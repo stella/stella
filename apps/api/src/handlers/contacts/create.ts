@@ -11,13 +11,13 @@ import {
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 
 const createContactBodySchema = t.Object({
-  id: tUuid,
+  id: tSafeId("contact"),
   type: t.UnionEnum(["person", "organization"]),
   prefix: t.Optional(t.String({ maxLength: 32 })),
   firstName: t.Optional(t.String({ maxLength: 256 })),

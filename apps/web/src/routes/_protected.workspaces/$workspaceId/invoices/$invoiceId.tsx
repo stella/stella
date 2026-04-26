@@ -42,6 +42,7 @@ import { toastManager } from "@stella/ui/components/toast";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import {
   requiredTrimmedStringSchema,
   toFormErrors,
@@ -140,7 +141,9 @@ const InvoiceDetail = ({
   const transitionMutation = useMutation({
     mutationFn: async (action: TransitionAction) => {
       const response = await api
-        .invoices({ workspaceId })({ invoiceId })
+        .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
+          invoiceId: toSafeId<"invoice">(invoiceId),
+        })
         .transition.post({
           action,
           queryKey: invoicesKeys.all(workspaceId),
@@ -161,7 +164,9 @@ const InvoiceDetail = ({
   const deleteMutation = useMutation({
     mutationFn: async () => {
       const response = await api
-        .invoices({ workspaceId })({ invoiceId })
+        .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
+          invoiceId: toSafeId<"invoice">(invoiceId),
+        })
         .delete({
           queryKey: invoicesKeys.all(workspaceId),
         });
@@ -185,9 +190,11 @@ const InvoiceDetail = ({
   const removeEntryMutation = useMutation({
     mutationFn: async (timeEntryId: string) => {
       const response = await api
-        .invoices({ workspaceId })({ invoiceId })
+        .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
+          invoiceId: toSafeId<"invoice">(invoiceId),
+        })
         .entries.delete({
-          timeEntryIds: [timeEntryId],
+          timeEntryIds: [toSafeId<"timeEntry">(timeEntryId)],
           queryKey: invoicesKeys.all(workspaceId),
         });
       if (response.error) {
@@ -206,9 +213,11 @@ const InvoiceDetail = ({
   const removeExpenseMutation = useMutation({
     mutationFn: async (expenseId: string) => {
       const response = await api
-        .invoices({ workspaceId })({ invoiceId })
+        .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
+          invoiceId: toSafeId<"invoice">(invoiceId),
+        })
         .entries.delete({
-          expenseIds: [expenseId],
+          expenseIds: [toSafeId<"expense">(expenseId)],
           queryKey: invoicesKeys.all(workspaceId),
         });
       if (response.error) {
@@ -674,7 +683,9 @@ const EditInvoiceForm = ({
       }
       const parsedValue = parseResult.output;
       const response = await api
-        .invoices({ workspaceId })({ invoiceId })
+        .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
+          invoiceId: toSafeId<"invoice">(invoiceId),
+        })
         .patch({
           invoiceNumber: parsedValue.invoiceNumber,
           invoiceDate: parsedValue.invoiceDate,

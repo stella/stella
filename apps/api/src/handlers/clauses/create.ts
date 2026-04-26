@@ -6,8 +6,9 @@ import type { SafeDb } from "@/api/db";
 import { clauses, clauseVersions } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -17,7 +18,7 @@ import type { ClauseBody } from "./types";
 
 const createClauseBodySchema = t.Object({
   title: tDefaultVarchar,
-  categoryId: t.Optional(tUuid),
+  categoryId: t.Optional(tSafeId("clauseCategory")),
   language: t.Optional(t.String({ maxLength: 10 })),
   body: clauseBodySchema,
   description: t.Optional(t.String({ maxLength: 2000 })),
@@ -31,7 +32,7 @@ type CreateClauseProps = {
   userId: SafeId<"user">;
   body: {
     title: string;
-    categoryId?: string;
+    categoryId?: SafeId<"clauseCategory">;
     language?: string;
     body: ClauseBody;
     description?: string;
@@ -63,7 +64,7 @@ const createClauseHandler = async function* ({
       safeDb((tx) =>
         tx.query.clauseCategories.findFirst({
           where: {
-            id: body.categoryId,
+            id: { eq: body.categoryId },
             organizationId: { eq: organizationId },
           },
           columns: { id: true },
@@ -78,8 +79,8 @@ const createClauseHandler = async function* ({
     }
   }
 
-  const clauseId = crypto.randomUUID();
-  const versionId = crypto.randomUUID();
+  const clauseId = createSafeId<"clause">();
+  const versionId = createSafeId<"clauseVersion">();
 
   const inserted = yield* Result.await(
     safeDb(async (tx) => {

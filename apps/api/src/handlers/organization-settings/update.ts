@@ -4,6 +4,7 @@ import { t } from "elysia";
 import { organizationSettings } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { validatePattern } from "@/api/lib/matter-reference";
 
@@ -36,7 +37,7 @@ const updateOrganizationSettings = createSafeRootHandler(
         tx
           .insert(organizationSettings)
           .values({
-            id: crypto.randomUUID(),
+            id: createSafeId<"organizationSettings">(),
             organizationId: session.activeOrganizationId,
             matterNumberPattern: body.matterNumberPattern,
             matterNumberPadding: body.matterNumberPadding,

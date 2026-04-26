@@ -14,6 +14,11 @@ type DocxFieldContent = Extract<FieldContent, { type: "file" }> & {
   mimeType: typeof DOCX_MIME_TYPE;
 };
 
+type DocxFieldEntry = {
+  content: FieldContent;
+  propertyId: SafeId<"property">;
+};
+
 export const asDocxFieldContent = (
   content: FieldContent,
 ): DocxFieldContent | null => {
@@ -31,8 +36,8 @@ export const findDocxFieldForProperty = ({
   fieldEntries,
   propertyId,
 }: {
-  fieldEntries: { content: FieldContent; propertyId: string }[];
-  propertyId: string;
+  fieldEntries: DocxFieldEntry[];
+  propertyId: SafeId<"property">;
 }) => {
   const targetField = fieldEntries.find(
     (field) => field.propertyId === propertyId,
@@ -56,14 +61,14 @@ export const readCurrentDocxTarget = async ({
   tx,
   workspaceId,
 }: {
-  entityId: string;
-  propertyId: string;
+  entityId: SafeId<"entity">;
+  propertyId: SafeId<"property">;
   tx: DatabaseTransaction;
   workspaceId: SafeId<"workspace">;
 }) => {
   const entity = await tx.query.entities.findFirst({
     where: {
-      id: entityId,
+      id: { eq: entityId },
       workspaceId: { eq: workspaceId },
     },
     columns: {
@@ -113,8 +118,8 @@ export const readVersionDocxTarget = async ({
   tx,
   workspaceId,
 }: {
-  entityVersionId: string;
-  propertyId: string;
+  entityVersionId: SafeId<"entityVersion">;
+  propertyId: SafeId<"property">;
   tx: DatabaseTransaction;
   workspaceId: SafeId<"workspace">;
 }) => {

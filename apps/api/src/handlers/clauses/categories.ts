@@ -5,8 +5,9 @@ import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db";
 import { clauseCategories } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -16,13 +17,13 @@ import { pickDefined } from "@/api/lib/pick-defined";
 export const createCategoryBodySchema = t.Object({
   name: tDefaultVarchar,
   description: t.Optional(t.String({ maxLength: 2000 })),
-  parentId: t.Optional(tUuid),
+  parentId: t.Optional(tSafeId("clauseCategory")),
 });
 
 export const updateCategoryBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
   description: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
-  parentId: t.Optional(t.Nullable(tUuid)),
+  parentId: t.Optional(t.Nullable(tSafeId("clauseCategory"))),
   sortOrder: t.Optional(t.Integer({ minimum: 0 })),
 });
 
@@ -95,7 +96,7 @@ export const createCategoryHandler = async function* ({
       safeDb((tx) =>
         tx.query.clauseCategories.findFirst({
           where: {
-            id: body.parentId,
+            id: { eq: body.parentId },
             organizationId: { eq: organizationId },
           },
           columns: { id: true },
@@ -118,7 +119,7 @@ export const createCategoryHandler = async function* ({
       tx
         .insert(clauseCategories)
         .values({
-          id: crypto.randomUUID(),
+          id: createSafeId<"clauseCategory">(),
           organizationId,
           parentId: body.parentId ?? null,
           name: body.name,
@@ -143,7 +144,7 @@ export const createCategoryHandler = async function* ({
 type UpdateCategoryProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  categoryId: string;
+  categoryId: SafeId<"clauseCategory">;
   body: UpdateCategoryBody;
 };
 
@@ -157,7 +158,7 @@ export const updateCategoryHandler = async function* ({
     safeDb((tx) =>
       tx.query.clauseCategories.findFirst({
         where: {
-          id: categoryId,
+          id: { eq: categoryId },
           organizationId: { eq: organizationId },
         },
         columns: { id: true },
@@ -186,7 +187,7 @@ export const updateCategoryHandler = async function* ({
       safeDb((tx) =>
         tx.query.clauseCategories.findFirst({
           where: {
-            id: parentId,
+            id: { eq: parentId },
             organizationId: { eq: organizationId },
           },
           columns: { id: true },
@@ -239,7 +240,7 @@ export const updateCategoryHandler = async function* ({
 type DeleteCategoryProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  categoryId: string;
+  categoryId: SafeId<"clauseCategory">;
 };
 
 export const deleteCategoryHandler = async function* ({
@@ -251,7 +252,7 @@ export const deleteCategoryHandler = async function* ({
     safeDb((tx) =>
       tx.query.clauseCategories.findFirst({
         where: {
-          id: categoryId,
+          id: { eq: categoryId },
           organizationId: { eq: organizationId },
         },
         columns: { id: true, parentId: true },

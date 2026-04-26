@@ -5,7 +5,7 @@ import { t } from "elysia";
 import type { SafeDb } from "@/api/db";
 import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -32,7 +32,7 @@ const decodeCursor = (cursor: string): { date: Date; id: string } | null => {
 // ── List ────────────────────────────────────────────
 
 export const listClausesQuerySchema = t.Object({
-  categoryId: t.Optional(tUuid),
+  categoryId: t.Optional(tSafeId("clauseCategory")),
   q: t.Optional(t.String({ minLength: 1 })),
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
   cursor: t.Optional(t.String()),
@@ -42,7 +42,7 @@ type ListClausesProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   query: {
-    categoryId?: string;
+    categoryId?: SafeId<"clauseCategory">;
     q?: string;
     limit?: number;
     cursor?: string;
@@ -143,7 +143,7 @@ export const listClausesHandler = async function* ({
 type GetClauseProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  clauseId: string;
+  clauseId: SafeId<"clause">;
 };
 
 export const getClauseHandler = async function* ({
@@ -155,7 +155,7 @@ export const getClauseHandler = async function* ({
     safeDb((tx) =>
       tx.query.clauses.findFirst({
         where: {
-          id: clauseId,
+          id: { eq: clauseId },
           organizationId: { eq: organizationId },
         },
         columns: {
@@ -212,8 +212,8 @@ export const getClauseHandler = async function* ({
 type GetClauseVersionProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  clauseId: string;
-  versionId: string;
+  clauseId: SafeId<"clause">;
+  versionId: SafeId<"clauseVersion">;
 };
 
 export const getClauseVersionHandler = async function* ({
@@ -227,7 +227,7 @@ export const getClauseVersionHandler = async function* ({
     safeDb((tx) =>
       tx.query.clauses.findFirst({
         where: {
-          id: clauseId,
+          id: { eq: clauseId },
           organizationId: { eq: organizationId },
         },
         columns: { id: true },
@@ -245,8 +245,8 @@ export const getClauseVersionHandler = async function* ({
     safeDb((tx) =>
       tx.query.clauseVersions.findFirst({
         where: {
-          id: versionId,
-          clauseId,
+          id: { eq: versionId },
+          clauseId: { eq: clauseId },
           organizationId: { eq: organizationId },
         },
         columns: {

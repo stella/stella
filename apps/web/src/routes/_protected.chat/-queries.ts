@@ -15,6 +15,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { APIError, toAPIError } from "@/lib/errors";
 import type { QueryOptionsInput } from "@/lib/react-query";
+import { toSafeId } from "@/lib/safe-id";
 import type { ChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 
 type ActiveFileContext = {
@@ -74,7 +75,10 @@ const fetchThreadMessages = async (
   const response = await api.chat
     .threads({ threadId: key.threadId })
     .messages.get({
-      query: key.scope === "workspace" ? { workspaceId: key.workspaceId } : {},
+      query:
+        key.scope === "workspace"
+          ? { workspaceId: toSafeId<"workspace">(key.workspaceId) }
+          : {},
     });
 
   if (response.error) {

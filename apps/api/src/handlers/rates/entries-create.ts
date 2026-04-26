@@ -4,20 +4,22 @@ import { t } from "elysia";
 
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { validateOrgUserId } from "@/api/lib/branded-types";
-import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, tUserId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const createRateEntryBodySchema = t.Object({
-  userId: t.Optional(t.Nullable(t.String({ minLength: 1 }))),
+  userId: t.Optional(t.Nullable(tUserId)),
   hourlyRate: t.Integer({ minimum: 0 }),
   effectiveFrom: t.String({ format: "date" }),
   effectiveTo: t.Optional(t.Nullable(t.String({ format: "date" }))),
 });
 
-const rateEntryParamsSchema = workspaceParams({ rateTableId: tUuid });
+const rateEntryParamsSchema = workspaceParams({
+  rateTableId: tSafeId("rateTable"),
+});
 
 const createRateEntry = createSafeHandler(
   {
@@ -48,7 +50,10 @@ const createRateEntry = createSafeHandler(
     const table = yield* Result.await(
       safeDb((tx) =>
         tx.query.rateTables.findFirst({
-          where: { id: params.rateTableId, workspaceId: { eq: workspaceId } },
+          where: {
+            id: { eq: params.rateTableId },
+            workspaceId: { eq: workspaceId },
+          },
           columns: { id: true },
         }),
       ),

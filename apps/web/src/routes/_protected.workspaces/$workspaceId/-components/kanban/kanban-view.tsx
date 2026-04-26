@@ -20,6 +20,7 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { toSafeId } from "@/lib/safe-id";
 import type {
   EntityKind,
   WorkspaceEntity,
@@ -78,10 +79,12 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
   const handleCreate = async (kind: EntityKind) => {
     if (kind === "task") {
-      const response = await api.tasks({ workspaceId }).put({
-        queryKey: entitiesKeys.all(workspaceId),
-        name: t("tasks.untitled"),
-      });
+      const response = await api
+        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .put({
+          queryKey: entitiesKeys.all(workspaceId),
+          name: t("tasks.untitled"),
+        });
 
       const entityId = response.data?.entityId;
       if (response.error || !entityId) {
@@ -193,11 +196,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       taskId: string;
       status: string;
     }) => {
-      const response = await api.tasks({ workspaceId }).patch({
-        queryKey: entitiesKeys.all(workspaceId),
-        taskId,
-        status,
-      });
+      const response = await api
+        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .patch({
+          queryKey: entitiesKeys.all(workspaceId),
+          taskId: toSafeId<"entity">(taskId),
+          status,
+        });
       if (response.error) {
         toastManager.add({
           title: t("errors.actionFailed"),

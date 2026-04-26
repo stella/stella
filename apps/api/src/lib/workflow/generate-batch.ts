@@ -2,6 +2,7 @@ import { PDF, rgb, Standard14Font, StandardFonts } from "@libpdf/core";
 import { matchError, Result } from "better-result";
 
 import { createFileKey } from "@/api/handlers/files/utils";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   Unreachable,
@@ -80,7 +81,7 @@ const addBatesNumbers = async (
 };
 
 type FileWithContent = {
-  fileFieldId: string;
+  fileFieldId: SafeId<"field">;
   fileId: string;
   content: Uint8Array;
   mimeType: typeof PDF_MIME_TYPE;
@@ -199,7 +200,7 @@ export const generateBatch = async ({
         property,
       });
 
-      const fieldId = crypto.randomUUID();
+      const fieldId = createSafeId<"field">();
 
       const justification = yield* parseJustificationXml({
         xml: validated.justificationXml,
@@ -207,7 +208,7 @@ export const generateBatch = async ({
       });
 
       if (justification) {
-        const justificationId = crypto.randomUUID();
+        const justificationId = createSafeId<"justification">();
         aiJustifications.push({
           fieldId,
           justificationId,

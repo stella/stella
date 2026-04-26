@@ -4,6 +4,7 @@ import { useParams } from "@tanstack/react-router";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import type { QueryOptionsInput } from "@/lib/react-query";
+import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 type JustificationsKey = {
@@ -37,7 +38,7 @@ export const workflowOptions = ({ key }: { key: WorkflowKey }) =>
     queryKey: workspaceKeys.workflow(key.workspaceId),
     queryFn: async ({ signal }) => {
       const response = await api
-        .workspaces({ workspaceId: key.workspaceId })
+        .workspaces({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
         .workflow.get({ fetch: { signal } });
 
       if (response.error) {
@@ -77,8 +78,11 @@ export const justificationsOptions = ({
     }),
     queryFn: async ({ signal }) => {
       const response = await api
-        .workspaces({ workspaceId })
-        .justifications.query.post({ entityIds }, { fetch: { signal } });
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .justifications.query.post(
+          { entityIds: entityIds.map((id) => toSafeId<"entity">(id)) },
+          { fetch: { signal } },
+        );
 
       if (response.error) {
         throw toAPIError(response.error);

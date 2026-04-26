@@ -1,6 +1,7 @@
 import { env } from "@/env";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 
 const DESKTOP_BRIDGE_PORT = env.VITE_DESKTOP_BRIDGE_PORT;
 const DESKTOP_BRIDGE_URL = `http://127.0.0.1:${String(DESKTOP_BRIDGE_PORT)}`;
@@ -118,11 +119,11 @@ const openRemoteDesktopSession = async ({
   workspaceId: string;
 }) => {
   const response = await api
-    .entities({ workspaceId })
+    .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
     ["desktop-edit-sessions"].open.post({
-      entityId,
+      entityId: toSafeId<"entity">(entityId),
       ...(force && { force }),
-      propertyId,
+      propertyId: toSafeId<"property">(propertyId),
     });
 
   if (response.error) {

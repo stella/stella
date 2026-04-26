@@ -14,7 +14,7 @@ import type { BoundingBox } from "@/api/types";
 
 export type GenerateBBoxesProps = {
   abortSignal: AbortSignal;
-  justificationId: string;
+  justificationId: SafeId<"justification">;
   organizationId: SafeId<"organization">;
   orgAIConfig?: OrgAIConfig | null;
   workspaceId: SafeId<"workspace">;
@@ -148,19 +148,19 @@ const getFieldContentAsString = (content?: FieldContent) => {
 };
 
 class JustificationDataError extends TaggedError("JustificationDataError")<{
-  justificationId: string;
+  justificationId: SafeId<"justification">;
 }>() {}
 
 export const prepareJustificationData = async (
   organizationId: SafeId<"organization">,
   workspaceId: SafeId<"workspace">,
-  justificationId: string,
+  justificationId: SafeId<"justification">,
   scopedDb: ScopedDb,
 ) =>
   await Result.gen(async function* () {
     const data = await scopedDb((tx) =>
       tx.query.justifications.findFirst({
-        where: { id: justificationId },
+        where: { id: { eq: justificationId } },
         columns: { htmlContent: true },
         with: {
           field: {

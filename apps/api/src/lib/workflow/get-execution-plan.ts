@@ -8,9 +8,12 @@ import type {
   PropertyTool,
 } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { PropertyContent } from "@/api/types";
 
 type DependencySignature = string; // Sorted, joined property IDs
+
+const toPropertyId = (value: string) => toSafeId<"property">(value);
 
 export type BatchPropertyDependency = {
   dependsOnPropertyId: string;
@@ -18,7 +21,7 @@ export type BatchPropertyDependency = {
 };
 
 export type BatchProperty = {
-  id: string;
+  id: SafeId<"property">;
   status: PropertyStatus;
   content: Exclude<PropertyContent, { type: "file" }>;
   tool: AIModelTool;
@@ -27,14 +30,14 @@ export type BatchProperty = {
 
 export type PropertyBatch = {
   id: string;
-  inputs: string[];
+  inputs: SafeId<"property">[];
   properties: BatchProperty[];
 };
 
 export type ExecutionLevel = PropertyBatch[];
 
 export type ExecutionPlanProperty = {
-  id: string;
+  id: SafeId<"property">;
   status: PropertyStatus;
   content: PropertyContent;
   tool: PropertyTool;
@@ -174,7 +177,7 @@ export const buildLevelBatches = (
       property.status === "stale"
     ) {
       signatureToProperties.get(signature)?.push({
-        id: propId,
+        id: property.id,
         status: property.status,
         content: property.content,
         tool: property.tool,
@@ -187,8 +190,8 @@ export const buildLevelBatches = (
   for (const [signature, batchProperties] of signatureToProperties) {
     if (batchProperties.length > 0) {
       batches.push({
-        id: crypto.randomUUID(),
-        inputs: signature ? signature.split(",") : [],
+        id: Bun.randomUUIDv7(),
+        inputs: signature ? signature.split(",").map(toPropertyId) : [],
         properties: batchProperties,
       });
     }

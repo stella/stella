@@ -16,6 +16,7 @@ import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { getS3 } from "@/api/lib/s3";
@@ -42,7 +43,7 @@ export default createSafeHandler(
       safeDb((tx) =>
         tx.query.entities.findFirst({
           where: {
-            id: entityId,
+            id: { eq: entityId },
             workspaceId: { eq: workspaceId },
           },
           columns: {
@@ -60,11 +61,13 @@ export default createSafeHandler(
       );
     }
 
+    const currentVersionId = entity.currentVersionId;
+
     // Get current version number and fields
     const currentVersion = yield* Result.await(
       safeDb((tx) =>
         tx.query.entityVersions.findFirst({
-          where: { id: entity.currentVersionId ?? "" },
+          where: { id: { eq: currentVersionId } },
           columns: { versionNumber: true },
           with: {
             fields: { columns: { content: true, propertyId: true } },
@@ -121,7 +124,7 @@ export default createSafeHandler(
     const scanWarnings = getScanWarnings(scanResult.value) ?? undefined;
 
     // Upload to S3 and convert to PDF
-    const fileId = crypto.randomUUID();
+    const fileId = Bun.randomUUIDv7();
     const sha256Hex = new Bun.CryptoHasher("sha256")
       .update(new Uint8Array(fileBuffer))
       .digest("hex");
@@ -152,7 +155,7 @@ export default createSafeHandler(
 
     let pdfFileId: string | null = null;
     if (conversionResult && Result.isOk(conversionResult)) {
-      pdfFileId = crypto.randomUUID();
+      pdfFileId = Bun.randomUUIDv7();
       const pdfKey = createFileKey({
         organizationId,
         workspaceId,
@@ -169,14 +172,14 @@ export default createSafeHandler(
     const workspace = yield* Result.await(
       safeDb((tx) =>
         tx.query.workspaces.findFirst({
-          where: { id: workspaceId },
+          where: { id: { eq: workspaceId } },
           columns: { reference: true },
         }),
       ),
     );
 
     const nextVersionNumber = currentVersion.versionNumber + 1;
-    const nextVersionId = crypto.randomUUID();
+    const nextVersionId = createSafeId<"entityVersion">();
     const nextVersionStamp = buildVersionStamp({
       docSequence: entity.docSequence,
       versionNumber: nextVersionNumber,

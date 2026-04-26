@@ -5,6 +5,7 @@ import { db } from "@/api/db/root";
 import type { searchDocuments } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";
+import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
 
@@ -45,10 +46,10 @@ const extractFieldText = (content: FieldContent): string => {
 };
 
 const buildSearchDocument = async (
-  entityId: string,
+  entityId: SafeId<"entity">,
 ): Promise<SearchDocumentRow | null> => {
   const entity = await db.query.entities.findFirst({
-    where: { id: entityId },
+    where: { id: { eq: entityId } },
     columns: {
       id: true,
       workspaceId: true,
@@ -151,7 +152,9 @@ const buildSearchDocument = async (
  * Shared by both pg-fts and paradedb providers so the tsvector
  * is always populated regardless of the active provider.
  */
-export const upsertSearchDocument = async (entityId: string): Promise<void> => {
+export const upsertSearchDocument = async (
+  entityId: SafeId<"entity">,
+): Promise<void> => {
   const doc = await buildSearchDocument(entityId);
   if (!doc) {
     return;

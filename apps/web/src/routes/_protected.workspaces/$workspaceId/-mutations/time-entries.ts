@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { timeEntriesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 
 type CreateTimeEntryVars = {
@@ -24,9 +25,12 @@ export const useCreateTimeEntry = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: CreateTimeEntryVars) => {
-      const response = await api["time-entries"]({ workspaceId }).put({
+      const response = await api["time-entries"]({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      }).put({
         queryKey: timeEntriesKeys.all(workspaceId),
         ...body,
+        matterId: toSafeId<"entity">(body.matterId),
       });
 
       if (response.error) {
@@ -63,9 +67,16 @@ export const useUpdateTimeEntry = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateTimeEntryVars) => {
-      const response = await api["time-entries"]({ workspaceId }).patch({
+      const { id, matterId, ...restBody } = body;
+      const response = await api["time-entries"]({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      }).patch({
         queryKey: timeEntriesKeys.all(workspaceId),
-        ...body,
+        ...restBody,
+        id: toSafeId<"timeEntry">(id),
+        ...(matterId !== undefined && {
+          matterId: toSafeId<"entity">(matterId),
+        }),
       });
 
       if (response.error) {
@@ -90,9 +101,11 @@ export const useDeleteTimeEntry = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, id }: DeleteTimeEntryVars) => {
-      const response = await api["time-entries"]({ workspaceId }).delete({
+      const response = await api["time-entries"]({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      }).delete({
         queryKey: timeEntriesKeys.all(workspaceId),
-        id,
+        id: toSafeId<"timeEntry">(id),
       });
 
       if (response.error) {
@@ -122,10 +135,11 @@ export const useStartTimer = () => {
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: StartTimerVars) => {
       const response = await api["time-entries"]({
-        workspaceId,
+        workspaceId: toSafeId<"workspace">(workspaceId),
       }).timer.start.post({
         queryKey: timeEntriesKeys.all(workspaceId),
         ...body,
+        matterId: toSafeId<"entity">(body.matterId),
       });
 
       if (response.error) {
@@ -150,7 +164,7 @@ export const useStopTimer = () => {
   return useMutation({
     mutationFn: async ({ workspaceId }: StopTimerVars) => {
       const response = await api["time-entries"]({
-        workspaceId,
+        workspaceId: toSafeId<"workspace">(workspaceId),
       }).timer.stop.post({
         queryKey: timeEntriesKeys.all(workspaceId),
       });
@@ -179,10 +193,11 @@ export const useBatchUpdateTimeEntries = () => {
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: BatchUpdateVars) => {
       const response = await api["time-entries"]({
-        workspaceId,
+        workspaceId: toSafeId<"workspace">(workspaceId),
       }).batch.post({
         queryKey: timeEntriesKeys.all(workspaceId),
         ...body,
+        ids: body.ids.map((id) => toSafeId<"timeEntry">(id)),
       });
 
       if (response.error) {
@@ -208,10 +223,10 @@ export const useBatchDeleteTimeEntries = () => {
   return useMutation({
     mutationFn: async ({ workspaceId, ids }: BatchDeleteVars) => {
       const response = await api["time-entries"]({
-        workspaceId,
+        workspaceId: toSafeId<"workspace">(workspaceId),
       }).batch.delete({
         queryKey: timeEntriesKeys.all(workspaceId),
-        ids,
+        ids: ids.map((id) => toSafeId<"timeEntry">(id)),
       });
 
       if (response.error) {
@@ -238,10 +253,15 @@ export const useSplitTimeEntry = () => {
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: SplitTimeEntryVars) => {
       const response = await api["time-entries"]({
-        workspaceId,
+        workspaceId: toSafeId<"workspace">(workspaceId),
       }).split.post({
         queryKey: timeEntriesKeys.all(workspaceId),
         ...body,
+        id: toSafeId<"timeEntry">(body.id),
+        splits: body.splits.map((split) => ({
+          ...split,
+          matterId: toSafeId<"entity">(split.matterId),
+        })),
       });
 
       if (response.error) {

@@ -114,7 +114,7 @@ const ensureUserExists = async ({
 export const ensureOrganizationExists = async (organizationId: string) => {
   if (
     await db.query.organization.findFirst({
-      where: { id: organizationId },
+      where: { id: { eq: organizationId } },
       columns: { id: true },
     })
   ) {
@@ -199,7 +199,7 @@ export async function ensurePrimarySeedUserInOrganization({
   await ensureOrganizationExists(organizationId);
 
   const existingUser = await db.query.user.findFirst({
-    where: { id: userId },
+    where: { id: { eq: userId } },
     columns: { id: true },
   });
 
@@ -256,7 +256,7 @@ async function seed() {
     existingUsers.map((existingUser) => existingUser.id),
   );
   const orgExistedBeforeSeed = !!(await db.query.organization.findFirst({
-    where: { id: TEST_ORG.id },
+    where: { id: { eq: TEST_ORG.id } },
     columns: { id: true },
   }));
 
@@ -287,7 +287,7 @@ async function seed() {
 
   // --- session (always refresh expiry) ---
   const existingSession = await db.query.session.findFirst({
-    where: { id: SESSION_ID },
+    where: { id: { eq: SESSION_ID } },
     columns: { id: true },
   });
 

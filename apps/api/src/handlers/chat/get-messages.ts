@@ -4,14 +4,14 @@ import { t } from "elysia";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { chat: ["create"] },
-  params: t.Object({ threadId: tUuid }),
+  params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({
-    workspaceId: t.Optional(tUuid),
+    workspaceId: t.Optional(tSafeId("workspace")),
   }),
 } satisfies HandlerConfig;
 

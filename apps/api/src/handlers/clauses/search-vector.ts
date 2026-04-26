@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db";
 import { clauses } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
 
 import type { ClauseBody } from "./types";
 
@@ -21,7 +22,7 @@ const bodyToPlainText = (body: ClauseBody): string =>
  */
 export const updateSearchVector = async (
   safeDb: SafeDb,
-  clauseId: string,
+  clauseId: SafeId<"clause">,
   title: string,
   description: string | null | undefined,
   body: ClauseBody,

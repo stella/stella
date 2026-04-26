@@ -2,6 +2,8 @@ import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 
 import { desktopEditSessions } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
+import { tSafeId } from "@/api/lib/custom-schema";
 import {
   authorizeDesktopEditSession,
   computeTokenExpiresAt,
@@ -18,7 +20,7 @@ import {
 } from "./desktop-edit-session-events";
 
 export const respondDesktopEditTakeoverParamsSchema = t.Object({
-  sessionId: t.String({ format: "uuid" }),
+  sessionId: tSafeId("desktopEditSession"),
 });
 
 export const respondDesktopEditTakeoverBodySchema = t.Object({
@@ -28,7 +30,7 @@ export const respondDesktopEditTakeoverBodySchema = t.Object({
 
 type RespondDesktopEditTakeoverHandlerProps = {
   body: { sessionToken: string; approved: boolean };
-  sessionId: string;
+  sessionId: SafeId<"desktopEditSession">;
 };
 
 export const respondDesktopEditTakeoverHandler = async ({

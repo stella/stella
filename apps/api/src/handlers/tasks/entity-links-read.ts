@@ -1,10 +1,12 @@
 import { Result } from "better-result";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const listEntityLinksParamsSchema = workspaceParams({ taskId: tUuid });
+const listEntityLinksParamsSchema = workspaceParams({
+  taskId: tSafeId("entity"),
+});
 
 const listEntityLinks = createSafeHandler(
   {
@@ -16,9 +18,9 @@ const listEntityLinks = createSafeHandler(
       safeDb((tx) =>
         tx.query.entities.findFirst({
           where: {
-            id: params.taskId,
+            id: { eq: params.taskId },
             workspaceId: { eq: workspaceId },
-            kind: "task",
+            kind: { eq: "task" },
           },
           columns: { id: true },
         }),
@@ -37,7 +39,7 @@ const listEntityLinks = createSafeHandler(
             tx.query.entityLinks.findMany({
               where: {
                 workspaceId: { eq: workspaceId },
-                sourceEntityId: params.taskId,
+                sourceEntityId: { eq: params.taskId },
               },
               with: {
                 sourceEntity: {
@@ -52,7 +54,7 @@ const listEntityLinks = createSafeHandler(
             tx.query.entityLinks.findMany({
               where: {
                 workspaceId: { eq: workspaceId },
-                targetEntityId: params.taskId,
+                targetEntityId: { eq: params.taskId },
               },
               with: {
                 sourceEntity: {

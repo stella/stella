@@ -9,10 +9,10 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const invoiceParamsSchema = workspaceParams({ invoiceId: tUuid });
+const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
 const deleteInvoice = createSafeHandler(
   {
@@ -26,9 +26,9 @@ const deleteInvoice = createSafeHandler(
       safeDb(async (tx) => {
         const invoice = await tx.query.invoices.findFirst({
           where: {
-            id: params.invoiceId,
+            id: { eq: params.invoiceId },
             workspaceId: { eq: workspaceId },
-            status: INVOICE_STATUS.DRAFT,
+            status: { eq: INVOICE_STATUS.DRAFT },
           },
           columns: { id: true },
         });

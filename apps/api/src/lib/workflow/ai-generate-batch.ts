@@ -87,7 +87,7 @@ export const generateWorkflowData = async ({
       workspace_id: workspaceId,
     },
     sessionId: entityVersionId,
-    traceId: crypto.randomUUID(),
+    traceId: Bun.randomUUIDv7(),
   });
 
   return await Result.tryPromise({

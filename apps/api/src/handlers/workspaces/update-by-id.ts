@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { contacts, workspaces } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -14,7 +14,7 @@ const config = {
   permissions: { workspace: ["update"] },
   body: t.Object({
     name: t.Optional(tDefaultVarchar),
-    clientId: t.Optional(tUuid),
+    clientId: t.Optional(tSafeId("contact")),
     reference: t.Optional(t.String({ maxLength: 64, minLength: 1 })),
     billingReference: t.Optional(t.Nullable(t.String({ maxLength: 128 }))),
     color: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),

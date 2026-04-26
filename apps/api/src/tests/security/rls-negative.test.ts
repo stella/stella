@@ -37,6 +37,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
+import type { SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
@@ -59,6 +60,8 @@ import type {
   createDryScopedQuery,
   createScopedQuery,
 } from "@/api/tests/security/test-utils";
+
+const testId = <T extends SafeIdType>() => toSafeId<T>(Bun.randomUUIDv7());
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -160,7 +163,7 @@ describe("workspace INSERT — wrong scope", () => {
       table: entities,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(entities).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsB1,
           kind: "document" as const,
         }),
@@ -169,7 +172,7 @@ describe("workspace INSERT — wrong scope", () => {
       table: entityVersions,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(entityVersions).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsB1,
           entityId: ids.entityB1,
         }),
@@ -178,7 +181,7 @@ describe("workspace INSERT — wrong scope", () => {
       table: properties,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(properties).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsB1,
           name: "Bad",
           content: {
@@ -195,7 +198,7 @@ describe("workspace INSERT — wrong scope", () => {
       table: fields,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(fields).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsB1,
           propertyId: ids.propertyB1,
           entityVersionId: ids.entityVersionB1,
@@ -210,7 +213,7 @@ describe("workspace INSERT — wrong scope", () => {
       table: workspaceMembers,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(workspaceMembers).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsB1,
           userId: ids.userA1,
         }),
@@ -219,7 +222,7 @@ describe("workspace INSERT — wrong scope", () => {
       table: documentCounters,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(documentCounters).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsB1,
           lastValue: 0,
         }),
@@ -228,7 +231,7 @@ describe("workspace INSERT — wrong scope", () => {
       table: workspaceContacts,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(workspaceContacts).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgB,
           workspaceId: ids.wsB1,
           contactId: ids.contactB,
@@ -239,7 +242,7 @@ describe("workspace INSERT — wrong scope", () => {
       table: propertyDependencies,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(propertyDependencies).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsB1,
           propertyId: ids.propertyB1,
           dependsOnPropertyId: ids.propertyB1dep,
@@ -249,7 +252,7 @@ describe("workspace INSERT — wrong scope", () => {
       table: justifications,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(justifications).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsB1,
           fieldId: ids.fieldB1,
           htmlVersion: 99,
@@ -260,7 +263,7 @@ describe("workspace INSERT — wrong scope", () => {
       table: timeEntries,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(timeEntries).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           workspaceId: ids.wsB1,
           userId: ids.userA1,
@@ -278,7 +281,7 @@ describe("workspace INSERT — wrong scope", () => {
       table: billingCodes,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(billingCodes).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           workspaceId: ids.wsB1,
           type: "task" as const,
@@ -290,7 +293,7 @@ describe("workspace INSERT — wrong scope", () => {
       table: rateTables,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(rateTables).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           workspaceId: ids.wsB1,
           name: "Bad",
@@ -301,7 +304,7 @@ describe("workspace INSERT — wrong scope", () => {
       table: rateEntries,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(rateEntries).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsB1,
           rateTableId: ids.rateTableB1,
           hourlyRate: cents(100),
@@ -312,7 +315,7 @@ describe("workspace INSERT — wrong scope", () => {
       table: expenses,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(expenses).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           workspaceId: ids.wsB1,
           userId: ids.userA1,
@@ -328,7 +331,7 @@ describe("workspace INSERT — wrong scope", () => {
       table: invoices,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(invoices).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           workspaceId: ids.wsB1,
           invoiceNumber: "BAD-001",
@@ -340,7 +343,7 @@ describe("workspace INSERT — wrong scope", () => {
       table: caseLawMatterLinks,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(caseLawMatterLinks).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           decisionId: ids.caseLawDecisionA,
           workspaceId: ids.wsB1,
           linkedBy: ids.userA1,
@@ -364,7 +367,7 @@ describe("organization INSERT — wrong scope", () => {
       table: contacts,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(contacts).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgB,
           type: "person" as const,
           displayName: "Bad",
@@ -374,7 +377,7 @@ describe("organization INSERT — wrong scope", () => {
       table: contactRelationships,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(contactRelationships).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgB,
           personId: ids.contactB,
           relatedContactId: ids.contactB2,
@@ -385,7 +388,7 @@ describe("organization INSERT — wrong scope", () => {
       table: templates,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(templates).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgB,
           name: "Bad",
           fileName: "bad.docx",
@@ -398,7 +401,7 @@ describe("organization INSERT — wrong scope", () => {
       table: templateVersions,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(templateVersions).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgB,
           templateId: ids.templateB,
           version: 99,
@@ -410,7 +413,7 @@ describe("organization INSERT — wrong scope", () => {
       table: templateCategories,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(templateCategories).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgB,
           name: "Bad",
         }),
@@ -419,7 +422,7 @@ describe("organization INSERT — wrong scope", () => {
       table: templateClauses,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(templateClauses).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgB,
           templateId: ids.templateB,
           clauseId: ids.clauseB,
@@ -429,7 +432,7 @@ describe("organization INSERT — wrong scope", () => {
       table: templateFills,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(templateFills).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgB,
           templateId: ids.templateB,
           userId: ids.userB1,
@@ -441,7 +444,7 @@ describe("organization INSERT — wrong scope", () => {
       table: clauseCategories,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(clauseCategories).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgB,
           name: "Bad",
         }),
@@ -450,7 +453,7 @@ describe("organization INSERT — wrong scope", () => {
       table: clauses,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(clauses).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgB,
           title: "Bad",
           body: clauseBody,
@@ -461,7 +464,7 @@ describe("organization INSERT — wrong scope", () => {
       table: clauseVariants,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(clauseVariants).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgB,
           clauseId: ids.clauseB,
           label: "Bad",
@@ -472,7 +475,7 @@ describe("organization INSERT — wrong scope", () => {
       table: clauseVersions,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(clauseVersions).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgB,
           clauseId: ids.clauseB,
           version: 99,
@@ -483,7 +486,7 @@ describe("organization INSERT — wrong scope", () => {
       table: organizationSettings,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(organizationSettings).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgB,
         }),
     },
@@ -491,7 +494,7 @@ describe("organization INSERT — wrong scope", () => {
       table: matterCounters,
       values: async (tx: TestDatabaseTransaction) =>
         tx.insert(matterCounters).values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgB,
           scopeKey: "bad",
           lastValue: 0,
@@ -1106,7 +1109,7 @@ describe("workspaces table — wrong scope", () => {
     const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
       tryCatch(async () =>
         tx.insert(workspaces).values({
-          id: toSafeId<"workspace">(crypto.randomUUID()),
+          id: toSafeId<"workspace">(Bun.randomUUIDv7()),
           organizationId: ids.orgB,
           clientId: ids.contactB,
           name: "Bad Workspace",
@@ -1198,7 +1201,7 @@ describe("dual-scope integrity (ws + org columns)", () => {
   test("INSERT timeEntry with correct ws but wrong org → succeeds (ws policy only)", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
       await tx.insert(timeEntries).values({
-        id: crypto.randomUUID(),
+        id: testId(),
         organizationId: ids.orgB,
         workspaceId: ids.wsA1,
         userId: ids.userA1,
@@ -1219,7 +1222,7 @@ describe("dual-scope integrity (ws + org columns)", () => {
   test("INSERT expense with correct ws but wrong org → succeeds (ws policy only)", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
       await tx.insert(expenses).values({
-        id: crypto.randomUUID(),
+        id: testId(),
         organizationId: ids.orgB,
         workspaceId: ids.wsA1,
         userId: ids.userA1,
@@ -1236,7 +1239,7 @@ describe("dual-scope integrity (ws + org columns)", () => {
   test("INSERT invoice with correct ws but wrong org → succeeds (ws policy only)", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
       await tx.insert(invoices).values({
-        id: crypto.randomUUID(),
+        id: testId(),
         organizationId: ids.orgB,
         workspaceId: ids.wsA1,
         invoiceNumber: "DUAL-001",
@@ -1323,7 +1326,7 @@ describe("chat mutations — wrong user", () => {
         ids.orgA,
         async (tx) => {
           await tx.insert(chatThreads).values({
-            id: crypto.randomUUID(),
+            id: testId(),
             userId: ids.userB1,
             title: "forbidden",
             workspaceId: ids.wsA1,

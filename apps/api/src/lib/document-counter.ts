@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db";
 import { documentCounters } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   generateVerificationCode,
@@ -22,7 +23,7 @@ const allocateDocSequence = async (
   const rows = await tx
     .insert(documentCounters)
     .values({
-      id: crypto.randomUUID(),
+      id: createSafeId<"documentCounter">(),
       workspaceId,
       lastValue: 1,
     })

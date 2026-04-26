@@ -155,6 +155,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-handler-try-catch.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
+    "./.oxlint-plugins/no-crypto-random-uuid.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
     "./.oxlint-plugins/security-guards.ts",
@@ -581,6 +582,12 @@ export default defineConfig({
         "typescript/no-unsafe-assignment": "off",
         "typescript/no-unsafe-member-access": "off",
         "typescript/no-unsafe-call": "off",
+      },
+    },
+    {
+      files: ["apps/api/**/*.ts"],
+      rules: {
+        "no-crypto-random-uuid/no-crypto-random-uuid": "error",
       },
     },
     {

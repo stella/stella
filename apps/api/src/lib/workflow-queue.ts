@@ -11,6 +11,7 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
 import { captureError } from "@/api/lib/analytics";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -89,8 +90,8 @@ type StartWorkflowArgs = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   scopedDb: ScopedDb;
-  entityIds?: string[];
-  entityIdsOrder?: string[];
+  entityIds?: SafeId<"entity">[];
+  entityIdsOrder?: SafeId<"entity">[];
 };
 
 type StartWorkflowResult = {
@@ -165,7 +166,7 @@ export const startWorkflow = async ({
       return { status: "skipped" };
     }
 
-    const requestId = crypto.randomUUID();
+    const requestId = Bun.randomUUIDv7();
 
     // Store entity count for completion tracking
     await redis.set(
@@ -277,6 +278,7 @@ const processEntityJob = async (data: EntityJobData) => {
     workspaceId,
   });
   const userId = brandPersistedUserId(rawUserId);
+  const brandedEntityId = toSafeId<"entity">(entityId);
 
   const scopedDb = createRootScopedDb({
     organizationId: branded.organizationId,
@@ -298,7 +300,7 @@ const processEntityJob = async (data: EntityJobData) => {
           await processOneBatch({
             workspaceId: branded.workspaceId,
             organizationId: branded.organizationId,
-            entityId,
+            entityId: brandedEntityId,
             batch,
             level,
             scopedDb,
@@ -317,7 +319,7 @@ const processEntityJob = async (data: EntityJobData) => {
 type ProcessOneBatchArgs = {
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
-  entityId: string;
+  entityId: SafeId<"entity">;
   batch: PropertyBatch;
   level: number;
   scopedDb: ScopedDb;
@@ -336,7 +338,7 @@ const processOneBatch = async ({
   const entityRow = await scopedDb((tx) =>
     tx.query.entities.findFirst({
       columns: { currentVersionId: true },
-      where: { id: entityId },
+      where: { id: { eq: entityId } },
     }),
   );
 
@@ -363,7 +365,7 @@ const processOneBatch = async ({
       ),
   );
 
-  const fieldContentMap = new Map<string, FieldContent["type"]>(
+  const fieldContentMap = new Map<SafeId<"property">, FieldContent["type"]>(
     batchFields.map((f) => [f.propertyId, f.contentType]),
   );
 
@@ -448,7 +450,7 @@ const processOneBatch = async ({
         content,
       })),
       ...processedFields.unsupportedPropertyIds.map((propertyId) => ({
-        id: crypto.randomUUID(),
+        id: createSafeId<"field">(),
         workspaceId,
         propertyId,
         entityVersionId,
@@ -535,7 +537,7 @@ const finishWorkflow = async (
 
 type SetFieldsStatusArgs = {
   workspaceId: SafeId<"workspace">;
-  entityVersionId: string;
+  entityVersionId: SafeId<"entityVersion">;
   batch: PropertyBatch;
   contentType: "pending" | "error" | "unsupported";
   scopedDb: ScopedDb;
@@ -561,7 +563,7 @@ const setFieldsStatus = async ({
       );
 
     const fieldValues = propertyIds.map((propertyId) => ({
-      id: crypto.randomUUID(),
+      id: createSafeId<"field">(),
       workspaceId,
       propertyId,
       entityVersionId,

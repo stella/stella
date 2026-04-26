@@ -20,6 +20,7 @@ import { cn } from "@stella/ui/lib/utils";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import {
   PRIORITY_COLORS,
   PRIORITY_ICONS,
@@ -185,8 +186,12 @@ export const AssigneePicker = ({
   const addAssignee = useMutation({
     mutationFn: async (userId: string) => {
       const response = await api
-        .tasks({ workspaceId })
-        .assignees.post({ taskId, userId, queryKey });
+        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .assignees.post({
+          taskId: toSafeId<"entity">(taskId),
+          userId,
+          queryKey,
+        });
       if (response.error) {
         throw toAPIError(response.error);
       }
@@ -198,8 +203,12 @@ export const AssigneePicker = ({
   const removeAssignee = useMutation({
     mutationFn: async (userId: string) => {
       const response = await api
-        .tasks({ workspaceId })
-        .assignees.delete({ taskId, userId, queryKey });
+        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .assignees.delete({
+          taskId: toSafeId<"entity">(taskId),
+          userId,
+          queryKey,
+        });
       if (response.error) {
         throw toAPIError(response.error);
       }

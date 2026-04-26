@@ -52,6 +52,8 @@ import type {
   createScopedQuery,
 } from "@/api/tests/security/test-utils";
 
+const testId = () => toSafeId<never>(Bun.randomUUIDv7());
+
 let ids: TestIds;
 let scopedQuery: ReturnType<typeof createScopedQuery>;
 let dryScopedQuery: ReturnType<typeof createDryScopedQuery>;
@@ -459,7 +461,7 @@ describe("workspaces table — correct scope", () => {
     // Not throwing IS the verification.
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
       await tx.insert(workspaces).values({
-        id: toSafeId<"workspace">(crypto.randomUUID()),
+        id: toSafeId<"workspace">(Bun.randomUUIDv7()),
         organizationId: ids.orgA,
         clientId: ids.contactA,
         name: "RLS Insert Test",
@@ -505,7 +507,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(entities)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsA1,
           kind: "document" as const,
         })
@@ -519,7 +521,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(entityVersions)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsA1,
           entityId: ids.entityA1,
         })
@@ -533,7 +535,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(properties)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsA1,
           name: "RLS Positive",
           content: propContent,
@@ -549,7 +551,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(fields)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsA1,
           propertyId: ids.propertyA1dep,
           entityVersionId: ids.entityVersionA1,
@@ -565,7 +567,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(workspaceMembers)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsA1,
           userId: ids.userAdmin,
         })
@@ -583,7 +585,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(documentCounters)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsA1,
           lastValue: 0,
         })
@@ -597,7 +599,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(workspaceContacts)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           workspaceId: ids.wsA1,
           contactId: ids.contactA2,
@@ -613,7 +615,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(propertyDependencies)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsA1,
           propertyId: ids.propertyA1dep,
           dependsOnPropertyId: ids.propertyA1,
@@ -632,7 +634,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(justifications)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsA1,
           fieldId: ids.fieldA1,
           htmlVersion: 99,
@@ -648,7 +650,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(timeEntries)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           workspaceId: ids.wsA1,
           userId: ids.userA1,
@@ -671,7 +673,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(billingCodes)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           workspaceId: ids.wsA1,
           type: "task" as const,
@@ -688,7 +690,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(rateTables)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           workspaceId: ids.wsA1,
           name: "RLS Positive",
@@ -704,7 +706,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(rateEntries)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           workspaceId: ids.wsA1,
           rateTableId: ids.rateTableA1,
           hourlyRate: cents(150),
@@ -720,7 +722,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(expenses)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           workspaceId: ids.wsA1,
           userId: ids.userA1,
@@ -741,7 +743,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(invoices)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           workspaceId: ids.wsA1,
           invoiceNumber: "RLS-POS-001",
@@ -759,7 +761,7 @@ describe("workspace INSERT — correct scope", () => {
       const rows = await tx
         .insert(caseLawMatterLinks)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           decisionId: ids.caseLawDecisionB,
           workspaceId: ids.wsA1,
           linkedBy: ids.userA1,
@@ -776,7 +778,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(contacts)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           type: "person" as const,
           displayName: "Positive Insert",
@@ -791,7 +793,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(contactRelationships)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           personId: ids.contactA2,
           relatedContactId: ids.contactA,
@@ -807,7 +809,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(templates)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           name: "RLS Positive",
           fileName: "pos.docx",
@@ -825,7 +827,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(templateVersions)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           templateId: ids.templateA,
           version: 99,
@@ -842,7 +844,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(templateCategories)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           name: "RLS Positive",
         })
@@ -856,7 +858,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(templateClauses)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           templateId: ids.templateA,
           clauseId: ids.clauseA,
@@ -871,7 +873,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(templateFills)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           templateId: ids.templateA,
           userId: ids.userA2,
@@ -888,7 +890,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(clauseCategories)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           name: "RLS Positive",
         })
@@ -902,7 +904,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(clauses)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           title: "RLS Positive",
           body: clauseBody,
@@ -918,7 +920,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(clauseVariants)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           clauseId: ids.clauseA,
           label: "RLS Positive",
@@ -934,7 +936,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(clauseVersions)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           clauseId: ids.clauseA,
           version: 99,
@@ -954,7 +956,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(organizationSettings)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
         })
         .returning({ id: organizationSettings.id });
@@ -967,7 +969,7 @@ describe("organization INSERT — correct scope", () => {
       const rows = await tx
         .insert(matterCounters)
         .values({
-          id: crypto.randomUUID(),
+          id: testId(),
           organizationId: ids.orgA,
           scopeKey: "rls-positive-test",
           lastValue: 0,
@@ -985,7 +987,7 @@ describe("organization INSERT — correct scope", () => {
 describe("workspace DELETE — correct scope", () => {
   test("DELETE entity in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(entities).values({
         id: delId,
         workspaceId: ids.wsA1,
@@ -1001,7 +1003,7 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE entityVersion in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(entityVersions).values({
         id: delId,
         workspaceId: ids.wsA1,
@@ -1017,7 +1019,7 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE property in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(properties).values({
         id: delId,
         workspaceId: ids.wsA1,
@@ -1045,7 +1047,7 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE workspaceMember in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(workspaceMembers).values({
         id: delId,
         workspaceId: ids.wsA1,
@@ -1071,7 +1073,7 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE workspaceContact in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(workspaceContacts).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1089,7 +1091,7 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE propertyDependency in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(propertyDependencies).values({
         id: delId,
         workspaceId: ids.wsA1,
@@ -1116,7 +1118,7 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE timeEntry in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(timeEntries).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1141,7 +1143,7 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE billingCode in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(billingCodes).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1160,7 +1162,7 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE rateTable in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(rateTables).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1178,7 +1180,7 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE rateEntry in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(rateEntries).values({
         id: delId,
         workspaceId: ids.wsA1,
@@ -1196,7 +1198,7 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE expense in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(expenses).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1219,7 +1221,7 @@ describe("workspace DELETE — correct scope", () => {
 
   test("DELETE invoice in own workspace → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(invoices).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1250,7 +1252,7 @@ describe("workspace DELETE — correct scope", () => {
 describe("organization DELETE — correct scope", () => {
   test("DELETE contact in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(contacts).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1267,7 +1269,7 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE contactRelationship in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(contactRelationships).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1285,7 +1287,7 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE template in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(templates).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1305,7 +1307,7 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE templateVersion in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(templateVersions).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1324,7 +1326,7 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE templateCategory in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(templateCategories).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1340,7 +1342,7 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE templateClause in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(templateClauses).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1357,7 +1359,7 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE templateFill in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(templateFills).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1376,7 +1378,7 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE clauseCategory in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(clauseCategories).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1392,7 +1394,7 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE clause in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(clauses).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1410,7 +1412,7 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE clauseVariant in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(clauseVariants).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1428,7 +1430,7 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE clauseVersion in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(clauseVersions).values({
         id: delId,
         organizationId: ids.orgA,
@@ -1456,7 +1458,7 @@ describe("organization DELETE — correct scope", () => {
 
   test("DELETE matterCounter in own org → succeeds", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      const delId = crypto.randomUUID();
+      const delId = testId();
       await tx.insert(matterCounters).values({
         id: delId,
         organizationId: ids.orgA,

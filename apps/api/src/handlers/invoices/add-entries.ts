@@ -10,16 +10,20 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 
 const addEntriesBodySchema = t.Object({
-  timeEntryIds: t.Optional(t.Array(tUuid, { minItems: 1, maxItems: 500 })),
-  expenseIds: t.Optional(t.Array(tUuid, { minItems: 1, maxItems: 500 })),
+  timeEntryIds: t.Optional(
+    t.Array(tSafeId("timeEntry"), { minItems: 1, maxItems: 500 }),
+  ),
+  expenseIds: t.Optional(
+    t.Array(tSafeId("expense"), { minItems: 1, maxItems: 500 }),
+  ),
 });
 
-const invoiceParamsSchema = workspaceParams({ invoiceId: tUuid });
+const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
 const addEntries = createSafeHandler(
   {
@@ -46,7 +50,7 @@ const addEntries = createSafeHandler(
       safeDb((tx) =>
         tx.query.invoices.findFirst({
           where: {
-            id: params.invoiceId,
+            id: { eq: params.invoiceId },
             workspaceId: { eq: workspaceId },
           },
           columns: { id: true, status: true },
@@ -169,9 +173,9 @@ const addEntries = createSafeHandler(
       safeDb(async (tx) => {
         const invoiceCheck = await tx.query.invoices.findFirst({
           where: {
-            id: params.invoiceId,
+            id: { eq: params.invoiceId },
             workspaceId: { eq: workspaceId },
-            status: INVOICE_STATUS.DRAFT,
+            status: { eq: INVOICE_STATUS.DRAFT },
           },
           columns: { id: true },
         });

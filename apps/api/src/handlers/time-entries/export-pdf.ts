@@ -7,13 +7,14 @@ import { user } from "@/api/db/auth-schema";
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
 import { timeEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 export const exportPdfQuerySchema = t.Object({
   dateFrom: t.Optional(t.String({ format: "date" })),
   dateTo: t.Optional(t.String({ format: "date" })),
   status: t.Optional(timeEntryStatusSchema),
-  matterId: t.Optional(t.String()),
+  matterId: t.Optional(tSafeId("entity")),
 });
 
 type ExportPdfQuerySchema = Static<typeof exportPdfQuerySchema>;

@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { ratesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/rates";
 
 // --- Rate Tables ---
@@ -19,10 +20,12 @@ export const useCreateRateTable = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: CreateRateTableVars) => {
-      const response = await api.rates({ workspaceId }).put({
-        queryKey: ratesKeys.all(workspaceId),
-        ...body,
-      });
+      const response = await api
+        .rates({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .put({
+          queryKey: ratesKeys.all(workspaceId),
+          ...body,
+        });
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -49,10 +52,13 @@ export const useUpdateRateTable = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateRateTableVars) => {
-      const response = await api.rates({ workspaceId }).patch({
-        queryKey: ratesKeys.all(workspaceId),
-        ...body,
-      });
+      const response = await api
+        .rates({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .patch({
+          queryKey: ratesKeys.all(workspaceId),
+          ...body,
+          id: toSafeId<"rateTable">(body.id),
+        });
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -76,10 +82,12 @@ export const useDeleteRateTable = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, id }: DeleteRateTableVars) => {
-      const response = await api.rates({ workspaceId }).delete({
-        queryKey: ratesKeys.all(workspaceId),
-        id,
-      });
+      const response = await api
+        .rates({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .delete({
+          queryKey: ratesKeys.all(workspaceId),
+          id: toSafeId<"rateTable">(id),
+        });
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -113,11 +121,17 @@ export const useCreateRateEntry = () => {
       rateTableId,
       ...body
     }: CreateRateEntryVars) => {
+      const { userId, ...restBody } = body;
       const response = await api
-        .rates({ workspaceId })({ rateTableId })
+        .rates({ workspaceId: toSafeId<"workspace">(workspaceId) })({
+          rateTableId: toSafeId<"rateTable">(rateTableId),
+        })
         .entries.put({
           queryKey: ratesKeys.all(workspaceId),
-          ...body,
+          ...restBody,
+          ...(userId !== undefined && {
+            userId: userId === null ? null : toSafeId<"user">(userId),
+          }),
         });
 
       if (response.error) {
@@ -148,10 +162,12 @@ export const useDeleteRateEntry = () => {
       id,
     }: DeleteRateEntryVars) => {
       const response = await api
-        .rates({ workspaceId })({ rateTableId })
+        .rates({ workspaceId: toSafeId<"workspace">(workspaceId) })({
+          rateTableId: toSafeId<"rateTable">(rateTableId),
+        })
         .entries.delete({
           queryKey: ratesKeys.all(workspaceId),
-          id,
+          id: toSafeId<"rateEntry">(id),
         });
 
       if (response.error) {

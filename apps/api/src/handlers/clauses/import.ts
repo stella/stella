@@ -6,6 +6,7 @@ import type { SafeDb, Transaction } from "@/api/db";
 import { clauseCategories, clauses, clauseVersions } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
@@ -95,7 +96,7 @@ const importHandler = async function* ({
   const findOrCreateCategory = async (
     tx: Transaction,
     name: string,
-  ): Promise<string | null> => {
+  ): Promise<SafeId<"clauseCategory"> | null> => {
     const key = name.toLowerCase();
     const existing = categoryByName.get(key);
     if (existing) {
@@ -106,7 +107,7 @@ const importHandler = async function* ({
       return null;
     }
 
-    const id = crypto.randomUUID();
+    const id = createSafeId<"clauseCategory">();
     await tx.insert(clauseCategories).values({
       id,
       organizationId,
@@ -129,13 +130,13 @@ const importHandler = async function* ({
   // inside the callback would silently corrupt subsequent statements.
   const result = yield* Result.await(
     safeDb(async (tx) => {
-      const insertedIds: string[] = [];
+      const insertedIds: SafeId<"clause">[] = [];
 
       for (const item of toProcess) {
-        const clauseId = crypto.randomUUID();
-        const versionId = crypto.randomUUID();
+        const clauseId = createSafeId<"clause">();
+        const versionId = createSafeId<"clauseVersion">();
 
-        let categoryId: string | null = null;
+        let categoryId: SafeId<"clauseCategory"> | null = null;
         if (item.categoryName) {
           categoryId = await findOrCreateCategory(tx, item.categoryName);
         }

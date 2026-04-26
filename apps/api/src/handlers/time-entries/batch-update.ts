@@ -4,11 +4,11 @@ import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const batchUpdateBodySchema = t.Object({
-  ids: t.Array(tUuid, { minItems: 1, maxItems: 200 }),
+  ids: t.Array(tSafeId("timeEntry"), { minItems: 1, maxItems: 200 }),
   action: t.UnionEnum([
     "approve",
     "revert_to_draft",

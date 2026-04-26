@@ -9,7 +9,8 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { createSafeId } from "@/api/lib/branded-types";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -17,7 +18,7 @@ import { includes } from "@/api/lib/type-guards";
 
 const createTaskBodySchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 255 }),
-  parentId: t.Optional(tUuid),
+  parentId: t.Optional(tSafeId("entity")),
   status: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
   priority: t.Optional(t.String({ minLength: 1, maxLength: 16 })),
   dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
@@ -65,7 +66,7 @@ const createTask = createSafeHandler(
         if (body.parentId) {
           const parent = await tx.query.entities.findFirst({
             where: {
-              id: body.parentId,
+              id: { eq: body.parentId },
               workspaceId: { eq: workspaceId },
             },
             columns: { kind: true },
@@ -86,7 +87,7 @@ const createTask = createSafeHandler(
           }
         }
 
-        const entityId = crypto.randomUUID();
+        const entityId = createSafeId<"entity">();
         await tx.insert(entities).values({
           id: entityId,
           workspaceId,
@@ -99,7 +100,7 @@ const createTask = createSafeHandler(
           dueDate: body.dueDate ?? null,
         });
 
-        const entityVersionId = crypto.randomUUID();
+        const entityVersionId = createSafeId<"entityVersion">();
         await tx.insert(entityVersions).values({
           id: entityVersionId,
           workspaceId,

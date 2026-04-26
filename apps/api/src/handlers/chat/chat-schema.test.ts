@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { toUserFileUrl } from "@/api/handlers/user-files/types";
+import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
 import type { StoredChatFile, StoredFileRef } from "./attachment-validation";
@@ -12,6 +13,9 @@ import {
 import type { ChatMessage } from "./types";
 
 type ChatParts = ChatMessage["parts"];
+
+const userFileId = (id: string) => toSafeId<"userFile">(id);
+const chatThreadId = (id: string) => toSafeId<"chatThread">(id);
 
 const createUserFilePart = ({
   fileId,
@@ -25,7 +29,7 @@ const createUserFilePart = ({
       type: "file",
       filename: "attachment",
       mediaType,
-      url: toUserFileUrl(fileId),
+      url: toUserFileUrl(userFileId(fileId)),
     },
   ] satisfies ChatParts;
 
@@ -37,7 +41,7 @@ describe("validateChatFileParts", () => {
         type: "file" as const,
         filename: `attachment-${index}.txt`,
         mediaType: "text/plain",
-        url: toUserFileUrl(`file_${index}`),
+        url: toUserFileUrl(userFileId(`file_${index}`)),
       }),
     ) satisfies ChatParts;
 
@@ -120,13 +124,13 @@ describe("validateChatFileParts", () => {
 describe("validateStoredFileRefs", () => {
   test("rejects missing stored files", () => {
     const refs = [
-      { id: "file_test", mediaType: "image/png" },
+      { id: userFileId("file_test"), mediaType: "image/png" },
     ] satisfies StoredFileRef[];
 
     const result = validateStoredFileRefs({
       refs,
       files: [],
-      threadId: "thread_test",
+      threadId: chatThreadId("thread_test"),
     });
 
     expect(Result.isError(result)).toBe(true);
@@ -140,16 +144,20 @@ describe("validateStoredFileRefs", () => {
 
   test("rejects stored files with mismatched MIME types", () => {
     const refs = [
-      { id: "file_test", mediaType: "image/png" },
+      { id: userFileId("file_test"), mediaType: "image/png" },
     ] satisfies StoredFileRef[];
     const files = [
-      { id: "file_test", mimeType: "application/pdf", threadId: "thread_test" },
+      {
+        id: userFileId("file_test"),
+        mimeType: "application/pdf",
+        threadId: chatThreadId("thread_test"),
+      },
     ] satisfies StoredChatFile[];
 
     const result = validateStoredFileRefs({
       refs,
       files,
-      threadId: "thread_test",
+      threadId: chatThreadId("thread_test"),
     });
 
     expect(Result.isError(result)).toBe(true);
@@ -165,16 +173,20 @@ describe("validateStoredFileRefs", () => {
 
   test("rejects stored files from a different thread", () => {
     const refs = [
-      { id: "file_test", mediaType: "image/png" },
+      { id: userFileId("file_test"), mediaType: "image/png" },
     ] satisfies StoredFileRef[];
     const files = [
-      { id: "file_test", mimeType: "image/png", threadId: "thread_other" },
+      {
+        id: userFileId("file_test"),
+        mimeType: "image/png",
+        threadId: chatThreadId("thread_other"),
+      },
     ] satisfies StoredChatFile[];
 
     const result = validateStoredFileRefs({
       refs,
       files,
-      threadId: "thread_test",
+      threadId: chatThreadId("thread_test"),
     });
 
     expect(Result.isError(result)).toBe(true);

@@ -19,6 +19,7 @@ import {
 } from "@stella/ui/components/tooltip";
 import { cn } from "@stella/ui/lib/utils";
 
+import type { SafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
 import type { CalendarDay } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils";
 import {
@@ -46,7 +47,7 @@ export const Route = createFileRoute("/_protected/calendar/")({
 
 type CalendarEntity = {
   entity: WorkspaceEntity;
-  workspaceId: string;
+  workspaceId: SafeId<"workspace">;
   workspaceName: string;
   workspaceColor: string | null;
 };
@@ -59,8 +60,9 @@ function CrossWorkspaceCalendar() {
   const weekdayLabels = useMemo(() => getWeekdayLabels(locale), [locale]);
   const [mode, setMode] = useState<"month" | "week">("month");
   const [viewDate, setViewDate] = useState(() => new Date());
-  const [selectedWorkspaceIds, setSelectedWorkspaceIds] =
-    useState<Set<string> | null>(null);
+  const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<Set<
+    SafeId<"workspace">
+  > | null>(null);
 
   const year = viewDate.getUTCFullYear();
   const month = viewDate.getUTCMonth();
@@ -176,7 +178,7 @@ function CrossWorkspaceCalendar() {
     [flushWheel],
   );
 
-  const toggleWorkspace = (id: string) => {
+  const toggleWorkspace = (id: SafeId<"workspace">) => {
     setSelectedWorkspaceIds((prev) => {
       const current = prev ?? new Set(workspaces.map((w) => w.id));
       const next = new Set(current);

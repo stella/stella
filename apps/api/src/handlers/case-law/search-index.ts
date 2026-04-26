@@ -4,6 +4,8 @@ import type { ScopedDb } from "@/api/db";
 import { caseLawDecisions, caseLawSearchDocuments } from "@/api/db/schema";
 import { resolveFtsConfig } from "@/api/handlers/case-law/fts-config";
 import { captureError } from "@/api/lib/analytics";
+import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
 
 import type { DecisionSection } from "./types";
@@ -23,12 +25,12 @@ const sectionsToPlainText = (
  * operates on the global (no tenant column) search table.
  */
 export const indexDecision = async (
-  decisionId: string,
+  decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
 ): Promise<void> => {
   const decision = await scopedDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
-      where: { id: decisionId },
+      where: { id: { eq: decisionId } },
       columns: {
         id: true,
         caseNumber: true,
@@ -134,7 +136,7 @@ export const backfillSearchIndex = async (
 
   const indexRow = async (row: { id: string }): Promise<number> => {
     try {
-      await indexDecision(row.id, scopedDb);
+      await indexDecision(toSafeId<"caseLawDecision">(row.id), scopedDb);
       return 1;
     } catch (error) {
       captureError(error, { decisionId: row.id, step: "backfillSearchIndex" });
@@ -163,7 +165,7 @@ export const backfillSearchIndex = async (
  * explicit cleanup.
  */
 export const removeDecisionFromIndex = async (
-  decisionId: string,
+  decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
 ): Promise<void> => {
   await scopedDb((tx) =>

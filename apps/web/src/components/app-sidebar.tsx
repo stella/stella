@@ -955,7 +955,9 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
     if (!workspaces) {
       return [];
     }
-    const wsMap = new Map(workspaces.map((ws) => [ws.id, ws]));
+    const wsMap = new Map<string, (typeof workspaces)[number]>(
+      workspaces.map((ws) => [ws.id, ws]),
+    );
     return pinnedOrder
       .map((id) => wsMap.get(id))
       .filter((ws) => ws !== undefined);

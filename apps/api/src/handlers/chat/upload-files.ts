@@ -12,6 +12,7 @@ import { ChatError } from "@/api/handlers/chat/errors";
 import { createUserFileKey } from "@/api/handlers/files/utils";
 import { isUserFileUrl, toUserFileUrl } from "@/api/handlers/user-files/types";
 import { captureError } from "@/api/lib/analytics";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   isDataUrlSizeLimitError,
@@ -29,14 +30,14 @@ import { extractText } from "../docx/extract-text";
 import type { ChatMessage } from "./types";
 
 export type UserFileThreadAccess = {
-  threadId: string;
+  threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
 };
 
 type UploadMessageFilesProps = {
   message: ChatMessage;
   safeDb: SafeDb;
-  threadId: string;
+  threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
 };
 
@@ -167,7 +168,7 @@ type UploadUserFileInput = {
     mimeType: string;
   };
   safeDb: SafeDb;
-  threadId: string;
+  threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
 };
 
@@ -182,7 +183,7 @@ export const uploadUserFile = async ({
     const sha256Hex = new Bun.CryptoHasher("sha256")
       .update(file.bytes)
       .digest("hex");
-    const id = crypto.randomUUID();
+    const id = createSafeId<"userFile">();
 
     const s3Key = createUserFileKey({
       fileId: id,
@@ -270,7 +271,7 @@ export const uploadUserFile = async ({
   });
 
 type NormalizeUserFilePartProps = {
-  fileId: string;
+  fileId: SafeId<"userFile">;
   fileName: string;
   mimeType: string;
   part: FileUIPart;

@@ -38,6 +38,7 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { ContactPicker } from "@/components/contact-picker";
 import { UserIdentity } from "@/components/user-avatar";
+import { toSafeId } from "@/lib/safe-id";
 import { useCreateContact } from "@/routes/_protected.contacts/-mutations";
 import { contactsKeys } from "@/routes/_protected.contacts/-queries";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
@@ -173,7 +174,7 @@ export const CreateMatterDialog = () => {
     displayName: string,
     type: "person" | "organization",
   ) => {
-    const id = crypto.randomUUID();
+    const id = toSafeId<"contact">(crypto.randomUUID());
 
     const result = await Result.tryPromise(
       async () =>

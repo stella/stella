@@ -5,14 +5,16 @@ import { t } from "elysia";
 import { member, user } from "@/api/db/auth-schema";
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 
 const readRateEntriesQuerySchema = t.Object({
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 500 })),
   offset: t.Optional(t.Integer({ minimum: 0 })),
 });
 
-const rateEntryParamsSchema = workspaceParams({ rateTableId: tUuid });
+const rateEntryParamsSchema = workspaceParams({
+  rateTableId: tSafeId("rateTable"),
+});
 
 const readRateEntries = createSafeHandler(
   {
@@ -24,7 +26,10 @@ const readRateEntries = createSafeHandler(
     const table = yield* Result.await(
       safeDb((tx) =>
         tx.query.rateTables.findFirst({
-          where: { id: params.rateTableId, workspaceId: { eq: workspaceId } },
+          where: {
+            id: { eq: params.rateTableId },
+            workspaceId: { eq: workspaceId },
+          },
           columns: { id: true },
         }),
       ),

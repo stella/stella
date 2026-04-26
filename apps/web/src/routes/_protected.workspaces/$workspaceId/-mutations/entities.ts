@@ -3,29 +3,19 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";
 import type { EditableFieldContent } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
-type CreateEntitiesVars =
-  | {
-      workspaceId: string;
-      type: "file";
-      version: 1;
-      propertyId: string;
-      entities: {
-        id: string;
-        fileId: string;
-      }[];
-    }
-  | {
-      type: "manual-input";
-      workspaceId: string;
-      kind?: EntityKind;
-      parentId?: string | null;
-      name?: string;
-    };
+type CreateEntitiesVars = {
+  type: "manual-input";
+  workspaceId: string;
+  kind?: EntityKind;
+  parentId?: string | null;
+  name?: string;
+};
 
 export const useCreateEntities = () => {
   const analytics = useAnalytics();
@@ -33,10 +23,17 @@ export const useCreateEntities = () => {
   return useMutation({
     retry: 3,
     mutationFn: async ({ workspaceId, ...body }: CreateEntitiesVars) => {
-      const response = await api.entities({ workspaceId }).put({
-        queryKey: entitiesKeys.all(workspaceId),
-        ...body,
-      });
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .put({
+          queryKey: entitiesKeys.all(workspaceId),
+          ...(body.kind !== undefined && { kind: body.kind }),
+          ...(body.name !== undefined && { name: body.name }),
+          ...(body.parentId !== undefined && {
+            parentId:
+              body.parentId === null ? null : toSafeId<"entity">(body.parentId),
+          }),
+        });
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -61,10 +58,12 @@ export const useDeleteEntities = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, entityIds }: DeleteEntitiesVars) => {
-      const response = await api.entities({ workspaceId }).delete({
-        queryKey: entitiesKeys.all(workspaceId),
-        entityIds,
-      });
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .delete({
+          queryKey: entitiesKeys.all(workspaceId),
+          entityIds: entityIds.map((entityId) => toSafeId<"entity">(entityId)),
+        });
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -94,11 +93,13 @@ export const useMoveEntity = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, entityId, parentId }: MoveEntityVars) => {
-      const response = await api.entities({ workspaceId }).move.patch({
-        queryKey: entitiesKeys.all(workspaceId),
-        entityId,
-        parentId,
-      });
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .move.patch({
+          queryKey: entitiesKeys.all(workspaceId),
+          entityId: toSafeId<"entity">(entityId),
+          parentId: parentId === null ? null : toSafeId<"entity">(parentId),
+        });
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -123,11 +124,13 @@ export const useRenameEntity = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, entityId, name }: RenameEntityVars) => {
-      const response = await api.entities({ workspaceId }).rename.patch({
-        queryKey: entitiesKeys.all(workspaceId),
-        entityId,
-        name,
-      });
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .rename.patch({
+          queryKey: entitiesKeys.all(workspaceId),
+          entityId: toSafeId<"entity">(entityId),
+          name,
+        });
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -158,12 +161,14 @@ export const useUpsertField = () => {
       entityId,
       content,
     }: UpsertFieldVars) => {
-      const response = await api.fields({ workspaceId }).post({
-        queryKey: entitiesKeys.all(workspaceId),
-        propertyId,
-        entityId,
-        content,
-      });
+      const response = await api
+        .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .post({
+          queryKey: entitiesKeys.all(workspaceId),
+          propertyId: toSafeId<"property">(propertyId),
+          entityId: toSafeId<"entity">(entityId),
+          content,
+        });
 
       if (response.error) {
         throw toAPIError(response.error);

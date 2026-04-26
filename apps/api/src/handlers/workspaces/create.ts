@@ -13,8 +13,9 @@ import {
 } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
@@ -24,16 +25,13 @@ import {
   toReference,
   toScopeKey,
 } from "@/api/lib/matter-reference";
-import {
-  brandPersistedUserId,
-  brandPersistedWorkspaceId,
-} from "@/api/lib/safe-id-boundaries";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const config = {
   permissions: { workspace: ["create"] },
   body: t.Object({
-    id: tUuid,
-    clientId: tUuid,
+    id: tSafeId("workspace"),
+    clientId: tSafeId("contact"),
     memberUserIds: t.Optional(
       t.Array(t.String({ maxLength: 128 }), {
         maxItems: LIMITS.workspaceMembersCount - 1,
@@ -154,7 +152,7 @@ const createWorkspaces = createSafeRootHandler(
         const counter = await tx
           .insert(matterCounters)
           .values({
-            id: crypto.randomUUID(),
+            id: createSafeId<"matterCounter">(),
             organizationId,
             scopeKey,
             lastValue: 1,
@@ -202,7 +200,7 @@ const createWorkspaces = createSafeRootHandler(
         )`,
         );
 
-        const workspaceId = brandPersistedWorkspaceId(body.id);
+        const workspaceId = body.id;
 
         await tx.insert(workspaceMembers).values(
           workspaceMemberUserIds.map((userId: SafeId<"user">) => ({

@@ -5,7 +5,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type ResolveChatScopeProps = {
   accessibleWorkspaceIds: SafeId<"workspace">[];
-  workspaceId?: string | undefined;
+  workspaceId?: SafeId<"workspace"> | undefined;
 };
 
 type ResolveChatScopeResult = Result<

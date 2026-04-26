@@ -6,12 +6,14 @@ import { t } from "elysia";
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { SafeId, ValidatedOrgUserId } from "@/api/lib/branded-types";
-import { validateOrgUserId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
+import { tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ValidatedOrgUserId } from "@/api/lib/validated-org-user-id";
+import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const resolveRateQuerySchema = t.Object({
-  userId: t.String({ minLength: 1 }),
+  userId: tUserId,
   date: t.String({ format: "date" }),
 });
 

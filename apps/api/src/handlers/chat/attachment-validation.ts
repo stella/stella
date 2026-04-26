@@ -7,6 +7,7 @@ import {
   isUserFileUrl,
   parseUserFileId,
 } from "@/api/handlers/user-files/types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { validateDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -34,13 +35,13 @@ export const USER_FILE_ALLOWED_MIME_TYPES = new Set([
 ]);
 
 export type StoredFileRef = {
-  id: string;
+  id: SafeId<"userFile">;
   mediaType: string;
 };
 
 export type StoredChatFile = {
-  id: string;
-  threadId: string;
+  id: SafeId<"userFile">;
+  threadId: SafeId<"chatThread">;
   mimeType: string;
 };
 
@@ -139,7 +140,7 @@ export const validateStoredFileRefs = ({
 }: {
   files: StoredChatFile[];
   refs: StoredFileRef[];
-  threadId: string;
+  threadId: SafeId<"chatThread">;
 }): Result<void, HandlerError<400 | 403 | 404>> => {
   const userFilesById = new Map(files.map((file) => [file.id, file]));
 
@@ -179,7 +180,7 @@ export const validateStoredFileRefs = ({
 
 export const getUserFileIdFromPart = (
   part: FileUIPart,
-): Result<string, HandlerError<400>> => {
+): Result<SafeId<"userFile">, HandlerError<400>> => {
   if (!isUserFileUrl(part.url)) {
     return Result.err(
       new HandlerError({

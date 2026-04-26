@@ -5,12 +5,12 @@ import { t } from "elysia";
 import { entityVersions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const paramsSchema = workspaceParams({
-  entityId: t.String(),
-  versionId: t.String(),
+  entityId: tSafeId("entity"),
+  versionId: tSafeId("entityVersion"),
 });
 
 const bodySchema = t.Object({

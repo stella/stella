@@ -3,6 +3,7 @@ import { useParams } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { toSafeId } from "@/lib/safe-id";
 import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
 /**
@@ -20,11 +21,15 @@ export const useStartWorkflow = () => {
   return async (args?: { entityIds?: string[]; entityIdsOrder?: string[] }) => {
     try {
       const response = await api
-        .workspaces({ workspaceId })
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .workflow.start.post({
-          ...(args?.entityIds && { entityIds: args.entityIds }),
+          ...(args?.entityIds && {
+            entityIds: args.entityIds.map((id) => toSafeId<"entity">(id)),
+          }),
           ...(args?.entityIdsOrder && {
-            entityIdsOrder: args.entityIdsOrder,
+            entityIdsOrder: args.entityIdsOrder.map((id) =>
+              toSafeId<"entity">(id),
+            ),
           }),
         });
 

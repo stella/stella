@@ -18,6 +18,7 @@ import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 
@@ -82,10 +83,13 @@ const alignParagraphs = (
 
 const config = {
   permissions: { workspace: ["read"] },
+  params: t.Object({
+    entityId: tSafeId("entity"),
+  }),
   body: t.Object({
-    baseVersionId: t.String(),
-    targetVersionId: t.String(),
-    entityId: t.String(),
+    baseVersionId: tSafeId("entityVersion"),
+    targetVersionId: tSafeId("entityVersion"),
+    entityId: tSafeId("entity"),
   }),
 } satisfies HandlerConfig;
 
@@ -94,10 +98,17 @@ export default createSafeHandler(
   async function* ({
     safeDb,
     workspaceId,
+    params,
     body: { baseVersionId, targetVersionId, entityId },
     session,
   }) {
     const organizationId = session.activeOrganizationId;
+
+    if (params.entityId !== entityId) {
+      return Result.err(
+        new HandlerError({ status: 400, message: "Entity ID mismatch" }),
+      );
+    }
 
     // Fetch fields for both versions to get file content
     const [baseFieldsResult, targetFieldsResult] = await Promise.all([

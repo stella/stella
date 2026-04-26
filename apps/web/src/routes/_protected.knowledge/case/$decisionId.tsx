@@ -9,6 +9,8 @@ import { parseDocumentAst } from "@stella/case-law/document-ast";
 
 import { useCaseSearchStore } from "@/lib/case-search-store";
 import { ensureCriticalQueryData } from "@/lib/react-query";
+import type { SafeId } from "@/lib/safe-id";
+import { toSafeId } from "@/lib/safe-id";
 import { MarginNotes } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/margin-notes";
 import { ScrollMarkers } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers";
 import { buildSectionMap } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/types";
@@ -20,9 +22,9 @@ import { decisionOptions } from "@/routes/_protected.knowledge/case/-queries/dec
  * Extract the ID from a composite URL param.
  * Format: "case-slug--id" or just "id" (legacy).
  */
-const extractId = (param: string): string => {
+const extractId = (param: string): SafeId<"caseLawDecision"> => {
   const sep = param.lastIndexOf("--");
-  return sep !== -1 ? param.slice(sep + 2) : param;
+  return toSafeId<"caseLawDecision">(sep !== -1 ? param.slice(sep + 2) : param);
 };
 
 export const Route = createFileRoute("/_protected/knowledge/case/$decisionId")({

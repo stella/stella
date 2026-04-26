@@ -244,11 +244,11 @@ const searchContent = async (
   return { hits, totalCount };
 };
 
-const indexEntity = async (entityId: string): Promise<void> => {
+const indexEntity = async (entityId: SafeId<"entity">): Promise<void> => {
   await upsertSearchDocument(entityId);
 };
 
-const removeEntity = async (entityId: string): Promise<void> => {
+const removeEntity = async (entityId: SafeId<"entity">): Promise<void> => {
   await db
     .delete(searchDocuments)
     .where(eq(searchDocuments.entityId, entityId));
@@ -263,14 +263,14 @@ const rebuildIndex = async (orgId: SafeId<"organization">): Promise<void> => {
 
   for (const ws of orgWorkspaces) {
     const wsId = toSafeId<"workspace">(ws.id);
-    let lastId = "";
+    let lastId: SafeId<"entity"> | null = null;
     let hasMore = true;
     while (hasMore) {
       const batch = await db
         .select({ id: entities.id })
         .from(entities)
         .where(
-          lastId
+          lastId !== null
             ? and(eq(entities.workspaceId, wsId), gt(entities.id, lastId))
             : eq(entities.workspaceId, wsId),
         )

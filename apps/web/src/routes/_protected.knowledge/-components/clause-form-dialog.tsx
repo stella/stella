@@ -25,6 +25,7 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 
 import { ClauseEditor } from "./clause-editor";
 import type { ClauseParagraph } from "./clause-editor-types";
@@ -112,14 +113,19 @@ export const ClauseFormDialog = ({
     const body = form.bodyParagraphs;
 
     if (isEdit && form.id) {
-      const response = await api.clauses({ clauseId: form.id }).post({
-        title: form.title.trim(),
-        description: form.description.trim() || null,
-        usageNotes: form.usageNotes.trim() || null,
-        language: form.language.trim() || null,
-        categoryId: form.categoryId || null,
-        body,
-      });
+      const response = await api
+        .clauses({ clauseId: toSafeId<"clause">(form.id) })
+        .post({
+          title: form.title.trim(),
+          description: form.description.trim() || null,
+          usageNotes: form.usageNotes.trim() || null,
+          language: form.language.trim() || null,
+          categoryId:
+            form.categoryId === ""
+              ? null
+              : toSafeId<"clauseCategory">(form.categoryId),
+          body,
+        });
 
       setSaving(false);
 
@@ -143,7 +149,10 @@ export const ClauseFormDialog = ({
       const description = form.description.trim() || undefined;
       const usageNotes = form.usageNotes.trim() || undefined;
       const language = form.language.trim() || undefined;
-      const categoryId = form.categoryId || undefined;
+      const categoryId =
+        form.categoryId === ""
+          ? undefined
+          : toSafeId<"clauseCategory">(form.categoryId);
 
       const response = await api.clauses.put({
         title: form.title.trim(),

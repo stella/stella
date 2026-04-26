@@ -3,13 +3,13 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import { deleteTemplateCategoryHandler } from "./categories";
 
 const deleteTemplateCategoryParamsSchema = t.Object({
-  categoryId: tUuid,
+  categoryId: tSafeId("templateCategory"),
 });
 
 const config = {

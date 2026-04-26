@@ -4,20 +4,25 @@ import { status, t } from "elysia";
 import { user } from "@/api/db/auth-schema";
 import { db } from "@/api/db/root";
 import { desktopEditSessions } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
+import { tSafeId } from "@/api/lib/custom-schema";
 
 export const desktopEditSessionEventsParamsSchema = t.Object({
-  sessionId: t.String({ format: "uuid" }),
+  sessionId: tSafeId("desktopEditSession"),
 });
 
 export const desktopEditSessionEventsQuerySchema = t.Object({});
 
 type SessionEventConnection = {
   controller: ReadableStreamDefaultController;
-  sessionId: string;
+  sessionId: SafeId<"desktopEditSession">;
 };
 
 /** Session ID → connected SSE streams. */
-const connections = new Map<string, Set<SessionEventConnection>>();
+const connections = new Map<
+  SafeId<"desktopEditSession">,
+  Set<SessionEventConnection>
+>();
 
 const encoder = new TextEncoder();
 
@@ -31,7 +36,7 @@ const formatSSE = (event: { type: string; data: unknown }): Uint8Array => {
  * Called from takeover request, release, and expiry handlers.
  */
 export const pushSessionEvent = (
-  sessionId: string,
+  sessionId: SafeId<"desktopEditSession">,
   event: { type: string; data: unknown },
 ): void => {
   const conns = connections.get(sessionId);
@@ -52,7 +57,9 @@ export const pushSessionEvent = (
 /**
  * Close all SSE connections for a session (e.g., on session close).
  */
-export const closeSessionConnections = (sessionId: string): void => {
+export const closeSessionConnections = (
+  sessionId: SafeId<"desktopEditSession">,
+): void => {
   const conns = connections.get(sessionId);
   if (!conns) {
     return;
@@ -69,7 +76,7 @@ export const closeSessionConnections = (sessionId: string): void => {
 };
 
 type DesktopEditSessionEventsHandlerProps = {
-  sessionId: string;
+  sessionId: SafeId<"desktopEditSession">;
 };
 
 export const desktopEditSessionEventsHandler = async ({

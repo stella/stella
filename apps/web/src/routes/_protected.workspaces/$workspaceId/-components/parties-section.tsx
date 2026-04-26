@@ -38,6 +38,7 @@ import {
 import { toastManager } from "@stella/ui/components/toast";
 
 import { ContactPicker } from "@/components/contact-picker";
+import { toSafeId } from "@/lib/safe-id";
 import { useCreateContact } from "@/routes/_protected.contacts/-mutations";
 import { contactsKeys } from "@/routes/_protected.contacts/-queries";
 import {
@@ -86,7 +87,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
     name: string,
     type: "person" | "organization",
   ) => {
-    const id = crypto.randomUUID();
+    const id = toSafeId<"contact">(crypto.randomUUID());
     createContact.mutate(
       { id, type, displayName: name },
       {

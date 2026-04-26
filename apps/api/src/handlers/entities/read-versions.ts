@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
-import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
 import { desktopEditSessions, entityVersions } from "@/api/db/schema";
@@ -8,15 +7,17 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const readVersionsParamsSchema = workspaceParams({ entityId: t.String() });
+const readVersionsParamsSchema = workspaceParams({
+  entityId: tSafeId("entity"),
+});
 
 type ReadVersionsHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
-  entityId: string;
+  entityId: SafeId<"entity">;
 };
 
 const readVersionsHandler = async function* ({
@@ -29,7 +30,7 @@ const readVersionsHandler = async function* ({
     safeDb((tx) =>
       tx.query.entities.findFirst({
         where: {
-          id: entityId,
+          id: { eq: entityId },
           workspaceId: { eq: workspaceId },
         },
         columns: {

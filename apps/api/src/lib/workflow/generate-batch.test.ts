@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import type { JustificationFilenames } from "@/api/lib/workflow/parse-justifications";
 
 // Stub @/api/db to prevent drizzle(DATABASE_URL) from
@@ -23,12 +24,14 @@ const { createMockJustifications } =
 const { parseJustificationXml } =
   await import("@/api/lib/workflow/parse-justifications");
 
+const fieldId = (value: string) => toSafeId<"field">(value);
+
 describe("justifications", () => {
   const filenames: JustificationFilenames = [
     {
       original: "filename",
       simplified: "f0",
-      fileFieldId: "file-field-0",
+      fileFieldId: fieldId("file-field-0"),
     },
   ];
 
@@ -44,13 +47,13 @@ describe("justifications", () => {
     expect(result?.htmlContent).toBe(
       `Some text <span data-page-number="1" data-field-id="file-field-0">1</span> more text <span data-page-number="2" data-field-id="file-field-0">2</span>`,
     );
-    expect(result?.fileFieldIds).toEqual(["file-field-0"]);
+    expect(result?.fileFieldIds).toEqual([fieldId("file-field-0")]);
   });
 
   test("merges multiple files into single html", () => {
     const multiFilenames: JustificationFilenames = [
-      { original: "file-a", simplified: "f0", fileFieldId: "field-a" },
-      { original: "file-b", simplified: "f1", fileFieldId: "field-b" },
+      { original: "file-a", simplified: "f0", fileFieldId: fieldId("field-a") },
+      { original: "file-b", simplified: "f1", fileFieldId: fieldId("field-b") },
     ];
     const xml = [
       `<j f="f0">Text from file A <p-f0-0001 /></j>`,
@@ -69,7 +72,10 @@ describe("justifications", () => {
     expect(result?.htmlContent).toContain(
       `Text from file B <span data-page-number="3" data-field-id="field-b">3</span>`,
     );
-    expect(result?.fileFieldIds).toEqual(["field-a", "field-b"]);
+    expect(result?.fileFieldIds).toEqual([
+      fieldId("field-a"),
+      fieldId("field-b"),
+    ]);
   });
 
   test("returns null for unknown filename", () => {
@@ -202,7 +208,7 @@ describe("justifications", () => {
     expect(result.htmlContent).toContain(
       `<span data-page-number="2" data-field-id="file-field-0"`,
     );
-    expect(result.fileFieldIds).toEqual(["file-field-0"]);
+    expect(result.fileFieldIds).toEqual([fieldId("file-field-0")]);
 
     const parsedContent = parseJustificationContent(
       result.htmlContent,

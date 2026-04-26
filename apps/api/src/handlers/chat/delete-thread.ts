@@ -8,14 +8,14 @@ import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { deleteS3Keys } from "@/api/handlers/files/utils";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { chat: ["delete"] },
-  params: t.Object({ threadId: t.String({ format: "uuid" }) }),
+  params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({
-    workspaceId: t.Optional(tUuid),
+    workspaceId: t.Optional(tSafeId("workspace")),
   }),
 } satisfies HandlerConfig;
 

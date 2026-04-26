@@ -6,13 +6,13 @@ import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateExpenseBodySchema = t.Object({
-  id: tUuid,
+  id: tSafeId("expense"),
   dateIncurred: t.Optional(t.String({ format: "date" })),
   amount: t.Optional(t.Integer({ minimum: 1 })),
   currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
@@ -21,7 +21,7 @@ const updateExpenseBodySchema = t.Object({
   invoiceDescription: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
   billable: t.Optional(t.Boolean()),
   markup: t.Optional(t.Integer({ minimum: 0, maximum: 100 })),
-  matterId: t.Optional(tUuid),
+  matterId: t.Optional(tSafeId("entity")),
   status: t.Optional(
     t.UnionEnum([BILLING_STATUS.DRAFT, BILLING_STATUS.APPROVED]),
   ),
@@ -39,7 +39,7 @@ const updateExpense = createSafeHandler(
       safeDb((tx) =>
         tx.query.expenses.findFirst({
           where: {
-            id: body.id,
+            id: { eq: body.id },
             workspaceId: { eq: workspaceId },
           },
           columns: {
@@ -71,7 +71,10 @@ const updateExpense = createSafeHandler(
       const matter = yield* Result.await(
         safeDb((tx) =>
           tx.query.entities.findFirst({
-            where: { id: body.matterId, workspaceId: { eq: workspaceId } },
+            where: {
+              id: { eq: body.matterId },
+              workspaceId: { eq: workspaceId },
+            },
             columns: { id: true },
           }),
         ),

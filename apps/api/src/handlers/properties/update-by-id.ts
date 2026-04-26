@@ -16,17 +16,18 @@ import {
 } from "@/api/handlers/properties/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   tDefaultVarchar,
-  tUuid,
+  tSafeId,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 
 type PropertyWithDeps = {
-  id: string;
-  dependencies: { dependsOnPropertyId: string }[];
+  id: SafeId<"property">;
+  dependencies: { dependsOnPropertyId: SafeId<"property"> }[];
 };
 
 /**
@@ -35,10 +36,10 @@ type PropertyWithDeps = {
  * on `rootId` (excludes `rootId` itself).
  */
 const getTransitiveDependents = (
-  rootId: string,
+  rootId: SafeId<"property">,
   allProperties: PropertyWithDeps[],
-): Set<string> => {
-  const dependents = new Map<string, string[]>();
+): Set<SafeId<"property">> => {
+  const dependents = new Map<SafeId<"property">, SafeId<"property">[]>();
   for (const prop of allProperties) {
     for (const dep of prop.dependencies) {
       const list = dependents.get(dep.dependsOnPropertyId);
@@ -50,7 +51,7 @@ const getTransitiveDependents = (
     }
   }
 
-  const visited = new Set<string>();
+  const visited = new Set<SafeId<"property">>();
   const queue = dependents.get(rootId) ?? [];
 
   for (const id of queue) {
@@ -75,7 +76,7 @@ const updatePropertyBodySchema = t.Object({
       t.Object({
         dependencies: t.Array(
           t.Object({
-            dependsOnPropertyId: tUuid,
+            dependsOnPropertyId: tSafeId("property"),
             condition: t.Nullable(propertyConditionSchema),
           }),
         ),
@@ -87,7 +88,7 @@ const updatePropertyBodySchema = t.Object({
 
 const config = {
   permissions: { property: ["update"] },
-  params: workspaceParams({ propertyId: tUuid }),
+  params: workspaceParams({ propertyId: tSafeId("property") }),
   body: updatePropertyBodySchema,
 } satisfies HandlerConfig;
 
@@ -110,7 +111,7 @@ const updateProperty = createSafeHandler(
     const oldProperty = yield* Result.await(
       safeDb((tx) =>
         tx.query.properties.findFirst({
-          where: { id: propertyId, workspaceId: { eq: workspaceId } },
+          where: { id: { eq: propertyId }, workspaceId: { eq: workspaceId } },
           with: {
             dependencies: {
               columns: {
@@ -143,12 +144,14 @@ const updateProperty = createSafeHandler(
       newProperty: { content, tool },
     });
 
-    if (tool.type === "ai-model") {
+    if (body.tool.type === "ai-model") {
       const validation = yield* validatePropertyInputs({
         safeDb,
         propertyId,
         workspaceId,
-        proposedInputs: tool.dependencies.map((d) => d.dependsOnPropertyId),
+        proposedInputs: body.tool.dependencies.map(
+          (d) => d.dependsOnPropertyId,
+        ),
       });
 
       if (Result.isError(validation)) {
@@ -161,7 +164,8 @@ const updateProperty = createSafeHandler(
       }
     }
 
-    const dependencies = tool.type === "ai-model" ? tool.dependencies : [];
+    const dependencies =
+      body.tool.type === "ai-model" ? body.tool.dependencies : [];
 
     // Strip dependencies from the tool for DB storage
     const dbTool: PropertyTool =

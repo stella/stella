@@ -5,6 +5,7 @@ import type { PropertyContentType } from "@stella/api/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceProperty } from "@/lib/types";
 import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
@@ -18,11 +19,13 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
 
   return useMutation({
     mutationFn: async ({ name, contentType }: CreatePropertyVars) => {
-      const response = await api.properties({ workspaceId }).put({
-        queryKey: propertiesKeys.all(workspaceId),
-        name,
-        contentType,
-      });
+      const response = await api
+        .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .put({
+          queryKey: propertiesKeys.all(workspaceId),
+          name,
+          contentType,
+        });
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -54,13 +57,24 @@ export const useUpdateProperty = () => {
       tool,
     }: UpdatePropertyVars) => {
       const response = await api
-        .properties({ workspaceId })
-        .property({ propertyId })
+        .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .property({ propertyId: toSafeId<"property">(propertyId) })
         .post({
           queryKey: propertiesKeys.all(workspaceId),
           name,
           content,
-          tool,
+          tool:
+            tool.type === "ai-model"
+              ? {
+                  ...tool,
+                  dependencies: tool.dependencies.map((dependency) => ({
+                    ...dependency,
+                    dependsOnPropertyId: toSafeId<"property">(
+                      dependency.dependsOnPropertyId,
+                    ),
+                  })),
+                }
+              : tool,
         });
 
       if (response.error) {
@@ -84,8 +98,8 @@ export const useDeleteProperty = () => {
   return useMutation({
     mutationFn: async ({ workspaceId, propertyId }: DeletePropertyVars) => {
       const response = await api
-        .properties({ workspaceId })
-        .property({ propertyId })
+        .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .property({ propertyId: toSafeId<"property">(propertyId) })
         .delete({
           queryKey: propertiesKeys.all(workspaceId),
         });

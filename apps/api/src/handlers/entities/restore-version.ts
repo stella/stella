@@ -1,18 +1,18 @@
 import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
-import { t } from "elysia";
 
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import { buildVersionStamp } from "@/api/handlers/entities/version-utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { workspaceParams } from "@/api/lib/custom-schema";
+import { createSafeId } from "@/api/lib/branded-types";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
 
 const paramsSchema = workspaceParams({
-  entityId: t.String(),
-  versionId: t.String(),
+  entityId: tSafeId("entity"),
+  versionId: tSafeId("entityVersion"),
 });
 
 const config = {
@@ -30,8 +30,8 @@ export default createSafeHandler(
       safeDb((tx) =>
         tx.query.entityVersions.findFirst({
           where: {
-            id: params.versionId,
-            entityId: params.entityId,
+            id: { eq: params.versionId },
+            entityId: { eq: params.entityId },
             workspaceId: { eq: workspaceId },
           },
           columns: { id: true, versionNumber: true },
@@ -66,13 +66,16 @@ export default createSafeHandler(
     );
 
     const nextVersionNumber = (latestVersion.at(0)?.versionNumber ?? 0) + 1;
-    const nextVersionId = crypto.randomUUID();
+    const nextVersionId = createSafeId<"entityVersion">();
 
     // Get entity info for stamp
     const entity = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findFirst({
-          where: { id: params.entityId, workspaceId: { eq: workspaceId } },
+          where: {
+            id: { eq: params.entityId },
+            workspaceId: { eq: workspaceId },
+          },
           columns: { docSequence: true },
         }),
       ),
@@ -81,7 +84,7 @@ export default createSafeHandler(
     const workspace = yield* Result.await(
       safeDb((tx) =>
         tx.query.workspaces.findFirst({
-          where: { id: workspaceId },
+          where: { id: { eq: workspaceId } },
           columns: { reference: true },
         }),
       ),

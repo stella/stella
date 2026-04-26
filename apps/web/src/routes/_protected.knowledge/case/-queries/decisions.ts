@@ -2,6 +2,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 
 const DEFAULT_PAGE_SIZE = 50;
 
@@ -66,7 +67,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
               language: listFilters.language,
             }),
             ...(listFilters.sourceId !== undefined && {
-              sourceId: listFilters.sourceId,
+              sourceId: toSafeId<"caseLawSource">(listFilters.sourceId),
             }),
           },
           { fetch: { signal } },
@@ -77,7 +78,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
         }
         return {
           decisions: response.data.hits.map((h) => ({
-            id: h.decisionId,
+            id: toSafeId<"caseLawDecision">(h.decisionId),
             caseNumber: h.caseNumber,
             ecli: h.ecli,
             court: h.court,
@@ -120,7 +121,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
             language: listFilters.language,
           }),
           ...(listFilters.sourceId !== undefined && {
-            sourceId: listFilters.sourceId,
+            sourceId: toSafeId<"caseLawSource">(listFilters.sourceId),
           }),
         },
         fetch: { signal },
@@ -145,7 +146,7 @@ export const decisionOptions = (decisionId: string) =>
     queryKey: caseLawDecisionKeys.byId(decisionId),
     queryFn: async ({ signal }) => {
       const response = await api.case
-        .decisions({ decisionId })
+        .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
         .get({ fetch: { signal } });
 
       if (response.error) {

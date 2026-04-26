@@ -46,6 +46,7 @@ import type {
   PropertyTool,
 } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { getS3 } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
@@ -74,6 +75,20 @@ const fileExtRe = /\.(pdf|docx)$/;
 const PDF_MIME = "application/pdf" as const;
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document" as const;
+
+type BillingCodeId = SafeId<"billingCode">;
+type ContactId = SafeId<"contact">;
+type EntityId = SafeId<"entity">;
+type EntityVersionId = SafeId<"entityVersion">;
+type ExpenseId = SafeId<"expense">;
+type FieldId = SafeId<"field">;
+type InvoiceId = SafeId<"invoice">;
+type PropertyId = SafeId<"property">;
+type RateEntryId = SafeId<"rateEntry">;
+type RateTableId = SafeId<"rateTable">;
+type UserFileId = SafeId<"userFile">;
+type WorkspaceContactId = SafeId<"workspaceContact">;
+type WorkspaceId = SafeId<"workspace">;
 
 /**
  * Unicode → WinAnsiEncoding (CP1252) mapping for chars
@@ -1956,8 +1971,8 @@ const seedWorkspaces = [
 // ─── Properties (per-workspace) ─────────────────────────
 
 type PropertySeed = {
-  id: string;
-  workspaceId: string;
+  id: PropertyId;
+  workspaceId: WorkspaceId;
   name: string;
   content: PropertyContent;
   tool: PropertyTool;
@@ -1965,7 +1980,10 @@ type PropertySeed = {
   kinds?: EntityKind[];
 };
 
-const buildProperties = (wsId: string, wsLabel: string): PropertySeed[] => [
+const buildProperties = (
+  wsId: WorkspaceId,
+  wsLabel: string,
+): PropertySeed[] => [
   {
     id: seedId(`${wsLabel}-prop-file`),
     workspaceId: wsId,
@@ -2011,14 +2029,14 @@ const buildProperties = (wsId: string, wsLabel: string): PropertySeed[] => [
 // ─── Entities (per-workspace) ───────────────────────────
 
 type EntitySeed = {
-  entityId: string;
-  versionId: string;
-  workspaceId: string;
+  entityId: EntityId;
+  versionId: EntityVersionId;
+  workspaceId: WorkspaceId;
   kind: "document" | "folder";
-  parentId?: string;
+  parentId?: EntityId;
 };
 
-const buildEntities = (wsId: string, wsLabel: string): EntitySeed[] => {
+const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
   const folderId = seedId(`${wsLabel}-folder-1`);
   return [
     {
@@ -2059,10 +2077,10 @@ const buildEntities = (wsId: string, wsLabel: string): EntitySeed[] => {
 // ─── Fields (status, due date, notes for each entity) ───
 
 type FieldSeed = {
-  id: string;
-  workspaceId: string;
-  propertyId: string;
-  entityVersionId: string;
+  id: FieldId;
+  workspaceId: WorkspaceId;
+  propertyId: PropertyId;
+  entityVersionId: EntityVersionId;
   content: FieldContent;
 };
 
@@ -2175,9 +2193,9 @@ type PartyRoleType =
   | "other";
 
 type PartySeed = {
-  id: string;
-  workspaceId: string;
-  contactId: string;
+  id: WorkspaceContactId;
+  workspaceId: WorkspaceId;
+  contactId: ContactId;
   role: PartyRoleType;
 };
 
@@ -2265,8 +2283,8 @@ const ACTIVITY_CODES = [
 ] as const;
 
 type BillingCodeSeed = {
-  id: string;
-  workspaceId: string;
+  id: BillingCodeId;
+  workspaceId: WorkspaceId;
   type: "task" | "activity";
   code: string;
   label: string;
@@ -2306,16 +2324,16 @@ const buildBillingCodes = (): BillingCodeSeed[] => {
 // ─── Rate tables ───────────────────────────────────────
 
 type RateTableSeed = {
-  id: string;
-  workspaceId: string;
+  id: RateTableId;
+  workspaceId: WorkspaceId;
   name: string;
   currency: string;
 };
 
 type RateEntrySeed = {
-  id: string;
-  workspaceId: string;
-  rateTableId: string;
+  id: RateEntryId;
+  workspaceId: WorkspaceId;
+  rateTableId: RateTableId;
   userId: string;
   hourlyRate: number;
   effectiveFrom: string;
@@ -2403,10 +2421,10 @@ const EXTENDED_NARRATIVES = [
 ];
 
 type ExtendedTimeEntrySeed = {
-  id: string;
-  workspaceId: string;
+  id: SafeId<"timeEntry">;
+  workspaceId: WorkspaceId;
   userId: string;
-  matterId: string;
+  matterId: EntityId;
   dateWorked: string;
   durationMinutes: number;
   billedMinutes: number;
@@ -2417,7 +2435,7 @@ type ExtendedTimeEntrySeed = {
   status: "draft" | "approved" | "billed" | "written_off";
   taskCode: string;
   activityCode: string;
-  invoiceId: string | null;
+  invoiceId: InvoiceId | null;
 };
 
 const WS_LABELS = [
@@ -2432,7 +2450,7 @@ const WS_LABELS = [
 ] as const;
 
 const buildExtendedTimeEntries = (
-  invoiceIds: string[],
+  invoiceIds: InvoiceId[],
   userIds: readonly string[],
   userRates: Record<string, number>,
 ): ExtendedTimeEntrySeed[] => {
@@ -2465,7 +2483,7 @@ const buildExtendedTimeEntries = (
     // 10% billed, 5% written_off
     const statusRoll = i % 20;
     let status: ExtendedTimeEntrySeed["status"] = "draft";
-    let invoiceId: string | null = null;
+    let invoiceId: InvoiceId | null = null;
     if (statusRoll >= 19) {
       status = "written_off";
     } else if (statusRoll >= 17) {
@@ -2501,10 +2519,10 @@ const buildExtendedTimeEntries = (
 // ─── Expenses (~50) ────────────────────────────────────
 
 type ExpenseSeed = {
-  id: string;
-  workspaceId: string;
+  id: ExpenseId;
+  workspaceId: WorkspaceId;
   userId: string;
-  matterId: string;
+  matterId: EntityId;
   dateIncurred: string;
   amount: number;
   currency: string;
@@ -2594,8 +2612,8 @@ const buildExpenses = (userIds: readonly string[]): ExpenseSeed[] => {
 // ─── Invoices (~5) ─────────────────────────────────────
 
 type InvoiceSeed = {
-  id: string;
-  workspaceId: string;
+  id: InvoiceId;
+  workspaceId: WorkspaceId;
   invoiceNumber: string;
   status: "draft" | "finalized" | "sent" | "paid";
   invoiceDate: string;
@@ -2902,7 +2920,7 @@ const MORE_WORKSPACES = [
 export async function seed(organizationId?: string, userId?: string) {
   const ORG_ID = toSafeId<"organization">(organizationId ?? DEFAULT_ORG_ID);
   const USER_ID = userId ?? DEFAULT_USER_ID;
-  const toWs = (id: string) => toSafeId<"workspace">(id);
+  const toWs = (id: WorkspaceId) => id;
   const seedUserIds = buildSeedUserIds({
     primaryUserId: USER_ID,
     colleagueCount: DEFAULT_SEED_COLLEAGUE_COUNT,
@@ -3195,7 +3213,7 @@ export async function seed(organizationId?: string, userId?: string) {
 
   /** Seed all document content for a single workspace. */
   const seedDocumentsForWorkspace = async (
-    wsId: string,
+    wsId: WorkspaceId,
     wsLabel: string,
     docNames: string[],
   ) => {
@@ -3237,7 +3255,7 @@ export async function seed(organizationId?: string, userId?: string) {
 
       // DOCX files are rendered natively via Folio — no PDF twin needed.
       // Non-DOCX convertible types still get a PDF twin from Gotenberg.
-      const pdfFileId: string | null = null;
+      const pdfFileId: UserFileId | null = null;
 
       // ── File field ──
       await db
@@ -3269,7 +3287,7 @@ export async function seed(organizationId?: string, userId?: string) {
       // the seed ran, e.g. via manual signup).
       if (docText) {
         const ws = await db.query.workspaces.findFirst({
-          where: { id: toWs(wsId) },
+          where: { id: { eq: toWs(wsId) } },
           columns: { organizationId: true },
         });
         const ecOrgId = ws?.organizationId ?? ORG_ID;
@@ -3294,7 +3312,7 @@ export async function seed(organizationId?: string, userId?: string) {
 
   // Resolve doc names for each workspace
   type WsDocPlan = {
-    wsId: string;
+    wsId: WorkspaceId;
     wsLabel: string;
     docNames: string[];
   };
@@ -3526,7 +3544,7 @@ export async function seed(organizationId?: string, userId?: string) {
 // Allow running as a CLI script
 if (import.meta.main) {
   const testUser = await db.query.user.findFirst({
-    where: { id: DEFAULT_USER_ID },
+    where: { id: { eq: DEFAULT_USER_ID } },
     columns: { id: true },
   });
 

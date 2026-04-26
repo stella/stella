@@ -72,7 +72,7 @@ export const classifyWithLLM = async (
     properties: {
       language,
     },
-    traceId: crypto.randomUUID(),
+    traceId: Bun.randomUUIDv7(),
   });
 
   return await Result.tryPromise({

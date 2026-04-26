@@ -3,6 +3,8 @@ import { queryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { STALE_TIME } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
+import type { SafeId } from "@/lib/safe-id";
+import { toSafeId } from "@/lib/safe-id";
 
 // ── Key factory ─────────────────────────────────────
 
@@ -42,7 +44,14 @@ export const templatesOptions = (categoryId?: string | null) =>
   queryOptions({
     queryKey: knowledgeKeys.templates.list(categoryId),
     queryFn: async ({ signal }) => {
-      const query = categoryId ? { categoryId } : {};
+      const query: {
+        categoryId?: SafeId<"templateCategory"> | "uncategorized";
+      } = {};
+      if (categoryId === "uncategorized") {
+        query.categoryId = "uncategorized";
+      } else if (categoryId) {
+        query.categoryId = toSafeId<"templateCategory">(categoryId);
+      }
       const response = await api.templates.get({
         query,
         fetch: { signal },
@@ -62,7 +71,7 @@ export const templateDetailOptions = (templateId: string) =>
     queryKey: knowledgeKeys.templates.detail(templateId),
     queryFn: async ({ signal }) => {
       const response = await api
-        .templates({ templateId })
+        .templates({ templateId: toSafeId<"template">(templateId) })
         .get({ fetch: { signal } });
 
       if (response.error) {
@@ -79,7 +88,7 @@ export const templatePreviewOptions = (templateId: string) =>
     queryKey: knowledgeKeys.templates.preview(templateId),
     queryFn: async ({ signal }) => {
       const response = await api
-        .templates({ templateId })
+        .templates({ templateId: toSafeId<"template">(templateId) })
         .preview.get({ fetch: { signal } });
 
       if (response.error) {
@@ -96,7 +105,7 @@ export const templateVersionsOptions = (templateId: string) =>
     queryKey: knowledgeKeys.templates.versions(templateId),
     queryFn: async ({ signal }) => {
       const response = await api
-        .templates({ templateId })
+        .templates({ templateId: toSafeId<"template">(templateId) })
         .versions.get({ fetch: { signal } });
 
       if (response.error) {
@@ -113,7 +122,7 @@ export const templateClausesOptions = (templateId: string) =>
     queryKey: knowledgeKeys.templates.clauses(templateId),
     queryFn: async ({ signal }) => {
       const response = await api
-        .templates({ templateId })
+        .templates({ templateId: toSafeId<"template">(templateId) })
         .clauses.get({ fetch: { signal } });
 
       if (response.error) {
@@ -172,7 +181,7 @@ export const clausesOptions = (params: {
     queryKey: knowledgeKeys.clauses.list(params),
     queryFn: async ({ signal }) => {
       const query: {
-        categoryId?: string;
+        categoryId?: SafeId<"clauseCategory">;
         uncategorized?: boolean;
         q?: string;
         limit?: number;
@@ -181,7 +190,7 @@ export const clausesOptions = (params: {
       if (params.categoryId === "uncategorized") {
         query.uncategorized = true;
       } else if (params.categoryId) {
-        query.categoryId = params.categoryId;
+        query.categoryId = toSafeId<"clauseCategory">(params.categoryId);
       }
 
       if (params.search) {

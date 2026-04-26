@@ -15,7 +15,7 @@ const getFieldMarker = ({
 export const buildFieldMarkers = ({
   fieldCount,
   fields,
-  randomUUID = () => crypto.randomUUID(),
+  randomUUID = () => Bun.randomUUIDv7(),
 }: {
   fieldCount: number;
   fields: string[];

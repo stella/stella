@@ -8,18 +8,18 @@ import { extractText } from "@/api/handlers/docx/extract-text";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 
 const previewTemplateParamsSchema = t.Object({
-  templateId: tUuid,
+  templateId: tSafeId("template"),
 });
 
 type PreviewTemplateProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  templateId: string;
+  templateId: SafeId<"template">;
 };
 
 const previewTemplateHandler = async function* ({
@@ -30,7 +30,10 @@ const previewTemplateHandler = async function* ({
   const template = yield* Result.await(
     safeDb((tx) =>
       tx.query.templates.findFirst({
-        where: { id: templateId, organizationId: { eq: organizationId } },
+        where: {
+          id: { eq: templateId },
+          organizationId: { eq: organizationId },
+        },
         columns: { s3Key: true },
       }),
     ),

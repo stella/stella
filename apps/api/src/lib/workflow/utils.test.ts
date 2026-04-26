@@ -4,6 +4,7 @@ import type {
   FieldContent,
   PropertyCondition,
 } from "@/api/db/schema-validators";
+import { toSafeId } from "@/api/lib/branded-types";
 import type {
   BatchProperty,
   PropertyBatch,
@@ -35,11 +36,13 @@ void mock.module("@/api/handlers/registry/utils", () => ({
 const { evaluateCondition, prepareBatch } =
   await import("@/api/lib/workflow/utils");
 
+const propertyId = (value: string) => toSafeId<"property">(value);
+
 const createBatchProperty = (
   id: string,
   overrides: Partial<BatchProperty> = {},
 ): BatchProperty => ({
-  id,
+  id: propertyId(id),
   status: "fresh",
   content: { version: 1, type: "text" },
   tool: { version: 1, type: "ai-model", prompt: "test" },
@@ -264,7 +267,7 @@ describe("prepareBatch", () => {
     const result = prepareBatch(rawBatch, fieldContentMap);
 
     expect(result.properties).toHaveLength(1);
-    expect(result.properties[0]?.id).toBe("p1");
+    expect(result.properties[0]?.id).toBe(propertyId("p1"));
   });
 
   test("includes fresh property with error content", () => {
@@ -278,7 +281,7 @@ describe("prepareBatch", () => {
     const result = prepareBatch(rawBatch, fieldContentMap);
 
     expect(result.properties).toHaveLength(1);
-    expect(result.properties[0]?.id).toBe("p1");
+    expect(result.properties[0]?.id).toBe(propertyId("p1"));
   });
 
   test("includes fresh property with pending content", () => {
@@ -292,7 +295,7 @@ describe("prepareBatch", () => {
     const result = prepareBatch(rawBatch, fieldContentMap);
 
     expect(result.properties).toHaveLength(1);
-    expect(result.properties[0]?.id).toBe("p1");
+    expect(result.properties[0]?.id).toBe(propertyId("p1"));
   });
 
   test("includes non-fresh property regardless of field content", () => {
@@ -308,17 +311,23 @@ describe("prepareBatch", () => {
     const result = prepareBatch(rawBatch, fieldContentMap);
 
     expect(result.properties).toHaveLength(2);
-    expect(result.properties.map((p) => p.id)).toEqual(["p1", "p2"]);
+    expect(result.properties.map((p) => p.id)).toEqual([
+      propertyId("p1"),
+      propertyId("p2"),
+    ]);
   });
 
   test("returns empty properties when raw batch has no properties", () => {
-    const rawBatch = createRawBatch([], { id: "empty-batch", inputs: ["dep"] });
+    const rawBatch = createRawBatch([], {
+      id: "empty-batch",
+      inputs: [propertyId("dep")],
+    });
     const fieldContentMap = new Map<string, FieldContent["type"]>();
 
     const result = prepareBatch(rawBatch, fieldContentMap);
 
     expect(result.properties).toHaveLength(0);
     expect(result.id).toBe("empty-batch");
-    expect(result.inputs).toEqual(["dep"]);
+    expect(result.inputs).toEqual([propertyId("dep")]);
   });
 });

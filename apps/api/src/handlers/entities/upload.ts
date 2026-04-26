@@ -15,8 +15,9 @@ import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
+import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -33,7 +34,7 @@ const uploadEntityBodySchema = t.Object({
     maxSize: FILE_SIZE_LIMITS.document,
   }),
   name: tDefaultVarchar,
-  propertyId: tUuid,
+  propertyId: tSafeId("property"),
 });
 
 type UploadEntityHandlerProps = {
@@ -46,7 +47,7 @@ type UploadEntityHandlerProps = {
 
 type ResolveFileNameProps = {
   tx: Transaction;
-  propertyId: string;
+  propertyId: SafeId<"property">;
   name: SanitizedFileName;
 };
 
@@ -100,7 +101,7 @@ const uploadEntityHandler = async function* ({
     safeDb((tx) =>
       tx.query.properties.findFirst({
         columns: { id: true, content: true },
-        where: { id: propertyId, workspaceId: { eq: workspaceId } },
+        where: { id: { eq: propertyId }, workspaceId: { eq: workspaceId } },
       }),
     ),
   ]);
@@ -186,7 +187,7 @@ const uploadEntityHandler = async function* ({
     encrypted = result.value;
   }
 
-  const fileId = crypto.randomUUID();
+  const fileId = Bun.randomUUIDv7();
   const sourceKey = createFileKey({
     organizationId,
     workspaceId,
@@ -226,7 +227,7 @@ const uploadEntityHandler = async function* ({
   let pdfFileId: string | null = null;
 
   if (conversionResult && Result.isOk(conversionResult)) {
-    pdfFileId = crypto.randomUUID();
+    pdfFileId = Bun.randomUUIDv7();
 
     const pdfKey = createFileKey({
       organizationId,
@@ -241,8 +242,8 @@ const uploadEntityHandler = async function* ({
   }
 
   try {
-    const entityId = crypto.randomUUID();
-    const entityVersionId = crypto.randomUUID();
+    const entityId = createSafeId<"entity">();
+    const entityVersionId = createSafeId<"entityVersion">();
 
     const fileName = yield* Result.await(
       safeDb(async (tx) => {

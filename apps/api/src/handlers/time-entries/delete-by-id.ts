@@ -4,11 +4,11 @@ import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const deleteTimeEntryBodySchema = t.Object({
-  id: tUuid,
+  id: tSafeId("timeEntry"),
 });
 
 const deleteTimeEntryById = createSafeHandler(
@@ -21,7 +21,7 @@ const deleteTimeEntryById = createSafeHandler(
       safeDb((tx) =>
         tx.query.timeEntries.findFirst({
           where: {
-            id: body.id,
+            id: { eq: body.id },
             workspaceId: { eq: workspaceId },
           },
           columns: {

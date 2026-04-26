@@ -9,8 +9,9 @@ import { entityKindSchema } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -18,7 +19,7 @@ import { getSearchProvider } from "@/api/lib/search/provider";
 
 const createEntityBodySchema = t.Object({
   kind: t.Optional(entityKindSchema),
-  parentId: t.Optional(t.Nullable(tUuid)),
+  parentId: t.Optional(t.Nullable(tSafeId("entity"))),
   name: t.Optional(t.String()),
 });
 
@@ -49,12 +50,12 @@ const checkEntityLimit = async (
 
 const validateParentId = async (
   tx: Transaction,
-  parentId: string,
+  parentId: SafeId<"entity">,
   workspaceId: SafeId<"workspace">,
 ): Promise<string | null> => {
   const parent = await tx.query.entities.findFirst({
     where: {
-      id: parentId,
+      id: { eq: parentId },
       workspaceId: { eq: workspaceId },
     },
     columns: {
@@ -101,7 +102,7 @@ const createEntitiesHandler = async function* ({
         }
       }
 
-      const entityId = crypto.randomUUID();
+      const entityId = createSafeId<"entity">();
       const effectiveKind = kind ?? "document";
 
       const entityStamp =
@@ -119,7 +120,7 @@ const createEntitiesHandler = async function* ({
         docSequence: entityStamp?.docSequence ?? null,
       });
 
-      const entityVersionId = crypto.randomUUID();
+      const entityVersionId = createSafeId<"entityVersion">();
 
       await tx.insert(entityVersions).values({
         id: entityVersionId,

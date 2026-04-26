@@ -4,14 +4,14 @@ import { and, eq } from "drizzle-orm";
 import { workspaceViews } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
 import { REQUIRED_VIEW_LAYOUTS } from "@/api/lib/views";
 
 const config = {
   permissions: { view: ["delete"] },
-  params: workspaceParams({ viewId: tUuid }),
+  params: workspaceParams({ viewId: tSafeId("workspaceView") }),
 } satisfies HandlerConfig;
 
 const deleteView = createSafeHandler(

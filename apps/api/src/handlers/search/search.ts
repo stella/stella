@@ -4,9 +4,8 @@ import type { Static } from "elysia";
 import type { ScopedDb } from "@/api/db";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
-import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 export const searchBodySchema = t.Object({
@@ -14,7 +13,7 @@ export const searchBodySchema = t.Object({
     minLength: 1,
     maxLength: LIMITS.searchQueryMaxLength,
   }),
-  workspaceId: t.Optional(tUuid),
+  workspaceId: t.Optional(tSafeId("workspace")),
   kinds: t.Optional(t.Array(entityKindSchema)),
   cursor: t.Optional(t.String()),
   limit: t.Optional(
@@ -48,7 +47,7 @@ export const searchHandler = async ({
     const ws = await scopedDb((tx) =>
       tx.query.workspaces.findFirst({
         where: {
-          id: body.workspaceId,
+          id: { eq: body.workspaceId },
           organizationId: { eq: organizationId },
           status: { ne: "deleting" },
         },
@@ -60,7 +59,7 @@ export const searchHandler = async ({
         message: "Workspace not found in organization",
       });
     }
-    workspaceId = brandPersistedWorkspaceId(ws.id);
+    workspaceId = ws.id;
   }
 
   const provider = getSearchProvider();

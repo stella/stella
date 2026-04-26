@@ -1,10 +1,10 @@
 import { Result } from "better-result";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const invoiceParamsSchema = workspaceParams({ invoiceId: tUuid });
+const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
 const readInvoiceById = createSafeHandler(
   {
@@ -16,7 +16,7 @@ const readInvoiceById = createSafeHandler(
       safeDb((tx) =>
         tx.query.invoices.findFirst({
           where: {
-            id: params.invoiceId,
+            id: { eq: params.invoiceId },
             workspaceId: { eq: workspaceId },
           },
           with: {

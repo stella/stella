@@ -9,8 +9,9 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -18,7 +19,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 
 const duplicateEntityBodySchema = t.Object({
-  entityId: tUuid,
+  entityId: tSafeId("entity"),
 });
 
 type DuplicateEntityHandlerProps = {
@@ -37,7 +38,7 @@ const trailingSuffixRe = /_\d+$/;
 type ResolveEntityNameProps = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
-  parentId: string | null;
+  parentId: SafeId<"entity"> | null;
   name: string | null;
 };
 
@@ -127,7 +128,7 @@ const duplicateEntityHandler = async function* ({
   const source = yield* Result.await(
     safeDb((tx) =>
       tx.query.entities.findFirst({
-        where: { id: sourceEntityId, workspaceId: { eq: workspaceId } },
+        where: { id: { eq: sourceEntityId }, workspaceId: { eq: workspaceId } },
         columns: {
           id: true,
           kind: true,
@@ -196,8 +197,8 @@ const duplicateEntityHandler = async function* ({
         };
       }
 
-      const newEntityId = crypto.randomUUID();
-      const newVersionId = crypto.randomUUID();
+      const newEntityId = createSafeId<"entity">();
+      const newVersionId = createSafeId<"entityVersion">();
 
       const duplicateName = await resolveEntityName({
         tx,

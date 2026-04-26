@@ -35,6 +35,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { formatRelativeTime } from "@/lib/relative-time";
+import { toSafeId } from "@/lib/safe-id";
 import { entityVersionsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 
 type VersionsSidebarProps = {
@@ -122,9 +123,9 @@ export function VersionsSidebar({
     setIsUploading(true);
     try {
       const response = await api
-        .entities({ workspaceId })
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         ["upload-version"].post({
-          entityId,
+          entityId: toSafeId<"entity">(entityId),
           file,
           queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
         });
@@ -146,9 +147,9 @@ export function VersionsSidebar({
       remaining.find((v) => v.id === currentVersionId) ?? remaining.at(0);
 
     const response = await api
-      .entities({ workspaceId })
-      .entity({ entityId })
-      .versions({ versionId })
+      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      .entity({ entityId: toSafeId<"entity">(entityId) })
+      .versions({ versionId: toSafeId<"entityVersion">(versionId) })
       .delete({
         queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
       });
@@ -170,9 +171,9 @@ export function VersionsSidebar({
 
   const handleSetLabel = async (versionId: string, label: string | null) => {
     await api
-      .entities({ workspaceId })
-      .entity({ entityId })
-      .versions({ versionId })
+      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      .entity({ entityId: toSafeId<"entity">(entityId) })
+      .versions({ versionId: toSafeId<"entityVersion">(versionId) })
       .label.patch({
         label,
         queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
@@ -182,9 +183,9 @@ export function VersionsSidebar({
 
   const handleRestore = async (versionId: string) => {
     await api
-      .entities({ workspaceId })
-      .entity({ entityId })
-      .versions({ versionId })
+      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      .entity({ entityId: toSafeId<"entity">(entityId) })
+      .versions({ versionId: toSafeId<"entityVersion">(versionId) })
       .restore.post({
         queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
       });
@@ -193,8 +194,8 @@ export function VersionsSidebar({
 
   const handleDownload = async (fieldId: string) => {
     const response = await api
-      .files({ workspaceId })
-      .url({ fieldId })
+      .files({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      .url({ fieldId: toSafeId<"field">(fieldId) })
       .get({ query: { purpose: "download" } });
     if (!response.error) {
       window.open(response.data.presignedUrl, "_blank");

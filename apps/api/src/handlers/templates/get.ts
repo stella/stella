@@ -5,18 +5,18 @@ import type { SafeDb } from "@/api/db";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 
 const getTemplateParamsSchema = t.Object({
-  templateId: tUuid,
+  templateId: tSafeId("template"),
 });
 
 type GetTemplateProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  templateId: string;
+  templateId: SafeId<"template">;
 };
 
 /** Presigned URL validity in seconds (15 min). */
@@ -30,7 +30,10 @@ const getTemplateHandler = async function* ({
   const template = yield* Result.await(
     safeDb((tx) =>
       tx.query.templates.findFirst({
-        where: { id: templateId, organizationId: { eq: organizationId } },
+        where: {
+          id: { eq: templateId },
+          organizationId: { eq: organizationId },
+        },
         columns: {
           id: true,
           name: true,

@@ -4,12 +4,12 @@ import { t } from "elysia";
 
 import { contacts, workspaces } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 
 const deleteContactParamsSchema = t.Object({
-  contactId: tUuid,
+  contactId: tSafeId("contact"),
 });
 
 const deleteContactById = createSafeRootHandler(

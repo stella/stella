@@ -8,12 +8,12 @@ import { entities, workspaces } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const moveEntityBodySchema = t.Object({
-  entityId: tUuid,
-  parentId: t.Nullable(tUuid),
+  entityId: tSafeId("entity"),
+  parentId: t.Nullable(tSafeId("entity")),
 });
 
 type MoveEntityBodySchema = Static<typeof moveEntityBodySchema>;
@@ -156,8 +156,8 @@ const moveEntityHandler = async function* ({
  */
 const checkIsDescendant = async (
   tx: Transaction,
-  startId: string,
-  targetAncestorId: string,
+  startId: SafeId<"entity">,
+  targetAncestorId: SafeId<"entity">,
   workspaceId: SafeId<"workspace">,
 ): Promise<boolean> => {
   const result = await tx.execute<{ found: boolean }>(sql`

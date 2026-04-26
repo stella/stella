@@ -9,6 +9,7 @@ import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
 import { api } from "@/lib/api";
+import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -117,7 +118,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
         },
         {
           onSuccess: (data) => {
-            if (!data.entityId) {
+            if (data.entityId === undefined) {
               return;
             }
             if (!isTaskDateProperty(datePropertyId)) {
@@ -279,9 +280,9 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       }
       if (datePropertyId === TASK_DATE_IDS[0] && kind === "task") {
         api
-          .tasks({ workspaceId })
+          .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .patch({
-            taskId: entityId,
+            taskId: toSafeId<"entity">(entityId),
             queryKey: entitiesKeys.all(workspaceId),
             dueDate: date,
           })

@@ -8,18 +8,18 @@ import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 
 const deleteTemplateParamsSchema = t.Object({
-  templateId: tUuid,
+  templateId: tSafeId("template"),
 });
 
 type DeleteTemplateProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  templateId: string;
+  templateId: SafeId<"template">;
 };
 
 const deleteTemplateHandler = async function* ({
@@ -30,7 +30,10 @@ const deleteTemplateHandler = async function* ({
   const existing = yield* Result.await(
     safeDb((tx) =>
       tx.query.templates.findFirst({
-        where: { id: templateId, organizationId: { eq: organizationId } },
+        where: {
+          id: { eq: templateId },
+          organizationId: { eq: organizationId },
+        },
         columns: { id: true, s3Key: true },
         with: {
           versions: { columns: { s3Key: true } },

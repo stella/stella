@@ -10,12 +10,12 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { generateBBoxes } from "@/api/lib/bbox/generate-b-boxes";
 import { generateBBoxesMock } from "@/api/lib/bbox/generate-b-boxes-mock";
 import { prepareJustificationData } from "@/api/lib/bbox/generate-b-boxes-shared";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 
 const config = {
   permissions: { workspace: ["update"] },
   body: t.Object({
-    justificationId: tUuid,
+    justificationId: tSafeId("justification"),
   }),
 } satisfies HandlerConfig;
 

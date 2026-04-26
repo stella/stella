@@ -9,7 +9,7 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
@@ -21,7 +21,7 @@ const createInvoiceBodySchema = t.Object({
   reference: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
   currency: t.String({ minLength: 3, maxLength: 3 }),
   notes: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
-  timeEntryIds: t.Array(tUuid, {
+  timeEntryIds: t.Array(tSafeId("timeEntry"), {
     minItems: 1,
     maxItems: 500,
   }),

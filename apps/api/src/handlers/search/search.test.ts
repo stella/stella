@@ -77,13 +77,14 @@ describe("search handler workspace scoping", () => {
   });
 
   test("keeps the accessible workspace allowlist when a workspace is selected", async () => {
-    const findFirstMock = mock(async () => ({ id: "ws_1" }));
+    const workspaceId = toSafeId<"workspace">("ws_1");
+    const findFirstMock = mock(async () => ({ id: workspaceId }));
 
     await searchHandler({
       accessibleWorkspaceIds,
       body: {
         query: "closing memo",
-        workspaceId: "ws_1",
+        workspaceId,
       },
       organizationId,
       scopedDb: createWorkspaceLookupScopedDb(findFirstMock),
@@ -91,7 +92,11 @@ describe("search handler workspace scoping", () => {
 
     expect(findFirstMock).toHaveBeenCalledWith({
       columns: { id: true },
-      where: { id: "ws_1", organizationId: { eq: "org_1" } },
+      where: {
+        id: { eq: workspaceId },
+        organizationId: { eq: organizationId },
+        status: { ne: "deleting" },
+      },
     });
     expect(searchMock).toHaveBeenCalledWith(
       expect.objectContaining({

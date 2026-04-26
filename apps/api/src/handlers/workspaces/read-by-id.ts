@@ -18,7 +18,7 @@ export const readWorkspaceHandler = async ({
   const result = await scopedDb((tx) =>
     tx.query.workspaces.findFirst({
       where: {
-        id: workspaceId,
+        id: { eq: workspaceId },
       },
       with: {
         client: {

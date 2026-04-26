@@ -8,7 +8,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 type DeleteMatterLinkProps = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
-  linkId: string;
+  linkId: SafeId<"caseLawMatterLink">;
 };
 
 export const deleteMatterLinkHandler = async ({

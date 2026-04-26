@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { t } from "elysia";
 import JSZip from "jszip";
 
 import type { SafeDb } from "@/api/db";
@@ -9,16 +8,19 @@ import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { workspaceParams } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 
-const downloadZipParamsSchema = workspaceParams({ entityId: t.String() });
+const downloadZipParamsSchema = workspaceParams({
+  entityId: tSafeId("entity"),
+});
 
 type DownloadZipHandlerProps = {
   safeDb: SafeDb;
-  entityId: string;
+  entityId: SafeId<"entity">;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
 };
@@ -35,11 +37,11 @@ type FileRow = {
  */
 const collectDescendantIds = async (
   safeDb: SafeDb,
-  parentId: string,
+  parentId: SafeId<"entity">,
   workspaceId: SafeId<"workspace">,
 ) =>
   await safeDb((tx) =>
-    tx.execute<{ id: string }>(sql`
+    tx.execute<{ id: SafeId<"entity"> }>(sql`
     WITH RECURSIVE descendants AS (
       SELECT ${entities.id}
       FROM ${entities}
@@ -90,8 +92,9 @@ const downloadZipHandler = async function* ({
     collectDescendantIds(safeDb, entityId, workspaceId),
   );
 
-  // Drizzle's execute() erases the generic to Record<string, any>
-  const descendantIds = descendantRows.map((r) => String(r["id"]));
+  const descendantIds = descendantRows.map((r) =>
+    toSafeId<"entity">(String(r["id"])),
+  );
 
   if (descendantIds.length === 0) {
     return Result.err(

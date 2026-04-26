@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { APIError, toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 // Hardcoded in English: these are persisted in the DB and shared
@@ -24,8 +25,8 @@ export const useCreateWorkspace = () => {
       const id = crypto.randomUUID();
       const response = await api.workspaces.put({
         queryKey: workspacesKeys.all,
-        id,
-        clientId: vars.clientId,
+        id: toSafeId<"workspace">(id),
+        clientId: toSafeId<"contact">(vars.clientId),
         ...(vars.memberUserIds && vars.memberUserIds.length > 0
           ? { memberUserIds: vars.memberUserIds }
           : {}),
@@ -37,7 +38,7 @@ export const useCreateWorkspace = () => {
         throw toAPIError(response.error);
       }
 
-      return { id };
+      return { id: toSafeId<"workspace">(id) };
     },
     onSuccess: () => {
       // eslint-disable-next-line typescript/no-floating-promises
@@ -68,10 +69,16 @@ export const useUpdateWorkspace = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateWorkspaceVars) => {
-      const response = await api.workspaces({ workspaceId }).post({
-        ...body,
-        queryKey: workspacesKeys.all,
-      });
+      const { clientId, ...restBody } = body;
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .post({
+          ...restBody,
+          ...(clientId !== undefined && {
+            clientId: toSafeId<"contact">(clientId),
+          }),
+          queryKey: workspacesKeys.all,
+        });
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -93,9 +100,11 @@ export const useArchiveWorkspace = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId }: ArchiveWorkspaceVars) => {
-      const response = await api.workspaces({ workspaceId }).archive.post({
-        queryKey: workspacesKeys.all,
-      });
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .archive.post({
+          queryKey: workspacesKeys.all,
+        });
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -123,9 +132,11 @@ export const useUnarchiveWorkspace = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId }: ArchiveWorkspaceVars) => {
-      const response = await api.workspaces({ workspaceId }).unarchive.post({
-        queryKey: workspacesKeys.all,
-      });
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .unarchive.post({
+          queryKey: workspacesKeys.all,
+        });
 
       if (response.error) {
         throw toAPIError(response.error);
@@ -158,9 +169,11 @@ export const useDeleteWorkspace = () => {
     retry: (failureCount, error) =>
       failureCount < 3 && (!APIError.is(error) || error.status >= 500),
     mutationFn: async ({ workspaceId }: DeleteWorkspaceVars) => {
-      const response = await api.workspaces({ workspaceId }).delete({
-        queryKey: workspacesKeys.all,
-      });
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .delete({
+          queryKey: workspacesKeys.all,
+        });
 
       if (response.error) {
         throw toAPIError(response.error);

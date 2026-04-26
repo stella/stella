@@ -14,7 +14,7 @@ import { LIMITS } from "@/api/lib/limits";
 type ReadJustificationsHandlerProps = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
-  entityIds: string[];
+  entityIds: SafeId<"entity">[];
 };
 
 export const readJustificationsHandler = async ({

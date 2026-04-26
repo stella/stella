@@ -3,14 +3,14 @@ import { t } from "elysia";
 
 import { entityLinks } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { ENTITY_LINK_TYPES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { includes } from "@/api/lib/type-guards";
 
 const createEntityLinkBodySchema = t.Object({
-  sourceEntityId: tUuid,
-  targetEntityId: tUuid,
+  sourceEntityId: tSafeId("entity"),
+  targetEntityId: tSafeId("entity"),
   linkType: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
 });
 
@@ -42,14 +42,14 @@ const createEntityLink = createSafeHandler(
           await Promise.all([
             tx.query.entities.findFirst({
               where: {
-                id: body.sourceEntityId,
+                id: { eq: body.sourceEntityId },
                 workspaceId: { eq: workspaceId },
               },
               columns: { id: true, kind: true },
             }),
             tx.query.entities.findFirst({
               where: {
-                id: body.targetEntityId,
+                id: { eq: body.targetEntityId },
                 workspaceId: { eq: workspaceId },
               },
               columns: { id: true, kind: true },
@@ -81,8 +81,8 @@ const createEntityLink = createSafeHandler(
         tx.query.entityLinks.findFirst({
           where: {
             workspaceId: { eq: workspaceId },
-            sourceEntityId: body.targetEntityId,
-            targetEntityId: body.sourceEntityId,
+            sourceEntityId: { eq: body.targetEntityId },
+            targetEntityId: { eq: body.sourceEntityId },
           },
           columns: { id: true },
         }),

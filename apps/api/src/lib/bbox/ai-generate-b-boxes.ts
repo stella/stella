@@ -50,7 +50,7 @@ export const generateBBoxData = async ({
       workspace_id: workspaceId,
     },
     sessionId: justificationId,
-    traceId: crypto.randomUUID(),
+    traceId: Bun.randomUUIDv7(),
   });
 
   return await Result.tryPromise({

@@ -6,6 +6,7 @@
  */
 
 import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 
 // ─── Constants ──────────────────────────────────────────
 
@@ -212,14 +213,18 @@ export const pickAuthor = (
 
 // ─── Deterministic ID generator ─────────────────────────
 
-export const seedId = (label: string): string => {
+export const seedId = <T extends SafeIdType = never>(
+  label: string,
+): SafeId<T> => {
   const hash = new Bun.CryptoHasher("sha256").update(label).digest("hex");
   const raw = hash.slice(0, 32);
   if (raw.length !== 32) {
     throw new Error(`Seed data: failed to create UUID for label "${label}"`);
   }
   const uuid = `${raw.slice(0, 12)}5${raw.slice(13, 16)}8${raw.slice(17)}`;
-  return `${uuid.slice(0, 8)}-${uuid.slice(8, 12)}-${uuid.slice(12, 16)}-${uuid.slice(16, 20)}-${uuid.slice(20, 32)}`;
+  return toSafeId<T>(
+    `${uuid.slice(0, 8)}-${uuid.slice(8, 12)}-${uuid.slice(12, 16)}-${uuid.slice(16, 20)}-${uuid.slice(20, 32)}`,
+  );
 };
 
 /** Safe array access for seed data (panics on out-of-bounds). */

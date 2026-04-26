@@ -6,6 +6,7 @@ import { toastManager } from "@stella/ui/components/toast";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
 import type {
   TaskPriority,
@@ -38,10 +39,13 @@ const useUpdateTask = (workspaceId: string, taskId: string) => {
       priority?: string;
       dueDate?: string | null;
     }) => {
-      const response = await api.tasks({ workspaceId }).patch({
-        queryKey: entitiesKeys.all(workspaceId),
-        ...body,
-      });
+      const response = await api
+        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .patch({
+          queryKey: entitiesKeys.all(workspaceId),
+          ...body,
+          taskId: toSafeId<"entity">(body.taskId),
+        });
       if (response.error) {
         throw toAPIError(response.error);
       }

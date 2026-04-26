@@ -23,6 +23,7 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
 import {
   knowledgeKeys,
@@ -174,8 +175,8 @@ const LinkedClauseRow = ({
     setUnlinking(true);
 
     const response = await api
-      .templates({ templateId })
-      .clauses({ linkId: link.id })
+      .templates({ templateId: toSafeId<"template">(templateId) })
+      .clauses({ linkId: toSafeId<"templateClause">(link.id) })
       .delete();
 
     setUnlinking(false);
@@ -204,8 +205,8 @@ const LinkedClauseRow = ({
     setSyncing(true);
 
     const response = await api
-      .templates({ templateId })
-      .clauses({ linkId: link.id })
+      .templates({ templateId: toSafeId<"template">(templateId) })
+      .clauses({ linkId: toSafeId<"templateClause">(link.id) })
       .sync.post();
 
     setSyncing(false);

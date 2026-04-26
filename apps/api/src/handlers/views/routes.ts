@@ -25,10 +25,14 @@ export const viewsRoute = new Elysia({
   .group("/view/:viewId", (app) =>
     app
       .post("/", updateView.handler, {
+        params: updateView.config.params,
         body: updateView.config.body,
       })
       .post("/convert", convertView.handler, {
+        params: convertView.config.params,
         body: convertView.config.body,
       })
-      .delete("/", deleteView.handler),
+      .delete("/", deleteView.handler, {
+        params: deleteView.config.params,
+      }),
   );

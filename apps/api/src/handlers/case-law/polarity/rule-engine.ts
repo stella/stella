@@ -20,17 +20,18 @@ import {
 } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
 import { captureError } from "@/api/lib/analytics";
+import type { SafeId } from "@/api/lib/branded-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 type CompiledRule = {
-  id: string;
+  id: SafeId<"caseLawPolarityRule">;
   regex: RegExp;
   polarity: Polarity;
 };
 
 type RuleMatch = {
-  ruleId: string;
+  ruleId: SafeId<"caseLawPolarityRule">;
   polarity: Polarity;
 };
 
@@ -137,7 +138,7 @@ export const matchRule = async (
 
 /** Increment the match count for a rule. */
 export const incrementMatchCount = async (
-  ruleId: string,
+  ruleId: SafeId<"caseLawPolarityRule">,
   scopedDb: ScopedDb,
 ) => {
   await scopedDb((tx) =>

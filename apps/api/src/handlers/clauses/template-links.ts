@@ -4,15 +4,16 @@ import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { templateClauses } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUuid } from "@/api/lib/custom-schema";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 // ── Schemas ─────────────────────────────────────────
 
 export const linkClauseBodySchema = t.Object({
-  clauseId: tUuid,
-  variantId: t.Optional(tUuid),
+  clauseId: tSafeId("clause"),
+  variantId: t.Optional(tSafeId("clauseVariant")),
   slotName: t.Optional(t.String({ maxLength: 128 })),
 });
 
@@ -22,13 +23,13 @@ type LinkClauseBody = Static<typeof linkClauseBodySchema>;
 
 const verifyTemplateOwnership = async (
   scopedDb: ScopedDb,
-  templateId: string,
+  templateId: SafeId<"template">,
   organizationId: SafeId<"organization">,
 ) => {
   const template = await scopedDb((tx) =>
     tx.query.templates.findFirst({
       where: {
-        id: templateId,
+        id: { eq: templateId },
         organizationId: { eq: organizationId },
       },
       columns: { id: true },
@@ -43,7 +44,7 @@ const verifyTemplateOwnership = async (
 type ListTemplateClausesProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-  templateId: string;
+  templateId: SafeId<"template">;
 };
 
 export const listTemplateClausesHandler = async ({
@@ -64,7 +65,7 @@ export const listTemplateClausesHandler = async ({
   const links = await scopedDb((tx) =>
     tx.query.templateClauses.findMany({
       where: {
-        templateId,
+        templateId: { eq: templateId },
         organizationId: { eq: organizationId },
       },
       columns: {
@@ -127,7 +128,7 @@ export const listTemplateClausesHandler = async ({
 type LinkClauseProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-  templateId: string;
+  templateId: SafeId<"template">;
   body: LinkClauseBody;
 };
 
@@ -151,7 +152,7 @@ export const linkClauseHandler = async ({
   const clause = await scopedDb((tx) =>
     tx.query.clauses.findFirst({
       where: {
-        id: body.clauseId,
+        id: { eq: body.clauseId },
         organizationId: { eq: organizationId },
       },
       columns: { id: true, currentVersion: true },
@@ -167,8 +168,8 @@ export const linkClauseHandler = async ({
     const variant = await scopedDb((tx) =>
       tx.query.clauseVariants.findFirst({
         where: {
-          id: body.variantId,
-          clauseId: body.clauseId,
+          id: { eq: body.variantId },
+          clauseId: { eq: body.clauseId },
           organizationId: { eq: organizationId },
         },
         columns: { id: true },
@@ -186,7 +187,7 @@ export const linkClauseHandler = async ({
   const currentVersion = await scopedDb((tx) =>
     tx.query.clauseVersions.findFirst({
       where: {
-        clauseId: body.clauseId,
+        clauseId: { eq: body.clauseId },
         version: clause.currentVersion,
         organizationId: { eq: organizationId },
       },
@@ -213,7 +214,7 @@ export const linkClauseHandler = async ({
     const [row] = await tx
       .insert(templateClauses)
       .values({
-        id: crypto.randomUUID(),
+        id: createSafeId<"templateClause">(),
         organizationId,
         templateId,
         clauseId: body.clauseId,
@@ -249,8 +250,8 @@ export const linkClauseHandler = async ({
 type UnlinkClauseProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-  templateId: string;
-  linkId: string;
+  templateId: SafeId<"template">;
+  linkId: SafeId<"templateClause">;
 };
 
 export const unlinkClauseHandler = async ({
@@ -272,8 +273,8 @@ export const unlinkClauseHandler = async ({
   const existing = await scopedDb((tx) =>
     tx.query.templateClauses.findFirst({
       where: {
-        id: linkId,
-        templateId,
+        id: { eq: linkId },
+        templateId: { eq: templateId },
         organizationId: { eq: organizationId },
       },
       columns: { id: true },
@@ -303,8 +304,8 @@ export const unlinkClauseHandler = async ({
 type SyncClauseProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-  templateId: string;
-  linkId: string;
+  templateId: SafeId<"template">;
+  linkId: SafeId<"templateClause">;
 };
 
 export const syncClauseHandler = async ({
@@ -326,8 +327,8 @@ export const syncClauseHandler = async ({
   const link = await scopedDb((tx) =>
     tx.query.templateClauses.findFirst({
       where: {
-        id: linkId,
-        templateId,
+        id: { eq: linkId },
+        templateId: { eq: templateId },
         organizationId: { eq: organizationId },
       },
       columns: {
@@ -352,7 +353,7 @@ export const syncClauseHandler = async ({
   const clause = await scopedDb((tx) =>
     tx.query.clauses.findFirst({
       where: {
-        id: clauseId,
+        id: { eq: clauseId },
         organizationId: { eq: organizationId },
       },
       columns: { id: true, currentVersion: true },
@@ -366,7 +367,7 @@ export const syncClauseHandler = async ({
   const latestVersion = await scopedDb((tx) =>
     tx.query.clauseVersions.findFirst({
       where: {
-        clauseId,
+        clauseId: { eq: clauseId },
         version: clause.currentVersion,
         organizationId: { eq: organizationId },
       },
