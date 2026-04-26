@@ -210,9 +210,10 @@ export const InlineHeaderFooterEditor = forwardRef<
     }
 
     // Convert header/footer content to PM document
-    const pmDoc = headerFooterToProseDoc(headerFooter.content, {
-      ...(styles ? { styles } : {}),
-    });
+    const pmDoc =
+      styles === undefined || styles === null
+        ? headerFooterToProseDoc(headerFooter.content)
+        : headerFooterToProseDoc(headerFooter.content, { styles });
 
     // Create a fresh ExtensionManager to get independent plugin instances
     // (keyed plugins like history$ can't be shared across EditorViews)

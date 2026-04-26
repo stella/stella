@@ -123,10 +123,10 @@ export function computeTabStops(context: TabContext): TabStop[] {
     .map((stop) => stop.pos);
 
   // Find rightmost explicit stop
-  const maxExplicit = validExplicitStops.reduce(
-    (max, stop) => Math.max(max, stop.pos),
-    0,
-  );
+  let maxExplicit = 0;
+  for (const stop of validExplicitStops) {
+    maxExplicit = Math.max(maxExplicit, stop.pos);
+  }
 
   // Build result starting with explicit stops
   const stops = [...validExplicitStops];

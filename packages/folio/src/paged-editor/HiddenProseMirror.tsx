@@ -149,7 +149,9 @@ function createInitialState(
 ): EditorState {
   const activeSchema = manager?.getSchema() ?? schema;
   const doc = document
-    ? toProseDoc(document, { ...(styles != null ? { styles } : {}) })
+    ? styles === undefined || styles === null
+      ? toProseDoc(document)
+      : toProseDoc(document, { styles })
     : createEmptyDoc();
 
   // External plugins go first so they can intercept before extension keymaps

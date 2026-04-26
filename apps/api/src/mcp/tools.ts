@@ -102,12 +102,11 @@ export const listMcpTools = (mode: McpMode = "default"): McpTool[] =>
   (mode === "default"
     ? DEFAULT_TOOL_DEFINITIONS
     : ANONYMIZED_TOOL_DEFINITIONS
-  ).map(({ annotations, description, inputSchema, name }) => ({
-    ...(annotations === undefined ? {} : { annotations }),
-    description,
-    inputSchema,
-    name,
-  }));
+  ).map(({ annotations, description, inputSchema, name }) =>
+    annotations === undefined
+      ? { description, inputSchema, name }
+      : { annotations, description, inputSchema, name },
+  );
 
 export const handleMcpToolCall = async ({
   args,

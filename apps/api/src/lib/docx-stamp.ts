@@ -260,10 +260,10 @@ const upsertProperty = (xml: string, name: string, value: string): string => {
 
   // Find max pid for new property
   const pidMatches = [...xml.matchAll(PID_RE)];
-  const maxPid = pidMatches.reduce(
-    (max, m) => Math.max(max, Number.parseInt(m[1] ?? "0", 10)),
-    1,
-  );
+  let maxPid = 1;
+  for (const match of pidMatches) {
+    maxPid = Math.max(maxPid, Number.parseInt(match[1] ?? "0", 10));
+  }
   const prop = [
     `  <property fmtid="${FMTID}" pid="${maxPid + 1}"`,
     `            name="${name}">`,

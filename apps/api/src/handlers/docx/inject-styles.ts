@@ -48,11 +48,20 @@ const loadTemplateParts = async (
   const buffer = await file.arrayBuffer();
   const zip = await JSZip.loadAsync(buffer);
 
+  const loadedParts = await Promise.all(
+    PARTS_TO_COPY.map(async (partPath) => {
+      const entry = zip.file(partPath);
+      if (!entry) {
+        return null;
+      }
+      return [partPath, await entry.async("string")] as const;
+    }),
+  );
+
   const parts = new Map<string, string>();
-  for (const partPath of PARTS_TO_COPY) {
-    const entry = zip.file(partPath);
-    if (entry) {
-      parts.set(partPath, await entry.async("string"));
+  for (const part of loadedParts) {
+    if (part !== null) {
+      parts.set(part[0], part[1]);
     }
   }
   return parts;

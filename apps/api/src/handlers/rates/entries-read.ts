@@ -87,7 +87,11 @@ const readRateEntries = createSafeHandler(
 
     return Result.ok(
       rows.map((row) => ({
-        ...row,
+        id: row.id,
+        userId: row.userId,
+        hourlyRate: row.hourlyRate,
+        effectiveFrom: row.effectiveFrom,
+        effectiveTo: row.effectiveTo,
         userImage: row.userId ? (userMap.get(row.userId)?.image ?? null) : null,
         userName: row.userId ? (userMap.get(row.userId)?.name ?? null) : null,
         createdAt: row.createdAt.toISOString(),

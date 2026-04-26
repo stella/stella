@@ -76,9 +76,10 @@ export function useClipboard(
 
       isProcessingRef.current = true;
       try {
-        const success = await copyRuns(selection.runs, {
-          ...(onError !== undefined ? { onError } : {}),
-        });
+        const success =
+          onError === undefined
+            ? await copyRuns(selection.runs)
+            : await copyRuns(selection.runs, { onError });
         if (success) {
           onCopy?.(selection);
         }
@@ -98,9 +99,10 @@ export function useClipboard(
 
       isProcessingRef.current = true;
       try {
-        const success = await copyRuns(selection.runs, {
-          ...(onError !== undefined ? { onError } : {}),
-        });
+        const success =
+          onError === undefined
+            ? await copyRuns(selection.runs)
+            : await copyRuns(selection.runs, { onError });
         if (success) {
           onCut?.(selection);
         }

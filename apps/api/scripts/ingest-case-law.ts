@@ -430,7 +430,7 @@ const healthLoop = (async () => {
 // Search index backfill loop: indexes decisions that were
 // inserted without a tsvector (the pipeline no longer computes
 // tsvectors inline). Runs at low priority outside the DB slot
-// semaphore; one decision at a time with a generous statement
+// semaphore with bounded concurrency and a generous statement
 // timeout so long texts don't block other work.
 const searchIndexLoop = (async () => {
   const scopedDb = createScopedDb(

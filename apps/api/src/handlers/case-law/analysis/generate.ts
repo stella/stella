@@ -117,11 +117,17 @@ ${decisionText}`;
 
     for await (const raw of result.elementStream) {
       headings.push({
-        ...raw,
         id: crypto.randomUUID(),
+        label: raw.label,
+        category: raw.category,
+        startAnchorId: raw.startAnchorId,
+        endAnchorId: raw.endAnchorId,
         annotations: raw.annotations.map((a) => ({
-          ...a,
           id: crypto.randomUUID(),
+          summary: a.summary,
+          startAnchorId: a.startAnchorId,
+          endAnchorId: a.endAnchorId,
+          textSnippet: a.textSnippet,
         })),
         children: [],
       });

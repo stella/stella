@@ -84,6 +84,7 @@ const readTimeEntries = createSafeHandler(
             timerStartedAt: timeEntries.timerStartedAt,
             timerStoppedAt: timeEntries.timerStoppedAt,
             createdAt: timeEntries.createdAt,
+            updatedAt: timeEntries.updatedAt,
           })
           .from(timeEntries)
           .where(and(...conditions))
@@ -117,11 +118,28 @@ const readTimeEntries = createSafeHandler(
 
     return Result.ok(
       rows.map((row) => ({
-        ...row,
+        id: row.id,
+        userId: row.userId,
+        matterId: row.matterId,
+        dateWorked: row.dateWorked,
+        timezoneId: row.timezoneId,
+        durationMinutes: row.durationMinutes,
+        billedMinutes: row.billedMinutes,
+        rateAtEntry: row.rateAtEntry,
+        currency: row.currency,
+        narrative: row.narrative,
+        invoiceNarrative: row.invoiceNarrative,
+        billable: row.billable,
+        noCharge: row.noCharge,
+        status: row.status,
+        source: row.source,
+        taskCode: row.taskCode,
+        activityCode: row.activityCode,
         userName: row.userId ? (userMap.get(row.userId) ?? null) : null,
         timerStartedAt: row.timerStartedAt?.toISOString() ?? null,
         timerStoppedAt: row.timerStoppedAt?.toISOString() ?? null,
         createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt?.toISOString() ?? null,
       })),
     );
   },

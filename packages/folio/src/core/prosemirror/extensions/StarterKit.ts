@@ -161,11 +161,11 @@ export function createStarterKit(
   add("baseKeymap", BaseKeymapExtension());
   add(
     "selectionTracker",
-    SelectionTrackerExtension({
-      ...(options.onSelectionChange !== undefined
-        ? { onSelectionChange: options.onSelectionChange }
-        : {}),
-    }),
+    options.onSelectionChange === undefined
+      ? SelectionTrackerExtension()
+      : SelectionTrackerExtension({
+          onSelectionChange: options.onSelectionChange,
+        }),
   );
   add("paragraphChangeTracker", ParagraphChangeTrackerExtension());
   add("bidiShortcut", BidiShortcutExtension());

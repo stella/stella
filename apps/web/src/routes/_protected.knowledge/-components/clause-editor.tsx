@@ -80,11 +80,14 @@ const tipTapToClauseBody = (json: JSONContent): ClauseParagraph[] => {
         const bold = child.marks?.some((m) => m.type === "bold");
         const italic = child.marks?.some((m) => m.type === "italic");
 
-        runs.push({
-          text: child.text,
-          ...(bold ? { bold: true } : {}),
-          ...(italic ? { italic: true } : {}),
-        });
+        const run: ClauseRun = { text: child.text };
+        if (bold) {
+          run.bold = true;
+        }
+        if (italic) {
+          run.italic = true;
+        }
+        runs.push(run);
 
         plainText += child.text;
       }
@@ -93,19 +96,16 @@ const tipTapToClauseBody = (json: JSONContent): ClauseParagraph[] => {
     // If all runs are unstyled, omit the runs array
     const hasFormatting = runs.some((r) => r.bold || r.italic);
 
-    return {
-      text: plainText,
-      ...(hasFormatting ? { runs } : {}),
-      ...(isHeading
-        ? {
-            style: "heading",
-            level:
-              typeof node.attrs?.["level"] === "number"
-                ? node.attrs["level"]
-                : 1,
-          }
-        : {}),
-    };
+    const paragraph: ClauseParagraph = { text: plainText };
+    if (hasFormatting) {
+      paragraph.runs = runs;
+    }
+    if (isHeading) {
+      paragraph.style = "heading";
+      paragraph.level =
+        typeof node.attrs?.["level"] === "number" ? node.attrs["level"] : 1;
+    }
+    return paragraph;
   });
 };
 

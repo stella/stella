@@ -183,21 +183,30 @@ const readWorkspaces = createSafeRootHandler(
       }
     }
 
-    const workspaces = result.map(({ status: _, client, ...w }) => {
+    const workspaces = result.map((workspace) => {
+      const { client } = workspace;
       if (!client) {
-        throw new Error(`workspace ${w.id} has no client (NOT NULL invariant)`);
+        throw new Error(
+          `workspace ${workspace.id} has no client (NOT NULL invariant)`,
+        );
       }
       return {
-        ...w,
+        id: workspace.id,
+        name: workspace.name,
+        reference: workspace.reference,
+        clientId: workspace.clientId,
+        color: workspace.color,
+        lastActivityAt: workspace.lastActivityAt,
+        createdAt: workspace.createdAt,
         client: {
           id: client.id,
           displayName: client.displayName,
           responsibleAttorneyName: client.responsibleAttorney?.name ?? null,
         },
-        entityCount: countMap.get(w.id) ?? 0,
-        openTaskCount: openTaskMap.get(w.id) ?? 0,
-        nextDeadline: deadlineMap.get(w.id) ?? null,
-        contributors: contributorMap.get(w.id) ?? [],
+        entityCount: countMap.get(workspace.id) ?? 0,
+        openTaskCount: openTaskMap.get(workspace.id) ?? 0,
+        nextDeadline: deadlineMap.get(workspace.id) ?? null,
+        contributors: contributorMap.get(workspace.id) ?? [],
       };
     });
 

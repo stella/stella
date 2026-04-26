@@ -78,8 +78,14 @@ export const listAuthSessions = async () => {
 
   return {
     data: result.data.map((session) => ({
-      ...session,
+      createdAt: session.createdAt,
+      expiresAt: session.expiresAt,
+      id: session.id,
+      ipAddress: session.ipAddress,
+      updatedAt: session.updatedAt,
+      userAgent: session.userAgent,
       token: createSessionRevocationToken(session.token),
+      userId: session.userId,
     })),
     error: null,
   };
