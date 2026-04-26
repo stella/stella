@@ -12,6 +12,7 @@ import {
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { cents } from "@/api/lib/money";
 
 const addEntriesBodySchema = t.Object({
   timeEntryIds: t.Optional(t.Array(tUuid, { minItems: 1, maxItems: 500 })),
@@ -265,7 +266,7 @@ const addEntries = createSafeHandler(
 
         await tx
           .update(invoices)
-          .set({ totalAmount, updatedAt: now })
+          .set({ totalAmount: cents(totalAmount), updatedAt: now })
           .where(
             and(
               eq(invoices.id, params.invoiceId),

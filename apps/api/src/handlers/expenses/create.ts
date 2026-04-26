@@ -9,6 +9,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { cents } from "@/api/lib/money";
 
 const createExpenseBodySchema = t.Object({
   matterId: tUuid,
@@ -102,7 +103,7 @@ const createExpense = createSafeHandler(
             userId: user.id,
             matterId: body.matterId,
             dateIncurred: body.dateIncurred,
-            amount: body.amount,
+            amount: cents(body.amount),
             currency: body.currency,
             category: body.category,
             description: body.description,

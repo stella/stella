@@ -41,6 +41,7 @@ import {
 } from "@/api/db/schema";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { cents } from "@/api/lib/money";
 import type {
   TestDatabase,
   TestDatabaseTransaction,
@@ -640,7 +641,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       timezoneId: "UTC",
       durationMinutes: 60,
       billedMinutes: 60,
-      rateAtEntry: 200,
+      rateAtEntry: cents(200),
       currency: "USD",
       narrative: "Test entry A",
     },
@@ -654,7 +655,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       timezoneId: "UTC",
       durationMinutes: 60,
       billedMinutes: 60,
-      rateAtEntry: 200,
+      rateAtEntry: cents(200),
       currency: "USD",
       narrative: "Test entry B",
     },
@@ -702,7 +703,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       workspaceId: ids.wsA1,
       rateTableId: ids.rateTableA1,
       userId: ids.userA1,
-      hourlyRate: 200,
+      hourlyRate: cents(200),
       effectiveFrom: "2025-01-01",
     },
     {
@@ -710,7 +711,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       workspaceId: ids.wsB1,
       rateTableId: ids.rateTableB1,
       userId: ids.userB1,
-      hourlyRate: 200,
+      hourlyRate: cents(200),
       effectiveFrom: "2025-01-01",
     },
   ]);
@@ -723,7 +724,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       userId: ids.userA1,
       matterId: ids.entityA1,
       dateIncurred: "2025-01-15",
-      amount: 100,
+      amount: cents(100),
       currency: "USD",
       category: "filing_fee" as const,
       description: "Expense A",
@@ -735,7 +736,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       userId: ids.userB1,
       matterId: ids.entityB1,
       dateIncurred: "2025-01-15",
-      amount: 100,
+      amount: cents(100),
       currency: "USD",
       category: "filing_fee" as const,
       description: "Expense B",

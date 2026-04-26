@@ -38,6 +38,7 @@ import {
 } from "@/api/db/schema";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { cents } from "@/api/lib/money";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
   getRlsFixture,
@@ -268,7 +269,7 @@ describe("workspace INSERT — wrong scope", () => {
           timezoneId: "UTC",
           durationMinutes: 30,
           billedMinutes: 30,
-          rateAtEntry: 100,
+          rateAtEntry: cents(100),
           currency: "USD",
           narrative: "bad",
         }),
@@ -303,7 +304,7 @@ describe("workspace INSERT — wrong scope", () => {
           id: crypto.randomUUID(),
           workspaceId: ids.wsB1,
           rateTableId: ids.rateTableB1,
-          hourlyRate: 100,
+          hourlyRate: cents(100),
           effectiveFrom: "2025-01-01",
         }),
     },
@@ -317,7 +318,7 @@ describe("workspace INSERT — wrong scope", () => {
           userId: ids.userA1,
           matterId: ids.entityB1,
           dateIncurred: "2025-06-01",
-          amount: 100,
+          amount: cents(100),
           currency: "USD",
           category: "filing_fee" as const,
           description: "bad",
@@ -633,7 +634,7 @@ describe("workspace UPDATE — wrong scope", () => {
       query: (tx: TestDatabaseTransaction) =>
         tx
           .update(rateEntries)
-          .set({ hourlyRate: 9999 })
+          .set({ hourlyRate: cents(9999) })
           .where(eq(rateEntries.id, ids.rateEntryB1))
           .returning({ id: rateEntries.id }),
     },
@@ -1206,7 +1207,7 @@ describe("dual-scope integrity (ws + org columns)", () => {
         timezoneId: "UTC",
         durationMinutes: 30,
         billedMinutes: 30,
-        rateAtEntry: 100,
+        rateAtEntry: cents(100),
         currency: "USD",
         narrative: "dual-scope test",
       });
@@ -1224,7 +1225,7 @@ describe("dual-scope integrity (ws + org columns)", () => {
         userId: ids.userA1,
         matterId: ids.entityA1,
         dateIncurred: "2025-06-01",
-        amount: 50,
+        amount: cents(50),
         currency: "USD",
         category: "filing_fee" as const,
         description: "dual-scope test",

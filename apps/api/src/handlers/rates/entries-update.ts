@@ -6,6 +6,7 @@ import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tUuid, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const updateRateEntryBodySchema = t.Object({
@@ -59,11 +60,12 @@ const updateRateEntry = createSafeHandler(
       );
     }
 
-    const updates = pickDefined(body, [
-      "hourlyRate",
-      "effectiveFrom",
-      "effectiveTo",
-    ]);
+    const updates = {
+      ...pickDefined(body, ["effectiveFrom", "effectiveTo"]),
+      ...(body.hourlyRate !== undefined
+        ? { hourlyRate: cents(body.hourlyRate) }
+        : {}),
+    };
 
     if (Object.keys(updates).length === 0) {
       return Result.ok({ id: body.id });
