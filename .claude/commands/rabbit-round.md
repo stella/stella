@@ -3,6 +3,9 @@
 Process automated PR review comments systematically. Run this for CodeRabbit, Google
 Code Assist (Gemini), GitHub Copilot, Devin, and similar review bots.
 
+This skill is single-pass. It does one round, reports the current
+state, and stops. Do not schedule future runs from inside this skill.
+
 ## Instructions
 
 1. **Get context** - PR number and current GitHub user:
@@ -163,8 +166,7 @@ Code Assist (Gemini), GitHub Copilot, Devin, and similar review bots.
 
     If any review bot checks are still in a non-terminal state,
     this round is **not clean** even if there are zero unresolved
-    comments. Report that bots are still pending and wait for the
-    next round.
+    comments. Report `pending_bots` and stop.
 
 10. **Check and fix failing CI**:
 
@@ -220,6 +222,29 @@ Code Assist (Gemini), GitHub Copilot, Devin, and similar review bots.
     - Create a commit with a message like
       `fix: address review comments`
     - Push to the current branch
+    - If you pushed new commits in this step, return `pending_bots`
+      in the final status because CI and review bots need to run on
+      the new commit
+
+14. **Report one round status and stop**:
+
+    Return exactly one of:
+    - `clean`: no actionable bot comments remain, review bot checks are
+      complete, and CI is green
+    - `pending_bots`: review bots have not finished yet, or new
+      commits were just pushed and checks are re-running
+    - `needs_changes`: actionable bot comments remain
+    - `failing_ci`: CI is failing and still needs fixes
+
+    If the round is `clean` and the PR is currently a draft, mark it as
+    ready for review:
+
+    ```bash
+    gh pr ready
+    ```
+
+    If the round is not `clean`, summarize what remains and stop. A
+    caller may invoke `/rabbit-round` again later.
 
 ## Decision Guidelines
 
