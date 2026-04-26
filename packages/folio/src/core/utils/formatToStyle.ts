@@ -12,6 +12,8 @@
  * - Paragraph: alignment, line-height, margins, padding, borders, background
  */
 
+import type { CSSProperties } from "react";
+
 import type { ColorValue } from "../types/colors";
 import type {
   TextFormatting,
@@ -33,10 +35,6 @@ import {
   formatPx,
   halfPointsToPoints,
 } from "./units";
-
-/** Framework-agnostic CSS properties type (compatible with React.CSSProperties) */
-// eslint-disable-next-line @typescript/no-explicit-any
-type CSSProperties = Record<string, any>;
 
 /**
  * Convert TextFormatting to CSS properties for a run/span
@@ -83,24 +81,24 @@ export function textToStyle(
 
     if (fontName) {
       const resolved = resolveFontFamily(fontName);
-      style["fontFamily"] = resolved.cssFallback;
+      style.fontFamily = resolved.cssFallback;
     }
   }
 
   // Font size (in half-points)
   if (formatting.fontSize !== undefined) {
     // Use pt for font sizes for better cross-browser consistency
-    style["fontSize"] = `${halfPointsToPoints(formatting.fontSize)}pt`;
+    style.fontSize = `${halfPointsToPoints(formatting.fontSize)}pt`;
   }
 
   // Bold
   if (formatting.bold) {
-    style["fontWeight"] = "bold";
+    style.fontWeight = "bold";
   }
 
   // Italic
   if (formatting.italic) {
-    style["fontStyle"] = "italic";
+    style.fontStyle = "italic";
   }
 
   // ============================================================================
@@ -108,7 +106,7 @@ export function textToStyle(
   // ============================================================================
 
   if (formatting.color) {
-    style["color"] = resolveColor(formatting.color, theme);
+    style.color = resolveColor(formatting.color, theme);
   }
 
   // ============================================================================
@@ -117,14 +115,14 @@ export function textToStyle(
 
   // Highlight (w:highlight)
   if (formatting.highlight && formatting.highlight !== "none") {
-    style["backgroundColor"] = resolveHighlightToCss(formatting.highlight);
+    style.backgroundColor = resolveHighlightToCss(formatting.highlight);
   }
 
   // Character shading (w:shd)
   if (formatting.shading) {
     const shadingBg = resolveShadingFill(formatting.shading, theme);
-    if (shadingBg && !style["backgroundColor"]) {
-      style["backgroundColor"] = shadingBg;
+    if (shadingBg && style.backgroundColor === undefined) {
+      style.backgroundColor = shadingBg;
     }
   }
 
@@ -133,7 +131,7 @@ export function textToStyle(
   // ============================================================================
 
   const decorations: string[] = [];
-  const decorationStyles: string[] = [];
+  const decorationStyles: CSSProperties["textDecorationStyle"][] = [];
   const decorationColors: string[] = [];
 
   // Underline
@@ -164,15 +162,14 @@ export function textToStyle(
   }
 
   if (decorations.length > 0) {
-    style["textDecoration"] = decorations.join(" ");
+    style.textDecoration = decorations.join(" ");
 
     if (decorationStyles.length > 0) {
-      style["textDecorationStyle"] =
-        decorationStyles[0] as CSSProperties["textDecorationStyle"];
+      style.textDecorationStyle = decorationStyles[0];
     }
 
     if (decorationColors.length > 0) {
-      style["textDecorationColor"] = decorationColors[0];
+      style.textDecorationColor = decorationColors[0];
     }
   }
 
@@ -183,30 +180,27 @@ export function textToStyle(
   if (formatting.vertAlign) {
     switch (formatting.vertAlign) {
       case "superscript":
-        style["verticalAlign"] = "super";
+        style.verticalAlign = "super";
         // Also reduce font size
-        if (!style["fontSize"]) {
-          style["fontSize"] = "0.83em";
-        }
+        style.fontSize ??= "0.83em";
         break;
       case "subscript":
-        style["verticalAlign"] = "sub";
-        if (!style["fontSize"]) {
-          style["fontSize"] = "0.83em";
-        }
+        style.verticalAlign = "sub";
+        style.fontSize ??= "0.83em";
+        break;
+      case "baseline":
         break;
       default:
         break;
-      // 'baseline' is default
     }
   }
 
   // Position (raised/lowered) - alternative to vertAlign
-  if (formatting.position && formatting.position !== 0) {
+  if (formatting.position !== undefined && formatting.position !== 0) {
     // Position is in half-points, positive = raised, negative = lowered
     const positionPx = halfPointsToPixels(formatting.position);
-    style["position"] = "relative";
-    style["top"] = formatPx(-positionPx); // Negative because CSS top is inverted
+    style.position = "relative";
+    style.top = formatPx(-positionPx); // Negative because CSS top is inverted
   }
 
   // ============================================================================
@@ -214,9 +208,9 @@ export function textToStyle(
   // ============================================================================
 
   if (formatting.allCaps) {
-    style["textTransform"] = "uppercase";
+    style.textTransform = "uppercase";
   } else if (formatting.smallCaps) {
-    style["fontVariant"] = "small-caps";
+    style.fontVariant = "small-caps";
   }
 
   // ============================================================================
@@ -225,14 +219,14 @@ export function textToStyle(
 
   // Letter spacing (character spacing in twips)
   if (formatting.spacing !== undefined && formatting.spacing !== 0) {
-    style["letterSpacing"] = formatPx(twipsToPixels(formatting.spacing));
+    style.letterSpacing = formatPx(twipsToPixels(formatting.spacing));
   }
 
   // Horizontal scale (w:w) - stretch/compress text
   if (formatting.scale !== undefined && formatting.scale !== 100) {
     // CSS doesn't have direct text scale, use transform
-    style["transform"] = `scaleX(${formatting.scale / 100})`;
-    style["display"] = "inline-block";
+    style.transform = `scaleX(${formatting.scale / 100})`;
+    style.display = "inline-block";
   }
 
   // ============================================================================
@@ -240,7 +234,7 @@ export function textToStyle(
   // ============================================================================
 
   if (formatting.hidden) {
-    style["display"] = "none";
+    style.display = "none";
   }
 
   // ============================================================================
@@ -249,25 +243,25 @@ export function textToStyle(
 
   // Emboss
   if (formatting.emboss) {
-    style["textShadow"] =
+    style.textShadow =
       "1px 1px 1px rgba(255,255,255,0.5), -1px -1px 1px rgba(0,0,0,0.3)";
   }
 
   // Imprint/Engrave
   if (formatting.imprint) {
-    style["textShadow"] =
+    style.textShadow =
       "-1px -1px 1px rgba(255,255,255,0.5), 1px 1px 1px rgba(0,0,0,0.3)";
   }
 
   // Outline
   if (formatting.outline) {
-    style["WebkitTextStroke"] = "1px currentColor";
-    style["WebkitTextFillColor"] = "transparent";
+    style.WebkitTextStroke = "1px currentColor";
+    style.WebkitTextFillColor = "transparent";
   }
 
   // Shadow
   if (formatting.shadow && !formatting.emboss && !formatting.imprint) {
-    style["textShadow"] = "1px 1px 2px rgba(0,0,0,0.3)";
+    style.textShadow = "1px 1px 2px rgba(0,0,0,0.3)";
   }
 
   // ============================================================================
@@ -275,7 +269,7 @@ export function textToStyle(
   // ============================================================================
 
   if (formatting.rtl) {
-    style["direction"] = "rtl";
+    style.direction = "rtl";
   }
 
   return style;
@@ -303,7 +297,7 @@ export function paragraphToStyle(
   // ============================================================================
 
   if (formatting.alignment) {
-    style["textAlign"] = mapAlignment(formatting.alignment);
+    style.textAlign = mapAlignment(formatting.alignment);
   }
 
   // ============================================================================
@@ -312,12 +306,12 @@ export function paragraphToStyle(
 
   // Space before (marginTop)
   if (formatting.spaceBefore !== undefined) {
-    style["marginTop"] = formatPx(twipsToPixels(formatting.spaceBefore));
+    style.marginTop = formatPx(twipsToPixels(formatting.spaceBefore));
   }
 
   // Space after (marginBottom)
   if (formatting.spaceAfter !== undefined) {
-    style["marginBottom"] = formatPx(twipsToPixels(formatting.spaceAfter));
+    style.marginBottom = formatPx(twipsToPixels(formatting.spaceAfter));
   }
 
   // ============================================================================
@@ -325,33 +319,26 @@ export function paragraphToStyle(
   // ============================================================================
 
   if (formatting.lineSpacing !== undefined && formatting.lineSpacing > 0) {
-    switch (formatting.lineSpacingRule) {
-      case "exact": {
-        // Exact line height in twips
-        const exactPx = twipsToPixels(formatting.lineSpacing);
-        if (exactPx > 0) {
-          style["lineHeight"] = formatPx(exactPx);
-        }
-        break;
+    if (formatting.lineSpacingRule === "exact") {
+      // Exact line height in twips
+      const exactPx = twipsToPixels(formatting.lineSpacing);
+      if (exactPx > 0) {
+        style.lineHeight = formatPx(exactPx);
       }
-      case "atLeast": {
-        // Minimum line height in twips
-        const atLeastPx = twipsToPixels(formatting.lineSpacing);
-        if (atLeastPx > 0) {
-          style["minHeight"] = formatPx(atLeastPx);
-          style["lineHeight"] = formatPx(atLeastPx);
-        }
-        break;
+    } else if (formatting.lineSpacingRule === "atLeast") {
+      // Minimum line height in twips
+      const atLeastPx = twipsToPixels(formatting.lineSpacing);
+      if (atLeastPx > 0) {
+        style.minHeight = formatPx(atLeastPx);
+        style.lineHeight = formatPx(atLeastPx);
       }
-      default: {
-        // Auto spacing: value is in 240ths of a line (240 = single space)
-        // Convert to line-height multiplier
-        const lineMultiplier = formatting.lineSpacing / 240;
-        // Only set line-height if it's a valid positive value
-        if (lineMultiplier > 0) {
-          style["lineHeight"] = lineMultiplier.toString();
-        }
-        break;
+    } else {
+      // Auto spacing: value is in 240ths of a line (240 = single space)
+      // Convert to line-height multiplier
+      const lineMultiplier = formatting.lineSpacing / 240;
+      // Only set line-height if it's a valid positive value
+      if (lineMultiplier > 0) {
+        style.lineHeight = lineMultiplier.toString();
       }
     }
   }
@@ -362,19 +349,19 @@ export function paragraphToStyle(
 
   // Left indent
   if (formatting.indentLeft !== undefined) {
-    style["marginLeft"] = formatPx(twipsToPixels(formatting.indentLeft));
+    style.marginLeft = formatPx(twipsToPixels(formatting.indentLeft));
   }
 
   // Right indent
   if (formatting.indentRight !== undefined) {
-    style["marginRight"] = formatPx(twipsToPixels(formatting.indentRight));
+    style.marginRight = formatPx(twipsToPixels(formatting.indentRight));
   }
 
   // First line indent / hanging indent
   if (formatting.indentFirstLine !== undefined) {
     // Both hanging indent and regular first-line indent use the same CSS:
     // text-indent handles both (negative for hanging, positive for regular).
-    style["textIndent"] = formatPx(twipsToPixels(formatting.indentFirstLine));
+    style.textIndent = formatPx(twipsToPixels(formatting.indentFirstLine));
   }
 
   // ============================================================================
@@ -412,7 +399,7 @@ export function paragraphToStyle(
   if (formatting.shading) {
     const bgColor = resolveShadingFill(formatting.shading, theme);
     if (bgColor) {
-      style["backgroundColor"] = bgColor;
+      style.backgroundColor = bgColor;
     }
   }
 
@@ -421,7 +408,7 @@ export function paragraphToStyle(
   // ============================================================================
 
   if (formatting.bidi) {
-    style["direction"] = "rtl";
+    style.direction = "rtl";
   }
 
   // ============================================================================
@@ -429,16 +416,19 @@ export function paragraphToStyle(
   // ============================================================================
 
   if (formatting.pageBreakBefore) {
-    style["pageBreakBefore"] = "always";
+    // eslint-disable-next-line typescript/no-deprecated -- legacy DOCX renderer uses page-break CSS for print layout compatibility
+    style.pageBreakBefore = "always";
   }
 
   // Keep with next / keep lines together
   if (formatting.keepNext) {
-    style["pageBreakAfter"] = "avoid";
+    // eslint-disable-next-line typescript/no-deprecated -- legacy DOCX renderer uses page-break CSS for print layout compatibility
+    style.pageBreakAfter = "avoid";
   }
 
   if (formatting.keepLines) {
-    style["pageBreakInside"] = "avoid";
+    // eslint-disable-next-line typescript/no-deprecated -- legacy DOCX renderer uses page-break CSS for print layout compatibility
+    style.pageBreakInside = "avoid";
   }
 
   return style;
@@ -464,7 +454,10 @@ export function borderToStyle(
   const style: CSSProperties = {};
 
   // Width in eighths of a point
-  const widthPx = border.size ? eighthsToPixels(border.size) : 1;
+  const widthPx =
+    border.size !== undefined && border.size !== 0
+      ? eighthsToPixels(border.size)
+      : 1;
 
   // Color
   const color = border.color ? resolveColor(border.color, theme) : "#000000";
@@ -473,15 +466,15 @@ export function borderToStyle(
   const cssStyle = mapBorderStyle(border.style);
 
   // Build the property name dynamically
-  const widthKey = `border${side}Width` as keyof CSSProperties;
-  const styleKey = `border${side}Style` as keyof CSSProperties;
-  const colorKey = `border${side}Color` as keyof CSSProperties;
+  const widthKey = `border${side}Width`;
+  const styleKey = `border${side}Style`;
+  const colorKey = `border${side}Color`;
 
-  (style as Record<string, string | number>)[widthKey] = formatPx(
-    Math.max(1, widthPx),
-  );
-  (style as Record<string, string | number>)[styleKey] = cssStyle;
-  (style as Record<string, string | number>)[colorKey] = color;
+  Object.assign(style, {
+    [colorKey]: color,
+    [styleKey]: cssStyle,
+    [widthKey]: formatPx(Math.max(1, widthPx)),
+  });
 
   return style;
 }
@@ -682,7 +675,7 @@ export function tableCellToStyle(
 
   // Vertical alignment
   if (formatting.verticalAlign) {
-    style["verticalAlign"] = formatting.verticalAlign;
+    style.verticalAlign = formatting.verticalAlign;
   }
 
   // Text direction
@@ -692,14 +685,14 @@ export function tableCellToStyle(
     (formatting.textDirection.includes("rl") ||
       formatting.textDirection.includes("Rl"))
   ) {
-    style["direction"] = "rtl";
+    style.direction = "rtl";
   }
 
   // Shading/background
   if (formatting.shading) {
     const bgColor = resolveShadingFill(formatting.shading, theme);
     if (bgColor) {
-      style["backgroundColor"] = bgColor;
+      style.backgroundColor = bgColor;
     }
   }
 
@@ -730,23 +723,33 @@ export function tableCellToStyle(
 
   // Cell padding (from margins)
   if (formatting.margins) {
-    if (formatting.margins.top?.value) {
-      style["paddingTop"] = formatPx(
-        twipsToPixels(formatting.margins.top.value),
-      );
+    if (
+      formatting.margins.top?.value !== undefined &&
+      formatting.margins.top.value !== 0
+    ) {
+      style.paddingTop = formatPx(twipsToPixels(formatting.margins.top.value));
     }
-    if (formatting.margins.bottom?.value) {
-      style["paddingBottom"] = formatPx(
+    if (
+      formatting.margins.bottom?.value !== undefined &&
+      formatting.margins.bottom.value !== 0
+    ) {
+      style.paddingBottom = formatPx(
         twipsToPixels(formatting.margins.bottom.value),
       );
     }
-    if (formatting.margins.left?.value) {
-      style["paddingLeft"] = formatPx(
+    if (
+      formatting.margins.left?.value !== undefined &&
+      formatting.margins.left.value !== 0
+    ) {
+      style.paddingLeft = formatPx(
         twipsToPixels(formatting.margins.left.value),
       );
     }
-    if (formatting.margins.right?.value) {
-      style["paddingRight"] = formatPx(
+    if (
+      formatting.margins.right?.value !== undefined &&
+      formatting.margins.right.value !== 0
+    ) {
+      style.paddingRight = formatPx(
         twipsToPixels(formatting.margins.right.value),
       );
     }
@@ -770,7 +773,7 @@ export function sectionToStyle(
         marginBottom?: number;
         marginLeft?: number;
         marginRight?: number;
-        background?: { color?: { rgb?: string; themeColor?: string } };
+        background?: { color?: ColorValue };
       }
     | undefined
     | null,
@@ -783,35 +786,38 @@ export function sectionToStyle(
   const style: CSSProperties = {};
 
   // Page dimensions
-  if (sectionProps.pageWidth) {
-    style["width"] = formatPx(twipsToPixels(sectionProps.pageWidth));
+  if (sectionProps.pageWidth !== undefined && sectionProps.pageWidth !== 0) {
+    style.width = formatPx(twipsToPixels(sectionProps.pageWidth));
   }
-  if (sectionProps.pageHeight) {
-    style["minHeight"] = formatPx(twipsToPixels(sectionProps.pageHeight));
+  if (sectionProps.pageHeight !== undefined && sectionProps.pageHeight !== 0) {
+    style.minHeight = formatPx(twipsToPixels(sectionProps.pageHeight));
   }
 
   // Margins (as padding on the page container)
-  if (sectionProps.marginTop) {
-    style["paddingTop"] = formatPx(twipsToPixels(sectionProps.marginTop));
+  if (sectionProps.marginTop !== undefined && sectionProps.marginTop !== 0) {
+    style.paddingTop = formatPx(twipsToPixels(sectionProps.marginTop));
   }
-  if (sectionProps.marginBottom) {
-    style["paddingBottom"] = formatPx(twipsToPixels(sectionProps.marginBottom));
+  if (
+    sectionProps.marginBottom !== undefined &&
+    sectionProps.marginBottom !== 0
+  ) {
+    style.paddingBottom = formatPx(twipsToPixels(sectionProps.marginBottom));
   }
-  if (sectionProps.marginLeft) {
-    style["paddingLeft"] = formatPx(twipsToPixels(sectionProps.marginLeft));
+  if (sectionProps.marginLeft !== undefined && sectionProps.marginLeft !== 0) {
+    style.paddingLeft = formatPx(twipsToPixels(sectionProps.marginLeft));
   }
-  if (sectionProps.marginRight) {
-    style["paddingRight"] = formatPx(twipsToPixels(sectionProps.marginRight));
+  if (
+    sectionProps.marginRight !== undefined &&
+    sectionProps.marginRight !== 0
+  ) {
+    style.paddingRight = formatPx(twipsToPixels(sectionProps.marginRight));
   }
 
   // Background color
   if (sectionProps.background?.color) {
-    const bgColor = resolveColor(
-      sectionProps.background.color as ColorValue,
-      theme,
-    );
+    const bgColor = resolveColor(sectionProps.background.color, theme);
     if (bgColor) {
-      style["backgroundColor"] = bgColor;
+      style.backgroundColor = bgColor;
     }
   }
 

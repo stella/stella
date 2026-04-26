@@ -5,6 +5,15 @@
  * Extracted from FindReplaceDialog.tsx.
  */
 
+import type {
+  Paragraph,
+  Table,
+  TableCell,
+  TableRow,
+  Run,
+} from "../../core/types/content";
+import type { Document } from "../../core/types/document";
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -192,7 +201,7 @@ export function replaceFirstInContent(
 } {
   const matches = findAllMatches(content, searchText, options);
 
-  const match = matches.find((m) => m.start >= startIndex) || matches[0];
+  const match = matches.find((m) => m.start >= startIndex) ?? matches.at(0);
 
   if (!match) {
     return { content, replaced: false, matchStart: -1, matchEnd: -1 };
@@ -249,15 +258,11 @@ export function getDefaultHighlightOptions(): HighlightOptions {
 /**
  * Get plain text from a run
  */
-// oxlint-disable-next-line typescript/no-explicit-any
-function getRunText(run: any): string {
-  if (!run || !run.content) {
-    return "";
-  }
+function getRunText(run: Run): string {
   let text = "";
   for (const item of run.content) {
     if (item.type === "text") {
-      text += item.text || "";
+      text += item.text;
     } else if (item.type === "tab") {
       text += "\t";
     } else if (item.type === "break" && item.breakType === "textWrapping") {
@@ -270,17 +275,13 @@ function getRunText(run: any): string {
 /**
  * Get plain text from a paragraph
  */
-// oxlint-disable-next-line typescript/no-explicit-any
-function getParagraphPlainText(paragraph: any): string {
-  if (!paragraph || !paragraph.content) {
-    return "";
-  }
+function getParagraphPlainText(paragraph: Paragraph): string {
   let text = "";
   for (const item of paragraph.content) {
     if (item.type === "run") {
       text += getRunText(item);
     } else if (item.type === "hyperlink") {
-      for (const child of item.children || []) {
+      for (const child of item.children) {
         if (child.type === "run") {
           text += getRunText(child);
         }
@@ -294,8 +295,7 @@ function getParagraphPlainText(paragraph: any): string {
  * Find all matches in a document
  */
 export function findInDocument(
-  // oxlint-disable-next-line typescript/no-explicit-any
-  document: any,
+  document: Document | null | undefined,
   searchText: string,
   options: FindOptions,
 ): FindMatch[] {
@@ -304,14 +304,14 @@ export function findInDocument(
   }
 
   const matches: FindMatch[] = [];
-  const body = document.package?.document;
-  if (!body || !body.content) {
+  const body = document.package.document;
+  if (!isDocumentBody(body)) {
     return matches;
   }
 
   let paragraphIndex = 0;
   for (const block of body.content) {
-    if (block.type === "paragraph") {
+    if (isParagraph(block)) {
       const paragraphMatches = findInParagraph(
         block,
         searchText,
@@ -320,11 +320,17 @@ export function findInDocument(
       );
       matches.push(...paragraphMatches);
       paragraphIndex++;
-    } else if (block.type === "table") {
-      for (const row of block.rows || []) {
-        for (const cell of row.cells || []) {
-          for (const cellContent of cell.content || []) {
-            if (cellContent.type === "paragraph") {
+    } else if (isTable(block)) {
+      for (const row of block.rows) {
+        if (!isTableRow(row)) {
+          continue;
+        }
+        for (const cell of row.cells) {
+          if (!isTableCell(cell)) {
+            continue;
+          }
+          for (const cellContent of cell.content) {
+            if (isParagraph(cellContent)) {
               // Table paragraphs tracked separately - skip for now
             }
           }
@@ -336,12 +342,43 @@ export function findInDocument(
   return matches;
 }
 
+function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isDocumentBody(
+  value: unknown,
+): value is Document["package"]["document"] {
+  return isRecord(value) && Array.isArray(value["content"]);
+}
+
+function isParagraph(value: unknown): value is Paragraph {
+  return (
+    isRecord(value) &&
+    value["type"] === "paragraph" &&
+    Array.isArray(value["content"])
+  );
+}
+
+function isTable(value: unknown): value is Table {
+  return (
+    isRecord(value) && value["type"] === "table" && Array.isArray(value["rows"])
+  );
+}
+
+function isTableRow(value: unknown): value is TableRow {
+  return isRecord(value) && Array.isArray(value["cells"]);
+}
+
+function isTableCell(value: unknown): value is TableCell {
+  return isRecord(value) && Array.isArray(value["content"]);
+}
+
 /**
  * Find matches in a single paragraph
  */
 export function findInParagraph(
-  // oxlint-disable-next-line typescript/no-explicit-any
-  paragraph: any,
+  paragraph: Paragraph,
   searchText: string,
   options: FindOptions,
   paragraphIndex: number,
@@ -374,14 +411,9 @@ export function findInParagraph(
  * Find the content (run) at a specific character offset in a paragraph
  */
 function findContentAtOffset(
-  // oxlint-disable-next-line typescript/no-explicit-any
-  paragraph: any,
+  paragraph: Paragraph,
   offset: number,
 ): { contentIndex: number; runIndex: number; offsetInContent: number } {
-  if (!paragraph || !paragraph.content) {
-    return { contentIndex: 0, runIndex: 0, offsetInContent: offset };
-  }
-
   let currentOffset = 0;
   let contentIndex = 0;
 
@@ -391,7 +423,7 @@ function findContentAtOffset(
     if (item.type === "run") {
       itemText = getRunText(item);
     } else if (item.type === "hyperlink") {
-      for (const child of item.children || []) {
+      for (const child of item.children) {
         if (child.type === "run") {
           itemText += getRunText(child);
         }
@@ -426,7 +458,7 @@ export function scrollToMatch(
   containerElement: HTMLElement | null,
   match: FindMatch,
 ): void {
-  if (!containerElement || !match) {
+  if (!containerElement) {
     return;
   }
 

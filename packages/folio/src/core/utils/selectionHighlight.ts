@@ -11,9 +11,7 @@
  * - Visual feedback for selection across runs
  */
 
-/** Framework-agnostic CSS properties type (compatible with React.CSSProperties) */
-// eslint-disable-next-line @typescript/no-explicit-any
-type CSSProperties = Record<string, any>;
+import type { CSSProperties } from "react";
 
 // ============================================================================
 // TYPES
@@ -188,13 +186,13 @@ export function mergeAdjacentRects(
   });
 
   const merged: HighlightRect[] = [];
-  // SAFETY: rects.length > 1 (checked above) so sorted[0] exists
-  let current = { ...sorted[0]! };
+  const first = sorted.at(0);
+  if (!first) {
+    return [];
+  }
+  let current = { ...first };
 
-  for (let i = 1; i < sorted.length; i++) {
-    // SAFETY: i is bounded by sorted.length
-    const rect = sorted[i]!;
-
+  for (const rect of sorted.slice(1)) {
     // Check if on same line (within tolerance) and adjacent/overlapping
     const sameLine = Math.abs(rect.top - current.top) < tolerance;
     const adjacent = rect.left <= current.left + current.width + tolerance;
@@ -247,7 +245,10 @@ export function getHighlightRectStyle(
     width: `${rect.width}px`,
     height: `${rect.height}px`,
     backgroundColor: config.backgroundColor,
-    borderRadius: config.borderRadius ? `${config.borderRadius}px` : undefined,
+    borderRadius:
+      config.borderRadius !== undefined
+        ? `${config.borderRadius}px`
+        : undefined,
     border: config.borderColor ? `1px solid ${config.borderColor}` : undefined,
     zIndex: config.zIndex ?? 0,
     opacity: config.opacity ?? 1,
@@ -494,8 +495,16 @@ export function injectSelectionStyles(
     /* Programmatic highlight class */
     .docx-selection-highlight {
       background-color: ${config.backgroundColor};
-      ${config.borderRadius ? `border-radius: ${config.borderRadius}px;` : ""}
-      ${config.mixBlendMode ? `mix-blend-mode: ${config.mixBlendMode};` : ""}
+      ${
+        config.borderRadius !== undefined
+          ? `border-radius: ${config.borderRadius}px;`
+          : ""
+      }
+      ${
+        config.mixBlendMode !== undefined
+          ? `mix-blend-mode: ${config.mixBlendMode};`
+          : ""
+      }
     }
 
     /* Find/replace highlight */

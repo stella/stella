@@ -1,12 +1,11 @@
+import type { getTranslator } from "@/i18n/i18n-store";
 import type { Role } from "@/lib/auth";
+
+type Translator = ReturnType<typeof getTranslator>;
 
 export const managementRoles: readonly Role[] = ["owner", "admin"];
 
-export const getRoles = (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any -- required for compatibility
-  t: (...args: any[]) => string,
-): { label: string; value: Role }[] => [
+export const getRoles = (t: Translator): { label: string; value: Role }[] => [
   { label: t("organization.roles.owner"), value: "owner" },
   { label: t("organization.roles.admin"), value: "admin" },
   { label: t("organization.roles.member"), value: "member" },
