@@ -369,4 +369,3 @@ export {
   resolveTextBoxOutlineColor,
   getTextBoxOutlineWidthPx,
 };
-

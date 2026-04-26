@@ -379,4 +379,3 @@ export function createBarTab(
 
   return <span className="docx-tab-bar" style={style} />;
 }
-

@@ -472,4 +472,3 @@ export function needsPlaceholder(field: FieldType): boolean {
   }
   return field.fieldResult.length === 0;
 }
-

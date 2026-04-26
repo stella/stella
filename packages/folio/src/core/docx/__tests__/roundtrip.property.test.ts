@@ -18,20 +18,20 @@ import { describe, test, expect } from "bun:test";
 import fc from "fast-check";
 import type { Node as PMNode, Mark } from "prosemirror-model";
 
-import { schema } from "../../prosemirror/schema";
-import { toProseDoc } from "../../prosemirror/conversion/toProseDoc";
 import { fromProseDoc } from "../../prosemirror/conversion/fromProseDoc";
-import { serializeDocument } from "../serializer/documentSerializer";
+import { toProseDoc } from "../../prosemirror/conversion/toProseDoc";
+import { schema } from "../../prosemirror/schema";
 import { parseDocumentBody } from "../documentParser";
+import { serializeDocument } from "../serializer/documentSerializer";
 
 // ============================================================================
 // ARBITRARIES — generators for random ProseMirror content
 // ============================================================================
 
 /** Safe text: printable ASCII, no control characters or XML-special chars */
-const safeText = fc.string({ minLength: 1, maxLength: 80 }).filter(
-  (s) => s.trim().length > 0 && !/[<>&\x00-\x1f]/.test(s),
-);
+const safeText = fc
+  .string({ minLength: 1, maxLength: 80 })
+  .filter((s) => s.trim().length > 0 && !/[<>&\x00-\x1f]/.test(s));
 
 /** Generate a subset of marks to apply to a text run */
 function arbMarks(): fc.Arbitrary<Mark[]> {
@@ -48,9 +48,9 @@ function arbMarks(): fc.Arbitrary<Mark[]> {
 
 /** Generate a text node with random marks */
 function arbTextNode(): fc.Arbitrary<PMNode> {
-  return fc.tuple(safeText, arbMarks()).map(([text, marks]) =>
-    schema.text(text, marks),
-  );
+  return fc
+    .tuple(safeText, arbMarks())
+    .map(([text, marks]) => schema.text(text, marks));
 }
 
 /** Generate a paragraph with random inline content */
@@ -88,7 +88,7 @@ function arbFormattedParagraph(): fc.Arbitrary<PMNode> {
       }
       // Rebuild paragraph with attrs
       const content: PMNode[] = [];
-// oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
+      // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
       para.forEach((child) => content.push(child));
       return schema.nodes.paragraph.create(attrs, content);
     });
@@ -139,10 +139,10 @@ function arbTrackedChangeNode(): fc.Arbitrary<PMNode> {
 /** Generate a paragraph with tracked changes */
 function arbTrackedChangeParagraph(): fc.Arbitrary<PMNode> {
   return fc
-    .array(
-      fc.oneof(arbTextNode(), arbTrackedChangeNode()),
-      { minLength: 1, maxLength: 6 },
-    )
+    .array(fc.oneof(arbTextNode(), arbTrackedChangeNode()), {
+      minLength: 1,
+      maxLength: 6,
+    })
     .map((inlines) => schema.nodes.paragraph.create(null, inlines));
 }
 
@@ -164,10 +164,10 @@ function arbDocument(): fc.Arbitrary<PMNode> {
 /** Generate a document with tracked changes */
 function arbTrackedChangeDocument(): fc.Arbitrary<PMNode> {
   return fc
-    .array(
-      fc.oneof(arbTrackedChangeParagraph(), arbParagraph()),
-      { minLength: 1, maxLength: 10 },
-    )
+    .array(fc.oneof(arbTrackedChangeParagraph(), arbParagraph()), {
+      minLength: 1,
+      maxLength: 10,
+    })
     .map((blocks) => schema.nodes.doc.create(null, blocks));
 }
 
@@ -204,7 +204,9 @@ function normalizeNode(node: PMNode): NormalizedNode {
   // characterSpacing with all-null attrs added by the parser).
   const meaningfulMarks = node.marks.filter((m) => {
     const spec = m.type.spec.attrs;
-    if (!spec) {return true;} // marks without attrs are always meaningful
+    if (!spec) {
+      return true;
+    } // marks without attrs are always meaningful
     return Object.keys(spec).some((key) => {
       const defaultVal = spec[key]?.default;
       return m.attrs[key] !== defaultVal;
@@ -340,9 +342,7 @@ describe("DOCX round-trip property tests", () => {
           if (node.type.name === "paragraph") {
             node.forEach((child) => {
               if (child.isText && child.text?.trim()) {
-                const hasBold = child.marks.some(
-                  (m) => m.type.name === "bold",
-                );
+                const hasBold = child.marks.some((m) => m.type.name === "bold");
                 expect(hasBold).toBe(true);
               }
             });
@@ -386,16 +386,12 @@ describe("DOCX round-trip property tests", () => {
   });
 
   test("empty paragraphs survive round-trip", () => {
-    const emptyParaDoc = fc
-      .integer({ min: 1, max: 10 })
-      .map((count) =>
-        schema.nodes.doc.create(
-          null,
-          Array.from({ length: count }, () =>
-            schema.nodes.paragraph.create(),
-          ),
-        ),
-      );
+    const emptyParaDoc = fc.integer({ min: 1, max: 10 }).map((count) =>
+      schema.nodes.doc.create(
+        null,
+        Array.from({ length: count }, () => schema.nodes.paragraph.create()),
+      ),
+    );
 
     fc.assert(
       fc.property(emptyParaDoc, (doc) => {
@@ -408,10 +404,7 @@ describe("DOCX round-trip property tests", () => {
 
   test("alignment attribute survives round-trip", () => {
     const alignedDoc = fc
-      .tuple(
-        safeText,
-        fc.constantFrom("left", "center", "right", "both"),
-      )
+      .tuple(safeText, fc.constantFrom("left", "center", "right", "both"))
       .map(([text, alignment]) =>
         schema.nodes.doc.create(null, [
           schema.nodes.paragraph.create({ alignment }, [schema.text(text)]),
@@ -525,7 +518,10 @@ describe("DOCX round-trip property tests", () => {
         doc.descendants((node) => {
           if (node.isText) {
             for (const mark of node.marks) {
-              if (mark.type.name === "insertion" || mark.type.name === "deletion") {
+              if (
+                mark.type.name === "insertion" ||
+                mark.type.name === "deletion"
+              ) {
                 originalAuthors.push(mark.attrs.author as string);
               }
             }
@@ -537,7 +533,10 @@ describe("DOCX round-trip property tests", () => {
         result.descendants((node) => {
           if (node.isText) {
             for (const mark of node.marks) {
-              if (mark.type.name === "insertion" || mark.type.name === "deletion") {
+              if (
+                mark.type.name === "insertion" ||
+                mark.type.name === "deletion"
+              ) {
                 resultAuthors.push(mark.attrs.author as string);
               }
             }

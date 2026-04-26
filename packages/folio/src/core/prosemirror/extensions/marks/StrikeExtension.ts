@@ -20,8 +20,7 @@ export const StrikeExtension = createMarkExtension({
       { tag: "del" },
       {
         style: "text-decoration",
-        getAttrs: (value) =>
-          (value as string).includes("line-through") ? {} : false,
+        getAttrs: (value) => (value.includes("line-through") ? {} : false),
       },
     ],
     toDOM() {
@@ -29,9 +28,13 @@ export const StrikeExtension = createMarkExtension({
     },
   },
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
+    const strikeType = ctx.schema.marks["strike"];
+    if (!strikeType) {
+      throw new Error("Missing mark type: strike");
+    }
     return {
       commands: {
-        toggleStrike: () => toggleMark(ctx.schema.marks["strike"]!),
+        toggleStrike: () => toggleMark(strikeType),
       },
     };
   },

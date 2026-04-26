@@ -50,7 +50,9 @@ export type HeaderFooterProps = {
   /** Additional inline styles */
   style?: CSSProperties | undefined;
   /** Render function for paragraph content */
-  renderParagraph?: ((paragraph: Paragraph, index: number) => ReactNode) | undefined;
+  renderParagraph?:
+    | ((paragraph: Paragraph, index: number) => ReactNode)
+    | undefined;
   /** Render function for tables */
   renderTable?: ((table: Table, index: number) => ReactNode) | undefined;
 };
@@ -613,4 +615,3 @@ export function getFooterTypes(
   }
   return Array.from(footers.keys());
 }
-

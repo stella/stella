@@ -64,7 +64,9 @@ export type ParagraphProps = {
   /** Render function for shapes (optional override) */
   renderShape?: ((shape: ShapeType, index: number) => ReactNode) | undefined;
   /** Render function for text boxes (optional override) */
-  renderTextBox?: ((textBox: TextBoxType, index: number) => ReactNode) | undefined;
+  renderTextBox?:
+    | ((textBox: TextBoxType, index: number) => ReactNode)
+    | undefined;
   /** Index for key generation */
   index?: number | undefined;
 };
@@ -217,7 +219,9 @@ type RenderContentOptions = {
   disableLinks: boolean;
   renderImage?: ((image: ImageType, index: number) => ReactNode) | undefined;
   renderShape?: ((shape: ShapeType, index: number) => ReactNode) | undefined;
-  renderTextBox?: ((textBox: TextBoxType, index: number) => ReactNode) | undefined;
+  renderTextBox?:
+    | ((textBox: TextBoxType, index: number) => ReactNode)
+    | undefined;
   contentIndex: number;
 };
 
@@ -377,7 +381,9 @@ function renderRun(
         // Create a mini-run for this content
         const miniRun: RunType = {
           type: "run",
-          ...(run.formatting !== undefined ? { formatting: run.formatting } : {}),
+          ...(run.formatting !== undefined
+            ? { formatting: run.formatting }
+            : {}),
           content: [item],
         };
         pieces.push(
@@ -739,4 +745,3 @@ export function getCharacterCount(
   }
   return text.replace(/\s/g, "").length;
 }
-

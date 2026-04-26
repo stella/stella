@@ -66,7 +66,7 @@ export function useVisualLineNavigation({
   pagesContainerRef,
 }: VisualLineNavigationOptions) {
   const stickyXRef = useRef<number | null>(null);
-  const lastVisualLineIndexRef = useRef<number>(-1);
+  const lastVisualLineIndexRef = useRef(-1);
 
   /**
    * Get the client X coordinate of the caret at a PM position.

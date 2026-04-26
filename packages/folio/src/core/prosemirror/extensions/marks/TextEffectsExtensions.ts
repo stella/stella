@@ -86,14 +86,12 @@ export const EmphasisMarkExtension = createMarkExtension({
     parseDOM: [
       {
         tag: "span.docx-emphasis-mark",
-        getAttrs: (dom) => {
-          const el = dom as HTMLElement;
-          return { type: el.dataset["emType"] || "dot" };
-        },
+        getAttrs: (dom) => ({ type: dom.dataset["emType"] ?? "dot" }),
       },
     ],
     toDOM(mark) {
-      const emType = mark.attrs["type"] as string;
+      // SAFETY: EmphasisMark attrs.type is always a string per schema
+      const emType = String(mark.attrs["type"]);
       // CSS text-emphasis for emphasis marks
       let emStyle = "filled dot";
       switch (emType) {

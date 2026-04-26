@@ -802,7 +802,7 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
   return (
     <div
       ref={menuRef}
-      className={`docx-text-context-menu fixed top-[var(--menu-top)] start-[var(--menu-left)] z-[10000] min-w-[var(--menu-min-w)] overflow-hidden rounded-lg border border-[var(--doc-border)] bg-[var(--doc-page)] py-1 shadow-lg ${className}`}
+      className={`docx-text-context-menu fixed start-[var(--menu-left)] top-[var(--menu-top)] z-[10000] min-w-[var(--menu-min-w)] overflow-hidden rounded-lg border border-[var(--doc-border)] bg-[var(--doc-page)] py-1 shadow-lg ${className}`}
       style={getMenuStyle()}
       role="menu"
       aria-label="Text editing menu"
@@ -1064,4 +1064,3 @@ export function isTextActionAvailable(
 // ============================================================================
 // EXPORTS
 // ============================================================================
-

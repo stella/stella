@@ -140,7 +140,12 @@ export function calculateChainHeight(
     const block = blocks[memberIndex];
     const measure = measures[memberIndex];
 
-    if (!block || !measure || block.kind !== "paragraph" || measure.kind !== "paragraph") {
+    if (
+      !block ||
+      !measure ||
+      block.kind !== "paragraph" ||
+      measure.kind !== "paragraph"
+    ) {
       continue;
     }
 

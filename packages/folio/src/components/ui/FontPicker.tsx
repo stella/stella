@@ -94,10 +94,12 @@ function toDisplayName(fontFamily: string, fonts: FontOption[]): string {
       f.fontFamily === fontFamily ||
       f.name.toLowerCase() === fontFamily.toLowerCase(),
   );
-  if (match) {return match.name;}
+  if (match) {
+    return match.name;
+  }
   // Extract first font name from CSS value
   // SAFETY: split always returns at least one element
-  return fontFamily.split(",")[0]!.replace(/['"]/g, "").trim();
+  return (fontFamily.split(",")[0] ?? "").replace(/['"]/g, "").trim();
 }
 
 export function FontPicker({
@@ -115,7 +117,9 @@ export function FontPicker({
       value={value ? toDisplayName(value, fontOptions) : undefined}
       onValueChange={(name) => {
         const font = fontOptions.find((f) => f.name === name);
-        if (font) {onChange?.(font.name);}
+        if (font) {
+          onChange?.(font.name);
+        }
       }}
       disabled={disabled}
     >

@@ -30,11 +30,7 @@ import type {
 } from "./toolbarPrimitives";
 
 // Re-export types and primitives so existing consumers keep working
-export {
-  ToolbarButton,
-  ToolbarGroup,
-  ToolbarSeparator,
-};
+export { ToolbarButton, ToolbarGroup, ToolbarSeparator };
 export type {
   SelectionFormatting,
   FormattingAction,
@@ -149,4 +145,3 @@ export {
   hasActiveFormatting,
   mapHexToHighlightName,
 } from "./toolbarUtils";
-

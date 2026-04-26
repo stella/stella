@@ -167,7 +167,10 @@ export function useFindReplace(
       }));
       hookOptions?.onMatchesChange?.(matches);
       if (matches.length > 0) {
-        hookOptions?.onCurrentMatchChange?.(matches[newIndex] ?? null, newIndex);
+        hookOptions?.onCurrentMatchChange?.(
+          matches[newIndex] ?? null,
+          newIndex,
+        );
       } else {
         hookOptions?.onCurrentMatchChange?.(null, -1);
       }

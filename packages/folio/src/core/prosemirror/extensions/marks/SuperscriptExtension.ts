@@ -18,9 +18,13 @@ export const SuperscriptExtension = createMarkExtension({
     },
   },
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
+    const superscriptType = ctx.schema.marks["superscript"];
+    if (!superscriptType) {
+      throw new Error("Missing mark type: superscript");
+    }
     return {
       commands: {
-        toggleSuperscript: () => toggleMark(ctx.schema.marks["superscript"]!),
+        toggleSuperscript: () => toggleMark(superscriptType),
       },
     };
   },

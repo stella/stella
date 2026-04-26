@@ -33,28 +33,25 @@ export const FieldExtension = createNodeExtension({
       {
         tag: "span.docx-field",
         getAttrs(dom) {
-          const el = dom as HTMLElement;
           return {
-            fieldType: el.dataset["fieldType"] || "UNKNOWN",
-            instruction: el.dataset["instruction"] || "",
-            displayText: el.textContent || "",
-            fieldKind: el.dataset["fieldKind"] || "simple",
-            fldLock: el.dataset["fldLock"] === "true",
-            dirty: el.dataset["dirty"] === "true",
+            fieldType: dom.dataset["fieldType"] ?? "UNKNOWN",
+            instruction: dom.dataset["instruction"] ?? "",
+            displayText: dom.textContent ?? "",
+            fieldKind: dom.dataset["fieldKind"] ?? "simple",
+            fldLock: dom.dataset["fldLock"] === "true",
+            dirty: dom.dataset["dirty"] === "true",
           };
         },
       },
     ],
     toDOM(node) {
-      const { fieldType, instruction, displayText, fieldKind, fldLock, dirty } =
-        node.attrs as {
-          fieldType: string;
-          instruction: string;
-          displayText: string;
-          fieldKind: string;
-          fldLock: boolean;
-          dirty: boolean;
-        };
+      // SAFETY: Field node attrs always match this shape per schema
+      const fieldType = String(node.attrs["fieldType"]);
+      const instruction = String(node.attrs["instruction"]);
+      const displayText = String(node.attrs["displayText"]);
+      const fieldKind = String(node.attrs["fieldKind"]);
+      const fldLock = Boolean(node.attrs["fldLock"]);
+      const dirty = Boolean(node.attrs["dirty"]);
 
       // Dynamic fields show a placeholder; static fields show their display text
       let text = displayText || "";

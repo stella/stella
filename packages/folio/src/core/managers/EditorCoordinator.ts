@@ -87,8 +87,12 @@ export class EditorCoordinator extends Subscribable<EditorCoordinatorSnapshot> {
     });
 
     this._zoom = zoom;
-    if (options.onChange !== undefined) this.onChangeCallback = options.onChange;
-    if (options.onError !== undefined) this.onErrorCallback = options.onError;
+    if (options.onChange !== undefined) {
+      this.onChangeCallback = options.onChange;
+    }
+    if (options.onError !== undefined) {
+      this.onErrorCallback = options.onError;
+    }
   }
 
   // --------------------------------------------------------------------------

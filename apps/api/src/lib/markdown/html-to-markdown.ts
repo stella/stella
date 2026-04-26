@@ -90,7 +90,7 @@ const renderInlineElement = (el: Element): string => {
     case "br":
       return "  \n";
     case "a": {
-      const href = el.attribs.href ?? "";
+      const href = el.attribs["href"] ?? "";
       return `[${renderInline(el.children)}](${href})`;
     }
     case "u":
@@ -258,7 +258,7 @@ const renderBlock = (el: Element): string => {
       const codeEl = el.children.find(
         (c): c is Element => isTag(c) && tagNameOf(c) === "code",
       );
-      const lang = codeEl?.attribs.class?.match(/language-(\S+)/)?.[1] ?? "";
+      const lang = codeEl?.attribs["class"]?.match(/language-(\S+)/)?.[1] ?? "";
       const text = rawText(codeEl ?? el).replace(/\n+$/, "");
       return `\`\`\`${lang}\n${text}\n\`\`\``;
     }

@@ -4,7 +4,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { Dialog, DialogPortal, DialogBackdrop, DialogPopup, DialogTitle, DialogClose } from "@stella/ui/components/dialog";
+import {
+  Dialog,
+  DialogPortal,
+  DialogBackdrop,
+  DialogPopup,
+  DialogTitle,
+  DialogClose,
+} from "@stella/ui/components/dialog";
 
 export type TableProperties = {
   width?: number | null;
@@ -44,8 +51,14 @@ export function TablePropertiesDialog({
   }, [isOpen, currentProps]);
 
   const handleApply = useCallback(() => {
+    const justifValue =
+      justification === "left" ||
+      justification === "center" ||
+      justification === "right"
+        ? justification
+        : ("left" as const);
     const props: TableProperties = {
-      justification: justification as "left" | "center" | "right",
+      justification: justifValue,
     };
     if (widthType === "auto") {
       props.width = null;
@@ -66,7 +79,7 @@ export function TablePropertiesDialog({
     <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
       <DialogPortal>
         <DialogBackdrop className="fixed inset-0 z-[10000] bg-black/50" />
-        <DialogPopup className="bg-popover fixed top-1/2 start-1/2 z-[10001] w-full max-w-[440px] min-w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-lg border shadow-xl">
+        <DialogPopup className="bg-popover fixed start-1/2 top-1/2 z-[10001] w-full max-w-[440px] min-w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-lg border shadow-xl">
           <DialogTitle className="border-b px-5 py-3 text-base font-semibold">
             Table Properties
           </DialogTitle>

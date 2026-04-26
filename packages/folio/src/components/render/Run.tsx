@@ -367,4 +367,3 @@ export function isWhitespaceOnly(run: RunType): boolean {
     return false;
   });
 }
-

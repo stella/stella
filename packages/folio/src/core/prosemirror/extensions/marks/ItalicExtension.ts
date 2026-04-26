@@ -24,12 +24,16 @@ export const ItalicExtension = createMarkExtension({
     },
   },
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
+    const italicType = ctx.schema.marks["italic"];
+    if (!italicType) {
+      throw new Error("Missing mark type: italic");
+    }
     return {
       commands: {
-        toggleItalic: () => toggleMark(ctx.schema.marks["italic"]!),
+        toggleItalic: () => toggleMark(italicType),
       },
       keyboardShortcuts: {
-        "Mod-i": toggleMark(ctx.schema.marks["italic"]!),
+        "Mod-i": toggleMark(italicType),
       },
     };
   },

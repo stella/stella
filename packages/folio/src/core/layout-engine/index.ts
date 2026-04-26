@@ -519,9 +519,7 @@ function layoutTable(
       ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
       ...(!isFirstFragment ? { continuesFromPrev: true } : {}),
       ...(!isLastFragment ? { continuesOnNext: true } : {}),
-      ...(!isFirstFragment && headerRowCount > 0
-        ? { headerRowCount }
-        : {}),
+      ...(!isFirstFragment && headerRowCount > 0 ? { headerRowCount } : {}),
     };
 
     const result = paginator.addFragment(fragment, fragmentHeight, 0, 0);

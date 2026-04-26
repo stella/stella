@@ -7,7 +7,11 @@
 import type { MarkType, Mark, Schema } from "prosemirror-model";
 import type { Command, EditorState, Transaction } from "prosemirror-state";
 
-import type { TextFormatting } from "../../../types/document";
+import type {
+  TextFormatting,
+  UnderlineStyle,
+  ThemeColorSlot,
+} from "../../../types/document";
 
 type MarkAttrs = Record<string, unknown>;
 
@@ -26,27 +30,75 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
       case "italic":
         formatting.italic = true;
         break;
-      case "underline":
-        formatting.underline = { style: mark.attrs["style"] || "single" };
+      case "underline": {
+        // SAFETY: underline mark always has style attr per schema; value is a valid UnderlineStyle
+        const underlineStyle = (
+          typeof mark.attrs["style"] === "string"
+            ? mark.attrs["style"]
+            : "single"
+        ) as UnderlineStyle;
+        formatting.underline = { style: underlineStyle };
         break;
+      }
       case "strike":
         formatting.strike = true;
         break;
-      case "textColor":
-        formatting.color = mark.attrs;
-        break;
-      case "highlight":
-        formatting.highlight = mark.attrs["color"];
-        break;
-      case "fontSize":
-        formatting.fontSize = mark.attrs["size"];
-        break;
-      case "fontFamily":
-        formatting.fontFamily = {
-          ascii: mark.attrs["ascii"],
-          hAnsi: mark.attrs["hAnsi"],
+      case "textColor": {
+        // SAFETY: textColor mark attrs always match ColorValue shape — extracted individually;
+        // themeColor is always a valid ThemeColorSlot string per schema
+        const colorRgb =
+          mark.attrs["rgb"] !== null && mark.attrs["rgb"] !== undefined
+            ? String(mark.attrs["rgb"])
+            : undefined;
+        const colorTheme =
+          mark.attrs["themeColor"] !== null &&
+          mark.attrs["themeColor"] !== undefined
+            ? (String(mark.attrs["themeColor"]) as ThemeColorSlot)
+            : undefined;
+        const colorTint =
+          mark.attrs["themeTint"] !== null &&
+          mark.attrs["themeTint"] !== undefined
+            ? String(mark.attrs["themeTint"])
+            : undefined;
+        const colorShade =
+          mark.attrs["themeShade"] !== null &&
+          mark.attrs["themeShade"] !== undefined
+            ? String(mark.attrs["themeShade"])
+            : undefined;
+        formatting.color = {
+          ...(colorRgb !== undefined ? { rgb: colorRgb } : {}),
+          ...(colorTheme !== undefined ? { themeColor: colorTheme } : {}),
+          ...(colorTint !== undefined ? { themeTint: colorTint } : {}),
+          ...(colorShade !== undefined ? { themeShade: colorShade } : {}),
         };
         break;
+      }
+      case "highlight":
+        // SAFETY: highlight mark always has color attr per schema; value is a valid highlight union member
+        formatting.highlight = String(mark.attrs["color"]) as NonNullable<
+          TextFormatting["highlight"]
+        >;
+        break;
+      case "fontSize":
+        // SAFETY: fontSize mark always has size attr per schema
+        formatting.fontSize = Number(mark.attrs["size"]);
+        break;
+      case "fontFamily": {
+        // SAFETY: fontFamily mark always has ascii/hAnsi attrs per schema
+        const ascii =
+          mark.attrs["ascii"] !== null && mark.attrs["ascii"] !== undefined
+            ? String(mark.attrs["ascii"])
+            : undefined;
+        const hAnsi =
+          mark.attrs["hAnsi"] !== null && mark.attrs["hAnsi"] !== undefined
+            ? String(mark.attrs["hAnsi"])
+            : undefined;
+        formatting.fontFamily = {
+          ...(ascii !== undefined ? { ascii } : {}),
+          ...(hAnsi !== undefined ? { hAnsi } : {}),
+        };
+        break;
+      }
       case "superscript":
         formatting.vertAlign = "superscript";
         break;
@@ -75,7 +127,7 @@ function saveStoredMarksToParagraph(
     return tr;
   }
 
-  const marks = tr.storedMarks || state.storedMarks || [];
+  const marks = tr.storedMarks ?? state.storedMarks ?? [];
   if (marks.length === 0) {
     return tr.setNodeMarkup($from.before(), undefined, {
       ...paragraph.attrs,
@@ -106,12 +158,12 @@ export function setMark(markType: MarkType, attrs: MarkAttrs): Command {
     if (empty) {
       if (dispatch) {
         const marks = markType.isInSet(
-          state.storedMarks || state.selection.$from.marks(),
+          state.storedMarks ?? state.selection.$from.marks(),
         )
-          ? (state.storedMarks || state.selection.$from.marks()).filter(
+          ? (state.storedMarks ?? state.selection.$from.marks()).filter(
               (m) => m.type !== markType,
             )
-          : state.storedMarks || state.selection.$from.marks();
+          : (state.storedMarks ?? state.selection.$from.marks());
 
         let tr = state.tr.setStoredMarks([...marks, mark]);
         tr = saveStoredMarksToParagraph(state, tr);
@@ -138,7 +190,7 @@ export function removeMark(markType: MarkType): Command {
     if (empty) {
       if (dispatch) {
         const marks = (
-          state.storedMarks || state.selection.$from.marks()
+          state.storedMarks ?? state.selection.$from.marks()
         ).filter((m) => m.type !== markType);
         let tr = state.tr.setStoredMarks(marks);
         tr = saveStoredMarksToParagraph(state, tr);
@@ -166,7 +218,7 @@ export function isMarkActive(
   const { from, to, empty } = state.selection;
 
   if (empty) {
-    const marks = state.storedMarks || state.selection.$from.marks();
+    const marks = state.storedMarks ?? state.selection.$from.marks();
     return marks.some((mark) => {
       if (mark.type !== markType) {
         return false;
@@ -211,11 +263,11 @@ export function getMarkAttr(
   state: EditorState,
   markType: MarkType,
   attr: string,
-): unknown | null {
+): unknown {
   const { empty, $from, from, to } = state.selection;
 
   if (empty) {
-    const marks = state.storedMarks || $from.marks();
+    const marks = state.storedMarks ?? $from.marks();
     for (const mark of marks) {
       if (mark.type === markType) {
         return mark.attrs[attr];
@@ -283,7 +335,7 @@ export function textFormattingToMarks(
       schema.marks["highlight"].create({ color: formatting.highlight }),
     );
   }
-  if (formatting.fontSize && schema.marks["fontSize"]) {
+  if (formatting.fontSize !== undefined && schema.marks["fontSize"]) {
     marks.push(schema.marks["fontSize"].create({ size: formatting.fontSize }));
   }
   if (formatting.fontFamily && schema.marks["fontFamily"]) {
@@ -344,7 +396,7 @@ export function createSetMarkCommand(
   markType: MarkType,
   attrs?: Record<string, unknown>,
 ): Command {
-  return setMark(markType, attrs || {});
+  return setMark(markType, attrs ?? {});
 }
 
 /**

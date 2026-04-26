@@ -29,22 +29,27 @@ export const HighlightExtension = createMarkExtension({
       },
     ],
     toDOM(mark) {
-      const color = mark.attrs["color"] as string;
+      // SAFETY: mark.attrs.color is always a string per the attrs spec above
+      const color = String(mark.attrs["color"]);
       // Resolve OOXML named highlight color (e.g., 'yellow' → '#FFFF00')
       const cssColor = resolveHighlightToCss(color);
       return ["mark", { style: `background-color: ${cssColor}` }, 0];
     },
   },
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
+    const highlightType = ctx.schema.marks["highlight"];
+    if (!highlightType) {
+      throw new Error("Missing mark type: highlight");
+    }
     return {
       commands: {
         setHighlight: (color: string) => {
           if (!color || color === "none") {
-            return removeMark(ctx.schema.marks["highlight"]!);
+            return removeMark(highlightType);
           }
-          return setMark(ctx.schema.marks["highlight"]!, { color });
+          return setMark(highlightType, { color });
         },
-        clearHighlight: () => removeMark(ctx.schema.marks["highlight"]!),
+        clearHighlight: () => removeMark(highlightType),
       },
     };
   },

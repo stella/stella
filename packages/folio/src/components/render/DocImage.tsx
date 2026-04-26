@@ -468,4 +468,3 @@ export {
   getImageHeightPx,
   isDecorativeImage,
 };
-

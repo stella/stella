@@ -196,13 +196,21 @@ function parseRunProperties(
   if (rFonts) {
     const fontFamily: NonNullable<TextFormatting["fontFamily"]> = {};
     const ascii = getAttribute(rFonts, "w", "ascii");
-    if (ascii) { fontFamily.ascii = ascii; }
+    if (ascii) {
+      fontFamily.ascii = ascii;
+    }
     const hAnsi = getAttribute(rFonts, "w", "hAnsi");
-    if (hAnsi) { fontFamily.hAnsi = hAnsi; }
+    if (hAnsi) {
+      fontFamily.hAnsi = hAnsi;
+    }
     const eastAsia = getAttribute(rFonts, "w", "eastAsia");
-    if (eastAsia) { fontFamily.eastAsia = eastAsia; }
+    if (eastAsia) {
+      fontFamily.eastAsia = eastAsia;
+    }
     const csFont = getAttribute(rFonts, "w", "cs");
-    if (csFont) { fontFamily.cs = csFont; }
+    if (csFont) {
+      fontFamily.cs = csFont;
+    }
 
     // Theme font references - resolve to actual font names
     const asciiTheme = getAttribute(rFonts, "w", "asciiTheme");
@@ -216,7 +224,9 @@ function parseRunProperties(
       // Also resolve the actual font name for convenience
       if (theme && !fontFamily.ascii) {
         const resolved = resolveThemeFontRef(theme, asciiTheme);
-        if (resolved) { fontFamily.ascii = resolved; }
+        if (resolved) {
+          fontFamily.ascii = resolved;
+        }
       }
     }
     const hAnsiTheme = getAttribute(rFonts, "w", "hAnsiTheme");
@@ -224,7 +234,9 @@ function parseRunProperties(
       fontFamily.hAnsiTheme = hAnsiTheme;
       if (theme && !fontFamily.hAnsi) {
         const resolved = resolveThemeFontRef(theme, hAnsiTheme);
-        if (resolved) { fontFamily.hAnsi = resolved; }
+        if (resolved) {
+          fontFamily.hAnsi = resolved;
+        }
       }
     }
     const eastAsiaTheme = getAttribute(rFonts, "w", "eastAsiaTheme");
@@ -232,7 +244,9 @@ function parseRunProperties(
       fontFamily.eastAsiaTheme = eastAsiaTheme;
       if (theme && !fontFamily.eastAsia) {
         const resolved = resolveThemeFontRef(theme, eastAsiaTheme);
-        if (resolved) { fontFamily.eastAsia = resolved; }
+        if (resolved) {
+          fontFamily.eastAsia = resolved;
+        }
       }
     }
     const csTheme = getAttribute(rFonts, "w", "cstheme");
@@ -240,7 +254,9 @@ function parseRunProperties(
       fontFamily.csTheme = csTheme;
       if (theme && !fontFamily.cs) {
         const resolved = resolveThemeFontRef(theme, csTheme);
-        if (resolved) { fontFamily.cs = resolved; }
+        if (resolved) {
+          fontFamily.cs = resolved;
+        }
       }
     }
 
@@ -297,7 +313,9 @@ function parseRunProperties(
   if (em) {
     const val = getAttribute(em, "w", "val");
     if (val) {
-      formatting.emphasisMark = val as NonNullable<TextFormatting["emphasisMark"]>;
+      formatting.emphasisMark = val as NonNullable<
+        TextFormatting["emphasisMark"]
+      >;
     }
   }
 
@@ -401,7 +419,9 @@ function parseShadingProperties(
 
   const themeFill = getAttribute(shd, "w", "themeFill");
   if (themeFill) {
-    if (!props.fill) { props.fill = {}; }
+    if (!props.fill) {
+      props.fill = {};
+    }
     props.fill.themeColor = themeFill as NonNullable<ColorValue["themeColor"]>;
   }
 
@@ -529,7 +549,9 @@ function parseParagraphProperties(
   if (jc) {
     const val = getAttribute(jc, "w", "val");
     if (val) {
-      formatting.alignment = val as NonNullable<ParagraphFormatting["alignment"]>;
+      formatting.alignment = val as NonNullable<
+        ParagraphFormatting["alignment"]
+      >;
     }
   }
 
@@ -559,8 +581,9 @@ function parseParagraphProperties(
 
     const lineRule = getAttribute(spacing, "w", "lineRule");
     if (lineRule) {
-      formatting.lineSpacingRule =
-        lineRule as NonNullable<ParagraphFormatting["lineSpacingRule"]>;
+      formatting.lineSpacingRule = lineRule as NonNullable<
+        ParagraphFormatting["lineSpacingRule"]
+      >;
     }
 
     const beforeAuto = getAttribute(spacing, "w", "beforeAutospacing");
@@ -1044,7 +1067,9 @@ function parseTableRowProperties(
     }
     const hRule = getAttribute(trHeight, "w", "hRule");
     if (hRule) {
-      formatting.heightRule = hRule as NonNullable<TableRowFormatting["heightRule"]>;
+      formatting.heightRule = hRule as NonNullable<
+        TableRowFormatting["heightRule"]
+      >;
     }
   }
 
@@ -1141,7 +1166,9 @@ function parseTableCellProperties(
   if (textDirection) {
     const val = getAttribute(textDirection, "w", "val");
     if (val) {
-      formatting.textDirection = val as NonNullable<TableCellFormatting["textDirection"]>;
+      formatting.textDirection = val as NonNullable<
+        TableCellFormatting["textDirection"]
+      >;
     }
   }
 
@@ -1201,28 +1228,36 @@ function parseStyle(styleEl: XmlElement, theme: Theme | null): Style {
   const nameEl = findChild(styleEl, "w", "name");
   if (nameEl) {
     const nameVal = getAttribute(nameEl, "w", "val");
-    if (nameVal) { style.name = nameVal; }
+    if (nameVal) {
+      style.name = nameVal;
+    }
   }
 
   // Based on (inheritance)
   const basedOn = findChild(styleEl, "w", "basedOn");
   if (basedOn) {
     const basedOnVal = getAttribute(basedOn, "w", "val");
-    if (basedOnVal) { style.basedOn = basedOnVal; }
+    if (basedOnVal) {
+      style.basedOn = basedOnVal;
+    }
   }
 
   // Next style
   const next = findChild(styleEl, "w", "next");
   if (next) {
     const nextVal = getAttribute(next, "w", "val");
-    if (nextVal) { style.next = nextVal; }
+    if (nextVal) {
+      style.next = nextVal;
+    }
   }
 
   // Linked style
   const link = findChild(styleEl, "w", "link");
   if (link) {
     const linkVal = getAttribute(link, "w", "val");
-    if (linkVal) { style.link = linkVal; }
+    if (linkVal) {
+      style.link = linkVal;
+    }
   }
 
   // UI Priority
@@ -1267,35 +1302,45 @@ function parseStyle(styleEl: XmlElement, theme: Theme | null): Style {
   const pPr = findChild(styleEl, "w", "pPr");
   if (pPr) {
     const pPrResult = parseParagraphProperties(pPr, theme);
-    if (pPrResult) { style.pPr = pPrResult; }
+    if (pPrResult) {
+      style.pPr = pPrResult;
+    }
   }
 
   // Run properties
   const rPr = findChild(styleEl, "w", "rPr");
   if (rPr) {
     const rPrResult = parseRunProperties(rPr, theme);
-    if (rPrResult) { style.rPr = rPrResult; }
+    if (rPrResult) {
+      style.rPr = rPrResult;
+    }
   }
 
   // Table properties (for table styles)
   const tblPr = findChild(styleEl, "w", "tblPr");
   if (tblPr) {
     const tblPrResult = parseTableProperties(tblPr, theme);
-    if (tblPrResult) { style.tblPr = tblPrResult; }
+    if (tblPrResult) {
+      style.tblPr = tblPrResult;
+    }
   }
 
   // Table row properties
   const trPr = findChild(styleEl, "w", "trPr");
   if (trPr) {
     const trPrResult = parseTableRowProperties(trPr);
-    if (trPrResult) { style.trPr = trPrResult; }
+    if (trPrResult) {
+      style.trPr = trPrResult;
+    }
   }
 
   // Table cell properties
   const tcPr = findChild(styleEl, "w", "tcPr");
   if (tcPr) {
     const tcPrResult = parseTableCellProperties(tcPr, theme);
-    if (tcPrResult) { style.tcPr = tcPrResult; }
+    if (tcPrResult) {
+      style.tcPr = tcPrResult;
+    }
   }
 
   // Table style conditional formatting (tblStylePr)
@@ -1314,31 +1359,41 @@ function parseStyle(styleEl: XmlElement, theme: Theme | null): Style {
         const condPPr = findChild(tblStylePr, "w", "pPr");
         if (condPPr) {
           const condPPrResult = parseParagraphProperties(condPPr, theme);
-          if (condPPrResult) { conditionalStyle.pPr = condPPrResult; }
+          if (condPPrResult) {
+            conditionalStyle.pPr = condPPrResult;
+          }
         }
 
         const condRPr = findChild(tblStylePr, "w", "rPr");
         if (condRPr) {
           const condRPrResult = parseRunProperties(condRPr, theme);
-          if (condRPrResult) { conditionalStyle.rPr = condRPrResult; }
+          if (condRPrResult) {
+            conditionalStyle.rPr = condRPrResult;
+          }
         }
 
         const condTblPr = findChild(tblStylePr, "w", "tblPr");
         if (condTblPr) {
           const condTblPrResult = parseTableProperties(condTblPr, theme);
-          if (condTblPrResult) { conditionalStyle.tblPr = condTblPrResult; }
+          if (condTblPrResult) {
+            conditionalStyle.tblPr = condTblPrResult;
+          }
         }
 
         const condTrPr = findChild(tblStylePr, "w", "trPr");
         if (condTrPr) {
           const condTrPrResult = parseTableRowProperties(condTrPr);
-          if (condTrPrResult) { conditionalStyle.trPr = condTrPrResult; }
+          if (condTrPrResult) {
+            conditionalStyle.trPr = condTrPrResult;
+          }
         }
 
         const condTcPr = findChild(tblStylePr, "w", "tcPr");
         if (condTcPr) {
           const condTcPrResult = parseTableCellProperties(condTcPr, theme);
-          if (condTcPrResult) { conditionalStyle.tcPr = condTcPrResult; }
+          if (condTcPrResult) {
+            conditionalStyle.tcPr = condTcPrResult;
+          }
         }
 
         style.tblStylePr.push(conditionalStyle);
@@ -1368,7 +1423,9 @@ function parseDocDefaults(
     const rPr = findChild(rPrDefault, "w", "rPr");
     if (rPr) {
       const rPrResult = parseRunProperties(rPr, theme);
-      if (rPrResult) { result.rPr = rPrResult; }
+      if (rPrResult) {
+        result.rPr = rPrResult;
+      }
     }
   }
 
@@ -1378,7 +1435,9 @@ function parseDocDefaults(
     const pPr = findChild(pPrDefault, "w", "pPr");
     if (pPr) {
       const pPrResult = parseParagraphProperties(pPr, theme);
-      if (pPrResult) { result.pPr = pPrResult; }
+      if (pPrResult) {
+        result.pPr = pPrResult;
+      }
     }
   }
 
@@ -1506,10 +1565,14 @@ function resolveStyleInheritance(
   const resolved: Style = { ...style };
 
   const mergedPPr = mergeParagraphFormatting(resolvedParent.pPr, style.pPr);
-  if (mergedPPr) { resolved.pPr = mergedPPr; }
+  if (mergedPPr) {
+    resolved.pPr = mergedPPr;
+  }
 
   const mergedRPr = mergeTextFormatting(resolvedParent.rPr, style.rPr);
-  if (mergedRPr) { resolved.rPr = mergedRPr; }
+  if (mergedRPr) {
+    resolved.rPr = mergedRPr;
+  }
 
   // Merge table properties if this is a table style
   if (style.type === "table") {

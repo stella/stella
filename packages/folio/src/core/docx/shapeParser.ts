@@ -626,12 +626,24 @@ export function parseShape(node: XmlElement): Shape {
 
     if (content.length > 0 || Object.keys(bodyProps).length > 0) {
       const textBody: ShapeTextBody = { content };
-      if (bodyProps.vertical !== undefined) textBody.vertical = bodyProps.vertical;
-      if (bodyProps.rotation !== undefined) textBody.rotation = bodyProps.rotation;
-      if (bodyProps.anchor !== undefined) textBody.anchor = bodyProps.anchor;
-      if (bodyProps.anchorCenter !== undefined) textBody.anchorCenter = bodyProps.anchorCenter;
-      if (bodyProps.autoFit !== undefined) textBody.autoFit = bodyProps.autoFit;
-      if (bodyProps.margins !== undefined) textBody.margins = bodyProps.margins;
+      if (bodyProps.vertical !== undefined) {
+        textBody.vertical = bodyProps.vertical;
+      }
+      if (bodyProps.rotation !== undefined) {
+        textBody.rotation = bodyProps.rotation;
+      }
+      if (bodyProps.anchor !== undefined) {
+        textBody.anchor = bodyProps.anchor;
+      }
+      if (bodyProps.anchorCenter !== undefined) {
+        textBody.anchorCenter = bodyProps.anchorCenter;
+      }
+      if (bodyProps.autoFit !== undefined) {
+        textBody.autoFit = bodyProps.autoFit;
+      }
+      if (bodyProps.margins !== undefined) {
+        textBody.margins = bodyProps.margins;
+      }
       shape.textBody = textBody;
     }
   }

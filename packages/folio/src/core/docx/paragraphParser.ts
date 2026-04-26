@@ -99,7 +99,9 @@ function parseSdtProperties(sdtPr: XmlElement | null): SdtProperties {
       }
       case "lock": {
         const lockVal = getAttribute(el, "w", "val");
-        props.lock = (lockVal ?? "unlocked") as NonNullable<SdtProperties["lock"]>;
+        props.lock = (lockVal ?? "unlocked") as NonNullable<
+          SdtProperties["lock"]
+        >;
         break;
       }
       case "placeholder": {
@@ -436,7 +438,9 @@ function parseFrameProperties(
 
   const wrap = getAttribute(framePr, "w", "wrap");
   if (wrap) {
-    frame.wrap = wrap as NonNullable<NonNullable<ParagraphFormatting["frame"]>["wrap"]>;
+    frame.wrap = wrap as NonNullable<
+      NonNullable<ParagraphFormatting["frame"]>["wrap"]
+    >;
   }
 
   return Object.keys(frame).length > 0 ? frame : undefined;

@@ -251,4 +251,3 @@ export function useTableSelection({
     tableContext: state.context,
   };
 }
-

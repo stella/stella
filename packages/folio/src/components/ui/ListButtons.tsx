@@ -8,8 +8,8 @@ import {
   ListIcon,
   ListOrderedIcon,
 } from "lucide-react";
-
 import { useTranslations } from "use-intl";
+
 import { cn } from "../../lib/utils";
 
 export type ListType = "bullet" | "numbered" | "none";

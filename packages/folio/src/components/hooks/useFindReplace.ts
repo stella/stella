@@ -11,10 +11,7 @@ import { useRef, useCallback } from "react";
 
 import type { Document } from "../../core/types/document";
 import { replaceTextInDocument } from "../../core/utils/replaceText";
-import {
-  findInDocument,
-  scrollToMatch,
-} from "../dialogs/findReplaceUtils";
+import { findInDocument, scrollToMatch } from "../dialogs/findReplaceUtils";
 import type {
   FindMatch,
   FindOptions,
@@ -100,10 +97,7 @@ export function useFindReplace({
 
   // Handle find next
   const handleFindNext = useCallback((): FindMatch | null => {
-    if (
-      !findResultRef.current ||
-      findResultRef.current.matches.length === 0
-    ) {
+    if (!findResultRef.current || findResultRef.current.matches.length === 0) {
       return null;
     }
 
@@ -120,10 +114,7 @@ export function useFindReplace({
 
   // Handle find previous
   const handleFindPrevious = useCallback((): FindMatch | null => {
-    if (
-      !findResultRef.current ||
-      findResultRef.current.matches.length === 0
-    ) {
+    if (!findResultRef.current || findResultRef.current.matches.length === 0) {
       return null;
     }
 
@@ -184,11 +175,7 @@ export function useFindReplace({
 
   // Handle replace all matches
   const handleReplaceAll = useCallback(
-    (
-      searchText: string,
-      replaceText: string,
-      options: FindOptions,
-    ): number => {
+    (searchText: string, replaceText: string, options: FindOptions): number => {
       if (!documentState || !searchText.trim()) {
         return 0;
       }

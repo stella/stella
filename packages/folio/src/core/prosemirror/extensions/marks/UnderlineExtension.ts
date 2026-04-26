@@ -4,7 +4,7 @@
 
 import { toggleMark } from "prosemirror-commands";
 
-import type { TextColorAttrs, UnderlineAttrs } from "../../schema/marks";
+import type { TextColorAttrs } from "../../schema/marks";
 import { createMarkExtension } from "../create";
 import type { ExtensionContext, ExtensionRuntime } from "../types";
 import { setMark } from "./markUtils";
@@ -21,43 +21,56 @@ export const UnderlineExtension = createMarkExtension({
       { tag: "u" },
       {
         style: "text-decoration",
-        getAttrs: (value) =>
-          (value as string).includes("underline") ? {} : false,
+        getAttrs: (value) => (value.includes("underline") ? {} : false),
       },
     ],
     toDOM(mark) {
-      const attrs = mark.attrs as UnderlineAttrs;
+      // SAFETY: underline mark attrs always match UnderlineAttrs shape per schema
+      const style =
+        typeof mark.attrs["style"] === "string"
+          ? mark.attrs["style"]
+          : undefined;
+      // Access color.rgb via Reflect.get to avoid unsafe-type-assertion on `any`
+      const colorObj: unknown = Reflect.get(mark.attrs, "color");
+      const colorRgb: unknown =
+        typeof colorObj === "object" && colorObj !== null
+          ? Reflect.get(colorObj, "rgb")
+          : undefined;
       const cssStyle: string[] = ["text-decoration: underline"];
 
-      if (attrs.style && attrs.style !== "single") {
+      if (style && style !== "single") {
         const styleMap: Record<string, string> = {
           double: "double",
           dotted: "dotted",
           dash: "dashed",
           wave: "wavy",
         };
-        const cssDecorationStyle = styleMap[attrs.style];
+        const cssDecorationStyle = styleMap[style];
         if (cssDecorationStyle) {
           cssStyle.push(`text-decoration-style: ${cssDecorationStyle}`);
         }
       }
 
-      if (attrs.color?.rgb) {
-        cssStyle.push(`text-decoration-color: #${attrs.color.rgb}`);
+      if (typeof colorRgb === "string" && colorRgb) {
+        cssStyle.push(`text-decoration-color: #${colorRgb}`);
       }
 
       return ["span", { style: cssStyle.join("; ") }, 0];
     },
   },
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
+    const underlineType = ctx.schema.marks["underline"];
+    if (!underlineType) {
+      throw new Error("Missing mark type: underline");
+    }
     return {
       commands: {
-        toggleUnderline: () => toggleMark(ctx.schema.marks["underline"]!),
+        toggleUnderline: () => toggleMark(underlineType),
         setUnderlineStyle: (style: string, color?: TextColorAttrs) =>
-          setMark(ctx.schema.marks["underline"]!, { style, color }),
+          setMark(underlineType, { style, color }),
       },
       keyboardShortcuts: {
-        "Mod-u": toggleMark(ctx.schema.marks["underline"]!),
+        "Mod-u": toggleMark(underlineType),
       },
     };
   },

@@ -174,4 +174,3 @@ export function createLineSpacingOption(multiplier: number): LineSpacingOption {
   const label = multiplier.toFixed(2).replace(/\.?0+$/, "");
   return { label, value: multiplier, twipsValue };
 }
-

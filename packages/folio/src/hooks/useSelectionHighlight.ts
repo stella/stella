@@ -291,4 +291,3 @@ export function generateOverlayElements(
     }),
   );
 }
-

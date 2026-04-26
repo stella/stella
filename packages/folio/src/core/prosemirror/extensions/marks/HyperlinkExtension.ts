@@ -4,7 +4,6 @@
 
 import type { Command, EditorState } from "prosemirror-state";
 
-import type { HyperlinkAttrs } from "../../schema/marks";
 import { createMarkExtension } from "../create";
 import type { ExtensionContext, ExtensionRuntime } from "../types";
 import { isMarkActive } from "./markUtils";
@@ -32,10 +31,16 @@ export function getHyperlinkAttrs(
   const { empty, $from, from, to } = state.selection;
 
   if (empty) {
-    const marks = state.storedMarks || $from.marks();
+    const marks = state.storedMarks ?? $from.marks();
     for (const mark of marks) {
       if (mark.type === hlType) {
-        return { href: mark.attrs["href"], tooltip: mark.attrs["tooltip"] };
+        // SAFETY: HyperlinkAttrs always has href/tooltip per schema
+        const href = String(mark.attrs["href"]);
+        const tooltip =
+          mark.attrs["tooltip"] !== null
+            ? String(mark.attrs["tooltip"])
+            : undefined;
+        return { href, ...(tooltip !== undefined ? { tooltip } : {}) };
       }
     }
     return null;
@@ -46,7 +51,13 @@ export function getHyperlinkAttrs(
     if (node.isText && attrs === null) {
       const mark = hlType.isInSet(node.marks);
       if (mark) {
-        attrs = { href: mark.attrs["href"], tooltip: mark.attrs["tooltip"] };
+        // SAFETY: HyperlinkAttrs always has href/tooltip per schema
+        const href = String(mark.attrs["href"]);
+        const tooltip =
+          mark.attrs["tooltip"] !== null
+            ? String(mark.attrs["tooltip"])
+            : undefined;
+        attrs = { href, ...(tooltip !== undefined ? { tooltip } : {}) };
         return false;
       }
     }
@@ -81,30 +92,34 @@ export const HyperlinkExtension = createMarkExtension({
     parseDOM: [
       {
         tag: "a[href]",
-        getAttrs: (dom) => {
-          const element = dom as HTMLAnchorElement;
-          return {
-            href: element.getAttribute("href") || "",
-            tooltip: element.getAttribute("title") || undefined,
-          };
-        },
+        getAttrs: (dom) => ({
+          // HTMLElement.getAttribute is available on all element types
+          href: dom.getAttribute("href") ?? "",
+          tooltip: dom.getAttribute("title") ?? undefined,
+        }),
       },
     ],
     toDOM(mark) {
-      const attrs = mark.attrs as HyperlinkAttrs;
+      // SAFETY: HyperlinkAttrs always has href/tooltip per schema
+      const href = String(mark.attrs["href"]);
+      const tooltip =
+        mark.attrs["tooltip"] !== null ? String(mark.attrs["tooltip"]) : null;
       const domAttrs: Record<string, string> = {
-        href: attrs.href,
+        href,
         target: "_blank",
         rel: "noopener noreferrer",
       };
-      if (attrs.tooltip) {
-        domAttrs["title"] = attrs.tooltip;
+      if (tooltip) {
+        domAttrs["title"] = tooltip;
       }
       return ["a", domAttrs, 0];
     },
   },
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
-    const hlType = ctx.schema.marks["hyperlink"]!;
+    const hlType = ctx.schema.marks["hyperlink"];
+    if (!hlType) {
+      throw new Error("Missing mark type: hyperlink");
+    }
 
     const setHyperlink =
       (href: string, tooltip?: string): Command =>

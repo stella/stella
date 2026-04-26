@@ -284,8 +284,8 @@ export const documentStyleToPreset = (style: Style): TableStylePreset => {
     preset.conditionals = {};
     for (const cond of style.tblStylePr) {
       const entry: NonNullable<TableStylePreset["conditionals"]>[string] = {};
-      if (cond.tcPr?.shading?.fill) {
-        entry.backgroundColor = `#${cond.tcPr.shading.fill}`;
+      if (cond.tcPr?.shading?.fill?.rgb) {
+        entry.backgroundColor = `#${cond.tcPr.shading.fill.rgb}`;
       }
       if (cond.tcPr?.borders) {
         entry.borders = {};

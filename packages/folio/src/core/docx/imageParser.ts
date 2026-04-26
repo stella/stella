@@ -179,9 +179,7 @@ function parseDocProps(docPr: XmlElement | null): {
 
   // Check for hyperlink (a:hlinkClick) — clickable image
   const hlinkClickEl = findChild(docPr, "a", "hlinkClick");
-  const hlinkRId = hlinkClickEl
-    ? getAttribute(hlinkClickEl, "r", "id")
-    : null;
+  const hlinkRId = hlinkClickEl ? getAttribute(hlinkClickEl, "r", "id") : null;
 
   return {
     ...(id != null ? { id } : {}),

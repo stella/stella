@@ -546,7 +546,9 @@ export function hitTestTableCell(
       rowIndex,
       colIndex,
       ...(cellBlock !== undefined ? { cellBlock } : {}),
-      ...(cellBlockMeasure !== undefined ? { cellMeasure: cellBlockMeasure } : {}),
+      ...(cellBlockMeasure !== undefined
+        ? { cellMeasure: cellBlockMeasure }
+        : {}),
       cellLocalX: Math.max(0, cellLocalX),
       cellLocalY: Math.max(0, cellLocalY),
     };

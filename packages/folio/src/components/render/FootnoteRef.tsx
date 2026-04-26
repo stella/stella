@@ -546,4 +546,3 @@ export function getEndnoteRefElementId(id: number, index?: number): string {
     ? `endnote-ref-${id}-${index}`
     : `endnote-ref-${id}`;
 }
-

@@ -254,4 +254,3 @@ export function useClipboard(
     lastPastedContent: lastPastedContentRef.current,
   };
 }
-

@@ -23,12 +23,12 @@ import {
   InfoIcon,
   XIcon,
 } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
 
 import { ErrorManager } from "../core/core";
 import type { ErrorSeverity, ErrorNotification } from "../core/core";
-import { useTranslations } from "use-intl";
 import { cn } from "../lib/utils";
 
 // Re-export for backwards compat
@@ -544,4 +544,3 @@ export function getUserFriendlyMessage(error: Error): string {
 // ============================================================================
 // EXPORTS
 // ============================================================================
-

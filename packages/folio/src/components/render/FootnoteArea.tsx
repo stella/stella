@@ -87,7 +87,9 @@ type FootnoteItemProps = {
   displayNumber: number;
   numberFormat?: string | undefined;
   theme?: Theme | null | undefined;
-  renderParagraph?: ((paragraph: Paragraph, index: number) => ReactNode) | undefined;
+  renderParagraph?:
+    | ((paragraph: Paragraph, index: number) => ReactNode)
+    | undefined;
   onClick?: ((id: number) => void) | undefined;
 };
 
@@ -355,7 +357,9 @@ function EndnoteItem({
   displayNumber: number;
   numberFormat?: string | undefined;
   theme?: Theme | null | undefined;
-  renderParagraph?: ((paragraph: Paragraph, index: number) => ReactNode) | undefined;
+  renderParagraph?:
+    | ((paragraph: Paragraph, index: number) => ReactNode)
+    | undefined;
   onClick?: ((id: number) => void) | undefined;
 }): React.ReactElement {
   const formattedNumber = formatNoteNumber(displayNumber, numberFormat);
@@ -567,4 +571,3 @@ export function getEndnoteCount(
     (en) => en.noteType === "normal" || en.noteType === undefined,
   ).length;
 }
-

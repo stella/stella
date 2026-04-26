@@ -569,4 +569,3 @@ export function getCommonNumberFormats(): {
     { format: "ordinal", label: "Ordinal", example: "1st, 2nd, 3rd" },
   ];
 }
-

@@ -147,7 +147,9 @@ function runToFontStyle(run: TextRun | TabRun): FontStyle {
     fontSize: run.fontSize ?? DEFAULT_FONT_SIZE,
     ...(run.bold !== undefined ? { bold: run.bold } : {}),
     ...(run.italic !== undefined ? { italic: run.italic } : {}),
-    ...(run.letterSpacing !== undefined ? { letterSpacing: run.letterSpacing } : {}),
+    ...(run.letterSpacing !== undefined
+      ? { letterSpacing: run.letterSpacing }
+      : {}),
   };
 }
 

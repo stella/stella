@@ -84,7 +84,7 @@ export type StarterKitOptions = {
 export function createStarterKit(
   options: StarterKitOptions = {},
 ): AnyExtension[] {
-  const disabled = new Set(options.disable || []);
+  const disabled = new Set(options.disable ?? []);
 
   const extensions: AnyExtension[] = [];
 
@@ -101,8 +101,12 @@ export function createStarterKit(
   add(
     "history",
     HistoryExtension({
-      ...(options.historyDepth !== undefined ? { depth: options.historyDepth } : {}),
-      ...(options.historyNewGroupDelay !== undefined ? { newGroupDelay: options.historyNewGroupDelay } : {}),
+      ...(options.historyDepth !== undefined
+        ? { depth: options.historyDepth }
+        : {}),
+      ...(options.historyNewGroupDelay !== undefined
+        ? { newGroupDelay: options.historyNewGroupDelay }
+        : {}),
     }),
   );
 
@@ -158,7 +162,9 @@ export function createStarterKit(
   add(
     "selectionTracker",
     SelectionTrackerExtension({
-      ...(options.onSelectionChange !== undefined ? { onSelectionChange: options.onSelectionChange } : {}),
+      ...(options.onSelectionChange !== undefined
+        ? { onSelectionChange: options.onSelectionChange }
+        : {}),
     }),
   );
   add("paragraphChangeTracker", ParagraphChangeTrackerExtension());

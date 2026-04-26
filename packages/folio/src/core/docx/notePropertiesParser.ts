@@ -145,7 +145,9 @@ export function parseFootnoteProperties(
 
   const numRestartEl = findChild(element, "w", "numRestart");
   if (numRestartEl) {
-    const numRestart = parseNumberRestart(getAttribute(numRestartEl, "w", "val"));
+    const numRestart = parseNumberRestart(
+      getAttribute(numRestartEl, "w", "val"),
+    );
     if (numRestart !== undefined) {
       props.numRestart = numRestart;
     }
@@ -193,7 +195,9 @@ export function parseEndnoteProperties(
 
   const numRestartEl = findChild(element, "w", "numRestart");
   if (numRestartEl) {
-    const numRestart = parseNumberRestart(getAttribute(numRestartEl, "w", "val"));
+    const numRestart = parseNumberRestart(
+      getAttribute(numRestartEl, "w", "val"),
+    );
     if (numRestart !== undefined) {
       props.numRestart = numRestart;
     }

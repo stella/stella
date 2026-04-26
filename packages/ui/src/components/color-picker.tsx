@@ -181,7 +181,10 @@ function ColorPickerContent({
 
   /** Called when the hex text input changes. */
   const handleInputChange = (raw: string) => {
-    const cleaned = raw.replace(/[^0-9A-Fa-f]/g, "").slice(0, 6).toUpperCase();
+    const cleaned = raw
+      .replace(/[^0-9A-Fa-f]/g, "")
+      .slice(0, 6)
+      .toUpperCase();
     setInputHex(cleaned);
     if (isValidHex(cleaned)) {
       setPickerHex(cleaned);

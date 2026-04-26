@@ -41,7 +41,7 @@ export type XmlElement = {
   type?: string;
   name?: string;
   elements?: XmlElement[];
-}
+};
 
 // ---------------------------------------------------------------------------
 // fast-xml-parser instances (reused across calls)
@@ -105,7 +105,9 @@ function fxpNodeToElement(node: Record<string, unknown>): XmlElement {
 
   // The tag name is the first key that is neither #text nor :@
   for (const key of Object.keys(node)) {
-    if (key === ATTR_KEY) {continue;}
+    if (key === ATTR_KEY) {
+      continue;
+    }
 
     const children = node[key] as Record<string, unknown>[];
     const element: XmlElement = { type: "element", name: key };

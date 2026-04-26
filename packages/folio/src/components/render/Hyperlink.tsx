@@ -293,4 +293,3 @@ export function getHyperlinkAccessibleText(hyperlink: HyperlinkType): string {
   }
   return text;
 }
-

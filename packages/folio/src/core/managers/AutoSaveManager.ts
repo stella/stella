@@ -109,9 +109,15 @@ export class AutoSaveManager extends Subscribable<AutoSaveSnapshot> {
     this.maxAge = options.maxAge ?? DEFAULT_MAX_AGE;
     this.saveOnChange = options.saveOnChange ?? true;
     this.debounceDelay = options.debounceDelay ?? DEFAULT_DEBOUNCE_DELAY;
-    if (options.onSave !== undefined) this.onSaveCallback = options.onSave;
-    if (options.onError !== undefined) this.onErrorCallback = options.onError;
-    if (options.onRecoveryAvailable !== undefined) this.onRecoveryAvailableCallback = options.onRecoveryAvailable;
+    if (options.onSave !== undefined) {
+      this.onSaveCallback = options.onSave;
+    }
+    if (options.onError !== undefined) {
+      this.onErrorCallback = options.onError;
+    }
+    if (options.onRecoveryAvailable !== undefined) {
+      this.onRecoveryAvailableCallback = options.onRecoveryAvailable;
+    }
     this._isEnabled = true;
     this.storageAvailable = isLocalStorageAvailable();
 
@@ -257,7 +263,7 @@ export class AutoSaveManager extends Subscribable<AutoSaveSnapshot> {
     }
 
     this.intervalTimer = setInterval(() => {
-      this.save();
+      void this.save();
     }, this.interval);
   }
 
@@ -304,7 +310,7 @@ export class AutoSaveManager extends Subscribable<AutoSaveSnapshot> {
       clearTimeout(this.debounceTimer);
     }
     this.debounceTimer = setTimeout(() => {
-      this.save();
+      void this.save();
     }, this.debounceDelay);
   }
 

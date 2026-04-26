@@ -7,10 +7,7 @@ import { history, undo, redo } from "prosemirror-history";
 import { createExtension } from "../create";
 import type { ExtensionRuntime } from "../types";
 
-export const HistoryExtension = createExtension<{
-  depth?: number;
-  newGroupDelay?: number;
-}>({
+export const HistoryExtension = createExtension({
   name: "history",
   defaultOptions: { depth: 100, newGroupDelay: 500 },
   onSchemaReady(_ctx, options): ExtensionRuntime {
@@ -18,7 +15,9 @@ export const HistoryExtension = createExtension<{
       plugins: [
         history({
           ...(options.depth !== undefined ? { depth: options.depth } : {}),
-          ...(options.newGroupDelay !== undefined ? { newGroupDelay: options.newGroupDelay } : {}),
+          ...(options.newGroupDelay !== undefined
+            ? { newGroupDelay: options.newGroupDelay }
+            : {}),
         }),
       ],
       commands: {

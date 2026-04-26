@@ -560,4 +560,3 @@ export class HistoryManager<T> {
     this.lastPushTime = 0;
   }
 }
-

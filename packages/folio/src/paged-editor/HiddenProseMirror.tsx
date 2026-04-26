@@ -210,7 +210,7 @@ const HiddenProseMirrorComponent = forwardRef<
   // Refs
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  const documentRef = useRef<Document | null>(document);
+  const documentRef = useRef(document);
   const isDestroyingRef = useRef(false);
   // Track the document identity to detect truly external changes
   // vs changes that originated from editing (which get passed back through props)

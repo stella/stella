@@ -17,7 +17,10 @@ const MAX_INLINE_IMAGE_WIDTH = 612; // ~6.375 inches at 96 DPI
 async function readFileAsDataUrl(file: File): Promise<string> {
   return await new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.addEventListener("load", () => resolve(reader.result as string));
+    // SAFETY: readAsDataURL always produces a string result
+    reader.addEventListener("load", () =>
+      resolve(reader.result as unknown as string),
+    );
     reader.addEventListener("error", () =>
       reject(reader.error ?? new Error("Failed to read image file")),
     );
@@ -105,10 +108,7 @@ export const ImagePasteExtension = createExtension({
       props: {
         handleDOMEvents: {
           paste(view, event) {
-            const clipboardEvent = event as ClipboardEvent;
-            const imageFiles = getClipboardImageFiles(
-              clipboardEvent.clipboardData,
-            );
+            const imageFiles = getClipboardImageFiles(event.clipboardData);
 
             if (imageFiles.length === 0) {
               return false;
@@ -118,7 +118,7 @@ export const ImagePasteExtension = createExtension({
               return false;
             }
 
-            clipboardEvent.preventDefault();
+            event.preventDefault();
             insertImageFiles(view, imageFiles).catch(() => {
               // Intentionally empty - image paste failures are non-critical
             });

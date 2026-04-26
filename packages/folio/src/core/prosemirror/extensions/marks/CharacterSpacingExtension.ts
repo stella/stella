@@ -27,57 +27,61 @@ export const CharacterSpacingExtension = createMarkExtension({
     parseDOM: [
       {
         tag: "span.docx-char-spacing",
-        getAttrs: (dom) => {
-          const el = dom as HTMLElement;
-          return {
-            spacing: el.dataset["spacing"]
-              ? Number(el.dataset["spacing"])
-              : null,
-            position: el.dataset["position"]
-              ? Number(el.dataset["position"])
-              : null,
-            scale: el.dataset["scale"] ? Number(el.dataset["scale"]) : null,
-            kerning: el.dataset["kerning"]
-              ? Number(el.dataset["kerning"])
-              : null,
-          };
-        },
+        getAttrs: (dom) => ({
+          spacing: dom.dataset["spacing"]
+            ? Number(dom.dataset["spacing"])
+            : null,
+          position: dom.dataset["position"]
+            ? Number(dom.dataset["position"])
+            : null,
+          scale: dom.dataset["scale"] ? Number(dom.dataset["scale"]) : null,
+          kerning: dom.dataset["kerning"]
+            ? Number(dom.dataset["kerning"])
+            : null,
+        }),
       },
     ],
     toDOM(mark) {
-      const attrs = mark.attrs as {
-        spacing: number | null;
-        position: number | null;
-        scale: number | null;
-        kerning: number | null;
-      };
+      // SAFETY: CharacterSpacing attrs always match this shape per schema
+      const spacing =
+        typeof mark.attrs["spacing"] === "number"
+          ? mark.attrs["spacing"]
+          : null;
+      const position =
+        typeof mark.attrs["position"] === "number"
+          ? mark.attrs["position"]
+          : null;
+      const scale =
+        typeof mark.attrs["scale"] === "number" ? mark.attrs["scale"] : null;
+      const kerning =
+        typeof mark.attrs["kerning"] === "number"
+          ? mark.attrs["kerning"]
+          : null;
 
       const styles: string[] = [];
       const dataAttrs: Record<string, string> = {
         class: "docx-char-spacing",
       };
 
-      if (attrs.spacing !== null && attrs.spacing !== 0) {
-        styles.push(
-          `letter-spacing: ${formatPx(twipsToPixels(attrs.spacing))}`,
-        );
-        dataAttrs["data-spacing"] = String(attrs.spacing);
+      if (spacing !== null && spacing !== 0) {
+        styles.push(`letter-spacing: ${formatPx(twipsToPixels(spacing))}`);
+        dataAttrs["data-spacing"] = String(spacing);
       }
 
-      if (attrs.position !== null && attrs.position !== 0) {
-        const px = halfPointsToPixels(attrs.position);
+      if (position !== null && position !== 0) {
+        const px = halfPointsToPixels(position);
         styles.push(`vertical-align: ${formatPx(px)}`);
-        dataAttrs["data-position"] = String(attrs.position);
+        dataAttrs["data-position"] = String(position);
       }
 
-      if (attrs.scale !== null && attrs.scale !== 100) {
-        styles.push(`transform: scaleX(${attrs.scale / 100})`);
+      if (scale !== null && scale !== 100) {
+        styles.push(`transform: scaleX(${scale / 100})`);
         styles.push("display: inline-block");
-        dataAttrs["data-scale"] = String(attrs.scale);
+        dataAttrs["data-scale"] = String(scale);
       }
 
-      if (attrs.kerning !== null) {
-        dataAttrs["data-kerning"] = String(attrs.kerning);
+      if (kerning !== null) {
+        dataAttrs["data-kerning"] = String(kerning);
       }
 
       if (styles.length > 0) {

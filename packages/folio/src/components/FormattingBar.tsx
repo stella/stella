@@ -20,14 +20,18 @@ import {
   UnderlineIcon,
   Undo2Icon,
 } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { ColorPicker } from "@stella/ui/components/color-picker";
 import type { ColorPreset } from "@stella/ui/components/color-picker";
 
 import type { ColorValue, ParagraphAlignment } from "../core/types/document";
-import { useTranslations } from "use-intl";
 import { cn } from "../lib/utils";
-import { ToolbarButton, ToolbarGroup, ToolbarSeparator } from "./toolbarPrimitives";
+import {
+  ToolbarButton,
+  ToolbarGroup,
+  ToolbarSeparator,
+} from "./toolbarPrimitives";
 import type { ToolbarProps, FormattingAction } from "./toolbarPrimitives";
 import { AlignmentButtons } from "./ui/AlignmentButtons";
 import { FontPicker } from "./ui/FontPicker";
@@ -94,17 +98,23 @@ export function FormattingBar(props: FormattingBarProps) {
 
   const handleFormat = useCallback(
     (action: FormattingAction) => {
-      if (!disabled && onFormat) {onFormat(action);}
+      if (!disabled && onFormat) {
+        onFormat(action);
+      }
     },
     [disabled, onFormat],
   );
 
   const handleUndo = useCallback(() => {
-    if (!disabled && canUndo && onUndo) {onUndo();}
+    if (!disabled && canUndo && onUndo) {
+      onUndo();
+    }
   }, [disabled, canUndo, onUndo]);
 
   const handleRedo = useCallback(() => {
-    if (!disabled && canRedo && onRedo) {onRedo();}
+    if (!disabled && canRedo && onRedo) {
+      onRedo();
+    }
   }, [disabled, canRedo, onRedo]);
 
   const handleFontFamilyChange = useCallback(
@@ -136,26 +146,35 @@ export function FormattingBar(props: FormattingBarProps) {
 
   const handleAlignmentChange = useCallback(
     (alignment: ParagraphAlignment) => {
-      if (!disabled && onFormat)
-        {onFormat({ type: "alignment", value: alignment });}
+      if (!disabled && onFormat) {
+        onFormat({ type: "alignment", value: alignment });
+      }
     },
     [disabled, onFormat],
   );
 
   const handleBulletList = useCallback(() => {
-    if (!disabled && onFormat) {onFormat("bulletList");}
+    if (!disabled && onFormat) {
+      onFormat("bulletList");
+    }
   }, [disabled, onFormat]);
 
   const handleNumberedList = useCallback(() => {
-    if (!disabled && onFormat) {onFormat("numberedList");}
+    if (!disabled && onFormat) {
+      onFormat("numberedList");
+    }
   }, [disabled, onFormat]);
 
   const handleIndent = useCallback(() => {
-    if (!disabled && onFormat) {onFormat("indent");}
+    if (!disabled && onFormat) {
+      onFormat("indent");
+    }
   }, [disabled, onFormat]);
 
   const handleOutdent = useCallback(() => {
-    if (!disabled && onFormat) {onFormat("outdent");}
+    if (!disabled && onFormat) {
+      onFormat("outdent");
+    }
   }, [disabled, onFormat]);
 
   const handleStyleChange = useCallback(
@@ -170,14 +189,20 @@ export function FormattingBar(props: FormattingBarProps) {
 
   // Keyboard shortcuts
   useEffect(() => {
-    if (!enableShortcuts) {return;}
+    if (!enableShortcuts) {
+      return;
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
       const editorContainer = editorRef?.current;
       const barContainer = barRef.current;
-      if (!editorContainer?.contains(target) && !barContainer?.contains(target))
-        {return;}
+      if (
+        !editorContainer?.contains(target) &&
+        !barContainer?.contains(target)
+      ) {
+        return;
+      }
 
       const isCtrl = event.ctrlKey || event.metaKey;
 
@@ -205,7 +230,9 @@ export function FormattingBar(props: FormattingBarProps) {
         }
       }
 
-      if (!isCtrl || event.altKey) {return;}
+      if (!isCtrl || event.altKey) {
+        return;
+      }
 
       switch (event.key.toLowerCase()) {
         case "b":

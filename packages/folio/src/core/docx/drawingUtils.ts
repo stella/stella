@@ -248,7 +248,9 @@ export function parsePositionH(
       relativeTo: relativeTo as ImagePosition["horizontal"]["relativeTo"],
     };
     if (text) {
-      result.alignment = text as NonNullable<ImagePosition["horizontal"]["alignment"]>;
+      result.alignment = text as NonNullable<
+        ImagePosition["horizontal"]["alignment"]
+      >;
     }
     return result;
   }
@@ -287,7 +289,9 @@ export function parsePositionV(
       relativeTo: relativeTo as ImagePosition["vertical"]["relativeTo"],
     };
     if (text) {
-      result.alignment = text as NonNullable<ImagePosition["vertical"]["alignment"]>;
+      result.alignment = text as NonNullable<
+        ImagePosition["vertical"]["alignment"]
+      >;
     }
     return result;
   }
