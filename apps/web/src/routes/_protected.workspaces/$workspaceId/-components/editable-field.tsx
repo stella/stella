@@ -30,7 +30,7 @@ import type { EditableFieldContent } from "@/routes/_protected.workspaces/$works
 import { FieldValueSelect } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value-select";
 import {
   emptyColor,
-  optionColorsMap,
+  resolveOptionColor,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -464,7 +464,7 @@ const SelectChip = ({
       return undefined;
     }
     const opt = property.content.options.find((o) => o.value === value)?.color;
-    return opt ? optionColorsMap[opt] : undefined;
+    return opt ? resolveOptionColor(opt) : undefined;
   })();
 
   return (

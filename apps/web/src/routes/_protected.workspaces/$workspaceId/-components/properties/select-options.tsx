@@ -18,7 +18,7 @@ import { shuffleArray } from "@/lib/utils";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
 import {
   optionColors,
-  optionColorsMap,
+  resolveOptionColor,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 
 type SelectOptionsProps = {
@@ -142,7 +142,7 @@ const SelectOptionsValues = ({
                     <span
                       className="size-4 rounded"
                       style={{
-                        backgroundColor: optionColorsMap[option.color].color,
+                        backgroundColor: resolveOptionColor(option.color).color,
                       }}
                     />
                   </PopoverTrigger>

@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@stella/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
     "@types/react": "catalog:react19",
     "tailwindcss": "catalog:",
     "typescript": "catalog:"

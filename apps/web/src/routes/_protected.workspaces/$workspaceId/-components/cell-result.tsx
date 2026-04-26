@@ -9,7 +9,7 @@ import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
   emptyColor,
-  optionColorsMap,
+  resolveOptionColor,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 
 type CellResultProps = {
@@ -200,7 +200,7 @@ const getSelectPropertyColor = (
     return undefined;
   }
 
-  return optionColorsMap[color];
+  return resolveOptionColor(color);
 };
 
 type SelectResultProps = {

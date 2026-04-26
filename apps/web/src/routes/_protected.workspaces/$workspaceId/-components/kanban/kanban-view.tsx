@@ -31,7 +31,7 @@ import { COLUMN_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
-import { optionColorsMap } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
+import { resolveOptionColor } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import {
   uploadFileEntitiesBatched,
   useBatchUploadLabels,
@@ -644,8 +644,8 @@ const getGroupOptions = (property: WorkspaceProperty): GroupOption[] => {
     return property.content.options.map((opt) => ({
       value: opt.value,
       label: opt.value,
-      color: optionColorsMap[opt.color]?.color,
-      colorBg: optionColorsMap[opt.color]?.background,
+      color: resolveOptionColor(opt.color).color,
+      colorBg: resolveOptionColor(opt.color).background,
       optionColor: opt.color,
     }));
   }
@@ -733,8 +733,8 @@ const getStatusGroupOptions = (labels: Record<string, string>): GroupOption[] =>
     return {
       value: status,
       label: labels[status] ?? status,
-      color: optionColorsMap[optColor]?.color,
-      colorBg: optionColorsMap[optColor]?.background,
+      color: resolveOptionColor(optColor).color,
+      colorBg: resolveOptionColor(optColor).background,
       optionColor: optColor,
     };
   });

@@ -1,0 +1,39 @@
+/**
+ * Bundled document fonts — metric-compatible replacements for
+ * common Microsoft Office fonts. Loaded from @fontsource packages
+ * (WOFF2, MIT licensed). No external network requests.
+ *
+ * Each font is aliased to both its real name AND the Microsoft font
+ * name it replaces, so DOCX documents render correctly without
+ * any font mapping at runtime.
+ */
+
+/* Carlito → Calibri (default Word font since 2007) */
+@import "@fontsource/carlito/400.css";
+@import "@fontsource/carlito/400-italic.css";
+@import "@fontsource/carlito/700.css";
+@import "@fontsource/carlito/700-italic.css";
+
+/* Caladea → Cambria */
+@import "@fontsource/caladea/400.css";
+@import "@fontsource/caladea/400-italic.css";
+@import "@fontsource/caladea/700.css";
+@import "@fontsource/caladea/700-italic.css";
+
+/* Arimo → Arial */
+@import "@fontsource/arimo/400.css";
+@import "@fontsource/arimo/400-italic.css";
+@import "@fontsource/arimo/700.css";
+@import "@fontsource/arimo/700-italic.css";
+
+/* Tinos → Times New Roman */
+@import "@fontsource/tinos/400.css";
+@import "@fontsource/tinos/400-italic.css";
+@import "@fontsource/tinos/700.css";
+@import "@fontsource/tinos/700-italic.css";
+
+/* Cousine → Courier New */
+@import "@fontsource/cousine/400.css";
+@import "@fontsource/cousine/400-italic.css";
+@import "@fontsource/cousine/700.css";
+@import "@fontsource/cousine/700-italic.css";

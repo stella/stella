@@ -1,0 +1,159 @@
+/**
+ * Font aliases — map Microsoft Office font names to bundled Croscore
+ * equivalents so DOCX font-family declarations resolve without runtime
+ * font loading or Google Fonts requests.
+ *
+ * The actual WOFF2 files come from the @fontsource imports in fonts.css.
+ * These rules just create additional @font-face entries under the
+ * Microsoft name pointing to the same files.
+ */
+
+/* Calibri → Carlito */
+@font-face {
+  font-family: "Calibri";
+  src: local("Carlito"), local("Calibri");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Calibri";
+  src: local("Carlito"), local("Calibri");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Calibri";
+  src: local("Carlito"), local("Calibri");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Calibri";
+  src: local("Carlito"), local("Calibri");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Cambria → Caladea */
+@font-face {
+  font-family: "Cambria";
+  src: local("Caladea"), local("Cambria");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Cambria";
+  src: local("Caladea"), local("Cambria");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Cambria";
+  src: local("Caladea"), local("Cambria");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Cambria";
+  src: local("Caladea"), local("Cambria");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Arial → Arimo */
+@font-face {
+  font-family: "Arial";
+  src: local("Arimo"), local("Arial");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Arial";
+  src: local("Arimo"), local("Arial");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Arial";
+  src: local("Arimo"), local("Arial");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Arial";
+  src: local("Arimo"), local("Arial");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Times New Roman → Tinos */
+@font-face {
+  font-family: "Times New Roman";
+  src: local("Tinos"), local("Times New Roman");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Times New Roman";
+  src: local("Tinos"), local("Times New Roman");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Times New Roman";
+  src: local("Tinos"), local("Times New Roman");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Times New Roman";
+  src: local("Tinos"), local("Times New Roman");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Courier New → Cousine */
+@font-face {
+  font-family: "Courier New";
+  src: local("Cousine"), local("Courier New");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Courier New";
+  src: local("Cousine"), local("Courier New");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Courier New";
+  src: local("Cousine"), local("Courier New");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Courier New";
+  src: local("Cousine"), local("Courier New");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}

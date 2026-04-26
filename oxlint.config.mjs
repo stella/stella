@@ -148,6 +148,7 @@ export default defineConfig({
     "eslint-plugin-drizzle",
     "eslint-plugin-sonarjs",
     "./.oxlint-plugins/no-raw-colors.ts",
+    "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
@@ -175,9 +176,10 @@ export default defineConfig({
       },
     },
     {
-      files: ["apps/web/src/**/*.{ts,tsx}", "packages/ui/src/**/*.{ts,tsx}"],
+      files: ["apps/web/src/**/*.{ts,tsx}", "packages/ui/src/**/*.{ts,tsx}", "packages/folio/src/**/*.{ts,tsx}"],
       rules: {
         "no-raw-colors/no-raw-colors": "error",
+        "no-inline-style-colors/no-inline-style-colors": "error",
         "no-physical-properties/no-physical-properties": "error",
       },
     },
@@ -267,8 +269,75 @@ export default defineConfig({
       rules: { "no-raw-colors/no-raw-colors": "off" },
     },
     {
+      // Color pickers, style galleries, and font pickers legitimately render
+      // inline color values as visual previews — not theme-dependent chrome.
+      files: [
+        "packages/folio/src/**/TableStyleGallery.tsx",
+        "packages/folio/src/**/TableBorderPicker.tsx",
+        "packages/folio/src/**/TableBorderWidthPicker.tsx",
+        "packages/folio/src/**/InsertSymbolDialog.tsx",
+        "packages/folio/src/**/FontSizePicker.tsx",
+        "packages/folio/src/**/IconGridDropdown.tsx",
+        "packages/folio/src/**/TableOptionsDropdown.tsx",
+        "packages/folio/src/**/TableMoreDropdown.tsx",
+        "packages/folio/src/**/TableMergeButton.tsx",
+        "packages/folio/src/**/TableGridPicker.tsx",
+        "packages/folio/src/**/ShapeGallery.tsx",
+        "packages/folio/src/**/FootnotePropertiesDialog.tsx",
+      ],
+      rules: { "no-inline-style-colors/no-inline-style-colors": "off" },
+    },
+    {
+      // OOXML color data: palette presets, hex-to-name mappings, table style
+      // definitions, and standard color arrays. These are document-format
+      // constants, not theme-dependent CSS.
+      files: [
+        "packages/folio/src/**/toolbarUtils.ts",
+        "packages/folio/src/**/table-styles.ts",
+        "packages/folio/src/**/colorResolver.ts",
+        "packages/folio/src/**/FormattingBar.tsx",
+      ],
+      rules: { "no-inline-style-colors/no-inline-style-colors": "off" },
+    },
+    {
+      // Eigenpal-inherited render/dialog components — inline colors need
+      // a dedicated cleanup pass. Tracked as follow-up.
+      files: ["packages/folio/src/**/render/**", "packages/folio/src/**/dialogs/**", "packages/folio/src/**/edit/**"],
+      rules: { "no-inline-style-colors/no-inline-style-colors": "off" },
+    },
+    {
+      // Eigenpal-inherited UI components with hardcoded chrome colors
+      files: [
+        "packages/folio/src/**/HyperlinkPopup.tsx",
+        "packages/folio/src/**/MenuDropdown.tsx",
+        "packages/folio/src/**/DocumentOutline.tsx",
+        "packages/folio/src/**/InlineHeaderFooterEditor.tsx",
+        "packages/folio/src/**/ErrorBoundary.tsx",
+        "packages/folio/src/**/UnsavedIndicator.tsx",
+        "packages/folio/src/**/TableGridInline.tsx",
+        "packages/folio/src/**/ResponsiveToolbar.tsx",
+        "packages/folio/src/**/PrintPreview.tsx",
+        "packages/folio/src/**/TableQuickActions.tsx",
+      ],
+      rules: { "no-inline-style-colors/no-inline-style-colors": "off" },
+    },
+    {
       files: ["packages/ui/src/**/button.tsx"],
-      rules: { "no-raw-colors/no-raw-colors": "off" },
+      rules: {
+        "no-raw-colors/no-raw-colors": "off",
+        "no-inline-style-colors/no-inline-style-colors": "off",
+      },
+    },
+    {
+      // Color picker presets and gradients are color data, not theme-dependent chrome.
+      files: [
+        "packages/ui/src/**/color-picker.tsx",
+        "packages/ui/src/**/hex-color-picker.tsx",
+      ],
+      rules: {
+        "no-inline-style-colors/no-inline-style-colors": "off",
+        "no-raw-colors/no-raw-colors": "off",
+      },
     },
     {
       // Category pills use text-white on dynamic colored backgrounds;

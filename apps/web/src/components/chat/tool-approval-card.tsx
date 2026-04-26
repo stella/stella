@@ -21,7 +21,7 @@ import type { WorkspaceProperty } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import {
   emptyColor,
-  optionColorsMap,
+  resolveOptionColor,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
@@ -96,7 +96,7 @@ const SelectBadge = ({ value, property }: SelectBadgeProps) => {
   if (value && property?.content.type === "single-select") {
     const opt = property.content.options.find((o) => o.value === value);
     if (opt) {
-      color = optionColorsMap[opt.color] ?? emptyColor;
+      color = resolveOptionColor(opt.color);
     }
   }
 

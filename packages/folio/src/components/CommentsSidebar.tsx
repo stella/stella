@@ -1,0 +1,980 @@
+/**
+ * Comments Sidebar
+ *
+ * Floating cards positioned relative to their anchored text in the document.
+ * Cards appear at the Y position of their corresponding text.
+ * Clicking a card expands it to show reply input and action buttons.
+ *
+ * Tracked changes are rendered purely inline (Word-style) and do not appear
+ * in this sidebar.
+ */
+
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
+
+import { CheckIcon, MoreVerticalIcon } from "lucide-react";
+
+import type { Comment, Paragraph } from "../core/types/content";
+
+/** Extract plain text from a Comment's paragraph content */
+function getCommentText(paragraphs?: Paragraph[]): string {
+  if (!paragraphs?.length) {
+    return "";
+  }
+  return paragraphs
+    .flatMap((p) =>
+      p.content
+        .filter((c) => c.type === "run")
+        .flatMap((r) => ("content" in r ? r.content : []))
+        .filter((c) => c.type === "text")
+        .map((t) => ("text" in t ? t.text : "")),
+    )
+    .join("");
+}
+
+function formatDate(dateStr?: string): string {
+  if (!dateStr) {
+    return "";
+  }
+  const d = new Date(dateStr);
+  return d.toLocaleString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+// Kibana-style avatar colors — deterministic per author name
+const AVATAR_COLORS = [
+  "#6DCCB1", // teal
+  "#79AAD9", // blue
+  "#EE789D", // pink
+  "#A987D1", // purple
+  "#E6A85F", // orange
+  "#F2CC8F", // gold
+  "#68B3A2", // seafoam
+  "#B07AA1", // mauve
+  "#59A14F", // green
+  "#FF9DA7", // salmon
+  "#E15759", // red
+  "#76B7B2", // cyan
+];
+
+function getAvatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    // oxlint-disable-next-line eslint/no-bitwise -- intentional bitwise operation
+    hash = (name.codePointAt(i) ?? 0) + ((hash << 5) - hash);
+  }
+  // SAFETY: modulo guarantees index is within bounds
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]!;
+}
+
+export type TrackedChangeEntry = {
+  type: "insertion" | "deletion";
+  text: string;
+  author: string;
+  date?: string;
+  from: number;
+  to: number;
+  revisionId: number;
+};
+
+export type CommentsSidebarProps = {
+  comments: Comment[];
+  onCommentClick?: (commentId: number) => void;
+  onCommentReply?: (commentId: number, text: string) => void;
+  onCommentResolve?: (commentId: number) => void;
+  onCommentDelete?: (commentId: number) => void;
+  onAddComment?: (text: string) => void;
+  onCancelAddComment?: () => void;
+  onAcceptChange?: (from: number, to: number) => void;
+  onRejectChange?: (from: number, to: number) => void;
+  onTrackedChangeReply?: (revisionId: number, text: string) => void;
+  topOffset?: number;
+  showResolved?: boolean;
+  isAddingComment?: boolean;
+  /** Y position (relative to scroll container) for the new comment input */
+  addCommentYPosition?: number | null;
+  /** Page width in pixels — used to position sidebar next to page edge */
+  pageWidth?: number;
+  /** Ref to the editor scroll container for DOM position queries */
+  editorContainerRef?: React.RefObject<HTMLDivElement | null>;
+  /** Pre-computed Y positions from layout engine (keys: "comment-{id}") */
+  anchorPositions?: Map<string, number>;
+};
+
+export const SIDEBAR_WIDTH = 340;
+
+// Minimum gap between stacked cards to avoid overlap
+const MIN_CARD_GAP = 8;
+
+// Static styles hoisted out of component to avoid recreating on each render
+const ICON_BUTTON_STYLE: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  padding: 4,
+  color: "var(--doc-text-muted)",
+  display: "flex",
+  borderRadius: "50%",
+};
+
+const CANCEL_BUTTON_STYLE: React.CSSProperties = {
+  padding: "6px 16px",
+  fontSize: 14,
+  border: "none",
+  background: "none",
+  color: "var(--doc-primary)",
+  cursor: "pointer",
+  fontWeight: 500,
+  fontFamily: "inherit",
+};
+
+export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
+  comments,
+  onCommentClick,
+  onCommentReply,
+  onCommentResolve,
+  onCommentDelete,
+  onAddComment,
+  onCancelAddComment,
+  onAcceptChange: _onAcceptChange,
+  onRejectChange: _onRejectChange,
+  onTrackedChangeReply: _onTrackedChangeReply,
+  topOffset = 0,
+  showResolved = false,
+  isAddingComment = false,
+  addCommentYPosition = null,
+  pageWidth = 816,
+  editorContainerRef,
+  anchorPositions,
+}) => {
+  const [replyingTo, setReplyingTo] = useState<number | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [newCommentText, setNewCommentText] = useState("");
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
+  const [cardPositions, setCardPositions] = useState<Map<string, number>>(
+    new Map(),
+  );
+  const [initialPositionsDone, setInitialPositionsDone] = useState(false);
+  // Track which cards have had at least one positioned render (to avoid "fall from top" animation)
+  const knownCardsRef = useRef<Set<string>>(new Set());
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  const visibleComments = useMemo(
+    () =>
+      comments.filter((c) => {
+        if (c.parentId !== null && c.parentId !== undefined) {
+          return false;
+        }
+        if (c.done && !showResolved) {
+          return false;
+        }
+        return true;
+      }),
+    [comments, showResolved],
+  );
+
+  // Pre-group replies by parentId for O(1) lookup instead of O(n) per card
+  const repliesByParent = useMemo(() => {
+    const map = new Map<number, Comment[]>();
+    for (const c of comments) {
+      if (c.parentId !== null && c.parentId !== undefined) {
+        const arr = map.get(c.parentId);
+        if (arr) {
+          arr.push(c);
+        } else {
+          map.set(c.parentId, [c]);
+        }
+      }
+    }
+    return map;
+  }, [comments]);
+
+  const getReplies = (commentId: number) =>
+    repliesByParent.get(commentId) ?? [];
+
+  // Find Y positions for comment/change anchors.
+  // Uses pre-computed layout positions (anchorPositions) as primary source —
+  // these work even for virtualized pages that haven't rendered to DOM.
+  // Falls back to DOM queries for rendered elements (e.g., when anchorPositions unavailable).
+  const updateCardPositions = useCallback(() => {
+    const container = editorContainerRef?.current;
+    if (!container) {
+      return;
+    }
+
+    const pagesEl = container.querySelector(".paged-editor__pages");
+    if (!pagesEl) {
+      return;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const scrollTop = container.scrollTop;
+    const positions: { id: string; targetY: number; height: number }[] = [];
+
+    // Find comment positions — prefer layout-computed positions, fall back to DOM
+    for (const comment of visibleComments) {
+      const cardId = `comment-${comment.id}`;
+      const layoutY = anchorPositions?.get(cardId);
+      if (layoutY !== null && layoutY !== undefined) {
+        positions.push({
+          id: cardId,
+          targetY: layoutY,
+          height: cardRefs.current.get(cardId)?.offsetHeight || 80,
+        });
+      } else {
+        // Fallback: query DOM (only works for rendered/non-virtualized pages)
+        const el = pagesEl.querySelector(`[data-comment-id="${comment.id}"]`);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          positions.push({
+            id: cardId,
+            targetY: rect.top - containerRect.top + scrollTop,
+            height: cardRefs.current.get(cardId)?.offsetHeight || 80,
+          });
+        }
+      }
+    }
+
+    // Include the "add comment" input box in the layout if it has a Y position
+    if (
+      isAddingComment &&
+      addCommentYPosition !== null &&
+      addCommentYPosition !== undefined
+    ) {
+      positions.push({
+        id: "new-comment-input",
+        targetY: addCommentYPosition,
+        height: cardRefs.current.get("new-comment-input")?.offsetHeight || 120,
+      });
+    }
+
+    // Sort by target Y and resolve overlaps
+    positions.sort((a, b) => a.targetY - b.targetY);
+    const resolvedPositions = new Map<string, number>();
+    let lastBottom = 0;
+
+    for (const pos of positions) {
+      const y = Math.max(pos.targetY, lastBottom + MIN_CARD_GAP);
+      resolvedPositions.set(pos.id, y);
+      lastBottom = y + pos.height;
+    }
+
+    setCardPositions(resolvedPositions);
+  }, [
+    visibleComments,
+    editorContainerRef,
+    isAddingComment,
+    addCommentYPosition,
+    anchorPositions,
+  ]);
+
+  // Listen for clicks on comment/change elements in the document body → expand the sidebar card
+  useEffect(() => {
+    const container = editorContainerRef?.current;
+    if (!container) {
+      return;
+    }
+
+    const pagesEl = container.querySelector(".paged-editor__pages");
+    if (!pagesEl) {
+      return;
+    }
+
+    const handleDocClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+
+      // Clicks inside the sidebar itself are handled by card onClick — ignore here
+      if (sidebarRef.current?.contains(target)) {
+        return;
+      }
+
+      // Clicks inside the pages area — check for comment highlights
+      if (pagesEl.contains(target)) {
+        const commentEl = target.closest(
+          "[data-comment-id]",
+        ) as HTMLElement | null;
+        if (commentEl?.dataset.commentId) {
+          setExpandedCard(`comment-${commentEl.dataset.commentId}`);
+          onCommentClick?.(Number(commentEl.dataset.commentId));
+          return;
+        }
+      }
+
+      // Click on grey area or anywhere else outside sidebar/highlights → collapse
+      setExpandedCard(null);
+      setMenuOpenFor(null);
+    };
+
+    container.addEventListener("click", handleDocClick);
+    return () => container.removeEventListener("click", handleDocClick);
+  }, [editorContainerRef, onCommentClick]);
+
+  // Update positions on mount, resize, and when comments/changes list changes.
+  // We do NOT use a MutationObserver — it caused feedback loops because the sidebar
+  // cards (which have data-comment-id) live inside the same scroll container.
+  useEffect(() => {
+    const container = editorContainerRef?.current;
+    if (!container) {
+      return;
+    }
+
+    // Calculate positions after a short delay to let the layout-painter render.
+    // Run twice: once quickly for existing elements, once delayed for new marks.
+    const timerQuick = setTimeout(updateCardPositions, 50);
+    const timerFull = setTimeout(() => {
+      updateCardPositions();
+      setInitialPositionsDone(true);
+    }, 400);
+
+    const resizeObserver = new ResizeObserver(() => {
+      requestAnimationFrame(updateCardPositions);
+    });
+    resizeObserver.observe(container);
+
+    return () => {
+      clearTimeout(timerQuick);
+      clearTimeout(timerFull);
+      resizeObserver.disconnect();
+    };
+  }, [updateCardPositions, editorContainerRef]);
+
+  // Recalculate positions after a card expand/collapse or add-comment toggle.
+  useEffect(() => {
+    const raf = requestAnimationFrame(updateCardPositions);
+    return () => cancelAnimationFrame(raf);
+  }, [expandedCard, isAddingComment, updateCardPositions]);
+
+  // Watch the expanded card for size changes (reply textarea appearing, text wrapping, etc.)
+  // and the add-comment input for the same. Fires when their actual rendered size changes.
+  useEffect(() => {
+    const targets: HTMLElement[] = [];
+    if (expandedCard) {
+      const el = cardRefs.current.get(expandedCard);
+      if (el) {
+        targets.push(el);
+      }
+    }
+    const addEl = cardRefs.current.get("new-comment-input");
+    if (addEl) {
+      targets.push(addEl);
+    }
+    if (targets.length === 0) {
+      return;
+    }
+
+    let rafId: number;
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(updateCardPositions);
+    });
+    for (const el of targets) {
+      observer.observe(el);
+    }
+    return () => {
+      cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
+  }, [expandedCard, updateCardPositions]);
+
+  const handleNewCommentSubmit = () => {
+    if (newCommentText.trim()) {
+      onAddComment?.(newCommentText.trim());
+      setNewCommentText("");
+    }
+  };
+
+  const handleCardClick = (cardId: string, commentId?: number) => {
+    setExpandedCard(expandedCard === cardId ? null : cardId);
+    setMenuOpenFor(null);
+    if (commentId !== undefined) {
+      onCommentClick?.(commentId);
+    }
+  };
+
+  // Determine if we have valid positions (fallback to stacked layout if not)
+  const hasPositions = cardPositions.size > 0;
+
+  // --- Shared styles ---
+  const avatarStyle = (
+    name: string,
+    size: 32 | 28 = 32,
+  ): React.CSSProperties => ({
+    width: size,
+    height: size,
+    borderRadius: "50%",
+    backgroundColor: getAvatarColor(name),
+    color: "var(--doc-canvas-text)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: size === 32 ? 13 : 11,
+    fontWeight: 500,
+    flexShrink: 0,
+  });
+
+  const submitButtonStyle = (enabled: boolean): React.CSSProperties => ({
+    padding: "6px 16px",
+    fontSize: 14,
+    border: "none",
+    borderRadius: 20,
+    background: enabled ? "var(--doc-primary)" : "var(--doc-primary-light)",
+    color: enabled ? "var(--doc-canvas-text)" : "var(--doc-text-subtle)",
+    cursor: enabled ? "pointer" : "default",
+    fontWeight: 500,
+    fontFamily: "inherit",
+  });
+
+  const cardContainerStyle = (
+    cardId: string,
+    isExpanded: boolean,
+    yPos: number | undefined,
+  ): React.CSSProperties => {
+    const isKnown = knownCardsRef.current.has(cardId);
+    // Mark card as known once it has a valid position
+    if (yPos !== undefined) {
+      knownCardsRef.current.add(cardId);
+    }
+    // New cards (first render with position): fade in, no top transition
+    // Known cards: transition top smoothly
+    // Cards without position yet: hidden completely (no transition)
+    const isNewCard = !isKnown && yPos !== undefined;
+    const noPosition = hasPositions && yPos === undefined;
+    return {
+      ...(hasPositions
+        ? yPos !== undefined
+          ? { position: "absolute", top: yPos, left: 0, right: 0, opacity: 1 }
+          : {
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              opacity: 0,
+              visibility: "hidden" as const,
+            }
+        : { marginBottom: 6 }),
+      padding: isExpanded ? "10px 12px" : "8px 10px",
+      borderRadius: 8,
+      backgroundColor: "var(--doc-page)",
+      cursor: "pointer",
+      boxShadow: isExpanded
+        ? "0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)"
+        : "0 1px 3px rgba(60,64,67,0.2), 0 2px 6px rgba(60,64,67,0.08)",
+      transition: noPosition
+        ? "none"
+        : isNewCard
+          ? "opacity 0.2s ease, box-shadow 0.2s ease"
+          : initialPositionsDone
+            ? "opacity 0.2s ease, box-shadow 0.2s ease, top 0.15s ease"
+            : "none",
+    };
+  };
+
+  // Shared reply thread renderer (used by comment cards)
+  const renderReplies = (replies: Comment[], isExpanded: boolean) => {
+    if (replies.length === 0) {
+      return null;
+    }
+    return (
+      <div style={{ marginTop: 8 }}>
+        {(isExpanded ? replies : replies.slice(-1)).map((reply) => (
+          <div
+            key={reply.id}
+            style={{
+              marginBottom: isExpanded ? 8 : 0,
+              paddingTop: 8,
+              borderTop: "1px solid var(--doc-border)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <div style={avatarStyle(reply.author || "U", 28)}>
+                {getInitials(reply.author || "U")}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "var(--doc-text)",
+                  }}
+                >
+                  {reply.author || "Unknown"}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--doc-text-muted)" }}>
+                  {formatDate(reply.date)}
+                </div>
+              </div>
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                color: "var(--doc-text)",
+                lineHeight: "20px",
+                marginTop: 4,
+                ...(!isExpanded
+                  ? {
+                      overflow: "hidden",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical" as const,
+                    }
+                  : {}),
+              }}
+            >
+              {getCommentText(reply.content)}
+            </div>
+          </div>
+        ))}
+        {!isExpanded && replies.length > 1 && (
+          <div
+            style={{
+              fontSize: 12,
+              color: "var(--doc-text-muted)",
+              marginTop: 4,
+            }}
+          >
+            {replies.length - 1} more{" "}
+            {replies.length - 1 === 1 ? "reply" : "replies"}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Reply input renderer (used by comment cards)
+  const renderReplySection = (
+    replyKey: number,
+    submitFn?: (id: number, text: string) => void,
+  ) => (
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
+    <div
+      onClick={(e) => e.stopPropagation()}
+      role="presentation"
+      onKeyDown={(e) => e.stopPropagation()}
+      style={{ marginTop: 12 }}
+    >
+      {replyingTo === replyKey ? (
+        <div>
+          <input
+            ref={(el) => el?.focus({ preventScroll: true })}
+            type="text"
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            onMouseDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (replyText.trim() && submitFn) {
+                  submitFn(replyKey, replyText.trim());
+                }
+                setReplyText("");
+                setReplyingTo(null);
+              }
+              if (e.key === "Escape") {
+                setReplyingTo(null);
+                setReplyText("");
+              }
+            }}
+            placeholder="Reply or add others with @"
+            style={{
+              width: "100%",
+              border: "1px solid var(--doc-primary)",
+              borderRadius: 20,
+              outline: "none",
+              fontSize: 14,
+              padding: "8px 16px",
+              fontFamily: "inherit",
+              boxSizing: "border-box",
+              color: "var(--doc-text)",
+            }}
+          />
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: 8,
+              marginTop: 8,
+            }}
+          >
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setReplyingTo(null);
+                setReplyText("");
+              }}
+              style={CANCEL_BUTTON_STYLE}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (replyText.trim() && submitFn) {
+                  submitFn(replyKey, replyText.trim());
+                }
+                setReplyText("");
+                setReplyingTo(null);
+              }}
+              disabled={!replyText.trim()}
+              style={submitButtonStyle(!!replyText.trim())}
+            >
+              Reply
+            </button>
+          </div>
+        </div>
+      ) : (
+        <input
+          readOnly
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            setReplyingTo(replyKey);
+          }}
+          placeholder="Reply or add others with @"
+          style={{
+            width: "100%",
+            border: "1px solid var(--doc-border)",
+            borderRadius: 20,
+            outline: "none",
+            fontSize: 14,
+            padding: "8px 16px",
+            fontFamily: "inherit",
+            color: "var(--doc-text-subtle)",
+            cursor: "text",
+            backgroundColor: "var(--doc-page)",
+            boxSizing: "border-box",
+          }}
+        />
+      )}
+    </div>
+  );
+
+  const renderCommentCard = (comment: Comment) => {
+    const replies = getReplies(comment.id);
+    const cardId = `comment-${comment.id}`;
+    const isExpanded = expandedCard === cardId;
+    const yPos = cardPositions.get(cardId);
+
+    return (
+      // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
+      <div
+        key={comment.id}
+        ref={(el) => {
+          if (el) {
+            cardRefs.current.set(cardId, el);
+          } else {
+            cardRefs.current.delete(cardId);
+          }
+        }}
+        data-comment-id={comment.id}
+        className="docx-comment-card"
+        onClick={() => handleCardClick(cardId, comment.id)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            handleCardClick(cardId, comment.id);
+          }
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{
+          ...cardContainerStyle(cardId, isExpanded, yPos),
+          opacity:
+            hasPositions && yPos === undefined ? 0 : comment.done ? 0.6 : 1,
+        }}
+      >
+        {/* Header: avatar + name/date + actions */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <div style={avatarStyle(comment.author || "U")}>
+            {getInitials(comment.author || "U")}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--doc-text)",
+              }}
+            >
+              {comment.author || "Unknown"}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--doc-text-muted)" }}>
+              {formatDate(comment.date)}
+            </div>
+          </div>
+          {isExpanded && (
+            <div
+              style={{
+                display: "flex",
+                gap: 4,
+                marginTop: 2,
+                position: "relative",
+              }}
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCommentResolve?.(comment.id);
+                }}
+                title="Resolve"
+                style={ICON_BUTTON_STYLE}
+              >
+                <CheckIcon size={20} />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpenFor(menuOpenFor === cardId ? null : cardId);
+                }}
+                title="More options"
+                style={ICON_BUTTON_STYLE}
+              >
+                <MoreVerticalIcon size={20} />
+              </button>
+              {menuOpenFor === cardId && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  role="menu"
+                  style={{
+                    position: "absolute",
+                    top: 32,
+                    right: 0,
+                    background: "var(--doc-page)",
+                    borderRadius: 8,
+                    boxShadow:
+                      "0 2px 6px var(--doc-shadow-md, rgba(60,64,67,0.3)), 0 1px 2px var(--doc-shadow-sm, rgba(60,64,67,0.15))",
+                    zIndex: 100,
+                    minWidth: 120,
+                    padding: "4px 0",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpenFor(null);
+                      onCommentDelete?.(comment.id);
+                    }}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      padding: "8px 16px",
+                      border: "none",
+                      background: "none",
+                      textAlign: "left",
+                      fontSize: 14,
+                      color: "var(--doc-text)",
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}
+                    onMouseOver={(e) => {
+                      (e.target as HTMLElement).style.backgroundColor =
+                        "var(--doc-primary-light)";
+                    }}
+                    onFocus={(e) => {
+                      (e.target as HTMLElement).style.backgroundColor =
+                        "var(--doc-primary-light)";
+                    }}
+                    onMouseOut={(e) => {
+                      (e.target as HTMLElement).style.backgroundColor =
+                        "transparent";
+                    }}
+                    onBlur={(e) => {
+                      (e.target as HTMLElement).style.backgroundColor =
+                        "transparent";
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Comment body */}
+        <div
+          style={{
+            fontSize: 13,
+            color: "var(--doc-text)",
+            lineHeight: "20px",
+            marginTop: 6,
+          }}
+        >
+          {getCommentText(comment.content)}
+        </div>
+
+        {renderReplies(replies, isExpanded)}
+
+        {/* Reply input */}
+        {isExpanded &&
+          !comment.done &&
+          renderReplySection(comment.id, onCommentReply)}
+      </div>
+    );
+  };
+
+  return (
+    <aside
+      ref={sidebarRef}
+      className="docx-comments-sidebar"
+      role="complementary"
+      aria-label="Comments"
+      style={{
+        position: "absolute",
+        top: topOffset,
+        left: `calc(50% - 120px + ${pageWidth / 2 + 12}px)`,
+        bottom: 0,
+        width: SIDEBAR_WIDTH,
+        fontFamily: "'Google Sans', Roboto, Arial, sans-serif",
+        zIndex: 40,
+        backgroundColor: "transparent",
+        overflowY: hasPositions ? "visible" : "auto",
+        overflowX: "visible",
+        opacity: hasPositions ? 1 : 0,
+        transition: "opacity 0.15s ease",
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {/* Cards container — relative for absolute card positioning */}
+      <div style={{ position: "relative" }}>
+        {/* New comment input — positioned like other cards via cardPositions */}
+        {isAddingComment && (
+          <div
+            ref={(el) => {
+              if (el) {
+                cardRefs.current.set("new-comment-input", el);
+              } else {
+                cardRefs.current.delete("new-comment-input");
+              }
+            }}
+            style={{
+              ...(hasPositions
+                ? cardPositions.get("new-comment-input") !== undefined
+                  ? {
+                      position: "absolute",
+                      top: cardPositions.get("new-comment-input"),
+                      left: 0,
+                      right: 0,
+                    }
+                  : {
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      visibility: "hidden" as const,
+                    }
+                : { marginBottom: 8 }),
+              padding: 12,
+              borderRadius: 8,
+              backgroundColor: "var(--doc-page)",
+              boxShadow:
+                "0 1px 3px var(--doc-shadow-md, rgba(60,64,67,0.3)), 0 4px 8px 3px var(--doc-shadow-sm, rgba(60,64,67,0.15))",
+              zIndex: 50,
+            }}
+          >
+            <textarea
+              ref={(el) => el?.focus({ preventScroll: true })}
+              value={newCommentText}
+              onChange={(e) => setNewCommentText(e.target.value)}
+              onMouseDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleNewCommentSubmit();
+                }
+                if (e.key === "Escape") {
+                  onCancelAddComment?.();
+                  setNewCommentText("");
+                }
+              }}
+              placeholder="Add a comment..."
+              style={{
+                width: "100%",
+                border: "1px solid var(--doc-primary)",
+                borderRadius: 20,
+                outline: "none",
+                resize: "none",
+                fontSize: 14,
+                lineHeight: "20px",
+                padding: "8px 16px",
+                fontFamily: "inherit",
+                minHeight: 40,
+                boxSizing: "border-box",
+                color: "var(--doc-text)",
+              }}
+            />
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 8,
+                marginTop: 8,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  onCancelAddComment?.();
+                  setNewCommentText("");
+                }}
+                style={CANCEL_BUTTON_STYLE}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleNewCommentSubmit}
+                disabled={!newCommentText.trim()}
+                style={submitButtonStyle(!!newCommentText.trim())}
+              >
+                Comment
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Comments */}
+        {visibleComments.map((comment) => renderCommentCard(comment))}
+
+        {/* Empty state */}
+        {visibleComments.length === 0 && !isAddingComment && (
+          <div
+            style={{
+              padding: "24px 16px",
+              textAlign: "center",
+              color: "var(--doc-text-subtle)",
+              fontSize: 13,
+            }}
+          >
+            No comments yet.
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+};

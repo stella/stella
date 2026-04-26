@@ -1,0 +1,825 @@
+/**
+ * Paragraph measurement module
+ *
+ * Measures paragraph blocks and computes line breaking.
+ * Converts runs into measured lines with typography metrics.
+ */
+
+import type {
+  ParagraphBlock,
+  ParagraphMeasure,
+  MeasuredLine,
+  Run,
+  TextRun,
+  TabRun,
+  ImageRun,
+  LineBreakRun,
+  FieldRun,
+  ParagraphSpacing,
+} from "../../layout-engine/types";
+import { DEFAULT_SINGLE_LINE_RATIO } from "../../utils/fontResolver";
+import {
+  measureTextWidth,
+  measureRun,
+  getFontMetrics,
+  ptToPx,
+  twipsToPx,
+} from "./measureContainer";
+import type { FontStyle, FontMetrics } from "./measureContainer";
+
+// Default values - match OOXML spec defaults
+const DEFAULT_FONT_SIZE = 11; // 11pt (Word 2007+ default)
+const DEFAULT_FONT_FAMILY = "Calibri";
+const DEFAULT_LINE_HEIGHT_MULTIPLIER = 1; // OOXML spec default: single spacing (line=240)
+
+// Floating-point tolerance for line breaking (0.5px)
+// Prevents premature line breaks due to measurement rounding
+const WIDTH_TOLERANCE = 0.5;
+
+/**
+ * Compute the width a tab character should advance to reach the next tab stop.
+ */
+function computeTabWidth(
+  currentPos: number,
+  tabStops: { pos: number; val: string }[] | undefined,
+): number {
+  if (tabStops && tabStops.length > 0) {
+    for (const stop of tabStops) {
+      const stopPx = twipsToPx(stop.pos);
+      if (stopPx > currentPos + 0.5) {
+        return Math.max(1, stopPx - currentPos);
+      }
+    }
+  }
+  // No matching stop — advance to next default interval
+  const remainder = currentPos % DEFAULT_TAB_WIDTH;
+  return Math.max(
+    1,
+    remainder < 0.5 ? DEFAULT_TAB_WIDTH : DEFAULT_TAB_WIDTH - remainder,
+  );
+}
+
+/**
+ * Find the longest prefix of `text` that fits within `maxWidth` pixels.
+ * Returns the number of characters that fit (at least 1 if `forceMin` is true).
+ */
+function findMaxFittingLength(
+  text: string,
+  style: FontStyle,
+  maxWidth: number,
+  forceMin: boolean = false,
+): number {
+  let lo = 1;
+  let hi = text.length;
+  let best = 0;
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (measureTextWidth(text.slice(0, mid), style) <= maxWidth) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return forceMin && best === 0 ? 1 : best;
+}
+
+/**
+ * Floating image exclusion zone - describes an area where text cannot flow.
+ * Used to calculate reduced line widths for text wrapping around floating images.
+ */
+export type FloatingImageZone = {
+  /** Left margin reduction (pixels from left edge) */
+  leftMargin: number;
+  /** Right margin reduction (pixels from right edge) */
+  rightMargin: number;
+  /** Top Y coordinate of the exclusion zone (pixels from paragraph start) */
+  topY: number;
+  /** Bottom Y coordinate of the exclusion zone (pixels from paragraph start) */
+  bottomY: number;
+};
+
+/**
+ * Options for paragraph measurement
+ */
+export type MeasureParagraphOptions = {
+  /** Floating image exclusion zones that affect line widths */
+  floatingZones?: FloatingImageZone[];
+  /** Y offset of this paragraph relative to the exclusion zones (default: 0) */
+  paragraphYOffset?: number;
+};
+
+/**
+ * Typography metrics for a line
+ */
+type LineTypography = {
+  ascent: number;
+  descent: number;
+  lineHeight: number;
+};
+
+/**
+ * State tracking for line accumulation
+ */
+type LineState = {
+  fromRun: number;
+  fromChar: number;
+  toRun: number;
+  toChar: number;
+  width: number;
+  maxFontSize: number;
+  maxFontMetrics: FontMetrics | null;
+  /** Maximum inline image height in pixels (already in px, not points) */
+  maxImageHeightPx: number;
+  availableWidth: number;
+  /** Left offset from floating images (pixels from content left edge) */
+  leftOffset: number;
+  /** Right offset from floating images (pixels from content right edge) */
+  rightOffset: number;
+};
+
+/**
+ * Extract FontStyle from a text run for measurement
+ */
+function runToFontStyle(run: TextRun | TabRun): FontStyle {
+  return {
+    fontFamily: run.fontFamily ?? DEFAULT_FONT_FAMILY,
+    fontSize: run.fontSize ?? DEFAULT_FONT_SIZE,
+    ...(run.bold !== undefined ? { bold: run.bold } : {}),
+    ...(run.italic !== undefined ? { italic: run.italic } : {}),
+    ...(run.letterSpacing !== undefined ? { letterSpacing: run.letterSpacing } : {}),
+  };
+}
+
+/**
+ * Calculate typography metrics from font size and spacing settings
+ *
+ * @param fontSize - Font size in points
+ * @param spacing - Paragraph spacing settings
+ * @param metrics - Pre-calculated font metrics (in pixels)
+ */
+function calculateTypographyMetrics(
+  fontSize: number,
+  spacing?: ParagraphSpacing,
+  metrics?: FontMetrics | null,
+): LineTypography {
+  // Use provided metrics or calculate from font size
+  // When calculating from fontSize (points), convert to pixels first
+  const fontSizePx = ptToPx(fontSize);
+  const ascent = metrics?.ascent ?? fontSizePx * 0.8;
+  const descent = metrics?.descent ?? fontSizePx * 0.2;
+
+  // Apply line spacing rules
+  //
+  // OOXML lineRule="auto" multipliers (w:line in 240ths):
+  //   line=240 → 1.0x (single), line=276 → 1.15x (Word default), line=480 → 2.0x
+  //
+  // The multiplier base is the font's "single line" height per OOXML spec (§17.3.1.33):
+  //   singleLine = (usWinAscent + usWinDescent) / unitsPerEm × fontSizePx
+  // This ratio is font-specific (1.07–1.27 for common fonts). We use a hardcoded
+  // lookup table of OS/2 metrics since Canvas fontBoundingBox is unreliable
+  // cross-platform (Mac uses hhea, not usWin) and Google Font substitutes
+  // report different metrics than the original fonts.
+  const ratio = metrics?.singleLineRatio ?? DEFAULT_SINGLE_LINE_RATIO;
+  const singleLineBase = fontSizePx * ratio;
+
+  let lineHeight: number;
+
+  if (spacing?.lineRule === "exact" && spacing.line !== undefined) {
+    // Exact: use specified height exactly
+    lineHeight = spacing.line;
+  } else if (spacing?.lineRule === "atLeast" && spacing.line !== undefined) {
+    // At least: use specified height or natural height, whichever is larger
+    const defaultHeight = singleLineBase * DEFAULT_LINE_HEIGHT_MULTIPLIER;
+    lineHeight = Math.max(spacing.line, defaultHeight);
+  } else if (
+    spacing?.line !== undefined &&
+    spacing?.lineUnit === "multiplier"
+  ) {
+    // Multiplier applied to font's single-line height
+    lineHeight = singleLineBase * spacing.line;
+  } else if (spacing?.line !== undefined && spacing?.lineUnit === "px") {
+    // Pixel value
+    lineHeight = spacing.line;
+  } else {
+    // No explicit spacing — OOXML spec default is line=240 (1.0x = single spacing).
+    // Documents wanting 1.15x set w:line=276 explicitly in styles, which flows
+    // through the multiplier branch above. This fallback is for paragraphs with
+    // no style and no direct formatting.
+    lineHeight = singleLineBase * DEFAULT_LINE_HEIGHT_MULTIPLIER;
+  }
+
+  return { ascent, descent, lineHeight };
+}
+
+/**
+ * Calculate metrics for an empty paragraph
+ */
+function calculateEmptyParagraphMetrics(
+  fontSize: number,
+  spacing?: ParagraphSpacing,
+  fontFamily?: string,
+): LineTypography {
+  const metrics = getFontMetrics({
+    fontSize,
+    fontFamily: fontFamily ?? DEFAULT_FONT_FAMILY,
+  });
+  return calculateTypographyMetrics(fontSize, spacing, metrics);
+}
+
+/**
+ * Check if a run is a text run
+ */
+function isTextRun(run: Run): run is TextRun {
+  return run.kind === "text";
+}
+
+/**
+ * Check if a run is a tab run
+ */
+function isTabRun(run: Run): run is TabRun {
+  return run.kind === "tab";
+}
+
+/**
+ * Check if a run is an image run
+ */
+function isImageRun(run: Run): run is ImageRun {
+  return run.kind === "image";
+}
+
+/**
+ * Check if a run is a line break run
+ */
+function isLineBreakRun(run: Run): run is LineBreakRun {
+  return run.kind === "lineBreak";
+}
+
+/**
+ * Check if a run is a field run
+ */
+function isFieldRun(run: Run): run is FieldRun {
+  return run.kind === "field";
+}
+
+/**
+ * Check if text run is empty (only whitespace or no text)
+ */
+function isEmptyTextRun(run: TextRun): boolean {
+  return !run.text || run.text.length === 0;
+}
+
+/**
+ * Find word break points in text
+ * Returns array of indices where words end (after space/punctuation)
+ */
+function findWordBreaks(text: string): number[] {
+  const breaks: number[] = [];
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    // Break after space or certain punctuation
+    if (char === " " || char === "-" || char === "\t") {
+      breaks.push(i + 1);
+    }
+  }
+
+  return breaks;
+}
+
+/**
+ * Default tab width in pixels (0.5 inch at 96 DPI)
+ */
+const DEFAULT_TAB_WIDTH = 48;
+
+/**
+ * Calculate width reduction for a line based on floating image zones.
+ * Returns the left and right margins that need to be applied.
+ */
+function getFloatingMargins(
+  lineY: number,
+  lineHeight: number,
+  zones: FloatingImageZone[] | undefined,
+  paragraphYOffset: number,
+): { leftMargin: number; rightMargin: number } {
+  if (!zones || zones.length === 0) {
+    return { leftMargin: 0, rightMargin: 0 };
+  }
+
+  let leftMargin = 0;
+  let rightMargin = 0;
+
+  // Line position relative to exclusion zones
+  const absoluteLineTop = paragraphYOffset + lineY;
+  const absoluteLineBottom = absoluteLineTop + lineHeight;
+
+  for (const zone of zones) {
+    // Check if this line overlaps vertically with the exclusion zone
+    if (absoluteLineBottom > zone.topY && absoluteLineTop < zone.bottomY) {
+      leftMargin = Math.max(leftMargin, zone.leftMargin);
+      rightMargin = Math.max(rightMargin, zone.rightMargin);
+    }
+  }
+
+  return { leftMargin, rightMargin };
+}
+
+/**
+ * Measure a paragraph block and compute line breaks
+ *
+ * @param block - The paragraph block to measure
+ * @param maxWidth - Maximum available width for the paragraph
+ * @param options - Optional measurement options (floating zones, Y offset)
+ * @returns ParagraphMeasure with lines and total height
+ */
+export function measureParagraph(
+  block: ParagraphBlock,
+  maxWidth: number,
+  options?: MeasureParagraphOptions,
+): ParagraphMeasure {
+  const runs = block.runs;
+  const attrs = block.attrs;
+  const spacing = attrs?.spacing;
+
+  // Floating image support
+  const floatingZones = options?.floatingZones;
+  const paragraphYOffset = options?.paragraphYOffset ?? 0;
+
+  // Handle indentation
+  const indent = attrs?.indent;
+  const indentLeft = indent?.left ?? 0;
+  const indentRight = indent?.right ?? 0;
+  const firstLineOffset = (indent?.firstLine ?? 0) - (indent?.hanging ?? 0);
+
+  // Calculate base available widths (before floating image adjustment)
+  const bodyContentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
+  // First line offset: positive = first-line indent (less space), negative = hanging (more space)
+  // Subtracting gives correct width in both cases
+  const baseFirstLineWidth = Math.max(1, bodyContentWidth - firstLineOffset);
+
+  // Track cumulative height for floating zone calculations
+  let cumulativeHeight = 0;
+
+  // Calculate first line width with floating zone adjustment
+  // Estimate first line height for floating margin calculation
+  const estimatedFirstLineHeight =
+    ptToPx(DEFAULT_FONT_SIZE) * DEFAULT_LINE_HEIGHT_MULTIPLIER;
+  const firstLineFloatingMargins = getFloatingMargins(
+    0,
+    estimatedFirstLineHeight,
+    floatingZones,
+    paragraphYOffset,
+  );
+  const firstLineWidth = Math.max(
+    1,
+    baseFirstLineWidth -
+      firstLineFloatingMargins.leftMargin -
+      firstLineFloatingMargins.rightMargin,
+  );
+
+  const lines: MeasuredLine[] = [];
+
+  // Handle empty paragraph
+  if (runs.length === 0) {
+    const emptyFontSize = attrs?.defaultFontSize ?? DEFAULT_FONT_SIZE;
+    const emptyFontFamily = attrs?.defaultFontFamily ?? DEFAULT_FONT_FAMILY;
+    const emptyMetrics = calculateEmptyParagraphMetrics(
+      emptyFontSize,
+      spacing,
+      emptyFontFamily,
+    );
+    lines.push({
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 0,
+      width: 0,
+      ...emptyMetrics,
+    });
+
+    return {
+      kind: "paragraph",
+      lines,
+      totalHeight: emptyMetrics.lineHeight,
+    };
+  }
+
+  // Check for empty text run only
+  if (
+    runs.length === 1 &&
+    // SAFETY: length === 1 guarantees index 0 exists
+    isTextRun(runs[0]!) &&
+    isEmptyTextRun(runs[0] as TextRun)
+  ) {
+    const run = runs[0] as TextRun;
+    const fontSize =
+      run.fontSize ?? attrs?.defaultFontSize ?? DEFAULT_FONT_SIZE;
+    const fontFamily =
+      run.fontFamily ?? attrs?.defaultFontFamily ?? DEFAULT_FONT_FAMILY;
+    const emptyMetrics = calculateEmptyParagraphMetrics(
+      fontSize,
+      spacing,
+      fontFamily,
+    );
+
+    lines.push({
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 0,
+      width: 0,
+      ...emptyMetrics,
+    });
+
+    return {
+      kind: "paragraph",
+      lines,
+      totalHeight: emptyMetrics.lineHeight,
+    };
+  }
+
+  // Initialize line state
+  let currentLine: LineState = {
+    fromRun: 0,
+    fromChar: 0,
+    toRun: 0,
+    toChar: 0,
+    width: 0,
+    maxFontSize: DEFAULT_FONT_SIZE,
+    maxFontMetrics: null,
+    maxImageHeightPx: 0,
+    availableWidth: firstLineWidth,
+    leftOffset: firstLineFloatingMargins.leftMargin,
+    rightOffset: firstLineFloatingMargins.rightMargin,
+  };
+
+  /**
+   * Finalize and push the current line to the lines array
+   */
+  const finalizeLine = (): void => {
+    const typography = calculateTypographyMetrics(
+      currentLine.maxFontSize,
+      spacing,
+      currentLine.maxFontMetrics,
+    );
+
+    // If an inline image is taller than the text-based line height,
+    // use the image height directly (it's already in pixels — no pt→px conversion needed)
+    const finalTypography = { ...typography };
+    if (currentLine.maxImageHeightPx > finalTypography.lineHeight) {
+      finalTypography.lineHeight = currentLine.maxImageHeightPx;
+      finalTypography.ascent = currentLine.maxImageHeightPx * 0.8;
+      finalTypography.descent = currentLine.maxImageHeightPx * 0.2;
+    }
+
+    const line: MeasuredLine = {
+      fromRun: currentLine.fromRun,
+      fromChar: currentLine.fromChar,
+      toRun: currentLine.toRun,
+      toChar: currentLine.toChar,
+      width: currentLine.width,
+      ...finalTypography,
+    };
+
+    // Only add offsets if they're non-zero (for floating images)
+    if (currentLine.leftOffset > 0) {
+      line.leftOffset = currentLine.leftOffset;
+    }
+    if (currentLine.rightOffset > 0) {
+      line.rightOffset = currentLine.rightOffset;
+    }
+
+    lines.push(line);
+
+    // Update cumulative height for next line's floating zone calculation
+    cumulativeHeight += typography.lineHeight;
+  };
+
+  /**
+   * Start a new line after the current one
+   */
+  const startNewLine = (runIndex: number, charIndex: number): void => {
+    finalizeLine();
+
+    // Calculate available width for new line based on floating zones
+    // Estimate the new line's height for overlap calculation
+    const estimatedLineHeight =
+      ptToPx(DEFAULT_FONT_SIZE) * DEFAULT_LINE_HEIGHT_MULTIPLIER;
+    const floatingMargins = getFloatingMargins(
+      cumulativeHeight,
+      estimatedLineHeight,
+      floatingZones,
+      paragraphYOffset,
+    );
+
+    // Body content width minus floating image margins
+    const adjustedWidth = Math.max(
+      1,
+      bodyContentWidth -
+        floatingMargins.leftMargin -
+        floatingMargins.rightMargin,
+    );
+
+    currentLine = {
+      fromRun: runIndex,
+      fromChar: charIndex,
+      toRun: runIndex,
+      toChar: charIndex,
+      width: 0,
+      maxFontSize: DEFAULT_FONT_SIZE,
+      maxFontMetrics: null,
+      maxImageHeightPx: 0,
+      availableWidth: adjustedWidth,
+      leftOffset: floatingMargins.leftMargin,
+      rightOffset: floatingMargins.rightMargin,
+    };
+  };
+
+  /**
+   * Update max font tracking for the current line
+   */
+  const updateMaxFont = (style: FontStyle): void => {
+    const fontSize = style.fontSize ?? DEFAULT_FONT_SIZE;
+    // Update when this is the first run on the line (maxFontMetrics not yet set)
+    // or when we find a larger font size. Without the !maxFontMetrics check,
+    // lines with only <11pt text would use the 11pt default, inflating line height.
+    if (!currentLine.maxFontMetrics || fontSize > currentLine.maxFontSize) {
+      currentLine.maxFontSize = fontSize;
+      currentLine.maxFontMetrics = getFontMetrics(style);
+    }
+  };
+
+  // Process each run
+  for (let runIndex = 0; runIndex < runs.length; runIndex++) {
+    // SAFETY: runIndex is bounded by runs.length
+    const run = runs[runIndex]!;
+
+    if (isLineBreakRun(run)) {
+      // Force line break
+      currentLine.toRun = runIndex;
+      currentLine.toChar = 0;
+      startNewLine(runIndex + 1, 0);
+      continue;
+    }
+
+    if (isTabRun(run)) {
+      // Handle tab run — compute width from paragraph tab stops
+      const style = runToFontStyle(run);
+      updateMaxFont(style);
+
+      // Compute tab width: advance to the next tab stop position.
+      const tabStops = attrs?.tabs;
+      const currentPos = currentLine.width + (currentLine.leftOffset ?? 0);
+      const tabWidth = computeTabWidth(currentPos, tabStops);
+
+      if (
+        currentLine.width + tabWidth >
+        currentLine.availableWidth + WIDTH_TOLERANCE
+      ) {
+        // Tab doesn't fit, start new line
+        startNewLine(runIndex, 0);
+        updateMaxFont(style);
+      }
+
+      currentLine.width += tabWidth;
+      currentLine.toRun = runIndex;
+      currentLine.toChar = 1;
+      continue;
+    }
+
+    if (isImageRun(run)) {
+      const wrapType = run.wrapType;
+      const isFloating =
+        run.displayMode === "float" ||
+        (wrapType && ["square", "tight", "through"].includes(wrapType));
+
+      // Skip truly floating images - they don't contribute to line height
+      // (they are positioned absolutely and text wraps around them)
+      if (run.position && isFloating) {
+        currentLine.toRun = runIndex;
+        currentLine.toChar = 1;
+        continue;
+      }
+
+      // Handle topAndBottom (block) images - they get their own line
+      if (wrapType === "topAndBottom" || run.displayMode === "block") {
+        // If current line has content, finish it first
+        if (currentLine.width > 0) {
+          startNewLine(runIndex, 0);
+        }
+
+        // The image gets its own line with full image height
+        const imageHeight = run.height;
+        const distTop = run.distTop ?? 6;
+        const distBottom = run.distBottom ?? 6;
+
+        // Update line to contain just this image
+        currentLine.toRun = runIndex;
+        currentLine.toChar = 1;
+        // Use image height plus margins as line height (already in pixels)
+        currentLine.maxImageHeightPx = imageHeight + distTop + distBottom;
+
+        // Start a new line after the image for subsequent content
+        startNewLine(runIndex + 1, 0);
+        continue;
+      }
+
+      // Handle inline image
+      const imageWidth = run.width;
+      const imageHeight = run.height;
+
+      // Track image height separately (already in pixels, not points)
+      if (imageHeight > currentLine.maxImageHeightPx) {
+        currentLine.maxImageHeightPx = imageHeight;
+      }
+
+      if (
+        currentLine.width + imageWidth >
+        currentLine.availableWidth + WIDTH_TOLERANCE
+      ) {
+        // Image doesn't fit, start new line
+        startNewLine(runIndex, 0);
+      }
+
+      currentLine.width += imageWidth;
+      currentLine.toRun = runIndex;
+      currentLine.toChar = 1;
+      continue;
+    }
+
+    if (isFieldRun(run)) {
+      // Measure field using fallback text (actual value substituted at render time)
+      const fallback = run.fallback || "1";
+      const style: FontStyle = {
+        fontFamily: run.fontFamily ?? DEFAULT_FONT_FAMILY,
+        fontSize: run.fontSize ?? DEFAULT_FONT_SIZE,
+        ...(run.bold !== undefined ? { bold: run.bold } : {}),
+        ...(run.italic !== undefined ? { italic: run.italic } : {}),
+      };
+      updateMaxFont(style);
+
+      const fieldWidth = measureTextWidth(fallback, style);
+      if (
+        currentLine.width > 0 &&
+        currentLine.width + fieldWidth >
+          currentLine.availableWidth + WIDTH_TOLERANCE
+      ) {
+        startNewLine(runIndex, 0);
+        updateMaxFont(style);
+      }
+
+      currentLine.width += fieldWidth;
+      currentLine.toRun = runIndex;
+      currentLine.toChar = 1;
+      continue;
+    }
+
+    if (isTextRun(run)) {
+      const textRun = run as TextRun;
+      const text = textRun.text;
+      const style = runToFontStyle(textRun);
+
+      updateMaxFont(style);
+
+      if (!text || text.length === 0) {
+        // Empty text run, just update position
+        currentLine.toRun = runIndex;
+        currentLine.toChar = 0;
+        continue;
+      }
+
+      // Find word break points for wrapping
+      const wordBreaks = findWordBreaks(text);
+
+      // Process text word by word
+      let charIndex = 0;
+
+      while (charIndex < text.length) {
+        // Find next word boundary
+        let nextBreak = text.length;
+        for (const breakPoint of wordBreaks) {
+          if (breakPoint > charIndex) {
+            nextBreak = breakPoint;
+            break;
+          }
+        }
+
+        // Extract word (includes trailing space if present)
+        const word = text.slice(charIndex, nextBreak);
+        const wordWidth = measureTextWidth(word, style);
+
+        // If the word itself is longer than a line, hard-break by characters.
+        // Use substring measurement (not char-by-char accumulation) to preserve
+        // kerning accuracy. Char-by-char accumulation overestimates width by
+        // ~1-2px per line due to lost kerning, causing extra wraps in narrow cells.
+        if (wordWidth > currentLine.availableWidth + WIDTH_TOLERANCE) {
+          // Long word that needs hard-breaking. DON'T start a new line first —
+          // fill the remaining space on the current line with as many characters
+          // as possible. This prevents wasting a full line when a small run
+          // (like "{" at 10pt) precedes a long word (like a variable at 5.5pt).
+          let chunkStart = 0;
+
+          while (chunkStart < word.length) {
+            const spaceLeft =
+              currentLine.availableWidth - currentLine.width + WIDTH_TOLERANCE;
+            const remaining = word.slice(chunkStart);
+            let bestEnd = findMaxFittingLength(remaining, style, spaceLeft);
+
+            // Nothing fits → start a new line and retry (or force 1 char on empty line)
+            if (bestEnd === 0) {
+              if (currentLine.width > 0) {
+                startNewLine(runIndex, charIndex + chunkStart);
+                updateMaxFont(style);
+                continue;
+              }
+              bestEnd = 1;
+            }
+
+            const chunkEnd = chunkStart + bestEnd;
+            const chunk = word.slice(chunkStart, chunkEnd);
+            const chunkWidth = measureTextWidth(chunk, style);
+
+            currentLine.width += chunkWidth;
+            currentLine.toRun = runIndex;
+            currentLine.toChar = charIndex + chunkEnd;
+
+            chunkStart = chunkEnd;
+            if (chunkStart < word.length) {
+              startNewLine(runIndex, charIndex + chunkStart);
+              updateMaxFont(style);
+            }
+          }
+
+          charIndex = nextBreak;
+          continue;
+        }
+
+        // Check if word fits on current line
+        if (
+          currentLine.width > 0 &&
+          currentLine.width + wordWidth >
+            currentLine.availableWidth + WIDTH_TOLERANCE
+        ) {
+          // Word doesn't fit, start new line
+          startNewLine(runIndex, charIndex);
+          // Re-apply font metrics to the new line (startNewLine resets maxFontSize)
+          updateMaxFont(style);
+        }
+
+        // Add word to current line
+        currentLine.width += wordWidth;
+        currentLine.toRun = runIndex;
+        currentLine.toChar = nextBreak;
+
+        charIndex = nextBreak;
+      }
+    }
+  }
+
+  // Finalize the last line
+  finalizeLine();
+
+  // Calculate total height
+  const totalHeight = lines.reduce((sum, line) => sum + line.lineHeight, 0);
+
+  // Add spacing before/after
+  let totalWithSpacing = totalHeight;
+  if (spacing?.before) {
+    totalWithSpacing += spacing.before;
+  }
+  if (spacing?.after) {
+    totalWithSpacing += spacing.after;
+  }
+
+  return {
+    kind: "paragraph",
+    lines,
+    totalHeight: totalWithSpacing,
+  };
+}
+
+/**
+ * Measure multiple paragraph blocks
+ *
+ * @param blocks - Array of paragraph blocks to measure
+ * @param maxWidth - Maximum available width
+ * @returns Array of ParagraphMeasure results
+ */
+export function measureParagraphs(
+  blocks: ParagraphBlock[],
+  maxWidth: number,
+): ParagraphMeasure[] {
+  return blocks.map((block) => measureParagraph(block, maxWidth));
+}
+
+/**
+ * Get per-character widths for a text run (for click positioning)
+ *
+ * @param run - The text run to measure
+ * @returns Array of character widths
+ */
+export function getRunCharWidths(run: TextRun): number[] {
+  const style = runToFontStyle(run);
+  const result = measureRun(run.text, style);
+  return result.charWidths;
+}
