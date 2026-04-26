@@ -7,8 +7,9 @@
 
 import type * as slimdom from "slimdom";
 
-export const W_NS =
-  "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+import { OOXML_NS } from "@stella/docx-utils";
+
+export const W_NS = OOXML_NS.w;
 
 /** Type guard that narrows `slimdom.Node` to `slimdom.Element`. */
 export const isElement = (node: slimdom.Node): node is slimdom.Element =>

@@ -3,7 +3,7 @@ import type { Static } from "elysia";
 
 const v1 = t.Literal(1);
 
-const optionColor = t.UnionEnum([
+const namedOptionColor = t.UnionEnum([
   "red",
   "orange",
   "amber",
@@ -24,6 +24,12 @@ const optionColor = t.UnionEnum([
   "fuchsia",
   "gray",
 ]);
+
+/** 6-character hex color (e.g. "FF0000"). */
+const hexColor = t.String({ pattern: "^[0-9A-Fa-f]{6}$" });
+
+/** Named preset or arbitrary hex color. */
+const optionColor = t.Union([namedOptionColor, hexColor]);
 
 export type OptionColor = Static<typeof optionColor>;
 

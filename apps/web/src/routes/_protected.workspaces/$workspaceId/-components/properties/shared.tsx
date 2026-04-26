@@ -14,7 +14,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import {
   isPropertyValid,
-  optionColorsMap,
+  resolveOptionColor,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 
 type PropertyPopoverTriggerProps = {
@@ -85,7 +85,7 @@ export const SelectColorIcon = ({ color, className }: SelectColorIconProps) => {
   return (
     <span
       className={cn("block size-4 shrink-0 rounded", className)}
-      style={{ backgroundColor: optionColorsMap[color].color }}
+      style={{ backgroundColor: resolveOptionColor(color).color }}
     />
   );
 };

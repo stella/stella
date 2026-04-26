@@ -1,0 +1,547 @@
+/**
+ * DOCX Editor Styles
+ *
+ * Core styles for the WYSIWYG DOCX editor:
+ * - Bundled document fonts (Croscore metric-compatible replacements)
+ * - CSS custom properties (light + dark)
+ * - Cursor/caret visibility
+ * - Selection highlighting
+ * - ContentEditable styling
+ */
+
+@import "./fonts.css";
+@import "./font-aliases.css";
+
+/* ============================================================================
+ * CSS CUSTOM PROPERTIES — adapts to .dark class on :root
+ * ============================================================================ */
+
+/* Maps Stella's semantic tokens to --doc-* aliases.
+ * Adapts automatically to light/dark and palette overrides (Nord, Flexoki). */
+.folio-root {
+  --doc-page: var(--background);
+  --doc-canvas: var(--background);
+  --doc-canvas-text: var(--foreground);
+
+  --doc-bg: var(--muted);
+  --doc-bg-subtle: var(--muted);
+  --doc-bg-muted: var(--muted);
+  --doc-bg-hover: var(--accent);
+  --doc-bg-input: var(--input);
+
+  --doc-text: var(--foreground);
+  --doc-text-muted: var(--muted-foreground);
+  --doc-text-subtle: var(--muted-foreground);
+
+  --doc-border: var(--border);
+  --doc-border-dark: var(--border);
+
+  --doc-primary: var(--primary);
+  --doc-primary-hover: var(--primary);
+  --doc-primary-light: var(--accent);
+
+  --doc-error: var(--destructive);
+  --doc-success: var(--success);
+
+  --doc-link: #2563eb;
+
+  --doc-selection: rgba(37, 99, 235, 0.25);
+  --doc-selection-dark-bg: rgba(96, 165, 250, 0.4);
+  --doc-find-highlight: rgba(250, 204, 21, 0.5);
+  --doc-find-current: rgba(249, 115, 22, 0.6);
+}
+
+/* Dark mode: only override what Stella tokens don't cover.
+ * Stella semantic tokens (--background, --foreground, etc.) already flip
+ * via the .dark class, so --doc-canvas / --doc-text / --doc-bg inherit
+ * automatically. We only need to adjust hardcoded color values here. */
+.dark .folio-root,
+.folio-root.dark {
+  --doc-link: #60a5fa;
+  --doc-selection: rgba(96, 165, 250, 0.3);
+}
+
+/* ============================================================================
+ * CURSOR / CARET
+ * ============================================================================ */
+
+[contenteditable="true"] {
+  caret-color: var(--doc-canvas-text, var(--doc-text));
+  outline: none;
+  caret-shape: bar;
+}
+
+/* Force white caret in dark mode — browser ignores CSS vars for caret
+ * in some engines, so we use an explicit value */
+.dark [contenteditable="true"],
+.dark .ProseMirror {
+  caret-color: var(--doc-canvas-text) !important;
+}
+
+.docx-run-editable[contenteditable="true"] {
+  caret-color: var(--doc-canvas-text, var(--doc-text));
+  min-height: 1em;
+  display: inline;
+}
+
+.docx-paragraph-empty [contenteditable="true"] {
+  min-height: 1em;
+  min-width: 1px;
+  display: inline-block;
+}
+
+.docx-paragraph-editable {
+  cursor: text;
+}
+
+/* ============================================================================
+ * FOCUS
+ * ============================================================================ */
+
+.docx-run-editable[contenteditable="true"]:focus {
+  outline: none;
+}
+
+.docx-paragraph-editable:focus-within {
+  outline: none;
+}
+
+/* ============================================================================
+ * SELECTION
+ * ============================================================================ */
+
+.docx-run-editable::selection,
+.docx-run-editable *::selection,
+.docx-run::selection,
+.docx-run *::selection,
+[contenteditable="true"]::selection,
+[contenteditable="true"] *::selection,
+.docx-paragraph::selection,
+.docx-paragraph *::selection,
+.docx-paragraph-editable::selection,
+.docx-paragraph-editable *::selection,
+.docx-hyperlink::selection,
+.docx-hyperlink *::selection {
+  background-color: var(--doc-selection) !important;
+  color: inherit !important;
+}
+
+/* Firefox */
+.docx-run-editable::-moz-selection,
+.docx-run-editable *::-moz-selection,
+.docx-run::-moz-selection,
+.docx-run *::-moz-selection,
+[contenteditable="true"]::-moz-selection,
+[contenteditable="true"] *::-moz-selection,
+.docx-paragraph::-moz-selection,
+.docx-paragraph *::-moz-selection,
+.docx-paragraph-editable::-moz-selection,
+.docx-paragraph-editable *::-moz-selection,
+.docx-hyperlink::-moz-selection,
+.docx-hyperlink *::-moz-selection {
+  background-color: var(--doc-selection) !important;
+  color: inherit !important;
+}
+
+/* Highlighted text — stronger selection for visibility */
+.docx-run-highlighted::selection,
+.docx-run-highlighted *::selection {
+  background-color: rgba(37, 99, 235, 0.45) !important;
+  color: inherit !important;
+}
+
+/* Dark background text */
+.docx-run-dark-bg::selection,
+.docx-run-dark-bg *::selection {
+  background-color: var(--doc-selection-dark-bg) !important;
+  color: inherit !important;
+}
+
+/* ============================================================================
+ * FIND & REPLACE
+ * ============================================================================ */
+
+.docx-find-highlight {
+  background-color: var(--doc-find-highlight) !important;
+  border-radius: 2px;
+}
+
+.docx-find-highlight-current {
+  background-color: var(--doc-find-current) !important;
+  border-radius: 2px;
+  outline: 2px solid var(--doc-find-current);
+}
+
+/* ============================================================================
+ * SELECTION OVERLAY
+ * ============================================================================ */
+
+.docx-selection-overlay-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.docx-selection-overlay-rect {
+  position: absolute;
+  background-color: var(--doc-selection);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ============================================================================
+ * SPECIAL CONTENT
+ * ============================================================================ */
+
+.docx-run-highlighted[contenteditable="true"] {
+  caret-color: var(--doc-text);
+}
+
+.docx-run-dark-bg[contenteditable="true"] {
+  caret-color: var(--doc-canvas-text);
+}
+
+/* ============================================================================
+ * EDITOR CONTAINER
+ * ============================================================================ */
+
+.folio-editor {
+  cursor: default;
+}
+
+.folio-editor-page {
+  cursor: text;
+}
+
+/* Dark mode: invert default text color on the document canvas.
+ * Individual runs with explicit non-black colors keep their color;
+ * everything else inherits from --doc-canvas-text. */
+.dark .layout-page,
+.dark .layout-page-content,
+.dark .docx-paragraph,
+.dark .docx-run,
+.dark .docx-run-editable,
+.dark .ProseMirror {
+  color: var(--doc-canvas-text) !important;
+}
+/* Preserve explicit non-black colors set by the layout painter */
+.dark .layout-page [style*="color:"] {
+  /* inline styles with explicit color win — no override needed */
+}
+
+/* ============================================================================
+ * SCROLLBAR — styled to match Stella's ScrollArea
+ * ============================================================================ */
+
+.folio-editor ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.folio-editor ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.folio-editor ::-webkit-scrollbar-thumb {
+  background: var(--foreground, #262626);
+  opacity: 0.2;
+  border-radius: 9999px;
+}
+
+.folio-editor ::-webkit-scrollbar-thumb:hover {
+  opacity: 0.4;
+}
+
+/* Firefox */
+.folio-editor {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(
+      in srgb,
+      var(--foreground, #262626) 20%,
+      transparent
+    )
+    transparent;
+}
+
+.docx-list-marker,
+.docx-bookmark-start,
+.docx-bookmark-end,
+.docx-field,
+.docx-drawing-placeholder,
+.docx-shape-placeholder {
+  cursor: default;
+  user-select: none;
+}
+
+/* ============================================================================
+ * TABLE CELL SELECTION
+ * ============================================================================ */
+
+.layout-table-cell-selected {
+  position: relative;
+  outline: 2px solid rgba(37, 99, 235, 0.6);
+  outline-offset: -2px;
+}
+
+.layout-table-cell-selected::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: rgba(37, 99, 235, 0.12);
+  pointer-events: none;
+}
+
+/* ============================================================================
+ * TABLE RESIZE HANDLES
+ * ============================================================================ */
+
+.layout-table-resize-handle,
+.layout-table-row-resize-handle,
+.layout-table-edge-handle-bottom,
+.layout-table-edge-handle-right {
+  background-color: transparent;
+  transition: background-color 150ms;
+}
+
+.layout-table-resize-handle:hover,
+.layout-table-resize-handle.dragging,
+.layout-table-row-resize-handle:hover,
+.layout-table-row-resize-handle.dragging,
+.layout-table-edge-handle-bottom:hover,
+.layout-table-edge-handle-bottom.dragging,
+.layout-table-edge-handle-right:hover,
+.layout-table-edge-handle-right.dragging {
+  background-color: rgba(37, 99, 235, 0.5);
+}
+
+/* ============================================================================
+ * READONLY MODE
+ * ============================================================================ */
+
+.paged-editor--readonly .layout-table-resize-handle,
+.paged-editor--readonly .layout-table-row-resize-handle,
+.paged-editor--readonly .layout-table-edge-handle-bottom,
+.paged-editor--readonly .layout-table-edge-handle-right {
+  display: none !important;
+}
+
+.paged-editor--readonly .layout-page-header,
+.paged-editor--readonly .layout-page-footer {
+  cursor: default;
+  pointer-events: none;
+}
+
+.paged-editor--readonly .layout-page-content {
+  cursor: default;
+}
+
+/* ============================================================================
+ * TRACKED CHANGES — Word-style per-author colors
+ *
+ * Author color is set inline by the layout painter / ProseMirror toDOM via
+ * style attributes. The CSS custom property below acts as a fallback and is
+ * driven by the data-tc-author-idx attribute.
+ * ============================================================================ */
+
+[data-tc-author-idx="0"] {
+  --tc-color: #c00000;
+}
+[data-tc-author-idx="1"] {
+  --tc-color: #2f5496;
+}
+[data-tc-author-idx="2"] {
+  --tc-color: #538135;
+}
+[data-tc-author-idx="3"] {
+  --tc-color: #7030a0;
+}
+[data-tc-author-idx="4"] {
+  --tc-color: #bf8f00;
+}
+
+.docx-insertion {
+  color: var(--tc-color, #c00000);
+  text-decoration: underline;
+  text-decoration-color: var(--tc-color, #c00000);
+  position: relative;
+}
+
+.docx-deletion {
+  text-decoration: line-through;
+  text-decoration-color: var(--tc-color, #c00000);
+  color: var(--tc-color, #c00000);
+  position: relative;
+}
+
+/* Author tooltip on rendered tracked-change spans (layout painter output).
+ * Uses data-change-author set by renderParagraph.ts. */
+.docx-insertion[data-change-author]:hover::after,
+.docx-deletion[data-change-author]:hover::after {
+  content: attr(data-change-author);
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  font-style: normal;
+  text-decoration: none;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--foreground);
+  background: var(--popover, var(--doc-page));
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* Hidden ProseMirror layer — keep spans alive but invisible for
+ * selection mapping; tooltips are handled by the rendered layer above. */
+.paged-editor__hidden-pm .docx-insertion,
+.paged-editor__hidden-pm .docx-deletion {
+  opacity: 1;
+  color: transparent !important;
+  text-decoration-color: transparent !important;
+  background: transparent !important;
+}
+
+/* ============================================================================
+ * TRACK CHANGES DISPLAY MODES
+ *
+ * All Markup: default — per-author colored underline / strikethrough (inline)
+ * No Markup: hide change styling, show final result
+ * Original: hide insertions, show deletions as normal text
+ * Simple Markup: hide inline marks, show left border on changed paragraphs
+ * ============================================================================ */
+
+/* --- No Markup: show accepted result without change marks --- */
+.folio-root--no-markup .docx-insertion {
+  color: inherit !important;
+  text-decoration: none !important;
+  background: none !important;
+}
+.folio-root--no-markup .docx-deletion {
+  display: none !important;
+}
+
+/* --- Original: show pre-change state --- */
+.folio-root--original .docx-insertion {
+  display: none !important;
+}
+.folio-root--original .docx-deletion {
+  color: inherit !important;
+  text-decoration: none !important;
+  background: none !important;
+}
+
+/* --- Simple Markup: clean text + subtle left border on changed paragraphs --- */
+.folio-root--simple-markup .docx-insertion {
+  color: inherit !important;
+  text-decoration: none !important;
+  background: none !important;
+}
+.folio-root--simple-markup .docx-deletion {
+  display: none !important;
+}
+/* Paragraphs that contain tracked changes get a left indicator bar */
+
+/* ============================================================================
+ * HEADER / FOOTER EDITING
+ * ============================================================================ */
+
+.layout-page-content {
+  cursor: text;
+}
+
+.layout-page-header,
+.layout-page-footer {
+  cursor: pointer;
+  transition: background-color 150ms;
+}
+
+.layout-page-header:hover,
+.layout-page-footer:hover {
+  background-color: rgba(37, 99, 235, 0.04);
+}
+
+.layout-page-header:empty:hover::after {
+  content: "Double-click to add header";
+  display: block;
+  text-align: center;
+  color: var(--doc-text-subtle);
+  font-size: 11px;
+  padding: 4px 0;
+}
+
+.layout-page-footer:empty:hover::after {
+  content: "Double-click to add footer";
+  display: block;
+  text-align: center;
+  color: var(--doc-text-subtle);
+  font-size: 11px;
+  padding: 4px 0;
+}
+
+.hf-editor-pm .ProseMirror {
+  outline: none;
+  min-height: 40px;
+  padding: 4px;
+}
+
+.hf-editor-pm .ProseMirror:focus {
+  outline: none;
+}
+
+.hf-editor-pm .ProseMirror p {
+  display: block;
+  margin: 0;
+  padding: 0;
+  min-height: 1em;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: normal;
+}
+
+.paged-editor--hf-editing .layout-page-content {
+  opacity: 0.4;
+  pointer-events: none;
+  transition: opacity 150ms;
+}
+
+.paged-editor--editing-header .layout-page-header {
+  border-bottom: 1px dotted var(--doc-primary);
+}
+
+.paged-editor--editing-footer .layout-page-footer {
+  border-top: 1px dotted var(--doc-primary);
+}
+
+.paged-editor--editing-header .layout-page-header > * {
+  visibility: hidden;
+}
+
+.paged-editor--editing-footer .layout-page-footer > * {
+  visibility: hidden;
+}
+
+.paged-editor--hf-editing .layout-page-header:hover,
+.paged-editor--hf-editing .layout-page-footer:hover {
+  background-color: transparent;
+}
+
+/* Section break indicator */
+.docx-section-break::after {
+  content: "Section Break (" attr(data-section-break) ")";
+  display: block;
+  text-align: center;
+  font-size: 9px;
+  color: var(--doc-text-muted);
+  border-top: 1px dashed var(--doc-border);
+  margin-top: 4px;
+  padding-top: 2px;
+  pointer-events: none;
+}
+

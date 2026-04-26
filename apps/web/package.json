@@ -28,6 +28,7 @@
     "@posthog/react": "^1.9.0",
     "@stella/api": "workspace:*",
     "@stella/case-law": "workspace:*",
+    "@stella/folio": "workspace:*",
     "@stella/permissions": "workspace:*",
     "@stella/template-conditions": "workspace:*",
     "@stella/ui": "workspace:*",

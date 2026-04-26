@@ -41,6 +41,11 @@ import {
 } from "@stella/ui/components/alert-dialog";
 import { Button } from "@stella/ui/components/button";
 import {
+  ColorPicker,
+  ColorPickerContent,
+  DEFAULT_PRESETS,
+} from "@stella/ui/components/color-picker";
+import {
   Menu,
   MenuItem,
   MenuPopup,
@@ -48,7 +53,6 @@ import {
 } from "@stella/ui/components/menu";
 import {
   Popover,
-  PopoverClose,
   PopoverPopup,
   PopoverTrigger,
 } from "@stella/ui/components/popover";
@@ -65,8 +69,6 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
-import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
-import { optionColors } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 
 type KanbanColumnProps = {
   title: string;
@@ -290,26 +292,10 @@ export const KanbanColumn = ({
     setEditValue(title);
   };
 
-  const colorPickerGrid = (
-    <div className="grid grid-cols-8 gap-0.5">
-      {optionColors.map((c) => (
-        <PopoverClose
-          key={c}
-          render={
-            <Button
-              data-pressed={c === optionColor ? true : undefined}
-              onClick={() => onChangeColor?.(c)}
-              size="icon-sm"
-              type="button"
-              variant="ghost"
-            />
-          }
-        >
-          <SelectColorIcon color={c} />
-        </PopoverClose>
-      ))}
-    </div>
-  );
+  const handleColorSelect = (value: string) => {
+    // SAFETY: DEFAULT_PRESETS values match OptionColor names
+    onChangeColor?.(value);
+  };
 
   const hasColumnActions = onChangeColor ?? onHideColumn ?? onDeleteAll;
 
@@ -343,24 +329,18 @@ export const KanbanColumn = ({
       )}
       <div className="flex items-center gap-2 px-3 py-2">
         {color && onChangeColor ? (
-          <Popover modal>
-            <PopoverTrigger
-              render={
-                <button className="shrink-0 cursor-pointer" type="button" />
-              }
-            >
+          <ColorPicker
+            value={optionColor}
+            onSelect={handleColorSelect}
+            side="bottom"
+          >
+            <button className="shrink-0 cursor-pointer" type="button">
               <span
                 className="block size-2.5 rounded-full"
                 style={{ backgroundColor: color }}
               />
-            </PopoverTrigger>
-            <PopoverPopup
-              className="*:data-[slot=popover-viewport]:p-1!"
-              side="bottom"
-            >
-              {colorPickerGrid}
-            </PopoverPopup>
-          </Popover>
+            </button>
+          </ColorPicker>
         ) : color ? (
           <span
             className="size-2.5 rounded-full"
@@ -414,7 +394,13 @@ export const KanbanColumn = ({
                     className="*:data-[slot=popover-viewport]:p-1!"
                     side="right"
                   >
-                    {colorPickerGrid}
+                    <ColorPickerContent
+                      columns={9}
+                      defaultExpanded={false}
+                      onSelect={handleColorSelect}
+                      presets={DEFAULT_PRESETS}
+                      value={optionColor}
+                    />
                   </PopoverPopup>
                 </Popover>
               )}

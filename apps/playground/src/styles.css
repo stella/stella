@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+/* Scan folio + ui sources for Tailwind utility classes */
+@source "../../../packages/folio/src";
+@source "../../../packages/ui/src";
+
+/* Import Stella's actual globals — provides all semantic tokens.
+ * The --doc-* vars in editor.css reference these via var(--background) etc. */
+@import "../../../packages/ui/src/styles/globals.css";

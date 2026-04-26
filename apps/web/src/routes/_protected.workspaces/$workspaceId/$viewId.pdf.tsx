@@ -15,7 +15,7 @@ import {
   createFileRoute,
   stripSearchParams,
 } from "@tanstack/react-router";
-import { UploadIcon } from "lucide-react";
+import { PencilIcon, UploadIcon } from "lucide-react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -23,6 +23,7 @@ import * as v from "valibot";
 import { Button } from "@stella/ui/components/button";
 
 import { api } from "@/lib/api";
+import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { toAPIError } from "@/lib/errors";
 import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
@@ -59,6 +60,7 @@ export const Route = createFileRoute(
     ),
     pdfPage: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
     panel: v.optional(v.picklist(["versions"])),
+    editing: v.optional(v.boolean()),
   }),
   search: {
     middlewares: [stripSearchParams({ pdfPage: 1 })],
@@ -242,6 +244,21 @@ function RouteComponentInner({
     }
   };
 
+  const editing = Route.useSearch({ select: (s) => s.editing === true });
+  const navigate = Route.useNavigate();
+
+  // Find the active file field to determine mimeType and propertyId
+  const activeFileField = entity.fields.find((f) => {
+    if (f.content.type !== "file") {
+      return false;
+    }
+    return f.id === fieldId;
+  });
+  const isDocxFile =
+    activeFileField?.content.type === "file" &&
+    activeFileField.content.mimeType === DOCX_MIME;
+  const filePropertyId = activeFileField?.propertyId;
+
   const showVersions = sidebar === "versions" || panel === "versions";
   const sidebarOpen = sidebar !== "none" || panel === "versions";
 
@@ -276,31 +293,61 @@ function RouteComponentInner({
           </>
         )}
 
-        {/* Center: PDF viewer or redline comparison */}
+        {/* Center: DOCX editor, PDF viewer, or redline comparison */}
         <Panel>
-          <VersionDropZone
-            disabled={!!compareState}
-            entityId={entityId}
-            workspaceId={workspaceId}
-          >
-            {compareState ? (
-              <RedlineOverlay
-                compareState={compareState}
-                onClose={() => setCompareState(null)}
-              />
-            ) : (
-              <PDFProvider
-                key={fieldId}
-                fieldId={fieldId}
-                initialScaleOffset={scaleOffset}
-                startPage={pageNumber}
-                fallback={{ suspense: <PDFSuspenseFallback /> }}
-              >
-                <AnonymizeScrollSync />
-                <PdfViewer />
-              </PDFProvider>
-            )}
-          </VersionDropZone>
+          {editing && isDocxFile && filePropertyId ? (
+            <DocxBrowserEditor
+              entityId={entityId}
+              onClose={() => {
+                void navigate({
+                  search: (prev) => ({ ...prev, editing: undefined }),
+                });
+              }}
+              propertyId={filePropertyId}
+              workspaceId={workspaceId}
+            />
+          ) : (
+            <VersionDropZone
+              disabled={!!compareState}
+              entityId={entityId}
+              workspaceId={workspaceId}
+            >
+              {/* "Edit in browser" button for DOCX files */}
+              {isDocxFile && !compareState && (
+                <div className="absolute top-2 right-2 z-10">
+                  <Button
+                    onClick={() => {
+                      void navigate({
+                        search: (prev) => ({ ...prev, editing: true }),
+                      });
+                    }}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <PencilIcon />
+                    Edit in browser
+                  </Button>
+                </div>
+              )}
+              {compareState ? (
+                <RedlineOverlay
+                  compareState={compareState}
+                  onClose={() => setCompareState(null)}
+                />
+              ) : (
+                <PDFProvider
+                  key={fieldId}
+                  fieldId={fieldId}
+                  initialScaleOffset={scaleOffset}
+                  startPage={pageNumber}
+                  fallback={{ suspense: <PDFSuspenseFallback /> }}
+                >
+                  <AnonymizeScrollSync />
+                  <PdfViewer />
+                </PDFProvider>
+              )}
+            </VersionDropZone>
+          )}
         </Panel>
 
         {/* Right panel: entity metadata / anonymize */}

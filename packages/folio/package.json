@@ -1,0 +1,68 @@
+{
+  "name": "@stella/folio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A modern .docx-compatible document editor for the browser",
+  "license": "MIT",
+  "author": "STLL",
+  "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./editor.css": "./src/styles/editor.css",
+    "./fonts.css": "./src/styles/fonts.css",
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs packages/folio",
+    "format": "oxfmt .",
+    "test:visual": "bunx playwright test",
+    "test:visual:update": "bunx playwright test --update-snapshots",
+    "test:visual:report": "bunx playwright show-report"
+  },
+  "dependencies": {
+    "@fontsource/arimo": "^5.2.8",
+    "@fontsource/caladea": "^5.2.8",
+    "@fontsource/carlito": "^5.2.8",
+    "@fontsource/cousine": "^5.2.7",
+    "@fontsource/tinos": "^5.2.7",
+    "@stella/docx-utils": "workspace:*",
+    "@stella/ui": "workspace:*",
+    "fast-xml-parser": "^5.7.1",
+    "jszip": "catalog:",
+    "lucide-react": "catalog:",
+    "prosemirror-commands": "^1.5.2",
+    "prosemirror-dropcursor": "^1.8.2",
+    "prosemirror-history": "^1.4.0",
+    "prosemirror-keymap": "^1.2.2",
+    "prosemirror-model": "^1.19.4",
+    "prosemirror-state": "^1.4.3",
+    "prosemirror-tables": "^1.8.5",
+    "prosemirror-transform": "^1.10.2",
+    "prosemirror-view": "^1.32.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "fast-check": "^4.7.0",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0",
+    "use-intl": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "use-intl": {
+      "optional": true
+    }
+  }
+}

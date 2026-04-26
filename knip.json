@@ -78,6 +78,10 @@
         "src/lib/*.ts",
         "src/styles/globals.css"
       ]
+    },
+    "packages/folio": {
+      "entry": ["src/index.ts", "src/styles/*.css"],
+      "ignore": ["src/**/*.test.ts", "src/**/*.test.tsx", "tests/**"]
     }
   },
   "ignore": [".oxlint-plugins/**", ".claude/**"],

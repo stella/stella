@@ -11,19 +11,47 @@ export const isPropertyValid = (property: WorkspaceProperty) => {
   return property.tool.prompt.trim().length > 0;
 };
 
-type ColorVariants = {
+export type ColorVariants = {
   background: string;
   foreground: string;
   color: string;
 };
 
-const optionVar = (name: OptionColor | "empty"): ColorVariants => ({
+/** Named preset colors with CSS variable references. */
+const NAMED_COLORS = [
+  "red",
+  "orange",
+  "amber",
+  "yellow",
+  "lime",
+  "green",
+  "emerald",
+  "teal",
+  "cyan",
+  "sky",
+  "blue",
+  "indigo",
+  "violet",
+  "purple",
+  "fuchsia",
+  "gray",
+] as const;
+
+type NamedColor = (typeof NAMED_COLORS)[number];
+
+const optionVar = (name: NamedColor | "empty"): ColorVariants => ({
   background: `var(--option-${name}-bg)`,
   foreground: `var(--option-${name}-fg)`,
   color: `var(--option-${name})`,
 });
 
-export const optionColorsMap: Record<OptionColor, ColorVariants> = {
+const hexVar = (hex: string): ColorVariants => ({
+  background: `color-mix(in srgb, #${hex} 12%, var(--background))`,
+  foreground: `color-mix(in srgb, #${hex} 50%, var(--foreground))`,
+  color: `#${hex}`,
+});
+
+const namedColorsMap: Record<NamedColor, ColorVariants> = {
   red: optionVar("red"),
   orange: optionVar("orange"),
   amber: optionVar("amber"),
@@ -44,9 +72,25 @@ export const optionColorsMap: Record<OptionColor, ColorVariants> = {
 
 export const emptyColor: ColorVariants = optionVar("empty");
 
-// SAFETY: optionColorsMap keys are OptionColor
-// eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-export const optionColors = Object.keys(optionColorsMap) as OptionColor[];
+/** Resolve any OptionColor (named or hex) to CSS color variants. */
+export const resolveOptionColor = (
+  color: OptionColor,
+): ColorVariants => {
+  const named = namedColorsMap[color as NamedColor];
+  if (named) {
+    return named;
+  }
+  return hexVar(color);
+};
+
+/** Backward compat: keyed by named colors only. Use resolveOptionColor for hex support. */
+export const optionColorsMap = namedColorsMap as Record<
+  string,
+  ColorVariants
+>;
+
+/** The 16 named preset color keys. */
+export const optionColors: OptionColor[] = [...NAMED_COLORS];
 
 export const downloadFile = (blob: Blob, fileName: string) => {
   const url = URL.createObjectURL(blob);
