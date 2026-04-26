@@ -34,7 +34,7 @@ import { prepareBatch } from "@/api/lib/workflow/utils";
 // ── Redis keys ─────────────────────────────────────────
 const WORKFLOW_KEY_PREFIX = "workflow";
 
-const workflowKey = (workspaceId: string, field: string) =>
+const workflowKey = (workspaceId: SafeId<"workspace">, field: string) =>
   `${WORKFLOW_KEY_PREFIX}:${workspaceId}:${field}`;
 
 // ── Queue name ─────────────────────────────────────────
@@ -78,7 +78,7 @@ const getQueue = (): Queue => {
  * Check if a workflow is currently running for a workspace.
  */
 export const isWorkflowRunning = async (
-  workspaceId: string,
+  workspaceId: SafeId<"workspace">,
 ): Promise<boolean> => {
   const val = await getRedis().get(workflowKey(workspaceId, "running"));
   return val === "1";
@@ -309,7 +309,7 @@ const processEntityJob = async (data: EntityJobData) => {
   }
 
   // Broadcast entity invalidation so frontend refetches
-  broadcastInvalidation(workspaceId, ["entities", workspaceId]);
+  broadcastInvalidation(branded.workspaceId, ["entities", branded.workspaceId]);
 
   await onEntityCompleted(branded.workspaceId, branded.organizationId, userId);
 };
@@ -574,7 +574,10 @@ const setFieldsStatus = async ({
   });
 };
 
-const broadcastWorkflowStatus = (workspaceId: string, running: boolean) => {
+const broadcastWorkflowStatus = (
+  workspaceId: SafeId<"workspace">,
+  running: boolean,
+) => {
   broadcastInvalidation(workspaceId, ["workspaces", workspaceId, "workflow"]);
   if (!running) {
     broadcastInvalidation(workspaceId, ["entities", workspaceId]);
@@ -582,7 +585,7 @@ const broadcastWorkflowStatus = (workspaceId: string, running: boolean) => {
 };
 
 const broadcastInvalidation = (
-  workspaceId: string,
+  workspaceId: SafeId<"workspace">,
   queryKey: readonly string[],
 ) => {
   broadcast(workspaceId, { type: "invalidate-query", data: queryKey });

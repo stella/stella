@@ -6,7 +6,9 @@ import { t } from "elysia";
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
+import type { SafeId, ValidatedOrgUserId } from "@/api/lib/branded-types";
+import { validateOrgUserId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const resolveRateQuerySchema = t.Object({
   userId: t.String({ minLength: 1 }),
@@ -18,11 +20,28 @@ const resolveRateHandler = createSafeHandler(
     permissions: { workspace: ["read"] },
     query: resolveRateQuerySchema,
   },
-  async function* ({ safeDb, workspaceId, query }) {
+  async function* ({ safeDb, workspaceId, session, query }) {
+    const userId = query.userId;
+    const validatedUserId = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await validateOrgUserId(tx, userId, session.activeOrganizationId),
+      ),
+    );
+
+    if (!validatedUserId) {
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "User is not a member of this organization",
+        }),
+      );
+    }
+
     const result = yield* resolveRate({
       safeDb,
       workspaceId,
-      userId: query.userId,
+      userId: validatedUserId,
       dateWorked: query.date,
     });
 
@@ -38,7 +57,7 @@ const resolveRate = async function* ({
 }: {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
-  userId: string;
+  userId: ValidatedOrgUserId;
   dateWorked: string;
 }): AsyncGenerator<
   Err<never, SafeDbError>,

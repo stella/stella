@@ -156,6 +156,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
     "./.oxlint-plugins/security-guards.ts",
+    "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
   ],
 
   overrides: [
@@ -419,6 +420,25 @@ export default defineConfig({
       },
     },
     {
+      files: ["apps/api/src/handlers/**/*.ts", "apps/api/src/lib/**/*.ts"],
+      rules: {
+        "no-unbranded-ownership-id-param/no-unbranded-ownership-id-param":
+          "error",
+      },
+    },
+    {
+      // Brand-minting boundary: these files must accept raw strings
+      // and produce SafeId values; the rule cannot help here.
+      files: [
+        "apps/api/src/lib/branded-types.ts",
+        "apps/api/src/lib/safe-id-boundaries.ts",
+      ],
+      rules: {
+        "no-unbranded-ownership-id-param/no-unbranded-ownership-id-param":
+          "off",
+      },
+    },
+    {
       files: ["apps/api/src/handlers/**/*.ts"],
       rules: {
         "no-body-ownership-ids/no-body-ownership-ids": "error",
@@ -474,6 +494,7 @@ export default defineConfig({
         "typescript/unbound-method": "off",
         "no-body-ownership-ids/no-body-ownership-ids": "off",
         "no-untyped-updates/no-untyped-updates": "off",
+        "no-unbranded-ownership-id-param/no-unbranded-ownership-id-param": "off",
         "no-raw-colors/no-raw-colors": "off",
         "no-physical-properties/no-physical-properties": "off",
         "security-guards/no-raw-filename-write": "off",

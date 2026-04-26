@@ -1,6 +1,7 @@
 import Elysia from "elysia";
 
 import { workspaceAccessMacro } from "@/api/lib/auth";
+import type { SafeId } from "@/api/lib/branded-types";
 import { subscribe } from "@/api/lib/sse";
 
 /**
@@ -15,26 +16,37 @@ export const workspaceEventsRoute = new Elysia({
 })
   .use(workspaceAccessMacro)
   .guard({ validateWorkspaceAccess: true })
-  .get("/events", ({ request, session, workspaceId }) => {
-    if (new URL(request.url).searchParams.has("token")) {
-      return new Response("Token query parameter is not supported", {
-        status: 400,
-      });
-    }
-
-    // Create the SSE stream. Use the request's abort signal to
-    // clean up when the client disconnects.
-    const stream = subscribe(
+  .get(
+    "/events",
+    ({
+      request,
+      session,
       workspaceId,
-      session.activeOrganizationId,
-      request.signal,
-    );
+    }: {
+      request: Request;
+      session: { activeOrganizationId: SafeId<"organization"> };
+      workspaceId: SafeId<"workspace">;
+    }) => {
+      if (new URL(request.url).searchParams.has("token")) {
+        return new Response("Token query parameter is not supported", {
+          status: 400,
+        });
+      }
 
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache, no-store",
-        Connection: "keep-alive",
-      },
-    });
-  });
+      // Create the SSE stream. Use the request's abort signal to
+      // clean up when the client disconnects.
+      const stream = subscribe(
+        workspaceId,
+        session.activeOrganizationId,
+        request.signal,
+      );
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache, no-store",
+          Connection: "keep-alive",
+        },
+      });
+    },
+  );

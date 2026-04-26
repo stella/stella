@@ -13,6 +13,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tUuid } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -23,7 +24,10 @@ import {
   toReference,
   toScopeKey,
 } from "@/api/lib/matter-reference";
-import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedUserId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
 
 const config = {
   permissions: { workspace: ["create"] },
@@ -50,9 +54,6 @@ const createWorkspaces = createSafeRootHandler(
           body.memberUserIds === undefined
             ? []
             : Array.from(new Set(body.memberUserIds));
-        const workspaceMemberUserIds = Array.from(
-          new Set([user.id, ...requestedMemberUserIds]),
-        );
 
         const orgFilter = eq(workspaces.organizationId, organizationId);
 
@@ -118,6 +119,16 @@ const createWorkspaces = createSafeRootHandler(
             message: "Some users are not members of this organization",
           };
         }
+
+        // Membership verified above — brand each requested user ID.
+        // Combined with the session user.id, this gives a typed list
+        // of org-validated members for the insert below.
+        const workspaceMemberUserIds = Array.from(
+          new Set([
+            user.id,
+            ...requestedMemberUserIds.map((id) => brandPersistedUserId(id)),
+          ]),
+        );
 
         if (activeCount >= LIMITS.workspacesCount) {
           return {
@@ -194,7 +205,7 @@ const createWorkspaces = createSafeRootHandler(
         const workspaceId = brandPersistedWorkspaceId(body.id);
 
         await tx.insert(workspaceMembers).values(
-          workspaceMemberUserIds.map((userId) => ({
+          workspaceMemberUserIds.map((userId: SafeId<"user">) => ({
             workspaceId,
             userId,
           })),

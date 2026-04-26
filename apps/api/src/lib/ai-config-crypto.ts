@@ -10,6 +10,7 @@
 import * as v from "valibot";
 
 import type { OrgAIConfig } from "@/api/lib/ai-models";
+import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 
@@ -41,7 +42,7 @@ export const isOrgAIConfig = (value: unknown): value is OrgAIConfig =>
  * aiConfigEncrypted / aiConfigIv columns.
  */
 export const encryptAIConfig = async (
-  organizationId: string,
+  organizationId: SafeId<"organization">,
   config: OrgAIConfig,
 ): Promise<EncryptedContent> =>
   await encryptContent(organizationId, JSON.stringify(config));
@@ -53,7 +54,7 @@ export const encryptAIConfig = async (
  * to guard against corruption or tampering.
  */
 export const decryptAIConfig = async (
-  organizationId: string,
+  organizationId: SafeId<"organization">,
   ciphertext: Buffer,
   iv: Buffer,
 ): Promise<OrgAIConfig> => {
