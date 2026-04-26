@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import type * as PDFJS from "pdfjs-dist";
 
 import { DEFAULT_PDF_WIDTH } from "@/lib/pdf/consts";
 import { parseAttachments } from "@/lib/pdf/parse-attachments";
@@ -9,6 +10,8 @@ import type { PDFViewerCode } from "@/lib/pdf/pdf-errors";
 import { loadPdfjs } from "@/lib/pdf/pdfjs-loader";
 import type { PDFDocumentProxy, PDFPageProxy } from "@/lib/pdf/pdfjs-loader";
 import { getPageId } from "@/lib/pdf/utils";
+
+type PasswordResponses = typeof PDFJS.PasswordResponses;
 
 export type PDFDocument = {
   document: PDFDocumentProxy;
@@ -41,17 +44,15 @@ const isPasswordException = (
 
 const parsePasswordException = (
   error: unknown,
-  // eslint-disable-next-line typescript/no-explicit-any
-  PasswordResponses: any,
+  passwordResponses: PasswordResponses | null,
 ): { code: PDFViewerCode; message: string } | null => {
-  if (!isPasswordException(error)) {
+  if (!isPasswordException(error) || passwordResponses === null) {
     return null;
   }
 
   return {
     code:
-      // eslint-disable-next-line typescript/no-unsafe-member-access
-      error.code === PasswordResponses.INCORRECT_PASSWORD
+      error.code === passwordResponses.INCORRECT_PASSWORD
         ? "INCORRECT_PASSWORD"
         : "PASSWORD_REQUIRED",
     message: error.message,
@@ -116,7 +117,7 @@ export const loadPDF = async ({
   buffer,
   password,
 }: LoadPDFProps): Promise<Result<PDFDocument, PDFViewerError>> => {
-  let passwordResponses: unknown = null;
+  let passwordResponses: PasswordResponses | null = null;
 
   const documentResult = await Result.tryPromise({
     try: async () => {

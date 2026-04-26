@@ -56,7 +56,7 @@ export const TextColorExtension = createMarkExtension({
         ...(themeShade !== undefined ? { themeShade } : {}),
       };
       const style = textToStyle({ color: colorAttrs });
-      const cssColor: unknown = style["color"];
+      const cssColor: unknown = style.color;
       const cssString =
         typeof cssColor === "string" && cssColor ? `color: ${cssColor}` : "";
       return ["span", { style: cssString }, 0];

@@ -41,6 +41,10 @@ type EventMap<T> = {
 
 type EventHandler<T> = (data: T) => void;
 
+type ListenerMap<T> = {
+  [K in keyof EventMap<T>]: Set<EventHandler<EventMap<T>[K]>>;
+};
+
 const sleep = async (ms: number) =>
   await new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
@@ -63,9 +67,13 @@ export class UploadQueue<T> {
   private concurrency: number;
   private uploadFn: UploadFn<T>;
   private rateLimitTimer: ReturnType<typeof setTimeout> | null = null;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private listeners = new Map<string, Set<EventHandler<any>>>();
+  private listeners: ListenerMap<T> = {
+    done: new Set(),
+    progress: new Set(),
+    "rate-limited": new Set(),
+    resumed: new Set(),
+    "state-change": new Set(),
+  };
 
   constructor(uploadFn: UploadFn<T>, concurrency = 5) {
     this.uploadFn = uploadFn;
@@ -92,20 +100,15 @@ export class UploadQueue<T> {
     event: K,
     handler: EventHandler<EventMap<T>[K]>,
   ): () => void {
-    const handlers =
-      this.listeners.get(event) ?? new Set<EventHandler<EventMap<T>[K]>>();
+    const handlers = this.listeners[event];
     handlers.add(handler);
-    this.listeners.set(event, handlers);
     return () => {
       handlers.delete(handler);
     };
   }
 
   private emit<K extends keyof EventMap<T>>(event: K, data: EventMap<T>[K]) {
-    const handlers = this.listeners.get(event);
-    if (!handlers) {
-      return;
-    }
+    const handlers = this.listeners[event];
     for (const handler of handlers) {
       handler(data);
     }
