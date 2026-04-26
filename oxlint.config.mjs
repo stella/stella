@@ -152,7 +152,6 @@ export default defineConfig({
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
-    "./.oxlint-plugins/no-handler-try-catch.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
@@ -613,7 +612,6 @@ export default defineConfig({
       files: ["apps/api/src/handlers/**/*.ts"],
       rules: {
         "no-body-ownership-ids/no-body-ownership-ids": "error",
-        "no-handler-try-catch/no-handler-try-catch": "warn",
         "no-untyped-updates/no-untyped-updates": "error",
         "security-guards/no-unscoped-user-query": "warn",
         "no-restricted-imports": [

@@ -5,9 +5,9 @@ import { t } from "elysia";
 import { workspaceMembers } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import { PG_ERROR } from "@/api/lib/pg-error";
 
 const addWorkspaceMemberBodySchema = t.Object({
   userId: t.String({ maxLength: 128 }),
@@ -45,46 +45,40 @@ const addWorkspaceMember = createSafeHandler(
       );
     }
 
-    const txResult = yield* Result.await(
-      safeDb(async (tx) => {
-        // Lock rows then count to serialize concurrent adds.
-        // PG rejects FOR UPDATE with aggregate functions, so
-        // we select rows first and count in application code.
-        const lockedRows = await tx
-          .select({ id: workspaceMembers.id })
-          .from(workspaceMembers)
-          .where(eq(workspaceMembers.workspaceId, workspaceId))
-          .for("update");
+    const txResult = await safeDb(async (tx) => {
+      // Lock rows then count to serialize concurrent adds.
+      // PG rejects FOR UPDATE with aggregate functions, so
+      // we select rows first and count in application code.
+      const lockedRows = await tx
+        .select({ id: workspaceMembers.id })
+        .from(workspaceMembers)
+        .where(eq(workspaceMembers.workspaceId, workspaceId))
+        .for("update");
 
-        if (lockedRows.length >= LIMITS.workspaceMembersCount) {
-          return { ok: false as const, reason: "limit" as const };
-        }
+      if (lockedRows.length >= LIMITS.workspaceMembersCount) {
+        return { ok: false as const, reason: "limit" as const };
+      }
 
-        try {
-          const rows = await tx
-            .insert(workspaceMembers)
-            .values({
-              workspaceId,
-              userId: body.userId,
-            })
-            .returning({
-              id: workspaceMembers.id,
-              userId: workspaceMembers.userId,
-              createdAt: workspaceMembers.createdAt,
-            });
+      const rows = await tx
+        .insert(workspaceMembers)
+        .values({
+          workspaceId,
+          userId: body.userId,
+        })
+        .returning({
+          id: workspaceMembers.id,
+          userId: workspaceMembers.userId,
+          createdAt: workspaceMembers.createdAt,
+        });
 
-          return { ok: true as const, rows };
-        } catch (error) {
-          if (isPgError(error, PG_ERROR.UNIQUE_VIOLATION)) {
-            return { ok: false as const, reason: "duplicate" as const };
-          }
-          throw error;
-        }
-      }),
-    );
+      return { ok: true as const, rows };
+    });
 
-    if (!txResult.ok) {
-      if (txResult.reason === "duplicate") {
+    if (Result.isError(txResult)) {
+      if (
+        DatabaseError.is(txResult.error) &&
+        txResult.error.code === PG_ERROR.UNIQUE_VIOLATION
+      ) {
         return Result.err(
           new HandlerError({
             status: 409,
@@ -92,6 +86,10 @@ const addWorkspaceMember = createSafeHandler(
           }),
         );
       }
+      return Result.err(txResult.error);
+    }
+
+    if (!txResult.value.ok) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -100,7 +98,7 @@ const addWorkspaceMember = createSafeHandler(
       );
     }
 
-    const [created] = txResult.rows;
+    const [created] = txResult.value.rows;
     return Result.ok(created);
   },
 );

@@ -66,11 +66,11 @@ type ClientTemplateManifest = {
 const parseClientManifest = (value: unknown): ClientTemplateManifest | null => {
   let parsed: unknown = value;
   if (typeof value === "string") {
-    try {
-      parsed = JSON.parse(value);
-    } catch {
+    const parseResult = Result.try((): unknown => JSON.parse(value));
+    if (Result.isError(parseResult)) {
       return null;
     }
+    parsed = parseResult.value;
   }
   if (!isRecord(parsed)) {
     return null;

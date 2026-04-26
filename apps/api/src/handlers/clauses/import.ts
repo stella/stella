@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import type { SafeDb, Transaction } from "@/api/db";
 import { clauseCategories, clauses, clauseVersions } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -33,15 +34,14 @@ const importHandler = async function* ({
 }: ImportProps) {
   const text = await file.text();
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
+  const parseResult = Result.try((): unknown => JSON.parse(text));
+  if (Result.isError(parseResult)) {
     return Result.err(
       new HandlerError({ status: 400, message: "Invalid JSON file" }),
     );
   }
 
+  const parsed = parseResult.value;
   if (!isClauseExportPayload(parsed)) {
     return Result.err(
       new HandlerError({
@@ -187,15 +187,15 @@ const importHandler = async function* ({
     );
 
     for (const c of newClauses) {
-      updateSearchVector(
-        safeDb,
-        c.id,
-        c.title,
-        c.description,
-        c.body,
-        // TODO: fix this
-        // oxlint-disable-next-line no-empty-function
-      ).catch(() => {});
+      void updateSearchVector(safeDb, c.id, c.title, c.description, c.body)
+        .then((searchVectorResult) => {
+          if (Result.isError(searchVectorResult)) {
+            captureError(searchVectorResult.error, { clauseId: c.id });
+          }
+        })
+        .catch((error: unknown) => {
+          captureError(error, { clauseId: c.id });
+        });
     }
   }
 

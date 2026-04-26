@@ -45,13 +45,12 @@ type UpdateTemplateProps = {
 };
 
 const parseManifest = (json: string): TemplateManifest | null => {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch {
+  const parseResult = Result.try((): unknown => JSON.parse(json));
+  if (Result.isError(parseResult)) {
     return null;
   }
 
+  const parsed = parseResult.value;
   return isTemplateManifest(parsed) ? parsed : null;
 };
 

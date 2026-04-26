@@ -24,16 +24,18 @@ type DecodedCursor = {
 };
 
 const decodeCursor = (cursor: string): DecodedCursor | null => {
-  try {
-    const decoded = Buffer.from(cursor, "base64").toString("utf-8");
-    const [displayName, id] = decoded.split("\0");
-    if (!displayName || !id) {
-      return null;
-    }
-    return { displayName, id: toSafeId<"contact">(id) };
-  } catch {
+  const decodeResult = Result.try(() =>
+    Buffer.from(cursor, "base64").toString("utf-8"),
+  );
+  if (Result.isError(decodeResult)) {
     return null;
   }
+
+  const [displayName, id] = decodeResult.value.split("\0");
+  if (!displayName || !id) {
+    return null;
+  }
+  return { displayName, id: toSafeId<"contact">(id) };
 };
 
 const encodeCursor = (displayName: string, id: string): string =>

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db";
@@ -27,19 +28,23 @@ export const updateSearchVector = async (
   description: string | null | undefined,
   body: ClauseBody,
 ) => {
-  const bodyText = bodyToPlainText(body);
+  const updateResult = await Result.tryPromise(async () => {
+    const bodyText = bodyToPlainText(body);
 
-  await safeDb((tx) =>
-    tx
-      .update(clauses)
-      .set({
-        searchVector: sql`to_tsvector(
+    return await safeDb((tx) =>
+      tx
+        .update(clauses)
+        .set({
+          searchVector: sql`to_tsvector(
         'english',
         ${title} || ' ' ||
         coalesce(${description ?? null}, '') || ' ' ||
         ${bodyText}
       )`,
-      })
-      .where(sql`${clauses.id} = ${clauseId}`),
-  );
+        })
+        .where(sql`${clauses.id} = ${clauseId}`),
+    );
+  });
+
+  return Result.flatten(updateResult);
 };

@@ -6,8 +6,8 @@ import { contacts, workspaces } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const config = {
@@ -26,63 +26,62 @@ const config = {
 const updateWorkspace = createSafeHandler(
   config,
   async function* ({ safeDb, session, workspaceId, body }) {
-    const txResult = yield* Result.await(
-      safeDb(async (tx) => {
-        if (body.clientId) {
-          const client = await tx
-            .select({ id: contacts.id })
-            .from(contacts)
-            .where(
-              and(
-                eq(contacts.id, body.clientId),
-                eq(contacts.organizationId, session.activeOrganizationId),
-              ),
-            )
-            .for("update")
-            .limit(1)
-            .then((rows) => rows.at(0) ?? null);
+    const txResult = await safeDb(async (tx) => {
+      if (body.clientId) {
+        const client = await tx
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(
+            and(
+              eq(contacts.id, body.clientId),
+              eq(contacts.organizationId, session.activeOrganizationId),
+            ),
+          )
+          .for("update")
+          .limit(1)
+          .then((rows) => rows.at(0) ?? null);
 
-          if (!client) {
-            return {
-              ok: false as const,
-              status: 404 as const,
-              message: "Client not found",
-            };
-          }
+        if (!client) {
+          return {
+            ok: false as const,
+            status: 404 as const,
+            message: "Client not found",
+          };
         }
+      }
 
-        try {
-          await tx
-            .update(workspaces)
-            .set(
-              pickDefined(body, [
-                "name",
-                "clientId",
-                "reference",
-                "billingReference",
-                "color",
-              ]),
-            )
-            .where(eq(workspaces.id, workspaceId));
-          return { ok: true as const };
-        } catch (error) {
-          if (isPgError(error, PG_ERROR.UNIQUE_VIOLATION)) {
-            return {
-              ok: false as const,
-              status: 409 as const,
-              message: "Duplicate value",
-            };
-          }
-          throw error;
-        }
-      }),
-    );
+      await tx
+        .update(workspaces)
+        .set(
+          pickDefined(body, [
+            "name",
+            "clientId",
+            "reference",
+            "billingReference",
+            "color",
+          ]),
+        )
+        .where(eq(workspaces.id, workspaceId));
+      return { ok: true as const };
+    });
 
-    if (!txResult.ok) {
-      return Result.err(
+    if (Result.isError(txResult)) {
+      if (
+        DatabaseError.is(txResult.error) &&
+        txResult.error.code === PG_ERROR.UNIQUE_VIOLATION
+      ) {
+        return yield* Result.err(
+          new HandlerError({ status: 409, message: "Duplicate value" }),
+        );
+      }
+      return yield* Result.err(txResult.error);
+    }
+
+    if (!txResult.value.ok) {
+      return yield* Result.err(
         new HandlerError({
-          status: txResult.status,
-          message: txResult.message,
+          status: txResult.value.status,
+          message: txResult.value.message,
         }),
       );
     }

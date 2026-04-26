@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
 import { clauses, clauseVersions } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -122,16 +123,15 @@ const createClauseHandler = async function* ({
   // Best-effort: if the search vector update fails the clause
   // is still persisted; it will be unsearchable until the next
   // update re-indexes it.
-  try {
-    await updateSearchVector(
-      safeDb,
-      clauseId,
-      body.title,
-      body.description,
-      body.body,
-    );
-  } catch {
-    // Intentionally swallowed; see comment above.
+  const searchVectorResult = await updateSearchVector(
+    safeDb,
+    clauseId,
+    body.title,
+    body.description,
+    body.body,
+  );
+  if (Result.isError(searchVectorResult)) {
+    captureError(searchVectorResult.error, { clauseId });
   }
 
   return Result.ok(inserted);
