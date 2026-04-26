@@ -47,10 +47,10 @@ const scrollToAnchor = (anchorId: string, container: HTMLElement | null) => {
   container.scrollTo({ top: offset, behavior: "instant" });
 
   // Trigger CSS highlight animation
-  delete el.dataset.highlight;
+  delete el.dataset["highlight"];
   // Force reflow so removing and re-adding triggers the animation
   void el.offsetWidth;
-  el.dataset.highlight = "";
+  el.dataset["highlight"] = "";
 };
 
 const HeadingNode = ({

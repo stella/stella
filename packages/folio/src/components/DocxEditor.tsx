@@ -22,8 +22,26 @@ import {
 } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
+import {
+  CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  EyeIcon,
+  MessageSquarePlusIcon,
+  PenLineIcon,
+  XIcon,
+} from "lucide-react";
 import type { Plugin as ProseMirrorPlugin } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
+import { useTranslations } from "use-intl";
+
+import {
+  Select as StSelect,
+  SelectItem as StSelectItem,
+  SelectPopup as StSelectPopup,
+  SelectTrigger as StSelectTrigger,
+  SelectValue as StSelectValue,
+} from "@stella/ui/components/select";
 
 import { repackDocx } from "../core/docx/rezip";
 import { attemptSelectiveSave } from "../core/docx/selectiveSave";
@@ -121,7 +139,6 @@ import type {
   EndnoteProperties,
 } from "../core/types/document";
 import { resolveColor } from "../core/utils/colorResolver";
-import { useTranslations } from "use-intl";
 import type { DocxInput } from "../core/utils/docxInput";
 import { onFontsLoaded } from "../core/utils/fontLoader";
 import type { HeadingInfo } from "../core/utils/headingCollector";
@@ -129,28 +146,6 @@ import { collectHeadings } from "../core/utils/headingCollector";
 import { pointsToHalfPoints } from "../core/utils/units";
 import { useDocumentHistory } from "../hooks/useHistory";
 import { useTableSelection } from "../hooks/useTableSelection";
-
-import { useDocumentLoader } from "./hooks/useDocumentLoader";
-import { useHeaderFooterEditor } from "./hooks/useHeaderFooterEditor";
-
-import {
-  CheckIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  EyeIcon,
-  MessageSquarePlusIcon,
-  PenLineIcon,
-  XIcon,
-} from "lucide-react";
-
-import {
-  Select as StSelect,
-  SelectItem as StSelectItem,
-  SelectPopup as StSelectPopup,
-  SelectTrigger as StSelectTrigger,
-  SelectValue as StSelectValue,
-} from "@stella/ui/components/select";
-
 // Paginated editor
 import { PagedEditor } from "../paged-editor/PagedEditor";
 import type { PagedEditorRef } from "../paged-editor/PagedEditor";
@@ -158,12 +153,9 @@ import type { PagedEditorRef } from "../paged-editor/PagedEditor";
 import type { RenderedDomContext } from "../plugin-api/types";
 import { CommentsSidebar } from "./CommentsSidebar";
 import type { TrackedChangeEntry } from "./CommentsSidebar";
+import { useHyperlinkDialog } from "./dialogs/HyperlinkDialog";
 // Dialog hooks and utilities (static imports — lightweight, no UI)
 import { useFindReplace as useFindReplaceState } from "./dialogs/useFindReplace";
-import { useFindReplace } from "./hooks/useFindReplace";
-import { useHyperlinkDialog } from "./dialogs/HyperlinkDialog";
-import { useHyperlinkHandlers } from "./hooks/useHyperlinkHandlers";
-import { useImageHandlers } from "./hooks/useImageHandlers";
 import {
   DefaultLoadingIndicator,
   DefaultPlaceholder,
@@ -171,6 +163,11 @@ import {
 } from "./DocxEditorHelpers";
 import { ErrorBoundary, ErrorProvider } from "./ErrorBoundary";
 import { FormattingBar } from "./FormattingBar";
+import { useDocumentLoader } from "./hooks/useDocumentLoader";
+import { useFindReplace } from "./hooks/useFindReplace";
+import { useHeaderFooterEditor } from "./hooks/useHeaderFooterEditor";
+import { useHyperlinkHandlers } from "./hooks/useHyperlinkHandlers";
+import { useImageHandlers } from "./hooks/useImageHandlers";
 import { InlineHeaderFooterEditor } from "./InlineHeaderFooterEditor";
 import type { InlineHeaderFooterEditorRef } from "./InlineHeaderFooterEditor";
 import { TextContextMenu } from "./TextContextMenu";
@@ -189,9 +186,11 @@ import { Tooltip } from "./ui/Tooltip";
 // a toast provider (e.g., in the standalone playground).
 const toast = (msg: string) => {
   const existing = document.querySelector("[data-folio-toast]");
-  if (existing) {return;} // debounce rapid calls (e.g., key repeat)
+  if (existing) {
+    return;
+  } // debounce rapid calls (e.g., key repeat)
   const el = document.createElement("div");
-  el.dataset.folioToast = "";
+  el.dataset["folioToast"] = "";
   el.textContent = msg;
   Object.assign(el.style, {
     position: "fixed",
@@ -440,8 +439,8 @@ function findSelectionYPosition(
   const elements = pagesEl.querySelectorAll("[data-pm-start]");
   for (const node of elements) {
     const el = node as HTMLElement;
-    const pmStart = Number(el.dataset.pmStart);
-    const pmEnd = Number(el.dataset.pmEnd);
+    const pmStart = Number(el.dataset["pmStart"]);
+    const pmEnd = Number(el.dataset["pmEnd"]);
     if (pmPos >= pmStart && pmPos <= pmEnd) {
       return (
         el.getBoundingClientRect().top - parentEl.getBoundingClientRect().top
@@ -613,8 +612,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         return;
       }
       const { doc, schema } = view.state;
-      const insertionType = schema.marks.insertion;
-      const deletionType = schema.marks.deletion;
+      const insertionType = schema.marks["insertion"];
+      const deletionType = schema.marks["deletion"];
       if (!insertionType && !deletionType) {
         return;
       }
@@ -629,13 +628,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             const entry: TrackedChangeEntry = {
               type: mark.type === insertionType ? "insertion" : "deletion",
               text: node.text || "",
-              author: (mark.attrs.author as string) || "",
+              author: (mark.attrs["author"] as string) || "",
               from: pos,
               to: pos + node.nodeSize,
-              revisionId: mark.attrs.revisionId as number,
+              revisionId: mark.attrs["revisionId"] as number,
             };
-            if (mark.attrs.date) {
-              entry.date = mark.attrs.date as string;
+            if (mark.attrs["date"]) {
+              entry.date = mark.attrs["date"] as string;
             }
             raw.push(entry);
           }
@@ -1072,15 +1071,18 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           if (selectedNode?.type.name === "image") {
             pmImageCtx = {
               pos: sel.from,
-              wrapType: (selectedNode.attrs.wrapType as string) ?? "inline",
+              wrapType: (selectedNode.attrs["wrapType"] as string) ?? "inline",
               displayMode:
-                (selectedNode.attrs.displayMode as string) ?? "inline",
-              cssFloat: (selectedNode.attrs.cssFloat as string) ?? null,
-              transform: (selectedNode.attrs.transform as string) ?? null,
-              alt: (selectedNode.attrs.alt as string) ?? null,
-              borderWidth: (selectedNode.attrs.borderWidth as number) ?? null,
-              borderColor: (selectedNode.attrs.borderColor as string) ?? null,
-              borderStyle: (selectedNode.attrs.borderStyle as string) ?? null,
+                (selectedNode.attrs["displayMode"] as string) ?? "inline",
+              cssFloat: (selectedNode.attrs["cssFloat"] as string) ?? null,
+              transform: (selectedNode.attrs["transform"] as string) ?? null,
+              alt: (selectedNode.attrs["alt"] as string) ?? null,
+              borderWidth:
+                (selectedNode.attrs["borderWidth"] as number) ?? null,
+              borderColor:
+                (selectedNode.attrs["borderColor"] as string) ?? null,
+              borderStyle:
+                (selectedNode.attrs["borderStyle"] as string) ?? null,
             };
           }
         }
@@ -1106,8 +1108,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                     const range = findChangeAtPosition(view.state, from, from);
                     trackedChange = {
                       type: mark.type.name as "insertion" | "deletion",
-                      author: (mark.attrs.author as string) || "Unknown",
-                      date: (mark.attrs.date as string) || null,
+                      author: (mark.attrs["author"] as string) || "Unknown",
+                      date: (mark.attrs["date"] as string) || null,
                       from: range.from,
                       to: range.to,
                     };
@@ -1184,18 +1186,42 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           subscript: textFormatting.vertAlign === "subscript",
           bidi: !!paragraphFormatting.bidi,
         };
-        if (textFormatting.bold !== undefined) { formatting.bold = textFormatting.bold; }
-        if (textFormatting.italic !== undefined) { formatting.italic = textFormatting.italic; }
-        if (textFormatting.strike !== undefined) { formatting.strike = textFormatting.strike; }
-        if (fontFamily !== undefined) { formatting.fontFamily = fontFamily; }
-        if (fontSize !== undefined) { formatting.fontSize = fontSize; }
-        if (textColor !== undefined) { formatting.color = textColor; }
-        if (textFormatting.highlight !== undefined) { formatting.highlight = textFormatting.highlight; }
-        if (paragraphFormatting.alignment !== undefined) { formatting.alignment = paragraphFormatting.alignment; }
-        if (paragraphFormatting.lineSpacing !== undefined) { formatting.lineSpacing = paragraphFormatting.lineSpacing; }
-        if (listState !== undefined) { formatting.listState = listState; }
-        if (selectionState.styleId) { formatting.styleId = selectionState.styleId; }
-        if (paragraphFormatting.indentLeft !== undefined) { formatting.indentLeft = paragraphFormatting.indentLeft; }
+        if (textFormatting.bold !== undefined) {
+          formatting.bold = textFormatting.bold;
+        }
+        if (textFormatting.italic !== undefined) {
+          formatting.italic = textFormatting.italic;
+        }
+        if (textFormatting.strike !== undefined) {
+          formatting.strike = textFormatting.strike;
+        }
+        if (fontFamily !== undefined) {
+          formatting.fontFamily = fontFamily;
+        }
+        if (fontSize !== undefined) {
+          formatting.fontSize = fontSize;
+        }
+        if (textColor !== undefined) {
+          formatting.color = textColor;
+        }
+        if (textFormatting.highlight !== undefined) {
+          formatting.highlight = textFormatting.highlight;
+        }
+        if (paragraphFormatting.alignment !== undefined) {
+          formatting.alignment = paragraphFormatting.alignment;
+        }
+        if (paragraphFormatting.lineSpacing !== undefined) {
+          formatting.lineSpacing = paragraphFormatting.lineSpacing;
+        }
+        if (listState !== undefined) {
+          formatting.listState = listState;
+        }
+        if (selectionState.styleId) {
+          formatting.styleId = selectionState.styleId;
+        }
+        if (paragraphFormatting.indentLeft !== undefined) {
+          formatting.indentLeft = paragraphFormatting.indentLeft;
+        }
         setState((prev) => ({
           ...prev,
           selectionFormatting: formatting,
@@ -1334,10 +1360,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               const selectedText = getSelectedText(view.state);
               const existingLink = getHyperlinkAttrs(view.state);
               if (existingLink) {
-                const linkData: import("./dialogs/HyperlinkDialog").HyperlinkData = {
-                  url: existingLink.href,
-                  displayText: selectedText,
-                };
+                const linkData: import("./dialogs/HyperlinkDialog").HyperlinkData =
+                  {
+                    url: existingLink.href,
+                    displayText: selectedText,
+                  };
                 if (existingLink.tooltip) {
                   linkData.tooltip = existingLink.tooltip;
                 }
@@ -1560,11 +1587,19 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                       ] as const) {
                         const bs = b[side];
                         if (bs) {
-                          const borderEntry: { style: string; size?: number; color?: { rgb: string } } = {
+                          const borderEntry: {
+                            style: string;
+                            size?: number;
+                            color?: { rgb: string };
+                          } = {
                             style: bs.style,
                           };
-                          if (bs.size !== undefined) { borderEntry.size = bs.size; }
-                          if (bs.color?.rgb) { borderEntry.color = { rgb: bs.color.rgb }; }
+                          if (bs.size !== undefined) {
+                            borderEntry.size = bs.size;
+                          }
+                          if (bs.color?.rgb) {
+                            borderEntry.color = { rgb: bs.color.rgb };
+                          }
                           preset.tableBorders[side] = borderEntry;
                         }
                       }
@@ -1574,7 +1609,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                       for (const cond of docStyle.tblStylePr) {
                         const entry: Record<string, unknown> = {};
                         if (cond.tcPr?.shading?.fill) {
-                          entry.backgroundColor = `#${cond.tcPr.shading.fill}`;
+                          entry["backgroundColor"] =
+                            `#${cond.tcPr.shading.fill}`;
                         }
                         if (cond.tcPr?.borders) {
                           const borders: Record<string, unknown> = {};
@@ -1595,13 +1631,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                               };
                             }
                           }
-                          entry.borders = borders;
+                          entry["borders"] = borders;
                         }
                         if (cond.rPr?.bold) {
-                          entry.bold = true;
+                          entry["bold"] = true;
                         }
                         if (cond.rPr?.color?.rgb) {
-                          entry.color = `#${cond.rPr.color.rgb}`;
+                          entry["color"] = `#${cond.rPr.color.rgb}`;
                         }
                         // SAFETY: preset.conditionals is Record<string, ...>; entry satisfies its value type
                         preset.conditionals[cond.type] = entry as NonNullable<
@@ -1621,9 +1657,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                   const styleArg: Parameters<typeof applyTableStyle>[0] = {
                     styleId: preset.id,
                   };
-                  if (preset.tableBorders) { styleArg.tableBorders = preset.tableBorders; }
-                  if (preset.conditionals) { styleArg.conditionals = preset.conditionals; }
-                  if (preset.look) { styleArg.look = preset.look; }
+                  if (preset.tableBorders) {
+                    styleArg.tableBorders = preset.tableBorders;
+                  }
+                  if (preset.conditionals) {
+                    styleArg.conditionals = preset.conditionals;
+                  }
+                  if (preset.look) {
+                    styleArg.look = preset.look;
+                  }
                   applyTableStyle(styleArg)(view.state, view.dispatch);
                 }
               }
@@ -1785,11 +1827,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           // Check if we're editing an existing link
           const existingLink = getHyperlinkAttrs(view.state);
           if (existingLink) {
-            const editData: import("./dialogs/HyperlinkDialog").HyperlinkData = {
-              url: existingLink.href,
-              displayText: selectedText,
-            };
-            if (existingLink.tooltip) { editData.tooltip = existingLink.tooltip; }
+            const editData: import("./dialogs/HyperlinkDialog").HyperlinkData =
+              {
+                url: existingLink.href,
+                displayText: selectedText,
+              };
+            if (existingLink.tooltip) {
+              editData.tooltip = existingLink.tooltip;
+            }
             hyperlinkDialog.openEdit(editData);
           } else {
             hyperlinkDialog.openInsert(selectedText);
@@ -1856,8 +1901,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                   action.value,
                 );
                 const styleAttrs: Parameters<typeof applyStyle>[1] = {};
-                if (resolved.paragraphFormatting) { styleAttrs.paragraphFormatting = resolved.paragraphFormatting; }
-                if (resolved.runFormatting) { styleAttrs.runFormatting = resolved.runFormatting; }
+                if (resolved.paragraphFormatting) {
+                  styleAttrs.paragraphFormatting = resolved.paragraphFormatting;
+                }
+                if (resolved.runFormatting) {
+                  styleAttrs.runFormatting = resolved.runFormatting;
+                }
                 applyStyle(action.value, styleAttrs)(view.state, view.dispatch);
               } else {
                 // No styles available, just set the styleId
@@ -2125,7 +2174,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               from,
             );
             setCommentSelectionRange({ from, to });
-            const commentMarkType = view.state.schema.marks.comment;
+            const commentMarkType = view.state.schema.marks["comment"];
             if (!commentMarkType) {
               return;
             }
@@ -2316,7 +2365,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const handleDirectPrint = useCallback(() => {
       toast(t("printRedirect"));
     }, [t]);
-
 
     // Expose ref methods
     useImperativeHandle(
@@ -2517,7 +2565,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         <ToolbarButton
           onClick={() => {
             const view = pagedEditorRef.current?.getView();
-            if (!view) {return;}
+            if (!view) {
+              return;
+            }
             const { from, to } = view.state.selection;
             const range = findChangeAtPosition(view.state, from, to);
             acceptChange(range.from, range.to)(view.state, view.dispatch);
@@ -2531,7 +2581,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         <ToolbarButton
           onClick={() => {
             const view = pagedEditorRef.current?.getView();
-            if (!view) {return;}
+            if (!view) {
+              return;
+            }
             const { from, to } = view.state.selection;
             const range = findChangeAtPosition(view.state, from, to);
             rejectChange(range.from, range.to)(view.state, view.dispatch);
@@ -2545,7 +2597,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         <ToolbarButton
           onClick={() => {
             const view = pagedEditorRef.current?.getView();
-            if (!view) {return;}
+            if (!view) {
+              return;
+            }
             const { from } = view.state.selection;
             const change = findPreviousChange(view.state, from);
             if (change) {
@@ -2570,7 +2624,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         <ToolbarButton
           onClick={() => {
             const view = pagedEditorRef.current?.getView();
-            if (!view) {return;}
+            if (!view) {
+              return;
+            }
             const { to } = view.state.selection;
             const change = findNextChange(view.state, to);
             if (change) {
@@ -2642,9 +2698,17 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                       onOpenImageProperties={handleOpenImageProperties}
                       onTableAction={handleTableAction}
                       inlineExtra={toolbarInlineExtra}
-                      {...(history.state?.package.styles?.styles ? { documentStyles: history.state.package.styles.styles } : {})}
-                      {...(state.pmImageContext ? { imageContext: state.pmImageContext } : {})}
-                      {...(state.pmTableContext ? { tableContext: state.pmTableContext } : {})}
+                      {...(history.state?.package.styles?.styles
+                        ? {
+                            documentStyles: history.state.package.styles.styles,
+                          }
+                        : {})}
+                      {...(state.pmImageContext
+                        ? { imageContext: state.pmImageContext }
+                        : {})}
+                      {...(state.pmTableContext
+                        ? { tableContext: state.pmTableContext }
+                        : {})}
                     >
                       {toolbarChildren}
                     </FormattingBar>
@@ -2686,7 +2750,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                         footerContent={footerContent}
                         firstPageHeaderContent={firstPageHeaderContent}
                         firstPageFooterContent={firstPageFooterContent}
-                        {...(history.state?.package.styles ? { styles: history.state.package.styles } : {})}
+                        {...(history.state?.package.styles
+                          ? { styles: history.state.package.styles }
+                          : {})}
                         onHeaderFooterDoubleClick={
                           handleHeaderFooterDoubleClick
                         }
@@ -2695,7 +2761,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                         zoom={state.zoom}
                         readOnly={readOnly}
                         onDocumentChange={handleDocumentChange}
-                        {...(extensionManager !== undefined ? { extensionManager } : {})}
+                        {...(extensionManager !== undefined
+                          ? { extensionManager }
+                          : {})}
                         onSelectionChange={(_from, _to) => {
                           // Extract full selection state from PM and use the standard handler
                           const view = pagedEditorRef.current?.getView();
@@ -2713,8 +2781,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                           // oxlint-disable-next-line typescript/no-non-null-assertion
                           onEditorViewReady?.(editorRef.getView()!);
                         }}
-                        {...(onRenderedDomContextReady ? { onRenderedDomContextReady } : {})}
-                        {...(pluginOverlays !== undefined ? { pluginOverlays } : {})}
+                        {...(onRenderedDomContextReady
+                          ? { onRenderedDomContextReady }
+                          : {})}
+                        {...(pluginOverlays !== undefined
+                          ? { pluginOverlays }
+                          : {})}
                         onHyperlinkClick={handleHyperlinkClick}
                         onContextMenu={handleContextMenu}
                         commentsSidebarOpen={showCommentsSidebar}
@@ -2758,17 +2830,20 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                                 const comment = createComment(addText, author);
                                 // Replace pending comment mark with the real comment ID
                                 const view = pagedEditorRef.current?.getView();
-                                const commentMark = view?.state.schema.marks.comment;
-                                if (view && commentMark && commentSelectionRange) {
+                                const commentMark =
+                                  view?.state.schema.marks["comment"];
+                                if (
+                                  view &&
+                                  commentMark &&
+                                  commentSelectionRange
+                                ) {
                                   const { from, to } = commentSelectionRange;
-                                  const pendingMark =
-                                    commentMark.create({
-                                      commentId: PENDING_COMMENT_ID,
-                                    });
-                                  const realMark =
-                                    commentMark.create({
-                                      commentId: comment.id,
-                                    });
+                                  const pendingMark = commentMark.create({
+                                    commentId: PENDING_COMMENT_ID,
+                                  });
+                                  const realMark = commentMark.create({
+                                    commentId: comment.id,
+                                  });
                                   const tr = view.state.tr
                                     .removeMark(from, to, pendingMark)
                                     .addMark(from, to, realMark);
@@ -2788,13 +2863,17 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                               onCancelAddComment={() => {
                                 // Remove pending comment highlight
                                 const view = pagedEditorRef.current?.getView();
-                                const cancelCommentMark = view?.state.schema.marks.comment;
-                                if (view && cancelCommentMark && commentSelectionRange) {
+                                const cancelCommentMark =
+                                  view?.state.schema.marks["comment"];
+                                if (
+                                  view &&
+                                  cancelCommentMark &&
+                                  commentSelectionRange
+                                ) {
                                   const { from, to } = commentSelectionRange;
-                                  const pendingMark =
-                                    cancelCommentMark.create({
-                                      commentId: PENDING_COMMENT_ID,
-                                    });
+                                  const pendingMark = cancelCommentMark.create({
+                                    commentId: PENDING_COMMENT_ID,
+                                  });
                                   view.dispatch(
                                     view.state.tr.removeMark(
                                       from,
@@ -2851,15 +2930,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                                 e.preventDefault();
                                 e.stopPropagation();
                                 const view = pagedEditorRef.current?.getView();
-                                const btnCommentMark = view?.state.schema.marks.comment;
+                                const btnCommentMark =
+                                  view?.state.schema.marks["comment"];
                                 if (view && btnCommentMark) {
                                   const { from, to } = view.state.selection;
                                   if (from !== to) {
                                     setCommentSelectionRange({ from, to });
-                                    const pendingMark =
-                                      btnCommentMark.create({
-                                        commentId: PENDING_COMMENT_ID,
-                                      });
+                                    const pendingMark = btnCommentMark.create({
+                                      commentId: PENDING_COMMENT_ID,
+                                    });
                                     const tr = view.state.tr.addMark(
                                       from,
                                       to,
@@ -2957,7 +3036,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                             : hfEditPosition === "header"
                               ? headerContent
                               : footerContent;
-                          if (!activeHf) {return null;}
+                          if (!activeHf) {
+                            return null;
+                          }
                           const targetEl = getHfTargetElement(hfEditPosition);
                           const parentEl = editorContentRef.current;
                           if (!targetEl || !parentEl) {
@@ -2974,7 +3055,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                               onClose={() => setHfEditPosition(null)}
                               onSelectionChange={handleSelectionChange}
                               onRemove={handleRemoveHeaderFooter}
-                              {...(history.state?.package.styles ? { styles: history.state.package.styles } : {})}
+                              {...(history.state?.package.styles
+                                ? { styles: history.state.package.styles }
+                                : {})}
                             />
                           );
                         })()}
@@ -3067,9 +3150,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                   onClose={hyperlinkDialog.close}
                   onSubmit={handleHyperlinkSubmit}
                   isEditing={hyperlinkDialog.state.isEditing}
-                  {...(hyperlinkDialog.state.isEditing ? { onRemove: handleHyperlinkRemove } : {})}
-                  {...(hyperlinkDialog.state.initialData ? { initialData: hyperlinkDialog.state.initialData } : {})}
-                  {...(hyperlinkDialog.state.selectedText ? { selectedText: hyperlinkDialog.state.selectedText } : {})}
+                  {...(hyperlinkDialog.state.isEditing
+                    ? { onRemove: handleHyperlinkRemove }
+                    : {})}
+                  {...(hyperlinkDialog.state.initialData
+                    ? { initialData: hyperlinkDialog.state.initialData }
+                    : {})}
+                  {...(hyperlinkDialog.state.selectedText
+                    ? { selectedText: hyperlinkDialog.state.selectedText }
+                    : {})}
                 />
               )}
               {tablePropsOpen && (
@@ -3082,7 +3171,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                       setTableProperties(props)(view.state, view.dispatch);
                     }
                   }}
-                  {...(state.pmTableContext?.table?.attrs ? { currentProps: state.pmTableContext.table.attrs as Record<string, unknown> } : {})}
+                  {...(state.pmTableContext?.table?.attrs
+                    ? {
+                        currentProps: state.pmTableContext.table
+                          .attrs as Record<string, unknown>,
+                      }
+                    : {})}
                 />
               )}
               {imagePositionOpen && (
@@ -3097,14 +3191,29 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                   isOpen={imagePropsOpen}
                   onClose={() => setImagePropsOpen(false)}
                   onApply={handleApplyImageProperties}
-                  {...(state.pmImageContext ? { currentData: (() => {
-                    const data: Record<string, string | number> = {};
-                    if (state.pmImageContext.alt != null) { data.alt = state.pmImageContext.alt; }
-                    if (state.pmImageContext.borderWidth != null) { data.borderWidth = state.pmImageContext.borderWidth; }
-                    if (state.pmImageContext.borderColor != null) { data.borderColor = state.pmImageContext.borderColor; }
-                    if (state.pmImageContext.borderStyle != null) { data.borderStyle = state.pmImageContext.borderStyle; }
-                    return data as import("./dialogs/ImagePropertiesDialog").ImagePropertiesData;
-                  })() } : {})}
+                  {...(state.pmImageContext
+                    ? {
+                        currentData: (() => {
+                          const data: Record<string, string | number> = {};
+                          if (state.pmImageContext.alt != null) {
+                            data["alt"] = state.pmImageContext.alt;
+                          }
+                          if (state.pmImageContext.borderWidth != null) {
+                            data["borderWidth"] =
+                              state.pmImageContext.borderWidth;
+                          }
+                          if (state.pmImageContext.borderColor != null) {
+                            data["borderColor"] =
+                              state.pmImageContext.borderColor;
+                          }
+                          if (state.pmImageContext.borderStyle != null) {
+                            data["borderStyle"] =
+                              state.pmImageContext.borderStyle;
+                          }
+                          return data as import("./dialogs/ImagePropertiesDialog").ImagePropertiesData;
+                        })(),
+                      }
+                    : {})}
                 />
               )}
               {showPageSetup && (
@@ -3112,7 +3221,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                   isOpen={showPageSetup}
                   onClose={() => setShowPageSetup(false)}
                   onApply={handlePageSetupApply}
-                  {...(history.state?.package.document?.finalSectionProperties ? { currentProps: history.state.package.document.finalSectionProperties } : {})}
+                  {...(history.state?.package.document?.finalSectionProperties
+                    ? {
+                        currentProps:
+                          history.state.package.document.finalSectionProperties,
+                      }
+                    : {})}
                 />
               )}
               {footnotePropsOpen && (
@@ -3120,8 +3234,22 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                   isOpen={footnotePropsOpen}
                   onClose={() => setFootnotePropsOpen(false)}
                   onApply={handleApplyFootnoteProperties}
-                  {...(history.state?.package.document?.finalSectionProperties?.footnotePr ? { footnotePr: history.state.package.document.finalSectionProperties.footnotePr } : {})}
-                  {...(history.state?.package.document?.finalSectionProperties?.endnotePr ? { endnotePr: history.state.package.document.finalSectionProperties.endnotePr } : {})}
+                  {...(history.state?.package.document?.finalSectionProperties
+                    ?.footnotePr
+                    ? {
+                        footnotePr:
+                          history.state.package.document.finalSectionProperties
+                            .footnotePr,
+                      }
+                    : {})}
+                  {...(history.state?.package.document?.finalSectionProperties
+                    ?.endnotePr
+                    ? {
+                        endnotePr:
+                          history.state.package.document.finalSectionProperties
+                            .endnotePr,
+                      }
+                    : {})}
                 />
               )}
             </Suspense>
@@ -3144,4 +3272,3 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
 // ============================================================================
 // EXPORTS
 // ============================================================================
-

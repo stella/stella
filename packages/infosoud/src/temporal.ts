@@ -192,9 +192,9 @@ const toNormalizedRaw = (value: string | null | undefined): string | null => {
 const parseDateParts = (value: string): DateParts | null => {
   const isoMatch = ISO_DATE_PATTERN.exec(value);
   if (isoMatch?.groups) {
-    const year = parseInteger(isoMatch.groups.year);
-    const month = parseInteger(isoMatch.groups.month);
-    const day = parseInteger(isoMatch.groups.day);
+    const year = parseInteger(isoMatch.groups["year"]);
+    const month = parseInteger(isoMatch.groups["month"]);
+    const day = parseInteger(isoMatch.groups["day"]);
     if (year !== null && month !== null && day !== null) {
       return { day, month, year };
     }
@@ -202,9 +202,9 @@ const parseDateParts = (value: string): DateParts | null => {
 
   const czechMatch = CZECH_DATE_PATTERN.exec(value);
   if (czechMatch?.groups) {
-    const year = parseInteger(czechMatch.groups.year);
-    const month = parseInteger(czechMatch.groups.month);
-    const day = parseInteger(czechMatch.groups.day);
+    const year = parseInteger(czechMatch.groups["year"]);
+    const month = parseInteger(czechMatch.groups["month"]);
+    const day = parseInteger(czechMatch.groups["day"]);
     if (year !== null && month !== null && day !== null) {
       return { day, month, year };
     }
@@ -216,12 +216,12 @@ const parseDateParts = (value: string): DateParts | null => {
 const parseDateTimeParts = (value: string): DateTimeParts | null => {
   const isoMatch = ISO_DATE_TIME_PATTERN.exec(value);
   if (isoMatch?.groups) {
-    const year = parseInteger(isoMatch.groups.year);
-    const month = parseInteger(isoMatch.groups.month);
-    const day = parseInteger(isoMatch.groups.day);
-    const hour = parseInteger(isoMatch.groups.hour);
-    const minute = parseInteger(isoMatch.groups.minute);
-    const second = parseInteger(isoMatch.groups.second) ?? 0;
+    const year = parseInteger(isoMatch.groups["year"]);
+    const month = parseInteger(isoMatch.groups["month"]);
+    const day = parseInteger(isoMatch.groups["day"]);
+    const hour = parseInteger(isoMatch.groups["hour"]);
+    const minute = parseInteger(isoMatch.groups["minute"]);
+    const second = parseInteger(isoMatch.groups["second"]) ?? 0;
     if (
       year !== null &&
       month !== null &&
@@ -235,12 +235,12 @@ const parseDateTimeParts = (value: string): DateTimeParts | null => {
 
   const czechMatch = CZECH_DATE_TIME_PATTERN.exec(value);
   if (czechMatch?.groups) {
-    const year = parseInteger(czechMatch.groups.year);
-    const month = parseInteger(czechMatch.groups.month);
-    const day = parseInteger(czechMatch.groups.day);
-    const hour = parseInteger(czechMatch.groups.hour);
-    const minute = parseInteger(czechMatch.groups.minute);
-    const second = parseInteger(czechMatch.groups.second) ?? 0;
+    const year = parseInteger(czechMatch.groups["year"]);
+    const month = parseInteger(czechMatch.groups["month"]);
+    const day = parseInteger(czechMatch.groups["day"]);
+    const hour = parseInteger(czechMatch.groups["hour"]);
+    const minute = parseInteger(czechMatch.groups["minute"]);
+    const second = parseInteger(czechMatch.groups["second"]) ?? 0;
     if (
       year !== null &&
       month !== null &&

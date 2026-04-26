@@ -371,10 +371,10 @@ export const czUsAdapter: SourceAdapter = {
                     const { abstract, legalSentence } =
                       extractAbstract(absHtml);
                     if (abstract) {
-                      decision.metadata.abstract = abstract;
+                      decision.metadata["abstract"] = abstract;
                     }
                     if (legalSentence) {
-                      decision.metadata.legalSentence = legalSentence;
+                      decision.metadata["legalSentence"] = legalSentence;
                     }
                     // Include abstract HTML in sourceRaw
                     decision.sourceRaw = JSON.stringify({

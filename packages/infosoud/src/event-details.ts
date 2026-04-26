@@ -136,14 +136,14 @@ export const getHearingEventDetailSummary = (
   const attributes = getEventAttributeMap(detail);
 
   return {
-    cancelled: parseCzechBoolean(attributes.JED_ZRUS),
-    hearingType: attributes.JED_DRUH ?? null,
-    result: attributes.JED_VYSLED ?? null,
-    resultRecordedOn: attributes.JED_D_Z_V ?? null,
-    resultRecordedOnDate: parseInfoSoudDate(attributes.JED_D_Z_V),
-    room: attributes.JED_SIN ?? null,
-    startsAt: attributes.JED_D_ZAC ?? null,
-    startsAtDateTime: parseInfoSoudDateTime(attributes.JED_D_ZAC),
+    cancelled: parseCzechBoolean(attributes["JED_ZRUS"]),
+    hearingType: attributes["JED_DRUH"] ?? null,
+    result: attributes["JED_VYSLED"] ?? null,
+    resultRecordedOn: attributes["JED_D_Z_V"] ?? null,
+    resultRecordedOnDate: parseInfoSoudDate(attributes["JED_D_Z_V"]),
+    room: attributes["JED_SIN"] ?? null,
+    startsAt: attributes["JED_D_ZAC"] ?? null,
+    startsAtDateTime: parseInfoSoudDateTime(attributes["JED_D_ZAC"]),
   };
 };
 
@@ -153,16 +153,16 @@ export const getDecisionEventDetailSummary = (
   const attributes = getEventAttributeMap(detail);
 
   return {
-    cancelled: parseCzechBoolean(attributes.ROZH_ZRUS),
-    cancelledOn: parseInfoSoudDate(attributes.ROZH_D_ZRU),
-    courtLevel: attributes.ROZH_DR_S ?? null,
-    decisionType: attributes.ROZH_DR_RO ?? null,
-    dictatedOn: parseInfoSoudDate(attributes.ROZH_D_DIK),
-    dispatchedOn: parseInfoSoudDate(attributes.ROZH_D_VYP),
-    disposesCase: parseCzechBoolean(attributes.ROZH_KON),
-    finalOn: parseInfoSoudDate(attributes.ROZH_D_PM),
-    issuedOn: parseInfoSoudDate(attributes.ROZH_D_VYD),
-    result: attributes.ROZH_VYS ?? null,
+    cancelled: parseCzechBoolean(attributes["ROZH_ZRUS"]),
+    cancelledOn: parseInfoSoudDate(attributes["ROZH_D_ZRU"]),
+    courtLevel: attributes["ROZH_DR_S"] ?? null,
+    decisionType: attributes["ROZH_DR_RO"] ?? null,
+    dictatedOn: parseInfoSoudDate(attributes["ROZH_D_DIK"]),
+    dispatchedOn: parseInfoSoudDate(attributes["ROZH_D_VYP"]),
+    disposesCase: parseCzechBoolean(attributes["ROZH_KON"]),
+    finalOn: parseInfoSoudDate(attributes["ROZH_D_PM"]),
+    issuedOn: parseInfoSoudDate(attributes["ROZH_D_VYD"]),
+    result: attributes["ROZH_VYS"] ?? null,
   };
 };
 
@@ -174,22 +174,22 @@ export const getAppealSubmissionEventDetailSummary = (
     detail.typOrganizace,
   );
   const submittedAtPostOnRaw = firstNonEmpty(
-    attributes.OP_D_DOSO,
-    attributeScope === "ks" ? undefined : attributes.OP_D_PODA,
+    attributes["OP_D_DOSO"],
+    attributeScope === "ks" ? undefined : attributes["OP_D_PODA"],
   );
   const submittedToCourtOnRaw = firstNonEmpty(
-    attributes.OP_D_DOSLO,
-    attributeScope === "ks" ? attributes.OP_D_PODA : undefined,
+    attributes["OP_D_DOSLO"],
+    attributeScope === "ks" ? attributes["OP_D_PODA"] : undefined,
   );
   const filedOnRaw = firstNonEmpty(submittedAtPostOnRaw, submittedToCourtOnRaw);
 
   return {
-    againstDecisionIssuedOn: parseInfoSoudDate(attributes.OP_D_VYD),
-    againstDecisionType: attributes.OP_D_ROZH ?? null,
-    againstDecisionVenue: attributes.OP_ROZ_PR ?? null,
+    againstDecisionIssuedOn: parseInfoSoudDate(attributes["OP_D_VYD"]),
+    againstDecisionType: attributes["OP_D_ROZH"] ?? null,
+    againstDecisionVenue: attributes["OP_ROZ_PR"] ?? null,
     filedOn: parseInfoSoudDate(filedOnRaw),
-    forwardedToSecondLevelOn: parseInfoSoudDate(attributes.OP_D_P2),
-    remedyType: attributes.OP_DRUH ?? null,
+    forwardedToSecondLevelOn: parseInfoSoudDate(attributes["OP_D_P2"]),
+    remedyType: attributes["OP_DRUH"] ?? null,
     submittedAtPostOn: parseInfoSoudDate(submittedAtPostOnRaw),
     submittedToCourtOn: parseInfoSoudDate(submittedToCourtOnRaw),
   };
@@ -200,18 +200,18 @@ export const getAppealDispositionEventDetailSummary = (
 ): AppealDispositionEventDetailSummary => {
   const attributes = getEventAttributeMap(detail);
   const resolvedOnRaw = firstNonEmpty(
-    attributes.OP_D_VYR,
-    attributes.OP_D_VYD_O,
-    attributes.OP_V_2ST,
+    attributes["OP_D_VYR"],
+    attributes["OP_D_VYD_O"],
+    attributes["OP_V_2ST"],
   );
 
   return {
-    resolutionAbout: attributes.OP_ROZ_O_O ?? null,
-    resolutionDecisionIssuedOn: parseInfoSoudDate(attributes.OP_D_VYD_O),
-    resolutionType: attributes.OP_DR_ROZH ?? null,
-    resolvedBySuperiorCourtOn: parseInfoSoudDate(attributes.OP_V_2ST),
+    resolutionAbout: attributes["OP_ROZ_O_O"] ?? null,
+    resolutionDecisionIssuedOn: parseInfoSoudDate(attributes["OP_D_VYD_O"]),
+    resolutionType: attributes["OP_DR_ROZH"] ?? null,
+    resolvedBySuperiorCourtOn: parseInfoSoudDate(attributes["OP_V_2ST"]),
     resolvedOn: parseInfoSoudDate(resolvedOnRaw),
-    result: attributes.OP_VYSL ?? null,
+    result: attributes["OP_VYSL"] ?? null,
   };
 };
 
@@ -221,21 +221,21 @@ export const getFileTransferEventDetailSummary = (
   const attributes = getEventAttributeMap(detail);
 
   return {
-    expectedReturnOn: parseInfoSoudDate(attributes.OD_SP_D_OV),
-    purpose: attributes.OD_SP_UCEL ?? null,
-    recipient: firstNonEmpty(attributes.OD_SP_KOMU, attributes.OS_VRAC),
+    expectedReturnOn: parseInfoSoudDate(attributes["OD_SP_D_OV"]),
+    purpose: attributes["OD_SP_UCEL"] ?? null,
+    recipient: firstNonEmpty(attributes["OD_SP_KOMU"], attributes["OS_VRAC"]),
     returnedOn: parseInfoSoudDate(
       firstNonEmpty(
-        attributes.OD_SP_D_VR,
-        attributes.OS_SP_D_VR,
-        attributes.VR_SP_D_VR,
+        attributes["OD_SP_D_VR"],
+        attributes["OS_SP_D_VR"],
+        attributes["VR_SP_D_VR"],
       ),
     ),
     sentOn: parseInfoSoudDate(
       firstNonEmpty(
-        attributes.OD_SP_D_OD,
-        attributes.SPIS_KS_D,
-        attributes.SPIS_OD_D,
+        attributes["OD_SP_D_OD"],
+        attributes["SPIS_KS_D"],
+        attributes["SPIS_OD_D"],
       ),
     ),
   };
@@ -247,10 +247,10 @@ export const getCaseTransferEventDetailSummary = (
   const attributes = getEventAttributeMap(detail);
 
   return {
-    destinationCaseMark: attributes.PREVD_SPZN ?? null,
-    destinationCourt: attributes.PREVD_SOUD ?? null,
-    relatedCase: firstNonEmpty(attributes.PO_VEC, attributes.PRED_VEC),
-    transferredOn: parseInfoSoudDate(attributes.PREVD_D_OD),
+    destinationCaseMark: attributes["PREVD_SPZN"] ?? null,
+    destinationCourt: attributes["PREVD_SOUD"] ?? null,
+    relatedCase: firstNonEmpty(attributes["PO_VEC"], attributes["PRED_VEC"]),
+    transferredOn: parseInfoSoudDate(attributes["PREVD_D_OD"]),
   };
 };
 
@@ -260,13 +260,13 @@ export const getStatusEventDetailSummary = (
   const attributes = getEventAttributeMap(detail);
 
   return {
-    detail: attributes.ST_VEC_UPR ?? null,
-    effectiveOn: parseInfoSoudDate(attributes.ST_VEC_D_D),
+    detail: attributes["ST_VEC_UPR"] ?? null,
+    effectiveOn: parseInfoSoudDate(attributes["ST_VEC_D_D"]),
     finalityOn: parseInfoSoudDate(
-      firstNonEmpty(attributes.ROZH_D_PM, attributes.ST_VEC_D_D),
+      firstNonEmpty(attributes["ROZH_D_PM"], attributes["ST_VEC_D_D"]),
     ),
-    resolution: attributes.ST_VEC_ZVR ?? null,
-    status: attributes.STAV_VECI ?? null,
+    resolution: attributes["ST_VEC_ZVR"] ?? null,
+    status: attributes["STAV_VECI"] ?? null,
   };
 };
 

@@ -59,10 +59,10 @@ const DOC_DOWNLOAD_URL = `${BASE_URL}/docDownload`;
  */
 // gitleaks:allow -- public credentials from court's JS bundle
 const CLIENT_ID =
-  process.env.SK_US_CLIENT_ID ?? "id-fab237c0-55ad-9fdf-9b9f-976eef3cbd9";
+  process.env["SK_US_CLIENT_ID"] ?? "id-fab237c0-55ad-9fdf-9b9f-976eef3cbd9";
 // gitleaks:allow -- public credentials from court's JS bundle
 const CLIENT_SECRET =
-  process.env.SK_US_CLIENT_SECRET ??
+  process.env["SK_US_CLIENT_SECRET"] ??
   "secret-579e7b79-b5b2-b22d-c1b3-204386e0447e";
 
 const PAGE_SIZE = 10;
@@ -197,8 +197,8 @@ const isTokenResponse = (
   value: unknown,
 ): value is { access_token: string; expires_in: number } =>
   isRecord(value) &&
-  typeof value.access_token === "string" &&
-  typeof value.expires_in === "number";
+  typeof value["access_token"] === "string" &&
+  typeof value["expires_in"] === "number";
 
 /**
  * Validate only the response envelope. Individual document
@@ -210,9 +210,9 @@ const isTokenResponse = (
  */
 const isSearchResponse = (value: unknown): value is SearchResponse =>
   isRecord(value) &&
-  Array.isArray(value.documents) &&
-  value.documents.every(isRecord) &&
-  typeof value.numFound === "number";
+  Array.isArray(value["documents"]) &&
+  value["documents"].every(isRecord) &&
+  typeof value["numFound"] === "number";
 
 // ── Date parsing ─────────────────────────────────────────
 

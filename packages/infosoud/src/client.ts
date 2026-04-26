@@ -182,13 +182,13 @@ const parseCaseEvent = (value: unknown, context: string): CaseEvent => {
   const record = assertRecord(value, context);
   return {
     datum: readString(record, "datum", context),
-    jednani: assertArray(record.jednani ?? [], `${context}.jednani`),
+    jednani: assertArray(record["jednani"] ?? [], `${context}.jednani`),
     poradi: readNumber(record, "poradi", context),
     udalost: readString(record, "udalost", context),
     udalostId: readNullableNumber(record, "udalostId", context),
-    znackaId: parseCaseMarkId(record.znackaId, `${context}.znackaId`),
+    znackaId: parseCaseMarkId(record["znackaId"], `${context}.znackaId`),
     zruseno: (() => {
-      const zruseno = record.zruseno;
+      const zruseno = record["zruseno"];
       if (typeof zruseno !== "boolean") {
         throw new InfoSoudParseError(`${context}.zruseno must be a boolean`);
       }
@@ -251,9 +251,9 @@ const parseCaseSearchResult = (value: unknown): CaseSearchResult => {
       "nadrizenaOrganizace",
       "CaseSearchResult",
     ),
-    napad: record.napad,
+    napad: record["napad"],
     navazneVeci: assertArray(
-      record.navazneVeci ?? [],
+      record["navazneVeci"] ?? [],
       "CaseSearchResult.navazneVeci",
     ).map((item, index) =>
       parseRelatedCase(item, `CaseSearchResult.navazneVeci[${index}]`),
@@ -264,7 +264,7 @@ const parseCaseSearchResult = (value: unknown): CaseSearchResult => {
     stav: readNullableString(record, "stav", "CaseSearchResult"),
     stavDatum: readNullableString(record, "stavDatum", "CaseSearchResult"),
     typOrganizace: readString(record, "typOrganizace", "CaseSearchResult"),
-    udalosti: assertArray(record.udalosti, "CaseSearchResult.udalosti").map(
+    udalosti: assertArray(record["udalosti"], "CaseSearchResult.udalosti").map(
       (item, index) =>
         parseCaseEvent(item, `CaseSearchResult.udalosti[${index}]`),
     ),
@@ -292,9 +292,11 @@ const parseHearingsSearchResult = (value: unknown): HearingsSearchResult => {
     platneK: readNullableString(record, "platneK", "HearingsSearchResult"),
     rocnik: readNumber(record, "rocnik", "HearingsSearchResult"),
     typ: readString(record, "typ", "HearingsSearchResult"),
-    udalosti: assertArray(record.udalosti, "HearingsSearchResult.udalosti").map(
-      (item, index) =>
-        parseHearingEvent(item, `HearingsSearchResult.udalosti[${index}]`),
+    udalosti: assertArray(
+      record["udalosti"],
+      "HearingsSearchResult.udalosti",
+    ).map((item, index) =>
+      parseHearingEvent(item, `HearingsSearchResult.udalosti[${index}]`),
     ),
   };
 };
@@ -302,7 +304,7 @@ const parseHearingsSearchResult = (value: unknown): HearingsSearchResult => {
 const parseEventDetailResult = (value: unknown): EventDetailResult => {
   const record = assertRecord(value, "EventDetailResult");
   return {
-    atributy: assertArray(record.atributy, "EventDetailResult.atributy").map(
+    atributy: assertArray(record["atributy"], "EventDetailResult.atributy").map(
       (item, index) =>
         parseEventAttribute(item, `EventDetailResult.atributy[${index}]`),
     ),
@@ -319,9 +321,9 @@ const parseEventDetailResult = (value: unknown): EventDetailResult => {
       "nadrizenaOrganizace",
       "EventDetailResult",
     ),
-    napad: record.napad,
+    napad: record["napad"],
     navazneVeci: assertArray(
-      record.navazneVeci ?? [],
+      record["navazneVeci"] ?? [],
       "EventDetailResult.navazneVeci",
     ).map((item, index) =>
       parseRelatedCase(item, `EventDetailResult.navazneVeci[${index}]`),

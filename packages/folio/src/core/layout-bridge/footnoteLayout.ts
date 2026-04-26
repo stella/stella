@@ -142,39 +142,42 @@ export function convertFootnoteToContent(
     for (const content of para.content) {
       const contentObj = content as unknown as Record<string, unknown>;
 
-      if (contentObj.type === "run" && Array.isArray(contentObj.content)) {
-        const formatting = contentObj.formatting as
+      if (
+        contentObj["type"] === "run" &&
+        Array.isArray(contentObj["content"])
+      ) {
+        const formatting = contentObj["formatting"] as
           | Record<string, unknown>
           | undefined;
         const runFormatting: RunFormatting = {};
 
         if (formatting) {
-          if (formatting.bold) {
+          if (formatting["bold"]) {
             runFormatting.bold = true;
           }
-          if (formatting.italic) {
+          if (formatting["italic"]) {
             runFormatting.italic = true;
           }
-          if (formatting.underline) {
+          if (formatting["underline"]) {
             runFormatting.underline = true;
           }
-          if (formatting.strike) {
+          if (formatting["strike"]) {
             runFormatting.strike = true;
           }
-          if (formatting.color) {
-            const color = formatting.color as Record<string, unknown>;
-            if (color.val) {
-              runFormatting.color = `#${color.val}`;
-            } else if (color.rgb) {
-              runFormatting.color = `#${color.rgb}`;
+          if (formatting["color"]) {
+            const color = formatting["color"] as Record<string, unknown>;
+            if (color["val"]) {
+              runFormatting.color = `#${color["val"]}`;
+            } else if (color["rgb"]) {
+              runFormatting.color = `#${color["rgb"]}`;
             }
           }
-          if (formatting.fontSize) {
-            runFormatting.fontSize = (formatting.fontSize as number) / 2; // half-points to points
+          if (formatting["fontSize"]) {
+            runFormatting.fontSize = (formatting["fontSize"] as number) / 2; // half-points to points
           }
-          if (formatting.fontFamily) {
-            const ff = formatting.fontFamily as Record<string, unknown>;
-            runFormatting.fontFamily = (ff.ascii || ff.hAnsi) as string;
+          if (formatting["fontFamily"]) {
+            const ff = formatting["fontFamily"] as Record<string, unknown>;
+            runFormatting.fontFamily = (ff["ascii"] || ff["hAnsi"]) as string;
           }
         }
 
@@ -183,19 +186,19 @@ export function convertFootnoteToContent(
           runFormatting.fontSize = FOOTNOTE_FONT_SIZE;
         }
 
-        for (const rc of contentObj.content as unknown[]) {
+        for (const rc of contentObj["content"] as unknown[]) {
           const rcObj = rc as Record<string, unknown>;
-          if (rcObj.type === "text" && typeof rcObj.text === "string") {
+          if (rcObj["type"] === "text" && typeof rcObj["text"] === "string") {
             runs.push({
               kind: "text",
-              text: rcObj.text,
+              text: rcObj["text"],
               ...runFormatting,
             });
-          } else if (rcObj.type === "tab") {
+          } else if (rcObj["type"] === "tab") {
             runs.push({ kind: "tab", ...runFormatting });
-          } else if (rcObj.type === "break") {
+          } else if (rcObj["type"] === "break") {
             runs.push({ kind: "lineBreak" });
-          } else if (rcObj.type === "footnoteRef") {
+          } else if (rcObj["type"] === "footnoteRef") {
             // Self-reference marker - skip (we prepend the number ourselves)
           }
         }

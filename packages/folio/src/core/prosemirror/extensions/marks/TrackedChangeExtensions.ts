@@ -41,30 +41,30 @@ export const InsertionExtension = createMarkExtension({
         getAttrs(dom) {
           const el = dom as HTMLElement;
           return {
-            revisionId: Number.parseInt(el.dataset.revisionId || "0", 10),
-            author: el.dataset.author || "",
-            date: el.dataset.date || null,
+            revisionId: Number.parseInt(el.dataset["revisionId"] || "0", 10),
+            author: el.dataset["author"] || "",
+            date: el.dataset["date"] || null,
           };
         },
       },
     ],
     toDOM(mark) {
-      const author = mark.attrs.author as string;
+      const author = mark.attrs["author"] as string;
       const idx = getAuthorColorIdx(author ?? "");
       // SAFETY: getAuthorColorIdx returns modulo AUTHOR_COLORS.length
       const color = AUTHOR_COLORS[idx]!;
-      const datePart = mark.attrs.date
-        ? new Date(mark.attrs.date as string).toLocaleDateString()
+      const datePart = mark.attrs["date"]
+        ? new Date(mark.attrs["date"] as string).toLocaleDateString()
         : "";
       const titleParts = [author, datePart].filter(Boolean);
       return [
         "span",
         {
           class: "docx-insertion",
-          "data-revision-id": String(mark.attrs.revisionId),
+          "data-revision-id": String(mark.attrs["revisionId"]),
           "data-author": author,
           "data-tc-author-idx": String(idx),
-          ...(mark.attrs.date ? { "data-date": mark.attrs.date } : {}),
+          ...(mark.attrs["date"] ? { "data-date": mark.attrs["date"] } : {}),
           ...(titleParts.length > 0
             ? { title: `Inserted: ${titleParts.join(", ")}` }
             : {}),
@@ -96,30 +96,30 @@ export const DeletionExtension = createMarkExtension({
         getAttrs(dom) {
           const el = dom as HTMLElement;
           return {
-            revisionId: Number.parseInt(el.dataset.revisionId || "0", 10),
-            author: el.dataset.author || "",
-            date: el.dataset.date || null,
+            revisionId: Number.parseInt(el.dataset["revisionId"] || "0", 10),
+            author: el.dataset["author"] || "",
+            date: el.dataset["date"] || null,
           };
         },
       },
     ],
     toDOM(mark) {
-      const author = mark.attrs.author as string;
+      const author = mark.attrs["author"] as string;
       const idx = getAuthorColorIdx(author ?? "");
       // SAFETY: getAuthorColorIdx returns modulo AUTHOR_COLORS.length
       const color = AUTHOR_COLORS[idx]!;
-      const datePart = mark.attrs.date
-        ? new Date(mark.attrs.date as string).toLocaleDateString()
+      const datePart = mark.attrs["date"]
+        ? new Date(mark.attrs["date"] as string).toLocaleDateString()
         : "";
       const titleParts = [author, datePart].filter(Boolean);
       return [
         "span",
         {
           class: "docx-deletion",
-          "data-revision-id": String(mark.attrs.revisionId),
+          "data-revision-id": String(mark.attrs["revisionId"]),
           "data-author": author,
           "data-tc-author-idx": String(idx),
-          ...(mark.attrs.date ? { "data-date": mark.attrs.date } : {}),
+          ...(mark.attrs["date"] ? { "data-date": mark.attrs["date"] } : {}),
           ...(titleParts.length > 0
             ? { title: `Deleted: ${titleParts.join(", ")}` }
             : {}),

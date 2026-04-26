@@ -683,7 +683,7 @@ export const createDesktopEnv = ({
 });
 
 export const shouldAutoOpenBrowser = ({
-  ci = process.env.CI,
+  ci = process.env["CI"],
   mode,
   noBrowser,
 }: {
@@ -796,7 +796,7 @@ const validateApiHealth = (response: Response, bodyText: string) => {
   }
 
   const payload = readJson(bodyText);
-  if (!isRecord(payload) || payload.status !== "ok") {
+  if (!isRecord(payload) || payload["status"] !== "ok") {
     return "expected JSON body with status=ok";
   }
 
@@ -830,11 +830,11 @@ const validateDesktopBridgeHealth =
     }
 
     const payload = readJson(bodyText);
-    if (!isRecord(payload) || payload.ok !== true) {
+    if (!isRecord(payload) || payload["ok"] !== true) {
       return "expected desktop bridge health payload with ok=true";
     }
 
-    if (payload.bridgePort !== expectedPort) {
+    if (payload["bridgePort"] !== expectedPort) {
       return `expected bridgePort=${String(expectedPort)}`;
     }
 
@@ -1258,8 +1258,8 @@ const main = async () => {
 
   const infraOffset =
     parsedArgs.infraOffset ??
-    (process.env.STELLA_INFRA_OFFSET
-      ? Number.parseInt(process.env.STELLA_INFRA_OFFSET, 10)
+    (process.env["STELLA_INFRA_OFFSET"]
+      ? Number.parseInt(process.env["STELLA_INFRA_OFFSET"], 10)
       : 0);
   if (
     !Number.isInteger(infraOffset) ||
@@ -1288,12 +1288,12 @@ const main = async () => {
 
   const initialOffset = resolveOffset({
     branchName: gitContext.branchName,
-    devInstance: parsedArgs.devInstance ?? process.env.STELLA_DEV_INSTANCE,
+    devInstance: parsedArgs.devInstance ?? process.env["STELLA_DEV_INSTANCE"],
     isWorktree: gitContext.isWorktree,
     portOffset:
       parsedArgs.portOffset ??
-      (process.env.STELLA_PORT_OFFSET
-        ? Number.parseInt(process.env.STELLA_PORT_OFFSET, 10)
+      (process.env["STELLA_PORT_OFFSET"]
+        ? Number.parseInt(process.env["STELLA_PORT_OFFSET"], 10)
         : undefined),
     worktreeName: basename(gitContext.currentRoot),
   });

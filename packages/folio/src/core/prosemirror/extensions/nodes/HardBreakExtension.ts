@@ -18,7 +18,7 @@ export const HardBreakExtension = createNodeExtension({
     },
   },
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
-    const hardBreakType = ctx.schema.nodes.hardBreak!;
+    const hardBreakType = ctx.schema.nodes["hardBreak"]!;
 
     return {
       keyboardShortcuts: {

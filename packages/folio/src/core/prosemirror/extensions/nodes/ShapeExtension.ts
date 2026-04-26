@@ -153,28 +153,50 @@ export const ShapeExtension = createNodeExtension({
           const el = dom as HTMLElement;
           const d = el.dataset;
           return {
-            shapeType: d.shapeType || "rect",
-            ...(d.shapeId ? { shapeId: d.shapeId } : {}),
-            ...(d.width ? { width: Number(d.width) } : {}),
-            ...(d.height ? { height: Number(d.height) } : {}),
-            ...(d.fillColor ? { fillColor: d.fillColor } : {}),
-            fillType: d.fillType || "solid",
-            ...(d.gradientType ? { gradientType: d.gradientType } : {}),
-            ...(d.gradientAngle ? { gradientAngle: Number(d.gradientAngle) } : {}),
-            ...(d.gradientStops ? { gradientStops: d.gradientStops } : {}),
-            ...(d.outlineWidth ? { outlineWidth: Number(d.outlineWidth) } : {}),
-            ...(d.outlineColor ? { outlineColor: d.outlineColor } : {}),
-            ...(d.outlineStyle ? { outlineStyle: d.outlineStyle } : {}),
-            ...(d.transform ? { transform: d.transform } : {}),
-            ...(d.displayMode ? { displayMode: d.displayMode as NonNullable<ShapeAttrs["displayMode"]> } : {}),
-            ...(d.cssFloat ? { cssFloat: d.cssFloat as NonNullable<ShapeAttrs["cssFloat"]> } : {}),
-            ...(d.wrapType ? { wrapType: d.wrapType } : {}),
-            ...(d.shadowColor ? { shadowColor: d.shadowColor } : {}),
-            ...(d.shadowBlur ? { shadowBlur: Number(d.shadowBlur) } : {}),
-            ...(d.shadowOffsetX ? { shadowOffsetX: Number(d.shadowOffsetX) } : {}),
-            ...(d.shadowOffsetY ? { shadowOffsetY: Number(d.shadowOffsetY) } : {}),
-            ...(d.glowColor ? { glowColor: d.glowColor } : {}),
-            ...(d.glowRadius ? { glowRadius: Number(d.glowRadius) } : {}),
+            shapeType: d["shapeType"] || "rect",
+            ...(d["shapeId"] ? { shapeId: d["shapeId"] } : {}),
+            ...(d["width"] ? { width: Number(d["width"]) } : {}),
+            ...(d["height"] ? { height: Number(d["height"]) } : {}),
+            ...(d["fillColor"] ? { fillColor: d["fillColor"] } : {}),
+            fillType: d["fillType"] || "solid",
+            ...(d["gradientType"] ? { gradientType: d["gradientType"] } : {}),
+            ...(d["gradientAngle"]
+              ? { gradientAngle: Number(d["gradientAngle"]) }
+              : {}),
+            ...(d["gradientStops"]
+              ? { gradientStops: d["gradientStops"] }
+              : {}),
+            ...(d["outlineWidth"]
+              ? { outlineWidth: Number(d["outlineWidth"]) }
+              : {}),
+            ...(d["outlineColor"] ? { outlineColor: d["outlineColor"] } : {}),
+            ...(d["outlineStyle"] ? { outlineStyle: d["outlineStyle"] } : {}),
+            ...(d["transform"] ? { transform: d["transform"] } : {}),
+            ...(d["displayMode"]
+              ? {
+                  displayMode: d["displayMode"] as NonNullable<
+                    ShapeAttrs["displayMode"]
+                  >,
+                }
+              : {}),
+            ...(d["cssFloat"]
+              ? {
+                  cssFloat: d["cssFloat"] as NonNullable<
+                    ShapeAttrs["cssFloat"]
+                  >,
+                }
+              : {}),
+            ...(d["wrapType"] ? { wrapType: d["wrapType"] } : {}),
+            ...(d["shadowColor"] ? { shadowColor: d["shadowColor"] } : {}),
+            ...(d["shadowBlur"] ? { shadowBlur: Number(d["shadowBlur"]) } : {}),
+            ...(d["shadowOffsetX"]
+              ? { shadowOffsetX: Number(d["shadowOffsetX"]) }
+              : {}),
+            ...(d["shadowOffsetY"]
+              ? { shadowOffsetY: Number(d["shadowOffsetY"]) }
+              : {}),
+            ...(d["glowColor"] ? { glowColor: d["glowColor"] } : {}),
+            ...(d["glowRadius"] ? { glowRadius: Number(d["glowRadius"]) } : {}),
           };
         },
       },
@@ -298,7 +320,7 @@ export const ShapeExtension = createNodeExtension({
         }
       }
 
-      domAttrs.style = styles.join("; ");
+      domAttrs["style"] = styles.join("; ");
 
       // Build SVG gradient defs if needed
       let svgDefs = "";

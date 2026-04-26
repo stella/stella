@@ -7,12 +7,12 @@ import { describe, expect, test } from "bun:test";
 
 import type { Analytics } from "./types";
 
-process.env.EMAIL_PROVIDER ??= "smtp";
-process.env.GOTENBERG_PASSWORD ??= "gotenberg";
-process.env.GOTENBERG_URL ??= "http://localhost:3003";
-process.env.GOTENBERG_USERNAME ??= "gotenberg";
-process.env.SMTP_HOST ??= "localhost";
-process.env.SMTP_PORT ??= "1025";
+process.env["EMAIL_PROVIDER"] ??= "smtp";
+process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
+process.env["GOTENBERG_URL"] ??= "http://localhost:3003";
+process.env["GOTENBERG_USERNAME"] ??= "gotenberg";
+process.env["SMTP_HOST"] ??= "localhost";
+process.env["SMTP_PORT"] ??= "1025";
 
 const loadAIAnalytics = async () => await import("./ai");
 
@@ -157,14 +157,14 @@ describe("createAIAnalyticsCallbacks", () => {
     expect(events).toHaveLength(2);
     expect(events[0]?.event).toBe("$ai_span");
     expect(events[1]?.event).toBe("$ai_generation");
-    expect(events[1]?.properties?.$ai_trace_id).toBe("trace_123");
-    expect(events[1]?.properties?.$ai_input).toEqual([
+    expect(events[1]?.properties?.["$ai_trace_id"]).toBe("trace_123");
+    expect(events[1]?.properties?.["$ai_input"]).toEqual([
       {
         content: [{ text: "Summarize this", type: "text" }],
         role: "user",
       },
     ]);
-    expect(events[1]?.properties?.$ai_output_choices).toEqual([
+    expect(events[1]?.properties?.["$ai_output_choices"]).toEqual([
       {
         content: [{ text: "Done.", type: "text" }],
         role: "assistant",

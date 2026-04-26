@@ -247,48 +247,48 @@ export const searchDecisionsHandler = async (
   const lastRaw = resultRows.at(-1);
   const nextCursor =
     hasMore && lastRaw
-      ? encodeCursor(Number(lastRaw.score), String(lastRaw.decision_id))
+      ? encodeCursor(Number(lastRaw["score"]), String(lastRaw["decision_id"]))
       : null;
 
   const hits = resultRows.map((row) => ({
-    decisionId: String(row.decision_id),
-    caseNumber: String(row.case_number),
-    ecli: toNullableString(row.ecli),
-    court: String(row.court),
-    country: String(row.country),
-    language: String(row.language),
-    decisionDate: toNullableString(row.decision_date),
-    decisionType: toNullableString(row.decision_type),
-    sourceUrl: toNullableString(row.source_url),
+    decisionId: String(row["decision_id"]),
+    caseNumber: String(row["case_number"]),
+    ecli: toNullableString(row["ecli"]),
+    court: String(row["court"]),
+    country: String(row["country"]),
+    language: String(row["language"]),
+    decisionDate: toNullableString(row["decision_date"]),
+    decisionType: toNullableString(row["decision_type"]),
+    sourceUrl: toNullableString(row["source_url"]),
     // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.headline from DB (any)
-    headline: row.headline
-      ? escapeAndHighlight(JSON.stringify(row.headline))
+    headline: row["headline"]
+      ? escapeAndHighlight(JSON.stringify(row["headline"]))
       : null,
-    citationCount: Number(row.citation_count) || 0,
+    citationCount: Number(row["citation_count"]) || 0,
     createdAt:
-      row.created_at instanceof Date
-        ? row.created_at.toISOString()
-        : String(row.created_at),
+      row["created_at"] instanceof Date
+        ? row["created_at"].toISOString()
+        : String(row["created_at"]),
   }));
 
   const totalCount = parsedCursor
     ? null
-    : Number(countResult.at(0)?.total) || 0;
+    : Number(countResult.at(0)?.["total"]) || 0;
 
   const facets = parsedCursor
     ? null
     : {
         court: courtResult.map((row) => ({
-          value: String(row.value),
-          count: Number(row.count),
+          value: String(row["value"]),
+          count: Number(row["count"]),
         })),
         country: countryResult.map((row) => ({
-          value: String(row.value),
-          count: Number(row.count),
+          value: String(row["value"]),
+          count: Number(row["count"]),
         })),
         language: languageResult.map((row) => ({
-          value: String(row.value),
-          count: Number(row.count),
+          value: String(row["value"]),
+          count: Number(row["count"]),
         })),
       };
 

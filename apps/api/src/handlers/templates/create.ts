@@ -74,11 +74,11 @@ const parseClientManifest = (value: unknown): ClientTemplateManifest | null => {
   if (!isRecord(parsed)) {
     return null;
   }
-  const fields = parsed.fields;
+  const fields = parsed["fields"];
   if (!Array.isArray(fields) || !fields.every(isFieldMeta)) {
     return null;
   }
-  const conditions = parsed.conditions;
+  const conditions = parsed["conditions"];
   if (
     conditions !== undefined &&
     (!Array.isArray(conditions) || !conditions.every(isNamedCondition))

@@ -313,7 +313,8 @@ const ViewTab = ({
       dropTargetForElements({
         element: el,
         canDrop: ({ source }) =>
-          source.data.type === VIEW_DRAG_TYPE && source.data.viewId !== id,
+          source.data["type"] === VIEW_DRAG_TYPE &&
+          source.data["viewId"] !== id,
         onDragEnter: () => setIsDropTarget(true),
         onDragLeave: () => setIsDropTarget(false),
         onDrop: ({ source }) => {
@@ -321,7 +322,7 @@ const ViewTab = ({
           // SAFETY: viewId from our draggable getInitialData
           onReorderRef.current(
             // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-            source.data.viewId as string,
+            source.data["viewId"] as string,
             id,
           );
         },

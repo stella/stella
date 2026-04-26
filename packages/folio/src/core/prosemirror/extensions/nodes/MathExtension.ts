@@ -30,8 +30,8 @@ export const MathExtension = createNodeExtension({
         getAttrs(dom) {
           const el = dom as HTMLElement;
           return {
-            display: el.dataset.display || "inline",
-            ommlXml: el.dataset.ommlXml || "",
+            display: el.dataset["display"] || "inline",
+            ommlXml: el.dataset["ommlXml"] || "",
             plainText: el.textContent || "",
           };
         },

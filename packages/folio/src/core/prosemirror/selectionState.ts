@@ -70,9 +70,9 @@ export function extractSelectionState(
   const paragraph = $from.parent;
   const isEmptyParagraph =
     paragraph.type.name === "paragraph" && paragraph.textContent.length === 0;
-  const paragraphDefaultFormatting = paragraph.attrs?.defaultTextFormatting as
-    | TextFormatting
-    | undefined;
+  const paragraphDefaultFormatting = paragraph.attrs?.[
+    "defaultTextFormatting"
+  ] as TextFormatting | undefined;
 
   // For empty selection (cursor), use stored marks or marks at cursor position
   // For non-empty selection, check marks at the start of selection
@@ -94,12 +94,12 @@ export function extractSelectionState(
         break;
       case "underline":
         textFormatting.underline = {
-          style: mark.attrs.style || "single",
-          color: mark.attrs.color,
+          style: mark.attrs["style"] || "single",
+          color: mark.attrs["color"],
         };
         break;
       case "strike":
-        if (mark.attrs.double) {
+        if (mark.attrs["double"]) {
           textFormatting.doubleStrike = true;
         } else {
           textFormatting.strike = true;
@@ -107,20 +107,20 @@ export function extractSelectionState(
         break;
       case "textColor":
         textFormatting.color = {
-          rgb: mark.attrs.rgb,
-          themeColor: mark.attrs.themeColor,
+          rgb: mark.attrs["rgb"],
+          themeColor: mark.attrs["themeColor"],
         };
         break;
       case "highlight":
-        textFormatting.highlight = mark.attrs.color;
+        textFormatting.highlight = mark.attrs["color"];
         break;
       case "fontSize":
-        textFormatting.fontSize = mark.attrs.size;
+        textFormatting.fontSize = mark.attrs["size"];
         break;
       case "fontFamily":
         textFormatting.fontFamily = {
-          ascii: mark.attrs.ascii,
-          hAnsi: mark.attrs.hAnsi,
+          ascii: mark.attrs["ascii"],
+          hAnsi: mark.attrs["hAnsi"],
         };
         break;
       case "superscript":
@@ -139,36 +139,36 @@ export function extractSelectionState(
   let styleId: string | null = null;
 
   if (paragraph.type.name === "paragraph") {
-    if (paragraph.attrs.alignment) {
-      paragraphFormatting.alignment = paragraph.attrs.alignment;
+    if (paragraph.attrs["alignment"]) {
+      paragraphFormatting.alignment = paragraph.attrs["alignment"];
     }
-    if (paragraph.attrs.lineSpacing) {
-      paragraphFormatting.lineSpacing = paragraph.attrs.lineSpacing;
-      paragraphFormatting.lineSpacingRule = paragraph.attrs.lineSpacingRule;
+    if (paragraph.attrs["lineSpacing"]) {
+      paragraphFormatting.lineSpacing = paragraph.attrs["lineSpacing"];
+      paragraphFormatting.lineSpacingRule = paragraph.attrs["lineSpacingRule"];
     }
-    if (paragraph.attrs.numPr) {
-      paragraphFormatting.numPr = paragraph.attrs.numPr;
+    if (paragraph.attrs["numPr"]) {
+      paragraphFormatting.numPr = paragraph.attrs["numPr"];
     }
-    if (paragraph.attrs.indentLeft) {
-      paragraphFormatting.indentLeft = paragraph.attrs.indentLeft;
+    if (paragraph.attrs["indentLeft"]) {
+      paragraphFormatting.indentLeft = paragraph.attrs["indentLeft"];
     }
-    if (paragraph.attrs.indentRight) {
-      paragraphFormatting.indentRight = paragraph.attrs.indentRight;
+    if (paragraph.attrs["indentRight"]) {
+      paragraphFormatting.indentRight = paragraph.attrs["indentRight"];
     }
-    if (paragraph.attrs.indentFirstLine) {
-      paragraphFormatting.indentFirstLine = paragraph.attrs.indentFirstLine;
+    if (paragraph.attrs["indentFirstLine"]) {
+      paragraphFormatting.indentFirstLine = paragraph.attrs["indentFirstLine"];
     }
-    if (paragraph.attrs.hangingIndent) {
-      paragraphFormatting.hangingIndent = paragraph.attrs.hangingIndent;
+    if (paragraph.attrs["hangingIndent"]) {
+      paragraphFormatting.hangingIndent = paragraph.attrs["hangingIndent"];
     }
-    if (paragraph.attrs.tabs) {
-      paragraphFormatting.tabs = paragraph.attrs.tabs;
+    if (paragraph.attrs["tabs"]) {
+      paragraphFormatting.tabs = paragraph.attrs["tabs"];
     }
-    if (paragraph.attrs.bidi) {
+    if (paragraph.attrs["bidi"]) {
       paragraphFormatting.bidi = true;
     }
-    if (paragraph.attrs.styleId) {
-      styleId = paragraph.attrs.styleId;
+    if (paragraph.attrs["styleId"]) {
+      styleId = paragraph.attrs["styleId"];
     }
   }
 

@@ -245,7 +245,7 @@ function applyCommentMarks(nodes: PMNode[], commentIds: Set<number>): PMNode[] {
     return nodes;
   }
   const commentId = [...commentIds][0]; // Use first active comment
-  const commentMark = schema.marks.comment!.create({ commentId });
+  const commentMark = schema.marks["comment"]!.create({ commentId });
 
   return nodes.map((node) => {
     if (node.isText) {
@@ -305,22 +305,47 @@ function paragraphFormattingToAttrs(
   // Start with base attrs — only include defined values
   const attrs: ParagraphAttrs = {};
 
-  if (paragraph.paraId) { attrs.paraId = paragraph.paraId; }
-  if (paragraph.textId) { attrs.textId = paragraph.textId; }
-  if (styleId) { attrs.styleId = styleId; }
-  if (formatting?.numPr) { attrs.numPr = formatting.numPr; }
+  if (paragraph.paraId) {
+    attrs.paraId = paragraph.paraId;
+  }
+  if (paragraph.textId) {
+    attrs.textId = paragraph.textId;
+  }
+  if (styleId) {
+    attrs.styleId = styleId;
+  }
+  if (formatting?.numPr) {
+    attrs.numPr = formatting.numPr;
+  }
   // List rendering info from parsed numbering definitions
-  if (paragraph.listRendering?.numFmt) { attrs.listNumFmt = paragraph.listRendering.numFmt; }
-  if (paragraph.listRendering?.isBullet) { attrs.listIsBullet = paragraph.listRendering.isBullet; }
-  if (paragraph.listRendering?.marker) { attrs.listMarker = paragraph.listRendering.marker; }
-  if (paragraph.listRendering?.markerHidden) { attrs.listMarkerHidden = paragraph.listRendering.markerHidden; }
-  if (paragraph.listRendering?.markerFontFamily) { attrs.listMarkerFontFamily = paragraph.listRendering.markerFontFamily; }
-  if (paragraph.listRendering?.markerFontSize) { attrs.listMarkerFontSize = paragraph.listRendering.markerFontSize; }
+  if (paragraph.listRendering?.numFmt) {
+    attrs.listNumFmt = paragraph.listRendering.numFmt;
+  }
+  if (paragraph.listRendering?.isBullet) {
+    attrs.listIsBullet = paragraph.listRendering.isBullet;
+  }
+  if (paragraph.listRendering?.marker) {
+    attrs.listMarker = paragraph.listRendering.marker;
+  }
+  if (paragraph.listRendering?.markerHidden) {
+    attrs.listMarkerHidden = paragraph.listRendering.markerHidden;
+  }
+  if (paragraph.listRendering?.markerFontFamily) {
+    attrs.listMarkerFontFamily = paragraph.listRendering.markerFontFamily;
+  }
+  if (paragraph.listRendering?.markerFontSize) {
+    attrs.listMarkerFontSize = paragraph.listRendering.markerFontSize;
+  }
   // Store original inline formatting for lossless serialization round-trip
-  if (formatting) { attrs._originalFormatting = formatting; }
+  if (formatting) {
+    attrs._originalFormatting = formatting;
+  }
 
   // Helper: assign a value only when defined
-  const set = <K extends keyof ParagraphAttrs>(key: K, val: ParagraphAttrs[K] | undefined): void => {
+  const set = <K extends keyof ParagraphAttrs>(
+    key: K,
+    val: ParagraphAttrs[K] | undefined,
+  ): void => {
     if (val !== undefined) {
       attrs[key] = val;
     }
@@ -337,20 +362,32 @@ function paragraphFormattingToAttrs(
     set("spaceBefore", formatting?.spaceBefore ?? stylePpr?.spaceBefore);
     set("spaceAfter", formatting?.spaceAfter ?? stylePpr?.spaceAfter);
     set("lineSpacing", formatting?.lineSpacing ?? stylePpr?.lineSpacing);
-    set("lineSpacingRule", formatting?.lineSpacingRule ?? stylePpr?.lineSpacingRule);
+    set(
+      "lineSpacingRule",
+      formatting?.lineSpacingRule ?? stylePpr?.lineSpacingRule,
+    );
     set("indentLeft", formatting?.indentLeft ?? stylePpr?.indentLeft);
     set("indentRight", formatting?.indentRight ?? stylePpr?.indentRight);
-    set("indentFirstLine", formatting?.indentFirstLine ?? stylePpr?.indentFirstLine);
+    set(
+      "indentFirstLine",
+      formatting?.indentFirstLine ?? stylePpr?.indentFirstLine,
+    );
     set("hangingIndent", formatting?.hangingIndent ?? stylePpr?.hangingIndent);
     set("borders", formatting?.borders ?? stylePpr?.borders);
     set("shading", formatting?.shading ?? stylePpr?.shading);
     set("tabs", formatting?.tabs ?? stylePpr?.tabs);
 
     // Page break control
-    set("pageBreakBefore", formatting?.pageBreakBefore ?? stylePpr?.pageBreakBefore);
+    set(
+      "pageBreakBefore",
+      formatting?.pageBreakBefore ?? stylePpr?.pageBreakBefore,
+    );
     set("keepNext", formatting?.keepNext ?? stylePpr?.keepNext);
     set("keepLines", formatting?.keepLines ?? stylePpr?.keepLines);
-    set("contextualSpacing", formatting?.contextualSpacing ?? stylePpr?.contextualSpacing);
+    set(
+      "contextualSpacing",
+      formatting?.contextualSpacing ?? stylePpr?.contextualSpacing,
+    );
 
     // Outline level (for TOC)
     set("outlineLevel", formatting?.outlineLevel ?? stylePpr?.outlineLevel);
@@ -363,7 +400,10 @@ function paragraphFormattingToAttrs(
       formatting?.runProperties,
       styleResolver,
     );
-    set("defaultTextFormatting", mergeTextFormatting(styleRpr, resolvedRunProps));
+    set(
+      "defaultTextFormatting",
+      mergeTextFormatting(styleRpr, resolvedRunProps),
+    );
 
     // If style defines numPr but inline doesn't, use style's numPr
     // numId === 0 means "no numbering" per OOXML spec — skip it
@@ -397,10 +437,10 @@ function paragraphFormattingToAttrs(
     set("bidi", formatting?.bidi);
 
     // Default run properties (pPr/rPr)
-    set("defaultTextFormatting", resolveTextFormatting(
-      formatting?.runProperties,
-      styleResolver,
-    ));
+    set(
+      "defaultTextFormatting",
+      resolveTextFormatting(formatting?.runProperties, styleResolver),
+    );
   }
 
   // Section break type and full section properties for layout + round-trip
@@ -454,8 +494,12 @@ function resolveTableStyleConditional(
   const mergedRunProps = mergeTextFormatting(runPropsFromPpr, resolvedRpr);
 
   const result: { tcPr?: TableCellFormatting; rPr?: TextFormatting } = {};
-  if (conditional.tcPr) { result.tcPr = conditional.tcPr; }
-  if (mergedRunProps) { result.rPr = mergedRunProps; }
+  if (conditional.tcPr) {
+    result.tcPr = conditional.tcPr;
+  }
+  if (mergedRunProps) {
+    result.rPr = mergedRunProps;
+  }
   return result;
 }
 
@@ -508,7 +552,9 @@ function mergeConditionalStyles(
   }
 
   const mergedRPr = mergeTextFormatting(base.rPr, override.rPr);
-  if (mergedRPr) { merged.rPr = mergedRPr; }
+  if (mergedRPr) {
+    merged.rPr = mergedRPr;
+  }
 
   return merged;
 }
@@ -616,28 +662,56 @@ function convertTable(
 
   // Resolve default cell margins: table's own cellMargins > table style's cellMargins
   const tableCellMargins =
-    table.formatting?.cellMargins ??
-    tableStyle?.tblPr?.cellMargins;
-  let cellMarginsAttr: { top?: number; bottom?: number; left?: number; right?: number } | undefined;
+    table.formatting?.cellMargins ?? tableStyle?.tblPr?.cellMargins;
+  let cellMarginsAttr:
+    | { top?: number; bottom?: number; left?: number; right?: number }
+    | undefined;
   if (tableCellMargins) {
-    const m: { top?: number; bottom?: number; left?: number; right?: number } = {};
-    if (tableCellMargins.top?.value !== undefined) { m.top = tableCellMargins.top.value; }
-    if (tableCellMargins.bottom?.value !== undefined) { m.bottom = tableCellMargins.bottom.value; }
-    if (tableCellMargins.left?.value !== undefined) { m.left = tableCellMargins.left.value; }
-    if (tableCellMargins.right?.value !== undefined) { m.right = tableCellMargins.right.value; }
+    const m: { top?: number; bottom?: number; left?: number; right?: number } =
+      {};
+    if (tableCellMargins.top?.value !== undefined) {
+      m.top = tableCellMargins.top.value;
+    }
+    if (tableCellMargins.bottom?.value !== undefined) {
+      m.bottom = tableCellMargins.bottom.value;
+    }
+    if (tableCellMargins.left?.value !== undefined) {
+      m.left = tableCellMargins.left.value;
+    }
+    if (tableCellMargins.right?.value !== undefined) {
+      m.right = tableCellMargins.right.value;
+    }
     cellMarginsAttr = m;
   }
 
   const attrs: TableAttrs = {};
-  if (table.formatting?.styleId) { attrs.styleId = table.formatting.styleId; }
-  if (table.formatting?.width?.value !== undefined) { attrs.width = table.formatting.width.value; }
-  if (table.formatting?.width?.type) { attrs.widthType = table.formatting.width.type; }
-  if (table.formatting?.justification) { attrs.justification = table.formatting.justification; }
-  if (columnWidths) { attrs.columnWidths = columnWidths; }
-  if (table.formatting?.floating) { attrs.floating = table.formatting.floating; }
-  if (cellMarginsAttr) { attrs.cellMargins = cellMarginsAttr; }
-  if (table.formatting?.look) { attrs.look = table.formatting.look; }
-  if (table.formatting) { attrs._originalFormatting = table.formatting; }
+  if (table.formatting?.styleId) {
+    attrs.styleId = table.formatting.styleId;
+  }
+  if (table.formatting?.width?.value !== undefined) {
+    attrs.width = table.formatting.width.value;
+  }
+  if (table.formatting?.width?.type) {
+    attrs.widthType = table.formatting.width.type;
+  }
+  if (table.formatting?.justification) {
+    attrs.justification = table.formatting.justification;
+  }
+  if (columnWidths) {
+    attrs.columnWidths = columnWidths;
+  }
+  if (table.formatting?.floating) {
+    attrs.floating = table.formatting.floating;
+  }
+  if (cellMarginsAttr) {
+    attrs.cellMargins = cellMarginsAttr;
+  }
+  if (table.formatting?.look) {
+    attrs.look = table.formatting.look;
+  }
+  if (table.formatting) {
+    attrs._originalFormatting = table.formatting;
+  }
 
   type CondStyle = { tcPr?: TableCellFormatting; rPr?: TextFormatting };
   const conditionalStyles: {
@@ -657,7 +731,9 @@ function convertTable(
   } = {};
   const setCS = (key: keyof typeof conditionalStyles, type: string): void => {
     const val = resolveTableStyleConditional(styleResolver, tableStyleId, type);
-    if (val) { conditionalStyles[key] = val; }
+    if (val) {
+      conditionalStyles[key] = val;
+    }
   };
   setCS("wholeTable", "wholeTable");
   setCS("firstRow", "firstRow");
@@ -768,9 +844,15 @@ function convertTableRow(
     // which is purely a conditional formatting flag (ECMA-376 §17.7.6.1).
     isHeader: !!row.formatting?.header,
   };
-  if (row.formatting?.height?.value !== undefined) { attrs.height = row.formatting.height.value; }
-  if (row.formatting?.heightRule) { attrs.heightRule = row.formatting.heightRule; }
-  if (row.formatting) { attrs._originalFormatting = row.formatting; }
+  if (row.formatting?.height?.value !== undefined) {
+    attrs.height = row.formatting.height.value;
+  }
+  if (row.formatting?.heightRule) {
+    attrs.heightRule = row.formatting.heightRule;
+  }
+  if (row.formatting) {
+    attrs._originalFormatting = row.formatting;
+  }
 
   const numCells = row.cells.length;
   const isFirstRow = rowIndex === 0;
@@ -1036,14 +1118,26 @@ function convertTableCell(
       : undefined;
 
   // Helper to build margins object without undefined values
-  const buildMarginsAttr = (
-    src: { top?: { value: number }; bottom?: { value: number }; left?: { value: number }; right?: { value: number } },
-  ): { top?: number; bottom?: number; left?: number; right?: number } => {
-    const m: { top?: number; bottom?: number; left?: number; right?: number } = {};
-    if (src.top?.value !== undefined) { m.top = src.top.value; }
-    if (src.bottom?.value !== undefined) { m.bottom = src.bottom.value; }
-    if (src.left?.value !== undefined) { m.left = src.left.value; }
-    if (src.right?.value !== undefined) { m.right = src.right.value; }
+  const buildMarginsAttr = (src: {
+    top?: { value: number };
+    bottom?: { value: number };
+    left?: { value: number };
+    right?: { value: number };
+  }): { top?: number; bottom?: number; left?: number; right?: number } => {
+    const m: { top?: number; bottom?: number; left?: number; right?: number } =
+      {};
+    if (src.top?.value !== undefined) {
+      m.top = src.top.value;
+    }
+    if (src.bottom?.value !== undefined) {
+      m.bottom = src.bottom.value;
+    }
+    if (src.left?.value !== undefined) {
+      m.left = src.left.value;
+    }
+    if (src.right?.value !== undefined) {
+      m.right = src.right.value;
+    }
     return m;
   };
 
@@ -1051,13 +1145,27 @@ function convertTableCell(
     colspan: formatting?.gridSpan ?? 1,
     rowspan,
   };
-  if (width !== undefined) { attrs.width = width; }
-  if (widthType) { attrs.widthType = widthType; }
-  if (formatting?.verticalAlign) { attrs.verticalAlign = formatting.verticalAlign; }
-  if (backgroundColor) { attrs.backgroundColor = backgroundColor; }
-  if (formatting?.textDirection) { attrs.textDirection = formatting.textDirection; }
-  if (formatting?.noWrap !== undefined) { attrs.noWrap = formatting.noWrap; }
-  if (borders) { attrs.borders = borders; }
+  if (width !== undefined) {
+    attrs.width = width;
+  }
+  if (widthType) {
+    attrs.widthType = widthType;
+  }
+  if (formatting?.verticalAlign) {
+    attrs.verticalAlign = formatting.verticalAlign;
+  }
+  if (backgroundColor) {
+    attrs.backgroundColor = backgroundColor;
+  }
+  if (formatting?.textDirection) {
+    attrs.textDirection = formatting.textDirection;
+  }
+  if (formatting?.noWrap !== undefined) {
+    attrs.noWrap = formatting.noWrap;
+  }
+  if (borders) {
+    attrs.borders = borders;
+  }
   if (formatting?.margins) {
     attrs.margins = buildMarginsAttr(formatting.margins);
   } else if (conditionalStyle?.tcPr?.margins) {
@@ -1065,7 +1173,9 @@ function convertTableCell(
   } else if (defaultCellMargins) {
     attrs.margins = defaultCellMargins;
   }
-  if (formatting) { attrs._originalFormatting = formatting; }
+  if (formatting) {
+    attrs._originalFormatting = formatting;
+  }
 
   // Convert cell content (paragraphs and nested tables)
   const contentNodes: PMNode[] = [];
@@ -1489,16 +1599,24 @@ function convertImage(image: Image): PMNode {
       const h: { relativeTo?: string; posOffset?: number; align?: string } = {
         relativeTo: image.position.horizontal.relativeTo,
       };
-      if (image.position.horizontal.posOffset !== undefined) { h.posOffset = image.position.horizontal.posOffset; }
-      if (image.position.horizontal.alignment) { h.align = image.position.horizontal.alignment; }
+      if (image.position.horizontal.posOffset !== undefined) {
+        h.posOffset = image.position.horizontal.posOffset;
+      }
+      if (image.position.horizontal.alignment) {
+        h.align = image.position.horizontal.alignment;
+      }
       position.horizontal = h;
     }
     if (image.position.vertical) {
       const v: { relativeTo?: string; posOffset?: number; align?: string } = {
         relativeTo: image.position.vertical.relativeTo,
       };
-      if (image.position.vertical.posOffset !== undefined) { v.posOffset = image.position.vertical.posOffset; }
-      if (image.position.vertical.alignment) { v.align = image.position.vertical.alignment; }
+      if (image.position.vertical.posOffset !== undefined) {
+        v.posOffset = image.position.vertical.posOffset;
+      }
+      if (image.position.vertical.alignment) {
+        v.align = image.position.vertical.alignment;
+      }
       position.vertical = v;
     }
   }
@@ -1881,12 +1999,24 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
               size: shape.size,
               content: shape.textBody.content,
             };
-            if (shape.id) { textBox.id = shape.id; }
-            if (shape.position) { textBox.position = shape.position; }
-            if (shape.wrap) { textBox.wrap = shape.wrap; }
-            if (shape.fill) { textBox.fill = shape.fill; }
-            if (shape.outline) { textBox.outline = shape.outline; }
-            if (shape.textBody.margins) { textBox.margins = shape.textBody.margins; }
+            if (shape.id) {
+              textBox.id = shape.id;
+            }
+            if (shape.position) {
+              textBox.position = shape.position;
+            }
+            if (shape.wrap) {
+              textBox.wrap = shape.wrap;
+            }
+            if (shape.fill) {
+              textBox.fill = shape.fill;
+            }
+            if (shape.outline) {
+              textBox.outline = shape.outline;
+            }
+            if (shape.textBody.margins) {
+              textBox.margins = shape.textBody.margins;
+            }
             textBoxes.push(textBox);
           }
         }
@@ -1931,11 +2061,15 @@ function convertTextBox(
   const marginTop =
     textBox.margins?.top !== undefined ? emuToPixels(textBox.margins.top) : 4;
   const marginBottom =
-    textBox.margins?.bottom !== undefined ? emuToPixels(textBox.margins.bottom) : 4;
+    textBox.margins?.bottom !== undefined
+      ? emuToPixels(textBox.margins.bottom)
+      : 4;
   const marginLeft =
     textBox.margins?.left !== undefined ? emuToPixels(textBox.margins.left) : 7;
   const marginRight =
-    textBox.margins?.right !== undefined ? emuToPixels(textBox.margins.right) : 7;
+    textBox.margins?.right !== undefined
+      ? emuToPixels(textBox.margins.right)
+      : 7;
 
   // Convert text box content (paragraphs) to PM nodes
   const contentNodes: PMNode[] = [];

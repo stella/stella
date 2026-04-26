@@ -96,9 +96,9 @@ export const ScrollMarkers = ({
         sc.getBoundingClientRect().top +
         sc.scrollTop;
       sc.scrollTo({ top: offset, behavior: "instant" });
-      delete el.dataset.highlight;
+      delete el.dataset["highlight"];
       void el.offsetWidth;
-      el.dataset.highlight = "";
+      el.dataset["highlight"] = "";
     },
     [scrollContainerRef],
   );

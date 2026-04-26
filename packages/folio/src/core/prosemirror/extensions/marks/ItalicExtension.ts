@@ -26,10 +26,10 @@ export const ItalicExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     return {
       commands: {
-        toggleItalic: () => toggleMark(ctx.schema.marks.italic!),
+        toggleItalic: () => toggleMark(ctx.schema.marks["italic"]!),
       },
       keyboardShortcuts: {
-        "Mod-i": toggleMark(ctx.schema.marks.italic!),
+        "Mod-i": toggleMark(ctx.schema.marks["italic"]!),
       },
     };
   },

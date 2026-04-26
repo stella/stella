@@ -27,7 +27,6 @@ import type {
 import { renderFragment, FRAGMENT_CLASS_NAMES } from "./renderFragment";
 import { renderImageFragment, IMAGE_CLASS_NAMES } from "./renderImage";
 import { renderPage, renderPages } from "./renderPage";
-import type { RenderContext } from "./renderUtils";
 import {
   renderParagraphFragment,
   sliceRunsForLine,
@@ -35,6 +34,7 @@ import {
 } from "./renderParagraph";
 import { renderTableFragment, TABLE_CLASS_NAMES } from "./renderTable";
 import { renderTextBoxFragment, TEXTBOX_CLASS_NAMES } from "./renderTextBox";
+import type { RenderContext } from "./renderUtils";
 
 // Re-export render functions
 export {
@@ -201,7 +201,7 @@ export class LayoutPainter {
   ): HTMLElement {
     const pageEl = this.doc.createElement("div");
     pageEl.className = "layout-page";
-    pageEl.dataset.pageNumber = String(page.number);
+    pageEl.dataset["pageNumber"] = String(page.number);
 
     // Apply page styles
     pageEl.style.position = "relative";

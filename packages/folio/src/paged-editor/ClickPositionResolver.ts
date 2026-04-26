@@ -113,7 +113,7 @@ export class ClickPositionResolver {
 
     for (const fragEl of Array.from(fragmentEls)) {
       const element = fragEl as HTMLElement;
-      const blockId = element.dataset.blockId || "";
+      const blockId = element.dataset["blockId"] || "";
       const rect = element.getBoundingClientRect();
 
       fragments.push({
@@ -145,8 +145,8 @@ export class ClickPositionResolver {
 
     for (const runEl of Array.from(runEls)) {
       const element = runEl as HTMLElement;
-      const pmStart = Number(element.dataset.pmStart);
-      const pmEnd = Number(element.dataset.pmEnd);
+      const pmStart = Number(element.dataset["pmStart"]);
+      const pmEnd = Number(element.dataset["pmEnd"]);
       const rect = element.getBoundingClientRect();
       const isTab = element.classList.contains("layout-run-tab");
 
@@ -365,7 +365,7 @@ export class ClickPositionResolver {
     const run = this.getRunAtX(fragment.blockId, clientX);
     if (!run) {
       // No run found - return fragment start position
-      const pmStart = Number(fragment.element.dataset.pmStart);
+      const pmStart = Number(fragment.element.dataset["pmStart"]);
       return {
         pageIndex: page.index,
         pmPosition: pmStart || 0,

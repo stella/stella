@@ -38,7 +38,6 @@ import type {
   Table,
   StyleDefinitions,
 } from "../core/types/document";
-// @ts-expect-error -- CSS side-effect import
 import "prosemirror-view/style/prosemirror.css";
 
 // ============================================================================
@@ -159,7 +158,9 @@ export const InlineHeaderFooterEditor = forwardRef<
   // Resolve default font size from document styles so the PM editor's
   // line-height calculations use the correct base (not browser-default 16px)
   const defaultFontSizePt = useMemo(() => {
-    if (!styles) {return 11;} // Word 2007+ default
+    if (!styles) {
+      return 11;
+    } // Word 2007+ default
     const resolver = createStyleResolver(styles);
     const resolved = resolver.resolveParagraphStyle(undefined);
     // fontSize in document model is in half-points
@@ -426,7 +427,7 @@ function OptionsMenu({
     // Get marks at the current cursor position so the field inherits surrounding styling
     const { $from, from } = view.state.selection;
     const marks = view.state.storedMarks || $from.marks();
-    const node = schema.nodes.field!.create({
+    const node = schema.nodes["field"]!.create({
       fieldType,
       instruction: ` ${fieldType} \\* MERGEFORMAT `,
       fieldKind: "simple",

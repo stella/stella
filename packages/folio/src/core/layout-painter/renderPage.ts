@@ -35,10 +35,7 @@ import { renderImageFragment } from "./renderImage";
 import { renderParagraphFragment } from "./renderParagraph";
 import { renderTableFragment } from "./renderTable";
 import { renderTextBoxFragment } from "./renderTextBox";
-import {
-  emuToPixels,
-  isFloatingImageRun,
-} from "./renderUtils";
+import { emuToPixels, isFloatingImageRun } from "./renderUtils";
 import type { RenderContext } from "./renderUtils";
 
 /**
@@ -509,7 +506,9 @@ function extractFloatingImagesFromParagraph(
       width: imgRun.width,
       height: imgRun.height,
       ...(imgRun.alt !== undefined ? { alt: imgRun.alt } : {}),
-      ...(imgRun.transform !== undefined ? { transform: imgRun.transform } : {}),
+      ...(imgRun.transform !== undefined
+        ? { transform: imgRun.transform }
+        : {}),
       side,
       x,
       y,
@@ -598,10 +597,10 @@ function renderFloatingImagesLayer(
     container.style.top = `${floatImg.y}px`;
     container.style.left = `${floatImg.x}px`;
     if (floatImg.pmStart !== undefined) {
-      container.dataset.pmStart = String(floatImg.pmStart);
+      container.dataset["pmStart"] = String(floatImg.pmStart);
     }
     if (floatImg.pmEnd !== undefined) {
-      container.dataset.pmEnd = String(floatImg.pmEnd);
+      container.dataset["pmEnd"] = String(floatImg.pmEnd);
     }
 
     const img = doc.createElement("img");
@@ -707,7 +706,7 @@ function renderHeaderFooterContent(
             height: imgRun.height,
             ...(imgRun.alt !== undefined ? { alt: imgRun.alt } : {}),
             paragraphY: paragraphStartY, // Store where this paragraph starts
-            behindDoc: (run as Record<string, unknown>).behindDoc === true,
+            behindDoc: (run as Record<string, unknown>)["behindDoc"] === true,
             position: imgRun.position,
           });
         } else {
@@ -849,7 +848,7 @@ export function renderPage(
   // Create page container
   const pageEl = doc.createElement("div");
   pageEl.className = options.pageClassName ?? PAGE_CLASS_NAMES.page;
-  pageEl.dataset.pageNumber = String(page.number);
+  pageEl.dataset["pageNumber"] = String(page.number);
 
   applyPageStyles(pageEl, page.size.w, page.size.h, options);
 
@@ -1200,7 +1199,9 @@ export function renderPage(
     for (const img of Array.from(
       headerEl.querySelectorAll<HTMLImageElement>('img[style*="z-index"]'),
     )) {
-      if (img.style.zIndex !== "-1") {continue;}
+      if (img.style.zIndex !== "-1") {
+        continue;
+      }
       // Adjust position: the image's top/left was relative to the header
       // container origin.  Shift it so it's relative to the page origin.
       const currentTop = Number.parseFloat(img.style.top) || 0;
@@ -1427,7 +1428,9 @@ function computeOptionsHash(options: RenderPageOptions): string {
       `fp-ftr:${options.firstPageFooterContent.blocks.length},${options.firstPageFooterContent.height}`,
     );
   }
-  if (options.titlePg) {parts.push("titlePg");}
+  if (options.titlePg) {
+    parts.push("titlePg");
+  }
 
   // Theme changes
   if (options.theme) {
@@ -1558,7 +1561,7 @@ export function renderPages(
       // Update page styles in case size changed
       const page = pages[i]!; // SAFETY: i < commonCount <= pages.length
       applyPageStyles(shell, page.size.w, page.size.h, options);
-      shell.dataset.pageNumber = String(page.number);
+      shell.dataset["pageNumber"] = String(page.number);
     }
 
     // Handle new pages (document grew)
@@ -1568,8 +1571,8 @@ export function renderPages(
         const page = pages[i]!; // SAFETY: i < pages.length
         const pageEl = doc.createElement("div");
         pageEl.className = options.pageClassName ?? PAGE_CLASS_NAMES.page;
-        pageEl.dataset.pageNumber = String(page.number);
-        pageEl.dataset.pageIndex = String(i);
+        pageEl.dataset["pageNumber"] = String(page.number);
+        pageEl.dataset["pageIndex"] = String(i);
         applyPageStyles(pageEl, page.size.w, page.size.h, options);
         container.append(pageEl);
 
@@ -1648,8 +1651,8 @@ export function renderPages(
       const doc = options.document ?? document;
       const pageEl = doc.createElement("div");
       pageEl.className = options.pageClassName ?? PAGE_CLASS_NAMES.page;
-      pageEl.dataset.pageNumber = String(page.number);
-      pageEl.dataset.pageIndex = String(i);
+      pageEl.dataset["pageNumber"] = String(page.number);
+      pageEl.dataset["pageIndex"] = String(i);
       applyPageStyles(pageEl, page.size.w, page.size.h, options);
       container.append(pageEl);
       pageShells.push(pageEl);
@@ -1670,8 +1673,9 @@ export function renderPages(
     { page: Page; index: number; rendered: boolean }
   >();
   for (let i = 0; i < pages.length; i++) {
-    pageDataMap.set(pageShells[i]!, { // SAFETY: pageShells built with same indices
-      page: pages[i]!,               // SAFETY: i < pages.length
+    pageDataMap.set(pageShells[i]!, {
+      // SAFETY: pageShells built with same indices
+      page: pages[i]!, // SAFETY: i < pages.length
       index: i,
       rendered: false,
     });

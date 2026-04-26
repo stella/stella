@@ -215,7 +215,7 @@ function extractRunFormatting(
 
       case "highlight":
         formatting.highlight = resolveHighlightToCss(
-          mark.attrs.color as string,
+          mark.attrs["color"] as string,
         );
         break;
 
@@ -270,7 +270,7 @@ function extractRunFormatting(
       }
 
       case "comment": {
-        const commentId = mark.attrs.commentId as number;
+        const commentId = mark.attrs["commentId"] as number;
         if (commentId) {
           if (!formatting.commentIds) {
             formatting.commentIds = [];
@@ -282,16 +282,16 @@ function extractRunFormatting(
 
       case "insertion":
         formatting.isInsertion = true;
-        formatting.changeAuthor = mark.attrs.author as string;
-        formatting.changeDate = mark.attrs.date as string;
-        formatting.changeRevisionId = mark.attrs.revisionId as number;
+        formatting.changeAuthor = mark.attrs["author"] as string;
+        formatting.changeDate = mark.attrs["date"] as string;
+        formatting.changeRevisionId = mark.attrs["revisionId"] as number;
         break;
 
       case "deletion":
         formatting.isDeletion = true;
-        formatting.changeAuthor = mark.attrs.author as string;
-        formatting.changeDate = mark.attrs.date as string;
-        formatting.changeRevisionId = mark.attrs.revisionId as number;
+        formatting.changeAuthor = mark.attrs["author"] as string;
+        formatting.changeDate = mark.attrs["date"] as string;
+        formatting.changeRevisionId = mark.attrs["revisionId"] as number;
         break;
       default:
         break;
@@ -313,41 +313,41 @@ function buildImageRun(
 ): ImageRun {
   const run: ImageRun = {
     kind: "image",
-    src: attrs.src as string,
+    src: attrs["src"] as string,
     width: constrained.width,
     height: constrained.height,
     pmStart,
     pmEnd,
   };
-  if (attrs.alt !== undefined && attrs.alt !== null) {
-    run.alt = attrs.alt as string;
+  if (attrs["alt"] !== undefined && attrs["alt"] !== null) {
+    run.alt = attrs["alt"] as string;
   }
-  if (attrs.transform !== undefined && attrs.transform !== null) {
-    run.transform = attrs.transform as string;
+  if (attrs["transform"] !== undefined && attrs["transform"] !== null) {
+    run.transform = attrs["transform"] as string;
   }
-  if (attrs.wrapType !== undefined && attrs.wrapType !== null) {
-    run.wrapType = attrs.wrapType as string;
+  if (attrs["wrapType"] !== undefined && attrs["wrapType"] !== null) {
+    run.wrapType = attrs["wrapType"] as string;
   }
-  if (attrs.displayMode !== undefined && attrs.displayMode !== null) {
-    run.displayMode = attrs.displayMode as "inline" | "block" | "float";
+  if (attrs["displayMode"] !== undefined && attrs["displayMode"] !== null) {
+    run.displayMode = attrs["displayMode"] as "inline" | "block" | "float";
   }
-  if (attrs.cssFloat !== undefined && attrs.cssFloat !== null) {
-    run.cssFloat = attrs.cssFloat as "left" | "right" | "none";
+  if (attrs["cssFloat"] !== undefined && attrs["cssFloat"] !== null) {
+    run.cssFloat = attrs["cssFloat"] as "left" | "right" | "none";
   }
-  if (attrs.distTop !== undefined && attrs.distTop !== null) {
-    run.distTop = attrs.distTop as number;
+  if (attrs["distTop"] !== undefined && attrs["distTop"] !== null) {
+    run.distTop = attrs["distTop"] as number;
   }
-  if (attrs.distBottom !== undefined && attrs.distBottom !== null) {
-    run.distBottom = attrs.distBottom as number;
+  if (attrs["distBottom"] !== undefined && attrs["distBottom"] !== null) {
+    run.distBottom = attrs["distBottom"] as number;
   }
-  if (attrs.distLeft !== undefined && attrs.distLeft !== null) {
-    run.distLeft = attrs.distLeft as number;
+  if (attrs["distLeft"] !== undefined && attrs["distLeft"] !== null) {
+    run.distLeft = attrs["distLeft"] as number;
   }
-  if (attrs.distRight !== undefined && attrs.distRight !== null) {
-    run.distRight = attrs.distRight as number;
+  if (attrs["distRight"] !== undefined && attrs["distRight"] !== null) {
+    run.distRight = attrs["distRight"] as number;
   }
-  if (attrs.position !== undefined && attrs.position !== null) {
-    run.position = attrs.position as NonNullable<ImageRun["position"]>;
+  if (attrs["position"] !== undefined && attrs["position"] !== null) {
+    run.position = attrs["position"] as NonNullable<ImageRun["position"]>;
   }
   return run;
 }
@@ -401,15 +401,20 @@ function paragraphToRuns(
       // Image within paragraph
       const attrs = child.attrs;
       const constrained = constrainImageToPage(
-        (attrs.width as number) || 100,
-        (attrs.height as number) || 100,
+        (attrs["width"] as number) || 100,
+        (attrs["height"] as number) || 100,
         _options.pageContentHeight,
       );
-      const run = buildImageRun(attrs, constrained, childPos, childPos + child.nodeSize);
+      const run = buildImageRun(
+        attrs,
+        constrained,
+        childPos,
+        childPos + child.nodeSize,
+      );
       runs.push(run);
     } else if (child.type.name === "field") {
       // Field node — convert to FieldRun for render-time substitution
-      const ft = child.attrs.fieldType as string;
+      const ft = child.attrs["fieldType"] as string;
       const mappedType: FieldRun["fieldType"] =
         ft === "PAGE"
           ? "PAGE"
@@ -423,14 +428,14 @@ function paragraphToRuns(
       const run: FieldRun = {
         kind: "field",
         fieldType: mappedType,
-        fallback: (child.attrs.displayText as string) || "",
+        fallback: (child.attrs["displayText"] as string) || "",
         pmStart: childPos,
         pmEnd: childPos + child.nodeSize,
       };
       runs.push(run);
     } else if (child.type.name === "math") {
       // Math node — render as plain text fallback in layout
-      const text = (child.attrs.plainText as string) || "[equation]";
+      const text = (child.attrs["plainText"] as string) || "[equation]";
       const run: TextRun = {
         kind: "text",
         text,
@@ -476,11 +481,16 @@ function paragraphToRuns(
         } else if (sdtChild.type.name === "image") {
           const attrs = sdtChild.attrs;
           const sdtConstrained = constrainImageToPage(
-            (attrs.width as number) || 100,
-            (attrs.height as number) || 100,
+            (attrs["width"] as number) || 100,
+            (attrs["height"] as number) || 100,
             _options.pageContentHeight,
           );
-          const run = buildImageRun(attrs, sdtConstrained, sdtChildPos, sdtChildPos + sdtChild.nodeSize);
+          const run = buildImageRun(
+            attrs,
+            sdtConstrained,
+            sdtChildPos,
+            sdtChildPos + sdtChild.nodeSize,
+          );
           runs.push(run);
         }
       });
@@ -605,7 +615,9 @@ function convertParagraphAttrs(
     if (topBorder) {
       attrs.borders.top = topBorder;
     }
-    const bottomBorder = borders.bottom ? convertBorder(borders.bottom) : undefined;
+    const bottomBorder = borders.bottom
+      ? convertBorder(borders.bottom)
+      : undefined;
     if (bottomBorder) {
       attrs.borders.bottom = bottomBorder;
     }
@@ -613,11 +625,15 @@ function convertParagraphAttrs(
     if (leftBorder) {
       attrs.borders.left = leftBorder;
     }
-    const rightBorder = borders.right ? convertBorder(borders.right) : undefined;
+    const rightBorder = borders.right
+      ? convertBorder(borders.right)
+      : undefined;
     if (rightBorder) {
       attrs.borders.right = rightBorder;
     }
-    const betweenBorder = borders.between ? convertBorder(borders.between) : undefined;
+    const betweenBorder = borders.between
+      ? convertBorder(borders.between)
+      : undefined;
     if (betweenBorder) {
       attrs.borders.between = betweenBorder;
     }
@@ -849,7 +865,7 @@ function extractCellBorders(
   attrs: Record<string, unknown>,
   theme?: Theme | null,
 ): CellBorders | undefined {
-  const borders = attrs.borders as Record<
+  const borders = attrs["borders"] as Record<
     string,
     {
       style?: string;
@@ -940,7 +956,7 @@ function convertTableCell(
 
   // Convert cell margins (twips) to pixel padding
   // OOXML TableNormal defaults: top=0, bottom=0, left=108 twips (~7px), right=108 twips (~7px)
-  const margins = attrs.margins as
+  const margins = attrs["margins"] as
     | { top?: number; bottom?: number; left?: number; right?: number }
     | undefined;
   const padding = {
@@ -953,18 +969,18 @@ function convertTableCell(
   const cell: TableCell = {
     id: nextBlockId(),
     blocks,
-    colSpan: attrs.colspan as number,
-    rowSpan: attrs.rowspan as number,
+    colSpan: attrs["colspan"] as number,
+    rowSpan: attrs["rowspan"] as number,
     padding,
   };
-  if (attrs.width) {
-    cell.width = twipsToPixels(attrs.width as number);
+  if (attrs["width"]) {
+    cell.width = twipsToPixels(attrs["width"] as number);
   }
-  if (attrs.verticalAlign) {
-    cell.verticalAlign = attrs.verticalAlign as "top" | "center" | "bottom";
+  if (attrs["verticalAlign"]) {
+    cell.verticalAlign = attrs["verticalAlign"] as "top" | "center" | "bottom";
   }
-  if (attrs.backgroundColor) {
-    cell.background = `#${attrs.backgroundColor}`;
+  if (attrs["backgroundColor"]) {
+    cell.background = `#${attrs["backgroundColor"]}`;
   }
   const cellBorders = extractCellBorders(
     attrs as Record<string, unknown>,
@@ -1001,14 +1017,14 @@ function convertTableRow(
     id: nextBlockId(),
     cells,
   };
-  if (attrs.height) {
-    row.height = twipsToPixels(attrs.height as number);
+  if (attrs["height"]) {
+    row.height = twipsToPixels(attrs["height"] as number);
   }
-  if (attrs.heightRule) {
-    row.heightRule = attrs.heightRule as "auto" | "atLeast" | "exact";
+  if (attrs["heightRule"]) {
+    row.heightRule = attrs["heightRule"] as "auto" | "atLeast" | "exact";
   }
-  if (attrs.isHeader) {
-    row.isHeader = attrs.isHeader as boolean;
+  if (attrs["isHeader"]) {
+    row.isHeader = attrs["isHeader"] as boolean;
   }
   return row;
 }
@@ -1034,11 +1050,11 @@ function convertTable(
   });
 
   // Extract columnWidths from node attributes and convert from twips to pixels
-  const columnWidthsTwips = node.attrs.columnWidths as number[] | undefined;
+  const columnWidthsTwips = node.attrs["columnWidths"] as number[] | undefined;
   let columnWidths = columnWidthsTwips?.map(twipsToPixels);
 
-  const width = node.attrs.width as number | undefined;
-  const widthType = node.attrs.widthType as string | undefined;
+  const width = node.attrs["width"] as number | undefined;
+  const widthType = node.attrs["widthType"] as string | undefined;
 
   // Fallback: compute column widths from first row cell widths if table attr is missing
   if (!columnWidths && rows.length > 0) {
@@ -1052,14 +1068,14 @@ function convertTable(
   }
 
   // Extract justification
-  const justification = node.attrs.justification as
+  const justification = node.attrs["justification"] as
     | "left"
     | "center"
     | "right"
     | undefined;
 
   // Extract table indent from _originalFormatting (w:tblInd)
-  const originalFormatting = node.attrs._originalFormatting as
+  const originalFormatting = node.attrs["_originalFormatting"] as
     | { indent?: { value: number; type: string } }
     | undefined;
   const indentPx =
@@ -1068,7 +1084,7 @@ function convertTable(
       ? twipsToPixels(originalFormatting.indent.value)
       : undefined;
 
-  const floating = node.attrs.floating as
+  const floating = node.attrs["floating"] as
     | {
         horzAnchor?: "margin" | "page" | "text";
         vertAnchor?: "margin" | "page" | "text";
@@ -1089,19 +1105,41 @@ function convertTable(
       }
     | undefined;
 
-  let floatingPx: import("../layout-engine/types").FloatingTablePosition | undefined;
+  let floatingPx:
+    | import("../layout-engine/types").FloatingTablePosition
+    | undefined;
   if (floating) {
     const fp: import("../layout-engine/types").FloatingTablePosition = {};
-    if (floating.horzAnchor) { fp.horzAnchor = floating.horzAnchor; }
-    if (floating.vertAnchor) { fp.vertAnchor = floating.vertAnchor; }
-    if (floating.tblpX !== undefined) { fp.tblpX = twipsToPixels(floating.tblpX); }
-    if (floating.tblpXSpec) { fp.tblpXSpec = floating.tblpXSpec; }
-    if (floating.tblpY !== undefined) { fp.tblpY = twipsToPixels(floating.tblpY); }
-    if (floating.tblpYSpec) { fp.tblpYSpec = floating.tblpYSpec; }
-    if (floating.topFromText !== undefined) { fp.topFromText = twipsToPixels(floating.topFromText); }
-    if (floating.bottomFromText !== undefined) { fp.bottomFromText = twipsToPixels(floating.bottomFromText); }
-    if (floating.leftFromText !== undefined) { fp.leftFromText = twipsToPixels(floating.leftFromText); }
-    if (floating.rightFromText !== undefined) { fp.rightFromText = twipsToPixels(floating.rightFromText); }
+    if (floating.horzAnchor) {
+      fp.horzAnchor = floating.horzAnchor;
+    }
+    if (floating.vertAnchor) {
+      fp.vertAnchor = floating.vertAnchor;
+    }
+    if (floating.tblpX !== undefined) {
+      fp.tblpX = twipsToPixels(floating.tblpX);
+    }
+    if (floating.tblpXSpec) {
+      fp.tblpXSpec = floating.tblpXSpec;
+    }
+    if (floating.tblpY !== undefined) {
+      fp.tblpY = twipsToPixels(floating.tblpY);
+    }
+    if (floating.tblpYSpec) {
+      fp.tblpYSpec = floating.tblpYSpec;
+    }
+    if (floating.topFromText !== undefined) {
+      fp.topFromText = twipsToPixels(floating.topFromText);
+    }
+    if (floating.bottomFromText !== undefined) {
+      fp.bottomFromText = twipsToPixels(floating.bottomFromText);
+    }
+    if (floating.leftFromText !== undefined) {
+      fp.leftFromText = twipsToPixels(floating.leftFromText);
+    }
+    if (floating.rightFromText !== undefined) {
+      fp.rightFromText = twipsToPixels(floating.rightFromText);
+    }
     floatingPx = fp;
   }
 
@@ -1112,12 +1150,24 @@ function convertTable(
     pmStart: startPos,
     pmEnd: startPos + node.nodeSize,
   };
-  if (columnWidths) { tableBlock.columnWidths = columnWidths; }
-  if (width !== undefined) { tableBlock.width = width; }
-  if (widthType !== undefined) { tableBlock.widthType = widthType; }
-  if (justification) { tableBlock.justification = justification; }
-  if (indentPx !== undefined) { tableBlock.indent = indentPx; }
-  if (floatingPx) { tableBlock.floating = floatingPx; }
+  if (columnWidths) {
+    tableBlock.columnWidths = columnWidths;
+  }
+  if (width !== undefined) {
+    tableBlock.width = width;
+  }
+  if (widthType !== undefined) {
+    tableBlock.widthType = widthType;
+  }
+  if (justification) {
+    tableBlock.justification = justification;
+  }
+  if (indentPx !== undefined) {
+    tableBlock.indent = indentPx;
+  }
+  if (floatingPx) {
+    tableBlock.floating = floatingPx;
+  }
   return tableBlock;
 }
 
@@ -1130,7 +1180,7 @@ function convertImage(
   pageContentHeight?: number,
 ): ImageBlock {
   const attrs = node.attrs;
-  const wrapType = attrs.wrapType as string | undefined;
+  const wrapType = attrs["wrapType"] as string | undefined;
 
   // Only anchor images with 'behind' or 'inFront' wrap types
   // Other wrap types (square, tight, through, topAndBottom) need text wrapping
@@ -1138,41 +1188,41 @@ function convertImage(
   const shouldAnchor = wrapType === "behind" || wrapType === "inFront";
 
   const constrained = constrainImageToPage(
-    (attrs.width as number) || 100,
-    (attrs.height as number) || 100,
+    (attrs["width"] as number) || 100,
+    (attrs["height"] as number) || 100,
     pageContentHeight,
   );
 
   const imgBlock: ImageBlock = {
     kind: "image",
     id: nextBlockId(),
-    src: attrs.src as string,
+    src: attrs["src"] as string,
     width: constrained.width,
     height: constrained.height,
     pmStart: startPos,
     pmEnd: startPos + node.nodeSize,
   };
-  if (attrs.alt) {
-    imgBlock.alt = attrs.alt as string;
+  if (attrs["alt"]) {
+    imgBlock.alt = attrs["alt"] as string;
   }
-  if (attrs.transform) {
-    imgBlock.transform = attrs.transform as string;
+  if (attrs["transform"]) {
+    imgBlock.transform = attrs["transform"] as string;
   }
   if (shouldAnchor) {
     const anchor: NonNullable<ImageBlock["anchor"]> = {
       isAnchored: true,
       behindDoc: wrapType === "behind",
     };
-    if (attrs.distLeft !== undefined && attrs.distLeft !== null) {
-      anchor.offsetH = attrs.distLeft as number;
+    if (attrs["distLeft"] !== undefined && attrs["distLeft"] !== null) {
+      anchor.offsetH = attrs["distLeft"] as number;
     }
-    if (attrs.distTop !== undefined && attrs.distTop !== null) {
-      anchor.offsetV = attrs.distTop as number;
+    if (attrs["distTop"] !== undefined && attrs["distTop"] !== null) {
+      anchor.offsetV = attrs["distTop"] as number;
     }
     imgBlock.anchor = anchor;
   }
-  if (attrs.hlinkHref) {
-    imgBlock.hlinkHref = attrs.hlinkHref as string;
+  if (attrs["hlinkHref"]) {
+    imgBlock.hlinkHref = attrs["hlinkHref"] as string;
   }
   return imgBlock;
 }
@@ -1200,31 +1250,32 @@ function convertTextBoxNode(
   const textBox: TextBoxBlock = {
     kind: "textBox",
     id: nextBlockId(),
-    width: (attrs.width as number) ?? DEFAULT_TEXTBOX_WIDTH,
+    width: (attrs["width"] as number) ?? DEFAULT_TEXTBOX_WIDTH,
     margins: {
-      top: (attrs.marginTop as number) ?? DEFAULT_TEXTBOX_MARGINS.top,
-      bottom: (attrs.marginBottom as number) ?? DEFAULT_TEXTBOX_MARGINS.bottom,
-      left: (attrs.marginLeft as number) ?? DEFAULT_TEXTBOX_MARGINS.left,
-      right: (attrs.marginRight as number) ?? DEFAULT_TEXTBOX_MARGINS.right,
+      top: (attrs["marginTop"] as number) ?? DEFAULT_TEXTBOX_MARGINS.top,
+      bottom:
+        (attrs["marginBottom"] as number) ?? DEFAULT_TEXTBOX_MARGINS.bottom,
+      left: (attrs["marginLeft"] as number) ?? DEFAULT_TEXTBOX_MARGINS.left,
+      right: (attrs["marginRight"] as number) ?? DEFAULT_TEXTBOX_MARGINS.right,
     },
     content: contentBlocks,
     pmStart: startPos,
     pmEnd: startPos + node.nodeSize,
   };
-  if (attrs.height != null) {
-    textBox.height = attrs.height as number;
+  if (attrs["height"] != null) {
+    textBox.height = attrs["height"] as number;
   }
-  if (attrs.fillColor != null) {
-    textBox.fillColor = attrs.fillColor as string;
+  if (attrs["fillColor"] != null) {
+    textBox.fillColor = attrs["fillColor"] as string;
   }
-  if (attrs.outlineWidth != null) {
-    textBox.outlineWidth = attrs.outlineWidth as number;
+  if (attrs["outlineWidth"] != null) {
+    textBox.outlineWidth = attrs["outlineWidth"] as number;
   }
-  if (attrs.outlineColor != null) {
-    textBox.outlineColor = attrs.outlineColor as string;
+  if (attrs["outlineColor"] != null) {
+    textBox.outlineColor = attrs["outlineColor"] as string;
   }
-  if (attrs.outlineStyle != null) {
-    textBox.outlineStyle = attrs.outlineStyle as string;
+  if (attrs["outlineStyle"] != null) {
+    textBox.outlineStyle = attrs["outlineStyle"] as string;
   }
   return textBox;
 }
@@ -1254,111 +1305,112 @@ export function toFlowBlocks(
     const pos = offset + nodeOffset;
 
     switch (node.type.name) {
-      case "paragraph":
-        {
-          const block = convertParagraph(node, pos, opts);
-          const pmAttrs = node.attrs as PMParagraphAttrs;
+      case "paragraph": {
+        const block = convertParagraph(node, pos, opts);
+        const pmAttrs = node.attrs as PMParagraphAttrs;
 
-          if (pmAttrs.numPr) {
-            const numId = pmAttrs.numPr.numId;
-            // numId === 0 means "no numbering" per OOXML spec (ECMA-376)
-            if (numId !== null && numId !== undefined && numId !== 0) {
-              const level = pmAttrs.numPr.ilvl ?? 0;
-              const counters =
-                listCounters.get(numId) ??
-                (Array.from({ length: 9 }, () => 0) as number[]);
+        if (pmAttrs.numPr) {
+          const numId = pmAttrs.numPr.numId;
+          // numId === 0 means "no numbering" per OOXML spec (ECMA-376)
+          if (numId !== null && numId !== undefined && numId !== 0) {
+            const level = pmAttrs.numPr.ilvl ?? 0;
+            const counters =
+              listCounters.get(numId) ??
+              (Array.from({ length: 9 }, () => 0) as number[]);
 
-              counters[level] = (counters[level] ?? 0) + 1;
-              for (let i = level + 1; i < counters.length; i += 1) {
-                counters[i] = 0;
-              }
-
-              listCounters.set(numId, counters);
-
-              // Compute the rendered marker text.
-              // Bullets keep their character as-is. For numbered lists,
-              // if the DOCX lvlText contains %N placeholders (e.g., "%1.%2"),
-              // substitute them with the actual counter values.
-              const marker = resolveListMarker(pmAttrs, counters, level);
-              block.attrs = { ...block.attrs, listMarker: marker };
+            counters[level] = (counters[level] ?? 0) + 1;
+            for (let i = level + 1; i < counters.length; i += 1) {
+              counters[i] = 0;
             }
-          } else if (
-            pmAttrs.listMarker &&
-            pmAttrs.listMarker.includes("%") &&
-            !pmAttrs.listIsBullet
-          ) {
-            // Paragraph has a raw format-string marker (e.g., "%1.%2") from
-            // style-inherited numbering but no numPr to drive counters.
-            // Substitute placeholders with the most-recently-used counters
-            // so the marker isn't rendered literally.
-            const lastCounters =
-              listCounters.size > 0
-                ? Array.from(listCounters.values()).at(-1)
-                : undefined;
-            if (lastCounters) {
-              const marker = substituteMarkerPlaceholders(
-                pmAttrs.listMarker,
-                lastCounters as number[],
-              );
-              block.attrs = { ...block.attrs, listMarker: marker };
-            }
+
+            listCounters.set(numId, counters);
+
+            // Compute the rendered marker text.
+            // Bullets keep their character as-is. For numbered lists,
+            // if the DOCX lvlText contains %N placeholders (e.g., "%1.%2"),
+            // substitute them with the actual counter values.
+            const marker = resolveListMarker(pmAttrs, counters, level);
+            block.attrs = { ...block.attrs, listMarker: marker };
           }
-
-          blocks.push(block);
-
-          // Emit section break block if this paragraph ends a section
-          const secProps = pmAttrs._sectionProperties as
-            | SectionProperties
-            | undefined;
-          if (secProps || pmAttrs.sectionBreakType) {
-            const sectionBreak: SectionBreakBlock = {
-              kind: "sectionBreak",
-              id: nextBlockId(),
-            };
-            const breakType = secProps?.sectionStart ?? pmAttrs.sectionBreakType;
-            if (breakType) {
-              sectionBreak.type = breakType as NonNullable<SectionBreakBlock["type"]>;
-            }
-
-            if (secProps) {
-              // Populate page size
-              if (secProps.pageWidth || secProps.pageHeight) {
-                sectionBreak.pageSize = {
-                  w: twipsToPixels(secProps.pageWidth ?? 12_240),
-                  h: twipsToPixels(secProps.pageHeight ?? 15_840),
-                };
-              }
-              // Populate margins
-              if (
-                secProps.marginTop !== undefined ||
-                secProps.marginLeft !== undefined
-              ) {
-                sectionBreak.margins = {
-                  top: twipsToPixels(secProps.marginTop ?? 1440),
-                  bottom: twipsToPixels(secProps.marginBottom ?? 1440),
-                  left: twipsToPixels(secProps.marginLeft ?? 1440),
-                  right: twipsToPixels(secProps.marginRight ?? 1440),
-                };
-              }
-              // Populate columns
-              const colCount = secProps.columnCount ?? 1;
-              if (colCount > 1) {
-                const cols: ColumnLayout = {
-                  count: colCount,
-                  gap: twipsToPixels(secProps.columnSpace ?? 720),
-                  equalWidth: secProps.equalWidth ?? true,
-                };
-                if (secProps.separator !== undefined) {
-                  cols.separator = secProps.separator;
-                }
-                sectionBreak.columns = cols;
-              }
-            }
-
-            blocks.push(sectionBreak);
+        } else if (
+          pmAttrs.listMarker &&
+          pmAttrs.listMarker.includes("%") &&
+          !pmAttrs.listIsBullet
+        ) {
+          // Paragraph has a raw format-string marker (e.g., "%1.%2") from
+          // style-inherited numbering but no numPr to drive counters.
+          // Substitute placeholders with the most-recently-used counters
+          // so the marker isn't rendered literally.
+          const lastCounters =
+            listCounters.size > 0
+              ? Array.from(listCounters.values()).at(-1)
+              : undefined;
+          if (lastCounters) {
+            const marker = substituteMarkerPlaceholders(
+              pmAttrs.listMarker,
+              lastCounters as number[],
+            );
+            block.attrs = { ...block.attrs, listMarker: marker };
           }
-          break;
         }
+
+        blocks.push(block);
+
+        // Emit section break block if this paragraph ends a section
+        const secProps = pmAttrs._sectionProperties as
+          | SectionProperties
+          | undefined;
+        if (secProps || pmAttrs.sectionBreakType) {
+          const sectionBreak: SectionBreakBlock = {
+            kind: "sectionBreak",
+            id: nextBlockId(),
+          };
+          const breakType = secProps?.sectionStart ?? pmAttrs.sectionBreakType;
+          if (breakType) {
+            sectionBreak.type = breakType as NonNullable<
+              SectionBreakBlock["type"]
+            >;
+          }
+
+          if (secProps) {
+            // Populate page size
+            if (secProps.pageWidth || secProps.pageHeight) {
+              sectionBreak.pageSize = {
+                w: twipsToPixels(secProps.pageWidth ?? 12_240),
+                h: twipsToPixels(secProps.pageHeight ?? 15_840),
+              };
+            }
+            // Populate margins
+            if (
+              secProps.marginTop !== undefined ||
+              secProps.marginLeft !== undefined
+            ) {
+              sectionBreak.margins = {
+                top: twipsToPixels(secProps.marginTop ?? 1440),
+                bottom: twipsToPixels(secProps.marginBottom ?? 1440),
+                left: twipsToPixels(secProps.marginLeft ?? 1440),
+                right: twipsToPixels(secProps.marginRight ?? 1440),
+              };
+            }
+            // Populate columns
+            const colCount = secProps.columnCount ?? 1;
+            if (colCount > 1) {
+              const cols: ColumnLayout = {
+                count: colCount,
+                gap: twipsToPixels(secProps.columnSpace ?? 720),
+                equalWidth: secProps.equalWidth ?? true,
+              };
+              if (secProps.separator !== undefined) {
+                cols.separator = secProps.separator;
+              }
+              sectionBreak.columns = cols;
+            }
+          }
+
+          blocks.push(sectionBreak);
+        }
+        break;
+      }
 
       case "table":
         blocks.push(convertTable(node, pos, opts, listCounters));

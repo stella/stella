@@ -40,7 +40,7 @@ function toggleList(numId: number): Command {
       return false;
     }
 
-    const currentNumPr = paragraph.attrs.numPr;
+    const currentNumPr = paragraph.attrs["numPr"];
     const isInSameList = currentNumPr?.numId === numId;
 
     if (!dispatch) {
@@ -66,7 +66,7 @@ function toggleList(numId: number): Command {
           const isBullet = numId === 1;
           tr = tr.setNodeMarkup(pos, undefined, {
             ...node.attrs,
-            numPr: { numId, ilvl: node.attrs.numPr?.ilvl || 0 },
+            numPr: { numId, ilvl: node.attrs["numPr"]?.ilvl || 0 },
             listIsBullet: isBullet,
             listNumFmt: isBullet ? null : "decimal",
             listMarker: null,
@@ -93,11 +93,11 @@ const increaseListLevel: Command = (state, dispatch) => {
   if (paragraph.type.name !== "paragraph") {
     return false;
   }
-  if (!paragraph.attrs.numPr) {
+  if (!paragraph.attrs["numPr"]) {
     return false;
   }
 
-  const currentLevel = paragraph.attrs.numPr.ilvl || 0;
+  const currentLevel = paragraph.attrs["numPr"].ilvl || 0;
   if (currentLevel >= 8) {
     return false;
   }
@@ -112,7 +112,7 @@ const increaseListLevel: Command = (state, dispatch) => {
     state.tr
       .setNodeMarkup(paragraphPos, undefined, {
         ...paragraph.attrs,
-        numPr: { ...paragraph.attrs.numPr, ilvl: currentLevel + 1 },
+        numPr: { ...paragraph.attrs["numPr"], ilvl: currentLevel + 1 },
         // Clear explicit indentation so layout engine computes from new level
         indentLeft: null,
         indentFirstLine: null,
@@ -131,11 +131,11 @@ const decreaseListLevel: Command = (state, dispatch) => {
   if (paragraph.type.name !== "paragraph") {
     return false;
   }
-  if (!paragraph.attrs.numPr) {
+  if (!paragraph.attrs["numPr"]) {
     return false;
   }
 
-  const currentLevel = paragraph.attrs.numPr.ilvl || 0;
+  const currentLevel = paragraph.attrs["numPr"].ilvl || 0;
 
   if (!dispatch) {
     return true;
@@ -163,7 +163,7 @@ const decreaseListLevel: Command = (state, dispatch) => {
       state.tr
         .setNodeMarkup(paragraphPos, undefined, {
           ...paragraph.attrs,
-          numPr: { ...paragraph.attrs.numPr, ilvl: currentLevel - 1 },
+          numPr: { ...paragraph.attrs["numPr"], ilvl: currentLevel - 1 },
           indentLeft: null,
           indentFirstLine: null,
           hangingIndent: null,
@@ -186,7 +186,11 @@ const removeList: Command = (state, dispatch) => {
   const seen = new Set<number>();
 
   state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
-    if (node.type.name === "paragraph" && node.attrs.numPr && !seen.has(pos)) {
+    if (
+      node.type.name === "paragraph" &&
+      node.attrs["numPr"] &&
+      !seen.has(pos)
+    ) {
       seen.add(pos);
       tr = tr.setNodeMarkup(pos, undefined, {
         ...node.attrs,
@@ -213,7 +217,7 @@ export function isInList(state: EditorState): boolean {
   if (paragraph.type.name !== "paragraph") {
     return false;
   }
-  return !!paragraph.attrs.numPr?.numId;
+  return !!paragraph.attrs["numPr"]?.numId;
 }
 
 export function getListInfo(
@@ -225,13 +229,13 @@ export function getListInfo(
   if (paragraph.type.name !== "paragraph") {
     return null;
   }
-  if (!paragraph.attrs.numPr?.numId) {
+  if (!paragraph.attrs["numPr"]?.numId) {
     return null;
   }
 
   return {
-    numId: paragraph.attrs.numPr.numId,
-    ilvl: paragraph.attrs.numPr.ilvl || 0,
+    numId: paragraph.attrs["numPr"].numId,
+    ilvl: paragraph.attrs["numPr"].ilvl || 0,
   };
 }
 
@@ -251,7 +255,7 @@ function exitListOnEmptyEnter(): Command {
       return false;
     }
 
-    const numPr = paragraph.attrs.numPr;
+    const numPr = paragraph.attrs["numPr"];
     if (!numPr) {
       return false;
     }
@@ -286,7 +290,7 @@ function splitListItem(): Command {
       return false;
     }
 
-    const numPr = paragraph.attrs.numPr;
+    const numPr = paragraph.attrs["numPr"];
     if (!numPr) {
       return false;
     }
@@ -296,7 +300,10 @@ function splitListItem(): Command {
       const pos = $from.pos;
 
       tr.split(pos, 1, [
-        { type: state.schema.nodes.paragraph!, attrs: { ...paragraph.attrs } },
+        {
+          type: state.schema.nodes["paragraph"]!,
+          attrs: { ...paragraph.attrs },
+        },
       ]);
 
       dispatch(tr.scrollIntoView());
@@ -321,7 +328,7 @@ function backspaceExitList(): Command {
       return false;
     }
 
-    const numPr = paragraph.attrs.numPr;
+    const numPr = paragraph.attrs["numPr"];
     if (!numPr) {
       return false;
     }
@@ -347,8 +354,9 @@ function increaseListIndent(): Command {
     // Collect all list paragraphs in the selection range
     const positions: { pos: number; attrs: Record<string, unknown> }[] = [];
     state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
-      if (node.type.name === "paragraph" && node.attrs.numPr) {
-        const currentLevel = (node.attrs.numPr as { ilvl?: number }).ilvl ?? 0;
+      if (node.type.name === "paragraph" && node.attrs["numPr"]) {
+        const currentLevel =
+          (node.attrs["numPr"] as { ilvl?: number }).ilvl ?? 0;
         if (currentLevel < 8) {
           positions.push({ pos, attrs: node.attrs as Record<string, unknown> });
         }
@@ -362,7 +370,7 @@ function increaseListIndent(): Command {
     if (dispatch) {
       let tr = state.tr;
       for (const { pos, attrs } of positions) {
-        const numPr = attrs.numPr as { ilvl?: number; numId?: number };
+        const numPr = attrs["numPr"] as { ilvl?: number; numId?: number };
         tr = tr.setNodeMarkup(pos, undefined, {
           ...attrs,
           numPr: { ...numPr, ilvl: (numPr.ilvl ?? 0) + 1 },
@@ -384,7 +392,7 @@ function decreaseListIndent(): Command {
     // Collect all list paragraphs in the selection range
     const positions: { pos: number; attrs: Record<string, unknown> }[] = [];
     state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
-      if (node.type.name === "paragraph" && node.attrs.numPr) {
+      if (node.type.name === "paragraph" && node.attrs["numPr"]) {
         positions.push({ pos, attrs: node.attrs as Record<string, unknown> });
       }
     });
@@ -396,7 +404,7 @@ function decreaseListIndent(): Command {
     if (dispatch) {
       let tr = state.tr;
       for (const { pos, attrs } of positions) {
-        const numPr = attrs.numPr as { ilvl?: number; numId?: number };
+        const numPr = attrs["numPr"] as { ilvl?: number; numId?: number };
         const currentLevel = numPr.ilvl ?? 0;
         if (currentLevel <= 0) {
           tr = tr.setNodeMarkup(pos, undefined, {
@@ -428,7 +436,7 @@ function decreaseListIndent(): Command {
 function insertTab(): Command {
   return (state, dispatch) => {
     const { schema } = state;
-    const tabType = schema.nodes.tab;
+    const tabType = schema.nodes["tab"];
 
     if (!tabType) {
       return false;

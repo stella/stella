@@ -10,7 +10,7 @@ const APP_ROOT = import.meta.dirname;
 const ANALYZE_MODE = "analyze";
 
 export default defineConfig(({ mode }) => {
-  const shouldAnalyze = mode === ANALYZE_MODE || process.env.ANALYZE === "1";
+  const shouldAnalyze = mode === ANALYZE_MODE || process.env["ANALYZE"] === "1";
 
   return {
     root: APP_ROOT,

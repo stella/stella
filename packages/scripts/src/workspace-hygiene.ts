@@ -44,7 +44,7 @@ const readWorkspacePackage = (
     };
   }
 
-  const maybeName = packageJson.name;
+  const maybeName = packageJson["name"];
   return {
     name: typeof maybeName === "string" ? maybeName : undefined,
     parseFailed: false,

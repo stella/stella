@@ -66,16 +66,16 @@ const sanitizeHtml = (html: string): string => {
       }
     }
 
-    if (tagName !== "a" || !el.attribs.href) {
+    if (tagName !== "a" || !el.attribs["href"]) {
       continue;
     }
 
-    if (!URL.canParse(el.attribs.href, "https://placeholder.invalid")) {
+    if (!URL.canParse(el.attribs["href"], "https://placeholder.invalid")) {
       $(el).removeAttr("href");
       continue;
     }
 
-    const url = new URL(el.attribs.href, "https://placeholder.invalid");
+    const url = new URL(el.attribs["href"], "https://placeholder.invalid");
     if (!ALLOWED_HREF_SCHEMES.has(url.protocol)) {
       $(el).removeAttr("href");
     }

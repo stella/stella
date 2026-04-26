@@ -44,7 +44,7 @@ async function insertImageFiles(
   view: EditorView,
   files: File[],
 ): Promise<void> {
-  const imageType = view.state.schema.nodes.image;
+  const imageType = view.state.schema.nodes["image"];
   if (!imageType) {
     return;
   }
@@ -114,7 +114,7 @@ export const ImagePasteExtension = createExtension({
               return false;
             }
 
-            if (!view.state.schema.nodes.image) {
+            if (!view.state.schema.nodes["image"]) {
               return false;
             }
 

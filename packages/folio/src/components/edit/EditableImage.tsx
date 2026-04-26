@@ -513,8 +513,8 @@ export function EditableImage({
 
   // Build container styles
   const containerStyle: CSSProperties = {
-    ...STYLES.container,
-    ...(isFloatingImage(image) ? STYLES.containerFloating : {}),
+    ...STYLES["container"],
+    ...(isFloatingImage(image) ? STYLES["containerFloating"] : {}),
     ...additionalStyle,
   };
 
@@ -531,10 +531,10 @@ export function EditableImage({
 
   // Build image styles
   const imageStyle: CSSProperties = {
-    ...STYLES.image,
+    ...STYLES["image"],
     width: `${currentWidth}px`,
     height: `${currentHeight}px`,
-    ...(selected ? STYLES.imageSelected : {}),
+    ...(selected ? STYLES["imageSelected"] : {}),
   };
 
   // Apply transformations
@@ -582,7 +582,7 @@ export function EditableImage({
       >
         <span
           style={{
-            ...STYLES.placeholder,
+            ...STYLES["placeholder"],
             width: `${currentWidth}px`,
             height: `${currentHeight}px`,
           }}
@@ -664,7 +664,7 @@ export function EditableImage({
 
       {/* Dimension indicator during resize */}
       {showDimensions && (
-        <div style={STYLES.dimensionIndicator}>
+        <div style={STYLES["dimensionIndicator"]}>
           {currentWidth} × {currentHeight}
         </div>
       )}
@@ -691,8 +691,8 @@ function ResizeHandleComponent({
   const isCorner = ["nw", "ne", "se", "sw"].includes(position);
 
   const handleStyle: CSSProperties = {
-    ...STYLES.handle,
-    ...(isCorner ? STYLES.handleCorner : STYLES.handleEdge),
+    ...STYLES["handle"],
+    ...(isCorner ? STYLES["handleCorner"] : STYLES["handleEdge"]),
     ...(STYLES[
       `handle${position.toUpperCase()}` as keyof typeof STYLES
     ] as CSSProperties),
@@ -828,4 +828,3 @@ export function isPointInImage(
     y <= imageY + bounds.height
   );
 }
-

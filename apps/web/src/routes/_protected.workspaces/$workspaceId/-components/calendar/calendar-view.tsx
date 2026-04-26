@@ -330,7 +330,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             entity.kind === "task" && entity.status
               ? (TASK_STATUS_DOT_COLORS[entity.status] ?? "var(--option-gray)")
               : (KIND_DOT_COLORS[entity.kind] ??
-                KIND_DOT_COLORS.document ??
+                KIND_DOT_COLORS["document"] ??
                 "var(--option-gray)"),
         });
       }

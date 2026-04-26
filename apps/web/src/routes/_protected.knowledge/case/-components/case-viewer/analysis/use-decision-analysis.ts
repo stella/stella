@@ -38,21 +38,21 @@ const parseAnalysisResponse = (value: unknown): AnalysisResponse | null => {
     return null;
   }
 
-  if (value.status === "done" || value.status === "generating") {
+  if (value["status"] === "done" || value["status"] === "generating") {
     return {
-      status: value.status,
-      analysis: value.analysis,
+      status: value["status"],
+      analysis: value["analysis"],
     };
   }
 
-  if (value.status === "error") {
-    return typeof value.error === "string"
+  if (value["status"] === "error") {
+    return typeof value["error"] === "string"
       ? {
-          status: value.status,
-          error: value.error,
+          status: value["status"],
+          error: value["error"],
         }
       : {
-          status: value.status,
+          status: value["status"],
         };
   }
 

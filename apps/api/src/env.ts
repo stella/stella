@@ -41,10 +41,10 @@ const envApi = createEnv({
       v.picklist(["ses", "smtp"]),
       v.check((provider) => {
         if (provider === "ses") {
-          return !!process.env.SES_REGION;
+          return !!process.env["SES_REGION"];
         }
         if (provider === "smtp") {
-          return !!(process.env.SMTP_HOST && process.env.SMTP_PORT);
+          return !!(process.env["SMTP_HOST"] && process.env["SMTP_PORT"]);
         }
         return true;
       }, "Missing required env vars for the selected EMAIL_PROVIDER"),

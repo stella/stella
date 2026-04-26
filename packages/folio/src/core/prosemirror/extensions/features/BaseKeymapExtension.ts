@@ -60,10 +60,11 @@ const clearIndentOnBackspace: Command = (state, dispatch) => {
 
   const attrs = $cursor.parent.attrs;
   const hasFirstLine =
-    attrs.indentFirstLine !== null && (attrs.indentFirstLine as number) > 0;
-  const hasHanging = !!attrs.hangingIndent;
+    attrs["indentFirstLine"] !== null &&
+    (attrs["indentFirstLine"] as number) > 0;
+  const hasHanging = !!attrs["hangingIndent"];
   const hasIndentLeft =
-    attrs.indentLeft !== null && (attrs.indentLeft as number) > 0;
+    attrs["indentLeft"] !== null && (attrs["indentLeft"] as number) > 0;
 
   if (!hasFirstLine && !hasHanging && !hasIndentLeft) {
     return false;
@@ -151,8 +152,8 @@ const splitBlockClearBorders: Command = (state, dispatch, view) => {
       }
 
       // Clear borders (Word does not propagate paragraph borders on Enter)
-      if (newAttrs.borders) {
-        newAttrs.borders = null;
+      if (newAttrs["borders"]) {
+        newAttrs["borders"] = null;
         attrsChanged = true;
       }
 
@@ -171,7 +172,7 @@ const splitBlockClearBorders: Command = (state, dispatch, view) => {
         let effectiveMarks: Mark[] = styleMarks;
 
         if (effectiveMarks.length === 0 && sourcePara) {
-          const dtf = sourcePara.attrs.defaultTextFormatting as
+          const dtf = sourcePara.attrs["defaultTextFormatting"] as
             | TextFormatting
             | undefined;
           if (dtf) {
@@ -185,15 +186,18 @@ const splitBlockClearBorders: Command = (state, dispatch, view) => {
         if (effectiveMarks.length > 0) {
           // Sync defaultTextFormatting with the actual cursor marks so the empty
           // paragraph measurement (used for caret height) matches the stored marks.
-          const dtf = { ...newAttrs.defaultTextFormatting };
+          const dtf = { ...newAttrs["defaultTextFormatting"] };
           let dtfChanged = false;
           for (const m of effectiveMarks) {
-            if (m.type.name === "fontSize" && m.attrs.size !== dtf.fontSize) {
-              dtf.fontSize = m.attrs.size;
+            if (
+              m.type.name === "fontSize" &&
+              m.attrs["size"] !== dtf.fontSize
+            ) {
+              dtf.fontSize = m.attrs["size"];
               dtfChanged = true;
             }
             if (m.type.name === "fontFamily") {
-              const ascii = m.attrs.ascii as string | undefined;
+              const ascii = m.attrs["ascii"] as string | undefined;
               if (
                 ascii &&
                 (!dtf.fontFamily || dtf.fontFamily.ascii !== ascii)
@@ -201,7 +205,7 @@ const splitBlockClearBorders: Command = (state, dispatch, view) => {
                 dtf.fontFamily = {
                   ...dtf.fontFamily,
                   ascii,
-                  hAnsi: m.attrs.hAnsi,
+                  hAnsi: m.attrs["hAnsi"],
                 };
                 dtfChanged = true;
               }

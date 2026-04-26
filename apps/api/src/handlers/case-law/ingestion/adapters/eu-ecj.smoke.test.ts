@@ -13,7 +13,7 @@ import { describe, expect, test } from "bun:test";
 
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 
-const SKIP = process.env.SMOKE_TEST !== "1";
+const SKIP = process.env["SMOKE_TEST"] !== "1";
 
 describe.skipIf(SKIP)("euEcjAdapter smoke (live)", () => {
   test(

@@ -99,7 +99,10 @@ const tipTapToClauseBody = (json: JSONContent): ClauseParagraph[] => {
       ...(isHeading
         ? {
             style: "heading",
-            level: typeof node.attrs?.level === "number" ? node.attrs.level : 1,
+            level:
+              typeof node.attrs?.["level"] === "number"
+                ? node.attrs["level"]
+                : 1,
           }
         : {}),
     };

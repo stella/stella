@@ -272,7 +272,7 @@ describe("czUsAdapter.fetchPage", () => {
     );
     expect(decision).toBeDefined();
     // eslint-disable-next-line unicorn/no-useless-undefined
-    expect(decision?.metadata.abstract).toEqual(undefined);
+    expect(decision?.metadata["abstract"]).toEqual(undefined);
   });
 
   test("enriches decision with abstract when available", async () => {
@@ -304,7 +304,7 @@ describe("czUsAdapter.fetchPage", () => {
     }
 
     const decision = result.value.decisions[0];
-    expect(decision?.metadata.abstract).toBe(longAbstract);
+    expect(decision?.metadata["abstract"]).toBe(longAbstract);
     const raw = JSON.parse(decision?.sourceRaw ?? "{}");
     expect(raw.textHtml).toBeDefined();
     expect(raw.abstractHtml).toBeDefined();
@@ -381,9 +381,9 @@ describe("czUsAdapter.fetchPage", () => {
     expect(decision?.court).toBe("Ústavní soud");
     expect(decision?.country).toBe("CZE");
     expect(decision?.language).toBe("cs");
-    expect(decision?.metadata.parallelQuotation).toBe("N 42/60 SbNU 507");
-    expect(decision?.metadata.popularName).toBe("Melčák");
-    expect(decision?.metadata.judge).toContain("Pavel Rychetský");
+    expect(decision?.metadata["parallelQuotation"]).toBe("N 42/60 SbNU 507");
+    expect(decision?.metadata["popularName"]).toBe("Melčák");
+    expect(decision?.metadata["judge"]).toContain("Pavel Rychetský");
     expect(decision?.fulltext).toBeDefined();
     expect(decision?.rawHash).toBeDefined();
   });

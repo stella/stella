@@ -101,7 +101,7 @@ export const useImageHandlers = ({
           }
 
           const rId = `rId_img_${Date.now()}`;
-          const imageNode = view.state.schema.nodes.image!.create({
+          const imageNode = view.state.schema.nodes["image"]!.create({
             src: dataUrl,
             alt: file.name,
             width,
@@ -205,7 +205,7 @@ export const useImageHandlers = ({
         return;
       }
 
-      const currentTransform = (node.attrs.transform as string) || "";
+      const currentTransform = (node.attrs["transform"] as string) || "";
 
       // Parse current rotation and flip state
       const rotateMatch = currentTransform.match(
@@ -276,10 +276,10 @@ export const useImageHandlers = ({
           horizontal: data.horizontal,
           vertical: data.vertical,
         },
-        distTop: data.distTop ?? node.attrs.distTop,
-        distBottom: data.distBottom ?? node.attrs.distBottom,
-        distLeft: data.distLeft ?? node.attrs.distLeft,
-        distRight: data.distRight ?? node.attrs.distRight,
+        distTop: data.distTop ?? node.attrs["distTop"],
+        distBottom: data.distBottom ?? node.attrs["distBottom"],
+        distLeft: data.distLeft ?? node.attrs["distLeft"],
+        distRight: data.distRight ?? node.attrs["distRight"],
       });
       view.dispatch(tr.scrollIntoView());
       focusActiveEditor();

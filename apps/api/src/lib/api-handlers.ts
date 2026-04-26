@@ -242,11 +242,11 @@ const logAndCaptureSafeError = ({
   };
 
   if (reqCtx?.posthogDistinctId) {
-    attributes.posthogDistinctId = reqCtx.posthogDistinctId;
+    attributes["posthogDistinctId"] = reqCtx.posthogDistinctId;
   }
 
   if (reqCtx?.sessionId) {
-    attributes.sessionId = reqCtx.sessionId;
+    attributes["sessionId"] = reqCtx.sessionId;
   }
 
   if (reqCtx?.organizationId) {

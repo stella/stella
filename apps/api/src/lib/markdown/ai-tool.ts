@@ -80,13 +80,13 @@ const sanitizeHtml = (html: string): string => {
       }
     }
 
-    if (tagName === "a" && el.attribs.href) {
-      if (!URL.canParse(el.attribs.href, "https://placeholder.invalid")) {
+    if (tagName === "a" && el.attribs["href"]) {
+      if (!URL.canParse(el.attribs["href"], "https://placeholder.invalid")) {
         $(el).removeAttr("href");
         continue;
       }
 
-      const url = new URL(el.attribs.href, "https://placeholder.invalid");
+      const url = new URL(el.attribs["href"], "https://placeholder.invalid");
       if (!ALLOWED_HREF_SCHEMES.has(url.protocol)) {
         $(el).removeAttr("href");
       }

@@ -233,11 +233,11 @@ function parseCellAttrsFromDOM(element: HTMLTableCellElement): TableCellAttrs {
   const borders = extractCellBordersFromCSS(style);
   const margins = extractCellMarginsFromCSS(style);
   const verticalAlign =
-    (element.dataset.valign as TableCellAttrs["verticalAlign"]) ||
+    (element.dataset["valign"] as TableCellAttrs["verticalAlign"]) ||
     mapCssVerticalAlign(style.verticalAlign) ||
     undefined;
   const backgroundColor =
-    element.dataset.bgcolor ||
+    element.dataset["bgcolor"] ||
     parseCssColorToHex(style.backgroundColor) ||
     undefined;
   return {
@@ -275,8 +275,8 @@ const tableSpec: NodeSpec = {
       tag: "table",
       getAttrs(dom): TableAttrs {
         const element = dom as HTMLTableElement;
-        const styleId = element.dataset.styleId;
-        const justification = element.dataset.justification as
+        const styleId = element.dataset["styleId"];
+        const justification = element.dataset["justification"] as
           | NonNullable<TableAttrs["justification"]>
           | undefined;
         return {
@@ -314,7 +314,7 @@ const tableSpec: NodeSpec = {
     } else if (attrs.justification === "right") {
       styles.push("margin-left: auto");
     }
-    domAttrs.style = styles.join("; ");
+    domAttrs["style"] = styles.join("; ");
 
     return ["table", domAttrs, ["tbody", 0]];
   },
@@ -336,7 +336,7 @@ const tableRowSpec: NodeSpec = {
 
     if (attrs.height) {
       const heightPx = Math.round((attrs.height / 20) * 1.333);
-      domAttrs.style = `height: ${heightPx}px`;
+      domAttrs["style"] = `height: ${heightPx}px`;
     }
 
     return ["tr", domAttrs, 0];
@@ -505,10 +505,10 @@ const tableCellSpec: NodeSpec = {
     const domAttrs: Record<string, string> = { class: "docx-table-cell" };
 
     if (attrs.colspan > 1) {
-      domAttrs.colspan = String(attrs.colspan);
+      domAttrs["colspan"] = String(attrs.colspan);
     }
     if (attrs.rowspan > 1) {
-      domAttrs.rowspan = String(attrs.rowspan);
+      domAttrs["rowspan"] = String(attrs.rowspan);
     }
 
     const styles: string[] = [];
@@ -536,7 +536,7 @@ const tableCellSpec: NodeSpec = {
       domAttrs["data-bgcolor"] = attrs.backgroundColor;
       styles.push(`background-color: #${attrs.backgroundColor}`);
     }
-    domAttrs.style = styles.join("; ");
+    domAttrs["style"] = styles.join("; ");
 
     return ["td", domAttrs, 0];
   },
@@ -571,10 +571,10 @@ const tableHeaderSpec: NodeSpec = {
     const domAttrs: Record<string, string> = { class: "docx-table-header" };
 
     if (attrs.colspan > 1) {
-      domAttrs.colspan = String(attrs.colspan);
+      domAttrs["colspan"] = String(attrs.colspan);
     }
     if (attrs.rowspan > 1) {
-      domAttrs.rowspan = String(attrs.rowspan);
+      domAttrs["rowspan"] = String(attrs.rowspan);
     }
 
     const styles: string[] = ["font-weight: bold"];
@@ -604,7 +604,7 @@ const tableHeaderSpec: NodeSpec = {
       styles.push(`background-color: #${attrs.backgroundColor}`);
     }
 
-    domAttrs.style = styles.join("; ");
+    domAttrs["style"] = styles.join("; ");
 
     return ["th", domAttrs, 0];
   },
@@ -659,7 +659,7 @@ function getTableContext(state: EditorState): TableContextInfo {
               columnIndex = colIdx;
               found = true;
             } else {
-              colIdx += child.attrs.colspan || 1;
+              colIdx += child.attrs["colspan"] || 1;
             }
           }
         });
@@ -690,7 +690,7 @@ function getTableContext(state: EditorState): TableContextInfo {
       let cols = 0;
       // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
       row.forEach((cell) => {
-        cols += cell.attrs.colspan || 1;
+        cols += cell.attrs["colspan"] || 1;
       });
       columnCount = Math.max(columnCount, cols);
     }
@@ -698,17 +698,21 @@ function getTableContext(state: EditorState): TableContextInfo {
 
   const canSplitCell =
     cellNode &&
-    ((cellNode.attrs.colspan || 1) > 1 || (cellNode.attrs.rowspan || 1) > 1);
+    ((cellNode.attrs["colspan"] || 1) > 1 ||
+      (cellNode.attrs["rowspan"] || 1) > 1);
 
   // Extract border color and background color from current cell
   let cellBorderColor: TableContextInfo["cellBorderColor"];
   let cellBackgroundColor: string | undefined;
   if (cellNode) {
     const attrs = cellNode.attrs as Record<string, unknown>;
-    if (attrs.backgroundColor && typeof attrs.backgroundColor === "string") {
-      cellBackgroundColor = attrs.backgroundColor;
+    if (
+      attrs["backgroundColor"] &&
+      typeof attrs["backgroundColor"] === "string"
+    ) {
+      cellBackgroundColor = attrs["backgroundColor"];
     }
-    const borders = attrs.borders as
+    const borders = attrs["borders"] as
       | Record<string, { style?: string; color?: ColorValue } | undefined>
       | undefined;
     if (borders) {
@@ -941,17 +945,17 @@ export const TablePluginExtension = createExtension({
     ): Record<string, unknown> {
       const baseAttrs = templateCell?.attrs ?? {};
       return {
-        colspan: baseAttrs.colspan || 1,
+        colspan: baseAttrs["colspan"] || 1,
         rowspan: 1,
-        colwidth: baseAttrs.colwidth,
-        width: baseAttrs.width,
-        widthType: baseAttrs.widthType,
-        verticalAlign: baseAttrs.verticalAlign,
-        backgroundColor: baseAttrs.backgroundColor,
-        borders: baseAttrs.borders,
-        margins: baseAttrs.margins,
-        textDirection: baseAttrs.textDirection,
-        noWrap: baseAttrs.noWrap,
+        colwidth: baseAttrs["colwidth"],
+        width: baseAttrs["width"],
+        widthType: baseAttrs["widthType"],
+        verticalAlign: baseAttrs["verticalAlign"],
+        backgroundColor: baseAttrs["backgroundColor"],
+        borders: baseAttrs["borders"],
+        margins: baseAttrs["margins"],
+        textDirection: baseAttrs["textDirection"],
+        noWrap: baseAttrs["noWrap"],
         ...overrides,
       };
     }
@@ -984,7 +988,7 @@ export const TablePluginExtension = createExtension({
       for (let r = 0; r < rows; r++) {
         const cells: PMNode[] = [];
         for (let c = 0; c < cols; c++) {
-          const paragraph = schema.nodes.paragraph!.create();
+          const paragraph = schema.nodes["paragraph"]!.create();
           const cellAttrs: Record<string, unknown> = {
             colspan: 1,
             rowspan: 1,
@@ -992,10 +996,10 @@ export const TablePluginExtension = createExtension({
             width: colWidthTwips,
             widthType: "dxa",
           };
-          cells.push(schema.nodes.tableCell!.create(cellAttrs, paragraph));
+          cells.push(schema.nodes["tableCell"]!.create(cellAttrs, paragraph));
         }
         tableRows.push(
-          schema.nodes.tableRow!.create(
+          schema.nodes["tableRow"]!.create(
             { height: defaultRowHeightTwips, heightRule: defaultRowHeightRule },
             cells,
           ),
@@ -1003,7 +1007,7 @@ export const TablePluginExtension = createExtension({
       }
 
       const columnWidths = Array.from({ length: cols }, () => colWidthTwips);
-      return schema.nodes.table!.create(
+      return schema.nodes["table"]!.create(
         {
           columnWidths,
           width: contentWidthTwips,
@@ -1020,8 +1024,8 @@ export const TablePluginExtension = createExtension({
         let borderColor = "000000";
         const marks = state.storedMarks || $from.marks();
         for (const mark of marks) {
-          if (mark.type.name === "textColor" && mark.attrs.rgb) {
-            borderColor = mark.attrs.rgb;
+          if (mark.type.name === "textColor" && mark.attrs["rgb"]) {
+            borderColor = mark.attrs["rgb"];
             break;
           }
         }
@@ -1048,7 +1052,7 @@ export const TablePluginExtension = createExtension({
               node.type.name === "tableCell" ||
               node.type.name === "tableHeader"
             ) {
-              const cellWidth = node.attrs.width as number | undefined;
+              const cellWidth = node.attrs["width"] as number | undefined;
               if (cellWidth && cellWidth > 0) {
                 // Subtract cell padding (~216 twips = 108 left + 108 right)
                 contentWidthTwips = Math.max(cellWidth - 216, 360);
@@ -1057,7 +1061,7 @@ export const TablePluginExtension = createExtension({
             }
           }
           const table = createTable(rows, cols, borderColor, contentWidthTwips);
-          const emptyParagraph = schema.nodes.paragraph!.create();
+          const emptyParagraph = schema.nodes["paragraph"]!.create();
 
           const $insert = state.doc.resolve(insertPos);
           const needsLeadingParagraph =
@@ -1103,14 +1107,14 @@ export const TablePluginExtension = createExtension({
         const cells: PMNode[] = [];
         // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
         rowNode.forEach((cell) => {
-          const paragraph = schema.nodes.paragraph!.create();
+          const paragraph = schema.nodes["paragraph"]!.create();
           const cellAttrs = buildCellAttrsFromTemplate(cell);
-          cells.push(schema.nodes.tableCell!.create(cellAttrs, paragraph));
+          cells.push(schema.nodes["tableCell"]!.create(cellAttrs, paragraph));
         });
-        const newRow = schema.nodes.tableRow!.create(
+        const newRow = schema.nodes["tableRow"]!.create(
           {
-            height: rowNode.attrs.height ?? 360,
-            heightRule: rowNode.attrs.heightRule ?? "atLeast",
+            height: rowNode.attrs["height"] ?? 360,
+            heightRule: rowNode.attrs["heightRule"] ?? "atLeast",
           },
           cells,
         );
@@ -1146,14 +1150,14 @@ export const TablePluginExtension = createExtension({
         const cells: PMNode[] = [];
         // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
         rowNode.forEach((cell) => {
-          const paragraph = schema.nodes.paragraph!.create();
+          const paragraph = schema.nodes["paragraph"]!.create();
           const cellAttrs = buildCellAttrsFromTemplate(cell);
-          cells.push(schema.nodes.tableCell!.create(cellAttrs, paragraph));
+          cells.push(schema.nodes["tableCell"]!.create(cellAttrs, paragraph));
         });
-        const newRow = schema.nodes.tableRow!.create(
+        const newRow = schema.nodes["tableRow"]!.create(
           {
-            height: rowNode.attrs.height ?? 360,
-            heightRule: rowNode.attrs.heightRule ?? "atLeast",
+            height: rowNode.attrs["height"] ?? 360,
+            heightRule: rowNode.attrs["heightRule"] ?? "atLeast",
           },
           cells,
         );
@@ -1228,21 +1232,21 @@ export const TablePluginExtension = createExtension({
             // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
             row.forEach((cell) => {
               if (colIdx === context.columnIndex) {
-                const paragraph = schema.nodes.paragraph!.create();
+                const paragraph = schema.nodes["paragraph"]!.create();
                 const cellAttrs = buildCellAttrsFromTemplate(cell, {
                   colspan: 1,
                   rowspan: 1,
                 });
-                cellAttrs.width = newColWidthPercent;
-                cellAttrs.widthType = "pct";
-                const newCell = schema.nodes.tableCell!.create(
+                cellAttrs["width"] = newColWidthPercent;
+                cellAttrs["widthType"] = "pct";
+                const newCell = schema.nodes["tableCell"]!.create(
                   cellAttrs,
                   paragraph,
                 );
                 tr = tr.insert(cellPos, newCell);
               }
               cellPos += cell.nodeSize;
-              colIdx += cell.attrs.colspan || 1;
+              colIdx += cell.attrs["colspan"] || 1;
             });
 
             if (
@@ -1250,14 +1254,14 @@ export const TablePluginExtension = createExtension({
               context.columnIndex !== null &&
               colIdx <= context.columnIndex
             ) {
-              const paragraph = schema.nodes.paragraph!.create();
+              const paragraph = schema.nodes["paragraph"]!.create();
               const cellAttrs = buildCellAttrsFromTemplate(
                 row.child(row.childCount - 1) ?? null,
                 { colspan: 1, rowspan: 1 },
               );
-              cellAttrs.width = newColWidthPercent;
-              cellAttrs.widthType = "pct";
-              const newCell = schema.nodes.tableCell!.create(
+              cellAttrs["width"] = newColWidthPercent;
+              cellAttrs["widthType"] = "pct";
+              const newCell = schema.nodes["tableCell"]!.create(
                 cellAttrs,
                 paragraph,
               );
@@ -1290,7 +1294,8 @@ export const TablePluginExtension = createExtension({
 
           // Update table columnWidths so full-width tables resize correctly.
           const colCount = firstRow?.childCount ?? newColumnCount;
-          const tableWidthTwips = (updatedTable.attrs.width as number) || 9360;
+          const tableWidthTwips =
+            (updatedTable.attrs["width"] as number) || 9360;
           const colWidthTwips = Math.floor(
             tableWidthTwips / Math.max(1, colCount),
           );
@@ -1336,7 +1341,7 @@ export const TablePluginExtension = createExtension({
             // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
             row.forEach((cell) => {
               cellPos += cell.nodeSize;
-              colIdx += cell.attrs.colspan || 1;
+              colIdx += cell.attrs["colspan"] || 1;
 
               if (
                 !inserted &&
@@ -1344,14 +1349,14 @@ export const TablePluginExtension = createExtension({
                 context.columnIndex !== null &&
                 colIdx > context.columnIndex
               ) {
-                const paragraph = schema.nodes.paragraph!.create();
+                const paragraph = schema.nodes["paragraph"]!.create();
                 const cellAttrs = buildCellAttrsFromTemplate(cell, {
                   colspan: 1,
                   rowspan: 1,
                 });
-                cellAttrs.width = newColWidthPercent;
-                cellAttrs.widthType = "pct";
-                const newCell = schema.nodes.tableCell!.create(
+                cellAttrs["width"] = newColWidthPercent;
+                cellAttrs["widthType"] = "pct";
+                const newCell = schema.nodes["tableCell"]!.create(
                   cellAttrs,
                   paragraph,
                 );
@@ -1361,14 +1366,14 @@ export const TablePluginExtension = createExtension({
             });
 
             if (!inserted) {
-              const paragraph = schema.nodes.paragraph!.create();
+              const paragraph = schema.nodes["paragraph"]!.create();
               const cellAttrs = buildCellAttrsFromTemplate(
                 row.child(row.childCount - 1) ?? null,
                 { colspan: 1, rowspan: 1 },
               );
-              cellAttrs.width = newColWidthPercent;
-              cellAttrs.widthType = "pct";
-              const newCell = schema.nodes.tableCell!.create(
+              cellAttrs["width"] = newColWidthPercent;
+              cellAttrs["widthType"] = "pct";
+              const newCell = schema.nodes["tableCell"]!.create(
                 cellAttrs,
                 paragraph,
               );
@@ -1401,7 +1406,8 @@ export const TablePluginExtension = createExtension({
 
           // Update table columnWidths so full-width tables resize correctly.
           const colCount = firstRow?.childCount ?? newColumnCount;
-          const tableWidthTwips = (updatedTable.attrs.width as number) || 9360;
+          const tableWidthTwips =
+            (updatedTable.attrs["width"] as number) || 9360;
           const colWidthTwips = Math.floor(
             tableWidthTwips / Math.max(1, colCount),
           );
@@ -1449,7 +1455,7 @@ export const TablePluginExtension = createExtension({
             row.forEach((cell) => {
               const cellStart = cellPos;
               const cellEnd = cellPos + cell.nodeSize;
-              const cellColspan = cell.attrs.colspan || 1;
+              const cellColspan = cell.attrs["colspan"] || 1;
 
               if (
                 context.columnIndex !== undefined &&
@@ -1494,7 +1500,8 @@ export const TablePluginExtension = createExtension({
 
           // Update table columnWidths to match new column count.
           const colCount = firstRow?.childCount ?? newColumnCount;
-          const tableWidthTwips = (updatedTable.attrs.width as number) || 9360;
+          const tableWidthTwips =
+            (updatedTable.attrs["width"] as number) || 9360;
           const colWidthTwips = Math.floor(
             tableWidthTwips / Math.max(1, colCount),
           );
@@ -1704,7 +1711,7 @@ export const TablePluginExtension = createExtension({
         // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
         row.forEach((cell, cellOffset) => {
           const pos = tableStart + rowOffset + cellOffset + 2;
-          const colspan = (cell.attrs.colspan as number) || 1;
+          const colspan = (cell.attrs["colspan"] as number) || 1;
           cellByPos.set(pos, { rowIdx, colIdx, colspan, pos, node: cell });
           cellByRC.set(`${rowIdx},${colIdx}`, pos);
           colIdx += colspan;
@@ -1827,7 +1834,7 @@ export const TablePluginExtension = createExtension({
             // Update target cell
             const attrs = getAttrs(pos, info.node);
             const existingBorders =
-              (attrs.borders as Record<string, unknown>) || {};
+              (attrs["borders"] as Record<string, unknown>) || {};
             setAttrs(pos, {
               ...attrs,
               borders: { ...existingBorders, ...cellBorders },
@@ -1835,7 +1842,7 @@ export const TablePluginExtension = createExtension({
 
             // Update adjacent cells' matching edges (edge-based borders like Google Docs)
             // Top edge → adjacent cell above needs matching bottom
-            if (cellBorders.top) {
+            if (cellBorders["top"]) {
               const adjPos = cellByRC.get(`${info.rowIdx - 1},${info.colIdx}`);
               if (adjPos !== undefined) {
                 const adj = cellByPos.get(adjPos);
@@ -1844,15 +1851,15 @@ export const TablePluginExtension = createExtension({
                 }
                 const adjAttrs = getAttrs(adjPos, adj.node);
                 const adjBorders =
-                  (adjAttrs.borders as Record<string, unknown>) || {};
+                  (adjAttrs["borders"] as Record<string, unknown>) || {};
                 setAttrs(adjPos, {
                   ...adjAttrs,
-                  borders: { ...adjBorders, bottom: cellBorders.top },
+                  borders: { ...adjBorders, bottom: cellBorders["top"] },
                 });
               }
             }
             // Bottom edge → adjacent cell below needs matching top
-            if (cellBorders.bottom) {
+            if (cellBorders["bottom"]) {
               const adjPos = cellByRC.get(`${info.rowIdx + 1},${info.colIdx}`);
               if (adjPos !== undefined) {
                 const adj = cellByPos.get(adjPos);
@@ -1861,15 +1868,15 @@ export const TablePluginExtension = createExtension({
                 }
                 const adjAttrs = getAttrs(adjPos, adj.node);
                 const adjBorders =
-                  (adjAttrs.borders as Record<string, unknown>) || {};
+                  (adjAttrs["borders"] as Record<string, unknown>) || {};
                 setAttrs(adjPos, {
                   ...adjAttrs,
-                  borders: { ...adjBorders, top: cellBorders.bottom },
+                  borders: { ...adjBorders, top: cellBorders["bottom"] },
                 });
               }
             }
             // Left edge → adjacent cell to the left needs matching right
-            if (cellBorders.left) {
+            if (cellBorders["left"]) {
               const adjPos = cellByRC.get(`${info.rowIdx},${info.colIdx - 1}`);
               if (adjPos !== undefined) {
                 const adj = cellByPos.get(adjPos);
@@ -1878,15 +1885,15 @@ export const TablePluginExtension = createExtension({
                 }
                 const adjAttrs = getAttrs(adjPos, adj.node);
                 const adjBorders =
-                  (adjAttrs.borders as Record<string, unknown>) || {};
+                  (adjAttrs["borders"] as Record<string, unknown>) || {};
                 setAttrs(adjPos, {
                   ...adjAttrs,
-                  borders: { ...adjBorders, right: cellBorders.left },
+                  borders: { ...adjBorders, right: cellBorders["left"] },
                 });
               }
             }
             // Right edge → adjacent cell to the right needs matching left
-            if (cellBorders.right) {
+            if (cellBorders["right"]) {
               const adjPos = cellByRC.get(
                 `${info.rowIdx},${info.colIdx + info.colspan}`,
               );
@@ -1897,10 +1904,10 @@ export const TablePluginExtension = createExtension({
                 }
                 const adjAttrs = getAttrs(adjPos, adj.node);
                 const adjBorders =
-                  (adjAttrs.borders as Record<string, unknown>) || {};
+                  (adjAttrs["borders"] as Record<string, unknown>) || {};
                 setAttrs(adjPos, {
                   ...adjAttrs,
-                  borders: { ...adjBorders, left: cellBorders.right },
+                  borders: { ...adjBorders, left: cellBorders["right"] },
                 });
               }
             }
@@ -1993,7 +2000,7 @@ export const TablePluginExtension = createExtension({
             const info = cellByPos.get(pos);
             const attrs = getAttrs(pos, node);
             const currentBorders =
-              (attrs.borders as Record<string, unknown>) || {};
+              (attrs["borders"] as Record<string, unknown>) || {};
 
             const sides = side === "all" ? allSides : [side];
             // When clearOthers is true, start with all sides cleared (preset behavior)
@@ -2029,7 +2036,7 @@ export const TablePluginExtension = createExtension({
                   }
                   const adjAttrs = getAttrs(adjPos, adjInfo.node);
                   const adjBorders =
-                    (adjAttrs.borders as Record<string, unknown>) || {};
+                    (adjAttrs["borders"] as Record<string, unknown>) || {};
                   setAttrs(adjPos, {
                     ...adjAttrs,
                     borders: { ...adjBorders, [adj.adjSide]: syncValue },
@@ -2097,7 +2104,7 @@ export const TablePluginExtension = createExtension({
           const tr = state.tr;
           const cells = getTargetCellPositions(state);
           for (const { pos, node } of cells) {
-            const currentMargins = node.attrs.margins || {};
+            const currentMargins = node.attrs["margins"] || {};
             const newMargins = { ...currentMargins, ...margins };
             tr.setNodeMarkup(tr.mapping.map(pos), undefined, {
               ...node.attrs,
@@ -2155,7 +2162,7 @@ export const TablePluginExtension = createExtension({
           for (const { pos, node } of cells) {
             tr.setNodeMarkup(tr.mapping.map(pos), undefined, {
               ...node.attrs,
-              noWrap: !node.attrs.noWrap,
+              noWrap: !node.attrs["noWrap"],
             });
           }
           dispatch(tr.scrollIntoView());
@@ -2221,7 +2228,7 @@ export const TablePluginExtension = createExtension({
           const colCount = context.columnCount;
 
           // Calculate total table width from existing column widths or use default
-          const existingWidths = table.attrs.columnWidths as number[] | null;
+          const existingWidths = table.attrs["columnWidths"] as number[] | null;
           const totalWidthTwips = existingWidths
             ? existingWidths.reduce((sum: number, w: number) => sum + w, 0)
             : 9360; // Default content width in twips
@@ -2467,9 +2474,9 @@ export const TablePluginExtension = createExtension({
 
               // Apply background color
               if (cond?.backgroundColor) {
-                newAttrs.backgroundColor = cond.backgroundColor;
+                newAttrs["backgroundColor"] = cond.backgroundColor;
               } else {
-                newAttrs.backgroundColor = null;
+                newAttrs["backgroundColor"] = null;
               }
 
               // Apply borders: conditional borders override table borders
@@ -2498,9 +2505,9 @@ export const TablePluginExtension = createExtension({
                 }
               }
               if (Object.keys(cellBorders).length > 0) {
-                newAttrs.borders = cellBorders;
+                newAttrs["borders"] = cellBorders;
               } else {
-                newAttrs.borders = null;
+                newAttrs["borders"] = null;
               }
 
               tr = tr.setNodeMarkup(cellPos, undefined, newAttrs);
@@ -2536,13 +2543,13 @@ export const TablePluginExtension = createExtension({
           const tr = state.tr;
           const newAttrs = { ...context.table.attrs };
           if ("width" in props) {
-            newAttrs.width = props.width;
+            newAttrs["width"] = props.width;
           }
           if ("widthType" in props) {
-            newAttrs.widthType = props.widthType;
+            newAttrs["widthType"] = props.widthType;
           }
           if ("justification" in props) {
-            newAttrs.justification = props.justification;
+            newAttrs["justification"] = props.justification;
           }
           tr.setNodeMarkup(context.tablePos, undefined, newAttrs);
           dispatch(tr.scrollIntoView());
@@ -2573,7 +2580,7 @@ export const TablePluginExtension = createExtension({
               const pos = $from.before(d);
               const newAttrs = {
                 ...node.attrs,
-                isHeader: !node.attrs.isHeader,
+                isHeader: !node.attrs["isHeader"],
               };
               tr.setNodeMarkup(pos, undefined, newAttrs);
               dispatch(tr.scrollIntoView());
@@ -2627,7 +2634,8 @@ export const TablePluginExtension = createExtension({
             const info = cellByPos.get(pos);
             const attrs = getAttrs(pos, node);
             const currentBorders =
-              (attrs.borders as Record<string, Record<string, unknown>>) || {};
+              (attrs["borders"] as Record<string, Record<string, unknown>>) ||
+              {};
             const newBorders: Record<string, unknown> = {};
 
             for (const side of ["top", "bottom", "left", "right"] as const) {
@@ -2655,7 +2663,7 @@ export const TablePluginExtension = createExtension({
                   }
                   const adjAttrs = getAttrs(adjPos, adjInfo.node);
                   const adjBorders =
-                    (adjAttrs.borders as Record<string, unknown>) || {};
+                    (adjAttrs["borders"] as Record<string, unknown>) || {};
                   setAttrs(adjPos, {
                     ...adjAttrs,
                     borders: { ...adjBorders, [adj.adjSide]: borderVal },
@@ -2719,7 +2727,8 @@ export const TablePluginExtension = createExtension({
             const info = cellByPos.get(pos);
             const attrs = getAttrs(pos, node);
             const currentBorders =
-              (attrs.borders as Record<string, Record<string, unknown>>) || {};
+              (attrs["borders"] as Record<string, Record<string, unknown>>) ||
+              {};
             const newBorders: Record<string, unknown> = {};
 
             for (const side of ["top", "bottom", "left", "right"] as const) {
@@ -2747,7 +2756,7 @@ export const TablePluginExtension = createExtension({
                   }
                   const adjAttrs = getAttrs(adjPos, adjInfo.node);
                   const adjBorders =
-                    (adjAttrs.borders as Record<string, unknown>) || {};
+                    (adjAttrs["borders"] as Record<string, unknown>) || {};
                   setAttrs(adjPos, {
                     ...adjAttrs,
                     borders: { ...adjBorders, [adj.adjSide]: borderVal },

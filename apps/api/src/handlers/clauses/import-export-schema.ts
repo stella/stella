@@ -27,24 +27,24 @@ export const isClauseExportPayload = (
     return false;
   }
 
-  if (value.version !== 1) {
+  if (value["version"] !== 1) {
     return false;
   }
-  if (typeof value.exportedAt !== "string") {
+  if (typeof value["exportedAt"] !== "string") {
     return false;
   }
-  if (!Array.isArray(value.clauses)) {
+  if (!Array.isArray(value["clauses"])) {
     return false;
   }
 
-  for (const clause of value.clauses) {
+  for (const clause of value["clauses"]) {
     if (!isRecord(clause)) {
       return false;
     }
-    if (typeof clause.title !== "string" || !clause.title) {
+    if (typeof clause["title"] !== "string" || !clause["title"]) {
       return false;
     }
-    if (!isClauseBody(clause.body)) {
+    if (!isClauseBody(clause["body"])) {
       return false;
     }
   }

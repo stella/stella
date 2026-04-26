@@ -32,7 +32,7 @@ const getMentions = (editor: Editor): string[] => {
     if (node.type.name === "mention") {
       // TODO: FIXME — ProseMirror node.attrs is Record<string, any>
       // oxlint-disable-next-line typescript-eslint/no-unsafe-argument
-      mentions.add(node.attrs.id);
+      mentions.add(node.attrs["id"]);
     }
   });
 

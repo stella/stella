@@ -184,14 +184,14 @@ const createAuth = () => {
         create: {
           // eslint-disable-next-line require-await -- async required by better-auth hook type
           before: async (user) => {
-            validateTimezoneId(user.timezoneId);
+            validateTimezoneId(user["timezoneId"]);
             return { data: user };
           },
         },
         update: {
           // eslint-disable-next-line require-await -- async required by better-auth hook type
           before: async (user) => {
-            validateTimezoneId(user.timezoneId);
+            validateTimezoneId(user["timezoneId"]);
             return { data: user };
           },
         },

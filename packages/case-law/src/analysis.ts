@@ -9,7 +9,7 @@ const isRecord = (val: unknown): val is Record<string, unknown> =>
 
 const hasGeneratingStatus = (
   val: unknown,
-): val is { status: "generating" } => isRecord(val) && val.status === "generating";
+): val is { status: "generating" } => isRecord(val) && val["status"] === "generating";
 
 export const CORE_CATEGORIES = [
   "facts",
@@ -87,15 +87,15 @@ export const decisionAnalysisSchema = v.object({
 
 export const isAnalysisGenerating = (val: unknown): val is AnalysisGenerating =>
   isRecord(val) &&
-  val.status === "generating" &&
-  typeof val.startedAt === "string";
+  val["status"] === "generating" &&
+  typeof val["startedAt"] === "string";
 
 export const isDecisionAnalysis = (val: unknown): val is DecisionAnalysis =>
   isRecord(val) &&
-  val.version === 1 &&
-  typeof val.generatedAt === "string" &&
-  typeof val.model === "string" &&
-  Array.isArray(val.tree);
+  val["version"] === 1 &&
+  typeof val["generatedAt"] === "string" &&
+  typeof val["model"] === "string" &&
+  Array.isArray(val["tree"]);
 
 export const isAnalysisInProgress = (
   val: unknown,

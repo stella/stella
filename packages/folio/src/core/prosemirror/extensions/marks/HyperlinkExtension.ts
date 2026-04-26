@@ -14,7 +14,7 @@ import { isMarkActive } from "./markUtils";
 // ============================================================================
 
 export function isHyperlinkActive(state: EditorState): boolean {
-  const hlType = state.schema.marks.hyperlink;
+  const hlType = state.schema.marks["hyperlink"];
   if (!hlType) {
     return false;
   }
@@ -24,7 +24,7 @@ export function isHyperlinkActive(state: EditorState): boolean {
 export function getHyperlinkAttrs(
   state: EditorState,
 ): { href: string; tooltip?: string } | null {
-  const hlType = state.schema.marks.hyperlink;
+  const hlType = state.schema.marks["hyperlink"];
   if (!hlType) {
     return null;
   }
@@ -35,7 +35,7 @@ export function getHyperlinkAttrs(
     const marks = state.storedMarks || $from.marks();
     for (const mark of marks) {
       if (mark.type === hlType) {
-        return { href: mark.attrs.href, tooltip: mark.attrs.tooltip };
+        return { href: mark.attrs["href"], tooltip: mark.attrs["tooltip"] };
       }
     }
     return null;
@@ -46,7 +46,7 @@ export function getHyperlinkAttrs(
     if (node.isText && attrs === null) {
       const mark = hlType.isInSet(node.marks);
       if (mark) {
-        attrs = { href: mark.attrs.href, tooltip: mark.attrs.tooltip };
+        attrs = { href: mark.attrs["href"], tooltip: mark.attrs["tooltip"] };
         return false;
       }
     }
@@ -98,13 +98,13 @@ export const HyperlinkExtension = createMarkExtension({
         rel: "noopener noreferrer",
       };
       if (attrs.tooltip) {
-        domAttrs.title = attrs.tooltip;
+        domAttrs["title"] = attrs.tooltip;
       }
       return ["a", domAttrs, 0];
     },
   },
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
-    const hlType = ctx.schema.marks.hyperlink!;
+    const hlType = ctx.schema.marks["hyperlink"]!;
 
     const setHyperlink =
       (href: string, tooltip?: string): Command =>
@@ -120,7 +120,7 @@ export const HyperlinkExtension = createMarkExtension({
           let tr = state.tr.addMark(from, to, mark);
           // Remove any explicit text color so the default hyperlink blue (#0563c1)
           // shows through, matching MS Word behavior
-          const textColorType = state.schema.marks.textColor;
+          const textColorType = state.schema.marks["textColor"];
           if (textColorType) {
             tr = tr.removeMark(from, to, textColorType);
           }

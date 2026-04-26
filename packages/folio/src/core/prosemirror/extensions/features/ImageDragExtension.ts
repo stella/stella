@@ -44,8 +44,8 @@ export const ImageDragExtension = createExtension({
                   "opacity: 0.6; pointer-events: none; " +
                   "border: 2px dashed var(--doc-primary, #2563eb); " +
                   "border-radius: 4px; background: rgba(37, 99, 235, 0.08);";
-                ghost.style.width = `${selection.node.attrs.width || 100}px`;
-                ghost.style.height = `${selection.node.attrs.height || 100}px`;
+                ghost.style.width = `${selection.node.attrs["width"] || 100}px`;
+                ghost.style.height = `${selection.node.attrs["height"] || 100}px`;
                 document.body.append(ghost);
                 dragEvent.dataTransfer.setDragImage(ghost, 0, 0);
                 // Clean up ghost element after a frame

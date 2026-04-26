@@ -94,7 +94,7 @@ export type DocumentAst = {
 };
 
 export const isDocumentAst = (val: unknown): val is DocumentAst =>
-  isRecord(val) && val.version === 1 && Array.isArray(val.blocks);
+  isRecord(val) && val["version"] === 1 && Array.isArray(val["blocks"]);
 
 export const parseDocumentAst = (raw: unknown): DocumentAst | null => {
   if (raw === null || raw === undefined) {

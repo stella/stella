@@ -124,7 +124,7 @@ const SOURCE_FIELD_LABELS: Record<string, string> = {
 
 /** Extract the popular name from source metadata (ÚS decisions). */
 const getPopularName = (meta: Record<string, unknown>): string | null => {
-  const val = meta.popularName;
+  const val = meta["popularName"];
   return typeof val === "string" && val.length > 0 ? val : null;
 };
 

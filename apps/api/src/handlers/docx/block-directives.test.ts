@@ -814,8 +814,8 @@ describe("processBlockDirectives — loops", () => {
     expect(texts[2]).toContain("__each_sellers_1_name");
 
     // Patch values should have the indexed entries
-    expect(patchValues.__each_sellers_0_name).toBe("Alice");
-    expect(patchValues.__each_sellers_1_name).toBe("Bob");
+    expect(patchValues["__each_sellers_0_name"]).toBe("Alice");
+    expect(patchValues["__each_sellers_1_name"]).toBe("Bob");
   });
 
   test("each with zero items removes block", () => {
@@ -855,10 +855,10 @@ describe("processBlockDirectives — loops", () => {
     const texts = bodyTexts(body);
     // 2 items × 2 paragraphs each = 4
     expect(texts).toHaveLength(4);
-    expect(patchValues.__each_sellers_0_name).toBe("Alice");
-    expect(patchValues.__each_sellers_0_address).toBe("Prague");
-    expect(patchValues.__each_sellers_1_name).toBe("Bob");
-    expect(patchValues.__each_sellers_1_address).toBe("Bratislava");
+    expect(patchValues["__each_sellers_0_name"]).toBe("Alice");
+    expect(patchValues["__each_sellers_0_address"]).toBe("Prague");
+    expect(patchValues["__each_sellers_1_name"]).toBe("Bob");
+    expect(patchValues["__each_sellers_1_address"]).toBe("Bratislava");
   });
 
   test("each with missing array path removes block", () => {
@@ -920,7 +920,7 @@ describe("processBlockDirectives — combined", () => {
     // Only Alice Corp's company line should survive
     expect(texts).toHaveLength(1);
     expect(texts[0]).toContain("__each_sellers_0_name");
-    expect(patchValues.__each_sellers_0_name).toBe("Alice Corp");
+    expect(patchValues["__each_sellers_0_name"]).toBe("Alice Corp");
   });
 
   test("loop inside conditional", () => {
@@ -942,8 +942,8 @@ describe("processBlockDirectives — combined", () => {
 
     const texts = bodyTexts(body);
     expect(texts).toHaveLength(3); // "Sellers:" + 2 items
-    expect(patchValues.__each_sellers_0_name).toBe("Alice");
-    expect(patchValues.__each_sellers_1_name).toBe("Bob");
+    expect(patchValues["__each_sellers_0_name"]).toBe("Alice");
+    expect(patchValues["__each_sellers_1_name"]).toBe("Bob");
   });
 
   test("loop inside false conditional is removed", () => {

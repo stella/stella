@@ -24,15 +24,17 @@ const getIngestionMarker = (
     return null;
   }
 
-  const ingestion = metadata.ingestion;
+  const ingestion = metadata["ingestion"];
   if (!isRecord(ingestion)) {
     return null;
   }
 
   const dumpHash =
-    typeof ingestion.dumpHash === "string" ? ingestion.dumpHash : undefined;
-  const sourceTier = isSourceTier(ingestion.sourceTier)
-    ? ingestion.sourceTier
+    typeof ingestion["dumpHash"] === "string"
+      ? ingestion["dumpHash"]
+      : undefined;
+  const sourceTier = isSourceTier(ingestion["sourceTier"])
+    ? ingestion["sourceTier"]
     : undefined;
 
   if (!dumpHash && !sourceTier) {

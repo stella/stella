@@ -39,8 +39,8 @@ export class RenderedDomContextImpl implements RenderedDomContext {
 
     for (const span of Array.from(spans)) {
       const spanEl = span as HTMLElement;
-      const pmStart = Number(spanEl.dataset.pmStart);
-      const pmEnd = Number(spanEl.dataset.pmEnd);
+      const pmStart = Number(spanEl.dataset["pmStart"]);
+      const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
       // Handle tab spans with exclusive end (tab at [5,6) means pos 6 is next run)
       if (spanEl.classList.contains("layout-run-tab")) {
@@ -97,8 +97,8 @@ export class RenderedDomContextImpl implements RenderedDomContext {
         continue;
       }
 
-      const pmStart = Number(paragraph.dataset.pmStart);
-      const pmEnd = Number(paragraph.dataset.pmEnd);
+      const pmStart = Number(paragraph.dataset["pmStart"]);
+      const pmEnd = Number(paragraph.dataset["pmEnd"]);
 
       if (pmPos >= pmStart && pmPos <= pmEnd) {
         const runRect = emptyRun.getBoundingClientRect();
@@ -127,8 +127,8 @@ export class RenderedDomContextImpl implements RenderedDomContext {
 
     for (const span of Array.from(spans)) {
       const spanEl = span as HTMLElement;
-      const pmStart = Number(spanEl.dataset.pmStart);
-      const pmEnd = Number(spanEl.dataset.pmEnd);
+      const pmStart = Number(spanEl.dataset["pmStart"]);
+      const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
       // Check if this span overlaps with the range
       if (pmEnd > from && pmStart < to) {
@@ -161,8 +161,8 @@ export class RenderedDomContextImpl implements RenderedDomContext {
 
     for (const span of Array.from(spans)) {
       const spanEl = span as HTMLElement;
-      const pmStart = Number(spanEl.dataset.pmStart);
-      const pmEnd = Number(spanEl.dataset.pmEnd);
+      const pmStart = Number(spanEl.dataset["pmStart"]);
+      const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
       // Check if this span overlaps with selection
       if (pmEnd > from && pmStart < to) {

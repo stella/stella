@@ -27,7 +27,7 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         formatting.italic = true;
         break;
       case "underline":
-        formatting.underline = { style: mark.attrs.style || "single" };
+        formatting.underline = { style: mark.attrs["style"] || "single" };
         break;
       case "strike":
         formatting.strike = true;
@@ -36,15 +36,15 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         formatting.color = mark.attrs;
         break;
       case "highlight":
-        formatting.highlight = mark.attrs.color;
+        formatting.highlight = mark.attrs["color"];
         break;
       case "fontSize":
-        formatting.fontSize = mark.attrs.size;
+        formatting.fontSize = mark.attrs["size"];
         break;
       case "fontFamily":
         formatting.fontFamily = {
-          ascii: mark.attrs.ascii,
-          hAnsi: mark.attrs.hAnsi,
+          ascii: mark.attrs["ascii"],
+          hAnsi: mark.attrs["hAnsi"],
         };
         break;
       case "superscript":
@@ -248,29 +248,29 @@ export function textFormattingToMarks(
 ): Mark[] {
   const marks: Mark[] = [];
 
-  if (formatting.bold && schema.marks.bold) {
-    marks.push(schema.marks.bold.create());
+  if (formatting.bold && schema.marks["bold"]) {
+    marks.push(schema.marks["bold"].create());
   }
-  if (formatting.italic && schema.marks.italic) {
-    marks.push(schema.marks.italic.create());
+  if (formatting.italic && schema.marks["italic"]) {
+    marks.push(schema.marks["italic"].create());
   }
-  if (formatting.underline && schema.marks.underline) {
+  if (formatting.underline && schema.marks["underline"]) {
     marks.push(
-      schema.marks.underline.create({
+      schema.marks["underline"].create({
         style: formatting.underline.style || "single",
         color: formatting.underline.color,
       }),
     );
   }
-  if (formatting.strike && schema.marks.strike) {
-    marks.push(schema.marks.strike.create());
+  if (formatting.strike && schema.marks["strike"]) {
+    marks.push(schema.marks["strike"].create());
   }
-  if (formatting.doubleStrike && schema.marks.strike) {
-    marks.push(schema.marks.strike.create({ double: true }));
+  if (formatting.doubleStrike && schema.marks["strike"]) {
+    marks.push(schema.marks["strike"].create({ double: true }));
   }
-  if (formatting.color && schema.marks.textColor) {
+  if (formatting.color && schema.marks["textColor"]) {
     marks.push(
-      schema.marks.textColor.create({
+      schema.marks["textColor"].create({
         rgb: formatting.color.rgb,
         themeColor: formatting.color.themeColor,
         themeTint: formatting.color.themeTint,
@@ -278,26 +278,28 @@ export function textFormattingToMarks(
       }),
     );
   }
-  if (formatting.highlight && schema.marks.highlight) {
-    marks.push(schema.marks.highlight.create({ color: formatting.highlight }));
-  }
-  if (formatting.fontSize && schema.marks.fontSize) {
-    marks.push(schema.marks.fontSize.create({ size: formatting.fontSize }));
-  }
-  if (formatting.fontFamily && schema.marks.fontFamily) {
+  if (formatting.highlight && schema.marks["highlight"]) {
     marks.push(
-      schema.marks.fontFamily.create({
+      schema.marks["highlight"].create({ color: formatting.highlight }),
+    );
+  }
+  if (formatting.fontSize && schema.marks["fontSize"]) {
+    marks.push(schema.marks["fontSize"].create({ size: formatting.fontSize }));
+  }
+  if (formatting.fontFamily && schema.marks["fontFamily"]) {
+    marks.push(
+      schema.marks["fontFamily"].create({
         ascii: formatting.fontFamily.ascii,
         hAnsi: formatting.fontFamily.hAnsi,
         asciiTheme: formatting.fontFamily.asciiTheme,
       }),
     );
   }
-  if (formatting.vertAlign === "superscript" && schema.marks.superscript) {
-    marks.push(schema.marks.superscript.create());
+  if (formatting.vertAlign === "superscript" && schema.marks["superscript"]) {
+    marks.push(schema.marks["superscript"].create());
   }
-  if (formatting.vertAlign === "subscript" && schema.marks.subscript) {
-    marks.push(schema.marks.subscript.create());
+  if (formatting.vertAlign === "subscript" && schema.marks["subscript"]) {
+    marks.push(schema.marks["subscript"].create());
   }
 
   return marks;

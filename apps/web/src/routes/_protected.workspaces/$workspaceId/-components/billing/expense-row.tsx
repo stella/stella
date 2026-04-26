@@ -70,7 +70,7 @@ export const ExpenseRow = ({
           <span
             className={cn(
               "shrink-0 rounded px-1.5 py-0.5 text-[0.625rem]",
-              STATUS_STYLES[expense.status] ?? STATUS_STYLES.draft,
+              STATUS_STYLES[expense.status] ?? STATUS_STYLES["draft"],
             )}
           >
             {

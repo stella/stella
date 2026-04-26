@@ -89,13 +89,13 @@ export const CalendarDayCell = ({
     }
     return dropTargetForElements({
       element: el,
-      canDrop: ({ source }) => source.data.type === ENTITY_DRAG_TYPE,
+      canDrop: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
       onDragEnter: () => setIsDropTarget(true),
       onDragLeave: () => setIsDropTarget(false),
       onDrop: ({ source }) => {
         setIsDropTarget(false);
-        const entityId = source.data.entityId;
-        const kind = source.data.kind;
+        const entityId = source.data["entityId"];
+        const kind = source.data["kind"];
         if (typeof entityId === "string") {
           onDropRef.current(
             entityId,

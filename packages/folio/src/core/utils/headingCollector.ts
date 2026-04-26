@@ -24,8 +24,8 @@ export function collectHeadings(doc: PMNode): HeadingInfo[] {
 
   doc.descendants((node, pos) => {
     if (node.type.name === "paragraph") {
-      const level = node.attrs.outlineLevel;
-      const styleId = node.attrs.styleId as string | null;
+      const level = node.attrs["outlineLevel"];
+      const styleId = node.attrs["styleId"] as string | null;
 
       let effectiveLevel = level;
       if (effectiveLevel === null && styleId) {

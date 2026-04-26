@@ -20,7 +20,7 @@ export const SuperscriptExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     return {
       commands: {
-        toggleSuperscript: () => toggleMark(ctx.schema.marks.superscript!),
+        toggleSuperscript: () => toggleMark(ctx.schema.marks["superscript"]!),
       },
     };
   },

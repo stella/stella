@@ -149,7 +149,7 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
             const headers = headerRow.map((c) =>
               c.plainText.trim().toLowerCase(),
             );
-            source.ustavniStiznost = rows.slice(1).map((row) => {
+            source["ustavniStiznost"] = rows.slice(1).map((row) => {
               const entry: Record<string, string> = {};
               for (let i = 0; i < headers.length; i++) {
                 const h = headers[i] ?? `col${i}`;
@@ -191,11 +191,11 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
       return;
     }
     if (labelText.includes("Kategorie rozhodnutí")) {
-      source.kategorieRozhodnuti = valueText.trim();
+      source["kategorieRozhodnuti"] = valueText.trim();
       return;
     }
     if (labelText.includes("Zveřejněno na webu")) {
-      source.zverejnenoNaWebu = parseDominoDate(valueText) ?? valueText;
+      source["zverejnenoNaWebu"] = parseDominoDate(valueText) ?? valueText;
       return;
     }
 

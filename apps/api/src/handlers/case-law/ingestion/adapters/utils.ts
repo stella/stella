@@ -9,7 +9,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
  * accidentally identify as the upstream project.
  */
 export const INGESTION_USER_AGENT =
-  process.env.INGESTION_USER_AGENT ?? "Mozilla/5.0 (compatible)";
+  process.env["INGESTION_USER_AGENT"] ?? "Mozilla/5.0 (compatible)";
 
 const CE_DATE_PATTERN = /^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/;
 

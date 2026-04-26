@@ -77,18 +77,18 @@ const isDominoEntryData = (
 } =>
   isRecord(value) &&
   isNullishString(value["@name"]) &&
-  isNullishValue(value.text, isDominoText);
+  isNullishValue(value["text"], isDominoText);
 
 const isDominoViewEntry = (value: unknown): value is DominoViewEntry =>
   isRecord(value) &&
   isNullishString(value["@position"]) &&
   isNullishString(value["@unid"]) &&
-  isNullishArrayOf(value.entrydata, isDominoEntryData);
+  isNullishArrayOf(value["entrydata"], isDominoEntryData);
 
 const isDominoViewResponse = (value: unknown): value is DominoViewResponse =>
   isRecord(value) &&
   isNullishString(value["@toplevelentries"]) &&
-  isNullishOneOrArrayOf(value.viewentry, isDominoViewEntry);
+  isNullishOneOrArrayOf(value["viewentry"], isDominoViewEntry);
 
 const normalizeViewEntries = (
   viewentry: DominoViewResponse["viewentry"],
@@ -195,7 +195,7 @@ const parseDetailPage = (html: string): Record<string, string | undefined> => {
     }
   }
 
-  result.fulltext = extractFulltext(html);
+  result["fulltext"] = extractFulltext(html);
 
   return result;
 };
@@ -318,12 +318,12 @@ export const czNsAdapter: SourceAdapter = {
                 : "";
 
               const meta = parseDetailPage(webHtml);
-              const raw = `${caseNumber}|${meta.ecli ?? ""}|${meta.decisionDate ?? ""}`;
+              const raw = `${caseNumber}|${meta["ecli"] ?? ""}|${meta["decisionDate"] ?? ""}`;
 
               // Parse AST from the print page (rich HTML)
               // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- AST container, not a DB update
               let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
-              let fulltext = meta.fulltext;
+              let fulltext = meta["fulltext"];
 
               // eslint-disable-next-line no-untyped-updates/no-untyped-updates -- court API metadata container, not a DB update
               let sourceMetadata: Record<string, unknown> = {};
@@ -346,37 +346,37 @@ export const czNsAdapter: SourceAdapter = {
 
               decisions.push({
                 caseNumber,
-                ecli: meta.ecli,
+                ecli: meta["ecli"],
                 court: "Nejvyšší soud",
                 country: "CZE",
                 language: "cs",
-                decisionDate: meta.decisionDate
-                  ? parseCeDate(meta.decisionDate)
+                decisionDate: meta["decisionDate"]
+                  ? parseCeDate(meta["decisionDate"])
                   : undefined,
-                decisionType: meta.decisionType?.toLowerCase(),
+                decisionType: meta["decisionType"]?.toLowerCase(),
                 fulltext,
                 sourceUrl: webUrl,
                 documentUrl: webUrl,
                 metadata: {
                   caseNumber,
-                  ecli: meta.ecli,
+                  ecli: meta["ecli"],
                   court: "Nejvyšší soud" as const,
-                  decisionDate: meta.decisionDate
-                    ? parseCeDate(meta.decisionDate)
+                  decisionDate: meta["decisionDate"]
+                    ? parseCeDate(meta["decisionDate"])
                     : undefined,
-                  decisionType: meta.decisionType?.toLowerCase(),
+                  decisionType: meta["decisionType"]?.toLowerCase(),
                   ...sourceMetadata,
                   judge,
-                  legalSentence: meta.legalSentence,
-                  keywords: meta.keywords
+                  legalSentence: meta["legalSentence"],
+                  keywords: meta["keywords"]
                     ?.split("\n")
                     .map((s) => s.trim())
                     .filter(Boolean),
-                  statutes: meta.statutes
+                  statutes: meta["statutes"]
                     ?.split("\n")
                     .map((s) => s.trim())
                     .filter(Boolean),
-                  category: meta.category?.trim(),
+                  category: meta["category"]?.trim(),
                 },
                 rawHash: hashContent(raw),
                 parserVersion: PARSER_VERSION,

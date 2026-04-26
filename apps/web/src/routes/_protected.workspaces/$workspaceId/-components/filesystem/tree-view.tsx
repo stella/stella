@@ -428,17 +428,19 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   useEffect(
     () =>
       monitorForElements({
-        canMonitor: ({ source }) => source.data.type === ENTITY_DRAG_TYPE,
+        canMonitor: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
         onDragStart: ({ source }) => {
           // Check if any entity in the drag has a parentId.
           // SAFETY: from our draggable getInitialData
           const entities =
             // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-            source.data.entities as { parentId: string | null }[] | undefined;
+            source.data["entities"] as
+              | { parentId: string | null }[]
+              | undefined;
           const hasNested = entities
             ? entities.some((e) => e.parentId)
-            : source.data.parentId !== undefined &&
-              source.data.parentId !== null;
+            : source.data["parentId"] !== undefined &&
+              source.data["parentId"] !== null;
           if (hasNested) {
             setIsDragActive(true);
           }
@@ -456,14 +458,14 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     }
     return dropTargetForElements({
       element: el,
-      canDrop: ({ source }) => source.data.type === ENTITY_DRAG_TYPE,
+      canDrop: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
       onDragEnter: () => setIsRootDropTarget(true),
       onDragLeave: () => setIsRootDropTarget(false),
       onDrop: ({ source }) => {
         setIsRootDropTarget(false);
         // SAFETY: entityIds is always string[]; set by our own draggable getInitialData.
         // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-        const entityIds = source.data.entityIds as string[];
+        const entityIds = source.data["entityIds"] as string[];
         for (const entityId of entityIds) {
           moveEntityRefRoot.current.mutate(
             { workspaceId, entityId, parentId: null },
@@ -852,12 +854,12 @@ const FilesystemRow = ({
             dropTargetForElements({
               element: el,
               canDrop: ({ source }) =>
-                source.data.type === ENTITY_DRAG_TYPE &&
-                source.data.entityId !== node.entityId &&
+                source.data["type"] === ENTITY_DRAG_TYPE &&
+                source.data["entityId"] !== node.entityId &&
                 // SAFETY: entityId is always a string; set by our own draggable getInitialData.
                 !ancestorIdsRef.current.has(
                   // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-                  source.data.entityId as string,
+                  source.data["entityId"] as string,
                 ),
               getData: () => ({ entityId: node.entityId }),
               onDragEnter: () => {
@@ -883,7 +885,7 @@ const FilesystemRow = ({
                 }
                 // SAFETY: entityIds is always string[]; set by our own draggable getInitialData.
                 // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-                const entityIds = source.data.entityIds as string[];
+                const entityIds = source.data["entityIds"] as string[];
                 for (const entityId of entityIds) {
                   if (ancestorIdsRef.current.has(entityId)) {
                     continue;

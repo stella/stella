@@ -73,21 +73,41 @@ export const TextBoxExtension = createNodeExtension({
           const el = dom as HTMLElement;
           const d = el.dataset;
           return {
-            ...(d.width ? { width: Number(d.width) } : {}),
-            ...(d.height ? { height: Number(d.height) } : {}),
-            ...(d.textboxId ? { textBoxId: d.textboxId } : {}),
-            ...(d.fillColor ? { fillColor: d.fillColor } : {}),
-            ...(d.outlineWidth ? { outlineWidth: Number(d.outlineWidth) } : {}),
-            ...(d.outlineColor ? { outlineColor: d.outlineColor } : {}),
-            ...(d.outlineStyle ? { outlineStyle: d.outlineStyle } : {}),
-            ...(d.marginTop ? { marginTop: Number(d.marginTop) } : {}),
-            ...(d.marginBottom ? { marginBottom: Number(d.marginBottom) } : {}),
-            ...(d.marginLeft ? { marginLeft: Number(d.marginLeft) } : {}),
-            ...(d.marginRight ? { marginRight: Number(d.marginRight) } : {}),
-            ...(d.verticalAlign ? { verticalAlign: d.verticalAlign } : {}),
-            ...(d.displayMode ? { displayMode: d.displayMode as NonNullable<TextBoxAttrs["displayMode"]> } : {}),
-            ...(d.cssFloat ? { cssFloat: d.cssFloat as NonNullable<TextBoxAttrs["cssFloat"]> } : {}),
-            ...(d.wrapType ? { wrapType: d.wrapType } : {}),
+            ...(d["width"] ? { width: Number(d["width"]) } : {}),
+            ...(d["height"] ? { height: Number(d["height"]) } : {}),
+            ...(d["textboxId"] ? { textBoxId: d["textboxId"] } : {}),
+            ...(d["fillColor"] ? { fillColor: d["fillColor"] } : {}),
+            ...(d["outlineWidth"]
+              ? { outlineWidth: Number(d["outlineWidth"]) }
+              : {}),
+            ...(d["outlineColor"] ? { outlineColor: d["outlineColor"] } : {}),
+            ...(d["outlineStyle"] ? { outlineStyle: d["outlineStyle"] } : {}),
+            ...(d["marginTop"] ? { marginTop: Number(d["marginTop"]) } : {}),
+            ...(d["marginBottom"]
+              ? { marginBottom: Number(d["marginBottom"]) }
+              : {}),
+            ...(d["marginLeft"] ? { marginLeft: Number(d["marginLeft"]) } : {}),
+            ...(d["marginRight"]
+              ? { marginRight: Number(d["marginRight"]) }
+              : {}),
+            ...(d["verticalAlign"]
+              ? { verticalAlign: d["verticalAlign"] }
+              : {}),
+            ...(d["displayMode"]
+              ? {
+                  displayMode: d["displayMode"] as NonNullable<
+                    TextBoxAttrs["displayMode"]
+                  >,
+                }
+              : {}),
+            ...(d["cssFloat"]
+              ? {
+                  cssFloat: d["cssFloat"] as NonNullable<
+                    TextBoxAttrs["cssFloat"]
+                  >,
+                }
+              : {}),
+            ...(d["wrapType"] ? { wrapType: d["wrapType"] } : {}),
           };
         },
       },
@@ -209,7 +229,7 @@ export const TextBoxExtension = createNodeExtension({
       styles.push("overflow: hidden");
       styles.push("position: relative");
 
-      domAttrs.style = styles.join("; ");
+      domAttrs["style"] = styles.join("; ");
 
       return ["div", domAttrs, 0];
     },

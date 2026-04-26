@@ -46,8 +46,8 @@ export const loadAdapterByKey = async (
   return Object.values(mod).find(
     (v): v is SourceAdapter =>
       isRecord(v) &&
-      typeof v.key === "string" &&
-      typeof v.fetchPage === "function",
+      typeof v["key"] === "string" &&
+      typeof v["fetchPage"] === "function",
   );
 };
 

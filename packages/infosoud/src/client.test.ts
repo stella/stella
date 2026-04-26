@@ -144,7 +144,7 @@ describe("InfoSoudClient", () => {
         const body = parseRequestBody(init);
         seenBodies.push(body);
 
-        if (body.okresniSoud === "OSPHA01") {
+        if (body["okresniSoud"] === "OSPHA01") {
           return jsonResponse(
             {
               error: "Bad Request",
@@ -211,7 +211,7 @@ describe("InfoSoudClient", () => {
         if (path === "/api/v1/rizeni/vyhledej") {
           seenBodies.push(body);
 
-          if (body.okresniSoud === "OSPHA01") {
+          if (body["okresniSoud"] === "OSPHA01") {
             return jsonResponse(
               {
                 error: "Bad Request",
@@ -278,7 +278,7 @@ describe("InfoSoudClient", () => {
       spisZn: "1 T 64/2024",
     });
 
-    expect(result.udalosti.at(0)?.detailAttributes.JED_SIN).toBe("101");
+    expect(result.udalosti.at(0)?.detailAttributes["JED_SIN"]).toBe("101");
     expect(seenBodies).toEqual([
       {
         bcVec: "64",
@@ -369,7 +369,7 @@ describe("InfoSoudClient", () => {
       spisZn: "1 T 64/2024",
     });
 
-    expect(result.udalosti.at(0)?.detailAttributes.JED_SIN).toBe("101");
+    expect(result.udalosti.at(0)?.detailAttributes["JED_SIN"]).toBe("101");
     expect(seenBodies).toEqual([
       {
         bcVec: "436",
@@ -545,7 +545,7 @@ describe("InfoSoudClient", () => {
     ]);
     expect(firstEvent?.detail?.typUdalosti).toBe("NAR_JED");
     expect(firstEvent?.decodedDetail?.kind).toBe("hearing");
-    expect(firstEvent?.detailAttributes.JED_SIN).toBe("101");
+    expect(firstEvent?.detailAttributes["JED_SIN"]).toBe("101");
     expect(firstEvent?.hearingDetail).toEqual({
       cancelled: true,
       hearingType: null,

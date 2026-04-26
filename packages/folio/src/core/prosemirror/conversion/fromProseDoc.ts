@@ -79,7 +79,8 @@ export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
   // Preserve section properties (margins, headers, footers) from base document
   const documentBody: DocumentBody = { content: blocks };
   if (baseDocument?.package.document.finalSectionProperties) {
-    documentBody.finalSectionProperties = baseDocument.package.document.finalSectionProperties;
+    documentBody.finalSectionProperties =
+      baseDocument.package.document.finalSectionProperties;
   }
   if (baseDocument?.package.document.sections) {
     documentBody.sections = baseDocument.package.document.sections;
@@ -178,10 +179,16 @@ function convertPMParagraph(
     type: "paragraph",
     content,
   };
-  if (attrs.paraId) { paragraph.paraId = attrs.paraId; }
-  if (attrs.textId) { paragraph.textId = attrs.textId; }
+  if (attrs.paraId) {
+    paragraph.paraId = attrs.paraId;
+  }
+  if (attrs.textId) {
+    paragraph.textId = attrs.textId;
+  }
   const pFormatting = paragraphAttrsToFormatting(attrs);
-  if (pFormatting) { paragraph.formatting = pFormatting; }
+  if (pFormatting) {
+    paragraph.formatting = pFormatting;
+  }
 
   // Restore full section properties (round-trip) or fallback to break type only
   if (attrs._sectionProperties) {
@@ -212,7 +219,7 @@ function insertCommentRanges(
   paragraph.forEach((node) => {
     for (const mark of node.marks) {
       if (mark.type.name === "comment") {
-        commentIds.add(mark.attrs.commentId as number);
+        commentIds.add(mark.attrs["commentId"] as number);
       }
     }
   });
@@ -232,7 +239,7 @@ function insertCommentRanges(
     const nodeCommentIds = new Set<number>();
     for (const mark of node.marks) {
       if (mark.type.name === "comment") {
-        nodeCommentIds.add(mark.attrs.commentId as number);
+        nodeCommentIds.add(mark.attrs["commentId"] as number);
       }
     }
 
@@ -289,22 +296,42 @@ function paragraphAttrsToFormatting(
     // Override properties that user may have changed via editor commands.
     // Only override if the PM attr differs from the original value.
     if (attrs.alignment !== (orig.alignment ?? undefined)) {
-      if (attrs.alignment) { result.alignment = attrs.alignment; } else { delete result.alignment; }
+      if (attrs.alignment) {
+        result.alignment = attrs.alignment;
+      } else {
+        delete result.alignment;
+      }
     }
     if (
       attrs.numPr !== orig.numPr &&
       JSON.stringify(attrs.numPr) !== JSON.stringify(orig.numPr)
     ) {
-      if (attrs.numPr) { result.numPr = attrs.numPr; } else { delete result.numPr; }
+      if (attrs.numPr) {
+        result.numPr = attrs.numPr;
+      } else {
+        delete result.numPr;
+      }
     }
     if (attrs.styleId !== (orig.styleId ?? undefined)) {
-      if (attrs.styleId) { result.styleId = attrs.styleId; } else { delete result.styleId; }
+      if (attrs.styleId) {
+        result.styleId = attrs.styleId;
+      } else {
+        delete result.styleId;
+      }
     }
     if (attrs.pageBreakBefore !== (orig.pageBreakBefore ?? undefined)) {
-      if (attrs.pageBreakBefore) { result.pageBreakBefore = attrs.pageBreakBefore; } else { delete result.pageBreakBefore; }
+      if (attrs.pageBreakBefore) {
+        result.pageBreakBefore = attrs.pageBreakBefore;
+      } else {
+        delete result.pageBreakBefore;
+      }
     }
     if (attrs.bidi !== (orig.bidi ?? undefined)) {
-      if (attrs.bidi) { result.bidi = attrs.bidi; } else { delete result.bidi; }
+      if (attrs.bidi) {
+        result.bidi = attrs.bidi;
+      } else {
+        delete result.bidi;
+      }
     }
 
     return result;
@@ -334,23 +361,57 @@ function paragraphAttrsToFormatting(
   }
 
   const f: ParagraphFormatting = {};
-  if (attrs.alignment) { f.alignment = attrs.alignment; }
-  if (attrs.spaceBefore) { f.spaceBefore = attrs.spaceBefore; }
-  if (attrs.spaceAfter) { f.spaceAfter = attrs.spaceAfter; }
-  if (attrs.lineSpacing) { f.lineSpacing = attrs.lineSpacing; }
-  if (attrs.lineSpacingRule) { f.lineSpacingRule = attrs.lineSpacingRule; }
-  if (attrs.indentLeft) { f.indentLeft = attrs.indentLeft; }
-  if (attrs.indentRight) { f.indentRight = attrs.indentRight; }
-  if (attrs.indentFirstLine) { f.indentFirstLine = attrs.indentFirstLine; }
-  if (attrs.hangingIndent) { f.hangingIndent = attrs.hangingIndent; }
-  if (attrs.numPr) { f.numPr = attrs.numPr; }
-  if (attrs.styleId) { f.styleId = attrs.styleId; }
-  if (attrs.borders) { f.borders = attrs.borders; }
-  if (attrs.shading) { f.shading = attrs.shading; }
-  if (attrs.tabs) { f.tabs = attrs.tabs; }
-  if (attrs.outlineLevel !== undefined && attrs.outlineLevel !== null) { f.outlineLevel = attrs.outlineLevel; }
-  if (attrs.contextualSpacing) { f.contextualSpacing = attrs.contextualSpacing; }
-  if (attrs.bidi) { f.bidi = attrs.bidi; }
+  if (attrs.alignment) {
+    f.alignment = attrs.alignment;
+  }
+  if (attrs.spaceBefore) {
+    f.spaceBefore = attrs.spaceBefore;
+  }
+  if (attrs.spaceAfter) {
+    f.spaceAfter = attrs.spaceAfter;
+  }
+  if (attrs.lineSpacing) {
+    f.lineSpacing = attrs.lineSpacing;
+  }
+  if (attrs.lineSpacingRule) {
+    f.lineSpacingRule = attrs.lineSpacingRule;
+  }
+  if (attrs.indentLeft) {
+    f.indentLeft = attrs.indentLeft;
+  }
+  if (attrs.indentRight) {
+    f.indentRight = attrs.indentRight;
+  }
+  if (attrs.indentFirstLine) {
+    f.indentFirstLine = attrs.indentFirstLine;
+  }
+  if (attrs.hangingIndent) {
+    f.hangingIndent = attrs.hangingIndent;
+  }
+  if (attrs.numPr) {
+    f.numPr = attrs.numPr;
+  }
+  if (attrs.styleId) {
+    f.styleId = attrs.styleId;
+  }
+  if (attrs.borders) {
+    f.borders = attrs.borders;
+  }
+  if (attrs.shading) {
+    f.shading = attrs.shading;
+  }
+  if (attrs.tabs) {
+    f.tabs = attrs.tabs;
+  }
+  if (attrs.outlineLevel !== undefined && attrs.outlineLevel !== null) {
+    f.outlineLevel = attrs.outlineLevel;
+  }
+  if (attrs.contextualSpacing) {
+    f.contextualSpacing = attrs.contextualSpacing;
+  }
+  if (attrs.bidi) {
+    f.bidi = attrs.bidi;
+  }
   return f;
 }
 
@@ -389,10 +450,12 @@ function extractParagraphContent(
         currentHyperlink = null;
       }
       const noteType =
-        noteRefMark.attrs.noteType === "endnote" ? "endnoteRef" : "footnoteRef";
+        noteRefMark.attrs["noteType"] === "endnote"
+          ? "endnoteRef"
+          : "footnoteRef";
       const noteRef: NoteReferenceContent = {
         type: noteType,
-        id: Number.parseInt(noteRefMark.attrs.id, 10) || 0,
+        id: Number.parseInt(noteRefMark.attrs["id"], 10) || 0,
       };
       content.push({
         type: "run",
@@ -433,11 +496,13 @@ function extractParagraphContent(
       };
 
       const info: TrackedChangeInfo = {
-        id: changeMark.attrs.revisionId as number,
-        author: (changeMark.attrs.author as string) || "Unknown",
+        id: changeMark.attrs["revisionId"] as number,
+        author: (changeMark.attrs["author"] as string) || "Unknown",
       };
-      const dateStr = changeMark.attrs.date as string;
-      if (dateStr) { info.date = dateStr; }
+      const dateStr = changeMark.attrs["date"] as string;
+      if (dateStr) {
+        info.date = dateStr;
+      }
       const revisionId = info.id;
       const hasInsertionForId =
         (trackedChangeCounts.insertionById.get(revisionId) ?? 0) > 0;
@@ -600,13 +665,13 @@ function buildDocumentTrackedChangeCounts(pmDoc: PMNode): TrackedChangeCounts {
     const deletionMark = node.marks.find((m) => m.type.name === "deletion");
 
     if (insertionMark) {
-      const revisionId = Number(insertionMark.attrs.revisionId);
+      const revisionId = Number(insertionMark.attrs["revisionId"]);
       if (Number.isFinite(revisionId)) {
         insertionById.set(revisionId, (insertionById.get(revisionId) ?? 0) + 1);
       }
     }
     if (deletionMark) {
-      const revisionId = Number(deletionMark.attrs.revisionId);
+      const revisionId = Number(deletionMark.attrs["revisionId"]);
       if (Number.isFinite(revisionId)) {
         deletionById.set(revisionId, (deletionById.get(revisionId) ?? 0) + 1);
       }
@@ -620,7 +685,7 @@ function buildDocumentTrackedChangeCounts(pmDoc: PMNode): TrackedChangeCounts {
  * Create a unique key for a link mark
  */
 function getLinkKey(mark: Mark): string {
-  return mark.attrs.href || "";
+  return mark.attrs["href"] || "";
 }
 
 /**
@@ -642,21 +707,21 @@ function getMarksKey(marks: readonly Mark[]): string {
  * Create a Hyperlink from a link mark
  */
 function createHyperlink(linkMark: Mark): Hyperlink {
-  const href = linkMark.attrs.href as string;
+  const href = linkMark.attrs["href"] as string;
   // Internal bookmark links use the anchor property in OOXML
   if (href?.startsWith("#")) {
     return {
       type: "hyperlink",
       anchor: href.slice(1),
-      tooltip: linkMark.attrs.tooltip || undefined,
+      tooltip: linkMark.attrs["tooltip"] || undefined,
       children: [],
     };
   }
   return {
     type: "hyperlink",
     href,
-    tooltip: linkMark.attrs.tooltip || undefined,
-    rId: linkMark.attrs.rId || undefined,
+    tooltip: linkMark.attrs["tooltip"] || undefined,
+    rId: linkMark.attrs["rId"] || undefined,
     children: [],
   };
 }
@@ -683,7 +748,9 @@ function createRunFromText(text: string, marks: readonly Mark[]): Run {
   };
 
   const run: Run = { type: "run", content: [textContent] };
-  if (Object.keys(formatting).length > 0) { run.formatting = formatting; }
+  if (Object.keys(formatting).length > 0) {
+    run.formatting = formatting;
+  }
   return run;
 }
 
@@ -777,8 +844,12 @@ function createFieldFromNode(
       fieldCode: [],
       fieldResult: [displayRun],
     };
-    if (attrs.fldLock) { complex.fldLock = true; }
-    if (attrs.dirty) { complex.dirty = true; }
+    if (attrs.fldLock) {
+      complex.fldLock = true;
+    }
+    if (attrs.dirty) {
+      complex.dirty = true;
+    }
     return complex;
   }
 
@@ -788,8 +859,12 @@ function createFieldFromNode(
     fieldType: attrs.fieldType as FieldType,
     content: [displayRun],
   };
-  if (attrs.fldLock) { simple.fldLock = true; }
-  if (attrs.dirty) { simple.dirty = true; }
+  if (attrs.fldLock) {
+    simple.fldLock = true;
+  }
+  if (attrs.dirty) {
+    simple.dirty = true;
+  }
   return simple;
 }
 
@@ -808,7 +883,9 @@ function createMathFromNode(node: PMNode): MathEquation {
     display: (attrs.display as "inline" | "block") || "inline",
     ommlXml: attrs.ommlXml,
   };
-  if (attrs.plainText) { math.plainText = attrs.plainText; }
+  if (attrs.plainText) {
+    math.plainText = attrs.plainText;
+  }
   return math;
 }
 
@@ -819,16 +896,35 @@ function createInlineSdtFromNode(node: PMNode): InlineSdt {
   const attrs = node.attrs as Record<string, unknown>;
 
   const properties: SdtProperties = {
-    sdtType: (attrs.sdtType as SdtProperties["sdtType"]) ?? "richText",
+    sdtType: (attrs["sdtType"] as SdtProperties["sdtType"]) ?? "richText",
   };
-  if (attrs.alias) { properties.alias = attrs.alias as string; }
-  if (attrs.tag) { properties.tag = attrs.tag as string; }
-  if (attrs.lock) { properties.lock = attrs.lock as NonNullable<SdtProperties["lock"]>; }
-  if (attrs.placeholder) { properties.placeholder = attrs.placeholder as string; }
-  if (attrs.showingPlaceholder !== undefined && attrs.showingPlaceholder !== null) { properties.showingPlaceholder = attrs.showingPlaceholder as boolean; }
-  if (attrs.dateFormat) { properties.dateFormat = attrs.dateFormat as string; }
-  if (attrs.listItems) { properties.listItems = JSON.parse(attrs.listItems as string); }
-  if (attrs.checked !== null && attrs.checked !== undefined) { properties.checked = attrs.checked as boolean; }
+  if (attrs["alias"]) {
+    properties.alias = attrs["alias"] as string;
+  }
+  if (attrs["tag"]) {
+    properties.tag = attrs["tag"] as string;
+  }
+  if (attrs["lock"]) {
+    properties.lock = attrs["lock"] as NonNullable<SdtProperties["lock"]>;
+  }
+  if (attrs["placeholder"]) {
+    properties.placeholder = attrs["placeholder"] as string;
+  }
+  if (
+    attrs["showingPlaceholder"] !== undefined &&
+    attrs["showingPlaceholder"] !== null
+  ) {
+    properties.showingPlaceholder = attrs["showingPlaceholder"] as boolean;
+  }
+  if (attrs["dateFormat"]) {
+    properties.dateFormat = attrs["dateFormat"] as string;
+  }
+  if (attrs["listItems"]) {
+    properties.listItems = JSON.parse(attrs["listItems"] as string);
+  }
+  if (attrs["checked"] !== null && attrs["checked"] !== undefined) {
+    properties.checked = attrs["checked"] as boolean;
+  }
 
   // Extract content from the sdt node's children
   const sdtContent = extractParagraphContent(node);
@@ -882,8 +978,12 @@ function createImageRun(node: PMNode): Run {
     },
     wrap,
   };
-  if (attrs.alt) { image.alt = attrs.alt; }
-  if (attrs.title) { image.title = attrs.title; }
+  if (attrs.alt) {
+    image.alt = attrs.alt;
+  }
+  if (attrs.title) {
+    image.title = attrs.title;
+  }
 
   // Parse CSS transform string back to ImageTransform for round-trip
   if (attrs.transform) {
@@ -917,14 +1017,22 @@ function createImageRun(node: PMNode): Run {
     const horizontal: ImagePosition["horizontal"] = {
       relativeTo: (pos.horizontal?.relativeTo || "column") as HRelativeTo,
     };
-    if (pos.horizontal?.align) { horizontal.alignment = pos.horizontal.align as NonNullable<HAlignment>; }
-    if (pos.horizontal?.posOffset !== undefined) { horizontal.posOffset = pos.horizontal.posOffset; }
+    if (pos.horizontal?.align) {
+      horizontal.alignment = pos.horizontal.align as NonNullable<HAlignment>;
+    }
+    if (pos.horizontal?.posOffset !== undefined) {
+      horizontal.posOffset = pos.horizontal.posOffset;
+    }
 
     const vertical: ImagePosition["vertical"] = {
       relativeTo: (pos.vertical?.relativeTo || "paragraph") as VRelativeTo,
     };
-    if (pos.vertical?.align) { vertical.alignment = pos.vertical.align as NonNullable<VAlignment>; }
-    if (pos.vertical?.posOffset !== undefined) { vertical.posOffset = pos.vertical.posOffset; }
+    if (pos.vertical?.align) {
+      vertical.alignment = pos.vertical.align as NonNullable<VAlignment>;
+    }
+    if (pos.vertical?.posOffset !== undefined) {
+      vertical.posOffset = pos.vertical.posOffset;
+    }
 
     image.position = { horizontal, vertical };
   }
@@ -985,7 +1093,9 @@ function createShapeRun(node: PMNode): Run {
       height: attrs.height ? Math.round(attrs.height * (914_400 / 96)) : 0,
     },
   };
-  if (attrs.shapeId) { shape.id = attrs.shapeId; }
+  if (attrs.shapeId) {
+    shape.id = attrs.shapeId;
+  }
 
   // Fill
   if (attrs.fillType === "gradient" && attrs.gradientStops) {
@@ -995,7 +1105,9 @@ function createShapeRun(node: PMNode): Run {
         position: number;
         color: string;
       }[];
-      const gradient: NonNullable<import("../../types/content").ShapeFill["gradient"]> = {
+      const gradient: NonNullable<
+        import("../../types/content").ShapeFill["gradient"]
+      > = {
         type: (attrs.gradientType || "linear") as
           | "linear"
           | "radial"
@@ -1006,7 +1118,9 @@ function createShapeRun(node: PMNode): Run {
           color: { rgb: s.color.replace("#", "") },
         })),
       };
-      if (attrs.gradientAngle) { gradient.angle = attrs.gradientAngle; }
+      if (attrs.gradientAngle) {
+        gradient.angle = attrs.gradientAngle;
+      }
       shape.fill = { type: "gradient", gradient };
     } catch {
       shape.fill = {
@@ -1073,13 +1187,15 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         const uline: NonNullable<TextFormatting["underline"]> = {
           style: attrs.style || "single",
         };
-        if (attrs.color) { uline.color = attrs.color; }
+        if (attrs.color) {
+          uline.color = attrs.color;
+        }
         formatting.underline = uline;
         break;
       }
 
       case "strike":
-        if (mark.attrs.double) {
+        if (mark.attrs["double"]) {
           formatting.doubleStrike = true;
         } else {
           formatting.strike = true;
@@ -1089,39 +1205,63 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
       case "textColor": {
         const attrs = mark.attrs as TextColorAttrs;
         const colorVal: ColorValue = {};
-        if (attrs.rgb) { colorVal.rgb = attrs.rgb; }
-        if (attrs.themeColor) { colorVal.themeColor = attrs.themeColor; }
-        if (attrs.themeTint) { colorVal.themeTint = attrs.themeTint; }
-        if (attrs.themeShade) { colorVal.themeShade = attrs.themeShade; }
+        if (attrs.rgb) {
+          colorVal.rgb = attrs.rgb;
+        }
+        if (attrs.themeColor) {
+          colorVal.themeColor = attrs.themeColor;
+        }
+        if (attrs.themeTint) {
+          colorVal.themeTint = attrs.themeTint;
+        }
+        if (attrs.themeShade) {
+          colorVal.themeShade = attrs.themeShade;
+        }
         formatting.color = colorVal;
         break;
       }
 
       case "highlight":
-        formatting.highlight = mark.attrs.color;
+        formatting.highlight = mark.attrs["color"];
         break;
 
       case "fontSize":
-        formatting.fontSize = mark.attrs.size;
-        formatting.fontSizeCs = mark.attrs.size;
+        formatting.fontSize = mark.attrs["size"];
+        formatting.fontSizeCs = mark.attrs["size"];
         break;
 
       case "fontFamily": {
         const attrs = mark.attrs as FontFamilyAttrs;
         const ff: NonNullable<TextFormatting["fontFamily"]> = {};
-        if (attrs.ascii) { ff.ascii = attrs.ascii; }
-        if (attrs.hAnsi) { ff.hAnsi = attrs.hAnsi; }
-        if (attrs.eastAsia) { ff.eastAsia = attrs.eastAsia; }
+        if (attrs.ascii) {
+          ff.ascii = attrs.ascii;
+        }
+        if (attrs.hAnsi) {
+          ff.hAnsi = attrs.hAnsi;
+        }
+        if (attrs.eastAsia) {
+          ff.eastAsia = attrs.eastAsia;
+        }
         // Use stored cs value, falling back to ascii for Complex Script compatibility
         const csVal = attrs.cs || attrs.ascii;
-        if (csVal) { ff.cs = csVal; }
+        if (csVal) {
+          ff.cs = csVal;
+        }
         // asciiTheme needs to be cast to the proper type
         if (attrs.asciiTheme) {
-          ff.asciiTheme = attrs.asciiTheme as NonNullable<NonNullable<TextFormatting["fontFamily"]>["asciiTheme"]>;
+          ff.asciiTheme = attrs.asciiTheme as NonNullable<
+            NonNullable<TextFormatting["fontFamily"]>["asciiTheme"]
+          >;
         }
-        if (attrs.hAnsiTheme) { ff.hAnsiTheme = attrs.hAnsiTheme; }
-        if (attrs.eastAsiaTheme) { ff.eastAsiaTheme = attrs.eastAsiaTheme; }
-        if (attrs.csTheme) { ff.csTheme = attrs.csTheme; }
+        if (attrs.hAnsiTheme) {
+          ff.hAnsiTheme = attrs.hAnsiTheme;
+        }
+        if (attrs.eastAsiaTheme) {
+          ff.eastAsiaTheme = attrs.eastAsiaTheme;
+        }
+        if (attrs.csTheme) {
+          ff.csTheme = attrs.csTheme;
+        }
         formatting.fontFamily = ff;
         break;
       }
@@ -1143,17 +1283,17 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         break;
 
       case "characterSpacing": {
-        if (mark.attrs.spacing !== null) {
-          formatting.spacing = mark.attrs.spacing;
+        if (mark.attrs["spacing"] !== null) {
+          formatting.spacing = mark.attrs["spacing"];
         }
-        if (mark.attrs.position !== null) {
-          formatting.position = mark.attrs.position;
+        if (mark.attrs["position"] !== null) {
+          formatting.position = mark.attrs["position"];
         }
-        if (mark.attrs.scale !== null) {
-          formatting.scale = mark.attrs.scale;
+        if (mark.attrs["scale"] !== null) {
+          formatting.scale = mark.attrs["scale"];
         }
-        if (mark.attrs.kerning !== null) {
-          formatting.kerning = mark.attrs.kerning;
+        if (mark.attrs["kerning"] !== null) {
+          formatting.kerning = mark.attrs["kerning"];
         }
         break;
       }
@@ -1171,7 +1311,7 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         break;
 
       case "emphasisMark":
-        formatting.emphasisMark = mark.attrs.type || "dot";
+        formatting.emphasisMark = mark.attrs["type"] || "dot";
         break;
 
       case "textOutline":
@@ -1251,29 +1391,46 @@ function convertPMTable(
           formatting: { borders: inferredBorders },
           rows,
         };
-        if (attrs.columnWidths) { minTable.columnWidths = attrs.columnWidths; }
+        if (attrs.columnWidths) {
+          minTable.columnWidths = attrs.columnWidths;
+        }
         return minTable;
       }
     }
   }
 
   const table: Table = { type: "table", rows };
-  if (attrs.columnWidths) { table.columnWidths = attrs.columnWidths; }
-  if (formatting) { table.formatting = formatting; }
+  if (attrs.columnWidths) {
+    table.columnWidths = attrs.columnWidths;
+  }
+  if (formatting) {
+    table.formatting = formatting;
+  }
   return table;
 }
 
 /**
  * Build CellMargins from PM margin attrs (top/bottom/left/right as number|null|undefined)
  */
-function buildCellMarginsFromAttrs(
-  m: { top?: number | null; bottom?: number | null; left?: number | null; right?: number | null },
-): CellMargins {
+function buildCellMarginsFromAttrs(m: {
+  top?: number | null;
+  bottom?: number | null;
+  left?: number | null;
+  right?: number | null;
+}): CellMargins {
   const margins: CellMargins = {};
-  if (m.top !== null && m.top !== undefined) { margins.top = { value: m.top, type: "dxa" }; }
-  if (m.bottom !== null && m.bottom !== undefined) { margins.bottom = { value: m.bottom, type: "dxa" }; }
-  if (m.left !== null && m.left !== undefined) { margins.left = { value: m.left, type: "dxa" }; }
-  if (m.right !== null && m.right !== undefined) { margins.right = { value: m.right, type: "dxa" }; }
+  if (m.top !== null && m.top !== undefined) {
+    margins.top = { value: m.top, type: "dxa" };
+  }
+  if (m.bottom !== null && m.bottom !== undefined) {
+    margins.bottom = { value: m.bottom, type: "dxa" };
+  }
+  if (m.left !== null && m.left !== undefined) {
+    margins.left = { value: m.left, type: "dxa" };
+  }
+  if (m.right !== null && m.right !== undefined) {
+    margins.right = { value: m.right, type: "dxa" };
+  }
   return margins;
 }
 
@@ -1292,16 +1449,32 @@ function tableAttrsToFormatting(
 
     // Override properties that user may have changed via editor commands
     if (attrs.styleId !== (orig.styleId ?? undefined)) {
-      if (attrs.styleId) { result.styleId = attrs.styleId; } else { delete result.styleId; }
+      if (attrs.styleId) {
+        result.styleId = attrs.styleId;
+      } else {
+        delete result.styleId;
+      }
     }
     if (attrs.justification !== (orig.justification ?? undefined)) {
-      if (attrs.justification) { result.justification = attrs.justification; } else { delete result.justification; }
+      if (attrs.justification) {
+        result.justification = attrs.justification;
+      } else {
+        delete result.justification;
+      }
     }
     if (attrs.floating !== (orig.floating ?? undefined)) {
-      if (attrs.floating) { result.floating = attrs.floating; } else { delete result.floating; }
+      if (attrs.floating) {
+        result.floating = attrs.floating;
+      } else {
+        delete result.floating;
+      }
     }
     if (attrs.look !== (orig.look ?? undefined)) {
-      if (attrs.look) { result.look = attrs.look; } else { delete result.look; }
+      if (attrs.look) {
+        result.look = attrs.look;
+      } else {
+        delete result.look;
+      }
     }
     // Width: check if changed
     const origWidthVal = orig.width?.value;
@@ -1354,12 +1527,24 @@ function tableAttrsToFormatting(
   }
 
   const f: TableFormatting = {};
-  if (attrs.styleId) { f.styleId = attrs.styleId; }
-  if (width) { f.width = width; }
-  if (attrs.justification) { f.justification = attrs.justification; }
-  if (attrs.floating) { f.floating = attrs.floating; }
-  if (cellMargins) { f.cellMargins = cellMargins; }
-  if (attrs.look) { f.look = attrs.look; }
+  if (attrs.styleId) {
+    f.styleId = attrs.styleId;
+  }
+  if (width) {
+    f.width = width;
+  }
+  if (attrs.justification) {
+    f.justification = attrs.justification;
+  }
+  if (attrs.floating) {
+    f.floating = attrs.floating;
+  }
+  if (cellMargins) {
+    f.cellMargins = cellMargins;
+  }
+  if (attrs.look) {
+    f.look = attrs.look;
+  }
   return f;
 }
 
@@ -1385,7 +1570,9 @@ function convertPMTableRow(
 
   const row: TableRow = { type: "tableRow", cells };
   const rowFormatting = tableRowAttrsToFormatting(attrs);
-  if (rowFormatting) { row.formatting = rowFormatting; }
+  if (rowFormatting) {
+    row.formatting = rowFormatting;
+  }
   return row;
 }
 
@@ -1404,13 +1591,25 @@ function tableRowAttrsToFormatting(
 
     // Override properties that user may have changed via editor commands
     if (attrs.height !== (orig.height?.value ?? undefined)) {
-      if (attrs.height) { result.height = { value: attrs.height, type: "dxa" as const }; } else { delete result.height; }
+      if (attrs.height) {
+        result.height = { value: attrs.height, type: "dxa" as const };
+      } else {
+        delete result.height;
+      }
     }
     if (attrs.heightRule !== (orig.heightRule ?? undefined)) {
-      if (attrs.heightRule) { result.heightRule = attrs.heightRule as "auto" | "atLeast" | "exact"; } else { delete result.heightRule; }
+      if (attrs.heightRule) {
+        result.heightRule = attrs.heightRule as "auto" | "atLeast" | "exact";
+      } else {
+        delete result.heightRule;
+      }
     }
     if (attrs.isHeader !== (orig.header ?? undefined)) {
-      if (attrs.isHeader) { result.header = attrs.isHeader; } else { delete result.header; }
+      if (attrs.isHeader) {
+        result.header = attrs.isHeader;
+      } else {
+        delete result.header;
+      }
     }
 
     return result;
@@ -1424,9 +1623,15 @@ function tableRowAttrsToFormatting(
   }
 
   const f: TableRowFormatting = {};
-  if (attrs.height) { f.height = { value: attrs.height, type: "dxa" }; }
-  if (attrs.heightRule) { f.heightRule = attrs.heightRule as "auto" | "atLeast" | "exact"; }
-  if (attrs.isHeader) { f.header = attrs.isHeader; }
+  if (attrs.height) {
+    f.height = { value: attrs.height, type: "dxa" };
+  }
+  if (attrs.heightRule) {
+    f.heightRule = attrs.heightRule as "auto" | "atLeast" | "exact";
+  }
+  if (attrs.isHeader) {
+    f.header = attrs.isHeader;
+  }
   return f;
 }
 
@@ -1452,7 +1657,9 @@ function convertPMTableCell(
 
   const cell: TableCell = { type: "tableCell", content };
   const cellFormatting = tableCellAttrsToFormatting(attrs);
-  if (cellFormatting) { cell.formatting = cellFormatting; }
+  if (cellFormatting) {
+    cell.formatting = cellFormatting;
+  }
   return cell;
 }
 
@@ -1482,7 +1689,11 @@ function tableCellAttrsToFormatting(
       };
     }
     if (attrs.verticalAlign !== (orig.verticalAlign ?? undefined)) {
-      if (attrs.verticalAlign) { result.verticalAlign = attrs.verticalAlign; } else { delete result.verticalAlign; }
+      if (attrs.verticalAlign) {
+        result.verticalAlign = attrs.verticalAlign;
+      } else {
+        delete result.verticalAlign;
+      }
     }
     if (attrs.backgroundColor) {
       result.shading = { fill: { rgb: attrs.backgroundColor } };
@@ -1491,13 +1702,21 @@ function tableCellAttrsToFormatting(
       delete result.shading;
     }
     if (attrs.borders) {
-      result.borders = attrs.borders as NonNullable<TableCellFormatting["borders"]>;
+      result.borders = attrs.borders as NonNullable<
+        TableCellFormatting["borders"]
+      >;
     }
     if (attrs.margins) {
       result.margins = buildCellMarginsFromAttrs(attrs.margins);
     }
     if (attrs.textDirection !== (orig.textDirection ?? undefined)) {
-      if (attrs.textDirection) { result.textDirection = attrs.textDirection as NonNullable<TableCellFormatting["textDirection"]>; } else { delete result.textDirection; }
+      if (attrs.textDirection) {
+        result.textDirection = attrs.textDirection as NonNullable<
+          TableCellFormatting["textDirection"]
+        >;
+      } else {
+        delete result.textDirection;
+      }
     }
 
     return result;
@@ -1519,18 +1738,32 @@ function tableCellAttrsToFormatting(
   }
 
   const f: TableCellFormatting = {};
-  if (attrs.colspan > 1) { f.gridSpan = attrs.colspan; }
+  if (attrs.colspan > 1) {
+    f.gridSpan = attrs.colspan;
+  }
   if (attrs.width !== null) {
     f.width = {
       value: attrs.width ?? 0,
       type: (attrs.widthType as "auto" | "dxa" | "pct" | "nil") || "dxa",
     };
   }
-  if (attrs.verticalAlign) { f.verticalAlign = attrs.verticalAlign; }
-  if (attrs.textDirection) { f.textDirection = attrs.textDirection as NonNullable<TableCellFormatting["textDirection"]>; }
-  if (attrs.backgroundColor) { f.shading = { fill: { rgb: attrs.backgroundColor } }; }
-  if (attrs.borders) { f.borders = attrs.borders as NonNullable<TableCellFormatting["borders"]>; }
-  if (attrs.margins) { f.margins = buildCellMarginsFromAttrs(attrs.margins); }
+  if (attrs.verticalAlign) {
+    f.verticalAlign = attrs.verticalAlign;
+  }
+  if (attrs.textDirection) {
+    f.textDirection = attrs.textDirection as NonNullable<
+      TableCellFormatting["textDirection"]
+    >;
+  }
+  if (attrs.backgroundColor) {
+    f.shading = { fill: { rgb: attrs.backgroundColor } };
+  }
+  if (attrs.borders) {
+    f.borders = attrs.borders as NonNullable<TableCellFormatting["borders"]>;
+  }
+  if (attrs.margins) {
+    f.margins = buildCellMarginsFromAttrs(attrs.margins);
+  }
   return f;
 }
 
@@ -1569,17 +1802,32 @@ function convertPMTextBox(node: PMNode): Paragraph {
           ? childParagraphs
           : [{ type: "paragraph", content: [] }],
       margins: (() => {
-        const m: { top?: number; bottom?: number; left?: number; right?: number } = {};
-        if (attrs.marginTop !== null && attrs.marginTop !== undefined) { m.top = Math.round(attrs.marginTop * (914_400 / 96)); }
-        if (attrs.marginBottom !== null && attrs.marginBottom !== undefined) { m.bottom = Math.round(attrs.marginBottom * (914_400 / 96)); }
-        if (attrs.marginLeft !== null && attrs.marginLeft !== undefined) { m.left = Math.round(attrs.marginLeft * (914_400 / 96)); }
-        if (attrs.marginRight !== null && attrs.marginRight !== undefined) { m.right = Math.round(attrs.marginRight * (914_400 / 96)); }
+        const m: {
+          top?: number;
+          bottom?: number;
+          left?: number;
+          right?: number;
+        } = {};
+        if (attrs.marginTop !== null && attrs.marginTop !== undefined) {
+          m.top = Math.round(attrs.marginTop * (914_400 / 96));
+        }
+        if (attrs.marginBottom !== null && attrs.marginBottom !== undefined) {
+          m.bottom = Math.round(attrs.marginBottom * (914_400 / 96));
+        }
+        if (attrs.marginLeft !== null && attrs.marginLeft !== undefined) {
+          m.left = Math.round(attrs.marginLeft * (914_400 / 96));
+        }
+        if (attrs.marginRight !== null && attrs.marginRight !== undefined) {
+          m.right = Math.round(attrs.marginRight * (914_400 / 96));
+        }
         return m;
       })(),
     },
   };
 
-  if (attrs.textBoxId) { shape.id = attrs.textBoxId; }
+  if (attrs.textBoxId) {
+    shape.id = attrs.textBoxId;
+  }
 
   // Convert fill color back
   if (attrs.fillColor) {

@@ -81,22 +81,22 @@ function renderParagraphFragmentPlaceholder(
   applyBaseFragmentStyles(el);
 
   // Store fragment metadata
-  el.dataset.blockId = String(fragment.blockId);
-  el.dataset.fromLine = String(fragment.fromLine);
-  el.dataset.toLine = String(fragment.toLine);
+  el.dataset["blockId"] = String(fragment.blockId);
+  el.dataset["fromLine"] = String(fragment.fromLine);
+  el.dataset["toLine"] = String(fragment.toLine);
 
   if (fragment.pmStart !== undefined) {
-    el.dataset.pmStart = String(fragment.pmStart);
+    el.dataset["pmStart"] = String(fragment.pmStart);
   }
   if (fragment.pmEnd !== undefined) {
-    el.dataset.pmEnd = String(fragment.pmEnd);
+    el.dataset["pmEnd"] = String(fragment.pmEnd);
   }
 
   if (fragment.continuesFromPrev) {
-    el.dataset.continuesFromPrev = "true";
+    el.dataset["continuesFromPrev"] = "true";
   }
   if (fragment.continuesOnNext) {
-    el.dataset.continuesOnNext = "true";
+    el.dataset["continuesOnNext"] = "true";
   }
 
   return el;
@@ -118,15 +118,15 @@ function renderTableFragmentPlaceholder(
   applyBaseFragmentStyles(el);
 
   // Store fragment metadata
-  el.dataset.blockId = String(fragment.blockId);
-  el.dataset.fromRow = String(fragment.fromRow);
-  el.dataset.toRow = String(fragment.toRow);
+  el.dataset["blockId"] = String(fragment.blockId);
+  el.dataset["fromRow"] = String(fragment.fromRow);
+  el.dataset["toRow"] = String(fragment.toRow);
 
   if (fragment.pmStart !== undefined) {
-    el.dataset.pmStart = String(fragment.pmStart);
+    el.dataset["pmStart"] = String(fragment.pmStart);
   }
   if (fragment.pmEnd !== undefined) {
-    el.dataset.pmEnd = String(fragment.pmEnd);
+    el.dataset["pmEnd"] = String(fragment.pmEnd);
   }
 
   return el;
@@ -145,17 +145,17 @@ function renderImageFragmentPlaceholder(
   applyBaseFragmentStyles(el);
 
   // Store fragment metadata
-  el.dataset.blockId = String(fragment.blockId);
+  el.dataset["blockId"] = String(fragment.blockId);
 
   if (fragment.pmStart !== undefined) {
-    el.dataset.pmStart = String(fragment.pmStart);
+    el.dataset["pmStart"] = String(fragment.pmStart);
   }
   if (fragment.pmEnd !== undefined) {
-    el.dataset.pmEnd = String(fragment.pmEnd);
+    el.dataset["pmEnd"] = String(fragment.pmEnd);
   }
 
   if (fragment.isAnchored) {
-    el.dataset.anchored = "true";
+    el.dataset["anchored"] = "true";
   }
 
   // Set z-index for layering
@@ -202,10 +202,10 @@ export function renderFragment(
   // Cast to access common properties
   const unknownFragment = fragment as { blockId?: unknown; kind?: string };
   if (unknownFragment.blockId !== undefined) {
-    el.dataset.blockId = String(unknownFragment.blockId);
+    el.dataset["blockId"] = String(unknownFragment.blockId);
   }
   if (unknownFragment.kind) {
-    el.dataset.kind = unknownFragment.kind;
+    el.dataset["kind"] = unknownFragment.kind;
   }
 
   return el;

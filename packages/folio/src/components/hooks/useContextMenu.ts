@@ -18,7 +18,10 @@ import {
   rejectChange,
   findChangeAtPosition,
 } from "../../core/prosemirror/commands/comments";
-import type { TextContextAction, TextContextMenuItem } from "../TextContextMenu";
+import type {
+  TextContextAction,
+  TextContextMenuItem,
+} from "../TextContextMenu";
 
 // ============================================================================
 // TYPES
@@ -60,8 +63,8 @@ function findSelectionYPosition(
   const elements = pagesEl.querySelectorAll("[data-pm-start]");
   for (const node of elements) {
     const el = node as HTMLElement;
-    const pmStart = Number(el.dataset.pmStart);
-    const pmEnd = Number(el.dataset.pmEnd);
+    const pmStart = Number(el.dataset["pmStart"]);
+    const pmEnd = Number(el.dataset["pmEnd"]);
     if (pmPos >= pmStart && pmPos <= pmEnd) {
       return (
         el.getBoundingClientRect().top - parentEl.getBoundingClientRect().top
@@ -137,8 +140,9 @@ export const useContextMenu = ({
   pendingCommentId,
   onAddComment,
 }: UseContextMenuOptions) => {
-  const [contextMenu, setContextMenu] =
-    useState<ContextMenuState>(INITIAL_CONTEXT_MENU_STATE);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(
+    INITIAL_CONTEXT_MENU_STATE,
+  );
 
   /**
    * Handler attached to the outer editor content wrapper (onContextMenu on the div).
@@ -152,9 +156,7 @@ export const useContextMenu = ({
       const inTable = view ? isInTable(view.state) : false;
       const { from, to } = view?.state.selection ?? { from: 0, to: 0 };
       const hasSel = from !== to;
-      const inTrackedChange = view
-        ? detectTrackedChange(view, from)
-        : false;
+      const inTrackedChange = view ? detectTrackedChange(view, from) : false;
       setContextMenu({
         isOpen: true,
         position: { x: e.clientX, y: e.clientY },
@@ -388,7 +390,7 @@ export const useContextMenu = ({
             editorContentRef.current,
             from,
           );
-          const pendingMark = view.state.schema.marks.comment!.create({
+          const pendingMark = view.state.schema.marks["comment"]!.create({
             commentId: pendingCommentId,
           });
           const tr = view.state.tr.addMark(from, to, pendingMark);
@@ -414,7 +416,15 @@ export const useContextMenu = ({
       }
       // TextContextMenu calls onClose after onAction, so no need to close here
     },
-    [getActiveEditorView, focusActiveEditor, contextMenu.selectionRange, scrollContainerRef, editorContentRef, pendingCommentId, onAddComment],
+    [
+      getActiveEditorView,
+      focusActiveEditor,
+      contextMenu.selectionRange,
+      scrollContainerRef,
+      editorContentRef,
+      pendingCommentId,
+      onAddComment,
+    ],
   );
 
   return {

@@ -16,7 +16,7 @@ export function addCommentMark(commentId: number): Command {
       return false;
     }
 
-    const commentType = state.schema.marks.comment;
+    const commentType = state.schema.marks["comment"];
     if (!commentType) {
       return false;
     }
@@ -34,7 +34,7 @@ export function addCommentMark(commentId: number): Command {
  */
 export function removeCommentMark(commentId: number): Command {
   return (state, dispatch) => {
-    const commentType = state.schema.marks.comment;
+    const commentType = state.schema.marks["comment"];
     if (!commentType) {
       return false;
     }
@@ -46,7 +46,7 @@ export function removeCommentMark(commentId: number): Command {
           for (const mark of node.marks) {
             if (
               mark.type === commentType &&
-              mark.attrs.commentId === commentId
+              mark.attrs["commentId"] === commentId
             ) {
               tr.removeMark(pos, pos + node.nodeSize, mark);
             }
@@ -72,8 +72,8 @@ function resolveChange(
   mode: "accept" | "reject",
 ): Command {
   return (state, dispatch) => {
-    const insertionType = state.schema.marks.insertion;
-    const deletionType = state.schema.marks.deletion;
+    const insertionType = state.schema.marks["insertion"];
+    const deletionType = state.schema.marks["deletion"];
     if (!insertionType && !deletionType) {
       return false;
     }
@@ -168,16 +168,22 @@ export function findChangeAtPosition(
   to: number,
 ): { from: number; to: number } {
   // If there's a range selection, use it directly
-  if (from !== to) {return { from, to };}
+  if (from !== to) {
+    return { from, to };
+  }
 
-  const insertionType = state.schema.marks.insertion;
-  const deletionType = state.schema.marks.deletion;
-  if (!insertionType && !deletionType) {return { from, to };}
+  const insertionType = state.schema.marks["insertion"];
+  const deletionType = state.schema.marks["deletion"];
+  if (!insertionType && !deletionType) {
+    return { from, to };
+  }
 
   // Resolve the position and check marks at cursor
   const $pos = state.doc.resolve(from);
   const node = $pos.parent;
-  if (!node.isTextblock) {return { from, to };}
+  if (!node.isTextblock) {
+    return { from, to };
+  }
 
   // Find the text node at this position and its mark
   let markStart = from;
@@ -199,7 +205,9 @@ export function findChangeAtPosition(
     }
   });
 
-  if (!foundMark) {return { from, to };}
+  if (!foundMark) {
+    return { from, to };
+  }
 
   // Expand to adjacent nodes with the same mark type
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
@@ -207,8 +215,12 @@ export function findChangeAtPosition(
     const childStart = $pos.start() + offset;
     const childEnd = childStart + child.nodeSize;
     if (child.isText && child.marks.some((m) => m.type === foundMark)) {
-      if (childEnd === markStart) {markStart = childStart;}
-      if (childStart === markEnd) {markEnd = childEnd;}
+      if (childEnd === markStart) {
+        markStart = childStart;
+      }
+      if (childStart === markEnd) {
+        markEnd = childEnd;
+      }
     }
   });
 
@@ -222,8 +234,8 @@ export function findNextChange(
   state: EditorState,
   startPos: number,
 ): ChangeRange | null {
-  const insertionType = state.schema.marks.insertion;
-  const deletionType = state.schema.marks.deletion;
+  const insertionType = state.schema.marks["insertion"];
+  const deletionType = state.schema.marks["deletion"];
   if (!insertionType && !deletionType) {
     return null;
   }
@@ -269,8 +281,8 @@ export function findPreviousChange(
   state: EditorState,
   startPos: number,
 ): ChangeRange | null {
-  const insertionType = state.schema.marks.insertion;
-  const deletionType = state.schema.marks.deletion;
+  const insertionType = state.schema.marks["insertion"];
+  const deletionType = state.schema.marks["deletion"];
   if (!insertionType && !deletionType) {
     return null;
   }

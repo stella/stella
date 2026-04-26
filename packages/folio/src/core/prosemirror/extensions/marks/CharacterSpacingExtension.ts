@@ -30,10 +30,16 @@ export const CharacterSpacingExtension = createMarkExtension({
         getAttrs: (dom) => {
           const el = dom as HTMLElement;
           return {
-            spacing: el.dataset.spacing ? Number(el.dataset.spacing) : null,
-            position: el.dataset.position ? Number(el.dataset.position) : null,
-            scale: el.dataset.scale ? Number(el.dataset.scale) : null,
-            kerning: el.dataset.kerning ? Number(el.dataset.kerning) : null,
+            spacing: el.dataset["spacing"]
+              ? Number(el.dataset["spacing"])
+              : null,
+            position: el.dataset["position"]
+              ? Number(el.dataset["position"])
+              : null,
+            scale: el.dataset["scale"] ? Number(el.dataset["scale"]) : null,
+            kerning: el.dataset["kerning"]
+              ? Number(el.dataset["kerning"])
+              : null,
           };
         },
       },
@@ -75,7 +81,7 @@ export const CharacterSpacingExtension = createMarkExtension({
       }
 
       if (styles.length > 0) {
-        dataAttrs.style = styles.join("; ");
+        dataAttrs["style"] = styles.join("; ");
       }
 
       return ["span", dataAttrs, 0];

@@ -31,7 +31,7 @@ export const StrikeExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     return {
       commands: {
-        toggleStrike: () => toggleMark(ctx.schema.marks.strike!),
+        toggleStrike: () => toggleMark(ctx.schema.marks["strike"]!),
       },
     };
   },
