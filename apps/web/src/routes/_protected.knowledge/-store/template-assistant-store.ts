@@ -6,13 +6,20 @@ type MockMessage = {
   text: string;
 };
 
+type TemplateAssistantSession =
+  | { status: "inactive" }
+  | {
+      status: "active";
+      templateId: string;
+      templateName: string;
+      selectedText: string | null;
+      messages: MockMessage[];
+    };
+
 type TemplateAssistantState = {
-  active: boolean;
-  templateId: string | null;
-  templateName: string | null;
-  selectedText: string | null;
-  messages: MockMessage[];
-  setActive: (active: boolean, id?: string, name?: string) => void;
+  session: TemplateAssistantSession;
+  openForTemplate: (template: { id: string; name: string }) => void;
+  close: () => void;
   setSelectedText: (text: string | null) => void;
   addMessage: (msg: MockMessage) => void;
   clearMessages: () => void;
@@ -20,21 +27,56 @@ type TemplateAssistantState = {
 
 export const useTemplateAssistantStore = create<TemplateAssistantState>(
   (set) => ({
-    active: false,
-    templateId: null,
-    templateName: null,
-    selectedText: null,
-    messages: [],
-    setActive: (active, id, name) =>
+    session: { status: "inactive" },
+    openForTemplate: (template) =>
       set({
-        active,
-        templateId: id ?? null,
-        templateName: name ?? null,
-        selectedText: null,
-        messages: [],
+        session: {
+          status: "active",
+          templateId: template.id,
+          templateName: template.name,
+          selectedText: null,
+          messages: [],
+        },
       }),
-    setSelectedText: (text) => set({ selectedText: text }),
-    addMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
-    clearMessages: () => set({ messages: [] }),
+    close: () => set({ session: { status: "inactive" } }),
+    setSelectedText: (text) =>
+      set((state) => {
+        if (state.session.status !== "active") {
+          return state;
+        }
+
+        return {
+          session: {
+            ...state.session,
+            selectedText: text,
+          },
+        };
+      }),
+    addMessage: (msg) =>
+      set((state) => {
+        if (state.session.status !== "active") {
+          return state;
+        }
+
+        return {
+          session: {
+            ...state.session,
+            messages: [...state.session.messages, msg],
+          },
+        };
+      }),
+    clearMessages: () =>
+      set((state) => {
+        if (state.session.status !== "active") {
+          return state;
+        }
+
+        return {
+          session: {
+            ...state.session,
+            messages: [],
+          },
+        };
+      }),
   }),
 );

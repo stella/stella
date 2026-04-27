@@ -137,13 +137,15 @@ export const MatterMenuItems = ({
 
 // ── Rename state ─────────────────────────────────────────────
 
-export type RenameState = {
-  active: boolean;
-  draft: string;
-  setDraft: (v: string) => void;
-  commit: () => void;
-  cancel: () => void;
-};
+export type RenameState =
+  | { status: "idle" }
+  | {
+      status: "editing";
+      draft: string;
+      setDraft: (v: string) => void;
+      commit: () => void;
+      cancel: () => void;
+    };
 
 // ── MatterContextMenu (card wrapper) ─────────────────────────
 
@@ -175,30 +177,37 @@ export const MatterContextMenu = ({
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
 
-  const [renaming, setRenaming] = useState(false);
-  const [renameDraft, setRenameDraft] = useState(workspaceName);
+  const [rename, setRename] = useState<
+    { status: "idle" } | { status: "editing"; draft: string }
+  >({ status: "idle" });
   const [addMemberOpen, setAddMemberOpen] = useState(false);
 
   const commitRename = () => {
-    const trimmed = renameDraft.trim();
+    if (rename.status !== "editing") {
+      return;
+    }
+
+    const trimmed = rename.draft.trim();
     if (trimmed && trimmed !== workspaceName) {
       updateWorkspace.mutate({ workspaceId, name: trimmed });
     }
-    setRenaming(false);
+    setRename({ status: "idle" });
   };
 
   const cancelRename = () => {
-    setRenameDraft(workspaceName);
-    setRenaming(false);
+    setRename({ status: "idle" });
   };
 
-  const renameState: RenameState = {
-    active: renaming,
-    draft: renameDraft,
-    setDraft: setRenameDraft,
-    commit: commitRename,
-    cancel: cancelRename,
-  };
+  const renameState: RenameState =
+    rename.status === "editing"
+      ? {
+          status: "editing",
+          draft: rename.draft,
+          setDraft: (draft) => setRename({ status: "editing", draft }),
+          commit: commitRename,
+          cancel: cancelRename,
+        }
+      : { status: "idle" };
 
   const handleCopyLink = async () => {
     const url = `${window.location.origin}/workspaces/${workspaceId}`;
@@ -295,8 +304,7 @@ export const MatterContextMenu = ({
               );
             }}
             onRename={() => {
-              setRenameDraft(workspaceName);
-              setRenaming(true);
+              setRename({ status: "editing", draft: workspaceName });
             }}
             onTogglePin={() => togglePin(workspaceId)}
           />

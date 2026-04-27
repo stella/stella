@@ -123,13 +123,14 @@ export const CreateMatterDialog = () => {
   const queryClient = useQueryClient();
   const createWorkspace = useCreateWorkspace();
   const createContact = useCreateContact();
-  const { closeDialog, draftClient, isOpen } = useCreateMatterStore(
+  const { closeDialog, dialog } = useCreateMatterStore(
     useShallow((s) => ({
       closeDialog: s.closeDialog,
-      draftClient: s.draftClient,
-      isOpen: s.isOpen,
+      dialog: s.dialog,
     })),
   );
+  const isOpen = dialog.status === "open";
+  const draftClient = dialog.status === "open" ? dialog.draftClient : null;
   const [name, setName] = useState("");
   const [selectedClient, setSelectedClient] =
     useState<MatterDraftClient | null>(null);

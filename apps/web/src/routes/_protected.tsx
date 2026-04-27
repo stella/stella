@@ -415,7 +415,9 @@ function RightPanel({
   decisionId,
 }: RightPanelProps) {
   const t = useTranslations();
-  const assistantActive = useTemplateAssistantStore((s) => s.active);
+  const assistantActive = useTemplateAssistantStore(
+    (s) => s.session.status === "active",
+  );
   // Start narrow when opened for case law decisions
   const defaultWidth = decisionId
     ? RIGHT_PANEL_MIN_WIDTH

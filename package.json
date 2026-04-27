@@ -93,6 +93,7 @@
     "eslint-plugin-sonarjs": "4.0.3",
     "@libpdf/core": "0.3.4",
     "elysia": "1.4.28",
+    "fast-check": "^4.7.0",
     "lucide-react": "1.8.0",
     "sherif": "1.11.1",
     "@tailwindcss/vite": "4.2.2",

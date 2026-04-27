@@ -26,12 +26,26 @@ export type FindReplaceOptions = {
   onCurrentMatchChange?: (match: FindMatch | null, index: number) => void;
 };
 
+type FindReplaceMode = "find" | "replace";
+
+type FindReplaceDialogState =
+  | {
+      dialog: { status: "closed" };
+      lastMode: FindReplaceMode;
+    }
+  | {
+      dialog: { status: "open"; mode: "find" };
+      lastMode: "find";
+    }
+  | {
+      dialog: { status: "open"; mode: "replace" };
+      lastMode: "replace";
+    };
+
 /**
  * State for the find/replace hook
  */
-export type FindReplaceState = {
-  /** Whether the dialog is open */
-  isOpen: boolean;
+export type FindReplaceState = FindReplaceDialogState & {
   /** Current search text */
   searchText: string;
   /** Current replace text */
@@ -42,8 +56,6 @@ export type FindReplaceState = {
   matches: FindMatch[];
   /** Current match index */
   currentIndex: number;
-  /** Whether in replace mode */
-  replaceMode: boolean;
 };
 
 /**
@@ -90,21 +102,22 @@ export type UseFindReplaceReturn = {
 export function useFindReplace(
   hookOptions?: FindReplaceOptions,
 ): UseFindReplaceReturn {
+  const initialMode: FindReplaceMode = hookOptions?.initialReplaceMode
+    ? "replace"
+    : "find";
   const [state, setState] = useState<FindReplaceState>({
-    isOpen: false,
+    ...closedDialogState(initialMode),
     searchText: "",
     replaceText: "",
     options: createDefaultFindOptions(),
     matches: [],
     currentIndex: 0,
-    replaceMode: hookOptions?.initialReplaceMode ?? false,
   });
 
   const openFind = useCallback((selectedText?: string) => {
     setState((prev) => ({
       ...prev,
-      isOpen: true,
-      replaceMode: false,
+      ...openDialogState("find"),
       searchText: selectedText || prev.searchText,
       matches: [],
       currentIndex: 0,
@@ -114,8 +127,7 @@ export function useFindReplace(
   const openReplace = useCallback((selectedText?: string) => {
     setState((prev) => ({
       ...prev,
-      isOpen: true,
-      replaceMode: true,
+      ...openDialogState("replace"),
       searchText: selectedText || prev.searchText,
       matches: [],
       currentIndex: 0,
@@ -125,14 +137,16 @@ export function useFindReplace(
   const close = useCallback(() => {
     setState((prev) => ({
       ...prev,
-      isOpen: false,
+      ...closedDialogState(prev.lastMode),
     }));
   }, []);
 
   const toggle = useCallback(() => {
     setState((prev) => ({
       ...prev,
-      isOpen: !prev.isOpen,
+      ...(prev.dialog.status === "closed"
+        ? openDialogState(prev.lastMode)
+        : closedDialogState(prev.lastMode)),
     }));
   }, []);
 
@@ -245,5 +259,26 @@ export function useFindReplace(
     goToMatch,
     getCurrentMatch,
     hasMatches,
+  };
+}
+
+function closedDialogState(mode: FindReplaceMode): FindReplaceDialogState {
+  return {
+    dialog: { status: "closed" },
+    lastMode: mode,
+  };
+}
+
+function openDialogState(mode: FindReplaceMode): FindReplaceDialogState {
+  if (mode === "replace") {
+    return {
+      dialog: { status: "open", mode: "replace" },
+      lastMode: "replace",
+    };
+  }
+
+  return {
+    dialog: { status: "open", mode: "find" },
+    lastMode: "find",
   };
 }
