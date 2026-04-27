@@ -32,12 +32,14 @@ type UseDocumentLoaderParams = {
    * tracked-change sidebar, find-replace matches, etc.).
    */
   onReset: () => void;
-  /** Set the loading / parse-error slice of EditorState. */
-  setLoadingState: (patch: {
-    isLoading: boolean;
-    parseError: string | null;
-  }) => void;
+  /** Set the document loading slice of EditorState. */
+  setDocumentLoadState: (state: DocumentLoadState) => void;
 };
+
+export type DocumentLoadState =
+  | { status: "loading" }
+  | { status: "ready" }
+  | { status: "error"; message: string };
 
 type UseDocumentLoaderReturn = {
   /** Parse and load a raw DOCX buffer. */
@@ -60,7 +62,7 @@ export const useDocumentLoader = ({
   history,
   onError,
   onReset,
-  setLoadingState,
+  setDocumentLoadState,
 }: UseDocumentLoaderParams): UseDocumentLoaderReturn => {
   // Monotonically increasing generation counter to discard stale async loads
   const loadGenerationRef = useRef(0);
@@ -85,7 +87,7 @@ export const useDocumentLoader = ({
     (doc: Document) => {
       resetForNewDocument();
       history.reset(doc);
-      setLoadingState({ isLoading: false, parseError: null });
+      setDocumentLoadState({ status: "ready" });
       // Defer font loading so the first page renders immediately
       if (doc.requiredFonts && doc.requiredFonts.length > 0) {
         loadFontsWithMapping(doc.requiredFonts).catch((error) => {
@@ -93,7 +95,7 @@ export const useDocumentLoader = ({
         });
       }
     },
-    [resetForNewDocument, history, setLoadingState],
+    [resetForNewDocument, history, setDocumentLoadState],
   );
 
   // -------------------------------------------------------------------
@@ -104,7 +106,7 @@ export const useDocumentLoader = ({
     async (buffer: DocxInput) => {
       const generation = ++loadGenerationRef.current;
       resetForNewDocument();
-      setLoadingState({ isLoading: true, parseError: null });
+      setDocumentLoadState({ status: "loading" });
 
       try {
         // Skip blocking font preload during parsing; fonts are loaded
@@ -121,11 +123,11 @@ export const useDocumentLoader = ({
         }
         const message =
           error instanceof Error ? error.message : "Failed to parse document";
-        setLoadingState({ isLoading: false, parseError: message });
+        setDocumentLoadState({ status: "error", message });
         onError?.(error instanceof Error ? error : new Error(message));
       }
     },
-    [resetForNewDocument, loadParsedDocument, onError, setLoadingState],
+    [resetForNewDocument, loadParsedDocument, onError, setDocumentLoadState],
   );
 
   // -------------------------------------------------------------------

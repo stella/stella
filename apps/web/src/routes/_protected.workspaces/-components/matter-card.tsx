@@ -97,7 +97,7 @@ export const MatterCard = ({
             {/* Line 1: name + reference */}
             <div className="flex items-center gap-2">
               <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
-                {rename.active ? (
+                {rename.status === "editing" ? (
                   <InlineEdit
                     onChange={rename.setDraft}
                     onCancel={rename.cancel}
@@ -115,7 +115,7 @@ export const MatterCard = ({
                   </Link>
                 )}
               </h2>
-              {!rename.active && workspace.reference && (
+              {rename.status !== "editing" && workspace.reference && (
                 <span className="text-muted-foreground shrink-0 font-mono text-xs">
                   {workspace.reference}
                 </span>

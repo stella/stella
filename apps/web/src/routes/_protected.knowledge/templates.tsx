@@ -303,12 +303,14 @@ function RouteComponent() {
   );
 }
 
-type RenameState = {
-  active: boolean;
-  draft: string;
-  displayName: string;
-  saving: boolean;
-};
+type RenameState =
+  | { status: "idle"; displayName: string }
+  | {
+      status: "editing";
+      draft: string;
+      displayName: string;
+      saving: boolean;
+    };
 
 type RenameAction =
   | { type: "start"; displayName: string }
@@ -325,36 +327,46 @@ const renameReducer = (
   switch (action.type) {
     case "start":
       return {
-        ...state,
-        active: true,
+        status: "editing",
         draft: action.displayName,
+        displayName: action.displayName,
+        saving: false,
       };
     case "cancel":
-      return { ...state, active: false };
+      return { status: "idle", displayName: state.displayName };
     case "setDraft":
+      if (state.status !== "editing") {
+        return state;
+      }
       return { ...state, draft: action.value };
     case "savingStart":
+      if (state.status !== "editing") {
+        return state;
+      }
       return { ...state, saving: true };
     case "saved":
       return {
-        active: false,
-        saving: false,
-        draft: action.name,
+        status: "idle",
         displayName: action.name,
       };
     case "saveFailed":
+      if (state.status !== "editing") {
+        return state;
+      }
       return { ...state, saving: false };
     default:
       return state;
   }
 };
 
-type FieldEditState = {
-  active: boolean;
-  fields: EditableField[];
-  expandedPath: string | null;
-  saving: boolean;
-};
+type FieldEditState =
+  | { status: "idle" }
+  | {
+      status: "editing";
+      fields: EditableField[];
+      expandedPath: string | null;
+      saving: boolean;
+    };
 
 type FieldEditAction =
   | { type: "start"; fields: EditableField[] }
@@ -372,22 +384,23 @@ const fieldEditReducer = (
   switch (action.type) {
     case "start":
       return {
-        active: true,
+        status: "editing",
         fields: action.fields,
         expandedPath: null,
         saving: false,
       };
     case "cancel":
     case "saved":
-      return {
-        active: false,
-        fields: [],
-        expandedPath: null,
-        saving: false,
-      };
+      return { status: "idle" };
     case "setExpanded":
+      if (state.status !== "editing") {
+        return state;
+      }
       return { ...state, expandedPath: action.path };
     case "updateField":
+      if (state.status !== "editing") {
+        return state;
+      }
       return {
         ...state,
         fields: state.fields.map((f) =>
@@ -395,8 +408,14 @@ const fieldEditReducer = (
         ),
       };
     case "savingStart":
+      if (state.status !== "editing") {
+        return state;
+      }
       return { ...state, saving: true };
     case "saveFailed":
+      if (state.status !== "editing") {
+        return state;
+      }
       return { ...state, saving: false };
     default:
       return state;
@@ -419,12 +438,20 @@ const TemplateDetail = ({
   const t = useTranslations();
   const format = useFormatter();
   const queryClient = useQueryClient();
-  const setAssistantActive = useTemplateAssistantStore((s) => s.setActive);
+  const openTemplateAssistant = useTemplateAssistantStore(
+    (s) => s.openForTemplate,
+  );
+  const closeTemplateAssistant = useTemplateAssistantStore((s) => s.close);
 
   useEffect(() => {
-    setAssistantActive(true, template.id, template.name);
-    return () => setAssistantActive(false);
-  }, [template.id, template.name, setAssistantActive]);
+    openTemplateAssistant({ id: template.id, name: template.name });
+    return closeTemplateAssistant;
+  }, [
+    template.id,
+    template.name,
+    openTemplateAssistant,
+    closeTemplateAssistant,
+  ]);
 
   const {
     data: detailData,
@@ -446,28 +473,23 @@ const TemplateDetail = ({
       : "ready";
 
   const [rename, renameDispatch] = useReducer(renameReducer, {
-    active: false,
-    draft: template.name,
+    status: "idle",
     displayName: template.name,
-    saving: false,
   });
   const renameInputRef = useRef<HTMLInputElement>(null);
   const renameCancelledRef = useRef(false);
 
   const [fieldEdit, fieldEditDispatch] = useReducer(fieldEditReducer, {
-    active: false,
-    fields: [],
-    expandedPath: null,
-    saving: false,
+    status: "idle",
   });
 
   // Focus input when entering rename mode
   useEffect(() => {
-    if (rename.active) {
+    if (rename.status === "editing") {
       renameInputRef.current?.focus();
       renameInputRef.current?.select();
     }
-  }, [rename.active]);
+  }, [rename.status]);
 
   const startRename = useCallback(() => {
     renameCancelledRef.current = false;
@@ -481,6 +503,10 @@ const TemplateDetail = ({
 
   const saveRename = useCallback(async () => {
     if (renameCancelledRef.current) {
+      return;
+    }
+
+    if (rename.status !== "editing") {
       return;
     }
 
@@ -516,7 +542,7 @@ const TemplateDetail = ({
       type: "success",
       title: t("templates.templateRenamed"),
     });
-  }, [rename.draft, rename.displayName, template.id, t, onRenamed]);
+  }, [rename, template.id, t, onRenamed]);
 
   const handleRenameKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -579,6 +605,10 @@ const TemplateDetail = ({
       return;
     }
 
+    if (fieldEdit.status !== "editing") {
+      return;
+    }
+
     fieldEditDispatch({ type: "savingStart" });
 
     const manifest = {
@@ -628,7 +658,7 @@ const TemplateDetail = ({
       type: "success",
       title: t("templates.fieldsUpdated"),
     });
-  }, [state, detail, fieldEdit.fields, template.id, t, queryClient]);
+  }, [state, detail, fieldEdit, template.id, t, queryClient]);
 
   const fields = detail?.manifest?.fields ?? [];
   const fieldCount = detail?.manifest?.fields.length ?? template.fieldCount;
@@ -662,7 +692,7 @@ const TemplateDetail = ({
         <div className="mx-auto w-full max-w-2xl overflow-y-auto p-6">
           <div className="mb-6 flex items-start justify-between">
             <div>
-              {rename.active ? (
+              {rename.status === "editing" ? (
                 <Input
                   aria-label={t("templates.templateName")}
                   className="h-8 text-lg font-semibold"
@@ -718,7 +748,7 @@ const TemplateDetail = ({
             </TabsList>
 
             <TabsPanel value="fields">
-              {fieldEdit.active ? (
+              {fieldEdit.status === "editing" ? (
                 <div className="mt-4">
                   <div className="rounded-lg border">
                     <div className="border-b px-4 py-3">

@@ -18,15 +18,15 @@ type SuggestionKind = "placeholder" | "conditional" | "repeat";
 
 export const TemplateAssistantPanel = () => {
   const t = useTranslations();
-  const { templateName, selectedText, messages, addMessage } =
-    useTemplateAssistantStore(
-      useShallow((s) => ({
-        templateName: s.templateName,
-        selectedText: s.selectedText,
-        messages: s.messages,
-        addMessage: s.addMessage,
-      })),
-    );
+  const { session, addMessage } = useTemplateAssistantStore(
+    useShallow((s) => ({
+      session: s.session,
+      addMessage: s.addMessage,
+    })),
+  );
+
+  const activeSession = session.status === "active" ? session : null;
+  const selectedText = activeSession?.selectedText ?? null;
 
   const getMockResponse = useCallback(
     (kind: SuggestionKind): string => {
@@ -59,6 +59,12 @@ export const TemplateAssistantPanel = () => {
     },
     [selectedText, addMessage, getMockResponse],
   );
+
+  if (!activeSession) {
+    return null;
+  }
+
+  const { templateName, messages } = activeSession;
 
   return (
     <div className="flex h-full flex-col">

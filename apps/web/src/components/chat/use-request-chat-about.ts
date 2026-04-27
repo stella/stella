@@ -24,7 +24,7 @@ export const useRequestChatAbout = (workspaceId?: string) => {
 
   return useCallback(
     (mentions: ChatMentionOption | ChatMentionOption[]) => {
-      useTemplateAssistantStore.getState().setActive(false);
+      useTemplateAssistantStore.getState().close();
       open();
 
       const threadRef: ChatThreadRef = workspaceId

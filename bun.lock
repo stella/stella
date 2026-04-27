@@ -90,7 +90,7 @@
         "@types/bun": "catalog:",
         "@types/nodemailer": "^8.0.0",
         "drizzle-kit": "catalog:",
-        "fast-check": "^4.7.0",
+        "fast-check": "catalog:",
       },
     },
     "apps/desktop": {
@@ -340,7 +340,7 @@
       },
       "devDependencies": {
         "@playwright/test": "^1.59.1",
-        "fast-check": "^4.7.0",
+        "fast-check": "catalog:",
         "typescript": "catalog:",
       },
       "peerDependencies": {
@@ -471,6 +471,7 @@
     "eslint": "10.2.1",
     "eslint-plugin-drizzle": "0.2.3",
     "eslint-plugin-sonarjs": "4.0.3",
+    "fast-check": "^4.7.0",
     "jszip": "3.10.1",
     "lucide-react": "1.8.0",
     "oxfmt": "0.46.0",

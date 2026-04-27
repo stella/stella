@@ -609,16 +609,22 @@ export function extractBookmarksForDialog(
 /**
  * Hook state for the Hyperlink dialog
  */
-export type UseHyperlinkDialogState = {
-  /** Whether the dialog is open */
-  isOpen: boolean;
-  /** Initial data for the dialog (for editing) */
-  initialData?: HyperlinkData;
-  /** Currently selected text */
-  selectedText?: string;
-  /** Whether we're editing an existing hyperlink */
-  isEditing: boolean;
-};
+export type UseHyperlinkDialogState =
+  | {
+      status: "closed";
+    }
+  | {
+      status: "insert";
+      /** Currently selected text */
+      selectedText?: string;
+    }
+  | {
+      status: "edit";
+      /** Initial data for the dialog (for editing) */
+      initialData: HyperlinkData;
+      /** Currently selected text */
+      selectedText?: string;
+    };
 
 /**
  * Hook return type for the Hyperlink dialog
@@ -641,41 +647,34 @@ export type UseHyperlinkDialogReturn = {
  */
 export function useHyperlinkDialog(): UseHyperlinkDialogReturn {
   const [state, setState] = useState<UseHyperlinkDialogState>({
-    isOpen: false,
-    isEditing: false,
+    status: "closed",
   });
 
   const openInsert = (selectedText?: string) => {
     setState({
-      isOpen: true,
+      status: "insert",
       ...(selectedText !== undefined ? { selectedText } : {}),
-      isEditing: false,
     });
   };
 
   const openEdit = (data: HyperlinkData) => {
     setState({
-      isOpen: true,
+      status: "edit",
       initialData: data,
       ...(data.displayText !== undefined
         ? { selectedText: data.displayText }
         : {}),
-      isEditing: true,
     });
   };
 
   const close = () => {
-    setState((prev) => ({
-      ...prev,
-      isOpen: false,
-    }));
+    setState({ status: "closed" });
   };
 
   const toggle = () => {
-    setState((prev) => ({
-      ...prev,
-      isOpen: !prev.isOpen,
-    }));
+    setState((prev) =>
+      prev.status === "closed" ? { status: "insert" } : { status: "closed" },
+    );
   };
 
   return { state, openInsert, openEdit, close, toggle };

@@ -73,6 +73,6 @@
     "@types/bun": "catalog:",
     "@types/nodemailer": "^8.0.0",
     "drizzle-kit": "catalog:",
-    "fast-check": "^4.7.0"
+    "fast-check": "catalog:"
   }
 }

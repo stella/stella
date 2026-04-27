@@ -7,23 +7,21 @@ export type MatterDraftClient = {
 };
 
 type CreateMatterState = {
-  isOpen: boolean;
-  draftClient: MatterDraftClient | null;
+  dialog:
+    | { status: "closed" }
+    | { status: "open"; draftClient: MatterDraftClient | null };
   closeDialog: () => void;
   openDialog: (client?: MatterDraftClient) => void;
 };
 
 export const useCreateMatterStore = create<CreateMatterState>()((set) => ({
-  isOpen: false,
-  draftClient: null,
+  dialog: { status: "closed" },
   closeDialog: () =>
     set({
-      isOpen: false,
-      draftClient: null,
+      dialog: { status: "closed" },
     }),
   openDialog: (client) =>
     set({
-      isOpen: true,
-      draftClient: client ?? null,
+      dialog: { status: "open", draftClient: client ?? null },
     }),
 }));

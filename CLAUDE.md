@@ -102,6 +102,9 @@ Full brand deck, micro-interaction guidelines, and visual noise rules in
 ### TypeScript
 
 - No enums — use `as const` objects or union types
+- Model mutually exclusive internal states as discriminated unions with a stable
+  `type`, `status`, or domain-specific discriminator. Avoid boolean flag sets plus
+  optional payload fields when only some combinations are valid.
 - When the linter blocks an `as` cast, restructure to narrow properly (type guards,
   `in` checks, records instead of arrays). If truly unavoidable, ask before adding and
   include a `// SAFETY:` comment explaining why the cast is sound.

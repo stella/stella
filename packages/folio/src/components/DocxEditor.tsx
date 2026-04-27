@@ -163,6 +163,7 @@ import {
 } from "./DocxEditorHelpers";
 import { ErrorBoundary, ErrorProvider } from "./ErrorBoundary";
 import { FormattingBar } from "./FormattingBar";
+import type { DocumentLoadState } from "./hooks/useDocumentLoader";
 import { useDocumentLoader } from "./hooks/useDocumentLoader";
 import { useFindReplace } from "./hooks/useFindReplace";
 import { useHeaderFooterEditor } from "./hooks/useHeaderFooterEditor";
@@ -363,8 +364,7 @@ export type DocxEditorRef = {
  * Editor internal state
  */
 type EditorState = {
-  isLoading: boolean;
-  parseError: string | null;
+  documentLoad: DocumentLoadState;
   zoom: number;
   /** Current selection formatting for toolbar */
   selectionFormatting: SelectionFormatting;
@@ -516,8 +516,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
 
     // State
     const [state, setState] = useState<EditorState>({
-      isLoading: !!documentBuffer,
-      parseError: null,
+      documentLoad: documentBuffer
+        ? { status: "loading" }
+        : { status: "ready" },
       zoom: initialZoom,
       selectionFormatting: {},
       paragraphIndentLeft: 0,
@@ -932,18 +933,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             extractTrackedChangesTimerRef.current = null;
           }
         }, [findReplace]),
-        setLoadingState: useCallback(
-          (patch: { isLoading: boolean; parseError: string | null }) => {
-            setState((prev) => ({ ...prev, ...patch }));
-          },
-          [],
-        ),
+        setDocumentLoadState: useCallback((documentLoad: DocumentLoadState) => {
+          setState((prev) => ({ ...prev, documentLoad }));
+        }, []),
       });
 
     // Extract tracked changes once PM view is ready (after loading completes)
     const trackedChangesLoadedRef = useRef(false);
     useEffect(() => {
-      if (!state.isLoading && history.state) {
+      if (state.documentLoad.status === "ready" && history.state) {
         const timer = setTimeout(() => {
           extractTrackedChanges();
           // Auto-open sidebar once on initial load
@@ -961,7 +959,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         return () => clearTimeout(timer);
       }
       return undefined;
-    }, [state.isLoading, history.state, extractTrackedChanges]);
+    }, [state.documentLoad.status, history.state, extractTrackedChanges]);
 
     // Listen for font loading
     useEffect(() => {
@@ -2442,7 +2440,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     };
 
     // Render loading state
-    if (state.isLoading) {
+    if (state.documentLoad.status === "loading") {
       return (
         <div
           className={`folio-root folio-editor folio-editor-loading ${className}`}
@@ -2455,14 +2453,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     }
 
     // Render error state
-    if (state.parseError) {
+    if (state.documentLoad.status === "error") {
       return (
         <div
           className={`folio-root folio-editor folio-editor-error ${className}`}
           style={containerStyle}
           data-testid="folio-editor"
         >
-          <ParseError message={state.parseError} />
+          <ParseError message={state.documentLoad.message} />
         </div>
       );
     }
@@ -3130,9 +3128,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
 
             {/* Lazy-loaded dialogs — only fetched when first opened */}
             <Suspense fallback={null}>
-              {findReplace.state.isOpen && (
+              {findReplace.state.dialog.status === "open" && (
                 <FindReplaceDialog
-                  isOpen={findReplace.state.isOpen}
+                  isOpen={true}
                   onClose={findReplace.close}
                   onFind={handleFind}
                   onFindNext={handleFindNext}
@@ -3140,20 +3138,20 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                   onReplace={handleReplace}
                   onReplaceAll={handleReplaceAll}
                   initialSearchText={findReplace.state.searchText}
-                  replaceMode={findReplace.state.replaceMode}
+                  replaceMode={findReplace.state.dialog.mode === "replace"}
                   currentResult={findResultRef.current}
                 />
               )}
-              {hyperlinkDialog.state.isOpen && (
+              {hyperlinkDialog.state.status !== "closed" && (
                 <HyperlinkDialog
-                  isOpen={hyperlinkDialog.state.isOpen}
+                  isOpen={true}
                   onClose={hyperlinkDialog.close}
                   onSubmit={handleHyperlinkSubmit}
-                  isEditing={hyperlinkDialog.state.isEditing}
-                  {...(hyperlinkDialog.state.isEditing
+                  isEditing={hyperlinkDialog.state.status === "edit"}
+                  {...(hyperlinkDialog.state.status === "edit"
                     ? { onRemove: handleHyperlinkRemove }
                     : {})}
-                  {...(hyperlinkDialog.state.initialData
+                  {...(hyperlinkDialog.state.status === "edit"
                     ? { initialData: hyperlinkDialog.state.initialData }
                     : {})}
                   {...(hyperlinkDialog.state.selectedText
