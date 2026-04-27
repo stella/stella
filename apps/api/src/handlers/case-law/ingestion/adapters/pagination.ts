@@ -164,13 +164,27 @@ export const createPagePaginatedFetch = <TResponse>(
                 await Bun.sleep(delayMs);
                 continue;
               }
-              // Exhausted retries: let the error propagate
+              // Exhausted retries: skip this page and advance
+              // so the adapter doesn't stall on a single slow page.
               logger.warn("case_law.ingestion.page_timeout_exhausted", {
                 adapterKey: opts.adapterKey,
                 page,
                 timeoutMs: listTimeout,
                 retries: SERVER_ERROR_RETRIES,
               });
+              captureError(
+                new AdapterFetchError({
+                  message:
+                    `${opts.adapterKey}: page ${page} timed out after ` +
+                    `${SERVER_ERROR_RETRIES} retries, skipping`,
+                  adapterKey: opts.adapterKey,
+                  cursor,
+                }),
+              );
+              return {
+                decisions: [],
+                nextCursor: String(page + 1),
+              };
             }
             throw fetchError;
           }
