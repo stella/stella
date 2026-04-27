@@ -358,6 +358,10 @@
       "searchCaseLaw": "Przeszukiwanie orzecznictwa",
       "update-entity-fields": "Zaktualizuj metadane"
     },
+    "toolCall": {
+      "output": "Wynik",
+      "sourceCode": "Kod źródłowy"
+    },
     "unsupportedFileType": "Nieobsługiwany typ pliku",
     "uploadFailed": "Przetwarzanie pliku nie powiodło się"
   },

@@ -55,6 +55,16 @@ export const LIMITS = {
   chatContextTextMaxChars: 32_000,
   /** Max number of file attachments per chat message. */
   chatContextFilesPerMessage: 5,
+  /** Max characters of TypeScript source the chat execute-typescript tool accepts. */
+  chatRunCodeMaxLength: 16_000,
+  /** Default page size for readonly chat execute functions. */
+  chatExecutePageSizeDefault: 50,
+  /** Max page size for readonly chat execute functions. */
+  chatExecutePageSizeMax: 500,
+  /** Max IDs accepted by readonly chat execute detail functions. */
+  chatExecuteDetailIdsMax: 100,
+  /** Max entity IDs accepted by readonly chat execute content functions. */
+  chatExecuteContentIdsMax: 20,
   /** Max DOCX size for stamp injection (bytes). */
   docxStampMaxBytes: 50 * 1024 * 1024,
 } as const;

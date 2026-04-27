@@ -358,6 +358,10 @@
       "searchCaseLaw": "Joggyakorlat keresése",
       "update-entity-fields": "Metaadatok frissítése"
     },
+    "toolCall": {
+      "output": "Kimenet",
+      "sourceCode": "Forráskód"
+    },
     "unsupportedFileType": "Nem támogatott fájltípus",
     "uploadFailed": "A fájl feldolgozása sikertelen"
   },

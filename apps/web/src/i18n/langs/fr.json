@@ -358,6 +358,10 @@
       "searchCaseLaw": "Recherche de jurisprudence",
       "update-entity-fields": "Mettre à jour le champ"
     },
+    "toolCall": {
+      "output": "Résultat",
+      "sourceCode": "Code source"
+    },
     "unsupportedFileType": "Type de fichier non pris en charge",
     "uploadFailed": "Échec du traitement du fichier"
   },

@@ -358,6 +358,10 @@
       "searchCaseLaw": "Vyhľadávanie v judikatúre",
       "update-entity-fields": "Aktualizovať metadáta"
     },
+    "toolCall": {
+      "output": "Výstup",
+      "sourceCode": "Zdrojový kód"
+    },
     "unsupportedFileType": "Nepodporovaný typ súboru",
     "uploadFailed": "Spracovanie súboru zlyhalo"
   },

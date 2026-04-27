@@ -358,6 +358,10 @@
       "searchCaseLaw": "Searching case law",
       "update-entity-fields": "Updating metadata"
     },
+    "toolCall": {
+      "output": "Output",
+      "sourceCode": "Source code"
+    },
     "unsupportedFileType": "Unsupported file type",
     "uploadFailed": "Failed to process file"
   },

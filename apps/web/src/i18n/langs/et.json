@@ -358,6 +358,10 @@
       "searchCaseLaw": "Kohtupraktika otsing",
       "update-entity-fields": "Uuenda välja"
     },
+    "toolCall": {
+      "output": "Väljund",
+      "sourceCode": "Lähtekood"
+    },
     "unsupportedFileType": "Toetamata failitüüp",
     "uploadFailed": "Faili töötlemine ebaõnnestus"
   },

@@ -1,4 +1,4 @@
-import { isDataUIPart } from "ai";
+import { isDataUIPart, isToolUIPart } from "ai";
 import type { UIDataTypes } from "ai";
 import { FileTextIcon, FolderIcon } from "lucide-react";
 
@@ -19,6 +19,11 @@ type SourceDocumentPart = {
   transient?: boolean;
 };
 
+type SourceDocumentEntry = {
+  data: ChatSourceDocument;
+  id?: string | undefined;
+};
+
 type SourceChipsProps = {
   messageId: string;
   parts: ChatMessage["parts"];
@@ -30,25 +35,88 @@ const isSourceDocumentPart = (part: ChatPart): part is SourceDocumentPart =>
     part,
   ) && part.type === "data-stella-source-document";
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isChatSourceDocument = (value: unknown): value is ChatSourceDocument => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value["entityId"] === "string" &&
+    typeof value["kind"] === "string" &&
+    (typeof value["mimeType"] === "string" || value["mimeType"] === null) &&
+    typeof value["title"] === "string" &&
+    (typeof value["workspaceId"] === "string" || value["workspaceId"] === null)
+  );
+};
+
+const collectSourceDocuments = (
+  value: unknown,
+  sources: SourceDocumentEntry[],
+) => {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectSourceDocuments(item, sources);
+    }
+    return;
+  }
+
+  if (!isRecord(value)) {
+    return;
+  }
+
+  const sourceDocument = value["sourceDocument"];
+  if (isChatSourceDocument(sourceDocument)) {
+    sources.push({ data: sourceDocument });
+  }
+
+  for (const child of Object.values(value)) {
+    collectSourceDocuments(child, sources);
+  }
+};
+
+const getToolOutput = (part: ChatPart): unknown => {
+  if (!isToolUIPart(part) || !("output" in part)) {
+    return undefined;
+  }
+
+  return part.output;
+};
+
 export const SourceChips = ({
   messageId,
   parts,
   workspaceId,
 }: SourceChipsProps) => {
-  const sources: SourceDocumentPart[] = [];
+  const sources: SourceDocumentEntry[] = [];
   for (const part of parts) {
     if (isSourceDocumentPart(part)) {
-      sources.push(part);
+      sources.push({ data: part.data, id: part.id });
+      continue;
     }
+
+    collectSourceDocuments(getToolOutput(part), sources);
   }
 
   if (sources.length === 0) {
     return null;
   }
 
+  const seen = new Set<string>();
+  const uniqueSources = sources.filter(({ data }) => {
+    const key = `${data.workspaceId ?? ""}:${data.entityId}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+
   return (
     <div className="flex flex-wrap gap-1">
-      {sources.map((part) => (
+      {uniqueSources.map((part) => (
         <SourceChip
           key={`${messageId}-source-${part.id ?? part.data.entityId}`}
           sourceDocument={part.data}

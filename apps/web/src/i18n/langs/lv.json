@@ -358,6 +358,10 @@
       "searchCaseLaw": "Meklē tiesu praksē",
       "update-entity-fields": "Atjaunināt lauku"
     },
+    "toolCall": {
+      "output": "Izvade",
+      "sourceCode": "Pirmkods"
+    },
     "unsupportedFileType": "Neatbalstīts faila tips",
     "uploadFailed": "Neizdevās apstrādāt failu"
   },

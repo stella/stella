@@ -71,9 +71,33 @@ export class WorkflowValidationError extends TaggedError(
   message: string;
 }>() {}
 
+/** Chat validation failure for tool inputs, outputs, or messages. */
+export class ChatToolValidationError extends TaggedError(
+  "ChatToolValidationError",
+)<{
+  message: string;
+  cause?: unknown;
+}>() {}
+
 /** Chat tool execution failure. */
 export class ChatToolError extends TaggedError("ChatToolError")<{
   message: string;
+  cause?: unknown;
+}>() {}
+
+/** Sandbox execution failure: transpile, runtime, limit, or marshalling. */
+export class SandboxError extends TaggedError("SandboxError")<{
+  reason:
+    | "transpile"
+    | "forbidden-syntax"
+    | "runtime"
+    | "timeout"
+    | "memory"
+    | "host-call-limit"
+    | "return-too-large"
+    | "non-serialisable-return";
+  message: string;
+  cause?: unknown;
 }>() {}
 
 /** Integration-layer errors: AI failures, parse failures, external I/O. */

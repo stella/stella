@@ -344,6 +344,10 @@ type Messages = {
     "send": "Send message";
     "thinking": "Thinking...";
     "threads": "Conversations";
+    "toolCall": {
+      "output": "Output";
+      "sourceCode": "Source code";
+    };
     "tool": {
       "ask-user": "Asking for clarification";
       "create-document": "Creating document";

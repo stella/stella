@@ -49,7 +49,6 @@ export const streamChat = async ({
   tools,
 }: StreamChatProps) => {
   const modelMessages = await convertToModelMessages(messages);
-  const emittedSourceDocumentIds = new Set<string>();
   const stream = createUIMessageStream<ChatMessage>({
     generateId: () => Bun.randomUUIDv7(),
     originalMessages: messages,
@@ -69,34 +68,6 @@ export const streamChat = async ({
         tools,
         stopWhen: [stepCountIs(MAX_TOOL_STEPS), hasToolCall("ask-user")],
         messages: modelMessages,
-        onStepFinish: ({ toolResults }) => {
-          for (const toolResult of toolResults) {
-            if (!toolResult || toolResult.dynamic === true) {
-              continue;
-            }
-
-            // oxlint-disable-next-line default-case, typescript/switch-exhaustiveness-check
-            switch (toolResult.toolName) {
-              case "read-entity":
-              case "read-content":
-              case "read-content-across-matters": {
-                const { output } = toolResult;
-                const sourceDocument = output.sourceDocument;
-                if (emittedSourceDocumentIds.has(sourceDocument.entityId)) {
-                  continue;
-                }
-
-                emittedSourceDocumentIds.add(sourceDocument.entityId);
-                writer.write({
-                  type: "data-stella-source-document",
-                  id: sourceDocument.entityId,
-                  data: sourceDocument,
-                });
-                break;
-              }
-            }
-          }
-        },
       });
 
       writer.merge(result.toUIMessageStream<ChatMessage>());

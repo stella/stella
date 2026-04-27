@@ -3,11 +3,11 @@ import { useState } from "react";
 import { getToolName } from "ai";
 import {
   ChevronDownIcon,
+  CodeIcon,
   CircleHelpIcon,
   FileTextIcon,
   LandmarkIcon,
   LayoutTemplateIcon,
-  ListIcon,
   SearchIcon,
   UserIcon,
 } from "lucide-react";
@@ -15,18 +15,38 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stella/ui/lib/utils";
 
+const getExecuteTypescriptSource = (
+  part: Parameters<typeof getToolName>[0],
+  toolName: string,
+): string | undefined => {
+  if (toolName !== "execute-typescript") {
+    return undefined;
+  }
+  if (!("input" in part)) {
+    return undefined;
+  }
+  const { input } = part;
+  if (input === undefined || input === null || typeof input !== "object") {
+    return undefined;
+  }
+  if (!("code" in input)) {
+    return undefined;
+  }
+  const code = (input as { code: unknown }).code;
+  if (typeof code !== "string") {
+    return undefined;
+  }
+
+  return code;
+};
+
 const TOOL_ICONS: Record<string, typeof SearchIcon> = {
   "ask-user": CircleHelpIcon,
+  "describe-stella-function": CircleHelpIcon,
+  "execute-typescript": CodeIcon,
   "read-clause": FileTextIcon,
   "list-templates": LayoutTemplateIcon,
   "read-contact": UserIcon,
-  "read-content-across-matters": FileTextIcon,
-  "search-across-matters": SearchIcon,
-  "search-matter": SearchIcon,
-  "list-entities": ListIcon,
-  "read-entity": FileTextIcon,
-  "read-content": FileTextIcon,
-  "search-content": SearchIcon,
   searchCaseLaw: LandmarkIcon,
 };
 
@@ -44,16 +64,11 @@ export const ToolCallCard = ({
   const Icon = TOOL_ICONS[name] ?? SearchIcon;
   const toolLabels: Record<string, string> = {
     "ask-user": t("chat.tool.ask-user"),
+    "describe-stella-function": "Inspecting stella function",
+    "execute-typescript": "Running TypeScript",
     "list-templates": t("chat.tool.list-templates"),
     "read-clause": t("chat.tool.read-clause"),
     "read-contact": t("chat.tool.read-contact"),
-    "read-content-across-matters": t("chat.tool.read-content-across-matters"),
-    "search-across-matters": t("chat.tool.search-across-matters"),
-    "search-matter": t("chat.tool.search-matter"),
-    "list-entities": t("chat.tool.list-entities"),
-    "read-entity": t("chat.tool.read-entity"),
-    "read-content": t("chat.tool.read-content"),
-    "search-content": t("chat.tool.search-content"),
     searchCaseLaw: t("chat.tool.searchCaseLaw"),
   };
   const label = toolLabels[name] ?? name;
@@ -62,7 +77,12 @@ export const ToolCallCard = ({
     part.state === "input-streaming" || part.state === "input-available";
   const hasOutput = part.state === "output-available";
   const hasError = part.state === "output-error";
-  const canExpand = showDetails && hasOutput;
+  const executeTsSource = getExecuteTypescriptSource(part, name);
+  const showExecuteTsOutput = name === "execute-typescript" && hasOutput;
+  const canExpand =
+    executeTsSource !== undefined ||
+    showExecuteTsOutput ||
+    (showDetails && hasOutput);
 
   return (
     <div className="bg-muted/40 my-1 rounded-md border text-xs">
@@ -89,13 +109,35 @@ export const ToolCallCard = ({
           />
         )}
       </button>
-      {expanded && hasOutput && (
-        <div className="border-t px-2 py-1.5">
-          <pre className="text-muted-foreground max-h-40 overflow-auto text-[11px] whitespace-pre-wrap">
-            {JSON.stringify(part.output, null, 2)}
-          </pre>
-        </div>
-      )}
+      {expanded &&
+        (executeTsSource !== undefined ||
+          showExecuteTsOutput ||
+          (showDetails && hasOutput)) && (
+          <div className="space-y-2 border-t px-2 py-1.5">
+            {executeTsSource !== undefined && (
+              <div>
+                <div className="text-muted-foreground mb-1 text-[11px] font-medium">
+                  {t("chat.toolCall.sourceCode")}
+                </div>
+                <pre className="bg-background/60 text-foreground max-h-96 overflow-auto rounded border px-2 py-1.5 font-mono text-[11px] whitespace-pre-wrap">
+                  {executeTsSource}
+                </pre>
+              </div>
+            )}
+            {hasOutput &&
+              (showDetails || showExecuteTsOutput) &&
+              "output" in part && (
+                <div>
+                  <div className="text-muted-foreground mb-1 text-[11px] font-medium">
+                    {t("chat.toolCall.output")}
+                  </div>
+                  <pre className="text-muted-foreground max-h-40 overflow-auto font-mono text-[11px] whitespace-pre-wrap">
+                    {JSON.stringify(part.output, null, 2)}
+                  </pre>
+                </div>
+              )}
+          </div>
+        )}
       {hasError && "errorText" in part && (
         <div className="text-destructive border-t px-2 py-1.5">
           {part.errorText}

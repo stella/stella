@@ -30,6 +30,7 @@
     "@aws-sdk/client-sesv2": "^3.1029.0",
     "@better-auth/oauth-provider": "catalog:",
     "@elysiajs/cors": "^1.4.1",
+    "@jitl/quickjs-ng-wasmfile-release-asyncify": "^0.32.0",
     "@libpdf/core": "catalog:",
     "@litko/yara-x": "0.5.0",
     "@modelcontextprotocol/sdk": "1.29.0",
@@ -63,6 +64,8 @@
     "marked": "^18.0.2",
     "nodemailer": "^8.0.5",
     "posthog-node": "^5.29.2",
+    "quickjs-emscripten": "^0.32.0",
+    "quickjs-emscripten-core": "^0.32.0",
     "slimdom": "^4.3.5",
     "valibot": "catalog:"
   },

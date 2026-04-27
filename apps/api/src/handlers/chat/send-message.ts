@@ -68,6 +68,7 @@ const sendMessage = createSafeRootHandler(
 
     const chatTools = getChatTools({
       organizationId: session.activeOrganizationId,
+      safeDb,
       scopedDb,
       userId: user.id,
       accessibleWorkspaceIds,
