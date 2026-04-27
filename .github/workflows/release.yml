@@ -1,0 +1,237 @@
+name: Release Artifacts
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: "Git tag to publish, for example v1.2.3 or v1.2.3-rc.1"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/stella-api
+
+jobs:
+  smoke:
+    name: Build and smoke test API image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: stella
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:8
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.release_ref) || github.ref }}
+
+      - name: Validate release ref
+        env:
+          RELEASE_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}
+        run: |
+          release_ref="$RELEASE_INPUT"
+          if [[ ! "$release_ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::Release ref must look like v1.2.3 or v1.2.3-rc.1"
+            exit 1
+          fi
+
+      - name: Build smoke image
+        run: docker build -f apps/api/Dockerfile -t stella-api:smoke .
+
+      - name: Run smoke container
+        env:
+          BETTER_AUTH_SECRET: "release-smoke-secret-at-least-32-chars"
+          BETTER_AUTH_URL: "http://localhost:3001"
+          DATABASE_URL: "postgres://postgres:postgres@127.0.0.1:5432/stella"
+          EMAIL_PROVIDER: "smtp"
+          FRONTEND_URL: "http://localhost:3000"
+          GOOGLE_GENERATIVE_AI_API_KEY: "release-smoke"
+          GOTENBERG_PASSWORD: "gotenberg"
+          GOTENBERG_URL: "http://127.0.0.1:3000"
+          GOTENBERG_USERNAME: "gotenberg"
+          POSTHOG_HOST: "https://eu.i.posthog.com"
+          POSTHOG_KEY: "phc_"
+          REDIS_URL: "redis://127.0.0.1:6379"
+          S3_BUCKET: "stella"
+          S3_ENDPOINT: "http://127.0.0.1:9000"
+          S3_REGION: "us-east-1"
+          SMTP_HOST: "127.0.0.1"
+          SMTP_PORT: "1025"
+          TRANSACTIONAL_EMAIL_FROM: "noreply@example.com"
+          USE_MOCK_AI: "true"
+        run: |
+          cleanup_smoke() {
+            docker rm -f stella-api-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup_smoke EXIT
+          cleanup_smoke
+
+          docker run --detach --network host \
+            --name stella-api-smoke \
+            --env BETTER_AUTH_SECRET \
+            --env BETTER_AUTH_URL \
+            --env DATABASE_URL \
+            --env EMAIL_PROVIDER \
+            --env FRONTEND_URL \
+            --env GOOGLE_GENERATIVE_AI_API_KEY \
+            --env GOTENBERG_PASSWORD \
+            --env GOTENBERG_URL \
+            --env GOTENBERG_USERNAME \
+            --env POSTHOG_HOST \
+            --env POSTHOG_KEY \
+            --env REDIS_URL \
+            --env S3_BUCKET \
+            --env S3_ENDPOINT \
+            --env S3_REGION \
+            --env SMTP_HOST \
+            --env SMTP_PORT \
+            --env TRANSACTIONAL_EMAIL_FROM \
+            --env USE_MOCK_AI \
+            stella-api:smoke
+
+          for _ in {1..60}; do
+            if curl -fsS http://127.0.0.1:3001/health >/dev/null; then
+              exit 0
+            fi
+            if [[ "$(docker inspect --format='{{.State.Running}}' stella-api-smoke 2>/dev/null)" != "true" ]]; then
+              docker logs stella-api-smoke || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+          docker logs stella-api-smoke || true
+          exit 1
+
+  publish:
+    name: Publish API image and manifest
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: smoke
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.release_ref) || github.ref }}
+          fetch-depth: 0
+
+      - name: Resolve release
+        id: release
+        env:
+          RELEASE_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}
+        run: |
+          release_ref="$RELEASE_INPUT"
+          if [[ ! "$release_ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::Release ref must look like v1.2.3 or v1.2.3-rc.1"
+            exit 1
+          fi
+          echo "ref=$release_ref" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.release.outputs.ref }}
+            type=sha,prefix=sha-
+
+      - name: Build and push API image
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Attest image provenance
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Create release manifest
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_NAME: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          RELEASE_REF: ${{ steps.release.outputs.ref }}
+        run: |
+          bash scripts/create-release-manifest.sh \
+            "$RELEASE_REF" \
+            "$IMAGE_NAME" \
+            "$IMAGE_DIGEST" \
+            > release-manifest.json
+
+      - name: Upload manifest artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-manifest-${{ steps.release.outputs.ref }}
+          path: release-manifest.json
+          retention-days: 90
+
+      - name: Publish GitHub release manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_REF: ${{ steps.release.outputs.ref }}
+        run: |
+          if ! gh release view "$RELEASE_REF" >/dev/null 2>&1; then
+            prerelease_args=()
+            if [[ "$RELEASE_REF" == *-rc.* ]]; then
+              prerelease_args+=(--prerelease)
+            fi
+            gh release create "$RELEASE_REF" \
+              --title "$RELEASE_REF" \
+              --generate-notes \
+              --verify-tag \
+              "${prerelease_args[@]}"
+          fi
+          gh release upload "$RELEASE_REF" release-manifest.json --clobber
