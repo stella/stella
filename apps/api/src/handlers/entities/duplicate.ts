@@ -9,6 +9,13 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditContext,
+  writeAuditLog,
+} from "@/api/lib/audit-log";
+import type { AuditContext } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -26,6 +33,7 @@ type DuplicateEntityHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
+  auditContext: AuditContext;
   body: Static<typeof duplicateEntityBodySchema>;
 };
 
@@ -123,6 +131,7 @@ const duplicateEntityHandler = async function* ({
   safeDb,
   workspaceId,
   userId,
+  auditContext,
   body: { entityId: sourceEntityId },
 }: DuplicateEntityHandlerProps) {
   const source = yield* Result.await(
@@ -254,6 +263,26 @@ const duplicateEntityHandler = async function* ({
         .set({ lastActivityAt: new Date() })
         .where(eq(workspaces.id, workspaceId));
 
+      await writeAuditLog(
+        {
+          ...auditContext,
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: newEntityId,
+          changes: {
+            created: {
+              old: { sourceEntityId },
+              new: {
+                kind: source.kind,
+                name: duplicateName,
+                parentId: source.parentId,
+              },
+            },
+          },
+        },
+        tx,
+      );
+
       return { ok: true as const, entityId: newEntityId };
     }),
   );
@@ -276,11 +305,17 @@ const config = {
 
 const duplicateEntity = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, user, body }) {
+  async function* ({ safeDb, session, workspaceId, user, request, body }) {
     return yield* duplicateEntityHandler({
       safeDb,
       workspaceId,
       userId: user.id,
+      auditContext: createAuditContext({
+        organizationId: session.activeOrganizationId,
+        workspaceId,
+        userId: user.id,
+        request,
+      }),
       body,
     });
   },

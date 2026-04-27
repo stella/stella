@@ -342,10 +342,10 @@ export const czUsAdapter: SourceAdapter = {
           const yearSuffix = toYearSuffix(state.year);
 
           const probeResults = await Promise.allSettled(
-            Array.from({ length: PROBE_CONCURRENCY }, (_, i) => {
+            Array.from({ length: PROBE_CONCURRENCY }, async (_, i) => {
               const num = state.number + i;
               const url = `${BASE_URL}?sz=I-${num}-${yearSuffix}_1`;
-              return fetch(url, {
+              const response = await fetch(url, {
                 headers: COMMON_HEADERS,
                 signal: callerSignal
                   ? AbortSignal.any([
@@ -353,16 +353,15 @@ export const czUsAdapter: SourceAdapter = {
                       AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
                     ])
                   : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-              }).then(async (response) => {
-                if (response.status === 429) {
-                  return { num, status: "rate-limited" as const };
-                }
-                if (!response.ok) {
-                  return { num, status: "miss" as const };
-                }
-                const html = await response.text();
-                return { num, status: "ok" as const, html };
               });
+              if (response.status === 429) {
+                return { num, status: "rate-limited" as const };
+              }
+              if (!response.ok) {
+                return { num, status: "miss" as const };
+              }
+              const html = await response.text();
+              return { num, status: "ok" as const, html };
             }),
           );
 
@@ -377,7 +376,7 @@ export const czUsAdapter: SourceAdapter = {
             }
 
             if (result.status === "rejected") {
-              const error = result.reason;
+              const error: unknown = result.reason;
               if (
                 error instanceof DOMException &&
                 error.name === "AbortError"

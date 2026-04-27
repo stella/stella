@@ -28,6 +28,7 @@ export const statements = {
   // todo: add better permissions for chat
   chat: ["create", "delete"],
   organizationSettings: ["update"],
+  auditLog: ["read"],
 } as const;
 
 type PermissionMap = {
@@ -62,6 +63,7 @@ const memberAc = ac.newRole({
   rate: ["create", "update", "delete"],
   chat: ["create", "delete"],
   organizationSettings: [],
+  auditLog: [],
 });
 
 export const roles = {
@@ -85,6 +87,7 @@ export const roles = {
     rate: ["create", "update", "delete"],
     chat: ["create", "delete"],
     organizationSettings: ["update"],
+    auditLog: ["read"],
   }),
   admin: ac.newRole({
     organization: ["update"],
@@ -106,6 +109,7 @@ export const roles = {
     rate: ["create", "update", "delete"],
     chat: ["create", "delete"],
     organizationSettings: ["update"],
+    auditLog: ["read"],
   }),
   member: memberAc,
   intern: ac.newRole({
@@ -128,6 +132,7 @@ export const roles = {
     rate: [],
     chat: ["create", "delete"],
     organizationSettings: [],
+    auditLog: [],
   }),
   external: ac.newRole({
     organization: [],
@@ -149,5 +154,6 @@ export const roles = {
     rate: [],
     chat: [],
     organizationSettings: [],
+    auditLog: [],
   }),
 };

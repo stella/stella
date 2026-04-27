@@ -388,6 +388,56 @@ export const workspaceContacts = p.pgTable(
   ],
 );
 
+// -- Audit Logs --
+
+export const auditLogs = p.pgTable(
+  "audit_logs",
+  {
+    id: pUuid<"auditLog">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id"),
+    userId: p.text("user_id").notNull(),
+    action: p.text().notNull(),
+    resourceType: p.text("resource_type").notNull(),
+    resourceId: p.text("resource_id").notNull(),
+    metadata: p.jsonb().$type<Record<string, unknown>>(),
+    changes: p.jsonb().$type<Record<string, unknown>>(),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("audit_logs_org_created_id_idx")
+      .on(table.organizationId, table.createdAt, table.id),
+    p
+      .index("audit_logs_org_workspace_created_id_idx")
+      .on(table.organizationId, table.workspaceId, table.createdAt, table.id),
+    p
+      .index("audit_logs_org_resource_created_id_idx")
+      .on(
+        table.organizationId,
+        table.resourceType,
+        table.resourceId,
+        table.createdAt,
+        table.id,
+      ),
+    p
+      .index("audit_logs_org_user_created_id_idx")
+      .on(table.organizationId, table.userId, table.createdAt, table.id),
+    p.pgPolicy("audit_logs_select", {
+      for: "select",
+      to: stella,
+      using: organizationCheck,
+    }),
+    p.pgPolicy("audit_logs_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: organizationCheck,
+    }),
+  ],
+);
+
 // -- Properties --
 
 export const properties = p.pgTable(
@@ -1876,6 +1926,7 @@ export const relations = defineRelations(
     workspaces,
     workspaceMembers,
     workspaceContacts,
+    auditLogs,
     properties,
     propertyDependencies,
     entities,

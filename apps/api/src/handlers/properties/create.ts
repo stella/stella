@@ -7,6 +7,12 @@ import { propertyContentTypeSchema } from "@/api/db/schema-validators";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditContext,
+  writeAuditLog,
+} from "@/api/lib/audit-log";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -23,7 +29,7 @@ const config = {
 
 const createProperty = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, session, workspaceId, user, request, body }) {
     let content: PropertyContent | null = null;
     let tool: PropertyTool | null = null;
 
@@ -96,6 +102,32 @@ const createProperty = createSafeHandler(
             message: "Failed to create property",
           };
         }
+
+        await writeAuditLog(
+          {
+            ...createAuditContext({
+              organizationId: session.activeOrganizationId,
+              workspaceId,
+              userId: user.id,
+              request,
+            }),
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,
+            resourceId: inserted.id,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  name: body.name,
+                  contentType: content.type,
+                  toolType: tool.type,
+                },
+              },
+            },
+          },
+          tx,
+        );
+
         return { ok: true as const, id: inserted.id };
       }),
     );

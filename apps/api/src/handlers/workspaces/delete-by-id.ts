@@ -17,6 +17,12 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { deleteS3Keys, deleteS3Objects } from "@/api/handlers/files/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditContext,
+  writeAuditLog,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -60,7 +66,7 @@ const config = {
 const deleteWorkspace = createSafeHandler(
   config,
   // eslint-disable-next-line require-yield -- manual Result.isError checks preserve rollback semantics
-  async function* ({ scopedDb, safeDb, workspaceId, session }) {
+  async function* ({ scopedDb, safeDb, workspaceId, session, user, request }) {
     const organizationId = session.activeOrganizationId;
 
     // Seal workspace: no new uploads.
@@ -151,6 +157,25 @@ const deleteWorkspace = createSafeHandler(
     // All S3 objects are gone. Delete DB records in a
     // single transaction.
     const deleteResult = await safeDb(async (tx) => {
+      const workspaceRows = await tx
+        .select({
+          id: workspaces.id,
+          name: workspaces.name,
+          reference: workspaces.reference,
+          clientId: workspaces.clientId,
+          billingReference: workspaces.billingReference,
+          color: workspaces.color,
+          status: workspaces.status,
+        })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId))
+        .for("update");
+      const workspace = workspaceRows.at(0);
+
+      if (!workspace) {
+        return;
+      }
+
       if (chatFileRefs.length > 0) {
         await tx.delete(userFiles).where(
           inArray(
@@ -195,6 +220,27 @@ const deleteWorkspace = createSafeHandler(
       // Delete workspace: cascades to properties ->
       // propertyDependencies. Entities already gone.
       await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
+
+      await writeAuditLog(
+        {
+          ...createAuditContext({
+            organizationId,
+            workspaceId,
+            userId: user.id,
+            request,
+          }),
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+          resourceId: workspaceId,
+          changes: {
+            deleted: {
+              old: workspace,
+              new: null,
+            },
+          },
+        },
+        tx,
+      );
     });
 
     if (Result.isError(deleteResult)) {

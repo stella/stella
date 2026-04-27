@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/bun-sql";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import {
+  auditLogs,
   invoiceStatusEnum,
   propertyStatusEnum,
   relations,
@@ -26,6 +27,7 @@ export const db = drizzle(envBase.DATABASE_URL, {
     timeEntryStatusEnum,
     timeEntrySourceEnum,
     invoiceStatusEnum,
+    auditLogs,
   },
 });
 

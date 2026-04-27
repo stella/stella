@@ -1,6 +1,7 @@
 declare const __brand: unique symbol;
 
 export type SafeIdType =
+  | "auditLog"
   | "billingCode"
   | "caseLawCitation"
   | "caseLawCourtWeight"

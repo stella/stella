@@ -4,6 +4,7 @@ import { rateLimit } from "elysia-rate-limit";
 
 import { env } from "@/api/env";
 import { analyticsRoute } from "@/api/handlers/analytics/routes";
+import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
 import { authMetadataRoute } from "@/api/handlers/auth/routes";
 import { authUiRoute } from "@/api/handlers/auth/ui-routes";
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
@@ -310,6 +311,7 @@ const api = new Elysia()
       .use(clausesRoute)
       .use(contactsRoute)
       .use(searchRoute)
+      .use(auditLogsRoute)
       .use(analyticsRoute)
       .use(templateAnalyticsRoute)
       .use(caseLawRoute)

@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -8,6 +8,13 @@ import { entities, fields } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditContext,
+  writeAuditLog,
+} from "@/api/lib/audit-log";
+import type { AuditContext } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -28,34 +35,38 @@ type RenameEntityBodySchema = Static<typeof renameEntityBodySchema>;
 type RenameEntityHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  auditContext: AuditContext;
   body: RenameEntityBodySchema;
 };
 
 const renameEntityHandler = async function* ({
   safeDb,
   workspaceId,
+  auditContext,
   body,
 }: RenameEntityHandlerProps) {
-  const entity = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.entities.findFirst({
-        where: {
-          id: { eq: body.entityId },
-          workspaceId: { eq: workspaceId },
-        },
-        columns: { id: true },
-      }),
-    ),
-  );
-
-  if (!entity) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Entity not found" }),
-    );
-  }
-
-  yield* Result.await(
+  const txResult = yield* Result.await(
     safeDb(async (tx) => {
+      const entityRows = await tx
+        .select({ id: entities.id, name: entities.name })
+        .from(entities)
+        .where(
+          and(
+            eq(entities.id, body.entityId),
+            eq(entities.workspaceId, workspaceId),
+          ),
+        )
+        .for("update");
+      const entity = entityRows.at(0);
+
+      if (!entity) {
+        return {
+          ok: false as const,
+          status: 404 as const,
+          message: "Entity not found",
+        };
+      }
+
       await tx
         .update(entities)
         .set({ name: body.name, updatedAt: new Date() })
@@ -94,8 +105,32 @@ const renameEntityHandler = async function* ({
           })
           .where(eq(fields.id, fileField.id));
       }
+
+      await writeAuditLog(
+        {
+          ...auditContext,
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: body.entityId,
+          changes: {
+            name: {
+              old: entity.name,
+              new: body.name,
+            },
+          },
+        },
+        tx,
+      );
+
+      return { ok: true as const };
     }),
   );
+
+  if (!txResult.ok) {
+    return Result.err(
+      new HandlerError({ status: txResult.status, message: txResult.message }),
+    );
+  }
 
   getSearchProvider().indexEntity(body.entityId).catch(captureError);
 
@@ -109,10 +144,16 @@ const config = {
 
 const renameEntity = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, session, workspaceId, user, request, body }) {
     return yield* renameEntityHandler({
       safeDb,
       workspaceId,
+      auditContext: createAuditContext({
+        organizationId: session.activeOrganizationId,
+        workspaceId,
+        userId: user.id,
+        request,
+      }),
       body,
     });
   },

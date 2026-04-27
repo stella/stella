@@ -7,6 +7,13 @@ import type { SafeDb, Transaction } from "@/api/db";
 import { entities, workspaces } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditContext,
+  writeAuditLog,
+} from "@/api/lib/audit-log";
+import type { AuditContext } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -21,19 +28,25 @@ type MoveEntityBodySchema = Static<typeof moveEntityBodySchema>;
 type MoveEntityHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  auditContext: AuditContext;
   body: MoveEntityBodySchema;
 };
 
 const moveEntityHandler = async function* ({
   safeDb,
   workspaceId,
+  auditContext,
   body,
 }: MoveEntityHandlerProps) {
   const txResult = yield* Result.await(
     safeDb(async (tx) => {
       // Lock the entity row to prevent concurrent moves.
       const entityRows = await tx
-        .select({ id: entities.id, kind: entities.kind })
+        .select({
+          id: entities.id,
+          kind: entities.kind,
+          parentId: entities.parentId,
+        })
         .from(entities)
         .where(
           and(
@@ -53,6 +66,7 @@ const moveEntityHandler = async function* ({
       }
 
       if (body.parentId === null) {
+        const oldParentId = entity.parentId;
         await tx
           .update(entities)
           .set({ parentId: null, updatedAt: new Date() })
@@ -61,6 +75,21 @@ const moveEntityHandler = async function* ({
           .update(workspaces)
           .set({ lastActivityAt: new Date() })
           .where(eq(workspaces.id, workspaceId));
+        await writeAuditLog(
+          {
+            ...auditContext,
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            resourceId: body.entityId,
+            changes: {
+              parentId: {
+                old: oldParentId,
+                new: null,
+              },
+            },
+          },
+          tx,
+        );
         return { ok: true as const };
       }
 
@@ -122,6 +151,8 @@ const moveEntityHandler = async function* ({
         }
       }
 
+      const oldParentId = entity.parentId;
+
       await tx
         .update(entities)
         .set({ parentId: body.parentId, updatedAt: new Date() })
@@ -131,6 +162,22 @@ const moveEntityHandler = async function* ({
         .update(workspaces)
         .set({ lastActivityAt: new Date() })
         .where(eq(workspaces.id, workspaceId));
+
+      await writeAuditLog(
+        {
+          ...auditContext,
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: body.entityId,
+          changes: {
+            parentId: {
+              old: oldParentId,
+              new: body.parentId,
+            },
+          },
+        },
+        tx,
+      );
 
       return { ok: true as const };
     }),
@@ -188,10 +235,16 @@ const config = {
 
 const moveEntity = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, session, workspaceId, user, request, body }) {
     return yield* moveEntityHandler({
       safeDb,
       workspaceId,
+      auditContext: createAuditContext({
+        organizationId: session.activeOrganizationId,
+        workspaceId,
+        userId: user.id,
+        request,
+      }),
       body,
     });
   },

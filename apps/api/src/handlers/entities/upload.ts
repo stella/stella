@@ -15,6 +15,13 @@ import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditContext,
+  writeAuditLog,
+} from "@/api/lib/audit-log";
+import type { AuditContext } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
@@ -42,6 +49,7 @@ type UploadEntityHandlerProps = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
+  auditContext: AuditContext;
   body: Static<typeof uploadEntityBodySchema>;
 };
 
@@ -93,6 +101,7 @@ const uploadEntityHandler = async function* ({
   organizationId,
   workspaceId,
   userId,
+  auditContext,
   body: { file, name: rawName, propertyId },
 }: UploadEntityHandlerProps) {
   const name = sanitizeFilename(rawName);
@@ -295,6 +304,28 @@ const uploadEntityHandler = async function* ({
           .set({ lastActivityAt: new Date() })
           .where(eq(workspaces.id, workspaceId));
 
+        await writeAuditLog(
+          {
+            ...auditContext,
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            resourceId: entityId,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  kind: "document",
+                  fileName: resolvedName.value,
+                  mimeType: file.type,
+                  sizeBytes: file.size,
+                  propertyId,
+                },
+              },
+            },
+          },
+          tx,
+        );
+
         return resolvedName;
       }),
     );
@@ -322,12 +353,18 @@ const config = {
 
 const uploadEntity = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, user, body }) {
+  async function* ({ safeDb, session, workspaceId, user, request, body }) {
     return yield* uploadEntityHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       workspaceId,
       userId: user.id,
+      auditContext: createAuditContext({
+        organizationId: session.activeOrganizationId,
+        workspaceId,
+        userId: user.id,
+        request,
+      }),
       body,
     });
   },

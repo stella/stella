@@ -26,6 +26,8 @@ export const LIMITS = {
   invoicesPerWorkspace: 10_000,
   exportRowLimit: 10_000,
   exportPdfRowLimit: 5000,
+  auditLogPageSizeDefault: 50,
+  auditLogPageSizeMax: 200,
   contactsCount: 10_000,
   contactRelationshipsCount: 50,
   workspaceContactsCount: 100,
