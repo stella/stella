@@ -80,6 +80,13 @@ export type SourceAdapter = {
    */
   maxSyncPages?: number | undefined;
   /**
+   * Override per-adapter cycle timeout (ms). Defaults to
+   * MAX_CYCLE_MS (10 min). Adapters doing lightweight work
+   * per page (metadata-only, no PDF) can use longer cycles
+   * to maximize throughput per cursor persist.
+   */
+  maxCycleMs?: number | undefined;
+  /**
    * Fetch the total number of decisions available from
    * the source. Returns null if the source doesn't expose
    * a count endpoint or if the request fails.

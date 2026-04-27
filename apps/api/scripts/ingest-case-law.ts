@@ -21,6 +21,7 @@ import { createScopedDb } from "@/api/db";
 import { db } from "@/api/db/root";
 import { caseLawIngestionEvents, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS, MAX_CYCLE_MS } from "@/api/handlers/case-law/consts";
+import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { backfillSearchIndex } from "@/api/handlers/case-law/search-index";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -256,11 +257,14 @@ const runOneCycle = async (
   let result: Awaited<ReturnType<typeof runIngestionPipeline>> | null = null;
 
   try {
+    const adapter = getAdapter(adapterKey);
+    const cycleMs = adapter?.maxCycleMs ?? MAX_CYCLE_MS;
+
     result = await runIngestionPipeline({
       source,
       scopedDb,
       dbSlot: { acquire: acquireDbSlot, release: releaseDbSlot },
-      signal: AbortSignal.timeout(MAX_CYCLE_MS),
+      signal: AbortSignal.timeout(cycleMs),
     });
     if (result.haltReason) {
       outcome =
