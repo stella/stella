@@ -1,5 +1,7 @@
 "use client";
 
+import * as React from "react";
+
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 import {
   ChevronDownIcon,
@@ -9,7 +11,42 @@ import {
 
 import { cn } from "@stella/ui/lib/utils";
 
-const Select = SelectPrimitive.Root;
+type SelectItemProps = SelectPrimitive.Item.Props & {
+  label?: string;
+};
+
+type ElementWithChildren = React.ReactElement<{
+  children?: React.ReactNode;
+}>;
+
+function Select<Value, Multiple extends boolean | undefined = false>({
+  children,
+  itemToStringLabel,
+  ...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+  const itemLabels = collectSelectItemLabels(children);
+
+  if (itemToStringLabel || itemLabels.size === 0) {
+    return (
+      <SelectPrimitive.Root itemToStringLabel={itemToStringLabel} {...props}>
+        {children}
+      </SelectPrimitive.Root>
+    );
+  }
+
+  return (
+    <SelectPrimitive.Root
+      itemToStringLabel={(value) => {
+        const stringValue = String(value);
+
+        return itemLabels.get(value) ?? stringValue;
+      }}
+      {...props}
+    >
+      {children}
+    </SelectPrimitive.Root>
+  );
+}
 
 function SelectTrigger({
   className,
@@ -116,8 +153,9 @@ function SelectPopup({
 function SelectItem({
   className,
   children,
+  label: _label,
   ...props
-}: SelectPrimitive.Item.Props) {
+}: SelectItemProps) {
   return (
     <SelectPrimitive.Item
       className={cn(
@@ -148,6 +186,82 @@ function SelectItem({
       </SelectPrimitive.ItemText>
     </SelectPrimitive.Item>
   );
+}
+
+function collectSelectItemLabels(children: React.ReactNode) {
+  const labels = new Map<unknown, string>();
+
+  React.Children.forEach(children, (child) => {
+    collectSelectItemLabel(child, labels);
+  });
+
+  return labels;
+}
+
+function collectSelectItemLabel(
+  child: React.ReactNode,
+  labels: Map<unknown, string>,
+) {
+  if (!isElementWithChildren(child)) {
+    return;
+  }
+
+  if (isSelectItemElement(child)) {
+    const value: unknown = child.props.value;
+    const label = child.props.label ?? getTextLabel(child.props.children);
+
+    if (label) {
+      labels.set(value, label);
+    }
+  }
+
+  React.Children.forEach(child.props.children, (nestedChild) => {
+    collectSelectItemLabel(nestedChild, labels);
+  });
+}
+
+function isElementWithChildren(
+  node: React.ReactNode,
+): node is ElementWithChildren {
+  return React.isValidElement<{ children?: React.ReactNode }>(node);
+}
+
+function isSelectItemElement(
+  node: React.ReactNode,
+): node is React.ReactElement<SelectItemProps> {
+  return (
+    React.isValidElement<SelectItemProps>(node) && node.type === SelectItem
+  );
+}
+
+function isReactNodeArray(node: React.ReactNode): node is React.ReactNode[] {
+  return Array.isArray(node);
+}
+
+function getTextLabel(node: React.ReactNode): string | null {
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+
+  if (isReactNodeArray(node)) {
+    const parts: string[] = [];
+
+    React.Children.forEach(node, (child) => {
+      const text = getTextLabel(child);
+
+      if (text) {
+        parts.push(text);
+      }
+    });
+
+    return parts.length > 0 ? parts.join("") : null;
+  }
+
+  if (isElementWithChildren(node)) {
+    return getTextLabel(node.props.children);
+  }
+
+  return null;
 }
 
 function SelectSeparator({

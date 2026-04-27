@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as DevRouteImport } from './routes/dev'
 import { Route as ConsentRouteImport } from './routes/consent'
 import { Route as ProtectedRouteImport } from './routes/_protected'
 import { Route as OnboardingRouteRouteImport } from './routes/onboarding/route'
@@ -19,7 +20,6 @@ import { Route as AuthOtpRouteImport } from './routes/auth/otp'
 import { Route as AuthOrganizationRouteImport } from './routes/auth/organization'
 import { Route as ProtectedOrganizationRouteRouteImport } from './routes/_protected.organization/route'
 import { Route as ProtectedKnowledgeRouteRouteImport } from './routes/_protected.knowledge/route'
-import { Route as ProtectedDevRouteRouteImport } from './routes/_protected.dev/route'
 import { Route as ProtectedChatRouteRouteImport } from './routes/_protected.chat/route'
 import { Route as ProtectedAccountRouteRouteImport } from './routes/_protected.account/route'
 import { Route as ProtectedWorkspacesIndexRouteImport } from './routes/_protected.workspaces/index'
@@ -54,6 +54,11 @@ import { Route as ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRouteImport } fr
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdPdfRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.pdf'
 import { Route as ProtectedChatWorkspacesWorkspaceIdThreadIdRouteImport } from './routes/_protected.chat/workspaces/$workspaceId/$threadId'
 
+const DevRoute = DevRouteImport.update({
+  id: '/dev',
+  path: '/dev',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConsentRoute = ConsentRouteImport.update({
   id: '/consent',
   path: '/consent',
@@ -102,11 +107,6 @@ const ProtectedOrganizationRouteRoute =
 const ProtectedKnowledgeRouteRoute = ProtectedKnowledgeRouteRouteImport.update({
   id: '/knowledge',
   path: '/knowledge',
-  getParentRoute: () => ProtectedRoute,
-} as any)
-const ProtectedDevRouteRoute = ProtectedDevRouteRouteImport.update({
-  id: '/dev',
-  path: '/dev',
   getParentRoute: () => ProtectedRoute,
 } as any)
 const ProtectedChatRouteRoute = ProtectedChatRouteRouteImport.update({
@@ -305,9 +305,9 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRouteRouteWithChildren
   '/onboarding': typeof OnboardingRouteRoute
   '/consent': typeof ConsentRoute
+  '/dev': typeof DevRoute
   '/account': typeof ProtectedAccountRouteRouteWithChildren
   '/chat': typeof ProtectedChatRouteRouteWithChildren
-  '/dev': typeof ProtectedDevRouteRoute
   '/knowledge': typeof ProtectedKnowledgeRouteRouteWithChildren
   '/organization': typeof ProtectedOrganizationRouteRouteWithChildren
   '/auth/organization': typeof AuthOrganizationRoute
@@ -349,8 +349,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/onboarding': typeof OnboardingRouteRoute
   '/consent': typeof ConsentRoute
+  '/dev': typeof DevRoute
   '/account': typeof ProtectedAccountRouteRouteWithChildren
-  '/dev': typeof ProtectedDevRouteRoute
   '/organization': typeof ProtectedOrganizationRouteRouteWithChildren
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
@@ -391,9 +391,9 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRouteRoute
   '/_protected': typeof ProtectedRouteWithChildren
   '/consent': typeof ConsentRoute
+  '/dev': typeof DevRoute
   '/_protected/account': typeof ProtectedAccountRouteRouteWithChildren
   '/_protected/chat': typeof ProtectedChatRouteRouteWithChildren
-  '/_protected/dev': typeof ProtectedDevRouteRoute
   '/_protected/knowledge': typeof ProtectedKnowledgeRouteRouteWithChildren
   '/_protected/organization': typeof ProtectedOrganizationRouteRouteWithChildren
   '/auth/organization': typeof AuthOrganizationRoute
@@ -438,9 +438,9 @@ export interface FileRouteTypes {
     | '/auth'
     | '/onboarding'
     | '/consent'
+    | '/dev'
     | '/account'
     | '/chat'
-    | '/dev'
     | '/knowledge'
     | '/organization'
     | '/auth/organization'
@@ -482,8 +482,8 @@ export interface FileRouteTypes {
     | '/'
     | '/onboarding'
     | '/consent'
-    | '/account'
     | '/dev'
+    | '/account'
     | '/organization'
     | '/auth/organization'
     | '/auth/otp'
@@ -523,9 +523,9 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/_protected'
     | '/consent'
+    | '/dev'
     | '/_protected/account'
     | '/_protected/chat'
-    | '/_protected/dev'
     | '/_protected/knowledge'
     | '/_protected/organization'
     | '/auth/organization'
@@ -570,10 +570,18 @@ export interface RootRouteChildren {
   OnboardingRouteRoute: typeof OnboardingRouteRoute
   ProtectedRoute: typeof ProtectedRouteWithChildren
   ConsentRoute: typeof ConsentRoute
+  DevRoute: typeof DevRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/dev': {
+      id: '/dev'
+      path: '/dev'
+      fullPath: '/dev'
+      preLoaderRoute: typeof DevRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/consent': {
       id: '/consent'
       path: '/consent'
@@ -642,13 +650,6 @@ declare module '@tanstack/react-router' {
       path: '/knowledge'
       fullPath: '/knowledge'
       preLoaderRoute: typeof ProtectedKnowledgeRouteRouteImport
-      parentRoute: typeof ProtectedRoute
-    }
-    '/_protected/dev': {
-      id: '/_protected/dev'
-      path: '/dev'
-      fullPath: '/dev'
-      preLoaderRoute: typeof ProtectedDevRouteRouteImport
       parentRoute: typeof ProtectedRoute
     }
     '/_protected/chat': {
@@ -1060,7 +1061,6 @@ const ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren =
 interface ProtectedRouteChildren {
   ProtectedAccountRouteRoute: typeof ProtectedAccountRouteRouteWithChildren
   ProtectedChatRouteRoute: typeof ProtectedChatRouteRouteWithChildren
-  ProtectedDevRouteRoute: typeof ProtectedDevRouteRoute
   ProtectedKnowledgeRouteRoute: typeof ProtectedKnowledgeRouteRouteWithChildren
   ProtectedOrganizationRouteRoute: typeof ProtectedOrganizationRouteRouteWithChildren
   ProtectedWorkspacesWorkspaceIdRouteRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
@@ -1074,7 +1074,6 @@ interface ProtectedRouteChildren {
 const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedAccountRouteRoute: ProtectedAccountRouteRouteWithChildren,
   ProtectedChatRouteRoute: ProtectedChatRouteRouteWithChildren,
-  ProtectedDevRouteRoute: ProtectedDevRouteRoute,
   ProtectedKnowledgeRouteRoute: ProtectedKnowledgeRouteRouteWithChildren,
   ProtectedOrganizationRouteRoute: ProtectedOrganizationRouteRouteWithChildren,
   ProtectedWorkspacesWorkspaceIdRouteRoute:
@@ -1096,6 +1095,7 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRouteRoute: OnboardingRouteRoute,
   ProtectedRoute: ProtectedRouteWithChildren,
   ConsentRoute: ConsentRoute,
+  DevRoute: DevRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

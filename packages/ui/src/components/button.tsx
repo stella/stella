@@ -36,7 +36,7 @@ const buttonVariants = cva(
         default:
           "border-primary bg-primary text-primary-foreground shadow-primary/24 [:hover,[data-pressed]]:bg-primary/90 shadow-xs not-disabled:inset-shadow-[0_1px_--theme(--color-white/16%)] [:active,[data-pressed]]:inset-shadow-[0_1px_--theme(--color-black/8%)] [:disabled,:active,[data-pressed]]:shadow-none",
         destructive:
-          "border-destructive bg-destructive shadow-destructive/24 [:hover,[data-pressed]]:bg-destructive/90 text-white shadow-xs not-disabled:inset-shadow-[0_1px_--theme(--color-white/16%)] [:active,[data-pressed]]:inset-shadow-[0_1px_--theme(--color-black/8%)] [:disabled,:active,[data-pressed]]:shadow-none",
+          "border-destructive/32 bg-destructive/10 text-destructive-foreground shadow-destructive/8 [:hover,[data-pressed]]:border-destructive/40 [:hover,[data-pressed]]:bg-destructive/14 [:active,[data-pressed]]:bg-destructive/18 shadow-xs not-dark:bg-clip-padding not-disabled:not-active:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] [:disabled,:active,[data-pressed]]:shadow-none",
         "destructive-outline":
           "border-input bg-popover text-destructive-foreground dark:bg-input/32 [:hover,[data-pressed]]:border-destructive/32 [:hover,[data-pressed]]:bg-destructive/4 shadow-xs/5 not-dark:bg-clip-padding not-disabled:not-active:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] dark:not-disabled:before:shadow-[0_-1px_--theme(--color-white/2%)] dark:not-disabled:not-active:not-data-pressed:before:shadow-[0_-1px_--theme(--color-white/6%)] [:disabled,:active,[data-pressed]]:shadow-none",
         ghost:
