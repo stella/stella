@@ -301,16 +301,23 @@ export const createPagePaginatedFetch = <TResponse>(
 
         let itemsSkipped = 0;
         for (const item of items) {
+          // Stop processing if the page/cycle signal fired
+          // during a previous item's detail fetch. Return
+          // partial results so the cursor still advances.
+          if (signal?.aborted) {
+            break;
+          }
           try {
             const parsed = await opts.parseItem(item, signal);
             if (parsed) {
               decisions.push(parsed);
             }
-          } catch (error) {
-            // Re-throw abort/timeout so the pipeline
-            // can detect cancellation properly.
-            if (error instanceof DOMException) {
-              throw error;
+          } catch {
+            // Page/cycle timeout fired during this item's
+            // processing. Stop and return partial results
+            // instead of throwing (which stalls the cursor).
+            if (signal?.aborted) {
+              break;
             }
             itemsSkipped++;
             // Skip individual items that fail to parse;
