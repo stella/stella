@@ -17,6 +17,10 @@ import type {
   IncomingActiveFile,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
+import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/org-manifest";
+import { buildReadonlyFunctionTypeDeclarations } from "@/api/handlers/chat/tools/execute/readonly-manifest";
+import type { ReadonlyFunctionContract } from "@/api/handlers/chat/tools/execute/readonly-manifest";
+import { readonlyWorkspaceFunctionContracts } from "@/api/handlers/chat/tools/execute/workspace-manifest";
 import type {
   ChatMentionHrefPrefix,
   ChatMessage,
@@ -24,6 +28,7 @@ import type {
 import type { SafeId } from "@/api/lib/branded-types";
 import { formatDateTimeInTimeZone } from "@/api/lib/date-format";
 import { unreachable } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 
 const TITLE_MAX_LENGTH = 80;
 const UNINITIALIZED_PROPERTY_STATUS = "uninitialized";
@@ -45,9 +50,10 @@ const CORE_RULE_SECTIONS = [
     "Stella. You retrieve documents, draft text, and " +
     "answer questions on behalf of the user.",
   "CRITICAL: Never guess, infer, or fabricate document " +
-    "content. Always call read-content (or the appropriate " +
-    "tool) to retrieve real data before answering. If a " +
-    "tool call fails, report the error honestly.",
+    "content. Always retrieve real data through the " +
+    "`execute-typescript` tool and the typed readonly `stella` " +
+    "API before answering. If a tool call fails, report the " +
+    "error honestly.",
   "IDENTITY: When drafting documents, emails, or letters, " +
     "always sign using the user's registered name (provided " +
     "below). The user is the author. Never refer to yourself " +
@@ -88,7 +94,17 @@ export const buildChatSystemPrompt = async ({
 }: BuildChatSystemPromptProps): Promise<Result<string, SafeDbError>> =>
   await Result.gen(async function* () {
     if (workspaceId === null) {
-      return Result.ok(buildGlobalPrompt({ userContext: userContext ?? null }));
+      return Result.ok(
+        buildGlobalPrompt({
+          readonlyStellaApi: buildReadonlyStellaApi({
+            contracts: [
+              ...readonlyOrgFunctionContracts,
+              ...readonlyWorkspaceFunctionContracts,
+            ],
+          }),
+          userContext: userContext ?? null,
+        }),
+      );
     }
 
     const prompt = yield* Result.await(
@@ -142,17 +158,34 @@ export const extractTitle = (parts: ChatMessage["parts"]) => {
 };
 
 type BuildGlobalPromptProps = {
+  readonlyStellaApi: string;
   userContext: UserContext | null;
 };
 
-export const buildGlobalPrompt = ({ userContext }: BuildGlobalPromptProps) =>
+export const buildGlobalPrompt = ({
+  readonlyStellaApi,
+  userContext,
+}: BuildGlobalPromptProps) =>
   buildPrompt({
     contextSections: [
-      "You have tools to search across all matters, look " +
-        "up contacts, browse templates, and read clauses. " +
-        "Use them when the user asks about " +
-        "their data. Never ask the user to call tools; " +
-        "just use them.",
+      "Use `execute-typescript` for readonly retrieval across " +
+        "matters in the organization. The readonly `stella` API available " +
+        "inside `execute-typescript` is typed below.",
+      "The readonly `stella` API uses matter naming. Matter-scoped " +
+        "functions require explicit `matterIds` inputs.",
+      "`stella.list*` functions accept optional `limit` and numeric " +
+        "`offset` pagination inputs. Omit `limit` unless you need a smaller " +
+        "page; the server defaults it and caps it at 500.",
+      "`stella.get*` functions require explicit ids and return full " +
+        `results without pagination. Detail reads accept up to ${LIMITS.chatExecuteDetailIdsMax} ids; ` +
+        `content reads accept up to ${LIMITS.chatExecuteContentIdsMax} entity ids.`,
+      "Prefer one batched `get*` call over many small calls when you " +
+        "already know the matter or entity IDs you need.",
+      "Use `describe-stella-function` only as a fallback if you " +
+        "need the full JSON Schema details for one function.",
+      "Inside `execute-typescript`, `console.log` is a no-op: " +
+        "only the value your program `return`s comes back.",
+      ["Readonly `stella` API:", "```ts", readonlyStellaApi, "```"].join("\n"),
     ],
     userContext,
   });
@@ -180,6 +213,12 @@ const buildWorkspacePrompt = async ({
       buildWorkspacePromptText({
         entityCount: workspacePromptData.entityCount,
         properties: workspacePromptData.properties,
+        readonlyStellaApi: buildReadonlyStellaApi({
+          contracts: [
+            ...readonlyOrgFunctionContracts,
+            ...readonlyWorkspaceFunctionContracts,
+          ],
+        }),
         userContext,
         workspaceId,
         workspaceName: workspacePromptData.workspaceName,
@@ -253,6 +292,7 @@ const loadWorkspacePromptData = async ({
 type BuildWorkspaceContextSectionsProps = {
   entityCount: number;
   properties: WorkspacePromptProperty[];
+  readonlyStellaApi: string;
   workspaceId: SafeId<"workspace">;
   workspaceName: string;
 };
@@ -260,22 +300,33 @@ type BuildWorkspaceContextSectionsProps = {
 const buildWorkspaceContextSections = ({
   entityCount,
   properties,
+  readonlyStellaApi,
   workspaceId,
   workspaceName,
 }: BuildWorkspaceContextSectionsProps): string[] => {
   const sections = [
     `Connected to matter "${workspaceName}".`,
-    "Use the available tools (search-matter, " +
-      "search-content, list-entities, read-entity, read-content) " +
-      "to retrieve real data. Never ask the " +
-      "user to call tools; just use them.",
-    "SCOPE: By default, use matter-scoped tools for " +
-      "this matter. Only use search-across-matters / " +
-      "read-content-across-matters when the user " +
-      'EXPLICITLY asks to search outside (e.g. "across ' +
-      'matters", "in other cases").',
+    "Use `execute-typescript` for readonly retrieval inside " +
+      "this matter. The readonly `stella` API available inside " +
+      "`execute-typescript` is typed below as a global namespace.",
+    "SCOPE: Matter-scoped `stella` functions require explicit " +
+      "`matterIds` inputs. In this matter, default to " +
+      `\`matterIds: ["${workspaceId}"]\` unless the user asks to work across matters.`,
+    "`stella.list*` functions accept optional `limit` and numeric " +
+      "`offset` pagination inputs. Omit `limit` unless you need a smaller " +
+      "page; the server defaults it and caps it at 500.",
+    "`stella.get*` functions require explicit ids and return full " +
+      `results without pagination. Detail reads accept up to ${LIMITS.chatExecuteDetailIdsMax} ids; ` +
+      `content reads accept up to ${LIMITS.chatExecuteContentIdsMax} entity ids.`,
+    "Prefer one batched `get*` call over many small calls when " +
+      "you already know the entity IDs you need.",
+    "Use `describe-stella-function` only as a fallback if you " +
+      "need the full JSON Schema manifest for one function. Inside " +
+      "`execute-typescript`, `console.log` is a no-op: only the value " +
+      "your program `return`s comes back as the tool output.",
+    ["Readonly `stella` API:", "```ts", readonlyStellaApi, "```"].join("\n"),
     [
-      `Workspace ID: ${workspaceId} (pass as workspaceId).`,
+      `Matter ID: ${workspaceId} (pass as matterIds: ["${workspaceId}"]).`,
       `The matter contains ${entityCount.toLocaleString()} entities.`,
     ].join("\n"),
   ];
@@ -343,6 +394,7 @@ const getPropertyOptionValues = (content: PropertyContent) => {
 type BuildWorkspacePromptTextProps = {
   entityCount: number;
   properties: WorkspacePromptProperty[];
+  readonlyStellaApi: string;
   userContext: UserContext | null;
   workspaceId: SafeId<"workspace">;
   workspaceName: string;
@@ -351,6 +403,7 @@ type BuildWorkspacePromptTextProps = {
 export const buildWorkspacePromptText = ({
   entityCount,
   properties,
+  readonlyStellaApi,
   userContext,
   workspaceId,
   workspaceName,
@@ -359,6 +412,7 @@ export const buildWorkspacePromptText = ({
     contextSections: buildWorkspaceContextSections({
       entityCount,
       properties,
+      readonlyStellaApi,
       workspaceId,
       workspaceName,
     }),
@@ -382,9 +436,21 @@ const buildActiveFilePrompt = ({ activeFile }: BuildActiveFilePromptProps) => {
   return [
     `The user is currently viewing "${safeName}" in the inspector sidebar.`,
     `When they refer to "this document" or "the open file", they mean entity ${safeEntityId}.`,
-    `Use read-entity or read-content with this entity ID to access its data.`,
+    `Use \`execute-typescript\` with \`stella.getMatterEntities\` or \`stella.getMatterEntityContents\`, plus the current matter ID and this entity ID, to access its data.`,
   ].join("\n");
 };
+
+type BuildReadonlyStellaApiProps = {
+  contracts: readonly ReadonlyFunctionContract[];
+};
+
+const buildReadonlyStellaApi = ({
+  contracts,
+}: BuildReadonlyStellaApiProps): string =>
+  buildReadonlyFunctionTypeDeclarations(contracts).match({
+    err: (error) => panic(error.message),
+    ok: (value) => value,
+  });
 
 type AppendActiveFilePromptIfEntityExistsProps = {
   activeFile: IncomingActiveFile;

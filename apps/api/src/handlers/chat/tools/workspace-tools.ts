@@ -8,20 +8,15 @@ import * as v from "valibot";
 import type { ScopedDb } from "@/api/db";
 import { entities, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { buildChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
 import { markdownToDocx } from "@/api/handlers/docx/markdown-to-docx";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { captureError } from "@/api/lib/analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { decryptContent } from "@/api/lib/content-encryption";
 import { ChatToolError, unreachable } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-
-const CONTENT_MAX_CHARS = 8000;
 
 const safeIdSchema = <T extends "entity" | "property">(description: string) =>
   v.pipe(
@@ -48,8 +43,7 @@ const formatFieldValue = (content: FieldContent): string => {
       if (!content.value) {
         return "";
       }
-      // Parse ISO date and format as "29 Jul 2025" so the
-      // model sees an unambiguous, human-readable date.
+
       const [y, m, d] = content.value.split("-");
       const date = new Date(Number(y), Number(m) - 1, Number(d));
       return date.toLocaleDateString("en-GB", {
@@ -82,8 +76,8 @@ const formatFieldValue = (content: FieldContent): string => {
 type WorkspaceToolsContext = {
   allowedWorkspaceIds: readonly SafeId<"workspace">[];
   organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
   scopedDb: ScopedDb;
+  userId: SafeId<"user">;
 };
 
 const createAllowedWorkspaceIdMap = (
@@ -129,8 +123,8 @@ const requireAllowedWorkspaceId = ({
 export const createWorkspaceTools = ({
   allowedWorkspaceIds,
   organizationId,
-  userId,
   scopedDb,
+  userId,
 }: WorkspaceToolsContext) => {
   if (allowedWorkspaceIds.length === 0) {
     return {};
@@ -141,329 +135,6 @@ export const createWorkspaceTools = ({
   const wsSchema = workspaceIdSchema(allowedWorkspaceIds);
 
   return {
-    "search-matter": tool({
-      description:
-        "Search for documents and files within a matter " +
-        "using full-text search. Returns matching entity " +
-        "names with highlighted excerpts.",
-      inputSchema: valibotSchema(
-        v.strictObject({
-          workspaceId: wsSchema,
-          query: v.pipe(
-            v.string(),
-            v.maxLength(LIMITS.searchQueryMaxLength),
-            v.description("Search query (keywords or phrases)"),
-          ),
-          limit: v.optional(
-            v.pipe(
-              v.number(),
-              v.integer(),
-              v.minValue(1),
-              v.maxValue(20),
-              v.description("Max results to return"),
-            ),
-            10,
-          ),
-        }),
-      ),
-      execute: async ({ workspaceId, query, limit }) => {
-        const allowedWorkspaceId = requireAllowedWorkspaceId({
-          allowedIdsByValue: allowedWorkspaceIdsByValue,
-          workspaceId,
-        });
-        const provider = getSearchProvider();
-        const result = await provider.search({
-          query,
-          organizationId,
-          workspaceId: allowedWorkspaceId,
-          limit,
-        });
-        return {
-          totalCount: result.totalCount,
-          hits: result.hits.map((hit) => ({
-            entityId: hit.entityId,
-            name: hit.title,
-            kind: hit.kind,
-            headline: hit.headline,
-          })),
-        };
-      },
-    }),
-
-    "list-entities": tool({
-      description:
-        "List documents, files, tasks, and folders in a " +
-        "matter. Returns names, types, dates, and custom " +
-        "property values (metadata columns).",
-      inputSchema: valibotSchema(
-        v.strictObject({
-          workspaceId: wsSchema,
-          kind: v.optional(
-            v.pipe(
-              v.picklist(["document", "folder", "task", "message"]),
-              v.description("Filter by entity type"),
-            ),
-          ),
-          parentId: v.optional(
-            safeIdSchema<"entity">("List contents of a specific folder"),
-          ),
-          limit: v.optional(
-            v.pipe(
-              v.number(),
-              v.integer(),
-              v.minValue(1),
-              v.maxValue(100),
-              v.description("Max entities to return"),
-            ),
-            50,
-          ),
-        }),
-      ),
-      execute: async ({ workspaceId, kind, parentId, limit }) => {
-        const allowedWorkspaceId = requireAllowedWorkspaceId({
-          allowedIdsByValue: allowedWorkspaceIdsByValue,
-          workspaceId,
-        });
-        const [ents, properties] = await Promise.all([
-          scopedDb((tx) =>
-            tx.query.entities.findMany({
-              where: {
-                workspaceId: { eq: allowedWorkspaceId },
-                ...(kind ? { kind } : {}),
-                ...(parentId ? { parentId: { eq: parentId } } : {}),
-              },
-              orderBy: { createdAt: "asc" },
-              limit,
-              columns: {
-                id: true,
-                kind: true,
-                name: true,
-                parentId: true,
-              },
-              with: {
-                currentVersion: {
-                  columns: { id: true },
-                  with: {
-                    fields: {
-                      columns: {
-                        propertyId: true,
-                        content: true,
-                      },
-                    },
-                  },
-                },
-              },
-            }),
-          ),
-          scopedDb((tx) =>
-            tx.query.properties.findMany({
-              where: { workspaceId: { eq: allowedWorkspaceId } },
-              columns: { id: true, name: true },
-            }),
-          ),
-        ]);
-        const propNameById = new Map(properties.map((p) => [p.id, p.name]));
-
-        // Build a compact { propertyName: value } map per
-        // entity to minimize token usage in AI context.
-        return ents.map((entity) => {
-          const fieldMap: Record<string, string> = {};
-          for (const f of entity.currentVersion?.fields ?? []) {
-            const val = formatFieldValue(f.content);
-            if (val === "") {
-              continue;
-            }
-            const key = propNameById.get(f.propertyId) ?? f.propertyId;
-            fieldMap[key] = val;
-          }
-          return {
-            id: entity.id,
-            kind: entity.kind,
-            name: entity.name,
-            parentId: entity.parentId,
-            fields: fieldMap,
-          };
-        });
-      },
-    }),
-
-    "read-entity": tool({
-      description:
-        "Get detailed information about a specific entity " +
-        "including all its property values (metadata).",
-      inputSchema: valibotSchema(
-        v.strictObject({
-          workspaceId: wsSchema,
-          entityId: safeIdSchema<"entity">("The entity ID to read"),
-        }),
-      ),
-      execute: async ({ workspaceId, entityId }) => {
-        const allowedWorkspaceId = requireAllowedWorkspaceId({
-          allowedIdsByValue: allowedWorkspaceIdsByValue,
-          workspaceId,
-        });
-        const entity = await scopedDb((tx) =>
-          tx.query.entities.findFirst({
-            where: {
-              id: { eq: entityId },
-              workspaceId: { eq: allowedWorkspaceId },
-            },
-            columns: {
-              id: true,
-              kind: true,
-              name: true,
-              parentId: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-            with: {
-              createdByUser: { columns: { name: true } },
-              versions: { columns: { id: true } },
-              currentVersion: {
-                columns: { id: true },
-                with: {
-                  fields: {
-                    columns: {
-                      propertyId: true,
-                      content: true,
-                    },
-                  },
-                },
-              },
-            },
-          }),
-        );
-
-        if (!entity) {
-          throw new ChatToolError({
-            message: "Entity not found in this matter",
-          });
-        }
-
-        const properties = await scopedDb((tx) =>
-          tx.query.properties.findMany({
-            where: { workspaceId: { eq: allowedWorkspaceId } },
-            columns: { id: true, name: true },
-          }),
-        );
-        const propNameById = new Map(properties.map((p) => [p.id, p.name]));
-
-        return {
-          entityId: entity.id,
-          kind: entity.kind,
-          name: entity.name,
-          parentId: entity.parentId,
-          createdAt: entity.createdAt.toISOString(),
-          createdBy: entity.createdByUser?.name ?? null,
-          sourceDocument: buildChatSourceDocument({
-            entityId: entity.id,
-            fields: entity.currentVersion?.fields,
-            kind: entity.kind,
-            name: entity.name,
-            workspaceId: allowedWorkspaceId,
-          }),
-          versionCount: entity.versions.length,
-          fields:
-            entity.currentVersion?.fields
-              .map((f) => ({
-                propertyId: f.propertyId,
-                property: propNameById.get(f.propertyId) ?? f.propertyId,
-                type: f.content.type,
-                value: formatFieldValue(f.content),
-              }))
-              .filter((f) => f.value !== "") ?? [],
-        };
-      },
-    }),
-
-    "read-content": tool({
-      description:
-        "Read the extracted text content of a document. Use " +
-        "this to read actual file contents, not just metadata. " +
-        "Returns up to 8000 characters of extracted text.",
-      inputSchema: valibotSchema(
-        v.strictObject({
-          workspaceId: wsSchema,
-          entityId: safeIdSchema<"entity">(
-            "The entity ID whose content to read",
-          ),
-        }),
-      ),
-      execute: async ({ workspaceId, entityId }) => {
-        const allowedWorkspaceId = requireAllowedWorkspaceId({
-          allowedIdsByValue: allowedWorkspaceIdsByValue,
-          workspaceId,
-        });
-        const row = await scopedDb((tx) =>
-          tx.query.extractedContent.findFirst({
-            where: {
-              entityId: { eq: entityId },
-              organizationId: { eq: organizationId },
-            },
-            with: {
-              entity: {
-                where: {
-                  workspaceId: { eq: allowedWorkspaceId },
-                },
-                columns: {
-                  name: true,
-                  kind: true,
-                },
-                with: {
-                  currentVersion: {
-                    columns: {},
-                    with: {
-                      fields: {
-                        columns: { content: true },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          }),
-        );
-
-        if (!row) {
-          throw new ChatToolError({
-            message:
-              "No extracted content available. The file may not have been processed yet, or its format is not supported for extraction.",
-          });
-        }
-
-        if (!row.entity) {
-          throw new ChatToolError({
-            message: "Entity not found in this matter.",
-          });
-        }
-
-        const plaintext = await decryptContent(
-          organizationId,
-          row.ciphertext,
-          row.iv,
-        );
-
-        const truncated = plaintext.length > CONTENT_MAX_CHARS;
-        const text = truncated
-          ? plaintext.slice(0, CONTENT_MAX_CHARS)
-          : plaintext;
-
-        return {
-          entityId,
-          charCount: row.charCount,
-          sourceDocument: buildChatSourceDocument({
-            entityId,
-            fields: row.entity?.currentVersion?.fields,
-            kind: row.entity?.kind,
-            name: row.entity?.name,
-            workspaceId: allowedWorkspaceId,
-          }),
-          truncated,
-          text,
-        };
-      },
-    }),
-
     "update-entity-fields": tool({
       description:
         "Update a metadata field on an entity (document, " +
@@ -501,10 +172,7 @@ export const createWorkspaceTools = ({
           oldValue: v.optional(
             v.pipe(
               v.string(),
-              v.description(
-                "Current value before the change " +
-                  "(for display in approval)",
-              ),
+              v.description("Current value before the change"),
             ),
           ),
         }),
@@ -532,11 +200,6 @@ export const createWorkspaceTools = ({
 
         const propType = property.content.type;
 
-        // Build typed content from the flat value,
-        // validating against the property type.
-        // SAFETY: content is always assigned in the switch
-        // for non-null values; null values hit the isEmpty
-        // path which skips the insert.
         let content!: FieldContent;
         switch (propType) {
           case "file":
@@ -569,7 +232,7 @@ export const createWorkspaceTools = ({
                   property.content.options as {
                     value: string;
                   }[]
-                ).map((o) => o.value),
+                ).map((option) => option.value),
               );
               if (!valid.has(value)) {
                 throw new ChatToolError({
@@ -640,7 +303,7 @@ export const createWorkspaceTools = ({
 
         if (!entity) {
           throw new ChatToolError({
-            message: `Entity "${entityId}" not found. Use list-entities to get valid entity IDs.`,
+            message: `Entity "${entityId}" not found.`,
           });
         }
 
@@ -651,7 +314,6 @@ export const createWorkspaceTools = ({
         }
 
         const versionId = entity.currentVersionId;
-
         const isEmpty =
           value === null ||
           value === "" ||
@@ -733,12 +395,10 @@ export const createWorkspaceTools = ({
         });
 
         if (Result.isOk(result)) {
-          const { entityId: newEntityId, fileName: newFileName } = result.value;
-
           return {
             success: true,
-            entityId: newEntityId,
-            fileName: newFileName,
+            entityId: result.value.entityId,
+            fileName: result.value.fileName,
           };
         }
 
@@ -756,62 +416,6 @@ export const createWorkspaceTools = ({
           default:
             return unreachable("Unhandled createEntityFromBuffer error tag");
         }
-      },
-    }),
-
-    "search-content": tool({
-      description:
-        "Search across document text content within a " +
-        "matter. Returns matching passages from documents " +
-        "with document name and entity ID. Use this to find " +
-        "specific clauses, terms, or information across " +
-        "all documents without reading each one individually.",
-      inputSchema: valibotSchema(
-        v.strictObject({
-          workspaceId: wsSchema,
-          query: v.pipe(
-            v.string(),
-            v.maxLength(LIMITS.searchQueryMaxLength),
-            v.description("Text or keywords to search for"),
-          ),
-          limit: v.optional(
-            v.pipe(
-              v.number(),
-              v.integer(),
-              v.minValue(1),
-              v.maxValue(20),
-              v.description("Max results (default: 5)"),
-            ),
-            5,
-          ),
-        }),
-      ),
-      execute: async ({ workspaceId, query, limit }) => {
-        const allowedWorkspaceId = requireAllowedWorkspaceId({
-          allowedIdsByValue: allowedWorkspaceIdsByValue,
-          workspaceId,
-        });
-        const provider = getSearchProvider();
-        const result = await provider.searchContent({
-          query,
-          organizationId,
-          workspaceId: allowedWorkspaceId,
-          limit,
-        });
-        const truncated = result.totalCount > result.hits.length;
-        return {
-          totalCount: result.totalCount,
-          truncated,
-          ...(truncated && {
-            note: `Showing ${result.hits.length} of ${result.totalCount} matches. Refine your query for more targeted results.`,
-          }),
-          results: result.hits.map((hit) => ({
-            entityId: hit.entityId,
-            name: hit.title,
-            kind: hit.kind,
-            passage: hit.passage,
-          })),
-        };
       },
     }),
   };

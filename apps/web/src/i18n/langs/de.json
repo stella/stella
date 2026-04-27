@@ -358,6 +358,10 @@
       "searchCaseLaw": "Rechtsprechung durchsuchen",
       "update-entity-fields": "Metadaten aktualisieren"
     },
+    "toolCall": {
+      "output": "Ausgabe",
+      "sourceCode": "Quellcode"
+    },
     "unsupportedFileType": "Nicht unterstützter Dateityp",
     "uploadFailed": "Datei konnte nicht verarbeitet werden"
   },

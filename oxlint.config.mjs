@@ -721,6 +721,7 @@ export default defineConfig({
         "jest/valid-title": "off",
         "no-console": "off",
         "require-await": "off",
+        "require-yield": "off",
         "typescript/unbound-method": "off",
         "no-body-ownership-ids/no-body-ownership-ids": "off",
         "no-untyped-updates/no-untyped-updates": "off",

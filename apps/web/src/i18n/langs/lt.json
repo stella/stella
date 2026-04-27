@@ -358,6 +358,10 @@
       "searchCaseLaw": "Ieškoma teismų praktikoje",
       "update-entity-fields": "Atnaujinti lauką"
     },
+    "toolCall": {
+      "output": "Išvestis",
+      "sourceCode": "Pradinis kodas"
+    },
     "unsupportedFileType": "Nepalaikomas failo tipas",
     "uploadFailed": "Nepavyko apdoroti failo"
   },

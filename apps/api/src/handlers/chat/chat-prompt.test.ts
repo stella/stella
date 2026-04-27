@@ -5,6 +5,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 import {
   appendActiveFilePromptIfEntityExists,
+  buildGlobalPrompt,
   buildWorkspacePromptText,
   extractTitle,
 } from "./chat-prompt";
@@ -12,6 +13,12 @@ import type { WorkspacePromptProperty } from "./chat-prompt";
 import type { ChatMessage } from "./types";
 
 const WORKSPACE_ID = toSafeId<"workspace">("ws_prompt_test");
+const READONLY_STELLA_API = `declare global {
+  namespace stella {
+    listMatters(input: {limit?: number; offset?: number}): Promise<{items: {matterId: string}[]; nextOffset: number | null; hasMore: boolean}>;
+    getMatterEntityContents(input: {matterIds: string[]; entityIds: string[]}): Promise<{text: string}[]>;
+  }
+}`;
 
 const createProperty = ({
   content,
@@ -73,6 +80,7 @@ describe("chat prompt builders", () => {
           status: "uninitialized",
         }),
       ],
+      readonlyStellaApi: READONLY_STELLA_API,
       userContext: null,
       workspaceId: WORKSPACE_ID,
       workspaceName: "Matter Alpha",
@@ -100,6 +108,7 @@ describe("chat prompt builders", () => {
           name: "Notes",
         }),
       ],
+      readonlyStellaApi: READONLY_STELLA_API,
       userContext: null,
       workspaceId: WORKSPACE_ID,
       workspaceName: "Matter Alpha",
@@ -107,6 +116,43 @@ describe("chat prompt builders", () => {
 
     expect(prompt).toContain("- Notes (id: prop_notes, type: text)");
     expect(prompt).not.toContain("type: text) [options:");
+  });
+
+  test("includes the readonly stella API block in the workspace prompt", () => {
+    const prompt = buildWorkspacePromptText({
+      entityCount: 1,
+      properties: [],
+      readonlyStellaApi: READONLY_STELLA_API,
+      userContext: null,
+      workspaceId: WORKSPACE_ID,
+      workspaceName: "Matter Alpha",
+    });
+
+    expect(prompt).toContain("Readonly `stella` API:");
+    expect(prompt).toContain("declare global {");
+    expect(prompt).toContain("namespace stella {");
+    expect(prompt).toContain("getMatterEntityContents(input:");
+    expect(prompt).toContain(
+      "Use `describe-stella-function` only as a fallback",
+    );
+    expect(prompt).not.toContain("call `stella-capabilities` once");
+    expect(prompt).toContain("Use `execute-typescript` for readonly retrieval");
+    expect(prompt).toContain("`stella.get*` functions require explicit ids");
+  });
+
+  test("includes the readonly stella API block in the global prompt", () => {
+    const prompt = buildGlobalPrompt({
+      readonlyStellaApi: READONLY_STELLA_API,
+      userContext: null,
+    });
+
+    expect(prompt).toContain("Use `execute-typescript` for readonly retrieval");
+    expect(prompt).toContain("require explicit `matterIds` inputs");
+    expect(prompt).toContain("caps it at 500");
+    expect(prompt).toContain(
+      "Use `describe-stella-function` only as a fallback",
+    );
+    expect(prompt).toContain("namespace stella {");
   });
 
   test("appends the active-file prompt only when the entity exists", () => {
@@ -130,9 +176,7 @@ describe("chat prompt builders", () => {
         entityExists: true,
         prompt: basePrompt,
       }),
-    ).toContain(
-      'The user is currently viewing "Open file.pdf" in the inspector sidebar.',
-    );
+    ).toContain("stella.getMatterEntities");
   });
 });
 
