@@ -1,4 +1,3 @@
-import { db } from "@/api/db/root";
 import {
   ADAPTER_KEYS,
   ADAPTER_TIMEOUT,
@@ -29,7 +28,7 @@ import { isRecord } from "@/api/lib/type-guards";
  * Slovak Courts adapter.
  *
  * Fetches decisions from the obcan.justice.sk REST API.
- * Page-based pagination (0-indexed, 25 items per page).
+ * Page-based pagination (0-indexed, 10 items per page).
  *
  * Each list item is enriched with a detail fetch for
  * ECLI, document URL, and referenced legislation.
@@ -257,22 +256,30 @@ const parseItemWithDetail = async (
   const rawHash = hashContent(rawJson);
 
   // Skip the expensive PDF download when the decision
-  // already exists with the same source hash. Uses the
-  // indexed (sourceId, caseNumber, language) unique
-  // constraint for lookup. The pipeline will also dedup,
-  // but checking here avoids the 5-30s PDF download per
-  // already-ingested decision during re-scans.
-  const existing = await db.query.caseLawDecisions.findFirst({
-    where: {
-      caseNumber: item.spisovaZnacka,
-      language: "sk",
-      sourceHash: rawHash,
-    },
-    columns: { id: true },
-  });
+  // already exists with the same source hash. The pipeline
+  // will also dedup, but checking here avoids the 5-30s
+  // PDF download per already-ingested decision during
+  // re-scans. Lazy import avoids triggering drizzle()
+  // initialization when the adapter module is loaded by
+  // tooling paths that don't need the DB.
+  let alreadyIngested = false;
+  try {
+    const { db } = await import("@/api/db/root");
+    const existing = await db.query.caseLawDecisions.findFirst({
+      where: {
+        caseNumber: item.spisovaZnacka,
+        language: "sk",
+        sourceHash: rawHash,
+      },
+      columns: { id: true },
+    });
+    alreadyIngested = existing !== undefined;
+  } catch {
+    // Transient DB failure; fall back to downloading the PDF.
+  }
 
   const pdfBytes =
-    !existing && detail?.dokument?.url
+    !alreadyIngested && detail?.dokument?.url
       ? await fetchPdfBytes(detail.dokument.url, signal)
       : undefined;
 
@@ -351,7 +358,7 @@ export const skCourtsAdapter: SourceAdapter = {
   country: "SVK",
   language: "sk",
   minRequestIntervalMs: 300,
-  // Each page fetches 25 items × (detail JSON + PDF download);
+  // Each page fetches 10 items × (detail JSON + PDF download);
   // 120s was too tight and caused consistent page-level timeouts.
   pageTimeoutMs: 180_000,
 
