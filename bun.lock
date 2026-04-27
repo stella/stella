@@ -295,6 +295,7 @@
         "jszip": "catalog:",
       },
       "devDependencies": {
+        "@types/bun": "catalog:",
         "typescript": "catalog:",
       },
     },
@@ -404,6 +405,7 @@
       "devDependencies": {
         "@stella/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
+        "fast-check": "catalog:",
         "typescript": "catalog:",
       },
     },

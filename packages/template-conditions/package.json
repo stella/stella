@@ -8,6 +8,7 @@
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test",
     "typecheck": "tsgo --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware packages/template-conditions",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware --fix packages/template-conditions",
@@ -16,6 +17,7 @@
   "devDependencies": {
     "@stella/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
+    "fast-check": "catalog:",
     "typescript": "catalog:"
   }
 }
