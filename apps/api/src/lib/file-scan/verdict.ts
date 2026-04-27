@@ -1,10 +1,10 @@
 import type { ScanFinding, ScanVerdict } from "@/api/lib/file-scan/types";
 
-const VERDICT_PRIORITY: Record<ScanVerdict, number> = {
+const VERDICT_PRIORITY = {
   pass: 0,
   warn: 1,
   reject: 2,
-};
+} as const satisfies Record<ScanVerdict, number>;
 
 export const aggregateVerdict = (
   findings: readonly ScanFinding[],

@@ -12,7 +12,7 @@ import {
   or,
 } from "drizzle-orm";
 
-import { user } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import { entities } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -104,7 +104,14 @@ const readWorkspaces = createSafeRootHandler(
                   lastActivity: max(entities.updatedAt),
                 })
                 .from(entities)
-                .innerJoin(user, eq(entities.createdBy, user.id))
+                .innerJoin(
+                  member,
+                  and(
+                    eq(entities.createdBy, member.userId),
+                    eq(member.organizationId, organizationId),
+                  ),
+                )
+                .innerJoin(user, eq(member.userId, user.id))
                 .where(inArray(entities.workspaceId, wsIds))
                 .groupBy(
                   entities.workspaceId,

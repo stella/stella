@@ -36,13 +36,13 @@ export const PROMOTION_THRESHOLD = 5;
 export const SPOT_CHECK_RATE = 0.05;
 
 /** Polarity weights for citation scoring. */
-export const POLARITY_WEIGHT: Record<Polarity, number> = {
+export const POLARITY_WEIGHT = {
   positive: 1,
   supportive: 0.8,
   neutral: 0.5,
   negative: 0,
   unknown: 0.5,
-};
+} as const satisfies Record<Polarity, number>;
 
 /**
  * Check if a string is a valid polarity value.

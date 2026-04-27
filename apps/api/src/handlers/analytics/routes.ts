@@ -42,6 +42,7 @@ export const analyticsRoute = new Elysia({
     async (ctx) =>
       await hoursByUserHandler({
         workspaceId: ctx.workspaceId,
+        organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
       }),

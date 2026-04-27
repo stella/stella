@@ -2,11 +2,16 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { workspaceMembers } from "@/api/db/schema";
+import { desktopEditSessions, workspaceMembers } from "@/api/db/schema";
+import {
+  closeSessionConnections,
+  pushSessionEvent,
+} from "@/api/handlers/entities/desktop-edit-session-events";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { broadcast } from "@/api/lib/sse";
 
 const config = {
   permissions: { workspace: ["update"] },
@@ -55,7 +60,23 @@ const removeWorkspaceMember = createSafeHandler(
           return { ok: false as const, reason: "not-found" as const };
         }
 
-        return { ok: true as const, id: deleted.id };
+        const closedSessions = await tx
+          .update(desktopEditSessions)
+          .set({ status: "cancelled", closedAt: new Date() })
+          .where(
+            and(
+              eq(desktopEditSessions.workspaceId, workspaceId),
+              eq(desktopEditSessions.createdBy, userId),
+              eq(desktopEditSessions.status, "open"),
+            ),
+          )
+          .returning({ id: desktopEditSessions.id });
+
+        return {
+          ok: true as const,
+          id: deleted.id,
+          closedSessionIds: closedSessions.map((session) => session.id),
+        };
       }),
     );
 
@@ -71,6 +92,21 @@ const removeWorkspaceMember = createSafeHandler(
       return Result.err(
         new HandlerError({ status: 404, message: "Member not found" }),
       );
+    }
+
+    for (const sessionId of txResult.closedSessionIds) {
+      pushSessionEvent(sessionId, {
+        type: "session-closed",
+        data: { reason: "released" },
+      });
+      closeSessionConnections(sessionId);
+    }
+
+    if (txResult.closedSessionIds.length > 0) {
+      broadcast(workspaceId, {
+        type: "invalidate-query",
+        data: ["entities", workspaceId],
+      });
     }
 
     return Result.ok({ id: txResult.id });

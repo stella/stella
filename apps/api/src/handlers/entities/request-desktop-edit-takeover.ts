@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { user } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import { desktopEditSessions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -21,7 +21,13 @@ const config = {
 
 export default createSafeHandler(
   config,
-  async function* ({ body, safeDb, user: currentUser, workspaceId }) {
+  async function* ({
+    body,
+    safeDb,
+    session: authSession,
+    user: currentUser,
+    workspaceId,
+  }) {
     const result = yield* Result.await(
       safeDb(async (tx) => {
         const sessions = await tx
@@ -41,12 +47,12 @@ export default createSafeHandler(
           .limit(1)
           .for("update");
 
-        const session = sessions.at(0);
-        if (!session) {
+        const editSession = sessions.at(0);
+        if (!editSession) {
           return { status: "no_session" as const };
         }
 
-        if (session.createdBy === currentUser.id) {
+        if (editSession.createdBy === currentUser.id) {
           return { status: "own_session" as const };
         }
 
@@ -57,20 +63,26 @@ export default createSafeHandler(
             takeoverRequestedBy: currentUser.id,
             takeoverRequestedAt: now,
           })
-          .where(eq(desktopEditSessions.id, session.id));
+          .where(eq(desktopEditSessions.id, editSession.id));
 
         // Get the requesting user's name for the notification
         const requestingUser = await tx
           .select({ name: user.name })
-          .from(user)
-          .where(eq(user.id, currentUser.id))
+          .from(member)
+          .innerJoin(user, eq(member.userId, user.id))
+          .where(
+            and(
+              eq(member.userId, currentUser.id),
+              eq(member.organizationId, authSession.activeOrganizationId),
+            ),
+          )
           .limit(1);
 
         const requestedByName = requestingUser.at(0)?.name ?? currentUser.id;
 
         return {
           status: "requested" as const,
-          sessionId: session.id,
+          sessionId: editSession.id,
           requestedByName,
           requestedAt: now.toISOString(),
         };

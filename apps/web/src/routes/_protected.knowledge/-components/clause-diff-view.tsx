@@ -6,14 +6,12 @@ type ClauseDiffViewProps = {
   diffs: ParagraphDiff[];
 };
 
-const statusBorder: Record<ParagraphDiff["status"], string> = {
+const statusBorder = {
   equal: "",
-  modified: "border-s-2 border-s-amber-400 ps-3",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  added: "border-s-2 border-s-green-500 dark:border-s-green-400 ps-3",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  removed: "border-s-2 border-s-red-500 dark:border-s-red-400 ps-3",
-};
+  modified: "border-s-2 border-s-[var(--option-amber)] ps-3",
+  added: "border-s-2 border-s-[var(--option-green)] ps-3",
+  removed: "border-s-2 border-s-[var(--option-red)] ps-3",
+} as const satisfies Record<ParagraphDiff["status"], string>;
 
 export const ClauseDiffView = ({ diffs }: ClauseDiffViewProps) => (
   <div className="space-y-1">

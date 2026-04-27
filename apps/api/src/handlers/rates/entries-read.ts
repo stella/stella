@@ -71,18 +71,24 @@ const readRateEntries = createSafeHandler(
     const usersResult =
       userIds.size > 0
         ? yield* Result.await(
-            safeDb((tx) =>
-              tx
-                .select({ id: user.id, image: user.image, name: user.name })
-                .from(user)
-                .innerJoin(member, eq(user.id, member.userId))
+            safeDb((tx) => {
+              const organizationMembers = tx
+                .select({ userId: member.userId })
+                .from(member)
                 .where(
                   and(
-                    inArray(user.id, [...userIds]),
+                    inArray(member.userId, [...userIds]),
                     eq(member.organizationId, session.activeOrganizationId),
                   ),
-                ),
-            ),
+                )
+                .groupBy(member.userId)
+                .as("organization_members");
+
+              return tx
+                .select({ id: user.id, image: user.image, name: user.name })
+                .from(organizationMembers)
+                .innerJoin(user, eq(organizationMembers.userId, user.id));
+            }),
           )
         : [];
 

@@ -2478,12 +2478,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       );
     }
 
-    const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
+    const DISPLAY_MODE_LABELS = {
       "all-markup": "All Markup",
       "simple-markup": "Simple",
       "no-markup": "No Markup",
       original: "Original",
-    };
+    } as const satisfies Record<DisplayMode, string>;
 
     const toolbarChildren = toolbarExtra ?? null;
 

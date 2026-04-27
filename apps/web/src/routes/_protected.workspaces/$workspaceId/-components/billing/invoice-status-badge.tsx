@@ -4,15 +4,13 @@ import { cn } from "@stella/ui/lib/utils";
 
 import type { InvoiceStatus } from "@/routes/_protected.workspaces/$workspaceId/-queries/invoices";
 
-const INVOICE_STATUS_STYLES: Record<InvoiceStatus, string> = {
+const INVOICE_STATUS_STYLES = {
   draft: "bg-muted text-muted-foreground",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  finalized: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  sent: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  paid: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  void: "bg-red-500/10 text-red-700 dark:text-red-400",
-};
+  finalized: "bg-[var(--option-blue-bg)] text-[var(--option-blue-fg)]",
+  sent: "bg-[var(--option-amber-bg)] text-[var(--option-amber-fg)]",
+  paid: "bg-[var(--option-emerald-bg)] text-[var(--option-emerald-fg)]",
+  void: "bg-[var(--option-red-bg)] text-[var(--option-red-fg)]",
+} as const satisfies Record<InvoiceStatus, string>;
 
 type InvoiceStatusBadgeProps = {
   status: InvoiceStatus;

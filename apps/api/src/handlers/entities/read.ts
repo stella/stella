@@ -4,7 +4,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
-import { user } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import {
   desktopEditSessions,
   entities,
@@ -20,61 +20,15 @@ import {
   buildSortExpressions,
 } from "@/api/lib/entity-filters";
 import { LIMITS } from "@/api/lib/limits";
-import type { ViewFilterCondition } from "@/api/lib/views-schema";
-
-const viewFilterConditionSchema = t.Union([
-  t.Object({
-    id: t.String(),
-    field: t.Literal("kind"),
-    op: t.Literal("in"),
-    value: t.Array(
-      t.Union([
-        t.Literal("document"),
-        t.Literal("folder"),
-        t.Literal("task"),
-        t.Literal("message"),
-        t.Literal("link"),
-      ]),
-    ),
-  }),
-  t.Object({
-    id: t.String(),
-    field: t.Literal("property"),
-    propertyId: t.String({ minLength: 1 }),
-    op: t.Union([
-      t.Literal("eq"),
-      t.Literal("neq"),
-      t.Literal("contains"),
-      t.Literal("is_empty"),
-    ]),
-    value: t.Optional(
-      t.Union([t.String(), t.Array(t.String()), t.Undefined()]),
-    ),
-  }),
-  t.Object({
-    id: t.String(),
-    field: t.Literal("builtin"),
-    builtinField: t.Union([t.Literal("status"), t.Literal("priority")]),
-    op: t.Union([
-      t.Literal("eq"),
-      t.Literal("neq"),
-      t.Literal("in"),
-      t.Literal("is_empty"),
-    ]),
-    value: t.Optional(
-      t.Union([t.String(), t.Array(t.String()), t.Undefined()]),
-    ),
-  }),
-]);
-
-const viewSortSchema = t.Object({
-  propertyId: t.String({ minLength: 1 }),
-  desc: t.Boolean(),
-});
+import {
+  tViewFilterConditionSchema,
+  tViewSortSchema,
+} from "@/api/lib/views-schema";
+import type { ViewFilterCondition, ViewSort } from "@/api/lib/views-schema";
 
 const readEntitiesBodySchema = t.Object({
-  filters: t.Optional(t.Array(viewFilterConditionSchema)),
-  sorts: t.Optional(t.Array(viewSortSchema)),
+  filters: t.Optional(t.Array(tViewFilterConditionSchema)),
+  sorts: t.Optional(t.Array(tViewSortSchema)),
   page: t.Optional(t.Integer({ minimum: 1 })),
   pageSize: t.Optional(
     t.Integer({
@@ -84,15 +38,11 @@ const readEntitiesBodySchema = t.Object({
   ),
 });
 
-type ViewSort = {
-  propertyId: string;
-  desc: boolean;
-};
-
 type ReadEntitiesHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   currentUserId: string;
+  currentOrganizationId: SafeId<"organization">;
   filters: ViewFilterCondition[];
   sorts: ViewSort[];
   page: number;
@@ -103,6 +53,7 @@ const readEntitiesHandler = async function* ({
   safeDb,
   workspaceId,
   currentUserId,
+  currentOrganizationId,
   filters,
   sorts,
   page,
@@ -157,8 +108,21 @@ const readEntitiesHandler = async function* ({
     fieldRowsResult,
     activeSessionsResult,
   ] = await Promise.all([
-    safeDb((tx) =>
-      tx
+    safeDb((tx) => {
+      const createdByMembers = tx
+        .select({ userId: member.userId })
+        .from(member)
+        .where(eq(member.organizationId, currentOrganizationId))
+        .groupBy(member.userId)
+        .as("created_by_members");
+      const lastEditorMembers = tx
+        .select({ userId: member.userId })
+        .from(member)
+        .where(eq(member.organizationId, currentOrganizationId))
+        .groupBy(member.userId)
+        .as("last_editor_members");
+
+      return tx
         .select({
           id: entities.id,
           kind: entities.kind,
@@ -177,10 +141,18 @@ const readEntitiesHandler = async function* ({
           sortOrder: entities.sortOrder,
         })
         .from(entities)
-        .leftJoin(user, eq(entities.createdBy, user.id))
-        .leftJoin(lastEditor, eq(entities.lastEditedBy, lastEditor.id))
-        .where(idFilter),
-    ),
+        .leftJoin(
+          createdByMembers,
+          eq(entities.createdBy, createdByMembers.userId),
+        )
+        .leftJoin(user, eq(createdByMembers.userId, user.id))
+        .leftJoin(
+          lastEditorMembers,
+          eq(entities.lastEditedBy, lastEditorMembers.userId),
+        )
+        .leftJoin(lastEditor, eq(lastEditorMembers.userId, lastEditor.id))
+        .where(idFilter);
+    }),
     safeDb((tx) =>
       tx
         .select({
@@ -205,8 +177,15 @@ const readEntitiesHandler = async function* ({
           and(eq(fields.entityVersionId, entities.currentVersionId), idFilter),
         ),
     ),
-    safeDb((tx) =>
-      tx
+    safeDb((tx) => {
+      const sessionEditorMembers = tx
+        .select({ userId: member.userId })
+        .from(member)
+        .where(eq(member.organizationId, currentOrganizationId))
+        .groupBy(member.userId)
+        .as("session_editor_members");
+
+      return tx
         .select({
           entityId: desktopEditSessions.entityId,
           createdBy: desktopEditSessions.createdBy,
@@ -215,8 +194,12 @@ const readEntitiesHandler = async function* ({
         })
         .from(desktopEditSessions)
         .innerJoin(
+          sessionEditorMembers,
+          eq(desktopEditSessions.createdBy, sessionEditorMembers.userId),
+        )
+        .innerJoin(
           sessionEditor,
-          eq(desktopEditSessions.createdBy, sessionEditor.id),
+          eq(sessionEditorMembers.userId, sessionEditor.id),
         )
         .where(
           and(
@@ -224,8 +207,8 @@ const readEntitiesHandler = async function* ({
             eq(desktopEditSessions.status, "open"),
           ),
         )
-        .orderBy(desktopEditSessions.createdAt),
-    ),
+        .orderBy(desktopEditSessions.createdAt);
+    }),
   ]);
 
   const entityRows = yield* entityRowsResult;
@@ -343,11 +326,12 @@ const config = {
 
 const readEntities = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body, user: currentUser }) {
+  async function* ({ safeDb, workspaceId, session, body, user: currentUser }) {
     return yield* readEntitiesHandler({
       safeDb,
       workspaceId,
       currentUserId: currentUser.id,
+      currentOrganizationId: session.activeOrganizationId,
       filters: body.filters ?? [],
       sorts: body.sorts ?? [],
       page: body.page ?? 1,

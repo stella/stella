@@ -1,9 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 
-import { user } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import { db } from "@/api/db/root";
-import { desktopEditSessions } from "@/api/db/schema";
+import { desktopEditSessions, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 
@@ -109,7 +109,15 @@ export const desktopEditSessionEventsHandler = async ({
       requestedAt: desktopEditSessions.takeoverRequestedAt,
     })
     .from(desktopEditSessions)
-    .innerJoin(user, eq(desktopEditSessions.takeoverRequestedBy, user.id))
+    .innerJoin(workspaces, eq(desktopEditSessions.workspaceId, workspaces.id))
+    .leftJoin(
+      member,
+      and(
+        eq(desktopEditSessions.takeoverRequestedBy, member.userId),
+        eq(member.organizationId, workspaces.organizationId),
+      ),
+    )
+    .leftJoin(user, eq(member.userId, user.id))
     .where(eq(desktopEditSessions.id, sessionId))
     .limit(1);
 

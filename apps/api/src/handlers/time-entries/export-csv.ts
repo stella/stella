@@ -3,7 +3,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
-import { user } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
 import { timeEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -23,12 +23,14 @@ type ExportCsvQuerySchema = Static<typeof exportCsvQuerySchema>;
 type ExportCsvHandlerProps = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
+  organizationId: SafeId<"organization">;
   query: ExportCsvQuerySchema;
 };
 
 export const exportCsvHandler = async ({
   scopedDb,
   workspaceId,
+  organizationId,
   query,
 }: ExportCsvHandlerProps) => {
   const conditions = [eq(timeEntries.workspaceId, workspaceId)];
@@ -83,8 +85,14 @@ export const exportCsvHandler = async ({
       ? await scopedDb((tx) =>
           tx
             .select({ id: user.id, name: user.name })
-            .from(user)
-            .where(inArray(user.id, [...userIds])),
+            .from(member)
+            .innerJoin(user, eq(member.userId, user.id))
+            .where(
+              and(
+                eq(member.organizationId, organizationId),
+                inArray(member.userId, [...userIds]),
+              ),
+            ),
         )
       : [];
 

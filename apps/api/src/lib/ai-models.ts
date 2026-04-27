@@ -48,7 +48,7 @@ export type AIProvider =
 
 // -- Default model IDs per provider -----------------------------
 
-const DEFAULT_MODELS: Record<AIProvider, Record<ModelRole, string>> = {
+const DEFAULT_MODELS = {
   google: {
     fast: "gemini-3.1-flash-lite-preview",
     chat: "gemini-3-flash-preview",
@@ -79,7 +79,7 @@ const DEFAULT_MODELS: Record<AIProvider, Record<ModelRole, string>> = {
     reasoning: "default",
     pdf: "default",
   },
-};
+} as const satisfies Record<AIProvider, Record<ModelRole, string>>;
 
 export type DataRegion = "eu" | "global" | "ch";
 
@@ -111,12 +111,12 @@ export const supportsRegion = (provider: AIProvider): boolean =>
  * Provider defaults (1.0 for OpenAI/Anthropic) are too high
  * for our use cases.
  */
-const TEMPERATURE_PER_ROLE: Record<ModelRole, number> = {
+const TEMPERATURE_PER_ROLE = {
   fast: 0,
   chat: 0.3,
   reasoning: 0,
   pdf: 0,
-};
+} as const satisfies Record<ModelRole, number>;
 
 export const getTemperatureForRole = (role: ModelRole): number =>
   TEMPERATURE_PER_ROLE[role];
@@ -154,10 +154,10 @@ const resolveProvider = (): AIProvider => {
  * GCP locations for data sovereignty regions.
  * Vertex AI Express Mode routes through these.
  */
-const REGION_LOCATIONS: Record<Exclude<DataRegion, "global">, string> = {
+const REGION_LOCATIONS = {
   eu: "europe-west4",
   ch: "europe-west6",
-};
+} as const satisfies Record<Exclude<DataRegion, "global">, string>;
 
 /**
  * Create a regional Vertex AI factory.
@@ -352,12 +352,12 @@ const getInstanceFactory = (): ModelFactory => {
   return _instanceFactory;
 };
 
-const MODEL_OVERRIDES: Record<ModelRole, string | undefined> = {
+const MODEL_OVERRIDES = {
   fast: env.AI_MODEL_FAST,
   chat: env.AI_MODEL_CHAT,
   reasoning: env.AI_MODEL_REASONING,
   pdf: env.AI_MODEL_PDF,
-};
+} satisfies Record<ModelRole, string | undefined>;
 
 // -- Public API -------------------------------------------------
 

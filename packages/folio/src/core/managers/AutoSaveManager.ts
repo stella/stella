@@ -374,12 +374,12 @@ export function formatLastSaveTime(date: Date | null): string {
 
 /** Get auto-save status label */
 export function getAutoSaveStatusLabel(status: AutoSaveStatus): string {
-  const labels: Record<AutoSaveStatus, string> = {
+  const labels = {
     idle: "Ready",
     saving: "Saving...",
     saved: "Saved",
     error: "Save failed",
-  };
+  } as const satisfies Record<AutoSaveStatus, string>;
   return labels[status];
 }
 

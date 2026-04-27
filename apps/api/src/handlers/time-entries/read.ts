@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
 import { t } from "elysia";
 
-import { user } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import {
   timeEntrySourceSchema,
   timeEntryStatusSchema,
@@ -29,7 +29,7 @@ const readTimeEntries = createSafeHandler(
     permissions: { workspace: ["read"] },
     query: readTimeEntriesQuerySchema,
   },
-  async function* ({ safeDb, workspaceId, query }) {
+  async function* ({ safeDb, session, workspaceId, query }) {
     const limit = query.limit ?? 100;
     const offset = query.offset ?? 0;
 
@@ -108,8 +108,14 @@ const readTimeEntries = createSafeHandler(
             safeDb((tx) =>
               tx
                 .select({ id: user.id, name: user.name })
-                .from(user)
-                .where(inArray(user.id, [...userIds])),
+                .from(member)
+                .innerJoin(user, eq(member.userId, user.id))
+                .where(
+                  and(
+                    eq(member.organizationId, session.activeOrganizationId),
+                    inArray(member.userId, [...userIds]),
+                  ),
+                ),
             ),
           )
         : [];

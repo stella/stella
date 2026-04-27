@@ -69,14 +69,14 @@ const REQUIRED_VIEW_LAYOUTS = new Set<ViewLayoutType>([
   "kanban",
 ]);
 
-const layoutIcons: Record<ViewLayoutType, React.ElementType> = {
+const layoutIcons = {
   overview: LayoutDashboardIcon,
   table: TableIcon,
   filesystem: FolderTreeIcon,
   kanban: KanbanIcon,
   calendar: CalendarIcon,
   timeline: GanttChartIcon,
-};
+} as const satisfies Record<ViewLayoutType, React.ElementType>;
 
 const LAYOUT_LABEL_KEYS = {
   overview: "workspaces.views.layouts.overview",
@@ -108,7 +108,7 @@ const emptyLayout = (
   return { type, ...base };
 };
 
-const defaultLayouts: Record<ViewLayoutType, ViewLayout> = {
+const defaultLayouts = {
   overview: emptyLayout("overview"),
   table: emptyLayout("table"),
   filesystem: emptyLayout("filesystem"),
@@ -131,7 +131,7 @@ const defaultLayouts: Record<ViewLayoutType, ViewLayout> = {
     zoom: "month",
     showTable: false,
   },
-};
+} as const satisfies Record<ViewLayoutType, ViewLayout>;
 
 const LAYOUT_OPTIONS: ViewLayoutType[] = [
   "overview",

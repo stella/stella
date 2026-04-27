@@ -92,7 +92,7 @@ export const PropertyPopoverLabel = (props: ComponentProps<"span">) => (
 export const PropertyName = ({ type }: PropertyHelperProps) => {
   const t = useTranslations();
 
-  const labelKeys: Record<FieldTypeWithoutPending, string> = {
+  const labelKeys = {
     text: t("workspaces.properties.text"),
     file: t("workspaces.properties.file"),
     error: t("workspaces.properties.error"),
@@ -102,7 +102,7 @@ export const PropertyName = ({ type }: PropertyHelperProps) => {
     date: t("workspaces.properties.date"),
     int: t("workspaces.properties.int"),
     clip: t("workspaces.properties.clip"),
-  };
+  } as const satisfies Record<FieldTypeWithoutPending, string>;
 
   return (
     <div className="flex items-center gap-1.5">

@@ -30,10 +30,10 @@ export type WorkspaceGroup = {
   workspaces: Workspace[];
 };
 
-export const ALL_COLUMNS: readonly MattersColumnId[] = [
+export const ALL_COLUMNS = [
   "client",
   "reference",
   "entityCount",
   "lastActivityAt",
   "createdAt",
-];
+] as const satisfies readonly MattersColumnId[];
