@@ -116,12 +116,22 @@ Full brand deck, micro-interaction guidelines, and visual noise rules in
 - Prefer discriminated union narrowing (`obj.type === "x"`) over `"key" in obj`
   checks. Use `in` only when the type is not a discriminated union and there is no
   discriminator to check.
-- For functions with multiple numeric (or otherwise interchangeable) params, prefer
-  object args over positional params to avoid silent bugs from swapped arguments.
+- For function arguments, including helpers: use normal typed parameters for one
+  argument, and also for two arguments when their types are different enough to stay
+  readable. Use a named `SomethingOptions`, `SomethingArgs`, or `SomethingParams`
+  object for 3+ arguments, or when two same-type or otherwise interchangeable
+  positional arguments would be easy to mix up. Reserve `Props` for React component
+  props.
 - Reuse util types from libraries instead of hand-rolling (e.g.,
   `React.PropsWithChildren<P>` for props with children,
   `React.ComponentProps<"button">` for HTML element props). Check React, TanStack, and
   other deps before defining custom equivalents.
+- Keep helper-local types close to the helper they describe: put `SomethingOptions`,
+  `SomethingResult`, and similar aliases immediately above the function, not in a
+  file-level type dump far away from the implementation.
+- If a return type is noisy enough to hurt readability, hoist it into a nearby alias
+  such as `SomethingResult` and use it in the signature (e.g., `SomethingResult` or
+  `Promise<SomethingResult>`). If the return type is simple, keep it inline.
 
 ### Module Side Effects
 
