@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 
 import type { EditorView } from "prosemirror-view";
 
+import { isSafeImageFile } from "../../core/utils/imageValidation";
 import type { ImagePositionData } from "../dialogs/ImagePositionDialog";
 import type { ImagePropertiesData } from "../dialogs/ImagePropertiesDialog";
 
@@ -82,43 +83,9 @@ export const useImageHandlers = ({
         return;
       }
 
-      const reader = new FileReader();
-      reader.addEventListener("load", () => {
-        const dataUrl = reader.result as string;
-
-        // Create an Image element to get natural dimensions
-        const img = new Image();
-        img.addEventListener("load", () => {
-          let width = img.naturalWidth;
-          let height = img.naturalHeight;
-
-          // Constrain to reasonable max width (content area of US Letter page at 96dpi)
-          const maxWidth = 612; // ~6.375 inches
-          if (width > maxWidth) {
-            const scale = maxWidth / width;
-            width = maxWidth;
-            height = Math.round(height * scale);
-          }
-
-          const rId = `rId_img_${Date.now()}`;
-          const imageNode = view.state.schema.nodes["image"]!.create({
-            src: dataUrl,
-            alt: file.name,
-            width,
-            height,
-            rId,
-            wrapType: "inline",
-            displayMode: "inline",
-          });
-
-          const { from } = view.state.selection;
-          const tr = view.state.tr.insert(from, imageNode);
-          view.dispatch(tr.scrollIntoView());
-          focusActiveEditor();
-        });
-        img.src = dataUrl;
+      void insertSelectedImage(file, view, focusActiveEditor).catch(() => {
+        // Image decode/read failures should not escape as unhandled rejections.
       });
-      reader.readAsDataURL(file);
 
       // Reset the input so the same file can be selected again
       e.target.value = "";
@@ -332,3 +299,83 @@ export const useImageHandlers = ({
     handleApplyImageProperties,
   };
 };
+
+async function insertSelectedImage(
+  file: File,
+  view: EditorView,
+  focusActiveEditor: () => void,
+): Promise<void> {
+  if (!(await isSafeImageFile(file))) {
+    return;
+  }
+
+  const dataUrl = await readFileAsDataUrl(file);
+  const { width, height } = await loadImageDimensions(dataUrl);
+  const constrained = constrainImageSize(width, height);
+  const imageType = view.state.schema.nodes["image"];
+  if (!imageType) {
+    return;
+  }
+
+  const imageNode = imageType.create({
+    src: dataUrl,
+    alt: file.name,
+    width: constrained.width,
+    height: constrained.height,
+    rId: `rId_img_${Date.now()}`,
+    wrapType: "inline",
+    displayMode: "inline",
+  });
+
+  const { from } = view.state.selection;
+  const tr = view.state.tr.insert(from, imageNode);
+  view.dispatch(tr.scrollIntoView());
+  focusActiveEditor();
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      resolve(typeof reader.result === "string" ? reader.result : "");
+    });
+    reader.addEventListener("error", () => {
+      reject(reader.error ?? new Error("Failed to read image file"));
+    });
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageDimensions(
+  src: string,
+): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.addEventListener("load", () => {
+      resolve({
+        width: img.naturalWidth || 1,
+        height: img.naturalHeight || 1,
+      });
+    });
+    img.addEventListener("error", () => {
+      reject(new Error("Failed to load image"));
+    });
+    img.src = src;
+  });
+}
+
+function constrainImageSize(
+  width: number,
+  height: number,
+): { width: number; height: number } {
+  const maxWidth = 612; // ~6.375 inches
+  if (width <= maxWidth) {
+    return { width, height };
+  }
+
+  const scale = maxWidth / width;
+  return {
+    width: maxWidth,
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}

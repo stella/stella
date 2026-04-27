@@ -70,7 +70,7 @@ export const FieldExtension = createNodeExtension({
             text = new Date().toLocaleDateString();
             break;
           case "MERGEFIELD":
-            text = `«${instruction.replace(/^MERGEFIELD\s+/i, "").replace(/\s*\\.*$/, "")}»`;
+            text = `«${getMergeFieldName(instruction)}»`;
             break;
           default:
             text = `{${fieldType}}`;
@@ -94,3 +94,15 @@ export const FieldExtension = createNodeExtension({
     },
   },
 });
+
+function getMergeFieldName(instruction: string): string {
+  const prefix = "MERGEFIELD";
+  const trimmed = instruction.trim();
+  const withoutPrefix = trimmed.toUpperCase().startsWith(prefix)
+    ? trimmed.slice(prefix.length).trimStart()
+    : trimmed;
+  const switchStart = withoutPrefix.indexOf("\\");
+  return (
+    switchStart === -1 ? withoutPrefix : withoutPrefix.slice(0, switchStart)
+  ).trimEnd();
+}

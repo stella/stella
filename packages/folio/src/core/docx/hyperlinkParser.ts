@@ -24,6 +24,7 @@ import type {
   RelationshipMap,
   MediaFile,
 } from "../types/document";
+import { sanitizeExternalUrl, sanitizeLinkTarget } from "../utils/urlSecurity";
 import { parseRun } from "./runParser";
 import type { StyleMap } from "./styleParser";
 import {
@@ -126,7 +127,10 @@ export function parseHyperlink(
       if (rel) {
         // External hyperlinks have TargetMode="External" and target is the URL
         // Both external and internal links use the same target
-        hyperlink.href = rel.target;
+        const safeHref = sanitizeExternalUrl(rel.target);
+        if (safeHref) {
+          hyperlink.href = safeHref;
+        }
       }
     }
   }
@@ -152,7 +156,7 @@ export function parseHyperlink(
   // Common values: _blank (new window), _self (same), _parent, _top
   const tgtFrame = getAttribute(node, "w", "tgtFrame");
   if (tgtFrame) {
-    hyperlink.target = tgtFrame;
+    hyperlink.target = sanitizeLinkTarget(tgtFrame);
   }
 
   // === History ===
@@ -237,7 +241,7 @@ export function getHyperlinkText(hyperlink: Hyperlink): string {
 export function isExternalLink(hyperlink: Hyperlink): boolean {
   // Has rId and resolved href that starts with a protocol
   if (hyperlink.href) {
-    return /^https?:\/\/|^mailto:|^tel:|^ftp:/i.test(hyperlink.href);
+    return sanitizeExternalUrl(hyperlink.href) !== undefined;
   }
   // Has rId but not resolved (still counts as external attempt)
   return !!hyperlink.rId && !hyperlink.anchor;
@@ -306,9 +310,11 @@ export function resolveHyperlinkUrl(
   if (hyperlink.rId) {
     const rel = rels.get(hyperlink.rId);
     if (rel) {
-      // Both external and internal links resolve to the same target
-      hyperlink.href = rel.target;
-      return hyperlink.href;
+      const safeHref = sanitizeExternalUrl(rel.target);
+      if (safeHref) {
+        hyperlink.href = safeHref;
+        return hyperlink.href;
+      }
     }
   }
 

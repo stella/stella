@@ -206,8 +206,7 @@ export function parseXmlDocument(xml: string): XmlElement | null {
     }
 
     return parsed;
-  } catch (error) {
-    console.warn("Failed to parse XML:", error);
+  } catch {
     return null;
   }
 }

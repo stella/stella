@@ -762,8 +762,10 @@ type Messages = {
     "cut": "Cut";
     "decreaseIndent": "Decrease Indent";
     "deleted": "Deleted";
+    "discardChanges": "Discard";
     "dismiss": "Dismiss";
     "displayText": "Display text";
+    "doneEditing": "Done editing";
     "doubleClickFooter": "Double-click to add footer";
     "doubleClickHeader": "Double-click to add header";
     "editLink": "Edit link";
@@ -780,6 +782,7 @@ type Messages = {
     "listFormatting": "List formatting";
     "listsGroup": "Lists";
     "loadingDocument": "Loading document...";
+    "loadingEditor": "Loading editor...";
     "networkError": "Network error. Please check your internet connection and try again.";
     "nextChange": "Next Change";
     "numberedList": "Numbered List";
@@ -792,6 +795,8 @@ type Messages = {
     "redoShortcut": "Redo (Ctrl+Y)";
     "rejectChange": "Reject Change";
     "removeLink": "Remove link";
+    "savingDocument": "Saving...";
+    "selectAll": "Select all";
     "showDetails": "Show details";
     "somethingWentWrong": "Something went wrong";
     "textEditingMenu": "Text editing menu";

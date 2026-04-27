@@ -118,7 +118,9 @@ export const DocxBrowserEditor = ({
     return (
       <div className="flex h-full items-center justify-center gap-2">
         <LoaderIcon className="text-muted-foreground size-5 animate-spin" />
-        <span className="text-muted-foreground text-sm">Saving...</span>
+        <span className="text-muted-foreground text-sm">
+          {t("folio.savingDocument")}
+        </span>
       </div>
     );
   }
@@ -133,7 +135,7 @@ export const DocxBrowserEditor = ({
       <div className="flex items-center justify-end gap-2 border-b px-3 py-1.5">
         <Button onClick={() => void cancel()} size="sm" variant="ghost">
           <XIcon />
-          Discard
+          {t("folio.discardChanges")}
         </Button>
         <Separator orientation="vertical" className="h-5" />
         <Button
@@ -142,7 +144,7 @@ export const DocxBrowserEditor = ({
           variant="default"
         >
           <CheckIcon />
-          Done editing
+          {t("folio.doneEditing")}
         </Button>
       </div>
 
@@ -153,7 +155,7 @@ export const DocxBrowserEditor = ({
             <div className="flex h-full flex-col items-center justify-center gap-3">
               <LoaderIcon className="text-muted-foreground size-6 animate-spin" />
               <span className="text-muted-foreground text-sm">
-                Loading editor...
+                {t("folio.loadingEditor")}
               </span>
             </div>
           }

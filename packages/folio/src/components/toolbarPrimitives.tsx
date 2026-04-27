@@ -248,12 +248,8 @@ export function ToolbarButton({
   ariaLabel,
 }: ToolbarButtonProps) {
   const testId =
-    ariaLabel?.toLowerCase().replace(/\s+/g, "-") ||
-    title
-      ?.toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/\([^)]*\)/g, "")
-      .trim();
+    toToolbarTestId(ariaLabel) ||
+    toToolbarTestId(title, { stripParentheses: true });
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -288,6 +284,39 @@ export function ToolbarButton({
   }
 
   return button;
+}
+
+function toToolbarTestId(
+  value: string | undefined,
+  options: { stripParentheses?: boolean } = {},
+): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = options.stripParentheses
+    ? stripParentheticalText(value)
+    : value;
+  return normalized.trim().toLowerCase().split(/\s+/u).join("-");
+}
+
+function stripParentheticalText(value: string): string {
+  let result = "";
+  let depth = 0;
+  for (const char of value) {
+    if (char === "(") {
+      depth++;
+      continue;
+    }
+    if (char === ")") {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (depth === 0) {
+      result += char;
+    }
+  }
+  return result;
 }
 
 /**

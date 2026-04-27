@@ -90,9 +90,7 @@ export const useDocumentLoader = ({
       setDocumentLoadState({ status: "ready" });
       // Defer font loading so the first page renders immediately
       if (doc.requiredFonts && doc.requiredFonts.length > 0) {
-        loadFontsWithMapping(doc.requiredFonts).catch((error) => {
-          console.warn("Failed to load document fonts:", error);
-        });
+        loadFontsWithMapping(doc.requiredFonts).catch(() => undefined);
       }
     },
     [resetForNewDocument, history, setDocumentLoadState],

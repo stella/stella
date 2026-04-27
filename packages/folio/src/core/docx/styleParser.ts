@@ -1623,8 +1623,8 @@ export function parseStyles(stylesXml: string, theme: Theme | null): StyleMap {
       const resolved = resolveStyleInheritance(style, styleMap, theme);
       styleMap.set(styleId, resolved);
     }
-  } catch (error) {
-    console.warn("Failed to parse styles:", error);
+  } catch {
+    // Malformed style inheritance leaves unresolved styles in place.
   }
 
   return styleMap;
@@ -1688,8 +1688,8 @@ export function parseStyleDefinitions(
     // Parse styles with full inheritance resolution
     const styleMap = parseStyles(stylesXml, theme);
     result.styles = Array.from(styleMap.values());
-  } catch (error) {
-    console.warn("Failed to parse style definitions:", error);
+  } catch {
+    // Malformed styles return the partial definitions parsed so far.
   }
 
   return result;

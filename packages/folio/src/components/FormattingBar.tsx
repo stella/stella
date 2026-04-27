@@ -290,7 +290,15 @@ export function FormattingBar(props: FormattingBarProps) {
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [enableShortcuts, handleFormat, handleAlignmentChange, editorRef]);
+  }, [
+    enableShortcuts,
+    handleFormat,
+    handleAlignmentChange,
+    handleBulletList,
+    handleIndent,
+    handleOutdent,
+    editorRef,
+  ]);
 
   const handleBarMouseDown = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -313,8 +321,8 @@ export function FormattingBar(props: FormattingBarProps) {
         className,
       )}
       style={inline ? { display: "contents", ...style } : style}
-      role={inline ? "presentation" : "toolbar"}
-      aria-label={inline ? undefined : t("formattingToolbar")}
+      role="toolbar"
+      aria-label={t("formattingToolbar")}
       onMouseDown={inline ? undefined : handleBarMouseDown}
       onMouseUp={inline ? undefined : handleBarMouseUp}
     >

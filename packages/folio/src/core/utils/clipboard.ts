@@ -463,14 +463,7 @@ export function cleanWordHtml(html: string): string {
   cleaned = cleaned.replace(/<w:[^>]*>[\s\S]*?<\/w:[^>]*>/gi, "");
   cleaned = cleaned.replace(/<w:[^>]*\/>/gi, "");
 
-  // Remove mso styles but keep other styles
-  cleaned = cleaned.replace(/\s*mso-[^:;]+:[^;]+;?/gi, "");
-
-  // Remove empty style attributes
-  cleaned = cleaned.replace(/\s*style="\s*"/gi, "");
-
-  // Remove class attributes containing Mso
-  cleaned = cleaned.replace(/\s*class="[^"]*Mso[^"]*"/gi, "");
+  cleaned = cleanWordAttributes(cleaned);
 
   // Remove empty spans
   cleaned = cleaned.replace(/<span[^>]*>\s*<\/span>/gi, "");
@@ -484,6 +477,42 @@ export function cleanWordHtml(html: string): string {
   return cleaned;
 }
 
+function cleanWordAttributes(html: string): string {
+  const container = new DOMParser().parseFromString(html, "text/html").body;
+
+  for (const element of Array.from(
+    container.querySelectorAll<HTMLElement>("*"),
+  )) {
+    const filteredClasses = Array.from(element.classList).filter(
+      (className) => !className.includes("Mso"),
+    );
+    if (filteredClasses.length === 0) {
+      element.removeAttribute("class");
+    } else {
+      element.setAttribute("class", filteredClasses.join(" "));
+    }
+
+    const keptStyleProperties: string[] = [];
+    for (const property of Array.from(element.style)) {
+      if (property.toLowerCase().startsWith("mso-")) {
+        continue;
+      }
+      const value = element.style.getPropertyValue(property);
+      if (value) {
+        keptStyleProperties.push(`${property}: ${value}`);
+      }
+    }
+
+    if (keptStyleProperties.length === 0) {
+      element.removeAttribute("style");
+    } else {
+      element.setAttribute("style", keptStyleProperties.join("; "));
+    }
+  }
+
+  return container.innerHTML;
+}
+
 /**
  * Convert HTML to runs
  */
@@ -493,8 +522,7 @@ export function htmlToRuns(html: string, plainTextFallback: string): Run[] {
     return plainTextFallback ? [createTextRun(plainTextFallback)] : [];
   }
 
-  const container = document.createElement("div");
-  container.innerHTML = html;
+  const container = new DOMParser().parseFromString(html, "text/html").body;
 
   const runs: Run[] = [];
   processNode(container, runs, {});

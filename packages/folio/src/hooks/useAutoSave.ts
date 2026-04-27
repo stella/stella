@@ -37,12 +37,14 @@ export {
 
 /** Options for useAutoSave hook */
 export type UseAutoSaveOptions = {
-  /** Storage key for localStorage (default: 'stella-folio-autosave') */
+  /** Storage key for localStorage (only used when allowLocalStorage is true) */
   storageKey?: string;
   /** Save interval in milliseconds (default: 30000 - 30 seconds) */
   interval?: number;
-  /** Whether auto-save is enabled (default: true) */
+  /** Whether auto-save is enabled (default: false) */
   enabled?: boolean;
+  /** Explicitly allow persisting document JSON to localStorage (default: false) */
+  allowLocalStorage?: boolean;
   /** Maximum age of auto-save in milliseconds before it's considered stale (default: 24 hours) */
   maxAge?: number;
   /** Callback when save succeeds */
@@ -83,7 +85,8 @@ export function useAutoSave(
   const {
     storageKey,
     interval,
-    enabled: initialEnabled = true,
+    enabled: initialEnabled = false,
+    allowLocalStorage = false,
     maxAge,
     onSave,
     onError,
@@ -97,6 +100,7 @@ export function useAutoSave(
     () =>
       new AutoSaveManager({
         ...(storageKey !== undefined ? { storageKey } : {}),
+        allowLocalStorage,
         ...(interval !== undefined ? { interval } : {}),
         ...(maxAge !== undefined ? { maxAge } : {}),
         ...(saveOnChange !== undefined ? { saveOnChange } : {}),
@@ -107,7 +111,7 @@ export function useAutoSave(
       }),
     // Only recreate if storageKey changes — callbacks are captured in the manager
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [storageKey],
+    [allowLocalStorage, storageKey],
   );
 
   // Start/stop interval based on enabled prop

@@ -671,13 +671,23 @@ export function isRtlParagraph(paragraph: ParagraphType): boolean {
  */
 export function getTemplateVariables(paragraph: ParagraphType): string[] {
   const text = getParagraphText(paragraph);
-  const regex = /\{\{([^}]+)\}\}/g;
   const variables: string[] = [];
-  let match;
+  let searchFrom = 0;
 
-  while ((match = regex.exec(text)) !== null) {
-    // SAFETY: capture group [1] always present when regex matches
-    variables.push(match[1]!.trim());
+  while (searchFrom < text.length) {
+    const start = text.indexOf("{{", searchFrom);
+    if (start === -1) {
+      break;
+    }
+    const end = text.indexOf("}}", start + 2);
+    if (end === -1) {
+      break;
+    }
+    const variable = text.slice(start + 2, end).trim();
+    if (variable) {
+      variables.push(variable);
+    }
+    searchFrom = end + 2;
   }
 
   return [...new Set(variables)]; // Remove duplicates
