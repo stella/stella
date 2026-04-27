@@ -399,6 +399,9 @@ export const czUsAdapter: SourceAdapter = {
 
             const probe = result.value;
             if (probe.status === "rate-limited") {
+              // Set cursor to the rate-limited item so
+              // unprocessed probes after it are retried.
+              state.number = batchStart + i;
               rateLimited = true;
               break;
             }
@@ -452,10 +455,11 @@ export const czUsAdapter: SourceAdapter = {
             consecutiveMisses = 0;
           }
 
-          state.number += PROBE_CONCURRENCY;
-
-          // Exponential backoff on rate limiting
-          if (rateLimited) {
+          // Only advance past full batch if no rate limit hit.
+          // On 429, state.number was set to the failing item above.
+          if (!rateLimited) {
+            state.number += PROBE_CONCURRENCY;
+          } else {
             await Bun.sleep(backoffMs(0, 2000));
           }
 

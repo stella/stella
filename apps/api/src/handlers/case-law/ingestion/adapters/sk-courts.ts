@@ -289,6 +289,10 @@ export const skCourtsAdapter: SourceAdapter = {
   // PDF download deferred; pages now only do list + detail JSON.
   // 60s is generous for 25 detail fetches (~2s each).
   pageTimeoutMs: 90_000,
+  // Metadata-only pages are lightweight (~15s each). Use a longer
+  // cycle to maximize throughput: 30 min fits ~120 pages (3000
+  // decisions) per cursor persist vs ~35 with the 10 min default.
+  maxCycleMs: 30 * 60 * 1000,
 
   fetchPage: createPagePaginatedFetch<SkApiResponse>({
     adapterKey: ADAPTER_KEYS.SK_COURTS,
