@@ -38,13 +38,15 @@ export type AutoSaveStatus = "idle" | "saving" | "saved" | "error";
 
 /** Configuration for AutoSaveManager */
 export type AutoSaveManagerOptions = {
-  /** Storage key for localStorage (default: 'stella-folio-autosave') */
+  /** Storage key for localStorage (only used when allowLocalStorage is true) */
   storageKey?: string;
+  /** Explicitly allow persisting document JSON to localStorage (default: false) */
+  allowLocalStorage?: boolean;
   /** Save interval in milliseconds (default: 30000 - 30 seconds) */
   interval?: number;
   /** Maximum age of auto-save before it's considered stale (default: 24 hours) */
   maxAge?: number;
-  /** Whether to save on document change with debounce (default: true) */
+  /** Whether to save on document change with debounce (default: true when storage is allowed) */
   saveOnChange?: boolean;
   /** Debounce delay for saveOnChange in milliseconds (default: 2000) */
   debounceDelay?: number;

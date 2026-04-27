@@ -301,9 +301,8 @@ export function expandSelectionToWordBoundaries(): boolean {
     selection.removeAllRanges();
     selection.addRange(range);
     return true;
-  } catch (error) {
+  } catch {
     // Selection manipulation can throw in some edge cases
-    console.warn("Could not expand selection to word boundaries:", error);
     return false;
   }
 }

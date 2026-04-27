@@ -43,6 +43,7 @@ import { serializeComments } from "./serializer/commentSerializer";
 import { serializeDocument } from "./serializer/documentSerializer";
 import { serializeHeaderFooter } from "./serializer/headerFooterSerializer";
 import { escapeXml } from "./serializer/xmlUtils";
+import { isPreservableDocxEntry } from "./unzip";
 import type { RawDocxContent } from "./unzip";
 
 /**
@@ -402,6 +403,10 @@ export async function repackDocx(
       continue;
     }
 
+    if (!isPreservableDocxEntry(path)) {
+      continue;
+    }
+
     // Get original file content
     const content = await file.async("arraybuffer");
 
@@ -494,6 +499,10 @@ export async function repackDocxFromRaw(
     // Skip directories
     if (file.dir) {
       newZip.folder(path.replace(/\/$/, ""));
+      continue;
+    }
+
+    if (!isPreservableDocxEntry(path)) {
       continue;
     }
 

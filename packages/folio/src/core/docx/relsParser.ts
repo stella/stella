@@ -88,7 +88,6 @@ export function parseRelationships(relsXml: string): RelationshipMap {
 
   const root = parseXmlDocument(relsXml);
   if (!root) {
-    console.warn("Failed to parse relationships XML");
     return map;
   }
 
@@ -109,11 +108,6 @@ export function parseRelationships(relsXml: string): RelationshipMap {
     const targetMode = getAttribute(child, null, "TargetMode");
 
     if (!id || !type || !target) {
-      console.warn("Relationship missing required attributes:", {
-        id,
-        type,
-        target,
-      });
       continue;
     }
 

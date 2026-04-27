@@ -321,8 +321,7 @@ export function parseTheme(themeXml: string | null): Theme {
       colorScheme,
       fontScheme,
     };
-  } catch (error) {
-    console.warn("Failed to parse theme:", error);
+  } catch {
     return { ...DEFAULT_THEME };
   }
 }

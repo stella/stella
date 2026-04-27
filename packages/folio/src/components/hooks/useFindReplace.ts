@@ -165,8 +165,7 @@ export function useFindReplace({
 
         handleDocumentChange(newDoc);
         return true;
-      } catch (error) {
-        console.error("Replace failed:", error);
+      } catch {
         return false;
       }
     },
@@ -211,8 +210,8 @@ export function useFindReplace({
             },
             replaceText,
           );
-        } catch (error) {
-          console.error("Replace failed for match:", match, error);
+        } catch {
+          continue;
         }
       }
 

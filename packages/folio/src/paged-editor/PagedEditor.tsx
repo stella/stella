@@ -1135,17 +1135,10 @@ function measureBlocks(
     const zones = activeZones.length > 0 ? activeZones : undefined;
 
     try {
-      const blockStart = performance.now();
       const blockWidth = Array.isArray(contentWidth)
         ? (contentWidth[blockIndex] ?? defaultWidth)
         : contentWidth;
       const measure = measureBlock(block, blockWidth, zones, cumulativeY);
-      const blockTime = performance.now() - blockStart;
-      if (blockTime > 500) {
-        console.warn(
-          `[measureBlocks] Block ${blockIndex} (${block.kind}) took ${Math.round(blockTime)}ms`,
-        );
-      }
 
       // Update cumulative Y for next block
       if (
@@ -1156,11 +1149,7 @@ function measureBlocks(
       }
 
       return measure;
-    } catch (error) {
-      console.error(
-        `[measureBlocks] Error measuring block ${blockIndex} (${block.kind}):`,
-        error,
-      );
+    } catch {
       // Return a minimal measure so we don't crash the entire layout
       return { totalHeight: 20 } as Measure;
     }
@@ -2031,8 +2020,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const runLayoutPipeline = useCallback(
       (state: EditorState) => {
-        const pipelineStart = performance.now();
-
         // Capture current state sequence for this layout run
         const currentEpoch = syncCoordinator.getStateSeq();
 
@@ -2041,7 +2028,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         try {
           // Step 1: Convert PM doc to flow blocks
-          const stepStart = performance.now();
           const pageContentHeight = pageSize.h - margins.top - margins.bottom;
           const flowOpts: import("../core/layout-bridge/toFlowBlocks").ToFlowBlocksOptions =
             {
@@ -2051,12 +2037,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             flowOpts.theme = _theme;
           }
           const newBlocks = toFlowBlocks(state.doc, flowOpts);
-          const stepTime = performance.now() - stepStart;
-          if (stepTime > 500) {
-            console.warn(
-              `[PagedEditor] toFlowBlocks took ${Math.round(stepTime)}ms (${newBlocks.length} blocks)`,
-            );
-          }
           setBlocks(newBlocks);
 
           // Step 2: Measure all blocks.
@@ -2314,15 +2294,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             );
             onAnchorPositionsChange(positions);
           }
-
-          const totalTime = performance.now() - pipelineStart;
-          if (totalTime > 2000) {
-            console.warn(
-              `[PagedEditor] Layout pipeline took ${Math.round(totalTime)}ms total (${newBlocks.length} blocks, ${newMeasures.length} measures)`,
-            );
-          }
-        } catch (error) {
-          console.error("[PagedEditor] Layout pipeline error:", error);
+        } catch {
+          // Keep the previous anchor positions if layout measurement fails.
         }
 
         // Signal layout is complete for this sequence

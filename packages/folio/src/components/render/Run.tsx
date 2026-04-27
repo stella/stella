@@ -42,7 +42,38 @@ export type RunProps = {
  * Check if text contains template variables
  */
 function containsTemplateVariable(text: string): boolean {
-  return /\{\{[^}]+\}\}/.test(text);
+  return findTemplateVariableSpans(text).length > 0;
+}
+
+function findTemplateVariableSpans(
+  text: string,
+): { start: number; end: number; value: string }[] {
+  const spans: { start: number; end: number; value: string }[] = [];
+  let searchFrom = 0;
+
+  while (searchFrom < text.length) {
+    const start = text.indexOf("{{", searchFrom);
+    if (start === -1) {
+      break;
+    }
+
+    const end = text.indexOf("}}", start + 2);
+    if (end === -1) {
+      break;
+    }
+
+    if (end > start + 2) {
+      spans.push({
+        start,
+        end: end + 2,
+        value: text.slice(start, end + 2),
+      });
+    }
+
+    searchFrom = end + 2;
+  }
+
+  return spans;
 }
 
 /**
@@ -66,22 +97,20 @@ function renderTextWithVariables(text: string): ReactNode {
 
   // Split text by template variables, keeping the delimiters
   const parts: ReactNode[] = [];
-  const regex = /(\{\{[^}]+\}\})/g;
   let lastIndex = 0;
-  let match: RegExpExecArray | null;
 
-  while ((match = regex.exec(text)) !== null) {
+  for (const span of findTemplateVariableSpans(text)) {
     // Add text before the match
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
+    if (span.start > lastIndex) {
+      parts.push(text.slice(lastIndex, span.start));
     }
     // Add the template variable with special styling
     parts.push(
-      <span key={match.index} style={TEMPLATE_VARIABLE_STYLE}>
-        {match[0]}
+      <span key={span.start} style={TEMPLATE_VARIABLE_STYLE}>
+        {span.value}
       </span>,
     );
-    lastIndex = regex.lastIndex;
+    lastIndex = span.end;
   }
 
   // Add remaining text after last match

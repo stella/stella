@@ -7,6 +7,7 @@ import {
   removeHyperlink,
   setHyperlink,
 } from "../../core/prosemirror";
+import { sanitizeExternalUrl } from "../../core/utils/urlSecurity";
 import type {
   HyperlinkData,
   UseHyperlinkDialogReturn,
@@ -144,7 +145,10 @@ export const useHyperlinkHandlers = ({
   );
 
   const handleHyperlinkPopupNavigate = useCallback((href: string) => {
-    window.open(href, "_blank", "noopener,noreferrer");
+    const safeHref = sanitizeExternalUrl(href);
+    if (safeHref) {
+      window.open(safeHref, "_blank", "noopener,noreferrer");
+    }
   }, []);
 
   const handleHyperlinkPopupCopy = useCallback((href: string) => {

@@ -146,7 +146,7 @@ export function getLineSpacingLabel(twips: number): string {
     return option.label;
   }
   const multiplier = twipsToLineSpacingMultiplier(twips);
-  return multiplier.toFixed(2).replace(/\.?0+$/, "");
+  return String(Number(multiplier.toFixed(2)));
 }
 
 export function isStandardLineSpacing(twips: number): boolean {
@@ -171,6 +171,6 @@ export function nearestStandardLineSpacing(twips: number): LineSpacingOption {
 
 export function createLineSpacingOption(multiplier: number): LineSpacingOption {
   const twipsValue = lineSpacingMultiplierToTwips(multiplier);
-  const label = multiplier.toFixed(2).replace(/\.?0+$/, "");
+  const label = String(Number(multiplier.toFixed(2)));
   return { label, value: multiplier, twipsValue };
 }

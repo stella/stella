@@ -309,9 +309,6 @@ export class ErrorBoundary extends Component<
     // oxlint-disable-next-line react/no-set-state
     this.setState({ errorInfo });
 
-    // Log error
-    console.error("ErrorBoundary caught an error:", error, errorInfo);
-
     // Call callback
     if (this.props.onError) {
       this.props.onError(error, errorInfo);

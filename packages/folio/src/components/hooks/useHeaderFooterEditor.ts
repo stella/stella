@@ -297,6 +297,7 @@ export const useHeaderFooterEditor = ({
       footerContent,
       firstPageHeaderContent,
       firstPageFooterContent,
+      hasTitlePg,
       history,
       pushDocument,
     ],
@@ -347,7 +348,7 @@ export const useHeaderFooterEditor = ({
 
       setHfEditPosition(null);
     },
-    [hfEditPosition, history, pushDocument],
+    [hfEditPosition, hfEditIsFirstPage, history, pushDocument],
   );
 
   const handleBodyClick = useCallback(() => {
@@ -409,7 +410,7 @@ export const useHeaderFooterEditor = ({
     }
 
     setHfEditPosition(null);
-  }, [hfEditPosition, history, pushDocument]);
+  }, [hfEditPosition, hfEditIsFirstPage, history, pushDocument]);
 
   return {
     hfEditPosition,

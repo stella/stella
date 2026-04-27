@@ -57,9 +57,6 @@ function parseSavedData(json: string): SavedDocumentData | null {
     if (!data.document || !data.savedAt) {
       return null;
     }
-    if (data.version !== SAVE_VERSION) {
-      console.warn("Auto-save data version mismatch, may need migration");
-    }
     return data as SavedDocumentData;
   } catch {
     return null;
@@ -85,6 +82,7 @@ export class AutoSaveManager extends Subscribable<AutoSaveSnapshot> {
   private onErrorCallback?: (error: Error) => void;
   private onRecoveryAvailableCallback?: (saved: SavedDocumentData) => void;
 
+  private allowLocalStorage: boolean;
   private storageAvailable: boolean;
   private currentDocument: Document | null = null;
   private lastSavedJson: string | null = null;
@@ -101,7 +99,7 @@ export class AutoSaveManager extends Subscribable<AutoSaveSnapshot> {
       status: "idle",
       lastSaveTime: null,
       hasRecoveryData: false,
-      isEnabled: true,
+      isEnabled: false,
     });
 
     this.storageKey = options.storageKey ?? DEFAULT_STORAGE_KEY;
@@ -118,8 +116,9 @@ export class AutoSaveManager extends Subscribable<AutoSaveSnapshot> {
     if (options.onRecoveryAvailable !== undefined) {
       this.onRecoveryAvailableCallback = options.onRecoveryAvailable;
     }
-    this._isEnabled = true;
-    this.storageAvailable = isLocalStorageAvailable();
+    this.allowLocalStorage = options.allowLocalStorage === true;
+    this._isEnabled = false;
+    this.storageAvailable = this.allowLocalStorage && isLocalStorageAvailable();
 
     // Check for recovery data
     this.checkRecoveryData();
@@ -175,7 +174,6 @@ export class AutoSaveManager extends Subscribable<AutoSaveSnapshot> {
       this.onSaveCallback?.(saveTime);
       return Promise.resolve(true);
     } catch (error) {
-      console.error("Auto-save failed:", error);
       this.updateStatus("error");
       this.onErrorCallback?.(error as Error);
       return Promise.resolve(false);
@@ -192,8 +190,8 @@ export class AutoSaveManager extends Subscribable<AutoSaveSnapshot> {
       this._hasRecoveryData = false;
       this.lastSavedJson = null;
       this.emitSnapshot();
-    } catch (error) {
-      console.error("Failed to clear auto-save:", error);
+    } catch {
+      // Clearing autosave is best effort.
     }
   }
 
@@ -243,6 +241,12 @@ export class AutoSaveManager extends Subscribable<AutoSaveSnapshot> {
 
   /** Enable auto-save and start the interval timer. */
   enable(): void {
+    if (!this.allowLocalStorage || !this.storageAvailable) {
+      this._isEnabled = false;
+      this.emitSnapshot();
+      return;
+    }
+
     this._isEnabled = true;
     this.startInterval();
     this.emitSnapshot();
@@ -274,8 +278,8 @@ export class AutoSaveManager extends Subscribable<AutoSaveSnapshot> {
     if (this._isEnabled && this.currentDocument && this.storageAvailable) {
       try {
         this.persistToStorage(serializeForStorage(this.currentDocument));
-      } catch (error) {
-        console.error("Failed to save on destroy:", error);
+      } catch {
+        // Destroy-time persistence is best effort.
       }
     }
   }

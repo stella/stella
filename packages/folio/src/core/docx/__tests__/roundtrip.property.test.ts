@@ -29,9 +29,22 @@ import { serializeDocument } from "../serializer/documentSerializer";
 // ============================================================================
 
 /** Safe text: printable ASCII, no control characters or XML-special chars */
-const safeText = fc
-  .string({ minLength: 1, maxLength: 80 })
-  .filter((s) => s.trim().length > 0 && !/[<>&\x00-\x1f]/.test(s));
+const safeText = fc.string({ minLength: 1, maxLength: 80 }).filter(isSafeText);
+
+function isSafeText(text: string): boolean {
+  if (text.trim().length === 0) {
+    return false;
+  }
+
+  for (const char of text) {
+    const codePoint = char.codePointAt(0) ?? 0;
+    if (codePoint < 0x20 || char === "<" || char === ">" || char === "&") {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 /** Generate a subset of marks to apply to a text run */
 function arbMarks(): fc.Arbitrary<Mark[]> {

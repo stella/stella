@@ -115,16 +115,26 @@ function inlineStylesFromStyleBlocks(doc: Document): void {
 
       tempStyle.remove();
     } catch {
-      // If CSSStyleSheet parsing fails, fall back to regex-based parsing
-      const ruleRegex = /([^{]+)\{([^}]+)\}/g;
-      let match;
-      while ((match = ruleRegex.exec(cssText)) !== null) {
-        // SAFETY: capture groups [1] and [2] always present when regex matches
-        const selector = match[1]!.trim();
-        const declarations = parseStyleDeclarations(match[2]!);
+      // If CSSStyleSheet parsing fails, fall back to a bounded scanner.
+      let searchFrom = 0;
+      while (searchFrom < cssText.length) {
+        const open = cssText.indexOf("{", searchFrom);
+        if (open === -1) {
+          break;
+        }
+        const close = cssText.indexOf("}", open + 1);
+        if (close === -1) {
+          break;
+        }
+
+        const selector = cssText.slice(searchFrom, open).trim();
+        const declarations = parseStyleDeclarations(
+          cssText.slice(open + 1, close),
+        );
         if (Object.keys(declarations).length > 0) {
           rulesWithSelectors.push({ selector, declarations });
         }
+        searchFrom = close + 1;
       }
     }
   }

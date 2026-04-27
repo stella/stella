@@ -26,6 +26,10 @@ import type {
   Hyperlink as HyperlinkType,
   Theme,
 } from "../../core/types/document";
+import {
+  sanitizeExternalUrl,
+  sanitizeLinkTarget,
+} from "../../core/utils/urlSecurity";
 import { Run } from "./Run";
 
 /**
@@ -79,9 +83,10 @@ export function Hyperlink({
   onBookmarkClick,
   disabled = false,
 }: HyperlinkProps): React.ReactElement {
-  const href = getHyperlinkUrl(hyperlink);
+  const rawHref = getHyperlinkUrl(hyperlink);
   const isExternal = isExternalLink(hyperlink);
   const isInternal = isInternalLink(hyperlink);
+  const href = isExternal ? sanitizeExternalUrl(rawHref) : rawHref;
 
   /**
    * Handle click for internal bookmark links
@@ -102,7 +107,9 @@ export function Hyperlink({
         } else {
           // Default behavior: try to scroll to element with bookmark ID
           const targetId = hyperlink.anchor;
-          const targetElement = document.querySelector(`#${targetId}`);
+          const targetElement = document.querySelector(
+            `#${CSS.escape(targetId)}`,
+          );
           if (targetElement) {
             targetElement.scrollIntoView({
               behavior: "smooth",
@@ -185,7 +192,7 @@ export function Hyperlink({
 
   // External links open in new tab with security attributes
   if (isExternal && !disabled) {
-    linkProps.target = hyperlink.target || "_blank";
+    linkProps.target = sanitizeLinkTarget(hyperlink.target);
     linkProps.rel = "noopener noreferrer";
   }
 

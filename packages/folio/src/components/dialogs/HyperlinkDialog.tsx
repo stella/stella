@@ -25,6 +25,11 @@ import {
   DialogClose,
 } from "@stella/ui/components/dialog";
 
+import {
+  isAllowedUserUrl,
+  normalizeUserUrl,
+} from "../../core/utils/urlSecurity";
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -81,71 +86,23 @@ export type HyperlinkDialogProps = {
 
 /**
  * Validate a URL string
- * Supports http, https, mailto, tel, ftp protocols
+ * Supports http, https, mailto, and tel protocols
  */
 export function isValidUrl(url: string): boolean {
-  if (!url || url.trim() === "") {
-    return false;
-  }
-
-  const trimmed = url.trim();
-
-  // Allow mailto: and tel: links
-  if (trimmed.startsWith("mailto:") || trimmed.startsWith("tel:")) {
-    return trimmed.length > 7; // Has content after protocol
-  }
-
-  // Allow ftp: links
-  if (trimmed.startsWith("ftp://")) {
-    return trimmed.length > 6;
-  }
-
-  // HTTP/HTTPS URLs
-  try {
-    // Add protocol if missing for validation
-    const urlToValidate = /^https?:\/\//.test(trimmed)
-      ? trimmed
-      : `https://${trimmed}`;
-    const parsed = new URL(urlToValidate);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
+  return isAllowedUserUrl(url);
 }
 
 /**
  * Normalize a URL by adding protocol if needed
  */
 export function normalizeUrl(url: string): string {
-  if (!url) {
-    return "";
-  }
-
-  const trimmed = url.trim();
-
-  // Keep special protocols as-is
-  if (
-    trimmed.startsWith("mailto:") ||
-    trimmed.startsWith("tel:") ||
-    trimmed.startsWith("ftp://")
-  ) {
-    return trimmed;
-  }
-
-  // Add https:// if no protocol specified
-  if (!/^https?:\/\//.test(trimmed)) {
-    return `https://${trimmed}`;
-  }
-
-  return trimmed;
+  return normalizeUserUrl(url);
 }
 
 /**
  * Detect URL type from string
  */
-export function getUrlType(
-  url: string,
-): "web" | "email" | "phone" | "ftp" | "unknown" {
+export function getUrlType(url: string): "web" | "email" | "phone" | "unknown" {
   if (!url) {
     return "unknown";
   }
@@ -157,9 +114,6 @@ export function getUrlType(
   }
   if (trimmed.startsWith("tel:")) {
     return "phone";
-  }
-  if (trimmed.startsWith("ftp://")) {
-    return "ftp";
   }
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
     return "web";

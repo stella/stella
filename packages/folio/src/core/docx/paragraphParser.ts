@@ -1618,6 +1618,13 @@ export function hasStyle(paragraph: Paragraph, styleId: string): boolean {
  */
 export function getTemplateVariable(paragraph: Paragraph): string | null {
   const text = getParagraphText(paragraph);
-  const match = text.match(/\{\{([^}]+)\}\}/);
-  return match ? (match[1] ?? null) : null;
+  const start = text.indexOf("{{");
+  if (start === -1) {
+    return null;
+  }
+  const end = text.indexOf("}}", start + 2);
+  if (end === -1 || end === start + 2) {
+    return null;
+  }
+  return text.slice(start + 2, end);
 }

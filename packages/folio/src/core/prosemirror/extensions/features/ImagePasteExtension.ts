@@ -9,6 +9,7 @@ import { Plugin, TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 
 import { getClipboardImageFiles } from "../../../utils/clipboard";
+import { isSafeImageFile } from "../../../utils/imageValidation";
 import { createExtension } from "../create";
 import type { ExtensionRuntime } from "../types";
 
@@ -55,6 +56,10 @@ async function insertImageFiles(
   let insertPos = view.state.selection.from;
 
   for (const file of files) {
+    if (!(await isSafeImageFile(file))) {
+      continue;
+    }
+
     let dataUrl: string;
     try {
       dataUrl = await readFileAsDataUrl(file);

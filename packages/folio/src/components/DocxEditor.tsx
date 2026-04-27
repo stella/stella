@@ -561,12 +561,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       modeProp ?? "editing",
     );
     const editingMode = modeProp ?? editingModeInternal;
-    const setEditingMode = (mode: EditorMode) => {
-      if (!modeProp) {
-        setEditingModeInternal(mode);
-      }
-      onModeChange?.(mode);
-    };
+    const setEditingMode = useCallback(
+      (mode: EditorMode) => {
+        if (!modeProp) {
+          setEditingModeInternal(mode);
+        }
+        onModeChange?.(mode);
+      },
+      [modeProp, onModeChange],
+    );
     // 'viewing' mode acts as read-only
     const readOnly = readOnlyProp || editingMode === "viewing";
 
@@ -576,7 +579,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
 
     const toggleTrackChanges = useCallback(() => {
       setEditingMode(trackChangesOn ? "editing" : "suggesting");
-    }, [trackChangesOn]);
+    }, [setEditingMode, trackChangesOn]);
 
     // Floating "add comment" button position (relative to scroll container, null = hidden)
     const [floatingCommentBtn, setFloatingCommentBtn] = useState<{
@@ -932,7 +935,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             clearTimeout(extractTrackedChangesTimerRef.current);
             extractTrackedChangesTimerRef.current = null;
           }
-        }, [findReplace]),
+        }, [findReplace, setHfEditPosition]),
         setDocumentLoadState: useCallback((documentLoad: DocumentLoadState) => {
           setState((prev) => ({ ...prev, documentLoad }));
         }, []),
@@ -1275,6 +1278,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       },
     });
 
+    const handleDirectPrint = useCallback(() => {
+      toast(t("printRedirect"));
+    }, [t]);
+
     // Keyboard shortcuts for Find/Replace (Ctrl+F, Ctrl+H) and delete table selection
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -1379,7 +1386,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       return () => {
         document.removeEventListener("keydown", handleKeyDown);
       };
-    }, [findReplace, hyperlinkDialog, tableSelection]);
+    }, [findReplace, handleDirectPrint, hyperlinkDialog, tableSelection]);
 
     // Handle footnote/endnote properties update
     const handleApplyFootnoteProperties = useCallback(
@@ -1754,9 +1761,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               ),
             );
             view.dispatch(tr);
-          } catch (error) {
+          } catch {
             // If restoration fails (e.g., positions are invalid after doc change), continue with current selection
-            console.warn("Could not restore selection:", error);
           }
         }
 
@@ -2032,7 +2038,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       }
       items.push({
         action: "selectAll",
-        label: "Select All",
+        label: t("selectAll"),
         shortcut: `${mod}+A`,
       });
       return items;
@@ -2040,6 +2046,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       contextMenu.hasSelection,
       contextMenu.cursorInTable,
       contextMenu.cursorInTrackedChange,
+      t,
     ]);
 
     const handleContextMenuAction = useCallback(
@@ -2205,7 +2212,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         }
         // TextContextMenu calls onClose after onAction, so no need to close here
       },
-      [getActiveEditorView, focusActiveEditor],
+      [
+        getActiveEditorView,
+        focusActiveEditor,
+        contextMenu.selectionRange.from,
+        contextMenu.selectionRange.to,
+      ],
     );
 
     // Page setup apply handler
@@ -2349,7 +2361,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           return null;
         }
       },
-      [history.state, onSave, onError, comments],
+      [history.state, onSave, onError, comments, originalBufferRef],
     );
 
     // Handle error from editor
@@ -2359,10 +2371,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       },
       [onError],
     );
-
-    const handleDirectPrint = useCallback(() => {
-      toast(t("printRedirect"));
-    }, [t]);
 
     // Expose ref methods
     useImperativeHandle(

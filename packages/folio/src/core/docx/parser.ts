@@ -46,8 +46,8 @@ import { parseRelationships, RELATIONSHIP_TYPES } from "./relsParser";
 import { parseStyles, parseStyleDefinitions } from "./styleParser";
 import type { StyleMap } from "./styleParser";
 import { parseTheme } from "./themeParser";
-import { unzipDocx, getMediaMimeType } from "./unzip";
-import type { RawDocxContent } from "./unzip";
+import { unzipDocx, getMediaMimeType, mediaToDataUrl } from "./unzip";
+import type { DocxUnzipLimits, RawDocxContent } from "./unzip";
 
 // ============================================================================
 // PROGRESS CALLBACK
@@ -72,6 +72,10 @@ export type ParseOptions = {
   parseNotes?: boolean;
   /** Whether to detect template variables (default: true) */
   detectVariables?: boolean;
+  /** Security limits for DOCX ZIP extraction */
+  unzipLimits?: Partial<Omit<DocxUnzipLimits, "allowedMediaMimeTypes">> & {
+    allowedMediaMimeTypes?: Iterable<string>;
+  };
 };
 
 // ============================================================================
@@ -100,46 +104,32 @@ export async function parseDocx(
     parseHeadersFooters = true,
     parseNotes = true,
     detectVariables = true,
+    unzipLimits,
   } = options;
 
   const warnings: string[] = [];
 
   try {
-    const parseStart = performance.now();
-    const stageTimings: { stage: string; ms: number }[] = [];
-
     // oxlint-disable-next-line no-inner-declarations -- scoped to try block intentionally
-    function timeStage<T>(name: string, fn: () => T): T {
-      const start = performance.now();
-      const result = fn();
-      const elapsed = performance.now() - start;
-      stageTimings.push({ stage: name, ms: elapsed });
-      if (elapsed > 1000) {
-        console.warn(`[parseDocx] ${name} took ${Math.round(elapsed)}ms`);
-      }
-      return result;
+    function timeStage<T>(_name: string, fn: () => T): T {
+      return fn();
     }
 
     // oxlint-disable-next-line no-inner-declarations -- scoped to try block intentionally
     async function timeStageAsync<T>(
-      name: string,
+      _name: string,
       fn: () => Promise<T>,
     ): Promise<T> {
-      const start = performance.now();
-      const result = await fn();
-      const elapsed = performance.now() - start;
-      stageTimings.push({ stage: name, ms: elapsed });
-      if (elapsed > 1000) {
-        console.warn(`[parseDocx] ${name} took ${Math.round(elapsed)}ms`);
-      }
-      return result;
+      return await fn();
     }
 
     // ========================================================================
     // STAGE 1: Unzip DOCX package (0-10%)
     // ========================================================================
     onProgress("Extracting DOCX...", 0);
-    const raw = await timeStageAsync("unzip", () => unzipDocx(buffer));
+    const raw = await timeStageAsync("unzip", () =>
+      unzipDocx(buffer, unzipLimits),
+    );
     onProgress("Extracted DOCX", 10);
 
     // ========================================================================
@@ -323,22 +313,10 @@ export async function parseDocx(
       ...(warnings.length > 0 ? { warnings } : {}),
     };
 
-    const totalTime = performance.now() - parseStart;
-    if (totalTime > 2000) {
-      const breakdown = stageTimings
-        .filter((s) => s.ms > 100)
-        .map((s) => `${s.stage}: ${Math.round(s.ms)}ms`)
-        .join(", ");
-      console.warn(
-        `[parseDocx] Total: ${Math.round(totalTime)}ms${breakdown ? ` (${breakdown})` : ""}`,
-      );
-    }
-
     onProgress("Complete", 100);
     return document;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("[parseDocx] Failed to parse DOCX:", message, error);
     throw new Error(`Failed to parse DOCX: ${message}`, { cause: error });
   }
 }
@@ -361,22 +339,13 @@ function buildMediaMap(
     const filename = path.split("/").pop() || path;
     const mimeType = getMediaMimeType(path);
 
-    // Create a data URL for the image
-    const bytes = new Uint8Array(data);
-    let binary = "";
-    for (const i_item of bytes) {
-      binary += String.fromCodePoint(i_item);
-    }
-    const base64 = btoa(binary);
-    const dataUrl = `data:${mimeType};base64,${base64}`;
-
     const mediaFile: MediaFile = {
       path,
       filename,
       mimeType,
       data,
-      dataUrl,
     };
+    attachLazyDataUrl(mediaFile);
 
     // Store by path and also by relationship target path
     media.set(path, mediaFile);
@@ -389,6 +358,18 @@ function buildMediaMap(
   }
 
   return media;
+}
+
+function attachLazyDataUrl(mediaFile: MediaFile): void {
+  let cachedDataUrl: string | undefined;
+  Object.defineProperty(mediaFile, "dataUrl", {
+    configurable: true,
+    enumerable: false,
+    get() {
+      cachedDataUrl ??= mediaToDataUrl(mediaFile.data, mediaFile.mimeType);
+      return cachedDataUrl;
+    },
+  });
 }
 
 /**
