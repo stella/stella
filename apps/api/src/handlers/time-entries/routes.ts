@@ -76,6 +76,7 @@ export const timeEntriesRoute = new Elysia({
     async (ctx) =>
       await exportCsvHandler({
         workspaceId: ctx.workspaceId,
+        organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
       }),
@@ -88,6 +89,7 @@ export const timeEntriesRoute = new Elysia({
     async (ctx) =>
       await exportLedesHandler({
         workspaceId: ctx.workspaceId,
+        organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
       }),
@@ -100,6 +102,7 @@ export const timeEntriesRoute = new Elysia({
     async (ctx) =>
       await exportPdfHandler({
         workspaceId: ctx.workspaceId,
+        organizationId: ctx.session.activeOrganizationId,
         query: ctx.query,
         scopedDb: ctx.scopedDb,
       }),

@@ -51,7 +51,7 @@ const hexVar = (hex: string): ColorVariants => ({
   color: `#${hex}`,
 });
 
-const namedColorsMap: Record<NamedColor, ColorVariants> = {
+const namedColorsMap = {
   red: optionVar("red"),
   orange: optionVar("orange"),
   amber: optionVar("amber"),
@@ -68,7 +68,7 @@ const namedColorsMap: Record<NamedColor, ColorVariants> = {
   purple: optionVar("purple"),
   fuchsia: optionVar("fuchsia"),
   gray: optionVar("gray"),
-};
+} as const satisfies Record<NamedColor, ColorVariants>;
 
 export const emptyColor: ColorVariants = optionVar("empty");
 

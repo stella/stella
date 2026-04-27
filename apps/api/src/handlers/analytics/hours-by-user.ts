@@ -1,7 +1,7 @@
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
-import { user } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import { timeEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -10,12 +10,14 @@ import type { DateRangeQuery } from "./date-range-schema";
 type HoursByUserHandlerProps = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
+  organizationId: SafeId<"organization">;
   query: DateRangeQuery;
 };
 
 export const hoursByUserHandler = async ({
   scopedDb,
   workspaceId,
+  organizationId,
   query,
 }: HoursByUserHandlerProps) => {
   const conditions = [eq(timeEntries.workspaceId, workspaceId)];
@@ -26,8 +28,15 @@ export const hoursByUserHandler = async ({
     conditions.push(lte(timeEntries.dateWorked, query.dateTo));
   }
 
-  return await scopedDb((tx) =>
-    tx
+  return await scopedDb((tx) => {
+    const organizationMembers = tx
+      .select({ userId: member.userId })
+      .from(member)
+      .where(eq(member.organizationId, organizationId))
+      .groupBy(member.userId)
+      .as("organization_members");
+
+    return tx
       .select({
         userId: timeEntries.userId,
         userName: sql<string>`coalesce(${user.name}, 'Unknown')`,
@@ -36,10 +45,14 @@ export const hoursByUserHandler = async ({
         count: sql<number>`count(*)::int`,
       })
       .from(timeEntries)
-      .leftJoin(user, eq(timeEntries.userId, user.id))
+      .leftJoin(
+        organizationMembers,
+        eq(timeEntries.userId, organizationMembers.userId),
+      )
+      .leftJoin(user, eq(organizationMembers.userId, user.id))
       .where(and(...conditions))
       .groupBy(timeEntries.userId, user.name, user.image)
       .orderBy(sql`sum(${timeEntries.durationMinutes}) desc`)
-      .limit(100),
-  );
+      .limit(100);
+  });
 };

@@ -269,10 +269,10 @@ export const ToolApprovalCard = ({
     onApprove(id);
   }, [isApprovalRequested, autoApprovedTools, name, part, onApprove]);
 
-  const toolLabels: Record<ApprovalToolName, string> = {
+  const toolLabels = {
     "update-entity-fields": t("chat.tool.update-entity-fields"),
     "create-document": t("chat.tool.create-document"),
-  };
+  } as const satisfies Record<ApprovalToolName, string>;
   const label = toolLabels[name];
 
   const approvalId = isApprovalRequested ? getApprovalId(part) : null;

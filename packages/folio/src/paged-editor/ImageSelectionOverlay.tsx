@@ -103,12 +103,12 @@ const dimensionStyles: CSSProperties = {
   transform: "translateX(-50%)",
 };
 
-const HANDLE_CURSORS: Record<ResizeHandle, string> = {
+const HANDLE_CURSORS = {
   nw: "nw-resize",
   ne: "ne-resize",
   se: "se-resize",
   sw: "sw-resize",
-};
+} as const satisfies Record<ResizeHandle, string>;
 
 // =============================================================================
 // RESIZE CALCULATION

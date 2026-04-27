@@ -30,7 +30,7 @@ type MessageLoader = () => LocaleMessages | Promise<LocaleMessages>;
 
 const supportedLanguageSet: ReadonlySet<string> = new Set(supportedLanguages);
 
-const messageLoaders: Record<SupportedLanguage, MessageLoader> = {
+const messageLoaders = {
   en: () => en,
   cs: async () => (await import("@/i18n/langs/cs.json")).default,
   de: async () => (await import("@/i18n/langs/de.json")).default,
@@ -42,7 +42,7 @@ const messageLoaders: Record<SupportedLanguage, MessageLoader> = {
   lv: async () => (await import("@/i18n/langs/lv.json")).default,
   pl: async () => (await import("@/i18n/langs/pl.json")).default,
   sk: async () => (await import("@/i18n/langs/sk.json")).default,
-};
+} as const satisfies Record<SupportedLanguage, MessageLoader>;
 
 export const LANG_ENDONYMS = {
   en: "English",

@@ -33,11 +33,11 @@ type WizardData = {
 
 const TOTAL_STEPS = 3;
 
-const STEP_TO_PROGRESS: Record<"organization" | "dms" | "invite", number> = {
+const STEP_TO_PROGRESS = {
   organization: 0,
   dms: 1,
   invite: 2,
-};
+} as const satisfies Record<Exclude<Step, "creating">, number>;
 
 export const OnboardingWizard = () => {
   const t = useTranslations();

@@ -1,4 +1,8 @@
+import { Type } from "@sinclair/typebox";
+import { t } from "elysia";
 import * as v from "valibot";
+
+import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 
 const entityKindValues = [
   "document",
@@ -9,6 +13,17 @@ const entityKindValues = [
 ] as const;
 
 const builtinFieldValues = ["status", "priority"] as const;
+
+const viewLayoutTypeValues = [
+  "overview",
+  "table",
+  "filesystem",
+  "kanban",
+  "calendar",
+  "timeline",
+] as const;
+
+const strictObjectOptions = { additionalProperties: false } as const;
 
 export const viewFilterConditionSchema = v.union([
   v.strictObject({
@@ -37,10 +52,74 @@ export type ViewFilterCondition = v.InferOutput<
   typeof viewFilterConditionSchema
 >;
 
-const viewSortSchema = v.strictObject({
+export const viewSortSchema = v.strictObject({
   propertyId: v.pipe(v.string(), v.minLength(1)),
   desc: v.boolean(),
 });
+
+export type ViewSort = v.InferOutput<typeof viewSortSchema>;
+
+export const tViewFilterConditionSchema = t.Union([
+  t.Object(
+    {
+      id: t.String(),
+      field: t.Literal("kind"),
+      op: t.Literal("in"),
+      value: t.Array(
+        t.Union([
+          t.Literal("document"),
+          t.Literal("folder"),
+          t.Literal("task"),
+          t.Literal("message"),
+          t.Literal("link"),
+        ]),
+      ),
+    },
+    strictObjectOptions,
+  ),
+  t.Object(
+    {
+      id: t.String(),
+      field: t.Literal("property"),
+      propertyId: t.String({ minLength: 1 }),
+      op: t.Union([
+        t.Literal("eq"),
+        t.Literal("neq"),
+        t.Literal("contains"),
+        t.Literal("is_empty"),
+      ]),
+      value: t.Optional(
+        t.Union([t.String(), t.Array(t.String()), t.Undefined()]),
+      ),
+    },
+    strictObjectOptions,
+  ),
+  t.Object(
+    {
+      id: t.String(),
+      field: t.Literal("builtin"),
+      builtinField: t.Union([t.Literal("status"), t.Literal("priority")]),
+      op: t.Union([
+        t.Literal("eq"),
+        t.Literal("neq"),
+        t.Literal("in"),
+        t.Literal("is_empty"),
+      ]),
+      value: t.Optional(
+        t.Union([t.String(), t.Array(t.String()), t.Undefined()]),
+      ),
+    },
+    strictObjectOptions,
+  ),
+]);
+
+export const tViewSortSchema = t.Object(
+  {
+    propertyId: t.String({ minLength: 1 }),
+    desc: t.Boolean(),
+  },
+  strictObjectOptions,
+);
 
 const baseLayoutSchema = {
   filters: v.array(viewFilterConditionSchema),
@@ -110,13 +189,96 @@ export const viewLayoutSchema = v.variant("type", layoutSchemas);
 export type ViewLayout = v.InferOutput<typeof viewLayoutSchema>;
 export type ViewLayoutType = ViewLayout["type"];
 
-export const createViewInputSchema = v.strictObject({
-  id: v.string(),
-  name: v.string(),
-  layout: viewLayoutSchema,
+const tBaseLayoutSchema = {
+  filters: t.Array(tViewFilterConditionSchema),
+  sorts: t.Array(tViewSortSchema),
+  hiddenProperties: t.Array(t.String()),
+};
+
+const tViewLayoutDefinition = t.Union([
+  t.Object(
+    {
+      type: t.Literal("overview"),
+      ...tBaseLayoutSchema,
+    },
+    strictObjectOptions,
+  ),
+  t.Object(
+    {
+      type: t.Literal("table"),
+      columnOrder: t.Array(t.String()),
+      columnPinning: t.Array(t.String()),
+      ...tBaseLayoutSchema,
+    },
+    strictObjectOptions,
+  ),
+  t.Object(
+    {
+      type: t.Literal("filesystem"),
+      ...tBaseLayoutSchema,
+    },
+    strictObjectOptions,
+  ),
+  t.Object(
+    {
+      type: t.Literal("kanban"),
+      ...tBaseLayoutSchema,
+      groupByPropertyId: t.Optional(t.String({ minLength: 1 })),
+    },
+    strictObjectOptions,
+  ),
+  t.Object(
+    {
+      type: t.Literal("calendar"),
+      ...tBaseLayoutSchema,
+      datePropertyId: t.String({ minLength: 1 }),
+      endDatePropertyId: t.Optional(t.String({ minLength: 1 })),
+      additionalDatePropertyIds: t.Optional(
+        t.Array(t.String({ minLength: 1 })),
+      ),
+      mode: t.Union([t.Literal("month"), t.Literal("week"), t.Literal("year")]),
+    },
+    strictObjectOptions,
+  ),
+  t.Object(
+    {
+      type: t.Literal("timeline"),
+      ...tBaseLayoutSchema,
+      startDatePropertyId: t.String({ minLength: 1 }),
+      endDatePropertyId: t.String({ minLength: 1 }),
+      zoom: t.Union([
+        t.Literal("day"),
+        t.Literal("week"),
+        t.Literal("month"),
+        t.Literal("quarter"),
+      ]),
+      groupByPropertyId: t.Optional(t.String({ minLength: 1 })),
+      showTable: t.Boolean(),
+    },
+    strictObjectOptions,
+  ),
+]);
+
+export const tViewLayoutSchema = Type.Unsafe<ViewLayout>({
+  ...tViewLayoutDefinition,
 });
 
-export type CreateViewInput = v.InferInput<typeof createViewInputSchema>;
+export const tCreateViewInputSchema = t.Object(
+  {
+    id: tSafeId("workspaceView"),
+    name: tDefaultVarchar,
+    layout: tViewLayoutSchema,
+  },
+  strictObjectOptions,
+);
+
+export const tUpdateViewBodySchema = t.Object(
+  {
+    name: t.Optional(tDefaultVarchar),
+    layout: t.Optional(tViewLayoutSchema),
+  },
+  strictObjectOptions,
+);
 
 export const updateViewInputSchema = v.strictObject({
   viewId: v.string(),
@@ -126,14 +288,7 @@ export const updateViewInputSchema = v.strictObject({
 
 export type UpdateViewInput = v.InferInput<typeof updateViewInputSchema>;
 
-const viewLayoutTypeSchema = v.picklist([
-  "overview",
-  "table",
-  "filesystem",
-  "kanban",
-  "calendar",
-  "timeline",
-]);
+const viewLayoutTypeSchema = v.picklist(viewLayoutTypeValues);
 
 export const convertViewInputSchema = v.strictObject({
   viewId: v.string(),

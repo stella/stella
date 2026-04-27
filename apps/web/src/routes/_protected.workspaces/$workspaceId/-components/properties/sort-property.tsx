@@ -13,12 +13,12 @@ type SortPropertyProps = {
   sortHint?: SortHint | undefined;
 };
 
-const LABELS: Record<SortHint, { asc: string; desc: string }> = {
+const LABELS = {
   text: { asc: "A → Z", desc: "Z → A" },
   number: { asc: "1 → 9", desc: "9 → 1" },
   // Date labels are filled in at render time from i18n.
   date: { asc: "", desc: "" },
-};
+} as const satisfies Record<SortHint, { asc: string; desc: string }>;
 
 export const SortProperty = ({ column, sortHint }: SortPropertyProps) => {
   const t = useTranslations("workspaces.properties");

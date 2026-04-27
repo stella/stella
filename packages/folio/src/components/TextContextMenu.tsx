@@ -991,7 +991,7 @@ export function useTextContextMenu(
  * Get action label
  */
 export function getTextActionLabel(action: TextContextAction): string {
-  const labels: Record<TextContextAction, string> = {
+  const labels = {
     cut: "Cut",
     copy: "Copy",
     paste: "Paste",
@@ -1008,7 +1008,7 @@ export function getTextActionLabel(action: TextContextAction): string {
     addComment: "Comment",
     acceptChange: "Accept Change",
     rejectChange: "Reject Change",
-  };
+  } as const satisfies Record<TextContextAction, string>;
   return labels[action];
 }
 
@@ -1016,7 +1016,7 @@ export function getTextActionLabel(action: TextContextAction): string {
  * Get action shortcut
  */
 export function getTextActionShortcut(action: TextContextAction): string {
-  const shortcuts: Record<TextContextAction, string> = {
+  const shortcuts = {
     cut: "Ctrl+X",
     copy: "Ctrl+C",
     paste: "Ctrl+V",
@@ -1033,7 +1033,7 @@ export function getTextActionShortcut(action: TextContextAction): string {
     addComment: "",
     acceptChange: "",
     rejectChange: "",
-  };
+  } as const satisfies Record<TextContextAction, string>;
   return shortcuts[action];
 }
 

@@ -232,14 +232,14 @@ const FONT_MAPPINGS: Record<string, FontMapping> = {
 /**
  * Default fallback stacks by category
  */
-const DEFAULT_FALLBACKS: Record<FontCategory, string> = {
+const DEFAULT_FALLBACKS = {
   "sans-serif": "Arial, Helvetica, sans-serif",
   serif: "Times New Roman, Times, serif",
   monospace: "Courier New, Courier, monospace",
   cursive: "cursive",
   fantasy: "fantasy",
   "system-ui": "system-ui, sans-serif",
-};
+} as const satisfies Record<FontCategory, string>;
 
 /**
  * Detect font category from font name

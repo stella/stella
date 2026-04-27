@@ -1,7 +1,5 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import * as v from "valibot";
 
 import { workspaceViews } from "@/api/db/schema";
 import {
@@ -10,23 +8,16 @@ import {
 } from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import {
-  tDefaultVarchar,
-  tSafeId,
-  workspaceParams,
-} from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
 import type { ViewLayout } from "@/api/lib/views-schema";
-import { viewLayoutSchema } from "@/api/lib/views-schema";
+import { tUpdateViewBodySchema } from "@/api/lib/views-schema";
 
 const config = {
   permissions: { view: ["update"] },
   params: workspaceParams({ viewId: tSafeId("workspaceView") }),
-  body: t.Object({
-    name: t.Optional(tDefaultVarchar),
-    layout: t.Optional(t.Any()),
-  }),
+  body: tUpdateViewBodySchema,
 } satisfies HandlerConfig;
 
 const updateView = createSafeHandler(
@@ -51,13 +42,7 @@ const updateView = createSafeHandler(
 
     let parsedLayout: ViewLayout | undefined;
     if (body.layout !== undefined) {
-      const parsed = v.safeParse(viewLayoutSchema, body.layout);
-      if (!parsed.success) {
-        return Result.err(
-          new HandlerError({ status: 400, message: "Invalid layout" }),
-        );
-      }
-      parsedLayout = parsed.output;
+      parsedLayout = body.layout;
 
       if (hasDuplicateSorts(parsedLayout.sorts)) {
         return Result.err(

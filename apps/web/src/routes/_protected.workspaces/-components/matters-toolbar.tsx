@@ -34,22 +34,22 @@ import type {
 import { ALL_COLUMNS } from "@/routes/_protected.workspaces/-types";
 import { useConfigStore } from "@/stores/config-store";
 
-const SORT_KEYS: MattersSortKey[] = [
+const SORT_KEYS = [
   "name",
   "reference",
   "entityCount",
   "lastActivityAt",
   "createdAt",
   "clientName",
-];
+] as const satisfies readonly MattersSortKey[];
 
-const COLUMN_ID_TO_SORT_KEY: Record<MattersColumnId, MattersSortKey> = {
+const COLUMN_ID_TO_SORT_KEY = {
   client: "clientName",
   reference: "reference",
   entityCount: "entityCount",
   lastActivityAt: "lastActivityAt",
   createdAt: "createdAt",
-};
+} as const satisfies Record<MattersColumnId, MattersSortKey>;
 
 type MattersToolbarProps = {
   search: string;

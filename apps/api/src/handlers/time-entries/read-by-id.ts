@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { user } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import { timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -16,7 +16,7 @@ const readTimeEntryById = createSafeHandler(
     permissions: { workspace: ["read"] },
     params: readTimeEntryByIdParamsSchema,
   },
-  async function* ({ safeDb, workspaceId, params }) {
+  async function* ({ safeDb, session, workspaceId, params }) {
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -67,8 +67,14 @@ const readTimeEntryById = createSafeHandler(
         safeDb((tx) =>
           tx
             .select({ name: user.name })
-            .from(user)
-            .where(eq(user.id, rowUserId)),
+            .from(member)
+            .innerJoin(user, eq(member.userId, user.id))
+            .where(
+              and(
+                eq(member.userId, rowUserId),
+                eq(member.organizationId, session.activeOrganizationId),
+              ),
+            ),
         ),
       );
       userName = u?.name ?? null;

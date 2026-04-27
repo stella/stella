@@ -1,7 +1,5 @@
 import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
-import { t } from "elysia";
-import * as v from "valibot";
 
 import { workspaceViews } from "@/api/db/schema";
 import {
@@ -10,31 +8,20 @@ import {
 } from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { broadcast } from "@/api/lib/sse";
-import { viewLayoutSchema } from "@/api/lib/views-schema";
+import { tCreateViewInputSchema } from "@/api/lib/views-schema";
 
 const config = {
   permissions: { view: ["create"] },
-  body: t.Object({
-    id: tSafeId("workspaceView"),
-    name: tDefaultVarchar,
-    layout: t.Any(),
-  }),
+  body: tCreateViewInputSchema,
 } satisfies HandlerConfig;
 
 const createView = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, body }) {
-    const parsed = v.safeParse(viewLayoutSchema, body.layout);
-    if (!parsed.success) {
-      return Result.err(
-        new HandlerError({ status: 400, message: "Invalid layout" }),
-      );
-    }
-    const layout = parsed.output;
+    const { layout } = body;
 
     if (hasDuplicateSorts(layout.sorts)) {
       return Result.err(
