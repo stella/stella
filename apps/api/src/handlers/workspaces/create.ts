@@ -13,6 +13,12 @@ import {
 } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditContext,
+  writeAuditLog,
+} from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
@@ -44,7 +50,7 @@ const config = {
 
 const createWorkspaces = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user, body }) {
+  async function* ({ safeDb, session, user, request, body }) {
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
         const organizationId = session.activeOrganizationId;
@@ -219,6 +225,32 @@ const createWorkspaces = createSafeRootHandler(
             kinds: ["document"],
           },
         ]);
+
+        await writeAuditLog(
+          {
+            ...createAuditContext({
+              organizationId,
+              workspaceId,
+              userId: user.id,
+              request,
+            }),
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+            resourceId: workspaceId,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  name: newName,
+                  reference,
+                  clientId: body.clientId,
+                  memberCount: workspaceMemberUserIds.length,
+                },
+              },
+            },
+          },
+          tx,
+        );
 
         return {
           ok: true as const,

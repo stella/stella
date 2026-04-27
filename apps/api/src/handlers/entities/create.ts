@@ -9,6 +9,13 @@ import { entityKindSchema } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditContext,
+  writeAuditLog,
+} from "@/api/lib/audit-log";
+import type { AuditContext } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -29,6 +36,7 @@ type CreateEntitiesHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
+  auditContext: AuditContext;
   body: CreateEntityBodySchema;
 };
 
@@ -78,6 +86,7 @@ const createEntitiesHandler = async function* ({
   safeDb,
   workspaceId,
   userId,
+  auditContext,
   body,
 }: CreateEntitiesHandlerProps) {
   const parentId = body.parentId ?? null;
@@ -113,7 +122,7 @@ const createEntitiesHandler = async function* ({
       await tx.insert(entities).values({
         id: entityId,
         workspaceId,
-        kind,
+        kind: effectiveKind,
         parentId,
         name,
         createdBy: userId,
@@ -141,6 +150,22 @@ const createEntitiesHandler = async function* ({
         .set({ lastActivityAt: new Date() })
         .where(eq(workspaces.id, workspaceId));
 
+      await writeAuditLog(
+        {
+          ...auditContext,
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: entityId,
+          changes: {
+            created: {
+              old: null,
+              new: { kind: effectiveKind, name, parentId },
+            },
+          },
+        },
+        tx,
+      );
+
       return { ok: true as const, entityId };
     }),
   );
@@ -163,11 +188,17 @@ const config = {
 
 const createEntities = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, user, body }) {
+  async function* ({ safeDb, session, workspaceId, user, request, body }) {
     return yield* createEntitiesHandler({
       safeDb,
       workspaceId,
       userId: user.id,
+      auditContext: createAuditContext({
+        organizationId: session.activeOrganizationId,
+        workspaceId,
+        userId: user.id,
+        request,
+      }),
       body,
     });
   },

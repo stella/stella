@@ -10,6 +10,13 @@ import { deleteS3Objects } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditContext,
+  writeAuditLog,
+} from "@/api/lib/audit-log";
+import type { AuditContext } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { getSearchProvider } from "@/api/lib/search/provider";
@@ -25,6 +32,7 @@ type DeleteEntitiesHandlerProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
+  auditContext: AuditContext;
   body: DeleteEntitiesBodySchema;
 };
 
@@ -51,6 +59,7 @@ const deleteEntitiesHandler = async function* ({
   safeDb,
   organizationId,
   workspaceId,
+  auditContext,
   body,
 }: DeleteEntitiesHandlerProps) {
   const fieldRows = yield* Result.await(
@@ -88,32 +97,56 @@ const deleteEntitiesHandler = async function* ({
 
   // Cascade: entities → entityVersions → fields →
   // justifications (all cascade).
-  yield* Result.await(
-    safeDb((tx) =>
-      tx
+  const deletedEntities = yield* Result.await(
+    safeDb(async (tx) => {
+      const deleted = await tx
         .delete(entities)
         .where(
           and(
             eq(entities.workspaceId, workspaceId),
             inArray(entities.id, body.entityIds),
           ),
-        ),
-    ),
-  );
+        )
+        .returning({
+          id: entities.id,
+          kind: entities.kind,
+          name: entities.name,
+          parentId: entities.parentId,
+        });
 
-  yield* Result.await(
-    safeDb((tx) =>
-      tx
+      await tx
         .update(workspaces)
         .set({ lastActivityAt: new Date() })
-        .where(eq(workspaces.id, workspaceId)),
-    ),
+        .where(eq(workspaces.id, workspaceId));
+
+      await writeAuditLog(
+        deleted.map((entity) => ({
+          ...auditContext,
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: entity.id,
+          changes: {
+            deleted: {
+              old: {
+                kind: entity.kind,
+                name: entity.name,
+                parentId: entity.parentId,
+              },
+              new: null,
+            },
+          },
+        })),
+        tx,
+      );
+
+      return deleted;
+    }),
   );
 
   // Explicit removal for non-PG providers (CASCADE handles PG)
   const provider = getSearchProvider();
-  for (const id of body.entityIds) {
-    provider.removeEntity(id).catch(captureError);
+  for (const entity of deletedEntities) {
+    provider.removeEntity(entity.id).catch(captureError);
   }
 
   return Result.ok(undefined);
@@ -126,11 +159,17 @@ const config = {
 
 const deleteEntities = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, body }) {
+  async function* ({ safeDb, session, workspaceId, user, request, body }) {
     return yield* deleteEntitiesHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       workspaceId,
+      auditContext: createAuditContext({
+        organizationId: session.activeOrganizationId,
+        workspaceId,
+        userId: user.id,
+        request,
+      }),
       body,
     });
   },
