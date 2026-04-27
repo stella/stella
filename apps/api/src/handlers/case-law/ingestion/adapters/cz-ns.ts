@@ -45,7 +45,7 @@ const COMMON_HEADERS = {
  */
 
 const BASE_URL = "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf";
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 40;
 
 /** Domino ReadViewEntries JSON shape. */
 type DominoViewEntry = {
@@ -205,10 +205,10 @@ export const czNsAdapter: SourceAdapter = {
   name: "Czech Supreme Court",
   country: "CZE",
   language: "cs",
-  minRequestIntervalMs: 500,
-  // Each page fetches 20 decisions + detail pages. ~30s/page.
-  // 20 pages ≈ 10 min. Persist cursor often.
-  maxSyncPages: 20,
+  minRequestIntervalMs: 200,
+  // Each page fetches 40 decisions + detail pages. ~40s/page.
+  // 15 pages ≈ 10 min (within MAX_CYCLE_MS).
+  maxSyncPages: 15,
 
   async getTotalCount(signal) {
     try {
@@ -418,7 +418,7 @@ export const czNsAdapter: SourceAdapter = {
 
           // Rate limit between detail fetches (skip for last entry)
           if (i < entries.length - 1) {
-            await Bun.sleep(200);
+            await Bun.sleep(50);
           }
         }
 

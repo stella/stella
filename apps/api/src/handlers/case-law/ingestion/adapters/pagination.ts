@@ -14,8 +14,8 @@ import type {
   IngestionResult,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
-  INGESTION_USER_AGENT,
   adapterCatch,
   isTimeoutError,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
@@ -97,7 +97,6 @@ type PagePaginationOptions<TResponse> = {
  */
 /** Max retries for transient 5xx / timeout errors before skipping. */
 const SERVER_ERROR_RETRIES = 2;
-const SERVER_ERROR_RETRY_DELAY_MS = 5000;
 
 export const createPagePaginatedFetch = <TResponse>(
   opts: PagePaginationOptions<TResponse>,
@@ -123,105 +122,56 @@ export const createPagePaginatedFetch = <TResponse>(
 
         const { url, init } = opts.buildRequest(page);
         const fetchT0 = performance.now();
-
-        // Retry on 5xx / timeout up to SERVER_ERROR_RETRIES times.
         const listTimeout = opts.listTimeoutMs ?? ADAPTER_TIMEOUT.LIST;
-        let response: Response | undefined;
-        for (let attempt = 0; attempt <= SERVER_ERROR_RETRIES; attempt++) {
-          // If the parent cycle signal is already aborted, don't
-          // retry — the pipeline will handle the cancellation.
-          if (signal?.aborted) {
-            throw new DOMException("Cycle aborted", "AbortError");
-          }
 
-          const headers = new Headers(init?.headers);
-          if (!headers.has("User-Agent")) {
-            headers.set("User-Agent", INGESTION_USER_AGENT);
-          }
-
-          try {
-            response = await fetch(url, {
-              ...init,
-              headers,
-              signal: signal
-                ? AbortSignal.any([signal, AbortSignal.timeout(listTimeout)])
-                : AbortSignal.timeout(listTimeout),
-            });
-          } catch (fetchError) {
-            // Timeout: retry with backoff unless exhausted.
-            // Abort from the parent cycle signal is not retried.
-            if (isTimeoutError(fetchError) && !signal?.aborted) {
-              if (attempt < SERVER_ERROR_RETRIES) {
-                const delayMs = SERVER_ERROR_RETRY_DELAY_MS * (attempt + 1);
-                logger.warn("case_law.ingestion.page_timeout_retry", {
-                  adapterKey: opts.adapterKey,
-                  page,
-                  timeoutMs: listTimeout,
-                  retry: attempt + 1,
-                  maxRetries: SERVER_ERROR_RETRIES,
-                  retryDelayMs: delayMs,
-                });
-                await Bun.sleep(delayMs);
-                continue;
-              }
-              // Exhausted retries: skip this page and advance
-              // so the adapter doesn't stall on a single slow page.
-              logger.warn("case_law.ingestion.page_timeout_exhausted", {
-                adapterKey: opts.adapterKey,
-                page,
-                timeoutMs: listTimeout,
-                retries: SERVER_ERROR_RETRIES,
-              });
-              captureError(
-                new AdapterFetchError({
-                  message:
-                    `${opts.adapterKey}: page ${page} timed out after ` +
-                    `${SERVER_ERROR_RETRIES} retries, skipping`,
-                  adapterKey: opts.adapterKey,
-                  cursor,
-                }),
-              );
-              return {
-                decisions: [],
-                nextCursor: String(page + 1),
-              };
-            }
-            throw fetchError;
-          }
-
-          if (response.ok || response.status < 500) {
-            break;
-          }
-
-          if (attempt < SERVER_ERROR_RETRIES) {
-            logger.warn("case_law.ingestion.page_server_error_retry", {
-              adapterKey: opts.adapterKey,
-              page,
-              httpStatus: response.status,
-              retry: attempt + 1,
-              maxRetries: SERVER_ERROR_RETRIES,
-            });
-            await Bun.sleep(SERVER_ERROR_RETRY_DELAY_MS);
-          }
-        }
-
-        if (!response) {
-          throw new AdapterFetchError({
-            message: `${opts.adapterKey}: no response after ${SERVER_ERROR_RETRIES} retries`,
+        // fetchWithRetry handles timeout/5xx/429 with exponential
+        // backoff. All page-paginated adapters inherit this.
+        let response: Response;
+        try {
+          response = await fetchWithRetry(url, init, {
+            maxRetries: SERVER_ERROR_RETRIES,
+            timeoutMs: listTimeout,
+            signal,
             adapterKey: opts.adapterKey,
-            cursor,
           });
+        } catch (error) {
+          // Parent signal aborted: propagate for pipeline handling
+          if (signal?.aborted) {
+            throw error;
+          }
+          // Timeout after all retries: skip this page so the
+          // adapter doesn't stall on a single slow page.
+          // Network errors (DNS, connection refused) propagate
+          // so a transient outage doesn't permanently skip pages.
+          if (isTimeoutError(error)) {
+            captureError(
+              new AdapterFetchError({
+                message:
+                  `${opts.adapterKey}: page ${page} timed out after ` +
+                  `${SERVER_ERROR_RETRIES} retries, skipping`,
+                adapterKey: opts.adapterKey,
+                cursor,
+              }),
+            );
+            return {
+              decisions: [],
+              nextCursor: String(page + 1),
+            };
+          }
+          throw error;
         }
 
         if (!response.ok) {
-          // 5xx after all retries: skip this page and advance
+          // 5xx after all retries: skip this page and advance.
+          // 429 is NOT skipped — it's transient throttling, not
+          // a page error. The cursor stays put so the page is
+          // retried in the next cycle.
           if (response.status >= 500) {
             captureError(
               new AdapterFetchError({
                 message:
                   `${opts.adapterKey}: page ${page} returned ` +
-                  `${response.status} after ${SERVER_ERROR_RETRIES} ` +
-                  "retries, skipping",
+                  `${response.status} after retries, skipping`,
                 adapterKey: opts.adapterKey,
                 cursor,
                 httpStatus: response.status,
@@ -254,19 +204,12 @@ export const createPagePaginatedFetch = <TResponse>(
               adapterKey: opts.adapterKey,
               page,
               contentType,
-              retryDelayMs: SERVER_ERROR_RETRY_DELAY_MS,
             });
-            await Bun.sleep(SERVER_ERROR_RETRY_DELAY_MS);
-            const retryHeaders = new Headers(init?.headers);
-            if (!retryHeaders.has("User-Agent")) {
-              retryHeaders.set("User-Agent", INGESTION_USER_AGENT);
-            }
-            const retryResponse = await fetch(url, {
-              ...init,
-              headers: retryHeaders,
-              signal: signal
-                ? AbortSignal.any([signal, AbortSignal.timeout(listTimeout)])
-                : AbortSignal.timeout(listTimeout),
+            const retryResponse = await fetchWithRetry(url, init, {
+              maxRetries: 1,
+              timeoutMs: listTimeout,
+              signal,
+              adapterKey: opts.adapterKey,
             });
             if (!retryResponse.ok) {
               throw new AdapterFetchError({

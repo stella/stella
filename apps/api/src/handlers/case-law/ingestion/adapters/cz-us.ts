@@ -13,6 +13,7 @@ import type {
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { backoffMs } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -57,6 +58,9 @@ const MAX_CONSECUTIVE_MISSES = 30;
 
 /** Decisions to collect per fetchPage call. */
 const PAGE_SIZE = 50;
+
+/** Number of case numbers to probe concurrently. */
+const PROBE_CONCURRENCY = 5;
 
 /** First year of the Constitutional Court's existence. */
 const FIRST_YEAR = 1993;
@@ -299,9 +303,9 @@ export const czUsAdapter: SourceAdapter = {
   name: "Czech Constitutional Court",
   country: "CZE",
   language: "cs",
-  minRequestIntervalMs: 300,
-  // Each fetchPage probes up to PAGE_SIZE + MAX_CONSECUTIVE_MISSES
-  // numbers sequentially (~2 requests each × 300ms). 30s is tight.
+  minRequestIntervalMs: 100,
+  // Each fetchPage probes numbers in batches of PROBE_CONCURRENCY.
+  // ~50 hits + 30 miss gap = ~80 probes ÷ 5 = 16 batches × ~2s = 32s.
   pageTimeoutMs: 120_000,
   maxSyncPages: 20,
 
@@ -328,109 +332,138 @@ export const czUsAdapter: SourceAdapter = {
         let consecutiveMisses = 0;
 
         while (decisions.length < PAGE_SIZE) {
-          const url = `${BASE_URL}?sz=I-${state.number}-${toYearSuffix(state.year)}_1`;
+          if (callerSignal?.aborted) {
+            return { decisions, nextCursor: makeCursor(state) };
+          }
 
-          try {
-            const response = await fetch(url, {
-              headers: COMMON_HEADERS,
-              signal: callerSignal
+          // Probe PROBE_CONCURRENCY numbers at once. Most are
+          // misses (~97%), so concurrent probing cuts wall time
+          // by ~5x without meaningful server load increase.
+          const yearSuffix = toYearSuffix(state.year);
+
+          const probeResults = await Promise.allSettled(
+            Array.from({ length: PROBE_CONCURRENCY }, (_, i) => {
+              const num = state.number + i;
+              const url = `${BASE_URL}?sz=I-${num}-${yearSuffix}_1`;
+              return fetch(url, {
+                headers: COMMON_HEADERS,
+                signal: callerSignal
+                  ? AbortSignal.any([
+                      callerSignal,
+                      AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+                    ])
+                  : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+              }).then(async (response) => {
+                if (response.status === 429) {
+                  return { num, status: "rate-limited" as const };
+                }
+                if (!response.ok) {
+                  return { num, status: "miss" as const };
+                }
+                const html = await response.text();
+                return { num, status: "ok" as const, html };
+              });
+            }),
+          );
+
+          // Process results in order to maintain consecutive miss tracking.
+          // batchStart lets early exits preserve cursor progress.
+          const batchStart = state.number;
+          let rateLimited = false;
+          for (const [i, result] of probeResults.entries()) {
+            if (callerSignal?.aborted) {
+              state.number = batchStart + i;
+              return { decisions, nextCursor: makeCursor(state) };
+            }
+
+            if (result.status === "rejected") {
+              const error = result.reason;
+              if (
+                error instanceof DOMException &&
+                error.name === "AbortError"
+              ) {
+                state.number = batchStart + i;
+                return { decisions, nextCursor: makeCursor(state) };
+              }
+              // Per-request timeout: treat as miss. Other errors:
+              // propagate so the pipeline can handle them.
+              if (
+                !(error instanceof DOMException) ||
+                error.name !== "TimeoutError"
+              ) {
+                state.number = batchStart + i;
+                throw error;
+              }
+              consecutiveMisses++;
+              continue;
+            }
+
+            const probe = result.value;
+            if (probe.status === "rate-limited") {
+              rateLimited = true;
+              break;
+            }
+            if (probe.status === "miss" || !("html" in probe)) {
+              consecutiveMisses++;
+              continue;
+            }
+
+            const decision = parseDecisionPage(
+              probe.html,
+              probe.num,
+              state.year,
+            );
+            if (!decision) {
+              consecutiveMisses++;
+              continue;
+            }
+
+            // Fetch abstract + legal sentence (separate endpoint)
+            try {
+              const szParam = `I-${probe.num}-${yearSuffix}_1`;
+              const absSignal = callerSignal
                 ? AbortSignal.any([
                     callerSignal,
                     AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
                   ])
-                : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-            });
-
-            if (response.ok) {
-              const html = await response.text();
-              const decision = parseDecisionPage(
-                html,
-                state.number,
-                state.year,
-              );
-
-              if (decision) {
-                // Rate limit before second request
-                await Bun.sleep(300);
-
-                // Fetch abstract + legal sentence (separate endpoint)
-                try {
-                  const szParam = `I-${state.number}-${toYearSuffix(state.year)}_1`;
-                  const absSignal = callerSignal
-                    ? AbortSignal.any([
-                        callerSignal,
-                        AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-                      ])
-                    : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST);
-                  const absResp = await fetch(`${ABSTRACT_URL}?sz=${szParam}`, {
-                    headers: COMMON_HEADERS,
-                    signal: absSignal,
-                  });
-                  if (absResp.ok) {
-                    const absHtml = await absResp.text();
-                    const { abstract, legalSentence } =
-                      extractAbstract(absHtml);
-                    if (abstract) {
-                      decision.metadata["abstract"] = abstract;
-                    }
-                    if (legalSentence) {
-                      decision.metadata["legalSentence"] = legalSentence;
-                    }
-                    // Include abstract HTML in sourceRaw
-                    decision.sourceRaw = JSON.stringify({
-                      textHtml: decision.sourceRaw,
-                      abstractHtml: absHtml,
-                    });
-                  }
-                } catch {
-                  // Abstract fetch failed; proceed without it
+                : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST);
+              const absResp = await fetch(`${ABSTRACT_URL}?sz=${szParam}`, {
+                headers: COMMON_HEADERS,
+                signal: absSignal,
+              });
+              if (absResp.ok) {
+                const absHtml = await absResp.text();
+                const { abstract, legalSentence } = extractAbstract(absHtml);
+                if (abstract) {
+                  decision.metadata["abstract"] = abstract;
                 }
+                if (legalSentence) {
+                  decision.metadata["legalSentence"] = legalSentence;
+                }
+                decision.sourceRaw = JSON.stringify({
+                  textHtml: decision.sourceRaw,
+                  abstractHtml: absHtml,
+                });
+              }
+            } catch {
+              // Abstract fetch failed; proceed without it
+            }
 
-                decisions.push(decision);
-                consecutiveMisses = 0;
-              } else {
-                consecutiveMisses++;
-              }
-            } else {
-              consecutiveMisses++;
-            }
-          } catch (error) {
-            if (error instanceof DOMException && error.name === "AbortError") {
-              // Caller cancelled: return partial results
-              // so the pipeline can persist cursor progress
-              return {
-                decisions,
-                nextCursor: makeCursor(state),
-              };
-            }
-            if (
-              error instanceof DOMException &&
-              error.name === "TimeoutError"
-            ) {
-              // Distinguish page-level timeout (callerSignal
-              // aborted) from per-request timeout.
-              if (callerSignal?.aborted) {
-                return {
-                  decisions,
-                  nextCursor: makeCursor(state),
-                };
-              }
-              consecutiveMisses++;
-            } else {
-              throw error;
-            }
+            decisions.push(decision);
+            consecutiveMisses = 0;
           }
 
-          state.number++;
+          state.number += PROBE_CONCURRENCY;
+
+          // Exponential backoff on rate limiting
+          if (rateLimited) {
+            await Bun.sleep(backoffMs(0, 2000));
+          }
 
           // Too many consecutive numbers with no decisions:
           // year exhausted, move to previous year (or park).
           if (consecutiveMisses >= MAX_CONSECUTIVE_MISSES) {
             if (state.year <= FIRST_YEAR || state.year > currentYear) {
-              // Either historical sweep is complete or we've
-              // caught up to the present. Park at the current
-              // year so subsequent cycles only re-scan for new
-              // filings instead of descending into history.
               return {
                 decisions,
                 nextCursor: `1:${currentYear}`,
@@ -441,8 +474,8 @@ export const czUsAdapter: SourceAdapter = {
             consecutiveMisses = 0;
           }
 
-          // Rate limit between requests
-          await Bun.sleep(300);
+          // Rate limit between batches
+          await Bun.sleep(100);
         }
 
         return {
