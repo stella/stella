@@ -1,6 +1,9 @@
 "use client";
 
+import * as React from "react";
+
 import { Toast } from "@base-ui/react/toast";
+import type { ToastManagerAddOptions } from "@base-ui/react/toast";
 import {
   CircleAlertIcon,
   CircleCheckIcon,
@@ -13,8 +16,12 @@ import {
 import { buttonVariants } from "@stella/ui/components/button";
 import { cn } from "@stella/ui/lib/utils";
 
-const toastManager = Toast.createToastManager();
-const anchoredToastManager = Toast.createToastManager();
+type ToastData = {
+  tooltipStyle?: boolean;
+};
+
+const toastManager = Toast.createToastManager<ToastData>();
+const anchoredToastManager = Toast.createToastManager<ToastData>();
 
 const TOAST_ICONS = {
   error: CircleAlertIcon,
@@ -23,6 +30,51 @@ const TOAST_ICONS = {
   success: CircleCheckIcon,
   warning: TriangleAlertIcon,
 } as const;
+
+type ToastType = keyof typeof TOAST_ICONS;
+
+type ToastAction = {
+  label: React.ReactNode;
+  onClick?: React.MouseEventHandler<HTMLButtonElement>;
+};
+
+type ToastActionProps = ToastManagerAddOptions<ToastData>["actionProps"];
+
+type ToastOptions = Omit<
+  ToastManagerAddOptions<ToastData>,
+  "actionProps" | "title" | "type"
+> & {
+  action?: ToastAction;
+  actionProps?: ToastActionProps;
+};
+
+type ToastUpdateOptions = Partial<ToastOptions> & {
+  title?: React.ReactNode | undefined;
+  type?: ToastType | undefined;
+};
+
+type ToastPromiseMessage = React.ReactNode | ToastUpdateOptions;
+
+type ToastPromiseOptions<Value> = {
+  error: ToastPromiseMessage | ((error: unknown) => ToastPromiseMessage);
+  loading: ToastPromiseMessage;
+  success: ToastPromiseMessage | ((value: Value) => ToastPromiseMessage);
+};
+
+type ToastApi = {
+  (title: React.ReactNode, options?: ToastOptions): string;
+  dismiss: (id?: string) => void;
+  error: (title: React.ReactNode, options?: ToastOptions) => string;
+  info: (title: React.ReactNode, options?: ToastOptions) => string;
+  loading: (title: React.ReactNode, options?: ToastOptions) => string;
+  promise: <Value>(
+    promiseValue: Promise<Value>,
+    options: ToastPromiseOptions<Value>,
+  ) => Promise<Value>;
+  success: (title: React.ReactNode, options?: ToastOptions) => string;
+  update: (id: string, options: ToastUpdateOptions) => void;
+  warning: (title: React.ReactNode, options?: ToastOptions) => string;
+};
 
 type ToastPosition =
   | "top-left"
@@ -35,6 +87,61 @@ type ToastPosition =
 type ToastProviderProps = {
   position?: ToastPosition;
 } & Toast.Provider.Props;
+
+const toast: ToastApi = Object.assign(
+  (title: React.ReactNode, options?: ToastOptions) =>
+    addToast(title, undefined, options),
+  {
+    dismiss: (id?: string) => {
+      if (id === undefined) {
+        toastManager.close();
+        return;
+      }
+
+      toastManager.close(id);
+    },
+    error: (title: React.ReactNode, options?: ToastOptions) =>
+      addToast(title, "error", options),
+    info: (title: React.ReactNode, options?: ToastOptions) =>
+      addToast(title, "info", options),
+    loading: (title: React.ReactNode, options?: ToastOptions) =>
+      addToast(title, "loading", options),
+    promise: async <Value,>(
+      promiseValue: Promise<Value>,
+      options: ToastPromiseOptions<Value>,
+    ) => {
+      const toastId = toast.loading(
+        getPromiseToastTitle(options.loading),
+        getPromiseToastOptions(options.loading),
+      );
+
+      try {
+        const value = await promiseValue;
+
+        toast.update(
+          toastId,
+          getPromiseToastUpdateOptions(options.success, value, "success"),
+        );
+
+        return value;
+      } catch (error) {
+        toast.update(
+          toastId,
+          getPromiseToastUpdateOptions(options.error, error, "error"),
+        );
+
+        throw error;
+      }
+    },
+    success: (title: React.ReactNode, options?: ToastOptions) =>
+      addToast(title, "success", options),
+    update: (id: string, options: ToastUpdateOptions) => {
+      toastManager.update(id, normalizeToastUpdateOptions(options));
+    },
+    warning: (title: React.ReactNode, options?: ToastOptions) =>
+      addToast(title, "warning", options),
+  },
+);
 
 function ToastProvider({
   children,
@@ -50,7 +157,7 @@ function ToastProvider({
 }
 
 function Toasts({ position }: { position: ToastPosition }) {
-  const { toasts } = Toast.useToastManager();
+  const { toasts } = Toast.useToastManager<ToastData>();
   const isTop = position.startsWith("top");
 
   return (
@@ -69,12 +176,8 @@ function Toasts({ position }: { position: ToastPosition }) {
         data-position={position}
         data-slot="toast-viewport"
       >
-        {toasts.map((toast) => {
-          const Icon = toast.type
-            ? // SAFETY: toast.type matches TOAST_ICONS keys
-              // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-              TOAST_ICONS[toast.type as keyof typeof TOAST_ICONS]
-            : null;
+        {toasts.map((toastItem) => {
+          const Icon = getToastIcon(toastItem.type);
 
           return (
             <Toast.Root
@@ -120,7 +223,7 @@ function Toasts({ position }: { position: ToastPosition }) {
                 "data-expanded:data-ending-style:data-[swipe-direction=down]:transform-[translateY(calc(var(--toast-swipe-movement-y)+100%+var(--toast-inset)))]",
               )}
               data-position={position}
-              key={toast.id}
+              key={toastItem.id}
               swipeDirection={
                 position.includes("center")
                   ? [isTop ? "up" : "down"]
@@ -128,10 +231,10 @@ function Toasts({ position }: { position: ToastPosition }) {
                     ? ["left", isTop ? "up" : "down"]
                     : ["right", isTop ? "up" : "down"]
               }
-              toast={toast}
+              toast={toastItem}
             >
               <Toast.Content className="pointer-events-auto flex items-center justify-between gap-1.5 overflow-hidden px-3.5 py-3 text-sm transition-opacity duration-250 data-behind:opacity-0 data-behind:not-data-expanded:pointer-events-none data-expanded:opacity-100">
-                <div className="flex gap-2">
+                <div className="flex min-w-0 gap-2">
                   {Icon && (
                     <div
                       className="[&_svg]:pointer-events-none [&_svg]:shrink-0 [&>svg]:h-lh [&>svg]:w-4"
@@ -147,22 +250,23 @@ function Toasts({ position }: { position: ToastPosition }) {
                       data-slot="toast-title"
                     />
                     <Toast.Description
-                      className="text-muted-foreground"
+                      className="text-muted-foreground break-words"
                       data-slot="toast-description"
                     />
                   </div>
                 </div>
-                {toast.actionProps && (
+                {toastItem.actionProps && (
                   <Toast.Action
                     className={buttonVariants({ size: "xs" })}
                     data-slot="toast-action"
                   >
-                    {toast.actionProps.children}
+                    {toastItem.actionProps.children}
                   </Toast.Action>
                 )}
                 <Toast.Close
                   className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer rounded p-0.5 transition-colors"
                   data-slot="toast-close"
+                  aria-label="Close notification"
                 >
                   <XIcon className="size-4" />
                 </Toast.Close>
@@ -193,14 +297,10 @@ function AnchoredToasts() {
         className="outline-none"
         data-slot="toast-viewport-anchored"
       >
-        {toasts.map((toast) => {
-          const Icon = toast.type
-            ? // SAFETY: toast.type matches TOAST_ICONS keys
-              // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-              TOAST_ICONS[toast.type as keyof typeof TOAST_ICONS]
-            : null;
-          const tooltipStyle = toast.data?.tooltipStyle ?? false;
-          const positionerProps = toast.positionerProps;
+        {toasts.map((toastItem) => {
+          const Icon = getToastIcon(toastItem.type);
+          const tooltipStyle = toastItem.data?.tooltipStyle ?? false;
+          const positionerProps = toastItem.positionerProps;
 
           if (!positionerProps?.anchor) {
             return null;
@@ -210,9 +310,9 @@ function AnchoredToasts() {
             <Toast.Positioner
               className="z-50 max-w-[min(--spacing(64),var(--available-width))]"
               data-slot="toast-positioner"
-              key={toast.id}
+              key={toastItem.id}
               sideOffset={positionerProps.sideOffset ?? 4}
-              toast={toast}
+              toast={toastItem}
             >
               <Toast.Root
                 className={cn(
@@ -222,7 +322,7 @@ function AnchoredToasts() {
                     : "rounded-lg shadow-lg/5 before:rounded-[calc(var(--radius-lg)-1px)]",
                 )}
                 data-slot="toast-popup"
-                toast={toast}
+                toast={toastItem}
               >
                 {tooltipStyle ? (
                   <Toast.Content className="pointer-events-auto px-2 py-1">
@@ -230,7 +330,7 @@ function AnchoredToasts() {
                   </Toast.Content>
                 ) : (
                   <Toast.Content className="pointer-events-auto flex items-center justify-between gap-1.5 overflow-hidden px-3.5 py-3 text-sm">
-                    <div className="flex gap-2">
+                    <div className="flex min-w-0 gap-2">
                       {Icon && (
                         <div
                           className="[&_svg]:pointer-events-none [&_svg]:shrink-0 [&>svg]:h-lh [&>svg]:w-4"
@@ -246,17 +346,17 @@ function AnchoredToasts() {
                           data-slot="toast-title"
                         />
                         <Toast.Description
-                          className="text-muted-foreground"
+                          className="text-muted-foreground break-words"
                           data-slot="toast-description"
                         />
                       </div>
                     </div>
-                    {toast.actionProps && (
+                    {toastItem.actionProps && (
                       <Toast.Action
                         className={buttonVariants({ size: "xs" })}
                         data-slot="toast-action"
                       >
-                        {toast.actionProps.children}
+                        {toastItem.actionProps.children}
                       </Toast.Action>
                     )}
                   </Toast.Content>
@@ -270,9 +370,171 @@ function AnchoredToasts() {
   );
 }
 
+function addToast(
+  title: React.ReactNode,
+  type: ToastType | undefined,
+  options?: ToastOptions,
+) {
+  return toastManager.add(
+    normalizeToastAddOptions({
+      ...options,
+      title,
+      type,
+    }),
+  );
+}
+
+function normalizeToastAddOptions({
+  action,
+  actionProps,
+  timeout,
+  type,
+  ...options
+}: ToastUpdateOptions) {
+  return {
+    ...options,
+    ...normalizeToastActionProps({ action, actionProps }),
+    timeout: normalizeToastTimeout(timeout ?? getDefaultToastTimeout(type)),
+    type,
+  };
+}
+
+function normalizeToastUpdateOptions(options: ToastUpdateOptions) {
+  const { action, actionProps, timeout, type, ...updateOptions } = options;
+  const normalizedTimeout =
+    timeout === undefined
+      ? normalizeDefaultToastUpdateTimeout(type)
+      : normalizeToastTimeout(timeout);
+
+  return {
+    ...updateOptions,
+    ...normalizeToastActionProps({
+      action,
+      actionProps,
+      includeEmptyActionProps:
+        Object.hasOwn(options, "action") ||
+        Object.hasOwn(options, "actionProps"),
+    }),
+    ...(type === undefined ? {} : { type }),
+    ...(normalizedTimeout === undefined ? {} : { timeout: normalizedTimeout }),
+  };
+}
+
+function normalizeDefaultToastUpdateTimeout(type: ToastType | undefined) {
+  if (type === undefined) {
+    return undefined;
+  }
+
+  return normalizeToastTimeout(getDefaultToastTimeout(type));
+}
+
+function normalizeToastActionProps({
+  action,
+  actionProps,
+  includeEmptyActionProps = false,
+}: {
+  action: ToastAction | undefined;
+  actionProps: ToastActionProps | undefined;
+  includeEmptyActionProps?: boolean;
+}) {
+  if (action === undefined) {
+    return actionProps === undefined && !includeEmptyActionProps
+      ? {}
+      : { actionProps };
+  }
+
+  return {
+    actionProps: {
+      ...actionProps,
+      children: action.label,
+      onClick: action.onClick,
+    },
+  };
+}
+
+function getDefaultToastTimeout(type: ToastType | undefined) {
+  if (type === "loading") {
+    return 0;
+  }
+
+  if (type === "error" || type === "warning") {
+    return 6000;
+  }
+
+  return 4000;
+}
+
+function normalizeToastTimeout(timeout: number | undefined) {
+  if (timeout === Number.POSITIVE_INFINITY) {
+    return 0;
+  }
+
+  return timeout;
+}
+
+function getPromiseToastTitle(
+  option: ToastPromiseMessage,
+): React.ReactNode | undefined {
+  return isToastUpdateOptions(option) ? option.title : option;
+}
+
+function getPromiseToastOptions(
+  option: ToastPromiseMessage,
+): ToastUpdateOptions | undefined {
+  return isToastUpdateOptions(option) ? option : undefined;
+}
+
+function getPromiseToastUpdateOptions<Value>(
+  option: ToastPromiseMessage | ((value: Value) => ToastPromiseMessage),
+  value: Value,
+  type: ToastType,
+) {
+  const resolved = typeof option === "function" ? option(value) : option;
+
+  if (isToastUpdateOptions(resolved)) {
+    const hasReplacementAction =
+      resolved.action !== undefined || Object.hasOwn(resolved, "actionProps");
+
+    return {
+      ...resolved,
+      ...(hasReplacementAction ? {} : { actionProps: undefined }),
+      type,
+    };
+  }
+
+  return { actionProps: undefined, title: resolved, type };
+}
+
+function isToastUpdateOptions(
+  value: ToastPromiseMessage,
+): value is ToastUpdateOptions {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  if (Array.isArray(value) || React.isValidElement(value)) {
+    return false;
+  }
+
+  return !(Symbol.iterator in value);
+}
+
+function getToastIcon(type: string | undefined) {
+  if (!isToastType(type)) {
+    return null;
+  }
+
+  return TOAST_ICONS[type];
+}
+
+function isToastType(type: string | undefined): type is ToastType {
+  return typeof type === "string" && type in TOAST_ICONS;
+}
+
 export {
   ToastProvider,
   type ToastPosition,
+  toast,
   toastManager,
   AnchoredToastProvider,
   anchoredToastManager,

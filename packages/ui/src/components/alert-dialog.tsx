@@ -90,7 +90,7 @@ function AlertDialogHeader({
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 p-6 text-center max-sm:pb-4 sm:text-start",
+        "flex flex-col gap-2 p-6 text-center in-[[data-slot=alert-dialog-popup]:has([data-slot=alert-dialog-panel])]:pb-3 max-sm:pb-4 sm:text-start",
         className,
       )}
       data-slot="alert-dialog-header"
@@ -115,6 +115,22 @@ function AlertDialogFooter({
         className,
       )}
       data-slot="alert-dialog-footer"
+      {...props}
+    />
+  );
+}
+
+function AlertDialogPanel({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
+  return (
+    <div
+      className={cn(
+        "px-6 pt-1 pb-6 in-[[data-slot=alert-dialog-popup]:has([data-slot=alert-dialog-footer])]:pb-4",
+        className,
+      )}
+      data-slot="alert-dialog-panel"
       {...props}
     />
   );
@@ -166,6 +182,7 @@ export {
   AlertDialogPopup as AlertDialogContent,
   AlertDialogHeader,
   AlertDialogFooter,
+  AlertDialogPanel,
   AlertDialogTitle,
   AlertDialogDescription,
   AlertDialogClose,
