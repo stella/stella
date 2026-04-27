@@ -3,10 +3,8 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
-  EmptyAst,
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -20,7 +18,6 @@ import {
   parseCeDate,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parseSkDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/sk-courts";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -38,7 +35,7 @@ import { isRecord } from "@/api/lib/type-guards";
 
 const BASE_URL =
   "https://obcan.justice.sk/pilot/api/ress-isu-service/v1/rozhodnutie";
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 25;
 
 type SkSud = {
   registreGuid?: string | null;
@@ -198,30 +195,6 @@ const fetchDetail = async (
 };
 
 /**
- * Fetch a PDF from the SK courts document endpoint.
- * Returns raw bytes for @libpdf/core parsing.
- */
-const fetchPdfBytes = async (
-  documentUrl: string,
-  signal?: AbortSignal,
-): Promise<Uint8Array | undefined> => {
-  try {
-    const response = await fetch(documentUrl, {
-      signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
-        : AbortSignal.timeout(30_000),
-    });
-    if (!response.ok) {
-      return undefined;
-    }
-
-    return new Uint8Array(await response.arrayBuffer());
-  } catch {
-    return undefined;
-  }
-};
-
-/**
  * Build the public source URL for a decision.
  *
  * The infosud viewer (obcan.justice.sk/infosud/...) is a
@@ -255,61 +228,18 @@ const parseItemWithDetail = async (
   const rawJson = JSON.stringify(item);
   const rawHash = hashContent(rawJson);
 
-  // Skip the expensive PDF download when the decision
-  // already exists with the same source hash. The pipeline
-  // will also dedup, but checking here avoids the 5-30s
-  // PDF download per already-ingested decision during
-  // re-scans. Lazy import avoids triggering drizzle()
-  // initialization when the adapter module is loaded by
-  // tooling paths that don't need the DB.
-  let alreadyIngested = false;
-  try {
-    const { db } = await import("@/api/db/root");
-    const existing = await db.query.caseLawDecisions.findFirst({
-      where: {
-        caseNumber: item.spisovaZnacka,
-        language: "sk",
-        sourceHash: rawHash,
-      },
-      columns: { id: true },
-    });
-    alreadyIngested = existing !== undefined;
-  } catch {
-    // Transient DB failure; fall back to downloading the PDF.
-  }
-
-  const pdfBytes =
-    !alreadyIngested && detail?.dokument?.url
-      ? await fetchPdfBytes(detail.dokument.url, signal)
-      : undefined;
+  // PDF download is deferred to a background backfill loop.
+  // Metadata-only ingestion (list + detail) lets us fly
+  // through the 4.6M Slovak court decisions (~25 items/page
+  // × ~4s/page) instead of blocking on 5-30s PDF downloads.
+  // Decisions are searchable by case number, ECLI, court,
+  // and date immediately; fulltext follows via backfill.
 
   const caseNumber = item.spisovaZnacka;
   const decisionDate = parseSkDate(item.datumVydania);
   const decisionType = toOptionalValue(item.formaRozhodnutia);
   const court = item.sud.nazov;
   const ecli = toOptionalValue(detail?.ecli);
-
-  // Parse PDF into structured AST using @libpdf/core
-  // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- AST container
-  let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
-  let fulltext: string | undefined;
-
-  if (pdfBytes) {
-    try {
-      const parsed = await parseSkDecisionPdf({
-        pdfBytes,
-        caseNumber,
-        ecli,
-        court,
-        decisionDate,
-        decisionType: decisionType?.toLowerCase(),
-      });
-      documentAst = parsed.documentAst;
-      fulltext = parsed.fulltext;
-    } catch {
-      // Parser failed; keep empty AST + no fulltext
-    }
-  }
 
   return {
     caseNumber,
@@ -319,7 +249,6 @@ const parseItemWithDetail = async (
     language: "sk",
     decisionDate,
     decisionType,
-    fulltext,
     sourceUrl: item.guid
       ? sanitizeUrl(sourceUrlForDecision(item.guid, detail?.dokument?.url))
       : undefined,
@@ -345,10 +274,9 @@ const parseItemWithDetail = async (
     },
     rawHash,
     parserVersion: PARSER_VERSION,
-    documentAst,
+    documentAst: EMPTY_AST,
     sourceRaw: JSON.stringify({ listItem: item, detail }),
-    sourceRawBytes: pdfBytes,
-    sourceRawContentType: pdfBytes ? "application/pdf" : "application/json",
+    sourceRawContentType: "application/json",
   };
 };
 
@@ -358,9 +286,9 @@ export const skCourtsAdapter: SourceAdapter = {
   country: "SVK",
   language: "sk",
   minRequestIntervalMs: 300,
-  // Each page fetches 10 items × (detail JSON + PDF download);
-  // 120s was too tight and caused consistent page-level timeouts.
-  pageTimeoutMs: 180_000,
+  // PDF download deferred; pages now only do list + detail JSON.
+  // 60s is generous for 25 detail fetches (~2s each).
+  pageTimeoutMs: 90_000,
 
   fetchPage: createPagePaginatedFetch<SkApiResponse>({
     adapterKey: ADAPTER_KEYS.SK_COURTS,

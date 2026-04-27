@@ -12,6 +12,7 @@ import type {
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -50,12 +51,12 @@ import { isRecord } from "@/api/lib/type-guards";
 const BASE_URL = "https://rozhodnuti.justice.cz/api";
 
 /**
- * Concurrent finaldoc fetches per page. Conservative (5) to
- * avoid overwhelming the court server. 200ms delay between
- * batches matches the adapter's minRequestIntervalMs.
+ * Concurrent finaldoc fetches per page. The court server
+ * returns 429 when overloaded (handled with a 2s backoff),
+ * so we can safely push higher concurrency and self-correct.
  */
-const FINALDOC_CONCURRENCY = 5;
-const FINALDOC_BATCH_DELAY_MS = 200;
+const FINALDOC_CONCURRENCY = 15;
+const FINALDOC_BATCH_DELAY_MS = 50;
 const LIST_FETCH_RETRIES = 2;
 const LIST_FETCH_RETRY_DELAY_MS = 5000;
 
@@ -255,26 +256,15 @@ const fetchFinaldoc = async (
   };
 
   try {
-    const fetchOpts: RequestInit = {
-      signal: signal
-        ? AbortSignal.any([
-            signal,
-            AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-          ])
-        : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-      headers: {
-        Accept: "application/json",
-        "User-Agent": INGESTION_USER_AGENT,
+    const response = await fetchWithRetry(
+      docUrl,
+      { headers: { Accept: "application/json" } },
+      {
+        maxRetries: 1,
+        signal,
+        adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
       },
-    };
-
-    let response = await fetch(docUrl, fetchOpts);
-
-    // Retry once on 429 (rate limit) with backoff
-    if (response.status === 429) {
-      await Bun.sleep(2000);
-      response = await fetch(docUrl, fetchOpts);
-    }
+    );
 
     if (!response.ok) {
       return empty;
