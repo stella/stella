@@ -20,6 +20,7 @@
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware packages/folio",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware --fix packages/folio",
     "format": "oxfmt .",
+    "test": "bun test src",
     "test:visual": "bunx playwright test",
     "test:visual:update": "bunx playwright test --update-snapshots",
     "test:visual:report": "bunx playwright show-report"

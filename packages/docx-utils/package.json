@@ -5,6 +5,7 @@
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {
+    "test": "bun test src",
     "typecheck": "tsc --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs packages/docx-utils",
     "format": "oxfmt ."
@@ -13,6 +14,7 @@
     "jszip": "catalog:"
   },
   "devDependencies": {
+    "@types/bun": "catalog:",
     "typescript": "catalog:"
   }
 }

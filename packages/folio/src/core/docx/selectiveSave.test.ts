@@ -2,13 +2,11 @@
  * Integration tests for Selective Save
  *
  * Tests the full pipeline: parse DOCX → modify document model → selective save → verify XML.
- * Uses real DOCX parsing and serialization to ensure round-trip correctness.
+ * Uses generated DOCX packages with real parsing and serialization to ensure round-trip correctness.
  */
 
 import { describe, test, expect } from "bun:test";
 import JSZip from "jszip";
-import * as fs from "node:fs";
-import * as path from "node:path";
 
 import type { Paragraph, Run } from "../types/document";
 import { parseDocx } from "./parser";
@@ -26,18 +24,208 @@ import { serializeDocument } from "./serializer/documentSerializer";
 // Helpers
 // ============================================================================
 
-const FIXTURES_DIR = path.resolve(
-  import.meta.dirname,
-  "../../../../e2e/fixtures",
-);
+type FixtureOptions = {
+  paragraphCount?: number;
+  includeTable?: boolean;
+  includeHeaderFooter?: boolean;
+  includeStyles?: boolean;
+  includeImage?: boolean;
+};
+
+const XML_DECLARATION =
+  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+
+const paragraphXml = (id: string, text: string, styleId?: string): string => {
+  const styleXml = styleId
+    ? `<w:pPr><w:pStyle w:val="${styleId}"/></w:pPr>`
+    : "";
+  return `<w:p w14:paraId="${id}">${styleXml}<w:r><w:t>${text}</w:t></w:r></w:p>`;
+};
+
+const SAMPLE_PNG = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49,
+  0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06,
+  0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44,
+  0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8, 0xff, 0xff, 0x3f, 0x00, 0x05, 0xfe, 0x02,
+  0xfe, 0xdc, 0xcc, 0x59, 0xe7, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44,
+  0xae, 0x42, 0x60, 0x82,
+]);
+
+const imageRelationshipId = (includeHeaderFooter: boolean): string =>
+  includeHeaderFooter ? "rId3" : "rId1";
+
+const contentTypesXml = (
+  includeHeaderFooter: boolean,
+  includeImage: boolean,
+): string => `${XML_DECLARATION}
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  ${includeImage ? '<Default Extension="png" ContentType="image/png"/>' : ""}
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  ${
+    includeHeaderFooter
+      ? '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>'
+      : ""
+  }
+</Types>`;
+
+const packageRelsXml = `${XML_DECLARATION}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+</Relationships>`;
+
+const documentRelsXml = (
+  includeHeaderFooter: boolean,
+  includeImage: boolean,
+): string => {
+  const relationships: string[] = [];
+  if (includeHeaderFooter) {
+    relationships.push(
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>',
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>',
+    );
+  }
+  if (includeImage) {
+    relationships.push(
+      `<Relationship Id="${imageRelationshipId(includeHeaderFooter)}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>`,
+    );
+  }
+
+  return `${XML_DECLARATION}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  ${relationships.join("")}
+</Relationships>`;
+};
+
+const stylesXml = `${XML_DECLARATION}
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading1">
+    <w:name w:val="heading 1"/>
+    <w:basedOn w:val="Normal"/>
+    <w:pPr><w:keepNext/></w:pPr>
+  </w:style>
+</w:styles>`;
+
+const corePropertiesXml = `${XML_DECLARATION}
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:title>Selective save fixture</dc:title>
+  <cp:lastModifiedBy>Test</cp:lastModifiedBy>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">2024-01-01T00:00:00.000Z</dcterms:modified>
+</cp:coreProperties>`;
+
+const imageParagraphXml = (rId: string): string =>
+  `<w:p w14:paraId="I0000001"><w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:extent cx="9525" cy="9525"/><wp:docPr id="1" name="Test image" descr="Generated fixture image"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="1" name="image1.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="9525" cy="9525"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+
+const documentXml = ({
+  paragraphCount = 4,
+  includeTable = false,
+  includeHeaderFooter = false,
+  includeStyles = false,
+  includeImage = false,
+}: FixtureOptions): string => {
+  const paragraphs: string[] = [];
+  for (let index = 1; index <= paragraphCount; index++) {
+    const id = `P${String(index).padStart(7, "0")}`;
+    paragraphs.push(
+      paragraphXml(
+        id,
+        `Fixture paragraph ${index}`,
+        includeStyles && index === 1 ? "Heading1" : undefined,
+      ),
+    );
+  }
+
+  if (includeTable) {
+    paragraphs.push(
+      `<w:tbl><w:tr><w:tc>${paragraphXml(
+        "T0000001",
+        "Table cell text",
+      )}</w:tc></w:tr></w:tbl>`,
+    );
+  }
+
+  if (includeImage) {
+    paragraphs.push(
+      imageParagraphXml(imageRelationshipId(includeHeaderFooter)),
+    );
+  }
+
+  const headerFooterRefs = includeHeaderFooter
+    ? '<w:headerReference w:type="default" r:id="rId1"/><w:footerReference w:type="default" r:id="rId2"/>'
+    : "";
+
+  return `${XML_DECLARATION}
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    ${paragraphs.join("")}
+    <w:sectPr>${headerFooterRefs}<w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>
+  </w:body>
+</w:document>`;
+};
+
+const headerXml = `${XML_DECLARATION}
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">
+  ${paragraphXml("H0000001", "Header text")}
+</w:hdr>`;
+
+const footerXml = `${XML_DECLARATION}
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">
+  ${paragraphXml("F0000001", "Footer text")}
+</w:ftr>`;
+
+async function createFixtureDocx(
+  options: FixtureOptions,
+): Promise<ArrayBuffer> {
+  const zip = new JSZip();
+  const { includeHeaderFooter = false, includeImage = false } = options;
+
+  zip.file(
+    "[Content_Types].xml",
+    contentTypesXml(includeHeaderFooter, includeImage),
+  );
+  zip.file("_rels/.rels", packageRelsXml);
+  zip.file(
+    "word/_rels/document.xml.rels",
+    documentRelsXml(includeHeaderFooter, includeImage),
+  );
+  zip.file("word/document.xml", documentXml(options));
+  zip.file("word/styles.xml", stylesXml);
+  zip.file("docProps/core.xml", corePropertiesXml);
+
+  if (includeHeaderFooter) {
+    zip.file("word/header1.xml", headerXml);
+    zip.file("word/footer1.xml", footerXml);
+  }
+  if (includeImage) {
+    zip.file("word/media/image1.png", SAMPLE_PNG);
+  }
+
+  return zip.generateAsync({ type: "arraybuffer" });
+}
 
 async function loadFixture(name: string): Promise<ArrayBuffer> {
-  const filePath = path.join(FIXTURES_DIR, name);
-  const buffer = fs.readFileSync(filePath);
-  return buffer.buffer.slice(
-    buffer.byteOffset,
-    buffer.byteOffset + buffer.byteLength,
-  );
+  switch (name) {
+    case "EP_ZMVZ_MULTI_v4.docx":
+      return createFixtureDocx({
+        paragraphCount: 64,
+        includeHeaderFooter: true,
+      });
+    case "with-tables.docx":
+      return createFixtureDocx({ includeTable: true });
+    case "complex-styles.docx":
+      return createFixtureDocx({ includeStyles: true });
+    case "example-with-image.docx":
+      return createFixtureDocx({ includeImage: true });
+    default:
+      throw new Error(`Unknown generated DOCX fixture: ${name}`);
+  }
 }
 
 async function getDocumentXml(buffer: ArrayBuffer): Promise<string> {
@@ -47,6 +235,18 @@ async function getDocumentXml(buffer: ArrayBuffer): Promise<string> {
     throw new Error("No word/document.xml found");
   }
   return file.async("text");
+}
+
+async function getBinaryEntry(
+  buffer: ArrayBuffer,
+  path: string,
+): Promise<ArrayBuffer> {
+  const zip = await JSZip.loadAsync(buffer);
+  const file = zip.file(path);
+  if (!file) {
+    throw new Error(`No ${path} found`);
+  }
+  return file.async("arraybuffer");
 }
 
 // ============================================================================
@@ -155,6 +355,34 @@ describe("attemptSelectiveSave", () => {
     if (coreProps) {
       expect(coreProps).toContain("dcterms:modified");
     }
+  });
+
+  test("preserves existing media parts when saving without content changes", async () => {
+    const buffer = await loadFixture("example-with-image.docx");
+    const doc = await parseDocx(buffer, { preloadFonts: false });
+    const originalImage = await getBinaryEntry(buffer, "word/media/image1.png");
+
+    const result = await attemptSelectiveSave(doc, buffer, {
+      changedParaIds: new Set(),
+      structuralChange: false,
+      hasUntrackedChanges: false,
+    });
+
+    expect(result).not.toBeNull();
+    if (!result) {
+      throw new Error("Expected result");
+    }
+
+    const resultImage = await getBinaryEntry(result, "word/media/image1.png");
+    expect(new Uint8Array(resultImage)).toEqual(new Uint8Array(originalImage));
+
+    const zip = await JSZip.loadAsync(result);
+    const contentTypes = await zip.file("[Content_Types].xml")?.async("text");
+    const relationships = await zip
+      .file("word/_rels/document.xml.rels")
+      ?.async("text");
+    expect(contentTypes).toContain('ContentType="image/png"');
+    expect(relationships).toContain('Target="media/image1.png"');
   });
 
   test("selectively patches a single paragraph edit", async () => {

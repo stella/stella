@@ -9,7 +9,7 @@ export const decodeCursor = (
   const decoded = Buffer.from(cursor, "base64").toString();
   const [scoreStr, id] = decoded.split(":");
   const score = Number(scoreStr);
-  if (Number.isNaN(score) || !id) {
+  if (!Number.isFinite(score) || !id) {
     return null;
   }
 
