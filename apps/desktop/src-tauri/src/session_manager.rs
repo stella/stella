@@ -210,12 +210,25 @@ fn did_remote_checkpoint_advance(
   remote > local
 }
 
+fn replacement_word_lock_file_name(file_name: &str) -> String {
+  let suffix = file_name.chars().skip(2).collect::<String>();
+  format!("{WORD_LOCK_PREFIX}{suffix}")
+}
+
+fn prefixed_word_lock_file_name(file_name: &str) -> String {
+  format!("{WORD_LOCK_PREFIX}{file_name}")
+}
+
+fn is_word_lock_file_for(candidate: &str, file_name: &str) -> bool {
+  candidate == replacement_word_lock_file_name(file_name)
+    || candidate == prefixed_word_lock_file_name(file_name)
+}
+
 async fn has_word_lock_file(dir: &Path, file_name: &str) -> bool {
-  let lock_name = format!("{WORD_LOCK_PREFIX}{file_name}");
   match tokio::fs::read_dir(dir).await {
     Ok(mut entries) => {
       while let Ok(Some(entry)) = entries.next_entry().await {
-        if entry.file_name().to_string_lossy() == lock_name {
+        if is_word_lock_file_for(&entry.file_name().to_string_lossy(), file_name) {
           return true;
         }
       }
@@ -1878,4 +1891,28 @@ async fn show_takeover_dialog(
 
 fn chrono_now() -> String {
   chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn replacement_word_lock_file_name_replaces_first_two_filename_characters() {
+    assert_eq!(
+      replacement_word_lock_file_name("document.docx"),
+      "~$cument.docx",
+    );
+    assert_eq!(
+      replacement_word_lock_file_name("Share_Purchase_Agreement_Draft.docx"),
+      "~$are_Purchase_Agreement_Draft.docx",
+    );
+  }
+
+  #[test]
+  fn is_word_lock_file_for_matches_replacement_and_prefixed_owner_files() {
+    assert!(is_word_lock_file_for("~$cument.docx", "document.docx"));
+    assert!(is_word_lock_file_for("~$document.docx", "document.docx"));
+    assert!(!is_word_lock_file_for("document.docx", "document.docx"));
+  }
 }
