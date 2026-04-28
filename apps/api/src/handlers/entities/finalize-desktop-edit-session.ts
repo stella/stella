@@ -433,27 +433,34 @@ export const finalizeDesktopEditSessionHandler = async ({
         workspaceId: authorizedSession.value.workspaceId,
       });
 
-      await tx.insert(fields).values(
-        cloneFieldsForRevision({
-          currentFields: baseVersion.fields,
-          entityVersionId: nextVersionId,
-          propertyId: editSession.propertyId,
-          replacementContent: {
-            encrypted: false,
-            fileName: editSession.fileName,
-            id: sourceFileId,
-            mimeType: DOCX_MIME_TYPE,
-            pdfFileId,
-            sha256Hex: editSession.checkpointSha256Hex,
-            sizeBytes: editSession.checkpointSizeBytes,
-            type: "file",
-            version: 1,
-            ...(editSession.checkpointScanWarnings !== null && {
-              scanWarnings: editSession.checkpointScanWarnings,
-            }),
-          },
-          workspaceId: authorizedSession.value.workspaceId,
-        }),
+      const clonedFields = cloneFieldsForRevision({
+        currentFields: baseVersion.fields,
+        entityVersionId: nextVersionId,
+        propertyId: editSession.propertyId,
+        replacementContent: {
+          encrypted: false,
+          fileName: editSession.fileName,
+          id: sourceFileId,
+          mimeType: DOCX_MIME_TYPE,
+          pdfFileId,
+          sha256Hex: editSession.checkpointSha256Hex,
+          sizeBytes: editSession.checkpointSizeBytes,
+          type: "file",
+          version: 1,
+          ...(editSession.checkpointScanWarnings !== null && {
+            scanWarnings: editSession.checkpointScanWarnings,
+          }),
+        },
+        workspaceId: authorizedSession.value.workspaceId,
+      });
+
+      const insertedFields = await tx
+        .insert(fields)
+        .values(clonedFields)
+        .returning({ id: fields.id, propertyId: fields.propertyId });
+
+      const nextField = insertedFields.find(
+        (field) => field.propertyId === editSession.propertyId,
       );
 
       await tx
@@ -483,6 +490,9 @@ export const finalizeDesktopEditSessionHandler = async ({
 
       return {
         entityId: editSession.entityId,
+        fieldId:
+          nextField?.id ??
+          panic("Finalized desktop edit session field was not inserted"),
         outcome: "finalized",
         versionId: nextVersionId,
         versionNumber: nextVersionNumber,

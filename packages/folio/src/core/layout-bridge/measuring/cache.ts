@@ -306,6 +306,14 @@ export function hashParagraphBlock(block: ParagraphBlock): string {
         `spacing:${attrs.spacing.before}|${attrs.spacing.after}|${attrs.spacing.line}|${attrs.spacing.lineRule}`,
       );
     }
+    // Default font drives line height for empty paragraphs, which otherwise
+    // have no text runs in this cache key.
+    if (attrs.defaultFontSize != null) {
+      parts.push(`dfs:${attrs.defaultFontSize}`);
+    }
+    if (attrs.defaultFontFamily != null) {
+      parts.push(`dff:${attrs.defaultFontFamily}`);
+    }
   }
 
   return parts.join("||");

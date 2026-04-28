@@ -206,6 +206,9 @@ function applyPageStyles(
     options.backgroundColor ?? "var(--doc-canvas, #ffffff)";
   element.style.color = "var(--doc-canvas-text, #1f2937)";
   element.style.overflow = "hidden";
+  element.style.border = "none";
+  element.style.boxShadow = "none";
+  element.style.outline = "none";
 
   // Set default font styles (matches Word default: 11pt Calibri)
   // Individual runs will override these with their own font settings
@@ -1461,8 +1464,8 @@ function applyContainerStyles(container: HTMLElement, pageGap: number): void {
   container.style.flexDirection = "column";
   container.style.alignItems = "center";
   container.style.gap = `${pageGap}px`;
-  container.style.padding = `${pageGap}px`;
-  container.style.backgroundColor = "var(--doc-bg, #f8f9fa)";
+  container.style.padding = "0";
+  container.style.backgroundColor = "transparent";
 }
 
 /**

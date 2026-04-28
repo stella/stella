@@ -139,6 +139,7 @@ export const RowActions = ({
             label: name,
             mimeType: file.mimeType,
             pdfFileId: file.pdfFileId,
+            propertyId: file.propertyId,
             workspaceId,
           });
       }

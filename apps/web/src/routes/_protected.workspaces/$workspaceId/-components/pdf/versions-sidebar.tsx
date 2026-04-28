@@ -34,7 +34,7 @@ import { cn } from "@stella/ui/lib/utils";
 import { UserAvatar } from "@/components/user-avatar";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
-import { formatRelativeTime } from "@/lib/relative-time";
+import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { entityVersionsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 
@@ -44,7 +44,7 @@ type VersionsSidebarProps = {
   currentFieldId: string;
   versions: Version[];
   currentVersionId: string | null;
-  onSwitchVersion: (fieldId: string, versionId: string) => void;
+  onSwitchVersion: (fieldId: string, versionId: string) => Promise<void> | void;
   onCompare: (baseVersionId: string, targetVersionId: string) => void;
   onClearCompare: () => void;
   isComparing: boolean;
@@ -165,7 +165,7 @@ export function VersionsSidebar({
       deletedVersion?.file?.fieldId === currentFieldId &&
       switchTarget?.file
     ) {
-      onSwitchVersion(switchTarget.file.fieldId, switchTarget.id);
+      await onSwitchVersion(switchTarget.file.fieldId, switchTarget.id);
     }
   };
 
@@ -302,7 +302,7 @@ type VersionItemProps = {
   locale: string;
   showPhaseDivider: boolean;
   canDelete: boolean;
-  onSwitchVersion: (fieldId: string, versionId: string) => void;
+  onSwitchVersion: (fieldId: string, versionId: string) => Promise<void> | void;
   onDelete: (versionId: string) => Promise<void>;
   onSetLabel: (versionId: string, label: string | null) => void;
   onRestore: (versionId: string) => void;
@@ -367,7 +367,7 @@ function VersionItem({
         type="button"
         onClick={() => {
           if (version.file) {
-            onSwitchVersion(version.file.fieldId, version.id);
+            void onSwitchVersion(version.file.fieldId, version.id);
           }
         }}
         onContextMenu={handleContextMenu}
@@ -413,7 +413,10 @@ function VersionItem({
           <span className="text-muted-foreground truncate text-xs">
             {version.author ? firstName(version.author.name) : ""}
           </span>
-          <span className="text-muted-foreground shrink-0 text-xs">
+          <span
+            className="text-muted-foreground shrink-0 text-xs"
+            title={formatFullTimestamp(version.createdAt, locale)}
+          >
             {formatRelativeTime(version.createdAt, locale)}
           </span>
         </div>

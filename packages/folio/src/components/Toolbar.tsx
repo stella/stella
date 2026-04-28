@@ -103,7 +103,7 @@ export function Toolbar({
     <div
       ref={toolbarRef}
       className={cn(
-        "flex h-11 items-center justify-center overflow-x-auto border-b border-[var(--doc-border)] bg-[var(--doc-page)] px-1 py-1",
+        "flex h-10 items-center justify-center overflow-x-auto border-b border-[var(--doc-border)] bg-[var(--doc-page)] px-1",
         className,
       )}
       style={style}

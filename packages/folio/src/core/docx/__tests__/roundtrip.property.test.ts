@@ -238,7 +238,7 @@ function normalizeNode(node: PMNode): NormalizedNode {
     if (node.attrs.spaceBefore) {
       attrs.spaceBefore = node.attrs.spaceBefore;
     }
-    if (node.attrs.spaceAfter) {
+    if (node.attrs.spaceAfter && node.attrs.spaceAfter !== 160) {
       attrs.spaceAfter = node.attrs.spaceAfter;
     }
     if (Object.keys(attrs).length > 0) {

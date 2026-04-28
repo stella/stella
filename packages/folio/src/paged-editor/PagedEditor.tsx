@@ -222,6 +222,10 @@ export type PagedEditorRef = {
   undo(): boolean;
   /** Redo. */
   redo(): boolean;
+  /** Check whether undo is available. */
+  canUndo(): boolean;
+  /** Check whether redo is available. */
+  canRedo(): boolean;
   /** Set selection by PM position. */
   setSelection(anchor: number, head?: number): void;
   /** Get current layout. */
@@ -317,7 +321,7 @@ function computeAnchorPositions(
   layout: Layout,
   blocks: FlowBlock[],
   measures: Measure[],
-  renderedPageGap: number,
+  _renderedPageGap: number,
 ): Map<string, number> {
   const positions = new Map<string, number>();
   if (!pmView?.state) {
@@ -333,9 +337,7 @@ function computeAnchorPositions(
   }
 
   const seen = new Set<string>();
-  // Offset from layout coords to scroll-container coords:
-  // viewport paddingTop + pages container padding (CSS padding = pageGap)
-  const contentOffset = VIEWPORT_PADDING_TOP + renderedPageGap;
+  const contentOffset = VIEWPORT_PADDING_TOP;
 
   pmDoc.descendants((node, pos) => {
     if (!node.isText) {
@@ -1828,7 +1830,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onBodyClick,
       className,
       style,
-      commentsSidebarOpen = false,
+      commentsSidebarOpen: _commentsSidebarOpen = false,
       sidebarOverlay,
       scrollContainerRef: scrollContainerRefProp,
       onHyperlinkClick,
@@ -2423,6 +2425,29 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             continue; // Skip to next span
           }
 
+          if (
+            spanEl.classList.contains("layout-empty-run") &&
+            pmPos >= pmStart &&
+            pmPos <= pmEnd
+          ) {
+            const spanRect = spanEl.getBoundingClientRect();
+            const pageEl = spanEl.closest(".layout-page");
+            const pageIndex = pageEl
+              ? Number((pageEl as HTMLElement).dataset["pageNumber"]) - 1
+              : 0;
+            const lineEl = spanEl.closest(".layout-line");
+            const lineHeight = lineEl
+              ? (lineEl as HTMLElement).offsetHeight
+              : Math.max(16, spanRect.height);
+
+            return {
+              x: (spanRect.left - overlayRect.left) / currentZoom,
+              y: (spanRect.top - overlayRect.top) / currentZoom,
+              height: lineHeight,
+              pageIndex,
+            };
+          }
+
           // For text runs, use inclusive range
           if (
             pmPos >= pmStart &&
@@ -2442,6 +2467,15 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             range.setEnd(textNode, charIndex);
 
             const rangeRect = range.getBoundingClientRect();
+            const spanRect = spanEl.getBoundingClientRect();
+            const useSpanStart =
+              charIndex === 0 ||
+              (rangeRect.width === 0 && rangeRect.left < spanRect.left);
+            const caretLeft = useSpanStart ? spanRect.left : rangeRect.left;
+            const caretTop =
+              rangeRect.height > 0 && !useSpanStart
+                ? rangeRect.top
+                : spanRect.top;
 
             // Find which page this span is on
             const pageEl = spanEl.closest(".layout-page");
@@ -2456,8 +2490,27 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               : 16;
 
             return {
-              x: (rangeRect.left - overlayRect.left) / currentZoom,
-              y: (rangeRect.top - overlayRect.top) / currentZoom,
+              x: (caretLeft - overlayRect.left) / currentZoom,
+              y: (caretTop - overlayRect.top) / currentZoom,
+              height: lineHeight,
+              pageIndex,
+            };
+          }
+
+          if (pmPos >= pmStart && pmPos <= pmEnd) {
+            const spanRect = spanEl.getBoundingClientRect();
+            const pageEl = spanEl.closest(".layout-page");
+            const pageIndex = pageEl
+              ? Number((pageEl as HTMLElement).dataset["pageNumber"]) - 1
+              : 0;
+            const lineEl = spanEl.closest(".layout-line");
+            const lineHeight = lineEl
+              ? (lineEl as HTMLElement).offsetHeight
+              : Math.max(16, spanRect.height);
+
+            return {
+              x: (spanRect.left - overlayRect.left) / currentZoom,
+              y: (spanRect.top - overlayRect.top) / currentZoom,
               height: lineHeight,
               pageIndex,
             };
@@ -4451,6 +4504,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         redo() {
           return hiddenPMRef.current?.redo() ?? false;
         },
+        canUndo() {
+          return hiddenPMRef.current?.canUndo() ?? false;
+        },
+        canRedo() {
+          return hiddenPMRef.current?.canRedo() ?? false;
+        },
         setSelection(anchor: number, head?: number) {
           hiddenPMRef.current?.setSelection(anchor, head);
         },
@@ -4499,6 +4558,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           dispatch: (tr) => hiddenPMRef.current?.dispatch(tr),
           undo: () => hiddenPMRef.current?.undo() ?? false,
           redo: () => hiddenPMRef.current?.redo() ?? false,
+          canUndo: () => hiddenPMRef.current?.canUndo() ?? false,
+          canRedo: () => hiddenPMRef.current?.canRedo() ?? false,
           setSelection: (anchor, head) =>
             hiddenPMRef.current?.setSelection(anchor, head),
           getLayout: () => layout,
@@ -4527,6 +4588,31 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       const numPages = layout.pages.length;
       return numPages * pageSize.h + (numPages - 1) * pageGap + 48;
     }, [layout, pageSize.h, pageGap]);
+    const scaledViewportHeight = Math.max(1, totalHeight * zoom);
+    const scaledViewportWidth = Math.max(1, pageSize.w * zoom);
+    const viewportExtentStyle: CSSProperties = {
+      position: "relative",
+      width: `max(100%, ${String(scaledViewportWidth)}px)`,
+      height: scaledViewportHeight,
+      backgroundColor: "transparent",
+    };
+    const scaledViewportStyle: CSSProperties = {
+      ...viewportStyles,
+      position: "absolute",
+      top: 0,
+      left: `max(0px, calc((100% - ${String(scaledViewportWidth)}px) / 2))`,
+      width: pageSize.w,
+      minHeight: totalHeight,
+      transform: (() => {
+        const parts: string[] = [];
+        if (zoom !== 1) {
+          parts.push(`scale(${zoom})`);
+        }
+        return parts.length > 0 ? parts.join(" ") : undefined;
+      })(),
+      transformOrigin: "top left",
+      transition: "transform 0.2s ease",
+    };
 
     return (
       // oxlint-disable-next-line jsx-a11y/no-static-element-interactions
@@ -4559,113 +4645,101 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         {/* Viewport for visible pages */}
         <div
-          style={{
-            ...viewportStyles,
-            minHeight: totalHeight,
-            transform: (() => {
-              const parts: string[] = [];
-              if (commentsSidebarOpen) {
-                parts.push("translateX(-120px)");
-              }
-              if (zoom !== 1) {
-                parts.push(`scale(${zoom})`);
-              }
-              return parts.length > 0 ? parts.join(" ") : undefined;
-            })(),
-            transformOrigin: "top center",
-            transition: "transform 0.2s ease",
-          }}
+          className="paged-editor__viewport-extent"
+          style={viewportExtentStyle}
         >
-          {/* Pages container */}
-          <div
-            ref={pagesContainerRef}
-            className={`paged-editor__pages${readOnly ? " paged-editor--readonly" : ""}${hfEditMode ? ` paged-editor--hf-editing paged-editor--editing-${hfEditMode}` : ""}`}
-            style={pagesContainerStyles}
-            onMouseDown={handlePagesMouseDown}
-            onMouseMove={handlePagesMouseMove}
-            onClick={handlePagesClick}
-            onContextMenu={handlePagesContextMenu}
-            aria-hidden="true" // Visual only, PM provides semantic content
-          />
-
-          {/* Selection overlay */}
-          <SelectionOverlay
-            selectionRects={selectionRects}
-            caretPosition={caretPosition}
-            isFocused={isFocused}
-            pageGap={pageGap}
-            readOnly={readOnly}
-          />
-
-          {/* Image selection overlay */}
-          <ImageSelectionOverlay
-            imageInfo={selectedImageInfo}
-            zoom={zoom}
-            isFocused={isFocused}
-            onResize={handleImageResize}
-            onResizeStart={handleImageResizeStart}
-            onResizeEnd={handleImageResizeEnd}
-            onDragMove={handleImageDragMove}
-            onDragStart={handleImageDragStart}
-            onDragEnd={handleImageDragEnd}
-          />
-
-          {/* Table quick action insert button */}
-          {tableInsertButton && (
-            <button
-              type="button"
-              onMouseDown={handleTableInsertClick}
-              onMouseEnter={clearTableInsertTimer}
-              onMouseLeave={() => setTableInsertButton(null)}
-              style={{
-                position: "absolute",
-                left: tableInsertButton.x,
-                top: tableInsertButton.y,
-                width: 20,
-                height: 20,
-                borderRadius: "4px",
-                border: "1px solid var(--doc-border, #dadce0)",
-                backgroundColor: "var(--doc-bg, #f8f9fa)",
-                color: "var(--doc-text-muted, #5f6368)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                zIndex: 200,
-                padding: 0,
-                boxShadow: "none",
-              }}
-              title={
-                tableInsertButton.type === "row"
-                  ? "Insert row below"
-                  : "Insert column to the right"
-              }
-              aria-label={
-                tableInsertButton.type === "row"
-                  ? "Insert row below"
-                  : "Insert column to the right"
-              }
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path
-                  d="M6 1v10M1 6h10"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </button>
-          )}
-
-          {/* Plugin overlays (highlights, annotations) */}
-          {pluginOverlays && (
+          <div className="paged-editor__viewport" style={scaledViewportStyle}>
+            {/* Pages container */}
             <div
-              className="paged-editor__plugin-overlays"
-              style={pluginOverlaysStyles}
-            >
-              {pluginOverlays}
-            </div>
-          )}
+              ref={pagesContainerRef}
+              className={`paged-editor__pages${readOnly ? " paged-editor--readonly" : ""}${hfEditMode ? ` paged-editor--hf-editing paged-editor--editing-${hfEditMode}` : ""}`}
+              style={pagesContainerStyles}
+              onMouseDown={handlePagesMouseDown}
+              onMouseMove={handlePagesMouseMove}
+              onClick={handlePagesClick}
+              onContextMenu={handlePagesContextMenu}
+              aria-hidden="true" // Visual only, PM provides semantic content
+            />
+
+            {/* Selection overlay */}
+            <SelectionOverlay
+              selectionRects={selectionRects}
+              caretPosition={caretPosition}
+              isFocused={isFocused}
+              pageGap={pageGap}
+              readOnly={readOnly}
+            />
+
+            {/* Image selection overlay */}
+            <ImageSelectionOverlay
+              imageInfo={selectedImageInfo}
+              zoom={zoom}
+              isFocused={isFocused}
+              onResize={handleImageResize}
+              onResizeStart={handleImageResizeStart}
+              onResizeEnd={handleImageResizeEnd}
+              onDragMove={handleImageDragMove}
+              onDragStart={handleImageDragStart}
+              onDragEnd={handleImageDragEnd}
+            />
+
+            {/* Table quick action insert button */}
+            {tableInsertButton && (
+              <button
+                type="button"
+                onMouseDown={handleTableInsertClick}
+                onMouseEnter={clearTableInsertTimer}
+                onMouseLeave={() => setTableInsertButton(null)}
+                style={{
+                  position: "absolute",
+                  left: tableInsertButton.x,
+                  top: tableInsertButton.y,
+                  width: 20,
+                  height: 20,
+                  borderRadius: "4px",
+                  border: "1px solid var(--doc-border, #dadce0)",
+                  backgroundColor: "var(--doc-bg, #f8f9fa)",
+                  color: "var(--doc-text-muted, #5f6368)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  zIndex: 200,
+                  padding: 0,
+                  boxShadow: "none",
+                }}
+                title={
+                  tableInsertButton.type === "row"
+                    ? "Insert row below"
+                    : "Insert column to the right"
+                }
+                aria-label={
+                  tableInsertButton.type === "row"
+                    ? "Insert row below"
+                    : "Insert column to the right"
+                }
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path
+                    d="M6 1v10M1 6h10"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+            )}
+
+            {/* Plugin overlays (highlights, annotations) */}
+            {pluginOverlays && (
+              <div
+                className="paged-editor__plugin-overlays"
+                style={pluginOverlaysStyles}
+              >
+                {pluginOverlays}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Sidebar overlay — inside scroll container, scrolls with document */}

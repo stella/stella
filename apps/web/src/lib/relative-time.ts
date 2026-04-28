@@ -49,3 +49,18 @@ export const formatRelativeTime = (
   }
   return rtf.format(Math.trunc(diff / YEAR), "year");
 };
+
+export const formatFullTimestamp = (
+  date: Date | string,
+  locale: string,
+): string => {
+  const resolvedDate = typeof date === "string" ? new Date(date) : date;
+  if (Number.isNaN(resolvedDate.getTime())) {
+    return "";
+  }
+
+  return resolvedDate.toLocaleString(locale, {
+    dateStyle: "full",
+    timeStyle: "medium",
+  });
+};

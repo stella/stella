@@ -20,7 +20,7 @@ type FileData = {
 
 type FileMetadata = Omit<FileData, "buffer">;
 
-const filesKeys = {
+export const filesKeys = {
   byFieldId: (key: FileByFieldIdKey) => [
     "files",
     key.workspaceId,

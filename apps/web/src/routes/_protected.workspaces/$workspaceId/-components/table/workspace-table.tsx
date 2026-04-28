@@ -18,7 +18,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/table";
-import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
@@ -356,12 +355,6 @@ const DraggableRow = ({
           ) : (
             <span className="flex items-center gap-1.5">
               {flexRender(cell.column.columnDef.cell, cell.getContext())}
-              {cell.column.getIndex() === 1 && entity.activeEditBy !== null && (
-                <ActiveEditBadge
-                  image={entity.activeEditBy.image}
-                  name={entity.activeEditBy.name}
-                />
-              )}
             </span>
           )}
         </TableCell>

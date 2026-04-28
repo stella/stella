@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { RefObject } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
@@ -24,11 +25,17 @@ import "./peek-docx.css";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
+import { env } from "@/env";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { DOCX_MIME } from "@/lib/consts";
+import { APIError } from "@/lib/errors";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
+import {
+  useDocxFitZoom,
+  useDocxWheelZoom,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { PageAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-anonymization";
 import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
@@ -38,13 +45,7 @@ const DocxEditor = lazy(async () => {
   return { default: m.DocxEditor };
 });
 
-const DOCX_BASE_ZOOM = 0.5;
-const DOCX_MIN_ZOOM = 0.25;
-const DOCX_MAX_ZOOM = 2;
-const PINCH_SENSITIVITY = 0.005;
-
-const clampDocxZoom = (zoom: number) =>
-  Math.max(DOCX_MIN_ZOOM, Math.min(DOCX_MAX_ZOOM, zoom));
+const PRINT_IFRAME_CLEANUP_MS = 5 * 60 * 1000;
 
 type PeekPdfViewerProps = {
   workspaceId: string;
@@ -57,6 +58,8 @@ type PeekPdfViewerProps = {
   mimeType?: string | undefined;
   /** Called when navigating from peek to fullscreen PDF (e.g. inspector close). */
   onPeekNavigate?: (() => void) | undefined;
+  docxPrintActionsRef?: RefObject<Map<string, () => void>> | undefined;
+  onDocxScrollTopChange?: ((scrollTop: number) => void) | undefined;
 };
 
 export const PeekPdfViewer = ({
@@ -69,6 +72,8 @@ export const PeekPdfViewer = ({
   scaleOffset,
   mimeType,
   onPeekNavigate,
+  docxPrintActionsRef,
+  onDocxScrollTopChange,
 }: PeekPdfViewerProps) => {
   const isImageOrigin = mimeType?.startsWith("image/") ?? false;
 
@@ -94,7 +99,14 @@ export const PeekPdfViewer = ({
   if (file.mimeType === DOCX_MIME) {
     return (
       <Suspense fallback={<PeekSuspenseFallback />}>
-        <PeekDocxViewer buffer={file.buffer} scaleOffset={scaleOffset} />
+        <PeekDocxViewer
+          buffer={file.buffer}
+          fieldId={fieldId}
+          printActionsRef={docxPrintActionsRef}
+          onScrollTopChange={onDocxScrollTopChange}
+          scaleOffset={scaleOffset}
+          workspaceId={workspaceId}
+        />
       </Suspense>
     );
   }
@@ -183,6 +195,59 @@ export const PeekPdfControls = ({
   );
 };
 
+export const printPdfBuffer = (buffer: ArrayBuffer) => {
+  const blob = new Blob([buffer], {
+    type: PDF_MIME_TYPE,
+  });
+  const url = URL.createObjectURL(blob);
+  const frame = document.createElement("iframe");
+  frame.style.display = "none";
+  frame.src = url;
+  document.body.append(frame);
+
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) {
+      return;
+    }
+    cleaned = true;
+    frame.remove();
+    URL.revokeObjectURL(url);
+  };
+  setTimeout(cleanup, PRINT_IFRAME_CLEANUP_MS);
+
+  frame.addEventListener("load", () => {
+    if (!frame.contentWindow) {
+      cleanup();
+      return;
+    }
+    frame.contentWindow.addEventListener("afterprint", cleanup, { once: true });
+    frame.contentWindow.print();
+  });
+};
+
+export const fetchPrintPdf = async ({
+  workspaceId,
+  fieldId,
+}: {
+  workspaceId: string;
+  fieldId: string;
+}) => {
+  const response = await fetch(
+    `${env.VITE_API_URL}/v1/files/${workspaceId}/print-pdf/${fieldId}`,
+    { credentials: "include", signal: AbortSignal.timeout(30_000) },
+  );
+
+  if (!response.ok) {
+    throw new APIError({
+      status: response.status,
+      message: "Failed to prepare printable PDF",
+    });
+  }
+
+  return await response.arrayBuffer();
+};
+
 export const PeekPrintButton = () => {
   const t = useTranslations();
   const analytics = useAnalytics();
@@ -210,34 +275,7 @@ export const PeekPrintButton = () => {
         return;
       }
 
-      const blob = new Blob([data.slice().buffer], {
-        type: PDF_MIME_TYPE,
-      });
-      const url = URL.createObjectURL(blob);
-      const frame = document.createElement("iframe");
-      frame.style.display = "none";
-      frame.src = url;
-      document.body.append(frame);
-      frame.addEventListener("load", () => {
-        let cleaned = false;
-        const cleanup = () => {
-          if (cleaned) {
-            return;
-          }
-          cleaned = true;
-          frame.remove();
-          URL.revokeObjectURL(url);
-        };
-        if (!frame.contentWindow) {
-          cleanup();
-          return;
-        }
-        frame.contentWindow.addEventListener("afterprint", cleanup);
-        // Fallback: clean up after 5 minutes if afterprint
-        // never fires (defensive; spec guarantees the event).
-        setTimeout(cleanup, 5 * 60 * 1000);
-        frame.contentWindow.print();
-      });
+      printPdfBuffer(data.slice().buffer);
     } catch (error: unknown) {
       analytics.captureError(error);
     } finally {
@@ -266,65 +304,125 @@ export const PeekPrintButton = () => {
   );
 };
 
+export const PreparedPdfPrintButton = ({
+  disabled = false,
+  fieldId,
+  workspaceId,
+}: {
+  disabled?: boolean | undefined;
+  fieldId: string;
+  workspaceId: string;
+}) => {
+  const t = useTranslations();
+  const analytics = useAnalytics();
+  const [isPrinting, setIsPrinting] = useState(false);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const handlePrint = useCallback(async () => {
+    setIsPrinting(true);
+    try {
+      const data = await fetchPrintPdf({ workspaceId, fieldId });
+      if (!isMounted.current) {
+        return;
+      }
+      printPdfBuffer(data);
+    } catch (error: unknown) {
+      analytics.captureError(error);
+    } finally {
+      if (isMounted.current) {
+        setIsPrinting(false);
+      }
+    }
+  }, [analytics, fieldId, workspaceId]);
+
+  return (
+    <Tooltip
+      content={t("common.print")}
+      render={
+        <Button
+          disabled={disabled || isPrinting || fieldId.length === 0}
+          onClick={() => {
+            void handlePrint();
+          }}
+          size="icon-xs"
+          variant="ghost"
+        >
+          <PrinterIcon className="size-3.5" />
+        </Button>
+      }
+    />
+  );
+};
+
 // ── DOCX peek viewer with zoom wiring ──────────────────
 
 const PeekDocxViewer = ({
   buffer,
+  fieldId,
+  onScrollTopChange,
+  printActionsRef,
   scaleOffset,
+  workspaceId,
 }: {
   buffer: ArrayBuffer;
+  fieldId: string;
+  onScrollTopChange?: ((scrollTop: number) => void) | undefined;
+  printActionsRef?: RefObject<Map<string, () => void>> | undefined;
   scaleOffset: number;
+  workspaceId: string;
 }) => {
+  const analytics = useAnalytics();
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const initialZoom = clampDocxZoom(DOCX_BASE_ZOOM + scaleOffset);
+  const targetZoom = useDocxFitZoom(containerRef, scaleOffset);
 
   // Sync scaleOffset from inspector +/- buttons to Folio zoom
   useEffect(() => {
-    editorRef.current?.setZoom(initialZoom);
-  }, [initialZoom]);
+    editorRef.current?.setZoom(targetZoom);
+  }, [targetZoom]);
+  useDocxWheelZoom(containerRef, editorRef);
 
-  // Pinch-to-zoom (Cmd/Ctrl+wheel on Mac trackpad)
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) {
+    if (!printActionsRef) {
       return undefined;
     }
 
-    const handleWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) {
-        return;
-      }
-      e.preventDefault();
-
-      const editor = editorRef.current;
-      if (!editor) {
-        return;
-      }
-
-      const currentZoom = editor.getZoom();
-      const delta = -e.deltaY * PINCH_SENSITIVITY;
-      const next = clampDocxZoom(currentZoom + delta);
-      editor.setZoom(Math.round(next * 100) / 100);
+    const printActions = printActionsRef.current;
+    const print = () => {
+      void fetchPrintPdf({ workspaceId, fieldId })
+        .then(printPdfBuffer)
+        .catch((error: unknown) => {
+          analytics.captureError(error);
+        });
     };
+    printActions.set(fieldId, print);
 
-    container.addEventListener("wheel", handleWheel, { passive: false });
     return () => {
-      container.removeEventListener("wheel", handleWheel);
+      if (printActions.get(fieldId) === print) {
+        printActions.delete(fieldId);
+      }
     };
-  }, []);
+  }, [analytics, fieldId, printActionsRef, workspaceId]);
 
   return (
     <div ref={containerRef} className="h-full overflow-auto">
       <DocxEditor
         ref={editorRef}
-        className="folio-peek h-full"
+        className="folio-docx-preview folio-peek h-full"
         documentBuffer={buffer}
-        initialZoom={initialZoom}
+        initialZoom={targetZoom}
         loadingIndicator={null}
         readOnly
         showToolbar={false}
         showZoomControl={false}
+        {...(onScrollTopChange !== undefined ? { onScrollTopChange } : {})}
       />
     </div>
   );

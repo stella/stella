@@ -8,6 +8,7 @@ import { cn } from "@stella/ui/lib/utils";
 
 import { isFileDisplayable } from "@/lib/types";
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
+import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
@@ -159,6 +160,13 @@ export const KanbanCard = ({
       <span className="flex items-center gap-1.5 text-sm leading-snug font-medium">
         {icon}
         {nameElement}
+        {entity.activeEditBy && (
+          <ActiveEditBadge
+            className="shrink-0"
+            image={entity.activeEditBy.image}
+            name={entity.activeEditBy.name}
+          />
+        )}
       </span>
       {isTask && <TaskBadges entity={entity} />}
       {cardFields &&
@@ -317,6 +325,7 @@ export const KanbanCard = ({
               label: name,
               mimeType: file.mimeType,
               pdfFileId: file.pdfFileId,
+              propertyId: file.propertyId,
               workspaceId,
             })
           }
@@ -328,6 +337,7 @@ export const KanbanCard = ({
                 label: name,
                 mimeType: file.mimeType,
                 pdfFileId: file.pdfFileId,
+                propertyId: file.propertyId,
                 workspaceId,
               });
             }

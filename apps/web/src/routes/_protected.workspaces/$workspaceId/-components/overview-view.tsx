@@ -45,7 +45,7 @@ import { renderDragPreview } from "@/components/drag-preview";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
-import { formatRelativeTime } from "@/lib/relative-time";
+import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { isFileDisplayable } from "@/lib/types";
 import type { EntityKind, WorkspaceEntity } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
@@ -913,6 +913,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
               label: entity.name,
               mimeType: entity.mimeType ?? undefined,
               pdfFileId: entity.pdfFileId,
+              propertyId: entity.propertyId ?? undefined,
               workspaceId,
             })
         : undefined;
@@ -957,7 +958,13 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
         <span className="truncate">{entity.name}</span>
       </span>
       {relTime && (
-        <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+        <span
+          className="text-muted-foreground shrink-0 text-xs tabular-nums"
+          title={formatFullTimestamp(
+            entity.updatedAt ?? entity.createdAt,
+            lang,
+          )}
+        >
           {relTime}
         </span>
       )}

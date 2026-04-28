@@ -36,7 +36,7 @@ import { authClient, revokeAuthSession } from "@/lib/auth";
 import type { SessionRevocationToken } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 import { parseUserAgent } from "@/lib/parse-user-agent";
-import { formatRelativeTime } from "@/lib/relative-time";
+import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { sessionOptions } from "@/routes/-queries";
 import {
   sessionsKeys,
@@ -96,7 +96,9 @@ function Sessions() {
                 <TableRow key={session.id}>
                   <TableCell>{deviceLabel}</TableCell>
                   <TableCell>{session.ipAddress || EM_DASH}</TableCell>
-                  <TableCell>
+                  <TableCell
+                    title={formatFullTimestamp(session.updatedAt, lang)}
+                  >
                     {formatRelativeTime(session.updatedAt, lang)}
                   </TableCell>
                   <TableCell className="text-end">

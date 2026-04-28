@@ -344,10 +344,6 @@ type Messages = {
     "send": "Send message";
     "thinking": "Thinking...";
     "threads": "Conversations";
-    "toolCall": {
-      "output": "Output";
-      "sourceCode": "Source code";
-    };
     "tool": {
       "ask-user": "Asking for clarification";
       "create-document": "Creating document";
@@ -364,6 +360,10 @@ type Messages = {
       "search-matter": "Searching the matter";
       "searchCaseLaw": "Searching case law";
       "update-entity-fields": "Updating metadata";
+    };
+    "toolCall": {
+      "output": "Output";
+      "sourceCode": "Source code";
     };
     "unsupportedFileType": "Unsupported file type";
     "uploadFailed": "Failed to process file";
@@ -705,7 +705,7 @@ type Messages = {
   "fileDetail": {
     "base": "Base";
     "cannotDeleteLastVersion": "Cannot delete the only remaining version";
-    "changesDetected": "changes detected";
+    "changesDetected": "{count, plural, one {# change} other {# changes}}";
     "changesSince": "Changes since {version}";
     "compare": "Compare";
     "compareTo": "Compare to";
@@ -737,7 +737,7 @@ type Messages = {
     "uploadedBy": "Uploaded by";
     "version": "Version";
     "versionHistory": "Version history";
-    "viewVersionHistory": "Version history";
+    "viewVersionHistory": "Show version history";
     "wordsAdded": "words added";
     "wordsRemoved": "words removed";
   };
@@ -757,10 +757,14 @@ type Messages = {
     "bold": "Bold";
     "boldShortcut": "Bold (Ctrl+B)";
     "bulletList": "Bullet List";
+    "comment": "Comment";
     "copy": "Copy";
     "copyLink": "Copy link";
     "cut": "Cut";
     "decreaseIndent": "Decrease Indent";
+    "delete": "Delete";
+    "deleteColumn": "Delete column";
+    "deleteRow": "Delete row";
     "deleted": "Deleted";
     "discardChanges": "Discard";
     "dismiss": "Dismiss";
@@ -768,13 +772,22 @@ type Messages = {
     "doneEditing": "Done editing";
     "doubleClickFooter": "Double-click to add footer";
     "doubleClickHeader": "Double-click to add header";
+    "editAuthRequired": "Refresh Stella and sign in again before editing this document.";
+    "editDownloadFailed": "The document could not be downloaded for editing.";
     "editLink": "Edit link";
+    "editOpenFailed": "The document could not be opened for editing.";
+    "editPermissionDenied": "You do not have permission to edit this document.";
+    "editSessionTakenOver": "This editing session was taken over elsewhere.";
     "fontColor": "Font color";
     "fontGroup": "Font";
     "formattingToolbar": "Formatting toolbar";
     "hideDetails": "Hide details";
     "historyGroup": "History";
     "increaseIndent": "Increase Indent";
+    "insertColumnLeft": "Insert column left";
+    "insertColumnRight": "Insert column right";
+    "insertRowAbove": "Insert row above";
+    "insertRowBelow": "Insert row below";
     "inserted": "Inserted";
     "italic": "Italic";
     "italicShortcut": "Italic (Ctrl+I)";
@@ -783,6 +796,7 @@ type Messages = {
     "listsGroup": "Lists";
     "loadingDocument": "Loading document...";
     "loadingEditor": "Loading editor...";
+    "moreFormatting": "More formatting";
     "networkError": "Network error. Please check your internet connection and try again.";
     "nextChange": "Next Change";
     "numberedList": "Numbered List";
@@ -795,6 +809,7 @@ type Messages = {
     "redoShortcut": "Redo (Ctrl+Y)";
     "rejectChange": "Reject Change";
     "removeLink": "Remove link";
+    "renderErrorDescription": "An error occurred while rendering this component. Please try again or contact support if the problem persists.";
     "savingDocument": "Saving...";
     "selectAll": "Select all";
     "showDetails": "Show details";

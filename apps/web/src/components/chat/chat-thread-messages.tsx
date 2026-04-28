@@ -30,26 +30,66 @@ const USER_STREAMDOWN_COMPONENTS = {
   ),
 };
 
-const USER_MENTION_TAG_RE =
-  /<entity-mention\b([^>]*?)\s*(?:\/>|><\/entity-mention>)/gi;
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const getMentionTagAttr = (attrs: string, name: string) => {
-  const match = new RegExp(`${name}="([^"]+)"`, "i").exec(attrs);
-  return match?.[1] ?? null;
+  const attrName = escapeRegExp(name);
+  const match = new RegExp(
+    `(?:^|\\s)${attrName}\\s*=\\s*(["'])(.*?)\\1`,
+    "i",
+  ).exec(attrs);
+
+  return match?.[2] ?? null;
 };
 
-const normalizeUserMessageTextForDisplay = (text: string) =>
-  text.replace(USER_MENTION_TAG_RE, (_, rawAttrs: string) => {
-    const id = getMentionTagAttr(rawAttrs, "data-id");
-    const label = getMentionTagAttr(rawAttrs, "data-label");
-    const category = getMentionTagAttr(rawAttrs, "data-category");
+const replaceMentionTag = (rawAttrs: string) => {
+  const id = getMentionTagAttr(rawAttrs, "data-id");
+  const label = getMentionTagAttr(rawAttrs, "data-label");
+  const category = getMentionTagAttr(rawAttrs, "data-category");
 
-    if (!id || !label || !category) {
-      return "";
+  if (!id || !label || !category) {
+    return "";
+  }
+
+  return `<a href="#stella-${category}=${id}">${label}</a>`;
+};
+
+const normalizeUserMessageTextForDisplay = (text: string) => {
+  const openTag = "<entity-mention";
+  const closeTag = "</entity-mention>";
+  let cursor = 0;
+  let result = "";
+
+  while (cursor < text.length) {
+    const start = text.indexOf(openTag, cursor);
+    if (start === -1) {
+      result += text.slice(cursor);
+      break;
     }
 
-    return `<a href="#stella-${category}=${id}">${label}</a>`;
-  });
+    const tagEnd = text.indexOf(">", start + openTag.length);
+    if (tagEnd === -1) {
+      result += text.slice(cursor);
+      break;
+    }
+
+    const isSelfClosing = text.slice(tagEnd - 1, tagEnd + 1) === "/>";
+    const closedTagEnd = tagEnd + 1 + closeTag.length;
+    const isClosed = text.slice(tagEnd + 1, closedTagEnd) === closeTag;
+    if (!isSelfClosing && !isClosed) {
+      result += text.slice(cursor, tagEnd + 1);
+      cursor = tagEnd + 1;
+      continue;
+    }
+
+    result += text.slice(cursor, start);
+    result += replaceMentionTag(text.slice(start + openTag.length, tagEnd));
+    cursor = isSelfClosing ? tagEnd + 1 : closedTagEnd;
+  }
+
+  return result;
+};
 
 const IMAGE_MEDIA_TYPES = new Set([
   "image/png",

@@ -236,7 +236,7 @@ export type ToolbarGroupProps = {
 
 /**
  * Individual toolbar button with shadcn styling.
- * 32x32px hit area, 18px icons, rounded-md.
+ * Compact editor chrome button.
  */
 export function ToolbarButton({
   active = false,
@@ -259,7 +259,7 @@ export function ToolbarButton({
     <button
       type="button"
       className={cn(
-        "flex h-8 w-8 items-center justify-center rounded-md",
+        "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
         "transition-colors duration-100",
         "-webkit-font-smoothing-antialiased",
         "text-[var(--doc-text-muted)] hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)]",
@@ -339,12 +339,12 @@ export function ToolbarGroup({
 }
 
 /**
- * Toolbar separator — 1px vertical line, 32px tall.
+ * Toolbar separator.
  */
 export function ToolbarSeparator() {
   return (
     <div
-      className="mx-2 h-8 w-px shrink-0 bg-[var(--doc-border)]"
+      className="mx-1 h-6 w-px shrink-0 bg-[var(--doc-border)] sm:mx-2"
       role="separator"
     />
   );

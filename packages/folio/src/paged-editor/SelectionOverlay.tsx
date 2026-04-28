@@ -58,12 +58,13 @@ const DEFAULT_BLINK_INTERVAL = 530; // Standard cursor blink rate
 const overlayStyles: React.CSSProperties = {
   position: "absolute",
   top: 0,
-  left: 0,
-  right: 0,
+  left: "50%",
+  width: "100vw",
   bottom: 0,
+  transform: "translateX(-50%)",
   pointerEvents: "none",
   zIndex: 10,
-  overflow: "hidden",
+  overflow: "visible",
 };
 
 const caretStyles = (

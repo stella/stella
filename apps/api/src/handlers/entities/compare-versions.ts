@@ -14,7 +14,6 @@ import type {
   ExtractedDocument,
   ParagraphRewrite,
 } from "@/api/handlers/docx/types";
-import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -250,30 +249,9 @@ export default createSafeHandler(
       );
     }
 
-    // Convert the redline DOCX to PDF via Gotenberg
-    const redlineBytes = new Uint8Array(editResult.value.buffer);
-    const pdfResult = await convertToPdf(
-      redlineBytes.buffer,
-      "comparison.docx",
-      DOCX_MIME,
-    );
-
-    if (Result.isError(pdfResult)) {
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "Failed to convert redline to PDF",
-        }),
-      );
-    }
-
-    // Return both the redline DOCX and PDF as base64
-    const docxBase64 = Buffer.from(redlineBytes).toString("base64");
-    const pdfBytes = new Uint8Array(pdfResult.value.buffer);
-    const pdfBase64 = Buffer.from(pdfBytes).toString("base64");
+    const docxBase64 = Buffer.from(editResult.value.buffer).toString("base64");
 
     return Result.ok({
-      pdfBase64,
       docxBase64,
       editsApplied: diffResult.edits.length,
       wordsAdded: diffResult.stats.wordsAdded,

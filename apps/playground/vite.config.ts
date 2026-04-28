@@ -1,13 +1,14 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import path from "path";
+import path from "node:path";
 import { defineConfig } from "vite";
 
-const monorepoRoot = path.resolve(__dirname, "../..");
+const playgroundRoot = import.meta.dirname;
+const monorepoRoot = path.resolve(playgroundRoot, "../..");
 
 export default defineConfig({
   plugins: [tailwindcss(), react()],
-  root: __dirname,
+  root: playgroundRoot,
   resolve: {
     alias: [
       {

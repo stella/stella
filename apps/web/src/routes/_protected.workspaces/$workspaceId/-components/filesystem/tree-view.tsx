@@ -656,7 +656,14 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         }}
         open={bgContextOpen}
         parentId={currentFolderId}
-        render={<span className="sr-only" />}
+        render={
+          <button
+            aria-label={t("common.add")}
+            className="sr-only"
+            tabIndex={-1}
+            type="button"
+          />
+        }
         workspaceId={workspaceId}
       />
     </div>
@@ -975,8 +982,9 @@ const FilesystemRow = ({
       ) : (
         <span className="flex items-center gap-1.5 truncate">
           <span className="truncate">{name}</span>
-          {node.activeEditBy !== null && (
+          {node.activeEditBy && (
             <ActiveEditBadge
+              className="shrink-0"
               image={node.activeEditBy.image}
               name={node.activeEditBy.name}
             />
@@ -1034,6 +1042,7 @@ const FilesystemRow = ({
             label: getEntityName(e),
             mimeType: f.mimeType,
             pdfFileId: f.pdfFileId,
+            propertyId: f.propertyId,
             workspaceId,
           };
         })
@@ -1059,6 +1068,7 @@ const FilesystemRow = ({
           label: name,
           mimeType: file.mimeType,
           pdfFileId: file.pdfFileId,
+          propertyId: file.propertyId,
           workspaceId,
         });
     }

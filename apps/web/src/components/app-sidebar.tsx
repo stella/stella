@@ -111,7 +111,7 @@ import { getInitials } from "@/lib/get-initials";
 import { HOTKEYS, NAV_KEY } from "@/lib/hotkeys";
 import { getMatterSwatch } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
-import { formatRelativeTime } from "@/lib/relative-time";
+import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { knowledgeSections } from "@/routes/_protected.knowledge/index";
 import { managementRoles } from "@/routes/_protected.organization/-consts";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
@@ -670,12 +670,18 @@ const MatterItem = ({
             <span className="flex min-w-0 flex-col">
               <span className="truncate">{ws.name}</span>
               {ws.client ? (
-                <span className="text-muted-foreground truncate text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100">
+                <span
+                  className="text-muted-foreground truncate text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100"
+                  title={formatFullTimestamp(ws.lastActivityAt, lang)}
+                >
                   {ws.client.displayName}
                   {relTime ? ` · ${relTime}` : ""}
                 </span>
               ) : (
-                <span className="text-muted-foreground font-mono text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100">
+                <span
+                  className="text-muted-foreground font-mono text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100"
+                  title={formatFullTimestamp(ws.lastActivityAt, lang)}
+                >
                   {ws.reference ? `${ws.reference} · ${relTime}` : relTime}
                 </span>
               )}

@@ -13,7 +13,7 @@
 
 import { useCallback, useRef } from "react";
 
-import { TextSelection } from "prosemirror-state";
+import { Selection, TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 
 /** Only match lines inside page body content, skipping header/footer lines. */
@@ -108,6 +108,10 @@ export function useVisualLineNavigation({
           range.setEnd(textNode, charIndex);
           return range.getBoundingClientRect().left;
         }
+
+        if (pmPos >= pmStart && pmPos <= pmEnd) {
+          return spanEl.getBoundingClientRect().left;
+        }
       }
 
       // Check empty paragraphs
@@ -188,6 +192,19 @@ export function useVisualLineNavigation({
   const findPositionOnLineAtClientX = useCallback(
     (lineEl: HTMLElement, clientX: number): number | null => {
       const spans = lineEl.querySelectorAll("span[data-pm-start][data-pm-end]");
+
+      const emptyRun = lineEl.querySelector(".layout-empty-run");
+      if (emptyRun) {
+        const paragraph = lineEl.closest(".layout-paragraph") as HTMLElement;
+        if (paragraph?.dataset["pmStart"]) {
+          return Number(paragraph.dataset["pmStart"]) + 1;
+        }
+        const emptyRunEl = emptyRun as HTMLElement;
+        if (emptyRunEl.dataset["pmStart"]) {
+          return Number(emptyRunEl.dataset["pmStart"]);
+        }
+        return null;
+      }
 
       if (spans.length === 0) {
         // Empty line - return paragraph content start
@@ -372,17 +389,22 @@ export function useVisualLineNavigation({
       // Set selection
       const { state, dispatch } = view;
       const clampedPos = Math.max(0, Math.min(newPos, state.doc.content.size));
+      const clampedAnchor = Math.max(
+        0,
+        Math.min(anchor, state.doc.content.size),
+      );
 
       try {
+        const $newPos = state.doc.resolve(clampedPos);
         const sel = event.shiftKey
-          ? TextSelection.create(state.doc, anchor, clampedPos)
-          : TextSelection.create(state.doc, clampedPos);
+          ? TextSelection.between(state.doc.resolve(clampedAnchor), $newPos)
+          : Selection.near($newPos);
         dispatch(state.tr.setSelection(sel));
       } catch {
         const $newPos = state.doc.resolve(clampedPos);
         const sel = event.shiftKey
-          ? TextSelection.between(state.doc.resolve(anchor), $newPos)
-          : TextSelection.near($newPos);
+          ? TextSelection.between(state.doc.resolve(clampedAnchor), $newPos)
+          : Selection.near($newPos);
         dispatch(state.tr.setSelection(sel));
       }
 

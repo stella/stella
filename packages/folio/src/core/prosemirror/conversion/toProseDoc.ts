@@ -72,10 +72,7 @@ export function toProseDoc(
   const paragraphs = document.package.document.content;
   const nodes: PMNode[] = [];
 
-  // Create style resolver if styles are provided
-  const styleResolver = options?.styles
-    ? createStyleResolver(options.styles)
-    : null;
+  const styleResolver = createStyleResolver(options?.styles);
 
   for (const block of paragraphs) {
     if (block.type === "paragraph") {

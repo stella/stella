@@ -14,7 +14,7 @@ import { cn } from "@stella/ui/lib/utils";
 
 import { useI18nStore } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";
-import { formatRelativeTime } from "@/lib/relative-time";
+import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { MatterContextMenu } from "@/routes/_protected.workspaces/-components/matter-context-menu";
@@ -257,7 +257,10 @@ const PreviewPopupContent = ({ preview, lang }: PreviewPopupContentProps) => {
             )}
             <span className="min-w-0 flex-1 truncate">{entity.name}</span>
             {entity.updatedAt && (
-              <span className="text-muted-foreground shrink-0">
+              <span
+                className="text-muted-foreground shrink-0"
+                title={formatFullTimestamp(entity.updatedAt, lang)}
+              >
                 {formatRelativeTime(entity.updatedAt, lang)}
               </span>
             )}

@@ -128,7 +128,7 @@ export function FontPicker({
         className="min-h-0 min-w-0 border-transparent bg-transparent text-sm text-[var(--doc-text-muted)] shadow-none hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)] data-[pressed]:bg-[var(--doc-primary-light)]"
         style={{
           width: typeof width === "number" ? `${width}px` : width,
-          height: 32,
+          height: 28,
         }}
       >
         <SelectValue placeholder={placeholder} />

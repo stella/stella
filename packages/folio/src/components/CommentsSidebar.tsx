@@ -15,6 +15,7 @@ import React, {
   useRef,
   useCallback,
   useMemo,
+  useLayoutEffect,
 } from "react";
 
 import { CheckIcon, MoreVerticalIcon } from "lucide-react";
@@ -173,11 +174,56 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   const [cardPositions, setCardPositions] = useState<Map<string, number>>(
     new Map(),
   );
+  const [measuredLeft, setMeasuredLeft] = useState<number | null>(null);
   const [initialPositionsDone, setInitialPositionsDone] = useState(false);
   // Track which cards have had at least one positioned render (to avoid "fall from top" animation)
   const knownCardsRef = useRef<Set<string>>(new Set());
   const sidebarRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  const updateSidebarLeft = useCallback(() => {
+    const scrollEl = editorContainerRef?.current;
+    const sidebarEl = sidebarRef.current;
+    const pageEl = scrollEl?.querySelector(
+      ".layout-page",
+    ) as HTMLElement | null;
+    const offsetParent = sidebarEl?.offsetParent as HTMLElement | null;
+
+    if (!scrollEl || !pageEl || !offsetParent) {
+      setMeasuredLeft(null);
+      return;
+    }
+
+    const parentRect = offsetParent.getBoundingClientRect();
+    const pageRect = pageEl.getBoundingClientRect();
+    const rawLeft = pageRect.right - parentRect.left + 12;
+    const maxLeft = Math.max(8, parentRect.width - SIDEBAR_WIDTH - 8);
+    setMeasuredLeft(Math.max(8, Math.min(rawLeft, maxLeft)));
+  }, [editorContainerRef]);
+
+  useLayoutEffect(() => {
+    updateSidebarLeft();
+  }, [updateSidebarLeft, pageWidth, isAddingComment, comments.length]);
+
+  useEffect(() => {
+    const scrollEl = editorContainerRef?.current;
+    if (!scrollEl) {
+      return;
+    }
+
+    const resizeObserver = new ResizeObserver(updateSidebarLeft);
+    resizeObserver.observe(scrollEl);
+
+    const handleScroll = () => updateSidebarLeft();
+    scrollEl.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll);
+
+    return () => {
+      resizeObserver.disconnect();
+      scrollEl.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+    };
+  }, [editorContainerRef, updateSidebarLeft]);
 
   const visibleComments = useMemo(
     () =>
@@ -435,10 +481,12 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   const submitButtonStyle = (enabled: boolean): React.CSSProperties => ({
     padding: "6px 16px",
     fontSize: 14,
-    border: "none",
+    border: enabled
+      ? "1px solid var(--doc-primary)"
+      : "1px solid var(--doc-border)",
     borderRadius: 20,
-    background: enabled ? "var(--doc-primary)" : "var(--doc-primary-light)",
-    color: enabled ? "var(--doc-canvas-text)" : "var(--doc-text-subtle)",
+    background: enabled ? "var(--doc-primary)" : "var(--doc-bg)",
+    color: enabled ? "var(--doc-bg)" : "var(--doc-text-muted)",
     cursor: enabled ? "pointer" : "default",
     fontWeight: 500,
     fontFamily: "inherit",
@@ -846,7 +894,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       style={{
         position: "absolute",
         top: topOffset,
-        left: `calc(50% - 120px + ${pageWidth / 2 + 12}px)`,
+        left: measuredLeft ?? `calc(50% - 120px + ${pageWidth / 2 + 12}px)`,
         bottom: 0,
         width: SIDEBAR_WIDTH,
         fontFamily: "'Google Sans', Roboto, Arial, sans-serif",
@@ -926,6 +974,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                 minHeight: 40,
                 boxSizing: "border-box",
                 color: "var(--doc-text)",
+                background: "var(--doc-page)",
               }}
             />
             <div

@@ -22,6 +22,7 @@ const createContext = ({
     scopedDb,
     memberRole: { role: "owner" },
     orgAIConfig: null,
+    request: new Request("http://localhost/v1/workspaces/ws_test123"),
     session: {
       activeOrganizationId:
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
@@ -38,6 +39,22 @@ const createContext = ({
 
 describe("updateWorkspace", () => {
   test("rejects client changes to contacts outside the active organization", async () => {
+    const workspaceSelect = {
+      from: () => ({
+        where: () => ({
+          for: async () => [
+            {
+              id: "ws_test123",
+              name: "Workspace",
+              clientId: null,
+              reference: null,
+              billingReference: null,
+              color: null,
+            },
+          ],
+        }),
+      }),
+    };
     const clientSelect = {
       from: () => ({
         where: () => ({
@@ -47,9 +64,13 @@ describe("updateWorkspace", () => {
         }),
       }),
     };
+    let selectCount = 0;
 
     const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
-      select: () => clientSelect,
+      select: () => {
+        selectCount++;
+        return selectCount === 1 ? workspaceSelect : clientSelect;
+      },
     });
 
     const result = await updateWorkspace.handler(

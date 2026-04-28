@@ -527,30 +527,33 @@ function convertParagraphAttrs(
   }
 
   // Spacing
+  const spaceBefore = pmAttrs.spaceBefore;
+  const spaceAfter = pmAttrs.spaceAfter;
+  const lineSpacing = pmAttrs.lineSpacing;
   if (
-    pmAttrs.spaceBefore !== undefined ||
-    pmAttrs.spaceAfter !== undefined ||
-    pmAttrs.lineSpacing !== undefined
+    typeof spaceBefore === "number" ||
+    typeof spaceAfter === "number" ||
+    typeof lineSpacing === "number"
   ) {
     attrs.spacing = {};
-    if (pmAttrs.spaceBefore !== undefined) {
-      attrs.spacing.before = twipsToPixels(pmAttrs.spaceBefore);
+    if (typeof spaceBefore === "number") {
+      attrs.spacing.before = twipsToPixels(spaceBefore);
     }
-    if (pmAttrs.spaceAfter !== undefined) {
-      attrs.spacing.after = twipsToPixels(pmAttrs.spaceAfter);
+    if (typeof spaceAfter === "number") {
+      attrs.spacing.after = twipsToPixels(spaceAfter);
     }
-    if (pmAttrs.lineSpacing !== undefined) {
+    if (typeof lineSpacing === "number") {
       // Line spacing in twips - convert to multiplier or exact
       if (
         pmAttrs.lineSpacingRule === "exact" ||
         pmAttrs.lineSpacingRule === "atLeast"
       ) {
-        attrs.spacing.line = twipsToPixels(pmAttrs.lineSpacing);
+        attrs.spacing.line = twipsToPixels(lineSpacing);
         attrs.spacing.lineUnit = "px";
         attrs.spacing.lineRule = pmAttrs.lineSpacingRule;
       } else {
         // Auto - line spacing is in 240ths of a line
-        attrs.spacing.line = pmAttrs.lineSpacing / 240;
+        attrs.spacing.line = lineSpacing / 240;
         attrs.spacing.lineUnit = "multiplier";
         attrs.spacing.lineRule = "auto";
       }
@@ -559,8 +562,12 @@ function convertParagraphAttrs(
 
   // Indentation - handle list item fallback calculation
   // For list items without explicit indentation, calculate based on level
-  let indentLeft = pmAttrs.indentLeft;
-  let indentFirstLine = pmAttrs.indentFirstLine;
+  let indentLeft =
+    typeof pmAttrs.indentLeft === "number" ? pmAttrs.indentLeft : undefined;
+  let indentFirstLine =
+    typeof pmAttrs.indentFirstLine === "number"
+      ? pmAttrs.indentFirstLine
+      : undefined;
   let hangingIndent = pmAttrs.hangingIndent;
   if (pmAttrs.numPr?.numId && indentLeft === undefined) {
     // Fallback: calculate indentation based on level
@@ -578,14 +585,14 @@ function convertParagraphAttrs(
 
   if (
     indentLeft !== undefined ||
-    pmAttrs.indentRight !== undefined ||
+    typeof pmAttrs.indentRight === "number" ||
     indentFirstLine !== undefined
   ) {
     attrs.indent = {};
     if (indentLeft !== undefined) {
       attrs.indent.left = twipsToPixels(indentLeft);
     }
-    if (pmAttrs.indentRight !== undefined) {
+    if (typeof pmAttrs.indentRight === "number") {
       attrs.indent.right = twipsToPixels(pmAttrs.indentRight);
     }
     if (indentFirstLine !== undefined) {
