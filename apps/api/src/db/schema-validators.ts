@@ -129,13 +129,13 @@ export const fieldContentSchema = t.Union([
   t.Object({
     version: v1,
     type: t.Literal("file"),
-    id: t.String({ minLength: 21, maxLength: 21 }),
+    id: t.String({ format: "uuid" }),
     fileName: t.String({ minLength: 1, maxLength: 256 }),
     mimeType: t.String({ minLength: 1, maxLength: 255 }),
     sizeBytes: t.Integer({ minimum: 0 }),
     encrypted: t.Boolean(),
     sha256Hex: t.String({ minLength: 64, maxLength: 64 }),
-    pdfFileId: t.Nullable(t.String({ minLength: 21, maxLength: 21 })),
+    pdfFileId: t.Nullable(t.String({ format: "uuid" })),
     scanWarnings: t.Optional(t.Array(t.String({ maxLength: 256 }))),
   }),
   t.Object({

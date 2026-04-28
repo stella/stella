@@ -6,6 +6,7 @@ import {
   stepCountIs,
   streamText,
 } from "ai";
+import type { InferUIMessageChunk } from "ai";
 import { panic, Result } from "better-result";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
@@ -34,6 +35,7 @@ type StreamChatProps = {
   messages: ChatMessage[];
   onFinish: (messages: ChatMessage[]) => Promise<void>;
   orgAIConfig: OrgAIConfig | null;
+  resolveAssistantTextRefs?: ((text: string) => string) | undefined;
   system: string;
   threadId: SafeId<"chatThread">;
   tools: ChatTools;
@@ -44,6 +46,7 @@ export const streamChat = async ({
   messages,
   onFinish,
   orgAIConfig,
+  resolveAssistantTextRefs,
   system,
   threadId,
   tools,
@@ -70,13 +73,91 @@ export const streamChat = async ({
         messages: modelMessages,
       });
 
-      writer.merge(result.toUIMessageStream<ChatMessage>());
+      const uiStream = result.toUIMessageStream<ChatMessage>();
+      writer.merge(
+        resolveAssistantTextRefs
+          ? resolveRefsInTextStream(uiStream, resolveAssistantTextRefs)
+          : uiStream,
+      );
     },
   });
 
   return createUIMessageStreamResponse({
     stream,
   });
+};
+
+const STELLA_REF_MARKER = "#stella-";
+
+const getResolvedTextPrefixLength = (text: string) => {
+  const markerIndex = text.lastIndexOf(STELLA_REF_MARKER);
+  if (markerIndex === -1) {
+    return text.length;
+  }
+
+  const markerSuffix = text.slice(markerIndex);
+  return /[\s)]/.test(markerSuffix) ? text.length : markerIndex;
+};
+
+export const resolveRefsInTextStream = (
+  stream: ReadableStream<InferUIMessageChunk<ChatMessage>>,
+  resolveAssistantTextRefs: (text: string) => string,
+) => {
+  const buffers = new Map<string, string>();
+
+  const flushText = ({
+    controller,
+    id,
+    text,
+  }: {
+    controller: TransformStreamDefaultController<
+      InferUIMessageChunk<ChatMessage>
+    >;
+    id: string;
+    text: string;
+  }) => {
+    if (text.length === 0) {
+      return;
+    }
+
+    controller.enqueue({
+      type: "text-delta",
+      id,
+      delta: resolveAssistantTextRefs(text),
+    });
+  };
+
+  return stream.pipeThrough(
+    new TransformStream<
+      InferUIMessageChunk<ChatMessage>,
+      InferUIMessageChunk<ChatMessage>
+    >({
+      transform(chunk, controller) {
+        if (chunk.type === "text-delta") {
+          const buffer = `${buffers.get(chunk.id) ?? ""}${chunk.delta}`;
+          const prefixLength = getResolvedTextPrefixLength(buffer);
+          flushText({
+            controller,
+            id: chunk.id,
+            text: buffer.slice(0, prefixLength),
+          });
+          buffers.set(chunk.id, buffer.slice(prefixLength));
+          return;
+        }
+
+        if (chunk.type === "text-end") {
+          flushText({
+            controller,
+            id: chunk.id,
+            text: buffers.get(chunk.id) ?? "",
+          });
+          buffers.delete(chunk.id);
+        }
+
+        controller.enqueue(chunk);
+      },
+    }),
+  );
 };
 
 type HydrateMessagesProps = {

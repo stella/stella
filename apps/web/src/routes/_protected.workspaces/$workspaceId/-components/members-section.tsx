@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ComponentProps } from "react";
 
 import {
   useQuery,
@@ -179,9 +180,17 @@ const MemberRow = ({
 
 type AddMemberDialogProps = {
   workspaceId: string;
+  triggerClassName?: string | undefined;
+  triggerSize?: ComponentProps<typeof Button>["size"] | undefined;
+  triggerVariant?: ComponentProps<typeof Button>["variant"] | undefined;
 };
 
-const AddMemberDialog = ({ workspaceId }: AddMemberDialogProps) => {
+export const AddMemberDialog = ({
+  workspaceId,
+  triggerClassName,
+  triggerSize = "sm",
+  triggerVariant = "outline",
+}: AddMemberDialogProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const addMember = useAddWorkspaceMember();
@@ -244,7 +253,15 @@ const AddMemberDialog = ({ workspaceId }: AddMemberDialogProps) => {
       }}
       open={isOpen}
     >
-      <DialogTrigger render={<Button size="sm" variant="outline" />}>
+      <DialogTrigger
+        render={
+          <Button
+            className={triggerClassName}
+            size={triggerSize}
+            variant={triggerVariant}
+          />
+        }
+      >
         <PlusIcon className="size-3.5" />
         {t("workspaces.members.addMember")}
       </DialogTrigger>

@@ -4,6 +4,8 @@ import type { SafeDb } from "@/api/db";
 import { buildChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
 import { createToolFunction } from "@/api/handlers/chat/tools/execute/execute-tool-function";
 import { buildPaginatedResult } from "@/api/handlers/chat/tools/execute/pagination";
+import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import { ensureAllowedWorkspaceIds } from "@/api/handlers/chat/tools/execute/utils";
 import {
   getMatterEntitiesContract,
   getMatterEntityContentsContract,
@@ -11,40 +13,71 @@ import {
   listMatterEntitiesContract,
   listMatterPropertiesContract,
 } from "@/api/handlers/chat/tools/execute/workspace-manifest";
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { deserializeAITool } from "@/api/lib/markdown/ai-tool";
 
-import { getScopedWorkspaceIds } from "./utils";
-
 const CONTENT_MAX_CHARS = 8000;
-
-const toSafeEntityIds = (ids: string[]) =>
-  ids.map((id) => toSafeId<"entity">(id));
-
-const toSafePropertyIds = (ids: string[]) =>
-  ids.map((id) => toSafeId<"property">(id));
 
 type WorkspaceFunctionContext = {
   allowedWorkspaceIds: SafeId<"workspace">[];
   organizationId: SafeId<"organization">;
+  refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
+};
+
+type SourceDocumentRefProps = {
+  entityId: SafeId<"entity">;
+  fields?: Parameters<typeof buildChatSourceDocument>[0]["fields"];
+  kind?: string | null | undefined;
+  name?: string | null | undefined;
+  refRegistry: ChatRefRegistry;
+  workspaceId: SafeId<"workspace">;
+};
+
+const buildChatSourceDocumentWithRefs = ({
+  entityId,
+  fields,
+  kind,
+  name,
+  refRegistry,
+  workspaceId,
+}: SourceDocumentRefProps) => {
+  const sourceDocument = buildChatSourceDocument({
+    entityId,
+    fields,
+    kind,
+    name,
+    workspaceId,
+  });
+
+  return {
+    ...sourceDocument,
+    entityRef: refRegistry.toEntityRef({ entityId, workspaceId }),
+    matterRef: refRegistry.toMatterRef(workspaceId),
+    mention: refRegistry.toEntityMention({
+      entityId,
+      label: sourceDocument.title,
+      workspaceId,
+    }),
+  };
 };
 
 export const createReadonlyWorkspaceFunctionRegistry = ({
   organizationId,
+  refRegistry,
   safeDb,
   allowedWorkspaceIds,
 }: WorkspaceFunctionContext) => ({
   [listMatterPropertiesContract.name]: createToolFunction(
     listMatterPropertiesContract,
     async function* (input) {
-      const scopedWorkspaceIds = yield* getScopedWorkspaceIds(
-        allowedWorkspaceIds,
-        input.matterIds,
-      );
+      const scopedWorkspaceIds = yield* refRegistry
+        .resolveMatterRefs(input.matterRefs)
+        .andThen((workspaceIds) =>
+          ensureAllowedWorkspaceIds({ allowedWorkspaceIds, workspaceIds }),
+        );
       const offset = input.offset ?? 0;
 
       const properties = yield* await safeDb((tx) =>
@@ -70,9 +103,9 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
       return Result.ok(
         buildPaginatedResult({
           items: properties.map((property) => ({
-            matterId: property.workspaceId,
+            matterRef: refRegistry.toMatterRef(property.workspaceId),
             name: property.name,
-            propertyId: property.id,
+            propertyRef: refRegistry.toPropertyRef(property.id),
             status: property.status,
             type: property.content.type,
           })),
@@ -86,11 +119,14 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
   [getMatterPropertiesContract.name]: createToolFunction(
     getMatterPropertiesContract,
     async function* (input) {
-      const scopedWorkspaceIds = yield* getScopedWorkspaceIds(
-        allowedWorkspaceIds,
-        input.matterIds,
+      const scopedWorkspaceIds = yield* refRegistry
+        .resolveMatterRefs(input.matterRefs)
+        .andThen((workspaceIds) =>
+          ensureAllowedWorkspaceIds({ allowedWorkspaceIds, workspaceIds }),
+        );
+      const propertyIds = yield* refRegistry.resolvePropertyRefs(
+        input.propertyRefs,
       );
-      const propertyIds = toSafePropertyIds(input.propertyIds);
 
       const properties = yield* await safeDb((tx) =>
         tx.query.properties.findMany({
@@ -125,16 +161,24 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
         properties.map((property) => ({
           content: property.content,
           createdAt: property.createdAt.toISOString(),
-          matterId: property.workspaceId,
+          matterRef: refRegistry.toMatterRef(property.workspaceId),
           name: property.name,
-          propertyId: property.id,
+          propertyRef: refRegistry.toPropertyRef(property.id),
           status: property.status,
           tool:
             property.tool.type === "ai-model"
-              ? deserializeAITool({
-                  ...property.tool,
-                  dependencies: property.dependencies,
-                })
+              ? {
+                  ...deserializeAITool({
+                    ...property.tool,
+                    dependencies: property.dependencies,
+                  }),
+                  dependencies: property.dependencies.map((dependency) => ({
+                    condition: dependency.condition,
+                    dependsOnPropertyRef: refRegistry.toPropertyRef(
+                      dependency.dependsOnPropertyId,
+                    ),
+                  })),
+                }
               : property.tool,
           type: property.content.type,
         })),
@@ -145,14 +189,13 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
   [listMatterEntitiesContract.name]: createToolFunction(
     listMatterEntitiesContract,
     async function* (input) {
-      const scopedWorkspaceIds = yield* getScopedWorkspaceIds(
-        allowedWorkspaceIds,
-        input.matterIds,
-      );
+      const scopedWorkspaceIds = yield* refRegistry
+        .resolveMatterRefs(input.matterRefs)
+        .andThen((workspaceIds) =>
+          ensureAllowedWorkspaceIds({ allowedWorkspaceIds, workspaceIds }),
+        );
       const offset = input.offset ?? 0;
-      const parentId = input.parentId
-        ? toSafeId<"entity">(input.parentId)
-        : undefined;
+      const parentId = yield* refRegistry.resolveParentRef(input.parentRef);
 
       const entities = yield* await safeDb((tx) =>
         tx.query.entities.findMany({
@@ -196,16 +239,31 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
               panic("Entity has no currentVersion");
             }
 
+            const name = entity.name ?? "Untitled";
+
             return {
-              entityId: entity.id,
+              entityRef: refRegistry.toEntityRef({
+                entityId: entity.id,
+                workspaceId: entity.workspaceId,
+              }),
               fields: entity.currentVersion.fields.map((field) => ({
                 content: field.content,
-                propertyId: field.propertyId,
+                propertyRef: refRegistry.toPropertyRef(field.propertyId),
               })),
               kind: entity.kind,
-              matterId: entity.workspaceId,
-              name: entity.name ?? "Untitled",
-              parentId: entity.parentId,
+              matterRef: refRegistry.toMatterRef(entity.workspaceId),
+              mention: refRegistry.toEntityMention({
+                entityId: entity.id,
+                label: name,
+                workspaceId: entity.workspaceId,
+              }),
+              name,
+              parentRef: entity.parentId
+                ? refRegistry.toEntityRef({
+                    entityId: entity.parentId,
+                    workspaceId: entity.workspaceId,
+                  })
+                : null,
             };
           }),
           limit: input.limit,
@@ -218,11 +276,12 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
   [getMatterEntitiesContract.name]: createToolFunction(
     getMatterEntitiesContract,
     async function* (input) {
-      const scopedWorkspaceIds = yield* getScopedWorkspaceIds(
-        allowedWorkspaceIds,
-        input.matterIds,
-      );
-      const entityIds = toSafeEntityIds(input.entityIds);
+      const scopedWorkspaceIds = yield* refRegistry
+        .resolveMatterRefs(input.matterRefs)
+        .andThen((workspaceIds) =>
+          ensureAllowedWorkspaceIds({ allowedWorkspaceIds, workspaceIds }),
+        );
+      const entityIds = yield* refRegistry.resolveEntityRefs(input.entityRefs);
 
       const entities = yield* await safeDb((tx) =>
         tx.query.entities.findMany({
@@ -267,23 +326,39 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
 
           const currentVersion = entity.currentVersion;
 
+          const name = entity.name ?? "Untitled";
+
           return {
             createdAt: entity.createdAt.toISOString(),
             createdBy: entity.createdByUser?.name ?? null,
-            entityId: entity.id,
+            entityRef: refRegistry.toEntityRef({
+              entityId: entity.id,
+              workspaceId: entity.workspaceId,
+            }),
             fields: currentVersion.fields.map((field) => ({
               content: field.content,
-              propertyId: field.propertyId,
+              propertyRef: refRegistry.toPropertyRef(field.propertyId),
             })),
             kind: entity.kind,
-            matterId: entity.workspaceId,
-            name: entity.name ?? "Untitled",
-            parentId: entity.parentId,
-            sourceDocument: buildChatSourceDocument({
+            matterRef: refRegistry.toMatterRef(entity.workspaceId),
+            mention: refRegistry.toEntityMention({
+              entityId: entity.id,
+              label: name,
+              workspaceId: entity.workspaceId,
+            }),
+            name,
+            parentRef: entity.parentId
+              ? refRegistry.toEntityRef({
+                  entityId: entity.parentId,
+                  workspaceId: entity.workspaceId,
+                })
+              : null,
+            sourceDocument: buildChatSourceDocumentWithRefs({
               entityId: entity.id,
               fields: currentVersion.fields,
               kind: entity.kind,
               name: entity.name,
+              refRegistry,
               workspaceId: entity.workspaceId,
             }),
             versionCount: entity.versions.length,
@@ -296,11 +371,12 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
   [getMatterEntityContentsContract.name]: createToolFunction(
     getMatterEntityContentsContract,
     async function* (input) {
-      const scopedWorkspaceIds = yield* getScopedWorkspaceIds(
-        allowedWorkspaceIds,
-        input.matterIds,
-      );
-      const entityIds = toSafeEntityIds(input.entityIds);
+      const scopedWorkspaceIds = yield* refRegistry
+        .resolveMatterRefs(input.matterRefs)
+        .andThen((workspaceIds) =>
+          ensureAllowedWorkspaceIds({ allowedWorkspaceIds, workspaceIds }),
+        );
+      const entityIds = yield* refRegistry.resolveEntityRefs(input.entityRefs);
 
       const contentRows = yield* await safeDb((tx) =>
         tx.query.extractedContent.findMany({
@@ -354,17 +430,27 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
 
               const entity = row.entity;
               const fieldsForSource = entity?.currentVersion?.fields;
+              const name = entity?.name ?? null;
 
               return {
                 charCount: row.charCount,
-                entityId: row.entityId,
-                matterId: row.workspaceId,
-                name: entity?.name ?? null,
-                sourceDocument: buildChatSourceDocument({
+                entityRef: refRegistry.toEntityRef({
+                  entityId: row.entityId,
+                  workspaceId: row.workspaceId,
+                }),
+                matterRef: refRegistry.toMatterRef(row.workspaceId),
+                mention: refRegistry.toEntityMention({
+                  entityId: row.entityId,
+                  label: name ?? "Untitled",
+                  workspaceId: row.workspaceId,
+                }),
+                name,
+                sourceDocument: buildChatSourceDocumentWithRefs({
                   entityId: row.entityId,
                   fields: fieldsForSource,
                   kind: entity?.kind,
                   name: entity?.name,
+                  refRegistry,
                   workspaceId: row.workspaceId,
                 }),
                 text: truncated

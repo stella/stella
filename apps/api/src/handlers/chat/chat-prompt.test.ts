@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import type { PropertyContent } from "@/api/db/schema-validators";
+import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import {
   appendActiveFilePromptIfEntityExists,
   buildGlobalPrompt,
+  buildUserContextBlock,
   buildWorkspacePromptText,
   extractTitle,
 } from "./chat-prompt";
@@ -15,8 +17,8 @@ import type { ChatMessage } from "./types";
 const WORKSPACE_ID = toSafeId<"workspace">("ws_prompt_test");
 const READONLY_STELLA_API = `declare global {
   namespace stella {
-    listMatters(input: {limit?: number; offset?: number}): Promise<{items: {matterId: string}[]; nextOffset: number | null; hasMore: boolean}>;
-    getMatterEntityContents(input: {matterIds: string[]; entityIds: string[]}): Promise<{text: string}[]>;
+    listMatters(input: {limit?: number; offset?: number}): Promise<{items: {matterRef: string}[]; nextOffset: number | null; hasMore: boolean}>;
+    getMatterEntityContents(input: {matterRefs: string[]; entityRefs: string[]}): Promise<{text: string}[]>;
   }
 }`;
 
@@ -39,6 +41,7 @@ const createProperty = ({
 
 describe("chat prompt builders", () => {
   test("renders option labels only for initialized select properties", () => {
+    const refRegistry = createChatRefRegistry();
     const prompt = buildWorkspacePromptText({
       entityCount: 42,
       properties: [
@@ -80,6 +83,7 @@ describe("chat prompt builders", () => {
           status: "uninitialized",
         }),
       ],
+      refRegistry,
       readonlyStellaApi: READONLY_STELLA_API,
       userContext: null,
       workspaceId: WORKSPACE_ID,
@@ -87,15 +91,16 @@ describe("chat prompt builders", () => {
     });
 
     expect(prompt).toContain(
-      "- Stage (id: prop_stage, type: single-select) [options: Open, Closed]",
+      "- Stage (ref: prop_1, type: single-select) [options: Open, Closed]",
     );
     expect(prompt).toContain(
-      "- Labels (id: prop_labels, type: multi-select) [options: Urgent, Client]",
+      "- Labels (ref: prop_2, type: multi-select) [options: Urgent, Client]",
     );
     expect(prompt).not.toContain("prop_hidden");
   });
 
   test("does not render option labels for non-select property types", () => {
+    const refRegistry = createChatRefRegistry();
     const prompt = buildWorkspacePromptText({
       entityCount: 0,
       properties: [
@@ -108,20 +113,23 @@ describe("chat prompt builders", () => {
           name: "Notes",
         }),
       ],
+      refRegistry,
       readonlyStellaApi: READONLY_STELLA_API,
       userContext: null,
       workspaceId: WORKSPACE_ID,
       workspaceName: "Matter Alpha",
     });
 
-    expect(prompt).toContain("- Notes (id: prop_notes, type: text)");
+    expect(prompt).toContain("- Notes (ref: prop_1, type: text)");
     expect(prompt).not.toContain("type: text) [options:");
   });
 
   test("includes the readonly stella API block in the workspace prompt", () => {
+    const refRegistry = createChatRefRegistry();
     const prompt = buildWorkspacePromptText({
       entityCount: 1,
       properties: [],
+      refRegistry,
       readonlyStellaApi: READONLY_STELLA_API,
       userContext: null,
       workspaceId: WORKSPACE_ID,
@@ -137,7 +145,9 @@ describe("chat prompt builders", () => {
     );
     expect(prompt).not.toContain("call `stella-capabilities` once");
     expect(prompt).toContain("Use `execute-typescript` for readonly retrieval");
-    expect(prompt).toContain("`stella.get*` functions require explicit ids");
+    expect(prompt).toContain("`stella.get*` functions require explicit refs");
+    expect(prompt).toContain("[Document Name](#stella-entity-ref=ent_1)");
+    expect(prompt).toContain("Do not write forms like");
   });
 
   test("includes the readonly stella API block in the global prompt", () => {
@@ -147,7 +157,7 @@ describe("chat prompt builders", () => {
     });
 
     expect(prompt).toContain("Use `execute-typescript` for readonly retrieval");
-    expect(prompt).toContain("require explicit `matterIds` inputs");
+    expect(prompt).toContain("require explicit `matterRefs` inputs");
     expect(prompt).toContain("caps it at 500");
     expect(prompt).toContain(
       "Use `describe-stella-function` only as a fallback",
@@ -155,8 +165,22 @@ describe("chat prompt builders", () => {
     expect(prompt).toContain("namespace stella {");
   });
 
+  test("does not include UI locale in the prompt", () => {
+    const prompt = buildUserContextBlock({
+      locale: "cs",
+      timezone: "Europe/Prague",
+      userName: "Jan Kubica",
+    });
+
+    expect(prompt).toContain("User registered as: Jan Kubica");
+    expect(prompt).toContain("Current date/time:");
+    expect(prompt).not.toContain("UX language:");
+    expect(prompt).not.toContain("cs");
+  });
+
   test("appends the active-file prompt only when the entity exists", () => {
     const basePrompt = "Base prompt";
+    const refRegistry = createChatRefRegistry();
     const activeFile = {
       entityId: toSafeId<"entity">("entity_active"),
       fileName: "Open file.pdf",
@@ -167,6 +191,8 @@ describe("chat prompt builders", () => {
         activeFile,
         entityExists: false,
         prompt: basePrompt,
+        refRegistry,
+        workspaceId: WORKSPACE_ID,
       }),
     ).toBe(basePrompt);
 
@@ -175,6 +201,8 @@ describe("chat prompt builders", () => {
         activeFile,
         entityExists: true,
         prompt: basePrompt,
+        refRegistry,
+        workspaceId: WORKSPACE_ID,
       }),
     ).toContain("stella.getMatterEntities");
   });

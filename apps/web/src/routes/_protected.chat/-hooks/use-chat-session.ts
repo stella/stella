@@ -11,15 +11,21 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
-import { invalidateGroupedChatThreads } from "@/routes/_protected.chat/-queries";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import {
+  invalidateChatThread,
+  invalidateGroupedChatThreads,
+} from "@/routes/_protected.chat/-queries";
 
 type UseChatSessionOptions = {
   chat: Chat<PersistedChatMessage>;
+  threadRef: ChatThreadRef;
   workspaceId?: string | undefined;
 };
 
 export const useChatSession = ({
   chat,
+  threadRef,
   workspaceId,
 }: UseChatSessionOptions) => {
   const queryClient = useQueryClient();
@@ -38,9 +44,10 @@ export const useChatSession = ({
   const sendMessage = useCallback(
     async (message: Parameters<typeof sendChatMessage>[0]) => {
       await sendChatMessage(message);
+      await invalidateChatThread({ queryClient, threadRef });
       await invalidateGroupedChatThreads(queryClient);
     },
-    [queryClient, sendChatMessage],
+    [queryClient, sendChatMessage, threadRef],
   );
 
   const handleApprove = useCallback(
@@ -69,19 +76,10 @@ export const useChatSession = ({
     [workspaceId],
   );
 
-  const approvalPendingMessageId = useMemo(() => {
-    for (const msg of messages) {
-      if (msg.role !== "assistant") {
-        continue;
-      }
-      for (const part of msg.parts) {
-        if (isToolUIPart(part) && part.state === "approval-requested") {
-          return msg.id;
-        }
-      }
-    }
-    return null;
-  }, [messages]);
+  const approvalPendingMessageId = useMemo(
+    () => getCurrentApprovalPendingMessageId(messages),
+    [messages],
+  );
 
   const isGenerating = status === "submitted" || status === "streaming";
 
@@ -97,4 +95,25 @@ export const useChatSession = ({
     streamdownComponents,
     approvalPendingMessageId,
   };
+};
+
+const getCurrentApprovalPendingMessageId = (
+  messages: PersistedChatMessage[],
+) => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const msg = messages.at(index);
+    if (!msg || msg.role !== "assistant") {
+      continue;
+    }
+
+    for (const part of msg.parts) {
+      if (isToolUIPart(part) && part.state === "approval-requested") {
+        return msg.id;
+      }
+    }
+
+    return null;
+  }
+
+  return null;
 };

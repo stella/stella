@@ -4,7 +4,10 @@ export const DEFAULT_SOURCE_DOCUMENT_KIND = "document";
 
 export type ChatSourceDocument = {
   entityId: string;
+  entityRef?: string;
   kind: string;
+  matterRef?: string;
+  mention?: string;
   mimeType: string | null;
   title: string;
   workspaceId: string | null;

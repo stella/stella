@@ -1,4 +1,4 @@
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { LayersIcon } from "lucide-react";
 
 import { cn } from "@stella/ui/lib/utils";
@@ -10,6 +10,7 @@ import {
 } from "@/components/chat/chat-mention-href";
 import { EntityMentionIcon } from "@/components/chat/entity-link";
 import { openEntityInInspector } from "@/components/chat/entity-open";
+import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 
 /** Matches all stella mention link formats:
  *  `[Label](#stella-entity=ID)`,
@@ -19,10 +20,11 @@ const MENTION_RE = new RegExp(
   "g",
 );
 
-/** Strip optional `WS_ID:` prefix from cross-workspace entity IDs. */
-const stripWsPrefix = (id: string) => {
+const parseEntityMentionId = (id: string) => {
   const idx = id.indexOf(":");
-  return idx !== -1 ? id.slice(idx + 1) : id;
+  return idx === -1
+    ? { entityId: id, workspaceId: undefined }
+    : { entityId: id.slice(idx + 1), workspaceId: id.slice(0, idx) };
 };
 
 const MentionChip = ({
@@ -35,11 +37,29 @@ const MentionChip = ({
   id: string;
 }) => {
   const navigate = useNavigate();
-  const entityId = category === "entity" ? stripWsPrefix(id) : id;
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const entityMention = category === "entity" ? parseEntityMentionId(id) : null;
 
   const handleClick = () => {
     if (category === "entity") {
-      void openEntityInInspector(entityId, label);
+      void (async () => {
+        const result = await openEntityInInspector(
+          entityMention?.entityId ?? id,
+          label,
+          entityMention?.workspaceId,
+        );
+
+        if (result.type === "folder") {
+          await navigateToWorkspaceFolder({
+            folderId: result.entityId,
+            navigate,
+            pathname,
+            targetWorkspaceId: result.workspaceId,
+          });
+        }
+      })();
       return;
     }
     if (category === "workspace") {
@@ -53,7 +73,7 @@ const MentionChip = ({
 
   let icon: React.ReactNode = null;
   if (category === "entity") {
-    icon = <EntityMentionIcon entityId={entityId} />;
+    icon = <EntityMentionIcon entityId={entityMention?.entityId ?? id} />;
   } else if (category === "workspace") {
     icon = <LayersIcon className="inline size-3 shrink-0" />;
   }

@@ -45,6 +45,7 @@ import { useWorkspaceChatMentionRegistration } from "@/routes/_protected.chat/-h
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
 import {
   chatThreadOptions,
+  invalidateChatThread,
   invalidateGroupedChatThreads,
 } from "@/routes/_protected.chat/-queries";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
@@ -161,19 +162,14 @@ const GlobalRightPanelChat = ({
 
       setCurrentThreadId(threadId);
       await chat.sendMessage(await buildChatRequestMessage(draft));
+      await invalidateChatThread({ queryClient, threadRef: nextThreadRef });
       await invalidateGroupedChatThreads(queryClient);
     },
     [queryClient, setCurrentThreadId, threadContext],
   );
 
   if (!threadRef) {
-    return (
-      <EmptyThreadPanel
-        onDraftStart={setCurrentThreadId}
-        onSubmit={handleStartNewThread}
-        open={open}
-      />
-    );
+    return <EmptyThreadPanel onSubmit={handleStartNewThread} open={open} />;
   }
 
   return (
@@ -263,6 +259,7 @@ const WorkspaceRightPanelChat = ({
 
       setCurrentThreadId(threadId);
       await chat.sendMessage(await buildChatRequestMessage(draft));
+      await invalidateChatThread({ queryClient, threadRef: nextThreadRef });
       await invalidateGroupedChatThreads(queryClient);
     },
     [queryClient, setCurrentThreadId, threadContext, workspaceId],
@@ -271,7 +268,6 @@ const WorkspaceRightPanelChat = ({
   if (!threadRef) {
     return (
       <EmptyThreadPanel
-        onDraftStart={setCurrentThreadId}
         onSubmit={handleStartNewThread}
         open={open}
         workspaceId={workspaceId}
@@ -291,12 +287,10 @@ const WorkspaceRightPanelChat = ({
 };
 
 const EmptyThreadPanel = ({
-  onDraftStart,
   onSubmit,
   open,
   workspaceId,
 }: {
-  onDraftStart: (threadId: string) => void;
   onSubmit: (input: {
     draft: ChatInputDraft;
     threadId: string;
@@ -319,7 +313,6 @@ const EmptyThreadPanel = ({
         },
   );
   const controller = useChatEditor({
-    onDraftStart: () => onDraftStart(draftThreadRef.current.threadId),
     threadRef: draftThreadRef.current,
   });
   const { handleDragOver, handleDrop, handlePaste } = controller;
@@ -429,7 +422,7 @@ const ActiveThreadPanelInner = ({
     handleAlwaysAllow,
     streamdownComponents,
     approvalPendingMessageId,
-  } = useChatSession({ chat, workspaceId });
+  } = useChatSession({ chat, threadRef, workspaceId });
 
   return (
     <div

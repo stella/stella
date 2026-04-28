@@ -6,25 +6,51 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
-import type { WorkspaceProperty } from "@/lib/types";
+import type { PropertyDependency, WorkspaceProperty } from "@/lib/types";
 import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+
+type CreatePropertyDependency = {
+  dependsOnPropertyId: string;
+  condition: PropertyDependency["condition"];
+};
 
 type CreatePropertyVars = {
   name: string;
   contentType: PropertyContentType;
+  toolType?: "ai-model" | "manual-input";
+  prompt?: string;
+  dependencies?: CreatePropertyDependency[];
 };
 
 export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
   const analytics = useAnalytics();
 
   return useMutation({
-    mutationFn: async ({ name, contentType }: CreatePropertyVars) => {
+    mutationFn: async ({
+      name,
+      contentType,
+      toolType,
+      prompt,
+      dependencies,
+    }: CreatePropertyVars) => {
       const response = await api
         .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .put({
           queryKey: propertiesKeys.all(workspaceId),
           name,
           contentType,
+          ...(toolType ? { toolType } : {}),
+          ...(prompt === undefined ? {} : { prompt }),
+          ...(dependencies && dependencies.length > 0
+            ? {
+                dependencies: dependencies.map((dep) => ({
+                  dependsOnPropertyId: toSafeId<"property">(
+                    dep.dependsOnPropertyId,
+                  ),
+                  condition: dep.condition,
+                })),
+              }
+            : {}),
         });
 
       if (response.error) {

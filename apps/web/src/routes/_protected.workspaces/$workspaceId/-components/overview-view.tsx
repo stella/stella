@@ -18,7 +18,6 @@ import {
   PlusIcon,
   SquareCheckIcon,
   UploadIcon,
-  UserPlusIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -66,6 +65,7 @@ import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { AddMemberDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/members-section";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import type { TaskStatus } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
 import {
@@ -843,18 +843,12 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                     count: teamHeatmap.length,
                   })}
                 </span>
-                <Button
-                  className="h-auto p-0 text-xs"
-                  onClick={() => {
-                    // eslint-disable-next-line typescript/no-floating-promises
-                    navigate({ to: "/organization/members" });
-                  }}
-                  size="sm"
-                  variant="link"
-                >
-                  <UserPlusIcon className="size-3" />
-                  {t("workspaces.members.addMember")}
-                </Button>
+                <AddMemberDialog
+                  triggerClassName="h-auto p-0 text-xs"
+                  triggerSize="sm"
+                  triggerVariant="link"
+                  workspaceId={workspaceId}
+                />
               </div>
             </div>
           </div>

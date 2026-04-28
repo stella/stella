@@ -11,6 +11,7 @@ const config = {
   permissions: { chat: ["create"] },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({
+    allowMissingThread: t.Optional(t.Boolean()),
     workspaceId: t.Optional(tSafeId("workspace")),
   }),
 } satisfies HandlerConfig;
@@ -20,7 +21,7 @@ const getMessages = createSafeRootHandler(
   async function* ({
     activeWorkspaceIds,
     params: { threadId },
-    query: { workspaceId },
+    query: { allowMissingThread, workspaceId },
     safeDb,
     user,
   }) {
@@ -57,6 +58,10 @@ const getMessages = createSafeRootHandler(
     );
 
     if (!thread) {
+      if (allowMissingThread) {
+        return Result.ok([]);
+      }
+
       return Result.err(
         new HandlerError({
           status: 404,

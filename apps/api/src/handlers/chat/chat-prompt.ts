@@ -23,12 +23,15 @@ import type {
 import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/org-manifest";
 import { buildReadonlyFunctionTypeDeclarations } from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import type { ReadonlyFunctionContract } from "@/api/handlers/chat/tools/execute/readonly-manifest";
+import {
+  CHAT_ENTITY_REF_PREFIX,
+  CHAT_WORKSPACE_REF_PREFIX,
+} from "@/api/handlers/chat/tools/execute/ref-registry";
+import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { readonlyWorkspaceFunctionContracts } from "@/api/handlers/chat/tools/execute/workspace-manifest";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
-import type {
-  ChatMessage,
-  ChatReferenceHrefPrefix,
-} from "@/api/handlers/chat/types";
+import type { ChatMessage } from "@/api/handlers/chat/types";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { formatDateTimeInTimeZone } from "@/api/lib/date-format";
 import { unreachable } from "@/api/lib/errors/tagged-errors";
@@ -40,7 +43,7 @@ const UNINITIALIZED_PROPERTY_STATUS = "uninitialized";
 
 type BuildPromptMentionExampleProps = {
   label: string;
-  prefix: ChatReferenceHrefPrefix;
+  prefix: string;
   id: string;
 };
 
@@ -68,18 +71,32 @@ const CORE_RULE_SECTIONS = [
     "documents, multi-step workflows), call ask-user to " +
     "gather requirements BEFORE acting. Wait for the " +
     "user's response, then synthesize a plan and execute.",
-  "Never expose internal IDs to the user in plain text.",
+  "Never expose internal IDs to the user in plain text. " +
+    "Tool outputs include short refs so you can create links. " +
+    "When a tool output includes a `mention` field, copy that exact " +
+    "`mention` markdown whenever you name that object in a user-facing " +
+    "answer. Do not rewrite it as plain text. " +
+    "When mentioning a matter, document, folder, task, case-law " +
+    "decision, or other Stella object, show only the human label " +
+    "and encode the ref in a markdown link.",
   `When citing documents and matters, use markdown links:
 ${buildPromptMentionExample({
   label: "Document Name",
-  prefix: CHAT_REFERENCE_HREF_PREFIXES.entity,
-  id: "ENTITY_ID",
+  prefix: CHAT_ENTITY_REF_PREFIX,
+  id: "ent_1",
 })}
 ${buildPromptMentionExample({
   label: "Matter Name",
-  prefix: CHAT_REFERENCE_HREF_PREFIXES.workspace,
-  id: "WORKSPACE_ID",
+  prefix: CHAT_WORKSPACE_REF_PREFIX,
+  id: "mat_1",
 })}
+For folders and tasks, use the same entity link format:
+${buildPromptMentionExample({
+  label: "Folder Name",
+  prefix: CHAT_ENTITY_REF_PREFIX,
+  id: "ent_2",
+})}
+Do not write forms like "Document Name (ent_1)" or expose refs/UUIDs in parentheses.
 When citing case-law decisions, use markdown links like:
 ${buildPromptMentionExample({
   label: "20 Cdo 470/2017",
@@ -95,6 +112,7 @@ export type UserContext = IncomingUserContext;
 type BuildChatSystemPromptProps = {
   activeDecision: IncomingActiveDecision | undefined;
   activeFile: IncomingActiveFile | undefined;
+  refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
   userContext: IncomingUserContext | undefined;
   workspaceId: SafeId<"workspace"> | null;
@@ -103,6 +121,7 @@ type BuildChatSystemPromptProps = {
 export const buildChatSystemPrompt = async ({
   activeDecision,
   activeFile,
+  refRegistry,
   safeDb,
   userContext,
   workspaceId,
@@ -131,6 +150,7 @@ export const buildChatSystemPrompt = async ({
 
     const prompt = yield* Result.await(
       buildWorkspacePrompt({
+        refRegistry,
         safeDb,
         userContext: userContext ?? null,
         workspaceId,
@@ -166,6 +186,8 @@ export const buildChatSystemPrompt = async ({
         activeFile,
         entityExists: Boolean(entity),
         prompt: decisionPrompt,
+        refRegistry,
+        workspaceId,
       }),
     );
   });
@@ -202,15 +224,15 @@ export const buildGlobalPrompt = ({
         "matters in the organization. The readonly `stella` API available " +
         "inside `execute-typescript` is typed below.",
       "The readonly `stella` API uses matter naming. Matter-scoped " +
-        "functions require explicit `matterIds` inputs.",
+        "functions require explicit `matterRefs` inputs.",
       "`stella.list*` functions accept optional `limit` and numeric " +
         "`offset` pagination inputs. Omit `limit` unless you need a smaller " +
         "page; the server defaults it and caps it at 500.",
-      "`stella.get*` functions require explicit ids and return full " +
-        `results without pagination. Detail reads accept up to ${LIMITS.chatExecuteDetailIdsMax} ids; ` +
-        `content reads accept up to ${LIMITS.chatExecuteContentIdsMax} entity ids.`,
+      "`stella.get*` functions require explicit refs and return full " +
+        `results without pagination. Detail reads accept up to ${LIMITS.chatExecuteDetailIdsMax} refs; ` +
+        `content reads accept up to ${LIMITS.chatExecuteContentIdsMax} entity refs.`,
       "Prefer one batched `get*` call over many small calls when you " +
-        "already know the matter or entity IDs you need.",
+        "already know the matter or entity refs you need.",
       "Use `describe-stella-function` only as a fallback if you " +
         "need the full JSON Schema details for one function.",
       "Inside `execute-typescript`, `console.log` is a no-op: " +
@@ -221,12 +243,14 @@ export const buildGlobalPrompt = ({
   });
 
 type BuildWorkspacePromptProps = {
+  refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
   userContext: UserContext | null;
   workspaceId: SafeId<"workspace">;
 };
 
 const buildWorkspacePrompt = async ({
+  refRegistry,
   safeDb,
   userContext,
   workspaceId,
@@ -243,6 +267,7 @@ const buildWorkspacePrompt = async ({
       buildWorkspacePromptText({
         entityCount: workspacePromptData.entityCount,
         properties: workspacePromptData.properties,
+        refRegistry,
         readonlyStellaApi: buildReadonlyStellaApi({
           contracts: [
             ...readonlyOrgFunctionContracts,
@@ -322,6 +347,7 @@ const loadWorkspacePromptData = async ({
 type BuildWorkspaceContextSectionsProps = {
   entityCount: number;
   properties: WorkspacePromptProperty[];
+  refRegistry: ChatRefRegistry;
   readonlyStellaApi: string;
   workspaceId: SafeId<"workspace">;
   workspaceName: string;
@@ -330,38 +356,43 @@ type BuildWorkspaceContextSectionsProps = {
 const buildWorkspaceContextSections = ({
   entityCount,
   properties,
+  refRegistry,
   readonlyStellaApi,
   workspaceId,
   workspaceName,
 }: BuildWorkspaceContextSectionsProps): string[] => {
+  const matterRef = refRegistry.toMatterRef(workspaceId);
   const sections = [
     `Connected to matter "${workspaceName}".`,
     "Use `execute-typescript` for readonly retrieval inside " +
       "this matter. The readonly `stella` API available inside " +
       "`execute-typescript` is typed below as a global namespace.",
     "SCOPE: Matter-scoped `stella` functions require explicit " +
-      "`matterIds` inputs. In this matter, default to " +
-      `\`matterIds: ["${workspaceId}"]\` unless the user asks to work across matters.`,
+      "`matterRefs` inputs. In this matter, default to " +
+      `\`matterRefs: ["${matterRef}"]\` unless the user asks to work across matters.`,
     "`stella.list*` functions accept optional `limit` and numeric " +
       "`offset` pagination inputs. Omit `limit` unless you need a smaller " +
       "page; the server defaults it and caps it at 500.",
-    "`stella.get*` functions require explicit ids and return full " +
-      `results without pagination. Detail reads accept up to ${LIMITS.chatExecuteDetailIdsMax} ids; ` +
-      `content reads accept up to ${LIMITS.chatExecuteContentIdsMax} entity ids.`,
+    "`stella.get*` functions require explicit refs and return full " +
+      `results without pagination. Detail reads accept up to ${LIMITS.chatExecuteDetailIdsMax} refs; ` +
+      `content reads accept up to ${LIMITS.chatExecuteContentIdsMax} entity refs.`,
     "Prefer one batched `get*` call over many small calls when " +
-      "you already know the entity IDs you need.",
+      "you already know the entity refs you need.",
     "Use `describe-stella-function` only as a fallback if you " +
       "need the full JSON Schema manifest for one function. Inside " +
       "`execute-typescript`, `console.log` is a no-op: only the value " +
       "your program `return`s comes back as the tool output.",
     ["Readonly `stella` API:", "```ts", readonlyStellaApi, "```"].join("\n"),
     [
-      `Matter ID: ${workspaceId} (pass as matterIds: ["${workspaceId}"]).`,
+      `Current matter ref: ${matterRef} (pass as matterRefs: ["${matterRef}"]).`,
       `The matter contains ${entityCount.toLocaleString()} entities.`,
     ].join("\n"),
   ];
 
-  const metadataColumnsSection = buildMetadataColumnsSection(properties);
+  const metadataColumnsSection = buildMetadataColumnsSection({
+    properties,
+    refRegistry,
+  });
   if (metadataColumnsSection) {
     sections.push(metadataColumnsSection);
   }
@@ -369,12 +400,21 @@ const buildWorkspaceContextSections = ({
   return sections;
 };
 
-const buildMetadataColumnsSection = (
-  properties: readonly WorkspacePromptProperty[],
-) => {
+const buildMetadataColumnsSection = ({
+  properties,
+  refRegistry,
+}: {
+  properties: readonly WorkspacePromptProperty[];
+  refRegistry: ChatRefRegistry;
+}) => {
   const propertyLines = properties
     .filter(({ status }) => status !== UNINITIALIZED_PROPERTY_STATUS)
-    .map(formatMetadataColumnLine);
+    .map((property) =>
+      formatMetadataColumnLine({
+        property,
+        refRegistry,
+      }),
+    );
 
   if (propertyLines.length === 0) {
     return null;
@@ -391,12 +431,15 @@ const buildMetadataColumnsSection = (
 };
 
 const formatMetadataColumnLine = ({
-  content,
-  id,
-  name,
-}: WorkspacePromptProperty) => {
+  property: { content, id, name },
+  refRegistry,
+}: {
+  property: WorkspacePromptProperty;
+  refRegistry: ChatRefRegistry;
+}) => {
   const optionValues = getPropertyOptionValues(content);
-  const baseLine = `- ${name} (id: ${id}, type: ${content.type})`;
+  const propertyRef = refRegistry.toPropertyRef(toSafeId<"property">(id));
+  const baseLine = `- ${name} (ref: ${propertyRef}, type: ${content.type})`;
 
   if (!optionValues) {
     return baseLine;
@@ -424,6 +467,7 @@ const getPropertyOptionValues = (content: PropertyContent) => {
 type BuildWorkspacePromptTextProps = {
   entityCount: number;
   properties: WorkspacePromptProperty[];
+  refRegistry: ChatRefRegistry;
   readonlyStellaApi: string;
   userContext: UserContext | null;
   workspaceId: SafeId<"workspace">;
@@ -433,6 +477,7 @@ type BuildWorkspacePromptTextProps = {
 export const buildWorkspacePromptText = ({
   entityCount,
   properties,
+  refRegistry,
   readonlyStellaApi,
   userContext,
   workspaceId,
@@ -442,6 +487,7 @@ export const buildWorkspacePromptText = ({
     contextSections: buildWorkspaceContextSections({
       entityCount,
       properties,
+      refRegistry,
       readonlyStellaApi,
       workspaceId,
       workspaceName,
@@ -451,22 +497,29 @@ export const buildWorkspacePromptText = ({
 
 type BuildActiveFilePromptProps = {
   activeFile: IncomingActiveFile;
+  refRegistry: ChatRefRegistry;
+  workspaceId: SafeId<"workspace">;
 };
 
-const buildActiveFilePrompt = ({ activeFile }: BuildActiveFilePromptProps) => {
+const buildActiveFilePrompt = ({
+  activeFile,
+  refRegistry,
+  workspaceId,
+}: BuildActiveFilePromptProps) => {
   const safeName = sanitizePromptValue({
     maxLength: 200,
     text: activeFile.fileName,
   });
-  const safeEntityId = sanitizePromptValue({
-    maxLength: 100,
-    text: activeFile.entityId,
+  const entityRef = refRegistry.toEntityRef({
+    entityId: activeFile.entityId,
+    workspaceId,
   });
+  const matterRef = refRegistry.toMatterRef(workspaceId);
 
   return [
     `The user is currently viewing "${safeName}" in the inspector sidebar.`,
-    `When they refer to "this document" or "the open file", they mean entity ${safeEntityId}.`,
-    `Use \`execute-typescript\` with \`stella.getMatterEntities\` or \`stella.getMatterEntityContents\`, plus the current matter ID and this entity ID, to access its data.`,
+    `When they refer to "this document" or "the open file", they mean entity ref ${entityRef}.`,
+    `Use \`execute-typescript\` with \`stella.getMatterEntities\` or \`stella.getMatterEntityContents\`, plus matter ref ${matterRef} and entity ref ${entityRef}, to access its data.`,
   ].join("\n");
 };
 
@@ -595,15 +648,23 @@ type AppendActiveFilePromptIfEntityExistsProps = {
   activeFile: IncomingActiveFile;
   entityExists: boolean;
   prompt: string;
+  refRegistry: ChatRefRegistry;
+  workspaceId: SafeId<"workspace">;
 };
 
 export const appendActiveFilePromptIfEntityExists = ({
   activeFile,
   entityExists,
   prompt,
+  refRegistry,
+  workspaceId,
 }: AppendActiveFilePromptIfEntityExistsProps) =>
   entityExists
-    ? `${prompt}\n\n${buildActiveFilePrompt({ activeFile })}`
+    ? `${prompt}\n\n${buildActiveFilePrompt({
+        activeFile,
+        refRegistry,
+        workspaceId,
+      })}`
     : prompt;
 
 type BuildPromptProps = {
@@ -628,10 +689,6 @@ export const buildUserContextBlock = (userContext: UserContext | null) => {
   }
 
   const lines = [`User registered as: ${userContext.userName}`];
-
-  if (userContext.locale) {
-    lines.push(`UX language: ${userContext.locale}`);
-  }
 
   if (userContext.timezone) {
     lines.push(
