@@ -21,7 +21,10 @@ import type { DocxEditorRef, EditorMode } from "@stella/folio";
 import { Button } from "@stella/ui/components/button";
 import { toastManager } from "@stella/ui/components/toast";
 import "@stella/folio/editor.css";
-import { StatusMessage } from "@/components/route-components";
+import {
+  DefaultPendingComponent,
+  StatusMessage,
+} from "@/components/route-components";
 import {
   useDocxFitZoom,
   useDocxWheelZoom,
@@ -376,12 +379,7 @@ export const DocxBrowserEditor = ({
       >
         <Suspense
           fallback={
-            <div className="flex h-full flex-col items-center justify-center gap-3">
-              <LoaderIcon className="text-muted-foreground size-6 animate-spin" />
-              <span className="text-muted-foreground text-sm">
-                {t("folio.loadingEditor")}
-              </span>
-            </div>
+            <DocxEditorLoadingFallback label={t("folio.loadingEditor")} />
           }
         >
           <DocxEditor
@@ -400,12 +398,7 @@ export const DocxBrowserEditor = ({
             {...(initialScrollTop !== undefined ? { initialScrollTop } : {})}
             {...(onScrollTopChange !== undefined ? { onScrollTopChange } : {})}
             loadingIndicator={
-              <div className="flex h-full flex-col items-center justify-center gap-3">
-                <LoaderIcon className="text-muted-foreground size-6 animate-spin" />
-                <span className="text-muted-foreground text-sm">
-                  {t("folio.loadingDocument")}
-                </span>
-              </div>
+              <DocxEditorLoadingFallback label={t("folio.loadingDocument")} />
             }
           />
         </Suspense>
@@ -413,6 +406,17 @@ export const DocxBrowserEditor = ({
     </div>
   );
 };
+
+const DocxEditorLoadingFallback = ({ label }: { label: string }) => (
+  <div
+    aria-live="polite"
+    className="flex h-full w-full items-center justify-center"
+    role="status"
+  >
+    <DefaultPendingComponent className="bg-transparent" />
+    <span className="sr-only">{label}</span>
+  </div>
+);
 
 type EditSessionErrorMessageKey =
   | "folio.editAuthRequired"

@@ -265,7 +265,8 @@ export function ToolbarButton({
         "text-[var(--doc-text-muted)] hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)]",
         active &&
           "bg-[var(--doc-primary-light)] text-[var(--doc-text)] hover:bg-[var(--doc-primary-light)]",
-        disabled && "cursor-not-allowed opacity-30",
+        disabled &&
+          "cursor-not-allowed text-[var(--doc-text-subtle)] opacity-[0.16] disabled:hover:bg-transparent disabled:hover:text-[var(--doc-text-subtle)]",
         className,
       )}
       onMouseDown={handleMouseDown}

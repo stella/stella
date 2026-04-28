@@ -48,7 +48,8 @@ const btnCls = (active: boolean, disabled: boolean, compact: boolean) =>
     active
       ? "bg-[var(--doc-primary-light)] text-[var(--doc-primary)]"
       : "text-[var(--doc-text-muted)] hover:bg-[var(--doc-bg-hover)]",
-    disabled && "cursor-not-allowed opacity-38",
+    disabled &&
+      "cursor-not-allowed text-[var(--doc-text-subtle)] opacity-[0.16] disabled:hover:bg-transparent disabled:hover:text-[var(--doc-text-subtle)]",
   );
 
 export function ListButtons({
