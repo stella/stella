@@ -2,6 +2,7 @@ import JSZip from "jszip";
 
 const REGEX_HAS_PAGE_SET_UP_PR = /<pageSetUpPr[\s/>]/;
 const REGEX_EXTRACT_PAGE_SET_UP_PR = /<pageSetUpPr([^/]*?)\/>/g;
+// oxlint-disable-next-line sonarjs/slow-regex -- worksheet attribute rewrite runs on bounded XLSX XML entries
 const REGEX_REMOVE_FIT_TO_PAGE = /\s*fitToPage="[^"]*"/;
 const REGEX_HAS_OPEN_SHEET_PR = /<sheetPr[^>]*>[\s\S]*?<\/sheetPr>/;
 const REGEX_EXTRACT_OPEN_SHEET_PR = /(<sheetPr[^>]*>)([\s\S]*?)(<\/sheetPr>)/;
@@ -12,8 +13,11 @@ const REGEX_SHEET_LANDMARK =
 const REGEX_WORKSHEET_OPEN = /<worksheet[^>]*>/;
 const REGEX_HAS_PAGE_SETUP = /<pageSetup[\s/>]/;
 const REGEX_EXTRACT_PAGE_SETUP = /<pageSetup([^/]*?)\/>/g;
+// oxlint-disable-next-line sonarjs/slow-regex -- worksheet attribute rewrite runs on bounded XLSX XML entries
 const REGEX_REMOVE_SCALE = /\s*scale="[^"]*"/;
+// oxlint-disable-next-line sonarjs/slow-regex -- worksheet attribute rewrite runs on bounded XLSX XML entries
 const REGEX_REMOVE_FIT_TO_WIDTH = /\s*fitToWidth="[^"]*"/;
+// oxlint-disable-next-line sonarjs/slow-regex -- worksheet attribute rewrite runs on bounded XLSX XML entries
 const REGEX_REMOVE_FIT_TO_HEIGHT = /\s*fitToHeight="[^"]*"/;
 const REGEX_WORKSHEET_CLOSE = /<\/worksheet>/;
 const REGEX_SHEET_FILENAME = /^xl\/worksheets\/sheet\d+\.xml$/;

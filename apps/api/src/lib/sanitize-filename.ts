@@ -18,17 +18,33 @@ export type SanitizedFileName = string & {
 // eslint-disable-next-line no-control-regex -- intentional: strip null byte and other unsafe characters
 const UNSAFE_CHARS_RE = /["/\\<>\r\n\0|*?:]/g;
 const PATH_TRAVERSAL_RE = /\.\./g;
-const LEADING_TRAILING_DOTS_RE = /^\.+|\.+$/g;
+
+const stripLeadingAndTrailingDots = (name: string): string => {
+  let start = 0;
+  let end = name.length;
+
+  while (name[start] === ".") {
+    start += 1;
+  }
+  while (end > start && name[end - 1] === ".") {
+    end -= 1;
+  }
+
+  const leadingReplacement = start > 0 ? "_" : "";
+  const trailingReplacement = end < name.length ? "_" : "";
+  return `${leadingReplacement}${name.slice(start, end)}${trailingReplacement}`;
+};
 
 export const sanitizeFilename = (name: string): SanitizedFileName => {
   const sanitized = name
     .replace(UNSAFE_CHARS_RE, "_")
-    .replace(PATH_TRAVERSAL_RE, "__")
-    .replace(LEADING_TRAILING_DOTS_RE, "_");
+    .replace(PATH_TRAVERSAL_RE, "__");
+  const sanitizedWithoutEdgeDots = stripLeadingAndTrailingDots(sanitized);
 
   // SAFETY: the sanitization above guarantees the result is safe
   // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  return (sanitized.slice(0, 255) || "file") as SanitizedFileName;
+  return (sanitizedWithoutEdgeDots.slice(0, 255) ||
+    "file") as SanitizedFileName;
 };
 
 /** Matches a trailing `.docx` extension (case-insensitive). */

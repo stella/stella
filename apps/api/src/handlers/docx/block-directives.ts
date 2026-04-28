@@ -34,6 +34,7 @@ export { evaluateCondition, resolvePath };
 
 /** Matches a block directive as the sole paragraph content. */
 const DIRECTIVE_RE =
+  // oxlint-disable-next-line sonarjs/slow-regex -- directive matching runs on one OOXML paragraph at a time
   /^\s*\{\{(#if|#elseif|#else|#each|\/if|\/each)\s*(.*?)\}\}\s*$/;
 
 /** Fast-path: does the raw XML contain any block directives? */

@@ -58,6 +58,21 @@ const SKIP_WORDS = new Set([
   "pokračování",
 ]);
 
+const LETTERS = new Set("abcdefghijklmnopqrstuvwxyzáčďéěíňóřšťúůýž");
+const trimNonLetters = (word: string): string => {
+  let start = 0;
+  let end = word.length;
+
+  while (start < end && !LETTERS.has(word.charAt(start))) {
+    start += 1;
+  }
+  while (end > start && !LETTERS.has(word.charAt(end - 1))) {
+    end -= 1;
+  }
+
+  return word.slice(start, end);
+};
+
 const extractWords = (text: string): Set<string> => {
   const words = new Set<string>();
   for (const w of text.split(/\s+/)) {
@@ -65,10 +80,7 @@ const extractWords = (text: string): Set<string> => {
     // "[o]rganizace" or "[OBRÁZEK]"), then trim remaining
     // non-letter chars from edges.
     const noBrackets = w.replace(/[[\]]/g, "");
-    const clean = noBrackets
-      .toLowerCase()
-      .replace(/^[^a-záčďéěíňóřšťúůýž]+/, "")
-      .replace(/[^a-záčďéěíňóřšťúůýž]+$/, "");
+    const clean = trimNonLetters(noBrackets.toLowerCase());
     if (
       clean.length >= 3 &&
       !/^\d+$/.test(clean) &&

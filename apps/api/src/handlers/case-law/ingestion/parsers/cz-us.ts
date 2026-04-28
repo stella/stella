@@ -525,10 +525,12 @@ const collapseSpaces = (text: string): string =>
   text.replace(/(\S)\s+(?=\S)/g, "$1");
 
 /** "takto:" separator (with spaced variants). */
+// oxlint-disable-next-line sonarjs/slow-regex -- matched against individual normalized parser lines
 const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*:?\s*$/i;
 
 /** "Odůvodnění:" separator (with spaced variants). */
 const ODUVODNENI_RE =
+  // oxlint-disable-next-line sonarjs/slow-regex -- matched against individual normalized parser lines
   /^(?:O\s*d\s*[uů]\s*v\s*o\s*d\s*n\s*[eě]\s*n\s*[ií]|Odůvodnění)\s*:?\s*$/i;
 
 /**

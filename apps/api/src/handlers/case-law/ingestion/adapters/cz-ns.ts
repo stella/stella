@@ -133,6 +133,7 @@ const LABEL_PATTERNS: Record<string, RegExp> = {
  * "předseda/předsedkyně senátu" label.
  */
 const JUDGE_RE =
+  // oxlint-disable-next-line sonarjs/slow-regex -- signature extraction scans one bounded decision text
   /(?:JUDr\.|Mgr\.|doc\.|prof\.)\s+[\p{L}\s,.-]+?(?=\s*předsed[ay]\s+senátu)/iu;
 
 const extractJudge = (text: string): string | undefined => {
