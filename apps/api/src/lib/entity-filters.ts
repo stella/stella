@@ -287,6 +287,8 @@ const internalSortExpr = (
   const dir = (col: SQL) => (direction ? sql`${col} DESC` : sql`${col} ASC`);
 
   switch (propertyId) {
+    case "_name":
+      return dir(sql`${entities.name}`);
     case "_created-by": {
       const sub = sql`(
         SELECT ${user.name} FROM ${user}

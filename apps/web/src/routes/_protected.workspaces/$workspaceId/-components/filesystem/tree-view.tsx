@@ -18,6 +18,8 @@ import { useHotkey } from "@tanstack/react-hotkeys";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
+  ArrowDownIcon,
+  ArrowUpIcon,
   ChevronRightIcon,
   FileIcon,
   FolderIcon,
@@ -65,6 +67,7 @@ import {
   useMoveEntity,
   useRenameEntity,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
+import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 import { useEntitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
@@ -148,7 +151,7 @@ const buildGridTemplate = (extraCount: number): string => {
 
 type FilesystemViewProps = {
   workspaceId: string;
-  view: WorkspaceView;
+  view: WorkspaceView<"filesystem">;
 };
 
 /** Collect all folder entity IDs from a flat entity list. */
@@ -169,6 +172,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const moveEntity = useMoveEntity();
   const renameEntity = useRenameEntity();
+  const updateView = useUpdateView(workspaceId);
   const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
   const [breadcrumbEditValue, setBreadcrumbEditValue] = useState("");
   const [selectedIds, setSelectedIds] = useState(new Set<string>());
@@ -200,6 +204,22 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   } | null>(null);
 
   const { filters, sorts, hiddenProperties } = view.layout;
+  const primarySort = sorts.at(0) ?? null;
+
+  const handleSortColumn = useCallback(
+    (propertyId: string) => {
+      const desc =
+        primarySort?.propertyId === propertyId ? !primarySort.desc : false;
+      updateView.mutate({
+        viewId: view.id,
+        layout: {
+          ...view.layout,
+          sorts: [{ propertyId, desc }],
+        },
+      });
+    },
+    [primarySort, updateView, view.id, view.layout],
+  );
 
   const { data: entityData } = useSuspenseQuery(
     useEntitiesOptions({
@@ -593,11 +613,21 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         className="text-muted-foreground grid items-center gap-x-4 border-b px-2 pb-1 text-xs font-medium"
         style={{ gridTemplateColumns: gridTemplate }}
       >
-        <span>{t("common.name")}</span>
+        <SortableColumnHeader
+          activeSort={primarySort}
+          label={t("common.name")}
+          onSort={handleSortColumn}
+          propertyId={getInternalPropertyId("name")}
+        />
         {extraColumns.map((col) => (
-          <span className="text-end" key={col.id}>
-            {col.label}
-          </span>
+          <SortableColumnHeader
+            activeSort={primarySort}
+            align="end"
+            key={col.id}
+            label={col.label}
+            onSort={handleSortColumn}
+            propertyId={col.id}
+          />
         ))}
         <span />
       </div>
@@ -680,6 +710,40 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 };
 
 // -- Row --
+
+type SortableColumnHeaderProps = {
+  activeSort: WorkspaceView<"filesystem">["layout"]["sorts"][number] | null;
+  label: string;
+  propertyId: string;
+  onSort: (propertyId: string) => void;
+  align?: "start" | "end" | undefined;
+};
+
+const SortableColumnHeader = ({
+  activeSort,
+  label,
+  propertyId,
+  onSort,
+  align = "start",
+}: SortableColumnHeaderProps) => {
+  const isActive = activeSort?.propertyId === propertyId;
+  const SortIcon = activeSort?.desc ? ArrowDownIcon : ArrowUpIcon;
+
+  return (
+    <button
+      className={cn(
+        "hover:text-foreground flex min-w-0 items-center gap-1 rounded-sm py-0.5 transition-colors",
+        align === "end" ? "justify-end text-end" : "justify-start text-start",
+        isActive && "text-foreground",
+      )}
+      onClick={() => onSort(propertyId)}
+      type="button"
+    >
+      <span className="truncate">{label}</span>
+      {isActive && <SortIcon className="size-3 shrink-0" />}
+    </button>
+  );
+};
 
 type FilesystemRowProps = {
   node: TableTreeNode;
