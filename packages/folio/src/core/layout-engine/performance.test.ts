@@ -278,16 +278,19 @@ describe("Layout Engine Performance", () => {
     });
 
     test("layout scales linearly with document size", () => {
-      // Measure for various document sizes
-      const sizes = [50, 100, 200, 400];
+      // Measure for various document sizes. The smallest size is 100 (not 50)
+      // because per-paragraph layout takes only a few µs; below 100 paragraphs
+      // the total work per iteration is dominated by timer noise and the
+      // median ratio between sizes becomes unreliable.
+      const sizes = [100, 200, 400, 800];
       const timePerBlock: number[] = [];
 
       for (const size of sizes) {
         const doc = generateNParagraphDocument(size);
         const { stats } = benchmark(
           () => layoutDocument(doc.blocks, doc.measures, DEFAULT_OPTIONS),
-          2,
-          5,
+          WARMUP_ITERATIONS,
+          MEASURE_ITERATIONS,
         );
         timePerBlock.push(stats.median / size);
       }
@@ -300,7 +303,8 @@ describe("Layout Engine Performance", () => {
         );
       }
 
-      // Time per block should be relatively stable (within 3x of smallest)
+      // Per-block time should stay roughly stable across sizes. 3x catches
+      // a real super-linear regression while leaving headroom for jitter.
       const minTime = Math.min(...timePerBlock);
       const maxTime = Math.max(...timePerBlock);
       expect(maxTime / minTime).toBeLessThanOrEqual(3);
