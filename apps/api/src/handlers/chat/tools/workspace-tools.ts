@@ -18,13 +18,8 @@ import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const safeIdSchema = <T extends "entity" | "property">(description: string) =>
-  v.pipe(
-    v.string(),
-    v.uuid(),
-    v.transform((id) => toSafeId<T>(id)),
-    v.description(description),
-  );
+const idSchema = (description: string) =>
+  v.pipe(v.string(), v.uuid(), v.description(description));
 
 // -----------------------------------------------------------------
 // Matter tools (workspace-scoped, explicit workspaceId)
@@ -149,10 +144,8 @@ export const createWorkspaceTools = ({
       inputSchema: valibotSchema(
         v.strictObject({
           workspaceId: wsSchema,
-          entityId: safeIdSchema<"entity">("The entity ID to update"),
-          propertyId: safeIdSchema<"property">(
-            "The property ID (from read-entity)",
-          ),
+          entityId: idSchema("The entity ID to update"),
+          propertyId: idSchema("The property ID (from read-entity)"),
           value: v.pipe(
             v.union([v.string(), v.number(), v.array(v.string()), v.null_()]),
             v.description("New value for the field"),
@@ -177,11 +170,14 @@ export const createWorkspaceTools = ({
           ),
         }),
       ),
-      execute: async ({ workspaceId, entityId, propertyId, value }) => {
+      execute: async (input) => {
         const allowedWorkspaceId = requireAllowedWorkspaceId({
           allowedIdsByValue: allowedWorkspaceIdsByValue,
-          workspaceId,
+          workspaceId: input.workspaceId,
         });
+        const entityId = toSafeId<"entity">(input.entityId);
+        const propertyId = toSafeId<"property">(input.propertyId);
+        const { value } = input;
         const property = await scopedDb((tx) =>
           tx.query.properties.findFirst({
             columns: { id: true, content: true },

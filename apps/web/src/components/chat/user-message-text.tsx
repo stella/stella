@@ -8,10 +8,8 @@ import {
   CHAT_MENTION_CATEGORY_PATTERN,
   isMentionCategory,
 } from "@/components/chat/chat-mention-href";
-import {
-  EntityMentionIcon,
-  openEntityInInspector,
-} from "@/components/chat/entity-link";
+import { EntityMentionIcon } from "@/components/chat/entity-link";
+import { openEntityInInspector } from "@/components/chat/entity-open";
 
 /** Matches all stella mention link formats:
  *  `[Label](#stella-entity=ID)`,
@@ -41,7 +39,7 @@ const MentionChip = ({
 
   const handleClick = () => {
     if (category === "entity") {
-      openEntityInInspector(entityId, label);
+      void openEntityInInspector(entityId, label);
       return;
     }
     if (category === "workspace") {

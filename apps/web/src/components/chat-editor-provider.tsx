@@ -19,7 +19,7 @@ import Text from "@tiptap/extension-text";
 import type { EditorState, Plugin, PluginKey } from "@tiptap/pm/state";
 import type { Editor, JSONContent } from "@tiptap/react";
 import { useEditor } from "@tiptap/react";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -28,6 +28,7 @@ import {
 } from "@/components/chat-mention-extension";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import { getMentionViewScope } from "@/components/chat-mention-helpers";
+import { getAnalytics } from "@/lib/analytics/provider";
 import {
   createChatDraftState,
   createEmptyChatDraftDoc,
@@ -85,6 +86,7 @@ export type ChatInputDraft = {
 export type ChatInputMentionSource = {
   id: string;
   getItems: () => ChatMentionOption[];
+  searchItems?: ((query: string) => Promise<ChatMentionOption[]>) | undefined;
 };
 
 export type ChatInputPluginRegistration = {
@@ -134,6 +136,7 @@ type ChatEditorManagerContextValue = {
   focusThread: (threadRef: ChatThreadRef) => void;
   getMentionItems: () => ChatMentionOption[];
   getPluginRegistrations: () => ChatInputPluginRegistration[];
+  searchMentionItems: (query: string) => Promise<ChatMentionOption[]>;
   insertMentionIntoThread: (
     threadRef: ChatThreadRef,
     mention: ChatMentionOption,
@@ -199,6 +202,33 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     }
 
     return plugins;
+  }, []);
+
+  const searchMentionItems = useCallback(async (query: string) => {
+    const items: ChatMentionOption[] = [];
+
+    for (const { registration } of registrationsRef.current.values()) {
+      if (!registration.mentionSources) {
+        continue;
+      }
+
+      for (const source of registration.mentionSources) {
+        const nextItemsResult = await Result.tryPromise(
+          async () => await source.searchItems?.(query),
+        );
+        if (Result.isError(nextItemsResult)) {
+          getAnalytics().captureError(nextItemsResult.error);
+          continue;
+        }
+
+        const nextItems = nextItemsResult.value;
+        if (nextItems !== undefined) {
+          items.push(...nextItems);
+        }
+      }
+    }
+
+    return items;
   }, []);
 
   const registerExtension = useCallback(
@@ -275,6 +305,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
       insertMentionIntoThread,
       registerActiveEditor,
       registerExtension,
+      searchMentionItems,
     }),
     [
       activeThreadKey,
@@ -285,6 +316,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
       insertMentionIntoThread,
       registerActiveEditor,
       registerExtension,
+      searchMentionItems,
     ],
   );
 
@@ -338,6 +370,7 @@ export const useChatEditor = ({
     getMentionItems,
     getPluginRegistrations,
     registerActiveEditor,
+    searchMentionItems,
   } = useChatEditorManager();
   const draft = useChatDraftStore(
     (state) => state.draftsByThreadKey[threadKey] ?? null,
@@ -437,6 +470,7 @@ export const useChatEditor = ({
       ChatMention.configure({
         suggestion: createChatSuggestion(
           getMentionItems,
+          searchMentionItems,
           loadWorkspaceEntities,
         ),
         deleteTriggerWithBackspace: true,

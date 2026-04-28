@@ -9,7 +9,7 @@ import type {
 } from "@stella/api/types";
 import { cn } from "@stella/ui/lib/utils";
 
-import { openEntityInInspector } from "@/components/chat/entity-link";
+import { openEntityInInspector } from "@/components/chat/entity-open";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 type SourceDocumentPart = {
@@ -160,7 +160,7 @@ const SourceChip = ({
       return;
     }
 
-    openEntityInInspector(
+    void openEntityInInspector(
       sourceDocument.entityId,
       sourceDocument.title,
       resolvedWorkspaceId,

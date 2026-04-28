@@ -21,6 +21,16 @@ describe("chat message markdown serializer", () => {
     );
   });
 
+  test("serializes case-law decision references without structured mention metadata", () => {
+    const html =
+      '<p>Viz <entity-mention data-id="6c51cbe0-9437-4587-a3bc-19acbb3d9a70" data-label="28 Cdo 5171/2008" data-category="decision"></entity-mention>.</p>';
+
+    expect(normalizeChatMessageHtml(html, [])).toEqual({
+      mentions: [],
+      text: "Viz [28 Cdo 5171/2008](#stella-decision=6c51cbe0-9437-4587-a3bc-19acbb3d9a70).",
+    });
+  });
+
   test("extracts structured mentions while keeping model-facing entity links clean", () => {
     const html =
       '<p>Check <entity-mention data-id="ent_123" data-label="Retention Memo" data-category="entity" data-source-workspace-id="ws_123"></entity-mention>.</p>';

@@ -21,6 +21,16 @@ export const CHAT_MENTION_HREF_PREFIXES = {
   workspace: "#stella-workspace=",
 } as const satisfies ChatMentionHrefPrefixMap;
 
+export const CHAT_REFERENCE_HREF_PREFIXES = {
+  ...CHAT_MENTION_HREF_PREFIXES,
+  decision: "#stella-decision=",
+} as const;
+
+export type ChatReferenceHrefPrefix =
+  (typeof CHAT_REFERENCE_HREF_PREFIXES)[keyof typeof CHAT_REFERENCE_HREF_PREFIXES];
+
+export type ChatReferenceCategory = keyof typeof CHAT_REFERENCE_HREF_PREFIXES;
+
 type BaseChatMention = {
   id: string;
   label: string;

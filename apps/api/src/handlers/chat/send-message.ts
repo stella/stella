@@ -8,6 +8,7 @@ import {
   extractTitle,
 } from "@/api/handlers/chat/chat-prompt";
 import type {
+  IncomingActiveDecision,
   IncomingActiveFile,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
@@ -128,6 +129,7 @@ const sendMessage = createSafeRootHandler(
     const messageWindow = latestMessagePlan.messages.slice(-MESSAGE_WINDOW);
     const chatContext = yield* Result.await(
       prepareChatContext({
+        activeDecision: body.activeDecision,
         activeFile: body.activeFile,
         messageWindow,
         safeDb,
@@ -314,6 +316,7 @@ const uploadMessageFilesWithRollback = async ({
 };
 
 type PrepareChatContextProps = {
+  activeDecision: IncomingActiveDecision | undefined;
   activeFile: IncomingActiveFile | undefined;
   messageWindow: ChatMessage[];
   safeDb: SafeDb;
@@ -331,6 +334,7 @@ type PrepareChatContextResult = Result<
 >;
 
 const prepareChatContext = async ({
+  activeDecision,
   activeFile,
   messageWindow,
   safeDb,
@@ -341,6 +345,7 @@ const prepareChatContext = async ({
   await Result.gen(async function* () {
     const [systemResult, hydratedMessagesResult] = await Promise.all([
       buildChatSystemPrompt({
+        activeDecision,
         activeFile,
         safeDb,
         userContext,

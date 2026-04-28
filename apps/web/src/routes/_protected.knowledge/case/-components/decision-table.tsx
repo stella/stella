@@ -9,12 +9,7 @@ import {
 } from "@tanstack/react-table";
 import { useFormatter, useTranslations } from "use-intl";
 
-const slugify = (caseNumber: string): string =>
-  caseNumber
-    .toLowerCase()
-    .replace(/\//g, "-")
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "");
+import { createCaseLawDecisionRouteParam } from "@/lib/case-law-route";
 
 export type Decision = {
   id: string;
@@ -52,7 +47,12 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
             <div>
               <Link
                 className="text-foreground font-medium hover:underline"
-                params={{ decisionId: `${slugify(info.getValue())}--${id}` }}
+                params={{
+                  decisionId: createCaseLawDecisionRouteParam({
+                    caseNumber: info.getValue(),
+                    decisionId: id,
+                  }),
+                }}
                 to="/knowledge/case/$decisionId"
               >
                 {info.getValue()}

@@ -15,9 +15,13 @@ import { invalidateGroupedChatThreads } from "@/routes/_protected.chat/-queries"
 
 type UseChatSessionOptions = {
   chat: Chat<PersistedChatMessage>;
+  workspaceId?: string | undefined;
 };
 
-export const useChatSession = ({ chat }: UseChatSessionOptions) => {
+export const useChatSession = ({
+  chat,
+  workspaceId,
+}: UseChatSessionOptions) => {
   const queryClient = useQueryClient();
   const [autoApprovedTools, setAutoApprovedTools] = useState(
     () => new Set<ApprovalToolName>(),
@@ -59,9 +63,10 @@ export const useChatSession = ({ chat }: UseChatSessionOptions) => {
         createElement(StreamdownMentionLink, {
           ...props,
           interactive: true,
+          workspaceId,
         }),
     }),
-    [],
+    [workspaceId],
   );
 
   const approvalPendingMessageId = useMemo(() => {

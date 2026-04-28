@@ -30,6 +30,8 @@ export type {
   ChatMentionHrefPrefixMap,
   ChatMessage,
   ChatPart,
+  ChatReferenceCategory,
+  ChatReferenceHrefPrefix,
   ChatUserFileUrl,
   ChatUITools,
 } from "@/api/handlers/chat/types";

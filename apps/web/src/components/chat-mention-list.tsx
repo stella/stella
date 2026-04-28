@@ -12,6 +12,7 @@ import {
   ChevronRightIcon,
   FileTextIcon,
   FolderIcon,
+  LandmarkIcon,
   LayersIcon,
   LoaderIcon,
 } from "lucide-react";
@@ -23,21 +24,27 @@ import { cn } from "@stella/ui/lib/utils";
 
 import type {
   ChatMentionOption,
-  MentionCategory,
+  ChatReferenceCategory,
 } from "@/components/chat-mention-extension";
 import { getMatterColor } from "@/lib/matter-colors";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
-const CATEGORY_ORDER: MentionCategory[] = ["entity", "workspace"];
+const CATEGORY_ORDER: ChatReferenceCategory[] = [
+  "entity",
+  "workspace",
+  "decision",
+];
 
 const useCategoryLabel = () => {
-  const t = useTranslations("chat.mention.category");
-  return (category: MentionCategory): string => {
+  const t = useTranslations();
+  return (category: ChatReferenceCategory): string => {
     switch (category) {
       case "entity":
-        return t("entities");
+        return t("chat.mention.category.entities");
       case "workspace":
-        return t("matters");
+        return t("chat.mention.category.matters");
+      case "decision":
+        return t("common.caseLaw");
       default:
         return category;
     }
@@ -51,7 +58,7 @@ const MentionIcon = ({
   mimeType,
 }: {
   id: string;
-  category: MentionCategory;
+  category: ChatReferenceCategory;
   kind: string;
   mimeType: string | null;
 }) => {
@@ -64,6 +71,10 @@ const MentionIcon = ({
         style={{ color: getMatterColor(id) }}
       />
     );
+  }
+
+  if (category === "decision") {
+    return <LandmarkIcon className={cls} />;
   }
 
   // Entity category: use document/folder icons
@@ -79,8 +90,8 @@ const MentionIcon = ({
 /** Group items by category, preserving a stable order. */
 const groupByCategory = (
   items: ChatMentionOption[],
-): { category: MentionCategory; items: ChatMentionOption[] }[] => {
-  const groups = new Map<MentionCategory, ChatMentionOption[]>();
+): { category: ChatReferenceCategory; items: ChatMentionOption[] }[] => {
+  const groups = new Map<ChatReferenceCategory, ChatMentionOption[]>();
 
   for (const item of items) {
     const list = groups.get(item.category);
@@ -92,7 +103,7 @@ const groupByCategory = (
   }
 
   const result: {
-    category: MentionCategory;
+    category: ChatReferenceCategory;
     items: ChatMentionOption[];
   }[] = [];
 

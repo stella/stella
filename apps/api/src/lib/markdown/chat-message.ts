@@ -4,8 +4,12 @@ import type {
   ChatMention,
   ChatMentionCategory,
   ChatMentionHref,
+  ChatReferenceCategory,
 } from "@/api/handlers/chat/types";
-import { CHAT_MENTION_HREF_PREFIXES } from "@/api/handlers/chat/types";
+import {
+  CHAT_MENTION_HREF_PREFIXES,
+  CHAT_REFERENCE_HREF_PREFIXES,
+} from "@/api/handlers/chat/types";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 import { typedEntries } from "@/api/lib/object";
 
@@ -94,6 +98,18 @@ const parseMentionCategory = (value: string): ChatMentionCategory | null => {
   return null;
 };
 
+const parseReferenceCategory = (
+  value: string,
+): ChatReferenceCategory | null => {
+  for (const [category] of typedEntries(CHAT_REFERENCE_HREF_PREFIXES)) {
+    if (value === category) {
+      return category;
+    }
+  }
+
+  return null;
+};
+
 const toMentionHref = ({
   category,
   id,
@@ -101,6 +117,14 @@ const toMentionHref = ({
   category: ChatMentionCategory;
   id: string;
 }): ChatMentionHref => `${CHAT_MENTION_HREF_PREFIXES[category]}${id}`;
+
+const toReferenceHref = ({
+  category,
+  id,
+}: {
+  category: ChatReferenceCategory;
+  id: string;
+}) => `${CHAT_REFERENCE_HREF_PREFIXES[category]}${encodeURIComponent(id)}`;
 
 const dedupeMentions = (mentions: readonly ChatMention[]): ChatMention[] => {
   const seen = new Set<string>();
@@ -150,10 +174,18 @@ const replaceMentionsWithAnchors = (
     const label = $(node).attr("data-label");
     const sourceWorkspaceId = $(node).attr("data-source-workspace-id") ?? null;
     const rawCategory = $(node).attr("data-category");
+    const referenceCategory = parseReferenceCategory(rawCategory ?? "");
     const category = parseMentionCategory(rawCategory ?? "");
 
-    if (!id || !label || !category) {
+    if (!id || !label || !referenceCategory) {
       $(node).replaceWith($(node).contents());
+      return;
+    }
+
+    if (!category) {
+      const href = toReferenceHref({ category: referenceCategory, id });
+      const anchor = $("<a></a>").attr("href", href).text(label);
+      $(node).replaceWith(anchor);
       return;
     }
 

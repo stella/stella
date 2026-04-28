@@ -55,8 +55,13 @@ type ActiveFileContext = {
   fileName: string;
 };
 
+type ActiveDecisionContext = {
+  decisionId: string;
+};
+
 type ChatThreadContext = {
   allowMissingThread?: boolean | undefined;
+  getActiveDecision?: (() => ActiveDecisionContext | undefined) | undefined;
   getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
   getUserContext: () => {
     locale: string;
@@ -66,41 +71,66 @@ type ChatThreadContext = {
 };
 
 type RightPanelChatProps = {
+  decisionId?: string | undefined;
   open: boolean;
   workspaceId?: string | undefined;
 };
 
-export const RightPanelChat = ({ open, workspaceId }: RightPanelChatProps) => {
+export const RightPanelChat = ({
+  decisionId,
+  open,
+  workspaceId,
+}: RightPanelChatProps) => {
   if (workspaceId) {
     return <WorkspaceRightPanelChat open={open} workspaceId={workspaceId} />;
   }
 
-  return <GlobalRightPanelChat open={open} />;
+  return <GlobalRightPanelChat decisionId={decisionId} open={open} />;
 };
 
-const GlobalRightPanelChat = ({ open }: { open: boolean }) => {
+const GlobalRightPanelChat = ({
+  decisionId,
+  open,
+}: {
+  decisionId?: string | undefined;
+  open: boolean;
+}) => {
   const queryClient = useQueryClient();
   const userContext = useChatUserContext();
   const getUserContext = useEffectEvent(() => userContext);
+  const getActiveDecision = useEffectEvent(() =>
+    decisionId ? { decisionId } : undefined,
+  );
   const globalThreadId = useChatPanelStore((state) => state.globalThreadId);
+  const decisionThreadId = useChatPanelStore((state) =>
+    decisionId ? (state.decisionThreadIds[decisionId] ?? null) : null,
+  );
   const setGlobalThreadId = useChatPanelStore(
     (state) => state.setGlobalThreadId,
+  );
+  const setDecisionThreadId = useChatPanelStore(
+    (state) => state.setDecisionThreadId,
   );
 
   const setCurrentThreadId = useCallback(
     (threadId: string | null) => {
+      if (decisionId) {
+        setDecisionThreadId(decisionId, threadId);
+        return;
+      }
       setGlobalThreadId(threadId);
     },
-    [setGlobalThreadId],
+    [decisionId, setDecisionThreadId, setGlobalThreadId],
   );
 
   const threadRef = getPanelThreadRef({
-    threadId: globalThreadId,
+    threadId: decisionId ? decisionThreadId : globalThreadId,
   });
 
   const threadContext = useMemo<ChatThreadContext>(
     () => ({
       allowMissingThread: true,
+      getActiveDecision,
       getUserContext,
     }),
     [],
@@ -399,7 +429,7 @@ const ActiveThreadPanelInner = ({
     handleAlwaysAllow,
     streamdownComponents,
     approvalPendingMessageId,
-  } = useChatSession({ chat });
+  } = useChatSession({ chat, workspaceId });
 
   return (
     <div

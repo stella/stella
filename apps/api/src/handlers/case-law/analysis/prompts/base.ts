@@ -23,11 +23,16 @@ export const ANALYSIS_GUIDELINES = `
    decision length. Short decisions (< 20 paragraphs) may have fewer.
 5. Every anchorId in your output MUST match an anchorId from the
    decision text. Do not invent anchorIds.
-6. Write ALL fields in the decision's language: labels, summaries,
-   AND category names. Do not use English category names.
-7. Annotations should point at specific paragraphs (narrow
+6. Write user-visible fields in the decision's language: labels,
+   summaries, and text snippets. Do not use English labels for
+   non-English decisions.
+7. The category field is a stable machine category. Use one of
+   facts, procedural-history, reasoning, holding when applicable;
+   use a concise language-specific category only when the core
+   categories do not fit.
+8. Annotations should point at specific paragraphs (narrow
    startAnchorId–endAnchorId ranges), not span entire sections.
-8. Annotation summaries: one sentence, stating what the court
+9. Annotation summaries: one sentence, stating what the court
    decided or found — not what the section "discusses".
 `;
 
