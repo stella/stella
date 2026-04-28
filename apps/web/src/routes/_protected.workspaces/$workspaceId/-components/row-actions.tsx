@@ -81,6 +81,7 @@ type RowActionsProps = {
     | ((entityId: string, parentId: string) => void)
     | undefined;
   triggerClassName?: string | undefined;
+  triggerTabIndex?: number | undefined;
   anchor?: VirtualAnchor | null | undefined;
   /** Extra entities included in bulk actions. */
   selectedEntities?: WorkspaceEntity[] | undefined;
@@ -95,6 +96,7 @@ export const RowActions = ({
   onRename,
   onSubfolderCreated,
   triggerClassName,
+  triggerTabIndex,
   anchor,
   selectedEntities,
 }: RowActionsProps) => {
@@ -406,6 +408,7 @@ export const RowActions = ({
               "opacity-0! transition-opacity group-hover/row:opacity-100!"
             }
             render={<Button size="icon-xs" variant="ghost" />}
+            tabIndex={triggerTabIndex}
           />
         }
       >
