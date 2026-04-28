@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 import {
@@ -226,7 +226,9 @@ const uploadSourceRaw = async (
  * Insert a single decision and its citations into the database.
  * Skips duplicates based on sourceHash.
  */
-const processDecision = async (
+const jsonbValue = <T>(value: T) => sql<T>`${value}`;
+
+export const processDecision = async (
   input: IngestionResult,
   sourceId: SafeId<"caseLawSource">,
   scopedDb: ScopedDb,
@@ -332,11 +334,11 @@ const processDecision = async (
           decisionDate: result.decisionDate,
           decisionType: result.decisionType,
           fulltext: result.fulltext,
-          sections: sections.length > 0 ? sections : null,
+          sections: sections.length > 0 ? jsonbValue(sections) : null,
           sourceUrl: result.sourceUrl,
           documentUrl: result.documentUrl,
-          metadata: result.metadata,
-          documentAst: result.documentAst,
+          metadata: jsonbValue(result.metadata),
+          documentAst: jsonbValue(result.documentAst),
           sourceRaw: null,
           sourceRawS3Key,
           sourceRawContentType,
@@ -379,11 +381,11 @@ const processDecision = async (
         decisionDate: result.decisionDate,
         decisionType: result.decisionType,
         fulltext: result.fulltext,
-        sections: sections.length > 0 ? sections : null,
+        sections: sections.length > 0 ? jsonbValue(sections) : null,
         sourceUrl: result.sourceUrl,
         documentUrl: result.documentUrl,
-        metadata: result.metadata,
-        documentAst: result.documentAst ?? null,
+        metadata: jsonbValue(result.metadata),
+        documentAst: jsonbValue(result.documentAst),
         parserVersion: result.parserVersion ?? 0,
         sourceRaw: null,
         sourceRawS3Key,
