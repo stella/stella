@@ -1,4 +1,4 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -166,24 +166,32 @@ export const MattersToolbar = ({
         )}
       </Button>
 
-      <CreateMatterPopover />
+      <CreateMatterPopover className="ms-auto" />
     </div>
   );
 };
 
-const CreateMatterPopover = () => {
+type CreateMatterPopoverProps = {
+  className?: string | undefined;
+};
+
+const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
   const t = useTranslations();
   const canCreate = usePermissions({ workspace: ["create"] });
-  const { data } = useSuspenseQuery(workspacesOptions);
+  const { data } = useQuery(workspacesOptions);
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
 
+  if (!data || !canCreate) {
+    return null;
+  }
+
   const isLimitReached = data.workspaces.length >= data.workspacesCountLimit;
-  if (isLimitReached || !canCreate) {
+  if (isLimitReached) {
     return null;
   }
 
   return (
-    <Button onClick={() => openCreateMatter()} size="xs">
+    <Button className={className} onClick={() => openCreateMatter()} size="xs">
       <PlusIcon />
       {t("workspaces.newMatter")}
     </Button>
