@@ -96,8 +96,8 @@ export const downloadFile = (blob: Blob, fileName: string) => {
   link.href = url;
   link.download = fileName;
 
+  document.body.append(link);
   link.click();
-
   link.remove();
   URL.revokeObjectURL(url);
 };

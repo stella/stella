@@ -1271,6 +1271,8 @@
         "unavailableTitle": "stella desktop nepasiekiama."
       },
       "downloadAsZip": "Atsisiųsti .zip failą",
+      "downloadOriginal": "Originalus failas",
+      "downloadPdf": "PDF",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",
       "rateLimited": "Greičio ribojimas; tęsiama po {seconds, number} s",
       "renamedToAvoidConflicts": "{count, plural, one {# failas pervadintas siekiant išvengti konfliktų} few {# failai pervadinti siekiant išvengti konfliktų} many {# failų pervadinta siekiant išvengti konfliktų} other {# failų pervadinta siekiant išvengti konfliktų}}",
