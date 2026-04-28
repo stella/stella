@@ -22,6 +22,7 @@ import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-componen
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import type {
   TableTreeNode,
   WorkspaceTable as WorkspaceTableType,
@@ -37,6 +38,10 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const selectColId = getInternalColId("select");
+
+type VirtualAnchor = {
+  getBoundingClientRect: () => DOMRect;
+};
 
 type WorkspaceTableProps = {
   workspaceId: string;
@@ -167,6 +172,7 @@ export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
               row={row}
               rowLabel={rowLabels[index] ?? ""}
               table={table}
+              workspaceId={workspaceId}
             />
           ))}
           <BottomRow
@@ -187,6 +193,7 @@ type DraggableRowProps = {
   index: number;
   rowLabel: string;
   table: WorkspaceTableType;
+  workspaceId: string;
   activeEntityId: string | null;
   activeTaskId: string | null;
   editingEntityId: string | null;
@@ -201,6 +208,7 @@ const DraggableRow = ({
   index,
   rowLabel,
   table,
+  workspaceId,
   activeEntityId,
   activeTaskId,
   editingEntityId,
@@ -210,6 +218,10 @@ const DraggableRow = ({
   onStopEditing,
 }: DraggableRowProps) => {
   const rowRef = useRef<HTMLTableRowElement>(null);
+  const [contextOpen, setContextOpen] = useState(false);
+  const [contextAnchor, setContextAnchor] = useState<VirtualAnchor | null>(
+    null,
+  );
   const entity = row.original;
 
   useInspectorFlash(entity.entityId, rowRef);
@@ -218,6 +230,33 @@ const DraggableRow = ({
   const visibleCells = row.getVisibleCells();
   const name = getEntityName(entity);
   const file = getFirstFile(entity);
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextAnchor({
+      getBoundingClientRect: () => new DOMRect(e.clientX, e.clientY, 0, 0),
+    });
+    setContextOpen(true);
+  };
+
+  const rowActions = (
+    <RowActions
+      anchor={contextAnchor}
+      entity={entity}
+      onOpenChange={(open) => {
+        setContextOpen(open);
+        if (!open) {
+          setContextAnchor(null);
+        }
+      }}
+      onRename={() => onStartEditing(entity.entityId)}
+      open={contextOpen}
+      triggerClassName="sr-only"
+      triggerTabIndex={-1}
+      workspaceId={workspaceId}
+    />
+  );
 
   useEffect(() => {
     const el = rowRef.current;
@@ -268,6 +307,7 @@ const DraggableRow = ({
         data-active={entity.entityId === activeEntityId || undefined}
         data-state={row.getIsSelected() ? "selected" : undefined}
         key={row.id}
+        onContextMenu={handleContextMenu}
         ref={rowRef}
       >
         <TableCell
@@ -284,6 +324,7 @@ const DraggableRow = ({
             row={row}
             table={table}
           />
+          {rowActions}
         </TableCell>
         <TableCell
           className="cursor-pointer"
@@ -331,6 +372,7 @@ const DraggableRow = ({
           ? () => useInspectorStore.getState().openTask(entity.entityId, name)
           : undefined
       }
+      onContextMenu={handleContextMenu}
       ref={rowRef}
     >
       {visibleCells.map((cell) => (
@@ -345,13 +387,16 @@ const DraggableRow = ({
           }}
         >
           {cell.column.id === selectColId ? (
-            <SelectRowContent
-              index={index}
-              label={rowLabel}
-              lastSelectedIndex={lastSelectedIndex}
-              row={row}
-              table={table}
-            />
+            <>
+              <SelectRowContent
+                index={index}
+                label={rowLabel}
+                lastSelectedIndex={lastSelectedIndex}
+                row={row}
+                table={table}
+              />
+              {rowActions}
+            </>
           ) : (
             <span className="flex items-center gap-1.5">
               {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -411,15 +456,16 @@ const SelectRowContent = ({
   };
 
   return (
-    <div className="flex min-h-5 items-center justify-center">
-      <span className="block text-xs tabular-nums group-hover/row:hidden group-data-[state=selected]/row:hidden">
+    <div className="relative flex h-5 w-7 shrink-0 items-center justify-center">
+      <span className="absolute inset-0 flex items-center justify-center text-xs tabular-nums transition-opacity group-hover/row:opacity-0 group-data-[state=selected]/row:opacity-0">
         {label}
       </span>
       <Checkbox
         checked={row.getIsSelected()}
-        className="hidden group-hover/row:block group-data-[state=selected]/row:block"
+        className="pointer-events-none absolute opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-data-[state=selected]/row:pointer-events-auto group-data-[state=selected]/row:opacity-100"
         indeterminate={someSelected}
         onCheckedChange={handleChange}
+        tabIndex={row.getIsSelected() ? 0 : -1}
       />
     </div>
   );
