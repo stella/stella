@@ -67,6 +67,7 @@ export const toOptionalValue = <T>(
 export const stripHtml = (html: string): string =>
   html
     .replace(/<br\s*\/?>/gi, "\n")
+    // oxlint-disable-next-line sonarjs/slow-regex -- adapter strips known court HTML fragments before parsing text
     .replace(/<[^>]*>/g, "")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")

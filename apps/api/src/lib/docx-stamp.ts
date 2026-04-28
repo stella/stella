@@ -57,6 +57,7 @@ const WID_RE = /w:id="(\d+)"/g;
 const FOOTER_FILE_RE = /^word\/footer\d+\.xml$/;
 const WT_TEXT_RE = /<w:t[^>]*>([^<]*)<\/w:t>/g;
 const STL_CODE_RE = /stl:([abcdefghjkmnpqrstuvwxyz23456789]{10})/;
+// oxlint-disable-next-line sonarjs/slow-regex -- footer text is bounded OOXML text and suffix is short
 const STL_SUFFIX_RE = /\s*stl:[abcdefghjkmnpqrstuvwxyz23456789]+\s*$/;
 const SECT_PR_RE = /(<w:sectPr[^>]*>)/;
 const CLOSING_BODY_RE = /<\/w:body>/;

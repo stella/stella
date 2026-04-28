@@ -67,6 +67,7 @@ const DECISION_TITLES: ReadonlySet<string> = new Set(
 );
 const CASE_NUMBER_RE = /^sygn(?:atura)?\.?\s*akt[:\s]/iu;
 const REASONS_HEADING_RE = /^uzasadnienie\b/iu;
+// oxlint-disable-next-line sonarjs/slow-regex -- heading check runs against one normalized line, not unbounded document text
 const HOLDING_HEADING_RE = /^(?:orzeka|postanawia|uchwala|zarządza)\s*:?\s*$/iu;
 const HOLDING_ITEM_RE = /^(?:[IVXLC]+\s*[.)]|[0-9]+\s*[.)]|[a-z][)])\s*/u;
 const OPERATIVE_VERB_RE =
@@ -93,6 +94,7 @@ const hasHtmlTags = (content: string): boolean =>
 const normalizeWhitespace = (text: string): string =>
   text
     .replace(/\u00a0/g, " ")
+    // oxlint-disable-next-line sonarjs/slow-regex -- source text is already split from one court document and replacement is line-local
     .replace(/[ \t]+\n/gu, "\n")
     .trim();
 

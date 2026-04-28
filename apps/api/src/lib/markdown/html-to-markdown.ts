@@ -259,7 +259,7 @@ const renderBlock = (el: Element): string => {
         (c): c is Element => isTag(c) && tagNameOf(c) === "code",
       );
       const lang = codeEl?.attribs["class"]?.match(/language-(\S+)/)?.[1] ?? "";
-      const text = rawText(codeEl ?? el).replace(/\n+$/, "");
+      const text = trimTrailingNewlines(rawText(codeEl ?? el));
       return `\`\`\`${lang}\n${text}\n\`\`\``;
     }
     case "ul":
@@ -274,6 +274,14 @@ const renderBlock = (el: Element): string => {
 };
 
 const renderChildren = (nodes: AnyNode[]): string => renderMixed(nodes);
+
+const trimTrailingNewlines = (text: string): string => {
+  let end = text.length;
+  while (text[end - 1] === "\n") {
+    end -= 1;
+  }
+  return text.slice(0, end);
+};
 
 /**
  * Convert sanitized HTML to GFM-flavored Markdown.

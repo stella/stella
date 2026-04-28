@@ -20,6 +20,7 @@ import type {
  * each other.
  */
 const DIRECTIVE_RE =
+  // oxlint-disable-next-line sonarjs/slow-regex -- DOCX directive text is one paragraph collected from OOXML
   /^\s*\{\{(#if|#elseif|#else|#each|\/if|\/each)\s*(.*?)\}\}\s*$/;
 
 const DIRECTIVE_KIND_MAP: Record<string, BlockDirectiveKind> = {

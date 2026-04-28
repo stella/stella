@@ -12,6 +12,7 @@ import { describe, expect, test } from "bun:test";
 
 const stripHtml = (html: string): string =>
   html
+    // oxlint-disable-next-line sonarjs/slow-regex -- test fixture HTML is small and controlled
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -38,6 +39,7 @@ const parseResultRows = (html: string): ParsedRow[] => {
     }
 
     const citMatch =
+      // oxlint-disable-next-line sonarjs/slow-regex -- test fixture rows are bounded representative NSS HTML snippets
       /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.)[\s]*([^"]+?)(?:-\d+)?"/i.exec(
         block,
       );

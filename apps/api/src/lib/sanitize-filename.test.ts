@@ -20,6 +20,10 @@ describe("sanitizeFilename", () => {
     expect<string>(sanitizeFilename("...draft...")).toBe("__.draft___");
   });
 
+  test("does not double-count a single dot filename", () => {
+    expect<string>(sanitizeFilename(".")).toBe("_");
+  });
+
   test("returns a SanitizedFileName branded type", () => {
     const result = sanitizeFilename("normal.pdf");
     // Compile-time check: result is assignable to SanitizedFileName
