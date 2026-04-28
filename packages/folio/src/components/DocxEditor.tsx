@@ -2682,7 +2682,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           disabled={readOnly}
           aria-pressed={trackChangesOn}
           aria-label={t("toggleTrackChanges")}
-          className={`flex h-8 w-[110px] items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors duration-100 disabled:cursor-not-allowed disabled:opacity-30 ${
+          className={`flex h-8 w-[110px] items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors duration-100 disabled:cursor-not-allowed disabled:text-[var(--doc-text-subtle)] disabled:opacity-[0.16] disabled:hover:bg-transparent disabled:hover:text-[var(--doc-text-subtle)] ${
             trackChangesOn
               ? "bg-[var(--doc-primary-light)] text-[var(--doc-text)]"
               : "text-[var(--doc-text-muted)] hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)]"

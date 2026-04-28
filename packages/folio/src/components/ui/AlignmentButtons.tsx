@@ -77,7 +77,8 @@ export function AlignmentButtons({
         className={cn(
           "flex h-8 w-8 items-center justify-center rounded-md transition-colors",
           "text-[var(--doc-text-muted)] hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)]",
-          disabled && "cursor-not-allowed opacity-30",
+          disabled &&
+            "cursor-not-allowed text-[var(--doc-text-subtle)] opacity-[0.16] disabled:hover:bg-transparent disabled:hover:text-[var(--doc-text-subtle)]",
         )}
         data-testid="toolbar-alignment"
         disabled={disabled}
