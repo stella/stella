@@ -210,18 +210,24 @@ fn did_remote_checkpoint_advance(
   remote > local
 }
 
-fn replacement_word_lock_file_name(file_name: &str) -> String {
-  let suffix = file_name.chars().skip(2).collect::<String>();
-  format!("{WORD_LOCK_PREFIX}{suffix}")
-}
-
-fn prefixed_word_lock_file_name(file_name: &str) -> String {
-  format!("{WORD_LOCK_PREFIX}{file_name}")
-}
-
 fn is_word_lock_file_for(candidate: &str, file_name: &str) -> bool {
-  candidate == replacement_word_lock_file_name(file_name)
-    || candidate == prefixed_word_lock_file_name(file_name)
+  let Some(candidate_suffix) = candidate.strip_prefix(WORD_LOCK_PREFIX) else {
+    return false;
+  };
+
+  if candidate_suffix == file_name {
+    return true;
+  }
+
+  if file_name.starts_with(WORD_LOCK_PREFIX) {
+    return false;
+  }
+
+  let mut file_name_chars = file_name.chars();
+  file_name_chars.next();
+  file_name_chars.next();
+
+  candidate_suffix == file_name_chars.as_str()
 }
 
 async fn has_word_lock_file(dir: &Path, file_name: &str) -> bool {
@@ -1898,21 +1904,10 @@ mod tests {
   use super::*;
 
   #[test]
-  fn replacement_word_lock_file_name_replaces_first_two_filename_characters() {
-    assert_eq!(
-      replacement_word_lock_file_name("document.docx"),
-      "~$cument.docx",
-    );
-    assert_eq!(
-      replacement_word_lock_file_name("Share_Purchase_Agreement_Draft.docx"),
-      "~$are_Purchase_Agreement_Draft.docx",
-    );
-  }
-
-  #[test]
   fn is_word_lock_file_for_matches_replacement_and_prefixed_owner_files() {
     assert!(is_word_lock_file_for("~$cument.docx", "document.docx"));
     assert!(is_word_lock_file_for("~$document.docx", "document.docx"));
     assert!(!is_word_lock_file_for("document.docx", "document.docx"));
+    assert!(!is_word_lock_file_for("~$brief.docx", "~$brief.docx"));
   }
 }

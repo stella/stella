@@ -1,6 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 
+import type { WorkspaceView } from "@/lib/types";
 import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
 import { FilesystemView } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view";
 import { KanbanView } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view";
@@ -35,7 +36,9 @@ function RouteComponent() {
       return (
         <TableLayout
           page={page}
-          view={{ ...activeView, layout: activeView.layout }}
+          // SAFETY: the switch narrows activeView.layout.type to "table".
+          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+          view={activeView as WorkspaceView<"table">}
           workspaceId={workspaceId}
         />
       );
@@ -44,7 +47,9 @@ function RouteComponent() {
     case "filesystem":
       return (
         <FilesystemView
-          view={{ ...activeView, layout: activeView.layout }}
+          // SAFETY: the switch narrows activeView.layout.type to "filesystem".
+          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+          view={activeView as WorkspaceView<"filesystem">}
           workspaceId={workspaceId}
         />
       );
@@ -53,7 +58,9 @@ function RouteComponent() {
     case "calendar":
       return (
         <CalendarView
-          view={{ ...activeView, layout: activeView.layout }}
+          // SAFETY: the switch narrows activeView.layout.type to "calendar".
+          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+          view={activeView as WorkspaceView<"calendar">}
           workspaceId={workspaceId}
         />
       );

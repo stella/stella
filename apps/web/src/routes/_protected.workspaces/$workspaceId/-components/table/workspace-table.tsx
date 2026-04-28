@@ -23,6 +23,7 @@ import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
+import type { VirtualAnchor } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import type {
   TableTreeNode,
   WorkspaceTable as WorkspaceTableType,
@@ -38,10 +39,6 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const selectColId = getInternalColId("select");
-
-type VirtualAnchor = {
-  getBoundingClientRect: () => DOMRect;
-};
 
 type WorkspaceTableProps = {
   workspaceId: string;
@@ -218,6 +215,7 @@ const DraggableRow = ({
   onStopEditing,
 }: DraggableRowProps) => {
   const rowRef = useRef<HTMLTableRowElement>(null);
+  const bulkEntitiesRef = useRef<TableTreeNode[] | undefined>(undefined);
   const [contextOpen, setContextOpen] = useState(false);
   const [contextAnchor, setContextAnchor] = useState<VirtualAnchor | null>(
     null,
@@ -231,31 +229,61 @@ const DraggableRow = ({
   const name = getEntityName(entity);
   const file = getFirstFile(entity);
 
+  const getBulkSelectedEntities = () => {
+    const selectedRows = table.getSelectedRowModel().rows;
+    if (!row.getIsSelected() || selectedRows.length <= 1) {
+      return undefined;
+    }
+    return selectedRows.map((selectedRow) => selectedRow.original);
+  };
+
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    bulkEntitiesRef.current = getBulkSelectedEntities();
     setContextAnchor({
       getBoundingClientRect: () => new DOMRect(e.clientX, e.clientY, 0, 0),
     });
     setContextOpen(true);
   };
 
+  const selectCellContent = (
+    <SelectRowContent
+      index={index}
+      label={rowLabel}
+      lastSelectedIndex={lastSelectedIndex}
+      row={row}
+      table={table}
+    />
+  );
+
   const rowActions = (
     <RowActions
       anchor={contextAnchor}
       entity={entity}
       onOpenChange={(open) => {
+        if (open) {
+          bulkEntitiesRef.current = getBulkSelectedEntities();
+        }
         setContextOpen(open);
         if (!open) {
           setContextAnchor(null);
+          bulkEntitiesRef.current = undefined;
         }
       }}
-      onRename={() => onStartEditing(entity.entityId)}
+      onRename={isFolder ? () => onStartEditing(entity.entityId) : undefined}
       open={contextOpen}
-      triggerClassName="sr-only"
-      triggerTabIndex={-1}
+      selectedEntities={contextOpen ? bulkEntitiesRef.current : undefined}
+      triggerClassName="opacity-0! transition-opacity group-hover/row:opacity-100! focus-visible:opacity-100!"
       workspaceId={workspaceId}
     />
+  );
+
+  const selectCellWithActions = (
+    <>
+      {selectCellContent}
+      {rowActions}
+    </>
   );
 
   useEffect(() => {
@@ -317,14 +345,7 @@ const DraggableRow = ({
             ...getPinningStyles(selectCell.column),
           }}
         >
-          <SelectRowContent
-            index={index}
-            label={rowLabel}
-            lastSelectedIndex={lastSelectedIndex}
-            row={row}
-            table={table}
-          />
-          {rowActions}
+          {selectCellWithActions}
         </TableCell>
         <TableCell
           className="cursor-pointer"
@@ -387,16 +408,7 @@ const DraggableRow = ({
           }}
         >
           {cell.column.id === selectColId ? (
-            <>
-              <SelectRowContent
-                index={index}
-                label={rowLabel}
-                lastSelectedIndex={lastSelectedIndex}
-                row={row}
-                table={table}
-              />
-              {rowActions}
-            </>
+            selectCellWithActions
           ) : (
             <span className="flex items-center gap-1.5">
               {flexRender(cell.column.columnDef.cell, cell.getContext())}

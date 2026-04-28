@@ -68,7 +68,7 @@ import {
   getFirstFile,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
-type VirtualAnchor = {
+export type VirtualAnchor = {
   getBoundingClientRect: () => DOMRect;
 };
 
@@ -409,6 +409,8 @@ export const RowActions = ({
               triggerClassName ??
               "opacity-0! transition-opacity group-hover/row:opacity-100!"
             }
+            onClick={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
             render={<Button size="icon-xs" variant="ghost" />}
             tabIndex={triggerTabIndex}
           />
