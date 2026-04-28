@@ -714,6 +714,9 @@ export function renderLine(
   if (runsForLine.length === 0) {
     const emptySpan = doc.createElement("span");
     emptySpan.className = `${PARAGRAPH_CLASS_NAMES.run} layout-empty-run`;
+    const contentStart =
+      block.pmStart === undefined ? undefined : block.pmStart + 1;
+    applyPmPositions(emptySpan, contentStart, block.pmEnd ?? contentStart);
     emptySpan.innerHTML = "&nbsp;";
     lineEl.append(emptySpan);
     return lineEl;

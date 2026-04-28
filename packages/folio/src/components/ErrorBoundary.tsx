@@ -380,8 +380,7 @@ function DefaultErrorFallback({
         {t("somethingWentWrong")}
       </h2>
       <p className="text-muted-foreground mb-4 max-w-[400px] text-sm">
-        An error occurred while rendering this component. Please try again or
-        contact support if the problem persists.
+        {t("renderErrorDescription")}
       </p>
       {showDetails && (
         <pre className="bg-destructive/10 mb-4 max-h-[200px] w-full max-w-[600px] overflow-auto rounded p-3 text-start font-mono text-xs break-words whitespace-pre-wrap">

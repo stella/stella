@@ -7,10 +7,34 @@ import { Button } from "@stella/ui/components/button";
 import { Input } from "@stella/ui/components/input";
 import { cn } from "@stella/ui/lib/utils";
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DELIMITERS = /[,;\n\t]/;
 
 const getDomain = (email: string) => email.split("@")[1]?.toLowerCase() ?? "";
+
+const hasWhitespace = (value: string) => {
+  for (const char of value) {
+    if (char.trim() === "") {
+      return true;
+    }
+  }
+  return false;
+};
+
+const isValidEmail = (value: string) => {
+  const atIndex = value.indexOf("@");
+  if (
+    atIndex <= 0 ||
+    atIndex !== value.lastIndexOf("@") ||
+    atIndex === value.length - 1 ||
+    hasWhitespace(value)
+  ) {
+    return false;
+  }
+
+  const domain = value.slice(atIndex + 1);
+  const dotIndex = domain.indexOf(".");
+  return dotIndex > 0 && dotIndex < domain.length - 1;
+};
 
 type InviteStepProps = {
   userEmail: string;
@@ -42,7 +66,7 @@ export const InviteStep = ({
 
       for (const token of tokens) {
         const lower = token.toLowerCase();
-        if (EMAIL_REGEX.test(lower)) {
+        if (isValidEmail(lower)) {
           if (!emails.includes(lower) && !valid.includes(lower)) {
             valid.push(lower);
           }
@@ -202,7 +226,7 @@ export const InviteStep = ({
                 .filter(Boolean);
               const valid = tokens
                 .map((s) => s.toLowerCase())
-                .filter((s) => EMAIL_REGEX.test(s));
+                .filter(isValidEmail);
               const hasInvalid = valid.length < tokens.length;
               processInput(input);
               if (hasInvalid) {

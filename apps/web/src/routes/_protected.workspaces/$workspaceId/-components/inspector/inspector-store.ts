@@ -46,6 +46,7 @@ type Actions = {
   setActive: (id: string) => void;
   closeAll: () => void;
   clearTaskNewFlag: (taskId: string) => void;
+  replacePdfFieldId: (oldFieldId: string, newFieldId: string) => void;
   updateLabel: (tabId: string, label: string) => void;
   updateTaskStatus: (taskId: string, status: string | null) => void;
 };
@@ -135,6 +136,28 @@ export const useInspectorStore = create<State & Actions>()(
         const tab = state.tabs.find((t) => t.id === taskId);
         if (tab?.type === "task") {
           tab.isNew = false;
+        }
+      }),
+
+    replacePdfFieldId: (oldFieldId, newFieldId) =>
+      set((state) => {
+        const tab = state.tabs.find(
+          (t) => t.type === "pdf" && t.id === oldFieldId,
+        );
+        if (!tab || tab.type !== "pdf") {
+          return;
+        }
+
+        // Keep the renamed tab, but drop any stale tab already using the target id.
+        state.tabs = state.tabs.filter(
+          (t) => t.id === oldFieldId || t.id !== newFieldId,
+        );
+        tab.id = newFieldId;
+        if (tab.justificationFieldId === oldFieldId) {
+          tab.justificationFieldId = newFieldId;
+        }
+        if (state.activeId === oldFieldId) {
+          state.activeId = newFieldId;
         }
       }),
 

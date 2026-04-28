@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 // ============================================================================
 // TYPES
@@ -557,7 +558,7 @@ const MenuItemComponent: React.FC<MenuItemComponentProps> = ({
         className="docx-text-context-menu-separator"
         style={{
           height: "1px",
-          backgroundColor: "var(--doc-border)",
+          backgroundColor: "var(--border, var(--doc-border, #e5e7eb))",
           margin: "4px 12px",
         }}
       />
@@ -583,11 +584,13 @@ const MenuItemComponent: React.FC<MenuItemComponentProps> = ({
           border: "none",
           background:
             isHighlighted && !item.disabled
-              ? "var(--doc-primary-light)"
+              ? "var(--accent, var(--doc-primary-light, #f3f4f6))"
               : "transparent",
           cursor: item.disabled ? "not-allowed" : "pointer",
           fontSize: "13px",
-          color: item.disabled ? "var(--doc-text-subtle)" : "var(--doc-text)",
+          color: item.disabled
+            ? "var(--muted-foreground, var(--doc-text-subtle, #737373))"
+            : "var(--popover-foreground, var(--doc-text, #171717))",
           textAlign: "left",
           opacity: item.disabled ? 0.6 : 1,
         }}
@@ -596,8 +599,8 @@ const MenuItemComponent: React.FC<MenuItemComponentProps> = ({
           style={{
             display: "flex",
             color: item.disabled
-              ? "var(--doc-border)"
-              : "var(--doc-text-muted)",
+              ? "var(--border, var(--doc-border, #d4d4d4))"
+              : "var(--muted-foreground, var(--doc-text-muted, #737373))",
           }}
         >
           {getActionIcon(item.action)}
@@ -607,7 +610,7 @@ const MenuItemComponent: React.FC<MenuItemComponentProps> = ({
           <span
             style={{
               fontSize: "11px",
-              color: "var(--doc-text-subtle)",
+              color: "var(--muted-foreground, var(--doc-text-subtle, #737373))",
               fontFamily: "monospace",
             }}
           >
@@ -620,7 +623,7 @@ const MenuItemComponent: React.FC<MenuItemComponentProps> = ({
           className="docx-text-context-menu-separator"
           style={{
             height: "1px",
-            backgroundColor: "var(--doc-border)",
+            backgroundColor: "var(--border, var(--doc-border, #e5e7eb))",
             margin: "4px 12px",
           }}
         />
@@ -768,13 +771,17 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
     }
   }, [isOpen]);
 
-  // Position menu to stay within viewport
+  // Position menu to stay within viewport. For text selections, prefer
+  // opening above the clicked selection so the selected text remains visible.
   const getMenuStyle = useCallback((): React.CSSProperties => {
     const menuWidth = 220;
     const menuHeight = menuItems.length * 36 + 16;
 
     let x = position.x;
-    let y = position.y;
+    let y =
+      hasSelection && position.y - menuHeight - 8 >= 10
+        ? position.y - menuHeight - 8
+        : position.y;
 
     if (typeof window !== "undefined") {
       if (x + menuWidth > window.innerWidth) {
@@ -792,11 +799,13 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
     }
 
     return {
-      "--menu-top": `${y}px`,
-      "--menu-left": `${x}px`,
-      "--menu-min-w": `${menuWidth}px`,
+      backgroundColor: "var(--popover, var(--doc-bg, #ffffff))",
+      color: "var(--popover-foreground, var(--doc-text, #171717))",
+      left: `${x}px`,
+      minWidth: `${menuWidth}px`,
+      top: `${y}px`,
     } as React.CSSProperties;
-  }, [position, menuItems.length]);
+  }, [hasSelection, position, menuItems.length]);
 
   const handleItemClick = (item: TextContextMenuItem) => {
     if (item.disabled) {
@@ -810,10 +819,10 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
     return null;
   }
 
-  return (
+  const menu = (
     <div
       ref={menuRef}
-      className={`docx-text-context-menu fixed start-[var(--menu-left)] top-[var(--menu-top)] z-[10000] min-w-[var(--menu-min-w)] overflow-hidden rounded-lg border border-[var(--doc-border)] bg-[var(--doc-page)] py-1 shadow-lg ${className}`}
+      className={`docx-text-context-menu fixed z-[2147483647] overflow-hidden rounded-lg border py-1 shadow-lg ${className}`}
       style={getMenuStyle()}
       role="menu"
       aria-label="Text editing menu"
@@ -838,6 +847,12 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
       })}
     </div>
   );
+
+  if (typeof document === "undefined") {
+    return menu;
+  }
+
+  return createPortal(menu, document.body);
 };
 
 // ============================================================================

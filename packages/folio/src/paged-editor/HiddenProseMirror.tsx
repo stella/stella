@@ -27,7 +27,12 @@ import type { CSSProperties } from "react";
 
 import { undo, redo } from "prosemirror-history";
 import type { Transaction, Command, Plugin } from "prosemirror-state";
-import { EditorState, TextSelection, NodeSelection } from "prosemirror-state";
+import {
+  EditorState,
+  NodeSelection,
+  Selection,
+  TextSelection,
+} from "prosemirror-state";
 import { CellSelection } from "prosemirror-tables";
 import { EditorView } from "prosemirror-view";
 import type { DirectEditorProps } from "prosemirror-view";
@@ -212,6 +217,7 @@ const HiddenProseMirrorComponent = forwardRef<
   // Refs
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const readOnlyRef = useRef(readOnly);
   const documentRef = useRef(document);
   const isDestroyingRef = useRef(false);
   // Track the document identity to detect truly external changes
@@ -229,6 +235,7 @@ const HiddenProseMirrorComponent = forwardRef<
   const onKeyDownRef = useRef(onKeyDown);
 
   // Keep refs in sync
+  readOnlyRef.current = readOnly;
   onTransactionRef.current = onTransaction;
   onSelectionChangeRef.current = onSelectionChange;
   onEditorViewReadyRef.current = onEditorViewReady;
@@ -260,7 +267,7 @@ const HiddenProseMirrorComponent = forwardRef<
 
     const editorProps: DirectEditorProps = {
       state: initialState,
-      editable: () => !readOnly,
+      editable: () => !readOnlyRef.current,
       dispatchTransaction: (transaction: Transaction) => {
         if (!viewRef.current || isDestroyingRef.current) {
           return;
@@ -296,7 +303,6 @@ const HiddenProseMirrorComponent = forwardRef<
     styles,
     externalPlugins,
     extensionManager,
-    readOnly,
     // Callbacks removed from dependencies - accessed via refs
   ]);
 
@@ -469,9 +475,18 @@ const HiddenProseMirrorComponent = forwardRef<
           return;
         }
         const { state, dispatch } = viewRef.current;
-        const $anchor = state.doc.resolve(anchor);
-        const $head = head !== undefined ? state.doc.resolve(head) : $anchor;
-        const selection = TextSelection.between($anchor, $head);
+        const docEnd = state.doc.content.size;
+        const clampedAnchor = Math.max(0, Math.min(anchor, docEnd));
+        const clampedHead =
+          head === undefined
+            ? clampedAnchor
+            : Math.max(0, Math.min(head, docEnd));
+        const $anchor = state.doc.resolve(clampedAnchor);
+        const $head = state.doc.resolve(clampedHead);
+        const selection =
+          head === undefined
+            ? Selection.near($anchor)
+            : TextSelection.between($anchor, $head);
         dispatch(state.tr.setSelection(selection));
       },
 

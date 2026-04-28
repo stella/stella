@@ -97,6 +97,11 @@ function SelectPopup({
   align = "start",
   alignOffset = 0,
   alignItemWithTrigger = true,
+  collisionAvoidance = {
+    align: "shift",
+    fallbackAxisSide: "none",
+    side: "none",
+  },
   ...props
 }: SelectPrimitive.Popup.Props & {
   side?: SelectPrimitive.Positioner.Props["side"];
@@ -104,6 +109,7 @@ function SelectPopup({
   align?: SelectPrimitive.Positioner.Props["align"];
   alignOffset?: SelectPrimitive.Positioner.Props["alignOffset"];
   alignItemWithTrigger?: SelectPrimitive.Positioner.Props["alignItemWithTrigger"];
+  collisionAvoidance?: SelectPrimitive.Positioner.Props["collisionAvoidance"];
 }) {
   return (
     <SelectPrimitive.Portal>
@@ -112,6 +118,7 @@ function SelectPopup({
         alignItemWithTrigger={alignItemWithTrigger}
         alignOffset={alignOffset}
         className="z-50 select-none"
+        collisionAvoidance={collisionAvoidance}
         data-slot="select-positioner"
         side={side}
         sideOffset={sideOffset}

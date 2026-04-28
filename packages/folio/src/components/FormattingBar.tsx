@@ -8,7 +8,7 @@
  * editing mode) is accessible via keyboard shortcuts or host app chrome.
  */
 
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import {
@@ -16,6 +16,7 @@ import {
   BoldIcon,
   ChevronDownIcon,
   ItalicIcon,
+  MoreHorizontalIcon,
   Redo2Icon,
   UnderlineIcon,
   Undo2Icon,
@@ -24,6 +25,7 @@ import { useTranslations } from "use-intl";
 
 import { ColorPicker } from "@stella/ui/components/color-picker";
 import type { ColorPreset } from "@stella/ui/components/color-picker";
+import { Menu, MenuPopup, MenuTrigger } from "@stella/ui/components/menu";
 
 import type { ColorValue, ParagraphAlignment } from "../core/types/document";
 import { cn } from "../lib/utils";
@@ -38,7 +40,8 @@ import { FontPicker } from "./ui/FontPicker";
 import { ListButtons, createDefaultListState } from "./ui/ListButtons";
 import { StylePicker } from "./ui/StylePicker";
 
-const ICON_SIZE = 18;
+const ICON_SIZE = 16;
+const INLINE_SECONDARY_CONTROLS_MIN_WIDTH = 760;
 
 /** Document color presets — hex values for OOXML compatibility. */
 const DOCUMENT_COLOR_PRESETS: ColorPreset[] = [
@@ -95,6 +98,7 @@ export function FormattingBar(props: FormattingBarProps) {
 
   const t = useTranslations("folio");
   const barRef = useRef<HTMLDivElement>(null);
+  const [showSecondaryInline, setShowSecondaryInline] = useState(false);
 
   const handleFormat = useCallback(
     (action: FormattingAction) => {
@@ -300,6 +304,31 @@ export function FormattingBar(props: FormattingBarProps) {
     editorRef,
   ]);
 
+  useEffect(() => {
+    const bar = barRef.current;
+    if (!bar || inline) {
+      setShowSecondaryInline(inline);
+      return undefined;
+    }
+
+    const update = () => {
+      const shouldShow =
+        bar.getBoundingClientRect().width >=
+        INLINE_SECONDARY_CONTROLS_MIN_WIDTH;
+      setShowSecondaryInline((current) =>
+        current === shouldShow ? current : shouldShow,
+      );
+    };
+
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(bar);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [inline]);
+
   const handleBarMouseDown = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target.tagName !== "INPUT" && target.tagName !== "SELECT") {
@@ -312,12 +341,86 @@ export function FormattingBar(props: FormattingBarProps) {
     [onRefocusEditor],
   );
 
+  const secondaryControls = (
+    <>
+      <ToolbarGroup label={t("fontGroup")}>
+        {showFontPicker && (
+          <FontPicker
+            value={currentFormatting.fontFamily || "Arial"}
+            onChange={handleFontFamilyChange}
+            disabled={disabled}
+            width={108}
+            placeholder="Arial"
+          />
+        )}
+        {showTextColorPicker && (
+          <ColorPicker
+            presets={DOCUMENT_COLOR_PRESETS}
+            columns={8}
+            value={currentFormatting.color?.replace(/^#/, "").toUpperCase()}
+            onSelect={handleTextColorSelect}
+            onClear={handleTextColorClear}
+          >
+            <ToolbarButton
+              disabled={disabled}
+              title={t("fontColor")}
+              ariaLabel={t("fontColor")}
+            >
+              <div className="flex flex-col items-center gap-0">
+                <BaselineIcon size={ICON_SIZE} />
+                <span
+                  className="mt-[-2px] h-1 w-4 rounded-sm"
+                  style={{
+                    backgroundColor: currentFormatting.color
+                      ? currentFormatting.color.startsWith("#")
+                        ? currentFormatting.color
+                        : `#${currentFormatting.color}`
+                      : "#000000",
+                  }}
+                />
+              </div>
+              <ChevronDownIcon size={10} />
+            </ToolbarButton>
+          </ColorPicker>
+        )}
+      </ToolbarGroup>
+
+      {showAlignmentButtons && (
+        <ToolbarGroup label={t("alignmentGroup")}>
+          <AlignmentButtons
+            value={currentFormatting.alignment || "left"}
+            onChange={handleAlignmentChange}
+            disabled={disabled}
+          />
+        </ToolbarGroup>
+      )}
+
+      {showListButtons && (
+        <ToolbarGroup label={t("listsGroup")}>
+          <ListButtons
+            listState={currentFormatting.listState || createDefaultListState()}
+            onBulletList={handleBulletList}
+            onNumberedList={handleNumberedList}
+            onIndent={handleIndent}
+            onOutdent={handleOutdent}
+            disabled={disabled}
+            showIndentButtons={true}
+            compact
+            hasIndent={(currentFormatting.indentLeft ?? 0) > 0}
+          />
+        </ToolbarGroup>
+      )}
+
+      {inlineExtra}
+    </>
+  );
+
   return (
     <div
       ref={barRef}
       className={cn(
         !inline &&
-          "scrollbar-none flex h-11 items-center gap-0.5 overflow-x-auto border-b border-[var(--doc-border)] bg-[var(--doc-page)] px-4 py-1",
+          "flex h-10 w-full items-center gap-0.5 overflow-hidden border-b border-[var(--doc-border)] bg-[var(--doc-page)] px-2 sm:px-4",
         className,
       )}
       style={inline ? { display: "contents", ...style } : style}
@@ -327,7 +430,7 @@ export function FormattingBar(props: FormattingBarProps) {
       onMouseUp={inline ? undefined : handleBarMouseUp}
     >
       {/* Formatting controls */}
-      <div className="flex shrink-0 items-center gap-0.5">
+      <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
         {/* Undo / Redo */}
         <ToolbarGroup label={t("historyGroup")}>
           <ToolbarButton
@@ -359,6 +462,7 @@ export function FormattingBar(props: FormattingBarProps) {
               styles={documentStyles}
               theme={theme}
               disabled={disabled}
+              width="clamp(76px, 15vw, 140px)"
             />
             <ToolbarSeparator />
           </>
@@ -395,83 +499,38 @@ export function FormattingBar(props: FormattingBarProps) {
           </ToolbarButton>
         </ToolbarGroup>
 
-        <ToolbarSeparator />
-
-        {/* Font picker + Text color */}
-        <ToolbarGroup label={t("fontGroup")}>
-          {showFontPicker && (
-            <FontPicker
-              value={currentFormatting.fontFamily || "Arial"}
-              onChange={handleFontFamilyChange}
-              disabled={disabled}
-              width={100}
-              placeholder="Arial"
-            />
-          )}
-          {showTextColorPicker && (
-            <ColorPicker
-              presets={DOCUMENT_COLOR_PRESETS}
-              columns={8}
-              value={currentFormatting.color?.replace(/^#/, "").toUpperCase()}
-              onSelect={handleTextColorSelect}
-              onClear={handleTextColorClear}
-            >
-              <ToolbarButton
-                disabled={disabled}
-                title={t("fontColor")}
-                ariaLabel={t("fontColor")}
-              >
-                <div className="flex flex-col items-center gap-0">
-                  <BaselineIcon size={ICON_SIZE} />
-                  <span
-                    className="mt-[-2px] h-1 w-4 rounded-sm"
-                    style={{
-                      backgroundColor: currentFormatting.color
-                        ? currentFormatting.color.startsWith("#")
-                          ? currentFormatting.color
-                          : `#${currentFormatting.color}`
-                        : "#000000",
-                    }}
+        {showSecondaryInline ? (
+          <>
+            <ToolbarSeparator />
+            {secondaryControls}
+          </>
+        ) : (
+          <>
+            <ToolbarSeparator />
+            <Menu>
+              <MenuTrigger
+                render={
+                  <button
+                    type="button"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--doc-text-muted)] transition-colors duration-100 hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)]"
+                    aria-label={t("moreFormatting")}
+                    title={t("moreFormatting")}
                   />
+                }
+              >
+                <MoreHorizontalIcon size={ICON_SIZE} />
+              </MenuTrigger>
+              <MenuPopup
+                align="end"
+                className="max-w-[min(520px,calc(100vw-24px))]"
+              >
+                <div className="flex w-[min(480px,calc(100vw-48px))] flex-wrap items-center gap-1 p-1">
+                  {secondaryControls}
                 </div>
-                <ChevronDownIcon size={10} />
-              </ToolbarButton>
-            </ColorPicker>
-          )}
-        </ToolbarGroup>
-
-        <ToolbarSeparator />
-
-        {/* Alignment + Lists + Indent */}
-        {showAlignmentButtons && (
-          <ToolbarGroup label={t("alignmentGroup")}>
-            <AlignmentButtons
-              value={currentFormatting.alignment || "left"}
-              onChange={handleAlignmentChange}
-              disabled={disabled}
-            />
-          </ToolbarGroup>
+              </MenuPopup>
+            </Menu>
+          </>
         )}
-
-        {showListButtons && (
-          <ToolbarGroup label={t("listsGroup")}>
-            <ListButtons
-              listState={
-                currentFormatting.listState || createDefaultListState()
-              }
-              onBulletList={handleBulletList}
-              onNumberedList={handleNumberedList}
-              onIndent={handleIndent}
-              onOutdent={handleOutdent}
-              disabled={disabled}
-              showIndentButtons={true}
-              compact
-              hasIndent={(currentFormatting.indentLeft ?? 0) > 0}
-            />
-          </ToolbarGroup>
-        )}
-
-        {inlineExtra}
       </div>
 
       {/* Host extras (track changes, etc.) */}

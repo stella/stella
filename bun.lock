@@ -164,6 +164,7 @@
         "lucide-react": "catalog:",
         "react": "catalog:react19",
         "react-dom": "catalog:react19",
+        "use-intl": "catalog:",
       },
       "devDependencies": {
         "@tailwindcss/vite": "catalog:",

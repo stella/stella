@@ -1,11 +1,12 @@
 import Elysia, { t } from "elysia";
 
 import {
+  printPdfHandler,
   readFileHandler,
   stampedDownloadHandler,
 } from "@/api/handlers/files/read-by-id";
 import { workspaceAccessMacro } from "@/api/lib/auth";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 
 export const filesRoute = new Elysia({
   prefix: "/files/:workspaceId",
@@ -28,7 +29,20 @@ export const filesRoute = new Elysia({
       query: t.Object({
         purpose: t.UnionEnum(["download", "display", "native-display"]),
       }),
-      params: t.Object({ fieldId: tSafeId("field") }),
+      params: workspaceParams({ fieldId: tSafeId("field") }),
+    },
+  )
+  .get(
+    "/print-pdf/:fieldId",
+    async (ctx) =>
+      await printPdfHandler({
+        fieldId: ctx.params.fieldId,
+        organizationId: ctx.session.activeOrganizationId,
+        workspaceId: ctx.workspaceId,
+        scopedDb: ctx.scopedDb,
+      }),
+    {
+      params: workspaceParams({ fieldId: tSafeId("field") }),
     },
   )
   .get(
@@ -41,6 +55,6 @@ export const filesRoute = new Elysia({
         scopedDb: ctx.scopedDb,
       }),
     {
-      params: t.Object({ fieldId: tSafeId("field") }),
+      params: workspaceParams({ fieldId: tSafeId("field") }),
     },
   );

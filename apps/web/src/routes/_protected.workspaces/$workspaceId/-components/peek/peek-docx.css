@@ -1,9 +1,23 @@
-/**
- * Override Folio's centered page layout for the narrow peek panel.
- * Align pages to the left edge and scale from top-left so the
- * content doesn't clip when the page is wider than the container.
- */
-.folio-peek > div > div {
-  align-items: flex-start !important;
-  transform-origin: top left !important;
+.folio-docx-preview {
+  background-color: var(--muted) !important;
+}
+
+.folio-docx-preview .paged-editor {
+  background-color: transparent !important;
+}
+
+.folio-docx-preview .paged-editor > div:not(.paged-editor__hidden-pm) {
+  align-items: center !important;
+  background-color: transparent !important;
+  transform-origin: top center !important;
+}
+
+.folio-docx-preview .paged-editor__pages {
+  background-color: transparent !important;
+}
+
+.folio-docx-preview .layout-page {
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
 }

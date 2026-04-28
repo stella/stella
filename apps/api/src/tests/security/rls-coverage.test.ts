@@ -38,6 +38,7 @@ describe("policy coverage", () => {
     "invitation", // auth table, no RLS
     "member", // auth table, no RLS
   ]);
+  const APPEND_ONLY = new Set(["audit_logs"]);
 
   test("every table with workspace_id has workspace policies", async () => {
     const scoped = await fetchScopedTables(testDb);
@@ -53,6 +54,9 @@ describe("policy coverage", () => {
       const cmds = new Set(tablePolicies.map((p) => p.command));
       expect(cmds).toContain("r"); // SELECT
       expect(cmds).toContain("a"); // INSERT
+      if (APPEND_ONLY.has(table)) {
+        continue;
+      }
       expect(cmds).toContain("w"); // UPDATE
       expect(cmds).toContain("d"); // DELETE
 

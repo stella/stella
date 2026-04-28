@@ -290,6 +290,8 @@ export type DocxEditorProps = {
   initialZoom?: number;
   /** Whether the editor is read-only. When true, hides toolbar and rulers */
   readOnly?: boolean;
+  /** Whether tracked changes should auto-open the review sidebar (default: true) */
+  autoOpenReviewSidebar?: boolean;
   /** Custom toolbar actions */
   toolbarExtra?: ReactNode;
   /** Additional CSS class name */
@@ -300,6 +302,10 @@ export type DocxEditorProps = {
   placeholder?: ReactNode;
   /** Loading indicator */
   loadingIndicator?: ReactNode;
+  /** Initial scroll offset for the editor's document scroll container. */
+  initialScrollTop?: number;
+  /** Callback when the editor's document scroll container scrolls. */
+  onScrollTopChange?: (scrollTop: number) => void;
   /** Whether to show the document outline sidebar (default: false) */
   showOutline?: boolean;
   /** Whether to show print button in toolbar (default: true) */
@@ -493,13 +499,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       marginGuideColor: _marginGuideColor,
       initialZoom = 1,
       readOnly: readOnlyProp = false,
+      autoOpenReviewSidebar = true,
       toolbarExtra,
       className = "",
       style,
       placeholder,
       loadingIndicator,
+      initialScrollTop,
+      onScrollTopChange,
       showOutline: showOutlineProp = false,
-      onPrint: _onPrint,
+      onPrint,
       onCopy: _onCopy,
       onCut: _onCut,
       onPaste: _onPaste,
@@ -776,6 +785,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       totalPages: number;
       visible: boolean;
     }>({ currentPage: 1, totalPages: 1, visible: false });
+    const [bodyHistoryAvailability, setBodyHistoryAvailability] = useState({
+      canRedo: false,
+      canUndo: false,
+    });
     const scrollFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
       null,
     );
@@ -816,6 +829,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       [history],
     );
 
+    const refreshBodyHistoryAvailability = useCallback(() => {
+      const canUndo = pagedEditorRef.current?.canUndo() ?? false;
+      const canRedo = pagedEditorRef.current?.canRedo() ?? false;
+      setBodyHistoryAvailability((prev) =>
+        prev.canUndo === canUndo && prev.canRedo === canRedo
+          ? prev
+          : { canUndo, canRedo },
+      );
+    }, []);
+
     // Header/footer editing state + content resolution + mutation callbacks
     const {
       hfEditPosition,
@@ -855,8 +878,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         hfEditorRef.current.undo();
       } else {
         pagedEditorRef.current?.undo();
+        requestAnimationFrame(refreshBodyHistoryAvailability);
       }
-    }, [hfEditPosition]);
+    }, [hfEditPosition, refreshBodyHistoryAvailability]);
 
     // Helper to redo in the active editor
     const redoActiveEditor = useCallback(() => {
@@ -864,8 +888,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         hfEditorRef.current.redo();
       } else {
         pagedEditorRef.current?.redo();
+        requestAnimationFrame(refreshBodyHistoryAvailability);
       }
-    }, [hfEditPosition]);
+    }, [hfEditPosition, refreshBodyHistoryAvailability]);
 
     // Find/Replace hook
     const findReplace = useFindReplaceState();
@@ -952,7 +977,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             trackedChangesLoadedRef.current = true;
             // Check if we just populated tracked changes
             setTrackedChanges((prev) => {
-              if (prev.length > 0) {
+              if (autoOpenReviewSidebar && prev.length > 0) {
                 setShowCommentsSidebar(true);
               }
               return prev;
@@ -962,7 +987,34 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         return () => clearTimeout(timer);
       }
       return undefined;
-    }, [state.documentLoad.status, history.state, extractTrackedChanges]);
+    }, [
+      state.documentLoad.status,
+      history.state,
+      extractTrackedChanges,
+      autoOpenReviewSidebar,
+    ]);
+
+    const initialScrollAppliedRef = useRef(false);
+    useEffect(() => {
+      if (
+        initialScrollTop === undefined ||
+        state.documentLoad.status !== "ready" ||
+        initialScrollAppliedRef.current
+      ) {
+        return undefined;
+      }
+
+      initialScrollAppliedRef.current = true;
+      const frame = requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = initialScrollTop;
+        }
+      });
+
+      return () => {
+        cancelAnimationFrame(frame);
+      };
+    }, [initialScrollTop, state.documentLoad.status]);
 
     // Listen for font loading
     useEffect(() => {
@@ -1006,8 +1058,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           extractTrackedChanges,
           300,
         );
+        requestAnimationFrame(refreshBodyHistoryAvailability);
       },
-      [onChange, pushDocument, extractTrackedChanges],
+      [
+        onChange,
+        pushDocument,
+        extractTrackedChanges,
+        refreshBodyHistoryAvailability,
+      ],
     );
 
     // Find/Replace handlers (depends on handleDocumentChange)
@@ -1252,10 +1310,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             const pageEl = pagesEl?.querySelector(
               ".layout-page",
             ) as HTMLElement | null;
-            const left = pageEl
-              ? pageEl.getBoundingClientRect().right -
-                parentEl.getBoundingClientRect().left
-              : parentEl.getBoundingClientRect().width / 2 + 408;
+            const parentRect = parentEl.getBoundingClientRect();
+            const rawLeft = pageEl
+              ? pageEl.getBoundingClientRect().right - parentRect.left + 12
+              : parentRect.width / 2 + 408;
+            const left = Math.max(16, Math.min(rawLeft, parentRect.width - 16));
             setFloatingCommentBtn({ top, left });
           }
         } else {
@@ -1279,8 +1338,126 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     });
 
     const handleDirectPrint = useCallback(() => {
-      toast(t("printRedirect"));
-    }, [t]);
+      if (onPrint) {
+        onPrint();
+        return;
+      }
+
+      const pages = containerRef.current?.querySelector(".paged-editor__pages");
+      if (!pages) {
+        toast(t("printRedirect"));
+        return;
+      }
+
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      iframe.style.opacity = "0";
+      iframe.style.pointerEvents = "none";
+      document.body.append(iframe);
+
+      const printDocument = iframe.contentDocument;
+      const printWindow = iframe.contentWindow;
+      if (!printDocument || !printWindow) {
+        iframe.remove();
+        toast(t("printRedirect"));
+        return;
+      }
+
+      const styles = [
+        ...document.querySelectorAll('style, link[rel="stylesheet"]'),
+      ]
+        .map((node) => node.outerHTML)
+        .join("\n");
+      const pagesClone = pages.cloneNode(true) as HTMLElement;
+      const overlays = pagesClone.querySelectorAll(
+        ".selection-overlay, .layout-selection-overlay, .image-selection-overlay",
+      );
+      for (const node of overlays) {
+        node.remove();
+      }
+
+      printDocument.open();
+      printDocument.write(`<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    ${styles}
+    <style>
+      @page { margin: 0; }
+      html, body {
+        margin: 0;
+        background: white;
+      }
+      * {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .paged-editor__pages {
+        display: block !important;
+        margin: 0 auto !important;
+        background: white !important;
+      }
+      .layout-page {
+        break-after: page;
+        page-break-after: always;
+        border: 0 !important;
+        box-shadow: none !important;
+        margin: 0 auto !important;
+        outline: 0 !important;
+      }
+      .layout-page:last-child {
+        break-after: auto;
+        page-break-after: auto;
+      }
+    </style>
+  </head>
+  <body>${pagesClone.outerHTML}</body>
+</html>`);
+      printDocument.close();
+
+      let isCleanedUp = false;
+      const cleanup = () => {
+        if (isCleanedUp) {
+          return;
+        }
+        isCleanedUp = true;
+        iframe.remove();
+      };
+      printWindow.addEventListener("afterprint", cleanup, { once: true });
+      setTimeout(cleanup, 5 * 60 * 1000);
+
+      const waitForFrameLoad = async () =>
+        await new Promise<void>((resolve) => {
+          if (printDocument.readyState === "complete") {
+            resolve();
+            return;
+          }
+
+          iframe.addEventListener("load", () => resolve(), { once: true });
+          setTimeout(resolve, 1000);
+        });
+
+      const waitForFonts = async () =>
+        await Promise.race([
+          printDocument.fonts.ready.catch(() => undefined),
+          new Promise((resolve) => {
+            setTimeout(resolve, 1000);
+          }),
+        ]);
+
+      void (async () => {
+        await waitForFrameLoad();
+        await waitForFonts();
+        if (isCleanedUp) {
+          return;
+        }
+        printWindow.focus();
+        printWindow.print();
+      })();
+    }, [onPrint, t]);
 
     // Keyboard shortcuts for Find/Replace (Ctrl+F, Ctrl+H) and delete table selection
     useEffect(() => {
@@ -1989,18 +2166,18 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
       const mod = isMac ? "⌘" : "Ctrl";
       const items: TextContextMenuItem[] = [
-        { action: "cut", label: "Cut", shortcut: `${mod}+X` },
-        { action: "copy", label: "Copy", shortcut: `${mod}+C` },
-        { action: "paste", label: "Paste", shortcut: `${mod}+V` },
+        { action: "cut", label: t("cut"), shortcut: `${mod}+X` },
+        { action: "copy", label: t("copy"), shortcut: `${mod}+C` },
+        { action: "paste", label: t("paste"), shortcut: `${mod}+V` },
         {
           action: "pasteAsPlainText",
-          label: "Paste as Plain Text",
+          label: t("pasteUnformatted"),
           shortcut: `${mod}+Shift+V`,
           dividerAfter: true,
         },
         {
           action: "delete",
-          label: "Delete",
+          label: t("delete"),
           shortcut: "Del",
           dividerAfter: !contextMenu.hasSelection && !contextMenu.cursorInTable,
         },
@@ -2008,20 +2185,20 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       if (contextMenu.hasSelection) {
         items.push({
           action: "addComment",
-          label: "Comment",
+          label: t("comment"),
           dividerAfter: !contextMenu.cursorInTable,
         });
       }
       if (contextMenu.cursorInTable) {
         items.push(
-          { action: "addRowAbove", label: "Insert row above" },
-          { action: "addRowBelow", label: "Insert row below" },
-          { action: "deleteRow", label: "Delete row", dividerAfter: true },
-          { action: "addColumnLeft", label: "Insert column left" },
-          { action: "addColumnRight", label: "Insert column right" },
+          { action: "addRowAbove", label: t("insertRowAbove") },
+          { action: "addRowBelow", label: t("insertRowBelow") },
+          { action: "deleteRow", label: t("deleteRow"), dividerAfter: true },
+          { action: "addColumnLeft", label: t("insertColumnLeft") },
+          { action: "addColumnRight", label: t("insertColumnRight") },
           {
             action: "deleteColumn",
-            label: "Delete column",
+            label: t("deleteColumn"),
             dividerAfter: true,
           },
         );
@@ -2691,8 +2868,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                       onFormat={handleFormat}
                       onUndo={undoActiveEditor}
                       onRedo={redoActiveEditor}
-                      canUndo={history.canUndo}
-                      canRedo={history.canRedo}
+                      canUndo={
+                        hfEditPosition
+                          ? history.canUndo
+                          : bodyHistoryAvailability.canUndo
+                      }
+                      canRedo={
+                        hfEditPosition
+                          ? history.canRedo
+                          : bodyHistoryAvailability.canRedo
+                      }
                       disabled={readOnly}
                       theme={history.state?.package.theme || theme || null}
                       showZoomControl={showZoomControl}
@@ -2722,7 +2907,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                 )}
 
                 {/* Editor container - this is the scroll container (toolbar is above, not inside) */}
-                <div ref={scrollContainerRef} style={editorContainerStyle}>
+                <div
+                  ref={scrollContainerRef}
+                  style={editorContainerStyle}
+                  onScroll={(event) => {
+                    onScrollTopChange?.(event.currentTarget.scrollTop);
+                  }}
+                >
                   {/* Editor content wrapper */}
                   <div
                     style={{
@@ -3018,19 +3209,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                             </button>
                           </Tooltip>
                         )}
-
-                      {/* Right-click context menu */}
-                      <TextContextMenu
-                        isOpen={contextMenu.isOpen}
-                        position={contextMenu.position}
-                        hasSelection={contextMenu.hasSelection}
-                        isEditable={!readOnly}
-                        items={contextMenuItems}
-                        onAction={handleContextMenuAction}
-                        onClose={() =>
-                          setContextMenu((prev) => ({ ...prev, isOpen: false }))
-                        }
-                      />
 
                       {/* Inline Header/Footer Editor — positioned over the target area */}
                       {hfEditPosition &&

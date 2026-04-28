@@ -13,11 +13,14 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useMatch, useNavigate } from "@tanstack/react-router";
 import {
   AlertTriangleIcon,
+  CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ExternalLinkIcon,
   FileTextIcon,
   LoaderCircleIcon,
+  PencilIcon,
+  PrinterIcon,
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -29,6 +32,7 @@ import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -37,6 +41,8 @@ import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { toSafeId } from "@/lib/safe-id";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
+import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { clearAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymize-pdf";
@@ -79,6 +85,7 @@ const PINCH_ZOOM_SENSITIVITY = 0.005;
 
 export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const t = useTranslations();
+  const canUpdateEntity = usePermissions({ entity: ["update"] });
   const { tabs, activeId } = useInspectorStore(
     useShallow((s) => ({
       tabs: s.tabs,
@@ -132,8 +139,84 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 
   // -- Inline rename --
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [editingDocxTabId, setEditingDocxTabId] = useState<string | null>(null);
+  const [flashingDocxEditTabId, setFlashingDocxEditTabId] = useState<
+    string | null
+  >(null);
+  const flashDocxEditTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const docxActionsRef = useRef(new Map<string, DocxBrowserEditorActions>());
+  const docxPrintActionsRef = useRef(new Map<string, () => void>());
+  const [docxScrollTopByTab, setDocxScrollTopByTab] = useState<
+    Map<string, number>
+  >(() => new Map());
   const [editValue, setEditValue] = useState("");
   const renameEntity = useRenameEntity();
+
+  const handleCloseTab = useCallback(
+    (tabId: string) => {
+      const action = docxActionsRef.current.get(tabId);
+      if (editingDocxTabId === tabId && action) {
+        void action.cancel().finally(() => {
+          docxActionsRef.current.delete(tabId);
+          setEditingDocxTabId((current) =>
+            current === tabId ? null : current,
+          );
+          clearAnonymization(tabId);
+          closeTab(tabId);
+        });
+        return;
+      }
+
+      if (editingDocxTabId === tabId) {
+        docxActionsRef.current.delete(tabId);
+        setEditingDocxTabId(null);
+      }
+      clearAnonymization(tabId);
+      closeTab(tabId);
+    },
+    [closeTab, editingDocxTabId],
+  );
+
+  const handleStartDocxEdit = useCallback(
+    async (tabId: string) => {
+      if (editingDocxTabId !== null && editingDocxTabId !== tabId) {
+        const currentAction = docxActionsRef.current.get(editingDocxTabId);
+        if (currentAction !== undefined) {
+          await currentAction.cancel();
+        }
+        docxActionsRef.current.delete(editingDocxTabId);
+        setEditingDocxTabId((current) =>
+          current === editingDocxTabId ? null : current,
+        );
+      }
+
+      setEditingDocxTabId(tabId);
+      docxActionsRef.current.get(tabId)?.unlock();
+    },
+    [editingDocxTabId],
+  );
+
+  const flashDocxEditButton = useCallback((tabId: string) => {
+    if (flashDocxEditTimerRef.current !== null) {
+      clearTimeout(flashDocxEditTimerRef.current);
+    }
+    setFlashingDocxEditTabId(tabId);
+    flashDocxEditTimerRef.current = setTimeout(() => {
+      setFlashingDocxEditTabId(null);
+      flashDocxEditTimerRef.current = null;
+    }, 900);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (flashDocxEditTimerRef.current !== null) {
+        clearTimeout(flashDocxEditTimerRef.current);
+      }
+    },
+    [],
+  );
 
   const startRename = useCallback((tab: PdfTab) => {
     const dotIndex = tab.label.lastIndexOf(".");
@@ -306,8 +389,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   key={tab.id}
                   onActivate={() => setActive(tab.id)}
                   onClose={() => {
-                    clearAnonymization(tab.id);
-                    closeTab(tab.id);
+                    handleCloseTab(tab.id);
                   }}
                   tab={tab}
                 />
@@ -333,6 +415,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         const isNativeDocxDisplay =
           tab.mimeType === DOCX_MIME &&
           (tab.pdfFileId === null || !tab.justificationFieldId);
+        const isEditingNativeDocx =
+          isNativeDocxDisplay &&
+          editingDocxTabId === tab.id &&
+          tab.propertyId !== undefined;
 
         const contextBar = (
           <div
@@ -361,36 +447,118 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             </div>
 
             <div className="flex shrink-0 items-center gap-1 ps-4">
-              <div className="flex items-center rounded-md border p-0.5">
-                <PeekPdfControls
-                  canResetZoom={scaleOffsets.get(tab.id) !== 0}
-                  onResetZoom={() => handleResetZoom(tab.id)}
-                  onZoomIn={() => handleZoom(tab.id, "in")}
-                  onZoomOut={() => handleZoom(tab.id, "out")}
-                  scaleOffset={scaleOffsets.get(tab.id) ?? 0}
-                />
-              </div>
-              {!isNativeDocxDisplay && <PeekPrintButton />}
-              <Tooltip
-                content={t("workspaces.pdf.openFullView")}
-                render={
+              {isEditingNativeDocx ? (
+                <>
+                  <div className="flex items-center rounded-md border p-0.5">
+                    <PeekPdfControls
+                      canResetZoom={scaleOffsets.get(tab.id) !== 0}
+                      onResetZoom={() => handleResetZoom(tab.id)}
+                      onZoomIn={() => handleZoom(tab.id, "in")}
+                      onZoomOut={() => handleZoom(tab.id, "out")}
+                      scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+                    />
+                  </div>
+                  <Tooltip
+                    content={t("common.print")}
+                    render={
+                      <Button
+                        onClick={() => {
+                          docxActionsRef.current.get(tab.id)?.print();
+                        }}
+                        size="icon-xs"
+                        variant="ghost"
+                      >
+                        <PrinterIcon className="size-3.5" />
+                      </Button>
+                    }
+                  />
                   <Button
                     onClick={() => {
-                      handleOpenFullView().catch(() => {
-                        /* fire-and-forget */
-                      });
+                      docxActionsRef.current.get(tab.id)?.finalize();
                     }}
-                    size="icon-xs"
-                    variant="ghost"
+                    size="sm"
                   >
-                    <ExternalLinkIcon className="size-3.5" />
+                    <CheckIcon />
+                    {t("common.save")}
                   </Button>
-                }
-              />
+                </>
+              ) : (
+                <>
+                  {canUpdateEntity &&
+                    isNativeDocxDisplay &&
+                    tab.propertyId !== undefined &&
+                    !isEditingNativeDocx && (
+                      <Tooltip
+                        content={t("common.edit")}
+                        render={
+                          <Button
+                            className={cn(
+                              flashingDocxEditTabId === tab.id &&
+                                "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
+                            )}
+                            onClick={() => {
+                              void handleStartDocxEdit(tab.id);
+                            }}
+                            size="icon-xs"
+                            variant="ghost"
+                          >
+                            <PencilIcon className="size-3.5" />
+                          </Button>
+                        }
+                      />
+                    )}
+                  <div className="flex items-center rounded-md border p-0.5">
+                    <PeekPdfControls
+                      canResetZoom={scaleOffsets.get(tab.id) !== 0}
+                      onResetZoom={() => handleResetZoom(tab.id)}
+                      onZoomIn={() => handleZoom(tab.id, "in")}
+                      onZoomOut={() => handleZoom(tab.id, "out")}
+                      scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+                    />
+                  </div>
+                  {isNativeDocxDisplay ? (
+                    <Tooltip
+                      content={t("common.print")}
+                      render={
+                        <Button
+                          onClick={() => {
+                            if (tab.propertyId !== undefined) {
+                              docxActionsRef.current.get(tab.id)?.print();
+                              return;
+                            }
+                            docxPrintActionsRef.current.get(tab.id)?.();
+                          }}
+                          size="icon-xs"
+                          variant="ghost"
+                        >
+                          <PrinterIcon className="size-3.5" />
+                        </Button>
+                      }
+                    />
+                  ) : (
+                    <PeekPrintButton />
+                  )}
+                  <Tooltip
+                    content={t("workspaces.pdf.openFullView")}
+                    render={
+                      <Button
+                        onClick={() => {
+                          handleOpenFullView().catch(() => {
+                            /* fire-and-forget */
+                          });
+                        }}
+                        size="icon-xs"
+                        variant="ghost"
+                      >
+                        <ExternalLinkIcon className="size-3.5" />
+                      </Button>
+                    }
+                  />
+                </>
+              )}
               <Button
                 onClick={() => {
-                  clearAnonymization(tab.id);
-                  closeTab(tab.id);
+                  handleCloseTab(tab.id);
                 }}
                 size="icon-xs"
                 variant="ghost"
@@ -424,19 +592,92 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 />
               </Suspense>
             )}
-            <Suspense fallback={<PeekSuspenseFallback />}>
-              <PeekPdfViewer
-                activePropertyId={tab.propertyId ?? ""}
-                entityId={tab.entityId}
-                fieldId={tab.id}
-                filePurpose={isNativeDocxDisplay ? "native-display" : "display"}
-                mimeType={tab.mimeType ?? undefined}
-                onPeekNavigate={closeAll}
-                scaleOffset={scaleOffsets.get(tab.id) ?? 0}
-                viewId={peekPdfViewId}
-                workspaceId={workspaceId}
-              />
-            </Suspense>
+            {isNativeDocxDisplay && tab.propertyId !== undefined ? (
+              <Suspense fallback={<PeekSuspenseFallback />}>
+                <DocxBrowserEditor
+                  actionsKey={tab.id}
+                  actionsMapRef={docxActionsRef}
+                  entityId={tab.entityId}
+                  fieldId={tab.id}
+                  initialScrollTop={docxScrollTopByTab.get(tab.id)}
+                  isEditing={isEditingNativeDocx}
+                  onClose={() => {
+                    docxActionsRef.current.delete(tab.id);
+                    setEditingDocxTabId(null);
+                  }}
+                  onPreviewDoubleClick={() => {
+                    if (
+                      canUpdateEntity &&
+                      isNativeDocxDisplay &&
+                      tab.propertyId !== undefined &&
+                      !isEditingNativeDocx
+                    ) {
+                      flashDocxEditButton(tab.id);
+                    }
+                  }}
+                  onSaved={(fieldId) => {
+                    if (fieldId !== tab.id) {
+                      setDocxScrollTopByTab((prev) => {
+                        const scrollTop = prev.get(tab.id);
+                        if (scrollTop === undefined) {
+                          return prev;
+                        }
+                        const next = new Map(prev);
+                        next.set(fieldId, scrollTop);
+                        return next;
+                      });
+                      setScaleOffsets((prev) => {
+                        const scaleOffset = prev.get(tab.id);
+                        if (scaleOffset === undefined) {
+                          return prev;
+                        }
+                        const next = new Map(prev);
+                        next.set(fieldId, scaleOffset);
+                        return next;
+                      });
+                      useInspectorStore
+                        .getState()
+                        .replacePdfFieldId(tab.id, fieldId);
+                    }
+                  }}
+                  onScrollTopChange={(scrollTop) => {
+                    setDocxScrollTopByTab((prev) => {
+                      const next = new Map(prev);
+                      next.set(tab.id, scrollTop);
+                      return next;
+                    });
+                  }}
+                  propertyId={tab.propertyId}
+                  scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+                  showActionBar={false}
+                  workspaceId={workspaceId}
+                />
+              </Suspense>
+            ) : (
+              <Suspense fallback={<PeekSuspenseFallback />}>
+                <PeekPdfViewer
+                  activePropertyId={tab.propertyId ?? ""}
+                  entityId={tab.entityId}
+                  fieldId={tab.id}
+                  filePurpose={
+                    isNativeDocxDisplay ? "native-display" : "display"
+                  }
+                  docxPrintActionsRef={docxPrintActionsRef}
+                  mimeType={tab.mimeType ?? undefined}
+                  onDocxScrollTopChange={(scrollTop) => {
+                    setDocxScrollTopByTab((prev) => {
+                      const next = new Map(prev);
+                      next.set(tab.id, scrollTop);
+                      return next;
+                    });
+                  }}
+                  onPeekNavigate={closeAll}
+                  scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+                  viewId={peekPdfViewId}
+                  workspaceId={workspaceId}
+                />
+              </Suspense>
+            )}
           </div>
         );
 
@@ -462,8 +703,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   error: (
                     <InspectorPdfErrorFallback
                       onClose={() => {
-                        clearAnonymization(tab.id);
-                        closeTab(tab.id);
+                        handleCloseTab(tab.id);
                       }}
                     />
                   ),

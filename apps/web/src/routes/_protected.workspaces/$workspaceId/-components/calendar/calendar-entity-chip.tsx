@@ -15,6 +15,7 @@ import { cn } from "@stella/ui/lib/utils";
 import type { DragPreviewData } from "@/components/drag-preview";
 import { renderDragPreview } from "@/components/drag-preview";
 import type { WorkspaceEntity } from "@/lib/types";
+import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
@@ -122,6 +123,7 @@ export const CalendarEntityChip = ({
         label: name,
         mimeType: file.mimeType,
         pdfFileId: file.pdfFileId,
+        propertyId: file.propertyId,
         workspaceId,
       });
     }
@@ -148,7 +150,16 @@ export const CalendarEntityChip = ({
       onClick={handleClick}
       type="button"
     >
-      {name}
+      <span className="flex min-w-0 items-center gap-1">
+        <span className="truncate">{name}</span>
+        {entity.activeEditBy && (
+          <ActiveEditBadge
+            className="shrink-0"
+            image={entity.activeEditBy.image}
+            name={entity.activeEditBy.name}
+          />
+        )}
+      </span>
     </button>
   );
 

@@ -193,7 +193,7 @@ const UnauthorizedError = () => {
   return null;
 };
 
-type StatusMessageProps = {
+export type StatusMessageProps = {
   status: "success" | "error";
   title: string;
   description?: string;
@@ -201,7 +201,7 @@ type StatusMessageProps = {
   className?: string | undefined;
 };
 
-const StatusMessage = ({
+export const StatusMessage = ({
   status,
   title,
   description,

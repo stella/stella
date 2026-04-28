@@ -1,5 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 
+import { PenLineIcon, EyeIcon } from "lucide-react";
+
 import { DocxEditor, createEmptyDocument } from "@stella/folio";
 import type {
   Document as FolioDocument,
@@ -8,16 +10,17 @@ import type {
 } from "@stella/folio";
 import { Button } from "@stella/ui/components/button";
 import { Separator } from "@stella/ui/components/separator";
-import { PenLineIcon, EyeIcon } from "lucide-react";
 
 export function App() {
   const editorRef = useRef<DocxEditorRef>(null);
   const [currentDocument, setCurrentDocument] = useState<FolioDocument | null>(
     null,
   );
-  const [documentBuffer, setDocumentBuffer] = useState<ArrayBuffer | null>(null);
-  const [fileName, setFileName] = useState<string>("Untitled.docx");
-  const [status, setStatus] = useState<string>("");
+  const [documentBuffer, setDocumentBuffer] = useState<ArrayBuffer | null>(
+    null,
+  );
+  const [fileName, setFileName] = useState("Untitled.docx");
+  const [status, setStatus] = useState("");
   const [editorMode, setEditorMode] = useState<EditorMode>("editing");
 
   // Load fixture from ?file= query param (for visual regression tests)
@@ -59,7 +62,9 @@ export function App() {
   const handleFileSelect = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
-      if (!file) return;
+      if (!file) {
+        return;
+      }
       try {
         setStatus("Loading...");
         const buffer = await file.arrayBuffer();
@@ -75,7 +80,9 @@ export function App() {
   );
 
   const handleSave = useCallback(async () => {
-    if (!editorRef.current) return;
+    if (!editorRef.current) {
+      return;
+    }
     try {
       setStatus("Saving...");
       const buffer = await editorRef.current.save();
@@ -89,7 +96,7 @@ export function App() {
         a.download = fileName || "document.docx";
         document.body.append(a);
         a.click();
-        document.body.removeChild(a);
+        a.remove();
         URL.revokeObjectURL(url);
         setStatus("Saved!");
         setTimeout(() => setStatus(""), 2000);
@@ -100,7 +107,6 @@ export function App() {
   }, [fileName]);
 
   const handleError = useCallback((error: Error) => {
-    console.error("Editor error:", error);
     setStatus(`Error: ${error.message}`);
   }, []);
 
@@ -115,7 +121,7 @@ export function App() {
       <main className="flex flex-1 overflow-hidden">
         <DocxEditor
           ref={editorRef}
-          document={documentBuffer ? undefined : (currentDocument as never)}
+          document={documentBuffer ? undefined : currentDocument}
           documentBuffer={documentBuffer}
           author="Folio User"
           onError={handleError}
@@ -126,11 +132,13 @@ export function App() {
       </main>
 
       {/* Dev controls bar */}
-      <div className="flex items-center gap-2 border-t border-border bg-background px-4 py-1.5">
+      <div className="border-border bg-background flex items-center gap-2 border-t px-4 py-1.5">
         <Button
           variant={trackChangesOn ? "default" : "ghost"}
           size="sm"
-          onClick={() => setEditorMode(trackChangesOn ? "editing" : "suggesting")}
+          onClick={() =>
+            setEditorMode(trackChangesOn ? "editing" : "suggesting")
+          }
         >
           <PenLineIcon />
           {trackChangesOn ? "Tracking" : "Track Changes"}
@@ -138,7 +146,9 @@ export function App() {
         <Button
           variant={editorMode === "viewing" ? "default" : "ghost"}
           size="sm"
-          onClick={() => setEditorMode(editorMode === "viewing" ? "editing" : "viewing")}
+          onClick={() =>
+            setEditorMode(editorMode === "viewing" ? "editing" : "viewing")
+          }
         >
           <EyeIcon />
           View Only
@@ -146,17 +156,41 @@ export function App() {
 
         <Separator orientation="vertical" className="h-5" />
 
-        <Button variant="ghost" size="sm" onClick={() => document.getElementById("file-input")?.click()}>Open</Button>
-        <input id="file-input" type="file" accept=".docx" onChange={handleFileSelect} className="hidden" />
-        <Button variant="ghost" size="sm" onClick={handleNewDocument}>New</Button>
-        <Button variant="ghost" size="sm" onClick={handleSave}>Save</Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() =>
+            document.querySelector<HTMLInputElement>("#file-input")?.click()
+          }
+        >
+          Open
+        </Button>
+        <input
+          id="file-input"
+          type="file"
+          accept=".docx"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+        <Button variant="ghost" size="sm" onClick={handleNewDocument}>
+          New
+        </Button>
+        <Button variant="ghost" size="sm" onClick={handleSave}>
+          Save
+        </Button>
 
         <Separator orientation="vertical" className="h-5" />
 
-        <Button variant="ghost" size="sm" onClick={toggleDarkMode}>◐</Button>
+        <Button variant="ghost" size="sm" onClick={toggleDarkMode}>
+          ◐
+        </Button>
 
-        {status && <span className="text-xs text-muted-foreground">{status}</span>}
-        <span className="ml-auto font-mono text-xs text-muted-foreground">{fileName}</span>
+        {status && (
+          <span className="text-muted-foreground text-xs">{status}</span>
+        )}
+        <span className="text-muted-foreground ml-auto font-mono text-xs">
+          {fileName}
+        </span>
       </div>
     </div>
   );

@@ -1,11 +1,17 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { status } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { isNativelyRenderableMimeType } from "@/api/handlers/files/gotenberg";
+import {
+  convertToPdf,
+  isConvertibleMimeType,
+  isNativelyRenderableMimeType,
+} from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
+import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
@@ -170,6 +176,142 @@ type StampedDownloadHandlerProps = {
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
+};
+
+type PrintPdfHandlerProps = {
+  scopedDb: ScopedDb;
+  fieldId: SafeId<"field">;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+};
+
+const pdfFileName = (fileName: string): string => {
+  const dotIndex = fileName.lastIndexOf(".");
+  if (dotIndex <= 0) {
+    return `${fileName}.pdf`;
+  }
+  return `${fileName.slice(0, dotIndex)}.pdf`;
+};
+
+const inlineContentDisposition = (fileName: string): string =>
+  contentDisposition(fileName).replace(/^attachment;/, "inline;");
+
+const fetchStoredFileResponse = async (
+  key: string,
+): Promise<Response | null> => {
+  const response = await fetch(getS3().presign(key, { expiresIn: 900 }), {
+    signal: AbortSignal.timeout(30_000),
+  }).catch(() => null);
+
+  if (!response?.ok) {
+    return null;
+  }
+
+  return response;
+};
+
+const fetchStoredFile = async (key: string): Promise<ArrayBuffer | null> => {
+  const response = await fetchStoredFileResponse(key);
+
+  if (!response) {
+    return null;
+  }
+
+  return await response.arrayBuffer();
+};
+
+const pdfResponse = (buffer: ArrayBuffer, fileName: string) =>
+  new Response(buffer, {
+    headers: {
+      "Content-Type": PDF_MIME_TYPE,
+      "Content-Disposition": inlineContentDisposition(fileName),
+      "Content-Length": String(buffer.byteLength),
+    },
+  });
+
+const streamedPdfResponse = (response: Response, fileName: string) =>
+  new Response(response.body, {
+    headers: {
+      "Content-Type": PDF_MIME_TYPE,
+      "Content-Disposition": inlineContentDisposition(fileName),
+      ...(response.headers.has("Content-Length")
+        ? { "Content-Length": response.headers.get("Content-Length") ?? "" }
+        : {}),
+    },
+  });
+
+export const printPdfHandler = async ({
+  scopedDb,
+  fieldId,
+  organizationId,
+  workspaceId,
+}: PrintPdfHandlerProps) => {
+  const rows = await fileFieldQuery(scopedDb, fieldId, workspaceId);
+  const row = rows.at(0);
+
+  if (!row) {
+    return status(404);
+  }
+
+  if (row.content.type !== "file") {
+    return status(400);
+  }
+
+  const content = row.content;
+  const outputName = pdfFileName(content.fileName);
+
+  if (content.encrypted) {
+    return status(400);
+  }
+
+  if (content.mimeType === PDF_MIME_TYPE || content.pdfFileId) {
+    const fileKey = createFileKey({
+      organizationId,
+      workspaceId,
+      fileId: content.pdfFileId ?? content.id,
+      mimeType: PDF_MIME_TYPE,
+    });
+    const response = await fetchStoredFileResponse(fileKey);
+
+    if (!response) {
+      return status(502);
+    }
+
+    return streamedPdfResponse(response, outputName);
+  }
+
+  if (!isConvertibleMimeType(content.mimeType)) {
+    return status(400);
+  }
+
+  const sourceKey = createFileKey({
+    organizationId,
+    workspaceId,
+    fileId: content.id,
+    mimeType: content.mimeType,
+  });
+  const sourceBuffer = await fetchStoredFile(sourceKey);
+
+  if (!sourceBuffer) {
+    return status(502);
+  }
+
+  const conversionResult = await convertToPdf(
+    sourceBuffer,
+    content.fileName,
+    content.mimeType,
+  );
+
+  if (Result.isError(conversionResult)) {
+    captureError(conversionResult.error, {
+      fieldId,
+      mimeType: content.mimeType,
+      sizeBytes: String(content.sizeBytes),
+    });
+    return status(502);
+  }
+
+  return pdfResponse(conversionResult.value.buffer, outputName);
 };
 
 /**

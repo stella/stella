@@ -1,6 +1,7 @@
 import type { PropsWithChildren } from "react";
 
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
+import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
 import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -41,7 +42,18 @@ const PropertyCell = ({
   }
 
   if (property.content.type === "file" || fieldContent?.type === "file") {
-    return <CellResult field={field} property={property} />;
+    return (
+      <span className="flex min-w-0 items-center gap-1.5">
+        <CellResult field={field} property={property} />
+        {entity.activeEditBy && (
+          <ActiveEditBadge
+            className="shrink-0"
+            image={entity.activeEditBy.image}
+            name={entity.activeEditBy.name}
+          />
+        )}
+      </span>
+    );
   }
 
   if (property.tool.type === "manual-input") {
