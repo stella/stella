@@ -7,6 +7,7 @@ import {
   EllipsisVerticalIcon,
   EyeIcon,
   FileOutputIcon,
+  FolderPlusIcon,
   HistoryIcon,
   LaptopIcon,
   LockOpenIcon,
@@ -50,8 +51,13 @@ import type { WorkspaceEntity } from "@/lib/types";
 import { isFileDisplayable } from "@/lib/types";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
-import { useDeleteEntities } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
+import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
+import {
+  useCreateEntities,
+  useDeleteEntities,
+} from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
   getEntityName,
@@ -71,6 +77,9 @@ type RowActionsProps = {
   onOpenChange?: ((open: boolean) => void) | undefined;
   onOpen?: (() => void) | undefined;
   onRename?: (() => void) | undefined;
+  onSubfolderCreated?:
+    | ((entityId: string, parentId: string) => void)
+    | undefined;
   triggerClassName?: string | undefined;
   anchor?: VirtualAnchor | null | undefined;
   /** Extra entities included in bulk actions. */
@@ -84,6 +93,7 @@ export const RowActions = ({
   onOpenChange,
   onOpen,
   onRename,
+  onSubfolderCreated,
   triggerClassName,
   anchor,
   selectedEntities,
@@ -415,6 +425,13 @@ export const RowActions = ({
             {t("common.rename")}
           </MenuItem>
         )}
+        {!isBulk && isFolder && onSubfolderCreated && (
+          <CreateSubfolderMenuItem
+            entity={entity}
+            onSubfolderCreated={onSubfolderCreated}
+            workspaceId={workspaceId}
+          />
+        )}
         {canOpenInDesktop && (
           // eslint-disable-next-line typescript/no-misused-promises
           <MenuItem onClick={handleOpenInDesktop}>
@@ -517,6 +534,66 @@ export const RowActions = ({
         </AlertDialog>
       </MenuPopup>
     </Menu>
+  );
+};
+
+type CreateSubfolderMenuItemProps = {
+  entity: WorkspaceEntity;
+  workspaceId: string;
+  onSubfolderCreated: (entityId: string, parentId: string) => void;
+};
+
+const CreateSubfolderMenuItem = ({
+  entity,
+  workspaceId,
+  onSubfolderCreated,
+}: CreateSubfolderMenuItemProps) => {
+  const t = useTranslations();
+  const createEntities = useCreateEntities();
+  const isWorkflowRunning = useIsWorkflowRunning();
+  const isEntitiesLimitReached = useEntitiesCountLimit();
+
+  if (isEntitiesLimitReached) {
+    return null;
+  }
+
+  const handleCreateSubfolder = () => {
+    createEntities.mutate(
+      {
+        workspaceId,
+        type: "manual-input",
+        kind: "folder",
+        parentId: entity.entityId,
+        name: t("workspaces.newFolder"),
+      },
+      {
+        onSuccess: (data) => {
+          toastManager.add({
+            title: t("success.folderCreated"),
+            type: "success",
+          });
+          if (data?.entityId !== undefined) {
+            onSubfolderCreated(data.entityId, entity.entityId);
+          }
+        },
+        onError: () => {
+          toastManager.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
+
+  return (
+    <MenuItem
+      disabled={isWorkflowRunning || createEntities.isPending}
+      onClick={handleCreateSubfolder}
+    >
+      <FolderPlusIcon />
+      {t("workspaces.filesystem.newSubfolder")}
+    </MenuItem>
   );
 };
 

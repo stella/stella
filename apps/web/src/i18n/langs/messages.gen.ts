@@ -1291,6 +1291,7 @@ type Messages = {
       "expandAll": "Expand all folders";
       "lastUpdated": "Last updated";
       "moveToRoot": "Drop here to move to root level";
+      "newSubfolder": "New subfolder";
       "noFilesYet": "No files yet";
       "version": "Version";
     };

@@ -413,8 +413,16 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   const handleFolderCreated = useCallback((entityId: string) => {
     setEditingEntityId(entityId);
-    setExpandedIds((prev) => new Set([...prev, entityId]));
+    setExpandedIds((prev) => new Set(prev).add(entityId));
   }, []);
+
+  const handleSubfolderCreated = useCallback(
+    (entityId: string, parentId: string) => {
+      setEditingEntityId(entityId);
+      setExpandedIds((prev) => new Set(prev).add(parentId).add(entityId));
+    },
+    [],
+  );
 
   const [isRootDropTarget, setIsRootDropTarget] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
@@ -631,6 +639,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
             }}
             onSelect={handleSelect}
             onStartEditing={setEditingEntityId}
+            onSubfolderCreated={handleSubfolderCreated}
             onToggleFolder={toggleFolder}
             selectedIds={selectedIds}
             workspaceId={workspaceId}
@@ -688,6 +697,7 @@ type FilesystemRowProps = {
   onStartEditing: (entityId: string | null) => void;
   onRename: (entityId: string, newName: string) => void;
   onSelect: (entityId: string, meta: boolean) => void;
+  onSubfolderCreated: (entityId: string, parentId: string) => void;
   getSelectedDragItems: (ids: Set<string>) => DragPreviewData[];
   getSelectedEntities: (ids: Set<string>) => WorkspaceEntity[];
 };
@@ -708,6 +718,7 @@ const FilesystemRow = ({
   onStartEditing,
   onRename,
   onSelect,
+  onSubfolderCreated,
   getSelectedDragItems,
   getSelectedEntities,
 }: FilesystemRowProps) => {
@@ -1104,6 +1115,7 @@ const FilesystemRow = ({
           }
         }}
         onRename={startEditing}
+        onSubfolderCreated={onSubfolderCreated}
         open={contextOpen}
         selectedEntities={bulkEntities}
         workspaceId={workspaceId}
@@ -1186,6 +1198,7 @@ const FilesystemRow = ({
               onRename={onRename}
               onSelect={onSelect}
               onStartEditing={onStartEditing}
+              onSubfolderCreated={onSubfolderCreated}
               onToggleFolder={onToggleFolder}
               selectedIds={selectedIds}
               workspaceId={workspaceId}
