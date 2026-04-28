@@ -1271,6 +1271,8 @@
         "unavailableTitle": "stella desktop není k dispozici."
       },
       "downloadAsZip": "Stáhnout .zip soubor",
+      "downloadOriginal": "Původní soubor",
+      "downloadPdf": "PDF",
       "maxEntitiesReached": "Dosažen maximální počet entit",
       "rateLimited": "Omezení rychlosti; pokračování za {seconds, number} s",
       "renamedToAvoidConflicts": "{count, plural, one {# soubor přejmenován kvůli konfliktu} few {# soubory přejmenovány kvůli konfliktům} other {# souborů přejmenováno kvůli konfliktům}}",

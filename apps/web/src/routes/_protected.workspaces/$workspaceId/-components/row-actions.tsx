@@ -33,6 +33,9 @@ import {
   MenuItem,
   MenuPopup,
   MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
   MenuTrigger,
 } from "@stella/ui/components/menu";
 import { toastManager } from "@stella/ui/components/toast";
@@ -50,6 +53,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
 import { isFileDisplayable } from "@/lib/types";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { getPdfDownloadFileName } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import {
@@ -63,8 +67,6 @@ import {
   getEntityName,
   getFirstFile,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
-
-const EXT_RE = /\.[^.]+$/;
 
 type VirtualAnchor = {
   getBoundingClientRect: () => DOMRect;
@@ -467,7 +469,7 @@ export const RowActions = ({
         <MenuSeparator />
 
         {/* --- File operations --- */}
-        {hasAnyFile && (
+        {hasAnyFile && (isBulk || !hasPdfConversion) && (
           // eslint-disable-next-line typescript/no-misused-promises
           <MenuItem onClick={async () => await handleDownload()}>
             <DownloadIcon />
@@ -475,11 +477,30 @@ export const RowActions = ({
           </MenuItem>
         )}
         {!isBulk && hasPdfConversion && (
-          // eslint-disable-next-line typescript/no-misused-promises
-          <MenuItem onClick={async () => await handleDownload(true)}>
-            <FileOutputIcon />
-            {t("common.saveAsPdf")}
-          </MenuItem>
+          <MenuSub>
+            <MenuSubTrigger>
+              <DownloadIcon />
+              {t("common.download")}
+            </MenuSubTrigger>
+            <MenuSubPopup>
+              <MenuItem
+                onClick={() => {
+                  void handleDownload();
+                }}
+              >
+                <DownloadIcon />
+                {t("workspaces.files.downloadOriginal")}
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  void handleDownload(true);
+                }}
+              >
+                <FileOutputIcon />
+                {t("workspaces.files.downloadPdf")}
+              </MenuItem>
+            </MenuSubPopup>
+          </MenuSub>
         )}
         {hasAnyFolder && (
           // eslint-disable-next-line typescript/no-misused-promises
@@ -602,7 +623,7 @@ const CreateSubfolderMenuItem = ({
 
 // -- Helpers (avoid duplicating logic between single/bulk) --
 
-type FileRef = { fieldId: string; mimeType: string | null };
+type FileRef = { fieldId: string; fileName: string; mimeType: string | null };
 type Msg = { downloading: string; failed: string };
 
 const downloadEntityAsZip = async (
@@ -675,7 +696,7 @@ const downloadSingleFile = async (
   }
 
   const fileName = asPdf
-    ? response.data.fileName.replace(EXT_RE, ".pdf")
-    : response.data.fileName;
+    ? getPdfDownloadFileName(file.fileName)
+    : file.fileName;
   downloadFile(blobResult.value, fileName);
 };

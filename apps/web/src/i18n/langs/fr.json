@@ -1271,6 +1271,8 @@
         "unavailableTitle": "stella desktop n’est pas disponible."
       },
       "downloadAsZip": "Télécharger en .zip",
+      "downloadOriginal": "Fichier d'origine",
+      "downloadPdf": "PDF",
       "maxEntitiesReached": "Nombre maximal d'entités atteint",
       "rateLimited": "Débit limité; reprise dans {seconds, number} s",
       "renamedToAvoidConflicts": "{count, plural, one {# fichier renommé pour éviter les conflits} many {# fichiers renommés pour éviter les conflits} other {# fichiers renommés pour éviter les conflits}}",

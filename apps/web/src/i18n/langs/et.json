@@ -1271,6 +1271,8 @@
         "unavailableTitle": "stella desktop pole saadaval."
       },
       "downloadAsZip": "Laadi alla .zip-fail",
+      "downloadOriginal": "Algfail",
+      "downloadPdf": "PDF",
       "maxEntitiesReached": "Kirjete piirarv on täis",
       "rateLimited": "Kiiruspiirang; jätkatakse {seconds, number} s pärast",
       "renamedToAvoidConflicts": "{count, plural, one {# fail nimetati konfliktide vältimiseks ümber} other {# faili nimetati konfliktide vältimiseks ümber}}",

@@ -737,7 +737,7 @@ type Messages = {
     "uploadedBy": "Uploaded by";
     "version": "Version";
     "versionHistory": "Version history";
-    "viewVersionHistory": "Show version history";
+    "viewVersionHistory": "Show details & history";
     "wordsAdded": "words added";
     "wordsRemoved": "words removed";
   };
@@ -1274,6 +1274,8 @@ type Messages = {
         "unavailableTitle": "stella desktop is not available.";
       };
       "downloadAsZip": "Download as ZIP";
+      "downloadOriginal": "Original file";
+      "downloadPdf": "PDF";
       "maxEntitiesReached": "Max entities count reached";
       "rateLimited": "Rate limited; resuming in {seconds, number}s";
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}";

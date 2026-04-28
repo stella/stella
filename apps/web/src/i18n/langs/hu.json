@@ -1271,6 +1271,8 @@
         "unavailableTitle": "A stella desktop nem érhető el."
       },
       "downloadAsZip": ".zip fájl letöltése",
+      "downloadOriginal": "Eredeti fájl",
+      "downloadPdf": "PDF",
       "maxEntitiesReached": "Elérte a maximális entitásszámot",
       "rateLimited": "Sebességkorlát; folytatás {seconds, number} mp múlva",
       "renamedToAvoidConflicts": "{count, plural, one {# fájl átnevezve az ütközések elkerülése érdekében} other {# fájl átnevezve az ütközések elkerülése érdekében}}",
