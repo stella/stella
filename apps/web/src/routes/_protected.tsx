@@ -20,8 +20,6 @@ import {
   useMatch,
 } from "@tanstack/react-router";
 import {
-  FolderIcon,
-  FolderOpenIcon,
   LayersIcon,
   PanelRightIcon,
   PinIcon,
@@ -58,7 +56,6 @@ import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/
 import { CaseSearchTrigger } from "@/routes/_protected.knowledge/case/-components/case-viewer/case-search-trigger";
 import { DecisionMetadataSheet } from "@/routes/_protected.knowledge/case/-components/case-viewer/decision-metadata-sheet";
 import { MatterMetadataSheet } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { CreateMatterDialog } from "@/routes/_protected.workspaces/-components/create-matter-dialog";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 import { TableControls } from "@/routes/_protected.workspaces/-components/table-controls";
@@ -232,9 +229,6 @@ function ProtectedContent({
   const viewId = viewMatch?.params.viewId;
   const isPinned = workspaceId ? pinnedIds.has(workspaceId) : false;
 
-  const folderState = useWorkspaceStore((s) => s.folderState);
-  const toggleAllFolders = useWorkspaceStore((s) => s.toggleAllFolders);
-
   const { data: workspace } = useQuery({
     ...workspaceOptions(workspaceId ?? ""),
     enabled: !!workspaceId,
@@ -269,24 +263,6 @@ function ProtectedContent({
         <div className="ms-auto flex shrink-0 items-center gap-0.5">
           {workspaceId && (
             <>
-              {folderState?.hasFolders && (
-                <Button
-                  onClick={toggleAllFolders}
-                  size="icon-sm"
-                  title={
-                    folderState.allExpanded
-                      ? t("workspaces.filesystem.collapseAll")
-                      : t("workspaces.filesystem.expandAll")
-                  }
-                  variant="ghost"
-                >
-                  {folderState.allExpanded ? (
-                    <FolderOpenIcon className="size-4" />
-                  ) : (
-                    <FolderIcon className="size-4" />
-                  )}
-                </Button>
-              )}
               <Button
                 onClick={() => togglePin(workspaceId)}
                 size="icon-sm"

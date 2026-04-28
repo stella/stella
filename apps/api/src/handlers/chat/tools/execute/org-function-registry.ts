@@ -9,18 +9,20 @@ import {
   listMattersContract,
 } from "@/api/handlers/chat/tools/execute/org-manifest";
 import { buildPaginatedResult } from "@/api/handlers/chat/tools/execute/pagination";
+import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import { ensureAllowedWorkspaceIds } from "@/api/handlers/chat/tools/execute/utils";
 import type { SafeId } from "@/api/lib/branded-types";
-
-import { getScopedWorkspaceIds } from "./utils";
 
 type OrgFunctionContext = {
   allowedWorkspaceIds: SafeId<"workspace">[];
+  refRegistry: ChatRefRegistry;
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
 };
 
 export const createReadonlyOrgFunctionRegistry = ({
   organizationId,
+  refRegistry,
   safeDb,
   allowedWorkspaceIds,
 }: OrgFunctionContext) => ({
@@ -54,7 +56,11 @@ export const createReadonlyOrgFunctionRegistry = ({
         buildPaginatedResult({
           items: workspaceRows.map((workspace) => ({
             lastActivityAt: workspace.lastActivityAt.toISOString(),
-            matterId: workspace.id,
+            matterRef: refRegistry.toMatterRef(workspace.id),
+            mention: refRegistry.toMatterMention({
+              label: workspace.name,
+              workspaceId: workspace.id,
+            }),
             name: workspace.name,
             reference: workspace.reference,
           })),
@@ -67,10 +73,11 @@ export const createReadonlyOrgFunctionRegistry = ({
   [getMattersContract.name]: createToolFunction(
     getMattersContract,
     async function* (input) {
-      const scopedWorkspaceIds = yield* getScopedWorkspaceIds(
-        allowedWorkspaceIds,
-        input.matterIds,
-      );
+      const scopedWorkspaceIds = yield* refRegistry
+        .resolveMatterRefs(input.matterRefs)
+        .andThen((workspaceIds) =>
+          ensureAllowedWorkspaceIds({ allowedWorkspaceIds, workspaceIds }),
+        );
 
       const workspaceRows = yield* await safeDb((tx) =>
         tx.query.workspaces.findMany({
@@ -113,7 +120,11 @@ export const createReadonlyOrgFunctionRegistry = ({
           createdAt: workspace.createdAt.toISOString(),
           entityCount: workspace.entityCount,
           lastActivityAt: workspace.lastActivityAt.toISOString(),
-          matterId: workspace.id,
+          matterRef: refRegistry.toMatterRef(workspace.id),
+          mention: refRegistry.toMatterMention({
+            label: workspace.name,
+            workspaceId: workspace.id,
+          }),
           name: workspace.name,
           propertyCount: workspace.propertyCount,
           reference: workspace.reference,

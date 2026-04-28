@@ -342,7 +342,7 @@ type Messages = {
     "noThreads": "No conversations yet";
     "placeholder": "What would you like to know?";
     "send": "Send message";
-    "thinking": "Thinking...";
+    "thinking": "Working with context";
     "threads": "Conversations";
     "tool": {
       "ask-user": "Asking for clarification";
@@ -1314,8 +1314,8 @@ type Messages = {
     "matterInfo": "Matter info";
     "mattersCount": "{count, plural, one {# matter} other {# matters}}";
     "members": {
-      "addMember": "Add member";
-      "addMemberDescription": "Add an organization member to this matter";
+      "addMember": "Add to matter";
+      "addMemberDescription": "Choose an existing team member to add to this matter";
       "alreadyMember": "User is already a member";
       "cannotRemoveLast": "Cannot remove the last member";
       "noMembersFound": "No members found";
@@ -1398,9 +1398,11 @@ type Messages = {
     "properties": {
       "addInputProperty": "Add at least one input property using \"@\"";
       "addPromptForBetterResults": "Add a prompt for better results";
+      "aiExtraction": "AI extraction";
       "clip": "Clip";
       "conditionSeparator": "AND";
       "conditions": "Conditions ({count})";
+      "createColumn": "Create column";
       "createOption": "Create \"{option}\"";
       "date": "Date";
       "defaultNames": {
@@ -1417,14 +1419,22 @@ type Messages = {
       "editConditionsDescription": "Set conditions for when this property should be generated.";
       "enterAValue": "Enter a value";
       "error": "Error";
+      "extractionInstruction": "Extraction instruction";
+      "extractionInstructionHelp": "Reruns when source documents or referenced columns change.";
+      "extractionInstructionPlaceholder": "Example: Find the agreement termination date. Return only the date.";
       "file": "File";
       "ifNoMatchFound": "If no match found";
       "int": "Integer";
       "keepEmpty": "Keep Empty";
+      "manualColumn": "Manual column";
       "multiSelect": "Multi Select";
       "nameProperty": "Name property";
+      "newColumn": "New column";
+      "newColumnDescription": "Choose how this table column should be filled.";
+      "newColumnName": "Column name";
       "noPropertiesFound": "No properties found";
       "referencesItself": "Property references itself through other properties";
+      "resultType": "Result type";
       "searchOrAddOptions": "Search or add options";
       "selectColor": "Select color";
       "selectOperator": "Select operator";

@@ -1,10 +1,12 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/org-manifest";
 import { buildReadonlyFunctionTypeDeclarations } from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import {
   buildReadonlyWorkspaceFunctionManifest,
+  listMatterEntitiesContract,
   readonlyWorkspaceFunctionContracts,
 } from "@/api/handlers/chat/tools/execute/workspace-manifest";
 
@@ -43,7 +45,28 @@ describe("workspace manifest helpers", () => {
     }
   });
 
-  test("renders list pagination and requires IDs for detail reads", () => {
+  test("documents entity links in entity lookup descriptions", () => {
+    const manifest = buildReadonlyWorkspaceFunctionManifest();
+
+    expect(Result.isOk(manifest)).toBe(true);
+    if (!Result.isOk(manifest)) {
+      return;
+    }
+
+    const entityEntries = manifest.value.filter(
+      (entry) =>
+        entry.name === "listMatterEntities" ||
+        entry.name === "getMatterEntities",
+    );
+
+    expect(entityEntries).toHaveLength(2);
+    for (const entry of entityEntries) {
+      expect(entry.description).toContain("refs");
+      expect(entry.description).toContain("#stella-entity-ref=ent_1");
+    }
+  });
+
+  test("renders list pagination and requires refs for detail reads", () => {
     const declarations = buildReadonlyFunctionTypeDeclarations([
       ...readonlyOrgFunctionContracts,
       ...readonlyWorkspaceFunctionContracts,
@@ -52,12 +75,51 @@ describe("workspace manifest helpers", () => {
     expect(Result.isOk(declarations)).toBe(true);
     if (Result.isOk(declarations)) {
       expect(declarations.value).toContain("listMatters(input: {");
-      expect(declarations.value).toContain("matterIds: string[]");
+      expect(declarations.value).toContain("matterRefs: string[]");
       expect(declarations.value).toContain("limit?: number");
       expect(declarations.value).toContain("offset?: number");
       expect(declarations.value).toContain("getMatterEntities(input: {");
-      expect(declarations.value).toContain("entityIds: string[]");
+      expect(declarations.value).toContain("entityRefs: string[]");
       expect(declarations.value).toContain("Promise<Array<{");
     }
+  });
+
+  test("accepts UUID file ids in entity field output", () => {
+    const output = {
+      hasMore: false,
+      items: [
+        {
+          entityRef: "ent_1",
+          fields: [
+            {
+              content: {
+                encrypted: false,
+                fileName: "Internal_Audit_Report.docx",
+                id: "141d8c88-2fa5-5127-8e37-3ea75f52f890",
+                mimeType:
+                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                pdfFileId: null,
+                sha256Hex:
+                  "7079424dfa5247d9f4745e86a487dc9602f78b5944d640e589927fea6b4b4eda",
+                sizeBytes: 3978,
+                type: "file",
+                version: 1,
+              },
+              propertyRef: "prop_1",
+            },
+          ],
+          kind: "document",
+          matterRef: "mat_1",
+          mention: "[Internal_Audit_Report.docx](#stella-entity-ref=ent_1)",
+          name: "Internal_Audit_Report.docx",
+          parentRef: null,
+        },
+      ],
+      nextOffset: null,
+    };
+
+    const result = v.safeParse(listMatterEntitiesContract.output, output);
+
+    expect(result.success).toBe(true);
   });
 });

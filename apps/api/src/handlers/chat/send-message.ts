@@ -26,6 +26,7 @@ import {
 } from "@/api/handlers/chat/persist-message";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
+import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type {
   ChatMessage,
   ChatMessageContent,
@@ -66,9 +67,11 @@ const sendMessage = createSafeRootHandler(
     /* eslint-enable no-body-ownership-ids/no-body-ownership-ids */
 
     const workspaceId = scope.scope === "workspace" ? scope.workspaceId : null;
+    const refRegistry = createChatRefRegistry();
 
     const chatTools = getChatTools({
       organizationId: session.activeOrganizationId,
+      refRegistry,
       safeDb,
       scopedDb,
       userId: user.id,
@@ -136,6 +139,7 @@ const sendMessage = createSafeRootHandler(
         userContext: body.userContext,
         userId: user.id,
         workspaceId,
+        refRegistry,
       }),
     );
 
@@ -156,7 +160,10 @@ const sendMessage = createSafeRootHandler(
               }
 
               const insertResult = await insertMessages({
-                messages: newAssistantMessages,
+                messages: resolveAssistantMessageRefs({
+                  messages: newAssistantMessages,
+                  refRegistry,
+                }),
                 safeDb,
                 threadId: body.threadId,
                 userId: user.id,
@@ -168,6 +175,7 @@ const sendMessage = createSafeRootHandler(
               }
             },
             orgAIConfig,
+            resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
             threadId: body.threadId,
             tools: chatTools,
             system: chatContext.system,
@@ -319,6 +327,7 @@ type PrepareChatContextProps = {
   activeDecision: IncomingActiveDecision | undefined;
   activeFile: IncomingActiveFile | undefined;
   messageWindow: ChatMessage[];
+  refRegistry: ReturnType<typeof createChatRefRegistry>;
   safeDb: SafeDb;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
@@ -337,6 +346,7 @@ const prepareChatContext = async ({
   activeDecision,
   activeFile,
   messageWindow,
+  refRegistry,
   safeDb,
   userContext,
   userId,
@@ -347,6 +357,7 @@ const prepareChatContext = async ({
       buildChatSystemPrompt({
         activeDecision,
         activeFile,
+        refRegistry,
         safeDb,
         userContext,
         workspaceId,
@@ -370,7 +381,10 @@ const prepareChatContext = async ({
 
     return Result.ok({
       system,
-      hydratedMessages,
+      hydratedMessages: hydrateAssistantMessageRefs({
+        messages: hydratedMessages,
+        refRegistry,
+      }),
     });
   });
 
@@ -380,6 +394,62 @@ type InsertMessagesProps = {
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
+};
+
+type ResolveAssistantMessageRefsProps = {
+  messages: ChatMessage[];
+  refRegistry: ReturnType<typeof createChatRefRegistry>;
+};
+
+const resolveAssistantMessageRefs = ({
+  messages,
+  refRegistry,
+}: ResolveAssistantMessageRefsProps): ChatMessage[] => {
+  const resolvePart = (
+    part: ChatMessage["parts"][number],
+  ): ChatMessage["parts"][number] => {
+    const resolved = refRegistry.resolveAssistantValueRefs(part);
+
+    // SAFETY: resolveAssistantValueRefs preserves the message part shape and
+    // only replaces string values containing session-scoped refs.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    return resolved as ChatMessage["parts"][number];
+  };
+
+  return messages.map((message) =>
+    message.role === "assistant"
+      ? {
+          ...message,
+          parts: message.parts.map(resolvePart),
+        }
+      : message,
+  );
+};
+
+const hydrateAssistantMessageRefs = ({
+  messages,
+  refRegistry,
+}: ResolveAssistantMessageRefsProps): ChatMessage[] => {
+  const hydratePart = (
+    part: ChatMessage["parts"][number],
+  ): ChatMessage["parts"][number] => {
+    const hydrated = refRegistry.hydrateAssistantValueRefs(part);
+
+    // SAFETY: hydrateAssistantValueRefs preserves the message part shape and
+    // only replaces stable persisted IDs in ref-shaped fields with
+    // request-local short refs for model context.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    return hydrated as ChatMessage["parts"][number];
+  };
+
+  return messages.map((message) =>
+    message.role === "assistant"
+      ? {
+          ...message,
+          parts: message.parts.map(hydratePart),
+        }
+      : message,
+  );
 };
 
 const insertMessages = async ({

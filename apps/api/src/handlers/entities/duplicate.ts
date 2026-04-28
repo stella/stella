@@ -5,7 +5,7 @@ import type { Static } from "elysia";
 
 import type { SafeDb, Transaction } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
-import type { FieldContent } from "@/api/db/schema-validators";
+import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -48,6 +48,29 @@ type ResolveEntityNameProps = {
   workspaceId: SafeId<"workspace">;
   parentId: SafeId<"entity"> | null;
   name: string | null;
+};
+
+type EntityFieldSnapshot = {
+  propertyId: SafeId<"property">;
+  content: FieldContent;
+};
+
+type EntitySnapshot = {
+  id: SafeId<"entity">;
+  kind: EntityKind;
+  name: string | null;
+  parentId: SafeId<"entity"> | null;
+  currentVersion: {
+    fields: EntityFieldSnapshot[];
+  } | null;
+};
+
+type DuplicatedEntity = {
+  sourceId: SafeId<"entity">;
+  entityId: SafeId<"entity">;
+  kind: EntityKind;
+  name: string | null;
+  parentId: SafeId<"entity"> | null;
 };
 
 /**
@@ -127,6 +150,211 @@ const extractFileName = (
   return null;
 };
 
+const getEffectiveName = (entity: EntitySnapshot) =>
+  entity.name ?? extractFileName(entity.currentVersion?.fields ?? []);
+
+const getFolderSubtree = (
+  allEntities: EntitySnapshot[],
+  rootId: SafeId<"entity">,
+) => {
+  const childrenByParentId = new Map<SafeId<"entity">, EntitySnapshot[]>();
+
+  for (const entity of allEntities) {
+    if (!entity.parentId) {
+      continue;
+    }
+
+    const children = childrenByParentId.get(entity.parentId);
+    if (children) {
+      children.push(entity);
+      continue;
+    }
+
+    childrenByParentId.set(entity.parentId, [entity]);
+  }
+
+  const root = allEntities.find((entity) => entity.id === rootId);
+  if (!root) {
+    return null;
+  }
+
+  const subtree: EntitySnapshot[] = [];
+  const queue = [root];
+
+  for (const entity of queue) {
+    subtree.push(entity);
+    for (const child of childrenByParentId.get(entity.id) ?? []) {
+      queue.push(child);
+    }
+  }
+
+  return subtree;
+};
+
+type DuplicateEntitiesProps = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  auditContext: AuditContext;
+  sourceEntityId: SafeId<"entity">;
+  sourceEntities: EntitySnapshot[];
+};
+
+const duplicateEntities = async ({
+  tx,
+  workspaceId,
+  userId,
+  auditContext,
+  sourceEntityId,
+  sourceEntities,
+}: DuplicateEntitiesProps) => {
+  const entityCount = await tx.$count(
+    entities,
+    eq(entities.workspaceId, workspaceId),
+  );
+
+  if (entityCount + sourceEntities.length > LIMITS.entitiesCount) {
+    return {
+      ok: false as const,
+      status: 400 as const,
+      message: "Entities limit reached",
+    };
+  }
+
+  const idMap = new Map<SafeId<"entity">, SafeId<"entity">>();
+  const duplicatedEntities: DuplicatedEntity[] = [];
+  const duplicatedEntityIds: SafeId<"entity">[] = [];
+
+  for (const source of sourceEntities) {
+    if (!source.currentVersion) {
+      return {
+        ok: false as const,
+        status: 400 as const,
+        message: "Entity has no current version",
+      };
+    }
+
+    const newEntityId = createSafeId<"entity">();
+    const newVersionId = createSafeId<"entityVersion">();
+    const mappedParentId = source.parentId
+      ? idMap.get(source.parentId)
+      : undefined;
+    const newParentId =
+      source.id === sourceEntityId ? source.parentId : mappedParentId;
+    const duplicateName =
+      source.id === sourceEntityId
+        ? await resolveEntityName({
+            tx,
+            workspaceId,
+            parentId: source.parentId,
+            name: getEffectiveName(source),
+          })
+        : source.name;
+
+    if (source.id !== sourceEntityId && !newParentId) {
+      return {
+        ok: false as const,
+        status: 500 as const,
+        message: "Duplicate parent was not created",
+      };
+    }
+
+    const entityStamp =
+      source.kind === "document"
+        ? await allocateEntityStamp(tx, workspaceId)
+        : null;
+
+    await tx.insert(entities).values({
+      id: newEntityId,
+      workspaceId,
+      kind: source.kind,
+      parentId: newParentId ?? null,
+      name: duplicateName,
+      createdBy: userId,
+      docSequence: entityStamp?.docSequence ?? null,
+    });
+
+    await tx.insert(entityVersions).values({
+      id: newVersionId,
+      workspaceId,
+      entityId: newEntityId,
+      versionNumber: 1,
+      stamp: entityStamp?.stamp ?? null,
+      verificationCode: entityStamp?.verificationCode ?? null,
+    });
+
+    await tx
+      .update(entities)
+      .set({ currentVersionId: newVersionId })
+      .where(eq(entities.id, newEntityId));
+
+    const sourceFields = source.currentVersion.fields;
+    if (sourceFields.length > 0) {
+      await tx.insert(fields).values(
+        sourceFields.map((field) => ({
+          workspaceId,
+          propertyId: field.propertyId,
+          entityVersionId: newVersionId,
+          content: field.content,
+        })),
+      );
+    }
+
+    idMap.set(source.id, newEntityId);
+    duplicatedEntityIds.push(newEntityId);
+    duplicatedEntities.push({
+      sourceId: source.id,
+      entityId: newEntityId,
+      kind: source.kind,
+      name: duplicateName,
+      parentId: newParentId ?? null,
+    });
+  }
+
+  await tx
+    .update(workspaces)
+    .set({ lastActivityAt: new Date() })
+    .where(eq(workspaces.id, workspaceId));
+
+  await writeAuditLog(
+    duplicatedEntities.map((entity) => ({
+      organizationId: auditContext.organizationId,
+      workspaceId: auditContext.workspaceId ?? null,
+      userId: auditContext.userId,
+      metadata: auditContext.metadata,
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+      resourceId: entity.entityId,
+      changes: {
+        created: {
+          old: { sourceEntityId: entity.sourceId },
+          new: {
+            kind: entity.kind,
+            name: entity.name,
+            parentId: entity.parentId,
+          },
+        },
+      },
+    })),
+    tx,
+  );
+
+  const rootEntityId = idMap.get(sourceEntityId);
+  if (!rootEntityId) {
+    return {
+      ok: false as const,
+      status: 500 as const,
+      message: "Duplicate root was not created",
+    };
+  }
+
+  return {
+    ok: true as const,
+    entityId: rootEntityId,
+    entityIds: duplicatedEntityIds,
+  };
+};
+
 const duplicateEntityHandler = async function* ({
   safeDb,
   workspaceId,
@@ -167,123 +395,60 @@ const duplicateEntityHandler = async function* ({
     );
   }
 
-  if (source.kind === "folder") {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Folder duplication is not supported",
-      }),
-    );
-  }
-
-  if (!source.currentVersion) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Entity has no current version",
-      }),
-    );
-  }
-
-  const sourceFields = source.currentVersion.fields;
-
-  // When entity.name is null (file uploads), derive the
-  // display name from the file field's fileName
-  const effectiveName = source.name ?? extractFileName(sourceFields);
-
   const txResult = yield* Result.await(
     safeDb(async (tx) => {
-      const entityCount = await tx.$count(
-        entities,
-        eq(entities.workspaceId, workspaceId),
-      );
-
-      if (entityCount >= LIMITS.entitiesCount) {
-        return {
-          ok: false as const,
-          status: 400 as const,
-          message: "Entities limit reached",
-        };
+      if (source.kind !== "folder") {
+        return await duplicateEntities({
+          tx,
+          workspaceId,
+          userId,
+          auditContext,
+          sourceEntityId,
+          sourceEntities: [source],
+        });
       }
 
-      const newEntityId = createSafeId<"entity">();
-      const newVersionId = createSafeId<"entityVersion">();
-
-      const duplicateName = await resolveEntityName({
-        tx,
-        workspaceId,
-        parentId: source.parentId,
-        name: effectiveName,
-      });
-
-      const entityStamp =
-        source.kind === "document"
-          ? await allocateEntityStamp(tx, workspaceId)
-          : null;
-
-      await tx.insert(entities).values({
-        id: newEntityId,
-        workspaceId,
-        kind: source.kind,
-        parentId: source.parentId,
-        name: duplicateName,
-        createdBy: userId,
-        docSequence: entityStamp?.docSequence ?? null,
-      });
-
-      await tx.insert(entityVersions).values({
-        id: newVersionId,
-        workspaceId,
-        entityId: newEntityId,
-        versionNumber: 1,
-        stamp: entityStamp?.stamp ?? null,
-        verificationCode: entityStamp?.verificationCode ?? null,
-      });
-
-      await tx
-        .update(entities)
-        .set({ currentVersionId: newVersionId })
-        .where(eq(entities.id, newEntityId));
-
-      // Copy all fields from source version (reuses S3 file
-      // references; no data is physically duplicated)
-      if (sourceFields.length > 0) {
-        await tx.insert(fields).values(
-          sourceFields.map((field) => ({
-            workspaceId,
-            propertyId: field.propertyId,
-            entityVersionId: newVersionId,
-            content: field.content,
-          })),
-        );
-      }
-
-      await tx
-        .update(workspaces)
-        .set({ lastActivityAt: new Date() })
-        .where(eq(workspaces.id, workspaceId));
-
-      await writeAuditLog(
-        {
-          ...auditContext,
-          action: AUDIT_ACTION.CREATE,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          resourceId: newEntityId,
-          changes: {
-            created: {
-              old: { sourceEntityId },
-              new: {
-                kind: source.kind,
-                name: duplicateName,
-                parentId: source.parentId,
+      const workspaceEntities = await tx.query.entities.findMany({
+        where: { workspaceId: { eq: workspaceId } },
+        columns: {
+          id: true,
+          kind: true,
+          name: true,
+          parentId: true,
+        },
+        with: {
+          currentVersion: {
+            columns: { id: true },
+            with: {
+              fields: {
+                columns: {
+                  propertyId: true,
+                  content: true,
+                },
               },
             },
           },
         },
-        tx,
-      );
+        limit: LIMITS.entitiesCount,
+      });
 
-      return { ok: true as const, entityId: newEntityId };
+      const subtree = getFolderSubtree(workspaceEntities, sourceEntityId);
+      if (!subtree) {
+        return {
+          ok: false as const,
+          status: 404 as const,
+          message: "Entity not found",
+        };
+      }
+
+      return await duplicateEntities({
+        tx,
+        workspaceId,
+        userId,
+        auditContext,
+        sourceEntityId,
+        sourceEntities: subtree,
+      });
     }),
   );
 
@@ -293,7 +458,9 @@ const duplicateEntityHandler = async function* ({
     );
   }
 
-  processExtraction(txResult.entityId).catch(captureError);
+  for (const entityId of txResult.entityIds) {
+    processExtraction(entityId).catch(captureError);
+  }
 
   return Result.ok({ entityId: txResult.entityId });
 };

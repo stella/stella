@@ -3,26 +3,25 @@ import { Result } from "better-result";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 
-export const getScopedWorkspaceIds = (
-  allowedWorkspaceIds: SafeId<"workspace">[],
-  workspaceIds: string[],
-) => {
-  const scopedWorkspaceIds = [];
+export const ensureAllowedWorkspaceIds = ({
+  allowedWorkspaceIds,
+  workspaceIds,
+}: {
+  allowedWorkspaceIds: SafeId<"workspace">[];
+  workspaceIds: SafeId<"workspace">[];
+}) => {
+  const allowedWorkspaceIdSet = new Set(allowedWorkspaceIds);
+  const scopedWorkspaceIds = workspaceIds.filter((id) =>
+    allowedWorkspaceIdSet.has(id),
+  );
 
-  for (const workspaceId of workspaceIds) {
-    const allowedWorkspaceId = allowedWorkspaceIds.find(
-      (id) => id === workspaceId,
-    );
-    if (!allowedWorkspaceId) {
-      return Result.err(
-        new ChatToolError({
-          message: `Matter "${workspaceId}" is not in the allowed set.`,
-        }),
-      );
-    }
-
-    scopedWorkspaceIds.push(allowedWorkspaceId);
+  if (scopedWorkspaceIds.length === workspaceIds.length) {
+    return Result.ok(scopedWorkspaceIds);
   }
 
-  return Result.ok(scopedWorkspaceIds);
+  return Result.err(
+    new ChatToolError({
+      message: "One or more matter refs are not in the allowed set.",
+    }),
+  );
 };

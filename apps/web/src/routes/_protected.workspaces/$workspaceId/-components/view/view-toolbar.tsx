@@ -3,6 +3,8 @@ import {
   CalendarIcon,
   ClockIcon,
   EyeIcon,
+  FolderIcon,
+  FolderOpenIcon,
   HashIcon,
   SparklesIcon,
   UserIcon,
@@ -34,6 +36,7 @@ import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-compon
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
   getInternalPropertyId,
   resolveKanbanGroupBy,
@@ -45,9 +48,12 @@ type ViewToolbarProps = {
 };
 
 export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
+  const t = useTranslations();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const updateView = useUpdateView(workspaceId);
   const { filters, sorts, hiddenProperties } = view.layout;
+  const folderState = useWorkspaceStore((s) => s.folderState);
+  const toggleAllFolders = useWorkspaceStore((s) => s.toggleAllFolders);
 
   const handleUpdate = (changes: Partial<ViewLayout>) => {
     updateView.mutate({
@@ -61,6 +67,28 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
 
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-1 px-2 py-1">
+      {view.layout.type === "filesystem" && folderState?.hasFolders && (
+        <>
+          <Button
+            onClick={toggleAllFolders}
+            size="icon-xs"
+            title={
+              folderState.allExpanded
+                ? t("workspaces.filesystem.collapseAll")
+                : t("workspaces.filesystem.expandAll")
+            }
+            variant="ghost"
+          >
+            {folderState.allExpanded ? (
+              <FolderOpenIcon className="size-3.5" />
+            ) : (
+              <FolderIcon className="size-3.5" />
+            )}
+          </Button>
+          <span className="bg-border mx-1 h-4 w-px" />
+        </>
+      )}
+
       <FilterChips
         filters={filters}
         onUpdate={(updatedFilters) => handleUpdate({ filters: updatedFilters })}

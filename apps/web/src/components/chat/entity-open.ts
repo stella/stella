@@ -53,25 +53,65 @@ const toEntityFileFields = (entity: WorkspaceEntity): EntityFileField[] =>
     content: field.content,
   }));
 
-/** Open the entity's file in the inspector panel. */
+type OpenEntityResult =
+  | { type: "opened" }
+  | { type: "folder"; entityId: string; workspaceId: string }
+  | { type: "unsupported" };
+
+const openEntityByKind = ({
+  entityId,
+  kind,
+  label,
+  workspaceId,
+}: {
+  entityId: string;
+  kind: string;
+  label: string;
+  workspaceId: string;
+}): OpenEntityResult | null => {
+  if (kind === "task") {
+    useInspectorStore.getState().openTask(entityId, label);
+    return { type: "opened" };
+  }
+
+  if (kind === "folder") {
+    return { type: "folder", entityId, workspaceId };
+  }
+
+  return null;
+};
+
+/** Open an entity reference from chat. Documents open in the
+ *  file inspector, tasks open in the task inspector, and folders
+ *  are returned to the caller for route-level navigation. */
 export const openEntityInInspector = async (
   entityId: string,
   label: string,
   workspaceId = "",
   entity?: WorkspaceEntity,
-) => {
+): Promise<OpenEntityResult> => {
   if (!workspaceId) {
-    return;
+    return { type: "unsupported" };
   }
 
   if (entity !== undefined) {
+    const openedByKind = openEntityByKind({
+      entityId,
+      kind: entity.kind,
+      label,
+      workspaceId,
+    });
+    if (openedByKind) {
+      return openedByKind;
+    }
+
     openDisplayableFile({
       entityId,
       fields: toEntityFileFields(entity),
       label,
       workspaceId,
     });
-    return;
+    return { type: "opened" };
   }
 
   try {
@@ -84,20 +124,34 @@ export const openEntityInInspector = async (
       throw toAPIError(response.error);
     }
 
+    const responseLabel = response.data.name ?? label;
+    const openedByKind = openEntityByKind({
+      entityId,
+      kind: response.data.kind,
+      label: responseLabel,
+      workspaceId,
+    });
+    if (openedByKind) {
+      return openedByKind;
+    }
+
     const opened = openDisplayableFile({
       entityId,
       fields: response.data.fields,
-      label: response.data.name ?? label,
+      label: responseLabel,
       workspaceId,
     });
 
-    if (!opened) {
-      const t = getTranslator();
-      toastManager.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+    if (opened) {
+      return { type: "opened" };
     }
+
+    const t = getTranslator();
+    toastManager.add({
+      title: t("errors.actionFailed"),
+      type: "error",
+    });
+    return { type: "unsupported" };
   } catch (error) {
     getAnalytics().captureError(error);
     const t = getTranslator();
@@ -105,5 +159,6 @@ export const openEntityInInspector = async (
       title: error instanceof Error ? error.message : t("errors.actionFailed"),
       type: "error",
     });
+    return { type: "unsupported" };
   }
 };

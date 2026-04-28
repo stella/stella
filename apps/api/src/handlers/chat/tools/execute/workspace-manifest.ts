@@ -17,40 +17,53 @@ import { LIMITS } from "@/api/lib/limits";
 
 const entityKindSchema = v.picklist(entityKindEnum.enumValues);
 const propertyStatusSchema = v.picklist(propertyStatusEnum.enumValues);
-const matterIdSchema = v.pipe(v.string(), v.uuid(), v.description("Matter ID"));
-const entityIdSchema = v.pipe(v.string(), v.uuid(), v.description("Entity ID"));
-const propertyIdSchema = v.pipe(
+const matterRefSchema = v.pipe(
+  v.string(),
+  v.regex(/^mat_\d+$/),
+  v.description("Short matter ref returned by Stella tools"),
+);
+const entityRefSchema = v.pipe(
+  v.string(),
+  v.regex(/^ent_\d+$/),
+  v.description("Short entity ref returned by Stella tools"),
+);
+const propertyRefSchema = v.pipe(
+  v.string(),
+  v.regex(/^prop_\d+$/),
+  v.description("Short property ref returned by Stella tools"),
+);
+const storedFileIdSchema = v.pipe(
   v.string(),
   v.uuid(),
-  v.description("Property ID"),
+  v.description("File ID"),
 );
 
-const matterIdsSchema = v.pipe(
-  v.array(matterIdSchema),
+const matterRefsSchema = v.pipe(
+  v.array(matterRefSchema),
   v.minLength(1),
   v.maxLength(LIMITS.chatExecuteDetailIdsMax),
-  v.description("Matter IDs to inspect"),
+  v.description("Matter refs to inspect"),
 );
 
-const entityIdsSchema = v.pipe(
-  v.array(entityIdSchema),
+const entityRefsSchema = v.pipe(
+  v.array(entityRefSchema),
   v.minLength(1),
   v.maxLength(LIMITS.chatExecuteDetailIdsMax),
-  v.description("Entity IDs to inspect"),
+  v.description("Entity refs to inspect"),
 );
 
-const propertyIdsSchema = v.pipe(
-  v.array(propertyIdSchema),
+const propertyRefsSchema = v.pipe(
+  v.array(propertyRefSchema),
   v.minLength(1),
   v.maxLength(LIMITS.chatExecuteDetailIdsMax),
-  v.description("Property IDs to inspect"),
+  v.description("Property refs to inspect"),
 );
 
-const contentEntityIdsSchema = v.pipe(
-  v.array(entityIdSchema),
+const contentEntityRefsSchema = v.pipe(
+  v.array(entityRefSchema),
   v.minLength(1),
   v.maxLength(LIMITS.chatExecuteContentIdsMax),
-  v.description("Entity IDs whose extracted content should be read"),
+  v.description("Entity refs whose extracted content should be read"),
 );
 
 const propertyOptionSchema = v.strictObject({
@@ -98,7 +111,7 @@ const propertyToolSchema = v.variant("type", [
     dependencies: v.array(
       v.strictObject({
         condition: v.nullable(v.unknown()),
-        dependsOnPropertyId: propertyIdSchema,
+        dependsOnPropertyRef: propertyRefSchema,
       }),
     ),
     prompt: v.pipe(v.string(), v.description("AI tool prompt")),
@@ -108,12 +121,18 @@ const propertyToolSchema = v.variant("type", [
 ]);
 
 const sourceDocumentSchema = v.strictObject({
-  entityId: entityIdSchema,
+  entityId: v.pipe(v.string(), v.uuid(), v.description("Source entity ID")),
+  entityRef: entityRefSchema,
   kind: v.pipe(v.string(), v.description("Source entity kind")),
+  matterRef: matterRefSchema,
+  mention: v.pipe(
+    v.string(),
+    v.description("Markdown mention to copy when citing this source document"),
+  ),
   mimeType: v.nullable(v.pipe(v.string(), v.description("Source MIME type"))),
   title: v.pipe(v.string(), v.description("Source document title")),
   workspaceId: v.nullable(
-    v.pipe(v.string(), v.description("Workspace ID for the source document")),
+    v.pipe(v.string(), v.uuid(), v.description("Source workspace ID")),
   ),
 });
 
@@ -136,9 +155,9 @@ const fieldContentSchema = v.variant("type", [
   v.strictObject({
     encrypted: v.boolean(),
     fileName: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
-    id: v.pipe(v.string(), v.minLength(21), v.maxLength(21)),
+    id: storedFileIdSchema,
     mimeType: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
-    pdfFileId: v.nullable(v.pipe(v.string(), v.minLength(21), v.maxLength(21))),
+    pdfFileId: v.nullable(storedFileIdSchema),
     scanWarnings: v.optional(v.array(v.pipe(v.string(), v.maxLength(256)))),
     sha256Hex: v.pipe(v.string(), v.minLength(64), v.maxLength(64)),
     sizeBytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
@@ -184,13 +203,13 @@ const fieldContentSchema = v.variant("type", [
 
 const entityFieldItemSchema = v.strictObject({
   content: fieldContentSchema,
-  propertyId: propertyIdSchema,
+  propertyRef: propertyRefSchema,
 });
 
 const propertySummaryEntries = {
-  matterId: matterIdSchema,
+  matterRef: matterRefSchema,
   name: v.pipe(v.string(), v.description("Property name")),
-  propertyId: propertyIdSchema,
+  propertyRef: propertyRefSchema,
   status: propertyStatusSchema,
   type: v.pipe(v.string(), v.description("Property content type")),
 } as const;
@@ -205,13 +224,17 @@ const propertyDetailSchema = v.strictObject({
 });
 
 const entitySummaryEntries = {
-  entityId: entityIdSchema,
+  entityRef: entityRefSchema,
   fields: v.array(entityFieldItemSchema),
   kind: entityKindSchema,
-  matterId: matterIdSchema,
+  matterRef: matterRefSchema,
+  mention: v.pipe(
+    v.string(),
+    v.description("Markdown mention to copy when referring to this entity"),
+  ),
   name: v.pipe(v.string(), v.description("Entity name")),
-  parentId: v.nullable(
-    v.pipe(v.string(), v.description("Parent folder entity ID")),
+  parentRef: v.nullable(
+    v.pipe(v.string(), v.description("Parent folder entity ref")),
   ),
 } as const;
 
@@ -227,8 +250,12 @@ const entityDetailSchema = v.strictObject({
 
 const entityContentSchema = v.strictObject({
   charCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
-  entityId: entityIdSchema,
-  matterId: matterIdSchema,
+  entityRef: entityRefSchema,
+  matterRef: matterRefSchema,
+  mention: v.pipe(
+    v.string(),
+    v.description("Markdown mention to copy when referring to this entity"),
+  ),
   name: v.nullable(v.pipe(v.string(), v.description("Entity name"))),
   sourceDocument: sourceDocumentSchema,
   text: v.pipe(v.string(), v.description("Extracted text content")),
@@ -239,38 +266,38 @@ const entityContentSchema = v.strictObject({
 });
 
 const listMatterPropertiesInputSchema = v.strictObject({
-  matterIds: matterIdsSchema,
+  matterRefs: matterRefsSchema,
   ...paginationInputEntries,
 });
 
 const getMatterPropertiesInputSchema = v.strictObject({
-  matterIds: matterIdsSchema,
-  propertyIds: propertyIdsSchema,
+  matterRefs: matterRefsSchema,
+  propertyRefs: propertyRefsSchema,
 });
 
 const listMatterEntitiesInputSchema = v.strictObject({
   kind: v.optional(
     v.pipe(entityKindSchema, v.description("Optional entity kind filter")),
   ),
-  matterIds: matterIdsSchema,
-  parentId: v.optional(
+  matterRefs: matterRefsSchema,
+  parentRef: v.optional(
     v.pipe(
       v.string(),
-      v.uuid(),
-      v.description("Optional parent folder entity ID"),
+      v.regex(/^ent_\d+$/),
+      v.description("Optional parent folder entity ref"),
     ),
   ),
   ...paginationInputEntries,
 });
 
 const getMatterEntitiesInputSchema = v.strictObject({
-  entityIds: entityIdsSchema,
-  matterIds: matterIdsSchema,
+  entityRefs: entityRefsSchema,
+  matterRefs: matterRefsSchema,
 });
 
 const getMatterEntityContentsInputSchema = v.strictObject({
-  entityIds: contentEntityIdsSchema,
-  matterIds: matterIdsSchema,
+  entityRefs: contentEntityRefsSchema,
+  matterRefs: matterRefsSchema,
 });
 
 export const listMatterPropertiesContract = createReadonlyFunctionContract({
@@ -283,7 +310,7 @@ export const listMatterPropertiesContract = createReadonlyFunctionContract({
 
 export const getMatterPropertiesContract = createReadonlyFunctionContract({
   description:
-    "Get full property definitions, including property content and tool configuration, for known property IDs in known matters.",
+    "Get full property definitions, including property content and tool configuration, for known property refs in known matters.",
   input: getMatterPropertiesInputSchema,
   name: "getMatterProperties",
   output: v.array(propertyDetailSchema),
@@ -291,7 +318,7 @@ export const getMatterPropertiesContract = createReadonlyFunctionContract({
 
 export const listMatterEntitiesContract = createReadonlyFunctionContract({
   description:
-    "List compact entity summaries for one or more matters. Each field's `content` is the stored value discriminated union (same shape as the DB). Resolve property display names via `listMatterProperties` or `getMatterProperties`. Supports optional kind and parent filters plus pagination.",
+    "List compact entity summaries for one or more matters. Use returned refs for follow-up calls. Reference entities in user-facing answers with markdown links like `[Name](#stella-entity-ref=ent_1)`. Each field's `content` is the stored value discriminated union (same shape as the DB). Resolve property display names via `listMatterProperties` or `getMatterProperties`. Supports optional kind and parent filters plus pagination.",
   input: listMatterEntitiesInputSchema,
   name: "listMatterEntities",
   output: buildPaginatedOutputSchema(entitySummarySchema),
@@ -299,7 +326,7 @@ export const listMatterEntitiesContract = createReadonlyFunctionContract({
 
 export const getMatterEntitiesContract = createReadonlyFunctionContract({
   description:
-    "Get rich entity details for known entity IDs in known matters. Each field's `content` is the stored value discriminated union (same shape as the DB). Resolve property display names via `listMatterProperties` or `getMatterProperties`.",
+    "Get rich entity details for known entity refs in known matters. Use refs for follow-up calls. Reference entities in user-facing answers with markdown links like `[Name](#stella-entity-ref=ent_1)`. Each field's `content` is the stored value discriminated union (same shape as the DB). Resolve property display names via `listMatterProperties` or `getMatterProperties`.",
   input: getMatterEntitiesInputSchema,
   name: "getMatterEntities",
   output: v.array(entityDetailSchema),
@@ -307,7 +334,7 @@ export const getMatterEntitiesContract = createReadonlyFunctionContract({
 
 export const getMatterEntityContentsContract = createReadonlyFunctionContract({
   description:
-    "Get extracted text content for known entity IDs in known matters. Text is truncated server-side when needed.",
+    "Get extracted text content for known entity refs in known matters. Text is truncated server-side when needed.",
   input: getMatterEntityContentsInputSchema,
   name: "getMatterEntityContents",
   output: v.array(entityContentSchema),

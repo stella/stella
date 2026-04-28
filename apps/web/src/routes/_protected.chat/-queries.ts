@@ -80,10 +80,12 @@ const fetchThreadMessages = async (
   const response = await api.chat
     .threads({ threadId: key.threadId })
     .messages.get({
-      query:
-        key.scope === "workspace"
+      query: {
+        ...(allowMissingThread ? { allowMissingThread: true } : {}),
+        ...(key.scope === "workspace"
           ? { workspaceId: toSafeId<"workspace">(key.workspaceId) }
-          : {},
+          : {}),
+      },
     });
 
   if (response.error) {
@@ -203,4 +205,33 @@ export const groupedChatThreadsOptions = () =>
 export const invalidateGroupedChatThreads = async (queryClient: QueryClient) =>
   await queryClient.invalidateQueries({
     queryKey: chatKeys.groupedThreads(),
+  });
+
+export const invalidateChatThread = async ({
+  queryClient,
+  threadRef,
+}: {
+  queryClient: QueryClient;
+  threadRef: ChatThreadRef;
+}) =>
+  await queryClient.invalidateQueries({
+    predicate: (query) => {
+      const queryKey = query.queryKey;
+      if (
+        queryKey.at(0) !== "chat" ||
+        queryKey.at(1) !== "thread" ||
+        queryKey.at(2) !== threadRef.scope
+      ) {
+        return false;
+      }
+
+      if (threadRef.scope === "global") {
+        return queryKey.at(3) === threadRef.threadId;
+      }
+
+      return (
+        queryKey.at(3) === threadRef.workspaceId &&
+        queryKey.at(4) === threadRef.threadId
+      );
+    },
   });

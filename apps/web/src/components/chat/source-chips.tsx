@@ -1,3 +1,4 @@
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { isDataUIPart, isToolUIPart } from "ai";
 import type { UIDataTypes } from "ai";
 import { FileTextIcon, FolderIcon } from "lucide-react";
@@ -10,6 +11,7 @@ import type {
 import { cn } from "@stella/ui/lib/utils";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
+import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 type SourceDocumentPart = {
@@ -152,6 +154,10 @@ const SourceChip = ({
   sourceDocument: ChatSourceDocument;
   workspaceId?: string | undefined;
 }) => {
+  const navigate = useNavigate();
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const resolvedWorkspaceId =
     workspaceId ?? sourceDocument.workspaceId ?? undefined;
 
@@ -160,11 +166,22 @@ const SourceChip = ({
       return;
     }
 
-    void openEntityInInspector(
-      sourceDocument.entityId,
-      sourceDocument.title,
-      resolvedWorkspaceId,
-    );
+    void (async () => {
+      const result = await openEntityInInspector(
+        sourceDocument.entityId,
+        sourceDocument.title,
+        resolvedWorkspaceId,
+      );
+
+      if (result.type === "folder") {
+        await navigateToWorkspaceFolder({
+          folderId: result.entityId,
+          navigate,
+          pathname,
+          targetWorkspaceId: result.workspaceId,
+        });
+      }
+    })();
   };
 
   return (

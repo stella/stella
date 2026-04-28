@@ -1,5 +1,6 @@
 import type { SafeDb, ScopedDb } from "@/api/db";
 import { createChatExecutionTools } from "@/api/handlers/chat/tools/execute/chat-execution-tools";
+import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -16,6 +17,7 @@ type GetChatToolsProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   accessibleWorkspaceIds: SafeId<"workspace">[];
+  refRegistry: ChatRefRegistry;
   workspaceId: SafeId<"workspace"> | null;
 };
 
@@ -25,6 +27,7 @@ export const getChatTools = ({
   organizationId,
   userId,
   accessibleWorkspaceIds,
+  refRegistry,
   workspaceId,
 }: GetChatToolsProps): ChatTools => {
   const orgTools = createOrgTools({
@@ -35,6 +38,7 @@ export const getChatTools = ({
   const executionTools = createChatExecutionTools({
     accessibleWorkspaceIds,
     organizationId,
+    refRegistry,
     safeDb,
     userId,
   });

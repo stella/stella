@@ -14,13 +14,17 @@ import type { ReadonlyFunctionManifest } from "@/api/handlers/chat/tools/execute
 import type { ChatToolValidationError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
-const matterIdSchema = v.pipe(v.string(), v.description("Matter ID"));
+const matterRefSchema = v.pipe(
+  v.string(),
+  v.regex(/^mat_\d+$/),
+  v.description("Short matter ref returned by Stella tools"),
+);
 
-const matterIdsSchema = v.pipe(
-  v.array(matterIdSchema),
+const matterRefsSchema = v.pipe(
+  v.array(matterRefSchema),
   v.minLength(1),
   v.maxLength(LIMITS.chatExecuteDetailIdsMax),
-  v.description("Matter IDs to inspect"),
+  v.description("Matter refs to inspect"),
 );
 
 const matterListItemSchema = v.strictObject({
@@ -28,7 +32,11 @@ const matterListItemSchema = v.strictObject({
     v.string(),
     v.description("ISO timestamp of the last activity"),
   ),
-  matterId: matterIdSchema,
+  matterRef: matterRefSchema,
+  mention: v.pipe(
+    v.string(),
+    v.description("Markdown mention to copy when referring to this matter"),
+  ),
   name: v.pipe(v.string(), v.description("Matter name")),
   reference: v.nullable(v.pipe(v.string(), v.description("Matter reference"))),
 });
@@ -49,7 +57,11 @@ const matterDetailSchema = v.strictObject({
     v.string(),
     v.description("ISO timestamp of the last activity"),
   ),
-  matterId: matterIdSchema,
+  matterRef: matterRefSchema,
+  mention: v.pipe(
+    v.string(),
+    v.description("Markdown mention to copy when referring to this matter"),
+  ),
   name: v.pipe(v.string(), v.description("Matter name")),
   propertyCount: v.pipe(
     v.number(),
@@ -67,7 +79,7 @@ const listMattersInputSchema = v.strictObject({
 });
 
 const getMattersInputSchema = v.strictObject({
-  matterIds: matterIdsSchema,
+  matterRefs: matterRefsSchema,
 });
 
 export const listMattersContract = createReadonlyFunctionContract({
@@ -80,7 +92,7 @@ export const listMattersContract = createReadonlyFunctionContract({
 
 export const getMattersContract = createReadonlyFunctionContract({
   description:
-    "Get full matter details for known matter IDs, including client, color, and entity/property counts.",
+    "Get full matter details for known matter refs, including client, color, and entity/property counts.",
   input: getMattersInputSchema,
   name: "getMatters",
   output: v.array(matterDetailSchema),

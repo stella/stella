@@ -9,6 +9,7 @@ import { createReadonlyOrgFunctionRegistry } from "@/api/handlers/chat/tools/exe
 import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/org-manifest";
 import { findReadonlyFunctionManifestEntry } from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import type { ReadonlyFunctionContract } from "@/api/handlers/chat/tools/execute/readonly-manifest";
+import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { DEFAULT_SANDBOX_LIMITS } from "@/api/handlers/chat/tools/execute/sandbox/limits";
 import { runSandbox } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import type { SandboxFunctionRegistry } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
@@ -21,6 +22,7 @@ import { LIMITS } from "@/api/lib/limits";
 type CreateChatExecutionToolsProps = {
   accessibleWorkspaceIds: SafeId<"workspace">[];
   organizationId: SafeId<"organization">;
+  refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
   userId: SafeId<"user">;
 };
@@ -55,23 +57,27 @@ const mergeSandboxRegistries = ({
 type BuildReadonlySandboxRegistryProps = {
   accessibleWorkspaceIds: SafeId<"workspace">[];
   organizationId: SafeId<"organization">;
+  refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
 };
 
 const buildReadonlySandboxRegistry = ({
   accessibleWorkspaceIds,
   organizationId,
+  refRegistry,
   safeDb,
 }: BuildReadonlySandboxRegistryProps): SandboxFunctionRegistry => {
   const orgRegistry = createReadonlyOrgFunctionRegistry({
     allowedWorkspaceIds: accessibleWorkspaceIds,
     organizationId,
+    refRegistry,
     safeDb,
   });
 
   const workspaceRegistry = createReadonlyWorkspaceFunctionRegistry({
     allowedWorkspaceIds: accessibleWorkspaceIds,
     organizationId,
+    refRegistry,
     safeDb,
   });
 
@@ -84,12 +90,14 @@ const buildReadonlySandboxRegistry = ({
 export const createChatExecutionTools = ({
   accessibleWorkspaceIds,
   organizationId,
+  refRegistry,
   safeDb,
   userId,
 }: CreateChatExecutionToolsProps) => {
   const readonlySandboxRegistry = buildReadonlySandboxRegistry({
     accessibleWorkspaceIds,
     organizationId,
+    refRegistry,
     safeDb,
   });
 
@@ -141,9 +149,9 @@ export const createChatExecutionTools = ({
         "details. `stella.list*` functions accept optional `limit` and " +
         "numeric `offset` pagination inputs; omit `limit` unless you need " +
         "a smaller page, and never exceed 500. `stella.get*` functions " +
-        "require explicit ids and return full results without pagination. " +
-        `Detail reads accept up to ${LIMITS.chatExecuteDetailIdsMax.toLocaleString()} ids; ` +
-        `content reads accept up to ${LIMITS.chatExecuteContentIdsMax.toLocaleString()} entity ids. When you need ` +
+        "require explicit refs and return full results without pagination. " +
+        `Detail reads accept up to ${LIMITS.chatExecuteDetailIdsMax.toLocaleString()} refs; ` +
+        `content reads accept up to ${LIMITS.chatExecuteContentIdsMax.toLocaleString()} entity refs. When you need ` +
         "multiple independent reads, use `Promise.all()` to fetch them in " +
         "parallel instead of awaiting them one by one. " +
         "`console.log` is a no-op; only the value you `return` comes " +

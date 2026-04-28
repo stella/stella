@@ -1,4 +1,4 @@
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   FileTextIcon,
   FolderIcon,
@@ -12,6 +12,7 @@ import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import type { MentionCategory } from "@/components/chat/chat-mention-href";
 import { parseStellaMentionHref } from "@/components/chat/chat-mention-href";
 import { openEntityInInspector } from "@/components/chat/entity-open";
+import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import type { WorkspaceEntity } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
@@ -59,6 +60,9 @@ export const EntityLink = ({
   workspaceId?: string | undefined;
 }) => {
   const navigate = useNavigate();
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
 
   if (!href) {
     return (
@@ -117,7 +121,22 @@ export const EntityLink = ({
 
   const handleClick = () => {
     if (category === "entity") {
-      void openEntityInInspector(id, label, mentionWorkspaceId);
+      void (async () => {
+        const result = await openEntityInInspector(
+          id,
+          label,
+          mentionWorkspaceId,
+        );
+
+        if (result.type === "folder") {
+          await navigateToWorkspaceFolder({
+            folderId: result.entityId,
+            navigate,
+            pathname,
+            targetWorkspaceId: result.workspaceId,
+          });
+        }
+      })();
       return;
     }
     if (category === "workspace") {

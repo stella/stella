@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import type React from "react";
 
-import type { AnyFieldApi } from "@tanstack/react-form";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import Document from "@tiptap/extension-document";
 import History from "@tiptap/extension-history";
@@ -39,14 +38,23 @@ const getMentions = (editor: Editor): string[] => {
   return [...mentions];
 };
 
-// TODO: FIXME — replace AnyFieldApi with a properly typed FieldApi
+// Narrow handle that both AnyFieldApi (TanStack form) and a
+// plain useState wrapper can satisfy structurally. Avoids
+// requiring a real form context just to embed this editor.
+export type PropertyPromptFieldHandle = {
+  name: string;
+  state: { value: string };
+  handleChange: (value: string) => void;
+  handleBlur: () => void;
+};
+
 type PropertyPromptInputProps = {
   workspaceId: string;
   propertyId: string;
   propertyName: string;
   onMentionsChange: (mentions: string[]) => void;
-  field: AnyFieldApi;
-  dependenciesField: React.ReactElement;
+  field: PropertyPromptFieldHandle;
+  dependenciesField?: React.ReactElement;
 };
 
 export const PropertyPromptInput = ({
@@ -79,7 +87,6 @@ export const PropertyPromptInput = ({
       }),
       History,
     ],
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
     content: field.state.value,
     onUpdate: (props) => {
       const mentions = getMentions(props.editor);
@@ -105,7 +112,7 @@ export const PropertyPromptInput = ({
       editor === null ||
       fileProperty === undefined ||
       fileProperty === null ||
-      (field.state.value !== undefined && field.state.value !== null)
+      field.state.value.length > 0
     ) {
       return;
     }
@@ -138,7 +145,6 @@ export const PropertyPromptInput = ({
 
   return (
     <div className="group w-full gap-1">
-      {/* oxlint-disable-next-line typescript-eslint/no-unsafe-assignment */}
       <PropertyFormField className="w-full p-0" name={field.name}>
         <ScrollArea className="h-32 overflow-y-auto">
           <EditorContent editor={editor} />
