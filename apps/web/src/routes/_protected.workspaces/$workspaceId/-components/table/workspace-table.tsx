@@ -456,7 +456,7 @@ const SelectRowContent = ({
   };
 
   return (
-    <div className="relative flex h-5 w-7 shrink-0 items-center justify-center">
+    <div className="absolute inset-0 flex items-center justify-center">
       <span className="absolute inset-0 flex items-center justify-center text-xs tabular-nums transition-opacity group-hover/row:opacity-0 group-data-[state=selected]/row:opacity-0">
         {label}
       </span>

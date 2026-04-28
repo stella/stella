@@ -15,15 +15,8 @@ import { getSearchProvider } from "@/api/lib/search/provider";
 
 const CONTENT_MAX_CHARS = 8000;
 
-const safeIdSchema = <T extends "entity" | "contact" | "clause">(
-  description: string,
-) =>
-  v.pipe(
-    v.string(),
-    v.uuid(),
-    v.transform((id) => toSafeId<T>(id)),
-    v.description(description),
-  );
+const idSchema = (description: string) =>
+  v.pipe(v.string(), v.uuid(), v.description(description));
 
 // -----------------------------------------------------------------
 // Org-level tools (always available)
@@ -93,10 +86,12 @@ export const createOrgTools = ({
       "document outside the current matter.",
     inputSchema: valibotSchema(
       v.strictObject({
-        entityId: safeIdSchema<"entity">("The entity ID whose content to read"),
+        entityId: idSchema("The entity ID whose content to read"),
       }),
     ),
-    execute: async ({ entityId }) => {
+    execute: async (input) => {
+      const entityId = toSafeId<"entity">(input.entityId);
+
       if (accessibleWorkspaceIds.length === 0) {
         throw new ChatToolError({
           message: "No extracted content available for this entity.",
@@ -180,10 +175,12 @@ export const createOrgTools = ({
     description: "Get details about a contact (person or organization).",
     inputSchema: valibotSchema(
       v.strictObject({
-        contactId: safeIdSchema<"contact">("The contact ID to read"),
+        contactId: idSchema("The contact ID to read"),
       }),
     ),
-    execute: async ({ contactId }) => {
+    execute: async (input) => {
+      const contactId = toSafeId<"contact">(input.contactId);
+
       const contact = await scopedDb((tx) =>
         tx.query.contacts.findFirst({
           where: {
@@ -264,10 +261,12 @@ export const createOrgTools = ({
     description: "Read a legal clause including its full text body.",
     inputSchema: valibotSchema(
       v.strictObject({
-        clauseId: safeIdSchema<"clause">("The clause ID to read"),
+        clauseId: idSchema("The clause ID to read"),
       }),
     ),
-    execute: async ({ clauseId }) => {
+    execute: async (input) => {
+      const clauseId = toSafeId<"clause">(input.clauseId);
+
       const clause = await scopedDb((tx) =>
         tx.query.clauses.findFirst({
           where: {

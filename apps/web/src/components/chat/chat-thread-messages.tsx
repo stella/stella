@@ -150,14 +150,8 @@ const ThinkingIndicator = () => {
     <Message from="assistant">
       <MessageContent>
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <div className="flex items-center gap-1">
-            {[0, 1, 2].map((index) => (
-              <div
-                className="bg-muted-foreground/40 size-1.5 animate-pulse rounded-full"
-                key={index}
-                style={{ animationDelay: `${index * 150}ms` }}
-              />
-            ))}
+          <div className="bg-muted relative h-1 w-9 overflow-hidden rounded-full">
+            <div className="bg-foreground/35 h-full w-1/2 animate-pulse rounded-full" />
           </div>
           <span>{t("chat.thinking")}</span>
         </div>
@@ -168,6 +162,7 @@ const ThinkingIndicator = () => {
 
 const hasVisibleContent = (
   messages: readonly PersistedChatMessage[],
+  showToolCalls: boolean,
 ): boolean => {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
@@ -180,7 +175,11 @@ const hasVisibleContent = (
         return true;
       }
 
-      if (isToolUIPart(part)) {
+      if (isApprovalPart(part) || part.type === "tool-ask-user") {
+        return true;
+      }
+
+      if (isToolUIPart(part) && showToolCalls) {
         return true;
       }
     }
@@ -253,6 +252,7 @@ export const ChatThreadMessages = ({
                       key={part.toolCallId}
                       onSubmit={onAskUserSubmit}
                       part={part}
+                      workspaceId={workspaceId}
                     />
                   );
                 }
@@ -310,8 +310,8 @@ export const ChatThreadMessages = ({
         </MessageContent>
       </Message>
     ))}
-    {showThinkingIndicator && isGenerating && !hasVisibleContent(messages) && (
-      <ThinkingIndicator />
-    )}
+    {showThinkingIndicator &&
+      isGenerating &&
+      !hasVisibleContent(messages, showToolCalls) && <ThinkingIndicator />}
   </>
 );

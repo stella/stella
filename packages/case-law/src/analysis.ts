@@ -7,9 +7,8 @@ import * as v from "valibot";
 const isRecord = (val: unknown): val is Record<string, unknown> =>
   typeof val === "object" && val !== null;
 
-const hasGeneratingStatus = (
-  val: unknown,
-): val is { status: "generating" } => isRecord(val) && val["status"] === "generating";
+const hasGeneratingStatus = (val: unknown): val is { status: "generating" } =>
+  isRecord(val) && val["status"] === "generating";
 
 export const CORE_CATEGORIES = [
   "facts",
@@ -97,7 +96,27 @@ export const isDecisionAnalysis = (val: unknown): val is DecisionAnalysis =>
   typeof val["model"] === "string" &&
   Array.isArray(val["tree"]);
 
-export const isAnalysisInProgress = (
-  val: unknown,
-): val is AnalysisInProgress =>
+export const isAnalysisInProgress = (val: unknown): val is AnalysisInProgress =>
   isDecisionAnalysis(val) && hasGeneratingStatus(val);
+
+export const parsePersistedDecisionAnalysis = (
+  val: unknown,
+): PersistedDecisionAnalysis | null => {
+  if (
+    isDecisionAnalysis(val) ||
+    isAnalysisInProgress(val) ||
+    isAnalysisGenerating(val)
+  ) {
+    return val;
+  }
+
+  if (typeof val !== "string") {
+    return null;
+  }
+
+  try {
+    return parsePersistedDecisionAnalysis(JSON.parse(val));
+  } catch {
+    return null;
+  }
+};

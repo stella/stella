@@ -62,10 +62,7 @@ import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-
 import { CreateMatterDialog } from "@/routes/_protected.workspaces/-components/create-matter-dialog";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 import { TableControls } from "@/routes/_protected.workspaces/-components/table-controls";
-import {
-  workspaceOptions,
-  workspacesKeys,
-} from "@/routes/_protected.workspaces/-queries";
+import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 const LazyTemplateAssistantPanel = lazy(
   async () =>
     await import("@/routes/_protected.knowledge/-components/template-assistant-panel").then(
@@ -337,12 +334,7 @@ function ProtectedContent({
 // -- Matter context badge --
 
 const MatterContextBadge = ({ workspaceId }: { workspaceId: string }) => {
-  const queryClient = useQueryClient();
-  // Read from the cache populated by the workspace route loader.
-  const workspace = queryClient.getQueryData<{
-    name: string;
-    color?: string | null;
-  }>(workspacesKeys.byId(workspaceId));
+  const { data: workspace } = useQuery(workspaceOptions(workspaceId));
   if (!workspace?.name) {
     return null;
   }
@@ -541,7 +533,10 @@ function RightPanel({
               {!isOnChatRoute && (
                 <Suspense>
                   <LazyRightPanelChat
-                    key={workspaceId ?? "global"}
+                    decisionId={
+                      decisionId ? extractDecisionNanoid(decisionId) : undefined
+                    }
+                    key={workspaceId ?? decisionId ?? "global"}
                     open={open}
                     workspaceId={workspaceId}
                   />

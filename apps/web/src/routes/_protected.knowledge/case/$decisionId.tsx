@@ -133,15 +133,6 @@ function DecisionViewer() {
           return items;
         }
 
-        items.push({
-          kind: "card",
-          id: `h-${heading.id}`,
-          heading: heading.label,
-          text: "",
-          category: heading.category,
-          startAnchorId: heading.startAnchorId,
-        });
-
         return items;
       }),
     [analysisTree],

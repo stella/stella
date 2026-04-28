@@ -13,10 +13,12 @@ import type { MentionCategory } from "@/components/chat/chat-mention-href";
 
 export type { MentionCategory } from "@/components/chat/chat-mention-href";
 
+export type ChatReferenceCategory = MentionCategory | "decision";
+
 export type ChatMentionOption = {
   id: string;
   label: string;
-  category: MentionCategory;
+  category: ChatReferenceCategory;
   /** Entity kind (document, folder, etc.) or workspace. */
   kind: string;
   mimeType: string | null;
@@ -78,41 +80,57 @@ export const ChatMention = MentionExtension.extend({
 const MAX_SUGGESTIONS_PER_CATEGORY = 5;
 const MAX_TOTAL_SUGGESTIONS = 15;
 
+type SelectChatSuggestionItemsOptions = {
+  localItems: ChatMentionOption[];
+  query: string;
+  searchedItems: ChatMentionOption[];
+};
+
+export const selectChatSuggestionItems = ({
+  localItems,
+  query,
+  searchedItems,
+}: SelectChatSuggestionItemsOptions): ChatMentionOption[] => {
+  const lower = query.toLowerCase();
+
+  const filteredLocalItems = lower
+    ? localItems.filter((item) => item.label.toLowerCase().includes(lower))
+    : localItems;
+  const all = [...filteredLocalItems, ...searchedItems];
+
+  // Cap per category to keep the list balanced
+  const counts = new Map<ChatReferenceCategory, number>();
+  const result: ChatMentionOption[] = [];
+
+  for (const item of all) {
+    const count = counts.get(item.category) ?? 0;
+    if (count >= MAX_SUGGESTIONS_PER_CATEGORY) {
+      continue;
+    }
+    counts.set(item.category, count + 1);
+    result.push(item);
+    if (result.length >= MAX_TOTAL_SUGGESTIONS) {
+      break;
+    }
+  }
+
+  return result;
+};
+
 export const createChatSuggestion = (
   getItems: () => ChatMentionOption[],
+  searchItems: (query: string) => Promise<ChatMentionOption[]>,
   loadWorkspaceEntities: (
     workspace: ChatMentionOption,
   ) => Promise<ChatMentionOption[]>,
 ): Omit<SuggestionOptions<ChatMentionOption, MentionNodeAttrs>, "editor"> => ({
   allowSpaces: true,
-  items: ({ query }) => {
-    const lower = query.toLowerCase();
-    const all = getItems();
-
-    // Empty query: show top items per category
-    // Non-empty: filter across all categories
-    const filtered = lower
-      ? all.filter((item) => item.label.toLowerCase().includes(lower))
-      : all;
-
-    // Cap per category to keep the list balanced
-    const counts = new Map<MentionCategory, number>();
-    const result: ChatMentionOption[] = [];
-
-    for (const item of filtered) {
-      const count = counts.get(item.category) ?? 0;
-      if (count >= MAX_SUGGESTIONS_PER_CATEGORY) {
-        continue;
-      }
-      counts.set(item.category, count + 1);
-      result.push(item);
-      if (result.length >= MAX_TOTAL_SUGGESTIONS) {
-        break;
-      }
-    }
-
-    return result;
-  },
+  items: async ({ query }) =>
+    selectChatSuggestionItems({
+      localItems: getItems(),
+      query,
+      searchedItems: await searchItems(query),
+    }),
 
   render: () => {
     let component: ReactRenderer<

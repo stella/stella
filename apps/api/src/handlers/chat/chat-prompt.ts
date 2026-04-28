@@ -10,10 +10,13 @@ import * as cheerio from "cheerio";
 import { count, eq } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
-import { entities, workspaces } from "@/api/db/schema";
+import { caseLawDecisions, entities, workspaces } from "@/api/db/schema";
 import type { PropertyStatus } from "@/api/db/schema";
 import type { PropertyContent } from "@/api/db/schema-validators";
+import { formatDecisionForPrompt } from "@/api/handlers/case-law/analysis/prompts/base";
+import { parseDocumentAst } from "@/api/handlers/case-law/document-ast";
 import type {
+  IncomingActiveDecision,
   IncomingActiveFile,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
@@ -21,9 +24,10 @@ import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/
 import { buildReadonlyFunctionTypeDeclarations } from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import type { ReadonlyFunctionContract } from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import { readonlyWorkspaceFunctionContracts } from "@/api/handlers/chat/tools/execute/workspace-manifest";
+import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type {
-  ChatMentionHrefPrefix,
   ChatMessage,
+  ChatReferenceHrefPrefix,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { formatDateTimeInTimeZone } from "@/api/lib/date-format";
@@ -31,11 +35,12 @@ import { unreachable } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const TITLE_MAX_LENGTH = 80;
+const ACTIVE_DECISION_MAX_CHARS = 12_000;
 const UNINITIALIZED_PROPERTY_STATUS = "uninitialized";
 
 type BuildPromptMentionExampleProps = {
   label: string;
-  prefix: ChatMentionHrefPrefix;
+  prefix: ChatReferenceHrefPrefix;
   id: string;
 };
 
@@ -67,19 +72,28 @@ const CORE_RULE_SECTIONS = [
   `When citing documents and matters, use markdown links:
 ${buildPromptMentionExample({
   label: "Document Name",
-  prefix: "#stella-entity=",
+  prefix: CHAT_REFERENCE_HREF_PREFIXES.entity,
   id: "ENTITY_ID",
 })}
 ${buildPromptMentionExample({
   label: "Matter Name",
-  prefix: "#stella-workspace=",
+  prefix: CHAT_REFERENCE_HREF_PREFIXES.workspace,
   id: "WORKSPACE_ID",
-})}`,
+})}
+When citing case-law decisions, use markdown links like:
+${buildPromptMentionExample({
+  label: "20 Cdo 470/2017",
+  prefix: CHAT_REFERENCE_HREF_PREFIXES.decision,
+  id: "CASE_LAW_DECISION_ID",
+})}
+If you only know the case number and not the decision ID, still link it as:
+[20 Cdo 470/2017](#stella-decision=20%20Cdo%20470%2F2017)`,
 ] as const;
 
 export type UserContext = IncomingUserContext;
 
 type BuildChatSystemPromptProps = {
+  activeDecision: IncomingActiveDecision | undefined;
   activeFile: IncomingActiveFile | undefined;
   safeDb: SafeDb;
   userContext: IncomingUserContext | undefined;
@@ -87,6 +101,7 @@ type BuildChatSystemPromptProps = {
 };
 
 export const buildChatSystemPrompt = async ({
+  activeDecision,
   activeFile,
   safeDb,
   userContext,
@@ -94,17 +109,24 @@ export const buildChatSystemPrompt = async ({
 }: BuildChatSystemPromptProps): Promise<Result<string, SafeDbError>> =>
   await Result.gen(async function* () {
     if (workspaceId === null) {
-      return Result.ok(
-        buildGlobalPrompt({
-          readonlyStellaApi: buildReadonlyStellaApi({
-            contracts: [
-              ...readonlyOrgFunctionContracts,
-              ...readonlyWorkspaceFunctionContracts,
-            ],
-          }),
-          userContext: userContext ?? null,
+      const prompt = buildGlobalPrompt({
+        readonlyStellaApi: buildReadonlyStellaApi({
+          contracts: [
+            ...readonlyOrgFunctionContracts,
+            ...readonlyWorkspaceFunctionContracts,
+          ],
+        }),
+        userContext: userContext ?? null,
+      });
+
+      const decisionPrompt = yield* Result.await(
+        appendActiveDecisionPromptIfExists({
+          activeDecision,
+          prompt,
+          safeDb,
         }),
       );
+      return Result.ok(decisionPrompt);
     }
 
     const prompt = yield* Result.await(
@@ -115,8 +137,16 @@ export const buildChatSystemPrompt = async ({
       }),
     );
 
+    const decisionPrompt = yield* Result.await(
+      appendActiveDecisionPromptIfExists({
+        activeDecision,
+        prompt,
+        safeDb,
+      }),
+    );
+
     if (!activeFile) {
-      return Result.ok(prompt);
+      return Result.ok(decisionPrompt);
     }
 
     const entity = yield* Result.await(
@@ -135,7 +165,7 @@ export const buildChatSystemPrompt = async ({
       appendActiveFilePromptIfEntityExists({
         activeFile,
         entityExists: Boolean(entity),
-        prompt,
+        prompt: decisionPrompt,
       }),
     );
   });
@@ -439,6 +469,115 @@ const buildActiveFilePrompt = ({ activeFile }: BuildActiveFilePromptProps) => {
     `Use \`execute-typescript\` with \`stella.getMatterEntities\` or \`stella.getMatterEntityContents\`, plus the current matter ID and this entity ID, to access its data.`,
   ].join("\n");
 };
+
+type BuildActiveDecisionPromptProps = {
+  caseNumber: string;
+  court: string;
+  country: string | null;
+  decisionDate: string | null;
+  decisionId: SafeId<"caseLawDecision">;
+  decisionText: string;
+  decisionType: string | null;
+};
+
+const buildActiveDecisionPrompt = ({
+  caseNumber,
+  court,
+  country,
+  decisionDate,
+  decisionId,
+  decisionText,
+  decisionType,
+}: BuildActiveDecisionPromptProps) =>
+  [
+    `The user is currently viewing case-law decision "${sanitizePromptValue({
+      maxLength: 200,
+      text: caseNumber,
+    })}".`,
+    `Reference it as ${buildPromptMentionExample({
+      label: sanitizePromptValue({ maxLength: 200, text: caseNumber }),
+      prefix: CHAT_REFERENCE_HREF_PREFIXES.decision,
+      id: decisionId,
+    })}.`,
+    [
+      `Court: ${sanitizePromptValue({ maxLength: 200, text: court })}`,
+      country
+        ? `Country: ${sanitizePromptValue({ maxLength: 80, text: country })}`
+        : null,
+      decisionType
+        ? `Decision type: ${sanitizePromptValue({
+            maxLength: 120,
+            text: decisionType,
+          })}`
+        : null,
+      decisionDate ? `Decision date: ${decisionDate}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    "When the user refers to this case, this decision, or the open case-law document, use the following current decision text. Do not answer from a previous matter unless the user explicitly asks about that matter.",
+    decisionText,
+  ].join("\n\n");
+
+type AppendActiveDecisionPromptIfExistsProps = {
+  activeDecision: IncomingActiveDecision | undefined;
+  prompt: string;
+  safeDb: SafeDb;
+};
+
+const appendActiveDecisionPromptIfExists = async ({
+  activeDecision,
+  prompt,
+  safeDb,
+}: AppendActiveDecisionPromptIfExistsProps): Promise<
+  Result<string, SafeDbError>
+> =>
+  await Result.gen(async function* () {
+    if (!activeDecision) {
+      return Result.ok(prompt);
+    }
+
+    const decision = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            caseNumber: caseLawDecisions.caseNumber,
+            country: caseLawDecisions.country,
+            court: caseLawDecisions.court,
+            decisionDate: caseLawDecisions.decisionDate,
+            decisionId: caseLawDecisions.id,
+            decisionType: caseLawDecisions.decisionType,
+            documentAst: caseLawDecisions.documentAst,
+            fulltext: caseLawDecisions.fulltext,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, activeDecision.decisionId))
+          .limit(1),
+      ),
+    );
+
+    const row = decision.at(0);
+    if (!row) {
+      return Result.ok(prompt);
+    }
+
+    const ast = parseDocumentAst(row.documentAst);
+    const sourceText = ast
+      ? formatDecisionForPrompt(ast.blocks)
+      : (row.fulltext ?? "");
+    const decisionText = sourceText.slice(0, ACTIVE_DECISION_MAX_CHARS);
+
+    return Result.ok(
+      `${prompt}\n\n${buildActiveDecisionPrompt({
+        caseNumber: row.caseNumber,
+        country: row.country,
+        court: row.court,
+        decisionDate: row.decisionDate,
+        decisionId: row.decisionId,
+        decisionText,
+        decisionType: row.decisionType,
+      })}`,
+    );
+  });
 
 type BuildReadonlyStellaApiProps = {
   contracts: readonly ReadonlyFunctionContract[];

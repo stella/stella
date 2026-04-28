@@ -8,7 +8,7 @@
 
 import { valibotSchema } from "@ai-sdk/valibot";
 import { Output, streamText } from "ai";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type {
   AnalysisHeading,
@@ -21,6 +21,7 @@ import {
   isAnalysisInProgress,
   isAnalysisGenerating,
   isDecisionAnalysis,
+  parsePersistedDecisionAnalysis,
 } from "@stella/case-law/analysis";
 import type { DocumentAst } from "@stella/case-law/document-ast";
 import { hasUsableAst } from "@stella/case-law/document-ast";
@@ -38,10 +39,42 @@ import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
 
+import { normalizeAnalysisHeadingLabels } from "./category-catalog";
 import { formatDecisionForPrompt } from "./prompts/base";
 import { getSystemPrompt } from "./prompts/index";
 
 const SENTINEL_STALE_MS = 5 * 60 * 1000;
+
+const jsonbValue = <TValue>(value: TValue) =>
+  sql<TValue>`${JSON.stringify(value)}::jsonb`;
+
+type StreamedAnalysisHeading = Omit<AnalysisHeading, "children">;
+
+const createAnalysisHeading = ({
+  heading,
+  language,
+}: {
+  heading: StreamedAnalysisHeading;
+  language: string;
+}): AnalysisHeading =>
+  normalizeAnalysisHeadingLabels({
+    heading: {
+      id: Bun.randomUUIDv7(),
+      label: heading.label,
+      category: heading.category,
+      startAnchorId: heading.startAnchorId,
+      endAnchorId: heading.endAnchorId,
+      annotations: heading.annotations.map((annotation) => ({
+        id: Bun.randomUUIDv7(),
+        summary: annotation.summary,
+        startAnchorId: annotation.startAnchorId,
+        endAnchorId: annotation.endAnchorId,
+        textSnippet: annotation.textSnippet,
+      })),
+      children: [],
+    },
+    language,
+  });
 
 /**
  * Run the AI generation in the background. Updates the DB
@@ -112,26 +145,16 @@ ${decisionText}`;
 
       await rootDb
         .update(caseLawDecisions)
-        .set({ analysis: partial })
+        .set({ analysis: jsonbValue(partial) })
         .where(eq(caseLawDecisions.id, decisionId));
     };
 
     for await (const raw of result.elementStream) {
-      headings.push({
-        id: Bun.randomUUIDv7(),
-        label: raw.label,
-        category: raw.category,
-        startAnchorId: raw.startAnchorId,
-        endAnchorId: raw.endAnchorId,
-        annotations: raw.annotations.map((a) => ({
-          id: Bun.randomUUIDv7(),
-          summary: a.summary,
-          startAnchorId: a.startAnchorId,
-          endAnchorId: a.endAnchorId,
-          textSnippet: a.textSnippet,
-        })),
-        children: [],
+      const heading = createAnalysisHeading({
+        heading: raw,
+        language: decision.language,
       });
+      headings.push(heading);
       await persistPartial();
     }
 
@@ -150,7 +173,7 @@ ${decisionText}`;
     //    JSONB values when used in a fire-and-forget background task
     await rootDb
       .update(caseLawDecisions)
-      .set({ analysis })
+      .set({ analysis: jsonbValue(analysis) })
       .where(eq(caseLawDecisions.id, decisionId));
   } catch (error) {
     captureError(error, {
@@ -196,18 +219,20 @@ export const generateAnalysis = async (
     return { status: "error", error: "Decision not found" };
   }
 
+  const analysis = parsePersistedDecisionAnalysis(decision.analysis);
+
   // Return cached analysis (complete or partial with progress)
-  if (isAnalysisInProgress(decision.analysis)) {
-    return { status: "generating", analysis: decision.analysis };
+  if (isAnalysisInProgress(analysis)) {
+    return { status: "generating", analysis };
   }
 
-  if (isDecisionAnalysis(decision.analysis)) {
-    return { status: "done", analysis: decision.analysis };
+  if (isDecisionAnalysis(analysis)) {
+    return { status: "done", analysis };
   }
 
   // Concurrent generation guard (old sentinel format without tree)
-  if (isAnalysisGenerating(decision.analysis)) {
-    const startedAt = new Date(decision.analysis.startedAt).getTime();
+  if (isAnalysisGenerating(analysis)) {
+    const startedAt = new Date(analysis.startedAt).getTime();
     if (Date.now() - startedAt < SENTINEL_STALE_MS) {
       return { status: "generating" };
     }
@@ -225,10 +250,10 @@ export const generateAnalysis = async (
   const [updated] = await rootDb
     .update(caseLawDecisions)
     .set({
-      analysis: {
+      analysis: jsonbValue({
         status: "generating",
         startedAt: new Date().toISOString(),
-      },
+      }),
     })
     .where(
       and(

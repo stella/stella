@@ -6,3 +6,5 @@ CREATE ROLE stella NOLOGIN;
 GRANT USAGE ON SCHEMA public TO stella;
 GRANT pg_read_all_data TO stella;
 GRANT pg_write_all_data TO stella;
+
+CREATE EXTENSION IF NOT EXISTS unaccent;

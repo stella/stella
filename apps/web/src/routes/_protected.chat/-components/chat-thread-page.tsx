@@ -56,7 +56,7 @@ export const ChatThreadPage = ({
     handleAlwaysAllow,
     streamdownComponents,
     approvalPendingMessageId,
-  } = useChatSession({ chat });
+  } = useChatSession({ chat, workspaceId });
 
   return (
     <div className="flex w-full max-w-2xl flex-1 flex-col overflow-hidden">

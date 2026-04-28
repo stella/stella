@@ -41,17 +41,23 @@ export const activeFileSchema = t.Object({
   fileName: t.String(),
 });
 
+export const activeDecisionSchema = t.Object({
+  decisionId: tSafeId("caseLawDecision"),
+});
+
 export const sendMessageBodySchema = t.Object({
   threadId: tSafeId("chatThread"),
   workspaceId: t.Optional(tSafeId("workspace")),
   message: rawMessageSchema,
   userContext: t.Optional(userContextSchema),
   activeFile: t.Optional(activeFileSchema),
+  activeDecision: t.Optional(activeDecisionSchema),
 });
 
 type RawIncomingMessage = Static<typeof rawMessageSchema>;
 export type IncomingUserContext = Static<typeof userContextSchema>;
 export type IncomingActiveFile = Static<typeof activeFileSchema>;
+export type IncomingActiveDecision = Static<typeof activeDecisionSchema>;
 
 type ValidateMessageInput = {
   message: RawIncomingMessage;

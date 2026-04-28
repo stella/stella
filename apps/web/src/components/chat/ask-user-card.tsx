@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { ToolUIPart } from "ai";
 import {
@@ -23,12 +23,23 @@ type AskUserPart = ToolUIPart<Pick<ChatUITools, "ask-user">>;
 type AskUserCardProps = {
   part: AskUserPart;
   onSubmit: (text: string) => void;
+  workspaceId?: string | undefined;
 };
 
-const ANALYSIS_COMPONENTS = { a: EntityLink };
-
-export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
+export const AskUserCard = ({
+  part,
+  onSubmit,
+  workspaceId,
+}: AskUserCardProps) => {
   const t = useTranslations();
+  const analysisComponents = useMemo(
+    () => ({
+      a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+        <EntityLink {...props} workspaceId={workspaceId} />
+      ),
+    }),
+    [workspaceId],
+  );
   const isLoading =
     part.state === "input-streaming" || part.state === "input-available";
   const isDone = part.state === "output-available";
@@ -139,7 +150,7 @@ export const AskUserCard = ({ part, onSubmit }: AskUserCardProps) => {
       {/* Analysis */}
       {input.analysis && (
         <div className="border-border/50 text-muted-foreground border-t px-3 py-2 text-xs [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-          <Streamdown components={ANALYSIS_COMPONENTS}>
+          <Streamdown components={analysisComponents}>
             {input.analysis}
           </Streamdown>
         </div>

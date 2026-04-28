@@ -1,10 +1,15 @@
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
-import { FileTextIcon, FolderIcon, LayersIcon } from "lucide-react";
+import {
+  FileTextIcon,
+  FolderIcon,
+  LandmarkIcon,
+  LayersIcon,
+} from "lucide-react";
 
 import { cn } from "@stella/ui/lib/utils";
 
-import type { MentionCategory } from "@/components/chat-mention-extension";
+import type { ChatReferenceCategory } from "@/components/chat-mention-extension";
 import { getMatterColor } from "@/lib/matter-colors";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
@@ -17,7 +22,7 @@ const CategoryIcon = ({
   attrKind,
   attrMimeType,
 }: {
-  category: MentionCategory;
+  category: ChatReferenceCategory;
   /** Entity/workspace ID stored in the TipTap node. */
   attrId: string;
   /** Kind stored in the TipTap node (fallback). */
@@ -29,6 +34,10 @@ const CategoryIcon = ({
     return (
       <LayersIcon className={cls} style={{ color: getMatterColor(attrId) }} />
     );
+  }
+
+  if (category === "decision") {
+    return <LandmarkIcon className={cls} />;
   }
 
   if (attrKind === "folder") {
@@ -46,7 +55,7 @@ export const ChatMentionNode = (props: NodeViewProps) => {
   const attrs = props.node.attrs as {
     id: string;
     label: string;
-    category: MentionCategory;
+    category: ChatReferenceCategory;
     kind: string;
     mimeType: string | null;
   };

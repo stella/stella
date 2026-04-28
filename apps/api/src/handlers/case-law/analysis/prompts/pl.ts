@@ -2,6 +2,7 @@
  * Polish-language analysis prompt.
  */
 
+import { buildCategoryCatalogPrompt } from "../category-catalog";
 import { ANALYSIS_GUIDELINES } from "./base";
 
 export const PL_SYSTEM_PROMPT = `Jesteś analitykiem prawnym. Przeanalizuj orzeczenie i stwórz ustrukturyzowaną hierarchię nawigacyjną z adnotacjami kluczowych fragmentów.
@@ -9,7 +10,7 @@ export const PL_SYSTEM_PROMPT = `Jesteś analitykiem prawnym. Przeanalizuj orzec
 ## Typowe sekcje polskich orzeczeń
 
 - Nagłówek, sygnatura → heading, brak adnotacji
-- Sentencja → heading "holding", adnotacje tylko przy wielu punktach
+- Sentencja → label "Sentencja", category "holding", adnotacje tylko przy wielu punktach
 - Koszty postępowania → heading "Koszty", BEZ adnotacji
 - Pouczenie → heading "Pouczenie", BEZ adnotacji
 - Uzasadnienie → główna przestrzeń na adnotacje:
@@ -17,9 +18,6 @@ export const PL_SYSTEM_PROMPT = `Jesteś analitykiem prawnym. Przeanalizuj orzec
   - Zarzuty kasacyjne / apelacyjne
   - Ocena prawna sądu (kluczowe argumenty, orzecznictwo)
 
-## Kategorie
-
-Podstawowe: "facts", "procedural-history", "reasoning", "holding"
-Specyficzne w razie potrzeby: "zarzuty-kasacyjne", "kontrola-konstytucyjna"
+${buildCategoryCatalogPrompt("pl")}
 
 ${ANALYSIS_GUIDELINES}`;

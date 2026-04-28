@@ -23,12 +23,17 @@ type ActiveFileContext = {
   fileName: string;
 };
 
+type ActiveDecisionContext = {
+  decisionId: string;
+};
+
 type ChatThreadKey = ChatThreadRef;
 
 type GroupedChatThreads = Awaited<ReturnType<typeof fetchGroupedChatThreads>>;
 
 type ChatThreadOptionsContext = {
   allowMissingThread?: boolean | undefined;
+  getActiveDecision?: (() => ActiveDecisionContext | undefined) | undefined;
   getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
   getUserContext?: (() => ChatUserContext) | undefined;
 };
@@ -121,6 +126,7 @@ const buildSendRequestBody = ({
   }
 
   const body: {
+    activeDecision?: ActiveDecisionContext | undefined;
     activeFile?: ActiveFileContext | undefined;
     message: PersistedChatMessage;
     threadId: string;
@@ -143,6 +149,11 @@ const buildSendRequestBody = ({
   const activeFile = context?.getActiveFile?.();
   if (activeFile) {
     body.activeFile = activeFile;
+  }
+
+  const activeDecision = context?.getActiveDecision?.();
+  if (activeDecision) {
+    body.activeDecision = activeDecision;
   }
 
   return body;

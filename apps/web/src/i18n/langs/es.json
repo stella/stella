@@ -339,7 +339,7 @@
     "noThreads": "Aún no hay conversaciones",
     "placeholder": "¿Qué le gustaría saber?",
     "send": "Enviar mensaje",
-    "thinking": "Pensando...",
+    "thinking": "Trabajando con contexto",
     "threads": "Conversaciones",
     "tool": {
       "ask-user": "Asking for clarification",

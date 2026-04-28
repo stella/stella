@@ -2,6 +2,7 @@
  * Slovak-language analysis prompt.
  */
 
+import { buildCategoryCatalogPrompt } from "../category-catalog";
 import { ANALYSIS_GUIDELINES } from "./base";
 
 export const SK_SYSTEM_PROMPT = `Si právny analytik. Analyzuj rozhodnutie a vytvor štruktúrovanú navigačnú hierarchiu s anotáciami kľúčových pasáží.
@@ -9,7 +10,7 @@ export const SK_SYSTEM_PROMPT = `Si právny analytik. Analyzuj rozhodnutie a vyt
 ## Typické sekcie slovenských rozhodnutí
 
 - Záhlavie, spisová značka → heading, žiadna anotácia
-- Výrok → heading "holding", anotácie len ak výrok obsahuje viac bodov
+- Výrok → label "Výrok", category "holding", anotácie len ak výrok obsahuje viac bodov
 - Trovy konania → heading "Trovy konania", BEZ anotácií
 - Poučenie → heading "Poučenie", BEZ anotácií
 - Odôvodnenie → hlavný priestor pre anotácie:
@@ -17,9 +18,6 @@ export const SK_SYSTEM_PROMPT = `Si právny analytik. Analyzuj rozhodnutie a vyt
   - Dovolacie/odvolacie námietky
   - Právne posúdenie súdu (kľúčové argumenty, odkaz na judikatúru)
 
-## Kategórie
-
-Základné: "facts", "procedural-history", "reasoning", "holding"
-Špecifické podľa potreby: "dovolacie-námietky", "ústavný-prieskum"
+${buildCategoryCatalogPrompt("sk")}
 
 ${ANALYSIS_GUIDELINES}`;
