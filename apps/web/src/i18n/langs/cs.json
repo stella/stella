@@ -503,7 +503,7 @@
     "organization": "Organizace",
     "organizationName": "Název organizace",
     "pin": "Připnout",
-    "preview": "Preview",
+    "preview": "Náhled",
     "previous": "Předchozí",
     "print": "Tisknout",
     "properties": "Vlastnosti",
@@ -734,7 +734,7 @@
     "uploadedBy": "Uploaded by",
     "version": "Version",
     "versionHistory": "Historie verzí",
-    "viewVersionHistory": "Zobrazit historii verzí",
+    "viewVersionHistory": "Zobrazit detail a historii",
     "wordsAdded": "slov přidáno",
     "wordsRemoved": "slov odebráno"
   },
