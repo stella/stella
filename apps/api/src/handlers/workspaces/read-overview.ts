@@ -56,6 +56,16 @@ export const readOverviewHandler = async ({
             lastEditedByUser: {
               columns: { name: true, email: true, image: true },
             },
+            assignees: {
+              columns: {},
+              orderBy: { createdAt: "asc" },
+              limit: 1,
+              with: {
+                user: {
+                  columns: { name: true, email: true, image: true },
+                },
+              },
+            },
           },
           orderBy: { updatedAt: "desc" },
           limit: LIMITS.overviewRecentEntities,
@@ -113,6 +123,10 @@ export const readOverviewHandler = async ({
     // Prefer last editor over original creator for the activity feed
     const editor = e.lastEditedByUser ?? e.createdByUser;
     const displayName = editor ? editor.name || editor.email : null;
+    const primaryAssignee = e.assignees.at(0)?.user;
+    const assigneeName = primaryAssignee
+      ? primaryAssignee.name || primaryAssignee.email
+      : null;
 
     return {
       entityId: e.id,
@@ -130,6 +144,8 @@ export const readOverviewHandler = async ({
       updatedAt: e.updatedAt?.toISOString() ?? null,
       createdBy: displayName,
       createdByImage: editor?.image ?? null,
+      assignedTo: assigneeName,
+      assignedToImage: primaryAssignee?.image ?? null,
     };
   });
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import {
+  useMutation,
   useQuery,
   useQueryClient,
   useSuspenseQuery,
@@ -28,6 +29,17 @@ import {
 } from "@stella/ui/components/avatar";
 import { Button } from "@stella/ui/components/button";
 import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "@stella/ui/components/menu";
+import {
   Popover,
   PopoverPopup,
   PopoverTrigger,
@@ -45,7 +57,9 @@ import { renderDragPreview } from "@/components/drag-preview";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
+import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type { EntityKind, WorkspaceEntity } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
@@ -53,6 +67,13 @@ import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
+import type { TaskStatus } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
+import {
+  isTaskStatus,
+  STATUS_COLORS,
+  STATUS_ICONS,
+  TASK_STATUSES,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -70,6 +91,22 @@ import {
 
 type OverviewViewProps = {
   workspaceId: string;
+};
+
+type UpcomingTaskContext = {
+  entityId: string;
+  name: string;
+  status: string | null;
+};
+
+type VirtualAnchor = {
+  getBoundingClientRect: () => DOMRect;
+};
+
+type UpcomingMenuState = {
+  open: boolean;
+  anchor: VirtualAnchor | null;
+  task: UpcomingTaskContext | null;
 };
 
 // ── Helpers ───────────────────────────────────────────────
@@ -93,6 +130,11 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const queryClient = useQueryClient();
   const { data } = useSuspenseQuery(overviewOptions(workspaceId));
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [upcomingMenu, setUpcomingMenu] = useState<UpcomingMenuState>({
+    open: false,
+    anchor: null,
+    task: null,
+  });
   const [, handleCreateFileEntities] = useCreateFileEntities(workspaceId);
   // Views — find view IDs by layout type for stat card navigation
   const { data: views } = useQuery(viewsOptions(workspaceId));
@@ -124,6 +166,71 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     });
     useInspectorStore.getState().openTask(entityId, "", true);
   }, [workspaceId, t, queryClient]);
+
+  const updateTaskStatus = useMutation({
+    mutationFn: async ({
+      taskId,
+      status,
+    }: {
+      taskId: string;
+      status: TaskStatus;
+    }) => {
+      const response = await api
+        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .patch({
+          queryKey: entitiesKeys.all(workspaceId),
+          taskId: toSafeId<"entity">(taskId),
+          status,
+        });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: workspacesKeys.overview(workspaceId),
+        }),
+      ]);
+    },
+    onError: () => {
+      toastManager.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+    },
+  });
+
+  const handleTaskContextMenu = useCallback(
+    (task: UpcomingTaskContext) => (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setUpcomingMenu({
+        open: true,
+        anchor: {
+          getBoundingClientRect: () => new DOMRect(e.clientX, e.clientY, 0, 0),
+        },
+        task,
+      });
+    },
+    [],
+  );
+
+  const menuTaskStatus = upcomingMenu.task?.status ?? null;
+  const currentMenuTaskStatus = isTaskStatus(menuTaskStatus)
+    ? menuTaskStatus
+    : "open";
+  const taskStatusLabels: Record<TaskStatus, string> = {
+    open: t("tasks.statusValues.open"),
+    in_progress: t("tasks.statusValues.in_progress"),
+    in_review: t("tasks.statusValues.in_review"),
+    done: t("tasks.statusValues.done"),
+    cancelled: t("tasks.statusValues.cancelled"),
+  };
 
   const recentEntities = useMemo(
     () => data.recentEntities.filter((e) => e.kind !== "folder"),
@@ -371,6 +478,11 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                         .getState()
                         .openTask(task.entityId, task.name)
                     }
+                    onContextMenu={handleTaskContextMenu({
+                      entityId: task.entityId,
+                      name: task.name,
+                      status: task.status,
+                    })}
                     type="button"
                   >
                     <EntityKindIcon
@@ -390,18 +502,18 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                         {task.name}
                       </p>
                       <span className="text-muted-foreground flex items-center gap-1 text-xs">
-                        {task.createdBy !== null && (
+                        {task.assignedTo !== null && (
                           <PersonMentionLabel
                             avatarClassName="size-4 text-[7px]"
                             mention={{
-                              name: task.createdBy,
-                              image: task.createdByImage,
+                              name: task.assignedTo,
+                              image: task.assignedToImage,
                             }}
                           />
                         )}
                         {task.dueDate && (
                           <>
-                            {task.createdBy ? " · " : ""}
+                            {task.assignedTo ? " · " : ""}
                             {new Date(task.dueDate).toLocaleDateString(lang, {
                               month: "short",
                               day: "numeric",
@@ -419,6 +531,95 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               {t("common.noResults")}
             </div>
           )}
+          <Menu
+            onOpenChange={(open) => {
+              setUpcomingMenu((previous) =>
+                open
+                  ? { ...previous, open }
+                  : { open: false, anchor: null, task: null },
+              );
+            }}
+            open={upcomingMenu.open}
+          >
+            <MenuTrigger
+              nativeButton={false}
+              render={<span className="sr-only" />}
+            />
+            <MenuPopup anchor={upcomingMenu.anchor ?? undefined}>
+              {upcomingMenu.task !== null ? (
+                <>
+                  <MenuItem
+                    onClick={() => {
+                      const task = upcomingMenu.task;
+                      if (task === null) {
+                        return;
+                      }
+                      useInspectorStore
+                        .getState()
+                        .openTask(task.entityId, task.name);
+                    }}
+                  >
+                    <SquareCheckIcon />
+                    {upcomingMenu.task.name}
+                  </MenuItem>
+                  <MenuSub>
+                    <MenuSubTrigger>
+                      {(() => {
+                        const Icon = STATUS_ICONS[currentMenuTaskStatus];
+                        return (
+                          <>
+                            <Icon
+                              className={cn(
+                                "size-4",
+                                STATUS_COLORS[currentMenuTaskStatus],
+                              )}
+                            />
+                            {t("common.status")}
+                          </>
+                        );
+                      })()}
+                    </MenuSubTrigger>
+                    <MenuSubPopup>
+                      <MenuRadioGroup value={currentMenuTaskStatus}>
+                        {TASK_STATUSES.map((status) => {
+                          const Icon = STATUS_ICONS[status];
+                          return (
+                            <MenuRadioItem
+                              key={status}
+                              onClick={() => {
+                                if (status === currentMenuTaskStatus) {
+                                  return;
+                                }
+                                const task = upcomingMenu.task;
+                                if (task === null) {
+                                  return;
+                                }
+                                updateTaskStatus.mutate({
+                                  taskId: task.entityId,
+                                  status,
+                                });
+                              }}
+                              value={status}
+                            >
+                              <span className="flex items-center gap-2">
+                                <Icon
+                                  className={cn(
+                                    "size-4",
+                                    STATUS_COLORS[status],
+                                  )}
+                                />
+                                {taskStatusLabels[status]}
+                              </span>
+                            </MenuRadioItem>
+                          );
+                        })}
+                      </MenuRadioGroup>
+                    </MenuSubPopup>
+                  </MenuSub>
+                </>
+              ) : null}
+            </MenuPopup>
+          </Menu>
         </section>
 
         {/* Time & Team */}
@@ -768,6 +969,8 @@ type OverviewEntity = {
   createdAt: string;
   createdBy: string | null;
   createdByImage: string | null;
+  assignedTo: string | null;
+  assignedToImage: string | null;
   updatedAt: string | null;
 };
 
@@ -775,10 +978,6 @@ type OverviewRowProps = {
   entity: OverviewEntity;
   workspaceId: string;
   lang: string;
-};
-
-type VirtualAnchor = {
-  getBoundingClientRect: () => DOMRect;
 };
 
 const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
