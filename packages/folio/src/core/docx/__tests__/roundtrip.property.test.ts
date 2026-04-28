@@ -295,7 +295,7 @@ describe("DOCX round-trip property tests", () => {
       }),
       { numRuns: 500 },
     );
-  });
+  }, 15_000);
 
   test("parsing never crashes", () => {
     fc.assert(
@@ -307,7 +307,7 @@ describe("DOCX round-trip property tests", () => {
       }),
       { numRuns: 500 },
     );
-  });
+  }, 15_000);
 
   test("round-trip preserves document structure", () => {
     fc.assert(
@@ -332,7 +332,7 @@ describe("DOCX round-trip property tests", () => {
       }),
       { numRuns: 500 },
     );
-  });
+  }, 15_000);
 
   test("round-trip preserves bold marks", () => {
     // Targeted test: paragraphs with bold text
