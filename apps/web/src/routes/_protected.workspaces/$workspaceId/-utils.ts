@@ -18,6 +18,7 @@ export const getInternalColId = (col: InternalColId): InternalColId => col;
 // -- Internal property IDs (metadata columns stored in view config) --
 
 const INTERNAL_PROPERTIES = [
+  "name",
   "created-by",
   "updated-at",
   "version",

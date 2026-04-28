@@ -42,7 +42,12 @@ function RouteComponent() {
     case "overview":
       return <OverviewView workspaceId={workspaceId} />;
     case "filesystem":
-      return <FilesystemView view={activeView} workspaceId={workspaceId} />;
+      return (
+        <FilesystemView
+          view={{ ...activeView, layout: activeView.layout }}
+          workspaceId={workspaceId}
+        />
+      );
     case "kanban":
       return <KanbanView view={activeView} workspaceId={workspaceId} />;
     case "calendar":
