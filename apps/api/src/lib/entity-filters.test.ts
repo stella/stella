@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
 import type { ViewFilterCondition } from "@/api/lib/views-schema";
@@ -6,6 +7,7 @@ import type { ViewFilterCondition } from "@/api/lib/views-schema";
 import {
   applyFilters,
   applySorts,
+  buildSortExpressions,
   buildFilterConditions,
 } from "./entity-filters";
 
@@ -386,5 +388,25 @@ describe("applySorts (in-memory)", () => {
         },
       ),
     );
+  });
+});
+
+describe("buildSortExpressions", () => {
+  test("_name sort uses the displayed entity name fallback chain", () => {
+    const [nameSort] = buildSortExpressions([
+      { propertyId: "_name", desc: false },
+    ]);
+    if (!nameSort) {
+      throw new Error("expected _name sort expression");
+    }
+
+    const dialect = new PgDialect();
+    const sql = dialect.sqlToQuery(nameSort).sql;
+
+    expect(sql).toContain('NULLIF("entities"."name", \'\')');
+    expect(sql).toContain("NULLIF(\"fields\".\"content\"->>'fileName', '')");
+    expect(sql).toContain('"fields"."content"->>\'value\'');
+    expect(sql).toContain('ORDER BY "fields"."property_id" ASC');
+    expect(sql.indexOf("fileName")).toBeLessThan(sql.indexOf("value"));
   });
 });

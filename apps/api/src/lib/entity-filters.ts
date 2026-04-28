@@ -285,10 +285,36 @@ const internalSortExpr = (
   direction: boolean,
 ): SQL | null => {
   const dir = (col: SQL) => (direction ? sql`${col} DESC` : sql`${col} ASC`);
-
   switch (propertyId) {
-    case "_name":
-      return dir(sql`${entities.name}`);
+    case "_name": {
+      const displayedNameExpr = sql`COALESCE(
+        NULLIF(${entities.name}, ''),
+        (
+          SELECT NULLIF(${fields.content}->>'fileName', '')
+          FROM ${fields}
+          WHERE ${fields.workspaceId} = ${entities.workspaceId}
+            AND ${fields.entityVersionId} = ${entities.currentVersionId}
+            AND ${fields.content}->>'type' = 'file'
+          ORDER BY ${fields.propertyId} ASC
+          LIMIT 1
+        ),
+        (
+          SELECT NULLIF(BTRIM(${fields.content}->>'value'), '')
+          FROM ${fields}
+          WHERE ${fields.workspaceId} = ${entities.workspaceId}
+            AND ${fields.entityVersionId} = ${entities.currentVersionId}
+            AND ${fields.content}->>'type' = 'text'
+          ORDER BY ${fields.propertyId} ASC
+          LIMIT 1
+        ),
+        CASE
+          WHEN ${entities.kind} = 'folder' THEN 'Untitled Folder'
+          WHEN ${entities.kind} = 'task' THEN 'Untitled Task'
+          ELSE 'Untitled'
+        END
+      )`;
+      return dir(displayedNameExpr);
+    }
     case "_created-by": {
       const sub = sql`(
         SELECT ${user.name} FROM ${user}
@@ -342,7 +368,8 @@ export const buildSortExpressions = (sorts: readonly ViewSort[]): SQL[] => {
         ''
       )
       FROM ${fields}
-      WHERE ${fields.entityVersionId} = ${entities.currentVersionId}
+      WHERE ${fields.workspaceId} = ${entities.workspaceId}
+        AND ${fields.entityVersionId} = ${entities.currentVersionId}
         AND ${fields.propertyId} = ${sort.propertyId}
       LIMIT 1
     )`;

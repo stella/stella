@@ -214,7 +214,12 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         viewId: view.id,
         layout: {
           ...view.layout,
-          sorts: [{ propertyId, desc }],
+          sorts: [
+            { propertyId, desc },
+            ...view.layout.sorts.filter(
+              (sort) => sort.propertyId !== propertyId,
+            ),
+          ],
         },
       });
     },

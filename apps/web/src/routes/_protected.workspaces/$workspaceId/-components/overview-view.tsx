@@ -77,6 +77,7 @@ import {
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks";
 import { timeEntriesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 import { workspaceMembersOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
@@ -187,10 +188,13 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       }
       return response.data;
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: entitiesKeys.all(workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: taskKeys.detail(workspaceId, variables.taskId),
         }),
         queryClient.invalidateQueries({
           queryKey: workspacesKeys.overview(workspaceId),
