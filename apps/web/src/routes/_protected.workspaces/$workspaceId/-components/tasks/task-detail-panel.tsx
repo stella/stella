@@ -132,9 +132,14 @@ export const TaskDetailPanel = ({
               queryKey: entitiesKeys.all(workspaceId),
             })
             .then(async () => {
-              await queryClient.invalidateQueries({
-                queryKey: taskKeys.detail(workspaceId, taskId),
-              });
+              await Promise.all([
+                queryClient.invalidateQueries({
+                  queryKey: taskKeys.detail(workspaceId, taskId),
+                }),
+                queryClient.invalidateQueries({
+                  queryKey: workspacesKeys.overview(workspaceId),
+                }),
+              ]);
             })
             .catch(() => {
               /* non-critical */

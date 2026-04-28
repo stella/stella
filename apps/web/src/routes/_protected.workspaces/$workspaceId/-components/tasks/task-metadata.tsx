@@ -32,6 +32,7 @@ import {
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks";
 import { workspaceMembersOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
+import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 import type { TaskPriority, TaskStatus } from "./task-detail-constants";
 
@@ -178,6 +179,9 @@ export const AssigneePicker = ({
     });
     await queryClient.invalidateQueries({
       queryKey: entitiesKeys.all(workspaceId),
+    });
+    await queryClient.invalidateQueries({
+      queryKey: workspacesKeys.overview(workspaceId),
     });
   };
 
