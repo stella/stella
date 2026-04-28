@@ -95,8 +95,8 @@
   --warning-foreground: var(--color-amber-700);
   --highlight: --alpha(var(--color-yellow-300) / 50%);
   --highlight-foreground: var(--color-neutral-800);
-  --border: --alpha(var(--color-black) / 8%);
-  --input: --alpha(var(--color-black) / 10%);
+  --border: --alpha(var(--color-black) / 10%);
+  --input: --alpha(var(--color-black) / 12%);
   --ring: var(--color-neutral-400);
   --sidebar: var(--color-neutral-50);
   --sidebar-foreground: color-mix(
@@ -108,7 +108,7 @@
   --sidebar-primary-foreground: var(--color-neutral-50);
   --sidebar-accent: --alpha(var(--color-black) / 4%);
   --sidebar-accent-foreground: var(--color-neutral-800);
-  --sidebar-border: --alpha(var(--color-black) / 6%);
+  --sidebar-border: --alpha(var(--color-black) / 8%);
   --sidebar-ring: var(--color-neutral-400);
 }
 
@@ -149,8 +149,8 @@
   --warning-foreground: var(--color-amber-400);
   --highlight: --alpha(var(--color-yellow-500) / 20%);
   --highlight-foreground: var(--color-neutral-100);
-  --border: --alpha(var(--color-white) / 6%);
-  --input: --alpha(var(--color-white) / 8%);
+  --border: --alpha(var(--color-white) / 8%);
+  --input: --alpha(var(--color-white) / 10%);
   --ring: var(--color-neutral-500);
   --sidebar: color-mix(
     in srgb,
@@ -166,7 +166,7 @@
   --sidebar-primary-foreground: var(--color-neutral-800);
   --sidebar-accent: --alpha(var(--color-white) / 4%);
   --sidebar-accent-foreground: var(--color-neutral-100);
-  --sidebar-border: --alpha(var(--color-white) / 5%);
+  --sidebar-border: --alpha(var(--color-white) / 7%);
   --sidebar-ring: var(--color-neutral-400);
 }
 
@@ -786,8 +786,8 @@
     --warning-foreground: var(--color-amber-700);
     --highlight: --alpha(var(--color-yellow-300) / 50%);
     --highlight-foreground: var(--color-neutral-800);
-    --border: --alpha(var(--color-black) / 8%);
-    --input: --alpha(var(--color-black) / 10%);
+    --border: --alpha(var(--color-black) / 10%);
+    --input: --alpha(var(--color-black) / 12%);
     --ring: var(--color-neutral-400);
     --sidebar: var(--color-neutral-50);
     --sidebar-foreground: var(--color-neutral-800);
@@ -795,7 +795,7 @@
     --sidebar-primary-foreground: var(--color-neutral-50);
     --sidebar-accent: --alpha(var(--color-black) / 4%);
     --sidebar-accent-foreground: var(--color-neutral-800);
-    --sidebar-border: --alpha(var(--color-black) / 6%);
+    --sidebar-border: --alpha(var(--color-black) / 8%);
     --sidebar-ring: var(--color-neutral-400);
 
     /* Reset option tag derived colors to light-mode ratios so
