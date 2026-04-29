@@ -359,10 +359,9 @@ export default defineConfig({
       rules: { "no-inline-style-colors/no-inline-style-colors": "off" },
     },
     {
-      // Eigenpal-inherited render/dialog components — inline colors need
+      // Eigenpal-inherited dialog/edit components: inline colors need
       // a dedicated cleanup pass. Tracked as follow-up.
       files: [
-        "packages/folio/src/**/render/**",
         "packages/folio/src/**/dialogs/**",
         "packages/folio/src/**/edit/**",
       ],
@@ -400,15 +399,6 @@ export default defineConfig({
       rules: {
         "no-inline-style-colors/no-inline-style-colors": "off",
         "no-raw-colors/no-raw-colors": "off",
-      },
-    },
-    {
-      // Category pills use text-white on dynamic colored backgrounds;
-      // left-1/2 is intentional physical centering (paired with -translate-x-1/2)
-      files: ["apps/web/src/**/heading-breadcrumb.tsx"],
-      rules: {
-        "no-raw-colors/no-raw-colors": "off",
-        "no-physical-properties/no-physical-properties": "off",
       },
     },
     {

@@ -54,9 +54,6 @@ import {
 } from "./xmlParser";
 import type { XmlElement } from "./xmlParser";
 
-// Re-export for backwards compatibility
-export { emuToPixels, pixelsToEmu } from "../utils/units";
-
 // ============================================================================
 // ROTATION CONVERSION
 // ============================================================================

@@ -25,7 +25,6 @@
     "use-intl": "catalog:"
   },
   "devDependencies": {
-    "@stella/scripts": "workspace:*",
     "@stella/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
     "react-email": "^6.0.0",

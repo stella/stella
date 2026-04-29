@@ -27,12 +27,9 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
 
-import { ErrorManager } from "../core/core";
-import type { ErrorSeverity, ErrorNotification } from "../core/core";
+import { ErrorManager } from "../core/managers/ErrorManager";
+import type { ErrorNotification } from "../core/managers/types";
 import { cn } from "../lib/utils";
-
-// Re-export for backwards compat
-export type { ErrorSeverity, ErrorNotification };
 
 /**
  * Error context value

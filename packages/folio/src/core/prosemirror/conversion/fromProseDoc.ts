@@ -12,7 +12,6 @@
 
 import type { Node as PMNode, Mark } from "prosemirror-model";
 
-import { pixelsToEmu } from "../../docx/imageParser";
 import type {
   ImageWrap,
   ImagePosition,
@@ -55,6 +54,7 @@ import type {
   ColorValue,
   CellMargins,
 } from "../../types/document";
+import { pixelsToEmu } from "../../utils/units";
 import type { ShapeAttrs } from "../extensions/nodes/ShapeExtension";
 import type { TextBoxAttrs } from "../extensions/nodes/TextBoxExtension";
 import type {

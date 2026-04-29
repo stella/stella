@@ -767,8 +767,7 @@ function parseRunContents(
 
       case "pict":
       case "object":
-        // Legacy VML pictures/objects - will handle in shape parser
-        // For now, skip these
+        // Legacy VML pictures/objects are not part of the active DrawingML path.
         break;
 
       case "rPr":

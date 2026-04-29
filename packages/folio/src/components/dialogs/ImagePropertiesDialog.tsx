@@ -181,4 +181,3 @@ export function ImagePropertiesDialog({
     </Dialog>
   );
 }
-export default ImagePropertiesDialog;

@@ -305,4 +305,3 @@ export function PageSetupDialog({
     </Dialog>
   );
 }
-export default PageSetupDialog;

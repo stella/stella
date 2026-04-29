@@ -5,6 +5,7 @@
  * At render time, field values are substituted (e.g., PAGE → actual page number).
  */
 
+import { parseFieldInstruction } from "../../../docx/fieldParser";
 import { createNodeExtension } from "../create";
 
 export const FieldExtension = createNodeExtension({
@@ -96,13 +97,5 @@ export const FieldExtension = createNodeExtension({
 });
 
 function getMergeFieldName(instruction: string): string {
-  const prefix = "MERGEFIELD";
-  const trimmed = instruction.trim();
-  const withoutPrefix = trimmed.toUpperCase().startsWith(prefix)
-    ? trimmed.slice(prefix.length).trimStart()
-    : trimmed;
-  const switchStart = withoutPrefix.indexOf("\\");
-  return (
-    switchStart === -1 ? withoutPrefix : withoutPrefix.slice(0, switchStart)
-  ).trimEnd();
+  return parseFieldInstruction(instruction).argument ?? "";
 }

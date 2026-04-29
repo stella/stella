@@ -350,4 +350,3 @@ export function ImagePositionDialog({
     </Dialog>
   );
 }
-export default ImagePositionDialog;

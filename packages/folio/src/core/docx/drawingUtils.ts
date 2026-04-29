@@ -1,7 +1,7 @@
 /**
  * Shared DrawingML Parsing Utilities
  *
- * Common functions used by imageParser, textBoxParser, and shapeParser
+ * Common functions used by imageParser and textBoxParser
  * for parsing DrawingML elements (positions, wrapping, colors, fills, outlines).
  */
 

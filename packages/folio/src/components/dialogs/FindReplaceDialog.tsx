@@ -775,5 +775,3 @@ export function FindReplaceDialog({
     </div>
   );
 }
-
-export default FindReplaceDialog;

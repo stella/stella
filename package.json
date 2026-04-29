@@ -111,7 +111,6 @@
   },
   "catalogs": {
     "react19": {
-      "@types/node": "^25.3.2",
       "@types/react": "^19.2.14",
       "@types/react-dom": "^19.2.3",
       "react": "^19.2.5",

@@ -55,9 +55,6 @@ import {
 } from "./xmlParser";
 import type { XmlElement } from "./xmlParser";
 
-// Re-export emuToPixels for backwards compatibility
-export { emuToPixels } from "../utils/units";
-
 // ============================================================================
 // CONSTANTS
 // ============================================================================
