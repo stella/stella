@@ -3,6 +3,7 @@ import Redis from "ioredis";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
+import { redisConnectionOptions } from "@/api/lib/redis-options";
 import {
   brandPersistedOrganizationId,
   brandPersistedWorkspaceId,
@@ -171,8 +172,14 @@ const parseRedisPayload = (raw: string): RedisPayload | null => {
   };
 };
 
-const publisher = new Redis(env.REDIS_URL, { lazyConnect: true });
-const subscriber = new Redis(env.REDIS_URL, { lazyConnect: true });
+const publisher = new Redis(env.REDIS_URL, {
+  ...redisConnectionOptions(),
+  lazyConnect: true,
+});
+const subscriber = new Redis(env.REDIS_URL, {
+  ...redisConnectionOptions(),
+  lazyConnect: true,
+});
 
 const initRedis = async () => {
   try {
