@@ -62,6 +62,8 @@ export type ParagraphAttrs = {
   listMarkerFontFamily?: string;
   /** Marker font size from numbering level rPr, in points */
   listMarkerFontSize?: number;
+  /** Number format for each level used by multi-level marker templates. */
+  listLevelNumFmts?: NumberFormat[];
 
   // Style reference
   styleId?: string;

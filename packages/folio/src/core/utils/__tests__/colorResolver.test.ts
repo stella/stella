@@ -4,6 +4,7 @@ import type { ThemeColorScheme } from "../../types/document";
 import {
   generateThemeTintShadeMatrix,
   getThemeTintShadeHex,
+  resolveColor,
 } from "../colorResolver";
 
 const OFFICE_2016_DEFAULTS: ThemeColorScheme = {
@@ -20,6 +21,8 @@ const OFFICE_2016_DEFAULTS: ThemeColorScheme = {
   hlink: "0563C1",
   folHlink: "954F72",
 };
+
+const OFFICE_THEME = { colorScheme: OFFICE_2016_DEFAULTS };
 
 describe("generateThemeTintShadeMatrix", () => {
   test("returns 6 rows x 10 columns", () => {
@@ -150,5 +153,28 @@ describe("getThemeTintShadeHex", () => {
   test("shade of 0 returns black", () => {
     const result = getThemeTintShadeHex("FF0000", "shade", 0);
     expect(result).toBe("000000");
+  });
+});
+
+describe("resolveColor", () => {
+  test('themeTint "FF" keeps the original theme color', () => {
+    expect(
+      resolveColor({ themeColor: "accent1", themeTint: "FF" }, OFFICE_THEME),
+    ).toBe("#4472C4");
+  });
+
+  test('themeTint "33" produces the Word-compatible light variant', () => {
+    expect(
+      resolveColor({ themeColor: "accent1", themeTint: "33" }, OFFICE_THEME),
+    ).toBe("#DAE3F3");
+  });
+
+  test('themeShade "F2" produces the Word-compatible dark variant', () => {
+    expect(
+      resolveColor(
+        { themeColor: "background1", themeShade: "F2" },
+        OFFICE_THEME,
+      ),
+    ).toBe("#F2F2F2");
   });
 });

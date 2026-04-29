@@ -2682,10 +2682,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           disabled={readOnly}
           aria-pressed={trackChangesOn}
           aria-label={t("toggleTrackChanges")}
-          className={`flex h-8 w-[110px] items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors duration-100 disabled:cursor-not-allowed disabled:text-[var(--doc-text-subtle)] disabled:opacity-[0.16] disabled:hover:bg-transparent disabled:hover:text-[var(--doc-text-subtle)] ${
+          className={`flex h-8 w-[110px] items-center gap-1.5 rounded-md border px-2.5 text-xs transition-colors duration-100 disabled:cursor-not-allowed disabled:border-transparent disabled:text-[var(--doc-text-subtle)] disabled:opacity-[0.16] disabled:hover:bg-transparent disabled:hover:text-[var(--doc-text-subtle)] ${
             trackChangesOn
-              ? "bg-[var(--doc-primary-light)] text-[var(--doc-text)]"
-              : "text-[var(--doc-text-muted)] hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)]"
+              ? "border-[var(--doc-primary)] bg-[var(--doc-primary-light)] text-[var(--doc-text)] shadow-[0_0_0_1px_var(--doc-primary)]"
+              : "border-transparent text-[var(--doc-text-muted)] hover:border-[var(--doc-border)] hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)]"
           }`}
         >
           <PenLineIcon size={14} />

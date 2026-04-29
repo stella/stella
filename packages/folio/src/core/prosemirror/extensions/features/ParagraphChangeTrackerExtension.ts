@@ -14,6 +14,7 @@ import {
   RemoveMarkStep,
   RemoveNodeMarkStep,
 } from "prosemirror-transform";
+import type { Mapping } from "prosemirror-transform";
 
 import { createExtension } from "../create";
 import type { ExtensionRuntime } from "../types";
@@ -108,6 +109,11 @@ function collectAffectedParaIdsFromMarkLikeStep(
   return { ids: new Set(), hasUntracked: false };
 }
 
+function mapStepPosition(remap: Mapping, pos: number, assoc: 1 | -1): number {
+  // oxlint-disable-next-line unicorn/no-array-method-this-argument -- ProseMirror Mapping.map uses assoc as its second parameter.
+  return remap.map(pos, assoc);
+}
+
 function createParagraphChangeTrackerPlugin(): Plugin<ParagraphChangeTrackerState> {
   return new Plugin<ParagraphChangeTrackerState>({
     key: paragraphChangeTrackerKey,
@@ -155,15 +161,22 @@ function createParagraphChangeTrackerPlugin(): Plugin<ParagraphChangeTrackerStat
           newState.structuralChange = true;
         }
 
-        // Track which paragraphs were affected by each step
-        for (const step of tr.steps) {
+        // Track which paragraphs were affected by each step. Step coordinates are
+        // valid in the document state where that step ran, so remap them through
+        // subsequent steps before reading from the final transaction document.
+        for (let stepIndex = 0; stepIndex < tr.steps.length; stepIndex++) {
+          // SAFETY: loop condition keeps stepIndex within tr.steps bounds.
+          const step = tr.steps[stepIndex]!;
+          const remap = tr.mapping.slice(stepIndex + 1);
+
           if (step instanceof AddMarkStep || step instanceof RemoveMarkStep) {
+            const from = mapStepPosition(remap, step.from, 1);
+            const to = mapStepPosition(remap, step.to, -1);
+            if (to <= from) {
+              continue;
+            }
             const { ids, hasUntracked } =
-              collectAffectedParaIdsFromMarkLikeStep(
-                tr.doc,
-                step.from,
-                step.to,
-              );
+              collectAffectedParaIdsFromMarkLikeStep(tr.doc, from, to);
             for (const id of ids) {
               newState.changedParaIds.add(id);
             }
@@ -177,9 +190,12 @@ function createParagraphChangeTrackerPlugin(): Plugin<ParagraphChangeTrackerStat
             step instanceof AddNodeMarkStep ||
             step instanceof RemoveNodeMarkStep
           ) {
-            const pos = step.pos;
+            const pos = mapStepPosition(remap, step.pos, 1);
             const node = tr.doc.nodeAt(pos);
-            const end = node ? pos + node.nodeSize : pos + 1;
+            if (!node) {
+              continue;
+            }
+            const end = pos + node.nodeSize;
             const { ids, hasUntracked } = collectAffectedParaIds(
               tr.doc,
               pos,
@@ -197,10 +213,15 @@ function createParagraphChangeTrackerPlugin(): Plugin<ParagraphChangeTrackerStat
           const stepMap = step.getMap();
           // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror StepMap.forEach
           stepMap.forEach((_oldStart, _oldEnd, newStart, newEnd) => {
+            const from = mapStepPosition(remap, newStart, 1);
+            const to = mapStepPosition(remap, newEnd, -1);
+            if (to < from) {
+              return;
+            }
             const { ids, hasUntracked } = collectAffectedParaIds(
               tr.doc,
-              newStart,
-              newEnd,
+              from,
+              to,
             );
             for (const id of ids) {
               newState.changedParaIds.add(id);

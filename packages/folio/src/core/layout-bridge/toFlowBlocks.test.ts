@@ -35,3 +35,134 @@ describe("toFlowBlocks paragraph formatting", () => {
     });
   });
 });
+
+describe("toFlowBlocks list numbering", () => {
+  test("formats numbered markers using the paragraph number format", () => {
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          numPr: { numId: 1, ilvl: 0 },
+          listMarker: "%1.",
+          listNumFmt: "upperRoman",
+        },
+        [schema.text("First")],
+      ),
+      schema.node(
+        "paragraph",
+        {
+          numPr: { numId: 1, ilvl: 0 },
+          listMarker: "%1.",
+          listNumFmt: "upperRoman",
+        },
+        [schema.text("Second")],
+      ),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+
+    expect(blocks.at(0)?.kind).toBe("paragraph");
+    expect(blocks.at(0)?.attrs?.listMarker).toBe("I.");
+    expect(blocks.at(1)?.kind).toBe("paragraph");
+    expect(blocks.at(1)?.attrs?.listMarker).toBe("II.");
+  });
+
+  test("drops unresolved child placeholders with their following punctuation", () => {
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          numPr: { numId: 2, ilvl: 0 },
+          listMarker: "%1.%2.",
+          listNumFmt: "decimal",
+        },
+        [schema.text("Parent")],
+      ),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+
+    expect(blocks.at(0)?.kind).toBe("paragraph");
+    expect(blocks.at(0)?.attrs?.listMarker).toBe("1.");
+  });
+
+  test("formats each level in a multi-level marker with its own number format", () => {
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          numPr: { numId: 3, ilvl: 0 },
+          listMarker: "%1.",
+          listNumFmt: "upperRoman",
+          listLevelNumFmts: ["upperRoman"],
+        },
+        [schema.text("Parent")],
+      ),
+      schema.node(
+        "paragraph",
+        {
+          numPr: { numId: 3, ilvl: 1 },
+          listMarker: "%1.%2)",
+          listNumFmt: "lowerLetter",
+          listLevelNumFmts: ["upperRoman", "lowerLetter"],
+        },
+        [schema.text("Child")],
+      ),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+
+    expect(blocks.at(0)?.attrs?.listMarker).toBe("I.");
+    expect(blocks.at(1)?.attrs?.listMarker).toBe("I.a)");
+  });
+
+  test("continues numbering inside text boxes", () => {
+    const textBoxNode = schema.nodes.textBox;
+    if (!textBoxNode) {
+      throw new Error("Expected textBox node in schema");
+    }
+
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        { numPr: { numId: 4, ilvl: 0 }, listMarker: "%1." },
+        [schema.text("Before")],
+      ),
+      textBoxNode.create(null, [
+        schema.node(
+          "paragraph",
+          { numPr: { numId: 4, ilvl: 0 }, listMarker: "%1." },
+          [schema.text("Inside")],
+        ),
+      ]),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+    const textBox = blocks.at(1);
+
+    expect(blocks.at(0)?.attrs?.listMarker).toBe("1.");
+    expect(textBox?.kind).toBe("textBox");
+    if (textBox?.kind !== "textBox") {
+      throw new Error("Expected textBox block");
+    }
+    expect(textBox.content.at(0)?.attrs?.listMarker).toBe("2.");
+  });
+
+  test("substitutes style-inherited marker templates without paragraph numPr", () => {
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        { numPr: { numId: 5, ilvl: 0 }, listMarker: "%1." },
+        [schema.text("Numbered")],
+      ),
+      schema.node("paragraph", { listMarker: "%1." }, [
+        schema.text("Style inherited"),
+      ]),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+
+    expect(blocks.at(0)?.attrs?.listMarker).toBe("1.");
+    expect(blocks.at(1)?.attrs?.listMarker).toBe("1.");
+  });
+});

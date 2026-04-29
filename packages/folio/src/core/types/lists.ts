@@ -166,6 +166,8 @@ export type ListRendering = {
   markerFontFamily?: string;
   /** Marker font size from numbering level rPr, in points */
   markerFontSize?: number;
+  /** Number format for each level from 0 through this paragraph's level. */
+  levelNumFmts?: NumberFormat[];
 };
 
 /**

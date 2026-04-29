@@ -333,6 +333,9 @@ function paragraphFormattingToAttrs(
   if (paragraph.listRendering?.markerFontSize) {
     attrs.listMarkerFontSize = paragraph.listRendering.markerFontSize;
   }
+  if (paragraph.listRendering?.levelNumFmts) {
+    attrs.listLevelNumFmts = paragraph.listRendering.levelNumFmts;
+  }
   // Store original inline formatting for lossless serialization round-trip
   if (formatting) {
     attrs._originalFormatting = formatting;
