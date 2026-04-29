@@ -4,7 +4,8 @@ import { and, eq } from "drizzle-orm";
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import {
-  buildChatSystemPrompt,
+  buildChatPromptCacheKey,
+  buildChatSystemPromptParts,
   extractTitle,
 } from "@/api/handlers/chat/chat-prompt";
 import type {
@@ -175,6 +176,7 @@ const sendMessage = createSafeRootHandler(
               }
             },
             orgAIConfig,
+            promptCacheKey: chatContext.promptCacheKey,
             resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
             threadId: body.threadId,
             tools: chatTools,
@@ -337,6 +339,7 @@ type PrepareChatContextProps = {
 type PrepareChatContextResult = Result<
   {
     hydratedMessages: ChatMessage[];
+    promptCacheKey: string;
     system: string;
   },
   HandlerError<422 | 500> | SafeDbError
@@ -354,7 +357,7 @@ const prepareChatContext = async ({
 }: PrepareChatContextProps): Promise<PrepareChatContextResult> =>
   await Result.gen(async function* () {
     const [systemResult, hydratedMessagesResult] = await Promise.all([
-      buildChatSystemPrompt({
+      buildChatSystemPromptParts({
         activeDecision,
         activeFile,
         refRegistry,
@@ -368,7 +371,7 @@ const prepareChatContext = async ({
         userId,
       }),
     ]);
-    const system = yield* systemResult;
+    const systemPrompt = yield* systemResult;
     const hydratedMessages = yield* hydratedMessagesResult.mapError((error) =>
       ChatError.is(error)
         ? new HandlerError({
@@ -380,7 +383,8 @@ const prepareChatContext = async ({
     );
 
     return Result.ok({
-      system,
+      promptCacheKey: buildChatPromptCacheKey(systemPrompt.cacheStablePrefix),
+      system: systemPrompt.fullPrompt,
       hydratedMessages: hydrateAssistantMessageRefs({
         messages: hydratedMessages,
         refRegistry,

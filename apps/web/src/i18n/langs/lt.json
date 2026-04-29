@@ -344,14 +344,18 @@
     "tool": {
       "ask-user": "Asking for clarification",
       "create-document": "Sukurti dokumentą",
+      "describe-stella-function": "Inspecting stella function",
       "displayDocument": "Dokumento peržiūra",
+      "execute-typescript": "Running TypeScript",
       "list-entities": "Listed entities",
       "list-templates": "Listing templates",
+      "load-skill": "Loading skill",
       "read-clause": "Reading clause",
       "read-contact": "Reading contact",
       "read-content": "Read content",
       "read-content-across-matters": "Reading document from another matter",
       "read-entity": "Read entity",
+      "read-skill-resource": "Reading skill resource",
       "search-across-matters": "Searching across matters",
       "search-content": "Searching document text",
       "search-matter": "Searched matter",
@@ -359,6 +363,7 @@
       "update-entity-fields": "Atnaujinti lauką"
     },
     "toolCall": {
+      "input": "Įvestis",
       "output": "Išvestis",
       "sourceCode": "Pradinis kodas"
     },

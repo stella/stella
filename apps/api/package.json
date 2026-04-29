@@ -44,6 +44,7 @@
     "@stella/case-law": "workspace:*",
     "@stella/docx-utils": "workspace:*",
     "@stella/permissions": "workspace:*",
+    "@stella/skills": "workspace:*",
     "@stella/template-conditions": "workspace:*",
     "@stella/transactional": "workspace:*",
     "@stll/anonymize-wasm": "catalog:",

@@ -61,6 +61,7 @@
         "@stella/case-law": "workspace:*",
         "@stella/docx-utils": "workspace:*",
         "@stella/permissions": "workspace:*",
+        "@stella/skills": "workspace:*",
         "@stella/template-conditions": "workspace:*",
         "@stella/transactional": "workspace:*",
         "@stll/anonymize-wasm": "catalog:",
@@ -390,6 +391,11 @@
     "packages/skills": {
       "name": "@stella/skills",
       "version": "0.0.0",
+      "devDependencies": {
+        "@stella/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
     },
     "packages/template-conditions": {
       "name": "@stella/template-conditions",

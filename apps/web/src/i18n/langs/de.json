@@ -344,14 +344,18 @@
     "tool": {
       "ask-user": "Asking for clarification",
       "create-document": "Dokument erstellen",
+      "describe-stella-function": "Inspecting stella function",
       "displayDocument": "Dokument anzeigen",
+      "execute-typescript": "Running TypeScript",
       "list-entities": "Einträge aufgelistet",
       "list-templates": "Listing templates",
+      "load-skill": "Loading skill",
       "read-clause": "Reading clause",
       "read-contact": "Reading contact",
       "read-content": "Inhalt gelesen",
       "read-content-across-matters": "Reading document from another matter",
       "read-entity": "Eintrag gelesen",
+      "read-skill-resource": "Reading skill resource",
       "search-across-matters": "Searching across matters",
       "search-content": "Dokumenttext durchsuchen",
       "search-matter": "Akte durchsucht",
@@ -359,6 +363,7 @@
       "update-entity-fields": "Metadaten aktualisieren"
     },
     "toolCall": {
+      "input": "Eingabe",
       "output": "Ausgabe",
       "sourceCode": "Quellcode"
     },

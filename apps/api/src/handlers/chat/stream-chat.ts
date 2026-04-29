@@ -35,6 +35,7 @@ type StreamChatProps = {
   messages: ChatMessage[];
   onFinish: (messages: ChatMessage[]) => Promise<void>;
   orgAIConfig: OrgAIConfig | null;
+  promptCacheKey: string;
   resolveAssistantTextRefs?: ((text: string) => string) | undefined;
   system: string;
   threadId: SafeId<"chatThread">;
@@ -46,6 +47,7 @@ export const streamChat = async ({
   messages,
   onFinish,
   orgAIConfig,
+  promptCacheKey,
   resolveAssistantTextRefs,
   system,
   threadId,
@@ -69,6 +71,11 @@ export const streamChat = async ({
         temperature: getTemperatureForRole("chat"),
         system,
         tools,
+        providerOptions: {
+          openai: {
+            promptCacheKey,
+          },
+        },
         stopWhen: [stepCountIs(MAX_TOOL_STEPS), hasToolCall("ask-user")],
         messages: modelMessages,
       });

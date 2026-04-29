@@ -4,6 +4,7 @@ import type { ScopedDb } from "@/api/db";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import { createOrgTools } from "./org-tools";
+import { createSkillTools } from "./skill-tools";
 import { createWorkspaceTools } from "./workspace-tools";
 
 const organizationId = toSafeId<"organization">(
@@ -36,6 +37,20 @@ describe("chat tool schemas", () => {
         organizationId,
         scopedDb: unusedScopedDb,
         userId,
+      }),
+    ).not.toThrow();
+  });
+
+  test("construct skill tools as JSON-schema-compatible AI tools", () => {
+    expect(() =>
+      createSkillTools({
+        skills: [
+          {
+            description: "Analyze legal texts.",
+            name: "legal-interpretation",
+            version: "3.0",
+          },
+        ],
       }),
     ).not.toThrow();
   });

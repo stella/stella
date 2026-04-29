@@ -6,6 +6,7 @@
     "module": "ESNext",
     "paths": {
       "@stella/ares": ["../../packages/ares/src/index.ts"],
+      "@stella/skills": ["../../packages/skills/src/index.ts"],
       "@/api/*": ["./src/*"]
     },
     "jsx": "react-jsx",

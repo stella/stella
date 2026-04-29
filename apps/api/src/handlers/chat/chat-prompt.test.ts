@@ -6,8 +6,11 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 import {
   appendActiveFilePromptIfEntityExists,
+  buildChatPromptCacheKey,
   buildGlobalPrompt,
+  buildGlobalPromptParts,
   buildUserContextBlock,
+  buildWorkspacePromptParts,
   buildWorkspacePromptText,
   extractTitle,
 } from "./chat-prompt";
@@ -21,6 +24,13 @@ const READONLY_STELLA_API = `declare global {
     getMatterEntityContents(input: {matterRefs: string[]; entityRefs: string[]}): Promise<{text: string}[]>;
   }
 }`;
+const SKILL_METADATA = [
+  {
+    name: "legal-interpretation",
+    description: "Analyze legal texts using an interpretation framework.",
+    version: "3.0",
+  },
+] as const;
 
 const createProperty = ({
   content,
@@ -153,9 +163,12 @@ describe("chat prompt builders", () => {
   test("includes the readonly stella API block in the global prompt", () => {
     const prompt = buildGlobalPrompt({
       readonlyStellaApi: READONLY_STELLA_API,
+      skillMetadata: SKILL_METADATA,
       userContext: null,
     });
 
+    expect(prompt).toContain("Available Stella skills");
+    expect(prompt).toContain("legal-interpretation");
     expect(prompt).toContain("Use `execute-typescript` for readonly retrieval");
     expect(prompt).toContain("require explicit `matterRefs` inputs");
     expect(prompt).toContain("caps it at 500");
@@ -176,6 +189,108 @@ describe("chat prompt builders", () => {
     expect(prompt).toContain("Current date/time:");
     expect(prompt).not.toContain("UX language:");
     expect(prompt).not.toContain("cs");
+  });
+
+  test("keeps the cache-stable prefix independent from volatile user context", () => {
+    const first = buildGlobalPromptParts({
+      readonlyStellaApi: READONLY_STELLA_API,
+      skillMetadata: SKILL_METADATA,
+      userContext: {
+        locale: "en",
+        timezone: "Europe/Prague",
+        userName: "First User",
+      },
+    });
+    const second = buildGlobalPromptParts({
+      readonlyStellaApi: READONLY_STELLA_API,
+      skillMetadata: SKILL_METADATA,
+      userContext: {
+        locale: "cs",
+        timezone: "Europe/Prague",
+        userName: "Second User",
+      },
+    });
+
+    expect(first.cacheStablePrefix).toBe(second.cacheStablePrefix);
+    expect(first.cacheStablePrefix).toContain("legal-interpretation");
+    expect(first.cacheStablePrefix).not.toContain("First User");
+    expect(first.cacheStablePrefix).not.toContain("Current date/time");
+    expect(first.fullPrompt).not.toBe(second.fullPrompt);
+    expect(buildChatPromptCacheKey(first.cacheStablePrefix)).toBe(
+      buildChatPromptCacheKey(second.cacheStablePrefix),
+    );
+  });
+
+  test("keeps the cache-stable prefix independent from workspace context", () => {
+    const firstRefRegistry = createChatRefRegistry();
+    const secondRefRegistry = createChatRefRegistry();
+    const first = buildWorkspacePromptParts({
+      entityCount: 1,
+      properties: [],
+      refRegistry: firstRefRegistry,
+      readonlyStellaApi: READONLY_STELLA_API,
+      skillMetadata: SKILL_METADATA,
+      userContext: null,
+      workspaceId: WORKSPACE_ID,
+      workspaceName: "Matter Alpha",
+    });
+    const second = buildWorkspacePromptParts({
+      entityCount: 500,
+      properties: [
+        createProperty({
+          content: {
+            type: "text",
+            version: 1,
+          },
+          id: "prop_notes",
+          name: "Notes",
+        }),
+      ],
+      refRegistry: secondRefRegistry,
+      readonlyStellaApi: READONLY_STELLA_API,
+      skillMetadata: SKILL_METADATA,
+      userContext: null,
+      workspaceId: toSafeId<"workspace">("ws_prompt_other"),
+      workspaceName: "Matter Beta",
+    });
+
+    expect(first.cacheStablePrefix).toBe(second.cacheStablePrefix);
+    expect(first.cacheStablePrefix).not.toContain("Matter Alpha");
+    expect(first.cacheStablePrefix).not.toContain("prop_notes");
+    expect(first.fullPrompt).toContain("Matter Alpha");
+    expect(second.fullPrompt).toContain("Matter Beta");
+    expect(buildChatPromptCacheKey(first.cacheStablePrefix)).toBe(
+      buildChatPromptCacheKey(second.cacheStablePrefix),
+    );
+  });
+
+  test("changes the cache key when stable prompt content changes", () => {
+    const first = buildGlobalPromptParts({
+      readonlyStellaApi: READONLY_STELLA_API,
+      skillMetadata: SKILL_METADATA,
+      userContext: null,
+    });
+    const second = buildGlobalPromptParts({
+      readonlyStellaApi: `${READONLY_STELLA_API}\n// added function`,
+      skillMetadata: SKILL_METADATA,
+      userContext: null,
+    });
+
+    expect(buildChatPromptCacheKey(first.cacheStablePrefix)).not.toBe(
+      buildChatPromptCacheKey(second.cacheStablePrefix),
+    );
+  });
+
+  test("omits empty skill catalog sections cleanly", () => {
+    const prompt = buildGlobalPromptParts({
+      readonlyStellaApi: READONLY_STELLA_API,
+      skillMetadata: [],
+      userContext: null,
+    });
+
+    expect(prompt.cacheStablePrefix).not.toContain("Available Stella skills");
+    expect(prompt.cacheStablePrefix).not.toContain("\n\n\n\n");
+    expect(prompt.fullPrompt).not.toContain("\n\n\n\n");
   });
 
   test("appends the active-file prompt only when the entity exists", () => {
