@@ -86,48 +86,13 @@ const separatorBarStyle: CSSProperties = {
   justifyContent: "space-between",
   padding: "2px 0",
   fontSize: 11,
-  color: "#4285f4",
+  color: "var(--doc-link)",
   userSelect: "none",
 };
 
 const labelStyle: CSSProperties = {
   fontWeight: 500,
   letterSpacing: 0.3,
-};
-
-const optionsButtonStyle: CSSProperties = {
-  background: "none",
-  border: "none",
-  color: "#4285f4",
-  cursor: "pointer",
-  fontSize: 11,
-  padding: "2px 6px",
-  borderRadius: 3,
-};
-
-const dropdownStyle: CSSProperties = {
-  position: "absolute",
-  right: 0,
-  top: "100%",
-  background: "white",
-  border: "1px solid #dadce0",
-  borderRadius: 4,
-  boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-  zIndex: 100,
-  minWidth: 160,
-  padding: "4px 0",
-};
-
-const dropdownItemStyle: CSSProperties = {
-  display: "block",
-  width: "100%",
-  padding: "6px 12px",
-  border: "none",
-  background: "none",
-  textAlign: "left",
-  cursor: "pointer",
-  fontSize: 12,
-  color: "#3c4043",
 };
 
 // ============================================================================
@@ -443,7 +408,7 @@ function OptionsMenu({
     <div style={{ position: "relative" }} ref={optionsRef}>
       <button
         type="button"
-        style={optionsButtonStyle}
+        className="hf-options-button"
         onClick={(e) => {
           e.stopPropagation();
           setShowOptions((prev) => !prev);
@@ -453,71 +418,35 @@ function OptionsMenu({
         Options ▾
       </button>
       {showOptions && (
-        <div style={dropdownStyle}>
+        <div className="hf-options-dropdown">
           <button
             type="button"
-            style={dropdownItemStyle}
+            className="hf-options-item"
             onClick={() => {
               setShowOptions(false);
               insertField("PAGE");
-            }}
-            onMouseOver={(e) => {
-              (e.target as HTMLElement).style.backgroundColor = "#f1f3f4";
-            }}
-            onFocus={() => {
-              /* noop */
-            }}
-            onMouseOut={(e) => {
-              (e.target as HTMLElement).style.backgroundColor = "transparent";
-            }}
-            onBlur={() => {
-              /* noop */
             }}
           >
             Insert current page number
           </button>
           <button
             type="button"
-            style={dropdownItemStyle}
+            className="hf-options-item"
             onClick={() => {
               setShowOptions(false);
               insertField("NUMPAGES");
             }}
-            onMouseOver={(e) => {
-              (e.target as HTMLElement).style.backgroundColor = "#f1f3f4";
-            }}
-            onFocus={() => {
-              /* noop */
-            }}
-            onMouseOut={(e) => {
-              (e.target as HTMLElement).style.backgroundColor = "transparent";
-            }}
-            onBlur={() => {
-              /* noop */
-            }}
           >
             Insert total page count
           </button>
-          <div style={{ borderTop: "1px solid #e8eaed", margin: "4px 0" }} />
+          <div className="hf-options-divider" />
           {onRemove && (
             <button
               type="button"
-              style={dropdownItemStyle}
+              className="hf-options-item"
               onClick={() => {
                 setShowOptions(false);
                 onRemove();
-              }}
-              onMouseOver={(e) => {
-                (e.target as HTMLElement).style.backgroundColor = "#f1f3f4";
-              }}
-              onFocus={() => {
-                /* noop */
-              }}
-              onMouseOut={(e) => {
-                (e.target as HTMLElement).style.backgroundColor = "transparent";
-              }}
-              onBlur={() => {
-                /* noop */
               }}
             >
               Remove {label.toLowerCase()}
@@ -525,22 +454,10 @@ function OptionsMenu({
           )}
           <button
             type="button"
-            style={dropdownItemStyle}
+            className="hf-options-item"
             onClick={() => {
               setShowOptions(false);
               onClose();
-            }}
-            onMouseOver={(e) => {
-              (e.target as HTMLElement).style.backgroundColor = "#f1f3f4";
-            }}
-            onFocus={() => {
-              /* noop */
-            }}
-            onMouseOut={(e) => {
-              (e.target as HTMLElement).style.backgroundColor = "transparent";
-            }}
-            onBlur={() => {
-              /* noop */
             }}
           >
             Close {label.toLowerCase()} editing

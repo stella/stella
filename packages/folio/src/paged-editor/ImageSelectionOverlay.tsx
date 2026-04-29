@@ -57,7 +57,9 @@ export type ImageSelectionOverlayProps = {
 const HANDLE_SIZE = 10;
 const HANDLE_HALF = HANDLE_SIZE / 2;
 const BORDER_WIDTH = 2;
-const ACCENT_COLOR = "#2563eb"; // Blue-600
+const IMAGE_SELECTION_COLOR = "var(--doc-image-selection)";
+const DRAG_GHOST_SELECTION_VAR = "--image-drag-ghost-selection";
+const DRAG_GHOST_SELECTION_MUTED_VAR = "--image-drag-ghost-selection-muted";
 
 const overlayStyles: CSSProperties = {
   position: "absolute",
@@ -72,7 +74,7 @@ const overlayStyles: CSSProperties = {
 
 const borderStyles: CSSProperties = {
   position: "absolute",
-  border: `${BORDER_WIDTH}px solid ${ACCENT_COLOR}`,
+  border: `${BORDER_WIDTH}px solid ${IMAGE_SELECTION_COLOR}`,
   pointerEvents: "none",
   boxSizing: "border-box",
 };
@@ -81,9 +83,9 @@ const handleBaseStyles: CSSProperties = {
   position: "absolute",
   width: `${HANDLE_SIZE}px`,
   height: `${HANDLE_SIZE}px`,
-  backgroundColor: ACCENT_COLOR,
-  border: "1px solid var(--doc-handle-border, white)",
-  boxShadow: "0 1px 3px var(--doc-handle-shadow, rgba(0, 0, 0, 0.3))",
+  backgroundColor: IMAGE_SELECTION_COLOR,
+  border: "1px solid var(--doc-handle-border)",
+  boxShadow: "0 1px 3px var(--doc-shadow-md)",
   boxSizing: "border-box",
   pointerEvents: "auto",
   zIndex: 16,
@@ -91,8 +93,8 @@ const handleBaseStyles: CSSProperties = {
 
 const dimensionStyles: CSSProperties = {
   position: "absolute",
-  backgroundColor: "var(--doc-dimension-bg, rgba(0, 0, 0, 0.75))",
-  color: "var(--doc-dimension-text, white)",
+  backgroundColor: "var(--doc-dimension-bg)",
+  color: "var(--doc-dimension-text)",
   fontSize: "11px",
   fontFamily: "system-ui, sans-serif",
   padding: "2px 8px",
@@ -138,6 +140,33 @@ function calculateNewDimensions(
     width: Math.max(20, Math.min(2000, newWidth)),
     height: Math.max(20, Math.min(2000, newHeight)),
   };
+}
+
+function applyDragGhostTheme(
+  ghostEl: HTMLElement,
+  sourceEl: HTMLElement | null,
+): void {
+  const themeRoot = sourceEl?.closest(".folio-root") ?? sourceEl;
+
+  if (!themeRoot) {
+    return;
+  }
+
+  const probe = document.createElement("div");
+  probe.style.borderColor = IMAGE_SELECTION_COLOR;
+  probe.style.backgroundColor = "var(--doc-image-selection-muted)";
+  themeRoot.append(probe);
+
+  const computedStyles = window.getComputedStyle(probe);
+  ghostEl.style.setProperty(
+    DRAG_GHOST_SELECTION_VAR,
+    computedStyles.borderColor,
+  );
+  ghostEl.style.setProperty(
+    DRAG_GHOST_SELECTION_MUTED_VAR,
+    computedStyles.backgroundColor,
+  );
+  probe.remove();
 }
 
 // =============================================================================
@@ -370,10 +399,8 @@ export function ImageSelectionOverlay({
 
           // Create ghost element
           ghostEl = document.createElement("div");
-          ghostEl.style.cssText =
-            "position: fixed; pointer-events: none; z-index: 10000; " +
-            "opacity: 0.5; border: 2px dashed #2563eb; border-radius: 4px; " +
-            "background: rgba(37, 99, 235, 0.1);";
+          ghostEl.className = "image-drag-ghost";
+          applyDragGhostTheme(ghostEl, overlayRef.current);
           ghostEl.style.width = `${overlayRect.width}px`;
           ghostEl.style.height = `${overlayRect.height}px`;
           document.body.append(ghostEl);
