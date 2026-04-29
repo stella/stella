@@ -55,6 +55,8 @@ type PropertyPromptInputProps = {
   onMentionsChange: (mentions: string[]) => void;
   field: PropertyPromptFieldHandle;
   dependenciesField?: React.ReactElement;
+  onEditorReady?: (editor: Editor) => void;
+  autoPopulateOnEmpty?: boolean;
 };
 
 export const PropertyPromptInput = ({
@@ -64,6 +66,8 @@ export const PropertyPromptInput = ({
   onMentionsChange,
   field,
   dependenciesField,
+  onEditorReady,
+  autoPopulateOnEmpty = true,
 }: PropertyPromptInputProps) => {
   const t = useTranslations();
   const didAutoPopulate = useRef(false);
@@ -103,10 +107,17 @@ export const PropertyPromptInput = ({
     },
   });
 
+  useEffect(() => {
+    if (editor !== null && onEditorReady !== undefined) {
+      onEditorReady(editor);
+    }
+  }, [editor, onEditorReady]);
+
   // Auto-populate prompt with file reference when the editor
   // is empty and a file property exists.
   useEffect(() => {
     if (
+      !autoPopulateOnEmpty ||
       didAutoPopulate.current ||
       editor === undefined ||
       editor === null ||
@@ -141,7 +152,15 @@ export const PropertyPromptInput = ({
     const mentions = getMentions(editor);
     onMentionsChange(mentions);
     field.handleChange(editor.getHTML());
-  }, [editor, fileProperty, field, propertyName, t, onMentionsChange]);
+  }, [
+    autoPopulateOnEmpty,
+    editor,
+    fileProperty,
+    field,
+    propertyName,
+    t,
+    onMentionsChange,
+  ]);
 
   return (
     <div className="group w-full gap-1">

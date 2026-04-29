@@ -2,6 +2,7 @@ import Elysia from "elysia";
 
 import createProperty from "@/api/handlers/properties/create";
 import deleteProperty from "@/api/handlers/properties/delete-by-id";
+import previewProperty from "@/api/handlers/properties/preview";
 import readProperties from "@/api/handlers/properties/read";
 import updateProperty from "@/api/handlers/properties/update-by-id";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
@@ -19,6 +20,9 @@ export const propertiesRoute = new Elysia({
   .put("/", createProperty.handler, {
     body: createProperty.config.body,
     invalidateQuery: true,
+  })
+  .post("/preview", previewProperty.handler, {
+    body: previewProperty.config.body,
   })
   .get("/", readProperties.handler)
   .group("/property/:propertyId", (app) =>
