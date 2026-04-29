@@ -8,13 +8,17 @@ import {
   billingAddressSchema,
   contactAddressSchema,
   contactEmailSchema,
+  contactMetadataSchema,
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
+import { mergeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import type { SafeId } from "@/api/lib/branded-types";
+import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
+import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const updateContactBodySchema = t.Object({
   type: t.Optional(t.Union([t.Literal("person"), t.Literal("organization")])),
@@ -31,6 +35,7 @@ const updateContactBodySchema = t.Object({
   addresses: t.Optional(
     t.Nullable(t.Array(contactAddressSchema, { maxItems: 10 })),
   ),
+  metadata: t.Optional(t.Nullable(contactMetadataSchema)),
   tags: t.Optional(t.Nullable(t.Array(t.String(), { maxItems: 50 }))),
   color: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
   registrationNumber: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
@@ -44,8 +49,8 @@ const updateContactBodySchema = t.Object({
   paymentTermDays: t.Optional(
     t.Nullable(t.Integer({ minimum: 0, maximum: 365 })),
   ),
-  originatingAttorneyId: t.Optional(t.Nullable(t.String())),
-  responsibleAttorneyId: t.Optional(t.Nullable(t.String())),
+  originatingAttorneyId: t.Optional(t.Nullable(tUserId)),
+  responsibleAttorneyId: t.Optional(t.Nullable(tUserId)),
 });
 
 const updateContactParamsSchema = t.Object({
@@ -59,7 +64,76 @@ const updateContactById = createSafeRootHandler(
     body: updateContactBodySchema,
   },
   async function* ({ safeDb, session, params, body }) {
-    const { defaultHourlyRate, ...rest } = body;
+    const attorneyIds: SafeId<"user">[] = [];
+    if (body.originatingAttorneyId) {
+      attorneyIds.push(body.originatingAttorneyId);
+    }
+    if (body.responsibleAttorneyId) {
+      attorneyIds.push(body.responsibleAttorneyId);
+    }
+
+    if (attorneyIds.length > 0) {
+      const uniqueAttorneyIds = [...new Set(attorneyIds)];
+      const validAttorneyIds = yield* Result.await(
+        safeDb(async (tx) => {
+          const results: (SafeId<"user"> | null)[] = [];
+          for (const attorneyId of uniqueAttorneyIds) {
+            results.push(
+              await validateOrgUserId(
+                tx,
+                attorneyId,
+                session.activeOrganizationId,
+              ),
+            );
+          }
+          return results;
+        }),
+      );
+
+      if (validAttorneyIds.some((attorneyId) => attorneyId === null)) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "User is not a member of this organization",
+          }),
+        );
+      }
+    }
+
+    const { defaultHourlyRate, metadata, ...rest } = body;
+
+    let metadataUpdate = {};
+    if (metadata !== undefined) {
+      const existingRows = yield* Result.await(
+        safeDb((tx) =>
+          tx
+            .select({ metadata: contacts.metadata })
+            .from(contacts)
+            .where(
+              and(
+                eq(contacts.id, params.contactId),
+                eq(contacts.organizationId, session.activeOrganizationId),
+              ),
+            )
+            .limit(1),
+        ),
+      );
+      const existing = existingRows.at(0);
+
+      if (!existing) {
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            message: "Contact not found",
+          }),
+        );
+      }
+
+      metadataUpdate = {
+        metadata: mergeContactMetadata(existing.metadata, metadata),
+      };
+    }
+
     const updates = {
       ...pickDefined(rest, [
         "type",
@@ -74,8 +148,8 @@ const updateContactById = createSafeRootHandler(
         "emails",
         "phones",
         "addresses",
-        "tags",
         "color",
+        "tags",
         "registrationNumber",
         "taxId",
         "bankAccounts",
@@ -85,6 +159,7 @@ const updateContactById = createSafeRootHandler(
         "originatingAttorneyId",
         "responsibleAttorneyId",
       ]),
+      ...metadataUpdate,
       ...(defaultHourlyRate === undefined
         ? {}
         : {

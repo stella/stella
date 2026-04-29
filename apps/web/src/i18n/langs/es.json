@@ -528,6 +528,7 @@
     "status": "Estado",
     "tryAgain": "Reintentar",
     "type": "Tipo",
+    "typeNameToConfirm": "Escriba el nombre para confirmar",
     "uncategorized": "Sin categorizar",
     "unexpectedError": "Se produjo un error inesperado. Contacte con soporte.",
     "unpin": "Desfijar",
@@ -572,14 +573,44 @@
     },
     "communication": {
       "addAddress": "Añadir dirección",
+      "addDataBox": "Añadir buzón de datos",
       "addEmail": "Añadir correo electrónico",
       "addPhone": "Añadir teléfono",
       "addresses": "Direcciones",
+      "alreadyExists": "Este dato de contacto ya existe.",
+      "dataBoxPlaceholder": "ID del buzón de datos",
+      "dataBoxes": "Buzones de datos",
+      "emailPlaceholder": "nombre@example.com",
       "emails": "Correos electrónicos",
-      "phones": "Teléfonos"
+      "invalidDataBox": "El ID del buzón de datos debe tener 7 letras o dígitos.",
+      "invalidEmail": "Introduzca una dirección de correo electrónico válida.",
+      "phonePlaceholder": "+34...",
+      "phones": "Teléfonos",
+      "title": "Comunicación"
+    },
+    "create": {
+      "aresApplied": "Datos de ARES aplicados.",
+      "aresHint": "Opcional. Usa un IČO checo para completar los datos de la organización.",
+      "aresLookup": "Completar desde ARES",
+      "aresNotFound": "No se encontró ninguna empresa para este IČO.",
+      "aresTitle": "Registro checo (ARES)",
+      "contactName": "Nombre del contacto",
+      "icoPlaceholder": "IČO",
+      "invalidIco": "Introduce un IČO de 8 dígitos."
     },
     "createOrganization": "Crear \"{name}\" como organización",
     "createPerson": "Crear \"{name}\" como persona",
+    "customFields": {
+      "addField": "Añadir campo",
+      "empty": "Todavía no hay campos personalizados.",
+      "label": "Nombre del campo",
+      "labelPlaceholder": "Nombre del campo",
+      "labelRequired": "El nombre del campo es obligatorio.",
+      "removeField": "Eliminar campo",
+      "title": "Campos personalizados",
+      "value": "Valor del campo",
+      "valuePlaceholder": "Valor"
+    },
     "deleteContact": "Eliminar cliente",
     "deleteContactConfirmDescription": "¿Está seguro de que desea eliminar este contacto? Esta acción no se puede deshacer.",
     "editContact": "Editar cliente",
@@ -630,7 +661,7 @@
       "office": "Oficina",
       "other": "Otro"
     },
-    "search": "Buscar clientes...",
+    "search": "Buscar contactos...",
     "title": "Clientes",
     "type": {
       "organization": "Organización",

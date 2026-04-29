@@ -22,6 +22,37 @@ type BillingAddress = {
   country?: string;
 };
 
+type ContactEmail = {
+  type: "work" | "personal" | "other";
+  address: string;
+  isPrimary: boolean;
+  label?: string;
+};
+
+type ContactPhone = {
+  type: "mobile" | "office" | "home" | "fax" | "other";
+  number: string;
+  isPrimary: boolean;
+  label?: string;
+};
+
+type ContactDataBox = {
+  id: string;
+  isPrimary: boolean;
+  label?: string;
+};
+
+type ContactCustomField = {
+  id: string;
+  label: string;
+  value: string;
+};
+
+type ContactMetadata = {
+  dataBoxes?: ContactDataBox[];
+  customFields?: ContactCustomField[];
+};
+
 type CreateContactVars = {
   id: SafeId<"contact">;
   type: "person" | "organization";
@@ -33,6 +64,9 @@ type CreateContactVars = {
   middleName?: string;
   suffix?: string;
   notes?: string;
+  emails?: ContactEmail[];
+  phones?: ContactPhone[];
+  metadata?: ContactMetadata;
   color?: string;
   registrationNumber?: string;
   taxId?: string;
@@ -41,8 +75,8 @@ type CreateContactVars = {
   defaultHourlyRate?: number;
   currency?: string;
   paymentTermDays?: number;
-  originatingAttorneyId?: string;
-  responsibleAttorneyId?: string;
+  originatingAttorneyId?: SafeId<"user">;
+  responsibleAttorneyId?: SafeId<"user">;
 };
 
 export const useCreateContact = () => {
@@ -75,6 +109,9 @@ type UpdateContactVars = {
   middleName?: string | null;
   suffix?: string | null;
   notes?: string | null;
+  emails?: ContactEmail[] | null;
+  phones?: ContactPhone[] | null;
+  metadata?: ContactMetadata | null;
   color?: string | null;
   registrationNumber?: string | null;
   taxId?: string | null;
@@ -83,8 +120,8 @@ type UpdateContactVars = {
   defaultHourlyRate?: number | null;
   currency?: string | null;
   paymentTermDays?: number | null;
-  originatingAttorneyId?: string | null;
-  responsibleAttorneyId?: string | null;
+  originatingAttorneyId?: SafeId<"user"> | null;
+  responsibleAttorneyId?: SafeId<"user"> | null;
 };
 
 export const useUpdateContact = () => {

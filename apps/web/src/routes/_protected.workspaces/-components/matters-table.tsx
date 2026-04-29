@@ -198,20 +198,29 @@ const MattersTableRow = ({
   focusIndex,
 }: MattersTableRowProps) => {
   const navigate = useNavigate();
+  const openMatter = () => {
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    navigate({
+      to: "/workspaces/$workspaceId",
+      params: { workspaceId: workspace.id },
+    });
+  };
 
   return (
     <TableRow
       className={cn(
-        "cursor-pointer",
+        "hover:bg-accent/30 cursor-pointer outline-none",
+        "focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-inset",
         focusIndex === globalIndex && "bg-accent/50",
       )}
-      onClick={() => {
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        navigate({
-          to: "/workspaces/$workspaceId",
-          params: { workspaceId: workspace.id },
-        });
+      onClick={openMatter}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openMatter();
+        }
       }}
+      tabIndex={0}
     >
       {columns.map((col) => (
         <TableCell key={col.key}>

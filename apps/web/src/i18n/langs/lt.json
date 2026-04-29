@@ -528,6 +528,7 @@
     "status": "Būsena",
     "tryAgain": "Bandyti dar kartą",
     "type": "Tipas",
+    "typeNameToConfirm": "Įveskite pavadinimą, kad patvirtintumėte",
     "uncategorized": "Nekategorizuota",
     "unexpectedError": "Įvyko netikėta klaida. Susisiekite su palaikymo tarnyba.",
     "unpin": "Atsegti",
@@ -572,14 +573,44 @@
     },
     "communication": {
       "addAddress": "Pridėti adresą",
+      "addDataBox": "Pridėti duomenų dėžutę",
       "addEmail": "Pridėti el. paštą",
       "addPhone": "Pridėti telefoną",
       "addresses": "Adresai",
+      "alreadyExists": "Šis kontaktinis būdas jau yra.",
+      "dataBoxPlaceholder": "Duomenų dėžutės ID",
+      "dataBoxes": "Duomenų dėžutės",
+      "emailPlaceholder": "vardas@example.com",
       "emails": "El. paštai",
-      "phones": "Telefonai"
+      "invalidDataBox": "Duomenų dėžutės ID turi būti 7 raidės arba skaitmenys.",
+      "invalidEmail": "Įveskite galiojantį el. pašto adresą.",
+      "phonePlaceholder": "+370...",
+      "phones": "Telefonai",
+      "title": "Komunikacija"
+    },
+    "create": {
+      "aresApplied": "ARES duomenys pritaikyti.",
+      "aresHint": "Pasirinktinai. Naudokite čekų IČO organizacijos duomenims užpildyti.",
+      "aresLookup": "Užpildyti iš ARES",
+      "aresNotFound": "Pagal šį IČO įmonė nerasta.",
+      "aresTitle": "Čekijos registras (ARES)",
+      "contactName": "Kontakto pavadinimas",
+      "icoPlaceholder": "IČO",
+      "invalidIco": "Įveskite 8 skaitmenų IČO."
     },
     "createOrganization": "Sukurti \"{name}\" kaip organizaciją",
     "createPerson": "Sukurti \"{name}\" kaip asmenį",
+    "customFields": {
+      "addField": "Pridėti lauką",
+      "empty": "Pasirinktinių laukų dar nėra.",
+      "label": "Lauko pavadinimas",
+      "labelPlaceholder": "Lauko pavadinimas",
+      "labelRequired": "Lauko pavadinimas privalomas.",
+      "removeField": "Pašalinti lauką",
+      "title": "Pasirinktiniai laukai",
+      "value": "Lauko reikšmė",
+      "valuePlaceholder": "Reikšmė"
+    },
     "deleteContact": "Ištrinti klientą",
     "deleteContactConfirmDescription": "Ar tikrai norite ištrinti šį kontaktą? Šio veiksmo negalima atšaukti.",
     "editContact": "Redaguoti klientą",
@@ -630,7 +661,7 @@
       "office": "Biuras",
       "other": "Kitas"
     },
-    "search": "Ieškoti klientų...",
+    "search": "Ieškoti kontaktų...",
     "title": "Klientai",
     "type": {
       "organization": "Organizacija",

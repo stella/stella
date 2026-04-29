@@ -528,6 +528,7 @@
     "status": "Status",
     "tryAgain": "Spróbuj ponownie",
     "type": "Typ",
+    "typeNameToConfirm": "Wpisz nazwę, aby potwierdzić",
     "uncategorized": "Bez kategorii",
     "unexpectedError": "Wystąpił nieoczekiwany błąd. Skontaktuj się z pomocą techniczną.",
     "unpin": "Odepnij",
@@ -572,14 +573,44 @@
     },
     "communication": {
       "addAddress": "Dodaj adres",
+      "addDataBox": "Dodaj skrzynkę danych",
       "addEmail": "Dodaj e-mail",
       "addPhone": "Dodaj telefon",
       "addresses": "Adresy",
+      "alreadyExists": "Ta metoda kontaktu już istnieje.",
+      "dataBoxPlaceholder": "ID skrzynki danych",
+      "dataBoxes": "Skrzynki danych",
+      "emailPlaceholder": "imie@example.com",
       "emails": "Adresy e-mail",
-      "phones": "Telefony"
+      "invalidDataBox": "ID skrzynki danych musi mieć 7 liter lub cyfr.",
+      "invalidEmail": "Podaj prawidłowy adres e-mail.",
+      "phonePlaceholder": "+48...",
+      "phones": "Telefony",
+      "title": "Komunikacja"
+    },
+    "create": {
+      "aresApplied": "Dane z ARES zostały zastosowane.",
+      "aresHint": "Opcjonalnie. Użyj czeskiego IČO, aby uzupełnić dane organizacji.",
+      "aresLookup": "Uzupełnij z ARES",
+      "aresNotFound": "Nie znaleziono firmy dla tego IČO.",
+      "aresTitle": "Czeski rejestr (ARES)",
+      "contactName": "Nazwa kontaktu",
+      "icoPlaceholder": "IČO",
+      "invalidIco": "Wpisz 8-cyfrowe IČO."
     },
     "createOrganization": "Utwórz \"{name}\" jako organizację",
     "createPerson": "Utwórz \"{name}\" jako osobę",
+    "customFields": {
+      "addField": "Dodaj pole",
+      "empty": "Brak pól niestandardowych.",
+      "label": "Nazwa pola",
+      "labelPlaceholder": "Nazwa pola",
+      "labelRequired": "Nazwa pola jest wymagana.",
+      "removeField": "Usuń pole",
+      "title": "Pola niestandardowe",
+      "value": "Wartość pola",
+      "valuePlaceholder": "Wartość"
+    },
     "deleteContact": "Usuń klienta",
     "deleteContactConfirmDescription": "Czy na pewno chcesz usunąć ten kontakt? Tej operacji nie można cofnąć.",
     "editContact": "Edytuj klienta",
@@ -630,7 +661,7 @@
       "office": "Biurowy",
       "other": "Inny"
     },
-    "search": "Szukaj klientów...",
+    "search": "Szukaj kontaktów...",
     "title": "Klienci",
     "type": {
       "organization": "Organizacja",

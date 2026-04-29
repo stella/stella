@@ -528,6 +528,7 @@
     "status": "Statuss",
     "tryAgain": "Mēģināt vēlreiz",
     "type": "Tips",
+    "typeNameToConfirm": "Ievadiet nosaukumu, lai apstiprinātu",
     "uncategorized": "Nekategorizēts",
     "unexpectedError": "Radās neparedzēta kļūda. Lūdzu, sazinieties ar atbalsta dienestu.",
     "unpin": "Atspraust",
@@ -572,14 +573,44 @@
     },
     "communication": {
       "addAddress": "Pievienot adresi",
+      "addDataBox": "Pievienot datu pastkasti",
       "addEmail": "Pievienot e-pastu",
       "addPhone": "Pievienot tālruni",
       "addresses": "Adreses",
+      "alreadyExists": "Šī kontaktinformācija jau pastāv.",
+      "dataBoxPlaceholder": "Datu pastkastes ID",
+      "dataBoxes": "Datu pastkastes",
+      "emailPlaceholder": "vards@example.com",
       "emails": "E-pasti",
-      "phones": "Tālruņi"
+      "invalidDataBox": "Datu pastkastes ID jābūt 7 burtiem vai cipariem.",
+      "invalidEmail": "Ievadiet derīgu e-pasta adresi.",
+      "phonePlaceholder": "+371...",
+      "phones": "Tālruņi",
+      "title": "Saziņa"
+    },
+    "create": {
+      "aresApplied": "ARES dati piemēroti.",
+      "aresHint": "Neobligāti. Izmantojiet Čehijas IČO, lai aizpildītu organizācijas datus.",
+      "aresLookup": "Aizpildīt no ARES",
+      "aresNotFound": "Šim IČO uzņēmums netika atrasts.",
+      "aresTitle": "Čehijas reģistrs (ARES)",
+      "contactName": "Kontakta nosaukums",
+      "icoPlaceholder": "IČO",
+      "invalidIco": "Ievadiet 8 ciparu IČO."
     },
     "createOrganization": "Izveidot \"{name}\" kā organizāciju",
     "createPerson": "Izveidot \"{name}\" kā personu",
+    "customFields": {
+      "addField": "Pievienot lauku",
+      "empty": "Vēl nav pielāgotu lauku.",
+      "label": "Lauka nosaukums",
+      "labelPlaceholder": "Lauka nosaukums",
+      "labelRequired": "Lauka nosaukums ir obligāts.",
+      "removeField": "Noņemt lauku",
+      "title": "Pielāgotie lauki",
+      "value": "Lauka vērtība",
+      "valuePlaceholder": "Vērtība"
+    },
     "deleteContact": "Dzēst klientu",
     "deleteContactConfirmDescription": "Vai tiešām vēlaties dzēst šo kontaktu? Šo darbību nevar atsaukt.",
     "editContact": "Rediģēt klientu",
@@ -630,7 +661,7 @@
       "office": "Birojs",
       "other": "Cits"
     },
-    "search": "Meklēt klientus...",
+    "search": "Meklēt kontaktos...",
     "title": "Klienti",
     "type": {
       "organization": "Organizācija",

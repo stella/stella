@@ -8,13 +8,17 @@ import {
   billingAddressSchema,
   contactAddressSchema,
   contactEmailSchema,
+  contactMetadataSchema,
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
+import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import type { SafeId } from "@/api/lib/branded-types";
+import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const createContactBodySchema = t.Object({
   id: tSafeId("contact"),
@@ -30,6 +34,7 @@ const createContactBodySchema = t.Object({
   emails: t.Optional(t.Array(contactEmailSchema, { maxItems: 20 })),
   phones: t.Optional(t.Array(contactPhoneSchema, { maxItems: 20 })),
   addresses: t.Optional(t.Array(contactAddressSchema, { maxItems: 10 })),
+  metadata: t.Optional(contactMetadataSchema),
   tags: t.Optional(t.Array(t.String(), { maxItems: 50 })),
   color: t.Optional(t.String({ maxLength: 32 })),
   registrationNumber: t.Optional(t.String({ maxLength: 64 })),
@@ -39,8 +44,8 @@ const createContactBodySchema = t.Object({
   defaultHourlyRate: t.Optional(t.Integer({ minimum: 0 })),
   currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
   paymentTermDays: t.Optional(t.Integer({ minimum: 0, maximum: 365 })),
-  originatingAttorneyId: t.Optional(t.String()),
-  responsibleAttorneyId: t.Optional(t.String()),
+  originatingAttorneyId: t.Optional(tUserId),
+  responsibleAttorneyId: t.Optional(tUserId),
 });
 
 const createContact = createSafeRootHandler(
@@ -66,6 +71,42 @@ const createContact = createSafeRootHandler(
       );
     }
 
+    const attorneyIds: SafeId<"user">[] = [];
+    if (body.originatingAttorneyId) {
+      attorneyIds.push(body.originatingAttorneyId);
+    }
+    if (body.responsibleAttorneyId) {
+      attorneyIds.push(body.responsibleAttorneyId);
+    }
+
+    if (attorneyIds.length > 0) {
+      const uniqueAttorneyIds = [...new Set(attorneyIds)];
+      const validAttorneyIds = yield* Result.await(
+        safeDb(async (tx) => {
+          const results: (SafeId<"user"> | null)[] = [];
+          for (const attorneyId of uniqueAttorneyIds) {
+            results.push(
+              await validateOrgUserId(
+                tx,
+                attorneyId,
+                session.activeOrganizationId,
+              ),
+            );
+          }
+          return results;
+        }),
+      );
+
+      if (validAttorneyIds.some((attorneyId) => attorneyId === null)) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "User is not a member of this organization",
+          }),
+        );
+      }
+    }
+
     const [contact] = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -85,6 +126,7 @@ const createContact = createSafeRootHandler(
             emails: body.emails,
             phones: body.phones,
             addresses: body.addresses,
+            metadata: normalizeContactMetadata(body.metadata),
             tags: body.tags,
             color: body.color,
             registrationNumber: body.registrationNumber,

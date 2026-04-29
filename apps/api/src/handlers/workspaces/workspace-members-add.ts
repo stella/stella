@@ -5,12 +5,13 @@ import { t } from "elysia";
 import { workspaceMembers } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tUserId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
 const addWorkspaceMemberBodySchema = t.Object({
-  userId: t.String({ maxLength: 128 }),
+  userId: tUserId,
 });
 
 const config = {

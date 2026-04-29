@@ -128,7 +128,7 @@ export const TaskDetailPanel = ({
             .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
             .assignees.post({
               taskId: toSafeId<"entity">(taskId),
-              userId,
+              userId: toSafeId<"user">(userId),
               queryKey: entitiesKeys.all(workspaceId),
             })
             .then(async () => {

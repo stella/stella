@@ -47,6 +47,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/workspace-contacts";
 import {
   PARTY_ROLES,
+  PARTY_ROLE_LABEL_KEYS,
   toPartyRole,
 } from "@/routes/_protected.workspaces/$workspaceId/-party-roles";
 import type { PartyRole } from "@/routes/_protected.workspaces/$workspaceId/-party-roles";
@@ -56,18 +57,6 @@ import {
   workspaceOptions,
   workspacesKeys,
 } from "@/routes/_protected.workspaces/-queries";
-
-const ROLE_LABEL_KEYS = {
-  opposing_party: "workspaces.parties.partyRoles.opposing_party",
-  opposing_counsel: "workspaces.parties.partyRoles.opposing_counsel",
-  co_counsel: "workspaces.parties.partyRoles.co_counsel",
-  witness: "workspaces.parties.partyRoles.witness",
-  expert_witness: "workspaces.parties.partyRoles.expert_witness",
-  third_party: "workspaces.parties.partyRoles.third_party",
-  judge: "workspaces.parties.partyRoles.judge",
-  mediator: "workspaces.parties.partyRoles.mediator",
-  other: "workspaces.parties.partyRoles.other",
-} as const;
 
 type PartiesSectionProps = {
   workspaceId: string;
@@ -245,8 +234,8 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
 
   const parsedRole = toPartyRole(party.role);
   const roleKey = parsedRole
-    ? ROLE_LABEL_KEYS[parsedRole]
-    : ROLE_LABEL_KEYS.other;
+    ? PARTY_ROLE_LABEL_KEYS[parsedRole]
+    : PARTY_ROLE_LABEL_KEYS.other;
 
   return (
     <li className="flex items-center gap-2 rounded-md border px-3 py-2">
@@ -295,7 +284,7 @@ const AddPartyDialog = ({ workspaceId }: AddPartyDialogProps) => {
   const [selectedRole, setSelectedRole] = useState<PartyRole | null>(null);
 
   const roleItems = PARTY_ROLES.map((role) => ({
-    label: t(ROLE_LABEL_KEYS[role]),
+    label: t(PARTY_ROLE_LABEL_KEYS[role]),
     value: role,
   }));
 
