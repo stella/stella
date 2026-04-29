@@ -279,10 +279,14 @@ const DraggableRow = ({
     />
   );
 
+  // Kebab stays mounted (right-click context menu uses the same Menu),
+  // but the visible trigger is hidden so the row checkbox owns this
+  // slot. We use sr-only positioning rather than `display: none` so
+  // keyboard users can still Tab to it and open the actions menu.
   const selectCellWithActions = (
     <>
       {selectCellContent}
-      {rowActions}
+      <span className="sr-only">{rowActions}</span>
     </>
   );
 

@@ -1,9 +1,11 @@
+import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { properties, propertyDependencies } from "@/api/db/schema";
 import {
+  propertyContentSchema,
   propertyContentTypeSchema,
   propertyConditionSchema,
 } from "@/api/db/schema-validators";
@@ -21,6 +23,16 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 
+type SelectOption = {
+  color: string;
+  value: string;
+};
+
+const selectOptionSchema = t.Object({
+  color: t.String({ minLength: 1, maxLength: 64 }),
+  value: t.String({ minLength: 1, maxLength: 1000 }),
+});
+
 const createPropertyBodySchema = t.Object({
   name: tDefaultVarchar,
   contentType: propertyContentTypeSchema,
@@ -36,7 +48,20 @@ const createPropertyBodySchema = t.Object({
       }),
     ),
   ),
+  options: t.Optional(t.Array(selectOptionSchema)),
 });
+
+// Re-validate options through the strict content schema before insert.
+const areSelectOptionsValid = (
+  rawOptions: SelectOption[],
+  contentType: "single-select" | "multi-select",
+): boolean =>
+  Value.Check(propertyContentSchema, {
+    version: 1,
+    type: contentType,
+    options: rawOptions,
+    fallback: null,
+  });
 
 const config = {
   permissions: { property: ["create"] },
@@ -92,15 +117,25 @@ const createProperty = createSafeHandler(
         tool = defaultTool();
         break;
       case "single-select":
-      case "multi-select":
+      case "multi-select": {
+        const rawOptions = body.options ?? [];
+        if (!areSelectOptionsValid(rawOptions, body.contentType)) {
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Invalid select options",
+            }),
+          );
+        }
         content = {
           version: 1,
           type: body.contentType,
-          options: [],
+          options: rawOptions,
           fallback: null,
         };
         tool = defaultTool();
         break;
+      }
       case "date":
       case "int":
         content = { version: 1, type: body.contentType };

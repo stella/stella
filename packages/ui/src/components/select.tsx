@@ -19,32 +19,56 @@ type ElementWithChildren = React.ReactElement<{
   children?: React.ReactNode;
 }>;
 
+const SelectItemDisplaysContext = React.createContext(
+  new Map<unknown, React.ReactNode>(),
+);
+
+// Look the value up in the displays map even when it is `null` or
+// `undefined` — selects intentionally use `null` as a sentinel value
+// for "clearable" options (e.g. fallback selectors). When the value
+// has no registered display (e.g. nothing selected yet), render the
+// caller-supplied placeholder so Base UI's placeholder behaviour is
+// preserved despite us overriding `children`.
+const renderSelectedDisplay =
+  (displays: Map<unknown, React.ReactNode>, placeholder: React.ReactNode) =>
+  (value: unknown): React.ReactNode => {
+    if (!displays.has(value)) {
+      return placeholder ?? null;
+    }
+    const display = displays.get(value);
+    return display ?? null;
+  };
+
 function Select<Value, Multiple extends boolean | undefined = false>({
   children,
   itemToStringLabel,
   ...props
 }: SelectPrimitive.Root.Props<Value, Multiple>) {
   const itemLabels = collectSelectItemLabels(children);
+  const itemDisplays = collectSelectItemDisplays(children);
 
-  if (itemToStringLabel || itemLabels.size === 0) {
-    return (
+  const root =
+    itemToStringLabel || itemLabels.size === 0 ? (
       <SelectPrimitive.Root itemToStringLabel={itemToStringLabel} {...props}>
         {children}
       </SelectPrimitive.Root>
+    ) : (
+      <SelectPrimitive.Root
+        itemToStringLabel={(value) => {
+          const stringValue = String(value);
+
+          return itemLabels.get(value) ?? stringValue;
+        }}
+        {...props}
+      >
+        {children}
+      </SelectPrimitive.Root>
     );
-  }
 
   return (
-    <SelectPrimitive.Root
-      itemToStringLabel={(value) => {
-        const stringValue = String(value);
-
-        return itemLabels.get(value) ?? stringValue;
-      }}
-      {...props}
-    >
-      {children}
-    </SelectPrimitive.Root>
+    <SelectItemDisplaysContext.Provider value={itemDisplays}>
+      {root}
+    </SelectItemDisplaysContext.Provider>
   );
 }
 
@@ -76,16 +100,47 @@ function SelectTrigger({
   );
 }
 
-function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
+function SelectValue({
+  className,
+  children,
+  placeholder,
+  ...props
+}: SelectPrimitive.Value.Props) {
+  const displays = React.useContext(SelectItemDisplaysContext);
+
+  // If the consumer passed children OR there are no rich displays
+  // registered, defer to Base UI's default rendering — same plain
+  // styling as before so existing consumers see no visual change.
+  if (children !== undefined || displays.size === 0) {
+    return (
+      <SelectPrimitive.Value
+        className={cn(
+          "data-placeholder:text-muted-foreground flex-1 truncate",
+          className,
+        )}
+        data-slot="select-value"
+        placeholder={placeholder}
+        {...props}
+      >
+        {children}
+      </SelectPrimitive.Value>
+    );
+  }
+
+  // Rich-display path: SelectItems carry icon + text children, so the
+  // trigger needs flex/gap to align them like the dropdown row.
   return (
     <SelectPrimitive.Value
       className={cn(
-        "data-placeholder:text-muted-foreground flex-1 truncate",
+        "data-placeholder:text-muted-foreground flex flex-1 items-center gap-2 truncate",
         className,
       )}
       data-slot="select-value"
+      placeholder={placeholder}
       {...props}
-    />
+    >
+      {renderSelectedDisplay(displays, placeholder)}
+    </SelectPrimitive.Value>
   );
 }
 
@@ -203,6 +258,35 @@ function collectSelectItemLabels(children: React.ReactNode) {
   });
 
   return labels;
+}
+
+function collectSelectItemDisplays(children: React.ReactNode) {
+  const displays = new Map<unknown, React.ReactNode>();
+
+  React.Children.forEach(children, (child) => {
+    collectSelectItemDisplay(child, displays);
+  });
+
+  return displays;
+}
+
+function collectSelectItemDisplay(
+  child: React.ReactNode,
+  displays: Map<unknown, React.ReactNode>,
+) {
+  if (!isElementWithChildren(child)) {
+    return;
+  }
+
+  if (isSelectItemElement(child)) {
+    const value: unknown = child.props.value;
+    displays.set(value, child.props.children);
+    return;
+  }
+
+  React.Children.forEach(child.props.children, (nestedChild) => {
+    collectSelectItemDisplay(nestedChild, displays);
+  });
 }
 
 function collectSelectItemLabel(

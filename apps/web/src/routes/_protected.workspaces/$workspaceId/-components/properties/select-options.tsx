@@ -54,7 +54,7 @@ export const SelectOptions = (props: SelectOptionsProps) => {
   };
 
   return (
-    <div className="flex flex-col gap-y-0.5">
+    <div className="flex w-full flex-col gap-y-0.5">
       <SearchOptions
         onAddOption={onAddOption}
         placeholder={t("workspaces.properties.searchOrAddOptions")}
@@ -87,7 +87,7 @@ const SearchOptions = ({
   onAddOption,
   placeholder,
 }: SearchOptionsProps) => (
-  <div className="bg-muted flex items-center gap-x-1.5 rounded-md px-1.5 py-1">
+  <div className="bg-muted flex w-full items-center gap-x-1.5 rounded-md px-1.5 py-1">
     <SearchIcon className="text-muted-foreground size-3.5 shrink-0" />
     <input
       className="placeholder:text-muted-foreground/72 w-full text-sm focus-within:outline-none"

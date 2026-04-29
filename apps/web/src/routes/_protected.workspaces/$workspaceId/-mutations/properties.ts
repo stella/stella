@@ -6,7 +6,11 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
-import type { PropertyDependency, WorkspaceProperty } from "@/lib/types";
+import type {
+  PropertyDependency,
+  WorkspaceProperty,
+  WorkspacePropertyOption,
+} from "@/lib/types";
 import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
 type CreatePropertyDependency = {
@@ -20,6 +24,7 @@ type CreatePropertyVars = {
   toolType?: "ai-model" | "manual-input";
   prompt?: string;
   dependencies?: CreatePropertyDependency[];
+  options?: WorkspacePropertyOption[];
 };
 
 export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
@@ -32,6 +37,7 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
       toolType,
       prompt,
       dependencies,
+      options,
     }: CreatePropertyVars) => {
       const response = await api
         .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -51,6 +57,7 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
                 })),
               }
             : {}),
+          ...(options && options.length > 0 ? { options } : {}),
         });
 
       if (response.error) {
@@ -106,6 +113,57 @@ export const useUpdateProperty = () => {
       if (response.error) {
         throw toAPIError(response.error);
       }
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+};
+
+type PreviewPropertyVars = {
+  workspaceId: string;
+  prompt: string;
+  contentType: "text" | "single-select" | "multi-select" | "date" | "int";
+  entityId: string;
+  options?: WorkspacePropertyOption[];
+  dependencies?: { dependsOnPropertyId: string }[];
+};
+
+export const usePreviewProperty = () => {
+  const analytics = useAnalytics();
+
+  return useMutation({
+    mutationFn: async ({
+      workspaceId,
+      prompt,
+      contentType,
+      entityId,
+      options,
+      dependencies,
+    }: PreviewPropertyVars) => {
+      const response = await api
+        .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .preview.post({
+          prompt,
+          contentType,
+          entityId: toSafeId<"entity">(entityId),
+          ...(options && options.length > 0 ? { options } : {}),
+          ...(dependencies && dependencies.length > 0
+            ? {
+                dependencies: dependencies.map((d) => ({
+                  dependsOnPropertyId: toSafeId<"property">(
+                    d.dependsOnPropertyId,
+                  ),
+                })),
+              }
+            : {}),
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
     },
     onError: (error) => {
       analytics.captureError(error);
