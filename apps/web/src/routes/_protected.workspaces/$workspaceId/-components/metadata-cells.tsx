@@ -29,14 +29,14 @@ export const AuthorCell = ({ entity }: { entity: WorkspaceEntity }) => {
     .toUpperCase();
 
   return (
-    <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+    <div className="text-muted-foreground flex min-w-0 items-center justify-end gap-1.5 text-xs">
       <Avatar className="size-5 text-[10px]">
         {entity.createdByImage && (
           <AvatarImage alt={name} src={entity.createdByImage} />
         )}
         <AvatarFallback>{initials}</AvatarFallback>
       </Avatar>
-      <span className="truncate">{name}</span>
+      <span className="truncate text-end">{name}</span>
     </div>
   );
 };

@@ -343,8 +343,21 @@ export const RowActions = ({
   };
 
   const handleDuplicate = async () => {
-    const targets = isBulk ? selectedEntities : [entity];
-    let failed = false;
+    const allTargets = isBulk ? selectedEntities : [entity];
+    // Folders cannot be duplicated server-side; silently skip them so a
+    // mixed selection (folders + files) does not surface as a generic
+    // failure to the user.
+    const targets = allTargets.filter((e) => e.kind !== "folder");
+
+    if (targets.length === 0) {
+      toastManager.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+      return;
+    }
+
+    let failedCount = 0;
     for (const e of targets) {
       const result = await Result.tryPromise(
         async () =>
@@ -356,14 +369,27 @@ export const RowActions = ({
             }),
       );
       if (Result.isError(result) || result.value.error) {
-        failed = true;
+        failedCount++;
       }
     }
 
-    toastManager.add({
-      title: failed ? t("errors.actionFailed") : t("common.duplicated"),
-      type: failed ? "error" : "success",
-    });
+    if (failedCount === 0) {
+      toastManager.add({
+        title: t("common.duplicated"),
+        type: "success",
+      });
+    } else if (failedCount === targets.length) {
+      toastManager.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+    } else {
+      toastManager.add({
+        title: t("common.duplicated"),
+        description: t("errors.actionFailed"),
+        type: "warning",
+      });
+    }
   };
 
   const handleDelete = () => {

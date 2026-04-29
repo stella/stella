@@ -9,8 +9,11 @@ import deleteEntities from "@/api/handlers/entities/delete";
 import deleteVersion from "@/api/handlers/entities/delete-version";
 import downloadZip from "@/api/handlers/entities/download-zip";
 import duplicateEntity from "@/api/handlers/entities/duplicate";
+import listFiles from "@/api/handlers/entities/list-files";
+import listFolders from "@/api/handlers/entities/list-folders";
 import moveEntity from "@/api/handlers/entities/move";
 import openDesktopEditSession from "@/api/handlers/entities/open-desktop-edit-session";
+import organizeSuggestions from "@/api/handlers/entities/organize-suggestions";
 import readEntities from "@/api/handlers/entities/read";
 import readEntityById from "@/api/handlers/entities/read-by-id";
 import readEntitySummaries from "@/api/handlers/entities/read-summaries";
@@ -81,6 +84,11 @@ export const entitiesRoute = new Elysia({
   .post("/query", readEntities.handler, {
     body: readEntities.config.body,
   })
+  .post("/organize-suggestions", organizeSuggestions.handler, {
+    body: organizeSuggestions.config.body,
+  })
+  .get("/folders", listFolders.handler)
+  .get("/files", listFiles.handler)
   .delete("/", deleteEntities.handler, {
     body: deleteEntities.config.body,
     invalidateQuery: true,

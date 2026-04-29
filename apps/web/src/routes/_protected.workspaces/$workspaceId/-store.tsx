@@ -30,6 +30,7 @@ type State = {
   pdfPageCount: number;
   pdfViewer: PdfViewerState;
   folderState: FolderState;
+  filesystemSelectedIds: Set<string>;
 };
 
 type Actions = {
@@ -54,6 +55,8 @@ type Actions = {
   resetPdfViewerState: () => void;
   setFolderState: (state: Omit<FolderState, "toggleVersion">) => void;
   toggleAllFolders: () => void;
+  setFilesystemSelectedIds: (selectedIds: Set<string>) => void;
+  clearFilesystemSelectedIds: () => void;
 };
 
 const initialPdfViewerState = (): PdfViewerState => ({
@@ -75,6 +78,7 @@ export const useWorkspaceStore = create<State & Actions>()(
       hasFolders: false,
       toggleVersion: 0,
     },
+    filesystemSelectedIds: new Set(),
 
     syncJustifications: (justifications) =>
       set((state) => {
@@ -166,6 +170,14 @@ export const useWorkspaceStore = create<State & Actions>()(
     toggleAllFolders: () =>
       set((state) => {
         state.folderState.toggleVersion += 1;
+      }),
+    setFilesystemSelectedIds: (selectedIds) =>
+      set((state) => {
+        state.filesystemSelectedIds = new Set(selectedIds);
+      }),
+    clearFilesystemSelectedIds: () =>
+      set((state) => {
+        state.filesystemSelectedIds = new Set();
       }),
   })),
 );

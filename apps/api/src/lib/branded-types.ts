@@ -23,6 +23,7 @@ export type SafeIdType =
   | "document"
   | "documentCounter"
   | "entity"
+  | "entityVersionAiSummary"
   | "entityVersion"
   | "expense"
   | "field"

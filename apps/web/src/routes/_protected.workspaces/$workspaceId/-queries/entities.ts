@@ -49,7 +49,10 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
             filters: key.filters,
             sorts: key.sorts,
             page: key.page,
-            pageSize: 50,
+            // TODO: replace this load-everything pageSize with
+            // virtualised rendering + cursor pagination. Tracked
+            // alongside the matching limits.ts TODO.
+            pageSize: 10_000,
           },
           { fetch: { signal } },
         );
@@ -132,5 +135,68 @@ export const entitySummariesOptions = (workspaceId: string) =>
       }
 
       return response.data.summaries;
+    },
+  });
+
+export type WorkspaceFolder = {
+  entityId: string;
+  name: string | null;
+  parentId: string | null;
+};
+
+// Returns every folder in the workspace, unpaginated. Used by features
+// (e.g. the file organizer) that need a complete folder hierarchy
+// regardless of which page the filesystem view is currently showing.
+export const workspaceFoldersOptions = (workspaceId: string) =>
+  queryOptions({
+    queryKey: [...entitiesKeys.all(workspaceId), "folders"],
+    queryFn: async ({ signal }): Promise<WorkspaceFolder[]> => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .folders.get({ fetch: { signal } });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data.folders.map((folder) => ({
+        entityId: folder.id,
+        name: folder.name,
+        parentId: folder.parentId,
+      }));
+    },
+  });
+
+export type WorkspaceFile = {
+  entityId: string;
+  name: string | null;
+  parentId: string | null;
+  fileName: string;
+  mimeType: string;
+};
+
+// Returns every file-bearing entity in the workspace, unpaginated, with
+// just the columns the organizer needs. Used by the file organizer so
+// it operates on the whole matter rather than the FilesystemView's
+// current page.
+export const workspaceFilesOptions = (workspaceId: string) =>
+  queryOptions({
+    queryKey: [...entitiesKeys.all(workspaceId), "files"],
+    queryFn: async ({ signal }): Promise<WorkspaceFile[]> => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .files.get({ fetch: { signal } });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data.files.map((file) => ({
+        entityId: file.entityId,
+        name: file.name,
+        parentId: file.parentId,
+        fileName: file.fileName,
+        mimeType: file.mimeType,
+      }));
     },
   });

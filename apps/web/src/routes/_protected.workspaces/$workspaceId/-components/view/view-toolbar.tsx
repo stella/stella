@@ -1,4 +1,6 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import {
   CalendarIcon,
   ClockIcon,
@@ -6,6 +8,7 @@ import {
   FolderIcon,
   FolderOpenIcon,
   HashIcon,
+  Rows3Icon,
   SparklesIcon,
   UserIcon,
 } from "lucide-react";
@@ -31,10 +34,15 @@ import {
 
 import type { TranslationKey } from "@/i18n/types";
 import type { ViewLayout, WorkspaceProperty, WorkspaceView } from "@/lib/types";
+import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
+import {
+  workspaceFilesOptions,
+  workspaceFoldersOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
@@ -168,11 +176,121 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
           />
         </>
       )}
+
+      {view.layout.type === "filesystem" && (
+        <>
+          <span className="bg-border mx-1 h-4 w-px" />
+          <FilesystemOrganizerAction workspaceId={workspaceId} />
+        </>
+      )}
     </div>
   );
 };
 
 // -- Layout-specific controls --
+
+type FilesystemOrganizerActionProps = {
+  workspaceId: string;
+};
+
+const FilesystemOrganizerAction = ({
+  workspaceId,
+}: FilesystemOrganizerActionProps) => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+  const selectedIds = useWorkspaceStore((state) => state.filesystemSelectedIds);
+
+  // Folders and files are both fetched unpaginated and independent of
+  // the FilesystemView's current page so the organizer always operates
+  // on the whole matter. useQuery (not useSuspenseQuery) keeps a cache
+  // miss from suspending the toolbar chrome — the action button just
+  // stays disabled until the data resolves.
+  const { data: foldersData } = useQuery(workspaceFoldersOptions(workspaceId));
+  const allFolders = useMemo(() => foldersData ?? [], [foldersData]);
+  const { data: filesData } = useQuery(workspaceFilesOptions(workspaceId));
+  const allFiles = useMemo(() => filesData ?? [], [filesData]);
+
+  const existingFolders = useMemo(() => {
+    const folderById = new Map(
+      allFolders.map((folder) => [folder.entityId, folder]),
+    );
+    // The visited set guards against malformed parent chains
+    // (folder A → folder B → folder A) that would otherwise blow the
+    // stack. A well-formed DB can't produce cycles, but the data we
+    // see here comes from a client cache and is worth defending.
+    const resolvePath = (folderId: string, visited: Set<string>): string => {
+      if (visited.has(folderId)) {
+        return "";
+      }
+      visited.add(folderId);
+      const folder = folderById.get(folderId);
+      if (!folder) {
+        return "";
+      }
+      const name = folder.name ?? "";
+      if (!folder.parentId) {
+        return name;
+      }
+      const parentPath = resolvePath(folder.parentId, visited);
+      return parentPath ? `${parentPath}/${name}` : name;
+    };
+
+    return allFolders.map((folder) => ({
+      entityId: folder.entityId,
+      name: folder.name ?? "",
+      path: resolvePath(folder.entityId, new Set()),
+      parentId: folder.parentId,
+    }));
+  }, [allFolders]);
+  const selectedFiles = useMemo(
+    () => allFiles.filter((file) => selectedIds.has(file.entityId)),
+    [allFiles, selectedIds],
+  );
+  // Fall back to all files when the persisted selection no longer
+  // matches anything in the workspace; otherwise the organizer would
+  // be unusably empty after the user navigates away from the folder
+  // where the selection was made.
+  const organizerSourceFiles = useMemo(
+    () => (selectedFiles.length > 0 ? selectedFiles : allFiles),
+    [allFiles, selectedFiles],
+  );
+  const organizerFiles = useMemo(
+    () =>
+      organizerSourceFiles.map((file) => ({
+        entityId: file.entityId,
+        originalName: file.fileName,
+        parentId: file.parentId,
+        mimeType: file.mimeType,
+      })),
+    [organizerSourceFiles],
+  );
+
+  return (
+    <>
+      <Button
+        disabled={organizerFiles.length === 0}
+        onClick={() => setOpen(true)}
+        size="xs"
+        type="button"
+        variant="outline"
+      >
+        <Rows3Icon />
+        {selectedFiles.length > 0
+          ? t("workspaces.importOrganizer.actionSelected", {
+              count: organizerFiles.length,
+            })
+          : t("workspaces.importOrganizer.action")}
+      </Button>
+      <ExistingFileOrganizerDialog
+        existingFolders={existingFolders}
+        files={organizerFiles}
+        onOpenChange={setOpen}
+        open={open}
+        workspaceId={workspaceId}
+      />
+    </>
+  );
+};
 
 type KanbanGroupByControlProps = {
   properties: WorkspaceProperty[];

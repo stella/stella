@@ -508,6 +508,7 @@ type Messages = {
     "notes": "Notes";
     "open": "Open";
     "openInNewTab": "Open in new tab";
+    "options": "Options";
     "organization": "Organization";
     "organizationName": "Organization name";
     "pin": "Pin";
@@ -1334,6 +1335,38 @@ type Messages = {
       "version": "Version";
     };
     "generatingCitations": "Generating citations...";
+    "importOrganizer": {
+      "action": "Organize files";
+      "actionSelected": "Organize selected ({count, number})";
+      "aiUnavailable": "AI suggestions could not be generated. Check AI configuration and try again.";
+      "apply": "Apply changes";
+      "applying": "Reorganizing files…";
+      "collapseFolder": "Collapse folder";
+      "description": "{count, plural, =0 {No files to organize} one {Suggested moves and renames for # file} other {Suggested moves and renames for # files}}";
+      "empty": "No files to organize";
+      "emptyFoldersToDelete": "{count, plural, one {# empty folder to delete} other {# empty folders to delete}}";
+      "expandFolder": "Expand folder";
+      "failed": "Organization failed";
+      "folderPlaceholder": "e.g. Compliance/2025";
+      "generating": "Generating AI suggestions...";
+      "instructionsEmpty": "No custom instructions";
+      "instructionsHelp": "Saved per matter. Used in addition to the system prompt.";
+      "instructionsPlaceholder": "e.g. Use English folder names, group by counterparty, prefix dates with year.";
+      "instructionsTitle": "AI instructions";
+      "moveTo": "Move file to folder";
+      "moveToHint": "Type a path or pick from existing folders.";
+      "moveToTitle": "Move to folder";
+      "organized": "Files organized";
+      "regenerate": "Regenerate";
+      "reset": "Reset to AI suggestions";
+      "retry": "Retry";
+      "selectedOfTotal": "{selected, number} / {total, number}";
+      "summaryToMove": "to move";
+      "summaryToRename": "to rename";
+      "summaryUnchanged": "unchanged";
+      "title": "Organize files";
+      "wasNamed": "was {name}";
+    };
     "justification": "Justification:";
     "kanban": {
       "changeColor": "Change color";
@@ -1542,6 +1575,7 @@ type Messages = {
       "fields": "Fields:";
       "fieldsSelected": "{count, plural, one {# selected} other {# selected}}";
       "groupBy": "Group by:";
+      "hideColumn": "Hide column";
       "layouts": {
         "calendar": "Calendar";
         "filesystem": "List";

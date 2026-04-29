@@ -685,6 +685,42 @@ export const entityVersions = p.pgTable(
   ],
 );
 
+export const entityVersionAiSummaries = p.pgTable(
+  "entity_version_ai_summaries",
+  {
+    id: pUuid<"entityVersionAiSummary">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    entityId: safeUuid<"entity">("entity_id").notNull(),
+    entityVersionId: safeUuid<"entityVersion">("entity_version_id")
+      .notNull()
+      .references(() => entityVersions.id, { onDelete: "cascade" }),
+    promptVersion: p.smallint("prompt_version").notNull(),
+    sourceTextHash: p.varchar("source_text_hash", { length: 64 }).notNull(),
+    summary: p.text().notNull(),
+    language: p.varchar("language", { length: 10 }),
+    modelProvider: p.varchar("model_provider", { length: 64 }).notNull(),
+    modelId: p.varchar("model_id", { length: 256 }).notNull(),
+    generatedAt: p.timestamp("generated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("entity_version_ai_summaries_workspace_idx").on(table.workspaceId),
+    p.index("entity_version_ai_summaries_entity_idx").on(table.entityId),
+    p
+      .uniqueIndex("entity_version_ai_summaries_version_prompt_uidx")
+      .on(table.entityVersionId, table.promptVersion),
+    p
+      .foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
+    ...wsPolicies(),
+  ],
+);
+
 export const desktopEditSessionStatusEnum = p.pgEnum(
   "desktop_edit_session_status",
   ["open", "finalized", "cancelled"],
@@ -1933,6 +1969,7 @@ export const relations = defineRelations(
     taskAssignees,
     entityLinks,
     entityVersions,
+    entityVersionAiSummaries,
     desktopEditSessions,
     fields,
     justifications,
@@ -2202,6 +2239,24 @@ export const relations = defineRelations(
       fields: r.many.fields({
         from: r.entityVersions.id,
         to: r.fields.entityVersionId,
+      }),
+      aiSummary: r.one.entityVersionAiSummaries({
+        from: r.entityVersions.id,
+        to: r.entityVersionAiSummaries.entityVersionId,
+      }),
+    },
+    entityVersionAiSummaries: {
+      entity: r.one.entities({
+        from: r.entityVersionAiSummaries.entityId,
+        to: r.entities.id,
+      }),
+      entityVersion: r.one.entityVersions({
+        from: r.entityVersionAiSummaries.entityVersionId,
+        to: r.entityVersions.id,
+      }),
+      workspace: r.one.workspaces({
+        from: r.entityVersionAiSummaries.workspaceId,
+        to: r.workspaces.id,
       }),
     },
     desktopEditSessions: {
