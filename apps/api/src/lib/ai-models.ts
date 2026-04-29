@@ -293,6 +293,11 @@ export type OrgAIConfig = {
   region?: DataRegion | undefined;
 };
 
+export type ResolvedModelInfo = {
+  provider: AIProvider;
+  modelId: string;
+};
+
 // -- BYOK factory cache -----------------------------------------
 
 /**
@@ -421,6 +426,29 @@ export const getModelForRole = (
   const modelId =
     MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[getActiveProvider()][role];
   return getInstanceFactory()(modelId);
+};
+
+export const getModelInfoForRole = (
+  role: ModelRole,
+  orgConfig?: OrgAIConfig | null,
+): ResolvedModelInfo => {
+  if (orgConfig) {
+    const roles = orgConfig.overrideRoles;
+    const shouldOverride = !roles || roles.length === 0 || roles.includes(role);
+
+    if (shouldOverride) {
+      return {
+        provider: orgConfig.provider,
+        modelId: DEFAULT_MODELS[orgConfig.provider][role],
+      };
+    }
+  }
+
+  const provider = getActiveProvider();
+  return {
+    provider,
+    modelId: MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role],
+  };
 };
 
 /**

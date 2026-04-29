@@ -21,6 +21,7 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   ChevronRightIcon,
+  EyeOffIcon,
   FileIcon,
   FolderIcon,
   FolderOpenIcon,
@@ -33,6 +34,12 @@ import {
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "@stella/ui/components/breadcrumb";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stella/ui/components/menu";
 import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
@@ -44,6 +51,7 @@ import type { DragPreviewData } from "@/components/drag-preview";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { isFileDisplayable } from "@/lib/types";
 import type {
+  ViewLayout,
   WorkspaceEntity,
   WorkspaceProperty,
   WorkspaceView,
@@ -141,10 +149,78 @@ const resolveExtraColumns = (
 
 // -- Grid template helpers --
 
-const buildGridTemplate = (extraCount: number): string => {
-  // Name (flex) + N extra columns (8rem each) + Actions
-  const extras = extraCount > 0 ? ` repeat(${extraCount}, 8rem)` : "";
-  return `minmax(14rem, 1fr)${extras} 2rem`;
+const NAME_COL_ID = "__name__";
+const DEFAULT_EXTRA_WIDTH_PX = 128;
+const MIN_COL_WIDTH_PX = 80;
+const MAX_COL_WIDTH_PX = 800;
+
+const buildGridTemplate = (
+  extraColumns: ExtraColumn[],
+  widths: Record<string, number>,
+): string => {
+  const nameWidth = widths[NAME_COL_ID];
+  const nameTrack =
+    nameWidth !== undefined ? `${nameWidth}px` : "minmax(20rem, 1fr)";
+  const extraTracks = extraColumns
+    .map((col) => `${widths[col.id] ?? DEFAULT_EXTRA_WIDTH_PX}px`)
+    .join(" ");
+  return `${nameTrack}${extraTracks ? ` ${extraTracks}` : ""} 2rem`;
+};
+
+type ColumnWidthsApi = {
+  widths: Record<string, number>;
+  setWidth: (id: string, width: number) => void;
+};
+
+const useColumnWidths = (storageKey: string): ColumnWidthsApi => {
+  const [widths, setWidths] = useState<Record<string, number>>(() => {
+    if (typeof window === "undefined") {
+      return {};
+    }
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) {
+        return {};
+      }
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed === null || typeof parsed !== "object") {
+        return {};
+      }
+      const result: Record<string, number> = {};
+      for (const [key, value] of Object.entries(parsed)) {
+        if (typeof value === "number" && Number.isFinite(value)) {
+          result[key] = value;
+        }
+      }
+      return result;
+    } catch {
+      return {};
+    }
+  });
+
+  const setWidth = useCallback(
+    (id: string, width: number) => {
+      const clamped = Math.max(
+        MIN_COL_WIDTH_PX,
+        Math.min(MAX_COL_WIDTH_PX, Math.round(width)),
+      );
+      setWidths((prev) => {
+        if (prev[id] === clamped) {
+          return prev;
+        }
+        const next = { ...prev, [id]: clamped };
+        try {
+          window.localStorage.setItem(storageKey, JSON.stringify(next));
+        } catch {
+          // Ignore quota / unavailable storage.
+        }
+        return next;
+      });
+    },
+    [storageKey],
+  );
+
+  return { widths, setWidth };
 };
 
 // -- Component --
@@ -176,6 +252,12 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
   const [breadcrumbEditValue, setBreadcrumbEditValue] = useState("");
   const [selectedIds, setSelectedIds] = useState(new Set<string>());
+  const setFilesystemSelectedIds = useWorkspaceStore(
+    (s) => s.setFilesystemSelectedIds,
+  );
+  const clearFilesystemSelectedIds = useWorkspaceStore(
+    (s) => s.clearFilesystemSelectedIds,
+  );
 
   const handleSelect = useCallback((entityId: string, meta: boolean) => {
     setSelectedIds((prev) => {
@@ -282,7 +364,6 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   );
 
   const tree = useMemo(() => buildTree(data), [data]);
-
   // Drill-down navigation (persisted in URL search params)
   const currentFolderId = useSearch({
     from: "/_protected/workspaces/$workspaceId/$viewId",
@@ -421,9 +502,28 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     [hiddenProperties, properties, metadataLabels],
   );
 
+  const { widths: columnWidths, setWidth: setColumnWidth } = useColumnWidths(
+    `stella.tree-view.column-widths.${view.id}`,
+  );
+
   const gridTemplate = useMemo(
-    () => buildGridTemplate(extraColumns.length),
-    [extraColumns.length],
+    () => buildGridTemplate(extraColumns, columnWidths),
+    [columnWidths, extraColumns],
+  );
+
+  const handleHideColumn = useCallback(
+    (propertyId: string) => {
+      updateView.mutate({
+        viewId: view.id,
+        // SAFETY: hiddenProperties is part of every layout discriminant.
+        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+        layout: {
+          ...view.layout,
+          hiddenProperties: [...new Set([...hiddenProperties, propertyId])],
+        } as ViewLayout,
+      });
+    },
+    [hiddenProperties, updateView, view.id, view.layout],
   );
 
   const handleBgContextMenu = useCallback((e: React.MouseEvent) => {
@@ -482,6 +582,12 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       }),
     [],
   );
+
+  useEffect(() => {
+    setFilesystemSelectedIds(selectedIds);
+  }, [selectedIds, setFilesystemSelectedIds]);
+
+  useEffect(() => clearFilesystemSelectedIds, [clearFilesystemSelectedIds]);
 
   // Dedicated root-level drop bar (visible during drags).
   useEffect(() => {
@@ -543,93 +649,102 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       }}
       onContextMenu={handleBgContextMenu}
     >
-      {currentFolderId && (
-        <div className="mb-2 px-2">
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <button
-                  className="text-muted-foreground hover:text-foreground text-xs"
-                  // eslint-disable-next-line typescript/no-misused-promises
-                  onClick={async () => await navigateToFolder()}
-                  type="button"
-                >
-                  <FolderIcon className="size-3.5" />
-                </button>
-              </BreadcrumbItem>
-              {breadcrumbs.map((crumb, i) => {
-                const isLast = i === breadcrumbs.length - 1;
-                const isEditingCrumb = isLast && editingEntityId === crumb.id;
-                return (
-                  <Fragment key={crumb.id}>
-                    <BreadcrumbSeparator />
-                    <BreadcrumbItem>
-                      {isEditingCrumb ? (
-                        <InlineEdit
-                          inputClassName="h-5 w-40 text-xs"
-                          onCancel={() => setEditingEntityId(null)}
-                          onChange={setBreadcrumbEditValue}
-                          onCommit={() => {
-                            const trimmed = breadcrumbEditValue.trim();
-                            setEditingEntityId(null);
-                            if (trimmed && trimmed !== crumb.name) {
-                              renameEntity.mutate({
-                                workspaceId,
-                                entityId: crumb.id,
-                                name: trimmed,
-                              });
+      <div className="mb-2 px-2">
+        <div className="min-w-0">
+          {currentFolderId && (
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <button
+                    className="text-muted-foreground hover:text-foreground text-xs"
+                    // eslint-disable-next-line typescript/no-misused-promises
+                    onClick={async () => await navigateToFolder()}
+                    type="button"
+                  >
+                    <FolderIcon className="size-3.5" />
+                  </button>
+                </BreadcrumbItem>
+                {breadcrumbs.map((crumb, i) => {
+                  const isLast = i === breadcrumbs.length - 1;
+                  const isEditingCrumb = isLast && editingEntityId === crumb.id;
+                  return (
+                    <Fragment key={crumb.id}>
+                      <BreadcrumbSeparator />
+                      <BreadcrumbItem>
+                        {isEditingCrumb ? (
+                          <InlineEdit
+                            inputClassName="h-5 w-40 text-xs"
+                            onCancel={() => setEditingEntityId(null)}
+                            onChange={setBreadcrumbEditValue}
+                            onCommit={() => {
+                              const trimmed = breadcrumbEditValue.trim();
+                              setEditingEntityId(null);
+                              if (trimmed && trimmed !== crumb.name) {
+                                renameEntity.mutate({
+                                  workspaceId,
+                                  entityId: crumb.id,
+                                  name: trimmed,
+                                });
+                              }
+                            }}
+                            value={breadcrumbEditValue}
+                          />
+                        ) : isLast ? (
+                          <button
+                            className="text-xs font-medium"
+                            // eslint-disable-next-line typescript/no-misused-promises
+                            onClick={async () => await navigateToFolder()}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              setBreadcrumbEditValue(crumb.name);
+                              setEditingEntityId(crumb.id);
+                            }}
+                            type="button"
+                          >
+                            {crumb.name}
+                          </button>
+                        ) : (
+                          <button
+                            className="text-muted-foreground hover:text-foreground text-xs"
+                            // eslint-disable-next-line typescript/no-misused-promises
+                            onClick={async () =>
+                              await navigateToFolder(crumb.id)
                             }
-                          }}
-                          value={breadcrumbEditValue}
-                        />
-                      ) : isLast ? (
-                        <button
-                          className="text-xs font-medium"
-                          // eslint-disable-next-line typescript/no-misused-promises
-                          onClick={async () => await navigateToFolder()}
-                          onDoubleClick={(e) => {
-                            e.stopPropagation();
-                            setBreadcrumbEditValue(crumb.name);
-                            setEditingEntityId(crumb.id);
-                          }}
-                          type="button"
-                        >
-                          {crumb.name}
-                        </button>
-                      ) : (
-                        <button
-                          className="text-muted-foreground hover:text-foreground text-xs"
-                          // eslint-disable-next-line typescript/no-misused-promises
-                          onClick={async () => await navigateToFolder(crumb.id)}
-                          type="button"
-                        >
-                          {crumb.name}
-                        </button>
-                      )}
-                    </BreadcrumbItem>
-                  </Fragment>
-                );
-              })}
-            </BreadcrumbList>
-          </Breadcrumb>
+                            type="button"
+                          >
+                            {crumb.name}
+                          </button>
+                        )}
+                      </BreadcrumbItem>
+                    </Fragment>
+                  );
+                })}
+              </BreadcrumbList>
+            </Breadcrumb>
+          )}
         </div>
-      )}
+      </div>
       <div
-        className="text-muted-foreground grid items-center gap-x-4 border-b px-2 pb-1 text-xs font-medium"
+        className="text-muted-foreground grid w-full items-center gap-x-4 border-b px-2 pb-1 text-xs font-medium"
         style={{ gridTemplateColumns: gridTemplate }}
       >
-        <SortableColumnHeader
+        <ColumnHeaderCell
           activeSort={primarySort}
+          currentWidth={columnWidths[NAME_COL_ID]}
           label={t("common.name")}
+          onResize={(width) => setColumnWidth(NAME_COL_ID, width)}
           onSort={handleSortColumn}
           propertyId={getInternalPropertyId("name")}
         />
         {extraColumns.map((col) => (
-          <SortableColumnHeader
+          <ColumnHeaderCell
             activeSort={primarySort}
             align="end"
+            currentWidth={columnWidths[col.id] ?? DEFAULT_EXTRA_WIDTH_PX}
             key={col.id}
             label={col.label}
+            onHide={() => handleHideColumn(col.id)}
+            onResize={(width) => setColumnWidth(col.id, width)}
             onSort={handleSortColumn}
             propertyId={col.id}
           />
@@ -716,37 +831,140 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
 // -- Row --
 
-type SortableColumnHeaderProps = {
+type ColumnHeaderCellProps = {
   activeSort: WorkspaceView<"filesystem">["layout"]["sorts"][number] | null;
+  currentWidth?: number | undefined;
   label: string;
   propertyId: string;
   onSort: (propertyId: string) => void;
+  onResize: (width: number) => void;
+  onHide?: (() => void) | undefined;
   align?: "start" | "end" | undefined;
 };
 
-const SortableColumnHeader = ({
+const ColumnHeaderCell = ({
   activeSort,
+  currentWidth,
   label,
   propertyId,
   onSort,
+  onResize,
+  onHide,
   align = "start",
-}: SortableColumnHeaderProps) => {
+}: ColumnHeaderCellProps) => {
+  const t = useTranslations();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [contextOpen, setContextOpen] = useState(false);
+  const [contextAnchor, setContextAnchor] = useState<{
+    getBoundingClientRect: () => DOMRect;
+  } | null>(null);
   const isActive = activeSort?.propertyId === propertyId;
   const SortIcon = activeSort?.desc ? ArrowDownIcon : ArrowUpIcon;
 
+  const handleResizePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const startX = event.clientX;
+      const startWidth =
+        currentWidth ??
+        containerRef.current?.getBoundingClientRect().width ??
+        0;
+      const handleMove = (moveEvent: PointerEvent) => {
+        moveEvent.preventDefault();
+        const delta = moveEvent.clientX - startX;
+        onResize(startWidth + delta);
+      };
+      const handleUp = () => {
+        window.removeEventListener("pointermove", handleMove);
+        window.removeEventListener("pointerup", handleUp);
+        document.body.style.cursor = "";
+      };
+      document.body.style.cursor = "col-resize";
+      window.addEventListener("pointermove", handleMove);
+      window.addEventListener("pointerup", handleUp);
+    },
+    [currentWidth, onResize],
+  );
+
+  const handleContextMenu = useCallback(
+    (event: React.MouseEvent) => {
+      if (!onHide) {
+        return;
+      }
+      event.preventDefault();
+      const x = event.clientX;
+      const y = event.clientY;
+      setContextAnchor({
+        getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+      });
+      setContextOpen(true);
+    },
+    [onHide],
+  );
+
   return (
-    <button
+    <div
       className={cn(
-        "hover:text-foreground flex min-w-0 items-center gap-1 rounded-sm py-0.5 transition-colors",
-        align === "end" ? "justify-end text-end" : "justify-start text-start",
-        isActive && "text-foreground",
+        "group/column relative flex min-w-0 items-center",
+        align === "end" ? "justify-end" : "justify-start",
       )}
-      onClick={() => onSort(propertyId)}
-      type="button"
+      onContextMenu={handleContextMenu}
+      ref={containerRef}
     >
-      <span className="truncate">{label}</span>
-      {isActive && <SortIcon className="size-3 shrink-0" />}
-    </button>
+      <button
+        className={cn(
+          "hover:text-foreground flex min-w-0 items-center gap-1 rounded-sm py-0.5 transition-colors",
+          align === "end" ? "justify-end text-end" : "justify-start text-start",
+          isActive && "text-foreground",
+        )}
+        onClick={() => onSort(propertyId)}
+        type="button"
+      >
+        <span className="truncate">{label}</span>
+        {isActive && <SortIcon className="size-3 shrink-0" />}
+      </button>
+      <div
+        aria-hidden="true"
+        className="absolute -end-2 top-0 z-10 h-full w-2 cursor-col-resize touch-none select-none"
+        onPointerDown={handleResizePointerDown}
+      >
+        <div className="bg-border/0 group-hover/column:bg-border/60 hover:bg-primary/60 mx-auto h-full w-px transition-colors" />
+      </div>
+      {onHide && (
+        <Menu
+          onOpenChange={(open) => {
+            setContextOpen(open);
+            if (!open) {
+              setContextAnchor(null);
+            }
+          }}
+          open={contextOpen}
+        >
+          <MenuTrigger
+            render={
+              <button
+                aria-label={t("common.options")}
+                className="sr-only"
+                tabIndex={-1}
+                type="button"
+              />
+            }
+          />
+          <MenuPopup anchor={contextAnchor ?? undefined}>
+            <MenuItem
+              onClick={() => {
+                onHide();
+                setContextOpen(false);
+              }}
+            >
+              <EyeOffIcon className="size-4" />
+              {t("workspaces.views.hideColumn")}
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
+      )}
+    </div>
   );
 };
 
@@ -1022,7 +1240,7 @@ const FilesystemRow = ({
   // Shared cells: Name + Type
   const nameCell = (
     <span
-      className="flex items-center gap-1.5 truncate"
+      className="flex min-w-0 items-center gap-1.5"
       style={{ paddingLeft: `${depth * 20}px` }}
     >
       {isFolder ? (
@@ -1060,8 +1278,10 @@ const FilesystemRow = ({
           value={editValue}
         />
       ) : (
-        <span className="flex items-center gap-1.5 truncate">
-          <span className="truncate">{name}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate" title={name}>
+            {name}
+          </span>
           {node.activeEditBy && (
             <ActiveEditBadge
               className="shrink-0"
@@ -1076,7 +1296,7 @@ const FilesystemRow = ({
 
   const extraCells = extraColumns.map((col) => (
     <span
-      className="text-muted-foreground min-w-0 overflow-hidden text-end text-xs text-ellipsis whitespace-nowrap"
+      className="text-muted-foreground flex h-full min-w-0 items-center justify-end overflow-hidden text-end text-xs text-ellipsis whitespace-nowrap"
       key={col.id}
     >
       <ExtraColumnCell column={col} entity={node} />
