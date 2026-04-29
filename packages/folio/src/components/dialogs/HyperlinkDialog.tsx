@@ -633,5 +633,3 @@ export function useHyperlinkDialog(): UseHyperlinkDialogReturn {
 
   return { state, openInsert, openEdit, close, toggle };
 }
-
-export default HyperlinkDialog;

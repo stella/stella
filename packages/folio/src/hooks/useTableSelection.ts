@@ -27,21 +27,8 @@ import {
   getTableFromDocument,
   updateTableInDocument,
   deleteTableFromDocument,
-} from "../core/core";
+} from "../core/managers/TableSelectionManager";
 import type { Document, Table } from "../core/types/document";
-
-// ============================================================================
-// RE-EXPORTS (backwards compat)
-// ============================================================================
-
-export {
-  TABLE_DATA_ATTRIBUTES,
-  findTableFromClick,
-  getTableFromDocument,
-  updateTableInDocument,
-  deleteTableFromDocument,
-} from "../core/core";
-export type { CellCoordinates } from "../core/core";
 
 // ============================================================================
 // TYPES

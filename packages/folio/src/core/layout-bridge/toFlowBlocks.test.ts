@@ -36,6 +36,98 @@ describe("toFlowBlocks paragraph formatting", () => {
   });
 });
 
+describe("toFlowBlocks field handling", () => {
+  test("keeps dynamically-rendered field types distinct in layout runs", () => {
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.node("field", {
+          fieldType: "PAGE",
+          instruction: " PAGE ",
+          displayText: "1",
+          fieldKind: "simple",
+        }),
+        schema.text(" / "),
+        schema.node("field", {
+          fieldType: "NUMPAGES",
+          instruction: " NUMPAGES ",
+          displayText: "5",
+          fieldKind: "simple",
+        }),
+        schema.text(" "),
+        schema.node("field", {
+          fieldType: "DATE",
+          instruction: ' DATE \\@ "d MMMM yyyy" ',
+          displayText: "29 April 2026",
+          fieldKind: "simple",
+        }),
+      ]),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+    const paragraph = blocks.at(0);
+
+    expect(paragraph?.kind).toBe("paragraph");
+    if (paragraph?.kind !== "paragraph") {
+      throw new Error("Expected paragraph block");
+    }
+
+    expect(paragraph.runs.at(0)).toMatchObject({
+      kind: "field",
+      fieldType: "PAGE",
+      fallback: "1",
+    });
+    expect(paragraph.runs.at(2)).toMatchObject({
+      kind: "field",
+      fieldType: "NUMPAGES",
+      fallback: "5",
+    });
+    expect(paragraph.runs.at(4)).toMatchObject({
+      kind: "field",
+      fieldType: "DATE",
+      fallback: "29 April 2026",
+    });
+  });
+
+  test("preserves cached text for field types that are not recomputed by layout", () => {
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.node("field", {
+          fieldType: "MERGEFIELD",
+          instruction: ' MERGEFIELD "Client Name" \\* MERGEFORMAT ',
+          displayText: "Acme s.r.o.",
+          fieldKind: "simple",
+        }),
+        schema.text(" "),
+        schema.node("field", {
+          fieldType: "REF",
+          instruction: " REF _Ref123 \\h ",
+          displayText: "Clause 4.2",
+          fieldKind: "complex",
+        }),
+      ]),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+    const paragraph = blocks.at(0);
+
+    expect(paragraph?.kind).toBe("paragraph");
+    if (paragraph?.kind !== "paragraph") {
+      throw new Error("Expected paragraph block");
+    }
+
+    expect(paragraph.runs.at(0)).toMatchObject({
+      kind: "field",
+      fieldType: "OTHER",
+      fallback: "Acme s.r.o.",
+    });
+    expect(paragraph.runs.at(2)).toMatchObject({
+      kind: "field",
+      fieldType: "OTHER",
+      fallback: "Clause 4.2",
+    });
+  });
+});
+
 describe("toFlowBlocks list numbering", () => {
   test("formats numbered markers using the paragraph number format", () => {
     const doc = schema.node("doc", null, [

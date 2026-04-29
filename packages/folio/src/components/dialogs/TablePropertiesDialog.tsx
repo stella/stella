@@ -155,4 +155,3 @@ export function TablePropertiesDialog({
     </Dialog>
   );
 }
-export default TablePropertiesDialog;

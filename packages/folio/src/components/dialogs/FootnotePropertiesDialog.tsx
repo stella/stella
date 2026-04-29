@@ -283,4 +283,3 @@ export function FootnotePropertiesDialog({
     </Dialog>
   );
 }
-export default FootnotePropertiesDialog;

@@ -58,6 +58,7 @@
     "@tiptap/extension-paragraph": "^3.22.4",
     "@tiptap/extension-placeholder": "^3.22.4",
     "@tiptap/extension-text": "^3.22.4",
+    "@tiptap/pm": "^3.22.4",
     "@tiptap/react": "^3.22.4",
     "@tiptap/suggestion": "^3.22.4",
     "ai": "^6.0.166",
@@ -88,7 +89,6 @@
   "devDependencies": {
     "@babel/core": "^7.29.0",
     "@rolldown/plugin-babel": "^0.2.2",
-    "@stella/scripts": "workspace:*",
     "@stella/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/router-plugin": "^1.167.20",

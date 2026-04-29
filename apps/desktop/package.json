@@ -18,10 +18,6 @@
   "dependencies": {
     "@stella/ui": "workspace:*",
     "@tauri-apps/api": "^2.5.0",
-    "@tauri-apps/plugin-autostart": "^2.2.0",
-    "@tauri-apps/plugin-clipboard-manager": "^2.2.0",
-    "@tauri-apps/plugin-notification": "^2.2.0",
-    "@tauri-apps/plugin-opener": "^2.2.0",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "use-intl": "catalog:"
@@ -29,11 +25,9 @@
   "devDependencies": {
     "@stella/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
-    "@tauri-apps/cli": "^2.10.0",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "@vitejs/plugin-react": "^6.0.0",
-    "tailwindcss": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:"
   }

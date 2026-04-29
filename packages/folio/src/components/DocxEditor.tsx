@@ -31,8 +31,6 @@ import {
   PenLineIcon,
   XIcon,
 } from "lucide-react";
-import type { Plugin as ProseMirrorPlugin } from "prosemirror-state";
-import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
 import {
@@ -149,8 +147,6 @@ import { useTableSelection } from "../hooks/useTableSelection";
 // Paginated editor
 import { PagedEditor } from "../paged-editor/PagedEditor";
 import type { PagedEditorRef } from "../paged-editor/PagedEditor";
-// Plugin API types
-import type { RenderedDomContext } from "../plugin-api/types";
 import { CommentsSidebar } from "./CommentsSidebar";
 import type { TrackedChangeEntry } from "./CommentsSidebar";
 import { useHyperlinkDialog } from "./dialogs/HyperlinkDialog";
@@ -220,8 +216,16 @@ const toast = (msg: string) => {
 };
 
 // Dialog components (lazy-loaded — only fetched when first opened)
-const FindReplaceDialog = lazy(() => import("./dialogs/FindReplaceDialog"));
-const HyperlinkDialog = lazy(() => import("./dialogs/HyperlinkDialog"));
+const FindReplaceDialog = lazy(() =>
+  import("./dialogs/FindReplaceDialog").then((m) => ({
+    default: m.FindReplaceDialog,
+  })),
+);
+const HyperlinkDialog = lazy(() =>
+  import("./dialogs/HyperlinkDialog").then((m) => ({
+    default: m.HyperlinkDialog,
+  })),
+);
 const TablePropertiesDialog = lazy(() =>
   import("./dialogs/TablePropertiesDialog").then((m) => ({
     default: m.TablePropertiesDialog,
@@ -272,10 +276,6 @@ export type DocxEditorProps = {
   onError?: (error: Error) => void;
   /** Callback when fonts are loaded */
   onFontsLoaded?: () => void;
-  /** External ProseMirror plugins (from PluginHost) */
-  externalPlugins?: ProseMirrorPlugin[];
-  /** Callback when editor view is ready (for PluginHost) */
-  onEditorViewReady?: (view: EditorView) => void;
   /** Theme for styling */
   theme?: Theme | null;
   /** Whether to show toolbar (default: true) */
@@ -322,16 +322,6 @@ export type DocxEditorProps = {
   mode?: EditorMode;
   /** Callback when the editing mode changes */
   onModeChange?: (mode: EditorMode) => void;
-  /**
-   * Callback when rendered DOM context is ready (for plugin overlays).
-   * Used by PluginHost to get access to the rendered page DOM for positioning.
-   */
-  onRenderedDomContextReady?: (context: RenderedDomContext) => void;
-  /**
-   * Plugin overlays to render inside the editor viewport.
-   * Passed from PluginHost to render plugin-specific overlays.
-   */
-  pluginOverlays?: ReactNode;
 };
 
 /**
@@ -514,10 +504,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       onPaste: _onPaste,
       mode: modeProp,
       onModeChange,
-      externalPlugins,
-      onEditorViewReady,
-      onRenderedDomContextReady,
-      pluginOverlays,
     },
     ref,
   ) {
@@ -730,15 +716,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       return mgr;
     }, []);
 
-    // Suggestion mode plugin — merged with external plugins
+    // Suggestion mode plugin
     const suggestionPlugin = useMemo(
       () => createSuggestionModePlugin(editingMode === "suggesting", author),
       [], // eslint-disable-line react-hooks/exhaustive-deps
     );
-    const allExternalPlugins = useMemo(
-      () => [suggestionPlugin, ...(externalPlugins ?? [])],
-      [suggestionPlugin, externalPlugins],
-    );
+    const editorPlugins = useMemo(() => [suggestionPlugin], [suggestionPlugin]);
 
     // Refs
     const pagedEditorRef = useRef<PagedEditorRef>(null);
@@ -2973,17 +2956,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                             handleSelectionChange(null);
                           }
                         }}
-                        externalPlugins={allExternalPlugins}
-                        onReady={(editorRef) => {
-                          // oxlint-disable-next-line typescript/no-non-null-assertion
-                          onEditorViewReady?.(editorRef.getView()!);
-                        }}
-                        {...(onRenderedDomContextReady
-                          ? { onRenderedDomContextReady }
-                          : {})}
-                        {...(pluginOverlays !== undefined
-                          ? { pluginOverlays }
-                          : {})}
+                        externalPlugins={editorPlugins}
                         onHyperlinkClick={handleHyperlinkClick}
                         onContextMenu={handleContextMenu}
                         commentsSidebarOpen={showCommentsSidebar}

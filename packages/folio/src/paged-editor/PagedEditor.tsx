@@ -112,8 +112,6 @@ import type {
   SectionProperties,
   HeaderFooter,
 } from "../core/types/document";
-import { createRenderedDomContext } from "../plugin-api/RenderedDomContext";
-import type { RenderedDomContext } from "../plugin-api/types";
 // Internal components
 import { HiddenProseMirror } from "./HiddenProseMirror";
 import type { HiddenProseMirrorRef } from "./HiddenProseMirror";
@@ -161,12 +159,6 @@ export type PagedEditorProps = {
   externalPlugins?: Plugin[];
   /** Extension manager for plugins/schema/commands (optional — falls back to default) */
   extensionManager?: ExtensionManager;
-  /** Callback when editor is ready. */
-  onReady?: (ref: PagedEditorRef) => void;
-  /** Callback when rendered DOM context is ready. */
-  onRenderedDomContextReady?: (context: RenderedDomContext) => void;
-  /** Plugin overlays to render inside the viewport. */
-  pluginOverlays?: React.ReactNode;
   /** Callback when header or footer is double-clicked for editing. */
   onHeaderFooterDoubleClick?: (
     position: "header" | "footer",
@@ -293,17 +285,6 @@ const pagesContainerStyles: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
-};
-
-const pluginOverlaysStyles: CSSProperties = {
-  position: "absolute",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  pointerEvents: "none",
-  overflow: "visible",
-  zIndex: 8,
 };
 
 // =============================================================================
@@ -1822,9 +1803,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onSelectionChange,
       externalPlugins = EMPTY_PLUGINS,
       extensionManager,
-      onReady,
-      onRenderedDomContextReady,
-      pluginOverlays,
       onHeaderFooterDoubleClick,
       hfEditMode,
       onBodyClick,
@@ -1868,14 +1846,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     // when parent passes unstable callback references
     const onSelectionChangeRef = useRef(onSelectionChange);
     const onDocumentChangeRef = useRef(onDocumentChange);
-    const onReadyRef = useRef(onReady);
-    const onRenderedDomContextReadyRef = useRef(onRenderedDomContextReady);
 
     // Keep refs in sync with latest props
     onSelectionChangeRef.current = onSelectionChange;
     onDocumentChangeRef.current = onDocumentChange;
-    onReadyRef.current = onReady;
-    onRenderedDomContextReadyRef.current = onRenderedDomContextReady;
 
     // State
     const [layout, setLayout] = useState<Layout | null>(null);
@@ -2273,15 +2247,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               blockLookup?: BlockLookup;
               footnotesByPage?: Map<number, FootnoteRenderItem[]>;
             });
-
-            // Create and expose RenderedDomContext after DOM is painted
-            if (onRenderedDomContextReady) {
-              const domContext = createRenderedDomContext(
-                pagesContainerRef.current,
-                zoom,
-              );
-              onRenderedDomContextReady(domContext);
-            }
           }
 
           // Compute anchor Y positions for comments sidebar (works without DOM queries).
@@ -2317,7 +2282,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         firstPageHeaderContent,
         firstPageFooterContent,
         sectionProperties,
-        onRenderedDomContextReady,
         onAnchorPositionsChange,
         document,
       ],
@@ -4538,44 +4502,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       }
     }, [layout, updateSelectionOverlay]);
 
-    // Notify when ready
-    // Notify when ready - use ref for callback to prevent infinite loops
-    useEffect(() => {
-      if (onReadyRef.current && hiddenPMRef.current) {
-        onReadyRef.current({
-          getDocument: () => hiddenPMRef.current?.getDocument() ?? null,
-          getState: () => hiddenPMRef.current?.getState() ?? null,
-          getView: () => hiddenPMRef.current?.getView() ?? null,
-          focus: () => {
-            hiddenPMRef.current?.focus();
-            setIsFocused(true);
-          },
-          blur: () => {
-            hiddenPMRef.current?.blur();
-            setIsFocused(false);
-          },
-          isFocused: () => hiddenPMRef.current?.isFocused() ?? false,
-          dispatch: (tr) => hiddenPMRef.current?.dispatch(tr),
-          undo: () => hiddenPMRef.current?.undo() ?? false,
-          redo: () => hiddenPMRef.current?.redo() ?? false,
-          canUndo: () => hiddenPMRef.current?.canUndo() ?? false,
-          canRedo: () => hiddenPMRef.current?.canRedo() ?? false,
-          setSelection: (anchor, head) =>
-            hiddenPMRef.current?.setSelection(anchor, head),
-          getLayout: () => layout,
-          relayout: () => {
-            const state = hiddenPMRef.current?.getState();
-            if (state) {
-              runLayoutPipeline(state);
-            }
-          },
-          scrollToPosition: scrollToPositionImpl,
-        });
-      }
-      // oxlint-disable-next-line react-hooks/exhaustive-deps
-    }, [layout, runLayoutPipeline]);
-    // NOTE: onReady removed from dependencies - accessed via ref to prevent infinite loops
-
     // =========================================================================
     // Render
     // =========================================================================
@@ -4728,16 +4654,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                   />
                 </svg>
               </button>
-            )}
-
-            {/* Plugin overlays (highlights, annotations) */}
-            {pluginOverlays && (
-              <div
-                className="paged-editor__plugin-overlays"
-                style={pluginOverlaysStyles}
-              >
-                {pluginOverlays}
-              </div>
             )}
           </div>
         </div>

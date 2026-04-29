@@ -30,4 +30,42 @@ describe("toProseDoc", () => {
     expect(paragraph?.attrs.lineSpacing).toBe(259);
     expect(paragraph?.attrs.lineSpacingRule).toBe("auto");
   });
+
+  test("preserves DOCX field instruction and cached display text", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "simpleField",
+                  instruction: ' MERGEFIELD "Client Name" \\* MERGEFORMAT ',
+                  fieldType: "MERGEFIELD",
+                  content: [
+                    {
+                      type: "run",
+                      content: [{ type: "text", text: "Acme s.r.o." }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const doc = toProseDoc(document);
+    const field = doc.firstChild?.firstChild;
+
+    expect(field?.type.name).toBe("field");
+    expect(field?.attrs.fieldType).toBe("MERGEFIELD");
+    expect(field?.attrs.instruction).toBe(
+      ' MERGEFIELD "Client Name" \\* MERGEFORMAT ',
+    );
+    expect(field?.attrs.displayText).toBe("Acme s.r.o.");
+    expect(field?.attrs.fieldKind).toBe("simple");
+  });
 });

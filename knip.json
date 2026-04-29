@@ -2,9 +2,14 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.ts", "i18n-unused.config.js"],
+      "entry": ["scripts/*.ts", "i18n-unused.config.js", "oxlint.config.mjs"],
       "ignoreDependencies": [
         "@fontsource-variable/source-serif-4",
+        "@tanstack/eslint-plugin-query",
+        "@tanstack/eslint-plugin-router",
+        "eslint",
+        "eslint-plugin-drizzle",
+        "eslint-plugin-sonarjs",
         "oxlint-tsgolint",
         "ultracite",
         "i18n-unused",
@@ -46,7 +51,12 @@
       "ignoreDependencies": ["react-grab", "@libpdf/core", "idb"]
     },
     "apps/docs": {
-      "entry": ["src/**/*.astro", "src/content.config.ts", "astro.config.*"]
+      "entry": [
+        "src/**/*.astro",
+        "src/content.config.ts",
+        "src/styles/custom.css",
+        "astro.config.*"
+      ]
     },
     "apps/landing": {
       "entry": ["src/**/*.astro", "astro.config.*"]
@@ -85,6 +95,10 @@
     }
   },
   "ignore": [".oxlint-plugins/**", ".claude/**"],
+  "ignoreIssues": {
+    "packages/folio/src/core/managers/ClipboardManager.ts": ["duplicates"],
+    "packages/infosoud/src/constants.ts": ["duplicates"]
+  },
   "exclude": ["exports", "types"],
   "ignoreBinaries": ["docker", "oxfmt", "tsgo", "bun"],
   "ignoreDependencies": ["@stella/typescript-config"],

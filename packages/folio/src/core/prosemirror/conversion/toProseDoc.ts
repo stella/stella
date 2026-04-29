@@ -14,7 +14,6 @@
 
 import type { Node as PMNode } from "prosemirror-model";
 
-import { emuToPixels } from "../../docx/imageParser";
 import type {
   Document,
   Paragraph,
@@ -41,6 +40,7 @@ import type {
   MoveTo,
   MathEquation,
 } from "../../types/document";
+import { emuToPixels } from "../../utils/units";
 import { schema } from "../schema";
 import type {
   ParagraphAttrs,
