@@ -193,7 +193,7 @@ export const AssigneePicker = ({
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .assignees.post({
           taskId: toSafeId<"entity">(taskId),
-          userId,
+          userId: toSafeId<"user">(userId),
           queryKey,
         });
       if (response.error) {
@@ -210,7 +210,7 @@ export const AssigneePicker = ({
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .assignees.delete({
           taskId: toSafeId<"entity">(taskId),
-          userId,
+          userId: toSafeId<"user">(userId),
           queryKey,
         });
       if (response.error) {

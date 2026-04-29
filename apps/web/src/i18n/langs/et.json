@@ -528,6 +528,7 @@
     "status": "Olek",
     "tryAgain": "Proovi uuesti",
     "type": "Tüüp",
+    "typeNameToConfirm": "Kinnitamiseks sisestage nimi",
     "uncategorized": "Kategoriseerimata",
     "unexpectedError": "Ilmnes ootamatu viga. Palun pöörduge klienditoe poole.",
     "unpin": "Eemalda kinnitamine",
@@ -572,14 +573,44 @@
     },
     "communication": {
       "addAddress": "Lisa aadress",
+      "addDataBox": "Lisa andmepostkast",
       "addEmail": "Lisa e-post",
       "addPhone": "Lisa telefon",
       "addresses": "Aadressid",
+      "alreadyExists": "See kontaktiviis on juba olemas.",
+      "dataBoxPlaceholder": "Andmepostkasti ID",
+      "dataBoxes": "Andmepostkastid",
+      "emailPlaceholder": "nimi@example.com",
       "emails": "E-postid",
-      "phones": "Telefonid"
+      "invalidDataBox": "Andmepostkasti ID peab koosnema 7 tähest või numbrist.",
+      "invalidEmail": "Sisestage kehtiv e-posti aadress.",
+      "phonePlaceholder": "+372...",
+      "phones": "Telefonid",
+      "title": "Suhtlus"
+    },
+    "create": {
+      "aresApplied": "ARES-i andmed rakendati.",
+      "aresHint": "Valikuline. Kasuta Tšehhi IČO-t organisatsiooni andmete täitmiseks.",
+      "aresLookup": "Täida ARES-ist",
+      "aresNotFound": "Selle IČO järgi ettevõtet ei leitud.",
+      "aresTitle": "Tšehhi register (ARES)",
+      "contactName": "Kontakti nimi",
+      "icoPlaceholder": "IČO",
+      "invalidIco": "Sisesta 8-kohaline IČO."
     },
     "createOrganization": "Loo \"{name}\" organisatsioonina",
     "createPerson": "Loo \"{name}\" isikuna",
+    "customFields": {
+      "addField": "Lisa väli",
+      "empty": "Kohandatud välju veel ei ole.",
+      "label": "Välja nimi",
+      "labelPlaceholder": "Välja nimi",
+      "labelRequired": "Välja nimi on kohustuslik.",
+      "removeField": "Eemalda väli",
+      "title": "Kohandatud väljad",
+      "value": "Välja väärtus",
+      "valuePlaceholder": "Väärtus"
+    },
     "deleteContact": "Kustuta klient",
     "deleteContactConfirmDescription": "Kas olete kindel, et soovite selle kontakti kustutada? Seda toimingut ei saa tagasi võtta.",
     "editContact": "Muuda klienti",
@@ -630,7 +661,7 @@
       "office": "Kontor",
       "other": "Muu"
     },
-    "search": "Otsi kliente...",
+    "search": "Otsi kontakte...",
     "title": "Kliendid",
     "type": {
       "organization": "Organisatsioon",

@@ -528,6 +528,7 @@
     "status": "Statut",
     "tryAgain": "Réessayer",
     "type": "Type",
+    "typeNameToConfirm": "Saisissez le nom pour confirmer",
     "uncategorized": "Non catégorisé",
     "unexpectedError": "Une erreur inattendue est survenue. Veuillez contacter le support.",
     "unpin": "Désépingler",
@@ -572,14 +573,44 @@
     },
     "communication": {
       "addAddress": "Ajouter une adresse",
+      "addDataBox": "Ajouter une boîte de données",
       "addEmail": "Ajouter un e-mail",
       "addPhone": "Ajouter un téléphone",
       "addresses": "Adresses",
+      "alreadyExists": "Ce moyen de contact existe déjà.",
+      "dataBoxPlaceholder": "ID de boîte de données",
+      "dataBoxes": "Boîtes de données",
+      "emailPlaceholder": "nom@example.com",
       "emails": "E-mails",
-      "phones": "Téléphones"
+      "invalidDataBox": "L'ID de boîte de données doit contenir 7 lettres ou chiffres.",
+      "invalidEmail": "Saisissez une adresse e-mail valide.",
+      "phonePlaceholder": "+33...",
+      "phones": "Téléphones",
+      "title": "Communication"
+    },
+    "create": {
+      "aresApplied": "Données ARES appliquées.",
+      "aresHint": "Facultatif. Utilisez un IČO tchèque pour remplir les informations de l'organisation.",
+      "aresLookup": "Remplir depuis ARES",
+      "aresNotFound": "Aucune entreprise trouvée pour cet IČO.",
+      "aresTitle": "Registre tchèque (ARES)",
+      "contactName": "Nom du contact",
+      "icoPlaceholder": "IČO",
+      "invalidIco": "Saisissez un IČO à 8 chiffres."
     },
     "createOrganization": "Créer \"{name}\" comme organisation",
     "createPerson": "Créer \"{name}\" comme personne",
+    "customFields": {
+      "addField": "Ajouter un champ",
+      "empty": "Aucun champ personnalisé pour le moment.",
+      "label": "Nom du champ",
+      "labelPlaceholder": "Nom du champ",
+      "labelRequired": "Le nom du champ est obligatoire.",
+      "removeField": "Supprimer le champ",
+      "title": "Champs personnalisés",
+      "value": "Valeur du champ",
+      "valuePlaceholder": "Valeur"
+    },
     "deleteContact": "Supprimer le client",
     "deleteContactConfirmDescription": "Voulez-vous vraiment supprimer ce contact ? Cette action est irréversible.",
     "editContact": "Modifier le client",
@@ -630,7 +661,7 @@
       "office": "Bureau",
       "other": "Autre"
     },
-    "search": "Rechercher des clients...",
+    "search": "Rechercher des contacts...",
     "title": "Clients",
     "type": {
       "organization": "Organisation",

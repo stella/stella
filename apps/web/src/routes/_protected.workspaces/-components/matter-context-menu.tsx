@@ -24,6 +24,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stella/ui/components/button";
+import { DestructiveConfirmDialog } from "@stella/ui/components/destructive-confirm-dialog";
 import {
   Dialog,
   DialogClose,
@@ -181,6 +182,7 @@ export const MatterContextMenu = ({
     { status: "idle" } | { status: "editing"; draft: string }
   >({ status: "idle" });
   const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const commitRename = () => {
     if (rename.status !== "editing") {
@@ -217,6 +219,40 @@ export const MatterContextMenu = ({
     } catch {
       toastManager.add({ title: t("errors.actionFailed"), type: "error" });
     }
+  };
+
+  const handleDelete = async () => {
+    if (deleteWorkspace.isPending) {
+      return;
+    }
+
+    const toastId = toastManager.add({
+      title: t("workspaces.deletingWorkspace"),
+      type: "loading",
+      timeout: Number.POSITIVE_INFINITY,
+    });
+
+    await deleteWorkspace.mutateAsync(
+      { workspaceId },
+      {
+        onSuccess: () => {
+          toastManager.update(toastId, {
+            title: t("success.workspaceDeletedSuccessfully"),
+            type: "success",
+          });
+          // eslint-disable-next-line typescript/no-floating-promises
+          queryClient.invalidateQueries({
+            queryKey: workspacesKeys.all,
+          });
+        },
+        onError: () => {
+          toastManager.update(toastId, {
+            title: t("errors.failedToDeleteWorkspace"),
+            type: "error",
+          });
+        },
+      },
+    );
   };
 
   return (
@@ -270,39 +306,7 @@ export const MatterContextMenu = ({
               }
             }}
             onCopyLink={handleCopyLink}
-            onDelete={() => {
-              if (deleteWorkspace.isPending) {
-                return;
-              }
-
-              const toastId = toastManager.add({
-                title: t("workspaces.deletingWorkspace"),
-                type: "loading",
-                timeout: Number.POSITIVE_INFINITY,
-              });
-
-              deleteWorkspace.mutate(
-                { workspaceId },
-                {
-                  onSuccess: () => {
-                    toastManager.update(toastId, {
-                      title: t("success.workspaceDeletedSuccessfully"),
-                      type: "success",
-                    });
-                    // eslint-disable-next-line typescript/no-floating-promises
-                    queryClient.invalidateQueries({
-                      queryKey: workspacesKeys.all,
-                    });
-                  },
-                  onError: () => {
-                    toastManager.update(toastId, {
-                      title: t("errors.failedToDeleteWorkspace"),
-                      type: "error",
-                    });
-                  },
-                },
-              );
-            }}
+            onDelete={() => setDeleteOpen(true)}
             onRename={() => {
               setRename({ status: "editing", draft: workspaceName });
             }}
@@ -318,6 +322,18 @@ export const MatterContextMenu = ({
           workspaceId={workspaceId}
         />
       )}
+      <DestructiveConfirmDialog
+        cancelLabel={t("common.cancel")}
+        confirmLabel={t("common.delete")}
+        confirmation={workspaceName}
+        description={t("workspaces.deleteWorkspaceConfirmDescription")}
+        inputLabel={t("common.typeNameToConfirm")}
+        loading={deleteWorkspace.isPending}
+        onConfirm={handleDelete}
+        onOpenChange={setDeleteOpen}
+        open={deleteOpen}
+        title={t("workspaces.deleteWorkspace")}
+      />
     </div>
   );
 };

@@ -528,6 +528,7 @@
     "status": "Status",
     "tryAgain": "Erneut versuchen",
     "type": "Typ",
+    "typeNameToConfirm": "Geben Sie zur Bestätigung den Namen ein",
     "uncategorized": "Nicht kategorisiert",
     "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten. Bitte kontaktieren Sie den Support.",
     "unpin": "Lösen",
@@ -572,14 +573,44 @@
     },
     "communication": {
       "addAddress": "Adresse hinzufügen",
+      "addDataBox": "Databox hinzufügen",
       "addEmail": "E-Mail hinzufügen",
       "addPhone": "Telefon hinzufügen",
       "addresses": "Adressen",
+      "alreadyExists": "Diese Kontaktangabe existiert bereits.",
+      "dataBoxPlaceholder": "Databox-ID",
+      "dataBoxes": "Databoxen",
+      "emailPlaceholder": "name@example.com",
       "emails": "E-Mails",
-      "phones": "Telefone"
+      "invalidDataBox": "Die Databox-ID muss aus 7 Buchstaben oder Ziffern bestehen.",
+      "invalidEmail": "Geben Sie eine gültige E-Mail-Adresse ein.",
+      "phonePlaceholder": "+49...",
+      "phones": "Telefone",
+      "title": "Kommunikation"
+    },
+    "create": {
+      "aresApplied": "ARES-Daten wurden übernommen.",
+      "aresHint": "Optional. Verwenden Sie eine tschechische IČO, um Organisationsdaten zu übernehmen.",
+      "aresLookup": "Aus ARES übernehmen",
+      "aresNotFound": "Für diese IČO wurde kein Unternehmen gefunden.",
+      "aresTitle": "Tschechisches Register (ARES)",
+      "contactName": "Kontaktname",
+      "icoPlaceholder": "IČO",
+      "invalidIco": "Geben Sie eine 8-stellige IČO ein."
     },
     "createOrganization": "\"{name}\" als Organisation erstellen",
     "createPerson": "\"{name}\" als Person erstellen",
+    "customFields": {
+      "addField": "Feld hinzufügen",
+      "empty": "Noch keine benutzerdefinierten Felder.",
+      "label": "Feldname",
+      "labelPlaceholder": "Feldname",
+      "labelRequired": "Feldname ist erforderlich.",
+      "removeField": "Feld entfernen",
+      "title": "Benutzerdefinierte Felder",
+      "value": "Feldwert",
+      "valuePlaceholder": "Wert"
+    },
     "deleteContact": "Klient löschen",
     "deleteContactConfirmDescription": "Möchten Sie diesen Kontakt wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
     "editContact": "Klient bearbeiten",
@@ -630,7 +661,7 @@
       "office": "Büro",
       "other": "Sonstige"
     },
-    "search": "Klienten suchen...",
+    "search": "Kontakte suchen...",
     "title": "Klienten",
     "type": {
       "organization": "Organisation",

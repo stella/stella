@@ -182,6 +182,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-route-query-client.ts",
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
+    "./.oxlint-plugins/no-raw-user-id-schema.ts",
   ],
 
   overrides: [
@@ -662,6 +663,7 @@ export default defineConfig({
       files: ["apps/api/src/handlers/**/*.ts"],
       rules: {
         "no-body-ownership-ids/no-body-ownership-ids": "error",
+        "no-raw-user-id-schema/no-raw-user-id-schema": "error",
         "no-untyped-updates/no-untyped-updates": "error",
         "security-guards/no-unscoped-user-query": "warn",
         "no-restricted-imports": [
@@ -714,6 +716,7 @@ export default defineConfig({
         "require-yield": "off",
         "typescript/unbound-method": "off",
         "no-body-ownership-ids/no-body-ownership-ids": "off",
+        "no-raw-user-id-schema/no-raw-user-id-schema": "off",
         "no-untyped-updates/no-untyped-updates": "off",
         "no-unbranded-ownership-id-param/no-unbranded-ownership-id-param":
           "off",

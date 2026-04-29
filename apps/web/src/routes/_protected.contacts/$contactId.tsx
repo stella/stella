@@ -1,40 +1,44 @@
-import { useState } from "react";
+import type { ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   BuildingIcon,
+  InboxIcon,
   LayersIcon,
   MailIcon,
   PlusIcon,
   PhoneIcon,
+  Trash2Icon,
   UserIcon,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-} from "@stella/ui/components/alert-dialog";
 import { Button } from "@stella/ui/components/button";
+import { DestructiveConfirmDialog } from "@stella/ui/components/destructive-confirm-dialog";
 import { Input } from "@stella/ui/components/input";
 import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stella/ui/components/popover";
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stella/ui/components/select";
 import { Skeleton } from "@stella/ui/components/skeleton";
+import { Textarea } from "@stella/ui/components/textarea";
 import { toastManager } from "@stella/ui/components/toast";
 
 import { UserIdentity } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";
-import { getMatterSwatch, MATTER_SWATCHES } from "@/lib/matter-colors";
+import { getMatterSwatch } from "@/lib/matter-colors";
 import {
   useDeleteContact,
   useUpdateContact,
@@ -43,7 +47,11 @@ import {
   contactOptions,
   contactsKeys,
 } from "@/routes/_protected.contacts/-queries";
-import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
+import { organizationOptions } from "@/routes/_protected.organization/-queries";
+import {
+  PARTY_ROLE_LABEL_KEYS,
+  toPartyRole,
+} from "@/routes/_protected.workspaces/$workspaceId/-party-roles";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
 export const Route = createFileRoute("/_protected/contacts/$contactId")({
@@ -72,8 +80,8 @@ function ContactDetailPage() {
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
-  const handleDelete = () => {
-    deleteContact.mutate(
+  const handleDelete = async () => {
+    await deleteContact.mutateAsync(
       { contactId },
       {
         // eslint-disable-next-line typescript/no-misused-promises
@@ -97,11 +105,6 @@ function ContactDetailPage() {
       },
     );
   };
-
-  const primaryEmail =
-    contact.emails?.find((e) => e.isPrimary) ?? contact.emails?.at(0);
-  const primaryPhone =
-    contact.phones?.find((p) => p.isPrimary) ?? contact.phones?.at(0);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto border-t p-4">
@@ -211,56 +214,9 @@ function ContactDetailPage() {
         {/* Communication */}
         <section className="rounded-lg border p-4">
           <h2 className="text-muted-foreground mb-3 text-sm font-medium">
-            {t("contacts.communication.emails")} {"& "}
-            {t("contacts.communication.phones")}
+            {t("contacts.communication.title")}
           </h2>
-          <div className="space-y-3 text-sm">
-            {primaryEmail && (
-              <div className="flex items-center gap-2">
-                <MailIcon className="text-muted-foreground size-4" />
-                <span>{primaryEmail.address}</span>
-                <span className="text-muted-foreground text-xs">
-                  ({t(`contacts.emailTypes.${primaryEmail.type}`)})
-                </span>
-              </div>
-            )}
-            {contact.emails
-              ?.filter((e) => e !== primaryEmail)
-              .map((email) => (
-                <div className="flex items-center gap-2" key={email.address}>
-                  <MailIcon className="text-muted-foreground size-4" />
-                  <span>{email.address}</span>
-                  <span className="text-muted-foreground text-xs">
-                    ({t(`contacts.emailTypes.${email.type}`)})
-                  </span>
-                </div>
-              ))}
-            {primaryPhone && (
-              <div className="flex items-center gap-2">
-                <PhoneIcon className="text-muted-foreground size-4" />
-                <span>{primaryPhone.number}</span>
-                <span className="text-muted-foreground text-xs">
-                  ({t(`contacts.phoneTypes.${primaryPhone.type}`)})
-                </span>
-              </div>
-            )}
-            {contact.phones
-              ?.filter((p) => p !== primaryPhone)
-              .map((phone) => (
-                <div className="flex items-center gap-2" key={phone.number}>
-                  <PhoneIcon className="text-muted-foreground size-4" />
-                  <span>{phone.number}</span>
-                  <span className="text-muted-foreground text-xs">
-                    ({t(`contacts.phoneTypes.${phone.type}`)})
-                  </span>
-                </div>
-              ))}
-            {!primaryEmail && !primaryPhone && (
-              <p className="text-muted-foreground">
-                {t("contacts.noContactsFound")}
-              </p>
-            )}
-          </div>
+          <ContactCommunicationEditor contact={contact} />
         </section>
 
         {/* Billing details (organizations) */}
@@ -388,42 +344,16 @@ function ContactDetailPage() {
           </section>
         )}
 
-        {/* Responsible attorneys */}
-        {(contact.originatingAttorney ?? contact.responsibleAttorney) && (
-          <section className="rounded-lg border p-4">
-            <h2 className="text-muted-foreground mb-3 text-sm font-medium">
-              {t("contacts.attorneys.title")}
-            </h2>
-            <div className="space-y-2 text-sm">
-              {contact.originatingAttorney && (
-                <UserInfoRow
-                  image={contact.originatingAttorney.image}
-                  label={t("contacts.attorneys.originating")}
-                  name={contact.originatingAttorney.name}
-                />
-              )}
-              {contact.responsibleAttorney && (
-                <UserInfoRow
-                  image={contact.responsibleAttorney.image}
-                  label={t("contacts.attorneys.responsible")}
-                  name={contact.responsibleAttorney.name}
-                />
-              )}
-            </div>
-          </section>
-        )}
+        <ContactOwnersEditor contact={contact} />
+
+        <ContactCustomFieldsEditor contact={contact} />
 
         {/* Notes */}
         <section className="rounded-lg border p-4 md:col-span-2">
           <h2 className="text-muted-foreground mb-3 text-sm font-medium">
             {t("common.notes")}
           </h2>
-          <EditableRow
-            contact={contact}
-            field="notes"
-            label=""
-            value={contact.notes}
-          />
+          <ContactNotesEditor contact={contact} />
         </section>
 
         {/* Matters as client */}
@@ -434,23 +364,20 @@ function ContactDetailPage() {
           {contact.clientMatters.length > 0 ? (
             <ul className="space-y-2">
               {contact.clientMatters.map((matter) => (
-                <li
-                  className="hover:bg-muted flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors"
-                  key={matter.id}
-                >
-                  <MatterColorIcon matter={matter} />
+                <li key={matter.id}>
                   <Link
-                    className="font-medium hover:underline"
+                    className="hover:bg-muted flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors"
                     params={{ workspaceId: matter.id }}
                     to="/workspaces/$workspaceId"
                   >
-                    {matter.name}
+                    <MatterIcon matter={matter} />
+                    <span className="font-medium">{matter.name}</span>
+                    <span className="text-muted-foreground ms-auto text-xs">
+                      {t("common.createdAt", {
+                        date: new Date(matter.createdAt).toLocaleDateString(),
+                      })}
+                    </span>
                   </Link>
-                  <span className="text-muted-foreground ms-auto text-xs">
-                    {t("common.createdAt", {
-                      date: new Date(matter.createdAt).toLocaleDateString(),
-                    })}
-                  </span>
                 </li>
               ))}
             </ul>
@@ -460,39 +387,754 @@ function ContactDetailPage() {
             </p>
           )}
           {contact.partyCount > 0 && (
-            <p className="text-muted-foreground mt-3 text-xs">
-              {t("contacts.alsoPartyIn", {
-                count: contact.partyCount,
-              })}
-            </p>
+            <div className="mt-3 space-y-2">
+              <p className="text-muted-foreground text-xs">
+                {t("contacts.alsoPartyIn", {
+                  count: contact.partyCount,
+                })}
+              </p>
+              <ul className="space-y-2">
+                {contact.partyMatters.map((matter) => (
+                  <li key={matter.id}>
+                    <PartyMatterRow matter={matter} />
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </section>
       </div>
 
-      {/* Delete confirmation */}
-      <AlertDialog onOpenChange={setIsDeleteOpen} open={isDeleteOpen}>
-        <AlertDialogPopup>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("contacts.deleteContact")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("contacts.deleteContactConfirmDescription")}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="ghost" />}>
-              {t("common.cancel")}
-            </AlertDialogClose>
-            <AlertDialogClose
-              render={<Button onClick={handleDelete} variant="destructive" />}
-            >
-              {t("common.delete")}
-            </AlertDialogClose>
-          </AlertDialogFooter>
-        </AlertDialogPopup>
-      </AlertDialog>
+      <DestructiveConfirmDialog
+        cancelLabel={t("common.cancel")}
+        confirmLabel={t("common.delete")}
+        confirmation={contact.displayName}
+        description={t("contacts.deleteContactConfirmDescription")}
+        inputLabel={t("common.typeNameToConfirm")}
+        loading={deleteContact.isPending}
+        onConfirm={handleDelete}
+        onOpenChange={setIsDeleteOpen}
+        open={isDeleteOpen}
+        title={t("contacts.deleteContact")}
+      />
     </div>
   );
 }
+
+const EmailLink = ({ address }: { address: string }) => (
+  <a
+    className="hover:text-foreground min-w-0 break-all hover:underline"
+    href={`mailto:${address}`}
+  >
+    {address}
+  </a>
+);
+
+type ContactEmail = {
+  type: "work" | "personal" | "other";
+  address: string;
+  isPrimary: boolean;
+  label?: string;
+};
+
+type ContactPhone = {
+  type: "mobile" | "office" | "home" | "fax" | "other";
+  number: string;
+  isPrimary: boolean;
+  label?: string;
+};
+
+type ContactDataBox = {
+  id: string;
+  isPrimary: boolean;
+  label?: string;
+};
+
+type ContactCustomField = {
+  id: string;
+  label: string;
+  value: string;
+};
+
+type ContactMetadata = {
+  dataBoxes?: ContactDataBox[];
+  customFields?: ContactCustomField[];
+};
+
+type ContactPatch = {
+  emails?: ContactEmail[] | null;
+  phones?: ContactPhone[] | null;
+  metadata?: ContactMetadata | null;
+};
+
+const DATA_BOX_ID_PATTERN = /^[a-z0-9]{7}$/;
+const EMAIL_SCHEMA = v.pipe(v.string(), v.trim(), v.email());
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isContactDataBox = (value: unknown): value is ContactDataBox =>
+  isRecord(value) &&
+  typeof value["id"] === "string" &&
+  typeof value["isPrimary"] === "boolean" &&
+  (value["label"] === undefined || typeof value["label"] === "string");
+
+const isContactCustomField = (value: unknown): value is ContactCustomField =>
+  isRecord(value) &&
+  typeof value["id"] === "string" &&
+  typeof value["label"] === "string" &&
+  typeof value["value"] === "string";
+
+const getContactMetadata = (contact: ContactData): ContactMetadata => {
+  const metadata = contact.metadata;
+
+  if (!isRecord(metadata)) {
+    return {};
+  }
+
+  const { customFields, dataBoxes } = metadata;
+
+  return {
+    dataBoxes: Array.isArray(dataBoxes)
+      ? dataBoxes.filter(isContactDataBox)
+      : [],
+    customFields: Array.isArray(customFields)
+      ? customFields.filter(isContactCustomField)
+      : [],
+  };
+};
+
+const useContactPatch = (contact: ContactData) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const updateContact = useUpdateContact();
+
+  const handleSuccess = () => {
+    // eslint-disable-next-line typescript/no-floating-promises
+    queryClient.invalidateQueries({
+      queryKey: contactsKeys.byId(contact.id),
+    });
+    // eslint-disable-next-line typescript/no-floating-promises
+    queryClient.invalidateQueries({
+      queryKey: contactsKeys.list(),
+    });
+  };
+
+  const handleError = (onError?: () => void) => {
+    toastManager.add({
+      title: t("errors.actionFailed"),
+      type: "error",
+    });
+    onError?.();
+  };
+
+  const saveContactPatch = (patch: ContactPatch, onError?: () => void) => {
+    updateContact.mutate(
+      { contactId: contact.id, ...patch },
+      {
+        onSuccess: handleSuccess,
+        onError: () => handleError(onError),
+      },
+    );
+  };
+
+  const saveContactPatchAsync = async (patch: ContactPatch) => {
+    try {
+      await updateContact.mutateAsync(
+        { contactId: contact.id, ...patch },
+        { onSuccess: handleSuccess },
+      );
+      return true;
+    } catch {
+      handleError();
+      return false;
+    }
+  };
+
+  return {
+    isPending: updateContact.isPending,
+    saveContactPatch,
+    saveContactPatchAsync,
+  };
+};
+
+const ContactCommunicationEditor = ({ contact }: { contact: ContactData }) => {
+  const t = useTranslations();
+  const { isPending, saveContactPatch } = useContactPatch(contact);
+  const [emailDraft, setEmailDraft] = useState("");
+  const [phoneDraft, setPhoneDraft] = useState("");
+  const [dataBoxDraft, setDataBoxDraft] = useState("");
+
+  const emails = contact.emails ?? [];
+  const phones = contact.phones ?? [];
+  const metadata = getContactMetadata(contact);
+  const dataBoxes = metadata.dataBoxes ?? [];
+
+  const addEmail = () => {
+    const address = emailDraft.trim();
+    if (!address) {
+      return;
+    }
+
+    if (!v.safeParse(EMAIL_SCHEMA, address).success) {
+      toastManager.add({
+        title: t("contacts.communication.invalidEmail"),
+        type: "error",
+      });
+      return;
+    }
+
+    if (
+      emails.some(
+        (email) => email.address.toLowerCase() === address.toLowerCase(),
+      )
+    ) {
+      toastManager.add({
+        title: t("contacts.communication.alreadyExists"),
+        type: "error",
+      });
+      return;
+    }
+
+    saveContactPatch(
+      {
+        emails: [
+          ...emails,
+          {
+            address,
+            isPrimary: emails.length === 0,
+            type: "work",
+          },
+        ],
+      },
+      () => setEmailDraft(address),
+    );
+    setEmailDraft("");
+  };
+
+  const addPhone = () => {
+    const number = phoneDraft.trim();
+    if (!number) {
+      return;
+    }
+
+    if (phones.some((phone) => phone.number === number)) {
+      toastManager.add({
+        title: t("contacts.communication.alreadyExists"),
+        type: "error",
+      });
+      return;
+    }
+
+    saveContactPatch(
+      {
+        phones: [
+          ...phones,
+          {
+            isPrimary: phones.length === 0,
+            number,
+            type: "office",
+          },
+        ],
+      },
+      () => setPhoneDraft(number),
+    );
+    setPhoneDraft("");
+  };
+
+  const addDataBox = () => {
+    const id = dataBoxDraft.trim().toLowerCase();
+    if (!id) {
+      return;
+    }
+
+    if (!DATA_BOX_ID_PATTERN.test(id)) {
+      toastManager.add({
+        title: t("contacts.communication.invalidDataBox"),
+        type: "error",
+      });
+      return;
+    }
+
+    if (dataBoxes.some((dataBox) => dataBox.id === id)) {
+      toastManager.add({
+        title: t("contacts.communication.alreadyExists"),
+        type: "error",
+      });
+      return;
+    }
+
+    saveContactPatch(
+      {
+        metadata: {
+          ...metadata,
+          dataBoxes: [
+            ...dataBoxes,
+            {
+              id,
+              isPrimary: dataBoxes.length === 0,
+            },
+          ],
+        },
+      },
+      () => setDataBoxDraft(id),
+    );
+    setDataBoxDraft("");
+  };
+
+  const removeEmail = (address: string) => {
+    saveContactPatch({
+      emails: emails.filter((email) => email.address !== address),
+    });
+  };
+
+  const removePhone = (number: string) => {
+    saveContactPatch({
+      phones: phones.filter((phone) => phone.number !== number),
+    });
+  };
+
+  const removeDataBox = (id: string) => {
+    saveContactPatch({
+      metadata: {
+        ...metadata,
+        dataBoxes: dataBoxes.filter((dataBox) => dataBox.id !== id),
+      },
+    });
+  };
+
+  const hasContactMethods =
+    emails.length > 0 || phones.length > 0 || dataBoxes.length > 0;
+
+  return (
+    <div className="space-y-4 text-sm">
+      <ContactMethodGroup title={t("contacts.communication.emails")}>
+        {emails.map((email) => (
+          <ContactMethodRow
+            disabled={isPending}
+            icon={MailIcon}
+            key={email.address}
+            onRemove={() => removeEmail(email.address)}
+          >
+            <EmailLink address={email.address} />
+            <span className="text-muted-foreground text-xs">
+              {t(`contacts.emailTypes.${email.type}`)}
+            </span>
+          </ContactMethodRow>
+        ))}
+        <AddContactMethodForm
+          buttonLabel={t("contacts.communication.addEmail")}
+          disabled={isPending}
+          inputMode="email"
+          onSubmit={addEmail}
+          onValueChange={setEmailDraft}
+          placeholder={t("contacts.communication.emailPlaceholder")}
+          value={emailDraft}
+        />
+      </ContactMethodGroup>
+
+      <ContactMethodGroup title={t("contacts.communication.phones")}>
+        {phones.map((phone) => (
+          <ContactMethodRow
+            disabled={isPending}
+            icon={PhoneIcon}
+            key={phone.number}
+            onRemove={() => removePhone(phone.number)}
+          >
+            <span className="min-w-0 break-all">{phone.number}</span>
+            <span className="text-muted-foreground text-xs">
+              {t(`contacts.phoneTypes.${phone.type}`)}
+            </span>
+          </ContactMethodRow>
+        ))}
+        <AddContactMethodForm
+          buttonLabel={t("contacts.communication.addPhone")}
+          disabled={isPending}
+          inputMode="tel"
+          onSubmit={addPhone}
+          onValueChange={setPhoneDraft}
+          placeholder={t("contacts.communication.phonePlaceholder")}
+          value={phoneDraft}
+        />
+      </ContactMethodGroup>
+
+      <ContactMethodGroup title={t("contacts.communication.dataBoxes")}>
+        {dataBoxes.map((dataBox) => (
+          <ContactMethodRow
+            disabled={isPending}
+            icon={InboxIcon}
+            key={dataBox.id}
+            onRemove={() => removeDataBox(dataBox.id)}
+          >
+            <span className="font-mono text-xs">{dataBox.id}</span>
+          </ContactMethodRow>
+        ))}
+        <AddContactMethodForm
+          buttonLabel={t("contacts.communication.addDataBox")}
+          disabled={isPending}
+          maxLength={7}
+          onSubmit={addDataBox}
+          onValueChange={setDataBoxDraft}
+          placeholder={t("contacts.communication.dataBoxPlaceholder")}
+          value={dataBoxDraft}
+        />
+      </ContactMethodGroup>
+
+      {!hasContactMethods && (
+        <p className="text-muted-foreground">{t("contacts.noContactsFound")}</p>
+      )}
+    </div>
+  );
+};
+
+const ContactMethodGroup = ({
+  children,
+  title,
+}: {
+  children: ReactNode;
+  title: string;
+}) => (
+  <div className="space-y-2">
+    <p className="text-muted-foreground text-xs font-medium">{title}</p>
+    {children}
+  </div>
+);
+
+const ContactMethodRow = ({
+  children,
+  disabled,
+  icon: Icon,
+  onRemove,
+}: {
+  children: ReactNode;
+  disabled: boolean;
+  icon: LucideIcon;
+  onRemove: () => void;
+}) => {
+  const t = useTranslations();
+
+  return (
+    <div className="group flex min-w-0 items-center gap-2">
+      <Icon className="text-muted-foreground size-4 shrink-0" />
+      <div className="flex min-w-0 flex-1 items-baseline gap-2">{children}</div>
+      <Button
+        aria-label={t("common.delete")}
+        className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+        disabled={disabled}
+        onClick={onRemove}
+        size="icon-xs"
+        type="button"
+        variant="ghost"
+      >
+        <Trash2Icon className="size-3.5" />
+      </Button>
+    </div>
+  );
+};
+
+const AddContactMethodForm = ({
+  buttonLabel,
+  disabled,
+  inputMode,
+  maxLength,
+  onSubmit,
+  onValueChange,
+  placeholder,
+  type = "text",
+  value,
+}: {
+  buttonLabel: string;
+  disabled: boolean;
+  inputMode?: "email" | "tel";
+  maxLength?: number;
+  onSubmit: () => void;
+  onValueChange: (value: string) => void;
+  placeholder: string;
+  type?: "text";
+  value: string;
+}) => (
+  <form
+    className="flex gap-2"
+    noValidate
+    onSubmit={(event) => {
+      event.preventDefault();
+      onSubmit();
+    }}
+  >
+    <Input
+      className="h-8 min-w-0 flex-1 text-sm"
+      disabled={disabled}
+      inputMode={inputMode}
+      maxLength={maxLength}
+      onChange={(event) => onValueChange(event.currentTarget.value)}
+      placeholder={placeholder}
+      type={type}
+      value={value}
+    />
+    <Button
+      disabled={disabled || value.trim().length === 0}
+      size="sm"
+      type="submit"
+    >
+      <PlusIcon className="size-4" />
+      {buttonLabel}
+    </Button>
+  </form>
+);
+
+const ContactCustomFieldsEditor = ({ contact }: { contact: ContactData }) => {
+  const t = useTranslations();
+  const { isPending, saveContactPatch, saveContactPatchAsync } =
+    useContactPatch(contact);
+  const [labelDraft, setLabelDraft] = useState("");
+  const [valueDraft, setValueDraft] = useState("");
+  const metadata = getContactMetadata(contact);
+  const customFields = metadata.customFields ?? [];
+
+  const addCustomField = () => {
+    const label = labelDraft.trim();
+    if (!label) {
+      return;
+    }
+
+    saveContactPatch(
+      {
+        metadata: {
+          ...metadata,
+          customFields: [
+            ...customFields,
+            {
+              id: crypto.randomUUID(),
+              label,
+              value: valueDraft.trim(),
+            },
+          ],
+        },
+      },
+      () => {
+        setLabelDraft(label);
+        setValueDraft(valueDraft);
+      },
+    );
+    setLabelDraft("");
+    setValueDraft("");
+  };
+
+  const updateCustomField = async (
+    fieldId: string,
+    patch: ContactCustomField,
+  ) => {
+    const label = patch.label.trim();
+    const value = patch.value.trim();
+
+    if (!label) {
+      toastManager.add({
+        title: t("contacts.customFields.labelRequired"),
+        type: "error",
+      });
+      return false;
+    }
+
+    return await saveContactPatchAsync({
+      metadata: {
+        ...metadata,
+        customFields: customFields.map((field) =>
+          field.id === fieldId
+            ? {
+                ...patch,
+                label,
+                value,
+              }
+            : field,
+        ),
+      },
+    });
+  };
+
+  const removeCustomField = (fieldId: string) => {
+    saveContactPatch({
+      metadata: {
+        ...metadata,
+        customFields: customFields.filter((field) => field.id !== fieldId),
+      },
+    });
+  };
+
+  return (
+    <section className="rounded-lg border p-4 md:col-span-2">
+      <h2 className="text-muted-foreground mb-3 text-sm font-medium">
+        {t("contacts.customFields.title")}
+      </h2>
+      <div className="space-y-3">
+        {customFields.map((field) => (
+          <CustomFieldRow
+            disabled={isPending}
+            field={field}
+            key={field.id}
+            onRemove={() => removeCustomField(field.id)}
+            onSave={async (patch) => await updateCustomField(field.id, patch)}
+          />
+        ))}
+        {customFields.length === 0 && (
+          <p className="text-muted-foreground text-sm">
+            {t("contacts.customFields.empty")}
+          </p>
+        )}
+        <form
+          className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]"
+          onSubmit={(event) => {
+            event.preventDefault();
+            addCustomField();
+          }}
+        >
+          <Input
+            disabled={isPending}
+            maxLength={128}
+            onChange={(event) => setLabelDraft(event.currentTarget.value)}
+            placeholder={t("contacts.customFields.labelPlaceholder")}
+            value={labelDraft}
+          />
+          <Input
+            disabled={isPending}
+            maxLength={2000}
+            onChange={(event) => setValueDraft(event.currentTarget.value)}
+            placeholder={t("contacts.customFields.valuePlaceholder")}
+            value={valueDraft}
+          />
+          <Button
+            disabled={isPending || labelDraft.trim().length === 0}
+            type="submit"
+          >
+            <PlusIcon className="size-4" />
+            {t("contacts.customFields.addField")}
+          </Button>
+        </form>
+      </div>
+    </section>
+  );
+};
+
+const CustomFieldRow = ({
+  disabled,
+  field,
+  onRemove,
+  onSave,
+}: {
+  disabled: boolean;
+  field: ContactCustomField;
+  onRemove: () => void;
+  onSave: (field: ContactCustomField) => Promise<boolean>;
+}) => {
+  const t = useTranslations();
+  const [label, setLabel] = useState(field.label);
+  const [value, setValue] = useState(field.value);
+  const latestFieldRef = useRef({ label: field.label, value: field.value });
+
+  useEffect(() => {
+    const nextField = { label: field.label, value: field.value };
+    setLabel((currentLabel) =>
+      currentLabel === latestFieldRef.current.label
+        ? nextField.label
+        : currentLabel,
+    );
+    setValue((currentValue) =>
+      currentValue === latestFieldRef.current.value
+        ? nextField.value
+        : currentValue,
+    );
+    latestFieldRef.current = nextField;
+  }, [field.label, field.value]);
+
+  const save = async () => {
+    if (label === field.label && value === field.value) {
+      return;
+    }
+
+    const nextField = {
+      ...field,
+      label: label.trim(),
+      value: value.trim(),
+    };
+
+    if (!(await onSave(nextField))) {
+      return;
+    }
+
+    setLabel(nextField.label);
+    setValue(nextField.value);
+  };
+
+  return (
+    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
+      <Input
+        aria-label={t("contacts.customFields.label")}
+        disabled={disabled}
+        maxLength={128}
+        onBlur={() => {
+          // eslint-disable-next-line typescript/no-floating-promises
+          save();
+        }}
+        onChange={(event) => setLabel(event.currentTarget.value)}
+        value={label}
+      />
+      <Input
+        aria-label={t("contacts.customFields.value")}
+        disabled={disabled}
+        maxLength={2000}
+        onBlur={() => {
+          // eslint-disable-next-line typescript/no-floating-promises
+          save();
+        }}
+        onChange={(event) => setValue(event.currentTarget.value)}
+        value={value}
+      />
+      <Button
+        aria-label={t("contacts.customFields.removeField")}
+        disabled={disabled}
+        onClick={onRemove}
+        size="icon-sm"
+        type="button"
+        variant="ghost"
+      >
+        <Trash2Icon className="size-4" />
+      </Button>
+    </div>
+  );
+};
+
+type PartyMatter = ContactData["partyMatters"][number];
+
+const PartyMatterRow = ({ matter }: { matter: PartyMatter }) => {
+  const t = useTranslations();
+
+  return (
+    <Link
+      className="hover:bg-muted flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors"
+      params={{ workspaceId: matter.id }}
+      to="/workspaces/$workspaceId"
+    >
+      <MatterIcon matter={matter} />
+      <span className="font-medium">{matter.name}</span>
+      <div className="ms-auto flex flex-wrap justify-end gap-1">
+        {matter.roles.map((role) => {
+          const parsedRole = toPartyRole(role);
+          const roleKey = parsedRole
+            ? PARTY_ROLE_LABEL_KEYS[parsedRole]
+            : PARTY_ROLE_LABEL_KEYS.other;
+
+          return (
+            <span
+              className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs"
+              key={role}
+            >
+              {t(roleKey)}
+            </span>
+          );
+        })}
+      </div>
+    </Link>
+  );
+};
 
 // Read-only row for non-editable fields
 const InfoRow = ({ label, value }: { label: string; value: string }) => (
@@ -502,23 +1144,170 @@ const InfoRow = ({ label, value }: { label: string; value: string }) => (
   </div>
 );
 
-const UserInfoRow = ({
-  image,
-  label,
-  name,
-}: {
-  image?: string | null | undefined;
+const NO_OWNER_VALUE = "__none";
+
+const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const updateContact = useUpdateContact();
+  const { data: organization } = useQuery(organizationOptions);
+
+  const memberItems = (organization?.members ?? []).map((member) => ({
+    email: member.user.email,
+    image: member.user.image,
+    name: member.user.name,
+    value: member.userId,
+  }));
+
+  const updateOwner = (
+    field: "originatingAttorneyId" | "responsibleAttorneyId",
+    value: string | null,
+  ) => {
+    const nextValue = value === NO_OWNER_VALUE ? null : value;
+    if (contact[field] === nextValue) {
+      return;
+    }
+
+    updateContact.mutate(
+      {
+        contactId: contact.id,
+        [field]: nextValue,
+      },
+      {
+        onSuccess: () => {
+          // eslint-disable-next-line typescript/no-floating-promises
+          queryClient.invalidateQueries({
+            queryKey: contactsKeys.byId(contact.id),
+          });
+          // eslint-disable-next-line typescript/no-floating-promises
+          queryClient.invalidateQueries({
+            queryKey: contactsKeys.list(),
+          });
+        },
+        onError: () => {
+          toastManager.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
+
+  return (
+    <section className="rounded-lg border p-4">
+      <h2 className="text-muted-foreground mb-3 text-sm font-medium">
+        {t("contacts.attorneys.title")}
+      </h2>
+      <div className="space-y-3 text-sm">
+        <OwnerSelect
+          disabled={updateContact.isPending}
+          label={t("contacts.attorneys.originating")}
+          members={memberItems}
+          noneLabel={t("contacts.attorneys.none")}
+          onValueChange={(value) => updateOwner("originatingAttorneyId", value)}
+          selectedOwner={contact.originatingAttorney}
+          value={contact.originatingAttorneyId ?? NO_OWNER_VALUE}
+        />
+        <OwnerSelect
+          disabled={updateContact.isPending}
+          label={t("contacts.attorneys.responsible")}
+          members={memberItems}
+          noneLabel={t("contacts.attorneys.none")}
+          onValueChange={(value) => updateOwner("responsibleAttorneyId", value)}
+          selectedOwner={contact.responsibleAttorney}
+          value={contact.responsibleAttorneyId ?? NO_OWNER_VALUE}
+        />
+      </div>
+    </section>
+  );
+};
+
+type OwnerSelectProps = {
+  disabled: boolean;
   label: string;
-  name: string;
-}) => (
-  <div className="flex items-start gap-2">
+  members: {
+    email: string;
+    image?: string | null | undefined;
+    name: string;
+    value: string;
+  }[];
+  noneLabel: string;
+  onValueChange: (value: string | null) => void;
+  selectedOwner?: {
+    id: string;
+    image: string | null;
+    name: string;
+  } | null;
+  value: string;
+};
+
+const OwnerSelect = ({
+  disabled,
+  label,
+  members,
+  noneLabel,
+  onValueChange,
+  selectedOwner,
+  value,
+}: OwnerSelectProps) => (
+  <div className="flex items-center gap-2">
     <span className="text-muted-foreground w-32 shrink-0">{label}</span>
-    <UserIdentity
-      avatarClassName="size-8 shrink-0 text-[0.625rem]"
-      className="min-w-0"
-      image={image}
-      name={name}
-    />
+    <Select disabled={disabled} onValueChange={onValueChange} value={value}>
+      <SelectTrigger className="min-w-0 flex-1">
+        <SelectValue>
+          {(current) => {
+            const member = members.find((item) => item.value === current);
+            if (!member) {
+              if (current === NO_OWNER_VALUE) {
+                return (
+                  <span className="text-muted-foreground">{noneLabel}</span>
+                );
+              }
+
+              if (selectedOwner) {
+                return (
+                  <UserIdentity
+                    avatarClassName="size-7 shrink-0 text-[0.625rem]"
+                    className="min-w-0"
+                    image={selectedOwner.image}
+                    name={selectedOwner.name}
+                  />
+                );
+              }
+
+              return <span className="text-muted-foreground">{noneLabel}</span>;
+            }
+
+            return (
+              <UserIdentity
+                avatarClassName="size-7 shrink-0 text-[0.625rem]"
+                className="min-w-0"
+                image={member.image}
+                name={member.name}
+                secondaryText={member.email}
+              />
+            );
+          }}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectPopup>
+        <SelectItem value={NO_OWNER_VALUE}>
+          <span className="text-muted-foreground">{noneLabel}</span>
+        </SelectItem>
+        {members.map((member) => (
+          <SelectItem key={member.value} value={member.value}>
+            <UserIdentity
+              avatarClassName="size-7 shrink-0 text-[0.625rem]"
+              className="min-w-0"
+              image={member.image}
+              name={member.name}
+              secondaryText={member.email}
+            />
+          </SelectItem>
+        ))}
+      </SelectPopup>
+    </Select>
   </div>
 );
 
@@ -557,6 +1346,81 @@ type EditableRowProps = {
   field: EditableField;
   contact: ContactData;
   type?: "text" | "number";
+};
+
+const ContactNotesEditor = ({ contact }: { contact: ContactData }) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const updateContact = useUpdateContact();
+  const [draft, setDraft] = useState(contact.notes ?? "");
+  const latestServerNotesRef = useRef(contact.notes ?? "");
+  const skipNextSaveRef = useRef(false);
+
+  useEffect(() => {
+    const nextNotes = contact.notes ?? "";
+    setDraft((currentDraft) =>
+      currentDraft === latestServerNotesRef.current ? nextNotes : currentDraft,
+    );
+    latestServerNotesRef.current = nextNotes;
+  }, [contact.notes]);
+
+  const handleSave = () => {
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return;
+    }
+
+    const current = contact.notes ?? "";
+    if (draft === current) {
+      return;
+    }
+
+    updateContact.mutate(
+      {
+        contactId: contact.id,
+        notes: draft.trim().length === 0 ? null : draft,
+      },
+      {
+        onSuccess: () => {
+          // eslint-disable-next-line typescript/no-floating-promises
+          queryClient.invalidateQueries({
+            queryKey: contactsKeys.byId(contact.id),
+          });
+          // eslint-disable-next-line typescript/no-floating-promises
+          queryClient.invalidateQueries({
+            queryKey: contactsKeys.list(),
+          });
+        },
+        onError: () => {
+          toastManager.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+          setDraft(current);
+        },
+      },
+    );
+  };
+
+  return (
+    <Textarea
+      aria-label={t("common.notes")}
+      className="min-h-28"
+      disabled={updateContact.isPending}
+      onBlur={handleSave}
+      onChange={(event) => setDraft(event.currentTarget.value)}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          skipNextSaveRef.current = true;
+          setDraft(contact.notes ?? "");
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
+      }}
+      placeholder="—"
+      value={draft}
+    />
+  );
 };
 
 const EditableRow = ({
@@ -679,47 +1543,16 @@ const EditableRow = ({
   );
 };
 
-const MatterColorIcon = ({
+const MatterIcon = ({
   matter,
 }: {
   matter: { id: string; color: string | null };
 }) => {
-  const updateWorkspace = useUpdateWorkspace();
   const activeColor = matter.color
     ? `var(${matter.color})`
     : `var(${getMatterSwatch(matter.id)})`;
 
   return (
-    <Popover>
-      <PopoverTrigger
-        className="hover:bg-muted cursor-pointer rounded p-0.5 transition-colors"
-        render={<button type="button" />}
-      >
-        <LayersIcon
-          className="size-4 shrink-0"
-          style={{ color: activeColor }}
-        />
-      </PopoverTrigger>
-      <PopoverPopup align="start" className="w-auto" sideOffset={8}>
-        <div className="flex gap-1.5">
-          {MATTER_SWATCHES.map((swatch) => (
-            <button
-              className="size-5 rounded-full transition-transform hover:scale-125"
-              key={swatch}
-              onClick={() => {
-                updateWorkspace.mutate({
-                  workspaceId: matter.id,
-                  color: swatch,
-                });
-              }}
-              style={{
-                backgroundColor: `var(${swatch})`,
-              }}
-              type="button"
-            />
-          ))}
-        </div>
-      </PopoverPopup>
-    </Popover>
+    <LayersIcon className="size-4 shrink-0" style={{ color: activeColor }} />
   );
 };

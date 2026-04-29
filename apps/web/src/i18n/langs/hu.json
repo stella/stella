@@ -528,6 +528,7 @@
     "status": "Státusz",
     "tryAgain": "Próbálja újra",
     "type": "Típus",
+    "typeNameToConfirm": "A megerősítéshez írja be a nevet",
     "uncategorized": "Kategória nélküli",
     "unexpectedError": "Váratlan hiba történt. Kérjük, lépjen kapcsolatba az ügyfélszolgálattal.",
     "unpin": "Rögzítés feloldása",
@@ -572,14 +573,44 @@
     },
     "communication": {
       "addAddress": "Cím hozzáadása",
+      "addDataBox": "Adatfiók hozzáadása",
       "addEmail": "E-mail hozzáadása",
       "addPhone": "Telefon hozzáadása",
       "addresses": "Címek",
+      "alreadyExists": "Ez a kapcsolattartási adat már létezik.",
+      "dataBoxPlaceholder": "Adatfiók azonosítója",
+      "dataBoxes": "Adatfiókok",
+      "emailPlaceholder": "nev@example.com",
       "emails": "E-mailek",
-      "phones": "Telefonok"
+      "invalidDataBox": "Az adatfiók azonosítójának 7 betűből vagy számjegyből kell állnia.",
+      "invalidEmail": "Adjon meg érvényes e-mail-címet.",
+      "phonePlaceholder": "+36...",
+      "phones": "Telefonok",
+      "title": "Kommunikáció"
+    },
+    "create": {
+      "aresApplied": "Az ARES-adatok alkalmazva.",
+      "aresHint": "Opcionális. Cseh IČO megadásával kitölthetők a szervezet adatai.",
+      "aresLookup": "Kitöltés ARES-ből",
+      "aresNotFound": "Ehhez az IČO-hoz nem található cég.",
+      "aresTitle": "Cseh nyilvántartás (ARES)",
+      "contactName": "Kapcsolat neve",
+      "icoPlaceholder": "IČO",
+      "invalidIco": "Adjon meg egy 8 számjegyű IČO-t."
     },
     "createOrganization": "\"{name}\" létrehozása szervezetként",
     "createPerson": "\"{name}\" létrehozása személyként",
+    "customFields": {
+      "addField": "Mező hozzáadása",
+      "empty": "Még nincsenek egyéni mezők.",
+      "label": "Mező neve",
+      "labelPlaceholder": "Mező neve",
+      "labelRequired": "A mező neve kötelező.",
+      "removeField": "Mező eltávolítása",
+      "title": "Egyéni mezők",
+      "value": "Mező értéke",
+      "valuePlaceholder": "Érték"
+    },
     "deleteContact": "Ügyfél törlése",
     "deleteContactConfirmDescription": "Biztosan törölni szeretné ezt a kontaktot? Ez a művelet nem vonható vissza.",
     "editContact": "Ügyfél szerkesztése",
@@ -630,7 +661,7 @@
       "office": "Iroda",
       "other": "Egyéb"
     },
-    "search": "Ügyfelek keresése...",
+    "search": "Kapcsolatok keresése...",
     "title": "Ügyfelek",
     "type": {
       "organization": "Szervezet",

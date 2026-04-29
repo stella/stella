@@ -10,12 +10,12 @@ import {
 import { expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 
 const readExpensesQuerySchema = t.Object({
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
   offset: t.Optional(t.Integer({ minimum: 0 })),
-  userId: t.Optional(t.String({ minLength: 1 })),
+  userId: t.Optional(tUserId),
   matterId: t.Optional(tSafeId("entity")),
   dateFrom: t.Optional(t.String({ format: "date" })),
   dateTo: t.Optional(t.String({ format: "date" })),

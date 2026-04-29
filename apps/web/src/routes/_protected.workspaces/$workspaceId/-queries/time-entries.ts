@@ -42,12 +42,13 @@ export const timeEntriesOptions = (
   queryOptions({
     queryKey: timeEntriesKeys.list(workspaceId, filters),
     queryFn: async ({ signal }) => {
-      const { matterId, ...restFilters } = filters;
+      const { matterId, userId, ...restFilters } = filters;
       const response = await api["time-entries"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).get({
         query: {
           ...restFilters,
+          ...(userId !== undefined && { userId: toSafeId<"user">(userId) }),
           ...(matterId !== undefined && {
             matterId: toSafeId<"entity">(matterId),
           }),

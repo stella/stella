@@ -531,6 +531,7 @@ type Messages = {
     "status": "Status";
     "tryAgain": "Try again";
     "type": "Type";
+    "typeNameToConfirm": "Type the name to confirm";
     "uncategorized": "Uncategorized";
     "unexpectedError": "An unexpected error occurred. Please contact support.";
     "unpin": "Unpin";
@@ -559,9 +560,9 @@ type Messages = {
     "alsoPartyIn": "Also appears as party in {count, plural, one {# other matter} other {# other matters}}";
     "attorneys": {
       "none": "Not assigned";
-      "originating": "Originating attorney";
-      "responsible": "Responsible attorney";
-      "title": "Attorneys";
+      "originating": "Primary contact";
+      "responsible": "Responsible person";
+      "title": "Relationship owners";
     };
     "billing": {
       "addBankAccount": "Add bank account";
@@ -575,14 +576,44 @@ type Messages = {
     };
     "communication": {
       "addAddress": "Add address";
+      "addDataBox": "Add data box";
       "addEmail": "Add email";
       "addPhone": "Add phone";
       "addresses": "Addresses";
+      "alreadyExists": "This contact method already exists.";
+      "dataBoxPlaceholder": "Data box ID";
+      "dataBoxes": "Data boxes";
+      "emailPlaceholder": "name@example.com";
       "emails": "Emails";
+      "invalidDataBox": "Data box ID must be 7 letters or digits.";
+      "invalidEmail": "Enter a valid e-mail address.";
+      "phonePlaceholder": "+420...";
       "phones": "Phones";
+      "title": "Communication";
+    };
+    "create": {
+      "aresApplied": "ARES details applied.";
+      "aresHint": "Optional. Use a Czech IČO to fill organization details.";
+      "aresLookup": "Fill from ARES";
+      "aresNotFound": "No company found for this IČO.";
+      "aresTitle": "Czech registry (ARES)";
+      "contactName": "Contact name";
+      "icoPlaceholder": "IČO";
+      "invalidIco": "Enter an 8-digit IČO.";
     };
     "createOrganization": "Create \"{name}\" as organization";
     "createPerson": "Create \"{name}\" as person";
+    "customFields": {
+      "addField": "Add field";
+      "empty": "No custom fields yet.";
+      "label": "Field name";
+      "labelPlaceholder": "Field name";
+      "labelRequired": "Field name is required.";
+      "removeField": "Remove field";
+      "title": "Custom fields";
+      "value": "Field value";
+      "valuePlaceholder": "Value";
+    };
     "deleteContact": "Delete client";
     "deleteContactConfirmDescription": "Are you sure you want to delete this contact? This action cannot be undone.";
     "editContact": "Edit client";
@@ -610,11 +641,11 @@ type Messages = {
       "firstName": "First name";
       "lastName": "Last name";
       "middleName": "Middle name";
-      "originatingAttorney": "Originating attorney";
+      "originatingAttorney": "Primary contact";
       "paymentTermDays": "Payment terms (days)";
       "prefix": "Prefix";
       "registrationNumber": "Registration number";
-      "responsibleAttorney": "Responsible attorney";
+      "responsibleAttorney": "Responsible person";
       "suffix": "Suffix";
       "tags": "Tags";
       "taxId": "Tax ID";
@@ -633,7 +664,7 @@ type Messages = {
       "office": "Office";
       "other": "Other";
     };
-    "search": "Search clients...";
+    "search": "Search contacts...";
     "title": "Clients";
     "type": {
       "organization": "Organization";

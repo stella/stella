@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { workspaceMembersKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
 
 type AddMemberVars = {
@@ -16,7 +17,7 @@ export const useAddWorkspaceMember = () => {
   return useMutation({
     mutationFn: async ({ workspaceId, userId }: AddMemberVars) => {
       const response = await api.workspaces({ workspaceId }).members.put({
-        userId,
+        userId: toSafeId<"user">(userId),
         queryKey: workspaceMembersKeys.all(workspaceId),
       });
 

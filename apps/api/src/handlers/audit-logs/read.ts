@@ -9,7 +9,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -41,7 +41,7 @@ const readAuditLogsQuerySchema = t.Object({
   workspaceId: t.Optional(tSafeId("workspace")),
   resourceType: t.Optional(t.String({ minLength: 1 })),
   resourceId: t.Optional(t.String({ minLength: 1 })),
-  userId: t.Optional(t.String({ minLength: 1 })),
+  userId: t.Optional(tUserId),
   from: t.Optional(t.String({ format: "date-time" })),
   to: t.Optional(t.String({ format: "date-time" })),
   limit: t.Optional(

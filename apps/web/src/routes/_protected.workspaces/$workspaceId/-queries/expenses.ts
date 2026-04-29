@@ -39,7 +39,7 @@ export const expensesOptions = (
   queryOptions({
     queryKey: expensesKeys.list(workspaceId, filters),
     queryFn: async ({ signal }) => {
-      const { matterId, ...restFilters } = filters;
+      const { matterId, userId, ...restFilters } = filters;
       const response = await api
         .expenses({
           workspaceId: toSafeId<"workspace">(workspaceId),
@@ -47,6 +47,7 @@ export const expensesOptions = (
         .get({
           query: {
             ...restFilters,
+            ...(userId !== undefined && { userId: toSafeId<"user">(userId) }),
             ...(matterId !== undefined && {
               matterId: toSafeId<"entity">(matterId),
             }),

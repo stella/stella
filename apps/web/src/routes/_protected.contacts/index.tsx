@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useForm, useStore } from "@tanstack/react-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   BuildingIcon,
   EllipsisVerticalIcon,
@@ -15,6 +15,7 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Button } from "@stella/ui/components/button";
+import { DestructiveConfirmDialog } from "@stella/ui/components/destructive-confirm-dialog";
 import {
   Dialog,
   DialogClose,
@@ -52,6 +53,8 @@ import { toastManager } from "@stella/ui/components/toast";
 
 import Tooltip from "@/components/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
+import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors";
 import { pageTitle } from "@/lib/page-title";
 import { toSafeId } from "@/lib/safe-id";
 import { toFormErrors } from "@/lib/schema";
@@ -193,9 +196,11 @@ type ContactItem = {
 
 const ContactRow = ({ contact }: { contact: ContactItem }) => {
   const t = useTranslations();
+  const navigate = useNavigate();
   const canDeleteContact = usePermissions({ contact: ["delete"] });
   const deleteContact = useDeleteContact();
   const queryClient = useQueryClient();
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const primaryEmail =
     contact.emails?.find((e) => e.isPrimary) ?? contact.emails?.at(0);
@@ -203,8 +208,16 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
   const primaryPhone =
     contact.phones?.find((p) => p.isPrimary) ?? contact.phones?.at(0);
 
-  const handleDelete = () => {
-    deleteContact.mutate(
+  const openContact = () => {
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    navigate({
+      to: "/contacts/$contactId",
+      params: { contactId: contact.id },
+    });
+  };
+
+  const handleDelete = async () => {
+    await deleteContact.mutateAsync(
       { contactId: contact.id },
       {
         onSuccess: () => {
@@ -229,7 +242,20 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
   };
 
   return (
-    <TableRow className="group">
+    <TableRow
+      className="hover:bg-accent/30 focus-visible:ring-ring group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset"
+      onClick={openContact}
+      onKeyDown={(event) => {
+        if (event.currentTarget !== event.target) {
+          return;
+        }
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openContact();
+        }
+      }}
+      tabIndex={0}
+    >
       <TableCell>
         {contact.type === "person" ? (
           <UserIcon className="text-muted-foreground size-4" />
@@ -240,14 +266,25 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
       <TableCell>
         <Link
           className="font-medium hover:underline"
+          onClick={(event) => event.stopPropagation()}
           params={{ contactId: contact.id }}
           to="/contacts/$contactId"
         >
           {contact.displayName}
         </Link>
       </TableCell>
-      <TableCell className="text-muted-foreground">
-        {primaryEmail?.address}
+      <TableCell
+        className="text-muted-foreground"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {primaryEmail && (
+          <a
+            className="hover:text-foreground hover:underline"
+            href={`mailto:${primaryEmail.address}`}
+          >
+            {primaryEmail.address}
+          </a>
+        )}
       </TableCell>
       <TableCell className="text-muted-foreground">
         {primaryPhone?.number}
@@ -255,7 +292,10 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
       <TableCell className="text-end tabular-nums">
         {contact.matterCount}
       </TableCell>
-      <TableCell className="w-10 text-end">
+      <TableCell
+        className="w-10 text-end"
+        onClick={(event) => event.stopPropagation()}
+      >
         <Menu>
           <Tooltip
             content={t("common.actions")}
@@ -272,7 +312,7 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
             {canDeleteContact && (
               <MenuItem
                 disabled={deleteContact.isPending}
-                onClick={handleDelete}
+                onClick={() => setDeleteOpen(true)}
                 variant="destructive"
               >
                 {t("contacts.deleteContact")}
@@ -280,6 +320,18 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
             )}
           </MenuPopup>
         </Menu>
+        <DestructiveConfirmDialog
+          cancelLabel={t("common.cancel")}
+          confirmLabel={t("common.delete")}
+          confirmation={contact.displayName}
+          description={t("contacts.deleteContactConfirmDescription")}
+          inputLabel={t("common.typeNameToConfirm")}
+          loading={deleteContact.isPending}
+          onConfirm={handleDelete}
+          onOpenChange={setDeleteOpen}
+          open={deleteOpen}
+          title={t("contacts.deleteContact")}
+        />
       </TableCell>
     </TableRow>
   );
@@ -299,6 +351,7 @@ const createContactSchema = (requiredMessage: string) =>
       firstName: trimmedString(256),
       lastName: trimmedString(256),
       organizationName: trimmedString(512),
+      registrationNumber: trimmedString(64),
     }),
     v.forward(
       v.partialCheck(
@@ -311,10 +364,67 @@ const createContactSchema = (requiredMessage: string) =>
     ),
   );
 
+type BillingAddress = {
+  line1?: string;
+  line2?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+};
+
+type AresAddress = {
+  street: string | null;
+  houseNumber: string | null;
+  orientationNumber: string | null;
+  orientationLetter: string | null;
+  municipalityPart: string | null;
+  municipality: string | null;
+  postalCode: string | null;
+  district: string | null;
+  country: string | null;
+  textAddress: string | null;
+};
+
+const normalizeIcoInput = (value: string) => value.replaceAll(/\D/g, "");
+
+const formatStreetLine = (address: AresAddress) => {
+  const street = address.street ?? address.municipalityPart ?? "";
+  const houseNumber = address.houseNumber ?? "";
+  const orientationNumber = address.orientationNumber
+    ? `/${address.orientationNumber}${address.orientationLetter ?? ""}`
+    : "";
+
+  return [street, `${houseNumber}${orientationNumber}`.trim()]
+    .filter(Boolean)
+    .join(" ");
+};
+
+const toBillingAddress = (
+  address: AresAddress | null,
+): BillingAddress | null => {
+  if (!address) {
+    return null;
+  }
+
+  const line1 = formatStreetLine(address) || address.textAddress || undefined;
+
+  return {
+    ...(line1 && { line1 }),
+    ...(address.municipality && { city: address.municipality }),
+    ...(address.district && { state: address.district }),
+    ...(address.postalCode && { postalCode: address.postalCode }),
+    ...(address.country && { country: address.country }),
+  };
+};
+
 const CreateContactDialog = () => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
+  const [isAresLoading, setIsAresLoading] = useState(false);
+  const [aresBillingAddress, setAresBillingAddress] =
+    useState<BillingAddress | null>(null);
   const createContact = useCreateContact();
   const schema = createContactSchema(t("common.required"));
 
@@ -327,6 +437,7 @@ const CreateContactDialog = () => {
       firstName: "",
       lastName: "",
       organizationName: "",
+      registrationNumber: "",
     },
     validators: { onDynamic: schema },
     onSubmit: async ({ value }) => {
@@ -347,6 +458,10 @@ const CreateContactDialog = () => {
         parsedValue.type === "organization"
           ? parsedValue.organizationName || undefined
           : undefined;
+      const registrationNumber =
+        parsedValue.type === "organization"
+          ? parsedValue.registrationNumber || undefined
+          : undefined;
 
       await createContact.mutateAsync({
         id: toSafeId<"contact">(crypto.randomUUID()),
@@ -355,6 +470,9 @@ const CreateContactDialog = () => {
         ...(firstName && { firstName }),
         ...(lastName && { lastName }),
         ...(organizationName && { organizationName }),
+        ...(registrationNumber && { registrationNumber }),
+        ...(parsedValue.type === "organization" &&
+          aresBillingAddress && { billingAddress: aresBillingAddress }),
       });
 
       await queryClient.invalidateQueries({
@@ -372,12 +490,63 @@ const CreateContactDialog = () => {
 
   const contactType = useStore(form.store, (s) => s.values.type);
 
+  const handleAresLookup = async () => {
+    const ico = normalizeIcoInput(form.state.values.registrationNumber);
+
+    if (ico.length !== 8) {
+      toastManager.add({
+        title: t("contacts.create.invalidIco"),
+        type: "error",
+      });
+      return;
+    }
+
+    setIsAresLoading(true);
+    try {
+      const response = await api.contacts.ares.get({ query: { ico } });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      const company =
+        response.data.type === "lookup" ? response.data.company : null;
+
+      if (!company) {
+        toastManager.add({
+          title: t("contacts.create.aresNotFound"),
+          type: "error",
+        });
+        return;
+      }
+
+      form.setFieldValue("registrationNumber", company.ico);
+      form.setFieldValue("organizationName", company.name);
+      form.setFieldValue("displayName", company.name);
+      setAresBillingAddress(toBillingAddress(company.address));
+
+      toastManager.add({
+        title: t("contacts.create.aresApplied"),
+        type: "success",
+      });
+    } catch (error) {
+      toastManager.add({
+        title:
+          error instanceof Error ? error.message : t("errors.actionFailed"),
+        type: "error",
+      });
+    } finally {
+      setIsAresLoading(false);
+    }
+  };
+
   return (
     <Dialog
       onOpenChange={(open) => {
         setIsOpen(open);
         if (!open) {
           form.reset();
+          setAresBillingAddress(null);
+          setIsAresLoading(false);
         }
       }}
       open={isOpen}
@@ -410,6 +579,7 @@ const CreateContactDialog = () => {
                       onClick={() => {
                         field.handleChange("person");
                         form.setFieldValue("displayName", "");
+                        setAresBillingAddress(null);
                       }}
                       size="sm"
                       type="button"
@@ -491,29 +661,83 @@ const CreateContactDialog = () => {
             )}
 
             {contactType === "organization" && (
-              <form.Field name="organizationName">
-                {(field) => (
-                  <Field name={field.name}>
-                    <FieldLabel>{t("common.organizationName")}</FieldLabel>
-                    <Input
-                      autoFocus
-                      onBlur={field.handleBlur}
-                      onChange={(e) => {
-                        field.handleChange(e.target.value);
-                        form.setFieldValue("displayName", e.target.value);
-                      }}
-                      value={field.state.value}
-                    />
-                    <FieldError />
-                  </Field>
-                )}
-              </form.Field>
+              <>
+                <form.Field name="organizationName">
+                  {(field) => (
+                    <Field name={field.name}>
+                      <FieldLabel>{t("common.organizationName")}</FieldLabel>
+                      <Input
+                        autoFocus
+                        onBlur={field.handleBlur}
+                        onChange={(e) => {
+                          field.handleChange(e.target.value);
+                          form.setFieldValue("displayName", e.target.value);
+                        }}
+                        value={field.state.value}
+                      />
+                      <FieldError />
+                    </Field>
+                  )}
+                </form.Field>
+
+                <div className="bg-muted/20 flex flex-col gap-3 rounded-md border p-3">
+                  <div>
+                    <p className="text-sm font-medium">
+                      {t("contacts.create.aresTitle")}
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      {t("contacts.create.aresHint")}
+                    </p>
+                  </div>
+                  <form.Field name="registrationNumber">
+                    {(field) => (
+                      <Field name={field.name}>
+                        <div className="flex gap-2">
+                          <Input
+                            inputMode="numeric"
+                            onBlur={field.handleBlur}
+                            onChange={(e) => {
+                              field.handleChange(
+                                normalizeIcoInput(e.target.value),
+                              );
+                              setAresBillingAddress(null);
+                            }}
+                            placeholder={t("contacts.create.icoPlaceholder")}
+                            value={field.state.value}
+                          />
+                          <Button
+                            loading={isAresLoading}
+                            onClick={handleAresLookup}
+                            type="button"
+                            variant="outline"
+                          >
+                            {t("contacts.create.aresLookup")}
+                          </Button>
+                        </div>
+                        <FieldError />
+                      </Field>
+                    )}
+                  </form.Field>
+                  {aresBillingAddress?.line1 && (
+                    <p className="text-muted-foreground text-xs">
+                      {[
+                        aresBillingAddress.line1,
+                        aresBillingAddress.city,
+                        aresBillingAddress.postalCode,
+                        aresBillingAddress.country,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </p>
+                  )}
+                </div>
+              </>
             )}
 
             <form.Field name="displayName">
               {(field) => (
                 <Field name={field.name}>
-                  <FieldLabel>{t("contacts.fields.displayName")}</FieldLabel>
+                  <FieldLabel>{t("contacts.create.contactName")}</FieldLabel>
                   <Input
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}

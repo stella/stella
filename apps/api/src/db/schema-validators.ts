@@ -255,6 +255,29 @@ export const contactPhoneSchema = t.Object({
 
 export type ContactPhone = Static<typeof contactPhoneSchema>;
 
+export const contactDataBoxSchema = t.Object({
+  id: t.String({ pattern: "^[A-Za-z0-9]{7}$" }),
+  isPrimary: t.Boolean(),
+  label: t.Optional(t.String({ maxLength: 128 })),
+});
+
+export type ContactDataBox = Static<typeof contactDataBoxSchema>;
+
+export const contactCustomFieldSchema = t.Object({
+  id: t.String({ minLength: 1, maxLength: 64 }),
+  label: t.String({ minLength: 1, maxLength: 128 }),
+  value: t.String({ maxLength: 2000 }),
+});
+
+export type ContactCustomField = Static<typeof contactCustomFieldSchema>;
+
+export const contactMetadataSchema = t.Object({
+  dataBoxes: t.Optional(t.Array(contactDataBoxSchema, { maxItems: 20 })),
+  customFields: t.Optional(t.Array(contactCustomFieldSchema, { maxItems: 50 })),
+});
+
+export type ContactMetadata = Static<typeof contactMetadataSchema>;
+
 export const contactAddressSchema = t.Object({
   type: t.UnionEnum([
     "office",

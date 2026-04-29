@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
 
 import { desktopEditSessions, workspaceMembers } from "@/api/db/schema";
 import {
@@ -9,13 +8,13 @@ import {
 } from "@/api/handlers/entities/desktop-edit-session-events";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { workspaceParams } from "@/api/lib/custom-schema";
+import { tUserId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
 
 const config = {
   permissions: { workspace: ["update"] },
-  params: workspaceParams({ userId: t.String({ maxLength: 128 }) }),
+  params: workspaceParams({ userId: tUserId }),
 } satisfies HandlerConfig;
 
 const removeWorkspaceMember = createSafeHandler(

@@ -528,6 +528,7 @@
     "status": "Stav",
     "tryAgain": "Skúsiť znova",
     "type": "Typ",
+    "typeNameToConfirm": "Na potvrdenie napíšte názov",
     "uncategorized": "Nekategorizované",
     "unexpectedError": "Vyskytla sa neočakávaná chyba. Kontaktujte podporu.",
     "unpin": "Odopnúť",
@@ -556,9 +557,9 @@
     "alsoPartyIn": "Vystupuje tiež ako strana v {count, plural, one {# ďalšom spise} few {# ďalších spisoch} other {# ďalších spisoch}}",
     "attorneys": {
       "none": "Nepriradený",
-      "originating": "Pôvodca",
-      "responsible": "Zodpovedný advokát",
-      "title": "Advokáti"
+      "originating": "Hlavný kontakt",
+      "responsible": "Zodpovedná osoba",
+      "title": "Zodpovednosti"
     },
     "billing": {
       "addBankAccount": "Pridať bankový účet",
@@ -572,14 +573,44 @@
     },
     "communication": {
       "addAddress": "Pridať adresu",
+      "addDataBox": "Pridať dátovú schránku",
       "addEmail": "Pridať e-mail",
       "addPhone": "Pridať telefón",
       "addresses": "Adresy",
+      "alreadyExists": "Tento kontaktný údaj už existuje.",
+      "dataBoxPlaceholder": "ID dátovej schránky",
+      "dataBoxes": "Dátové schránky",
+      "emailPlaceholder": "meno@example.com",
       "emails": "E-maily",
-      "phones": "Telefóny"
+      "invalidDataBox": "ID dátovej schránky musí mať 7 písmen alebo číslic.",
+      "invalidEmail": "Zadajte platnú e-mailovú adresu.",
+      "phonePlaceholder": "+421...",
+      "phones": "Telefóny",
+      "title": "Komunikácia"
+    },
+    "create": {
+      "aresApplied": "Údaje z ARES boli doplnené.",
+      "aresHint": "Voliteľné. Zadajte české IČO a doplníme údaje organizácie.",
+      "aresLookup": "Načítať z ARES",
+      "aresNotFound": "Pre toto IČO sme nenašli žiadnu firmu.",
+      "aresTitle": "Český register (ARES)",
+      "contactName": "Názov kontaktu",
+      "icoPlaceholder": "IČO",
+      "invalidIco": "Zadajte 8-miestne IČO."
     },
     "createOrganization": "Vytvoriť \"{name}\" ako organizáciu",
     "createPerson": "Vytvoriť \"{name}\" ako osobu",
+    "customFields": {
+      "addField": "Pridať pole",
+      "empty": "Zatiaľ žiadne vlastné polia.",
+      "label": "Názov poľa",
+      "labelPlaceholder": "Názov poľa",
+      "labelRequired": "Názov poľa je povinný.",
+      "removeField": "Odstrániť pole",
+      "title": "Vlastné polia",
+      "value": "Hodnota poľa",
+      "valuePlaceholder": "Hodnota"
+    },
     "deleteContact": "Vymazať klienta",
     "deleteContactConfirmDescription": "Naozaj chcete vymazať tento kontakt? Túto akciu nemožno vrátiť.",
     "editContact": "Upraviť klienta",
@@ -607,11 +638,11 @@
       "firstName": "Meno",
       "lastName": "Priezvisko",
       "middleName": "Stredné meno",
-      "originatingAttorney": "Pôvodca",
+      "originatingAttorney": "Hlavný kontakt",
       "paymentTermDays": "Splatnosť (dni)",
       "prefix": "Titul pred",
       "registrationNumber": "IČO",
-      "responsibleAttorney": "Zodpovedný advokát",
+      "responsibleAttorney": "Zodpovedná osoba",
       "suffix": "Titul za",
       "tags": "Štítky",
       "taxId": "DIČ"
@@ -630,7 +661,7 @@
       "office": "Kancelária",
       "other": "Iný"
     },
-    "search": "Hľadať klientov...",
+    "search": "Hľadať v kontaktoch...",
     "title": "Klienti",
     "type": {
       "organization": "Organizácia",

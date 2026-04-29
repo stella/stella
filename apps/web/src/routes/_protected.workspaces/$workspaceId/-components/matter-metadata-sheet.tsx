@@ -12,16 +12,8 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-} from "@stella/ui/components/alert-dialog";
 import { Button } from "@stella/ui/components/button";
+import { DestructiveConfirmDialog } from "@stella/ui/components/destructive-confirm-dialog";
 import { Input } from "@stella/ui/components/input";
 import { Separator } from "@stella/ui/components/separator";
 import {
@@ -66,7 +58,7 @@ export const MatterMetadataSheet = ({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
-  const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [referenceValue, setReferenceValue] = useState("");
   const [referenceError, setReferenceError] = useState("");
 
@@ -110,7 +102,7 @@ export const MatterMetadataSheet = ({
     );
   };
 
-  const handleDeleteWorkspace = () => {
+  const handleDeleteWorkspace = async () => {
     if (deleteWorkspace.isPending) {
       return;
     }
@@ -121,7 +113,7 @@ export const MatterMetadataSheet = ({
       timeout: Number.POSITIVE_INFINITY,
     });
 
-    deleteWorkspace.mutate(
+    await deleteWorkspace.mutateAsync(
       { workspaceId },
       {
         onError: () => {
@@ -252,7 +244,7 @@ export const MatterMetadataSheet = ({
                 <Button
                   className="text-destructive justify-start"
                   disabled={deleteWorkspace.isPending}
-                  onClick={() => setIsAlertDialogOpen(true)}
+                  onClick={() => setDeleteDialogOpen(true)}
                   size="sm"
                   variant="ghost"
                 >
@@ -264,30 +256,18 @@ export const MatterMetadataSheet = ({
           </SheetPanel>
         </SheetPopup>
       </Sheet>
-      <AlertDialog onOpenChange={setIsAlertDialogOpen} open={isAlertDialogOpen}>
-        <AlertDialogPopup>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t("workspaces.deleteWorkspace")}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("workspaces.deleteWorkspaceConfirmDescription")}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="ghost" />}>
-              {t("common.cancel")}
-            </AlertDialogClose>
-            <AlertDialogClose
-              render={
-                <Button onClick={handleDeleteWorkspace} variant="destructive" />
-              }
-            >
-              {t("common.delete")}
-            </AlertDialogClose>
-          </AlertDialogFooter>
-        </AlertDialogPopup>
-      </AlertDialog>
+      <DestructiveConfirmDialog
+        cancelLabel={t("common.cancel")}
+        confirmLabel={t("common.delete")}
+        confirmation={workspace.name}
+        description={t("workspaces.deleteWorkspaceConfirmDescription")}
+        inputLabel={t("common.typeNameToConfirm")}
+        loading={deleteWorkspace.isPending}
+        onConfirm={handleDeleteWorkspace}
+        onOpenChange={setDeleteDialogOpen}
+        open={deleteDialogOpen}
+        title={t("workspaces.deleteWorkspace")}
+      />
     </>
   );
 };
