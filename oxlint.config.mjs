@@ -360,31 +360,6 @@ export default defineConfig({
       rules: { "no-inline-style-colors/no-inline-style-colors": "off" },
     },
     {
-      // Eigenpal-inherited dialog/edit components: inline colors need
-      // a dedicated cleanup pass. Tracked as follow-up.
-      files: [
-        "packages/folio/src/**/dialogs/**",
-        "packages/folio/src/**/edit/**",
-      ],
-      rules: { "no-inline-style-colors/no-inline-style-colors": "off" },
-    },
-    {
-      // Eigenpal-inherited UI components with hardcoded chrome colors
-      files: [
-        "packages/folio/src/**/HyperlinkPopup.tsx",
-        "packages/folio/src/**/MenuDropdown.tsx",
-        "packages/folio/src/**/DocumentOutline.tsx",
-        "packages/folio/src/**/InlineHeaderFooterEditor.tsx",
-        "packages/folio/src/**/ErrorBoundary.tsx",
-        "packages/folio/src/**/UnsavedIndicator.tsx",
-        "packages/folio/src/**/TableGridInline.tsx",
-        "packages/folio/src/**/ResponsiveToolbar.tsx",
-        "packages/folio/src/**/PrintPreview.tsx",
-        "packages/folio/src/**/TableQuickActions.tsx",
-      ],
-      rules: { "no-inline-style-colors/no-inline-style-colors": "off" },
-    },
-    {
       files: ["packages/ui/src/**/button.tsx"],
       rules: {
         "no-raw-colors/no-raw-colors": "off",
@@ -531,7 +506,7 @@ export default defineConfig({
     },
     {
       // Folio layout bridge, layout painter, layout engine, prosemirror commands,
-      // prosemirror conversion, prosemirror plugins, plugin-api, paged-editor,
+      // prosemirror conversion, prosemirror plugins, paged-editor,
       // managers, and utils all work with ProseMirror's any-typed node.attrs and
       // DOM APIs that return HTMLElement subtypes requiring narrowing casts.
       files: [
@@ -556,8 +531,6 @@ export default defineConfig({
         "packages/folio/src/core/utils/**/*.ts",
         "packages/folio/src/core/utils/**/*.tsx",
         "packages/folio/src/core/types/**/*.ts",
-        "packages/folio/src/plugin-api/**/*.ts",
-        "packages/folio/src/plugin-api/**/*.tsx",
         "packages/folio/src/paged-editor/**/*.ts",
         "packages/folio/src/paged-editor/**/*.tsx",
       ],

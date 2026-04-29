@@ -32,8 +32,10 @@
   --doc-text: var(--foreground);
   --doc-text-muted: var(--muted-foreground);
   --doc-text-subtle: var(--muted-foreground);
+  --doc-text-placeholder: var(--muted-foreground);
 
   --doc-border: var(--border);
+  --doc-border-input: var(--input);
   --doc-border-dark: var(--border);
 
   --doc-primary: var(--primary);
@@ -49,6 +51,19 @@
   --doc-selection-dark-bg: rgba(96, 165, 250, 0.4);
   --doc-find-highlight: rgba(250, 204, 21, 0.5);
   --doc-find-current: rgba(249, 115, 22, 0.6);
+  --doc-image-selection: var(--doc-link);
+  --doc-image-selection-muted: color-mix(
+    in srgb,
+    var(--doc-image-selection) 12%,
+    transparent
+  );
+  --doc-handle-border: var(--background);
+  --doc-dimension-bg: color-mix(in srgb, var(--foreground) 75%, transparent);
+  --doc-dimension-text: var(--background);
+  --doc-focus-ring: color-mix(in srgb, var(--doc-link) 18%, transparent);
+  --doc-shadow-sm: color-mix(in srgb, var(--foreground) 15%, transparent);
+  --doc-shadow-md: color-mix(in srgb, var(--foreground) 24%, transparent);
+  --doc-shadow-lg: color-mix(in srgb, var(--foreground) 28%, transparent);
 }
 
 /* Dark mode: only override what Stella tokens don't cover.
@@ -59,6 +74,68 @@
 .folio-root.dark {
   --doc-link: #60a5fa;
   --doc-selection: rgba(96, 165, 250, 0.3);
+}
+
+.hf-options-button {
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--doc-link);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 6px;
+}
+
+.hf-options-button:hover,
+.hf-options-button:focus-visible {
+  background-color: var(--doc-bg-hover);
+  outline: none;
+}
+
+.hf-options-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 100;
+  min-width: 160px;
+  padding: 4px 0;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+  background: var(--doc-page);
+  box-shadow: 0 2px 6px var(--doc-shadow-sm);
+}
+
+.hf-options-item {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  border: 0;
+  background: none;
+  color: var(--doc-text);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.hf-options-item:hover,
+.hf-options-item:focus-visible {
+  background-color: var(--doc-bg-hover);
+  outline: none;
+}
+
+.hf-options-divider {
+  margin: 4px 0;
+  border-top: 1px solid var(--doc-border);
+}
+
+.image-drag-ghost {
+  position: fixed;
+  z-index: 10000;
+  border: 2px dashed var(--image-drag-ghost-selection);
+  border-radius: 4px;
+  background: var(--image-drag-ghost-selection-muted);
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 /* ============================================================================

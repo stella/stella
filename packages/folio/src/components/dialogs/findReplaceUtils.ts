@@ -246,8 +246,8 @@ export function isEmptySearch(searchText: string): boolean {
  */
 export function getDefaultHighlightOptions(): HighlightOptions {
   return {
-    currentMatchColor: "#FFFF00",
-    otherMatchColor: "#FFFFAA",
+    currentMatchColor: "var(--doc-find-current)",
+    otherMatchColor: "var(--doc-find-highlight)",
   };
 }
 

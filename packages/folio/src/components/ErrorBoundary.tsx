@@ -210,8 +210,8 @@ const SEVERITY_STYLES = {
   error:
     "border-destructive/30 bg-destructive/10 text-destructive [&_svg]:text-destructive",
   warning:
-    "border-yellow-500/30 bg-yellow-50 text-yellow-800 [&_svg]:text-yellow-600",
-  info: "border-blue-500/30 bg-blue-50 text-blue-800 [&_svg]:text-blue-600",
+    "border-border bg-muted text-foreground [&_svg]:text-muted-foreground",
+  info: "border-border bg-card text-card-foreground [&_svg]:text-muted-foreground",
 } as const;
 
 const SEVERITY_ICONS = {
@@ -256,7 +256,7 @@ function NotificationToast({
                 {isExpanded ? t("hideDetails") : t("showDetails")}
               </button>
               {isExpanded && (
-                <pre className="mt-2 max-h-[200px] overflow-auto rounded bg-black/5 p-2 font-mono text-xs break-words whitespace-pre-wrap">
+                <pre className="bg-muted mt-2 max-h-[200px] overflow-auto rounded p-2 font-mono text-xs break-words whitespace-pre-wrap">
                   {notification.details}
                 </pre>
               )}
@@ -471,11 +471,11 @@ export function UnsupportedFeatureWarning({
   return (
     <div
       className={cn(
-        "flex items-center gap-2 rounded border border-yellow-500/30 bg-yellow-50 px-3 py-2 text-xs text-yellow-800",
+        "border-border bg-muted text-foreground flex items-center gap-2 rounded border px-3 py-2 text-xs",
         className,
       )}
     >
-      <AlertTriangleIcon className="size-4 shrink-0 text-yellow-600" />
+      <AlertTriangleIcon className="text-muted-foreground size-4 shrink-0" />
       <span>
         <strong>{feature}</strong>
         {description && `: ${description}`}
