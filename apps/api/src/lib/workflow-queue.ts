@@ -14,6 +14,7 @@ import { captureError } from "@/api/lib/analytics";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
+import { redisConnectionOptions } from "@/api/lib/redis-options";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
   brandPersistedUserId,
@@ -60,7 +61,10 @@ let queue: Queue | null = null;
 let redisClient: Redis | null = null;
 
 const getRedis = (): Redis => {
-  redisClient ??= new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+  redisClient ??= new Redis(env.REDIS_URL, {
+    ...redisConnectionOptions(),
+    maxRetriesPerRequest: null,
+  });
   return redisClient;
 };
 
@@ -212,6 +216,7 @@ export const initWorkflowWorker = () => {
   // BullMQ Worker uses blocking commands (BRPOPLPUSH) so it
   // needs a dedicated Redis connection, not the shared one.
   const workerConnection = new Redis(env.REDIS_URL, {
+    ...redisConnectionOptions(),
     maxRetriesPerRequest: null,
   });
 
