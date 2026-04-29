@@ -226,7 +226,28 @@ const uploadSourceRaw = async (
  * Insert a single decision and its citations into the database.
  * Skips duplicates based on sourceHash.
  */
-const jsonbValue = <T>(value: T) => sql<T>`${value}`;
+
+/**
+ * Serialise a JS value into a JSONB literal for SQL.
+ *
+ * Three steps, each load-bearing:
+ *   1. JS-side `JSON.stringify` — the parameter is a normal string.
+ *   2. `::text` — forces Postgres to treat the bound parameter as
+ *      text. Without this, bun-sql binds the parameter with the
+ *      jsonb wire type, and Postgres stores the string value as a
+ *      jsonb-string primitive (`jsonb_typeof = 'string'`) instead
+ *      of parsing it.
+ *   3. `::jsonb` — parses the text as JSON.
+ *
+ * Background: an earlier form (`sql\`${value}\``, PR #971) worked
+ * for ~95% of writes but left ~5% of rows with
+ * `jsonb_typeof = 'string'` in production. bun-sql's jsonb
+ * parameter encoder behaves inconsistently for some payload +
+ * connection-state combinations; the explicit text→jsonb cast
+ * sidesteps that by removing all type ambiguity from the wire.
+ */
+const jsonbValue = <T>(value: T) =>
+  sql<T>`${JSON.stringify(value)}::text::jsonb`;
 
 export const processDecision = async (
   input: IngestionResult,
