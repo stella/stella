@@ -272,7 +272,13 @@ export const ChatThreadMessages = ({
                 }
 
                 if (isToolUIPart(part) && showToolCalls) {
-                  return <ToolCallCard key={part.toolCallId} part={part} />;
+                  return (
+                    <ToolCallCard
+                      key={part.toolCallId}
+                      part={part}
+                      showDetails
+                    />
+                  );
                 }
 
                 return null;

@@ -9,6 +9,8 @@ import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
 import { count, eq } from "drizzle-orm";
 
+import type { SkillMetadata } from "@stella/skills";
+
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { caseLawDecisions, entities, workspaces } from "@/api/db/schema";
 import type { PropertyStatus } from "@/api/db/schema";
@@ -20,6 +22,7 @@ import type {
   IncomingActiveFile,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
+import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
 import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/org-manifest";
 import { buildReadonlyFunctionTypeDeclarations } from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import type { ReadonlyFunctionContract } from "@/api/handlers/chat/tools/execute/readonly-manifest";
@@ -109,6 +112,20 @@ If you only know the case number and not the decision ID, still link it as:
 
 export type UserContext = IncomingUserContext;
 
+export type ChatPromptParts = {
+  cacheStablePrefix: string;
+  fullPrompt: string;
+};
+
+export const buildChatPromptCacheKey = (cacheStablePrefix: string) => {
+  const hash = new Bun.CryptoHasher("sha256")
+    .update(cacheStablePrefix)
+    .digest("hex")
+    .slice(0, 24);
+
+  return `stella-chat:v1:${hash}`;
+};
+
 type BuildChatSystemPromptProps = {
   activeDecision: IncomingActiveDecision | undefined;
   activeFile: IncomingActiveFile | undefined;
@@ -126,30 +143,53 @@ export const buildChatSystemPrompt = async ({
   userContext,
   workspaceId,
 }: BuildChatSystemPromptProps): Promise<Result<string, SafeDbError>> =>
+  (
+    await buildChatSystemPromptParts({
+      activeDecision,
+      activeFile,
+      refRegistry,
+      safeDb,
+      userContext,
+      workspaceId,
+    })
+  ).map(({ fullPrompt }) => fullPrompt);
+
+export const buildChatSystemPromptParts = async ({
+  activeDecision,
+  activeFile,
+  refRegistry,
+  safeDb,
+  userContext,
+  workspaceId,
+}: BuildChatSystemPromptProps): Promise<Result<ChatPromptParts, SafeDbError>> =>
   await Result.gen(async function* () {
     if (workspaceId === null) {
-      const prompt = buildGlobalPrompt({
+      const prompt = buildGlobalPromptParts({
         readonlyStellaApi: buildReadonlyStellaApi({
           contracts: [
             ...readonlyOrgFunctionContracts,
             ...readonlyWorkspaceFunctionContracts,
           ],
         }),
+        skillMetadata: getChatSkillMetadata(),
         userContext: userContext ?? null,
       });
 
-      const decisionPrompt = yield* Result.await(
+      const fullPrompt = yield* Result.await(
         appendActiveDecisionPromptIfExists({
           activeDecision,
-          prompt,
+          prompt: prompt.fullPrompt,
           safeDb,
         }),
       );
-      return Result.ok(decisionPrompt);
+      return Result.ok({
+        cacheStablePrefix: prompt.cacheStablePrefix,
+        fullPrompt,
+      });
     }
 
     const prompt = yield* Result.await(
-      buildWorkspacePrompt({
+      buildWorkspacePromptPartsFromDb({
         refRegistry,
         safeDb,
         userContext: userContext ?? null,
@@ -160,13 +200,16 @@ export const buildChatSystemPrompt = async ({
     const decisionPrompt = yield* Result.await(
       appendActiveDecisionPromptIfExists({
         activeDecision,
-        prompt,
+        prompt: prompt.fullPrompt,
         safeDb,
       }),
     );
 
     if (!activeFile) {
-      return Result.ok(decisionPrompt);
+      return Result.ok({
+        cacheStablePrefix: prompt.cacheStablePrefix,
+        fullPrompt: decisionPrompt,
+      });
     }
 
     const entity = yield* Result.await(
@@ -181,15 +224,16 @@ export const buildChatSystemPrompt = async ({
       ),
     );
 
-    return Result.ok(
-      appendActiveFilePromptIfEntityExists({
+    return Result.ok({
+      cacheStablePrefix: prompt.cacheStablePrefix,
+      fullPrompt: appendActiveFilePromptIfEntityExists({
         activeFile,
         entityExists: Boolean(entity),
         prompt: decisionPrompt,
         refRegistry,
         workspaceId,
       }),
-    );
+    });
   });
 
 export const extractTitle = (parts: ChatMessage["parts"]) => {
@@ -211,34 +255,31 @@ export const extractTitle = (parts: ChatMessage["parts"]) => {
 
 type BuildGlobalPromptProps = {
   readonlyStellaApi: string;
+  skillMetadata?: readonly SkillMetadata[] | undefined;
   userContext: UserContext | null;
 };
 
 export const buildGlobalPrompt = ({
   readonlyStellaApi,
+  skillMetadata = getChatSkillMetadata(),
   userContext,
 }: BuildGlobalPromptProps) =>
-  buildPrompt({
-    contextSections: [
-      "Use `execute-typescript` for readonly retrieval across " +
-        "matters in the organization. The readonly `stella` API available " +
-        "inside `execute-typescript` is typed below.",
-      "The readonly `stella` API uses matter naming. Matter-scoped " +
-        "functions require explicit `matterRefs` inputs.",
-      "`stella.list*` functions accept optional `limit` and numeric " +
-        "`offset` pagination inputs. Omit `limit` unless you need a smaller " +
-        "page; the server defaults it and caps it at 500.",
-      "`stella.get*` functions require explicit refs and return full " +
-        `results without pagination. Detail reads accept up to ${LIMITS.chatExecuteDetailIdsMax} refs; ` +
-        `content reads accept up to ${LIMITS.chatExecuteContentIdsMax} entity refs.`,
-      "Prefer one batched `get*` call over many small calls when you " +
-        "already know the matter or entity refs you need.",
-      "Use `describe-stella-function` only as a fallback if you " +
-        "need the full JSON Schema details for one function.",
-      "Inside `execute-typescript`, `console.log` is a no-op: " +
-        "only the value your program `return`s comes back.",
-      ["Readonly `stella` API:", "```ts", readonlyStellaApi, "```"].join("\n"),
-    ],
+  buildGlobalPromptParts({
+    readonlyStellaApi,
+    skillMetadata,
+    userContext,
+  }).fullPrompt;
+
+export const buildGlobalPromptParts = ({
+  readonlyStellaApi,
+  skillMetadata = getChatSkillMetadata(),
+  userContext,
+}: BuildGlobalPromptProps): ChatPromptParts =>
+  buildPromptParts({
+    cacheStableContextSections:
+      buildCacheStableReadonlyToolSections(readonlyStellaApi),
+    requestContextSections: [],
+    skillMetadata,
     userContext,
   });
 
@@ -249,12 +290,12 @@ type BuildWorkspacePromptProps = {
   workspaceId: SafeId<"workspace">;
 };
 
-const buildWorkspacePrompt = async ({
+const buildWorkspacePromptPartsFromDb = async ({
   refRegistry,
   safeDb,
   userContext,
   workspaceId,
-}: BuildWorkspacePromptProps): Promise<Result<string, SafeDbError>> =>
+}: BuildWorkspacePromptProps): Promise<Result<ChatPromptParts, SafeDbError>> =>
   await Result.gen(async function* () {
     const workspacePromptData = yield* Result.await(
       loadWorkspacePromptData({
@@ -264,7 +305,7 @@ const buildWorkspacePrompt = async ({
     );
 
     return Result.ok(
-      buildWorkspacePromptText({
+      buildWorkspacePromptParts({
         entityCount: workspacePromptData.entityCount,
         properties: workspacePromptData.properties,
         refRegistry,
@@ -274,6 +315,7 @@ const buildWorkspacePrompt = async ({
             ...readonlyWorkspaceFunctionContracts,
           ],
         }),
+        skillMetadata: getChatSkillMetadata(),
         userContext,
         workspaceId,
         workspaceName: workspacePromptData.workspaceName,
@@ -348,7 +390,6 @@ type BuildWorkspaceContextSectionsProps = {
   entityCount: number;
   properties: WorkspacePromptProperty[];
   refRegistry: ChatRefRegistry;
-  readonlyStellaApi: string;
   workspaceId: SafeId<"workspace">;
   workspaceName: string;
 };
@@ -357,32 +398,15 @@ const buildWorkspaceContextSections = ({
   entityCount,
   properties,
   refRegistry,
-  readonlyStellaApi,
   workspaceId,
   workspaceName,
 }: BuildWorkspaceContextSectionsProps): string[] => {
   const matterRef = refRegistry.toMatterRef(workspaceId);
   const sections = [
     `Connected to matter "${workspaceName}".`,
-    "Use `execute-typescript` for readonly retrieval inside " +
-      "this matter. The readonly `stella` API available inside " +
-      "`execute-typescript` is typed below as a global namespace.",
     "SCOPE: Matter-scoped `stella` functions require explicit " +
       "`matterRefs` inputs. In this matter, default to " +
       `\`matterRefs: ["${matterRef}"]\` unless the user asks to work across matters.`,
-    "`stella.list*` functions accept optional `limit` and numeric " +
-      "`offset` pagination inputs. Omit `limit` unless you need a smaller " +
-      "page; the server defaults it and caps it at 500.",
-    "`stella.get*` functions require explicit refs and return full " +
-      `results without pagination. Detail reads accept up to ${LIMITS.chatExecuteDetailIdsMax} refs; ` +
-      `content reads accept up to ${LIMITS.chatExecuteContentIdsMax} entity refs.`,
-    "Prefer one batched `get*` call over many small calls when " +
-      "you already know the entity refs you need.",
-    "Use `describe-stella-function` only as a fallback if you " +
-      "need the full JSON Schema manifest for one function. Inside " +
-      "`execute-typescript`, `console.log` is a no-op: only the value " +
-      "your program `return`s comes back as the tool output.",
-    ["Readonly `stella` API:", "```ts", readonlyStellaApi, "```"].join("\n"),
     [
       `Current matter ref: ${matterRef} (pass as matterRefs: ["${matterRef}"]).`,
       `The matter contains ${entityCount.toLocaleString()} entities.`,
@@ -469,6 +493,7 @@ type BuildWorkspacePromptTextProps = {
   properties: WorkspacePromptProperty[];
   refRegistry: ChatRefRegistry;
   readonlyStellaApi: string;
+  skillMetadata?: readonly SkillMetadata[] | undefined;
   userContext: UserContext | null;
   workspaceId: SafeId<"workspace">;
   workspaceName: string;
@@ -479,19 +504,43 @@ export const buildWorkspacePromptText = ({
   properties,
   refRegistry,
   readonlyStellaApi,
+  skillMetadata = getChatSkillMetadata(),
   userContext,
   workspaceId,
   workspaceName,
 }: BuildWorkspacePromptTextProps) =>
-  buildPrompt({
-    contextSections: buildWorkspaceContextSections({
+  buildWorkspacePromptParts({
+    entityCount,
+    properties,
+    refRegistry,
+    readonlyStellaApi,
+    skillMetadata,
+    userContext,
+    workspaceId,
+    workspaceName,
+  }).fullPrompt;
+
+export const buildWorkspacePromptParts = ({
+  entityCount,
+  properties,
+  refRegistry,
+  readonlyStellaApi,
+  skillMetadata = getChatSkillMetadata(),
+  userContext,
+  workspaceId,
+  workspaceName,
+}: BuildWorkspacePromptTextProps): ChatPromptParts =>
+  buildPromptParts({
+    cacheStableContextSections:
+      buildCacheStableReadonlyToolSections(readonlyStellaApi),
+    requestContextSections: buildWorkspaceContextSections({
       entityCount,
       properties,
       refRegistry,
-      readonlyStellaApi,
       workspaceId,
       workspaceName,
     }),
+    skillMetadata,
     userContext,
   });
 
@@ -644,6 +693,28 @@ const buildReadonlyStellaApi = ({
     ok: (value) => value,
   });
 
+const buildCacheStableReadonlyToolSections = (
+  readonlyStellaApi: string,
+): string[] => [
+  "Use `execute-typescript` for readonly retrieval. The readonly " +
+    "`stella` API available inside `execute-typescript` is typed below.",
+  "The readonly `stella` API uses matter naming. Matter-scoped " +
+    "functions require explicit `matterRefs` inputs.",
+  "`stella.list*` functions accept optional `limit` and numeric " +
+    "`offset` pagination inputs. Omit `limit` unless you need a smaller " +
+    "page; the server defaults it and caps it at 500.",
+  "`stella.get*` functions require explicit refs and return full " +
+    `results without pagination. Detail reads accept up to ${LIMITS.chatExecuteDetailIdsMax} refs; ` +
+    `content reads accept up to ${LIMITS.chatExecuteContentIdsMax} entity refs.`,
+  "Prefer one batched `get*` call over many small calls when you " +
+    "already know the matter or entity refs you need.",
+  "Use `describe-stella-function` only as a fallback if you " +
+    "need the full JSON Schema details for one function.",
+  "Inside `execute-typescript`, `console.log` is a no-op: " +
+    "only the value your program `return`s comes back.",
+  ["Readonly `stella` API:", "```ts", readonlyStellaApi, "```"].join("\n"),
+];
+
 type AppendActiveFilePromptIfEntityExistsProps = {
   activeFile: IncomingActiveFile;
   entityExists: boolean;
@@ -668,19 +739,58 @@ export const appendActiveFilePromptIfEntityExists = ({
     : prompt;
 
 type BuildPromptProps = {
-  contextSections: string[];
+  cacheStableContextSections: string[];
+  requestContextSections: string[];
+  skillMetadata: readonly SkillMetadata[];
   userContext: UserContext | null;
 };
 
-const buildPrompt = ({ contextSections, userContext }: BuildPromptProps) => {
-  const sections = [...CORE_RULE_SECTIONS, ...contextSections];
+const buildPromptParts = ({
+  cacheStableContextSections,
+  requestContextSections,
+  skillMetadata,
+  userContext,
+}: BuildPromptProps): ChatPromptParts => {
+  const cacheStablePrefix = joinPromptSections([
+    ...CORE_RULE_SECTIONS,
+    buildSkillCatalogSection(skillMetadata),
+    ...cacheStableContextSections,
+  ]);
+  const sections = [cacheStablePrefix, ...requestContextSections];
   const userContextBlock = buildUserContextBlock(userContext);
 
   if (userContextBlock) {
     sections.push(userContextBlock);
   }
 
-  return sections.join("\n\n");
+  return {
+    cacheStablePrefix,
+    fullPrompt: joinPromptSections(sections),
+  };
+};
+
+const joinPromptSections = (sections: readonly string[]) =>
+  sections.filter((section) => section.length > 0).join("\n\n");
+
+const buildSkillCatalogSection = (skillMetadata: readonly SkillMetadata[]) => {
+  if (skillMetadata.length === 0) {
+    return "";
+  }
+
+  const skillLines = skillMetadata
+    .map((skill) => {
+      const version = skill.version ? ` (version ${skill.version})` : "";
+      return `- ${skill.name}: ${skill.description}${version}`;
+    })
+    .join("\n");
+
+  return [
+    "Available Stella skills are listed below by name and description only.",
+    "Use `load-skill` before applying a skill's detailed methodology. " +
+      "Use `read-skill-resource` only for resource paths returned by `load-skill`.",
+    "Skills provide reasoning methodology and templates; they do not grant data access.",
+    skillLines,
+  ].join("\n");
 };
 
 export const buildUserContextBlock = (userContext: UserContext | null) => {

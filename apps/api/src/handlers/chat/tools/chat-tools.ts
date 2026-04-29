@@ -1,15 +1,21 @@
 import type { SafeDb, ScopedDb } from "@/api/db";
+import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
 import { createChatExecutionTools } from "@/api/handlers/chat/tools/execute/chat-execution-tools";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
+import { createSkillTools } from "@/api/handlers/chat/tools/skill-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
 type OrgTools = ReturnType<typeof createOrgTools>;
 type ChatExecutionTools = ReturnType<typeof createChatExecutionTools>;
+type SkillTools = ReturnType<typeof createSkillTools>;
 
-export type ChatTools = OrgTools & ChatExecutionTools & WorkspaceTools;
+export type ChatTools = OrgTools &
+  ChatExecutionTools &
+  SkillTools &
+  WorkspaceTools;
 
 type GetChatToolsProps = {
   safeDb: SafeDb;
@@ -42,11 +48,15 @@ export const getChatTools = ({
     safeDb,
     userId,
   });
+  const skillTools = createSkillTools({
+    skills: getChatSkillMetadata(),
+  });
 
   if (!workspaceId) {
     return {
       ...orgTools,
       ...executionTools,
+      ...skillTools,
     };
   }
 
@@ -60,6 +70,7 @@ export const getChatTools = ({
   return {
     ...orgTools,
     ...executionTools,
+    ...skillTools,
     ...workspaceTools,
   };
 };

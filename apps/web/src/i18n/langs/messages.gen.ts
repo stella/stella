@@ -347,14 +347,18 @@ type Messages = {
     "tool": {
       "ask-user": "Asking for clarification";
       "create-document": "Creating document";
+      "describe-stella-function": "Inspecting stella function";
       "displayDocument": "Viewing document";
+      "execute-typescript": "Running TypeScript";
       "list-entities": "Browsing documents";
       "list-templates": "Listing templates";
+      "load-skill": "Loading skill";
       "read-clause": "Reading clause";
       "read-contact": "Reading contact";
       "read-content": "Reading content";
       "read-content-across-matters": "Reading document from another matter";
       "read-entity": "Reading document details";
+      "read-skill-resource": "Reading skill resource";
       "search-across-matters": "Searching across matters";
       "search-content": "Searching document text";
       "search-matter": "Searching the matter";
@@ -362,6 +366,7 @@ type Messages = {
       "update-entity-fields": "Updating metadata";
     };
     "toolCall": {
+      "input": "Input";
       "output": "Output";
       "sourceCode": "Source code";
     };

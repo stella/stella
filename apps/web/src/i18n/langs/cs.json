@@ -344,14 +344,18 @@
     "tool": {
       "ask-user": "Asking for clarification",
       "create-document": "Vytvářím dokument",
+      "describe-stella-function": "Inspecting stella function",
       "displayDocument": "Zobrazuji dokument",
+      "execute-typescript": "Running TypeScript",
       "list-entities": "Procházím dokumenty",
       "list-templates": "Listing templates",
+      "load-skill": "Loading skill",
       "read-clause": "Reading clause",
       "read-contact": "Reading contact",
       "read-content": "Čtu obsah",
       "read-content-across-matters": "Reading document from another matter",
       "read-entity": "Čtu detail dokumentu",
+      "read-skill-resource": "Reading skill resource",
       "search-across-matters": "Searching across matters",
       "search-content": "Prohledávám text dokumentů",
       "search-matter": "Prohledávám spis",
@@ -359,6 +363,7 @@
       "update-entity-fields": "Aktualizuji metadata"
     },
     "toolCall": {
+      "input": "Vstup",
       "output": "Výstup",
       "sourceCode": "Zdrojový kód"
     },
