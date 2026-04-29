@@ -116,6 +116,7 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
 function saveStoredMarksToParagraph(
   state: EditorState,
   tr: Transaction,
+  marks: readonly Mark[],
 ): Transaction {
   const { $from } = state.selection;
   const paragraph = $from.parent;
@@ -127,7 +128,6 @@ function saveStoredMarksToParagraph(
     return tr;
   }
 
-  const marks = tr.storedMarks ?? state.storedMarks ?? [];
   if (marks.length === 0) {
     return tr.setNodeMarkup($from.before(), undefined, {
       ...paragraph.attrs,
@@ -147,9 +147,17 @@ function saveStoredMarksToParagraph(
 // CORE MARK COMMANDS
 // ============================================================================
 
-/**
- * Set a mark with specific attributes
- */
+function dispatchStoredMarks(
+  state: EditorState,
+  dispatch: (tr: Transaction) => void,
+  marks: readonly Mark[],
+): void {
+  let tr = state.tr;
+  tr = saveStoredMarksToParagraph(state, tr, marks);
+  tr.setStoredMarks(marks);
+  dispatch(tr);
+}
+
 export function setMark(markType: MarkType, attrs: MarkAttrs): Command {
   return (state, dispatch) => {
     const { from, to, empty } = state.selection;
@@ -157,17 +165,12 @@ export function setMark(markType: MarkType, attrs: MarkAttrs): Command {
 
     if (empty) {
       if (dispatch) {
-        const marks = markType.isInSet(
-          state.storedMarks ?? state.selection.$from.marks(),
-        )
-          ? (state.storedMarks ?? state.selection.$from.marks()).filter(
-              (m) => m.type !== markType,
-            )
-          : (state.storedMarks ?? state.selection.$from.marks());
+        const current = state.storedMarks ?? state.selection.$from.marks();
+        const marks = markType.isInSet(current)
+          ? current.filter((m) => m.type !== markType)
+          : current;
 
-        let tr = state.tr.setStoredMarks([...marks, mark]);
-        tr = saveStoredMarksToParagraph(state, tr);
-        dispatch(tr);
+        dispatchStoredMarks(state, dispatch, [...marks, mark]);
       }
       return true;
     }
@@ -180,9 +183,6 @@ export function setMark(markType: MarkType, attrs: MarkAttrs): Command {
   };
 }
 
-/**
- * Remove a mark
- */
 export function removeMark(markType: MarkType): Command {
   return (state, dispatch) => {
     const { from, to, empty } = state.selection;
@@ -192,9 +192,7 @@ export function removeMark(markType: MarkType): Command {
         const marks = (
           state.storedMarks ?? state.selection.$from.marks()
         ).filter((m) => m.type !== markType);
-        let tr = state.tr.setStoredMarks(marks);
-        tr = saveStoredMarksToParagraph(state, tr);
-        dispatch(tr);
+        dispatchStoredMarks(state, dispatch, marks);
       }
       return true;
     }

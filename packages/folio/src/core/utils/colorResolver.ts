@@ -164,107 +164,10 @@ function rgbToHex(r: number, g: number, b: number): string {
 }
 
 /**
- * Convert RGB to HSL
- *
- * @param r - Red 0-255
- * @param g - Green 0-255
- * @param b - Blue 0-255
- * @returns HSL object with h (0-360), s (0-1), l (0-1)
- */
-function rgbToHsl(
-  r: number,
-  g: number,
-  b: number,
-): { h: number; s: number; l: number } {
-  const rNorm = r / 255;
-  const gNorm = g / 255;
-  const bNorm = b / 255;
-
-  const max = Math.max(rNorm, gNorm, bNorm);
-  const min = Math.min(rNorm, gNorm, bNorm);
-  const l = (max + min) / 2;
-
-  if (max === min) {
-    return { h: 0, s: 0, l };
-  }
-
-  const d = max - min;
-  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-
-  let h: number;
-  switch (max) {
-    case rNorm:
-      h = ((gNorm - bNorm) / d + (gNorm < bNorm ? 6 : 0)) / 6;
-      break;
-    case gNorm:
-      h = ((bNorm - rNorm) / d + 2) / 6;
-      break;
-    case bNorm:
-      h = ((rNorm - gNorm) / d + 4) / 6;
-      break;
-    default:
-      h = 0;
-  }
-
-  return { h: h * 360, s, l };
-}
-
-/**
- * Convert HSL to RGB
- *
- * @param h - Hue 0-360
- * @param s - Saturation 0-1
- * @param l - Lightness 0-1
- * @returns RGB object with r, g, b values 0-255
- */
-function hslToRgb(
-  h: number,
-  s: number,
-  l: number,
-): { r: number; g: number; b: number } {
-  const hNorm = h / 360;
-
-  if (s === 0) {
-    const gray = Math.round(l * 255);
-    return { r: gray, g: gray, b: gray };
-  }
-
-  const hue2rgb = (p: number, q: number, tVal: number) => {
-    let t = tVal;
-    if (t < 0) {
-      t += 1;
-    }
-    if (t > 1) {
-      t -= 1;
-    }
-    if (t < 1 / 6) {
-      return p + (q - p) * 6 * t;
-    }
-    if (t < 1 / 2) {
-      return q;
-    }
-    if (t < 2 / 3) {
-      return p + (q - p) * (2 / 3 - t) * 6;
-    }
-    return p;
-  };
-
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
-
-  return {
-    r: Math.round(hue2rgb(p, q, hNorm + 1 / 3) * 255),
-    g: Math.round(hue2rgb(p, q, hNorm) * 255),
-    b: Math.round(hue2rgb(p, q, hNorm - 1 / 3) * 255),
-  };
-}
-
-/**
  * Apply tint to a color (make lighter by blending with white)
  *
  * OOXML tint algorithm:
- * - Converts to HSL
- * - Adjusts luminance: newLum = lum + (1 - lum) * tint
+ * - Blends each channel toward white
  *
  * @param hex - 6-character hex color (no #)
  * @param tint - Tint value 0-1 (0 = no change, 1 = fully white)
@@ -276,21 +179,18 @@ function applyTint(hex: string, tint: number): string {
   }
 
   const rgb = hexToRgb(hex);
-  const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
-
-  // Apply tint: increase luminance toward white
-  hsl.l += (1 - hsl.l) * tint;
-
-  const newRgb = hslToRgb(hsl.h, hsl.s, hsl.l);
-  return rgbToHex(newRgb.r, newRgb.g, newRgb.b);
+  return rgbToHex(
+    rgb.r * (1 - tint) + 255 * tint,
+    rgb.g * (1 - tint) + 255 * tint,
+    rgb.b * (1 - tint) + 255 * tint,
+  );
 }
 
 /**
  * Apply shade to a color (make darker by blending with black)
  *
  * OOXML shade algorithm:
- * - Converts to HSL
- * - Adjusts luminance: newLum = lum * shade
+ * - Multiplies each channel by the shade value
  *
  * @param hex - 6-character hex color (no #)
  * @param shade - Shade value 0-1 (0 = fully black, 1 = no change)
@@ -302,13 +202,7 @@ function applyShade(hex: string, shade: number): string {
   }
 
   const rgb = hexToRgb(hex);
-  const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
-
-  // Apply shade: decrease luminance toward black
-  hsl.l *= shade;
-
-  const newRgb = hslToRgb(hsl.h, hsl.s, hsl.l);
-  return rgbToHex(newRgb.r, newRgb.g, newRgb.b);
+  return rgbToHex(rgb.r * shade, rgb.g * shade, rgb.b * shade);
 }
 
 /**
@@ -419,7 +313,7 @@ export function resolveColor(
     // Apply tint/shade modifiers
     if (color.themeTint) {
       const tintValue = parseModifierValue(color.themeTint);
-      hexColor = applyTint(hexColor, tintValue);
+      hexColor = applyTint(hexColor, 1 - tintValue);
     } else if (color.themeShade) {
       const shadeValue = parseModifierValue(color.themeShade);
       hexColor = applyShade(hexColor, shadeValue);

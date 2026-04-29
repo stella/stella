@@ -1434,11 +1434,20 @@ export function parseParagraph(
     if (numId !== undefined && numId !== 0) {
       const level = numbering.getLevel(numId, ilvl);
       if (level) {
+        const levelNumFmts: NonNullable<
+          typeof paragraph.listRendering
+        >["levelNumFmts"] = [];
+        for (let levelIndex = 0; levelIndex <= ilvl; levelIndex += 1) {
+          levelNumFmts.push(
+            numbering.getLevel(numId, levelIndex)?.numFmt ?? "decimal",
+          );
+        }
         const listRendering: typeof paragraph.listRendering & object = {
           level: ilvl,
           numId,
           marker: level.lvlText,
           isBullet: level.numFmt === "bullet",
+          levelNumFmts,
         };
         if (level.numFmt) {
           listRendering.numFmt = level.numFmt;

@@ -41,7 +41,7 @@ import type {
   FontFamilyAttrs,
 } from "../prosemirror/schema/marks";
 import type { ParagraphAttrs as PMParagraphAttrs } from "../prosemirror/schema/nodes";
-import type { Theme, SectionProperties } from "../types/document";
+import type { Theme, SectionProperties, NumberFormat } from "../types/document";
 import { resolveColor, resolveHighlightToCss } from "../utils/colorResolver";
 import { pointsToPixels } from "../utils/units";
 
@@ -57,6 +57,8 @@ export type ToFlowBlocksOptions = {
   theme?: Theme | null;
   /** Page content height in pixels (pageHeight - marginTop - marginBottom). Images taller than this are scaled down to fit. */
   pageContentHeight?: number;
+  /** Shared list counters for nested containers. */
+  listCounters?: Map<number, number[]>;
 };
 
 const DEFAULT_FONT = "Calibri";
@@ -110,37 +112,144 @@ function formatNumberedMarker(counters: number[], level: number): string {
   return `${parts.join(".")}.`;
 }
 
-/**
- * Replace %1..%9 placeholders in a format string with counter values.
- */
-function substituteMarkerPlaceholders(
-  template: string,
-  counters: number[],
-): string {
-  let result = template;
-  for (let i = 1; i <= 9; i++) {
-    const ph = `%${i}`;
-    if (result.includes(ph)) {
-      // Use || 1 (not ?? 1) so that 0 is treated as "not yet counted"
-      result = result.replaceAll(ph, String(counters[i - 1] || 1));
+const ROMAN_PAIRS: [number, string][] = [
+  [1000, "M"],
+  [900, "CM"],
+  [500, "D"],
+  [400, "CD"],
+  [100, "C"],
+  [90, "XC"],
+  [50, "L"],
+  [40, "XL"],
+  [10, "X"],
+  [9, "IX"],
+  [5, "V"],
+  [4, "IV"],
+  [1, "I"],
+];
+
+function toRoman(value: number, upper: boolean): string {
+  if (value <= 0) {
+    return "";
+  }
+  let remaining = value;
+  let output = "";
+  for (const [number, symbol] of ROMAN_PAIRS) {
+    while (remaining >= number) {
+      output += symbol;
+      remaining -= number;
     }
   }
-  return result;
+  return upper ? output : output.toLowerCase();
 }
 
-/**
- * Resolve the display marker for a numbered or bullet list item.
- */
-function resolveListMarker(
-  pmAttrs: { listIsBullet?: boolean; listMarker?: string },
-  counters: number[],
-  level: number,
+function toLetter(value: number, upper: boolean): string {
+  if (value <= 0) {
+    return "";
+  }
+  let remaining = value;
+  let output = "";
+  while (remaining > 0) {
+    const remainder = (remaining - 1) % 26;
+    output = String.fromCodePoint(65 + remainder) + output;
+    remaining = Math.floor((remaining - 1) / 26);
+  }
+  return upper ? output : output.toLowerCase();
+}
+
+function formatCounter(
+  value: number,
+  format: NumberFormat | undefined,
 ): string {
+  if (value <= 0) {
+    return "";
+  }
+  switch (format) {
+    case "upperRoman":
+      return toRoman(value, true);
+    case "lowerRoman":
+      return toRoman(value, false);
+    case "upperLetter":
+      return toLetter(value, true);
+    case "lowerLetter":
+      return toLetter(value, false);
+    case "decimalZero":
+      return value < 10 ? `0${value}` : String(value);
+    case "none":
+      return "";
+    default:
+      return String(value);
+  }
+}
+
+function resolveListTemplate(
+  template: string,
+  counters: number[],
+  levelFormats: NumberFormat[] | undefined,
+): string {
+  return template.replace(/%(\d)([.):\]])?/g, (_match, digit, punct = "") => {
+    const index = Number.parseInt(String(digit), 10) - 1;
+    if (index < 0) {
+      return "";
+    }
+    const formatted = formatCounter(
+      counters[index] ?? 0,
+      levelFormats?.[index],
+    );
+    return formatted ? `${formatted}${String(punct)}` : "";
+  });
+}
+
+function getLastListCounters(
+  listCounters: Map<number, number[]>,
+): number[] | undefined {
+  let lastCounters: number[] | undefined;
+  for (const counters of listCounters.values()) {
+    lastCounters = counters;
+  }
+  return lastCounters;
+}
+
+function computeListMarker(
+  pmAttrs: PMParagraphAttrs,
+  listCounters: Map<number, number[]>,
+): string | null {
+  const numId = pmAttrs.numPr?.numId;
+  if (numId === null || numId === undefined || numId === 0) {
+    if (pmAttrs.listMarker?.includes("%") && !pmAttrs.listIsBullet) {
+      const counters = getLastListCounters(listCounters);
+      if (counters) {
+        return resolveListTemplate(
+          pmAttrs.listMarker,
+          counters,
+          pmAttrs.listLevelNumFmts,
+        );
+      }
+    }
+    return null;
+  }
+
   if (pmAttrs.listIsBullet) {
     return pmAttrs.listMarker || "•";
   }
+
+  const level = pmAttrs.numPr?.ilvl ?? 0;
+  const counters =
+    listCounters.get(numId) ?? (Array.from({ length: 9 }, () => 0) as number[]);
+  counters[level] = (counters[level] ?? 0) + 1;
+  for (let i = level + 1; i < counters.length; i += 1) {
+    counters[i] = 0;
+  }
+  listCounters.set(numId, counters);
+
+  const levelFormats =
+    pmAttrs.listLevelNumFmts ??
+    (pmAttrs.listNumFmt ? [pmAttrs.listNumFmt] : undefined);
   if (pmAttrs.listMarker && pmAttrs.listMarker.includes("%")) {
-    return substituteMarkerPlaceholders(pmAttrs.listMarker, counters);
+    return resolveListTemplate(pmAttrs.listMarker, counters, levelFormats);
+  }
+  if (pmAttrs.listMarker) {
+    return pmAttrs.listMarker;
   }
   return formatNumberedMarker(counters, level);
 }
@@ -506,6 +615,7 @@ function paragraphToRuns(
 function convertParagraphAttrs(
   pmAttrs: PMParagraphAttrs,
   theme?: Theme | null,
+  listCounters?: Map<number, number[]>,
 ): ParagraphAttrs {
   const attrs: ParagraphAttrs = {};
 
@@ -712,7 +822,12 @@ function convertParagraphAttrs(
     }
     attrs.numPr = numPr;
   }
-  if (pmAttrs.listMarker) {
+  const resolvedMarker = listCounters
+    ? computeListMarker(pmAttrs, listCounters)
+    : null;
+  if (resolvedMarker !== null) {
+    attrs.listMarker = resolvedMarker;
+  } else if (pmAttrs.listMarker) {
     attrs.listMarker = pmAttrs.listMarker;
   }
   if (pmAttrs.listIsBullet !== undefined && pmAttrs.listIsBullet !== null) {
@@ -784,7 +899,11 @@ function convertParagraph(
 ): ParagraphBlock {
   const pmAttrs = node.attrs as PMParagraphAttrs;
   const runs = paragraphToRuns(node, startPos, options);
-  const attrs = convertParagraphAttrs(pmAttrs, options.theme);
+  const attrs = convertParagraphAttrs(
+    pmAttrs,
+    options.theme,
+    options.listCounters,
+  );
 
   return {
     kind: "paragraph",
@@ -911,7 +1030,6 @@ function convertTableCell(
   node: PMNode,
   startPos: number,
   options: ToFlowBlocksOptions,
-  listCounters?: Map<number, number[]>,
 ): TableCell {
   const blocks: FlowBlock[] = [];
   let offset = startPos + 1; // +1 for opening tag
@@ -920,41 +1038,9 @@ function convertTableCell(
   node.forEach((child) => {
     if (child.type.name === "paragraph") {
       const block = convertParagraph(child, offset, options);
-      // Resolve list markers inside table cells using shared counters
-      if (listCounters) {
-        const pmAttrs = child.attrs as PMParagraphAttrs;
-        if (pmAttrs.numPr) {
-          const numId = pmAttrs.numPr.numId;
-          if (numId !== null && numId !== undefined && numId !== 0) {
-            const level = pmAttrs.numPr.ilvl ?? 0;
-            const counters =
-              listCounters.get(numId) ??
-              (Array.from({ length: 9 }, () => 0) as number[]);
-            counters[level] = (counters[level] ?? 0) + 1;
-            for (let i = level + 1; i < counters.length; i += 1) {
-              counters[i] = 0;
-            }
-            listCounters.set(numId, counters);
-            const marker = resolveListMarker(pmAttrs, counters, level);
-            block.attrs = { ...block.attrs, listMarker: marker };
-          }
-        } else if (pmAttrs.listMarker?.includes("%") && !pmAttrs.listIsBullet) {
-          const lastCounters =
-            listCounters.size > 0
-              ? Array.from(listCounters.values()).at(-1)
-              : undefined;
-          if (lastCounters) {
-            const marker = substituteMarkerPlaceholders(
-              pmAttrs.listMarker,
-              lastCounters as number[],
-            );
-            block.attrs = { ...block.attrs, listMarker: marker };
-          }
-        }
-      }
       blocks.push(block);
     } else if (child.type.name === "table") {
-      blocks.push(convertTable(child, offset, options, listCounters));
+      blocks.push(convertTable(child, offset, options));
     }
     offset += child.nodeSize;
   });
@@ -1006,7 +1092,6 @@ function convertTableRow(
   node: PMNode,
   startPos: number,
   options: ToFlowBlocksOptions,
-  listCounters?: Map<number, number[]>,
 ): TableRow {
   const cells: TableCell[] = [];
   let offset = startPos + 1; // +1 for opening tag
@@ -1014,7 +1099,7 @@ function convertTableRow(
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   node.forEach((child) => {
     if (child.type.name === "tableCell" || child.type.name === "tableHeader") {
-      cells.push(convertTableCell(child, offset, options, listCounters));
+      cells.push(convertTableCell(child, offset, options));
     }
     offset += child.nodeSize;
   });
@@ -1043,7 +1128,6 @@ function convertTable(
   node: PMNode,
   startPos: number,
   options: ToFlowBlocksOptions,
-  listCounters?: Map<number, number[]>,
 ): TableBlock {
   const rows: TableRow[] = [];
   let offset = startPos + 1; // +1 for opening tag
@@ -1051,7 +1135,7 @@ function convertTable(
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   node.forEach((child) => {
     if (child.type.name === "tableRow") {
-      rows.push(convertTableRow(child, offset, options, listCounters));
+      rows.push(convertTableRow(child, offset, options));
     }
     offset += child.nodeSize;
   });
@@ -1301,11 +1385,11 @@ export function toFlowBlocks(
     ...options,
     defaultFont: options.defaultFont ?? DEFAULT_FONT,
     defaultSize: options.defaultSize ?? DEFAULT_SIZE,
+    listCounters: options.listCounters ?? new Map<number, number[]>(),
   };
 
   const blocks: FlowBlock[] = [];
   const offset = 0; // Start at document beginning
-  const listCounters = new Map<number, number[]>();
 
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   doc.forEach((node, nodeOffset) => {
@@ -1315,51 +1399,6 @@ export function toFlowBlocks(
       case "paragraph": {
         const block = convertParagraph(node, pos, opts);
         const pmAttrs = node.attrs as PMParagraphAttrs;
-
-        if (pmAttrs.numPr) {
-          const numId = pmAttrs.numPr.numId;
-          // numId === 0 means "no numbering" per OOXML spec (ECMA-376)
-          if (numId !== null && numId !== undefined && numId !== 0) {
-            const level = pmAttrs.numPr.ilvl ?? 0;
-            const counters =
-              listCounters.get(numId) ??
-              (Array.from({ length: 9 }, () => 0) as number[]);
-
-            counters[level] = (counters[level] ?? 0) + 1;
-            for (let i = level + 1; i < counters.length; i += 1) {
-              counters[i] = 0;
-            }
-
-            listCounters.set(numId, counters);
-
-            // Compute the rendered marker text.
-            // Bullets keep their character as-is. For numbered lists,
-            // if the DOCX lvlText contains %N placeholders (e.g., "%1.%2"),
-            // substitute them with the actual counter values.
-            const marker = resolveListMarker(pmAttrs, counters, level);
-            block.attrs = { ...block.attrs, listMarker: marker };
-          }
-        } else if (
-          pmAttrs.listMarker &&
-          pmAttrs.listMarker.includes("%") &&
-          !pmAttrs.listIsBullet
-        ) {
-          // Paragraph has a raw format-string marker (e.g., "%1.%2") from
-          // style-inherited numbering but no numPr to drive counters.
-          // Substitute placeholders with the most-recently-used counters
-          // so the marker isn't rendered literally.
-          const lastCounters =
-            listCounters.size > 0
-              ? Array.from(listCounters.values()).at(-1)
-              : undefined;
-          if (lastCounters) {
-            const marker = substituteMarkerPlaceholders(
-              pmAttrs.listMarker,
-              lastCounters as number[],
-            );
-            block.attrs = { ...block.attrs, listMarker: marker };
-          }
-        }
 
         blocks.push(block);
 
@@ -1420,7 +1459,7 @@ export function toFlowBlocks(
       }
 
       case "table":
-        blocks.push(convertTable(node, pos, opts, listCounters));
+        blocks.push(convertTable(node, pos, opts));
         break;
 
       case "image":

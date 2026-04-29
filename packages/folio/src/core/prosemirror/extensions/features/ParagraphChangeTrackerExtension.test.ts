@@ -3,8 +3,13 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { Schema } from "prosemirror-model";
+import { Schema, Slice } from "prosemirror-model";
 import { EditorState, TextSelection } from "prosemirror-state";
+import {
+  AddMarkStep,
+  RemoveMarkStep,
+  ReplaceStep,
+} from "prosemirror-transform";
 
 import {
   getChangedParagraphIds,
@@ -29,7 +34,12 @@ const schema = new Schema({
     },
     text: { group: "inline" },
   },
-  marks: {},
+  marks: {
+    bold: {
+      parseDOM: [{ tag: "strong" }],
+      toDOM: () => ["strong", 0],
+    },
+  },
 });
 
 // Get the plugin from the extension
@@ -84,6 +94,34 @@ function setSelection(state: EditorState, pos: number): EditorState {
 // ============================================================================
 
 describe("ParagraphChangeTrackerExtension", () => {
+  describe("mark-only edits", () => {
+    test("does not crash when a mark step is followed by a shrinking replace step", () => {
+      let state = createState([
+        { text: "AAAA", paraId: "P1" },
+        { text: "BBBB", paraId: "P2" },
+      ]);
+      const bold = schema.marks.bold;
+      if (!bold) {
+        throw new Error("Expected bold mark in test schema");
+      }
+      const boldMark = bold.create();
+
+      state = state.apply(state.tr.step(new AddMarkStep(7, 11, boldMark)));
+
+      const tr = state.tr;
+      tr.step(new RemoveMarkStep(7, 11, boldMark));
+      tr.step(new ReplaceStep(1, 5, Slice.empty));
+
+      expect(() => {
+        state = state.apply(tr);
+      }).not.toThrow();
+
+      const changed = getChangedParagraphIds(state);
+      expect(changed.has("P1")).toBe(true);
+      expect(changed.has("P2")).toBe(true);
+    });
+  });
+
   describe("single paragraph edit", () => {
     test("tracks changed paraId when text is inserted", () => {
       let state = createState([
