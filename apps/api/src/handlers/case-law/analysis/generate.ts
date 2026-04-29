@@ -45,8 +45,21 @@ import { getSystemPrompt } from "./prompts/index";
 
 const SENTINEL_STALE_MS = 5 * 60 * 1000;
 
+/**
+ * Serialise a JS value into a JSONB literal for SQL.
+ *
+ * The single-cast form `${JSON.stringify(value)}::jsonb` looks
+ * obvious but stores the payload as a jsonb-string primitive
+ * (`jsonb_typeof = 'string'`). bun-sql binds the parameter with
+ * the jsonb wire type, so Postgres treats the JSON-text value as
+ * a JSON string literal rather than parsing it.
+ *
+ * `${...}::text::jsonb` is the only reliable form: cast to text
+ * first to drop the jsonb wire type, then `::jsonb` parses the
+ * text as JSON. Same fix as in the case-law ingestion pipeline.
+ */
 const jsonbValue = <TValue>(value: TValue) =>
-  sql<TValue>`${JSON.stringify(value)}::jsonb`;
+  sql<TValue>`${JSON.stringify(value)}::text::jsonb`;
 
 type StreamedAnalysisHeading = Omit<AnalysisHeading, "children">;
 
