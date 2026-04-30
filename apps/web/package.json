@@ -30,6 +30,7 @@
     "@stll/anonymize-wasm": "catalog:",
     "@stll/api": "workspace:*",
     "@stll/case-law": "workspace:*",
+    "@stll/feature-flags": "workspace:*",
     "@stll/folio": "workspace:*",
     "@stll/permissions": "workspace:*",
     "@stll/template-conditions": "workspace:*",

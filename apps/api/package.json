@@ -46,6 +46,7 @@
     "@stll/ares": "workspace:*",
     "@stll/case-law": "workspace:*",
     "@stll/docx-utils": "workspace:*",
+    "@stll/feature-flags": "workspace:*",
     "@stll/infosoud": "workspace:*",
     "@stll/permissions": "workspace:*",
     "@stll/skills": "workspace:*",

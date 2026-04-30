@@ -4,6 +4,10 @@ import * as v from "valibot";
 import { envBase } from "@/api/env-base";
 
 const HTTPS_PROTOCOL = "https:";
+const featureFlagSchema = v.optional(
+  v.pipe(v.string(), v.parseBoolean()),
+  "false",
+);
 
 /**
  * API-specific environment variables. These are only required
@@ -101,6 +105,17 @@ const envApi = createEnv({
     MICROSOFT_AUTH_CLIENT_ID: v.optional(v.string()),
     MICROSOFT_AUTH_CLIENT_SECRET: v.optional(v.string()),
     MICROSOFT_AUTH_TENANT_ID: v.optional(v.string()),
+
+    // Launch feature flags. Keep default-off; deployment must opt in.
+    FEATURE_CHAT: featureFlagSchema,
+    FEATURE_BILLING: featureFlagSchema,
+    FEATURE_KNOWLEDGE_TEMPLATES: featureFlagSchema,
+    FEATURE_CASE_LAW: featureFlagSchema,
+    FEATURE_CONTACTS: featureFlagSchema,
+    FEATURE_CALENDAR: featureFlagSchema,
+    FEATURE_TODOS: featureFlagSchema,
+    FEATURE_MCP: featureFlagSchema,
+    FEATURE_DESKTOP_EDITING: featureFlagSchema,
   },
   emptyStringAsUndefined: true,
   runtimeEnv: process.env,

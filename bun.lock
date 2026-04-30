@@ -61,6 +61,7 @@
         "@stll/ares": "workspace:*",
         "@stll/case-law": "workspace:*",
         "@stll/docx-utils": "workspace:*",
+        "@stll/feature-flags": "workspace:*",
         "@stll/infosoud": "workspace:*",
         "@stll/permissions": "workspace:*",
         "@stll/skills": "workspace:*",
@@ -191,6 +192,7 @@
         "@stll/anonymize-wasm": "catalog:",
         "@stll/api": "workspace:*",
         "@stll/case-law": "workspace:*",
+        "@stll/feature-flags": "workspace:*",
         "@stll/folio": "workspace:*",
         "@stll/permissions": "workspace:*",
         "@stll/template-conditions": "workspace:*",
@@ -313,6 +315,14 @@
         "tailwindcss": "catalog:",
         "typescript": "catalog:",
         "wxt": "^0.20.25",
+      },
+    },
+    "packages/feature-flags": {
+      "name": "@stll/feature-flags",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "typescript": "catalog:",
       },
     },
     "packages/folio": {
@@ -1605,6 +1615,8 @@
     "@stll/docx-utils": ["@stll/docx-utils@workspace:packages/docx-utils"],
 
     "@stll/extension": ["@stll/extension@workspace:packages/extension"],
+
+    "@stll/feature-flags": ["@stll/feature-flags@workspace:packages/feature-flags"],
 
     "@stll/folio": ["@stll/folio@workspace:packages/folio"],
 
