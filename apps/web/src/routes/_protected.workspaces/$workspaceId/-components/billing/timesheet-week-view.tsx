@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 
+import { prorateHourlyCents } from "@stll/money";
 import { cn } from "@stll/ui/lib/utils";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -77,9 +78,10 @@ export const TimesheetWeekView = ({
       };
       current.minutes += entry.durationMinutes;
       if (entry.billable) {
-        current.amount += Math.round(
-          (entry.billedMinutes / 60) * entry.rateAtEntry,
-        );
+        current.amount += prorateHourlyCents({
+          billedMinutes: entry.billedMinutes,
+          hourlyRateCents: entry.rateAtEntry,
+        });
       }
       dayMap.set(entry.dateWorked, current);
     }

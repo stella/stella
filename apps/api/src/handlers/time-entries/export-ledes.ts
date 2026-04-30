@@ -1,3 +1,4 @@
+import { prorateHourlyCents } from "@stll/money";
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
@@ -127,8 +128,10 @@ export const exportLedesHandler = async ({
   for (const row of rows) {
     lineItemNumber++;
     const hours = row.billedMinutes / 60;
-    const rate = row.rateAtEntry / 100;
-    const total = hours * rate;
+    const total = prorateHourlyCents({
+      billedMinutes: row.billedMinutes,
+      hourlyRateCents: row.rateAtEntry,
+    });
     const dateFormatted = row.dateWorked.replace(/-/g, "");
     const userName = row.userId ? (userMap.get(row.userId) ?? "") : "";
     const narrative = (row.invoiceNarrative ?? row.narrative).replace(
@@ -142,7 +145,7 @@ export const exportLedesHandler = async ({
         "", // INVOICE_NUMBER
         "", // CLIENT_ID
         row.matterId,
-        total.toFixed(2),
+        (total / 100).toFixed(2),
         dateFormatted,
         dateFormatted,
         "", // INVOICE_DESCRIPTION
@@ -150,7 +153,7 @@ export const exportLedesHandler = async ({
         "F", // FEE type
         hours.toFixed(2),
         "0.00", // ADJUSTMENT
-        total.toFixed(2),
+        (total / 100).toFixed(2),
         dateFormatted,
         row.taskCode ?? "",
         "", // EXPENSE_CODE
@@ -158,7 +161,7 @@ export const exportLedesHandler = async ({
         row.userId ?? "",
         narrative,
         "", // LAW_FIRM_ID
-        rate.toFixed(2),
+        (row.rateAtEntry / 100).toFixed(2),
         userName,
         "", // TASK_DESCRIPTION
         "", // ACTIVITY_DESCRIPTION

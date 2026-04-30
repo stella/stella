@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 
+import { prorateHourlyCents } from "@stll/money";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
@@ -75,7 +76,10 @@ export const TimesheetDayView = ({
     let total = 0;
     for (const e of entries) {
       if (e.billable) {
-        total += Math.round((e.billedMinutes / 60) * e.rateAtEntry);
+        total += prorateHourlyCents({
+          billedMinutes: e.billedMinutes,
+          hourlyRateCents: e.rateAtEntry,
+        });
       }
     }
     return total;

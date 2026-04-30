@@ -1,5 +1,6 @@
 import { Suspense, useState } from "react";
 
+import { applyMarkupCents, prorateHourlyCents } from "@stll/money";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -343,9 +344,10 @@ const InvoiceDetail = ({
                     </td>
                     <td className="px-4 py-2 text-end tabular-nums">
                       {formatCurrencyAmount(
-                        Math.round(
-                          (entry.billedMinutes / 60) * entry.rateAtEntry,
-                        ),
+                        prorateHourlyCents({
+                          billedMinutes: entry.billedMinutes,
+                          hourlyRateCents: entry.rateAtEntry,
+                        }),
                         entry.currency,
                       )}
                     </td>
@@ -408,7 +410,10 @@ const InvoiceDetail = ({
                     </td>
                     <td className="px-4 py-2 text-end tabular-nums">
                       {formatCurrencyAmount(
-                        Math.round(expense.amount * (1 + expense.markup / 100)),
+                        applyMarkupCents({
+                          amountCents: expense.amount,
+                          markupPercent: expense.markup,
+                        }),
                         expense.currency,
                       )}
                     </td>
