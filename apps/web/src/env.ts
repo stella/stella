@@ -1,6 +1,11 @@
 import { createEnv } from "@t3-oss/env-core";
 import * as v from "valibot";
 
+const featureFlagSchema = v.optional(
+  v.pipe(v.string(), v.parseBoolean()),
+  "false",
+);
+
 export const env = createEnv({
   clientPrefix: "VITE_",
   client: {
@@ -27,6 +32,15 @@ export const env = createEnv({
       v.pipe(v.string(), v.parseBoolean()),
       "false",
     ),
+    VITE_FEATURE_CHAT: featureFlagSchema,
+    VITE_FEATURE_BILLING: featureFlagSchema,
+    VITE_FEATURE_KNOWLEDGE_TEMPLATES: featureFlagSchema,
+    VITE_FEATURE_CASE_LAW: featureFlagSchema,
+    VITE_FEATURE_CONTACTS: featureFlagSchema,
+    VITE_FEATURE_CALENDAR: featureFlagSchema,
+    VITE_FEATURE_TODOS: featureFlagSchema,
+    VITE_FEATURE_MCP: featureFlagSchema,
+    VITE_FEATURE_DESKTOP_EDITING: featureFlagSchema,
   },
 
   runtimeEnv: import.meta.env,
