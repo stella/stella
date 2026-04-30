@@ -1,3 +1,4 @@
+import { prorateHourlyCents } from "@stll/money";
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
@@ -118,7 +119,10 @@ export const exportCsvHandler = async ({
   const csvRows = [headers.join(",")];
 
   for (const row of rows) {
-    const amount = (row.billedMinutes / 60) * (row.rateAtEntry / 100);
+    const amount = prorateHourlyCents({
+      billedMinutes: row.billedMinutes,
+      hourlyRateCents: row.rateAtEntry,
+    });
     csvRows.push(
       [
         escapeCSV(row.dateWorked),
@@ -128,7 +132,7 @@ export const exportCsvHandler = async ({
         String(row.billedMinutes),
         (row.rateAtEntry / 100).toFixed(2),
         escapeCSV(row.currency),
-        amount.toFixed(2),
+        (amount / 100).toFixed(2),
         row.billable ? "Yes" : "No",
         escapeCSV(row.status),
         escapeCSV(row.taskCode ?? ""),

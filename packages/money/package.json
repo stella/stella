@@ -1,0 +1,24 @@
+{
+  "name": "@stll/money",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src",
+    "typecheck": "tsgo --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware packages/money",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware --fix packages/money",
+    "format": "oxfmt ."
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

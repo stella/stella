@@ -1,3 +1,4 @@
+import { applyMarkupCents, prorateHourlyCents } from "@stll/money";
 import { Result } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
@@ -259,13 +260,16 @@ const addEntries = createSafeHandler(
 
         let totalAmount = 0;
         for (const entry of allTimeEntries) {
-          totalAmount += Math.round(
-            (entry.billedMinutes / 60) * entry.rateAtEntry,
-          );
+          totalAmount += prorateHourlyCents({
+            billedMinutes: entry.billedMinutes,
+            hourlyRateCents: entry.rateAtEntry,
+          });
         }
         for (const expense of allExpenses) {
-          const markupMultiplier = 1 + expense.markup / 100;
-          totalAmount += Math.round(expense.amount * markupMultiplier);
+          totalAmount += applyMarkupCents({
+            amountCents: expense.amount,
+            markupPercent: expense.markup,
+          });
         }
 
         await tx

@@ -1,3 +1,4 @@
+import { prorateHourlyCents } from "@stll/money";
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
@@ -91,7 +92,10 @@ const createInvoice = createSafeHandler(
 
     let totalAmount = 0;
     for (const entry of entries) {
-      totalAmount += Math.round((entry.billedMinutes / 60) * entry.rateAtEntry);
+      totalAmount += prorateHourlyCents({
+        billedMinutes: entry.billedMinutes,
+        hourlyRateCents: entry.rateAtEntry,
+      });
     }
 
     const now = new Date();

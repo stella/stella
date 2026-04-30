@@ -1,3 +1,4 @@
+import { prorateHourlyCents } from "@stll/money";
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
@@ -124,16 +125,17 @@ export const exportPdfHandler = async ({
       : "Unknown";
     const hours = (row.billedMinutes / 60).toFixed(2);
     const rate = (row.rateAtEntry / 100).toFixed(2);
-    const amount = ((row.billedMinutes / 60) * (row.rateAtEntry / 100)).toFixed(
-      2,
-    );
+    const amount = prorateHourlyCents({
+      billedMinutes: row.billedMinutes,
+      hourlyRateCents: row.rateAtEntry,
+    });
 
     totalMinutes += row.durationMinutes;
-    totalAmount += (row.billedMinutes / 60) * (row.rateAtEntry / 100);
+    totalAmount += amount;
 
     textLines.push(`Date: ${row.dateWorked}  User: ${userName}`);
     textLines.push(
-      `Duration: ${hours}h  Rate: ${row.currency} ${rate}/hr  Amount: ${row.currency} ${amount}`,
+      `Duration: ${hours}h  Rate: ${row.currency} ${rate}/hr  Amount: ${row.currency} ${(amount / 100).toFixed(2)}`,
     );
     textLines.push(
       `Status: ${row.status}  Billable: ${row.billable ? "Yes" : "No"}`,
@@ -151,7 +153,7 @@ export const exportPdfHandler = async ({
   textLines.push("-".repeat(80));
   const totalHours = (totalMinutes / 60).toFixed(2);
   textLines.push(`Total Hours: ${totalHours}`);
-  textLines.push(`Total Amount: ${totalAmount.toFixed(2)}`);
+  textLines.push(`Total Amount: ${(totalAmount / 100).toFixed(2)}`);
 
   return buildMinimalPdf(textLines);
 };

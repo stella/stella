@@ -32,6 +32,7 @@
     "@stll/case-law": "workspace:*",
     "@stll/feature-flags": "workspace:*",
     "@stll/folio": "workspace:*",
+    "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",
     "@stll/template-conditions": "workspace:*",
     "@stll/ui": "workspace:*",

@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { prorateHourlyCents } from "@stll/money";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { cn } from "@stll/ui/lib/utils";
@@ -61,9 +62,10 @@ export const TimeEntryRow = ({
   const [splitOpen, setSplitOpen] = useState(false);
 
   const isActive = entry.timerStartedAt !== null;
-  const billedAmount = Math.round(
-    (entry.billedMinutes / 60) * entry.rateAtEntry,
-  );
+  const billedAmount = prorateHourlyCents({
+    billedMinutes: entry.billedMinutes,
+    hourlyRateCents: entry.rateAtEntry,
+  });
 
   return (
     <>

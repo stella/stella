@@ -48,6 +48,7 @@
     "@stll/docx-utils": "workspace:*",
     "@stll/feature-flags": "workspace:*",
     "@stll/infosoud": "workspace:*",
+    "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",
     "@stll/skills": "workspace:*",
     "@stll/template-conditions": "workspace:*",

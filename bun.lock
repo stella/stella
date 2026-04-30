@@ -63,6 +63,7 @@
         "@stll/docx-utils": "workspace:*",
         "@stll/feature-flags": "workspace:*",
         "@stll/infosoud": "workspace:*",
+        "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/template-conditions": "workspace:*",
@@ -194,6 +195,7 @@
         "@stll/case-law": "workspace:*",
         "@stll/feature-flags": "workspace:*",
         "@stll/folio": "workspace:*",
+        "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
         "@stll/template-conditions": "workspace:*",
         "@stll/ui": "workspace:*",
@@ -366,6 +368,15 @@
       "bin": {
         "infosoud": "./dist/cli.js",
       },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/money": {
+      "name": "@stll/money",
+      "version": "0.0.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
@@ -1625,6 +1636,8 @@
     "@stll/infosoud": ["@stll/infosoud@workspace:packages/infosoud"],
 
     "@stll/landing": ["@stll/landing@workspace:apps/landing"],
+
+    "@stll/money": ["@stll/money@workspace:packages/money"],
 
     "@stll/permissions": ["@stll/permissions@workspace:packages/permissions"],
 
