@@ -180,6 +180,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
+    "./.oxlint-plugins/require-safe-route-handlers.ts",
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
     "./.oxlint-plugins/no-raw-user-id-schema.ts",
@@ -261,12 +262,7 @@ export default defineConfig({
             ],
             patterns: [
               {
-                group: [
-                  "@stll/*",
-                  "@stll/*/**",
-                  "!@stll/ui",
-                  "!@stll/ui/**",
-                ],
+                group: ["@stll/*", "@stll/*/**", "!@stll/ui", "!@stll/ui/**"],
                 message:
                   "@stll/ui must stay workspace-pure; do not import other Stella workspaces from UI source.",
               },
@@ -659,6 +655,32 @@ export default defineConfig({
       },
     },
     {
+      files: [
+        "apps/api/src/handlers/**/routes.ts",
+        "apps/api/src/handlers/**/*route.ts",
+      ],
+      rules: {
+        "require-safe-route-handlers/require-safe-route-handlers": "error",
+      },
+    },
+    {
+      // Explicit route-boundary exceptions: public/protocol/auth/dev/SSE
+      // surfaces do not fit the normal safe-handler endpoint shape.
+      files: [
+        "apps/api/src/handlers/auth/routes.ts",
+        "apps/api/src/handlers/auth/ui-routes.ts",
+        "apps/api/src/handlers/dev/routes.ts",
+        "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts",
+        "apps/api/src/handlers/health/routes.ts",
+        "apps/api/src/handlers/mcp/routes.ts",
+        "apps/api/src/handlers/verify/routes.ts",
+        "apps/api/src/handlers/workspaces/events.ts",
+      ],
+      rules: {
+        "require-safe-route-handlers/require-safe-route-handlers": "off",
+      },
+    },
+    {
       files: ["apps/api/src/handlers/search/search.ts"],
       rules: { "no-body-ownership-ids/no-body-ownership-ids": "off" },
     },
@@ -695,6 +717,7 @@ export default defineConfig({
           "off",
         "no-raw-colors/no-raw-colors": "off",
         "no-physical-properties/no-physical-properties": "off",
+        "require-safe-route-handlers/require-safe-route-handlers": "off",
         "security-guards/no-raw-filename-write": "off",
         "security-guards/no-unsanitized-href": "off",
         "security-guards/no-unscoped-user-query": "off",
