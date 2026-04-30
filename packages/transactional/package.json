@@ -1,5 +1,5 @@
 {
-  "name": "@stella/transactional",
+  "name": "@stll/transactional",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -25,7 +25,7 @@
     "use-intl": "catalog:"
   },
   "devDependencies": {
-    "@stella/typescript-config": "workspace:*",
+    "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
     "react-email": "^6.0.0",
     "typescript": "catalog:"

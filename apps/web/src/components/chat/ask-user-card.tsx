@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { cn } from "@stll/ui/lib/utils";
 import type { ToolUIPart } from "ai";
 import {
   CheckIcon,
@@ -9,8 +10,6 @@ import {
 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { useTranslations } from "use-intl";
-
-import { cn } from "@stella/ui/lib/utils";
 
 import type {
   AskUserInput,

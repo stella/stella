@@ -473,8 +473,7 @@ const processOneBatch = async ({
           id: j.justificationId,
           workspaceId,
           fieldId: j.fieldId,
-          htmlVersion: j.htmlVersion,
-          htmlContent: j.htmlContent,
+          content: j.content,
           fileFieldIds: j.fileFieldIds,
         })),
       );

@@ -1,13 +1,12 @@
 import { useState } from "react";
 
+import { Button } from "@stll/ui/components/button";
+import { Separator } from "@stll/ui/components/separator";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { produce } from "immer";
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { Separator } from "@stella/ui/components/separator";
 
 import Tooltip from "@/components/tooltip";
 import { DOCX_MIME } from "@/lib/consts";

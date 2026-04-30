@@ -1,11 +1,10 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 
+import { Skeleton } from "@stll/ui/components/skeleton";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
-
-import { Skeleton } from "@stella/ui/components/skeleton";
 
 import { pageTitle } from "@/lib/page-title";
 import { AlphabetIndex } from "@/routes/_protected.workspaces/-components/alphabet-index";

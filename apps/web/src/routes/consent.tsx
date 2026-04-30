@@ -1,19 +1,18 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
-import * as v from "valibot";
-
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 import {
   Frame,
   FrameDescription,
   FrameHeader,
   FramePanel,
   FrameTitle,
-} from "@stella/ui/components/frame";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/frame";
+import { toastManager } from "@stll/ui/components/toast";
+import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { authClient } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";

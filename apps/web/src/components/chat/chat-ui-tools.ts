@@ -3,11 +3,10 @@
  * source of truth) and provides frontend-only helpers.
  */
 
+import type { ChatMessage, ChatPart, ChatUITools } from "@stll/api/types";
 import { getToolName, isToolUIPart } from "ai";
 
-import type { ChatMessage, ChatPart, ChatUITools } from "@stella/api/types";
-
-export type { ChatMessage, ChatPart, ChatUITools } from "@stella/api/types";
+export type { ChatMessage, ChatPart, ChatUITools } from "@stll/api/types";
 export type PersistedChatMessage = ChatMessage;
 export type SharedChatUITools = Pick<ChatUITools, "ask-user">;
 export type ApprovalToolName = "create-document" | "update-entity-fields";

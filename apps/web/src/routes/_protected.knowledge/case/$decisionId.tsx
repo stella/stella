@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { parseDocumentAst } from "@stll/case-law/document-ast";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Loader2Icon, SparklesIcon } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
-
-import { parseDocumentAst } from "@stella/case-law/document-ast";
 
 import { useCaseSearchStore } from "@/lib/case-search-store";
 import { ensureCriticalQueryData } from "@/lib/react-query";

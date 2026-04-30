@@ -1,14 +1,13 @@
 import type { PropsWithChildren } from "react";
 
+import { ToastProvider } from "@stll/ui/components/toast";
+import { TooltipProvider } from "@stll/ui/components/tooltip";
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
 import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { enableMapSet } from "immer";
 import { IntlProvider } from "use-intl";
-
-import { ToastProvider } from "@stella/ui/components/toast";
-import { TooltipProvider } from "@stella/ui/components/tooltip";
 
 import {
   DefaultErrorComponent,

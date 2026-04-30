@@ -5,7 +5,7 @@ import type {
   PropertyCondition,
   ViewLayout,
   ViewLayoutType,
-} from "@stella/api/types";
+} from "@stll/api/types";
 
 import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME } from "@/lib/consts";
@@ -16,7 +16,7 @@ export type {
   ViewFilterCondition,
   ViewLayout,
   ViewLayoutType,
-} from "@stella/api/types";
+} from "@stll/api/types";
 
 export type RouterToPath = FileRouteTypes["to"];
 export type RouterFullPath = FileRouteTypes["fullPaths"];
@@ -219,11 +219,24 @@ export type PersonMention = {
   hideAvatar?: boolean;
 };
 
+export type JustificationContent = {
+  version: 1;
+  blocks: {
+    fileFieldId: string;
+    statements: {
+      text: string;
+      citations: {
+        bates: string;
+        pageNumber: number;
+      }[];
+    }[];
+  }[];
+};
+
 export type WorkspaceJustification = {
   id: string;
   fieldId: string;
-  htmlVersion: number;
-  htmlContent: string;
+  content: JustificationContent;
   boundingBoxes: { version: number; boxes: BoundingBox[] } | null;
   fileFieldIds: string[];
 };

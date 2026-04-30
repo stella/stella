@@ -1,5 +1,5 @@
 {
-  "name": "@stella/template-conditions",
+  "name": "@stll/template-conditions",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -15,7 +15,7 @@
     "format": "oxfmt ."
   },
   "devDependencies": {
-    "@stella/typescript-config": "workspace:*",
+    "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
     "fast-check": "catalog:",
     "typescript": "catalog:"

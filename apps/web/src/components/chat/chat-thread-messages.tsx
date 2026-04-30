@@ -1,11 +1,10 @@
 import type { ComponentProps } from "react";
 
+import { cn } from "@stll/ui/lib/utils";
 import { isToolUIPart } from "ai";
 import type { FileUIPart } from "ai";
 import { FileTextIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { cn } from "@stella/ui/lib/utils";
 
 import {
   Message,

@@ -1,7 +1,6 @@
+import { cn } from "@stll/ui/lib/utils";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronRightIcon } from "lucide-react";
-
-import { cn } from "@stella/ui/lib/utils";
 
 type ClientGroupHeaderProps = {
   groupId: string;

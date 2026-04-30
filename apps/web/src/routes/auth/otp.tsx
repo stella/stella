@@ -1,24 +1,23 @@
 import { useState } from "react";
 
-import { useMutation } from "@tanstack/react-query";
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
-import * as v from "valibot";
-
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 import {
   Frame,
   FrameDescription,
   FrameHeader,
   FramePanel,
   FrameTitle,
-} from "@stella/ui/components/frame";
+} from "@stll/ui/components/frame";
 import {
   InputOTP,
   InputOTPGroup,
   InputOTPSlot,
-} from "@stella/ui/components/input-otp";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/input-otp";
+import { toastManager } from "@stll/ui/components/toast";
+import { useMutation } from "@tanstack/react-query";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";

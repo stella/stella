@@ -1,16 +1,15 @@
-import { LockIcon } from "lucide-react";
-
 import {
   Avatar,
   AvatarFallback,
   AvatarImage,
-} from "@stella/ui/components/avatar";
+} from "@stll/ui/components/avatar";
 import {
   TooltipPopup,
   Tooltip as TooltipRoot,
   TooltipTrigger,
-} from "@stella/ui/components/tooltip";
-import { cn } from "@stella/ui/lib/utils";
+} from "@stll/ui/components/tooltip";
+import { cn } from "@stll/ui/lib/utils";
+import { LockIcon } from "lucide-react";
 
 type ActiveEditBadgeProps = {
   name: string;

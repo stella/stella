@@ -1,11 +1,7 @@
 import { Result } from "better-result";
-import * as slimdom from "slimdom";
 
+import type { JustificationContent } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
-
-const isElementNode = (node: slimdom.Node): node is slimdom.Element =>
-  node.nodeType === node.ELEMENT_NODE;
 
 export type JustificationFilenames = {
   original: string;
@@ -13,100 +9,95 @@ export type JustificationFilenames = {
   fileFieldId: SafeId<"field">;
 }[];
 
-type ParseJustificationXmlProps = {
-  xml: string;
+export type AIJustificationOutput = {
+  file: string;
+  statements: {
+    text: string;
+    citations: string[];
+  }[];
+}[];
+
+type NormalizeJustificationProps = {
+  justification: AIJustificationOutput;
   filenames: JustificationFilenames;
 };
 
-type ParsedJustificationXml = {
-  htmlVersion: number;
-  htmlContent: string;
+type ParsedJustification = {
+  content: JustificationContent;
   fileFieldIds: SafeId<"field">[];
 };
 
-/**
- * Parse justification XML produced by the AI model.
- *
- * Multiple `<j f="F0">` elements (one per source file) are
- * merged into a single HTML string. Each citation `<span>`
- * receives a `data-page-number` attribute for page navigation.
- */
-export const parseJustificationXml = ({
-  xml,
+const parseCitation = (citation: string, file: string) => {
+  const trimmed = citation.trim();
+  const prefix = `${file}-`;
+
+  if (!trimmed.startsWith(prefix)) {
+    return null;
+  }
+
+  const pageSegment = trimmed.slice(prefix.length);
+  const pageNumber = Number(pageSegment);
+
+  if (!Number.isInteger(pageNumber) || pageNumber < 1) {
+    return null;
+  }
+
+  return { bates: trimmed, pageNumber };
+};
+
+export const normalizeJustification = ({
+  justification,
   filenames,
-}: ParseJustificationXmlProps) =>
-  Result.try({
-    try: (): ParsedJustificationXml | null => {
-      const document = slimdom.parseXmlDocument(
-        `<root>${xml.replaceAll(`\\"`, `"`)}</root>`,
-      );
+}: NormalizeJustificationProps): Result<ParsedJustification | null, never> => {
+  const blocks: JustificationContent["blocks"] = [];
+  const fileFieldIdSet = new Set<SafeId<"field">>();
 
-      // eslint-disable-next-line unicorn/prefer-query-selector -- slimdom XML document does not support querySelectorAll
-      const justificationElements = document.getElementsByTagName("j");
+  for (const block of justification) {
+    const file = filenames.find(
+      (filename) => filename.simplified === block.file,
+    );
 
-      const htmlParts: string[] = [];
-      const fileFieldIdSet = new Set<SafeId<"field">>();
+    if (!file) {
+      continue;
+    }
 
-      for (const justificationElement of justificationElements) {
-        const filename = justificationElement.getAttribute("f");
-        const fileFieldId = filenames.find(
-          (f) => f.simplified === filename,
-        )?.fileFieldId;
+    const statements: JustificationContent["blocks"][number]["statements"] = [];
 
-        if (!fileFieldId) {
-          continue;
-        }
+    for (const statement of block.statements) {
+      const text = statement.text.trim();
 
-        fileFieldIdSet.add(fileFieldId);
-
-        const elements = justificationElement.childNodes;
-
-        for (const element of elements) {
-          if (!isElementNode(element)) {
-            continue;
-          }
-
-          const tagParts = element.tagName.split("-");
-          const tagName = tagParts[0];
-          const pageId = tagParts[2];
-          const pageNumber = pageId !== undefined ? +pageId : Number.NaN;
-
-          if (!tagName || Number.isNaN(pageNumber)) {
-            const previousSibling = element.previousSibling;
-            if (previousSibling?.textContent) {
-              previousSibling.textContent =
-                previousSibling.textContent.trimEnd();
-            }
-            element.remove();
-            continue;
-          }
-
-          const page = pageNumber.toString();
-          const span = document.createElement("span");
-          span.textContent = page;
-          // eslint-disable-next-line unicorn/prefer-dom-node-dataset -- slimdom Element does not have dataset
-          span.setAttribute("data-page-number", page);
-          // eslint-disable-next-line unicorn/prefer-dom-node-dataset -- slimdom Element does not have dataset
-          span.setAttribute("data-field-id", fileFieldId);
-          element.replaceWith(span);
-        }
-
-        htmlParts.push(justificationElement.innerHTML);
+      if (text.length === 0) {
+        continue;
       }
 
-      if (htmlParts.length === 0) {
-        return null;
+      const citations = statement.citations
+        .map((citation) => parseCitation(citation, file.simplified))
+        .filter((citation) => citation !== null);
+
+      if (citations.length === 0) {
+        continue;
       }
 
-      return {
-        htmlVersion: 1,
-        htmlContent: htmlParts.join(""),
-        fileFieldIds: [...fileFieldIdSet],
-      };
+      statements.push({ text, citations });
+    }
+
+    if (statements.length === 0) {
+      continue;
+    }
+
+    fileFieldIdSet.add(file.fileFieldId);
+    blocks.push({ fileFieldId: file.fileFieldId, statements });
+  }
+
+  if (blocks.length === 0) {
+    return Result.ok(null);
+  }
+
+  return Result.ok({
+    content: {
+      version: 1,
+      blocks,
     },
-    catch: (error) =>
-      new ParseXmlError({
-        message: "Failed to parse justification XML",
-        cause: error,
-      }),
+    fileFieldIds: [...fileFieldIdSet],
   });
+};

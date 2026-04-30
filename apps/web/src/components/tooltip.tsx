@@ -1,13 +1,12 @@
 import type { PropsWithChildren } from "react";
 
 import type { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
-
 import {
   TooltipPopup,
   Tooltip as TooltipRoot,
   TooltipTrigger,
-} from "@stella/ui/components/tooltip";
-import { cn } from "@stella/ui/lib/utils";
+} from "@stll/ui/components/tooltip";
+import { cn } from "@stll/ui/lib/utils";
 
 type TooltipProps = {
   render: TooltipPrimitive.Trigger.Props["render"];

@@ -1,11 +1,10 @@
 import { useCallback } from "react";
 
+import { Button } from "@stll/ui/components/button";
+import { toastManager } from "@stll/ui/components/toast";
 import { useQuery } from "@tanstack/react-query";
 import { DownloadIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";

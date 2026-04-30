@@ -20,7 +20,7 @@ export default defineConfig({
   },
   // Start playground dev server automatically
   webServer: {
-    command: "bun --filter @stella/playground dev",
+    command: "bun --filter @stll/playground dev",
     url: "http://localhost:4200",
     reuseExistingServer: true,
     cwd: "../..",

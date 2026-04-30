@@ -1,11 +1,10 @@
 import "./chat-editor.css";
 import { useCallback, useEffect } from "react";
 
+import { Button } from "@stll/ui/components/button";
+import { cn } from "@stll/ui/lib/utils";
 import { EditorContent } from "@tiptap/react";
 import { ArrowUpIcon, PaperclipIcon } from "lucide-react";
-
-import { Button } from "@stella/ui/components/button";
-import { cn } from "@stella/ui/lib/utils";
 
 import type {
   ChatEditorController,

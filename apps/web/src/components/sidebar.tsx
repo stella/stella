@@ -6,31 +6,30 @@ import {
   useState,
 } from "react";
 
-import { useHotkey } from "@tanstack/react-hotkeys";
-import { panic } from "better-result";
-import { cva } from "class-variance-authority";
-import type { VariantProps } from "class-variance-authority";
-import { PanelLeftIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { Input } from "@stella/ui/components/input";
-import { Separator } from "@stella/ui/components/separator";
+import { Button } from "@stll/ui/components/button";
+import { Input } from "@stll/ui/components/input";
+import { Separator } from "@stll/ui/components/separator";
 import {
   Sheet,
   SheetDescription,
   SheetHeader,
   SheetPopup,
   SheetTitle,
-} from "@stella/ui/components/sheet";
-import { Skeleton } from "@stella/ui/components/skeleton";
+} from "@stll/ui/components/sheet";
+import { Skeleton } from "@stll/ui/components/skeleton";
 import {
   TooltipPopup,
   Tooltip as TooltipRoot,
   TooltipTrigger,
-} from "@stella/ui/components/tooltip";
-import { useIsMobile } from "@stella/ui/hooks/use-mobile";
-import { cn } from "@stella/ui/lib/utils";
+} from "@stll/ui/components/tooltip";
+import { useIsMobile } from "@stll/ui/hooks/use-mobile";
+import { cn } from "@stll/ui/lib/utils";
+import { useHotkey } from "@tanstack/react-hotkeys";
+import { panic } from "better-result";
+import { cva } from "class-variance-authority";
+import type { VariantProps } from "class-variance-authority";
+import { PanelLeftIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { HOTKEYS } from "@/lib/hotkeys";
 import { Slot } from "@/lib/slot";

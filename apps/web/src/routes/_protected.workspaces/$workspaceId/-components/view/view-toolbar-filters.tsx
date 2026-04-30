@@ -1,5 +1,20 @@
 import type { PropsWithChildren, ReactNode } from "react";
 
+import { Button } from "@stll/ui/components/button";
+import { Input } from "@stll/ui/components/input";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/components/select";
 import type { LucideIcon } from "lucide-react";
 import {
   CircleDotIcon,
@@ -11,22 +26,6 @@ import {
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { Input } from "@stella/ui/components/input";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stella/ui/components/menu";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stella/ui/components/select";
 
 import type { ViewFilterCondition, WorkspaceProperty } from "@/lib/types";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";

@@ -14,11 +14,11 @@ export type {
   ParagraphRole,
   TableBlock,
   TableCell,
-} from "@stella/case-law/document-ast";
+} from "@stll/case-law/document-ast";
 
 export {
   getDocumentAstMetadata,
   hasUsableAst,
   isDocumentAst,
   parseDocumentAst,
-} from "@stella/case-law/document-ast";
+} from "@stll/case-law/document-ast";

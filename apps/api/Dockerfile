@@ -6,7 +6,7 @@ WORKDIR /app
 FROM base AS pruner
 RUN bun install -g turbo@^2
 COPY . .
-RUN turbo prune @stella/api --docker
+RUN turbo prune @stll/api --docker
 
 # Install dependencies using only package manifests (cached layer)
 FROM base AS deps

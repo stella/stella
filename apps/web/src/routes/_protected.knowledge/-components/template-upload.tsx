@@ -1,10 +1,9 @@
 import { useCallback, useRef, useState } from "react";
 
+import { Button } from "@stll/ui/components/button";
+import { toastManager } from "@stll/ui/components/toast";
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";

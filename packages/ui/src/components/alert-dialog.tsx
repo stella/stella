@@ -1,8 +1,7 @@
 "use client";
 
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog";
-
-import { cn } from "@stella/ui/lib/utils";
+import { cn } from "@stll/ui/lib/utils";
 
 const AlertDialogCreateHandle = AlertDialogPrimitive.createHandle;
 

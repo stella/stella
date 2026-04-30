@@ -1,8 +1,7 @@
+import { toastManager } from "@stll/ui/components/toast";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
-
-import { toastManager } from "@stella/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";

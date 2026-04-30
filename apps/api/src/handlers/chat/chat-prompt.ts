@@ -5,11 +5,10 @@
  * REST chat endpoint can share the same prompt logic.
  */
 
+import type { SkillMetadata } from "@stll/skills";
 import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
 import { count, eq } from "drizzle-orm";
-
-import type { SkillMetadata } from "@stella/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { caseLawDecisions, entities, workspaces } from "@/api/db/schema";

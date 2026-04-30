@@ -50,9 +50,9 @@ to explore the codebase.
 - `apps/*` contains runnable applications only.
 - `packages/*` contains shared or publishable packages only.
 - Every direct child of `apps/` and `packages/` is a workspace package named
-  `@stella/<directory>`.
+  `@stll/<directory>`.
 - Use scoped workspace filters in commands, for example
-  `bun --filter @stella/web dev`.
+  `bun --filter @stll/web dev`.
 
 ## Development Workflow
 

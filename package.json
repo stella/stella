@@ -47,7 +47,7 @@
   },
   "devDependencies": {
     "@fontsource-variable/source-serif-4": "^5.2.9",
-    "@stella/typescript-config": "workspace:^0.0.0",
+    "@stll/typescript-config": "workspace:^0.0.0",
     "@tanstack/eslint-plugin-query": "catalog:",
     "@tanstack/eslint-plugin-router": "catalog:",
     "@typescript/native-preview": "7.0.0-dev.20260425.1",

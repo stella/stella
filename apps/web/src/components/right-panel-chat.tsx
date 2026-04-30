@@ -9,6 +9,8 @@ import {
 
 import type { Chat } from "@ai-sdk/react";
 import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { Button } from "@stll/ui/components/button";
+import { cn } from "@stll/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMatch } from "@tanstack/react-router";
 import {
@@ -19,9 +21,6 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
-
-import { Button } from "@stella/ui/components/button";
-import { cn } from "@stella/ui/lib/utils";
 
 import {
   Conversation,

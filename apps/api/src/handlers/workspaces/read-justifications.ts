@@ -39,8 +39,7 @@ export const readJustificationsHandler = async ({
       .select({
         id: justifications.id,
         fieldId: justifications.fieldId,
-        htmlVersion: justifications.htmlVersion,
-        htmlContent: justifications.htmlContent,
+        content: justifications.content,
         boundingBoxes: justifications.boundingBoxes,
         fileFieldIds: justifications.fileFieldIds,
       })

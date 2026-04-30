@@ -1,5 +1,5 @@
 {
-  "name": "@stella/skills",
+  "name": "@stll/skills",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -19,7 +19,7 @@
     "format": "oxfmt ."
   },
   "devDependencies": {
-    "@stella/typescript-config": "workspace:*",
+    "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
     "typescript": "catalog:"
   }

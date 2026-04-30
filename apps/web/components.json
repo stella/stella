@@ -12,8 +12,8 @@
   "iconLibrary": "lucide",
   "aliases": {
     "components": "@/components",
-    "utils": "@stella/ui/lib/utils",
-    "ui": "@stella/ui/components",
+    "utils": "@stll/ui/lib/utils",
+    "ui": "@stll/ui/components",
     "lib": "@/lib",
     "hooks": "@/hooks"
   },

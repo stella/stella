@@ -1,8 +1,7 @@
+import { Button } from "@stll/ui/components/button";
 import type { Column } from "@tanstack/react-table";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
 
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 

@@ -1,4 +1,4 @@
-import { cn } from "@stella/ui/lib/utils";
+import { cn } from "@stll/ui/lib/utils";
 
 function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (

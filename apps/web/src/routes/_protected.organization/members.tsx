@@ -1,13 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { useForm, useStore } from "@tanstack/react-form";
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, useSearch } from "@tanstack/react-router";
-import { EllipsisVerticalIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-import * as v from "valibot";
-
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
   DialogClose,
@@ -18,23 +11,23 @@ import {
   DialogPopup,
   DialogTitle,
   DialogTrigger,
-} from "@stella/ui/components/dialog";
-import { Field, FieldError, FieldLabel } from "@stella/ui/components/field";
-import { Form } from "@stella/ui/components/form";
-import { Frame } from "@stella/ui/components/frame";
+} from "@stll/ui/components/dialog";
+import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
+import { Form } from "@stll/ui/components/form";
+import { Frame } from "@stll/ui/components/frame";
 import {
   Menu,
   MenuItem,
   MenuPopup,
   MenuTrigger,
-} from "@stella/ui/components/menu";
+} from "@stll/ui/components/menu";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stella/ui/components/select";
+} from "@stll/ui/components/select";
 import {
   Table,
   TableBody,
@@ -42,8 +35,14 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@stella/ui/components/table";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/table";
+import { toastManager } from "@stll/ui/components/toast";
+import { useForm, useStore } from "@tanstack/react-form";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, useSearch } from "@tanstack/react-router";
+import { EllipsisVerticalIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";

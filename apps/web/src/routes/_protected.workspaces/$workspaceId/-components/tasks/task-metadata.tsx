@@ -1,22 +1,21 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PlusIcon, XIcon } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { DatePickerPopover as DatePickerPopoverBase } from "@stella/ui/components/date-picker-popover";
-import type { DatePickerPopoverProps as DatePickerPopoverBaseProps } from "@stella/ui/components/date-picker-popover";
+import { Button } from "@stll/ui/components/button";
+import { DatePickerPopover as DatePickerPopoverBase } from "@stll/ui/components/date-picker-popover";
+import type { DatePickerPopoverProps as DatePickerPopoverBaseProps } from "@stll/ui/components/date-picker-popover";
 import {
   Popover,
   PopoverPopup,
   PopoverTrigger,
-} from "@stella/ui/components/popover";
+} from "@stll/ui/components/popover";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
-} from "@stella/ui/components/select";
-import { cn } from "@stella/ui/lib/utils";
+} from "@stll/ui/components/select";
+import { cn } from "@stll/ui/lib/utils";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { PlusIcon, XIcon } from "lucide-react";
+import { useLocale, useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";

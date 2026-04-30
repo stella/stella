@@ -1,15 +1,14 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 
-import { PenLineIcon, EyeIcon } from "lucide-react";
-
-import { DocxEditor, createEmptyDocument } from "@stella/folio";
+import { DocxEditor, createEmptyDocument } from "@stll/folio";
 import type {
   Document as FolioDocument,
   DocxEditorRef,
   EditorMode,
-} from "@stella/folio";
-import { Button } from "@stella/ui/components/button";
-import { Separator } from "@stella/ui/components/separator";
+} from "@stll/folio";
+import { Button } from "@stll/ui/components/button";
+import { Separator } from "@stll/ui/components/separator";
+import { PenLineIcon, EyeIcon } from "lucide-react";
 
 export function App() {
   const editorRef = useRef<DocxEditorRef>(null);

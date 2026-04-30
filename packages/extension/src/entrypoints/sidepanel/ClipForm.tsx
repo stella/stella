@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 
 import type { SaveClipResponse } from "../../lib/messages";
 import type { ClipData, Matter, PageMetadata } from "../../types";

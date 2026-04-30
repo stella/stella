@@ -1,12 +1,11 @@
-import { GlobeIcon } from "lucide-react";
-
 import {
   Menu,
   MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
   MenuTrigger,
-} from "@stella/ui/components/menu";
+} from "@stll/ui/components/menu";
+import { GlobeIcon } from "lucide-react";
 
 import {
   LANG_ENDONYMS,

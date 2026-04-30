@@ -1,17 +1,16 @@
 import { useState } from "react";
 
 import { Field } from "@base-ui/react/field";
-import { PlusIcon, SearchIcon, XIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { FieldError } from "@stella/ui/components/field";
+import { Button } from "@stll/ui/components/button";
+import { FieldError } from "@stll/ui/components/field";
 import {
   Popover,
   PopoverClose,
   PopoverPopup,
   PopoverTrigger,
-} from "@stella/ui/components/popover";
+} from "@stll/ui/components/popover";
+import { PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import type { WorkspacePropertyOption } from "@/lib/types";
 import { shuffleArray } from "@/lib/utils";

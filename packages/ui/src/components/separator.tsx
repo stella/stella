@@ -1,6 +1,5 @@
 import { Separator as SeparatorPrimitive } from "@base-ui/react/separator";
-
-import { cn } from "@stella/ui/lib/utils";
+import { cn } from "@stll/ui/lib/utils";
 
 function Separator({
   className,

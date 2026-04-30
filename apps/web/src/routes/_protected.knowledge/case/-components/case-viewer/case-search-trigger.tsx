@@ -1,5 +1,8 @@
 import { useEffect, useRef } from "react";
 
+import { Button } from "@stll/ui/components/button";
+import { Input } from "@stll/ui/components/input";
+import { Separator } from "@stll/ui/components/separator";
 import { formatForDisplay, useHotkey } from "@tanstack/react-hotkeys";
 import {
   ChevronDownIcon,
@@ -9,10 +12,6 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
-
-import { Button } from "@stella/ui/components/button";
-import { Input } from "@stella/ui/components/input";
-import { Separator } from "@stella/ui/components/separator";
 
 import Tooltip from "@/components/tooltip";
 import { useCaseSearchStore } from "@/lib/case-search-store";

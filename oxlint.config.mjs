@@ -262,13 +262,13 @@ export default defineConfig({
             patterns: [
               {
                 group: [
-                  "@stella/*",
-                  "@stella/*/**",
-                  "!@stella/ui",
-                  "!@stella/ui/**",
+                  "@stll/*",
+                  "@stll/*/**",
+                  "!@stll/ui",
+                  "!@stll/ui/**",
                 ],
                 message:
-                  "@stella/ui must stay workspace-pure; do not import other Stella workspaces from UI source.",
+                  "@stll/ui must stay workspace-pure; do not import other Stella workspaces from UI source.",
               },
             ],
           },
@@ -296,21 +296,21 @@ export default defineConfig({
             patterns: [
               {
                 group: ["@/api/*", "@/api/**/*"],
-                message: "Use '@stella/api/types' instead of '@/api/'.",
+                message: "Use '@stll/api/types' instead of '@/api/'.",
               },
               {
-                group: ["@stella/api", "@stella/api/**", "!@stella/api/types"],
+                group: ["@stll/api", "@stll/api/**", "!@stll/api/types"],
                 message:
-                  "apps/web may only import the public '@stella/api/types' surface.",
+                  "apps/web may only import the public '@stll/api/types' surface.",
               },
               {
                 group: [
-                  "@stella/desktop",
-                  "@stella/desktop/**",
-                  "@stella/docs",
-                  "@stella/docs/**",
-                  "@stella/landing",
-                  "@stella/landing/**",
+                  "@stll/desktop",
+                  "@stll/desktop/**",
+                  "@stll/docs",
+                  "@stll/docs/**",
+                  "@stll/landing",
+                  "@stll/landing/**",
                 ],
                 message:
                   "apps/web must not import other app workspaces directly.",
@@ -597,7 +597,7 @@ export default defineConfig({
       },
     },
     {
-      // @stella/ares types resolve as error in type-aware linting
+      // @stll/ares types resolve as error in type-aware linting
       // because the workspace package dist isn't always available
       // during local lint runs.
       files: ["apps/api/src/handlers/contacts/ares-lookup.ts"],

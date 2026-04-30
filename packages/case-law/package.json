@@ -1,5 +1,5 @@
 {
-  "name": "@stella/case-law",
+  "name": "@stll/case-law",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -18,7 +18,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
-    "@stella/typescript-config": "workspace:*",
+    "@stll/typescript-config": "workspace:*",
     "typescript": "catalog:"
   }
 }

@@ -1,5 +1,14 @@
 import { useRef } from "react";
 
+import { Button } from "@stll/ui/components/button";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import { toastManager } from "@stll/ui/components/toast";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   FolderPlusIcon,
@@ -8,16 +17,6 @@ import {
   UploadIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuSeparator,
-  MenuTrigger,
-} from "@stella/ui/components/menu";
-import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";

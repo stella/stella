@@ -4,10 +4,9 @@ import { useState } from "react";
 import type * as React from "react";
 
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
+import { HexColorPicker } from "@stll/ui/components/hex-color-picker";
+import { cn } from "@stll/ui/lib/utils";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
-
-import { HexColorPicker } from "@stella/ui/components/hex-color-picker";
-import { cn } from "@stella/ui/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Types

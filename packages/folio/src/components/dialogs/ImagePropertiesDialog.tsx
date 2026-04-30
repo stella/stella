@@ -15,7 +15,7 @@ import {
   DialogPopup,
   DialogTitle,
   DialogClose,
-} from "@stella/ui/components/dialog";
+} from "@stll/ui/components/dialog";
 
 // ============================================================================
 // TYPES

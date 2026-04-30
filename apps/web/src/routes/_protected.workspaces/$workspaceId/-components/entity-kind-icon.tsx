@@ -1,6 +1,5 @@
+import { cn } from "@stll/ui/lib/utils";
 import { FileIcon, FolderIcon, LinkIcon, MailIcon } from "lucide-react";
-
-import { cn } from "@stella/ui/lib/utils";
 
 import type { EntityKind } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";

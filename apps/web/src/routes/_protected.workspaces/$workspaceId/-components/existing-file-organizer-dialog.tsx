@@ -5,6 +5,22 @@ import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { Button } from "@stll/ui/components/button";
+import { Checkbox } from "@stll/ui/components/checkbox";
+import {
+  Dialog,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/components/dialog";
+import { Input } from "@stll/ui/components/input";
+import { Skeleton } from "@stll/ui/components/skeleton";
+import { Textarea } from "@stll/ui/components/textarea";
+import { toastManager } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDownIcon,
@@ -17,23 +33,6 @@ import {
   TriangleAlertIcon,
 } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { Checkbox } from "@stella/ui/components/checkbox";
-import {
-  Dialog,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "@stella/ui/components/dialog";
-import { Input } from "@stella/ui/components/input";
-import { Skeleton } from "@stella/ui/components/skeleton";
-import { Textarea } from "@stella/ui/components/textarea";
-import { toastManager } from "@stella/ui/components/toast";
-import { cn } from "@stella/ui/lib/utils";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";

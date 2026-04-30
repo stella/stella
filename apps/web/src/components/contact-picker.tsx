@@ -1,11 +1,6 @@
 import { useState } from "react";
 import type * as React from "react";
 
-import { useQuery } from "@tanstack/react-query";
-import { BuildingIcon, PlusIcon, SearchIcon, UserIcon } from "lucide-react";
-import { useDebouncedCallback } from "use-debounce";
-import { useTranslations } from "use-intl";
-
 import {
   Combobox,
   ComboboxEmpty,
@@ -13,7 +8,11 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-} from "@stella/ui/components/combobox";
+} from "@stll/ui/components/combobox";
+import { useQuery } from "@tanstack/react-query";
+import { BuildingIcon, PlusIcon, SearchIcon, UserIcon } from "lucide-react";
+import { useDebouncedCallback } from "use-debounce";
+import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";

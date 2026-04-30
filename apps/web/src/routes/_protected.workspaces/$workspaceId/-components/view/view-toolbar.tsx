@@ -1,5 +1,22 @@
 import { useMemo, useState } from "react";
 
+import { Button } from "@stll/ui/components/button";
+import {
+  Menu,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/components/select";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import {
   CalendarIcon,
@@ -13,24 +30,6 @@ import {
   UserIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import {
-  Menu,
-  MenuGroup,
-  MenuGroupLabel,
-  MenuItem,
-  MenuPopup,
-  MenuSeparator,
-  MenuTrigger,
-} from "@stella/ui/components/menu";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stella/ui/components/select";
 
 import type { TranslationKey } from "@/i18n/types";
 import type { ViewLayout, WorkspaceProperty, WorkspaceView } from "@/lib/types";

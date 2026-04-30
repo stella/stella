@@ -1,6 +1,5 @@
+import type { PermissionInput } from "@stll/permissions";
 import { useSuspenseQuery } from "@tanstack/react-query";
-
-import type { PermissionInput } from "@stella/permissions";
 
 import { authClient } from "@/lib/auth";
 import { roleOptions } from "@/routes/-queries";

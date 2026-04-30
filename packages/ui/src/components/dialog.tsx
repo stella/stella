@@ -1,11 +1,10 @@
 "use client";
 
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
+import { Button } from "@stll/ui/components/button";
+import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { cn } from "@stll/ui/lib/utils";
 import { XIcon } from "lucide-react";
-
-import { Button } from "@stella/ui/components/button";
-import { ScrollArea } from "@stella/ui/components/scroll-area";
-import { cn } from "@stella/ui/lib/utils";
 
 const DialogCreateHandle = DialogPrimitive.createHandle;
 

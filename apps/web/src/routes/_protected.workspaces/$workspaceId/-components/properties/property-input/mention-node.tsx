@@ -1,9 +1,8 @@
+import { cn } from "@stll/ui/lib/utils";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
-
-import { cn } from "@stella/ui/lib/utils";
 
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 

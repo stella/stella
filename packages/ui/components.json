@@ -11,10 +11,10 @@
   },
   "iconLibrary": "lucide",
   "aliases": {
-    "components": "@stella/ui/components",
-    "utils": "@stella/ui/lib/utils",
-    "hooks": "@stella/ui/hooks",
-    "lib": "@stella/ui/lib",
-    "ui": "@stella/ui/components"
+    "components": "@stll/ui/components",
+    "utils": "@stll/ui/lib/utils",
+    "hooks": "@stll/ui/hooks",
+    "lib": "@stll/ui/lib",
+    "ui": "@stll/ui/components"
   }
 }

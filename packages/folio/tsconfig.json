@@ -1,5 +1,5 @@
 {
-  "extends": "@stella/typescript-config/react-library.json",
+  "extends": "@stll/typescript-config/react-library.json",
   "include": ["src"],
   "exclude": [
     "node_modules",

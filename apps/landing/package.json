@@ -1,8 +1,8 @@
 {
-  "name": "@stella/landing",
-  "type": "module",
+  "name": "@stll/landing",
   "version": "0.0.1",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "bun --bun astro dev",
     "build": "bun --bun astro build",
@@ -15,7 +15,7 @@
   "dependencies": {
     "@astrojs/react": "^5.0.3",
     "@astrojs/sitemap": "^3.7.2",
-    "@stella/ui": "workspace:*",
+    "@stll/ui": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "astro": "^6.1.7",
     "react": "catalog:react19",

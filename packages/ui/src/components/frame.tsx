@@ -1,6 +1,6 @@
 import type * as React from "react";
 
-import { cn } from "@stella/ui/lib/utils";
+import { cn } from "@stll/ui/lib/utils";
 
 function Frame({ className, ...props }: React.ComponentProps<"div">) {
   return (

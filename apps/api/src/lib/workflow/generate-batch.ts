@@ -1,13 +1,10 @@
 import { PDF, rgb, Standard14Font, StandardFonts } from "@libpdf/core";
-import { matchError, Result } from "better-result";
+import { Result } from "better-result";
 
 import { createFileKey } from "@/api/handlers/files/utils";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  Unreachable,
-  WorkflowIntegrationError,
-} from "@/api/lib/errors/tagged-errors";
+import { Unreachable } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
 import { validateAIOutput } from "@/api/lib/workflow/ai-validators";
@@ -22,7 +19,7 @@ import type {
   GenerateBatchResult,
   ResolvedFile,
 } from "@/api/lib/workflow/generate-batch-shared";
-import { parseJustificationXml } from "@/api/lib/workflow/parse-justifications";
+import { normalizeJustification } from "@/api/lib/workflow/parse-justifications";
 import type { JustificationFilenames } from "@/api/lib/workflow/parse-justifications";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -202,8 +199,8 @@ export const generateBatch = async ({
 
       const fieldId = createSafeId<"field">();
 
-      const justification = yield* parseJustificationXml({
-        xml: validated.justificationXml,
+      const justification = yield* normalizeJustification({
+        justification: validated.justification,
         filenames,
       });
 
@@ -291,16 +288,4 @@ export const generateBatch = async ({
       skippedPropertyIds,
       unsupportedPropertyIds: [],
     });
-  }).then((result) =>
-    result.mapError((err) =>
-      matchError(err, {
-        ParseXmlError: (parseErr) =>
-          new WorkflowIntegrationError({
-            message: parseErr.message,
-            cause: parseErr,
-          }),
-        WorkflowIntegrationError: (integrationErr) => integrationErr,
-        WorkflowValidationError: (validErr) => validErr,
-      }),
-    ),
-  );
+  });

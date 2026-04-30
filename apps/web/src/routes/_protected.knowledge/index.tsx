@@ -1,3 +1,4 @@
+import { cn } from "@stll/ui/lib/utils";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   BarChart3Icon,
@@ -10,8 +11,6 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { cn } from "@stella/ui/lib/utils";
 
 export const Route = createFileRoute("/_protected/knowledge/")({
   component: KnowledgeLanding,

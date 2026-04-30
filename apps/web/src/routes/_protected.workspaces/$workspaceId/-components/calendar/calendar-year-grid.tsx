@@ -1,8 +1,7 @@
 import { useMemo } from "react";
 
+import { cn } from "@stll/ui/lib/utils";
 import { useLocale } from "use-intl";
-
-import { cn } from "@stella/ui/lib/utils";
 
 import type { CalendarDay } from "./calendar-utils";
 import {

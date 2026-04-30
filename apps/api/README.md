@@ -13,7 +13,7 @@ bun install
 ### Run the development server
 
 ```bash
-bun --filter @stella/api dev
+bun --filter @stll/api dev
 ```
 
 The API serves on [http://localhost:3001](http://localhost:3001) by default.

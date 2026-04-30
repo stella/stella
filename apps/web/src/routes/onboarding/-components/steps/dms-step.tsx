@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
 
+import { Button } from "@stll/ui/components/button";
+import { Input } from "@stll/ui/components/input";
+import { cn } from "@stll/ui/lib/utils";
 import { CheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { Input } from "@stella/ui/components/input";
-import { cn } from "@stella/ui/lib/utils";
 
 export const DMS_NONE = "none" as const;
 

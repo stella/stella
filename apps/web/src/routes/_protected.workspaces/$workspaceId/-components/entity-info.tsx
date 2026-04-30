@@ -1,18 +1,17 @@
 import { useState } from "react";
 
+import {
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@stll/ui/components/accordion";
+import { Button } from "@stll/ui/components/button";
+import { toastManager } from "@stll/ui/components/toast";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { produce } from "immer";
 import { ChevronLeftIcon, ChevronRightIcon, LaptopIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import {
-  AccordionItem,
-  AccordionPanel,
-  AccordionTrigger,
-} from "@stella/ui/components/accordion";
-import { Button } from "@stella/ui/components/button";
-import { toastManager } from "@stella/ui/components/toast";
 
 import { env } from "@/env";
 import { getFreshLinkedAccount } from "@/lib/auth-session";

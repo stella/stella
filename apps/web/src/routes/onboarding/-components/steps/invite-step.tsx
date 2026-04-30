@@ -1,11 +1,10 @@
 import { useCallback, useRef, useState } from "react";
 
+import { Button } from "@stll/ui/components/button";
+import { Input } from "@stll/ui/components/input";
+import { cn } from "@stll/ui/lib/utils";
 import { AlertTriangleIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { Input } from "@stella/ui/components/input";
-import { cn } from "@stella/ui/lib/utils";
 
 const DELIMITERS = /[,;\n\t]/;
 

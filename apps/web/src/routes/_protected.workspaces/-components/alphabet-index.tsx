@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { RefObject } from "react";
 
-import { cn } from "@stella/ui/lib/utils";
+import { cn } from "@stll/ui/lib/utils";
 
 import type { WorkspaceGroup } from "@/routes/_protected.workspaces/-types";
 

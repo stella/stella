@@ -1,9 +1,6 @@
 import { Suspense } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { EllipsisIcon } from "lucide-react";
-
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 import {
   Sheet,
   SheetDescription,
@@ -12,7 +9,9 @@ import {
   SheetPopup,
   SheetTitle,
   SheetTrigger,
-} from "@stella/ui/components/sheet";
+} from "@stll/ui/components/sheet";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { EllipsisIcon } from "lucide-react";
 
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";

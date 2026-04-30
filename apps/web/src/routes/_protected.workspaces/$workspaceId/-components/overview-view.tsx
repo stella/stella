@@ -4,6 +4,36 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@stll/ui/components/avatar";
+import { Button } from "@stll/ui/components/button";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import {
+  Popover,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stll/ui/components/popover";
+import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { toastManager } from "@stll/ui/components/toast";
+import {
+  TooltipPopup,
+  Tooltip as TooltipRoot,
+  TooltipTrigger,
+} from "@stll/ui/components/tooltip";
+import { cn } from "@stll/ui/lib/utils";
+import {
   useMutation,
   useQuery,
   useQueryClient,
@@ -20,37 +50,6 @@ import {
   UploadIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@stella/ui/components/avatar";
-import { Button } from "@stella/ui/components/button";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
-  MenuSub,
-  MenuSubPopup,
-  MenuSubTrigger,
-  MenuTrigger,
-} from "@stella/ui/components/menu";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stella/ui/components/popover";
-import { ScrollArea } from "@stella/ui/components/scroll-area";
-import { toastManager } from "@stella/ui/components/toast";
-import {
-  TooltipPopup,
-  Tooltip as TooltipRoot,
-  TooltipTrigger,
-} from "@stella/ui/components/tooltip";
-import { cn } from "@stella/ui/lib/utils";
 
 import { renderDragPreview } from "@/components/drag-preview";
 import { PersonMentionLabel } from "@/components/person-mention-label";

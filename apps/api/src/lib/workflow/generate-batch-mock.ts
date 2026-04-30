@@ -1,12 +1,9 @@
 import { faker } from "@faker-js/faker";
-import { matchError, Result } from "better-result";
+import { Result } from "better-result";
 import { sleep } from "bun";
 
 import { createSafeId } from "@/api/lib/branded-types";
-import {
-  Unreachable,
-  WorkflowIntegrationError,
-} from "@/api/lib/errors/tagged-errors";
+import { Unreachable } from "@/api/lib/errors/tagged-errors";
 import {
   fetchInputFieldsForBatch,
   prepareBatchInput,
@@ -18,8 +15,11 @@ import type {
   GenerateBatchProps,
   GenerateBatchResult,
 } from "@/api/lib/workflow/generate-batch-shared";
-import { parseJustificationXml } from "@/api/lib/workflow/parse-justifications";
-import type { JustificationFilenames } from "@/api/lib/workflow/parse-justifications";
+import { normalizeJustification } from "@/api/lib/workflow/parse-justifications";
+import type {
+  AIJustificationOutput,
+  JustificationFilenames,
+} from "@/api/lib/workflow/parse-justifications";
 
 const getValueFromInputFields = (
   input: readonly FieldContentForAI[],
@@ -85,7 +85,7 @@ export const generateBatchMock = async ({
     const filenames: JustificationFilenames = resolvedFiles.map(
       (file, index) => ({
         original: file.fileId,
-        simplified: `f${index}`,
+        simplified: `F${index}`,
         fileFieldId: file.fileFieldId,
       }),
     );
@@ -96,9 +96,8 @@ export const generateBatchMock = async ({
       const content = property.content;
       const fieldId = createSafeId<"field">();
 
-      const justificationXml = createMockJustifications(filenames);
-      const justification = yield* parseJustificationXml({
-        xml: justificationXml,
+      const justification = yield* normalizeJustification({
+        justification: createMockJustifications(filenames),
         filenames,
       });
 
@@ -200,27 +199,28 @@ export const generateBatchMock = async ({
       skippedPropertyIds,
       unsupportedPropertyIds: [],
     });
-  }).then((result) =>
-    result.mapError((err) =>
-      matchError(err, {
-        ParseXmlError: (parseErr) =>
-          new WorkflowIntegrationError({
-            message: parseErr.message,
-            cause: parseErr,
-          }),
-        WorkflowValidationError: (validErr) => validErr,
-      }),
-    ),
-  );
+  });
 
-export const createMockJustifications = (filenames: JustificationFilenames) => {
-  const xmlParts: string[] = [];
+export const createMockJustifications = (
+  filenames: JustificationFilenames,
+): AIJustificationOutput => {
+  const justifications: AIJustificationOutput = [];
 
   for (const filename of filenames) {
-    xmlParts.push(
-      `<j f="${filename.simplified}">${faker.lorem.sentence()} <p-${filename.simplified}-0001 /> ${faker.lorem.sentence()} <p-${filename.simplified}-0002 /></j>`,
-    );
+    justifications.push({
+      file: filename.simplified,
+      statements: [
+        {
+          text: faker.lorem.sentence(),
+          citations: [`${filename.simplified}-0001`],
+        },
+        {
+          text: faker.lorem.sentence(),
+          citations: [`${filename.simplified}-0002`],
+        },
+      ],
+    });
   }
 
-  return xmlParts.join("\n");
+  return justifications;
 };

@@ -23,6 +23,3 @@ minimumReleaseAgeExcludes = [
   "@typescript/native-preview-win32-arm64",
   "@typescript/native-preview-win32-x64",
 ]
-
-[install.scopes]
-"@stella" = "https://registry.invalid/"

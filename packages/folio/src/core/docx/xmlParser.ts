@@ -19,9 +19,8 @@
  * - pic: Pictures
  */
 
+import { OOXML_NS } from "@stll/docx-utils";
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
-
-import { OOXML_NS } from "@stella/docx-utils";
 
 /**
  * XML element tree node — drop-in replacement for the `Element` type
@@ -162,7 +161,7 @@ function elementToFxpNode(el: XmlElement): Record<string, unknown> {
 }
 
 /**
- * Common OOXML namespace URIs — re-exported from @stella/docx-utils.
+ * Common OOXML namespace URIs — re-exported from @stll/docx-utils.
  */
 export const NAMESPACES = OOXML_NS;
 

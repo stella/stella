@@ -1,25 +1,24 @@
 import { useEffect, useRef } from "react";
 
-import { useForm, useStore } from "@tanstack/react-form";
-import { useMutation } from "@tanstack/react-query";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
-import * as v from "valibot";
-
-import { Avatar, AvatarFallback } from "@stella/ui/components/avatar";
-import { Button } from "@stella/ui/components/button";
-import { Field, FieldError, FieldLabel } from "@stella/ui/components/field";
-import { Form } from "@stella/ui/components/form";
+import { Avatar, AvatarFallback } from "@stll/ui/components/avatar";
+import { Button } from "@stll/ui/components/button";
+import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
+import { Form } from "@stll/ui/components/form";
 import {
   Frame,
   FrameDescription,
   FrameHeader,
   FramePanel,
   FrameTitle,
-} from "@stella/ui/components/frame";
-import { Input } from "@stella/ui/components/input";
-import { Skeleton } from "@stella/ui/components/skeleton";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/frame";
+import { Input } from "@stll/ui/components/input";
+import { Skeleton } from "@stll/ui/components/skeleton";
+import { toastManager } from "@stll/ui/components/toast";
+import { useForm, useStore } from "@tanstack/react-form";
+import { useMutation } from "@tanstack/react-query";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";

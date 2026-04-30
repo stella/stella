@@ -9,7 +9,7 @@ import {
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stella/ui/components/select";
+} from "@stll/ui/components/select";
 
 // ============================================================================
 // TYPES

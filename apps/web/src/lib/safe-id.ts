@@ -1,2 +1,2 @@
-export { toSafeId } from "@stella/api/types";
-export type { SafeId, SafeIdType } from "@stella/api/types";
+export { toSafeId } from "@stll/api/types";
+export type { SafeId, SafeIdType } from "@stll/api/types";

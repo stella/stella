@@ -1,13 +1,12 @@
-import type { AnyFieldApi } from "@tanstack/react-form";
-import { useTranslations } from "use-intl";
-
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stella/ui/components/select";
+} from "@stll/ui/components/select";
+import type { AnyFieldApi } from "@tanstack/react-form";
+import { useTranslations } from "use-intl";
 
 import type { WorkspaceToolType } from "@/lib/types";
 

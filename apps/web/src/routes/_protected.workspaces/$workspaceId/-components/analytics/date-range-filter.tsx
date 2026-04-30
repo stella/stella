@@ -1,7 +1,6 @@
+import { Button } from "@stll/ui/components/button";
+import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { DatePickerPopover } from "@stella/ui/components/date-picker-popover";
 
 import { formatDateISO } from "./utils";
 

@@ -1,4 +1,4 @@
-import type { OptionColor } from "@stella/api/types";
+import type { OptionColor } from "@stll/api/types";
 
 import type { WorkspaceProperty } from "@/lib/types";
 

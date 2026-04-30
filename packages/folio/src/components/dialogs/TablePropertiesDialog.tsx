@@ -11,7 +11,7 @@ import {
   DialogPopup,
   DialogTitle,
   DialogClose,
-} from "@stella/ui/components/dialog";
+} from "@stll/ui/components/dialog";
 
 export type TableProperties = {
   width?: number | null;

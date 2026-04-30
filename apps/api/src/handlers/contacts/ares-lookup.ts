@@ -1,6 +1,3 @@
-import { Result } from "better-result";
-import { t } from "elysia";
-
 import {
   AresAPIError,
   AresRequestError,
@@ -8,7 +5,9 @@ import {
   AresValidationError,
   lookupByIco,
   searchByName,
-} from "@stella/ares";
+} from "@stll/ares";
+import { Result } from "better-result";
+import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

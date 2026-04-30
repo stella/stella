@@ -3,7 +3,6 @@ import type { PropsWithChildren } from "react";
 
 import { panic } from "better-result";
 import type { Result } from "better-result";
-import { LRUCache } from "lru-cache";
 import { createStore, useStore } from "zustand";
 
 import {
@@ -107,15 +106,47 @@ type CreatePDFStoreArgs = {
   fitToWidth: number | undefined;
 };
 
+class PageBuffer {
+  readonly #pageIds = new Map<string, true>();
+  readonly #max: number;
+
+  constructor(max: number) {
+    this.#max = max;
+  }
+
+  clear() {
+    this.#pageIds.clear();
+  }
+
+  has(pageId: string) {
+    return this.#pageIds.has(pageId);
+  }
+
+  markUsed(pageId: string) {
+    this.#pageIds.delete(pageId);
+    this.#pageIds.set(pageId, true);
+
+    while (this.#pageIds.size > this.#max) {
+      const oldestPageId = this.#pageIds.keys().next().value;
+      if (oldestPageId === undefined) {
+        return;
+      }
+      this.#pageIds.delete(oldestPageId);
+    }
+  }
+
+  keys() {
+    return [...this.#pageIds.keys()].toReversed();
+  }
+}
+
 const createPDFStore = ({
   fieldId,
   startPage,
   scaleOffset,
   fitToWidth,
 }: CreatePDFStoreArgs) => {
-  const lru = new LRUCache<string, true>({
-    max: DEFAULT_PAGE_BUFFER_SIZE,
-  });
+  const pageBuffer = new PageBuffer(DEFAULT_PAGE_BUFFER_SIZE);
 
   let renderAbort: AbortController = new AbortController();
   let originalPageWidth: number | null = null;
@@ -321,9 +352,9 @@ const createPDFStore = ({
         effectiveScale,
       );
 
-      lru.clear();
+      pageBuffer.clear();
 
-      const orderedPageIds = document.pages.keys().toArray();
+      const orderedPageIds = [...document.pages.keys()];
       const pageCount = orderedPageIds.length;
       const startIndex = Math.min(
         Math.max(0, startPage - 1),
@@ -364,7 +395,7 @@ const createPDFStore = ({
       }
 
       for (const id of spiralIds) {
-        lru.set(id, true);
+        pageBuffer.markUsed(id);
       }
 
       const initialRenderPromises = buildRenderPromises({
@@ -380,7 +411,7 @@ const createPDFStore = ({
         pages: pagesAtEffectiveScale,
         attachmentLabels: document.attachmentLabels,
         scale: baseDocumentScale,
-        activePages: lru.keys().toArray(),
+        activePages: pageBuffer.keys(),
         scrollTo:
           startPage > 1 && startPageId !== undefined
             ? { pageId: startPageId }
@@ -412,14 +443,10 @@ const createPDFStore = ({
       }
 
       for (const pageId of expandedSet) {
-        if (lru.has(pageId)) {
-          lru.get(pageId);
-        } else {
-          lru.set(pageId, true);
-        }
+        pageBuffer.markUsed(pageId);
       }
 
-      const newActivePages = lru.keys().toArray();
+      const newActivePages = pageBuffer.keys();
       const previousRenderPromises = get().renderPromises;
       const nextRenderPromises = new Map(previousRenderPromises);
       let renderPromisesChanged = false;
@@ -507,7 +534,7 @@ const createPDFStore = ({
 
   const destroy = () => {
     renderAbort.abort();
-    lru.clear();
+    pageBuffer.clear();
     originalPageWidth = null;
     store.setState({
       document: null,

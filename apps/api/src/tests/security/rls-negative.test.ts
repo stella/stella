@@ -295,8 +295,20 @@ describe("workspace INSERT — wrong scope", () => {
           id: testId(),
           workspaceId: ids.wsB1,
           fieldId: ids.fieldB1,
-          htmlVersion: 99,
-          htmlContent: "<p>bad</p>",
+          content: {
+            version: 1,
+            blocks: [
+              {
+                fileFieldId: ids.fieldB1,
+                statements: [
+                  {
+                    text: "bad",
+                    citations: [{ bates: "F0-0001", pageNumber: 1 }],
+                  },
+                ],
+              },
+            ],
+          },
         }),
     },
     {
@@ -631,7 +643,22 @@ describe("workspace UPDATE — wrong scope", () => {
       query: (tx: TestDatabaseTransaction) =>
         tx
           .update(justifications)
-          .set({ htmlContent: "<p>hacked</p>" })
+          .set({
+            content: {
+              version: 1,
+              blocks: [
+                {
+                  fileFieldId: ids.fieldB1,
+                  statements: [
+                    {
+                      text: "hacked",
+                      citations: [{ bates: "F0-0001", pageNumber: 1 }],
+                    },
+                  ],
+                },
+              ],
+            },
+          })
           .where(eq(justifications.id, ids.justificationB1))
           .returning({ id: justifications.id }),
     },

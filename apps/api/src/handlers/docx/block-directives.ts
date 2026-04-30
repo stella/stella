@@ -10,9 +10,8 @@
  * (fast-path check via regex on raw XML).
  */
 
+import { evaluateCondition, resolvePath } from "@stll/template-conditions";
 import type * as slimdom from "slimdom";
-
-import { evaluateCondition, resolvePath } from "@stella/template-conditions";
 
 import { isElement, paragraphText, W_NS } from "./ooxml";
 import type {

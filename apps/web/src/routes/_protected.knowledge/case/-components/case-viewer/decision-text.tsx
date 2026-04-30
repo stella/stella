@@ -1,11 +1,10 @@
 import { Fragment, useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 
+import type { Block, DocumentAst, Inline } from "@stll/case-law/document-ast";
+import { parseDocumentAst } from "@stll/case-law/document-ast";
+import { cn } from "@stll/ui/lib/utils";
 import { useTranslations } from "use-intl";
-
-import type { Block, DocumentAst, Inline } from "@stella/case-law/document-ast";
-import { parseDocumentAst } from "@stella/case-law/document-ast";
-import { cn } from "@stella/ui/lib/utils";
 
 import { sanitizeHref } from "@/lib/sanitize-href";
 

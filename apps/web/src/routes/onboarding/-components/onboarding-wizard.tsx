@@ -1,10 +1,9 @@
 import { useCallback, useState } from "react";
 
+import { toastManager } from "@stll/ui/components/toast";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
-
-import { toastManager } from "@stella/ui/components/toast";
 
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";

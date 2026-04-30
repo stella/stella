@@ -1,5 +1,5 @@
 {
-  "extends": "@stella/typescript-config/base.json",
+  "extends": "@stll/typescript-config/base.json",
   "compilerOptions": {
     "types": ["bun"]
   },

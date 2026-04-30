@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react";
 
+import { Button } from "@stll/ui/components/button";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
 
 import { DecisionFilters } from "@/routes/_protected.knowledge/case/-components/decision-filters";
 import { DecisionTable } from "@/routes/_protected.knowledge/case/-components/decision-table";

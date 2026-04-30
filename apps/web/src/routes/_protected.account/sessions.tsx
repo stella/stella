@@ -1,14 +1,6 @@
 import { useState } from "react";
 
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQueries,
-} from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
   DialogClose,
@@ -18,8 +10,8 @@ import {
   DialogPopup,
   DialogTitle,
   DialogTrigger,
-} from "@stella/ui/components/dialog";
-import { Frame } from "@stella/ui/components/frame";
+} from "@stll/ui/components/dialog";
+import { Frame } from "@stll/ui/components/frame";
 import {
   Table,
   TableBody,
@@ -27,8 +19,15 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@stella/ui/components/table";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/table";
+import { toastManager } from "@stll/ui/components/toast";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQueries,
+} from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
 
 import { useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";

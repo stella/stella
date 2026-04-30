@@ -1,6 +1,3 @@
-import { Trash2Icon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
 import {
   AlertDialog,
   AlertDialogClose,
@@ -10,9 +7,11 @@ import {
   AlertDialogPopup,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@stella/ui/components/alert-dialog";
-import { Button } from "@stella/ui/components/button";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/alert-dialog";
+import { Button } from "@stll/ui/components/button";
+import { toastManager } from "@stll/ui/components/toast";
+import { Trash2Icon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import type { WorkspaceProperty } from "@/lib/types";
 import { useDeleteProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";

@@ -1,7 +1,7 @@
 import type {
   ChatMentionCategory,
   ChatMentionHrefPrefixMap,
-} from "@stella/api/types";
+} from "@stll/api/types";
 
 import { typedEntries } from "@/lib/object";
 

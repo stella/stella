@@ -1,10 +1,9 @@
 import { useCallback, useRef, useState } from "react";
 
+import { toastManager } from "@stll/ui/components/toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
-
-import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";

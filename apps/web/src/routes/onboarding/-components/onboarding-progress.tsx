@@ -1,6 +1,5 @@
+import { cn } from "@stll/ui/lib/utils";
 import { useTranslations } from "use-intl";
-
-import { cn } from "@stella/ui/lib/utils";
 
 type OnboardingProgressProps = {
   currentStep: number;

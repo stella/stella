@@ -2,6 +2,12 @@ import { useState } from "react";
 
 import { Field } from "@base-ui/react/field";
 import { Form } from "@base-ui/react/form";
+import type { OptionColor } from "@stll/api/types";
+import { Button } from "@stll/ui/components/button";
+import { FieldError } from "@stll/ui/components/field";
+import { Popover, PopoverPopup } from "@stll/ui/components/popover";
+import { Separator } from "@stll/ui/components/separator";
+import { toastManager } from "@stll/ui/components/toast";
 import { revalidateLogic, useForm, useStore } from "@tanstack/react-form";
 import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
@@ -9,13 +15,6 @@ import { EyeOffIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import type { _Translator as Translator } from "use-intl/core";
 import * as v from "valibot";
-
-import type { OptionColor } from "@stella/api/types";
-import { Button } from "@stella/ui/components/button";
-import { FieldError } from "@stella/ui/components/field";
-import { Popover, PopoverPopup } from "@stella/ui/components/popover";
-import { Separator } from "@stella/ui/components/separator";
-import { toastManager } from "@stella/ui/components/toast";
 
 import { requiredTrimmedStringSchema, toFormErrors } from "@/lib/schema";
 import type { WorkspaceProperty } from "@/lib/types";

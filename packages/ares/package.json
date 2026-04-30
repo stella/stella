@@ -1,5 +1,5 @@
 {
-  "name": "@stella/ares",
+  "name": "@stll/ares",
   "version": "0.1.0",
   "description": "Typed client for the Czech ARES business registry API",
   "keywords": [
@@ -54,7 +54,7 @@
     "@stll/stdnum": "^0.0.1"
   },
   "devDependencies": {
-    "@stella/typescript-config": "workspace:*",
+    "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
     "typescript": "catalog:"
   }

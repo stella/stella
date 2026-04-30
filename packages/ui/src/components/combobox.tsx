@@ -3,11 +3,10 @@
 import * as React from "react";
 
 import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
+import { Input } from "@stll/ui/components/input";
+import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { cn } from "@stll/ui/lib/utils";
 import { ChevronsUpDownIcon, XIcon } from "lucide-react";
-
-import { Input } from "@stella/ui/components/input";
-import { ScrollArea } from "@stella/ui/components/scroll-area";
-import { cn } from "@stella/ui/lib/utils";
 
 const ComboboxContext = React.createContext<{
   chipsRef: React.RefObject<Element | null> | null;

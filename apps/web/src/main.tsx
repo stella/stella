@@ -5,7 +5,7 @@ import { CancelledError } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 
 import "@/fonts.css";
-import "@stella/ui/globals.css";
+import "@stll/ui/globals.css";
 import { initializeI18n } from "@/i18n/i18n-store";
 import { getRouter } from "@/router";
 

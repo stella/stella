@@ -12,7 +12,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
   TooltipPopup,
-} from "@stella/ui/components/tooltip";
+} from "@stll/ui/components/tooltip";
 
 type TooltipProps = {
   content: React.ReactNode;

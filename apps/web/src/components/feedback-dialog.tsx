@@ -1,9 +1,6 @@
 import { useState } from "react";
 
-import { MessageSquarePlusIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
   DialogDescription,
@@ -12,9 +9,11 @@ import {
   DialogPopup,
   DialogTitle,
   DialogTrigger,
-} from "@stella/ui/components/dialog";
-import { Label } from "@stella/ui/components/label";
-import { Textarea } from "@stella/ui/components/textarea";
+} from "@stll/ui/components/dialog";
+import { Label } from "@stll/ui/components/label";
+import { Textarea } from "@stll/ui/components/textarea";
+import { MessageSquarePlusIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/sidebar";
 import { useAnalytics } from "@/lib/analytics/provider";

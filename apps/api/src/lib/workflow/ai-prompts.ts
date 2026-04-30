@@ -3,7 +3,10 @@ import * as v from "valibot";
 import { Unreachable } from "@/api/lib/errors/tagged-errors";
 import type { TextInput } from "@/api/lib/workflow/generate-batch-shared";
 import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
-import type { JustificationFilenames } from "@/api/lib/workflow/parse-justifications";
+import type {
+  AIJustificationOutput,
+  JustificationFilenames,
+} from "@/api/lib/workflow/parse-justifications";
 
 // --------------- System prompts ---------------
 
@@ -71,35 +74,47 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
     .join("\n");
 
   return v.pipe(
-    v.string(),
+    v.array(
+      v.strictObject({
+        file: v.string(),
+        statements: v.array(
+          v.strictObject({
+            text: v.pipe(v.string(), v.trim(), v.minLength(1)),
+            citations: v.pipe(
+              v.array(v.pipe(v.string(), v.trim(), v.minLength(1))),
+              v.nonEmpty(),
+            ),
+          }),
+        ),
+      }),
+    ),
     v.description(
       [
-        "Generate XML justifications that reference the file " +
+        "Generate structured justifications that reference the file " +
           "context you received.",
-        "Create one <j> element per filename with the " +
-          '"f" attribute equal to the filename, using that ' +
-          "exact filename attached with the file in the message.",
+        'Create one array item per source file with "file" equal to ' +
+          "the exact filename attached with the file in the message.",
         `Filenames:\n${filenamesList}`,
-        "Inside each justification, write concise supporting " +
-          "text and immediately follow every evidence statement " +
-          "with a citation tag in the format " +
-          "<p-BATES_NUMBER /> where BATES_NUMBER is the full " +
-          "Bates stamp (e.g., F0-0002).",
-        "Citation tags must be self-closing, match the exact " +
-          "casing shown, and appear inline with the " +
-          "justification sentence they support.",
-        `Example: <j f="${filenames[0]?.simplified ?? "F0"}">` +
-          "This is a justification " +
-          `<p-${filenames[0]?.simplified ?? "F0"}-0002 /> ` +
-          "This is another justification " +
-          `<p-${filenames[0]?.simplified ?? "F0"}-0003 /></j>.`,
-        "Return only well-formed XML composed of the " +
-          "justification elements described above; do not " +
-          "include any other narrative or formatting outside " +
-          "the XML.",
+        "For each statement, write concise supporting text in " +
+          '"text" and put the Bates stamps that support it in ' +
+          '"citations".',
+        "Citations must be full Bates stamps exactly as shown on " +
+          "the page, for example F0-0002. Do not include markup, " +
+          "HTML, Markdown, or narrative outside the object.",
+        `Example: ${JSON.stringify([
+          {
+            file: filenames[0]?.simplified ?? "F0",
+            statements: [
+              {
+                text: "The document identifies the contracting party.",
+                citations: [`${filenames[0]?.simplified ?? "F0"}-0002`],
+              },
+            ],
+          },
+        ])}`,
       ].join("\n\n"),
     ),
-  );
+  ) satisfies v.GenericSchema<AIJustificationOutput>;
 };
 
 export const buildBatchSchema = (
@@ -110,7 +125,7 @@ export const buildBatchSchema = (
 
   const schemaShape: Record<
     string,
-    v.GenericSchema<{ answer: Answer; justification: string }>
+    v.GenericSchema<{ answer: Answer; justification: AIJustificationOutput }>
   > = {};
 
   for (const property of properties) {

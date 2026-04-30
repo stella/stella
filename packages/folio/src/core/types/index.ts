@@ -1,5 +1,5 @@
 /**
- * Type exports for @stella/folio
+ * Type exports for @stll/folio
  *
  * Re-exports all public TypeScript types from the split type modules.
  */

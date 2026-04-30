@@ -7,6 +7,8 @@ import {
   useState,
 } from "react";
 
+import { Button } from "@stll/ui/components/button";
+import { Separator } from "@stll/ui/components/separator";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import {
   useQuery,
@@ -27,9 +29,6 @@ import {
   BookOpenTextIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { Separator } from "@stella/ui/components/separator";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";

@@ -5,6 +5,31 @@ import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import type { ViewLayout, ViewLayoutType } from "@stll/api/types";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@stll/ui/components/alert-dialog";
+import { Button } from "@stll/ui/components/button";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
+import { toastManager } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   CalendarIcon,
@@ -20,32 +45,6 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import type { ViewLayout, ViewLayoutType } from "@stella/api/types";
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@stella/ui/components/alert-dialog";
-import { Button } from "@stella/ui/components/button";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuSeparator,
-  MenuSub,
-  MenuSubPopup,
-  MenuSubTrigger,
-  MenuTrigger,
-} from "@stella/ui/components/menu";
-import { Tabs, TabsList, TabsTab } from "@stella/ui/components/tabs";
-import { toastManager } from "@stella/ui/components/toast";
-import { cn } from "@stella/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import type { TranslationKey } from "@/i18n/types";

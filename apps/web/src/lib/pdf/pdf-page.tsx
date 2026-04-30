@@ -1,10 +1,9 @@
 import { Suspense, use, useDeferredValue } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
+import { Skeleton } from "@stll/ui/components/skeleton";
 import { Result } from "better-result";
 import { useShallow } from "zustand/react/shallow";
-
-import { Skeleton } from "@stella/ui/components/skeleton";
 
 import { PAGE_ID_ATTRIBUTE, TEXT_LAYER_ATTRIBUTE } from "@/lib/pdf/consts";
 import { usePDFStore } from "@/lib/pdf/pdf-context";

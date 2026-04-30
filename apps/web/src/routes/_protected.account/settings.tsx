@@ -1,27 +1,26 @@
 import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
-
-import {
   Frame,
   FrameDescription,
   FrameHeader,
   FramePanel,
   FrameTitle,
-} from "@stella/ui/components/frame";
-import { Label } from "@stella/ui/components/label";
+} from "@stll/ui/components/frame";
+import { Label } from "@stll/ui/components/label";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stella/ui/components/select";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/select";
+import { toastManager } from "@stll/ui/components/toast";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
 
 import { authClient } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";

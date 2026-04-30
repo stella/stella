@@ -1,11 +1,10 @@
 import { forwardRef, useImperativeHandle, useState } from "react";
 
+import { Button } from "@stll/ui/components/button";
+import { Popover, PopoverPopup } from "@stll/ui/components/popover";
+import { cn } from "@stll/ui/lib/utils";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { Popover, PopoverPopup } from "@stella/ui/components/popover";
-import { cn } from "@stella/ui/lib/utils";
 
 import type { MentionOption } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/custom-mention";
 

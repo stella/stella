@@ -6,36 +6,37 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import type { Answer } from "@/api/lib/workflow/ai-prompts";
 import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
+import type { AIJustificationOutput } from "@/api/lib/workflow/parse-justifications";
 
 type TextValidatedResult = {
   type: "text";
   value: string;
-  justificationXml: string;
+  justification: AIJustificationOutput;
 };
 
 type SingleSelectValidatedResult = {
   type: "single-select";
   value: string | null;
-  justificationXml: string;
+  justification: AIJustificationOutput;
 };
 
 type MultiSelectValidatedResult = {
   type: "multi-select";
   value: string[];
-  justificationXml: string;
+  justification: AIJustificationOutput;
 };
 
 type DateValidatedResult = {
   type: "date";
   value: string | null;
-  justificationXml: string;
+  justification: AIJustificationOutput;
 };
 
 type IntValidatedResult = {
   type: "int";
   value: number;
   currency: string | null;
-  justificationXml: string;
+  justification: AIJustificationOutput;
 };
 
 type ValidatedResult =
@@ -60,13 +61,13 @@ const validateTextResult = ({
   justification,
 }: {
   answer: Answer;
-  justification: string;
+  justification: AIJustificationOutput;
 }): ValidateResult => {
   if (typeof answer === "string") {
     return Result.ok({
       type: "text",
       value: answer,
-      justificationXml: justification,
+      justification,
     });
   }
 
@@ -83,14 +84,14 @@ const validateSingleSelectResult = ({
   content,
 }: {
   answer: Answer;
-  justification: string;
+  justification: AIJustificationOutput;
   content: SelectContent;
 }): ValidateResult => {
   if (answer === null && content.fallback !== null) {
     return Result.ok({
       type: "single-select",
       value: content.fallback,
-      justificationXml: justification,
+      justification,
     });
   }
 
@@ -98,7 +99,7 @@ const validateSingleSelectResult = ({
     return Result.ok({
       type: "single-select",
       value: answer,
-      justificationXml: justification,
+      justification,
     });
   }
 
@@ -115,14 +116,14 @@ const validateMultiSelectResult = ({
   content,
 }: {
   answer: Answer;
-  justification: string;
+  justification: AIJustificationOutput;
   content: SelectContent;
 }): ValidateResult => {
   if (answer === null) {
     return Result.ok({
       type: "multi-select",
       value: content.fallback !== null ? [content.fallback] : [],
-      justificationXml: justification,
+      justification,
     });
   }
 
@@ -130,7 +131,7 @@ const validateMultiSelectResult = ({
     return Result.ok({
       type: "multi-select",
       value: [...new Set(answer)],
-      justificationXml: justification,
+      justification,
     });
   }
 
@@ -146,13 +147,13 @@ const validateDateResult = ({
   justification,
 }: {
   answer: Answer;
-  justification: string;
+  justification: AIJustificationOutput;
 }): ValidateResult => {
   if (typeof answer === "string" || answer === null) {
     return Result.ok({
       type: "date",
       value: answer,
-      justificationXml: justification,
+      justification,
     });
   }
 
@@ -168,14 +169,14 @@ const validateIntResult = ({
   justification,
 }: {
   answer: Answer;
-  justification: string;
+  justification: AIJustificationOutput;
 }): ValidateResult => {
   if (!Array.isArray(answer) && typeof answer === "object" && answer !== null) {
     return Result.ok({
       type: "int",
       value: answer.amount,
       currency: answer.currency,
-      justificationXml: justification,
+      justification,
     });
   }
 
@@ -187,7 +188,7 @@ const validateIntResult = ({
 };
 
 type ValidateAIOutputProps = {
-  aiResult: { answer: Answer; justification: string };
+  aiResult: { answer: Answer; justification: AIJustificationOutput };
   property: BatchProperty;
 };
 

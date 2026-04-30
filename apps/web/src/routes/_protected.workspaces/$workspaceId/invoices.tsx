@@ -1,5 +1,6 @@
 import { Suspense, useState } from "react";
 
+import { Button } from "@stll/ui/components/button";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -10,8 +11,6 @@ import {
 } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";

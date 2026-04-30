@@ -1,5 +1,5 @@
 {
-  "name": "@stella/folio",
+  "name": "@stll/folio",
   "version": "0.1.0",
   "private": true,
   "description": "A modern .docx-compatible document editor for the browser",
@@ -29,8 +29,8 @@
     "@fontsource/carlito": "^5.2.8",
     "@fontsource/cousine": "^5.2.7",
     "@fontsource/tinos": "^5.2.7",
-    "@stella/docx-utils": "workspace:*",
-    "@stella/ui": "workspace:*",
+    "@stll/docx-utils": "workspace:*",
+    "@stll/ui": "workspace:*",
     "fast-xml-parser": "^5.7.1",
     "jszip": "catalog:",
     "lucide-react": "catalog:",

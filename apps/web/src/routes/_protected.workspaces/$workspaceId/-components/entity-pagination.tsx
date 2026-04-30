@@ -6,7 +6,7 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@stella/ui/components/pagination";
+} from "@stll/ui/components/pagination";
 
 type EntityPaginationProps = {
   page: number;

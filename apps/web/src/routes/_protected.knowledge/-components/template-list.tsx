@@ -1,14 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
 import {
-  LayoutTemplateIcon,
-  MoreHorizontalIcon,
-  PlusIcon,
-  Trash2Icon,
-} from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
-
-import {
   AlertDialog,
   AlertDialogClose,
   AlertDialogDescription,
@@ -16,15 +8,22 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stella/ui/components/alert-dialog";
-import { Button } from "@stella/ui/components/button";
+} from "@stll/ui/components/alert-dialog";
+import { Button } from "@stll/ui/components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@stella/ui/components/menu";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/menu";
+import { toastManager } from "@stll/ui/components/toast";
+import {
+  LayoutTemplateIcon,
+  MoreHorizontalIcon,
+  PlusIcon,
+  Trash2Icon,
+} from "lucide-react";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
