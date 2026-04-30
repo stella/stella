@@ -621,3 +621,90 @@
   padding-top: 2px;
   pointer-events: none;
 }
+
+/* ============================================================================
+ * AI SUGGESTION DECORATIONS
+ *
+ * Inline decorations rendered by the prosemirror plugin
+ * `aiSuggestionDecorations` for ranges in the suggestion review queue.
+ * Tailwind cannot reach decoration spans (they're injected by PM at
+ * render time, not in JSX), so the styling lives here.
+ * ============================================================================ */
+
+.folio-ai-suggestion {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  background-color: transparent;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    text-decoration-color 150ms ease;
+}
+
+.folio-ai-suggestion--typo {
+  text-decoration-color: color-mix(
+    in oklch,
+    var(--doc-text-muted) 65%,
+    transparent
+  );
+}
+
+.folio-ai-suggestion--style {
+  text-decoration-color: color-mix(in oklch, var(--doc-text) 35%, transparent);
+}
+
+.folio-ai-suggestion--substantive {
+  text-decoration-color: color-mix(
+    in oklch,
+    var(--doc-error, currentColor) 60%,
+    transparent
+  );
+  text-decoration-thickness: 1.5px;
+}
+
+.folio-ai-suggestion:hover {
+  background-color: color-mix(in oklch, var(--doc-bg-hover) 60%, transparent);
+}
+
+.folio-ai-suggestion--focused {
+  background-color: color-mix(in oklch, var(--doc-bg-hover) 90%, transparent);
+}
+
+/* AI prompt-bar caret suppression lives in apps/web (the bar is no
+   longer part of folio); see file-viewer-with-ai.css. */
+
+/* ============================================================================
+ * AI CITATION DECORATIONS
+ *
+ * Highlight ranges referenced by an AI chat answer or extraction
+ * justification. Distinct from suggestion decorations — citations
+ * are read-only pointers, not edit candidates.
+ * ============================================================================ */
+
+.folio-ai-citation {
+  background-color: color-mix(
+    in oklch,
+    var(--doc-find-highlight, rgba(250, 204, 21, 0.5)) 50%,
+    transparent
+  );
+  border-radius: 2px;
+  transition:
+    background-color 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.folio-ai-citation--active {
+  background-color: color-mix(
+    in oklch,
+    var(--doc-find-current, rgba(249, 115, 22, 0.6)) 70%,
+    transparent
+  );
+  box-shadow: 0 0 0 2px
+    color-mix(
+      in oklch,
+      var(--doc-find-current, rgba(249, 115, 22, 0.6)) 30%,
+      transparent
+    );
+}

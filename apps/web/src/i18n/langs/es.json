@@ -298,6 +298,14 @@
     }
   },
   "chat": {
+    "actionExpand": {
+      "toastDescription": "Full-page chat lands with persisted threads.",
+      "toastTitle": "Full view not yet available"
+    },
+    "actionPrint": {
+      "toastDescription": "Chat printing lands with persisted threads.",
+      "toastTitle": "Printing not yet available"
+    },
     "approval": {
       "allow": "Permitir",
       "alwaysAllow": "Permitir siempre",
@@ -319,6 +327,10 @@
       "original": "Original",
       "simple": "Aceptado",
       "trackedChanges": "Control de cambios"
+    },
+    "emptyState": {
+      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
+      "title": "What can we work on?"
     },
     "extractingContent": "Extrayendo contenido...",
     "fileTooLarge": "El archivo supera el límite de {maxSize}",
@@ -459,6 +471,8 @@
     "category": "Categoría",
     "clauses": "Cláusulas",
     "close": "Cerrar",
+    "closeAll": "Cerrar todo",
+    "closeOthers": "Cerrar otros",
     "columns": "Columnas",
     "comingSoon": "Próximamente",
     "confirm": "Confirmar",
@@ -859,6 +873,21 @@
     "undo": "Undo",
     "undoShortcut": "Undo (Ctrl+Z)"
   },
+  "inspector": {
+    "hidePane": "Hide pane",
+    "matterPicker": {
+      "allMatters": "All matters",
+      "description": "Pick the matters this chat can draw on. The AI sees content from every matter you select.",
+      "directLabel": "Direct",
+      "empty": "No matters available.",
+      "noMatter": "No matter",
+      "noResults": "No matter matches “{query}”.",
+      "searchPlaceholder": "Search matters or clients…",
+      "title": "Matter context"
+    },
+    "openChat": "Open chat",
+    "showPane": "Show pane"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1043,22 +1072,6 @@
     },
     "settings": "Configuración de la organización",
     "settingsDescription": "Edite el nombre y el slug de su organización"
-  },
-  "rightPanel": {
-    "addConditional": "Añadir condicional",
-    "askAboutMatter": "Haga preguntas sobre su asunto.",
-    "chatPlaceholder": "El chat aparecerá aquí.",
-    "comingSoon": "Asistente de plantillas IA próximamente.",
-    "convertToPlaceholder": "Convertir en marcador de posición",
-    "mockDisclaimer": "Esta es una vista previa del asistente de IA. Las respuestas son simuladas.",
-    "mockResponseConditional": "Envolvería este texto en un bloque condicional: '{{#if condition}}...{{/if}}'. ¿Qué condición debería controlar su visibilidad?",
-    "mockResponsePlaceholder": "Puedo convertir el texto seleccionado en un marcador de posición como '{{fieldName}}'. ¿Cómo debería llamarse el campo?",
-    "mockResponseRepeat": "Envolvería esto en un bucle: '{{#each items}}...{{/each}}'. ¿Sobre qué colección debería iterar?",
-    "repeatForEach": "Repetir para cada elemento",
-    "selectedText": "Texto seleccionado",
-    "templateAssistant": "Asistente de plantillas",
-    "title": "Chat",
-    "whatToDo": "¿Qué desea hacer con este texto?"
   },
   "search": {
     "aiRefine": "Mejorar consulta con IA",

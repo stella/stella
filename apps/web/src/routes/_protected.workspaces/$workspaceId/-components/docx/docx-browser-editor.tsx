@@ -17,9 +17,10 @@ import type { DocxEditorRef, EditorMode } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
 import { toastManager } from "@stll/ui/components/toast";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { CheckIcon, LoaderIcon } from "lucide-react";
+import { CheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import "@stll/folio/editor.css";
+import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import {
   DefaultPendingComponent,
   StatusMessage,
@@ -313,8 +314,21 @@ export const DocxBrowserEditor = ({
     state.status,
   ]);
 
+  // Hold the last editing buffer so the editor doesn't swap to the
+  // preview buffer during the save transition (`state` becomes
+  // "saving" with no buffer of its own). Without this we'd reload the
+  // editor against `previewFile.buffer` for the few hundred ms before
+  // the parent unmounts us — and the Stella fallback would flash.
+  const lastEditingBufferRef = useRef<ArrayBuffer | null>(null);
+  if (state.status === "editing") {
+    lastEditingBufferRef.current = state.buffer;
+  }
   const editorBuffer =
-    state.status === "editing" ? state.buffer : previewFile.buffer;
+    state.status === "editing"
+      ? state.buffer
+      : state.status === "saving" && lastEditingBufferRef.current !== null
+        ? lastEditingBufferRef.current
+        : previewFile.buffer;
 
   useEffect(() => {
     if (!isUnlocked) {
@@ -342,16 +356,10 @@ export const DocxBrowserEditor = ({
     );
   }
 
-  if (state.status === "saving") {
-    return (
-      <div className="flex h-full items-center justify-center gap-2">
-        <LoaderIcon className="text-muted-foreground size-5 animate-spin" />
-        <span className="text-muted-foreground text-sm">
-          {t("folio.savingDocument")}
-        </span>
-      </div>
-    );
-  }
+  // While the finalize request is in flight we keep the editor
+  // mounted so the user sees the document they just saved instead of
+  // a transient "Saving…" screen. The component unmounts on
+  // `onFinalized` → `onClose`, which makes the close feel instant.
 
   return (
     <div ref={containerRef} className="flex h-full flex-col">
@@ -371,36 +379,44 @@ export const DocxBrowserEditor = ({
         </div>
       )}
 
-      {/* Folio editor */}
+      {/* Folio editor with AI overlay */}
       <div
         className="flex-1 overflow-hidden"
         onDoubleClickCapture={isUnlocked ? undefined : onPreviewDoubleClick}
       >
-        <Suspense
-          fallback={
-            <DocxEditorLoadingFallback label={t("folio.loadingEditor")} />
-          }
+        <FileViewerWithAI
+          activeFile={{ entityId, fileName: previewFile.fileName }}
+          chatThreadId={entityId}
+          workspaceId={workspaceId}
         >
-          <DocxEditor
-            ref={editorRef}
-            className="folio-docx-preview folio-peek h-full"
-            documentBuffer={editorBuffer}
-            initialZoom={targetZoom}
-            mode={isUnlocked ? editorMode : "viewing"}
-            onModeChange={(mode) => {
-              if (mode !== "viewing") {
-                setEditorMode(mode);
-              }
-            }}
-            showToolbar={isUnlocked}
-            {...(isUnlocked ? { onChange: handleChange } : {})}
-            {...(initialScrollTop !== undefined ? { initialScrollTop } : {})}
-            {...(onScrollTopChange !== undefined ? { onScrollTopChange } : {})}
-            loadingIndicator={
-              <DocxEditorLoadingFallback label={t("folio.loadingDocument")} />
+          <Suspense
+            fallback={
+              <DocxEditorLoadingFallback label={t("folio.loadingEditor")} />
             }
-          />
-        </Suspense>
+          >
+            <DocxEditor
+              ref={editorRef}
+              className="folio-docx-preview folio-peek h-full"
+              documentBuffer={editorBuffer}
+              initialZoom={targetZoom}
+              mode={isUnlocked ? editorMode : "viewing"}
+              onModeChange={(mode) => {
+                if (mode !== "viewing") {
+                  setEditorMode(mode);
+                }
+              }}
+              showToolbar={isUnlocked}
+              {...(isUnlocked ? { onChange: handleChange } : {})}
+              {...(initialScrollTop !== undefined ? { initialScrollTop } : {})}
+              {...(onScrollTopChange !== undefined
+                ? { onScrollTopChange }
+                : {})}
+              loadingIndicator={
+                <DocxEditorLoadingFallback label={t("folio.loadingDocument")} />
+              }
+            />
+          </Suspense>
+        </FileViewerWithAI>
       </div>
     </div>
   );

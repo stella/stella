@@ -33,6 +33,7 @@ import { useTranslations } from "use-intl";
 
 import type { TranslationKey } from "@/i18n/types";
 import type { ViewLayout, WorkspaceProperty, WorkspaceView } from "@/lib/types";
+import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
@@ -180,6 +181,18 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
         <>
           <span className="bg-border mx-1 h-4 w-px" />
           <FilesystemOrganizerAction workspaceId={workspaceId} />
+        </>
+      )}
+
+      {/* "+ Nový sloupec" mirrors the toolbar's chip-shaped chrome
+          and lives next to the data-shape controls (filters, sorts,
+          property visibility) so adding a column is reachable from
+          the same row, not just the small "+" cell at the right edge
+          of the table header. */}
+      {view.layout.type === "table" && (
+        <>
+          <span className="bg-border mx-1 h-4 w-px" />
+          <CreateProperty triggerVariant="labelled" workspaceId={workspaceId} />
         </>
       )}
     </div>

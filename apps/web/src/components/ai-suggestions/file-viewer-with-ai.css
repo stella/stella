@@ -1,0 +1,13 @@
+/**
+ * Cross-cutting styles for FileViewerWithAI that Tailwind can't
+ * reach — :has() selectors and content rendered outside JSX.
+ */
+
+/* Suppress the editor caret while the AI prompt input has focus, so
+ * the user only sees one blinking cursor. Scoped to the wrapper so
+ * unrelated contenteditable elements elsewhere on the page are
+ * unaffected. */
+[data-file-viewer-ai]:has([data-folio-ai-bar-focus="true"])
+  [contenteditable="true"] {
+  caret-color: transparent;
+}

@@ -22,3 +22,13 @@ export const getMatterSwatch = (id: string) => {
 };
 
 export const getMatterColor = (id: string) => `var(${getMatterSwatch(id)})`;
+
+/**
+ * Resolves the swatch CSS variable for a matter, preferring the
+ * explicit `color` token stored on the workspace record over the
+ * deterministic id-hash fallback. One source of truth so trigger
+ * pills, picker rows, and badges all paint the same matter the
+ * same colour.
+ */
+export const resolveMatterColor = (id: string, color: string | null) =>
+  color ? `var(${color})` : getMatterColor(id);

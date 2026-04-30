@@ -298,6 +298,14 @@
     }
   },
   "chat": {
+    "actionExpand": {
+      "toastDescription": "Full-page chat lands with persisted threads.",
+      "toastTitle": "Full view not yet available"
+    },
+    "actionPrint": {
+      "toastDescription": "Chat printing lands with persisted threads.",
+      "toastTitle": "Printing not yet available"
+    },
     "approval": {
       "allow": "Engedélyezés",
       "alwaysAllow": "Mindig engedélyezze ebben a szálban",
@@ -319,6 +327,10 @@
       "original": "Eredeti",
       "simple": "Elfogadott",
       "trackedChanges": "Változáskövetés"
+    },
+    "emptyState": {
+      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
+      "title": "What can we work on?"
     },
     "extractingContent": "Tartalom kinyerése...",
     "fileTooLarge": "A fájl meghaladja a {maxSize} korlátot",
@@ -459,6 +471,8 @@
     "category": "Kategória",
     "clauses": "Záradékok",
     "close": "Bezárás",
+    "closeAll": "Összes bezárása",
+    "closeOthers": "Többi bezárása",
     "columns": "Oszlopok",
     "comingSoon": "Hamarosan",
     "confirm": "Megerősítés",
@@ -859,6 +873,21 @@
     "undo": "Undo",
     "undoShortcut": "Undo (Ctrl+Z)"
   },
+  "inspector": {
+    "hidePane": "Hide pane",
+    "matterPicker": {
+      "allMatters": "All matters",
+      "description": "Pick the matters this chat can draw on. The AI sees content from every matter you select.",
+      "directLabel": "Direct",
+      "empty": "No matters available.",
+      "noMatter": "No matter",
+      "noResults": "No matter matches “{query}”.",
+      "searchPlaceholder": "Search matters or clients…",
+      "title": "Matter context"
+    },
+    "openChat": "Open chat",
+    "showPane": "Show pane"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1043,22 +1072,6 @@
     },
     "settings": "Szervezet beállításai",
     "settingsDescription": "Szervezet nevének és slugjának szerkesztése"
-  },
-  "rightPanel": {
-    "addConditional": "Feltétel hozzáadása",
-    "askAboutMatter": "Tegyen fel kérdéseket az ügyéről.",
-    "chatPlaceholder": "A csevegés itt jelenik meg.",
-    "comingSoon": "AI sablonasszisztens hamarosan.",
-    "convertToPlaceholder": "Átalakítás helyőrzővé",
-    "mockDisclaimer": "Ez az AI asszisztens előnézete. A válaszok szimuláltak.",
-    "mockResponseConditional": "Ezt a szöveget feltételes blokkba csomagolnám: '{{#if condition}}...{{/if}}'. Milyen feltétel szabályozza a láthatóságát?",
-    "mockResponsePlaceholder": "A kijelölt szöveget helyőrzővé alakíthatom, például '{{fieldName}}'. Mi legyen a mező neve?",
-    "mockResponseRepeat": "Ezt ciklusba csomagolnám: '{{#each items}}...{{/each}}'. Melyik gyűjteményen iteráljon?",
-    "repeatForEach": "Ismétlés minden elemre",
-    "selectedText": "Kijelölt szöveg",
-    "templateAssistant": "Sablonasszisztens",
-    "title": "Csevegés",
-    "whatToDo": "Mit szeretne ezzel a szöveggel?"
   },
   "search": {
     "aiRefine": "Keresés javítása AI-val",

@@ -2,6 +2,7 @@
   "name": "@stll/scripts",
   "version": "0.0.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "bin": {
     "i18n-check": "src/i18n-check.ts",
     "i18n-typegen": "src/i18n-typegen.ts"

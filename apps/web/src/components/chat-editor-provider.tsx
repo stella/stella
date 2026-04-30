@@ -12,6 +12,7 @@ import type React from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import Document from "@tiptap/extension-document";
+import HardBreak from "@tiptap/extension-hard-break";
 import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -463,6 +464,16 @@ export const useChatEditor = ({
       Document,
       Paragraph,
       Text,
+      // Shift+Enter inserts a hard break (newline) instead of
+      // splitting the paragraph; matches expected chat-input
+      // behaviour everywhere — Slack, Discord, ChatGPT, etc.
+      HardBreak.extend({
+        addKeyboardShortcuts() {
+          return {
+            "Shift-Enter": () => this.editor.commands.setHardBreak(),
+          };
+        },
+      }),
       Placeholder.configure({
         placeholder: t("chat.placeholder"),
       }),
@@ -488,10 +499,17 @@ export const useChatEditor = ({
           "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm focus-visible:outline-none",
       },
       handleKeyDown: (view, event) => {
-        if (event.key !== "Enter" || event.shiftKey || event.isComposing) {
+        // Submit on Enter or Cmd/Ctrl+Enter. Shift+Enter falls
+        // through to the HardBreak extension (newline). The
+        // mention-suggestion plugin owns Enter while its popup is
+        // open — let it pick the highlighted item instead of
+        // submitting the prompt.
+        if (event.key !== "Enter" || event.isComposing) {
           return false;
         }
-
+        if (event.shiftKey) {
+          return false;
+        }
         if (isSuggestionPluginActive(view.state)) {
           return false;
         }

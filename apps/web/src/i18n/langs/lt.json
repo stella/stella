@@ -298,6 +298,14 @@
     }
   },
   "chat": {
+    "actionExpand": {
+      "toastDescription": "Full-page chat lands with persisted threads.",
+      "toastTitle": "Full view not yet available"
+    },
+    "actionPrint": {
+      "toastDescription": "Chat printing lands with persisted threads.",
+      "toastTitle": "Printing not yet available"
+    },
     "approval": {
       "allow": "Leisti",
       "alwaysAllow": "Visada leisti",
@@ -319,6 +327,10 @@
       "original": "Originalas",
       "simple": "Priimta",
       "trackedChanges": "Pakeitimų sekimas"
+    },
+    "emptyState": {
+      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
+      "title": "What can we work on?"
     },
     "extractingContent": "Turinio ištraukimas...",
     "fileTooLarge": "Failas viršija {maxSize} limitą",
@@ -459,6 +471,8 @@
     "category": "Kategorija",
     "clauses": "Sąlygos",
     "close": "Uždaryti",
+    "closeAll": "Uždaryti viską",
+    "closeOthers": "Uždaryti kitus",
     "columns": "Stulpeliai",
     "comingSoon": "Netrukus",
     "confirm": "Patvirtinti",
@@ -859,6 +873,21 @@
     "undo": "Undo",
     "undoShortcut": "Undo (Ctrl+Z)"
   },
+  "inspector": {
+    "hidePane": "Hide pane",
+    "matterPicker": {
+      "allMatters": "All matters",
+      "description": "Pick the matters this chat can draw on. The AI sees content from every matter you select.",
+      "directLabel": "Direct",
+      "empty": "No matters available.",
+      "noMatter": "No matter",
+      "noResults": "No matter matches “{query}”.",
+      "searchPlaceholder": "Search matters or clients…",
+      "title": "Matter context"
+    },
+    "openChat": "Open chat",
+    "showPane": "Show pane"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1043,22 +1072,6 @@
     },
     "settings": "Organizacijos nustatymai",
     "settingsDescription": "Redaguokite organizacijos pavadinimą ir slug"
-  },
-  "rightPanel": {
-    "addConditional": "Pridėti sąlygą",
-    "askAboutMatter": "Užduokite klausimų apie savo bylą.",
-    "chatPlaceholder": "Čia bus rodomas pokalbis.",
-    "comingSoon": "DI šablono asistentas netrukus.",
-    "convertToPlaceholder": "Konvertuoti į vietos žymeklį",
-    "mockDisclaimer": "Tai yra DI asistento peržiūra. Atsakymai yra simuliuoti.",
-    "mockResponseConditional": "Apvyniotų šį tekstą sąlyginiu bloku: '{{#if condition}}...{{/if}}'. Kokia sąlyga turėtų valdyti jo matomumą?",
-    "mockResponsePlaceholder": "Galiu konvertuoti pasirinktą tekstą į vietos žymeklį, pvz. '{{laukoVardas}}'. Kaip turėtų vadintis šis laukas?",
-    "mockResponseRepeat": "Apvyniotų tai kilpa: '{{#each items}}...{{/each}}'. Kurią kolekciją turėtų iteruoti?",
-    "repeatForEach": "Kartoti kiekvienam elementui",
-    "selectedText": "Pasirinktas tekstas",
-    "templateAssistant": "Šablono asistentas",
-    "title": "Pokalbis",
-    "whatToDo": "Ką norėtumėte daryti su šiuo tekstu?"
   },
   "search": {
     "aiRefine": "Patobulinti užklausą su DI",

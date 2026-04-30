@@ -23,7 +23,7 @@ export const BottomRow = ({
   const t = useTranslations();
 
   return (
-    <TableRow className="sticky bottom-0 z-10 [&_td]:sticky [&_td]:border-t-2">
+    <TableRow className="bg-muted/40 hover:bg-muted sticky bottom-0 z-10 transition-colors [&_td]:sticky [&_td]:border-e-0 [&_td]:border-t-2">
       <TableCell
         className="relative z-10 p-0"
         style={{
@@ -34,19 +34,19 @@ export const BottomRow = ({
           onFolderCreated={onFolderCreated}
           render={
             <Button
-              className="hover:bg-accent absolute inset-0 z-10 flex size-auto! rounded-none border-e"
+              className="absolute inset-0 z-10 flex size-auto! rounded-none bg-transparent"
               size="icon"
               type="button"
               variant="ghost"
             >
-              <PlusIcon />
+              <PlusIcon className="size-4" />
             </Button>
           }
           workspaceId={workspaceId}
         />
       </TableCell>
       <TableCell
-        className="relative z-10 border-e-0"
+        className="text-muted-foreground relative z-10"
         style={{
           left: table.getColumn(selectColId)?.getSize(),
         }}
@@ -61,7 +61,7 @@ export const BottomRow = ({
           }
           workspaceId={workspaceId}
         />
-        {t("common.newRow")}
+        {t("workspaces.newDocument")}
       </TableCell>
       <TableCell
         className="relative p-0"

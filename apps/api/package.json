@@ -1,6 +1,7 @@
 {
   "name": "@stll/api",
   "version": "0.0.0",
+  "license": "AGPL-3.0-only",
   "module": "src/index.js",
   "exports": {
     "./types": "./src/types.ts"

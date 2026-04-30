@@ -13,7 +13,11 @@ import { Button } from "@stll/ui/components/button";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { toastManager } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { useMatch, useNavigate } from "@tanstack/react-router";
 import {
   AlertTriangleIcon,
@@ -23,6 +27,9 @@ import {
   ExternalLinkIcon,
   FileTextIcon,
   LoaderCircleIcon,
+  MessageSquareIcon,
+  MessageSquarePlusIcon,
+  PanelRightIcon,
   PencilIcon,
   PrinterIcon,
   XIcon,
@@ -43,13 +50,19 @@ import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
-import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { clearAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymize-pdf";
+import { ChatTabPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type {
   InspectorTab,
   PdfTab,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import {
+  InspectorTabHeader,
+  MatterOriginLink,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header";
+import { useRailContextMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-rail-context-menu";
+import { useTabContextMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-tab-context-menu";
 import { PeekJustification } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-justification";
 import {
   PeekPdfControls,
@@ -63,6 +76,7 @@ import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-quer
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 
 type InspectorPanelProps = {
   workspaceId: string;
@@ -94,10 +108,36 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const setActive = useInspectorStore((s) => s.setActive);
   const closeTab = useInspectorStore((s) => s.closeTab);
   const closeAll = useInspectorStore((s) => s.closeAll);
+  const setMinimized = useInspectorStore((s) => s.setMinimized);
+  const openChat = useInspectorStore((s) => s.openChat);
   const navigate = useNavigate({
     from: "/workspaces/$workspaceId/$viewId",
   });
   const setPdfViewerState = useWorkspaceStore((s) => s.setPdfViewerState);
+
+  // Originating matter — surfaced in every tab header as
+  // "label · Matter" so users always know which matter the tab
+  // belongs to (matters can host related-matter content; chats are
+  // moving to nullable matter binding in Phase D). Cache hit thanks
+  // to the workspace route loader.
+  const { data: workspace } = useQuery(workspaceOptions(workspaceId));
+  const matterOrigin = useMemo(
+    () =>
+      workspace?.name
+        ? {
+            id: workspaceId,
+            name: workspace.name,
+            color: workspace.color ?? null,
+            onClick: () => {
+              void navigate({
+                to: "/workspaces/$workspaceId",
+                params: { workspaceId },
+              });
+            },
+          }
+        : null,
+    [workspace?.name, workspace?.color, navigate, workspaceId],
+  );
 
   const viewMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId/$viewId",
@@ -222,6 +262,27 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     setEditValue(dotIndex > 0 ? tab.label.slice(0, dotIndex) : tab.label);
     setEditingTabId(tab.id);
   }, []);
+
+  // Honour rename requests coming from the rail's right-click menu.
+  // The rail can't reach into the ribbon's edit state directly; it
+  // sets `pendingRenameTabId`, we pick it up here for the matching
+  // PDF tab and clear the flag once consumed. Chat tabs do the
+  // same in their own component.
+  const pendingRenameTabId = useInspectorStore((s) => s.pendingRenameTabId);
+  const clearRenameRequest = useInspectorStore((s) => s.clearRenameRequest);
+  useEffect(() => {
+    if (pendingRenameTabId === null) {
+      return;
+    }
+    const target = tabs.find(
+      (candidate): candidate is PdfTab =>
+        candidate.type === "pdf" && candidate.id === pendingRenameTabId,
+    );
+    if (target) {
+      startRename(target);
+      clearRenameRequest();
+    }
+  }, [pendingRenameTabId, tabs, startRename, clearRenameRequest]);
 
   const commitRename = useCallback(
     (tab: PdfTab) => {
@@ -375,13 +436,61 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     return () => el.removeEventListener("wheel", onWheel);
   }, [activeId, activeTab?.type]);
 
+  // One context menu shared by every ribbon label. Only the active
+  // tab's ribbon is mounted at a time so a single instance suffices,
+  // and we avoid calling hooks inside the pdfTabs.map.
+  const ribbonContextMenu = useTabContextMenu({
+    tabId: activeTab?.id ?? "",
+    onClose: () => {
+      if (activeTab) {
+        handleCloseTab(activeTab.id);
+      }
+    },
+  });
+
+  // Right-click in the rail's empty space (below the tabs) opens
+  // a "New chat" affordance. Mirrors the chrome topbar's right-
+  // click context menu but lives next to the tab list itself.
+  const railContextMenu = useRailContextMenu({ workspaceId });
+
   return (
     <div className="bg-background flex h-full border-s shadow-lg">
-      {/* Vertical tab bar */}
+      {/* Vertical tab bar — top houses the "hide pane" button
+          (replaces the chrome topbar PanelRightIcon while the
+          pane is open); the middle scrolls the open tabs; the
+          bottom hosts the new-chat affordance. All affordances
+          stay inside the rail so the active tab content keeps
+          the full vertical space to the right of the rail. */}
       {tabs.length > 0 && (
         <div className="bg-muted/50 flex w-10 shrink-0 flex-col border-e">
+          <Tooltip
+            content={t("inspector.hidePane")}
+            render={
+              <Button
+                aria-label={t("inspector.hidePane")}
+                className="text-muted-foreground hover:bg-accent hover:text-foreground h-12 w-full shrink-0 rounded-none border-b"
+                onClick={() => setMinimized(true)}
+                size="icon"
+                type="button"
+                variant="ghost"
+              />
+            }
+            side="left"
+          >
+            <PanelRightIcon className="size-3.5" />
+          </Tooltip>
           <ScrollArea className="flex-1">
-            <div className="flex flex-col">
+            {/* Right-clicking in the rail's empty space (below
+                the last tab) offers "New chat" so users can
+                spawn a chat without aiming at the small icon
+                button at the bottom of the rail. */}
+            <div
+              className="flex h-full flex-col"
+              onContextMenu={(e) => {
+                e.preventDefault();
+                railContextMenu.openAt(e);
+              }}
+            >
               {tabs.map((tab) => (
                 <VerticalTab
                   active={tab.id === activeId}
@@ -395,12 +504,57 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
               ))}
             </div>
           </ScrollArea>
+          {railContextMenu.element}
+          <Tooltip
+            content={t("chat.newChat")}
+            render={
+              <Button
+                aria-label={t("chat.newChat")}
+                className={cn(
+                  "text-muted-foreground hover:bg-accent hover:text-foreground w-full shrink-0 rounded-none border-t",
+                  TOOLBAR_ROW_HEIGHT,
+                )}
+                onClick={() => openChat({ contextMatterIds: [workspaceId] })}
+                size="icon"
+                type="button"
+                variant="ghost"
+              />
+            }
+            side="left"
+          >
+            <MessageSquarePlusIcon className="size-3.5" />
+          </Tooltip>
         </div>
       )}
 
       {/* Task content */}
       {activeTab?.type === "task" && (
         <TaskDetailPanel taskId={activeTab.id} workspaceId={workspaceId} />
+      )}
+
+      {/* Chat content — sidepeek chat tab. Mounts FileAIChatHost in
+          standalone layout so the bar + thread fill the panel
+          instead of overlaying a file viewer. */}
+      {activeTab?.type === "chat" && (
+        // Local Suspense boundary so the chat-thread fetch (cold
+        // cache: a brand-new chat tab) doesn't bubble up to the
+        // workspace route's pending component, which otherwise
+        // shows the full-page loading screen and reads as a
+        // refresh.
+        <Suspense
+          fallback={
+            <div className="flex flex-1 items-center justify-center">
+              <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
+            </div>
+          }
+        >
+          <ChatTabPanel
+            onClose={() => handleCloseTab(activeTab.id)}
+            onLabelContextMenu={ribbonContextMenu.openAt}
+            tab={activeTab}
+            workspaceId={workspaceId}
+          />
+        </Suspense>
       )}
 
       {/* PDF content — render all open PDF tabs, show only the active one.
@@ -419,153 +573,140 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           editingDocxTabId === tab.id &&
           tab.propertyId !== undefined;
 
-        const contextBar = (
-          <div
-            className={cn(
-              "flex shrink-0 items-center justify-between border-b px-3",
-              TOOLBAR_ROW_HEIGHT,
-            )}
-          >
-            <div className="flex items-center overflow-hidden">
-              {editingTabId === tab.id ? (
-                <InlineEdit
-                  inputClassName="w-40 text-xs"
-                  onCancel={() => setEditingTabId(null)}
-                  onChange={setEditValue}
-                  onCommit={() => commitRename(tab)}
-                  value={editValue}
-                />
-              ) : (
-                <span
-                  className="truncate text-xs font-medium"
-                  onDoubleClick={() => startRename(tab)}
-                >
-                  {stripExtension(tab.label)}
-                </span>
-              )}
+        const fileActions = isEditingNativeDocx ? (
+          <>
+            <div className="flex items-center rounded-md border p-0.5">
+              <PeekPdfControls
+                canResetZoom={scaleOffsets.get(tab.id) !== 0}
+                onResetZoom={() => handleResetZoom(tab.id)}
+                onZoomIn={() => handleZoom(tab.id, "in")}
+                onZoomOut={() => handleZoom(tab.id, "out")}
+                scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+              />
             </div>
-
-            <div className="flex shrink-0 items-center gap-1 ps-4">
-              {isEditingNativeDocx ? (
-                <>
-                  <div className="flex items-center rounded-md border p-0.5">
-                    <PeekPdfControls
-                      canResetZoom={scaleOffsets.get(tab.id) !== 0}
-                      onResetZoom={() => handleResetZoom(tab.id)}
-                      onZoomIn={() => handleZoom(tab.id, "in")}
-                      onZoomOut={() => handleZoom(tab.id, "out")}
-                      scaleOffset={scaleOffsets.get(tab.id) ?? 0}
-                    />
-                  </div>
-                  <Tooltip
-                    content={t("common.print")}
-                    render={
-                      <Button
-                        onClick={() => {
-                          docxActionsRef.current.get(tab.id)?.print();
-                        }}
-                        size="icon-xs"
-                        variant="ghost"
-                      >
-                        <PrinterIcon className="size-3.5" />
-                      </Button>
-                    }
-                  />
+            <Tooltip
+              content={t("common.print")}
+              render={
+                <Button
+                  onClick={() => {
+                    docxActionsRef.current.get(tab.id)?.print();
+                  }}
+                  size="icon-xs"
+                  variant="ghost"
+                >
+                  <PrinterIcon className="size-3.5" />
+                </Button>
+              }
+            />
+            <Button
+              onClick={() => {
+                docxActionsRef.current.get(tab.id)?.finalize();
+              }}
+              size="sm"
+            >
+              <CheckIcon />
+              {t("common.save")}
+            </Button>
+          </>
+        ) : (
+          <>
+            {canUpdateEntity &&
+              isNativeDocxDisplay &&
+              tab.propertyId !== undefined && (
+                <Tooltip
+                  content={t("common.edit")}
+                  render={
+                    <Button
+                      className={cn(
+                        flashingDocxEditTabId === tab.id &&
+                          "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
+                      )}
+                      onClick={() => {
+                        void handleStartDocxEdit(tab.id);
+                      }}
+                      size="icon-xs"
+                      variant="ghost"
+                    >
+                      <PencilIcon className="size-3.5" />
+                    </Button>
+                  }
+                />
+              )}
+            <div className="flex items-center rounded-md border p-0.5">
+              <PeekPdfControls
+                canResetZoom={scaleOffsets.get(tab.id) !== 0}
+                onResetZoom={() => handleResetZoom(tab.id)}
+                onZoomIn={() => handleZoom(tab.id, "in")}
+                onZoomOut={() => handleZoom(tab.id, "out")}
+                scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+              />
+            </div>
+            {isNativeDocxDisplay ? (
+              <Tooltip
+                content={t("common.print")}
+                render={
                   <Button
                     onClick={() => {
-                      docxActionsRef.current.get(tab.id)?.finalize();
-                    }}
-                    size="sm"
-                  >
-                    <CheckIcon />
-                    {t("common.save")}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  {canUpdateEntity &&
-                    isNativeDocxDisplay &&
-                    tab.propertyId !== undefined &&
-                    !isEditingNativeDocx && (
-                      <Tooltip
-                        content={t("common.edit")}
-                        render={
-                          <Button
-                            className={cn(
-                              flashingDocxEditTabId === tab.id &&
-                                "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
-                            )}
-                            onClick={() => {
-                              void handleStartDocxEdit(tab.id);
-                            }}
-                            size="icon-xs"
-                            variant="ghost"
-                          >
-                            <PencilIcon className="size-3.5" />
-                          </Button>
-                        }
-                      />
-                    )}
-                  <div className="flex items-center rounded-md border p-0.5">
-                    <PeekPdfControls
-                      canResetZoom={scaleOffsets.get(tab.id) !== 0}
-                      onResetZoom={() => handleResetZoom(tab.id)}
-                      onZoomIn={() => handleZoom(tab.id, "in")}
-                      onZoomOut={() => handleZoom(tab.id, "out")}
-                      scaleOffset={scaleOffsets.get(tab.id) ?? 0}
-                    />
-                  </div>
-                  {isNativeDocxDisplay ? (
-                    <Tooltip
-                      content={t("common.print")}
-                      render={
-                        <Button
-                          onClick={() => {
-                            if (tab.propertyId !== undefined) {
-                              docxActionsRef.current.get(tab.id)?.print();
-                              return;
-                            }
-                            docxPrintActionsRef.current.get(tab.id)?.();
-                          }}
-                          size="icon-xs"
-                          variant="ghost"
-                        >
-                          <PrinterIcon className="size-3.5" />
-                        </Button>
+                      if (tab.propertyId !== undefined) {
+                        docxActionsRef.current.get(tab.id)?.print();
+                        return;
                       }
-                    />
-                  ) : (
-                    <PeekPrintButton />
-                  )}
-                  <Tooltip
-                    content={t("workspaces.pdf.openFullView")}
-                    render={
-                      <Button
-                        onClick={() => {
-                          handleOpenFullView().catch(() => {
-                            /* fire-and-forget */
-                          });
-                        }}
-                        size="icon-xs"
-                        variant="ghost"
-                      >
-                        <ExternalLinkIcon className="size-3.5" />
-                      </Button>
-                    }
-                  />
-                </>
-              )}
-              <Button
-                onClick={() => {
-                  handleCloseTab(tab.id);
-                }}
-                size="icon-xs"
-                variant="ghost"
-              >
-                <XIcon className="size-3.5" />
-              </Button>
-            </div>
-          </div>
+                      docxPrintActionsRef.current.get(tab.id)?.();
+                    }}
+                    size="icon-xs"
+                    variant="ghost"
+                  >
+                    <PrinterIcon className="size-3.5" />
+                  </Button>
+                }
+              />
+            ) : (
+              <PeekPrintButton />
+            )}
+            <Tooltip
+              content={t("workspaces.pdf.openFullView")}
+              render={
+                <Button
+                  onClick={() => {
+                    handleOpenFullView().catch(() => {
+                      /* fire-and-forget */
+                    });
+                  }}
+                  size="icon-xs"
+                  variant="ghost"
+                >
+                  <ExternalLinkIcon className="size-3.5" />
+                </Button>
+              }
+            />
+          </>
+        );
+
+        const contextBar = (
+          <InspectorTabHeader
+            actions={fileActions}
+            label={stripExtension(tab.label)}
+            matter={
+              matterOrigin ? (
+                <MatterOriginLink
+                  color={matterOrigin.color}
+                  id={matterOrigin.id}
+                  name={matterOrigin.name}
+                  onClick={matterOrigin.onClick}
+                />
+              ) : undefined
+            }
+            onClose={() => handleCloseTab(tab.id)}
+            onLabelContextMenu={ribbonContextMenu.openAt}
+            onStartRename={() => startRename(tab)}
+            rename={{
+              active: editingTabId === tab.id,
+              value: editValue,
+              onChange: setEditValue,
+              onCommit: () => commitRename(tab),
+              onCancel: () => setEditingTabId(null),
+            }}
+          />
         );
 
         const viewerContent = (
@@ -723,6 +864,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           </div>
         );
       })}
+      {ribbonContextMenu.element}
     </div>
   );
 };
@@ -1121,6 +1263,8 @@ const VerticalTab = ({
   const tooltipLabel = tab.label || tab.id.slice(0, 6);
   const tabRef = useRef<HTMLButtonElement>(null);
 
+  const contextMenu = useTabContextMenu({ tabId: tab.id, onClose });
+
   // Flash the tab on (re-)activation.
   const activationSeq = useInspectorStore((s) => s.activationSeq);
   const prevSeq = useRef(activationSeq);
@@ -1145,41 +1289,51 @@ const VerticalTab = ({
   }, [active, activationSeq]);
 
   return (
-    <Tooltip
-      content={tooltipLabel}
-      render={
-        <button
-          ref={tabRef}
-          className={cn(
-            "group/tab relative flex w-full items-center justify-center border-b transition-colors",
-            "text-muted-foreground hover:bg-accent hover:text-foreground",
-            TOOLBAR_ROW_HEIGHT,
-            active &&
-              "bg-background text-foreground before:bg-primary before:absolute before:inset-y-0 before:inset-s-0 before:w-0.5",
-          )}
-          onAuxClick={(e) => {
-            if (e.button === 1) {
-              e.preventDefault();
-              onClose();
-            }
-          }}
-          onClick={onActivate}
-          type="button"
-        />
-      }
-      side="left"
-    >
-      {tab.type === "task" ? (
-        <EntityKindIcon className="size-3.5" kind="task" status={tab.status} />
-      ) : active && tab.mimeType ? (
-        <DocumentIcon className="size-3.5" mimeType={tab.mimeType} />
-      ) : active ? (
-        <FileTextIcon className="size-3.5" />
-      ) : (
-        <span className="text-[9px] leading-none font-semibold tracking-tight uppercase">
-          {getTabAbbrev(tab.label)}
-        </span>
-      )}
-    </Tooltip>
+    <>
+      <Tooltip
+        content={tooltipLabel}
+        render={
+          <button
+            ref={tabRef}
+            className={cn(
+              "group/tab relative flex w-full items-center justify-center border-b transition-colors",
+              "text-muted-foreground hover:bg-accent hover:text-foreground",
+              TOOLBAR_ROW_HEIGHT,
+              active &&
+                "bg-background text-foreground before:bg-primary before:absolute before:inset-y-0 before:inset-s-0 before:w-0.5",
+            )}
+            onAuxClick={(e) => {
+              if (e.button === 1) {
+                e.preventDefault();
+                onClose();
+              }
+            }}
+            onClick={onActivate}
+            onContextMenu={contextMenu.openAt}
+            type="button"
+          />
+        }
+        side="left"
+      >
+        {tab.type === "task" ? (
+          <EntityKindIcon
+            className="size-3.5"
+            kind="task"
+            status={tab.status}
+          />
+        ) : tab.type === "chat" ? (
+          <MessageSquareIcon className="size-3.5" />
+        ) : active && tab.mimeType ? (
+          <DocumentIcon className="size-3.5" mimeType={tab.mimeType} />
+        ) : active ? (
+          <FileTextIcon className="size-3.5" />
+        ) : (
+          <span className="text-[9px] leading-none font-semibold tracking-tight uppercase">
+            {getTabAbbrev(tab.label)}
+          </span>
+        )}
+      </Tooltip>
+      {contextMenu.element}
+    </>
   );
 };

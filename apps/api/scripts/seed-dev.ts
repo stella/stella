@@ -3452,7 +3452,40 @@ export async function seed(organizationId?: string, userId?: string) {
   }
   console.log(`  Fields: ${allFields.length}`);
 
-  // 7b. Ensure the search GIN index exists on fresh dev databases
+  // 7b. Ensure search prerequisites exist on fresh dev databases.
+  // `db:push` syncs declarative schema but does not run migration
+  // files, so the unaccent extension, the `stella_unaccent` text
+  // search config, and the tsvector column added by the
+  // global-search migrations are missing on a freshly pushed DB.
+  // Index-time SQL calls `unaccent(...)` and runtime headlines use
+  // the `stella_unaccent` regconfig; without these the first
+  // `upsertSearchDocument` aborts the whole seed.
+  await db.execute(sql`CREATE EXTENSION IF NOT EXISTS unaccent`);
+  await db.execute(sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_ts_config
+        WHERE cfgname = 'stella_unaccent'
+          AND cfgnamespace = 'public'::regnamespace
+      ) THEN
+        CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple);
+      END IF;
+    END
+    $$;
+  `);
+  await db.execute(sql`
+    ALTER TEXT SEARCH CONFIGURATION public.stella_unaccent
+      ALTER MAPPING FOR
+        asciiword,
+        asciihword,
+        hword_asciipart,
+        word,
+        hword,
+        hword_part
+      WITH unaccent, simple
+  `);
   await db.execute(sql`
     ALTER TABLE search_documents
       ADD COLUMN IF NOT EXISTS tsv tsvector

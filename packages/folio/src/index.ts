@@ -9,3 +9,39 @@ export {
   type CreateEmptyDocumentOptions,
 } from "./core/utils/createDocument";
 export type { Document } from "./core/types/document";
+
+// AI suggestion primitives — types, conflict resolution, apply, and
+// the prosemirror decoration plugin. The bar/panel UI itself lives in
+// apps/web; folio only ships the headless pieces.
+export {
+  DEFAULT_AI_SUGGESTION_PRESETS,
+  type AICitation,
+  type AICitationSource,
+  type AIChatMode,
+  type AISuggestion,
+  type AISuggestionApplyMode,
+  type AISuggestionPreset,
+  type AISuggestionSeverity,
+  type AISuggestionStatus,
+  type AIBarStatus,
+  type AIGenerateInput,
+} from "./core/ai-suggestions/types";
+export {
+  applySuggestions,
+  type ApplyResult,
+} from "./core/ai-suggestions/apply";
+export {
+  resolveSuggestionAnchor,
+  isSuggestionStale,
+  type ResolvedAnchor,
+} from "./core/ai-suggestions/conflict";
+export {
+  setAISuggestionsMeta,
+  setFocusedSuggestionMeta,
+} from "./core/prosemirror/plugins/aiSuggestionDecorations";
+export {
+  createAICitationDecorationsPlugin,
+  setAICitationsMeta,
+  setActiveCitationMeta,
+  type AICitationRange,
+} from "./core/prosemirror/plugins/aiCitationDecorations";

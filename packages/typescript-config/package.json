@@ -2,7 +2,7 @@
   "name": "@stll/typescript-config",
   "version": "0.0.0",
   "private": true,
-  "license": "PROPRIETARY",
+  "license": "AGPL-3.0-only",
   "publishConfig": {
     "access": "public"
   },

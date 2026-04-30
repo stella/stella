@@ -301,6 +301,14 @@ type Messages = {
     };
   };
   "chat": {
+    "actionExpand": {
+      "toastDescription": "Full-page chat lands with persisted threads.";
+      "toastTitle": "Full view not yet available";
+    };
+    "actionPrint": {
+      "toastDescription": "Chat printing lands with persisted threads.";
+      "toastTitle": "Printing not yet available";
+    };
     "approval": {
       "allow": "Allow";
       "alwaysAllow": "Always allow in this thread";
@@ -322,6 +330,10 @@ type Messages = {
       "original": "Original";
       "simple": "Accepted";
       "trackedChanges": "Tracked changes";
+    };
+    "emptyState": {
+      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.";
+      "title": "What can we work on?";
     };
     "extractingContent": "Extracting content...";
     "fileTooLarge": "File exceeds {maxSize} limit";
@@ -462,6 +474,8 @@ type Messages = {
     "category": "Category";
     "clauses": "Clauses";
     "close": "Close";
+    "closeAll": "Close all";
+    "closeOthers": "Close others";
     "columns": "Columns";
     "comingSoon": "Coming soon";
     "confirm": "Confirm";
@@ -862,6 +876,21 @@ type Messages = {
     "undo": "Undo";
     "undoShortcut": "Undo (Ctrl+Z)";
   };
+  "inspector": {
+    "hidePane": "Hide pane";
+    "matterPicker": {
+      "allMatters": "All matters";
+      "description": "Pick the matters this chat can draw on. The AI sees content from every matter you select.";
+      "directLabel": "Direct";
+      "empty": "No matters available.";
+      "noMatter": "No matter";
+      "noResults": "No matter matches “{query}”.";
+      "searchPlaceholder": "Search matters or clients…";
+      "title": "Matter context";
+    };
+    "openChat": "Open chat";
+    "showPane": "Show pane";
+  };
   "knowledge": {
     "sections": {
       "agents": {
@@ -1046,22 +1075,6 @@ type Messages = {
     };
     "settings": "Organization settings";
     "settingsDescription": "Edit your organization name and slug";
-  };
-  "rightPanel": {
-    "addConditional": "Add conditional";
-    "askAboutMatter": "Ask questions about your matter.";
-    "chatPlaceholder": "Chat will appear here.";
-    "comingSoon": "AI template assistant coming soon.";
-    "convertToPlaceholder": "Convert to placeholder";
-    "mockDisclaimer": "This is a preview of the AI assistant. Responses are simulated.";
-    "mockResponseConditional": "I would wrap this text in a conditional block: '{{#if condition}}...{{/if}}'. What condition should control its visibility?";
-    "mockResponsePlaceholder": "I can convert the selected text into a placeholder like '{{fieldName}}'. What should the field be called?";
-    "mockResponseRepeat": "I would wrap this in a loop: '{{#each items}}...{{/each}}'. What collection should this iterate over?";
-    "repeatForEach": "Repeat for each item";
-    "selectedText": "Selected text";
-    "templateAssistant": "Template Assistant";
-    "title": "Chat";
-    "whatToDo": "What would you like to do with this text?";
   };
   "search": {
     "aiRefine": "Improve query with AI";
