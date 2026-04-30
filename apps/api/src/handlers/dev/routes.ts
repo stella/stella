@@ -20,6 +20,23 @@ const VITE_CACHE_DIR = resolve(
   "../../../../../apps/web/node_modules/.vite",
 );
 
+type SeedStatus =
+  | { status: "idle" }
+  | { status: "running"; startedAt: string }
+  | { status: "succeeded"; startedAt: string; finishedAt: string }
+  | {
+      status: "failed";
+      startedAt: string;
+      finishedAt: string;
+      message: string;
+    };
+
+let seedInFlight: Promise<void> | null = null;
+let seedStatus: SeedStatus = { status: "idle" };
+
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : "Seed failed";
+
 export const devRoute = new Elysia({ prefix: "/dev" })
   .use(authMacro)
   .guard({
@@ -33,12 +50,36 @@ export const devRoute = new Elysia({ prefix: "/dev" })
       return undefined;
     },
   })
-  .post("/seed", async (ctx) => {
+  .get("/seed", () => seedStatus)
+  .post("/seed", (ctx) => {
     const orgId = ctx.session.activeOrganizationId;
     const userId = ctx.user.id;
-    const { seed } = await import("../../../scripts/seed-dev");
-    await seed(orgId, userId);
-    return { ok: true };
+    if (!seedInFlight) {
+      const startedAt = new Date().toISOString();
+      seedStatus = { status: "running", startedAt };
+      seedInFlight = (async () => {
+        try {
+          const { seed } = await import("../../../scripts/seed-dev");
+          await seed(orgId, userId);
+          seedStatus = {
+            status: "succeeded",
+            startedAt,
+            finishedAt: new Date().toISOString(),
+          };
+        } catch (error: unknown) {
+          seedStatus = {
+            status: "failed",
+            startedAt,
+            finishedAt: new Date().toISOString(),
+            message: getErrorMessage(error),
+          };
+        } finally {
+          seedInFlight = null;
+        }
+      })();
+    }
+
+    return seedStatus;
   })
   .post("/clean", async (ctx) => {
     const orgId = ctx.session.activeOrganizationId;

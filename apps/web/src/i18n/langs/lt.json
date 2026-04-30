@@ -1370,6 +1370,7 @@
       "deleteAll": "Ištrinti visus",
       "deleteAllConfirm": "Ištrinti visus {count} elementus stulpelyje \"{column}\"?",
       "hideColumn": "Slėpti stulpelį",
+      "readOnlyGrouping": "Šis grupavimas yra tik skaitomas",
       "selectPropertyHint": "Pasirinkite savybę grupavimui įrankių juostoje",
       "unknown": "Nežinoma",
       "uploadDocument": "Įkelti dokumentą",
@@ -1535,6 +1536,9 @@
       "documents": "Dokumentai",
       "members": "Nariai",
       "parties": "Šalys"
+    },
+    "table": {
+      "reorderReadOnly": "Lentelės eilutės laikosi dabartinio rūšiavimo"
     },
     "tasksCount": "{count, plural, one {# užduotis} other {# užduočių}}",
     "tools": {

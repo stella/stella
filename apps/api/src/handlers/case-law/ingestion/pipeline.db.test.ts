@@ -82,6 +82,7 @@ if (!databaseUrl) {
   });
 } else {
   describe("case-law ingestion JSONB persistence", () => {
+    const adapterKey = `jsonb-regression-cz-ns-${Bun.randomUUIDv7()}`;
     const db = drizzle(databaseUrl, {
       relations: { ...relations, ...authRelationsPart },
       schema: {
@@ -105,7 +106,7 @@ if (!databaseUrl) {
       const [source] = await db
         .insert(caseLawSources)
         .values({
-          adapterKey: "jsonb-regression-cz-ns",
+          adapterKey,
           name: "JSONB regression source",
           enabled: false,
         })

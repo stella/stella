@@ -1370,6 +1370,7 @@
       "deleteAll": "Smazat vše",
       "deleteAllConfirm": "Smazat všechny {count} položky ve sloupci „{column}“?",
       "hideColumn": "Skrýt sloupec",
+      "readOnlyGrouping": "Toto seskupení je jen pro čtení",
       "selectPropertyHint": "Vyberte vlastnost pro seskupení v panelu nástrojů",
       "unknown": "Neznámý",
       "uploadDocument": "Nahrát dokument",
@@ -1535,6 +1536,9 @@
       "documents": "Dokumenty",
       "members": "Členové",
       "parties": "Strany"
+    },
+    "table": {
+      "reorderReadOnly": "Řádky tabulky se řídí aktuálním řazením"
     },
     "tasksCount": "{count, plural, one {# úkol} few {# úkoly} other {# úkolů}}",
     "tools": {

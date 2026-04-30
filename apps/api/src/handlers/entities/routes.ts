@@ -19,6 +19,7 @@ import readEntityById from "@/api/handlers/entities/read-by-id";
 import readEntitySummaries from "@/api/handlers/entities/read-summaries";
 import readVersionById from "@/api/handlers/entities/read-version-by-id";
 import readVersions from "@/api/handlers/entities/read-versions";
+import readEntitiesWindow from "@/api/handlers/entities/read-window";
 import releaseDesktopEditLock from "@/api/handlers/entities/release-desktop-edit-lock";
 import renameEntity from "@/api/handlers/entities/rename";
 import requestDesktopEditTakeover from "@/api/handlers/entities/request-desktop-edit-takeover";
@@ -83,6 +84,9 @@ export const entitiesRoute = new Elysia({
   })
   .post("/query", readEntities.handler, {
     body: readEntities.config.body,
+  })
+  .post("/query-window", readEntitiesWindow.handler, {
+    body: readEntitiesWindow.config.body,
   })
   .post("/organize-suggestions", organizeSuggestions.handler, {
     body: organizeSuggestions.config.body,

@@ -1373,6 +1373,7 @@ type Messages = {
       "deleteAll": "Delete all";
       "deleteAllConfirm": "Delete all {count} items in \"{column}\"?";
       "hideColumn": "Hide column";
+      "readOnlyGrouping": "This grouping is read-only";
       "selectPropertyHint": "Select a property to group by in the toolbar";
       "unknown": "Unknown";
       "uploadDocument": "Upload document";
@@ -1538,6 +1539,9 @@ type Messages = {
       "documents": "Documents";
       "members": "Members";
       "parties": "Parties";
+    };
+    "table": {
+      "reorderReadOnly": "Table rows follow the current sort";
     };
     "tasksCount": "{count, plural, one {# task} other {# tasks}}";
     "tools": {

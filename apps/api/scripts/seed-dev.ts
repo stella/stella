@@ -75,6 +75,15 @@ const fileExtRe = /\.(pdf|docx)$/;
 const PDF_MIME = "application/pdf" as const;
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document" as const;
+const HEAVY_MATTER_LABEL = "ws-heavy-virtualization";
+const HEAVY_MATTER_FILE_COUNT = 1000;
+const HEAVY_MATTER_FOLDER_COUNT = 25;
+
+// Bun SQL binds JSON strings with a JSONB wire type unless we
+// force text first; without this, Postgres stores a JSONB string
+// primitive and `content->>'value'` cannot be sorted/filtered.
+const jsonbValue = <T>(value: T) =>
+  sql<T>`${JSON.stringify(value)}::text::jsonb`;
 
 type BillingCodeId = SafeId<"billingCode">;
 type ContactId = SafeId<"contact">;
@@ -404,6 +413,43 @@ const createMockDocx = async (
 
 // ─── Document names per workspace ───────────────────────
 
+const buildHeavyMatterDocNames = (): string[] => {
+  const subjects = [
+    "Pleadings",
+    "Disclosure",
+    "Witness",
+    "Expert",
+    "Contract",
+    "Correspondence",
+    "Board",
+    "Finance",
+    "Regulatory",
+    "Closing",
+  ];
+  const phases = [
+    "draft",
+    "signed",
+    "redline",
+    "translated",
+    "annex",
+    "email",
+    "scan",
+    "bundle",
+  ];
+  const result: string[] = [];
+
+  for (let i = 0; i < HEAVY_MATTER_FILE_COUNT; i++) {
+    const subject = at(subjects, i % subjects.length);
+    const phase = at(phases, (i * 7) % phases.length);
+    const extension = i % 11 === 0 ? "docx" : "pdf";
+    result.push(
+      `${String(i + 1).padStart(4, "0")}_${subject}_${phase}.${extension}`,
+    );
+  }
+
+  return result;
+};
+
 const workspaceDocNames: Record<string, string[]> = {
   "ws-akvizice-energo": [
     "Smlouva_o_akvizici_akcii.pdf",
@@ -453,6 +499,7 @@ const workspaceDocNames: Record<string, string[]> = {
     "Privacy_Impact_Assessment.docx",
     "Cookie_Policy_Draft.pdf",
   ],
+  [HEAVY_MATTER_LABEL]: buildHeavyMatterDocNames(),
 };
 
 /**
@@ -1966,6 +2013,13 @@ const seedWorkspaces = [
     clientId: at(orgContacts, 2).id, // Moravská stavební
     billingReference: "MS-GDPR-2024",
   },
+  {
+    id: seedId("ws-heavy-virtualization"),
+    name: "Virtualization Scale Test Matter",
+    reference: "PERF/1000",
+    clientId: at(orgContacts, 0).id, // Novák & Partners
+    billingReference: "PERF-VIRT-1000",
+  },
 ];
 
 // ─── Properties (per-workspace) ─────────────────────────
@@ -2038,6 +2092,39 @@ type EntitySeed = {
 
 const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
   const folderId = seedId(`${wsLabel}-folder-1`);
+  if (wsLabel === HEAVY_MATTER_LABEL) {
+    const result: EntitySeed[] = [];
+    const folderIds: EntityId[] = [];
+
+    for (let i = 0; i < HEAVY_MATTER_FOLDER_COUNT; i++) {
+      const parentId =
+        i > 0 && i % 5 !== 0 ? folderIds[Math.floor(i / 5) * 5] : undefined;
+      const entityId = seedId(`${wsLabel}-folder-${i + 1}`);
+      folderIds.push(entityId);
+      result.push({
+        entityId,
+        versionId: seedId(`${wsLabel}-folder-${i + 1}-v`),
+        workspaceId: wsId,
+        kind: "folder",
+        ...(parentId !== undefined && { parentId }),
+      });
+    }
+
+    const docNames = workspaceDocNames[wsLabel] ?? [];
+    for (let i = 0; i < docNames.length; i++) {
+      const parentId = at(folderIds, i % folderIds.length);
+      result.push({
+        entityId: seedId(`${wsLabel}-doc-${i + 1}`),
+        versionId: seedId(`${wsLabel}-doc-${i + 1}-v`),
+        workspaceId: wsId,
+        kind: "document",
+        parentId,
+      });
+    }
+
+    return result;
+  }
+
   return [
     {
       entityId: folderId,
@@ -2447,6 +2534,7 @@ const WS_LABELS = [
   "ws-reorganizace",
   "ws-cross-border",
   "ws-gdpr-audit",
+  HEAVY_MATTER_LABEL,
 ] as const;
 
 const buildExtendedTimeEntries = (
@@ -3111,19 +3199,9 @@ export async function seed(organizationId?: string, userId?: string) {
 
   // 3. Properties
   const allProperties: PropertySeed[] = [];
-  const wsLabels = [
-    "ws-akvizice-energo",
-    "ws-stavebni-spor",
-    "ws-due-diligence",
-    "ws-pracovni-spory",
-    "ws-compliance-ceska-energie",
-    "ws-reorganizace",
-    "ws-cross-border",
-    "ws-gdpr-audit",
-  ];
   for (let i = 0; i < seedWorkspaces.length; i++) {
     allProperties.push(
-      ...buildProperties(at(seedWorkspaces, i).id, at(wsLabels, i)),
+      ...buildProperties(at(seedWorkspaces, i).id, at(WS_LABELS, i)),
     );
   }
   for (const mw of MORE_WORKSPACES) {
@@ -3138,8 +3216,8 @@ export async function seed(organizationId?: string, userId?: string) {
         id: prop.id,
         workspaceId: toWs(prop.workspaceId),
         name: prop.name,
-        content: prop.content,
-        tool: prop.tool,
+        content: jsonbValue(prop.content),
+        tool: jsonbValue(prop.tool),
         ...(prop.system !== undefined && { system: prop.system }),
         ...(prop.kinds !== undefined && { kinds: prop.kinds }),
       })
@@ -3153,7 +3231,7 @@ export async function seed(organizationId?: string, userId?: string) {
   const allEntities: EntitySeed[] = [];
   for (let i = 0; i < seedWorkspaces.length; i++) {
     allEntities.push(
-      ...buildEntities(at(seedWorkspaces, i).id, at(wsLabels, i)),
+      ...buildEntities(at(seedWorkspaces, i).id, at(WS_LABELS, i)),
     );
   }
   // Also create entities in extra workspaces, cycling through
@@ -3265,7 +3343,7 @@ export async function seed(organizationId?: string, userId?: string) {
           workspaceId: toWs(entity.workspaceId),
           propertyId: filePropertyId,
           entityVersionId: entity.versionId,
-          content: {
+          content: jsonbValue({
             version: 1,
             type: "file",
             id: fileId,
@@ -3275,7 +3353,7 @@ export async function seed(organizationId?: string, userId?: string) {
             encrypted: false,
             sha256Hex,
             pdfFileId,
-          },
+          }),
         })
         .onConflictDoNothing();
       fileCount++;
@@ -3321,7 +3399,7 @@ export async function seed(organizationId?: string, userId?: string) {
   // Main 8 workspaces
   for (let i = 0; i < seedWorkspaces.length; i++) {
     const ws = at(seedWorkspaces, i);
-    const wsLabel = at(wsLabels, i);
+    const wsLabel = at(WS_LABELS, i);
     const docNames = workspaceDocNames[wsLabel];
     // oxlint-disable-next-line typescript/strict-boolean-expressions -- docNames may be undefined
     if (docNames) {
@@ -3366,7 +3444,7 @@ export async function seed(organizationId?: string, userId?: string) {
         workspaceId: toWs(f.workspaceId),
         propertyId: f.propertyId,
         entityVersionId: f.entityVersionId,
-        content: f.content,
+        content: jsonbValue(f.content),
       })
       .onConflictDoNothing();
   }

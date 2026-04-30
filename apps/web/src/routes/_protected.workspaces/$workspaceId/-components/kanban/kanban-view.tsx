@@ -32,6 +32,11 @@ import { COLUMN_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
+import {
+  getKanbanGroupingPropertyId,
+  resolveKanbanGrouping,
+  selectKanbanEntitiesForGrouping,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { resolveOptionColor } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import {
   uploadFileEntitiesBatched,
@@ -48,12 +53,12 @@ import { useUpdateProperty } from "@/routes/_protected.workspaces/$workspaceId/-
 import {
   entitiesKeys,
   useEntitiesOptions,
+  visibleEntityFieldIds,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import {
   getFieldValue,
   getInternalPropertyId,
-  resolveKanbanGroupBy,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 type KanbanViewProps = {
@@ -136,10 +141,15 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     setLocalColumnOrder([]);
   }, [configuredGroupBy]);
 
-  const resolvedGroupBy = useMemo(
-    () => resolveKanbanGroupBy(configuredGroupBy, properties),
+  const grouping = useMemo(
+    () => resolveKanbanGrouping(configuredGroupBy, properties),
     [configuredGroupBy, properties],
   );
+  const groupByPropertyId = getKanbanGroupingPropertyId(grouping);
+  const isStatusGrouping = grouping.type === "status";
+  const isBuiltInGrouping = grouping.type === "built-in";
+  const groupByProperty =
+    grouping.type === "property" ? grouping.property : null;
 
   // Fields to show on each card: all properties minus hidden ones.
   const allPropertyIds = properties.map((p) => p.id);
@@ -154,22 +164,20 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   ];
   const cardFields = allFieldIds.filter(
     (id) =>
-      id !== resolvedGroupBy &&
+      id !== groupByPropertyId &&
       id !== getInternalPropertyId("kind") &&
       !hiddenProperties.includes(id),
   );
 
-  const groupByPropertyId = resolvedGroupBy;
-  const isStatusGrouping =
-    groupByPropertyId === getInternalPropertyId("status");
-  const isBuiltInGrouping =
-    !isStatusGrouping &&
-    (groupByPropertyId === getInternalPropertyId("kind") ||
-      groupByPropertyId === getInternalPropertyId("created-by"));
-  const groupByProperty =
-    isBuiltInGrouping || isStatusGrouping
-      ? null
-      : properties.find((p) => p.id === groupByPropertyId);
+  const fieldIds = useMemo(
+    () =>
+      visibleEntityFieldIds({
+        hiddenProperties,
+        properties,
+        requiredPropertyIds: groupByProperty ? [groupByProperty.id] : [],
+      }),
+    [groupByProperty, hiddenProperties, properties],
+  );
 
   const { filters, sorts } = view.layout;
 
@@ -179,12 +187,14 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       filters,
       sorts,
       page: 1,
+      fieldMode: "visible",
+      fieldIds,
     }),
   );
 
   const entities = useMemo(
-    () => entityData.entities.filter((e) => e.kind === "task"),
-    [entityData.entities],
+    () => selectKanbanEntitiesForGrouping(entityData.entities, grouping),
+    [entityData.entities, grouping],
   );
 
   // Mutation for changing task status via kanban drag-drop
@@ -219,7 +229,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   });
 
   // No group-by selected at all
-  if (!isBuiltInGrouping && !isStatusGrouping && !groupByProperty) {
+  if (grouping.type === "none" || groupByPropertyId === null) {
     return (
       <EmptyState
         hint={t("workspaces.kanban.usePropertyHint")}
@@ -268,6 +278,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       return;
     }
     if (isBuiltInGrouping) {
+      toastManager.add({
+        title: t("workspaces.kanban.readOnlyGrouping"),
+        type: "info",
+      });
       return;
     }
     const content = {

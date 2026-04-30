@@ -81,6 +81,14 @@ const CHAT_MODELS = [
   },
 ] as const;
 
+const SEED_STATUS_POLL_INTERVAL_MS = 1000;
+const SEED_STATUS_MAX_POLLS = 180;
+
+const sleep = async (ms: number) =>
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
 export const DevSidebarGroup = () => {
   const queryClient = useQueryClient();
   const [seeding, setSeeding] = useState(false);
@@ -103,19 +111,48 @@ export const DevSidebarGroup = () => {
 
   const handleSeed = async () => {
     setSeeding(true);
-    const { error } = await api.dev.seed.post();
-    setSeeding(false);
-    if (error) {
-      toastManager.add({
-        title: "Seed failed",
-        type: "error",
-      });
+    const start = await api.dev.seed.post();
+    if (start.error) {
+      setSeeding(false);
+      toastManager.add({ title: "Seed failed", type: "error" });
       return;
     }
-    await queryClient.invalidateQueries();
+
+    for (let i = 0; i < SEED_STATUS_MAX_POLLS; i++) {
+      const status = await api.dev.seed.get();
+      if (status.error) {
+        setSeeding(false);
+        toastManager.add({ title: "Seed status failed", type: "error" });
+        return;
+      }
+
+      if (status.data.status === "failed") {
+        setSeeding(false);
+        toastManager.add({
+          title: "Seed failed",
+          description: status.data.message,
+          type: "error",
+        });
+        return;
+      }
+
+      if (status.data.status === "succeeded") {
+        setSeeding(false);
+        await queryClient.invalidateQueries();
+        toastManager.add({
+          title: "Dev data seeded",
+          type: "success",
+        });
+        return;
+      }
+
+      await sleep(SEED_STATUS_POLL_INTERVAL_MS);
+    }
+
+    setSeeding(false);
     toastManager.add({
-      title: "Dev data seeded",
-      type: "success",
+      title: "Seed still running",
+      type: "info",
     });
   };
 

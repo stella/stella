@@ -16,6 +16,7 @@ import {
   containsFiles,
   getFiles,
 } from "@atlaskit/pragmatic-drag-and-drop/external/file";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   EllipsisVerticalIcon,
   EyeOffIcon,
@@ -70,6 +71,9 @@ import {
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
 
+const KANBAN_CARD_ESTIMATE_PX = 128;
+const KANBAN_CARD_OVERSCAN = 8;
+
 type KanbanColumnProps = {
   title: string;
   columnValue: string | null;
@@ -118,6 +122,7 @@ export const KanbanColumn = ({
 }: KanbanColumnProps) => {
   const t = useTranslations();
   const columnRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const dragHandleRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
@@ -145,6 +150,14 @@ export const KanbanColumn = ({
   const [isEntityDragOver, setIsEntityDragOver] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [closestColumnEdge, setClosestColumnEdge] = useState<Edge | null>(null);
+  const cardVirtualizer = useVirtualizer({
+    count: entities.length,
+    estimateSize: () => KANBAN_CARD_ESTIMATE_PX,
+    getItemKey: (index) => entities.at(index)?.entityId ?? index,
+    getScrollElement: () => scrollRef.current,
+    overscan: KANBAN_CARD_OVERSCAN,
+  });
+  const virtualCards = cardVirtualizer.getVirtualItems();
 
   const isDraggable = columnValue !== null && onReorderColumn !== undefined;
 
@@ -454,25 +467,45 @@ export const KanbanColumn = ({
       {/* biome-ignore lint/a11y/noStaticElementInteractions: context menu on column body */}
       {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: context menu on column body */}
       <div
-        className="flex flex-1 flex-col gap-2 overflow-y-auto p-2"
+        className="flex-1 overflow-y-auto p-2"
         onContextMenu={handleContextMenu}
+        ref={scrollRef}
       >
-        {entities.map((entity) => (
-          <KanbanCard
-            cardFields={cardFields}
-            entity={entity}
-            key={entity.entityId}
-            onRename={onRenameEntity}
-            properties={properties}
-            workspaceId={workspaceId}
-          />
-        ))}
         {isFileDragOver && (
-          <div className="border-primary/40 bg-primary/5 text-muted-foreground flex items-center gap-2 rounded-lg border border-dashed p-3 text-xs">
+          <div className="border-primary/40 bg-primary/5 text-muted-foreground mb-2 flex items-center gap-2 rounded-lg border border-dashed p-3 text-xs">
             <FileUpIcon className="text-primary/60 size-4 shrink-0" />
             {t("workspaces.dropToUploadFiles")}
           </div>
         )}
+        <div
+          className="relative"
+          style={{ height: cardVirtualizer.getTotalSize() }}
+        >
+          {virtualCards.map((virtualCard) => {
+            const entity = entities.at(virtualCard.index);
+            if (!entity) {
+              return null;
+            }
+
+            return (
+              <div
+                className="absolute inset-x-0 top-0 pb-2"
+                data-index={virtualCard.index}
+                key={entity.entityId}
+                ref={cardVirtualizer.measureElement}
+                style={{ transform: `translateY(${virtualCard.start}px)` }}
+              >
+                <KanbanCard
+                  cardFields={cardFields}
+                  entity={entity}
+                  onRename={onRenameEntity}
+                  properties={properties}
+                  workspaceId={workspaceId}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
       {onCreate && (
         <Menu

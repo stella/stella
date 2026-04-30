@@ -1370,6 +1370,7 @@
       "deleteAll": "Odstrániť všetko",
       "deleteAllConfirm": "Odstrániť všetkých {count} položiek v „{column}“?",
       "hideColumn": "Skryť stĺpec",
+      "readOnlyGrouping": "Toto zoskupenie je iba na čítanie",
       "selectPropertyHint": "Vyberte vlastnosť na zoskupenie v paneli nástrojov",
       "unknown": "Neznámy",
       "uploadDocument": "Nahrať dokument",
@@ -1535,6 +1536,9 @@
       "documents": "Dokumenty",
       "members": "Členovia",
       "parties": "Strany"
+    },
+    "table": {
+      "reorderReadOnly": "Riadky tabuľky sa riadia aktuálnym zoradením"
     },
     "tasksCount": "{count, plural, one {# úloha} few {# úlohy} other {# úloh}}",
     "tools": {

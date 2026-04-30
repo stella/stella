@@ -7,6 +7,8 @@ export const LIMITS = {
   // doesn't scale once we lift entitiesCount past ~10k.
   entitiesPageSizeDefault: 10_000,
   entitiesPageSizeMax: 10_000,
+  entitiesWindowSizeDefault: 200,
+  entitiesWindowSizeMax: 500,
   entitySummariesPageSize: 200,
   viewsCount: 20,
   templatesCount: 50,

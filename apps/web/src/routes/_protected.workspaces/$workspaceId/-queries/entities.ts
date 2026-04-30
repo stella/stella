@@ -1,47 +1,78 @@
 import { useDeferredValue } from "react";
 
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import type { WorkspaceEntity, WorkspaceField } from "@/lib/types";
+import {
+  DEFAULT_ENTITY_VIEW_PAGE_SIZE,
+  DEFAULT_ENTITY_WINDOW_SIZE,
+  entitiesKeys,
+  normalizeVisibleFieldIds,
+  visibleEntityFieldIds,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
 import type {
-  ViewFilterCondition,
-  WorkspaceEntity,
-  WorkspaceField,
-} from "@/lib/types";
+  EntitiesPageKey,
+  EntitiesWindowKey,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
 
-type ViewSort = {
-  propertyId: string;
-  desc: boolean;
-};
-
-type EntitiesPageKey = {
-  workspaceId: string;
-  filters: ViewFilterCondition[];
-  sorts: ViewSort[];
-  page: number;
-};
-
-export const entitiesKeys = {
-  all: (workspaceId: string) => ["entities", workspaceId],
-  page: ({ workspaceId, filters, sorts, page }: EntitiesPageKey) => [
-    ...entitiesKeys.all(workspaceId),
-    { filters, sorts, page },
-  ],
-  summaries: (workspaceId: string) => [
-    ...entitiesKeys.all(workspaceId),
-    "summaries",
-  ],
-};
+export { entitiesKeys, visibleEntityFieldIds };
 
 type EntitiesOptionsInput = QueryOptionsInput<EntitiesPageKey>;
+type EntitiesWindowOptionsInput = QueryOptionsInput<EntitiesWindowKey>;
+
+type RawWorkspaceEntity = Omit<
+  WorkspaceEntity,
+  "entityId" | "parentId" | "fields"
+> & {
+  entityId: string;
+  parentId: string | null;
+  fields: {
+    id: string;
+    propertyId: string;
+    entityId: string;
+    content: WorkspaceField["content"];
+  }[];
+};
+
+const toWorkspaceEntity = (entity: RawWorkspaceEntity): WorkspaceEntity => {
+  const { fields: rawFields } = entity;
+  const fields: Record<string, WorkspaceField> = {};
+  for (const field of rawFields) {
+    fields[field.propertyId] = {
+      id: toSafeId<"field">(field.id),
+      entityId: toSafeId<"entity">(field.entityId),
+      content: field.content,
+    };
+  }
+  return {
+    entityId: toSafeId<"entity">(entity.entityId),
+    kind: entity.kind,
+    name: entity.name,
+    parentId:
+      entity.parentId === null ? null : toSafeId<"entity">(entity.parentId),
+    createdAt: entity.createdAt,
+    createdBy: entity.createdBy,
+    createdByImage: entity.createdByImage,
+    updatedAt: entity.updatedAt,
+    version: entity.version,
+    status: entity.status,
+    priority: entity.priority,
+    dueDate: entity.dueDate,
+    sortOrder: entity.sortOrder,
+    activeEditBy: entity.activeEditBy,
+    fields,
+  };
+};
 
 export const entitiesOptions = (key: EntitiesOptionsInput) =>
   queryOptions({
     queryKey: entitiesKeys.page(key),
     queryFn: async ({ signal }) => {
+      const fieldMode = key.fieldMode ?? "full";
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
         .query.post(
@@ -49,10 +80,17 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
             filters: key.filters,
             sorts: key.sorts,
             page: key.page,
+            fieldMode,
+            fieldIds:
+              fieldMode === "visible"
+                ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
+                    toSafeId<"property">(fieldId),
+                  )
+                : [],
             // TODO: replace this load-everything pageSize with
             // virtualised rendering + cursor pagination. Tracked
             // alongside the matching limits.ts TODO.
-            pageSize: 10_000,
+            pageSize: key.pageSize ?? DEFAULT_ENTITY_VIEW_PAGE_SIZE,
           },
           { fetch: { signal } },
         );
@@ -62,42 +100,56 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
       }
 
       const { entities: rawEntities, ...rest } = response.data;
-
-      const entities: WorkspaceEntity[] = rawEntities.map((entity) => {
-        const { fields: rawFields } = entity;
-        const fields: Record<string, WorkspaceField> = {};
-        for (const field of rawFields) {
-          fields[field.propertyId] = {
-            id: toSafeId<"field">(field.id),
-            entityId: toSafeId<"entity">(field.entityId),
-            content: field.content,
-          };
-        }
-        return {
-          entityId: toSafeId<"entity">(entity.entityId),
-          kind: entity.kind,
-          name: entity.name,
-          parentId:
-            entity.parentId === null
-              ? null
-              : toSafeId<"entity">(entity.parentId),
-          createdAt: entity.createdAt,
-          createdBy: entity.createdBy,
-          createdByImage: entity.createdByImage,
-          updatedAt: entity.updatedAt,
-          version: entity.version,
-          status: entity.status,
-          priority: entity.priority,
-          dueDate: entity.dueDate,
-          sortOrder: entity.sortOrder,
-          activeEditBy: entity.activeEditBy,
-          fields,
-        };
-      });
+      const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
 
       return { ...rest, entities };
     },
   });
+
+export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
+  infiniteQueryOptions({
+    queryKey: entitiesKeys.window(key),
+    queryFn: async ({ signal, pageParam }) => {
+      const fieldMode = key.fieldMode ?? "full";
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
+        ["query-window"].post(
+          {
+            filters: key.filters,
+            sorts: key.sorts,
+            limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
+            excludedKinds: key.excludedKinds ?? [],
+            fieldMode,
+            fieldIds:
+              fieldMode === "visible"
+                ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
+                    toSafeId<"property">(fieldId),
+                  )
+                : [],
+            ...(pageParam !== undefined && { cursor: pageParam }),
+          },
+          { fetch: { signal } },
+        );
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      const { entities: rawEntities, ...rest } = response.data;
+      const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
+
+      return { ...rest, entities };
+    },
+    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  });
+
+// Defers the key so useSuspenseInfiniteQuery keeps showing stale
+// data instead of triggering the suspense boundary when filters or
+// sorts change.
+export const useEntitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
+  entitiesWindowOptions(useDeferredValue(key));
 
 // Defers the key so useSuspenseQuery keeps showing stale
 // data instead of triggering the suspense boundary when

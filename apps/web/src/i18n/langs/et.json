@@ -1370,6 +1370,7 @@
       "deleteAll": "Kustuta kõik",
       "deleteAllConfirm": "Kustutada kõik {count} elementi veerus „{column}\"?",
       "hideColumn": "Peida veerg",
+      "readOnlyGrouping": "See rühmitus on ainult lugemiseks",
       "selectPropertyHint": "Valige tööriistaribal omadus, mille järgi rühmitada",
       "unknown": "Teadmata",
       "uploadDocument": "Laadi üles dokument",
@@ -1535,6 +1536,9 @@
       "documents": "Dokumendid",
       "members": "Liikmed",
       "parties": "Osapooled"
+    },
+    "table": {
+      "reorderReadOnly": "Tabeliread järgivad praegust sortimist"
     },
     "tasksCount": "{count, plural, one {# ülesanne} other {# ülesannet}}",
     "tools": {

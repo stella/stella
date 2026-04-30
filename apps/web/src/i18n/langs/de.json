@@ -1370,6 +1370,7 @@
       "deleteAll": "Alle löschen",
       "deleteAllConfirm": "Alle {count} Einträge in „{column}“ löschen?",
       "hideColumn": "Spalte ausblenden",
+      "readOnlyGrouping": "Diese Gruppierung ist schreibgeschützt",
       "selectPropertyHint": "Wählen Sie eine Eigenschaft zum Gruppieren in der Symbolleiste",
       "unknown": "Unbekannt",
       "uploadDocument": "Dokument hochladen",
@@ -1535,6 +1536,9 @@
       "documents": "Dokumente",
       "members": "Mitglieder",
       "parties": "Parteien"
+    },
+    "table": {
+      "reorderReadOnly": "Tabellenzeilen folgen der aktuellen Sortierung"
     },
     "tasksCount": "{count, plural, one {# Aufgabe} other {# Aufgaben}}",
     "tools": {

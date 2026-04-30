@@ -58,7 +58,6 @@ import { DecisionMetadataSheet } from "@/routes/_protected.knowledge/case/-compo
 import { MatterMetadataSheet } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
 import { CreateMatterDialog } from "@/routes/_protected.workspaces/-components/create-matter-dialog";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
-import { TableControls } from "@/routes/_protected.workspaces/-components/table-controls";
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 const LazyTemplateAssistantPanel = lazy(
   async () =>
@@ -216,17 +215,12 @@ function ProtectedContent({
     from: "/_protected/workspaces/$workspaceId",
     shouldThrow: false,
   });
-  const viewMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId",
-    shouldThrow: false,
-  });
   const pdfMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
     shouldThrow: false,
   });
 
   const workspaceId = projectMatch?.params.workspaceId;
-  const viewId = viewMatch?.params.viewId;
   const isPinned = workspaceId ? pinnedIds.has(workspaceId) : false;
 
   const { data: workspace } = useQuery({
@@ -256,9 +250,6 @@ function ProtectedContent({
           </>
         )}
         <AppBreadcrumbs />
-        {workspaceId && viewId && (
-          <TableControls viewId={viewId} workspaceId={workspaceId} />
-        )}
         {pdfMatch && <PdfViewerControls />}
         <div className="ms-auto flex shrink-0 items-center gap-0.5">
           {workspaceId && (

@@ -4,7 +4,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
-import type { ViewLayout, ViewLayoutType } from "@/lib/types";
+import type { ViewLayout, ViewLayoutType, WorkspaceView } from "@/lib/types";
 import { viewsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 
 type CreateViewVars = {
@@ -48,6 +48,7 @@ type UpdateViewVars = {
 export const useUpdateView = (workspaceId: string) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
+  const queryKey = viewsKeys.all(workspaceId);
 
   return useMutation({
     mutationFn: async ({ viewId, ...body }: UpdateViewVars) => {
@@ -60,14 +61,39 @@ export const useUpdateView = (workspaceId: string) => {
       }
       return response.data;
     },
-    onSuccess: () => {
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({
-        queryKey: viewsKeys.all(workspaceId),
-      });
+    onMutate: async ({ viewId, ...body }) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previousViews = queryClient.getQueryData<WorkspaceView[]>(queryKey);
+
+      queryClient.setQueryData<WorkspaceView[]>(
+        queryKey,
+        (current): WorkspaceView[] | undefined => {
+          if (!current) {
+            return current;
+          }
+          return current.map((view) =>
+            view.id === viewId
+              ? {
+                  ...view,
+                  ...(body.name !== undefined && { name: body.name }),
+                  ...(body.layout !== undefined && { layout: body.layout }),
+                }
+              : view,
+          );
+        },
+      );
+
+      return { previousViews };
     },
-    onError: (error) => {
+    onError: (error, _variables, context) => {
+      if (context?.previousViews) {
+        queryClient.setQueryData(queryKey, context.previousViews);
+      }
       analytics.captureError(error);
+    },
+    onSettled: () => {
+      // eslint-disable-next-line typescript/no-floating-promises
+      queryClient.invalidateQueries({ queryKey });
     },
   });
 };

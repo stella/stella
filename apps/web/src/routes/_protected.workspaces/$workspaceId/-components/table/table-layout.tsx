@@ -1,6 +1,9 @@
 import { useMemo } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useSuspenseInfiniteQuery,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import {
   ArrowUpIcon,
@@ -32,8 +35,12 @@ import {
   PriorityCell,
   StatusCell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-table-cells";
+import { useSyncJustificationChunks } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
-import { useEntitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import {
+  useEntitiesWindowOptions,
+  visibleEntityFieldIds,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import {
   getInternalColId,
@@ -47,27 +54,52 @@ const addPropertyColId = getInternalColId("add-property");
 type TableLayoutProps = {
   workspaceId: string;
   view: WorkspaceView<"table">;
-  page: number;
 };
 
-export const TableLayout = ({ workspaceId, view, page }: TableLayoutProps) => {
+export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   const t = useTranslations();
   const tableState = useTableState({ workspaceId, view });
 
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
+  const fieldIds = useMemo(
+    () =>
+      visibleEntityFieldIds({
+        hiddenProperties: view.layout.hiddenProperties,
+        properties,
+      }),
+    [properties, view.layout.hiddenProperties],
+  );
 
-  const { data: treeData } = useSuspenseQuery({
-    ...useEntitiesOptions({
-      workspaceId,
-      filters: view.layout.filters,
-      sorts: view.layout.sorts,
-      page,
-    }),
-    select: (data) =>
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useSuspenseInfiniteQuery(
+      useEntitiesWindowOptions({
+        workspaceId,
+        filters: view.layout.filters,
+        sorts: view.layout.sorts,
+        limit: 200,
+        excludedKinds: ["folder", "task"],
+        fieldMode: "visible",
+        fieldIds,
+      }),
+    );
+
+  const treeData = useMemo(
+    () =>
       toTableEntities(
-        data.entities.filter((e) => e.kind !== "folder" && e.kind !== "task"),
+        data.pages
+          .flatMap((window) => window.entities)
+          .filter(
+            (entity) => entity.kind !== "folder" && entity.kind !== "task",
+          ),
       ),
-  });
+    [data.pages],
+  );
+  const justificationEntityIdChunks = useMemo(
+    () =>
+      data.pages.map((page) => page.entities.map((entity) => entity.entityId)),
+    [data.pages],
+  );
+  useSyncJustificationChunks(justificationEntityIdChunks);
 
   const columns = useMemo(() => {
     const columnDefs: TableColumnDef[] = [
@@ -215,7 +247,7 @@ export const TableLayout = ({ workspaceId, view, page }: TableLayoutProps) => {
 
   const table = useReactTable({
     columnResizeMode: "onChange",
-    data: treeData ?? [],
+    data: treeData,
     columns,
     getCoreRowModel: getCoreRowModel(),
     manualSorting: true,
@@ -236,5 +268,16 @@ export const TableLayout = ({ workspaceId, view, page }: TableLayoutProps) => {
     );
   }
 
-  return <WorkspaceTable table={table} workspaceId={workspaceId} />;
+  return (
+    <WorkspaceTable
+      hasNextPage={hasNextPage}
+      isFetchingNextPage={isFetchingNextPage}
+      onLoadMore={() => {
+        // eslint-disable-next-line typescript/no-floating-promises
+        fetchNextPage();
+      }}
+      table={table}
+      workspaceId={workspaceId}
+    />
+  );
 };
