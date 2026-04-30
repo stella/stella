@@ -32,12 +32,14 @@ import { UserAvatar } from "@/components/user-avatar";
 import { getMatterSwatch } from "@/lib/matter-colors";
 import {
   createSearchSummaryChatThread,
+  presetUpdatedFrom,
   refineSearchQuery,
   searchFacetOptions,
   searchInfiniteOptions,
   summarizeSearchResults,
+  TIME_PRESETS,
 } from "@/lib/search";
-import type { SearchableFacet } from "@/lib/search";
+import type { SearchableFacet, TimePreset } from "@/lib/search";
 import {
   readRecentFiles,
   readRecentSearches,
@@ -77,22 +79,12 @@ const KIND_TRANSLATION_KEYS = {
   link: "search.kinds.link",
 } as const satisfies Record<GlobalSearchResultType, string>;
 
-const TIME_PRESETS = ["day", "week", "month", "year"] as const;
-type TimePreset = (typeof TIME_PRESETS)[number];
-
 const TIME_PRESET_TRANSLATION_KEYS = {
   day: "search.updatedWithinOptions.day",
   week: "search.updatedWithinOptions.week",
   month: "search.updatedWithinOptions.month",
   year: "search.updatedWithinOptions.year",
 } as const satisfies Record<TimePreset, string>;
-
-const TIME_PRESET_DURATIONS_MS = {
-  day: 86_400_000,
-  week: 7 * 86_400_000,
-  month: 30 * 86_400_000,
-  year: 365 * 86_400_000,
-} as const satisfies Record<TimePreset, number>;
 
 const isGlobalSearchResultType = (
   value: string,
@@ -151,9 +143,6 @@ const dateInputToIsoStart = (value: string): string =>
 const dateInputToIsoEnd = (value: string): string =>
   new Date(`${value}T23:59:59.999Z`).toISOString();
 
-const presetUpdatedFrom = (preset: TimePreset): string =>
-  new Date(Date.now() - TIME_PRESET_DURATIONS_MS[preset]).toISOString();
-
 const mergeSelectedBuckets = (
   buckets: { value: string; label?: string; count: number }[],
   selected: string[],
@@ -167,7 +156,7 @@ const mergeSelectedBuckets = (
 };
 
 type TimeFilter =
-  | { mode: "preset"; preset: TimePreset; updatedFrom: string }
+  | { mode: "preset"; preset: TimePreset }
   | { mode: "custom"; updatedFrom?: string; updatedTo?: string };
 
 const initialSearchFilters = (
@@ -183,9 +172,6 @@ type SearchFilters = {
   mimeTypes?: string[];
   time?: TimeFilter;
 };
-
-const filterUpdatedFrom = (filters: SearchFilters): string | undefined =>
-  filters.time?.updatedFrom;
 
 const filterUpdatedTo = (filters: SearchFilters): string | undefined =>
   filters.time?.mode === "custom" ? filters.time.updatedTo : undefined;
@@ -259,7 +245,21 @@ export const SearchDialog = ({
   }, DEBOUNCE_MS);
 
   const searchQuery = debouncedQuery;
-  const updatedFrom = filterUpdatedFrom(filters);
+  // Resolve preset → ISO once per logical search. Memoising on
+  // [filters.time, searchQuery] gives us a fresh `now() - duration`
+  // whenever the user picks a new preset or runs a new query, while
+  // staying stable across pagination so `fetchNextPage` keeps using
+  // the same cutoff as page 1.
+  const updatedFrom = useMemo(() => {
+    if (filters.time?.mode === "preset") {
+      return presetUpdatedFrom(filters.time.preset);
+    }
+    if (filters.time?.mode === "custom") {
+      return filters.time.updatedFrom;
+    }
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: include searchQuery so each new query gets a fresh preset cutoff
+  }, [filters.time, searchQuery]);
   const updatedTo = filterUpdatedTo(filters);
 
   const {
@@ -556,14 +556,7 @@ export const SearchDialog = ({
       if (!preset) {
         return rest;
       }
-      return {
-        ...rest,
-        time: {
-          mode: "preset",
-          preset,
-          updatedFrom: presetUpdatedFrom(preset),
-        },
-      };
+      return { ...rest, time: { mode: "preset", preset } };
     });
     setSelectedIndex(-1);
   }, []);

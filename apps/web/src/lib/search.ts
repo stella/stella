@@ -9,6 +9,25 @@ import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 
+export const TIME_PRESETS = ["day", "week", "month", "year"] as const;
+export type TimePreset = (typeof TIME_PRESETS)[number];
+
+const TIME_PRESET_DURATIONS_MS = {
+  day: 86_400_000,
+  week: 7 * 86_400_000,
+  month: 30 * 86_400_000,
+  year: 365 * 86_400_000,
+} as const satisfies Record<TimePreset, number>;
+
+/**
+ * Compute the ISO timestamp `now() - preset duration`. Callers should
+ * resolve this once per logical search (when filters or the query
+ * change) and reuse it across pagination, so the cutoff stays stable
+ * for the duration of a `useInfiniteQuery` session.
+ */
+export const presetUpdatedFrom = (preset: TimePreset): string =>
+  new Date(Date.now() - TIME_PRESET_DURATIONS_MS[preset]).toISOString();
+
 export type SearchableFacet = "editor" | "workspace" | "mimeType";
 
 type SearchFacetParams = {
