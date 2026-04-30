@@ -2,7 +2,6 @@ import { cn } from "@stll/ui/lib/utils";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   BarChart3Icon,
-  BotIcon,
   LandmarkIcon,
   LayoutTemplateIcon,
   LightbulbIcon,
@@ -23,7 +22,6 @@ type KnowledgeSection = {
     | "analytics"
     | "caseLaw"
     | "skills"
-    | "agents"
     | "connectors";
   icon: LucideIcon;
   to?:
@@ -39,7 +37,6 @@ export const knowledgeSections: readonly KnowledgeSection[] = [
   { key: "caseLaw", icon: LandmarkIcon, to: "/knowledge/case" },
   { key: "analytics", icon: BarChart3Icon, to: "/knowledge/analytics" },
   { key: "skills", icon: LightbulbIcon },
-  { key: "agents", icon: BotIcon },
   { key: "connectors", icon: PlugIcon },
 ];
 
