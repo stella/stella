@@ -740,14 +740,6 @@
     "uploadFailed": "Error al subir"
   },
   "feedback": {
-    "describeIssue": "¿Qué podemos mejorar?",
-    "describeIssuePlaceholder": "Error, aspereza o idea de función; todo ayuda…",
-    "description": "Tu opinión se envía directamente al equipo.",
-    "sent": "Comentario enviado, ¡gracias!",
-    "submit": "Enviar comentario",
-    "suggestedFix": "Corrección sugerida (opcional)",
-    "suggestedFixPlaceholder": "p. ej. Desactivar el botón de envío cuando el formulario esté vacío",
-    "title": "Opinión",
     "trigger": "Comentarios"
   },
   "fileDetail": {

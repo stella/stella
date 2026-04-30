@@ -740,14 +740,6 @@
     "uploadFailed": "Upload failed"
   },
   "feedback": {
-    "describeIssue": "What can we do better?",
-    "describeIssuePlaceholder": "Bug, rough edge, or feature idea; anything helps…",
-    "description": "Your feedback is sent directly to the team.",
-    "sent": "Feedback sent, thank you!",
-    "submit": "Send feedback",
-    "suggestedFix": "Suggested fix (optional)",
-    "suggestedFixPlaceholder": "e.g. Make the submit button disabled when the form is empty",
-    "title": "Feedback",
     "trigger": "Feedback"
   },
   "fileDetail": {

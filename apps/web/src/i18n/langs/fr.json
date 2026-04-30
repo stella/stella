@@ -740,14 +740,6 @@
     "uploadFailed": "Échec de l'import"
   },
   "feedback": {
-    "describeIssue": "Que pouvons-nous améliorer ?",
-    "describeIssuePlaceholder": "Bug, aspérité ou idée de fonctionnalité; tout retour est utile…",
-    "description": "Vos commentaires sont envoyés directement à l'équipe.",
-    "sent": "Retour envoyé, merci !",
-    "submit": "Envoyer",
-    "suggestedFix": "Correction suggérée (facultatif)",
-    "suggestedFixPlaceholder": "p. ex. Désactiver le bouton d'envoi lorsque le formulaire est vide",
-    "title": "Commentaires",
     "trigger": "Commentaires"
   },
   "fileDetail": {

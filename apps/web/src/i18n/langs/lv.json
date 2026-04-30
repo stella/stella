@@ -740,14 +740,6 @@
     "uploadFailed": "Augšupielāde neizdevās"
   },
   "feedback": {
-    "describeIssue": "Ko varam uzlabot?",
-    "describeIssuePlaceholder": "Kļūda, nepilnība vai funkcijas ideja; jebkas noderēs…",
-    "description": "Jūsu atsauksme tiek nosūtīta tieši komandai.",
-    "sent": "Atsauksme nosūtīta, paldies!",
-    "submit": "Nosūtīt atsauksmi",
-    "suggestedFix": "Ieteiktais labojums (neobligāti)",
-    "suggestedFixPlaceholder": "piem., Atspējot sūtīšanas pogu, kad forma ir tukša",
-    "title": "Atsauksmes",
     "trigger": "Atsauksmes"
   },
   "fileDetail": {

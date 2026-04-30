@@ -1384,7 +1384,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
       {/* User avatar at bottom */}
       <SidebarFooter>
         <SidebarMenu>
-          <FeedbackDialog />
+          <FeedbackDialog userEmail={user.email} />
           <SidebarMenuItem>
             <Menu>
               <MenuTrigger

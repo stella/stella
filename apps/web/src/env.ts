@@ -41,6 +41,7 @@ export const env = createEnv({
     VITE_FEATURE_TODOS: featureFlagSchema,
     VITE_FEATURE_MCP: featureFlagSchema,
     VITE_FEATURE_DESKTOP_EDITING: featureFlagSchema,
+    VITE_FEEDBACK_EMAIL_TO: v.optional(v.pipe(v.string(), v.email())),
   },
 
   runtimeEnv: import.meta.env,

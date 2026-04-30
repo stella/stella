@@ -740,14 +740,6 @@
     "uploadFailed": "Įkėlimas nepavyko"
   },
   "feedback": {
-    "describeIssue": "Ką galime pagerinti?",
-    "describeIssuePlaceholder": "Klaida, nepatogumas ar funkcijos idėja; bet kas padės…",
-    "description": "Jūsų atsiliepimai siunčiami tiesiogiai komandai.",
-    "sent": "Atsiliepimas išsiųstas, ačiū!",
-    "submit": "Siųsti atsiliepimą",
-    "suggestedFix": "Siūlomas pataisymas (neprivaloma)",
-    "suggestedFixPlaceholder": "pvz., Išjungti siuntimo mygtuką, kai forma tuščia",
-    "title": "Atsiliepimai",
     "trigger": "Atsiliepimai"
   },
   "fileDetail": {

@@ -740,14 +740,6 @@
     "uploadFailed": "Üleslaadimine ebaõnnestus"
   },
   "feedback": {
-    "describeIssue": "Mida saaksime paremini teha?",
-    "describeIssuePlaceholder": "Viga, kitsaskoht või funktsiooniidee; kõik aitab…",
-    "description": "Teie tagasiside saadetakse otse meeskonnale.",
-    "sent": "Tagasiside saadetud, aitäh!",
-    "submit": "Saada tagasiside",
-    "suggestedFix": "Soovituslik parandus (valikuline)",
-    "suggestedFixPlaceholder": "nt Keela saatmisnupp, kui vorm on tühi",
-    "title": "Tagasiside",
     "trigger": "Tagasiside"
   },
   "fileDetail": {
