@@ -5,67 +5,6 @@
   "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "ddl": [
     {
-      "values": ["task", "activity"],
-      "name": "billing_code_type",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "values": ["open", "finalized", "cancelled"],
-      "name": "desktop_edit_session_status",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "values": ["document", "folder", "task", "message", "link"],
-      "name": "entity_kind",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "values": [
-        "filing_fee",
-        "expert_witness",
-        "travel",
-        "printing",
-        "courier",
-        "other"
-      ],
-      "name": "expense_category",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "values": ["draft", "finalized", "sent", "paid", "void"],
-      "name": "invoice_status",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "values": ["uninitialized", "stale", "fresh"],
-      "name": "property_status",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "values": ["assignee", "reviewer"],
-      "name": "task_assignee_role",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "values": ["manual", "timer"],
-      "name": "time_entry_source",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
-      "values": ["draft", "approved", "billed", "written_off"],
-      "name": "time_entry_status",
-      "entityType": "enums",
-      "schema": "public"
-    },
-    {
       "isRlsEnabled": true,
       "name": "audit_logs",
       "entityType": "tables",
@@ -607,8 +546,8 @@
       "table": "billing_codes"
     },
     {
-      "type": "billing_code_type",
-      "typeSchema": "public",
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -3168,8 +3107,8 @@
       "table": "desktop_edit_sessions"
     },
     {
-      "type": "desktop_edit_session_status",
-      "typeSchema": "public",
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": "'open'",
@@ -3415,8 +3354,8 @@
       "table": "entities"
     },
     {
-      "type": "entity_kind",
-      "typeSchema": "public",
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": "'document'",
@@ -4091,8 +4030,8 @@
       "table": "expenses"
     },
     {
-      "type": "expense_category",
-      "typeSchema": "public",
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -4156,8 +4095,8 @@
       "table": "expenses"
     },
     {
-      "type": "time_entry_status",
-      "typeSchema": "public",
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": "'draft'",
@@ -4468,8 +4407,8 @@
       "table": "invoices"
     },
     {
-      "type": "invoice_status",
-      "typeSchema": "public",
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": "'draft'",
@@ -4858,8 +4797,8 @@
       "table": "properties"
     },
     {
-      "type": "property_status",
-      "typeSchema": "public",
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": "'uninitialized'",
@@ -5261,8 +5200,8 @@
       "table": "search_documents"
     },
     {
-      "type": "entity_kind",
-      "typeSchema": "public",
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -5391,8 +5330,8 @@
       "table": "task_assignees"
     },
     {
-      "type": "task_assignee_role",
-      "typeSchema": "public",
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
@@ -6249,8 +6188,8 @@
       "table": "time_entries"
     },
     {
-      "type": "time_entry_status",
-      "typeSchema": "public",
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": "'draft'",
@@ -6262,8 +6201,8 @@
       "table": "time_entries"
     },
     {
-      "type": "time_entry_source",
-      "typeSchema": "public",
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": "'manual'",

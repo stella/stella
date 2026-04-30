@@ -462,7 +462,7 @@ export const searchGlobal = async ({
   );
   const entityTypeFilter = sqlWhen(
     selected.size > 0,
-    () => sql`AND sd.kind = ANY(${typedPgArray(entityTypes, "entity_kind")})`,
+    () => sql`AND sd.kind = ANY(${typedPgArray(entityTypes, "text")})`,
   );
 
   const entityPromise = rowsWhen(hasSelectedEntityType(selected), () =>

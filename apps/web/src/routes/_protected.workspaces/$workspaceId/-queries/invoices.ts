@@ -3,7 +3,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 
-/** Mirrors `invoiceStatusEnum` in `apps/api/src/db/schema.ts`. */
+/** Mirrors `INVOICE_STATUSES` in `apps/api/src/db/schema.ts`. */
 type InvoiceStatus = "draft" | "finalized" | "sent" | "paid" | "void";
 
 type InvoicesFilters = {

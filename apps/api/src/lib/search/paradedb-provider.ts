@@ -66,7 +66,7 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
       : sql``;
   const kindFilter =
     query.kinds && query.kinds.length > 0
-      ? sql`AND sd.kind = ANY(${typedPgArray(query.kinds, "entity_kind")})`
+      ? sql`AND sd.kind = ANY(${typedPgArray(query.kinds, "text")})`
       : sql``;
 
   // BM25 disjunction: matches documents containing any

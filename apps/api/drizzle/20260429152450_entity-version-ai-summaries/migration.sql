@@ -1,12 +1,3 @@
-CREATE TYPE "billing_code_type" AS ENUM('task', 'activity');--> statement-breakpoint
-CREATE TYPE "desktop_edit_session_status" AS ENUM('open', 'finalized', 'cancelled');--> statement-breakpoint
-CREATE TYPE "entity_kind" AS ENUM('document', 'folder', 'task', 'message', 'link');--> statement-breakpoint
-CREATE TYPE "expense_category" AS ENUM('filing_fee', 'expert_witness', 'travel', 'printing', 'courier', 'other');--> statement-breakpoint
-CREATE TYPE "invoice_status" AS ENUM('draft', 'finalized', 'sent', 'paid', 'void');--> statement-breakpoint
-CREATE TYPE "property_status" AS ENUM('uninitialized', 'stale', 'fresh');--> statement-breakpoint
-CREATE TYPE "task_assignee_role" AS ENUM('assignee', 'reviewer');--> statement-breakpoint
-CREATE TYPE "time_entry_source" AS ENUM('manual', 'timer');--> statement-breakpoint
-CREATE TYPE "time_entry_status" AS ENUM('draft', 'approved', 'billed', 'written_off');--> statement-breakpoint
 CREATE TABLE "audit_logs" (
 	"id" uuid PRIMARY KEY,
 	"organization_id" varchar(128) NOT NULL,
@@ -25,7 +16,7 @@ CREATE TABLE "billing_codes" (
 	"id" uuid PRIMARY KEY,
 	"organization_id" varchar(128) NOT NULL,
 	"workspace_id" uuid NOT NULL,
-	"type" "billing_code_type" NOT NULL,
+	"type" text NOT NULL,
 	"code" varchar(20) NOT NULL,
 	"label" varchar(256) NOT NULL,
 	"active" boolean DEFAULT true NOT NULL,
@@ -294,7 +285,7 @@ CREATE TABLE "desktop_edit_sessions" (
 	"base_version_id" uuid NOT NULL,
 	"finalized_version_id" uuid,
 	"created_by" text NOT NULL,
-	"status" "desktop_edit_session_status" DEFAULT 'open'::"desktop_edit_session_status" NOT NULL,
+	"status" text DEFAULT 'open' NOT NULL,
 	"file_name" varchar(256) NOT NULL,
 	"checkpoint_file_id" uuid NOT NULL,
 	"checkpoint_sha256_hex" varchar(64),
@@ -321,7 +312,7 @@ ALTER TABLE "document_counters" ENABLE ROW LEVEL SECURITY;--> statement-breakpoi
 CREATE TABLE "entities" (
 	"id" uuid PRIMARY KEY,
 	"workspace_id" uuid NOT NULL,
-	"kind" "entity_kind" DEFAULT 'document'::"entity_kind" NOT NULL,
+	"kind" text DEFAULT 'document' NOT NULL,
 	"parent_id" uuid,
 	"name" text,
 	"created_by" text,
@@ -391,12 +382,12 @@ CREATE TABLE "expenses" (
 	"date_incurred" date NOT NULL,
 	"amount" integer NOT NULL,
 	"currency" varchar(3) NOT NULL,
-	"category" "expense_category" NOT NULL,
+	"category" text NOT NULL,
 	"description" text NOT NULL,
 	"invoice_description" text,
 	"billable" boolean DEFAULT true NOT NULL,
 	"markup" integer DEFAULT 0 NOT NULL,
-	"status" "time_entry_status" DEFAULT 'draft'::"time_entry_status" NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
 	"invoice_id" uuid,
 	"receipt_file_id" uuid,
 	"created_at" timestamp DEFAULT now() NOT NULL,
@@ -433,7 +424,7 @@ CREATE TABLE "invoices" (
 	"workspace_id" uuid NOT NULL,
 	"invoice_number" varchar(64) NOT NULL,
 	"reference" varchar(256),
-	"status" "invoice_status" DEFAULT 'draft'::"invoice_status" NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
 	"invoice_date" date NOT NULL,
 	"due_date" date,
 	"currency" varchar(3) NOT NULL,
@@ -479,7 +470,7 @@ CREATE TABLE "properties" (
 	"id" uuid PRIMARY KEY,
 	"workspace_id" uuid NOT NULL,
 	"name" varchar(256) NOT NULL,
-	"status" "property_status" DEFAULT 'uninitialized'::"property_status" NOT NULL,
+	"status" text DEFAULT 'uninitialized' NOT NULL,
 	"content" jsonb NOT NULL,
 	"tool" jsonb NOT NULL,
 	"system" boolean DEFAULT false NOT NULL,
@@ -528,7 +519,7 @@ CREATE TABLE "search_documents" (
 	"entity_id" uuid PRIMARY KEY,
 	"organization_id" varchar(128) NOT NULL,
 	"workspace_id" uuid NOT NULL,
-	"kind" "entity_kind" NOT NULL,
+	"kind" text NOT NULL,
 	"title" text DEFAULT '' NOT NULL,
 	"searchable_text" text DEFAULT '' NOT NULL,
 	"language" varchar(10),
@@ -541,7 +532,7 @@ CREATE TABLE "task_assignees" (
 	"workspace_id" uuid NOT NULL,
 	"entity_id" uuid NOT NULL,
 	"user_id" text NOT NULL,
-	"role" "task_assignee_role" NOT NULL,
+	"role" text NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -632,8 +623,8 @@ CREATE TABLE "time_entries" (
 	"invoice_narrative" text,
 	"billable" boolean DEFAULT true NOT NULL,
 	"no_charge" boolean DEFAULT false NOT NULL,
-	"status" "time_entry_status" DEFAULT 'draft'::"time_entry_status" NOT NULL,
-	"source" "time_entry_source" DEFAULT 'manual'::"time_entry_source" NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"source" text DEFAULT 'manual' NOT NULL,
 	"task_code" varchar(20),
 	"activity_code" varchar(20),
 	"invoice_id" uuid,
