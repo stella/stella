@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
 import archiveWorkspace from "@/api/handlers/workspaces/archive";
@@ -24,10 +25,128 @@ import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspac
 import addWorkspaceMember from "@/api/handlers/workspaces/workspace-members-add";
 import { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
 import removeWorkspaceMember from "@/api/handlers/workspaces/workspace-members-remove";
+import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 import { LIMITS } from "@/api/lib/limits";
+
+const readWorkspace = createSafeHandler(
+  {
+    permissions: { workspace: ["read"] },
+  } satisfies HandlerConfig,
+  async function* ({ scopedDb, session, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readWorkspaceHandler({
+            workspaceId,
+            organizationId: session.activeOrganizationId,
+            scopedDb,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const readWorkflow = createSafeHandler(
+  {
+    permissions: { workspace: ["read"] },
+  } satisfies HandlerConfig,
+  async function* ({ workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(async () => await readWorkflowHandler(workspaceId)),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const readJustifications = createSafeHandler(
+  {
+    permissions: { workspace: ["read"] },
+    body: t.Object({
+      entityIds: t.Array(tSafeId("entity"), {
+        minItems: 1,
+        maxItems: LIMITS.entitiesPageSizeMax,
+      }),
+    }),
+  } satisfies HandlerConfig,
+  async function* ({ body: { entityIds }, scopedDb, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readJustificationsHandler({
+            workspaceId,
+            scopedDb,
+            entityIds,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const readOverview = createSafeHandler(
+  {
+    permissions: { workspace: ["read"] },
+  } satisfies HandlerConfig,
+  async function* ({ scopedDb, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readOverviewHandler({
+            workspaceId,
+            scopedDb,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const readWorkspaceContacts = createSafeHandler(
+  {
+    permissions: { workspace: ["read"] },
+  } satisfies HandlerConfig,
+  async function* ({ scopedDb, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readWorkspaceContactsHandler({
+            workspaceId,
+            scopedDb,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const readWorkspaceMembers = createSafeHandler(
+  {
+    permissions: { workspace: ["read"] },
+  } satisfies HandlerConfig,
+  async function* ({ scopedDb, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readWorkspaceMembersHandler({
+            workspaceId,
+            scopedDb,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
 
 export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   .use(workspaceAccessMacro)
@@ -51,40 +170,15 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
     },
     (app) =>
       app
-        .get(
-          "/",
-          async (ctx) =>
-            await readWorkspaceHandler({
-              workspaceId: ctx.workspaceId,
-              organizationId: ctx.session.activeOrganizationId,
-              scopedDb: ctx.scopedDb,
-            }),
-        )
-        .get(
-          "/workflow",
-          async (ctx) => await readWorkflowHandler(ctx.workspaceId),
-        )
+        .get("/", readWorkspace.handler)
+        .get("/workflow", readWorkflow.handler)
         .post("/workflow/start", workflowStart.handler, {
           body: workflowStart.config.body,
           permissions: workflowStart.config.permissions,
         })
-        .post(
-          "/justifications/query",
-          async (ctx) =>
-            await readJustificationsHandler({
-              workspaceId: ctx.workspaceId,
-              scopedDb: ctx.scopedDb,
-              entityIds: ctx.body.entityIds,
-            }),
-          {
-            body: t.Object({
-              entityIds: t.Array(tSafeId("entity"), {
-                minItems: 1,
-                maxItems: LIMITS.entitiesPageSizeMax,
-              }),
-            }),
-          },
-        )
+        .post("/justifications/query", readJustifications.handler, {
+          body: readJustifications.config.body,
+        })
         .post("/bounding-boxes", generateBoundingBoxes.handler, {
           body: generateBoundingBoxes.config.body,
           invalidateQuery: true,
@@ -97,14 +191,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
           body: infosoudImportAgenda.config.body,
           invalidateQuery: true,
         })
-        .get(
-          "/overview",
-          async (ctx) =>
-            await readOverviewHandler({
-              workspaceId: ctx.workspaceId,
-              scopedDb: ctx.scopedDb,
-            }),
-        )
+        .get("/overview", readOverview.handler)
         .post("/", updateWorkspace.handler, {
           body: updateWorkspace.config.body,
           invalidateQuery: true,
@@ -118,14 +205,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
           invalidateQuery: true,
         })
         // Unarchive is mounted below, outside the active-only group.
-        .get(
-          "/contacts",
-          async (ctx) =>
-            await readWorkspaceContactsHandler({
-              workspaceId: ctx.workspaceId,
-              scopedDb: ctx.scopedDb,
-            }),
-        )
+        .get("/contacts", readWorkspaceContacts.handler)
         .put("/contacts", createWorkspaceContact.handler, {
           body: createWorkspaceContact.config.body,
           invalidateQuery: true,
@@ -138,14 +218,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
             invalidateQuery: true,
           },
         )
-        .get(
-          "/members",
-          async (ctx) =>
-            await readWorkspaceMembersHandler({
-              workspaceId: ctx.workspaceId,
-              scopedDb: ctx.scopedDb,
-            }),
-        )
+        .get("/members", readWorkspaceMembers.handler)
         .put("/members", addWorkspaceMember.handler, {
           body: addWorkspaceMember.config.body,
           invalidateQuery: true,

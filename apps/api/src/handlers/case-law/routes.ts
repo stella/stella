@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
 import { generateAnalysis } from "@/api/handlers/case-law/analysis/generate";
@@ -18,12 +19,159 @@ import {
 import { deleteMatterLinkHandler } from "@/api/handlers/case-law/matter-links/delete";
 import { listMatterLinksHandler } from "@/api/handlers/case-law/matter-links/list";
 import {
+  createSafeHandler,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
   ADMIN_BYPASS_ROLES,
   authMacro,
   permissionMacro,
   workspaceAccessMacro,
 } from "@/api/lib/auth";
 import { tSafeId } from "@/api/lib/custom-schema";
+
+const listDecisions = createSafeRootHandler(
+  {
+    permissions: { workspace: ["read"] },
+    query: listDecisionsQuerySchema,
+  } satisfies HandlerConfig,
+  async function* ({ query, scopedDb }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () => await listDecisionsHandler(query, scopedDb),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const readDecision = createSafeRootHandler(
+  {
+    permissions: { workspace: ["read"] },
+    params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+  } satisfies HandlerConfig,
+  async function* ({ params: { decisionId }, scopedDb }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () => await readDecisionHandler(decisionId, scopedDb),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const searchDecisions = createSafeRootHandler(
+  {
+    permissions: { workspace: ["read"] },
+    body: searchDecisionsBodySchema,
+  } satisfies HandlerConfig,
+  async function* ({ body, scopedDb }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () => await searchDecisionsHandler(body, scopedDb),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const generateDecisionAnalysis = createSafeRootHandler(
+  {
+    permissions: { workspace: ["read"] },
+    params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+  } satisfies HandlerConfig,
+  async function* ({ params: { decisionId }, scopedDb }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () => await generateAnalysis(decisionId, scopedDb),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const listMatterLinks = createSafeHandler(
+  {
+    permissions: { workspace: ["read"] },
+  } satisfies HandlerConfig,
+  async function* ({ scopedDb, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await listMatterLinksHandler({
+            workspaceId,
+            scopedDb,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const createMatterLink = createSafeHandler(
+  {
+    permissions: { entity: ["create"] },
+    body: createMatterLinkBodySchema,
+  } satisfies HandlerConfig,
+  async function* ({ body, scopedDb, user, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await createMatterLinkHandler({
+            workspaceId,
+            userId: user.id,
+            body,
+            scopedDb,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const deleteMatterLink = createSafeHandler(
+  {
+    permissions: { entity: ["delete"] },
+    params: t.Object({
+      workspaceId: tSafeId("workspace"),
+      linkId: tSafeId("caseLawMatterLink"),
+    }),
+  } satisfies HandlerConfig,
+  async function* ({ params: { linkId }, scopedDb, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await deleteMatterLinkHandler({
+            workspaceId,
+            linkId,
+            scopedDb,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const getCaseLawIngestionStatus = createSafeRootHandler(
+  {
+    permissions: { workspace: ["read"] },
+  } satisfies HandlerConfig,
+  async function* ({ scopedDb }) {
+    const response = yield* Result.await(
+      Result.tryPromise(async () => await getIngestionStatus(scopedDb)),
+    );
+
+    return Result.ok(response);
+  },
+);
 
 /**
  * Global-read routes: any authenticated user can read.
@@ -34,89 +182,18 @@ const globalCaseLawRoute = new Elysia({
 })
   .use(authMacro)
   .guard({ validateAuth: true })
-  .get(
-    "/decisions",
-    async (ctx) => await listDecisionsHandler(ctx.query, ctx.scopedDb),
-    {
-      query: listDecisionsQuerySchema,
-    },
-  )
-  .get(
-    "/decisions/:decisionId",
-    async (ctx) =>
-      await readDecisionHandler(ctx.params.decisionId, ctx.scopedDb),
-    { params: t.Object({ decisionId: tSafeId("caseLawDecision") }) },
-  )
-  .post(
-    "/decisions/search",
-    async (ctx) => await searchDecisionsHandler(ctx.body, ctx.scopedDb),
-    {
-      body: searchDecisionsBodySchema,
-    },
-  )
-  .get(
-    "/decisions/:decisionId/analysis",
-    async (ctx) => await generateAnalysis(ctx.params.decisionId, ctx.scopedDb),
-    { params: t.Object({ decisionId: tSafeId("caseLawDecision") }) },
-  )
-  .get(
-    "/decisions/:decisionId/analysis/debug",
-    async (ctx) => {
-      const { decisionId } = ctx.params;
-      const decision = await ctx.scopedDb((tx) =>
-        tx.query.caseLawDecisions.findFirst({
-          where: { id: { eq: decisionId } },
-          columns: {
-            id: true,
-            language: true,
-            court: true,
-            country: true,
-            decisionType: true,
-            documentAst: true,
-          },
-        }),
-      );
-      if (!decision) {
-        return { error: "not found" };
-      }
-
-      const { getSystemPrompt } =
-        await import("@/api/handlers/case-law/analysis/prompts/index");
-      const { formatDecisionForPrompt } =
-        await import("@/api/handlers/case-law/analysis/prompts/base");
-      const { hasUsableAst } =
-        await import("@/api/handlers/case-law/document-ast");
-      const { getModelForRole } = await import("@/api/lib/ai-models");
-
-      const model = getModelForRole("fast");
-      const modelId =
-        typeof model === "string"
-          ? model
-          : "modelId" in model
-            ? model.modelId
-            : "unknown";
-
-      const systemPrompt = getSystemPrompt(decision.language);
-      const ast = hasUsableAst(decision.documentAst)
-        ? (decision.documentAst as {
-            blocks: { anchorId: string; plainText: string; type: string }[];
-          })
-        : null;
-
-      const userMessage = ast
-        ? `Court: ${decision.court}\nCountry: ${decision.country}\nType: ${decision.decisionType ?? "unknown"}\n\n${formatDecisionForPrompt(ast.blocks)}`
-        : null;
-
-      return {
-        model: modelId,
-        systemPromptLength: systemPrompt.length,
-        systemPrompt,
-        userMessageLength: userMessage?.length ?? 0,
-        userMessage,
-      };
-    },
-    { params: t.Object({ decisionId: tSafeId("caseLawDecision") }) },
-  );
+  .get("/decisions", listDecisions.handler, {
+    query: listDecisions.config.query,
+  })
+  .get("/decisions/:decisionId", readDecision.handler, {
+    params: readDecision.config.params,
+  })
+  .post("/decisions/search", searchDecisions.handler, {
+    body: searchDecisions.config.body,
+  })
+  .get("/decisions/:decisionId/analysis", generateDecisionAnalysis.handler, {
+    params: generateDecisionAnalysis.config.params,
+  });
 
 /**
  * Workspace-scoped routes: requires workspace access.
@@ -128,44 +205,13 @@ const caseLawMatterLinksRoute = new Elysia({
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })
-  .get(
-    "/",
-    async (ctx) =>
-      await listMatterLinksHandler({
-        workspaceId: ctx.workspaceId,
-        scopedDb: ctx.scopedDb,
-      }),
-  )
-  .post(
-    "/",
-    async (ctx) =>
-      await createMatterLinkHandler({
-        workspaceId: ctx.workspaceId,
-        userId: ctx.user.id,
-        body: ctx.body,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { entity: ["create"] },
-      body: createMatterLinkBodySchema,
-    },
-  )
-  .delete(
-    "/:linkId",
-    async (ctx) =>
-      await deleteMatterLinkHandler({
-        workspaceId: ctx.workspaceId,
-        linkId: ctx.params.linkId,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      permissions: { entity: ["delete"] },
-      params: t.Object({
-        workspaceId: tSafeId("workspace"),
-        linkId: tSafeId("caseLawMatterLink"),
-      }),
-    },
-  );
+  .get("/", listMatterLinks.handler)
+  .post("/", createMatterLink.handler, {
+    body: createMatterLink.config.body,
+  })
+  .delete("/:linkId", deleteMatterLink.handler, {
+    params: deleteMatterLink.config.params,
+  });
 
 /**
  * Admin routes: authenticated + admin/owner role.
@@ -183,10 +229,7 @@ const caseLawAdminRoute = new Elysia({
     }
     return undefined;
   })
-  .get(
-    "/ingestion/status",
-    async (ctx) => await getIngestionStatus(ctx.scopedDb),
-  );
+  .get("/ingestion/status", getCaseLawIngestionStatus.handler);
 
 export const caseLawRoute = new Elysia()
   .use(globalCaseLawRoute)

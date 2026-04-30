@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import Elysia from "elysia";
 
 import batchDelete from "@/api/handlers/time-entries/batch-delete";
@@ -22,8 +23,76 @@ import splitEntry from "@/api/handlers/time-entries/split";
 import timerStart from "@/api/handlers/time-entries/timer-start";
 import timerStop from "@/api/handlers/time-entries/timer-stop";
 import updateTimeEntryById from "@/api/handlers/time-entries/update-by-id";
+import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
+
+const exportCsv = createSafeHandler(
+  {
+    permissions: { workspace: ["read"] },
+    query: exportCsvQuerySchema,
+  } satisfies HandlerConfig,
+  async function* ({ query, scopedDb, session, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await exportCsvHandler({
+            workspaceId,
+            organizationId: session.activeOrganizationId,
+            query,
+            scopedDb,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const exportLedes = createSafeHandler(
+  {
+    permissions: { workspace: ["read"] },
+    query: exportLedesQuerySchema,
+  } satisfies HandlerConfig,
+  async function* ({ query, scopedDb, session, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await exportLedesHandler({
+            workspaceId,
+            organizationId: session.activeOrganizationId,
+            query,
+            scopedDb,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+const exportPdf = createSafeHandler(
+  {
+    permissions: { workspace: ["read"] },
+    query: exportPdfQuerySchema,
+  } satisfies HandlerConfig,
+  async function* ({ query, scopedDb, session, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await exportPdfHandler({
+            workspaceId,
+            organizationId: session.activeOrganizationId,
+            query,
+            scopedDb,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
 
 export const timeEntriesRoute = new Elysia({
   prefix: "/time-entries/:workspaceId",
@@ -71,42 +140,12 @@ export const timeEntriesRoute = new Elysia({
     invalidateQuery: true,
     body: splitEntry.config.body,
   })
-  .get(
-    "/export/csv",
-    async (ctx) =>
-      await exportCsvHandler({
-        workspaceId: ctx.workspaceId,
-        organizationId: ctx.session.activeOrganizationId,
-        query: ctx.query,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      query: exportCsvQuerySchema,
-    },
-  )
-  .get(
-    "/export/ledes",
-    async (ctx) =>
-      await exportLedesHandler({
-        workspaceId: ctx.workspaceId,
-        organizationId: ctx.session.activeOrganizationId,
-        query: ctx.query,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      query: exportLedesQuerySchema,
-    },
-  )
-  .get(
-    "/export/pdf",
-    async (ctx) =>
-      await exportPdfHandler({
-        workspaceId: ctx.workspaceId,
-        organizationId: ctx.session.activeOrganizationId,
-        query: ctx.query,
-        scopedDb: ctx.scopedDb,
-      }),
-    {
-      query: exportPdfQuerySchema,
-    },
-  );
+  .get("/export/csv", exportCsv.handler, {
+    query: exportCsv.config.query,
+  })
+  .get("/export/ledes", exportLedes.handler, {
+    query: exportLedes.config.query,
+  })
+  .get("/export/pdf", exportPdf.handler, {
+    query: exportPdf.config.query,
+  });
