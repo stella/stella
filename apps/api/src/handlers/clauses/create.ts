@@ -13,6 +13,7 @@ import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
+import { normalizeClauseMetadata } from "./metadata";
 import { updateSearchVector } from "./search-vector";
 import { clauseBodySchema } from "./shared-schemas";
 import type { ClauseBody } from "./types";
@@ -96,7 +97,7 @@ const createClauseHandler = async function* ({
           usageNotes: body.usageNotes ?? null,
           language: body.language ?? null,
           body: body.body,
-          metadata: body.metadata ?? null,
+          metadata: normalizeClauseMetadata(body.metadata) ?? null,
           currentVersion: 1,
           createdBy: userId,
         })

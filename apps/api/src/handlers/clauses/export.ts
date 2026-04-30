@@ -14,6 +14,7 @@ import type {
   ClauseExportItem,
   ClauseExportPayload,
 } from "./import-export-schema";
+import { normalizeClauseMetadata } from "./metadata";
 
 const exportQuerySchema = t.Object({
   ids: t.Optional(t.String()),
@@ -104,8 +105,7 @@ const exportHandler = async function* ({
     usageNotes: row.usageNotes,
     language: row.language,
     body: row.body,
-    // SAFETY: metadata is Record<string, unknown> stored as JSONB
-    metadata: row.metadata,
+    metadata: normalizeClauseMetadata(row.metadata) ?? null,
     categoryName: row.categoryId
       ? (categoryMap.get(row.categoryId)?.name ?? null)
       : null,

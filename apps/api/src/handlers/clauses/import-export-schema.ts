@@ -1,5 +1,6 @@
 import { isRecord } from "@/api/lib/type-guards";
 
+import type { ClauseMetadata } from "./metadata";
 import { isClauseBody } from "./types";
 import type { ClauseBody } from "./types";
 
@@ -9,7 +10,7 @@ export type ClauseExportItem = {
   usageNotes: string | null;
   language: string | null;
   body: ClauseBody;
-  metadata: Record<string, unknown> | null;
+  metadata: ClauseMetadata | Record<string, unknown> | null;
   categoryName: string | null;
   categoryPath: string[] | null;
 };
@@ -45,6 +46,13 @@ export const isClauseExportPayload = (
       return false;
     }
     if (!isClauseBody(clause["body"])) {
+      return false;
+    }
+    if (
+      clause["metadata"] !== undefined &&
+      clause["metadata"] !== null &&
+      !isRecord(clause["metadata"])
+    ) {
       return false;
     }
   }
