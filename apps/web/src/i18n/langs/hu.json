@@ -1370,6 +1370,7 @@
       "deleteAll": "Összes törlése",
       "deleteAllConfirm": "Törli az összes {count} elemet a(z) „{column}” oszlopban?",
       "hideColumn": "Oszlop elrejtése",
+      "readOnlyGrouping": "Ez a csoportosítás csak olvasható",
       "selectPropertyHint": "Válasszon egy tulajdonságot a csoportosításhoz az eszköztáron",
       "unknown": "Ismeretlen",
       "uploadDocument": "Dokumentum feltöltése",
@@ -1535,6 +1536,9 @@
       "documents": "Dokumentumok",
       "members": "Tagok",
       "parties": "Felek"
+    },
+    "table": {
+      "reorderReadOnly": "A táblázatsorok az aktuális rendezést követik"
     },
     "tasksCount": "{count, plural, one {# feladat} other {# feladat}}",
     "tools": {

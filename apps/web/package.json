@@ -48,6 +48,7 @@
     "@tanstack/react-router-devtools": "^1.166.13",
     "@tanstack/react-router-ssr-query": "^1.166.11",
     "@tanstack/react-table": "^8.21.3",
+    "@tanstack/react-virtual": "^3.13.12",
     "@tanstack/table-core": "^8.21.3",
     "@tiptap/extension-bold": "^3.22.4",
     "@tiptap/extension-document": "^3.22.4",

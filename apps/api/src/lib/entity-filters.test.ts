@@ -409,4 +409,28 @@ describe("buildSortExpressions", () => {
     expect(sql).toContain('ORDER BY "fields"."property_id" ASC');
     expect(sql.indexOf("fileName")).toBeLessThan(sql.indexOf("value"));
   });
+
+  test("metadata table sorts use entity columns, not property field subqueries", () => {
+    const dialect = new PgDialect();
+    const sortCases = [
+      { propertyId: "_created-at", column: '"created_at"' },
+      { propertyId: "_status", column: '"status"' },
+      { propertyId: "_priority", column: '"priority"' },
+      { propertyId: "_due-date", column: '"due_date"' },
+    ];
+
+    for (const { propertyId, column } of sortCases) {
+      const [sortExpression] = buildSortExpressions([
+        { propertyId, desc: false },
+      ]);
+      if (!sortExpression) {
+        throw new Error(`expected ${propertyId} sort expression`);
+      }
+
+      const sql = dialect.sqlToQuery(sortExpression).sql;
+
+      expect(sql).toContain(`"entities".${column}`);
+      expect(sql).not.toContain('"fields"."property_id" =');
+    }
+  });
 });

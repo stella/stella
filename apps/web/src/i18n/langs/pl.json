@@ -1370,6 +1370,7 @@
       "deleteAll": "Usuń wszystkie",
       "deleteAllConfirm": "Usunąć wszystkie {count} elementy z kolumny „{column}”?",
       "hideColumn": "Ukryj kolumnę",
+      "readOnlyGrouping": "To grupowanie jest tylko do odczytu",
       "selectPropertyHint": "Wybierz właściwość do grupowania na pasku narzędzi",
       "unknown": "Nieznany",
       "uploadDocument": "Prześlij dokument",
@@ -1535,6 +1536,9 @@
       "documents": "Dokumenty",
       "members": "Członkowie",
       "parties": "Strony"
+    },
+    "table": {
+      "reorderReadOnly": "Wiersze tabeli są zgodne z bieżącym sortowaniem"
     },
     "tasksCount": "{count, plural, one {# zadanie} few {# zadania} other {# zadań}}",
     "tools": {

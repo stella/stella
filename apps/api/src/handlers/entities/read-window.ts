@@ -2,6 +2,10 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { queryEntities } from "@/api/handlers/entities/query-entities";
+import {
+  decodeEntitiesWindowCursor,
+  encodeEntitiesWindowCursor,
+} from "@/api/handlers/entities/window-cursor";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -11,14 +15,19 @@ import {
   tViewSortSchema,
 } from "@/api/lib/views-schema";
 
-const readEntitiesBodySchema = t.Object({
+const readEntitiesWindowBodySchema = t.Object({
   filters: t.Optional(t.Array(tViewFilterConditionSchema)),
   sorts: t.Optional(t.Array(tViewSortSchema)),
-  page: t.Optional(t.Integer({ minimum: 1 })),
-  pageSize: t.Optional(
+  limit: t.Optional(
     t.Integer({
       minimum: 1,
-      maximum: LIMITS.entitiesPageSizeMax,
+      maximum: LIMITS.entitiesWindowSizeMax,
+    }),
+  ),
+  cursor: t.Optional(t.String({ maxLength: 512 })),
+  excludedKinds: t.Optional(
+    t.Array(t.UnionEnum(["document", "folder", "task", "message", "link"]), {
+      maxItems: 5,
     }),
   ),
   fieldMode: t.Optional(t.UnionEnum(["full", "visible"])),
@@ -31,14 +40,19 @@ const readEntitiesBodySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
-  body: readEntitiesBodySchema,
+  body: readEntitiesWindowBodySchema,
 } satisfies HandlerConfig;
 
-const readEntities = createSafeHandler(
+const readEntitiesWindow = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, session, body, user: currentUser }) {
-    const page = body.page ?? 1;
-    const pageSize = body.pageSize ?? LIMITS.entitiesPageSizeDefault;
+    const cursorResult = decodeEntitiesWindowCursor(body.cursor);
+    if (Result.isError(cursorResult)) {
+      return Result.err(cursorResult.error);
+    }
+
+    const offset = cursorResult.value;
+    const limit = body.limit ?? LIMITS.entitiesWindowSizeDefault;
     const result = yield* Result.await(
       queryEntities({
         safeDb,
@@ -47,22 +61,24 @@ const readEntities = createSafeHandler(
         currentOrganizationId: session.activeOrganizationId,
         filters: body.filters ?? [],
         sorts: body.sorts ?? [],
-        offset: (page - 1) * pageSize,
-        limit: pageSize,
+        offset,
+        limit: limit + 1,
         fieldMode: body.fieldMode ?? "full",
         fieldIds: body.fieldIds ?? [],
-        excludedKinds: [],
-        includeTotalCount: true,
+        excludedKinds: body.excludedKinds ?? [],
+        includeTotalCount: false,
       }),
     );
 
+    const hasMore = result.entities.length > limit;
+    const entities = result.entities.slice(0, limit);
+
     return Result.ok({
-      entities: result.entities,
-      totalCount: result.totalCount ?? 0,
-      page,
-      pageSize,
+      entities,
+      limit,
+      nextCursor: hasMore ? encodeEntitiesWindowCursor(offset + limit) : null,
     });
   },
 );
 
-export default readEntities;
+export default readEntitiesWindow;

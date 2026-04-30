@@ -1370,6 +1370,7 @@
       "deleteAll": "Tout supprimer",
       "deleteAllConfirm": "Supprimer les {count} éléments de « {column} » ?",
       "hideColumn": "Masquer la colonne",
+      "readOnlyGrouping": "Ce regroupement est en lecture seule",
       "selectPropertyHint": "Sélectionnez une propriété de regroupement dans la barre d'outils",
       "unknown": "Inconnu",
       "uploadDocument": "Téléverser un document",
@@ -1535,6 +1536,9 @@
       "documents": "Documents",
       "members": "Membres",
       "parties": "Parties"
+    },
+    "table": {
+      "reorderReadOnly": "Les lignes du tableau suivent le tri actuel"
     },
     "tasksCount": "{count, plural, one {# tâche} other {# tâches}}",
     "tools": {

@@ -1,12 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import { flexRender } from "@tanstack/react-table";
 import type { Table as ReactTable, Row } from "@tanstack/react-table";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronRightIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { Checkbox } from "@stella/ui/components/checkbox";
+import { toastManager } from "@stella/ui/components/toast";
 import { cn } from "@stella/ui/lib/utils";
 
 import { renderDragPreview } from "@/components/drag-preview";
@@ -39,13 +45,25 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const selectColId = getInternalColId("select");
+const TABLE_ROW_ESTIMATE_PX = 41;
+const TABLE_ROW_OVERSCAN = 16;
 
 type WorkspaceTableProps = {
   workspaceId: string;
   table: WorkspaceTableType;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  onLoadMore?: () => void;
 };
 
-export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
+export const WorkspaceTable = ({
+  workspaceId,
+  table,
+  hasNextPage = false,
+  isFetchingNextPage = false,
+  onLoadMore,
+}: WorkspaceTableProps) => {
+  const t = useTranslations();
   const tableWrapperRef = useRef<HTMLDivElement>(null);
   const lastSelectedIndex = useRef<number | null>(null);
   const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
@@ -56,7 +74,7 @@ export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
     if (!s.activeId) {
       return null;
     }
-    const tab = s.tabs.find((t) => t.id === s.activeId);
+    const tab = s.tabs.find((candidate) => candidate.id === s.activeId);
     return tab?.type === "pdf" ? tab.entityId : null;
   });
 
@@ -64,7 +82,7 @@ export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
     if (!s.activeId) {
       return null;
     }
-    const tab = s.tabs.find((t) => t.id === s.activeId);
+    const tab = s.tabs.find((candidate) => candidate.id === s.activeId);
     return tab?.type === "task" ? tab.id : null;
   });
 
@@ -96,6 +114,62 @@ export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
     }
     return labels;
   }, [rowModel]);
+  const getVirtualRowKey = useCallback(
+    (index: number) =>
+      rowModel.rows.at(index)?.original.entityId ?? `table-row-${index}`,
+    [rowModel.rows],
+  );
+  const rowVirtualizer = useVirtualizer({
+    count: rowModel.rows.length,
+    getScrollElement: () => tableWrapperRef.current,
+    estimateSize: () => TABLE_ROW_ESTIMATE_PX,
+    getItemKey: getVirtualRowKey,
+    overscan: TABLE_ROW_OVERSCAN,
+  });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const lastVirtualRow = virtualRows.at(-1);
+  useEffect(() => {
+    if (!hasNextPage || isFetchingNextPage || !onLoadMore || !lastVirtualRow) {
+      return;
+    }
+
+    const shouldLoadMore =
+      lastVirtualRow.index >= rowModel.rows.length - 1 - TABLE_ROW_OVERSCAN;
+    if (shouldLoadMore) {
+      onLoadMore();
+    }
+  }, [
+    hasNextPage,
+    isFetchingNextPage,
+    lastVirtualRow,
+    onLoadMore,
+    rowModel.rows.length,
+  ]);
+  const paddingTop = virtualRows.at(0)?.start ?? 0;
+  const paddingBottom =
+    rowVirtualizer.getTotalSize() - (virtualRows.at(-1)?.end ?? 0);
+  const visibleColumnCount = table.getVisibleLeafColumns().length;
+
+  useEffect(() => {
+    const element = tableWrapperRef.current;
+    if (!element) {
+      return undefined;
+    }
+
+    return dropTargetForElements({
+      element,
+      canDrop: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
+      onDrop: ({ source }) => {
+        if (source.data["type"] !== ENTITY_DRAG_TYPE) {
+          return;
+        }
+        toastManager.add({
+          title: t("workspaces.table.reorderReadOnly"),
+          type: "info",
+        });
+      },
+    });
+  }, [t]);
 
   return (
     <div className="relative h-full flex-1 overflow-auto" ref={tableWrapperRef}>
@@ -149,29 +223,52 @@ export const WorkspaceTable = ({ workspaceId, table }: WorkspaceTableProps) => {
           ))}
         </TableHeader>
         <TableBody>
-          {rowModel.rows.map((row, index) => (
-            <DraggableRow
-              activeEntityId={activeEntityId}
-              activeTaskId={activeTaskId}
-              editingEntityId={editingEntityId}
-              index={index}
-              key={row.id}
-              lastSelectedIndex={lastSelectedIndex}
-              onRename={(entityId, newName) => {
-                renameEntity.mutate({
-                  workspaceId,
-                  entityId,
-                  name: newName,
-                });
-              }}
-              onStartEditing={setEditingEntityId}
-              onStopEditing={() => setEditingEntityId(null)}
-              row={row}
-              rowLabel={rowLabels[index] ?? ""}
-              table={table}
-              workspaceId={workspaceId}
-            />
-          ))}
+          {paddingTop > 0 && (
+            <TableRow aria-hidden="true">
+              <TableCell
+                colSpan={visibleColumnCount}
+                style={{ height: paddingTop, padding: 0 }}
+              />
+            </TableRow>
+          )}
+          {virtualRows.map((virtualRow) => {
+            const row = rowModel.rows.at(virtualRow.index);
+            if (!row) {
+              return null;
+            }
+
+            return (
+              <DraggableRow
+                activeEntityId={activeEntityId}
+                activeTaskId={activeTaskId}
+                editingEntityId={editingEntityId}
+                index={virtualRow.index}
+                key={row.id}
+                lastSelectedIndex={lastSelectedIndex}
+                onRename={(entityId, newName) => {
+                  renameEntity.mutate({
+                    workspaceId,
+                    entityId,
+                    name: newName,
+                  });
+                }}
+                onStartEditing={setEditingEntityId}
+                onStopEditing={() => setEditingEntityId(null)}
+                row={row}
+                rowLabel={rowLabels[virtualRow.index] ?? ""}
+                table={table}
+                workspaceId={workspaceId}
+              />
+            );
+          })}
+          {paddingBottom > 0 && (
+            <TableRow aria-hidden="true">
+              <TableCell
+                colSpan={visibleColumnCount}
+                style={{ height: paddingBottom, padding: 0 }}
+              />
+            </TableRow>
+          )}
           <BottomRow
             onFolderCreated={setEditingEntityId}
             table={table}

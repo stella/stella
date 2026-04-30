@@ -17,6 +17,7 @@ import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/el
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -61,6 +62,7 @@ import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-comp
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
+import { flattenFilesystemRows } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-virtualization";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
@@ -76,7 +78,10 @@ import {
   useRenameEntity,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
-import { useEntitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import {
+  useEntitiesOptions,
+  visibleEntityFieldIds,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
@@ -89,7 +94,10 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 import type { InternalPropertyId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
-const INDENT_PER_LEVEL = 20;
+const FILESYSTEM_ROW_HEIGHT_PX = 36;
+const FILESYSTEM_ROW_OVERSCAN = 16;
+const FILESYSTEM_INDENT_PX = 20;
+const FILESYSTEM_GUIDE_OFFSET_PX = 10;
 
 // -- Column descriptors --
 
@@ -287,6 +295,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   const { filters, sorts, hiddenProperties } = view.layout;
   const primarySort = sorts.at(0) ?? null;
+  const fieldIds = useMemo(
+    () => visibleEntityFieldIds({ hiddenProperties, properties }),
+    [hiddenProperties, properties],
+  );
 
   const handleSortColumn = useCallback(
     (propertyId: string) => {
@@ -314,6 +326,8 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       filters,
       sorts,
       page: 1,
+      fieldMode: "visible",
+      fieldIds,
     }),
   );
   const data = useMemo(
@@ -549,6 +563,20 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     [],
   );
 
+  const flattenedRows = useMemo(
+    () => flattenFilesystemRows(visibleNodes, expandedIds),
+    [visibleNodes, expandedIds],
+  );
+  const rowsViewportRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: flattenedRows.length,
+    getScrollElement: () => rowsViewportRef.current,
+    estimateSize: () => FILESYSTEM_ROW_HEIGHT_PX,
+    getItemKey: (index) => flattenedRows.at(index)?.node.entityId ?? index,
+    overscan: FILESYSTEM_ROW_OVERSCAN,
+  });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+
   const [isRootDropTarget, setIsRootDropTarget] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
   const rootBarRef = useRef<HTMLDivElement>(null);
@@ -636,7 +664,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     // TODO: fix this
     // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events
     <div
-      className="h-full flex-1 overflow-auto p-2"
+      className="flex h-full flex-1 flex-col overflow-hidden p-2"
       onClick={(e) => {
         // Clear selection when clicking empty background
         // (not inside a row).
@@ -764,39 +792,62 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         <FolderIcon className="size-3.5" />
         {t("workspaces.filesystem.moveToRoot")}
       </div>
-      <div className="mt-1">
-        {visibleNodes.map((node) => (
-          <FilesystemRow
-            ancestorIds={new Set<string>()}
-            currentFolderId={currentFolderId}
-            depth={currentFolderId ? 0 : undefined}
-            editingEntityId={editingEntityId}
-            expandedIds={expandedIds}
-            extraColumns={extraColumns}
-            getSelectedDragItems={getSelectedDragItems}
-            getSelectedEntities={getSelectedEntities}
-            gridTemplate={gridTemplate}
-            key={node.entityId}
-            node={node}
-            // eslint-disable-next-line typescript/no-misused-promises
-            onNavigateToFolder={navigateToFolder}
-            onRename={(entityId, newName) => {
-              renameEntity.mutate({
-                workspaceId,
-                entityId,
-                name: newName,
-              });
-            }}
-            onSelect={handleSelect}
-            onStartEditing={setEditingEntityId}
-            onSubfolderCreated={handleSubfolderCreated}
-            onToggleFolder={toggleFolder}
-            selectedIds={selectedIds}
-            workspaceId={workspaceId}
-          />
-        ))}
+      <div className="mt-1 min-h-0 flex-1 overflow-auto" ref={rowsViewportRef}>
+        <div
+          className="relative"
+          style={{ height: rowVirtualizer.getTotalSize() }}
+        >
+          {virtualRows.map((virtualRow) => {
+            const row = flattenedRows.at(virtualRow.index);
+            if (!row) {
+              return null;
+            }
+
+            return (
+              <div
+                className="absolute inset-x-0 top-0 w-full"
+                data-index={virtualRow.index}
+                key={row.node.entityId}
+                style={{
+                  height: virtualRow.size,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                <FilesystemRow
+                  ancestorIds={row.ancestorIds}
+                  currentFolderId={currentFolderId}
+                  depth={row.depth}
+                  editingEntityId={editingEntityId}
+                  expandedIds={expandedIds}
+                  extraColumns={extraColumns}
+                  getSelectedDragItems={getSelectedDragItems}
+                  getSelectedEntities={getSelectedEntities}
+                  gridTemplate={gridTemplate}
+                  guideDepths={row.guideDepths}
+                  isLast={row.isLast}
+                  node={row.node}
+                  // eslint-disable-next-line typescript/no-misused-promises
+                  onNavigateToFolder={navigateToFolder}
+                  onRename={(entityId, newName) => {
+                    renameEntity.mutate({
+                      workspaceId,
+                      entityId,
+                      name: newName,
+                    });
+                  }}
+                  onSelect={handleSelect}
+                  onStartEditing={setEditingEntityId}
+                  onSubfolderCreated={handleSubfolderCreated}
+                  onToggleFolder={toggleFolder}
+                  selectedIds={selectedIds}
+                  workspaceId={workspaceId}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
-      <div className="mt-2 px-2">
+      <div className="mt-2 shrink-0 px-2">
         <AddEntityMenu
           onFolderCreated={setEditingEntityId}
           parentId={currentFolderId}
@@ -971,6 +1022,8 @@ const ColumnHeaderCell = ({
 type FilesystemRowProps = {
   node: TableTreeNode;
   depth: number | undefined;
+  guideDepths: number[];
+  isLast: boolean;
   workspaceId: string;
   extraColumns: ExtraColumn[];
   gridTemplate: string;
@@ -992,6 +1045,8 @@ type FilesystemRowProps = {
 const FilesystemRow = ({
   node,
   depth = 0,
+  guideDepths,
+  isLast,
   workspaceId,
   extraColumns,
   gridTemplate,
@@ -1240,9 +1295,10 @@ const FilesystemRow = ({
   // Shared cells: Name + Type
   const nameCell = (
     <span
-      className="flex min-w-0 items-center gap-1.5"
-      style={{ paddingLeft: `${depth * 20}px` }}
+      className="relative flex min-w-0 items-center gap-1.5"
+      style={{ paddingLeft: `${depth * FILESYSTEM_INDENT_PX}px` }}
     >
+      <TreeGuideLines depth={depth} guideDepths={guideDepths} isLast={isLast} />
       {isFolder ? (
         <ChevronRightIcon
           className={cn(
@@ -1304,7 +1360,7 @@ const FilesystemRow = ({
   ));
 
   const gridCls = cn(
-    "hover:bg-muted grid w-full items-center gap-x-4 rounded px-2 py-1 text-start text-sm",
+    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded px-2 text-start text-sm",
     isDropTarget && "bg-accent ring-primary ring-2",
     isSelected && "bg-accent",
   );
@@ -1413,89 +1469,91 @@ const FilesystemRow = ({
   );
 
   return (
-    <>
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-      <div
-        className="group/row relative"
-        data-entity-row
-        onContextMenu={handleContextMenu}
-        ref={rowRef}
-      >
-        {isFolder ? (
-          <div
-            className={gridCls}
-            style={{ gridTemplateColumns: gridTemplate }}
-          >
-            <button
-              className="text-start"
-              onClick={() => {
-                if (currentFolderId) {
-                  onNavigateToFolder(node.entityId);
-                } else {
-                  onToggleFolder(node.entityId);
-                }
-              }}
-              onDoubleClick={() => onNavigateToFolder(node.entityId)}
-              style={contentSpanStyle}
-              type="button"
-            >
-              {contentCells}
-            </button>
-            {rowActionsNode}
-          </div>
-        ) : (
-          <div
-            className={gridCls}
-            style={{ gridTemplateColumns: gridTemplate }}
-          >
-            <button
-              onClick={(e) => onSelect(node.entityId, e.metaKey || e.ctrlKey)}
-              onDoubleClick={() => openInInspector?.()}
-              style={contentSpanStyle}
-              type="button"
-            >
-              {contentCells}
-            </button>
-            {rowActionsNode}
-          </div>
-        )}
-      </div>
-      {isFolder && expanded && node.children.length > 0 && (
-        <div className="relative">
-          {/* Tree guide line — aligned under parent chevron */}
-          <div
-            className="bg-muted-foreground/20 absolute top-0 bottom-0 w-px"
-            style={{
-              left: `${8 + depth * INDENT_PER_LEVEL + 7}px`,
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+    <div
+      className="group/row relative h-full"
+      data-entity-row
+      onContextMenu={handleContextMenu}
+      ref={rowRef}
+    >
+      {isFolder ? (
+        <div className={gridCls} style={{ gridTemplateColumns: gridTemplate }}>
+          <button
+            className="text-start"
+            onClick={() => {
+              if (currentFolderId) {
+                onNavigateToFolder(node.entityId);
+              } else {
+                onToggleFolder(node.entityId);
+              }
             }}
-          />
-          {node.children.map((child) => (
-            <FilesystemRow
-              ancestorIds={new Set([...ancestorIds, node.entityId])}
-              currentFolderId={currentFolderId}
-              depth={depth + 1}
-              editingEntityId={editingEntityId}
-              expandedIds={expandedIds}
-              extraColumns={extraColumns}
-              getSelectedDragItems={getSelectedDragItems}
-              getSelectedEntities={getSelectedEntities}
-              gridTemplate={gridTemplate}
-              key={child.entityId}
-              node={child}
-              onNavigateToFolder={onNavigateToFolder}
-              onRename={onRename}
-              onSelect={onSelect}
-              onStartEditing={onStartEditing}
-              onSubfolderCreated={onSubfolderCreated}
-              onToggleFolder={onToggleFolder}
-              selectedIds={selectedIds}
-              workspaceId={workspaceId}
-            />
-          ))}
+            onDoubleClick={() => onNavigateToFolder(node.entityId)}
+            style={contentSpanStyle}
+            type="button"
+          >
+            {contentCells}
+          </button>
+          {rowActionsNode}
+        </div>
+      ) : (
+        <div className={gridCls} style={{ gridTemplateColumns: gridTemplate }}>
+          <button
+            onClick={(e) => onSelect(node.entityId, e.metaKey || e.ctrlKey)}
+            onDoubleClick={() => openInInspector?.()}
+            style={contentSpanStyle}
+            type="button"
+          >
+            {contentCells}
+          </button>
+          {rowActionsNode}
         </div>
       )}
-    </>
+    </div>
+  );
+};
+
+type TreeGuideLinesProps = {
+  depth: number;
+  guideDepths: readonly number[];
+  isLast: boolean;
+};
+
+const TreeGuideLines = ({
+  depth,
+  guideDepths,
+  isLast,
+}: TreeGuideLinesProps) => {
+  if (depth === 0) {
+    return null;
+  }
+
+  const currentLineLeft =
+    depth * FILESYSTEM_INDENT_PX - FILESYSTEM_GUIDE_OFFSET_PX;
+
+  return (
+    <span aria-hidden="true" className="pointer-events-none absolute inset-y-0">
+      {guideDepths.map((guideDepth) => (
+        <span
+          className="bg-muted-foreground/20 absolute top-0 bottom-0 w-px"
+          key={guideDepth}
+          style={{
+            left:
+              guideDepth * FILESYSTEM_INDENT_PX + FILESYSTEM_GUIDE_OFFSET_PX,
+          }}
+        />
+      ))}
+      <span
+        className={cn(
+          "bg-muted-foreground/20 absolute top-0 w-px",
+          isLast ? "h-1/2" : "bottom-0",
+        )}
+        style={{ left: currentLineLeft }}
+      />
+      <span
+        className="bg-muted-foreground/20 absolute top-1/2 h-px w-2"
+        style={{ left: currentLineLeft }}
+      />
+    </span>
   );
 };
 

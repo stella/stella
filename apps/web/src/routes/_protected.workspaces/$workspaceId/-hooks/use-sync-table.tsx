@@ -1,13 +1,20 @@
+import { useMemo } from "react";
+
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 
-import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
+import {
+  chunkJustificationEntityIds,
+  useSyncJustificationChunks,
+} from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { useEntitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
-type UseSyncTableProps = Parameters<typeof useEntitiesOptions>[0];
+type UseSyncTableProps = Parameters<typeof useEntitiesOptions>[0] & {
+  syncJustifications?: boolean;
+};
 
 export const useSyncTable = (activeView: UseSyncTableProps) => {
-  const { workspaceId } = activeView;
+  const { syncJustifications = true, workspaceId } = activeView;
 
   const { data: entityIds } = useSuspenseQuery({
     ...useEntitiesOptions(activeView),
@@ -20,5 +27,11 @@ export const useSyncTable = (activeView: UseSyncTableProps) => {
   // just subscribe to the cached query here.
   useQuery(propertiesOptions(workspaceId));
 
-  useSyncJustifications(entityIds);
+  const justificationEntityIdChunks = useMemo(
+    () => chunkJustificationEntityIds(entityIds),
+    [entityIds],
+  );
+  useSyncJustificationChunks(justificationEntityIdChunks, {
+    enabled: syncJustifications,
+  });
 };

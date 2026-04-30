@@ -322,10 +322,26 @@ const internalSortExpr = (
       )`;
       return dir(sub);
     }
+    case "_created-at":
+      return direction
+        ? sql`${entities.createdAt} DESC`
+        : sql`${entities.createdAt} ASC`;
     case "_updated-at":
       return direction
         ? sql`${entities.updatedAt} DESC NULLS LAST`
         : sql`${entities.updatedAt} ASC NULLS FIRST`;
+    case "_status":
+      return direction
+        ? sql`${entities.status} DESC NULLS LAST`
+        : sql`${entities.status} ASC NULLS LAST`;
+    case "_priority":
+      return direction
+        ? sql`${entities.priority} DESC NULLS LAST`
+        : sql`${entities.priority} ASC NULLS LAST`;
+    case "_due-date":
+      return direction
+        ? sql`${entities.dueDate} DESC NULLS LAST`
+        : sql`${entities.dueDate} ASC NULLS LAST`;
     case "_version": {
       const sub = sql`(
         SELECT COUNT(*) FROM ${entityVersions}

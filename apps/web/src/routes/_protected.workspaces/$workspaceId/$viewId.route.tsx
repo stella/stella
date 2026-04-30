@@ -20,17 +20,22 @@ import type { WorkspaceView } from "@/lib/types";
 import { EntityPagination } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-pagination";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
+import { chunkJustificationEntityIds } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { useSyncTable } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-table";
 import {
   entitiesOptions,
+  entitiesWindowOptions,
   useEntitiesOptions,
+  visibleEntityFieldIds,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { timeEntriesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 import { justificationsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { workspaceMembersOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
 import {
   getWeekStart,
+  resolveKanbanGroupBy,
   toISODate,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
@@ -120,6 +125,53 @@ export const Route = createFileRoute(
       return;
     }
 
+    const shouldLoadViewProperties =
+      activeView.layout.type === "filesystem" ||
+      activeView.layout.type === "table" ||
+      activeView.layout.type === "kanban";
+    const properties = shouldLoadViewProperties
+      ? await ensureCriticalQueryData(
+          queryClient,
+          propertiesOptions(workspaceId),
+        )
+      : [];
+    const requiredPropertyIds =
+      activeView.layout.type === "kanban"
+        ? [
+            resolveKanbanGroupBy(
+              activeView.layout.groupByPropertyId ?? "",
+              properties,
+            ),
+          ]
+        : [];
+    const shouldLoadVisibleFields =
+      activeView.layout.type === "filesystem" ||
+      activeView.layout.type === "table" ||
+      activeView.layout.type === "kanban";
+    const fieldIds = shouldLoadVisibleFields
+      ? visibleEntityFieldIds({
+          hiddenProperties: activeView.layout.hiddenProperties,
+          properties,
+          requiredPropertyIds,
+        })
+      : [];
+    const fieldMode = shouldLoadVisibleFields ? "visible" : "full";
+
+    if (activeView.layout.type === "table") {
+      await queryClient.ensureInfiniteQueryData(
+        entitiesWindowOptions({
+          workspaceId,
+          filters: activeView.layout.filters,
+          sorts: activeView.layout.sorts,
+          limit: 200,
+          excludedKinds: ["folder", "task"],
+          fieldMode,
+          fieldIds,
+        }),
+      );
+      return;
+    }
+
     const entities = await ensureCriticalQueryData(
       queryClient,
       entitiesOptions({
@@ -127,6 +179,8 @@ export const Route = createFileRoute(
         filters: activeView.layout.filters,
         sorts: activeView.layout.sorts,
         page: deps.page,
+        fieldMode,
+        fieldIds,
       }),
     );
 
@@ -134,17 +188,21 @@ export const Route = createFileRoute(
       return;
     }
 
-    const entityIds = [
-      ...new Set(entities.entities.map((entity) => entity.entityId)),
-    ].toSorted();
+    if (activeView.layout.type === "filesystem") {
+      return;
+    }
 
-    void prefetchNonCriticalQuery(
-      queryClient,
-      justificationsOptions({ workspaceId, entityIds }),
-      (error: unknown) => {
-        getAnalytics().captureError(error);
-      },
-    );
+    for (const entityIds of chunkJustificationEntityIds(
+      entities.entities.map((entity) => entity.entityId),
+    )) {
+      void prefetchNonCriticalQuery(
+        queryClient,
+        justificationsOptions({ workspaceId, entityIds }),
+        (error: unknown) => {
+          getAnalytics().captureError(error);
+        },
+      );
+    }
   },
 });
 
@@ -189,11 +247,100 @@ type EntityViewContentProps = ViewContentProps & {
   page: number;
 };
 
+type VisibleFieldsView = WorkspaceView & {
+  layout: Extract<WorkspaceView["layout"], { type: "filesystem" | "kanban" }>;
+};
+
 function OverviewViewContent({ activeView, workspaceId }: ViewContentProps) {
   return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
 }
 
 function EntityViewContent({
+  activeView,
+  page,
+  workspaceId,
+}: EntityViewContentProps) {
+  if (hasVisibleFieldsLayout(activeView)) {
+    return (
+      <VisibleFieldEntityViewContent
+        activeView={activeView}
+        page={page}
+        workspaceId={workspaceId}
+      />
+    );
+  }
+
+  if (activeView.layout.type === "table") {
+    return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
+  }
+
+  return (
+    <FullEntityViewContent
+      activeView={activeView}
+      page={page}
+      workspaceId={workspaceId}
+    />
+  );
+}
+
+const hasVisibleFieldsLayout = (
+  view: WorkspaceView,
+): view is VisibleFieldsView =>
+  view.layout.type === "filesystem" || view.layout.type === "kanban";
+
+function VisibleFieldEntityViewContent({
+  activeView,
+  page,
+  workspaceId,
+}: EntityViewContentProps & { activeView: VisibleFieldsView }) {
+  const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
+  const requiredPropertyIds =
+    activeView.layout.type === "kanban"
+      ? [
+          resolveKanbanGroupBy(
+            activeView.layout.groupByPropertyId ?? "",
+            properties,
+          ),
+        ]
+      : [];
+  const fieldIds = visibleEntityFieldIds({
+    hiddenProperties: activeView.layout.hiddenProperties,
+    properties,
+    requiredPropertyIds,
+  });
+
+  useSyncTable({
+    workspaceId,
+    filters: activeView.layout.filters ?? [],
+    sorts: activeView.layout.sorts ?? [],
+    page,
+    fieldMode: "visible",
+    fieldIds,
+  });
+
+  const { data } = useSuspenseQuery(
+    useEntitiesOptions({
+      workspaceId,
+      filters: activeView.layout.filters,
+      sorts: activeView.layout.sorts,
+      page,
+      fieldMode: "visible",
+      fieldIds,
+    }),
+  );
+  const totalPages = Math.ceil(data.totalCount / data.pageSize);
+
+  return (
+    <ViewShell
+      activeView={activeView}
+      page={page}
+      totalPages={totalPages}
+      workspaceId={workspaceId}
+    />
+  );
+}
+
+function FullEntityViewContent({
   activeView,
   page,
   workspaceId,

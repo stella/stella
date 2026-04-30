@@ -1370,6 +1370,7 @@
       "deleteAll": "Eliminar todo",
       "deleteAllConfirm": "¿Eliminar los {count} elementos de \"{column}\"?",
       "hideColumn": "Ocultar columna",
+      "readOnlyGrouping": "Esta agrupación es de solo lectura",
       "selectPropertyHint": "Seleccione una propiedad para agrupar en la barra de herramientas",
       "unknown": "Desconocido",
       "uploadDocument": "Subir documento",
@@ -1535,6 +1536,9 @@
       "documents": "Documentos",
       "members": "Miembros",
       "parties": "Partes"
+    },
+    "table": {
+      "reorderReadOnly": "Las filas de la tabla siguen el orden actual"
     },
     "tasksCount": "{count, plural, one {# tarea} other {# tareas}}",
     "tools": {

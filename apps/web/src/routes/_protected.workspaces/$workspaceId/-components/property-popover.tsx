@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Field } from "@base-ui/react/field";
 import { Form } from "@base-ui/react/form";
 import { revalidateLogic, useForm, useStore } from "@tanstack/react-form";
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { EyeOffIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -36,11 +36,10 @@ import {
   SortProperty,
   toSortHint,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
+import { getEntityIdsOrderFromRows } from "@/routes/_protected.workspaces/$workspaceId/-components/property-popover.logic";
 import type { TableHeader } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
-import { useActiveView } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-active-view";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { useUpdateProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
-import { useEntitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
@@ -196,8 +195,6 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
   const isWorkflowRunning = useIsWorkflowRunning();
   const updateProperty = useUpdateProperty();
   const startWorkflow = useStartWorkflow();
-  const activeView = useActiveView();
-  const { data: entityData } = useSuspenseQuery(useEntitiesOptions(activeView));
   const form = useForm({
     defaultValues: getDefaultValues(property),
     validationLogic: revalidateLogic(),
@@ -226,8 +223,18 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
               return;
             }
 
-            void startWorkflow({
-              entityIdsOrder: entityData.entities.map((e) => e.entityId),
+            const entityIdsOrder = getEntityIdsOrderFromRows(
+              header.getContext().table.getRowModel().rows,
+            );
+            void startWorkflow(
+              entityIdsOrder.length > 0 ? { entityIdsOrder } : undefined,
+            ).then((result) => {
+              if (result === undefined) {
+                toastManager.add({
+                  title: t("errors.actionFailed"),
+                  type: "error",
+                });
+              }
             });
           },
           onError: () => {

@@ -1370,6 +1370,7 @@
       "deleteAll": "Dzēst visus",
       "deleteAllConfirm": "Dzēst visus {count} vienumus slejā \"{column}\"?",
       "hideColumn": "Paslēpt sleju",
+      "readOnlyGrouping": "Šis grupējums ir tikai lasāms",
       "selectPropertyHint": "Rīkjoslā izvēlieties rekvizītu grupēšanai",
       "unknown": "Nezināms",
       "uploadDocument": "Augšupielādēt dokumentu",
@@ -1535,6 +1536,9 @@
       "documents": "Dokumenti",
       "members": "Dalībnieki",
       "parties": "Puses"
+    },
+    "table": {
+      "reorderReadOnly": "Tabulas rindas seko pašreizējai kārtošanai"
     },
     "tasksCount": "{count, plural, one {# uzdevums} other {# uzdevumi}}",
     "tools": {
