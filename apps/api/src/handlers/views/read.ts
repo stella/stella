@@ -7,22 +7,26 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { getDefaultViews } from "@/api/lib/views";
+import { parseViewLayout } from "@/api/lib/views-schema";
 
 const config = {
   permissions: { workspace: ["read"] },
 } satisfies HandlerConfig;
 
-const toViewResponse = (view: {
-  id: string;
-  name: string;
-  layout: (typeof workspaceViews.$inferSelect)["layout"];
-  position: number;
-  createdAt: Date;
-}) => ({
+const toViewResponse = (
+  view: {
+    id: string;
+    name: string;
+    layout: (typeof workspaceViews.$inferSelect)["layout"];
+    position: number;
+    createdAt: Date;
+  },
+  layout = parseViewLayout(view.layout),
+) => ({
   version: 1 as const,
   id: view.id,
   name: view.name,
-  layout: view.layout,
+  layout,
   position: view.position,
   createdAt: view.createdAt.toISOString(),
 });
@@ -71,10 +75,10 @@ const readViews = createSafeHandler(
               .orderBy(workspaceViews.position),
           ),
         );
-        return Result.ok(existing.map(toViewResponse));
+        return Result.ok(existing.map((view) => toViewResponse(view)));
       }
 
-      return Result.ok(inserted.map(toViewResponse));
+      return Result.ok(inserted.map((view) => toViewResponse(view)));
     }
 
     // Clean stale property references from layouts.
@@ -91,8 +95,9 @@ const readViews = createSafeHandler(
 
     return Result.ok(
       views.map((view) => {
-        cleanStalePropertyIds(view.layout, propertyIds);
-        return toViewResponse(view);
+        const layout = parseViewLayout(view.layout);
+        cleanStalePropertyIds(layout, propertyIds);
+        return toViewResponse(view, layout);
       }),
     );
   },

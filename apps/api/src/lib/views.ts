@@ -30,6 +30,7 @@ const emptyLayout = (
 
   if (type === "table") {
     return {
+      version: 1,
       type,
       ...base,
       columnOrder: [],
@@ -39,13 +40,14 @@ const emptyLayout = (
 
   if (type === "kanban") {
     return {
+      version: 1,
       type,
       ...base,
       groupByPropertyId: "_status",
     };
   }
 
-  return { type, ...base };
+  return { version: 1, type, ...base };
 };
 
 const VIEW_NAMES = {

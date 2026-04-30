@@ -11,7 +11,10 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { broadcast } from "@/api/lib/sse";
-import { tCreateViewInputSchema } from "@/api/lib/views-schema";
+import {
+  parseViewLayout,
+  tCreateViewInputSchema,
+} from "@/api/lib/views-schema";
 
 const config = {
   permissions: { view: ["create"] },
@@ -21,7 +24,7 @@ const config = {
 const createView = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, body }) {
-    const { layout } = body;
+    const layout = parseViewLayout(body.layout);
 
     if (hasDuplicateSorts(layout.sorts)) {
       return Result.err(

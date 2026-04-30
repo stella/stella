@@ -12,7 +12,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
 import type { ViewLayout } from "@/api/lib/views-schema";
-import { tUpdateViewBodySchema } from "@/api/lib/views-schema";
+import { parseViewLayout, tUpdateViewBodySchema } from "@/api/lib/views-schema";
 
 const config = {
   permissions: { view: ["update"] },
@@ -42,7 +42,7 @@ const updateView = createSafeHandler(
 
     let parsedLayout: ViewLayout | undefined;
     if (body.layout !== undefined) {
-      parsedLayout = body.layout;
+      parsedLayout = parseViewLayout(body.layout);
 
       if (hasDuplicateSorts(parsedLayout.sorts)) {
         return Result.err(
@@ -60,7 +60,8 @@ const updateView = createSafeHandler(
           }),
         );
       }
-      if (existing.layout.type !== parsedLayout.type) {
+      const existingLayout = parseViewLayout(existing.layout);
+      if (existingLayout.type !== parsedLayout.type) {
         return Result.err(
           new HandlerError({
             status: 400,

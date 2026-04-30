@@ -9,6 +9,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
+import { parseViewLayout } from "@/api/lib/views-schema";
 
 const VIEW_LAYOUT_TYPES = [
   "overview",
@@ -52,7 +53,8 @@ const convertView = createSafeHandler(
       );
     }
 
-    if (existing.layout.type === targetType) {
+    const existingLayout = parseViewLayout(existing.layout);
+    if (existingLayout.type === targetType) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -61,7 +63,7 @@ const convertView = createSafeHandler(
       );
     }
 
-    const newLayout = convertLayout(existing.layout, targetType);
+    const newLayout = convertLayout(existingLayout, targetType);
 
     yield* Result.await(
       safeDb((tx) =>
