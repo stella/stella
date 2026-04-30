@@ -1174,14 +1174,6 @@ const OrganizerFileNode = ({
     row.originalName,
   );
   const isRenamed = targetName !== row.originalName;
-  const metaParts: string[] = [];
-  if (row.documentType) {
-    metaParts.push(row.documentType);
-  }
-  if (row.detectedDate) {
-    metaParts.push(row.detectedDate);
-  }
-
   const secondaryParts: string[] = [];
   if (isRenamed) {
     secondaryParts.push(
@@ -1190,8 +1182,8 @@ const OrganizerFileNode = ({
       }),
     );
   }
-  for (const part of metaParts) {
-    secondaryParts.push(part);
+  if (row.documentType) {
+    secondaryParts.push(row.documentType);
   }
 
   return (

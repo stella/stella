@@ -41,6 +41,13 @@ type AddEntityMenuProps = {
   onOpenChange?: ((open: boolean) => void) | undefined;
   /** Virtual anchor for positioning (right-click). */
   anchor?: VirtualAnchor | null | undefined;
+  /**
+   * Whether to surface "New task" in the menu. Defaults to true.
+   * Set to false on surfaces that don't show tasks by default
+   * (e.g. the Files filesystem tree) so the menu doesn't offer an
+   * action whose result the user can't see in place.
+   */
+  showTaskOption?: boolean | undefined;
 };
 
 export const AddEntityMenu = ({
@@ -51,6 +58,7 @@ export const AddEntityMenu = ({
   open,
   onOpenChange,
   anchor,
+  showTaskOption = true,
 }: AddEntityMenuProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isWorkflowRunning = useIsWorkflowRunning();
@@ -152,17 +160,19 @@ export const AddEntityMenu = ({
               <MenuSeparator />
             </>
           )}
-          <MenuItem
-            disabled={isCreationDisabled}
-            onClick={() => {
-              handleCreateTask().catch(() => {
-                // Error handled inside handleCreateTask
-              });
-            }}
-          >
-            <SquareCheckIcon />
-            {t("tasks.newTask")}
-          </MenuItem>
+          {showTaskOption && (
+            <MenuItem
+              disabled={isCreationDisabled}
+              onClick={() => {
+                handleCreateTask().catch(() => {
+                  // Error handled inside handleCreateTask
+                });
+              }}
+            >
+              <SquareCheckIcon />
+              {t("tasks.newTask")}
+            </MenuItem>
+          )}
           <MenuItem disabled={isCreationDisabled} onClick={handleCreateFolder}>
             <FolderPlusIcon />
             {t("workspaces.newFolder")}
