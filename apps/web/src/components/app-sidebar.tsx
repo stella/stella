@@ -54,7 +54,6 @@ import {
   ClockIcon,
   EllipsisVerticalIcon,
   GlobeIcon,
-  InboxIcon,
   LayersIcon,
   Loader2Icon,
   LogOutIcon,
@@ -387,20 +386,9 @@ type ContextAction = {
   variant?: "destructive";
 };
 
-/**
- * Every nav section declares its context menu via this type.
- * The required fields make it a compile error to add a nav
- * item without considering its right-click experience.
- *
- * - `primaryAction`: the "+ New X" action (null if the section
- *    has no creation flow yet)
- * - `recents`: recent/pinned items shown below the action.
- *    Empty array = no data available yet, but you acknowledged
- *    the field exists. When data becomes available, fill it in.
- */
 type NavContextMenuConfig = {
-  primaryAction: ContextAction | null;
-  recents: ContextAction[];
+  primaryAction?: ContextAction;
+  recents?: ContextAction[];
 };
 
 const NavContextMenu = ({
@@ -415,7 +403,8 @@ const NavContextMenu = ({
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
 
-  const hasContent = config.primaryAction !== null || config.recents.length > 0;
+  const hasRecents = (config.recents?.length ?? 0) > 0;
+  const hasContent = config.primaryAction !== undefined || hasRecents;
 
   if (!hasContent) {
     return children;
@@ -456,10 +445,10 @@ const NavContextMenu = ({
               {config.primaryAction.label}
             </MenuItem>
           )}
-          {config.recents.length > 0 && config.primaryAction && (
+          {hasRecents && config.primaryAction !== undefined && (
             <MenuSeparator />
           )}
-          {config.recents.map((item, i) => (
+          {config.recents?.map((item, i) => (
             // eslint-disable-next-line react/no-array-index-key
             <MenuItem
               className={
@@ -1009,6 +998,9 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
 
   type NavTarget = {
     action: () => void;
+  };
+
+  type FixedNavTarget = NavTarget & {
     contextMenu: NavContextMenuConfig;
   };
 
@@ -1023,17 +1015,27 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
       }),
   });
 
-  // Fixed nav items: one entry per sidebar navigation item.
-  // The tuple type ensures every sidebar item has a shortcut
-  // AND a context menu config (primary action + recents).
+  const openChat = () => {
+    void navigate({ to: "/chat" });
+  };
+
   const fixedNavTargets: [
-    /* 1: search */ NavTarget,
-    /* 2: inbox */ NavTarget,
-    /* 3: workspaces */ NavTarget,
-    /* 4: chat */ NavTarget,
-    /* 5: knowledge */ NavTarget,
-    /* 6: time tracking */ NavTarget,
+    /* 1: chat */ FixedNavTarget,
+    /* 2: search */ FixedNavTarget,
+    /* 3: workspaces */ FixedNavTarget,
+    /* 4: knowledge */ FixedNavTarget,
+    /* 5: time tracking */ FixedNavTarget,
   ] = [
+    {
+      action: openChat,
+      contextMenu: {
+        primaryAction: {
+          label: t("chat.newChat"),
+          icon: <PlusIcon />,
+          onClick: openChat,
+        },
+      },
+    },
     {
       action: () => setSearchOpen(true),
       contextMenu: {
@@ -1042,18 +1044,6 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
           icon: <SearchIcon />,
           onClick: () => setSearchOpen(true),
         },
-        recents: [], // TODO: search history
-      },
-    },
-    {
-      action: comingSoon,
-      contextMenu: {
-        primaryAction: {
-          label: t("navigation.inbox"),
-          icon: <InboxIcon />,
-          onClick: comingSoon,
-        },
-        recents: [], // TODO: inbox items
       },
     },
     {
@@ -1069,22 +1059,9 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
       },
     },
     {
-      action: comingSoon,
-      contextMenu: {
-        primaryAction: {
-          label: t("chat.newChat"),
-          icon: <PlusIcon />,
-          // eslint-disable-next-line typescript/no-misused-promises
-          onClick: async () => await navigate({ to: "/chat" }),
-        },
-        recents: [], // TODO: recent chat threads
-      },
-    },
-    {
       // eslint-disable-next-line typescript/no-misused-promises
       action: async () => await navigate({ to: "/knowledge" }),
       contextMenu: {
-        primaryAction: null,
         recents: knowledgeSections
           .filter(
             (s): s is typeof s & { to: NonNullable<typeof s.to> } =>
@@ -1123,12 +1100,8 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                   params: { workspaceId: currentWorkspaceId },
                 }),
             },
-            recents: [], // TODO: recent time entries
           }
-        : {
-            primaryAction: null,
-            recents: [],
-          },
+        : {},
     },
   ];
 
@@ -1142,10 +1115,6 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
             to: "/workspaces/$workspaceId",
             params: { workspaceId: ws.id },
           }),
-        contextMenu: {
-          primaryAction: null,
-          recents: [],
-        },
       }),
     ),
   ];
@@ -1214,6 +1183,17 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
           <SidebarMenu>
             <NavContextMenu config={fixedNavTargets[0].contextMenu}>
               <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip={t("navigation.chat")}>
+                  <Link activeProps={{ "data-active": true }} to="/chat">
+                    <MessageCircleIcon />
+                    <span>{t("navigation.chat")}</span>
+                  </Link>
+                </SidebarMenuButton>
+                {showNavBadges && <NavBadge digit={1} />}
+              </SidebarMenuItem>
+            </NavContextMenu>
+            <NavContextMenu config={fixedNavTargets[1].contextMenu}>
+              <SidebarMenuItem>
                 <SidebarMenuButton
                   onClick={() => setSearchOpen(true)}
                   tooltip={t("navigation.search")}
@@ -1222,30 +1202,12 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                   <span>{t("navigation.search")}</span>
                 </SidebarMenuButton>
                 {showNavBadges ? (
-                  <NavBadge digit={1} />
+                  <NavBadge digit={2} />
                 ) : (
                   <SidebarMenuBadge>
                     <kbd className="text-muted-foreground text-[0.625rem]">
                       {formatForDisplay(HOTKEYS.SEARCH)}
                     </kbd>
-                  </SidebarMenuBadge>
-                )}
-              </SidebarMenuItem>
-            </NavContextMenu>
-            <NavContextMenu config={fixedNavTargets[1].contextMenu}>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={comingSoon}
-                  tooltip={t("navigation.inbox")}
-                >
-                  <InboxIcon />
-                  <span>{t("navigation.inbox")}</span>
-                </SidebarMenuButton>
-                {showNavBadges ? (
-                  <NavBadge digit={2} />
-                ) : (
-                  <SidebarMenuBadge>
-                    <span className="bg-muted-foreground/40 size-1.5 rounded-full" />
                   </SidebarMenuBadge>
                 )}
               </SidebarMenuItem>
@@ -1273,29 +1235,16 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
             </NavContextMenu>
             <NavContextMenu config={fixedNavTargets[3].contextMenu}>
               <SidebarMenuItem>
-                <SidebarMenuButton
-                  // eslint-disable-next-line typescript/no-misused-promises
-                  onClick={async () => await navigate({ to: "/chat" })}
-                  tooltip={t("navigation.chat")}
-                >
-                  <MessageCircleIcon />
-                  <span>{t("navigation.chat")}</span>
-                </SidebarMenuButton>
-                {showNavBadges && <NavBadge digit={4} />}
-              </SidebarMenuItem>
-            </NavContextMenu>
-            <NavContextMenu config={fixedNavTargets[4].contextMenu}>
-              <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip={t("navigation.knowledge")}>
                   <Link activeProps={{ "data-active": true }} to="/knowledge">
                     <BookOpenIcon />
                     <span>{t("navigation.knowledge")}</span>
                   </Link>
                 </SidebarMenuButton>
-                {showNavBadges && <NavBadge digit={5} />}
+                {showNavBadges && <NavBadge digit={4} />}
               </SidebarMenuItem>
             </NavContextMenu>
-            <NavContextMenu config={fixedNavTargets[5].contextMenu}>
+            <NavContextMenu config={fixedNavTargets[4].contextMenu}>
               <SidebarMenuItem>
                 {currentWorkspaceId ? (
                   <SidebarMenuButton
@@ -1322,7 +1271,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                   </SidebarMenuButton>
                 )}
                 {showNavBadges ? (
-                  <NavBadge digit={6} />
+                  <NavBadge digit={5} />
                 ) : currentWorkspaceId ? (
                   <SidebarTimerBadge workspaceId={currentWorkspaceId} />
                 ) : null}
@@ -1348,7 +1297,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                     <MatterItem
                       isPinned
                       key={ws.id}
-                      navBadge={showNavBadges && i < 3 ? 7 + i : undefined}
+                      navBadge={showNavBadges && i < 3 ? 6 + i : undefined}
                       onDelete={handleDeleteWorkspace}
                       onReorder={reorderPinned}
                       onTogglePin={togglePin}
