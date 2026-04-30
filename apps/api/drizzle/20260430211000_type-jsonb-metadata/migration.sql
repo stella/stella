@@ -1,0 +1,1 @@
+-- Type-only JSONB metadata contracts; no database changes.

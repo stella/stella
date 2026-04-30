@@ -22,6 +22,7 @@ import type {
   BoundingBoxes,
   ContactAddress,
   ContactEmail,
+  ContactPersistedMetadata,
   ContactPhone,
   EntityKind,
   FieldContent,
@@ -35,6 +36,7 @@ import type {
   ChatMessageRole,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
+import type { ClauseMetadata } from "@/api/handlers/clauses/metadata";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -238,7 +240,7 @@ export const contacts = p.pgTable(
     phones: p.jsonb().$type<ContactPhone[]>(),
     addresses: p.jsonb().$type<ContactAddress[]>(),
     tags: p.text().array(),
-    metadata: p.jsonb().$type<Record<string, unknown>>(),
+    metadata: p.jsonb().$type<ContactPersistedMetadata | null>(),
     color: p.varchar({ length: 32 }),
 
     // Billing fields
@@ -1643,7 +1645,7 @@ export const clauses = p.pgTable(
     usageNotes: p.text("usage_notes"),
     language: p.varchar({ length: 10 }),
     body: p.jsonb().$type<ClauseBody>().notNull(),
-    metadata: p.jsonb().$type<Record<string, unknown>>(),
+    metadata: p.jsonb().$type<ClauseMetadata | null>(),
     searchVector: tsvector("search_vector"),
     currentVersion: p.integer("current_version").notNull().default(1),
     createdBy: p

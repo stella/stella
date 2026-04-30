@@ -1,6 +1,8 @@
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import type { JsonObject } from "@/api/lib/json-value";
+
 const v1 = t.Literal(1);
 
 const namedOptionColor = t.UnionEnum([
@@ -271,12 +273,25 @@ export const contactCustomFieldSchema = t.Object({
 
 export type ContactCustomField = Static<typeof contactCustomFieldSchema>;
 
-export const contactMetadataSchema = t.Object({
+const contactMetadataFields = {
   dataBoxes: t.Optional(t.Array(contactDataBoxSchema, { maxItems: 20 })),
   customFields: t.Optional(t.Array(contactCustomFieldSchema, { maxItems: 50 })),
-});
+};
+
+export const contactMetadataSchema = t.Object(contactMetadataFields);
 
 export type ContactMetadata = Static<typeof contactMetadataSchema>;
+
+export const contactPersistedMetadataSchema = t.Object({
+  version: t.Literal(1),
+  ...contactMetadataFields,
+  custom: t.Optional(t.Record(t.String(), t.Unknown())),
+});
+
+export type ContactPersistedMetadata = ContactMetadata & {
+  version: 1;
+  custom?: JsonObject;
+};
 
 export const contactAddressSchema = t.Object({
   type: t.UnionEnum([

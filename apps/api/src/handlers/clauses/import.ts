@@ -13,6 +13,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 
 import { isClauseExportPayload } from "./import-export-schema";
+import { normalizeClauseMetadata } from "./metadata";
 import { updateSearchVector } from "./search-vector";
 
 const importBodySchema = t.Object({
@@ -150,7 +151,7 @@ const importHandler = async function* ({
           usageNotes: item.usageNotes ?? null,
           language: item.language ?? null,
           body: item.body,
-          metadata: item.metadata ?? null,
+          metadata: normalizeClauseMetadata(item.metadata) ?? null,
           currentVersion: 1,
           createdBy: userId,
         });

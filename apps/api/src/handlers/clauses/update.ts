@@ -15,6 +15,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
 
+import type { ClauseMetadata } from "./metadata";
+import { normalizeClauseMetadata } from "./metadata";
 import { updateSearchVector } from "./search-vector";
 import { clauseBodySchema } from "./shared-schemas";
 import type { ClauseBody } from "./types";
@@ -100,7 +102,7 @@ const updateClauseHandler = async function* ({
     body: ClauseBody;
     description: string | null;
     usageNotes: string | null;
-    metadata: Record<string, unknown> | null;
+    metadata: ClauseMetadata | null;
     currentVersion: number;
     updatedAt: Date;
   }> = {
@@ -110,8 +112,10 @@ const updateClauseHandler = async function* ({
       "language",
       "description",
       "usageNotes",
-      "metadata",
     ]),
+    ...(body.metadata === undefined
+      ? {}
+      : { metadata: normalizeClauseMetadata(body.metadata) ?? null }),
     updatedAt: new Date(),
   };
 

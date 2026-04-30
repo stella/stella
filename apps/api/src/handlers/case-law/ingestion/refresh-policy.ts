@@ -1,50 +1,10 @@
-import { isRecord } from "@/api/lib/type-guards";
-
-type SourceTier = "dump" | "detail";
-
-type IngestionMarker = {
-  dumpHash?: string;
-  sourceTier?: SourceTier;
-};
+import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
 
 type RefreshPolicyInput = {
   existingMetadata: Record<string, unknown> | null;
   existingSourceHash: string | null;
   incomingMetadata: Record<string, unknown>;
   incomingRawHash: string;
-};
-
-const isSourceTier = (value: unknown): value is SourceTier =>
-  value === "dump" || value === "detail";
-
-const getIngestionMarker = (
-  metadata: Record<string, unknown> | null,
-): IngestionMarker | null => {
-  if (metadata === null) {
-    return null;
-  }
-
-  const ingestion = metadata["ingestion"];
-  if (!isRecord(ingestion)) {
-    return null;
-  }
-
-  const dumpHash =
-    typeof ingestion["dumpHash"] === "string"
-      ? ingestion["dumpHash"]
-      : undefined;
-  const sourceTier = isSourceTier(ingestion["sourceTier"])
-    ? ingestion["sourceTier"]
-    : undefined;
-
-  if (!dumpHash && !sourceTier) {
-    return null;
-  }
-
-  return {
-    ...(dumpHash && { dumpHash }),
-    ...(sourceTier && { sourceTier }),
-  };
 };
 
 const shouldUpgradeFromDumpToDetail = ({
@@ -54,8 +14,8 @@ const shouldUpgradeFromDumpToDetail = ({
   RefreshPolicyInput,
   "existingSourceHash" | "incomingRawHash"
 >): boolean => {
-  const existingMarker = getIngestionMarker(existingMetadata);
-  const incomingMarker = getIngestionMarker(incomingMetadata);
+  const existingMarker = getCaseLawIngestionMetadata(existingMetadata);
+  const incomingMarker = getCaseLawIngestionMetadata(incomingMetadata);
 
   return (
     existingMarker?.dumpHash !== undefined &&
@@ -72,8 +32,8 @@ const shouldSkipDetailDowngrade = ({
   RefreshPolicyInput,
   "existingSourceHash" | "incomingRawHash"
 >): boolean => {
-  const existingMarker = getIngestionMarker(existingMetadata);
-  const incomingMarker = getIngestionMarker(incomingMetadata);
+  const existingMarker = getCaseLawIngestionMetadata(existingMetadata);
+  const incomingMarker = getCaseLawIngestionMetadata(incomingMetadata);
 
   return (
     existingMarker?.dumpHash !== undefined &&

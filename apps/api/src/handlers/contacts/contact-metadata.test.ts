@@ -50,24 +50,27 @@ describe("contact metadata", () => {
     ).toEqual({
       customFields: [{ id: "field-1", label: "Reference", value: "A1" }],
       dataBoxes: [{ id: "abc1234", isPrimary: true }],
+      version: 1,
     });
   });
 
-  test("merges partial metadata updates into existing metadata", () => {
+  test("merges partial metadata updates into versioned metadata", () => {
     expect(
       mergeContactMetadata(
         {
           customFields: [{ id: "field-1", label: "Reference", value: "A1" }],
           legacyKey: true,
+          version: 1,
         },
         {
           dataBoxes: [{ id: "ABC1234", isPrimary: true }],
         },
       ),
     ).toEqual({
+      custom: { legacyKey: true },
       customFields: [{ id: "field-1", label: "Reference", value: "A1" }],
       dataBoxes: [{ id: "abc1234", isPrimary: true }],
-      legacyKey: true,
+      version: 1,
     });
   });
 });
