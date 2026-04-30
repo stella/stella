@@ -263,6 +263,7 @@ const uploadEntityHandler = async function* ({
         await tx.insert(entities).values({
           id: entityId,
           workspaceId,
+          name: resolvedName.value,
           createdBy: userId,
           docSequence: entityStamp.docSequence,
         });

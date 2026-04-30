@@ -362,16 +362,19 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       id: ids.entityA1,
       workspaceId: ids.wsA1,
       kind: "document" as const,
+      name: "entityA1",
     },
     {
       id: ids.entityA2,
       workspaceId: ids.wsA2,
       kind: "document" as const,
+      name: "entityA2",
     },
     {
       id: ids.entityB1,
       workspaceId: ids.wsB1,
       kind: "document" as const,
+      name: "entityB1",
     },
   ]);
 

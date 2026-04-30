@@ -27,7 +27,7 @@ import { getSearchProvider } from "@/api/lib/search/provider";
 const createEntityBodySchema = t.Object({
   kind: t.Optional(entityKindSchema),
   parentId: t.Optional(t.Nullable(tSafeId("entity"))),
-  name: t.Optional(t.String()),
+  name: t.String({ minLength: 1, maxLength: 255 }),
 });
 
 type CreateEntityBodySchema = Static<typeof createEntityBodySchema>;
@@ -91,7 +91,19 @@ const createEntitiesHandler = async function* ({
 }: CreateEntitiesHandlerProps) {
   const parentId = body.parentId ?? null;
   const kind = body.kind;
-  const name = body.name ?? null;
+  const name = body.name?.trim() ?? "";
+
+  // `entities.name` is the canonical display label and is non-null
+  // for every kind. Reject empty names here so the row never
+  // reaches the DB without one.
+  if (name.length === 0) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Entity name is required",
+      }),
+    );
+  }
 
   const txResult = yield* Result.await(
     safeDb(async (tx) => {

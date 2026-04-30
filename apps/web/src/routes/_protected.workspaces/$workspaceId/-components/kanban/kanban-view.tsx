@@ -112,6 +112,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         workspaceId,
         type: "manual-input",
         kind,
+        name: t("workspaces.newDocument"),
       },
       {
         onSuccess: () => {

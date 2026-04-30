@@ -164,6 +164,7 @@ export const createEntityFromBuffer = async ({
       await tx.insert(entities).values({
         id: entityId,
         workspaceId,
+        name: fileName,
         createdBy: userId,
         docSequence: entityStamp.docSequence,
       });

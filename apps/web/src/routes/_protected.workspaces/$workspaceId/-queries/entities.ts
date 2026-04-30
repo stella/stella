@@ -212,7 +212,7 @@ export const entitySummariesOptions = (workspaceId: string) =>
 
 export type WorkspaceFolder = {
   entityId: string;
-  name: string | null;
+  name: string;
   parentId: string | null;
 };
 

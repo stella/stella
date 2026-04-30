@@ -707,7 +707,7 @@ export const entities = p.pgTable(
         onDelete: "set null",
       },
     ),
-    name: p.text("name"),
+    name: p.text("name").notNull(),
     createdBy: p
       .text("created_by")
       .references(() => user.id, { onDelete: "set null" }),

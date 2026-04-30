@@ -47,7 +47,7 @@ type ResolveEntityNameProps = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
   parentId: SafeId<"entity"> | null;
-  name: string | null;
+  name: string;
 };
 
 type EntityFieldSnapshot = {
@@ -58,7 +58,7 @@ type EntityFieldSnapshot = {
 type EntitySnapshot = {
   id: SafeId<"entity">;
   kind: EntityKind;
-  name: string | null;
+  name: string;
   parentId: SafeId<"entity"> | null;
   currentVersion: {
     fields: EntityFieldSnapshot[];
@@ -69,7 +69,7 @@ type DuplicatedEntity = {
   sourceId: SafeId<"entity">;
   entityId: SafeId<"entity">;
   kind: EntityKind;
-  name: string | null;
+  name: string;
   parentId: SafeId<"entity"> | null;
 };
 
@@ -87,11 +87,7 @@ const resolveEntityName = async ({
   workspaceId,
   parentId,
   name,
-}: ResolveEntityNameProps) => {
-  if (!name) {
-    return name;
-  }
-
+}: ResolveEntityNameProps): Promise<string> => {
   const lastDot = name.lastIndexOf(".");
   const hasExt = lastDot > 0;
   const rawBase = hasExt ? name.slice(0, lastDot) : name;
@@ -138,20 +134,7 @@ const resolveEntityName = async ({
   return `${base}_${maxN + 1}${ext}`;
 };
 
-/** Extract fileName from the first file-type field. */
-const extractFileName = (
-  sourceFields: { content: FieldContent }[],
-): string | null => {
-  for (const field of sourceFields) {
-    if (field.content.type === "file") {
-      return field.content.fileName;
-    }
-  }
-  return null;
-};
-
-const getEffectiveName = (entity: EntitySnapshot) =>
-  entity.name ?? extractFileName(entity.currentVersion?.fields ?? []);
+const getEffectiveName = (entity: EntitySnapshot): string => entity.name;
 
 const getFolderSubtree = (
   allEntities: EntitySnapshot[],

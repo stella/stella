@@ -119,6 +119,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
           type: "manual-input",
           workspaceId,
           kind,
+          name: t("workspaces.newDocument"),
         },
         {
           onSuccess: (data) => {
