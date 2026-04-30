@@ -206,6 +206,7 @@ describe("workspace INSERT — wrong scope", () => {
           id: testId(),
           workspaceId: ids.wsB1,
           kind: "document" as const,
+          name: "rls negative scope",
         }),
     },
     {

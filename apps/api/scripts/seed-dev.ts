@@ -2089,6 +2089,8 @@ type EntitySeed = {
   workspaceId: WorkspaceId;
   kind: "document" | "folder";
   parentId?: EntityId;
+  /** Canonical display label. Non-null for every entity row. */
+  name: string;
 };
 
 const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
@@ -2107,6 +2109,7 @@ const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
         versionId: seedId(`${wsLabel}-folder-${i + 1}-v`),
         workspaceId: wsId,
         kind: "folder",
+        name: `Folder ${i + 1}`,
         ...(parentId !== undefined && { parentId }),
       });
     }
@@ -2119,6 +2122,7 @@ const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
         versionId: seedId(`${wsLabel}-doc-${i + 1}-v`),
         workspaceId: wsId,
         kind: "document",
+        name: at(docNames, i),
         parentId,
       });
     }
@@ -2126,18 +2130,21 @@ const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
     return result;
   }
 
+  const docNames = workspaceDocNames[wsLabel] ?? [];
   return [
     {
       entityId: folderId,
       versionId: seedId(`${wsLabel}-folder-1-v`),
       workspaceId: wsId,
       kind: "folder",
+      name: "Documents",
     },
     {
       entityId: seedId(`${wsLabel}-doc-1`),
       versionId: seedId(`${wsLabel}-doc-1-v`),
       workspaceId: wsId,
       kind: "document",
+      name: docNames[0] ?? "Document 1",
       parentId: folderId,
     },
     {
@@ -2145,6 +2152,7 @@ const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
       versionId: seedId(`${wsLabel}-doc-2-v`),
       workspaceId: wsId,
       kind: "document",
+      name: docNames[1] ?? "Document 2",
       parentId: folderId,
     },
     {
@@ -2152,12 +2160,14 @@ const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
       versionId: seedId(`${wsLabel}-doc-3-v`),
       workspaceId: wsId,
       kind: "document",
+      name: docNames[2] ?? "Document 3",
     },
     {
       entityId: seedId(`${wsLabel}-doc-4`),
       versionId: seedId(`${wsLabel}-doc-4-v`),
       workspaceId: wsId,
       kind: "document",
+      name: docNames[3] ?? "Document 4",
     },
   ];
 };
@@ -3251,6 +3261,7 @@ export async function seed(organizationId?: string, userId?: string) {
         workspaceId: toWs(e.workspaceId),
         kind: e.kind,
         parentId: e.parentId,
+        name: e.name,
         createdBy: pickAuthor(seedUserIds, ei),
         lastEditedBy: pickAuthor(seedUserIds, ei + 1),
       })
@@ -3310,12 +3321,6 @@ export async function seed(organizationId?: string, userId?: string) {
       const ext = isDocx ? "docx" : "pdf";
 
       const title = fileName.replace(fileExtRe, "").replaceAll("_", " ");
-
-      // Set entity name from filename
-      await db
-        .update(entities)
-        .set({ name: fileName })
-        .where((await import("drizzle-orm")).eq(entities.id, entity.entityId));
 
       // Single source of truth for document content
       const docText = documentTexts[fileName];

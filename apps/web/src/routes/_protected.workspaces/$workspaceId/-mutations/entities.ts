@@ -14,7 +14,7 @@ type CreateEntitiesVars = {
   workspaceId: string;
   kind?: EntityKind;
   parentId?: string | null;
-  name?: string;
+  name: string;
 };
 
 export const useCreateEntities = () => {
@@ -27,8 +27,8 @@ export const useCreateEntities = () => {
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .put({
           queryKey: entitiesKeys.all(workspaceId),
+          name: body.name,
           ...(body.kind !== undefined && { kind: body.kind }),
-          ...(body.name !== undefined && { name: body.name }),
           ...(body.parentId !== undefined && {
             parentId:
               body.parentId === null ? null : toSafeId<"entity">(body.parentId),

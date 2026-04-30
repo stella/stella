@@ -538,6 +538,7 @@ describe("workspace INSERT — correct scope", () => {
           id: testId(),
           workspaceId: ids.wsA1,
           kind: "document" as const,
+          name: "rls insert positive",
         })
         .returning({ id: entities.id });
       expect(rows).toHaveLength(1);
@@ -1032,6 +1033,7 @@ describe("workspace DELETE — correct scope", () => {
         id: delId,
         workspaceId: ids.wsA1,
         kind: "document" as const,
+        name: "rls delete positive",
       });
       const rows = await tx
         .delete(entities)

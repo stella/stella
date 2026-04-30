@@ -239,17 +239,16 @@ const FilesystemOrganizerAction = ({
       if (!folder) {
         return "";
       }
-      const name = folder.name ?? "";
       if (!folder.parentId) {
-        return name;
+        return folder.name;
       }
       const parentPath = resolvePath(folder.parentId, visited);
-      return parentPath ? `${parentPath}/${name}` : name;
+      return parentPath ? `${parentPath}/${folder.name}` : folder.name;
     };
 
     return allFolders.map((folder) => ({
       entityId: folder.entityId,
-      name: folder.name ?? "",
+      name: folder.name,
       path: resolvePath(folder.entityId, new Set()),
       parentId: folder.parentId,
     }));

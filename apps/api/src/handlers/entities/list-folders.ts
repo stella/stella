@@ -41,9 +41,7 @@ const listFoldersHandler = async function* ({
     ),
   );
 
-  return Result.ok({
-    folders: rows,
-  });
+  return Result.ok({ folders: rows });
 };
 
 const config = {
