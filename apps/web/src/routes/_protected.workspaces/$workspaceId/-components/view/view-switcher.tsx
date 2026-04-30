@@ -97,6 +97,7 @@ const emptyLayout = (
 
   if (type === "table") {
     return {
+      version: 1,
       type,
       ...base,
       columnOrder: [],
@@ -104,7 +105,7 @@ const emptyLayout = (
     };
   }
 
-  return { type, ...base };
+  return { version: 1, type, ...base };
 };
 
 const defaultLayouts = {
@@ -113,6 +114,7 @@ const defaultLayouts = {
   filesystem: emptyLayout("filesystem"),
   kanban: emptyLayout("kanban"),
   calendar: {
+    version: 1,
     type: "calendar",
     filters: [],
     sorts: [],
@@ -121,6 +123,7 @@ const defaultLayouts = {
     mode: "month",
   },
   timeline: {
+    version: 1,
     type: "timeline",
     filters: [],
     sorts: [],

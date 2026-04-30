@@ -242,7 +242,7 @@ export const generateAnalysis = async (
     return { status: "done", analysis };
   }
 
-  // Concurrent generation guard (old sentinel format without tree)
+  // Concurrent generation guard for the lightweight sentinel without a tree.
   if (isAnalysisGenerating(analysis)) {
     const startedAt = new Date(analysis.startedAt).getTime();
     if (Date.now() - startedAt < SENTINEL_STALE_MS) {
@@ -263,6 +263,7 @@ export const generateAnalysis = async (
     .update(caseLawDecisions)
     .set({
       analysis: jsonbValue({
+        version: 1,
         status: "generating",
         startedAt: new Date().toISOString(),
       }),

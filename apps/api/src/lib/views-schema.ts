@@ -4,6 +4,8 @@ import * as v from "valibot";
 
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 
+const v1 = v.literal(1);
+
 const entityKindValues = [
   "document",
   "folder",
@@ -131,32 +133,37 @@ export type ViewLayoutBase = v.InferOutput<
   v.ObjectSchema<typeof baseLayoutSchema, "">
 >;
 
+const versionedBaseLayoutSchema = {
+  version: v1,
+  ...baseLayoutSchema,
+};
+
 const overviewLayoutSchema = v.strictObject({
   type: v.literal("overview"),
-  ...baseLayoutSchema,
+  ...versionedBaseLayoutSchema,
 });
 
 const tableLayoutSchema = v.strictObject({
   type: v.literal("table"),
   columnOrder: v.array(v.string()),
   columnPinning: v.array(v.string()),
-  ...baseLayoutSchema,
+  ...versionedBaseLayoutSchema,
 });
 
 const filesystemLayoutSchema = v.strictObject({
   type: v.literal("filesystem"),
-  ...baseLayoutSchema,
+  ...versionedBaseLayoutSchema,
 });
 
 const kanbanLayoutSchema = v.strictObject({
   type: v.literal("kanban"),
-  ...baseLayoutSchema,
+  ...versionedBaseLayoutSchema,
   groupByPropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
 });
 
 const calendarLayoutSchema = v.strictObject({
   type: v.literal("calendar"),
-  ...baseLayoutSchema,
+  ...versionedBaseLayoutSchema,
   datePropertyId: v.pipe(v.string(), v.minLength(1)),
   endDatePropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
   additionalDatePropertyIds: v.optional(
@@ -167,7 +174,7 @@ const calendarLayoutSchema = v.strictObject({
 
 const timelineLayoutSchema = v.strictObject({
   type: v.literal("timeline"),
-  ...baseLayoutSchema,
+  ...versionedBaseLayoutSchema,
   startDatePropertyId: v.pipe(v.string(), v.minLength(1)),
   endDatePropertyId: v.pipe(v.string(), v.minLength(1)),
   zoom: v.picklist(["day", "week", "month", "quarter"]),
@@ -189,17 +196,25 @@ export const viewLayoutSchema = v.variant("type", layoutSchemas);
 export type ViewLayout = v.InferOutput<typeof viewLayoutSchema>;
 export type ViewLayoutType = ViewLayout["type"];
 
+export const parseViewLayout = (value: unknown): ViewLayout =>
+  v.parse(viewLayoutSchema, value);
+
 const tBaseLayoutSchema = {
   filters: t.Array(tViewFilterConditionSchema),
   sorts: t.Array(tViewSortSchema),
   hiddenProperties: t.Array(t.String()),
 };
 
+const tVersionedBaseLayoutSchema = {
+  version: t.Literal(1),
+  ...tBaseLayoutSchema,
+};
+
 const tViewLayoutDefinition = t.Union([
   t.Object(
     {
       type: t.Literal("overview"),
-      ...tBaseLayoutSchema,
+      ...tVersionedBaseLayoutSchema,
     },
     strictObjectOptions,
   ),
@@ -208,21 +223,21 @@ const tViewLayoutDefinition = t.Union([
       type: t.Literal("table"),
       columnOrder: t.Array(t.String()),
       columnPinning: t.Array(t.String()),
-      ...tBaseLayoutSchema,
+      ...tVersionedBaseLayoutSchema,
     },
     strictObjectOptions,
   ),
   t.Object(
     {
       type: t.Literal("filesystem"),
-      ...tBaseLayoutSchema,
+      ...tVersionedBaseLayoutSchema,
     },
     strictObjectOptions,
   ),
   t.Object(
     {
       type: t.Literal("kanban"),
-      ...tBaseLayoutSchema,
+      ...tVersionedBaseLayoutSchema,
       groupByPropertyId: t.Optional(t.String({ minLength: 1 })),
     },
     strictObjectOptions,
@@ -230,7 +245,7 @@ const tViewLayoutDefinition = t.Union([
   t.Object(
     {
       type: t.Literal("calendar"),
-      ...tBaseLayoutSchema,
+      ...tVersionedBaseLayoutSchema,
       datePropertyId: t.String({ minLength: 1 }),
       endDatePropertyId: t.Optional(t.String({ minLength: 1 })),
       additionalDatePropertyIds: t.Optional(
@@ -243,7 +258,7 @@ const tViewLayoutDefinition = t.Union([
   t.Object(
     {
       type: t.Literal("timeline"),
-      ...tBaseLayoutSchema,
+      ...tVersionedBaseLayoutSchema,
       startDatePropertyId: t.String({ minLength: 1 }),
       endDatePropertyId: t.String({ minLength: 1 }),
       zoom: t.Union([

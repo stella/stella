@@ -45,6 +45,7 @@ export type DecisionAnalysis = {
 };
 
 export type AnalysisGenerating = {
+  version: 1;
   status: "generating";
   startedAt: string;
 };
@@ -86,6 +87,7 @@ export const decisionAnalysisSchema = v.object({
 
 export const isAnalysisGenerating = (val: unknown): val is AnalysisGenerating =>
   isRecord(val) &&
+  val["version"] === 1 &&
   val["status"] === "generating" &&
   typeof val["startedAt"] === "string";
 

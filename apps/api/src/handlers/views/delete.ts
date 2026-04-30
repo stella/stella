@@ -8,6 +8,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
 import { REQUIRED_VIEW_LAYOUTS } from "@/api/lib/views";
+import { parseViewLayout } from "@/api/lib/views-schema";
 
 const config = {
   permissions: { view: ["delete"] },
@@ -46,10 +47,10 @@ const deleteView = createSafeHandler(
       );
     }
 
-    const targetLayoutType = target.layoutType.type;
+    const targetLayoutType = parseViewLayout(target.layoutType).type;
     if (REQUIRED_VIEW_LAYOUTS.includes(targetLayoutType)) {
       const sameLayoutCount = allViews.filter(
-        (v) => v.layoutType.type === targetLayoutType,
+        (v) => parseViewLayout(v.layoutType).type === targetLayoutType,
       ).length;
 
       if (sameLayoutCount <= 1) {

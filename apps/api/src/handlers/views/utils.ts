@@ -140,16 +140,17 @@ export const convertLayout = (
   if (targetType === "table") {
     const columnOrder = source.type === "table" ? source.columnOrder : [];
     const columnPinning = source.type === "table" ? source.columnPinning : [];
-    return { type: "table", ...base, columnOrder, columnPinning };
+    return { version: 1, type: "table", ...base, columnOrder, columnPinning };
   }
 
   if (targetType === "kanban") {
-    return { type: "kanban", ...base };
+    return { version: 1, type: "kanban", ...base };
   }
 
   if (targetType === "calendar") {
     const prev = source.type === "calendar" ? source : null;
     return {
+      version: 1,
       type: "calendar",
       ...base,
       datePropertyId: prev?.datePropertyId ?? "_start-date",
@@ -160,6 +161,7 @@ export const convertLayout = (
   if (targetType === "timeline") {
     const prev = source.type === "timeline" ? source : null;
     return {
+      version: 1,
       type: "timeline",
       ...base,
       startDatePropertyId: prev?.startDatePropertyId ?? "_created-at",
@@ -170,5 +172,5 @@ export const convertLayout = (
   }
 
   // overview, filesystem
-  return { type: targetType, ...base };
+  return { version: 1, type: targetType, ...base };
 };
