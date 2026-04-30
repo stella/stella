@@ -1061,23 +1061,43 @@
     "whatToDo": "Ką norėtumėte daryti su šiuo tekstu?"
   },
   "search": {
+    "aiQueryLabel": "Išsiųsta kaip:",
+    "aiRefine": "Patobulinti užklausą su DI",
+    "continueInChat": "Tęsti pokalbyje",
+    "editedBy": "Redagavo",
     "emptyState": "Pradėkite rašyti, kad ieškotumėte visose bylose.",
     "escKey": "ESC",
-    "facets": {
-      "workspace": "Darbo erdvė"
-    },
     "filterLabel": "{type}:",
     "kinds": {
+      "caseLaw": "Teismų praktika",
+      "contact": "Kontaktas",
       "document": "Dokumentas",
       "folder": "Aplankas",
       "link": "Link",
+      "matter": "Byla",
       "message": "Žinutė",
       "task": "Užduotis"
     },
     "metaSeparator": "{workspace} · {time}",
+    "mimeType": "Failo tipas",
     "noResults": "Nerasta rezultatų pagal \"{query}\".",
     "placeholder": "Ieškoti visose bylose...",
-    "resultCount": "{count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}"
+    "recentSearches": "Naujausios paieškos",
+    "recentlyOpenedFiles": "Neseniai atidaryti failai",
+    "resultCount": "{count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
+    "summaryAction": "Apibendrinti geriausius rezultatus",
+    "summaryCitations": "Cituojami rezultatai",
+    "summaryError": "Santrauka nepasiekiama",
+    "summaryLoading": "Apibendrinami rezultatai...",
+    "summaryPrompt": "Naudoja geriausius rezultatus ir jų turinį trumpam atsakymui parengti.",
+    "summaryRetry": "Spustelėkite bandyti dar kartą.",
+    "updatedWithin": "Atnaujinta",
+    "updatedWithinOptions": {
+      "day": "Šiandien",
+      "month": "Per paskutines 30 dienų",
+      "week": "Per paskutines 7 dienas",
+      "year": "Per paskutinius metus"
+    }
   },
   "success": {
     "aiConfigDeleted": "AI configuration removed",

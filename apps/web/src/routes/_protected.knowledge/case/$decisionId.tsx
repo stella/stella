@@ -4,15 +4,20 @@ import { parseDocumentAst } from "@stll/case-law/document-ast";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Loader2Icon, SparklesIcon } from "lucide-react";
+import * as v from "valibot";
 import { useShallow } from "zustand/react/shallow";
 
 import { useCaseSearchStore } from "@/lib/case-search-store";
 import { ensureCriticalQueryData } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
+import { optionalSearchStringSchema } from "@/lib/schema";
 import { MarginNotes } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/margin-notes";
 import { ScrollMarkers } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers";
-import { buildSectionMap } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/types";
+import {
+  buildSectionMap,
+  flattenAnalysisHeadings,
+} from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/types";
 import { useDecisionAnalysis } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/use-decision-analysis";
 import { DecisionText } from "@/routes/_protected.knowledge/case/-components/case-viewer/decision-text";
 import { decisionOptions } from "@/routes/_protected.knowledge/case/-queries/decisions";
@@ -26,7 +31,18 @@ const extractId = (param: string): SafeId<"caseLawDecision"> => {
   return toSafeId<"caseLawDecision">(sep !== -1 ? param.slice(sep + 2) : param);
 };
 
+const getHeadingDisplayAnchorId = ({
+  annotations,
+  startAnchorId,
+}: {
+  annotations: { startAnchorId: string }[];
+  startAnchorId: string;
+}) => annotations.at(0)?.startAnchorId ?? startAnchorId;
+
 export const Route = createFileRoute("/_protected/knowledge/case/$decisionId")({
+  validateSearch: v.object({
+    q: optionalSearchStringSchema(),
+  }),
   loader: async ({ context: { queryClient }, params: { decisionId } }) =>
     await ensureCriticalQueryData(
       queryClient,
@@ -37,6 +53,7 @@ export const Route = createFileRoute("/_protected/knowledge/case/$decisionId")({
 
 function DecisionViewer() {
   const rawParam = Route.useParams({ select: (p) => p.decisionId });
+  const initialSearchQuery = Route.useSearch({ select: (s) => s.q });
   const decisionId = extractId(rawParam);
   const { data: decision } = useSuspenseQuery(decisionOptions(decisionId));
 
@@ -56,15 +73,23 @@ function DecisionViewer() {
   const mainRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(220);
   const isDragging = useRef(false);
-  const { searchOpen, searchQuery, activeMatchIndex, setMatchCount } =
-    useCaseSearchStore(
-      useShallow((s) => ({
-        searchOpen: s.isOpen,
-        searchQuery: s.query,
-        activeMatchIndex: s.activeMatchIndex,
-        setMatchCount: s.setMatchCount,
-      })),
-    );
+  const {
+    searchOpen,
+    searchQuery,
+    activeMatchIndex,
+    openSearch,
+    setMatchCount,
+    setSearchQuery,
+  } = useCaseSearchStore(
+    useShallow((s) => ({
+      searchOpen: s.isOpen,
+      searchQuery: s.query,
+      activeMatchIndex: s.activeMatchIndex,
+      openSearch: s.open,
+      setMatchCount: s.setMatchCount,
+      setSearchQuery: s.setQuery,
+    })),
+  );
 
   const { state: analysisState, generate } = useDecisionAnalysis(
     decisionId,
@@ -94,47 +119,51 @@ function DecisionViewer() {
     return buildSectionMap(analysisTree, anchorIds);
   }, [analysisTree, ast]);
 
+  const flatAnalysisHeadings = useMemo(
+    () => flattenAnalysisHeadings(analysisTree),
+    [analysisTree],
+  );
+
   const marginItems = useMemo(
     () =>
-      analysisTree.flatMap((heading) => {
+      flatAnalysisHeadings.flatMap((heading) => {
         type Item = {
           kind: "card" | "annotation";
           id: string;
           heading?: string;
           text: string;
           category: string;
+          depth: number;
           startAnchorId: string;
         };
 
         const items: Item[] = [];
         const first = heading.annotations.at(0);
 
-        if (first) {
+        items.push({
+          kind: "card",
+          id: heading.id,
+          heading: heading.label,
+          text: first?.summary ?? "",
+          category: heading.category,
+          depth: heading.depth,
+          startAnchorId: first?.startAnchorId ?? heading.startAnchorId,
+        });
+
+        for (const annotation of heading.annotations.slice(first ? 1 : 0)) {
           items.push({
-            kind: "card",
-            id: first.id,
-            heading: heading.label,
-            text: first.summary,
+            kind: "annotation",
+            id: annotation.id,
+            text: annotation.summary,
             category: heading.category,
-            startAnchorId: first.startAnchorId,
+            depth: heading.depth + 1,
+            startAnchorId: annotation.startAnchorId,
           });
-
-          for (const annotation of heading.annotations.slice(1)) {
-            items.push({
-              kind: "annotation",
-              id: annotation.id,
-              text: annotation.summary,
-              category: heading.category,
-              startAnchorId: annotation.startAnchorId,
-            });
-          }
-
-          return items;
         }
 
         return items;
       }),
-    [analysisTree],
+    [flatAnalysisHeadings],
   );
 
   useEffect(() => {
@@ -148,17 +177,21 @@ function DecisionViewer() {
   const reset = useCaseSearchStore((s) => s.reset);
   useEffect(() => {
     reset();
-  }, [decisionId, reset]);
+    if (initialSearchQuery) {
+      setSearchQuery(initialSearchQuery);
+      openSearch();
+    }
+  }, [decisionId, initialSearchQuery, openSearch, reset, setSearchQuery]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="relative min-h-0 flex-1">
         {hasAnalysis && analysisTree.length > 0 && (
           <ScrollMarkers
-            headings={analysisTree.map((heading) => ({
+            headings={flatAnalysisHeadings.map((heading) => ({
               id: heading.id,
               label: heading.label,
-              startAnchorId: heading.startAnchorId,
+              startAnchorId: getHeadingDisplayAnchorId(heading),
               category: heading.category,
             }))}
             scrollContainerRef={mainRef}

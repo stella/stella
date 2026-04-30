@@ -51,6 +51,7 @@ import { cents } from "@/api/lib/money";
 import { getS3 } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 
+import { seedCaseLaw } from "./seed-case-law";
 import { seedTemplates } from "./seed-templates";
 import {
   ensureSeedColleaguesInOrganization,
@@ -3251,6 +3252,7 @@ export async function seed(organizationId?: string, userId?: string) {
         kind: e.kind,
         parentId: e.parentId,
         createdBy: pickAuthor(seedUserIds, ei),
+        lastEditedBy: pickAuthor(seedUserIds, ei + 1),
       })
       .onConflictDoNothing();
 
@@ -3615,6 +3617,9 @@ export async function seed(organizationId?: string, userId?: string) {
 
   // 14. Templates & clauses (knowledge base)
   await seedTemplates(ORG_ID, seedUserIds);
+
+  // 15. Global case-law corpus for search and references
+  await seedCaseLaw();
 
   console.log("\nDone. Dev data seeded successfully.");
 }

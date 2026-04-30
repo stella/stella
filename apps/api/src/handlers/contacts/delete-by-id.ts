@@ -2,11 +2,13 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { contacts, workspaces } from "@/api/db/schema";
+import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import { upsertWorkspaceSearchDocuments } from "@/api/lib/search/index-global";
 
 const deleteContactParamsSchema = t.Object({
   contactId: tSafeId("contact"),
@@ -58,6 +60,11 @@ const deleteContactById = createSafeRootHandler(
         };
       }
 
+      const affectedWorkspaces = await tx
+        .select({ id: workspaceContacts.workspaceId })
+        .from(workspaceContacts)
+        .where(eq(workspaceContacts.contactId, params.contactId));
+
       await tx
         .delete(contacts)
         .where(
@@ -67,7 +74,10 @@ const deleteContactById = createSafeRootHandler(
           ),
         );
 
-      return { ok: true as const };
+      return {
+        ok: true as const,
+        affectedWorkspaceIds: affectedWorkspaces.map(({ id }) => id),
+      };
     });
 
     if (Result.isError(txResult)) {
@@ -93,6 +103,10 @@ const deleteContactById = createSafeRootHandler(
         }),
       );
     }
+
+    upsertWorkspaceSearchDocuments(txResult.value.affectedWorkspaceIds).catch(
+      captureError,
+    );
 
     return Result.ok(undefined);
   },

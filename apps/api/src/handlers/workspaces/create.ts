@@ -11,6 +11,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
@@ -32,6 +33,7 @@ import {
   toScopeKey,
 } from "@/api/lib/matter-reference";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
 
 const config = {
   permissions: { workspace: ["create"] },
@@ -267,6 +269,8 @@ const createWorkspaces = createSafeRootHandler(
         }),
       );
     }
+
+    upsertWorkspaceSearchDocument(txResult.id).catch(captureError);
 
     return Result.ok({ id: txResult.id });
   },

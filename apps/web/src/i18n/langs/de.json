@@ -1061,23 +1061,43 @@
     "whatToDo": "Was möchten Sie mit diesem Text tun?"
   },
   "search": {
+    "aiQueryLabel": "Gesendet als:",
+    "aiRefine": "Suchanfrage mit KI verbessern",
+    "continueInChat": "Im Chat fortsetzen",
+    "editedBy": "Bearbeitet von",
     "emptyState": "Tippen Sie, um alle Akten zu durchsuchen.",
     "escKey": "ESC",
-    "facets": {
-      "workspace": "Arbeitsbereich"
-    },
     "filterLabel": "{type}:",
     "kinds": {
+      "caseLaw": "Rechtsprechung",
+      "contact": "Kontakt",
       "document": "Dokument",
       "folder": "Ordner",
       "link": "Link",
+      "matter": "Matter",
       "message": "Nachricht",
       "task": "Aufgabe"
     },
     "metaSeparator": "{workspace} · {time}",
+    "mimeType": "Dateityp",
     "noResults": "Keine Ergebnisse für",
     "placeholder": "Suchen …",
-    "resultCount": "{count, plural, one {# Ergebnis} other {# Ergebnisse}}"
+    "recentSearches": "Letzte Suchen",
+    "recentlyOpenedFiles": "Zuletzt geöffnete Dateien",
+    "resultCount": "{count, plural, one {# Ergebnis} other {# Ergebnisse}}",
+    "summaryAction": "Top-Ergebnisse zusammenfassen",
+    "summaryCitations": "Zitierte Ergebnisse",
+    "summaryError": "Zusammenfassung nicht verfügbar",
+    "summaryLoading": "Ergebnisse werden zusammengefasst...",
+    "summaryPrompt": "Nutzt die Top-Ergebnisse und deren Inhalt für eine kurze Antwort.",
+    "summaryRetry": "Zum erneuten Versuch klicken.",
+    "updatedWithin": "Aktualisiert",
+    "updatedWithinOptions": {
+      "day": "Heute",
+      "month": "Letzte 30 Tage",
+      "week": "Letzte 7 Tage",
+      "year": "Letztes Jahr"
+    }
   },
   "success": {
     "aiConfigDeleted": "AI configuration removed",

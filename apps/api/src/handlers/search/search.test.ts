@@ -1,19 +1,19 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { ScopedDb, Transaction } from "@/api/db";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
 const searchMock = mock();
-const getSearchProviderMock = mock(() => ({
-  search: searchMock,
+
+void mock.module("@/api/lib/search/index-global", () => ({
+  searchGlobal: searchMock,
 }));
 
-void mock.module("@/api/lib/search/provider", () => ({
-  getSearchProvider: getSearchProviderMock,
-}));
+const { resolveUpdatedAfter, searchHandler } =
+  await import("@/api/handlers/search/search");
 
-const { searchHandler } = await import("@/api/handlers/search/search");
+const realDateNow = Date.now;
 
 const organizationId = toSafeId<"organization">("org_1");
 const accessibleWorkspaceIds = [
@@ -42,17 +42,17 @@ const createWorkspaceLookupScopedDb =
 
 describe("search handler workspace scoping", () => {
   beforeEach(() => {
-    getSearchProviderMock.mockReset();
     searchMock.mockReset();
-    getSearchProviderMock.mockImplementation(() => ({
-      search: searchMock,
-    }));
     searchMock.mockResolvedValue({
-      facets: { kind: [], workspace: [] },
+      facets: { editor: [], mimeType: [], type: [], workspace: [] },
       hits: [],
       nextCursor: null,
       totalCount: 0,
     });
+  });
+
+  afterEach(() => {
+    Date.now = realDateNow;
   });
 
   test("passes the caller's accessible workspace allowlist for global searches", async () => {
@@ -67,10 +67,13 @@ describe("search handler workspace scoping", () => {
 
     expect(searchMock).toHaveBeenCalledWith({
       cursor: undefined,
-      kinds: undefined,
       limit: LIMITS.searchPageSizeDefault,
       organizationId: "org_1",
       query: "closing memo",
+      types: undefined,
+      editedByUserId: undefined,
+      mimeTypes: undefined,
+      updatedAfter: undefined,
       workspaceId: undefined,
       workspaceIds: ["ws_1", "ws_2"],
     });
@@ -102,9 +105,41 @@ describe("search handler workspace scoping", () => {
       expect.objectContaining({
         organizationId: "org_1",
         query: "closing memo",
+        updatedAfter: undefined,
         workspaceId: "ws_1",
         workspaceIds: ["ws_1", "ws_2"],
       }),
     );
+  });
+
+  test("passes editor, MIME, and time filters to global search", async () => {
+    Date.now = () => new Date("2026-04-30T12:00:00.000Z").getTime();
+
+    await searchHandler({
+      accessibleWorkspaceIds,
+      body: {
+        editedByUserId: "user_1",
+        mimeTypes: ["application/pdf"],
+        query: "closing memo",
+        updatedWithin: "week",
+      },
+      organizationId,
+      scopedDb: unusedScopedDb,
+    });
+
+    expect(searchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        editedByUserId: "user_1",
+        mimeTypes: ["application/pdf"],
+        updatedAfter: "2026-04-23T12:00:00.000Z",
+      }),
+    );
+  });
+
+  test("resolves relative updated filters from the current clock", () => {
+    Date.now = () => new Date("2026-04-30T12:00:00.000Z").getTime();
+
+    expect(resolveUpdatedAfter("day")).toBe("2026-04-29T12:00:00.000Z");
+    expect(resolveUpdatedAfter(undefined)).toBeUndefined();
   });
 });

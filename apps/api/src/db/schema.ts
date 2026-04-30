@@ -942,7 +942,6 @@ export const templateVersions = p.pgTable(
 
 // -- Search --
 
-// TODO: add wsPolicies() once search providers use scopedDb
 export const searchDocuments = p.pgTable(
   "search_documents",
   {
@@ -968,10 +967,60 @@ export const searchDocuments = p.pgTable(
       .index("search_documents_org_workspace_idx")
       .on(table.organizationId, table.workspaceId),
     p.index("search_documents_tsv_idx").using("gin", table.tsv),
+    ...wsPolicies(),
   ],
 );
 
-// TODO: add wsPolicies() once search providers use scopedDb
+export const contactSearchDocuments = p.pgTable(
+  "contact_search_documents",
+  {
+    contactId: safeUuid<"contact">("contact_id")
+      .primaryKey()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    contactType: p
+      .text("contact_type", {
+        enum: ["person", "organization"],
+      })
+      .notNull(),
+    title: p.text().notNull().default(""),
+    searchableText: p.text("searchable_text").notNull().default(""),
+    tsv: tsvector(),
+    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("contact_search_docs_org_idx").on(table.organizationId),
+    p
+      .index("contact_search_docs_org_type_idx")
+      .on(table.organizationId, table.contactType),
+    p.index("contact_search_docs_tsv_idx").using("gin", table.tsv),
+    ...orgPolicies(),
+  ],
+);
+
+export const workspaceSearchDocuments = p.pgTable(
+  "workspace_search_documents",
+  {
+    workspaceId: safeWorkspaceId("workspace_id")
+      .primaryKey()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    title: p.text().notNull().default(""),
+    searchableText: p.text("searchable_text").notNull().default(""),
+    tsv: tsvector(),
+    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("workspace_search_docs_org_idx").on(table.organizationId),
+    p.index("workspace_search_docs_tsv_idx").using("gin", table.tsv),
+    ...wsPolicies(),
+  ],
+);
+
 export const extractedContent = p.pgTable(
   "extracted_content",
   {
@@ -997,6 +1046,7 @@ export const extractedContent = p.pgTable(
       })
       .onDelete("cascade"),
     p.index("extracted_content_workspace_id_idx").on(table.workspaceId),
+    ...wsPolicies(),
   ],
 );
 

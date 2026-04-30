@@ -21,6 +21,11 @@ export type BoundingBox = SchemaValidators.BoundingBoxes["boxes"][number];
 export type PropertyCondition = SchemaValidators.PropertyCondition;
 
 export type EntityKind = SchemaValidators.EntityKind;
+export type {
+  GlobalSearchHit,
+  GlobalSearchResultType,
+  GlobalSearchUpdatedWithin,
+} from "@/api/lib/search/types";
 
 export type {
   ChatMention,

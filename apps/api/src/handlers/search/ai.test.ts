@@ -1,0 +1,264 @@
+import { toJsonSchema } from "@valibot/to-json-schema";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
+
+import { toSafeId } from "@/api/lib/branded-types";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+process.env["REDIS_URL"] ??= "redis://localhost:6379";
+process.env["EMAIL_PROVIDER"] ??= "smtp";
+process.env["SMTP_HOST"] ??= "localhost";
+process.env["SMTP_PORT"] ??= "1025";
+process.env["TRANSACTIONAL_EMAIL_FROM"] ??= "test@example.com";
+process.env["FRONTEND_URL"] ??= "http://localhost:3000";
+process.env["BETTER_AUTH_SECRET"] ??= "x".repeat(32);
+process.env["BETTER_AUTH_URL"] ??= "http://localhost:3001";
+process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
+process.env["GOTENBERG_USERNAME"] ??= "test";
+process.env["GOTENBERG_PASSWORD"] ??= "test";
+
+const searchGlobalMock = mock();
+const dbLimitMock = mock(async () => [{ searchableText: "Document content" }]);
+const dbWhereMock = mock(() => ({ limit: dbLimitMock }));
+const dbFromMock = mock(() => ({ where: dbWhereMock }));
+const dbSelectMock = mock(() => ({ from: dbFromMock }));
+
+void mock.module("@/api/lib/search/index-global", () => ({
+  searchGlobal: searchGlobalMock,
+}));
+
+void mock.module("@/api/db/root", () => ({
+  db: {
+    select: dbSelectMock,
+  },
+}));
+
+beforeEach(() => {
+  searchGlobalMock.mockReset();
+  dbSelectMock.mockClear();
+  dbFromMock.mockClear();
+  dbWhereMock.mockClear();
+  dbLimitMock.mockClear();
+});
+
+describe("search AI output schemas", () => {
+  test("convert to JSON Schema for structured model output", async () => {
+    const { refineSearchOutputSchema, searchSummaryOutputSchema } =
+      await import("@/api/handlers/search/ai");
+
+    expect(() => toJsonSchema(refineSearchOutputSchema)).not.toThrow();
+    expect(() => toJsonSchema(searchSummaryOutputSchema)).not.toThrow();
+  });
+});
+
+describe("search summary chat", () => {
+  test("stores workspace-scoped summaries on the requested workspace", async () => {
+    const organizationId = toSafeId<"organization">("org_1");
+    const workspaceId = toSafeId<"workspace">("ws_1");
+    const insertedValues: unknown[] = [];
+    const tx = {
+      query: {
+        workspaces: {
+          findFirst: mock(async () => ({ id: workspaceId })),
+        },
+      },
+      insert: mock((_table: unknown) => ({
+        values: mock(async (values: unknown) => {
+          insertedValues.push(values);
+        }),
+      })),
+    };
+    const { safeDb, scopedDb } = createScopedDbMock(tx);
+
+    searchGlobalMock.mockResolvedValueOnce({
+      facets: { editor: [], mimeType: [], type: [], workspace: [] },
+      hits: [
+        {
+          entityId: "entity_1",
+          headline: null,
+          id: "entity:entity_1",
+          lastEditedByImage: null,
+          lastEditedByName: null,
+          mimeType: "application/pdf",
+          title: "Motion.pdf",
+          type: "document",
+          updatedAt: "2026-04-30T08:00:00.000Z",
+          workspaceId,
+          workspaceName: "Motion matter",
+        },
+      ],
+      nextCursor: null,
+      totalCount: 1,
+    });
+
+    const { createSearchSummaryChatThread } =
+      await import("@/api/handlers/search/ai");
+    const result = await createSearchSummaryChatThread({
+      accessibleWorkspaceIds: [workspaceId],
+      body: {
+        citations: [{ number: 1 }],
+        limit: 1,
+        query: "motion",
+        summary: "Relevant document [1].",
+        title: "Search summary",
+        workspaceId,
+      },
+      organizationId,
+      safeDb,
+      scopedDb,
+      userId: toSafeId<"user">("user_1"),
+    });
+
+    expect(result).toHaveProperty("threadId");
+    expect(insertedValues.at(0)).toMatchObject({ workspaceId });
+    expect(insertedValues.at(1)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: "user", workspaceId }),
+        expect.objectContaining({ role: "assistant", workspaceId }),
+      ]),
+    );
+  });
+
+  test("infers one workspace for unfiltered summary chats with workspace hits", async () => {
+    const organizationId = toSafeId<"organization">("org_1");
+    const workspaceId = toSafeId<"workspace">("ws_1");
+    const insertedValues: unknown[] = [];
+    const tx = {
+      query: {
+        workspaces: {
+          findFirst: mock(async () => null),
+        },
+      },
+      insert: mock((_table: unknown) => ({
+        values: mock(async (values: unknown) => {
+          insertedValues.push(values);
+        }),
+      })),
+    };
+    const { safeDb, scopedDb } = createScopedDbMock(tx);
+
+    searchGlobalMock.mockResolvedValueOnce({
+      facets: { editor: [], mimeType: [], type: [], workspace: [] },
+      hits: [
+        {
+          entityId: "entity_1",
+          headline: null,
+          id: "entity:entity_1",
+          lastEditedByImage: null,
+          lastEditedByName: null,
+          mimeType: "application/pdf",
+          title: "Motion.pdf",
+          type: "document",
+          updatedAt: "2026-04-30T08:00:00.000Z",
+          workspaceId,
+          workspaceName: "Motion matter",
+        },
+      ],
+      nextCursor: null,
+      totalCount: 1,
+    });
+
+    const { createSearchSummaryChatThread } =
+      await import("@/api/handlers/search/ai");
+    const result = await createSearchSummaryChatThread({
+      accessibleWorkspaceIds: [workspaceId],
+      body: {
+        citations: [{ number: 1 }],
+        limit: 1,
+        query: "motion",
+        summary: "Relevant document [1].",
+        title: "Search summary",
+      },
+      organizationId,
+      safeDb,
+      scopedDb,
+      userId: toSafeId<"user">("user_1"),
+    });
+
+    expect(result).toHaveProperty("threadId");
+    expect(insertedValues.at(0)).toMatchObject({ workspaceId });
+    expect(insertedValues.at(1)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: "user", workspaceId }),
+        expect.objectContaining({ role: "assistant", workspaceId }),
+      ]),
+    );
+  });
+
+  test("rejects unfiltered summary chats with hits from multiple workspaces", async () => {
+    const organizationId = toSafeId<"organization">("org_1");
+    const firstWorkspaceId = toSafeId<"workspace">("ws_1");
+    const secondWorkspaceId = toSafeId<"workspace">("ws_2");
+    const insertMock = mock((_table: unknown) => ({
+      values: mock(async () => undefined),
+    }));
+    const tx = {
+      query: {
+        workspaces: {
+          findFirst: mock(async () => null),
+        },
+      },
+      insert: insertMock,
+    };
+    const { safeDb, scopedDb } = createScopedDbMock(tx);
+
+    searchGlobalMock.mockResolvedValueOnce({
+      facets: { editor: [], mimeType: [], type: [], workspace: [] },
+      hits: [
+        {
+          entityId: "entity_1",
+          headline: null,
+          id: "entity:entity_1",
+          lastEditedByImage: null,
+          lastEditedByName: null,
+          mimeType: "application/pdf",
+          title: "First.pdf",
+          type: "document",
+          updatedAt: "2026-04-30T08:00:00.000Z",
+          workspaceId: firstWorkspaceId,
+          workspaceName: "First matter",
+        },
+        {
+          entityId: "entity_2",
+          headline: null,
+          id: "entity:entity_2",
+          lastEditedByImage: null,
+          lastEditedByName: null,
+          mimeType: "application/pdf",
+          title: "Second.pdf",
+          type: "document",
+          updatedAt: "2026-04-30T08:00:00.000Z",
+          workspaceId: secondWorkspaceId,
+          workspaceName: "Second matter",
+        },
+      ],
+      nextCursor: null,
+      totalCount: 2,
+    });
+
+    const { createSearchSummaryChatThread } =
+      await import("@/api/handlers/search/ai");
+    const result = await createSearchSummaryChatThread({
+      accessibleWorkspaceIds: [firstWorkspaceId, secondWorkspaceId],
+      body: {
+        citations: [{ number: 1 }],
+        limit: 2,
+        query: "motion",
+        summary: "Relevant documents [1].",
+        title: "Search summary",
+      },
+      organizationId,
+      safeDb,
+      scopedDb,
+      userId: toSafeId<"user">("user_1"),
+    });
+
+    expect(result).toMatchObject({
+      code: 400,
+      response: {
+        message:
+          "Search summaries can only be opened as chat from one workspace.",
+      },
+    });
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+});

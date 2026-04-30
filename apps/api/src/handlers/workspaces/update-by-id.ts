@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { contacts, workspaces } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
@@ -15,6 +16,7 @@ import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
+import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
 
 const config = {
   permissions: { workspace: ["update"] },
@@ -27,8 +29,6 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-// Workspace name is fetched via JOIN at search time;
-// no reindex needed on rename.
 const updateWorkspace = createSafeHandler(
   config,
   async function* ({ safeDb, session, workspaceId, user, request, body }) {
@@ -159,6 +159,8 @@ const updateWorkspace = createSafeHandler(
         }),
       );
     }
+
+    upsertWorkspaceSearchDocument(workspaceId).catch(captureError);
 
     return Result.ok(undefined);
   },

@@ -24,6 +24,8 @@ export function ShortcutHintsOverlay() {
   const t = useTranslations();
   const isModHeld = useKeyHold(MOD_KEY);
   const [isVisible, setIsVisible] = useState(false);
+  const [isSuppressedUntilRelease, setIsSuppressedUntilRelease] =
+    useState(false);
 
   const showDialog = useDebouncedCallback(
     () => setIsVisible(true),
@@ -40,52 +42,80 @@ export function ShortcutHintsOverlay() {
       setIsVisible(false);
     };
 
+    const suppressUntilRelease = () => {
+      setIsSuppressedUntilRelease(true);
+      cancel();
+    };
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) {
         return;
       }
       const { key } = e;
-      if (
-        key === "Meta" ||
-        key === "Control" ||
-        key === "Shift" ||
-        key === "Alt"
-      ) {
+      if (key === "Meta" || key === "Control") {
         return;
       }
-      cancel();
+      suppressUntilRelease();
     };
 
-    const onMouseDown = (e: MouseEvent) => {
-      if (e.metaKey || e.ctrlKey) {
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Meta" || e.key === "Control") {
+        setIsSuppressedUntilRelease(false);
         cancel();
       }
     };
 
+    const onBlur = () => {
+      setIsSuppressedUntilRelease(false);
+      cancel();
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        onBlur();
+      }
+    };
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.metaKey || e.ctrlKey) {
+        suppressUntilRelease();
+      }
+    };
+
     window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("keyup", onKeyUp, true);
+    window.addEventListener("blur", onBlur);
     window.addEventListener("mousedown", onMouseDown, true);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("keyup", onKeyUp, true);
+      window.removeEventListener("blur", onBlur);
       window.removeEventListener("mousedown", onMouseDown, true);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [showDialog]);
 
   useEffect(() => {
-    if (isModHeld) {
+    if (isModHeld && !isSuppressedUntilRelease) {
       showDialog();
     } else {
       showDialog.cancel();
       setIsVisible(false);
     }
-  }, [isModHeld, showDialog]);
+  }, [isModHeld, isSuppressedUntilRelease, showDialog]);
+
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      setIsSuppressedUntilRelease(true);
+      showDialog.cancel();
+    }
+    setIsVisible(open);
+  };
 
   return (
-    <Dialog onOpenChange={setIsVisible} open={isVisible}>
-      <DialogPopup
-        className="w-64 p-4"
-        initialFocus={false}
-        showCloseButton={false}
-      >
+    <Dialog onOpenChange={handleOpenChange} open={isVisible}>
+      <DialogPopup className="w-64 p-4" initialFocus={false} showCloseButton>
         <div className="flex flex-col gap-3">
           {SHORTCUT_HINT_GROUPS.map((group) => (
             <div key={group.categoryKey}>

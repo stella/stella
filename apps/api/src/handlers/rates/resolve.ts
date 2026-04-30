@@ -9,6 +9,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import type { ValidatedOrgUserId } from "@/api/lib/validated-org-user-id";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
@@ -27,7 +28,11 @@ const resolveRateHandler = createSafeHandler(
     const validatedUserId = yield* Result.await(
       safeDb(
         async (tx) =>
-          await validateOrgUserId(tx, userId, session.activeOrganizationId),
+          await validateOrgUserId(
+            tx,
+            brandPersistedUserId(userId),
+            session.activeOrganizationId,
+          ),
       ),
     );
 

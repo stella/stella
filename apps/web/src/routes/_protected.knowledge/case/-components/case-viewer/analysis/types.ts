@@ -100,6 +100,10 @@ export type FlatAnnotation = AnalysisAnnotation & {
   category: string;
 };
 
+export type FlatAnalysisHeading = AnalysisHeading & {
+  depth: number;
+};
+
 /**
  * Section info per anchor: CSS variable + heading ID for grouping.
  */
@@ -175,5 +179,21 @@ export const flattenAnnotations = (
   };
 
   walk(headings);
+  return result;
+};
+
+export const flattenAnalysisHeadings = (
+  headings: readonly AnalysisHeading[],
+): FlatAnalysisHeading[] => {
+  const result: FlatAnalysisHeading[] = [];
+
+  const walk = (nodes: readonly AnalysisHeading[], depth: number) => {
+    for (const node of nodes) {
+      result.push({ ...node, depth });
+      walk(node.children, depth + 1);
+    }
+  };
+
+  walk(headings, 0);
   return result;
 };

@@ -11,6 +11,9 @@ import {
   TS_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
+import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
+import { buildSearchTsQuery } from "@/api/lib/search/query";
+import { typedPgArray } from "@/api/lib/search/sql";
 import {
   assertAuthorizedSearchScope,
   parseEntityKind,
@@ -54,7 +57,7 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
   const orgFilter = sql`sd.organization_id = ${organizationId}`;
   const workspaceAccessFilter = query.workspaceIds
     ? query.workspaceIds.length > 0
-      ? sql`AND sd.workspace_id = ANY(${query.workspaceIds}::uuid[])`
+      ? sql`AND sd.workspace_id = ANY(${typedPgArray(query.workspaceIds, "uuid")})`
       : sql`AND false`
     : sql`AND sd.workspace_id = ${query.workspaceId}`;
   const workspaceSelectionFilter =
@@ -63,7 +66,7 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
       : sql``;
   const kindFilter =
     query.kinds && query.kinds.length > 0
-      ? sql`AND sd.kind = ANY(${query.kinds})`
+      ? sql`AND sd.kind = ANY(${typedPgArray(query.kinds, "entity_kind")})`
       : sql``;
 
   // Use 'simple' config for the query so it matches any
@@ -71,7 +74,7 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
   // index time. PG FTS still matches across configs when the
   // lexeme overlaps. For ranking and headlines, we use the
   // per-document language stored on the row.
-  const tsQuery = sql`plainto_tsquery('simple', ${query.query})`;
+  const tsQuery = buildSearchTsQuery(query.query);
 
   const cursorFilter = query.cursor
     ? (() => {
@@ -201,7 +204,7 @@ const searchContent = async (
   query: ContentSearchQuery,
 ): Promise<ContentSearchResult> => {
   const { organizationId, workspaceId, limit } = query;
-  const tsQuery = sql`plainto_tsquery('simple', ${query.query})`;
+  const tsQuery = buildSearchTsQuery(query.query);
 
   const [hitsResult, countResult] = await Promise.all([
     db.execute(sql`
@@ -250,9 +253,18 @@ const indexEntity = async (entityId: SafeId<"entity">): Promise<void> => {
 };
 
 const removeEntity = async (entityId: SafeId<"entity">): Promise<void> => {
+  const existing = await db.query.searchDocuments.findFirst({
+    where: { entityId: { eq: entityId } },
+    columns: { workspaceId: true },
+  });
+
   await db
     .delete(searchDocuments)
     .where(eq(searchDocuments.entityId, entityId));
+
+  if (existing) {
+    await syncWorkspaceSearchActivity(existing.workspaceId);
+  }
 };
 
 // Upsert all entities without deleting first to avoid search

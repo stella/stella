@@ -14,6 +14,28 @@ import {
 const toNullableString = (x: unknown): string | null =>
   x === null ? null : JSON.stringify(x);
 
+export const bodyPreviewJoin = sql`
+  LEFT JOIN LATERAL (
+    SELECT string_agg(
+      section_item.value ->> 'text',
+      ' '
+      ORDER BY (section_item.value ->> 'index')::int
+    ) AS text
+    FROM jsonb_array_elements(
+      CASE jsonb_typeof(d.sections)
+        WHEN 'array' THEN d.sections
+        ELSE '[]'::jsonb
+      END
+    ) section_item(value)
+    WHERE section_item.value ->> 'type' <> 'header'
+      AND nullif(section_item.value ->> 'text', '') IS NOT NULL
+  ) body_preview ON true
+`;
+
+const headlineRegconfig = sql`
+  'public.stella_unaccent'::regconfig
+`;
+
 export const searchDecisionsBodySchema = t.Object({
   query: t.String({
     minLength: 1,
@@ -129,9 +151,8 @@ export const searchDecisionsHandler = async (
       d.decision_type,
       d.source_url,
       ts_headline(
-        'simple',
-        sd.title || ' ' ||
-          left(sd.searchable_text, 2000),
+        ${headlineRegconfig},
+        coalesce(nullif(body_preview.text, ''), d.fulltext, sd.searchable_text),
         ${tsQuery},
         ${TS_HEADLINE_CONFIG}
       ) AS headline,
@@ -143,6 +164,7 @@ export const searchDecisionsHandler = async (
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
+    ${bodyPreviewJoin}
     LEFT JOIN ${citationBoost} ON true
     WHERE sd.tsv @@ ${tsQuery}
       ${allFilters}

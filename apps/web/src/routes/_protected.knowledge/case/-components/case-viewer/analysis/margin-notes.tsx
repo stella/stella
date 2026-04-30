@@ -19,6 +19,7 @@ export type MarginItem = {
   heading?: string | undefined;
   text: string;
   category: string;
+  depth: number;
   startAnchorId: string;
 };
 
@@ -129,6 +130,7 @@ export const MarginNotes = ({
             ref={(el) => measureRef(el, item.id)}
             style={{
               top: `${item.top}px`,
+              paddingInlineStart: `${0.625 + item.depth * 0.5}rem`,
               borderInlineStartColor:
                 item.kind === "card"
                   ? `var(${cssVar})`
