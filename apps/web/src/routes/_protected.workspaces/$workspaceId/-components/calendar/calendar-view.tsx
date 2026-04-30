@@ -48,6 +48,9 @@ type CalendarViewProps = {
   workspaceId: string;
 };
 
+const toAllDayAgendaDateTime = (date: string): string =>
+  new Date(`${date}T00:00:00.000Z`).toISOString();
+
 export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   const t = useTranslations();
   const locale = useLocale();
@@ -71,11 +74,16 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
         // Use the dedicated tasks endpoint so status/priority
         // are set correctly (the generic createEntities handler
         // does not set task defaults).
-        const dueDate = datePropertyId === "_due-date" ? date : undefined;
+        const dueDate = datePropertyId === TASK_DATE_IDS[0] ? date : undefined;
+        const startAt =
+          datePropertyId === TASK_DATE_IDS[1]
+            ? toAllDayAgendaDateTime(date)
+            : undefined;
         const response = await api.tasks({ workspaceId }).put({
           queryKey: entitiesKeys.all(workspaceId),
           name: t("tasks.untitled"),
           ...(dueDate && { dueDate }),
+          ...(startAt && { allDay: true, startAt }),
         });
 
         const entityId = response.data?.entityId;
@@ -88,10 +96,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
         }
 
         // Set custom date property if not using built-in due date
-        if (
-          !isTaskDateProperty(datePropertyId) &&
-          datePropertyId !== "_due-date"
-        ) {
+        if (!isTaskDateProperty(datePropertyId)) {
           upsertField.mutate({
             workspaceId,
             propertyId: datePropertyId,
@@ -288,7 +293,20 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
           .catch(() => {
             // non-critical
           });
+      } else if (datePropertyId === TASK_DATE_IDS[1] && kind === "task") {
+        api
+          .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .patch({
+            taskId: toSafeId<"entity">(entityId),
+            queryKey: entitiesKeys.all(workspaceId),
+            allDay: true,
+            startAt: toAllDayAgendaDateTime(date),
+          })
+          .catch(() => {
+            // non-critical
+          });
       } else if (isTaskDateProperty(datePropertyId)) {
+        // Future-proofing for any new built-in task date pseudo-property.
         if (kind !== "task") {
           toastManager.add({
             title: t("workspaces.views.calendar.dueDateTaskOnly"),

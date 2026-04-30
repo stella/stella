@@ -87,6 +87,26 @@ export default createSafeHandler(
       );
     }
 
+    // Check if this is the current version before irreversible file cleanup.
+    const entity = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.entities.findFirst({
+          where: {
+            id: { eq: params.entityId },
+            workspaceId: { eq: workspaceId },
+          },
+          columns: { currentVersionId: true, readOnly: true },
+        }),
+      ),
+    );
+    if (entity?.readOnly) {
+      return Result.err(
+        new HandlerError({ status: 409, message: "Entity is read-only" }),
+      );
+    }
+
+    const isDeletingCurrent = entity?.currentVersionId === params.versionId;
+
     // Get file fields for S3 cleanup
     const versionFields = yield* Result.await(
       safeDb((tx) =>
@@ -111,21 +131,6 @@ export default createSafeHandler(
         }),
       );
     }
-
-    // Check if this is the current version
-    const entity = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.entities.findFirst({
-          where: {
-            id: { eq: params.entityId },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: { currentVersionId: true },
-        }),
-      ),
-    );
-
-    const isDeletingCurrent = entity?.currentVersionId === params.versionId;
 
     yield* Result.await(
       safeDb(async (tx) => {

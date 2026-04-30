@@ -1,5 +1,7 @@
 import type {
   BoundingBox,
+  AgendaItemKind,
+  AgendaItemSource,
   EntityKind,
   OptionColor,
   PropertyCondition,
@@ -14,6 +16,8 @@ import type { FileRouteTypes } from "@/routeTree.gen";
 export type {
   EntityKind,
   ViewFilterCondition,
+  AgendaItemKind,
+  AgendaItemSource,
   ViewLayout,
   ViewLayoutType,
 } from "@stll/api/types";
@@ -187,6 +191,26 @@ export type WorkspaceEntity = {
   status: string | null;
   priority: string | null;
   dueDate: string | null;
+  agendaKind: AgendaItemKind;
+  startAt: string | null;
+  endAt: string | null;
+  occurredAt: string | null;
+  remindAt: string | null;
+  allDay: boolean;
+  timeZone: string | null;
+  location: string | null;
+  onlineMeetingUrl: string | null;
+  availability: string | null;
+  sensitivity: string | null;
+  organizer: unknown;
+  attendees: unknown;
+  recurrence: unknown;
+  agendaSource: AgendaItemSource;
+  externalSource: string | null;
+  externalId: string | null;
+  externalChangeKey: string | null;
+  externalICalUid: string | null;
+  readOnly: boolean;
   sortOrder: string | null;
   activeEditBy: { name: string; image: string | null; isMe: boolean } | null;
   fields: Record<string, WorkspaceField>;

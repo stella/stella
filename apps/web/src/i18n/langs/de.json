@@ -1384,6 +1384,29 @@
       "title": "Dateien organisieren",
       "wasNamed": "war {name}"
     },
+    "infosoud": {
+      "cancelled": "Aufgehoben",
+      "court": "Gericht",
+      "courtPlaceholder": "Gericht oder Code suchen",
+      "courtsFailed": "InfoSoud-Gerichte konnten nicht geladen werden",
+      "eventCount": "{count, plural, one {# Ereignis} other {# Ereignisse}}",
+      "events": "Ereignisse",
+      "hearings": "Termine",
+      "importAgenda": "In Agenda speichern",
+      "importAgendaFailed": "InfoSoud-Einträge konnten nicht in der Agenda gespeichert werden",
+      "importAgendaResult": "{count, plural, one {# Eintrag in Agenda gespeichert} other {# Einträge in Agenda gespeichert}}",
+      "importAgendaUpToDate": "Agenda ist bereits aktuell",
+      "lookup": "Suchen",
+      "lookupFailed": "InfoSoud-Abfrage fehlgeschlagen",
+      "noHearings": "Keine Termine angesetzt",
+      "notFound": "Für dieses Gericht und dieses Aktenzeichen wurde in InfoSoud kein Verfahren gefunden.",
+      "relatedCases": "Verbundene Verfahren",
+      "spisZn": "Sp. zn.",
+      "spisZnPlaceholder": "z. B. 1 T 64/2024",
+      "statusDate": "Statusdatum",
+      "title": "InfoSoud",
+      "validTo": "Gültig bis"
+    },
     "justification": "Begründung:",
     "kanban": {
       "changeColor": "Farbe ändern",
@@ -1429,7 +1452,7 @@
       "matterDetails": "Aktendetails",
       "membersCount": "{count, plural, one {# Mitglied} other {# Mitglieder}}",
       "nextDeadline": "Nächste Frist",
-      "openTasks": "Offene Aufgaben",
+      "openTasks": "Offene Agenda",
       "recentActivity": "Letzte Aktivität",
       "timeAndTeam": "Zeit & Team",
       "timeThisWeek": "Zeit diese Woche",
@@ -1437,7 +1460,7 @@
       "totalDocuments": "Dokumente gesamt",
       "totalItems": "Einträge",
       "totalThisWeek": "Gesamt diese Woche",
-      "upcomingTasks": "Anstehende Aufgaben",
+      "upcomingTasks": "Anstehende Agenda",
       "uploaded": "hochgeladen"
     },
     "parties": {
@@ -1560,7 +1583,7 @@
     "table": {
       "reorderReadOnly": "Tabellenzeilen folgen der aktuellen Sortierung"
     },
-    "tasksCount": "{count, plural, one {# Aufgabe} other {# Aufgaben}}",
+    "tasksCount": "{count, plural, one {# Agendaeintrag} other {# Agendaeinträge}}",
     "tools": {
       "aiModel": "KI-Modell",
       "manualInput": "Manuell"
@@ -1573,7 +1596,7 @@
         "addDates": "+ Daten",
         "additionalDates": "+{count} Daten",
         "createdAt": "Erstellt am",
-        "dueDateTaskOnly": "Das Fälligkeitsdatum kann nur für Aufgaben gesetzt werden",
+        "dueDateTaskOnly": "Ein Fälligkeitsdatum kann nur für Agendaeinträge gesetzt werden",
         "month": "Monat",
         "more": "+{count} weitere",
         "noDates": "Keine Datumseigenschaft ausgewählt",

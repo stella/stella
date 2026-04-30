@@ -117,7 +117,7 @@ const defaultLayouts = {
     filters: [],
     sorts: [],
     hiddenProperties: [],
-    datePropertyId: "_due-date",
+    datePropertyId: "_start-date",
     mode: "month",
   },
   timeline: {

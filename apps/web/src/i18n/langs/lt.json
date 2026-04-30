@@ -1384,6 +1384,29 @@
       "title": "Tvarkyti failus",
       "wasNamed": "anksčiau {name}"
     },
+    "infosoud": {
+      "cancelled": "Atšaukta",
+      "court": "Teismas",
+      "courtPlaceholder": "Ieškoti teismo arba kodo",
+      "courtsFailed": "Nepavyko įkelti InfoSoud teismų",
+      "eventCount": "{count, plural, one {# įvykis} few {# įvykiai} other {# įvykių}}",
+      "events": "Įvykiai",
+      "hearings": "Posėdžiai",
+      "importAgenda": "Išsaugoti į Agendą",
+      "importAgendaFailed": "Nepavyko išsaugoti InfoSoud elementų į Agendą",
+      "importAgendaResult": "{count, plural, one {# elementas išsaugotas Agendoje} other {# elementų išsaugota Agendoje}}",
+      "importAgendaUpToDate": "Agenda jau atnaujinta",
+      "lookup": "Ieškoti",
+      "lookupFailed": "InfoSoud paieška nepavyko",
+      "noHearings": "Posėdžių nepaskirta",
+      "notFound": "InfoSoud nerado bylos pagal šį teismą ir sp. zn.",
+      "relatedCases": "Susijusios bylos",
+      "spisZn": "Sp. zn.",
+      "spisZnPlaceholder": "pvz., 1 T 64/2024",
+      "statusDate": "Būsenos data",
+      "title": "InfoSoud",
+      "validTo": "Galioja iki"
+    },
     "justification": "Pagrindimas:",
     "kanban": {
       "changeColor": "Pakeisti spalvą",
@@ -1429,7 +1452,7 @@
       "matterDetails": "Bylos detalės",
       "membersCount": "{count, plural, one {# narys} other {# narių}}",
       "nextDeadline": "Kitas terminas",
-      "openTasks": "Atviros užduotys",
+      "openTasks": "Atvira agenda",
       "recentActivity": "Naujausia veikla",
       "timeAndTeam": "Laikas ir komanda",
       "timeThisWeek": "Laikas šią savaitę",
@@ -1437,7 +1460,7 @@
       "totalDocuments": "Iš viso dokumentų",
       "totalItems": "Elementai",
       "totalThisWeek": "Viso šią savaitę",
-      "upcomingTasks": "Artėjančios užduotys",
+      "upcomingTasks": "Būsima agenda",
       "uploaded": "įkėlė"
     },
     "parties": {
@@ -1560,7 +1583,7 @@
     "table": {
       "reorderReadOnly": "Lentelės eilutės laikosi dabartinio rūšiavimo"
     },
-    "tasksCount": "{count, plural, one {# užduotis} other {# užduočių}}",
+    "tasksCount": "{count, plural, one {# agendos elementas} few {# agendos elementai} other {# agendos elementų}}",
     "tools": {
       "aiModel": "AI modelis",
       "manualInput": "Rankiniu būdu"
@@ -1573,7 +1596,7 @@
         "addDates": "+ Datos",
         "additionalDates": "+{count} datų",
         "createdAt": "Sukurta",
-        "dueDateTaskOnly": "Terminą galima nustatyti tik užduotims",
+        "dueDateTaskOnly": "Terminą galima nustatyti tik agendos elementams",
         "month": "Mėnuo",
         "more": "+{count} daugiau",
         "noDates": "Nepasirinkta datos savybė",

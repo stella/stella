@@ -1384,6 +1384,29 @@
       "title": "Organiser les fichiers",
       "wasNamed": "auparavant {name}"
     },
+    "infosoud": {
+      "cancelled": "Annulé",
+      "court": "Juridiction",
+      "courtPlaceholder": "Rechercher une juridiction ou un code",
+      "courtsFailed": "Impossible de charger les juridictions InfoSoud",
+      "eventCount": "{count, plural, one {# événement} other {# événements}}",
+      "events": "Événements",
+      "hearings": "Audiences",
+      "importAgenda": "Enregistrer dans Agenda",
+      "importAgendaFailed": "Impossible d’enregistrer les éléments InfoSoud dans Agenda",
+      "importAgendaResult": "{count, plural, one {# élément enregistré dans Agenda} other {# éléments enregistrés dans Agenda}}",
+      "importAgendaUpToDate": "Agenda est déjà à jour",
+      "lookup": "Rechercher",
+      "lookupFailed": "La recherche InfoSoud a échoué",
+      "noHearings": "Aucune audience programmée",
+      "notFound": "Aucune affaire InfoSoud trouvée pour cette juridiction et cette sp. zn.",
+      "relatedCases": "Affaires liées",
+      "spisZn": "Sp. zn.",
+      "spisZnPlaceholder": "p. ex. 1 T 64/2024",
+      "statusDate": "Date du statut",
+      "title": "InfoSoud",
+      "validTo": "Valable jusqu'au"
+    },
     "justification": "Justification :",
     "kanban": {
       "changeColor": "Changer la couleur",
@@ -1429,7 +1452,7 @@
       "matterDetails": "Détails du dossier",
       "membersCount": "{count, plural, one {# membre} other {# membres}}",
       "nextDeadline": "Prochain délai",
-      "openTasks": "Tâches ouvertes",
+      "openTasks": "Agenda ouvert",
       "recentActivity": "Activité récente",
       "timeAndTeam": "Temps & Équipe",
       "timeThisWeek": "Temps cette semaine",
@@ -1437,7 +1460,7 @@
       "totalDocuments": "Total des documents",
       "totalItems": "Éléments",
       "totalThisWeek": "Total cette semaine",
-      "upcomingTasks": "Tâches à venir",
+      "upcomingTasks": "Agenda à venir",
       "uploaded": "a importé"
     },
     "parties": {
@@ -1560,7 +1583,7 @@
     "table": {
       "reorderReadOnly": "Les lignes du tableau suivent le tri actuel"
     },
-    "tasksCount": "{count, plural, one {# tâche} other {# tâches}}",
+    "tasksCount": "{count, plural, one {# élément d'agenda} other {# éléments d'agenda}}",
     "tools": {
       "aiModel": "Modèle IA",
       "manualInput": "Manuellement"
@@ -1573,7 +1596,7 @@
         "addDates": "+ Dates",
         "additionalDates": "+{count} dates",
         "createdAt": "Créé le",
-        "dueDateTaskOnly": "La date d'échéance ne peut être définie que pour les tâches",
+        "dueDateTaskOnly": "Une échéance ne peut être définie que pour les éléments d'agenda",
         "month": "Mois",
         "more": "+{count} de plus",
         "noDates": "Aucune propriété de date sélectionnée",

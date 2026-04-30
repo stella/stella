@@ -25,8 +25,8 @@ const deleteEntityLink = createSafeHandler(
             workspaceId: { eq: workspaceId },
           },
           with: {
-            sourceEntity: { columns: { kind: true } },
-            targetEntity: { columns: { kind: true } },
+            sourceEntity: { columns: { kind: true, readOnly: true } },
+            targetEntity: { columns: { kind: true, readOnly: true } },
           },
         }),
       ),
@@ -45,6 +45,14 @@ const deleteEntityLink = createSafeHandler(
           status: 400,
           message: "This endpoint only manages task links",
         }),
+      );
+    }
+    if (
+      (link.sourceEntity?.kind === "task" && link.sourceEntity.readOnly) ||
+      (link.targetEntity?.kind === "task" && link.targetEntity.readOnly)
+    ) {
+      return Result.err(
+        new HandlerError({ status: 409, message: "Task is read-only" }),
       );
     }
 

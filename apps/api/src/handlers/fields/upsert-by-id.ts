@@ -84,7 +84,7 @@ const upsertField = createSafeHandler(
     const entity = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findFirst({
-          columns: { id: true, currentVersionId: true },
+          columns: { id: true, currentVersionId: true, readOnly: true },
           where: {
             id: { eq: body.entityId },
             workspaceId: { eq: workspaceId },
@@ -99,6 +99,11 @@ const upsertField = createSafeHandler(
           status: 404,
           message: "Entity not found in workspace",
         }),
+      );
+    }
+    if (entity.readOnly) {
+      return Result.err(
+        new HandlerError({ status: 409, message: "Entity is read-only" }),
       );
     }
 

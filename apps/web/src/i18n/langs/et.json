@@ -1384,6 +1384,29 @@
       "title": "Korralda failid",
       "wasNamed": "varem {name}"
     },
+    "infosoud": {
+      "cancelled": "Tühistatud",
+      "court": "Kohus",
+      "courtPlaceholder": "Otsi kohut või koodi",
+      "courtsFailed": "InfoSoudi kohtuid ei õnnestunud laadida",
+      "eventCount": "{count, plural, one {# sündmus} other {# sündmust}}",
+      "events": "Sündmused",
+      "hearings": "Istungid",
+      "importAgenda": "Salvesta Agendasse",
+      "importAgendaFailed": "InfoSoudi üksusi ei õnnestunud Agendasse salvestada",
+      "importAgendaResult": "{count, plural, one {# üksus salvestati Agendasse} other {# üksust salvestati Agendasse}}",
+      "importAgendaUpToDate": "Agenda on juba ajakohane",
+      "lookup": "Otsi",
+      "lookupFailed": "InfoSoudi otsing nurjus",
+      "noHearings": "Ühtegi istungit pole määratud",
+      "notFound": "Selle kohtu ja sp. zn. järgi ei leitud InfoSoudist asja.",
+      "relatedCases": "Seotud asjad",
+      "spisZn": "Sp. zn.",
+      "spisZnPlaceholder": "nt 1 T 64/2024",
+      "statusDate": "Staatuse kuupäev",
+      "title": "InfoSoud",
+      "validTo": "Kehtib kuni"
+    },
     "justification": "Põhjendus:",
     "kanban": {
       "changeColor": "Muuda värvi",
@@ -1429,7 +1452,7 @@
       "matterDetails": "Asja detailid",
       "membersCount": "{count, plural, one {# liige} other {# liiget}}",
       "nextDeadline": "Järgmine tähtaeg",
-      "openTasks": "Avatud ülesanded",
+      "openTasks": "Avatud agenda",
       "recentActivity": "Viimane tegevus",
       "timeAndTeam": "Aeg ja meeskond",
       "timeThisWeek": "Aeg sel nädalal",
@@ -1437,7 +1460,7 @@
       "totalDocuments": "Dokumente kokku",
       "totalItems": "Elemendid",
       "totalThisWeek": "Kokku sel nädalal",
-      "upcomingTasks": "Eelseisvad ülesanded",
+      "upcomingTasks": "Tulevane agenda",
       "uploaded": "laadis üles"
     },
     "parties": {
@@ -1560,7 +1583,7 @@
     "table": {
       "reorderReadOnly": "Tabeliread järgivad praegust sortimist"
     },
-    "tasksCount": "{count, plural, one {# ülesanne} other {# ülesannet}}",
+    "tasksCount": "{count, plural, one {# agenda kirje} other {# agenda kirjet}}",
     "tools": {
       "aiModel": "Tehisintellekti mudel",
       "manualInput": "Käsitsi"
@@ -1573,7 +1596,7 @@
         "addDates": "+ Kuupäevad",
         "additionalDates": "+{count} kuupäeva",
         "createdAt": "Loodud",
-        "dueDateTaskOnly": "Tähtaega saab määrata ainult ülesannetele",
+        "dueDateTaskOnly": "Tähtaega saab määrata ainult agenda kirjetele",
         "month": "Kuu",
         "more": "+{count} veel",
         "noDates": "Kuupäeva omadust pole valitud",

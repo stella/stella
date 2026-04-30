@@ -1432,7 +1432,7 @@ type Messages = {
       "matterDetails": "Matter details";
       "membersCount": "{count, plural, one {# member} other {# members}}";
       "nextDeadline": "Next deadline";
-      "openTasks": "Open tasks";
+      "openTasks": "Open agenda";
       "recentActivity": "Recent activity";
       "timeAndTeam": "Time & Team";
       "timeThisWeek": "Time this week";
@@ -1440,7 +1440,7 @@ type Messages = {
       "totalDocuments": "Total documents";
       "totalItems": "Items";
       "totalThisWeek": "Total this week";
-      "upcomingTasks": "Upcoming tasks";
+      "upcomingTasks": "Upcoming agenda";
       "uploaded": "uploaded";
     };
     "parties": {
@@ -1563,7 +1563,7 @@ type Messages = {
     "table": {
       "reorderReadOnly": "Table rows follow the current sort";
     };
-    "tasksCount": "{count, plural, one {# task} other {# tasks}}";
+    "tasksCount": "{count, plural, one {# agenda item} other {# agenda items}}";
     "tools": {
       "aiModel": "AI Model";
       "manualInput": "Manually";
@@ -1576,7 +1576,7 @@ type Messages = {
         "addDates": "+ Dates";
         "additionalDates": "+{count} dates";
         "createdAt": "Created at";
-        "dueDateTaskOnly": "Due date can only be set for tasks";
+        "dueDateTaskOnly": "Due date can only be set for agenda items";
         "month": "Month";
         "more": "+{count} more";
         "noDates": "No date property selected";
@@ -1634,6 +1634,29 @@ type Messages = {
       "starting": "Starting workflow...";
       "terminated": "Workflow terminated";
       "terminatedDescription": "The workflow was terminated due to an error. Please contact support.";
+    };
+    "infosoud": {
+      "cancelled": "Canceled";
+      "court": "Court";
+      "courtPlaceholder": "Search court or code";
+      "courtsFailed": "Could not load InfoSoud courts";
+      "eventCount": "{count, plural, one {# event} other {# events}}";
+      "events": "Events";
+      "hearings": "Hearings";
+      "importAgenda": "Save to Agenda";
+      "importAgendaFailed": "Could not save InfoSoud items to Agenda";
+      "importAgendaResult": "{count, plural, one {# item saved to Agenda} other {# items saved to Agenda}}";
+      "importAgendaUpToDate": "Agenda is already up to date";
+      "lookup": "Lookup";
+      "lookupFailed": "InfoSoud lookup failed";
+      "noHearings": "No hearings scheduled";
+      "notFound": "No InfoSoud case found for this court and sp. zn.";
+      "relatedCases": "Related cases";
+      "spisZn": "Sp. zn.";
+      "spisZnPlaceholder": "e.g. 1 T 64/2024";
+      "statusDate": "Status date";
+      "title": "InfoSoud";
+      "validTo": "Valid to";
     };
   };
 };

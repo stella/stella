@@ -1384,6 +1384,29 @@
       "title": "Uspořádat soubory",
       "wasNamed": "původně {name}"
     },
+    "infosoud": {
+      "cancelled": "Zrušeno",
+      "court": "Soud",
+      "courtPlaceholder": "Vyhledejte soud nebo kód",
+      "courtsFailed": "Soudy z InfoSoudu se nepodařilo načíst",
+      "eventCount": "{count, plural, one {# událost} few {# události} other {# událostí}}",
+      "events": "Události",
+      "hearings": "Jednání",
+      "importAgenda": "Uložit do Agendy",
+      "importAgendaFailed": "Položky z InfoSoudu se nepodařilo uložit do Agendy",
+      "importAgendaResult": "{count, plural, one {# položka uložena do Agendy} few {# položky uloženy do Agendy} other {# položek uloženo do Agendy}}",
+      "importAgendaUpToDate": "Agenda je už aktuální",
+      "lookup": "Vyhledat",
+      "lookupFailed": "Vyhledání v InfoSoudu selhalo",
+      "noHearings": "Nejsou nařízena žádná jednání",
+      "notFound": "Pro tento soud a sp. zn. nebyla v InfoSoudu nalezena věc.",
+      "relatedCases": "Navazné věci",
+      "spisZn": "Sp. zn.",
+      "spisZnPlaceholder": "např. 1 T 64/2024",
+      "statusDate": "Datum stavu",
+      "title": "InfoSoud",
+      "validTo": "Platné k"
+    },
     "justification": "Odůvodnění:",
     "kanban": {
       "changeColor": "Změnit barvu",
@@ -1429,7 +1452,7 @@
       "matterDetails": "Podrobnosti spisu",
       "membersCount": "{count, plural, one {# člen} few {# členové} other {# členů}}",
       "nextDeadline": "Další termín",
-      "openTasks": "Otevřené úkoly",
+      "openTasks": "Otevřená agenda",
       "recentActivity": "Nedávná aktivita",
       "timeAndTeam": "Čas a tým",
       "timeThisWeek": "Čas tento týden",
@@ -1437,7 +1460,7 @@
       "totalDocuments": "Celkem dokumentů",
       "totalItems": "Položky",
       "totalThisWeek": "Celkem tento týden",
-      "upcomingTasks": "Nadcházející úkoly",
+      "upcomingTasks": "Nadcházející agenda",
       "uploaded": "nahrál(a)"
     },
     "parties": {
@@ -1560,7 +1583,7 @@
     "table": {
       "reorderReadOnly": "Řádky tabulky se řídí aktuálním řazením"
     },
-    "tasksCount": "{count, plural, one {# úkol} few {# úkoly} other {# úkolů}}",
+    "tasksCount": "{count, plural, one {# položka agendy} few {# položky agendy} other {# položek agendy}}",
     "tools": {
       "aiModel": "AI model",
       "manualInput": "Ručně"
@@ -1573,7 +1596,7 @@
         "addDates": "+ Datumy",
         "additionalDates": "+{count} datumů",
         "createdAt": "Vytvořeno",
-        "dueDateTaskOnly": "Datum splnění lze nastavit pouze u úkolů",
+        "dueDateTaskOnly": "Datum splnění lze nastavit pouze u položek agendy",
         "month": "Měsíc",
         "more": "+{count} dalších",
         "noDates": "Nevybrána žádná vlastnost data",

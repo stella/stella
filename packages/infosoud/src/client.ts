@@ -31,6 +31,7 @@ import type {
   CaseMarkId,
   CaseSearchResult,
   CaseSearchResultWithDetails,
+  CaseSearchResultWithHearings,
   CourtEntry,
   CourtMap,
   DistrictCourtsInput,
@@ -45,6 +46,7 @@ import type {
   RelatedCase,
   SearchCaseInput,
   SearchCaseWithDetailsInput,
+  SearchCaseWithHearingsInput,
   SearchHearingsInput,
   SpisZn,
 } from "./types.js";
@@ -412,6 +414,40 @@ const toSpisZnFromCaseMarkId = ({
   rocnik,
 });
 
+const isSameCaseMark = (
+  result: CaseSearchResult,
+  event: Pick<CaseEvent, "znackaId">,
+): boolean =>
+  event.znackaId.cisloSenatu === result.cislo &&
+  event.znackaId.druhVeci === result.druh &&
+  event.znackaId.bcVec === result.bcVec &&
+  event.znackaId.rocnik === result.rocnik;
+
+const inferPrimaryCourtCode = (result: CaseSearchResult): string | null =>
+  result.udalosti
+    .find(
+      (event) =>
+        isSameCaseMark(result, event) &&
+        event.znackaId.organizace.trim().length > 0,
+    )
+    ?.znackaId.organizace.trim() ?? null;
+
+const createEmptyHearingsResult = (
+  result: CaseSearchResult,
+): HearingsSearchResult => ({
+  bcVec: result.bcVec,
+  cislo: result.cislo,
+  datum: null,
+  druh: result.druh,
+  jednaciSin: null,
+  nadrizenaOrganizace: result.nadrizenaOrganizace,
+  organizace: result.organizace,
+  platneK: result.platneK,
+  rocnik: result.rocnik,
+  typ: "SPZN",
+  udalosti: [],
+});
+
 const buildCacheConfig = (
   options: false | InfoSoudCacheOptions | undefined,
 ): CacheConfig => {
@@ -541,6 +577,37 @@ export class InfoSoudClient {
       signal,
     });
     return result;
+  }
+
+  async searchCaseWithHearings({
+    courtCode,
+    signal,
+    spisZn,
+  }: SearchCaseWithHearingsInput): Promise<CaseSearchResultWithHearings> {
+    const caseResult = await this.searchCase({ courtCode, signal, spisZn });
+    const resolvedCourtCode = inferPrimaryCourtCode(caseResult) ?? courtCode;
+
+    try {
+      const hearingsResult = await this.searchHearings({
+        courtCode: resolvedCourtCode,
+        signal,
+        spisZn,
+      });
+
+      return {
+        case: caseResult,
+        hearings: hearingsResult,
+      };
+    } catch (error) {
+      if (error instanceof InfoSoudAPIError && error.status === 400) {
+        return {
+          case: caseResult,
+          hearings: createEmptyHearingsResult(caseResult),
+        };
+      }
+
+      throw error;
+    }
   }
 
   async getEventDetail({

@@ -6,6 +6,7 @@
     "module": "ESNext",
     "paths": {
       "@stll/ares": ["../../packages/ares/src/index.ts"],
+      "@stll/infosoud": ["../../packages/infosoud/src/index.ts"],
       "@stll/skills": ["../../packages/skills/src/index.ts"],
       "@/api/*": ["./src/*"]
     },

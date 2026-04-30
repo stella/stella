@@ -23,16 +23,21 @@ const removeAssignee = createSafeHandler(
         tx.query.entities.findFirst({
           where: {
             id: { eq: body.taskId },
-            workspaceId: { eq: workspaceId },
             kind: { eq: "task" },
+            workspaceId: { eq: workspaceId },
           },
-          columns: { id: true },
+          columns: { id: true, readOnly: true },
         }),
       ),
     );
     if (!task) {
       return Result.err(
         new HandlerError({ status: 404, message: "Task not found" }),
+      );
+    }
+    if (task.readOnly) {
+      return Result.err(
+        new HandlerError({ status: 409, message: "Task is read-only" }),
       );
     }
 

@@ -76,10 +76,15 @@ export default createSafeHandler(
             id: { eq: params.entityId },
             workspaceId: { eq: workspaceId },
           },
-          columns: { docSequence: true },
+          columns: { docSequence: true, readOnly: true },
         }),
       ),
     );
+    if (entity?.readOnly) {
+      return Result.err(
+        new HandlerError({ status: 409, message: "Entity is read-only" }),
+      );
+    }
 
     const workspace = yield* Result.await(
       safeDb((tx) =>

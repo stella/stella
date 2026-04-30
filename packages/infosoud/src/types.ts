@@ -1,7 +1,7 @@
 export type CourtType = "KS" | "MS" | "NS" | "OS" | "VS";
 
 export type FetchLike = (
-  input: URL | RequestInfo,
+  input: URL | Request | string,
   init?: RequestInit,
 ) => Promise<Response>;
 
@@ -292,6 +292,11 @@ export type CaseSearchResultWithDetails = Omit<CaseSearchResult, "udalosti"> & {
   readonly udalosti: CaseEventWithDetail[];
 };
 
+export type CaseSearchResultWithHearings = {
+  readonly case: CaseSearchResult;
+  readonly hearings: HearingsSearchResult;
+};
+
 export type InfoSoudCacheOptions = {
   readonly caseTtlMs?: number | undefined;
   readonly courtsTtlMs?: number | undefined;
@@ -325,6 +330,8 @@ export type SearchHearingsInput = {
   readonly courtCode?: string | undefined;
   readonly signal?: AbortSignal | undefined;
 };
+
+export type SearchCaseWithHearingsInput = SearchCaseInput;
 
 export type EventDetailInput = {
   readonly spisZn: SpisZn | string;
