@@ -162,35 +162,28 @@ const pUuid = <T extends SafeIdType>() =>
     .$defaultFn(createSafeId<T>)
     .$type<SafeId<T>>();
 
-export const propertyStatusEnum = p.pgEnum("property_status", [
-  "uninitialized",
-  "stale",
-  "fresh",
-]);
-export type PropertyStatus = (typeof propertyStatusEnum)["enumValues"][number];
+export const PROPERTY_STATUSES = ["uninitialized", "stale", "fresh"] as const;
+export type PropertyStatus = (typeof PROPERTY_STATUSES)[number];
 
-export const entityKindEnum = p.pgEnum("entity_kind", [
+export const ENTITY_KINDS = [
   "document",
   "folder",
   "task",
   "message",
   "link",
-]);
+] as const satisfies readonly EntityKind[];
 
-export const taskAssigneeRoleEnum = p.pgEnum("task_assignee_role", [
-  "assignee",
-  "reviewer",
-]);
+export const TASK_ASSIGNEE_ROLES = ["assignee", "reviewer"] as const;
 
-export const timeEntryStatusEnum = p.pgEnum("time_entry_status", [
+export const TIME_ENTRY_STATUSES = [
   "draft",
   "approved",
   "billed",
   "written_off",
-]);
-export type TimeEntryStatus = (typeof timeEntryStatusEnum.enumValues)[number];
+] as const;
+export type TimeEntryStatus = (typeof TIME_ENTRY_STATUSES)[number];
 /** Named constants for time entry and expense statuses
- *  (both tables share timeEntryStatusEnum). */
+ *  (both tables share TIME_ENTRY_STATUSES). */
 export const BILLING_STATUS = {
   DRAFT: "draft",
   APPROVED: "approved",
@@ -198,21 +191,18 @@ export const BILLING_STATUS = {
   WRITTEN_OFF: "written_off",
 } as const satisfies Record<string, TimeEntryStatus>;
 
-export const expenseCategoryEnum = p.pgEnum("expense_category", [
+export const EXPENSE_CATEGORIES = [
   "filing_fee",
   "expert_witness",
   "travel",
   "printing",
   "courier",
   "other",
-]);
-export type ExpenseCategory = (typeof expenseCategoryEnum.enumValues)[number];
+] as const;
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 
-export const timeEntrySourceEnum = p.pgEnum("time_entry_source", [
-  "manual",
-  "timer",
-]);
-export type TimeEntrySource = (typeof timeEntrySourceEnum.enumValues)[number];
+export const TIME_ENTRY_SOURCES = ["manual", "timer"] as const;
+export type TimeEntrySource = (typeof TIME_ENTRY_SOURCES)[number];
 export const TIME_ENTRY_SOURCE = {
   MANUAL: "manual",
   TIMER: "timer",
@@ -640,7 +630,10 @@ export const properties = p.pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: p.varchar({ length: 256 }).notNull(),
-    status: propertyStatusEnum().notNull().default("uninitialized"),
+    status: p
+      .text("status", { enum: PROPERTY_STATUSES })
+      .notNull()
+      .default("uninitialized"),
     content: p.jsonb().$type<PropertyContent>().notNull(),
     tool: p.jsonb().$type<PropertyTool>().notNull(),
     system: p.boolean().notNull().default(false),
@@ -705,7 +698,7 @@ export const entities = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    kind: entityKindEnum().notNull().default("document"),
+    kind: p.text("kind", { enum: ENTITY_KINDS }).notNull().default("document"),
     parentId: safeUuid<"entity">("parent_id").references(
       (): AnyPgColumn => entities.id,
       {
@@ -833,7 +826,7 @@ export const taskAssignees = p.pgTable(
       .text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    role: taskAssigneeRoleEnum().notNull(),
+    role: p.text("role", { enum: TASK_ASSIGNEE_ROLES }).notNull(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -969,10 +962,11 @@ export const entityVersionAiSummaries = p.pgTable(
   ],
 );
 
-export const desktopEditSessionStatusEnum = p.pgEnum(
-  "desktop_edit_session_status",
-  ["open", "finalized", "cancelled"],
-);
+export const DESKTOP_EDIT_SESSION_STATUSES = [
+  "open",
+  "finalized",
+  "cancelled",
+] as const;
 
 export const desktopEditSessions = p.pgTable(
   "desktop_edit_sessions",
@@ -993,7 +987,10 @@ export const desktopEditSessions = p.pgTable(
       .text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    status: desktopEditSessionStatusEnum().notNull().default("open"),
+    status: p
+      .text("status", { enum: DESKTOP_EDIT_SESSION_STATUSES })
+      .notNull()
+      .default("open"),
     fileName: p.varchar("file_name", { length: 256 }).notNull(),
     checkpointFileId: safeUuid<"userFile">("checkpoint_file_id").notNull(),
     checkpointSha256Hex: p.varchar("checkpoint_sha256_hex", { length: 64 }),
@@ -1189,7 +1186,7 @@ export const searchDocuments = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    kind: entityKindEnum().notNull(),
+    kind: p.text("kind", { enum: ENTITY_KINDS }).notNull(),
     title: p.text().notNull().default(""),
     searchableText: p.text("searchable_text").notNull().default(""),
     language: p.varchar("language", { length: 10 }),
@@ -1311,8 +1308,14 @@ export const timeEntries = p.pgTable(
     invoiceNarrative: p.text("invoice_narrative"),
     billable: p.boolean().notNull().default(true),
     noCharge: p.boolean("no_charge").notNull().default(false),
-    status: timeEntryStatusEnum().notNull().default("draft"),
-    source: timeEntrySourceEnum().notNull().default("manual"),
+    status: p
+      .text("status", { enum: TIME_ENTRY_STATUSES })
+      .notNull()
+      .default("draft"),
+    source: p
+      .text("source", { enum: TIME_ENTRY_SOURCES })
+      .notNull()
+      .default("manual"),
     taskCode: p.varchar("task_code", { length: 20 }),
     activityCode: p.varchar("activity_code", { length: 20 }),
     invoiceId: safeUuid<"invoice">("invoice_id").references(() => invoices.id, {
@@ -1349,10 +1352,7 @@ export const timeEntries = p.pgTable(
   ],
 );
 
-export const billingCodeTypeEnum = p.pgEnum("billing_code_type", [
-  "task",
-  "activity",
-]);
+export const BILLING_CODE_TYPES = ["task", "activity"] as const;
 
 export const billingCodes = p.pgTable(
   "billing_codes",
@@ -1364,7 +1364,7 @@ export const billingCodes = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    type: billingCodeTypeEnum().notNull(),
+    type: p.text("type", { enum: BILLING_CODE_TYPES }).notNull(),
     code: p.varchar({ length: 20 }).notNull(),
     label: p.varchar({ length: 256 }).notNull(),
     active: p.boolean().notNull().default(true),
@@ -1454,12 +1454,15 @@ export const expenses = p.pgTable(
     dateIncurred: p.date("date_incurred").notNull(),
     amount: centsColumn("amount").notNull(),
     currency: p.varchar({ length: 3 }).notNull(),
-    category: expenseCategoryEnum().notNull(),
+    category: p.text("category", { enum: EXPENSE_CATEGORIES }).notNull(),
     description: p.text().notNull(),
     invoiceDescription: p.text("invoice_description"),
     billable: p.boolean().notNull().default(true),
     markup: p.integer().notNull().default(0),
-    status: timeEntryStatusEnum().notNull().default("draft"),
+    status: p
+      .text("status", { enum: TIME_ENTRY_STATUSES })
+      .notNull()
+      .default("draft"),
     invoiceId: safeUuid<"invoice">("invoice_id").references(() => invoices.id, {
       onDelete: "set null",
     }),
@@ -1480,14 +1483,14 @@ export const expenses = p.pgTable(
   ],
 );
 
-export const invoiceStatusEnum = p.pgEnum("invoice_status", [
+export const INVOICE_STATUSES = [
   "draft",
   "finalized",
   "sent",
   "paid",
   "void",
-]);
-export type InvoiceStatus = (typeof invoiceStatusEnum)["enumValues"][number];
+] as const;
+export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
 export const INVOICE_STATUS = {
   DRAFT: "draft",
@@ -1509,7 +1512,10 @@ export const invoices = p.pgTable(
       .references(() => workspaces.id, { onDelete: "cascade" }),
     invoiceNumber: p.varchar("invoice_number", { length: 64 }).notNull(),
     reference: p.varchar({ length: 256 }),
-    status: invoiceStatusEnum().notNull().default("draft"),
+    status: p
+      .text("status", { enum: INVOICE_STATUSES })
+      .notNull()
+      .default("draft"),
     invoiceDate: p.date("invoice_date").notNull(),
     dueDate: p.date("due_date"),
     currency: p.varchar({ length: 3 }).notNull(),

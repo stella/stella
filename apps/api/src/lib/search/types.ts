@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import { entityKindEnum } from "@/api/db/schema";
+import { ENTITY_KINDS } from "@/api/db/schema";
 import type { ContactType } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -8,7 +8,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 /** Narrow an unknown value to a valid EntityKind. */
 export const parseEntityKind = (value: unknown): EntityKind => {
   const s = String(value);
-  const match = entityKindEnum.enumValues.find((v) => v === s);
+  const match = ENTITY_KINDS.find((v) => v === s);
   if (!match) {
     panic(`Invalid entity kind: ${s}`);
   }
@@ -114,7 +114,7 @@ export const GLOBAL_SEARCH_RESULT_TYPES = [
   "matter",
   "contact",
   "case-law",
-  ...entityKindEnum.enumValues,
+  ...ENTITY_KINDS,
 ] as const;
 
 export type GlobalSearchResultType =

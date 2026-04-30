@@ -1,7 +1,7 @@
 import type { Result } from "better-result";
 import * as v from "valibot";
 
-import { entityKindEnum, propertyStatusEnum } from "@/api/db/schema";
+import { ENTITY_KINDS, PROPERTY_STATUSES } from "@/api/db/schema";
 import {
   buildPaginatedOutputSchema,
   paginationInputEntries,
@@ -15,8 +15,8 @@ import type { ReadonlyFunctionManifest } from "@/api/handlers/chat/tools/execute
 import type { ChatToolValidationError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
-const entityKindSchema = v.picklist(entityKindEnum.enumValues);
-const propertyStatusSchema = v.picklist(propertyStatusEnum.enumValues);
+const entityKindSchema = v.picklist(ENTITY_KINDS);
+const propertyStatusSchema = v.picklist(PROPERTY_STATUSES);
 const matterRefSchema = v.pipe(
   v.string(),
   v.regex(/^mat_\d+$/),

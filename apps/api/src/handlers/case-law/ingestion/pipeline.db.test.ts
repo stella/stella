@@ -9,11 +9,7 @@ import {
   caseLawCitations,
   caseLawDecisions,
   caseLawSources,
-  invoiceStatusEnum,
-  propertyStatusEnum,
   relations,
-  timeEntrySourceEnum,
-  timeEntryStatusEnum,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
@@ -88,10 +84,6 @@ if (!databaseUrl) {
       schema: {
         ...relations,
         ...authRelationsPart,
-        propertyStatusEnum,
-        timeEntryStatusEnum,
-        timeEntrySourceEnum,
-        invoiceStatusEnum,
         auditLogs,
         caseLawSources,
         caseLawDecisions,

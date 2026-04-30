@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-type PgArrayType = "entity_kind" | "text" | "uuid";
+type PgArrayType = "text" | "uuid";
 
 export const typedPgArray = (values: readonly unknown[], pgType: PgArrayType) =>
   sql`ARRAY[${sql.join(

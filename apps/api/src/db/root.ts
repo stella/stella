@@ -1,14 +1,7 @@
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
-import {
-  auditLogs,
-  invoiceStatusEnum,
-  propertyStatusEnum,
-  relations,
-  timeEntrySourceEnum,
-  timeEntryStatusEnum,
-} from "@/api/db/schema";
+import { auditLogs, relations } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 
@@ -23,10 +16,6 @@ import { envBase } from "@/api/env-base";
 export const db = drizzle(envBase.DATABASE_URL, {
   relations: { ...relations, ...authRelationsPart },
   schema: {
-    propertyStatusEnum,
-    timeEntryStatusEnum,
-    timeEntrySourceEnum,
-    invoiceStatusEnum,
     auditLogs,
   },
 });
