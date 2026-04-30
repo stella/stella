@@ -1,13 +1,12 @@
 import { PDF } from "@libpdf/core";
 import { Result, TaggedError } from "better-result";
-import * as slimdom from "slimdom";
 
 import type { ScopedDb } from "@/api/db";
+import type { JustificationContent } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { createFileKey } from "@/api/handlers/files/utils";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import type { SafeId } from "@/api/lib/branded-types";
-import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import type { BoundingBox } from "@/api/types";
@@ -33,38 +32,26 @@ class JustificationTextError extends TaggedError("JustificationTextError")<{
   message: string;
 }>() {}
 
-export const parseJustificationContent = (justification: string) => {
+export const extractJustificationContent = (
+  justification: JustificationContent,
+) => {
   const pageNumbers = new Set<number>();
+  const textParts: string[] = [];
 
-  const documentResult = Result.try({
-    try: () => slimdom.parseXmlDocument(`<root>${justification}</root>`),
-    catch: (error) =>
-      new ParseXmlError({
-        message: "Failed to parse justification XML",
-        cause: error,
-      }),
-  });
+  for (const block of justification.blocks) {
+    for (const statement of block.statements) {
+      const text = statement.text.trim();
+      if (text.length > 0) {
+        textParts.push(text);
+      }
 
-  if (Result.isError(documentResult)) {
-    return Result.err(documentResult.error);
-  }
-
-  const document = documentResult.value;
-  // eslint-disable-next-line unicorn/prefer-query-selector -- slimdom XML document does not support querySelectorAll
-  const spans = document.getElementsByTagName("span");
-
-  for (const span of spans) {
-    // eslint-disable-next-line unicorn/prefer-dom-node-dataset -- slimdom Element does not have dataset
-    const pageNumber = span.getAttribute("data-page-number");
-
-    if (pageNumber) {
-      pageNumbers.add(+pageNumber);
+      for (const citation of statement.citations) {
+        pageNumbers.add(citation.pageNumber);
+      }
     }
-
-    span.remove();
   }
 
-  const justificationText = document.documentElement?.textContent;
+  const justificationText = textParts.join(" ");
 
   if (!justificationText) {
     return Result.err(
@@ -161,7 +148,7 @@ export const prepareJustificationData = async (
     const data = await scopedDb((tx) =>
       tx.query.justifications.findFirst({
         where: { id: { eq: justificationId } },
-        columns: { htmlContent: true },
+        columns: { content: true },
         with: {
           field: {
             columns: { content: true },
@@ -183,11 +170,11 @@ export const prepareJustificationData = async (
 
     const fieldContent = getFieldContentAsString(data?.field?.content);
     const tool = data?.field?.property?.tool;
-    const htmlContent = data?.htmlContent;
+    const content = data?.content;
 
     if (
       !fieldContent ||
-      !htmlContent ||
+      !content ||
       tool?.type !== "ai-model" ||
       !data?.field
     ) {
@@ -199,7 +186,7 @@ export const prepareJustificationData = async (
     }
 
     const { justificationText, pageNumbers } =
-      yield* parseJustificationContent(htmlContent);
+      yield* extractJustificationContent(content);
 
     const fileFieldContent = data.field.entityVersion?.fields.find(
       (f) => f.content.type === "file",

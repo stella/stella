@@ -1,9 +1,8 @@
 import { useState } from "react";
 
+import { getDocumentAstMetadata } from "@stll/case-law/document-ast";
+import { Button } from "@stll/ui/components/button";
 import { useTranslations } from "use-intl";
-
-import { getDocumentAstMetadata } from "@stella/case-law/document-ast";
-import { Button } from "@stella/ui/components/button";
 
 import { sanitizeHref } from "@/lib/sanitize-href";
 

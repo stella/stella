@@ -1,11 +1,7 @@
 import { Fragment } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { RouteIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import type { PropertyCondition } from "@stella/api/types";
-import { Button } from "@stella/ui/components/button";
+import type { PropertyCondition } from "@stll/api/types";
+import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
   DialogHeader,
@@ -13,17 +9,20 @@ import {
   DialogPopup,
   DialogTitle,
   DialogTrigger,
-} from "@stella/ui/components/dialog";
-import { Input } from "@stella/ui/components/input";
-import { ScrollArea } from "@stella/ui/components/scroll-area";
+} from "@stll/ui/components/dialog";
+import { Input } from "@stll/ui/components/input";
+import { ScrollArea } from "@stll/ui/components/scroll-area";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stella/ui/components/select";
-import { Separator } from "@stella/ui/components/separator";
+} from "@stll/ui/components/select";
+import { Separator } from "@stll/ui/components/separator";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { RouteIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { getTranslator } from "@/i18n/i18n-store";
 import type {

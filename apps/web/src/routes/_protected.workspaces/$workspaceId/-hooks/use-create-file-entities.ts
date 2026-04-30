@@ -1,13 +1,12 @@
 import { useCallback } from "react";
 
+import { toastManager } from "@stll/ui/components/toast";
 import {
   useMutation,
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
-
-import { toastManager } from "@stella/ui/components/toast";
 
 import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";
 import { useAnalytics } from "@/lib/analytics/provider";

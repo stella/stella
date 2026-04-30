@@ -12,19 +12,19 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^@stella\/ui\/(.*)/,
+        find: /^@stll\/ui\/(.*)/,
         replacement: path.join(monorepoRoot, "packages/ui/src/$1"),
       },
       {
-        find: "@stella/ui",
+        find: "@stll/ui",
         replacement: path.join(monorepoRoot, "packages/ui/src/index.ts"),
       },
       {
-        find: "@stella/folio",
+        find: "@stll/folio",
         replacement: path.join(monorepoRoot, "packages/folio/src/index.ts"),
       },
       {
-        find: /^@stella\/docx-utils(.*)/,
+        find: /^@stll\/docx-utils(.*)/,
         replacement: path.join(monorepoRoot, "packages/docx-utils/src$1"),
       },
     ],

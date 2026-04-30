@@ -1,5 +1,7 @@
 import { useCallback } from "react";
 
+import { Button } from "@stll/ui/components/button";
+import { Input } from "@stll/ui/components/input";
 import {
   BracesIcon,
   GitBranchIcon,
@@ -8,9 +10,6 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
-
-import { Button } from "@stella/ui/components/button";
-import { Input } from "@stella/ui/components/input";
 
 import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
 

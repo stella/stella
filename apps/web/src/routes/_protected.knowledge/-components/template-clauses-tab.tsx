@@ -1,14 +1,5 @@
 import { useCallback, useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  AlertTriangleIcon,
-  PlusIcon,
-  RefreshCwIcon,
-  XIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
 import {
   AlertDialog,
   AlertDialogClose,
@@ -17,9 +8,17 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stella/ui/components/alert-dialog";
-import { Button } from "@stella/ui/components/button";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/alert-dialog";
+import { Button } from "@stll/ui/components/button";
+import { toastManager } from "@stll/ui/components/toast";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertTriangleIcon,
+  PlusIcon,
+  RefreshCwIcon,
+  XIcon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";

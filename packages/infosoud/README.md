@@ -1,9 +1,9 @@
-# @stella/infosoud
+# @stll/infosoud
 
 TypeScript SDK and Bun-first CLI for the public
 [InfoSoud](https://infosoud.gov.cz) endpoints used for Czech court case lookup.
 
-The package name is `@stella/infosoud`; the CLI binary remains `infosoud`.
+The package name is `@stll/infosoud`; the CLI binary remains `infosoud`.
 
 It is meant to be the boring, reusable layer:
 
@@ -17,7 +17,7 @@ It is meant to be the boring, reusable layer:
 ## Install
 
 ```sh
-bun add @stella/infosoud
+bun add @stll/infosoud
 ```
 
 ## CLI
@@ -47,7 +47,7 @@ import {
   InfoSoudClient,
   formatSpisZnCanonical,
   parseSpisZn,
-} from "@stella/infosoud";
+} from "@stll/infosoud";
 
 const client = new InfoSoudClient();
 
@@ -74,7 +74,7 @@ import {
   getEventAttribute,
   InfoSoudAPIError,
   InfoSoudClient,
-} from "@stella/infosoud";
+} from "@stll/infosoud";
 
 const client = new InfoSoudClient();
 
@@ -138,7 +138,7 @@ import {
   collectUnknownInfoSoudCodes,
   getEventDescription,
   getEventTooltip,
-} from "@stella/infosoud";
+} from "@stll/infosoud";
 
 console.log(getEventTooltip("NAR_JED"));
 console.log(getEventDescription("VYD_ROZH"));

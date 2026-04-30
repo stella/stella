@@ -1,3 +1,25 @@
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@stll/ui/components/alert-dialog";
+import { Button } from "@stll/ui/components/button";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import { toastManager } from "@stll/ui/components/toast";
 import { useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
@@ -16,29 +38,6 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@stella/ui/components/alert-dialog";
-import { Button } from "@stella/ui/components/button";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuSeparator,
-  MenuSub,
-  MenuSubPopup,
-  MenuSubTrigger,
-  MenuTrigger,
-} from "@stella/ui/components/menu";
-import { toastManager } from "@stella/ui/components/toast";
 
 import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
 import Tooltip from "@/components/tooltip";

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 
+import { toastManager } from "@stll/ui/components/toast";
 import {
   createFileRoute,
   Outlet,
@@ -7,8 +8,6 @@ import {
   useMatch,
 } from "@tanstack/react-router";
 import { Group, Panel, Separator } from "react-resizable-panels";
-
-import { toastManager } from "@stella/ui/components/toast";
 
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";

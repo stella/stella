@@ -1,5 +1,5 @@
-import { listSkillMetadata } from "@stella/skills";
-import type { SkillMetadata } from "@stella/skills";
+import { listSkillMetadata } from "@stll/skills";
+import type { SkillMetadata } from "@stll/skills";
 
 let chatSkillMetadata: SkillMetadata[] | undefined;
 

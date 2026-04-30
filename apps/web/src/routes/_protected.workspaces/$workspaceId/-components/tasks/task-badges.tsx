@@ -1,3 +1,4 @@
+import { cn } from "@stll/ui/lib/utils";
 import {
   AlertCircleIcon,
   ArrowDownIcon,
@@ -6,8 +7,6 @@ import {
   MinusIcon,
 } from "lucide-react";
 import { useLocale } from "use-intl";
-
-import { cn } from "@stella/ui/lib/utils";
 
 import type { WorkspaceEntity } from "@/lib/types";
 

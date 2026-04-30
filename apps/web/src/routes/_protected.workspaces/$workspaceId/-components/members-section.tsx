@@ -1,15 +1,7 @@
 import { useState } from "react";
 import type { ComponentProps } from "react";
 
-import {
-  useQuery,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
-import { PlusIcon, TrashIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
   DialogClose,
@@ -20,15 +12,22 @@ import {
   DialogPopup,
   DialogTitle,
   DialogTrigger,
-} from "@stella/ui/components/dialog";
+} from "@stll/ui/components/dialog";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stella/ui/components/select";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/select";
+import { toastManager } from "@stll/ui/components/toast";
+import {
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import { PlusIcon, TrashIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { UserIdentity } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";

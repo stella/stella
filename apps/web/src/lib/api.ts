@@ -1,7 +1,6 @@
 import { treaty } from "@elysiajs/eden";
+import type { API } from "@stll/api/types";
 import { posthog } from "posthog-js";
-
-import type { API } from "@stella/api/types";
 
 import { env } from "@/env";
 

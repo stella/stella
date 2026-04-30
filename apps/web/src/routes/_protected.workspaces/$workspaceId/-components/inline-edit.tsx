@@ -1,7 +1,6 @@
+import { Button } from "@stll/ui/components/button";
+import { cn } from "@stll/ui/lib/utils";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { cn } from "@stella/ui/lib/utils";
 
 type InlineEditProps = {
   value: string;

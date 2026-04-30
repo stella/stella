@@ -1,5 +1,7 @@
 import type { ComponentProps } from "react";
 
+import type { PropertyContentType } from "@stll/api/types";
+import { cn } from "@stll/ui/lib/utils";
 import {
   AlertCircleIcon,
   CalendarIcon,
@@ -13,9 +15,6 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import type { PropertyContentType } from "@stella/api/types";
-import { cn } from "@stella/ui/lib/utils";
 
 import type { WorkspaceField } from "@/lib/types";
 

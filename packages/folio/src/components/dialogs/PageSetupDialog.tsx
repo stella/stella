@@ -16,7 +16,7 @@ import {
   DialogPopup,
   DialogTitle,
   DialogClose,
-} from "@stella/ui/components/dialog";
+} from "@stll/ui/components/dialog";
 
 import type { SectionProperties } from "../../core/types/document";
 import { TWIPS_PER_INCH } from "../../core/utils/units";

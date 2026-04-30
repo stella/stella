@@ -1,11 +1,6 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
-import type { Editor } from "@tiptap/react";
-import { PlusIcon, SparklesIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
   DialogClose,
@@ -16,24 +11,24 @@ import {
   DialogPopup,
   DialogTitle,
   DialogTrigger,
-} from "@stella/ui/components/dialog";
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from "@stella/ui/components/field";
-import { Input } from "@stella/ui/components/input";
+} from "@stll/ui/components/dialog";
+import { Field, FieldDescription, FieldLabel } from "@stll/ui/components/field";
+import { Input } from "@stll/ui/components/input";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stella/ui/components/select";
-import { Skeleton } from "@stella/ui/components/skeleton";
-import { Tabs, TabsList, TabsTab } from "@stella/ui/components/tabs";
-import { toastManager } from "@stella/ui/components/toast";
-import { cn } from "@stella/ui/lib/utils";
+} from "@stll/ui/components/select";
+import { Skeleton } from "@stll/ui/components/skeleton";
+import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
+import { toastManager } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import type { Editor } from "@tiptap/react";
+import { PlusIcon, SparklesIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { PDF_MIME_TYPE } from "@/consts";
 import type {

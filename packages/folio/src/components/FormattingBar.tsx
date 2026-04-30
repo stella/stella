@@ -11,6 +11,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+import { ColorPicker } from "@stll/ui/components/color-picker";
+import type { ColorPreset } from "@stll/ui/components/color-picker";
+import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/components/menu";
 import {
   BaselineIcon,
   BoldIcon,
@@ -22,10 +25,6 @@ import {
   Undo2Icon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { ColorPicker } from "@stella/ui/components/color-picker";
-import type { ColorPreset } from "@stella/ui/components/color-picker";
-import { Menu, MenuPopup, MenuTrigger } from "@stella/ui/components/menu";
 
 import type { ColorValue, ParagraphAlignment } from "../core/types/document";
 import { cn } from "../lib/utils";

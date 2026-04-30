@@ -1,7 +1,6 @@
+import { Button } from "@stll/ui/components/button";
 import { PinIcon, PinOffIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
 
 import type { TableColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 

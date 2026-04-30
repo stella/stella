@@ -1,11 +1,6 @@
 import { useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useMatch, useNavigate } from "@tanstack/react-router";
-import { MessageSquareIcon, TrashIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 import {
   Sheet,
   SheetHeader,
@@ -13,8 +8,12 @@ import {
   SheetPopup,
   SheetTitle,
   SheetTrigger,
-} from "@stella/ui/components/sheet";
-import { cn } from "@stella/ui/lib/utils";
+} from "@stll/ui/components/sheet";
+import { cn } from "@stll/ui/lib/utils";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useMatch, useNavigate } from "@tanstack/react-router";
+import { MessageSquareIcon, TrashIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { useChatPanelStore } from "@/lib/chat-panel-store";

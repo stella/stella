@@ -1,6 +1,5 @@
+import { parsePersistedDecisionAnalysis } from "@stll/case-law/analysis";
 import { status } from "elysia";
-
-import { parsePersistedDecisionAnalysis } from "@stella/case-law/analysis";
 
 import type { ScopedDb } from "@/api/db";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";

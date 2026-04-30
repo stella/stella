@@ -1,5 +1,5 @@
 {
-  "name": "@stella/infosoud",
+  "name": "@stll/infosoud",
   "version": "0.1.0",
   "description": "Czech court case lookup SDK and CLI for infosoud.gov.cz",
   "keywords": [
@@ -56,7 +56,7 @@
     "prepack": "bun run build"
   },
   "devDependencies": {
-    "@stella/typescript-config": "workspace:*",
+    "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
     "typescript": "catalog:"
   }

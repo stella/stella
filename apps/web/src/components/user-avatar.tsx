@@ -2,8 +2,8 @@ import {
   Avatar,
   AvatarFallback,
   AvatarImage,
-} from "@stella/ui/components/avatar";
-import { cn } from "@stella/ui/lib/utils";
+} from "@stll/ui/components/avatar";
+import { cn } from "@stll/ui/lib/utils";
 
 import { getInitials } from "@/lib/get-initials";
 

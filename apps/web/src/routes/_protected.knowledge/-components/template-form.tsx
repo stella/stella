@@ -1,11 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 
-import { AlertTriangleIcon, EyeIcon, PlusIcon, TrashIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { evaluateCondition } from "@stella/template-conditions";
-import { Button } from "@stella/ui/components/button";
-import { Checkbox } from "@stella/ui/components/checkbox";
+import { evaluateCondition } from "@stll/template-conditions";
+import { Button } from "@stll/ui/components/button";
+import { Checkbox } from "@stll/ui/components/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -14,19 +11,21 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stella/ui/components/dialog";
-import { Field, FieldControl, FieldLabel } from "@stella/ui/components/field";
-import { Input } from "@stella/ui/components/input";
+} from "@stll/ui/components/dialog";
+import { Field, FieldControl, FieldLabel } from "@stll/ui/components/field";
+import { Input } from "@stll/ui/components/input";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stella/ui/components/select";
-import { Textarea } from "@stella/ui/components/textarea";
-import { toastManager } from "@stella/ui/components/toast";
-import { cn } from "@stella/ui/lib/utils";
+} from "@stll/ui/components/select";
+import { Textarea } from "@stll/ui/components/textarea";
+import { toastManager } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
+import { AlertTriangleIcon, EyeIcon, PlusIcon, TrashIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";

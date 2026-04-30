@@ -250,7 +250,7 @@ export type FieldMeta = {
 };
 
 /**
- * Matches `NamedCondition` from `@stella/template-conditions`.
+ * Matches `NamedCondition` from `@stll/template-conditions`.
  * Kept here for co-location with `TemplateManifest`.
  */
 export type NamedCondition = {

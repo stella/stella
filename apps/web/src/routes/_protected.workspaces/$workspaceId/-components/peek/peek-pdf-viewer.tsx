@@ -8,6 +8,8 @@ import {
 } from "react";
 import type { RefObject } from "react";
 
+import type { DocxEditorRef } from "@stll/folio";
+import { Button } from "@stll/ui/components/button";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   FoldHorizontalIcon,
@@ -17,10 +19,7 @@ import {
   UnfoldHorizontalIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import type { DocxEditorRef } from "@stella/folio";
-import { Button } from "@stella/ui/components/button";
-import "@stella/folio/editor.css";
+import "@stll/folio/editor.css";
 import "./peek-docx.css";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
@@ -41,7 +40,7 @@ import { PageAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-
 import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
 
 const DocxEditor = lazy(async () => {
-  const m = await import("@stella/folio");
+  const m = await import("@stll/folio");
   return { default: m.DocxEditor };
 });
 

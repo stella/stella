@@ -1,14 +1,12 @@
 import type { PropsWithChildren } from "react";
 
+import { cn } from "@stll/ui/lib/utils";
 import { useNavigate } from "@tanstack/react-router";
-import parse, { domToReact, Element } from "html-react-parser";
-import type { DOMNode } from "html-react-parser";
 import { produce } from "immer";
 import { useShallow } from "zustand/react/shallow";
 
-import { cn } from "@stella/ui/lib/utils";
-
 import { usePDFStore } from "@/lib/pdf/pdf-context";
+import { renderJustificationContent } from "@/lib/render-justification-content";
 import type { WorkspaceJustification } from "@/lib/types";
 import { useCreateBBoxes } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
@@ -18,42 +16,23 @@ type JustificationProps = {
 };
 
 export const Justification = ({ justification }: JustificationProps) => (
-  <p>
-    {parse(justification.htmlContent, {
-      replace: (node) => {
-        if (!(node instanceof Element)) {
-          return node;
-        }
-
-        const pageNumberAttribute = node.attribs["data-page-number"];
-        const fileFieldId = node.attribs["data-field-id"];
-
-        if (!pageNumberAttribute || !fileFieldId) {
-          return node;
-        }
-
-        const pageNumber = +pageNumberAttribute;
-
-        if (Number.isNaN(pageNumber)) {
-          return node;
-        }
-
-        return (
+  <div>
+    {
+      renderJustificationContent({
+        content: justification.content,
+        renderCitation: ({ children, fileFieldId, key, pageNumber }) => (
           <Citation
             fileFieldId={fileFieldId}
             justification={justification}
+            key={key}
             pageNumber={pageNumber}
           >
-            {domToReact(
-              // SAFETY: html-react-parser DOMNode children
-              // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-              node.children as DOMNode[],
-            )}
+            {children}
           </Citation>
-        );
-      },
-    })}
-  </p>
+        ),
+      }).nodes
+    }
+  </div>
 );
 
 type CitationProps = {

@@ -2,14 +2,10 @@
 
 import * as React from "react";
 
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from "@stella/ui/components/field";
-import { Input } from "@stella/ui/components/input";
-import type { InputProps } from "@stella/ui/components/input";
-import { cn } from "@stella/ui/lib/utils";
+import { Field, FieldDescription, FieldLabel } from "@stll/ui/components/field";
+import { Input } from "@stll/ui/components/input";
+import type { InputProps } from "@stll/ui/components/input";
+import { cn } from "@stll/ui/lib/utils";
 
 type DestructiveActionConfirmationProps = Omit<
   InputProps,

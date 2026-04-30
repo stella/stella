@@ -1,10 +1,6 @@
 import { useCallback, useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
-import { SearchIcon, TextQuoteIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
   DialogClose,
@@ -13,9 +9,12 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stella/ui/components/dialog";
-import { Input } from "@stella/ui/components/input";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/dialog";
+import { Input } from "@stll/ui/components/input";
+import { toastManager } from "@stll/ui/components/toast";
+import { useQuery } from "@tanstack/react-query";
+import { SearchIcon, TextQuoteIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";

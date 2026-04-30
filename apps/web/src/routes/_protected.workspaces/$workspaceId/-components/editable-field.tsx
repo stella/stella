@@ -12,12 +12,11 @@
 
 import { useState } from "react";
 
+import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
+import { Input } from "@stll/ui/components/input";
+import { toastManager } from "@stll/ui/components/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
-
-import { DatePickerPopover } from "@stella/ui/components/date-picker-popover";
-import { Input } from "@stella/ui/components/input";
-import { toastManager } from "@stella/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";

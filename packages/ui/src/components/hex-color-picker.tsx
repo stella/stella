@@ -18,7 +18,7 @@
 import type * as React from "react";
 import { useEffect, useRef, useState } from "react";
 
-import { cn } from "@stella/ui/lib/utils";
+import { cn } from "@stll/ui/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Types

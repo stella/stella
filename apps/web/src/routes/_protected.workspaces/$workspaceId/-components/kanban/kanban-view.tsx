@@ -7,6 +7,8 @@ import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/clo
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import type { OptionColor } from "@stll/api/types";
+import { toastManager } from "@stll/ui/components/toast";
 import {
   useMutation,
   useQueryClient,
@@ -14,9 +16,6 @@ import {
 } from "@tanstack/react-query";
 import { KanbanIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import type { OptionColor } from "@stella/api/types";
-import { toastManager } from "@stella/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";

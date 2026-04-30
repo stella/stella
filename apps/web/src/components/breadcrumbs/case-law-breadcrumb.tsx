@@ -1,8 +1,7 @@
+import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type { ResolveParams } from "@tanstack/react-router";
 import { BookOpenTextIcon } from "lucide-react";
-
-import { BreadcrumbItem } from "@stella/ui/components/breadcrumb";
 
 import { getCourtColor } from "@/lib/court-colors";
 import type { SafeId } from "@/lib/safe-id";

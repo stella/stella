@@ -3,14 +3,13 @@ import { useEffect, useRef } from "react";
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
-import { useLocale, useTranslations } from "use-intl";
-
 import {
   Tooltip,
   TooltipPopup,
   TooltipTrigger,
-} from "@stella/ui/components/tooltip";
-import { cn } from "@stella/ui/lib/utils";
+} from "@stll/ui/components/tooltip";
+import { cn } from "@stll/ui/lib/utils";
+import { useLocale, useTranslations } from "use-intl";
 
 import type { DragPreviewData } from "@/components/drag-preview";
 import { renderDragPreview } from "@/components/drag-preview";

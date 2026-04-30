@@ -1,3 +1,5 @@
+import type { PermissionInput } from "@stll/permissions";
+import { roles } from "@stll/permissions";
 import type { Err, UnhandledException } from "better-result";
 import { Result } from "better-result";
 import type {
@@ -7,9 +9,6 @@ import type {
   UnwrapRoute,
 } from "elysia";
 import { status } from "elysia";
-
-import type { PermissionInput } from "@stella/permissions";
-import { roles } from "@stella/permissions";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
 import type { OrgAIConfig } from "@/api/lib/ai-models";

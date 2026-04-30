@@ -1,6 +1,5 @@
+import type { AnalysisHeading } from "@stll/case-law/analysis";
 import { describe, expect, test } from "bun:test";
-
-import type { AnalysisHeading } from "@stella/case-law/analysis";
 
 import {
   buildCategoryCatalogPrompt,

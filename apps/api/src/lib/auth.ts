@@ -1,4 +1,6 @@
 import { oauthProvider } from "@better-auth/oauth-provider";
+import { ac, roles } from "@stll/permissions";
+import type { PermissionInput } from "@stll/permissions";
 import type { BetterAuthPlugin } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -14,9 +16,6 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import Elysia, { t } from "elysia";
-
-import { ac, roles } from "@stella/permissions";
-import type { PermissionInput } from "@stella/permissions";
 
 import { createSafeDb, createScopedDb } from "@/api/db";
 import { authSchema, session as sessionTable } from "@/api/db/auth-schema";

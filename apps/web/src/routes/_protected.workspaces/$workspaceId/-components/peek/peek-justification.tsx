@@ -1,13 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { PropsWithChildren } from "react";
 
-import DOMPurify from "dompurify";
-import parse, { domToReact, Element } from "html-react-parser";
-import type { DOMNode } from "html-react-parser";
-
-import { cn } from "@stella/ui/lib/utils";
+import { cn } from "@stll/ui/lib/utils";
 
 import { usePDFStore } from "@/lib/pdf/pdf-context";
+import { renderJustificationContent } from "@/lib/render-justification-content";
 import type { WorkspaceJustification } from "@/lib/types";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
@@ -55,52 +52,26 @@ export const PeekJustification = ({
 
   // Parse once so we can extract the first cited page
   const { parsed: nodes, firstPage } = useMemo(() => {
-    const safeHtml = DOMPurify.sanitize(justification.htmlContent, {
-      ALLOWED_TAGS: ["span", "strong", "em", "b", "i", "u", "p", "br", "cite"],
-      ALLOWED_ATTR: ["data-page-number", "data-field-id"],
-    });
-    let fp: number | null = null;
-
-    const result = parse(safeHtml, {
-      replace: (node) => {
-        if (!(node instanceof Element)) {
-          return node;
-        }
-
-        const pageNumberAttr = node.attribs["data-page-number"];
-        const fileFieldId = node.attribs["data-field-id"];
-
-        if (!pageNumberAttr || !fileFieldId) {
-          return node;
-        }
-
-        const pageNumber = +pageNumberAttr;
-
-        if (Number.isNaN(pageNumber)) {
-          return node;
-        }
-
-        fp ??= pageNumber;
-
+    const result = renderJustificationContent({
+      content: justification.content,
+      firstPageFileFieldId: activeFileFieldId,
+      renderCitation: ({ children, fileFieldId, key, pageNumber }) => {
         const isSameFile = fileFieldId === activeFileFieldId;
 
         return (
           <PeekCitation
             disabled={!isSameFile}
+            key={key}
             onClick={() => handleCitationClick(fileFieldId, pageNumber)}
           >
-            {/* SAFETY: html-react-parser's Element.children is
-                typed as ChildNode[] which is structurally
-                compatible with DOMNode[] */}
-            {/* eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion */}
-            {domToReact(node.children as DOMNode[])}
+            {children}
           </PeekCitation>
         );
       },
     });
 
-    return { parsed: result, firstPage: fp };
-  }, [justification.htmlContent, activeFileFieldId, handleCitationClick]);
+    return { parsed: result.nodes, firstPage: result.firstPage };
+  }, [justification.content, activeFileFieldId, handleCitationClick]);
 
   // Activate the justification and scroll to the first cited page
   // when expanded. Bbox generation is handled by JustificationBar.

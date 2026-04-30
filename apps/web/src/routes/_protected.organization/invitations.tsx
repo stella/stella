@@ -1,18 +1,13 @@
 import { useMemo } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, useSearch } from "@tanstack/react-router";
-import { EllipsisVerticalIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { Frame } from "@stella/ui/components/frame";
+import { Button } from "@stll/ui/components/button";
+import { Frame } from "@stll/ui/components/frame";
 import {
   Menu,
   MenuItem,
   MenuPopup,
   MenuTrigger,
-} from "@stella/ui/components/menu";
+} from "@stll/ui/components/menu";
 import {
   Table,
   TableBody,
@@ -20,8 +15,12 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@stella/ui/components/table";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/table";
+import { toastManager } from "@stll/ui/components/toast";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, useSearch } from "@tanstack/react-router";
+import { EllipsisVerticalIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import Tooltip from "@/components/tooltip";
 import {

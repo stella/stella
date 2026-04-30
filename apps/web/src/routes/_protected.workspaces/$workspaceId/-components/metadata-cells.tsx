@@ -2,7 +2,7 @@ import {
   Avatar,
   AvatarFallback,
   AvatarImage,
-} from "@stella/ui/components/avatar";
+} from "@stll/ui/components/avatar";
 
 import Tooltip from "@/components/tooltip";
 import type { WorkspaceEntity } from "@/lib/types";

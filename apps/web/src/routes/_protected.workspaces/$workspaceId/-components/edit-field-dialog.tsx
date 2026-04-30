@@ -1,13 +1,7 @@
 import { useState } from "react";
 
-import { revalidateLogic, useForm } from "@tanstack/react-form";
-import type { AnyFieldApi } from "@tanstack/react-form";
-import { panic } from "better-result";
-import { useTranslations } from "use-intl";
-import * as v from "valibot";
-
-import { Button } from "@stella/ui/components/button";
-import { DatePickerPopover } from "@stella/ui/components/date-picker-popover";
+import { Button } from "@stll/ui/components/button";
+import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
 import {
   Dialog,
   DialogClose,
@@ -17,11 +11,16 @@ import {
   DialogPopup,
   DialogTitle,
   DialogTrigger,
-} from "@stella/ui/components/dialog";
-import { Field, FieldError, FieldLabel } from "@stella/ui/components/field";
-import { Form } from "@stella/ui/components/form";
-import { Input } from "@stella/ui/components/input";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/dialog";
+import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
+import { Form } from "@stll/ui/components/form";
+import { Input } from "@stll/ui/components/input";
+import { toastManager } from "@stll/ui/components/toast";
+import { revalidateLogic, useForm } from "@tanstack/react-form";
+import type { AnyFieldApi } from "@tanstack/react-form";
+import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { toFormErrors } from "@/lib/schema";
 import type {

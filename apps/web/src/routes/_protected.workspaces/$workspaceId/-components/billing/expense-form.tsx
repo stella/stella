@@ -1,22 +1,21 @@
 import { useState } from "react";
 
-import { useForm } from "@tanstack/react-form";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { Checkbox } from "@stella/ui/components/checkbox";
-import { DatePickerPopover } from "@stella/ui/components/date-picker-popover";
-import { Input } from "@stella/ui/components/input";
-import { Label } from "@stella/ui/components/label";
+import { Button } from "@stll/ui/components/button";
+import { Checkbox } from "@stll/ui/components/checkbox";
+import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
+import { Input } from "@stll/ui/components/input";
+import { Label } from "@stll/ui/components/label";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stella/ui/components/select";
-import { Textarea } from "@stella/ui/components/textarea";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/select";
+import { Textarea } from "@stll/ui/components/textarea";
+import { toastManager } from "@stll/ui/components/toast";
+import { useForm } from "@tanstack/react-form";
+import { useTranslations } from "use-intl";
 
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 

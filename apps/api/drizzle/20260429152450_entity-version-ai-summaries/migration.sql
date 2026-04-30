@@ -449,8 +449,7 @@ CREATE TABLE "justifications" (
 	"id" uuid PRIMARY KEY,
 	"workspace_id" uuid NOT NULL,
 	"field_id" uuid NOT NULL,
-	"html_version" numeric NOT NULL,
-	"html_content" text NOT NULL,
+	"content" jsonb NOT NULL,
 	"bounding_boxes" jsonb,
 	"file_field_ids" uuid[] DEFAULT '{}'::uuid[] NOT NULL
 );

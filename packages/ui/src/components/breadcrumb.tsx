@@ -4,9 +4,8 @@ import type * as React from "react";
 
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
+import { cn } from "@stll/ui/lib/utils";
 import { ChevronRight, MoreHorizontal } from "lucide-react";
-
-import { cn } from "@stella/ui/lib/utils";
 
 function Breadcrumb({ ...props }: React.ComponentProps<"nav">) {
   return <nav aria-label="breadcrumb" data-slot="breadcrumb" {...props} />;

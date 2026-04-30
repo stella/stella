@@ -1,4 +1,4 @@
-import { toastManager } from "@stella/ui/components/toast";
+import { toastManager } from "@stll/ui/components/toast";
 
 import { getTranslator } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";

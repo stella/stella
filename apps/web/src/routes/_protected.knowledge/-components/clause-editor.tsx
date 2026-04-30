@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from "react";
 
+import { Button } from "@stll/ui/components/button";
 import Bold from "@tiptap/extension-bold";
 import Document from "@tiptap/extension-document";
 import Heading from "@tiptap/extension-heading";
@@ -17,8 +18,6 @@ import {
   Heading3Icon,
   ItalicIcon,
 } from "lucide-react";
-
-import { Button } from "@stella/ui/components/button";
 
 import "./clause-editor.css";
 import type { ClauseParagraph, ClauseRun } from "./clause-editor-types";

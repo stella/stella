@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { cn } from "@stll/ui/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRightIcon,
@@ -9,8 +10,6 @@ import {
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { cn } from "@stella/ui/lib/utils";
 
 import type {
   ApprovalToolName,

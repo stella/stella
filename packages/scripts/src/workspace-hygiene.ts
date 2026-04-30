@@ -52,7 +52,7 @@ const readWorkspacePackage = (
 };
 
 export const expectedWorkspaceName = (directoryName: string) =>
-  `@stella/${directoryName}`;
+  `@stll/${directoryName}`;
 
 export const validateWorkspaceRoot = (rootDir: string): WorkspaceIssue[] => {
   const issues: WorkspaceIssue[] = [];

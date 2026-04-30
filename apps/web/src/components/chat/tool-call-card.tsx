@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { cn } from "@stll/ui/lib/utils";
 import { getToolName } from "ai";
 import {
   ChevronDownIcon,
@@ -13,8 +14,6 @@ import {
   UserIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { cn } from "@stella/ui/lib/utils";
 
 type ToolPart = Parameters<typeof getToolName>[0];
 

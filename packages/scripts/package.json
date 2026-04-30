@@ -1,5 +1,5 @@
 {
-  "name": "@stella/scripts",
+  "name": "@stll/scripts",
   "version": "0.0.0",
   "private": true,
   "bin": {
@@ -16,7 +16,7 @@
     "format": "oxfmt ."
   },
   "devDependencies": {
-    "@stella/typescript-config": "workspace:*",
+    "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
     "typescript": "catalog:"
   }

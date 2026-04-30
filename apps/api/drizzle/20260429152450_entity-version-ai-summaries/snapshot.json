@@ -4624,27 +4624,14 @@
       "table": "justifications"
     },
     {
-      "type": "numeric",
+      "type": "jsonb",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "html_version",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "justifications"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "html_content",
+      "name": "content",
       "entityType": "columns",
       "schema": "public",
       "table": "justifications"

@@ -2,14 +2,13 @@
 
 import type * as React from "react";
 
+import { Input } from "@stll/ui/components/input";
+import type { InputProps } from "@stll/ui/components/input";
+import { Textarea } from "@stll/ui/components/textarea";
+import type { TextareaProps } from "@stll/ui/components/textarea";
+import { cn } from "@stll/ui/lib/utils";
 import { cva } from "class-variance-authority";
 import type { VariantProps } from "class-variance-authority";
-
-import { Input } from "@stella/ui/components/input";
-import type { InputProps } from "@stella/ui/components/input";
-import { Textarea } from "@stella/ui/components/textarea";
-import type { TextareaProps } from "@stella/ui/components/textarea";
-import { cn } from "@stella/ui/lib/utils";
 
 function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (

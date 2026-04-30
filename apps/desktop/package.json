@@ -1,5 +1,5 @@
 {
-  "name": "@stella/desktop",
+  "name": "@stll/desktop",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -16,14 +16,14 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@stella/ui": "workspace:*",
+    "@stll/ui": "workspace:*",
     "@tauri-apps/api": "^2.5.0",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "use-intl": "catalog:"
   },
   "devDependencies": {
-    "@stella/typescript-config": "workspace:*",
+    "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",

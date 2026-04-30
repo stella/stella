@@ -1,17 +1,16 @@
+import { Button } from "@stll/ui/components/button";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
 import {
   ArrowDownIcon,
   ArrowUpDownIcon,
   ArrowUpIcon,
   XIcon,
 } from "lucide-react";
-
-import { Button } from "@stella/ui/components/button";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stella/ui/components/menu";
 
 import type { ViewLayout, WorkspaceProperty } from "@/lib/types";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";

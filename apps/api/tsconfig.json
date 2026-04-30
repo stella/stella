@@ -1,12 +1,12 @@
 {
-  "extends": "@stella/typescript-config/base.json",
+  "extends": "@stll/typescript-config/base.json",
   "compilerOptions": {
     "target": "ES2024",
     "lib": ["ESNext"],
     "module": "ESNext",
     "paths": {
-      "@stella/ares": ["../../packages/ares/src/index.ts"],
-      "@stella/skills": ["../../packages/skills/src/index.ts"],
+      "@stll/ares": ["../../packages/ares/src/index.ts"],
+      "@stll/skills": ["../../packages/skills/src/index.ts"],
       "@/api/*": ["./src/*"]
     },
     "jsx": "react-jsx",

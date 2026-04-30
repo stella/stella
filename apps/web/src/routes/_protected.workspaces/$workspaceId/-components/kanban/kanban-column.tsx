@@ -16,6 +16,35 @@ import {
   containsFiles,
   getFiles,
 } from "@atlaskit/pragmatic-drag-and-drop/external/file";
+import type { OptionColor } from "@stll/api/types";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@stll/ui/components/alert-dialog";
+import { Button } from "@stll/ui/components/button";
+import {
+  ColorPicker,
+  ColorPickerContent,
+  DEFAULT_PRESETS,
+} from "@stll/ui/components/color-picker";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import {
+  Popover,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stll/ui/components/popover";
+import { cn } from "@stll/ui/lib/utils";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   EllipsisVerticalIcon,
@@ -28,36 +57,6 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import type { OptionColor } from "@stella/api/types";
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@stella/ui/components/alert-dialog";
-import { Button } from "@stella/ui/components/button";
-import {
-  ColorPicker,
-  ColorPickerContent,
-  DEFAULT_PRESETS,
-} from "@stella/ui/components/color-picker";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stella/ui/components/menu";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stella/ui/components/popover";
-import { cn } from "@stella/ui/lib/utils";
 
 import type {
   EntityKind,

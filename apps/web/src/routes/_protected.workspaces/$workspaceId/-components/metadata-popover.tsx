@@ -1,14 +1,13 @@
-import { EyeOffIcon } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 import {
   Popover,
   PopoverPopup,
   PopoverTrigger,
-} from "@stella/ui/components/popover";
-import { Separator } from "@stella/ui/components/separator";
+} from "@stll/ui/components/popover";
+import { Separator } from "@stll/ui/components/separator";
+import { EyeOffIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { PinProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/pin-property";
 import { SortProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";

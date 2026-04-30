@@ -26,7 +26,7 @@
 
 import { Children, Fragment, cloneElement, isValidElement } from "react";
 
-import { cn } from "@stella/ui/lib/utils";
+import { cn } from "@stll/ui/lib/utils";
 
 type SlotProps = React.HTMLAttributes<HTMLElement> & {
   children?: React.ReactNode;

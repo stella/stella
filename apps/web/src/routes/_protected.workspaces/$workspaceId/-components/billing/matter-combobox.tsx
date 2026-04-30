@@ -1,13 +1,12 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { useTranslations } from "use-intl";
-
 import {
   Combobox,
   ComboboxInput,
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-} from "@stella/ui/components/combobox";
+} from "@stll/ui/components/combobox";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
 
 import { entitySummariesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 

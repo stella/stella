@@ -1,16 +1,15 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { FileIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
 import {
   PreviewCard,
   PreviewCardPopup,
   PreviewCardTrigger,
-} from "@stella/ui/components/preview-card";
-import { cn } from "@stella/ui/lib/utils";
+} from "@stll/ui/components/preview-card";
+import { cn } from "@stll/ui/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { FileIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { useI18nStore } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";

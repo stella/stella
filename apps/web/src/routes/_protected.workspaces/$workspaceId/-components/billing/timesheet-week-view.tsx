@@ -1,9 +1,8 @@
 import { useMemo } from "react";
 
+import { cn } from "@stll/ui/lib/utils";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
-
-import { cn } from "@stella/ui/lib/utils";
 
 import {
   formatDecimalHours,

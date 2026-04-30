@@ -1,21 +1,20 @@
 import { useEffect, useRef } from "react";
 import type React from "react";
 
+import { FieldError } from "@stll/ui/components/field";
+import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { cn } from "@stll/ui/lib/utils";
+
+import "./tiptap.css";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import Document from "@tiptap/extension-document";
 import History from "@tiptap/extension-history";
-
-import "./tiptap.css";
 import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { useTranslations } from "use-intl";
-
-import { FieldError } from "@stella/ui/components/field";
-import { ScrollArea } from "@stella/ui/components/scroll-area";
-import { cn } from "@stella/ui/lib/utils";
 
 import { PropertyFormField } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/form";
 import {

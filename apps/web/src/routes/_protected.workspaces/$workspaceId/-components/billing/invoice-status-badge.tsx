@@ -1,6 +1,5 @@
+import { cn } from "@stll/ui/lib/utils";
 import { useTranslations } from "use-intl";
-
-import { cn } from "@stella/ui/lib/utils";
 
 import type { InvoiceStatus } from "@/routes/_protected.workspaces/$workspaceId/-queries/invoices";
 

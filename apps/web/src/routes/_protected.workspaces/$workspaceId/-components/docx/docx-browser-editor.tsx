@@ -13,14 +13,13 @@ import {
 } from "react";
 import type { ReactNode, RefObject } from "react";
 
+import type { DocxEditorRef, EditorMode } from "@stll/folio";
+import { Button } from "@stll/ui/components/button";
+import { toastManager } from "@stll/ui/components/toast";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { CheckIcon, LoaderIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import type { DocxEditorRef, EditorMode } from "@stella/folio";
-import { Button } from "@stella/ui/components/button";
-import { toastManager } from "@stella/ui/components/toast";
-import "@stella/folio/editor.css";
+import "@stll/folio/editor.css";
 import {
   DefaultPendingComponent,
   StatusMessage,
@@ -35,7 +34,7 @@ import type { EditSessionErrorReason } from "./use-edit-session";
 import { useEditSession } from "./use-edit-session";
 
 const DocxEditor = lazy(async () => {
-  const m = await import("@stella/folio");
+  const m = await import("@stll/folio");
   return { default: m.DocxEditor };
 });
 

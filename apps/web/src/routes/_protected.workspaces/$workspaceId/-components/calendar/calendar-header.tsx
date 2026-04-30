@@ -1,14 +1,13 @@
 import { useMemo } from "react";
 
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 import {
   Popover,
   PopoverPopup,
   PopoverTrigger,
-} from "@stella/ui/components/popover";
+} from "@stll/ui/components/popover";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { useLocale, useTranslations } from "use-intl";
 
 import { getMonthLabels } from "./calendar-utils";
 

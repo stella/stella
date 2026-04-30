@@ -1,5 +1,5 @@
 {
-  "name": "@stella/extension",
+  "name": "@stll/extension",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
-    "@stella/ui": "workspace:*",
+    "@stll/ui": "workspace:*",
     "react": "catalog:react19",
     "react-dom": "catalog:react19"
   },

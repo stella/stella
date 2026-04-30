@@ -1,8 +1,4 @@
-import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon } from "lucide-react";
-import { useShallow } from "zustand/shallow";
-
-import { Frame } from "@stella/ui/components/frame";
+import { Frame } from "@stll/ui/components/frame";
 import {
   Table,
   TableBody,
@@ -10,8 +6,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@stella/ui/components/table";
-import { cn } from "@stella/ui/lib/utils";
+} from "@stll/ui/components/table";
+import { cn } from "@stll/ui/lib/utils";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon } from "lucide-react";
+import { useShallow } from "zustand/shallow";
 
 import { useI18nStore } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";

@@ -101,6 +101,6 @@
   },
   "exclude": ["exports", "types"],
   "ignoreBinaries": ["docker", "oxfmt", "tsgo", "bun"],
-  "ignoreDependencies": ["@stella/typescript-config"],
+  "ignoreDependencies": ["@stll/typescript-config"],
   "ignoreWorkspaces": ["packages/skills", "packages/typescript-config"]
 }

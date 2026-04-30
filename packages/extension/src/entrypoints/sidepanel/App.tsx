@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 
 import { API_BASE } from "../../lib/config";
 import { storage } from "../../lib/storage";

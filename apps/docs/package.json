@@ -1,8 +1,8 @@
 {
-  "name": "@stella/docs",
-  "type": "module",
+  "name": "@stll/docs",
   "version": "0.0.1",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "bun --bun astro dev",
     "build": "bun --bun astro build",

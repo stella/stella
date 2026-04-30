@@ -1,11 +1,10 @@
 import { useEffectEvent } from "react";
 
+import { Button, buttonVariants } from "@stll/ui/components/button";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { PlusIcon, SquareIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button, buttonVariants } from "@stella/ui/components/button";
 
 import {
   Conversation,

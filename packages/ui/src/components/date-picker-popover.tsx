@@ -2,15 +2,14 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 
-import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 import {
   Popover,
   PopoverPopup,
   PopoverTrigger,
-} from "@stella/ui/components/popover";
-import { cn } from "@stella/ui/lib/utils";
+} from "@stll/ui/components/popover";
+import { cn } from "@stll/ui/lib/utils";
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Calendar utilities

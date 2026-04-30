@@ -1,12 +1,11 @@
-import { useTranslations } from "use-intl";
-
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stella/ui/components/select";
+} from "@stll/ui/components/select";
+import { useTranslations } from "use-intl";
 
 import type { WorkspacePropertyOption } from "@/lib/types";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";

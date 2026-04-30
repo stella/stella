@@ -1,6 +1,5 @@
+import type { EntityKind } from "@stll/api/types";
 import { infiniteQueryOptions } from "@tanstack/react-query";
-
-import type { EntityKind } from "@stella/api/types";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";

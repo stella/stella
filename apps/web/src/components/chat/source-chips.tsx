@@ -1,14 +1,13 @@
-import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { isDataUIPart, isToolUIPart } from "ai";
-import type { UIDataTypes } from "ai";
-import { FileTextIcon, FolderIcon } from "lucide-react";
-
 import type {
   ChatMessage,
   ChatPart,
   ChatSourceDocument,
-} from "@stella/api/types";
-import { cn } from "@stella/ui/lib/utils";
+} from "@stll/api/types";
+import { cn } from "@stll/ui/lib/utils";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { isDataUIPart, isToolUIPart } from "ai";
+import type { UIDataTypes } from "ai";
+import { FileTextIcon, FolderIcon } from "lucide-react";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";

@@ -1,21 +1,20 @@
 import { useEffect, useState } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2Icon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { Checkbox } from "@stella/ui/components/checkbox";
-import { Field, FieldLabel } from "@stella/ui/components/field";
-import { Input } from "@stella/ui/components/input";
+import { Button } from "@stll/ui/components/button";
+import { Checkbox } from "@stll/ui/components/checkbox";
+import { Field, FieldLabel } from "@stll/ui/components/field";
+import { Input } from "@stll/ui/components/input";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stella/ui/components/select";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/select";
+import { toastManager } from "@stll/ui/components/toast";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Trash2Icon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";

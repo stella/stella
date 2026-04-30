@@ -3,12 +3,12 @@ import type React from "react";
 import type {
   AnalysisAnnotation,
   AnalysisHeading,
-} from "@stella/case-law/analysis";
+} from "@stll/case-law/analysis";
 
 export type {
   AnalysisAnnotation,
   AnalysisHeading,
-} from "@stella/case-law/analysis";
+} from "@stll/case-law/analysis";
 
 // ── Color system ──────────────────────────────────────────
 //

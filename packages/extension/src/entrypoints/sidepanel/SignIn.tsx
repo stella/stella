@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
-import { Button } from "@stella/ui/components/button";
-import { Input } from "@stella/ui/components/input";
+import { Button } from "@stll/ui/components/button";
+import { Input } from "@stll/ui/components/input";
 
 import { API_BASE } from "../../lib/config";
 import { storage } from "../../lib/storage";

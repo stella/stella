@@ -1,18 +1,17 @@
 import { startTransition, useEffect, useState } from "react";
 
+import { Avatar, AvatarFallback } from "@stll/ui/components/avatar";
+import { Button } from "@stll/ui/components/button";
+import { Checkbox } from "@stll/ui/components/checkbox";
+import { FramePanel } from "@stll/ui/components/frame";
+import { Label } from "@stll/ui/components/label";
+import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { Separator } from "@stll/ui/components/separator";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
+import { cn } from "@stll/ui/lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslations } from "use-intl";
-
-import { Avatar, AvatarFallback } from "@stella/ui/components/avatar";
-import { Button } from "@stella/ui/components/button";
-import { Checkbox } from "@stella/ui/components/checkbox";
-import { FramePanel } from "@stella/ui/components/frame";
-import { Label } from "@stella/ui/components/label";
-import { ScrollArea } from "@stella/ui/components/scroll-area";
-import { Separator } from "@stella/ui/components/separator";
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@stella/ui/components/tabs";
-import { cn } from "@stella/ui/lib/utils";
 
 import { isAppSnapshot } from "../shared/rpc";
 import type {

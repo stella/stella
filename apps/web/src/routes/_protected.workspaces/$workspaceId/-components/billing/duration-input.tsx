@@ -1,9 +1,8 @@
 import { useCallback, useState } from "react";
 
+import { Input } from "@stll/ui/components/input";
+import { cn } from "@stll/ui/lib/utils";
 import { useTranslations } from "use-intl";
-
-import { Input } from "@stella/ui/components/input";
-import { cn } from "@stella/ui/lib/utils";
 
 const BILLING_INCREMENT = 6;
 

@@ -7,6 +7,41 @@ import {
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@stll/ui/components/avatar";
+import { Button } from "@stll/ui/components/button";
+import {
+  Combobox,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+} from "@stll/ui/components/combobox";
+import { Input } from "@stll/ui/components/input";
+import {
+  Menu,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import {
+  Popover,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stll/ui/components/popover";
+import { toastManager } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
+import {
   formatForDisplay,
   useHotkey,
   useKeyHold,
@@ -41,42 +76,6 @@ import {
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
-
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@stella/ui/components/avatar";
-import { Button } from "@stella/ui/components/button";
-import {
-  Combobox,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxPopup,
-} from "@stella/ui/components/combobox";
-import { Input } from "@stella/ui/components/input";
-import {
-  Menu,
-  MenuGroup,
-  MenuGroupLabel,
-  MenuItem,
-  MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
-  MenuSeparator,
-  MenuSub,
-  MenuSubPopup,
-  MenuSubTrigger,
-  MenuTrigger,
-} from "@stella/ui/components/menu";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stella/ui/components/popover";
-import { toastManager } from "@stella/ui/components/toast";
-import { cn } from "@stella/ui/lib/utils";
 
 import { DevSidebarGroup } from "@/components/dev-sidebar-group";
 import { FeedbackDialog } from "@/components/feedback-dialog";

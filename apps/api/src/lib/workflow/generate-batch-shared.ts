@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 import { fields } from "@/api/db/schema";
+import type { JustificationContent } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -35,8 +36,7 @@ export type AIResult = {
 export type AIJustification = {
   fieldId: SafeId<"field">;
   justificationId: SafeId<"justification">;
-  htmlVersion: number;
-  htmlContent: string;
+  content: JustificationContent;
   fileFieldIds: SafeId<"field">[];
 };
 

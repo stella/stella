@@ -1,11 +1,10 @@
+import type { PersistedDecisionAnalysis } from "@stll/case-law/analysis";
+import type { DocumentAst } from "@stll/case-law/document-ast";
 import { panic } from "better-result";
 import { defineRelations, isNotNull, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import * as p from "drizzle-orm/pg-core";
 import { customType } from "drizzle-orm/pg-core";
-
-import type { PersistedDecisionAnalysis } from "@stella/case-law/analysis";
-import type { DocumentAst } from "@stella/case-law/document-ast";
 
 import { organization, user } from "@/api/db/auth-schema";
 import {
@@ -51,6 +50,20 @@ export type LinkMetadata = {
   citation?: string;
   jurisdiction?: string;
   sourceType?: string;
+};
+
+export type JustificationContent = {
+  version: 1;
+  blocks: {
+    fileFieldId: SafeId<"field">;
+    statements: {
+      text: string;
+      citations: {
+        bates: string;
+        pageNumber: number;
+      }[];
+    }[];
+  }[];
 };
 
 const tsvector = customType<{ data: string }>({
@@ -832,8 +845,7 @@ export const justifications = p.pgTable(
     id: pUuid<"justification">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     fieldId: safeUuid<"field">("field_id").notNull(),
-    htmlVersion: p.numeric("html_version", { mode: "number" }).notNull(),
-    htmlContent: p.text("html_content").notNull(),
+    content: p.jsonb().$type<JustificationContent>().notNull(),
     boundingBoxes: p.jsonb("bounding_boxes").$type<BoundingBoxes>(),
     fileFieldIds: safeUuid<"field">("file_field_ids")
       .array()

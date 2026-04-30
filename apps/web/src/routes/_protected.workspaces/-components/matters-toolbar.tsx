@@ -1,3 +1,14 @@
+import { Button } from "@stll/ui/components/button";
+import { Input } from "@stll/ui/components/input";
+import {
+  Menu,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import { Separator } from "@stll/ui/components/separator";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowDownIcon,
@@ -10,18 +21,6 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
-
-import { Button } from "@stella/ui/components/button";
-import { Input } from "@stella/ui/components/input";
-import {
-  Menu,
-  MenuGroup,
-  MenuGroupLabel,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stella/ui/components/menu";
-import { Separator } from "@stella/ui/components/separator";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";

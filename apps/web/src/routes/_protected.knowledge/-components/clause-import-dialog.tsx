@@ -1,9 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
-import { UploadIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
   DialogClose,
@@ -12,8 +9,10 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stella/ui/components/dialog";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/dialog";
+import { toastManager } from "@stll/ui/components/toast";
+import { UploadIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";

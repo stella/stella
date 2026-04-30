@@ -13,7 +13,7 @@ import {
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stella/ui/components/select";
+} from "@stll/ui/components/select";
 
 import type { Style, StyleType, Theme } from "../../core/types/document";
 

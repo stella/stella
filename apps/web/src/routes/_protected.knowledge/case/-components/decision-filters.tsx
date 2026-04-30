@@ -1,17 +1,16 @@
 import { useCallback } from "react";
 
-import { useDebouncedCallback } from "use-debounce";
-import { useTranslations } from "use-intl";
-
-import { DatePickerPopover } from "@stella/ui/components/date-picker-popover";
-import { Input } from "@stella/ui/components/input";
+import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
+import { Input } from "@stll/ui/components/input";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stella/ui/components/select";
+} from "@stll/ui/components/select";
+import { useDebouncedCallback } from "use-debounce";
+import { useTranslations } from "use-intl";
 
 import type {
   DecisionListFilters,

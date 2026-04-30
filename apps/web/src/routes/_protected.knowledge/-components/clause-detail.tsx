@@ -1,15 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
-  ArrowLeftIcon,
-  Loader2Icon,
-  MoreHorizontalIcon,
-  PlusIcon,
-  Trash2Icon,
-} from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
-
-import {
   AlertDialog,
   AlertDialogClose,
   AlertDialogDescription,
@@ -17,8 +8,8 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stella/ui/components/alert-dialog";
-import { Button } from "@stella/ui/components/button";
+} from "@stll/ui/components/alert-dialog";
+import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
   DialogClose,
@@ -27,18 +18,26 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stella/ui/components/dialog";
-import { Input } from "@stella/ui/components/input";
+} from "@stll/ui/components/dialog";
+import { Input } from "@stll/ui/components/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@stella/ui/components/menu";
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@stella/ui/components/tabs";
-import { Textarea } from "@stella/ui/components/textarea";
-import { toastManager } from "@stella/ui/components/toast";
-import { cn } from "@stella/ui/lib/utils";
+} from "@stll/ui/components/menu";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
+import { Textarea } from "@stll/ui/components/textarea";
+import { toastManager } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
+import {
+  ArrowLeftIcon,
+  Loader2Icon,
+  MoreHorizontalIcon,
+  PlusIcon,
+  Trash2Icon,
+} from "lucide-react";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";

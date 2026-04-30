@@ -2,28 +2,11 @@ import { useState } from "react";
 import type * as React from "react";
 
 import {
-  ArchiveIcon,
-  BellIcon,
-  ChevronDownIcon,
-  ClockIcon,
-  CopyIcon,
-  FileTextIcon,
-  FilterIcon,
-  LinkIcon,
-  MailIcon,
-  SearchIcon,
-  SettingsIcon,
-  ShieldIcon,
-  Trash2Icon,
-  UserIcon,
-} from "lucide-react";
-
-import {
   Accordion,
   AccordionItem,
   AccordionPanel,
   AccordionTrigger,
-} from "@stella/ui/components/accordion";
+} from "@stll/ui/components/accordion";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -34,12 +17,12 @@ import {
   AlertDialogPopup,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@stella/ui/components/alert-dialog";
+} from "@stll/ui/components/alert-dialog";
 import {
   Avatar,
   AvatarFallback,
   AvatarImage,
-} from "@stella/ui/components/avatar";
+} from "@stll/ui/components/avatar";
 import {
   Breadcrumb,
   BreadcrumbEllipsis,
@@ -48,10 +31,10 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@stella/ui/components/breadcrumb";
-import { Button, buttonVariants } from "@stella/ui/components/button";
-import { Checkbox } from "@stella/ui/components/checkbox";
-import { ColorPicker } from "@stella/ui/components/color-picker";
+} from "@stll/ui/components/breadcrumb";
+import { Button, buttonVariants } from "@stll/ui/components/button";
+import { Checkbox } from "@stll/ui/components/checkbox";
+import { ColorPicker } from "@stll/ui/components/color-picker";
 import {
   Combobox,
   ComboboxEmpty,
@@ -59,12 +42,12 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-} from "@stella/ui/components/combobox";
-import { DatePickerPopover } from "@stella/ui/components/date-picker-popover";
+} from "@stll/ui/components/combobox";
+import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
 import {
   DestructiveActionConfirmation,
   useDestructiveActionConfirmation,
-} from "@stella/ui/components/destructive-action-confirmation";
+} from "@stll/ui/components/destructive-action-confirmation";
 import {
   Dialog,
   DialogClose,
@@ -75,14 +58,14 @@ import {
   DialogPopup,
   DialogTitle,
   DialogTrigger,
-} from "@stella/ui/components/dialog";
+} from "@stll/ui/components/dialog";
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldLabel,
-} from "@stella/ui/components/field";
-import { Form } from "@stella/ui/components/form";
+} from "@stll/ui/components/field";
+import { Form } from "@stll/ui/components/form";
 import {
   Frame,
   FrameDescription,
@@ -90,23 +73,23 @@ import {
   FrameHeader,
   FramePanel,
   FrameTitle,
-} from "@stella/ui/components/frame";
-import { HexColorPicker } from "@stella/ui/components/hex-color-picker";
-import { Input } from "@stella/ui/components/input";
+} from "@stll/ui/components/frame";
+import { HexColorPicker } from "@stll/ui/components/hex-color-picker";
+import { Input } from "@stll/ui/components/input";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
   InputGroupText,
   InputGroupTextarea,
-} from "@stella/ui/components/input-group";
+} from "@stll/ui/components/input-group";
 import {
   InputOTP,
   InputOTPGroup,
   InputOTPSeparator,
   InputOTPSlot,
-} from "@stella/ui/components/input-otp";
-import { Label } from "@stella/ui/components/label";
+} from "@stll/ui/components/input-otp";
+import { Label } from "@stll/ui/components/label";
 import {
   Menu,
   MenuCheckboxItem,
@@ -122,7 +105,7 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
   MenuTrigger,
-} from "@stella/ui/components/menu";
+} from "@stll/ui/components/menu";
 import {
   Pagination,
   PaginationContent,
@@ -131,28 +114,28 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@stella/ui/components/pagination";
+} from "@stll/ui/components/pagination";
 import {
   Popover,
   PopoverDescription,
   PopoverPopup,
   PopoverTitle,
   PopoverTrigger,
-} from "@stella/ui/components/popover";
+} from "@stll/ui/components/popover";
 import {
   PreviewCard,
   PreviewCardPopup,
   PreviewCardTrigger,
-} from "@stella/ui/components/preview-card";
-import { ScrollArea } from "@stella/ui/components/scroll-area";
+} from "@stll/ui/components/preview-card";
+import { ScrollArea } from "@stll/ui/components/scroll-area";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stella/ui/components/select";
-import { Separator } from "@stella/ui/components/separator";
+} from "@stll/ui/components/select";
+import { Separator } from "@stll/ui/components/separator";
 import {
   Sheet,
   SheetClose,
@@ -163,8 +146,8 @@ import {
   SheetPopup,
   SheetTitle,
   SheetTrigger,
-} from "@stella/ui/components/sheet";
-import { Skeleton } from "@stella/ui/components/skeleton";
+} from "@stll/ui/components/sheet";
+import { Skeleton } from "@stll/ui/components/skeleton";
 import {
   Table,
   TableBody,
@@ -174,15 +157,31 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@stella/ui/components/table";
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@stella/ui/components/tabs";
-import { Textarea } from "@stella/ui/components/textarea";
-import { toast } from "@stella/ui/components/toast";
+} from "@stll/ui/components/table";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
+import { Textarea } from "@stll/ui/components/textarea";
+import { toast } from "@stll/ui/components/toast";
 import {
   Tooltip,
   TooltipPopup,
   TooltipTrigger,
-} from "@stella/ui/components/tooltip";
+} from "@stll/ui/components/tooltip";
+import {
+  ArchiveIcon,
+  BellIcon,
+  ChevronDownIcon,
+  ClockIcon,
+  CopyIcon,
+  FileTextIcon,
+  FilterIcon,
+  LinkIcon,
+  MailIcon,
+  SearchIcon,
+  SettingsIcon,
+  ShieldIcon,
+  Trash2Icon,
+  UserIcon,
+} from "lucide-react";
 
 type ComboboxOption = {
   id: string;
@@ -292,7 +291,7 @@ export function UiPlayground() {
             Stella UI Playground
           </h1>
           <p className="text-muted-foreground max-w-3xl text-sm">
-            Stable primitives from @stella/ui with mock content, core variants,
+            Stable primitives from @stll/ui with mock content, core variants,
             and common edge states.
           </p>
         </header>

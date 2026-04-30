@@ -1,10 +1,9 @@
 import { useRef } from "react";
 
+import { Button } from "@stll/ui/components/button";
 import { UploadIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
 
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 

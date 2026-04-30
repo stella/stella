@@ -5,13 +5,13 @@ The public marketing site for Stella, built with Astro.
 ## Development
 
 ```bash
-bun --filter @stella/landing dev
+bun --filter @stll/landing dev
 ```
 
 ## Commands
 
 ```bash
-bun --filter @stella/landing build
-bun --filter @stella/landing preview
-bun --filter @stella/landing typecheck
+bun --filter @stll/landing build
+bun --filter @stll/landing preview
+bun --filter @stll/landing typecheck
 ```

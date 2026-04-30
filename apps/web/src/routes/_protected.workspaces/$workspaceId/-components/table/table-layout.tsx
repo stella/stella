@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 
+import { Checkbox } from "@stll/ui/components/checkbox";
 import {
   useSuspenseInfiniteQuery,
   useSuspenseQuery,
@@ -15,8 +16,6 @@ import {
   UserIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Checkbox } from "@stella/ui/components/checkbox";
 
 import type { WorkspaceView } from "@/lib/types";
 import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";

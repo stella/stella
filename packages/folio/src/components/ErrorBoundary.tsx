@@ -16,6 +16,7 @@ import React, {
 } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 
+import { Button } from "@stll/ui/components/button";
 import {
   AlertCircleIcon,
   AlertTriangleIcon,
@@ -24,8 +25,6 @@ import {
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
 
 import { ErrorManager } from "../core/managers/ErrorManager";
 import type { ErrorNotification } from "../core/managers/types";

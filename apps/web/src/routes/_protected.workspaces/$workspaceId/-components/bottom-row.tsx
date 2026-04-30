@@ -1,7 +1,6 @@
+import { Button } from "@stll/ui/components/button";
 import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
 
 import { TableCell, TableRow } from "@/components/table";
 import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";

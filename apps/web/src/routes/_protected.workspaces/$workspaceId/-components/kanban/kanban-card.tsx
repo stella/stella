@@ -3,15 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
-import { CalendarIcon } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
-
 import {
   Avatar,
   AvatarFallback,
   AvatarImage,
-} from "@stella/ui/components/avatar";
-import { cn } from "@stella/ui/lib/utils";
+} from "@stll/ui/components/avatar";
+import { cn } from "@stll/ui/lib/utils";
+import { CalendarIcon } from "lucide-react";
+import { useLocale, useTranslations } from "use-intl";
 
 import { isFileDisplayable } from "@/lib/types";
 import type {

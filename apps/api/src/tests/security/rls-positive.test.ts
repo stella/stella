@@ -242,7 +242,22 @@ describe("workspace UPDATE — correct scope", () => {
       query: (tx) =>
         tx
           .update(justifications)
-          .set({ htmlContent: "<p>updated</p>" })
+          .set({
+            content: {
+              version: 1,
+              blocks: [
+                {
+                  fileFieldId: ids.fieldA1,
+                  statements: [
+                    {
+                      text: "updated",
+                      citations: [{ bates: "F0-0001", pageNumber: 1 }],
+                    },
+                  ],
+                },
+              ],
+            },
+          })
           .where(eq(justifications.id, ids.justificationA1))
           .returning({ id: justifications.id }),
     },
@@ -650,8 +665,20 @@ describe("workspace INSERT — correct scope", () => {
           id: testId(),
           workspaceId: ids.wsA1,
           fieldId: ids.fieldA1,
-          htmlVersion: 99,
-          htmlContent: "<p>positive</p>",
+          content: {
+            version: 1,
+            blocks: [
+              {
+                fileFieldId: ids.fieldA1,
+                statements: [
+                  {
+                    text: "positive",
+                    citations: [{ bates: "F0-0001", pageNumber: 1 }],
+                  },
+                ],
+              },
+            ],
+          },
         })
         .returning({ id: justifications.id });
       expect(rows).toHaveLength(1);

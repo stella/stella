@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { Button } from "@stll/ui/components/button";
+import { Input } from "@stll/ui/components/input";
+import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { Skeleton } from "@stll/ui/components/skeleton";
+import { cn } from "@stll/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { Input } from "@stella/ui/components/input";
-import { ScrollArea } from "@stella/ui/components/scroll-area";
-import { Skeleton } from "@stella/ui/components/skeleton";
-import { cn } from "@stella/ui/lib/utils";
 
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";

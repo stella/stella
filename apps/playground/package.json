@@ -1,5 +1,5 @@
 {
-  "name": "@stella/playground",
+  "name": "@stll/playground",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,8 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@stella/folio": "workspace:*",
-    "@stella/ui": "workspace:*",
+    "@stll/folio": "workspace:*",
+    "@stll/ui": "workspace:*",
     "lucide-react": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",

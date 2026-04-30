@@ -11,12 +11,12 @@ import {
   AlertDialogPanel,
   AlertDialogPopup,
   AlertDialogTitle,
-} from "@stella/ui/components/alert-dialog";
-import { Button } from "@stella/ui/components/button";
+} from "@stll/ui/components/alert-dialog";
+import { Button } from "@stll/ui/components/button";
 import {
   DestructiveActionConfirmation,
   useDestructiveActionConfirmation,
-} from "@stella/ui/components/destructive-action-confirmation";
+} from "@stll/ui/components/destructive-action-confirmation";
 
 type DestructiveConfirmDialogProps = {
   cancelLabel: React.ReactNode;

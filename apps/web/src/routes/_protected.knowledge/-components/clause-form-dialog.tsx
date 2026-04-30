@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
+import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
   DialogClose,
@@ -11,17 +9,18 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-} from "@stella/ui/components/dialog";
-import { Input } from "@stella/ui/components/input";
+} from "@stll/ui/components/dialog";
+import { Input } from "@stll/ui/components/input";
 import {
   Select,
   SelectItem,
   SelectPopup,
   SelectTrigger,
   SelectValue,
-} from "@stella/ui/components/select";
-import { Textarea } from "@stella/ui/components/textarea";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/select";
+import { Textarea } from "@stll/ui/components/textarea";
+import { toastManager } from "@stll/ui/components/toast";
+import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";

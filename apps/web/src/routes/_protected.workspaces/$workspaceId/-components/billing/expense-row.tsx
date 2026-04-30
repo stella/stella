@@ -1,8 +1,7 @@
+import { Button } from "@stll/ui/components/button";
+import { cn } from "@stll/ui/lib/utils";
 import { PencilIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Button } from "@stella/ui/components/button";
-import { cn } from "@stella/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";

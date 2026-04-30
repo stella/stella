@@ -89,7 +89,7 @@ Dual-licensed:
 
 - Workspace layout:
   `apps/*` contains runnable applications, `packages/*` contains shared or
-  publishable packages, and every workspace package uses the `@stella/<name>`
+  publishable packages, and every workspace package uses the `@stll/<name>`
   naming convention.
 - [Stella Web App](/apps/web/README.md)
 - [Stella Desktop App](/apps/desktop/README.md)

@@ -5,15 +5,14 @@ import {
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
+import { Checkbox } from "@stll/ui/components/checkbox";
+import { toastManager } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 import { flexRender } from "@tanstack/react-table";
 import type { Table as ReactTable, Row } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronRightIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import { Checkbox } from "@stella/ui/components/checkbox";
-import { toastManager } from "@stella/ui/components/toast";
-import { cn } from "@stella/ui/lib/utils";
 
 import { renderDragPreview } from "@/components/drag-preview";
 import {

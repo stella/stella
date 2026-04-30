@@ -1,15 +1,5 @@
 import { useState } from "react";
 
-import { useQueryClient } from "@tanstack/react-query";
-import {
-  DatabaseIcon,
-  PlayIcon,
-  RotateCcwIcon,
-  Trash2Icon,
-  WrenchIcon,
-} from "lucide-react";
-import { useShallow } from "zustand/react/shallow";
-
 import {
   MenuCheckboxItem,
   MenuGroup,
@@ -21,8 +11,17 @@ import {
   MenuSub,
   MenuSubPopup,
   MenuSubTrigger,
-} from "@stella/ui/components/menu";
-import { toastManager } from "@stella/ui/components/toast";
+} from "@stll/ui/components/menu";
+import { toastManager } from "@stll/ui/components/toast";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  DatabaseIcon,
+  PlayIcon,
+  RotateCcwIcon,
+  Trash2Icon,
+  WrenchIcon,
+} from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 
 import { api } from "@/lib/api";
 import { useDevStore } from "@/lib/dev-store";

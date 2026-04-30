@@ -599,15 +599,39 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       id: ids.justificationA1,
       workspaceId: ids.wsA1,
       fieldId: ids.fieldA1,
-      htmlVersion: 1,
-      htmlContent: "<p>a1</p>",
+      content: {
+        version: 1,
+        blocks: [
+          {
+            fileFieldId: ids.fieldA1,
+            statements: [
+              {
+                text: "a1",
+                citations: [{ bates: "F0-0001", pageNumber: 1 }],
+              },
+            ],
+          },
+        ],
+      },
     },
     {
       id: ids.justificationB1,
       workspaceId: ids.wsB1,
       fieldId: ids.fieldB1,
-      htmlVersion: 1,
-      htmlContent: "<p>b1</p>",
+      content: {
+        version: 1,
+        blocks: [
+          {
+            fileFieldId: ids.fieldB1,
+            statements: [
+              {
+                text: "b1",
+                citations: [{ bates: "F0-0001", pageNumber: 1 }],
+              },
+            ],
+          },
+        ],
+      },
     },
   ]);
 

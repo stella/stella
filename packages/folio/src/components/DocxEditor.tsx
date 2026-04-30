@@ -23,6 +23,13 @@ import {
 import type { CSSProperties, ReactNode } from "react";
 
 import {
+  Select as StSelect,
+  SelectItem as StSelectItem,
+  SelectPopup as StSelectPopup,
+  SelectTrigger as StSelectTrigger,
+  SelectValue as StSelectValue,
+} from "@stll/ui/components/select";
+import {
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -32,14 +39,6 @@ import {
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
-
-import {
-  Select as StSelect,
-  SelectItem as StSelectItem,
-  SelectPopup as StSelectPopup,
-  SelectTrigger as StSelectTrigger,
-  SelectValue as StSelectValue,
-} from "@stella/ui/components/select";
 
 import { repackDocx } from "../core/docx/rezip";
 import { attemptSelectiveSave } from "../core/docx/selectiveSave";

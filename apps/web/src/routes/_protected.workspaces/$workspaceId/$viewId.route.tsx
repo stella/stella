@@ -1,3 +1,4 @@
+import { cn } from "@stll/ui/lib/utils";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -6,8 +7,6 @@ import {
   useMatches,
 } from "@tanstack/react-router";
 import * as v from "valibot";
-
-import { cn } from "@stella/ui/lib/utils";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";

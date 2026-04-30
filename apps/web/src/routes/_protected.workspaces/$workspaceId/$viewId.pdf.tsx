@@ -13,6 +13,8 @@ import {
   containsFiles,
   getFiles,
 } from "@atlaskit/pragmatic-drag-and-drop/external/file";
+import type { DocxEditorRef } from "@stll/folio";
+import { Button } from "@stll/ui/components/button";
 import {
   useQuery,
   useQueryClient,
@@ -26,11 +28,8 @@ import {
 import { PencilIcon, PrinterIcon, UploadIcon } from "lucide-react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { useTranslations } from "use-intl";
+import "@stll/folio/editor.css";
 import * as v from "valibot";
-
-import type { DocxEditorRef } from "@stella/folio";
-import "@stella/folio/editor.css";
-import { Button } from "@stella/ui/components/button";
 
 import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
@@ -64,7 +63,7 @@ import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
 
 const ReadOnlyDocxViewer = lazy(async () => {
-  const m = await import("@stella/folio");
+  const m = await import("@stll/folio");
   return { default: m.DocxEditor };
 });
 

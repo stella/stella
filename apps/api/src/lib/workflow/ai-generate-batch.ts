@@ -17,7 +17,10 @@ import {
 import type { Answer } from "@/api/lib/workflow/ai-prompts";
 import type { TextInput } from "@/api/lib/workflow/generate-batch-shared";
 import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
-import type { JustificationFilenames } from "@/api/lib/workflow/parse-justifications";
+import type {
+  AIJustificationOutput,
+  JustificationFilenames,
+} from "@/api/lib/workflow/parse-justifications";
 
 type WorkflowFile = {
   content: ArrayBuffer | Uint8Array;
@@ -38,7 +41,7 @@ type GenerateWorkflowDataProps = {
 
 type WorkflowDataOutput = Record<
   string,
-  { answer: Answer; justification: string }
+  { answer: Answer; justification: AIJustificationOutput }
 >;
 
 export const generateWorkflowData = async ({

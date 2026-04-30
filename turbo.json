@@ -22,7 +22,7 @@
       "dependsOn": ["transit"],
       "outputs": [".cache/tsbuildinfo.json"]
     },
-    "@stella/landing#typecheck": {
+    "@stll/landing#typecheck": {
       "dependsOn": ["transit"],
       "outputs": []
     },

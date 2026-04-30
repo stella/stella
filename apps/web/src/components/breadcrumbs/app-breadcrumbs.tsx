@@ -1,15 +1,14 @@
 import { Fragment, useId, useMemo } from "react";
 
-import { Link, useMatches } from "@tanstack/react-router";
-import type { ResolveParams } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
-
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbSeparator,
-} from "@stella/ui/components/breadcrumb";
+} from "@stll/ui/components/breadcrumb";
+import { Link, useMatches } from "@tanstack/react-router";
+import type { ResolveParams } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
 
 import { CaseLawBreadcrumb } from "@/components/breadcrumbs/case-law-breadcrumb";
 import { ContactBreadcrumb } from "@/components/breadcrumbs/contact-breadcrumb";

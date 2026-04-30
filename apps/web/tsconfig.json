@@ -1,12 +1,12 @@
 {
-  "extends": "@stella/typescript-config/react-library.json",
+  "extends": "@stll/typescript-config/react-library.json",
   "compilerOptions": {
     "types": ["vite/client"],
     "paths": {
       "@/*": ["./src/*"],
       "@/api/*": ["../api/src/*"], // this is for eden to work https://elysiajs.com/eden/installation#path-alias-monorepo
-      "@stella/ares": ["../../packages/ares/src/index.ts"],
-      "@stella/ui/*": ["../../packages/ui/src/*"]
+      "@stll/ares": ["../../packages/ares/src/index.ts"],
+      "@stll/ui/*": ["../../packages/ui/src/*"]
     }
   },
 
