@@ -298,6 +298,14 @@
     }
   },
   "chat": {
+    "actionExpand": {
+      "toastDescription": "Celostránkový chat bude k dispozici s perzistentními vlákny.",
+      "toastTitle": "Celý pohled zatím není dostupný"
+    },
+    "actionPrint": {
+      "toastDescription": "Tisk chatu bude k dispozici s perzistentními vlákny.",
+      "toastTitle": "Tisk zatím není dostupný"
+    },
     "approval": {
       "allow": "Povolit",
       "alwaysAllow": "Vždy povolit v tomto vlákně",
@@ -319,6 +327,10 @@
       "original": "Originál",
       "simple": "Přijaté",
       "trackedChanges": "Sledované změny"
+    },
+    "emptyState": {
+      "description": "Vyberte spisy nahoře a zadejte dotaz. @-zmiňte dokument, aby odpověď vycházela z jeho obsahu.",
+      "title": "Na čem budeme pracovat?"
     },
     "extractingContent": "Extrahování obsahu...",
     "fileTooLarge": "Soubor překračuje limit {maxSize}",
@@ -459,6 +471,8 @@
     "category": "Kategorie",
     "clauses": "Klauzule",
     "close": "Zavřít",
+    "closeAll": "Zavřít vše",
+    "closeOthers": "Zavřít ostatní",
     "columns": "Sloupce",
     "comingSoon": "Již brzy",
     "confirm": "Potvrdit",
@@ -859,6 +873,21 @@
     "undo": "Zpět",
     "undoShortcut": "Zpět (Ctrl+Z)"
   },
+  "inspector": {
+    "hidePane": "Skrýt panel",
+    "matterPicker": {
+      "allMatters": "Všechny spisy",
+      "description": "Vyberte spisy, ze kterých chat čerpá. AI vidí obsah všech vybraných spisů.",
+      "directLabel": "Přímé",
+      "empty": "Žádné dostupné spisy.",
+      "noMatter": "Žádný spis",
+      "noResults": "Žádný spis neodpovídá „{query}“.",
+      "searchPlaceholder": "Hledat spisy nebo klienty…",
+      "title": "Kontext spisů"
+    },
+    "openChat": "Otevřít chat",
+    "showPane": "Zobrazit panel"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1043,22 +1072,6 @@
     },
     "settings": "Nastavení organizace",
     "settingsDescription": "Upravte název a slug organizace"
-  },
-  "rightPanel": {
-    "addConditional": "Přidat podmínku",
-    "askAboutMatter": "Ptejte se na svůj spis.",
-    "chatPlaceholder": "Chat se zobrazí zde.",
-    "comingSoon": "AI asistent šablon již brzy.",
-    "convertToPlaceholder": "Převést na zástupný symbol",
-    "mockDisclaimer": "Toto je náhled AI asistenta. Odpovědi jsou simulované.",
-    "mockResponseConditional": "Zabalil bych tento text do podmíněného bloku: '{{#if condition}}...{{/if}}'. Jaká podmínka má řídit jeho viditelnost?",
-    "mockResponsePlaceholder": "Mohu převést vybraný text na zástupný symbol jako '{{fieldName}}'. Jak se má pole jmenovat?",
-    "mockResponseRepeat": "Zabalil bych to do smyčky: '{{#each items}}...{{/each}}'. Jakou kolekci má procházet?",
-    "repeatForEach": "Opakovat pro každou položku",
-    "selectedText": "Vybraný text",
-    "templateAssistant": "Asistent šablon",
-    "title": "Chat",
-    "whatToDo": "Co chcete s tímto textem udělat?"
   },
   "search": {
     "aiRefine": "Vylepšit dotaz pomocí AI",

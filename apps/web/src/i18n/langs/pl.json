@@ -298,6 +298,14 @@
     }
   },
   "chat": {
+    "actionExpand": {
+      "toastDescription": "Full-page chat lands with persisted threads.",
+      "toastTitle": "Full view not yet available"
+    },
+    "actionPrint": {
+      "toastDescription": "Chat printing lands with persisted threads.",
+      "toastTitle": "Printing not yet available"
+    },
     "approval": {
       "allow": "Zezwól",
       "alwaysAllow": "Zawsze zezwalaj w tym wątku",
@@ -319,6 +327,10 @@
       "original": "Oryginał",
       "simple": "Zaakceptowane",
       "trackedChanges": "Śledzenie zmian"
+    },
+    "emptyState": {
+      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
+      "title": "What can we work on?"
     },
     "extractingContent": "Wyodrębnianie treści...",
     "fileTooLarge": "Plik przekracza limit {maxSize}",
@@ -459,6 +471,8 @@
     "category": "Kategoria",
     "clauses": "Klauzule",
     "close": "Zamknij",
+    "closeAll": "Zamknij wszystko",
+    "closeOthers": "Zamknij pozostałe",
     "columns": "Kolumny",
     "comingSoon": "Wkrótce",
     "confirm": "Potwierdź",
@@ -859,6 +873,21 @@
     "undo": "Undo",
     "undoShortcut": "Undo (Ctrl+Z)"
   },
+  "inspector": {
+    "hidePane": "Hide pane",
+    "matterPicker": {
+      "allMatters": "All matters",
+      "description": "Pick the matters this chat can draw on. The AI sees content from every matter you select.",
+      "directLabel": "Direct",
+      "empty": "No matters available.",
+      "noMatter": "No matter",
+      "noResults": "No matter matches “{query}”.",
+      "searchPlaceholder": "Search matters or clients…",
+      "title": "Matter context"
+    },
+    "openChat": "Open chat",
+    "showPane": "Show pane"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1043,22 +1072,6 @@
     },
     "settings": "Ustawienia organizacji",
     "settingsDescription": "Edytuj nazwę i slug organizacji"
-  },
-  "rightPanel": {
-    "addConditional": "Dodaj warunek",
-    "askAboutMatter": "Zadawaj pytania o swoją sprawę.",
-    "chatPlaceholder": "Czat pojawi się tutaj.",
-    "comingSoon": "Asystent szablonów AI wkrótce.",
-    "convertToPlaceholder": "Zamień na symbol zastępczy",
-    "mockDisclaimer": "To jest podgląd asystenta AI. Odpowiedzi są symulowane.",
-    "mockResponseConditional": "Umieściłbym ten tekst w bloku warunkowym: '{{#if condition}}...{{/if}}'. Jaki warunek powinien kontrolować jego widoczność?",
-    "mockResponsePlaceholder": "Mogę zamienić zaznaczony tekst na symbol zastępczy, np. '{{fieldName}}'. Jak powinno nazywać się pole?",
-    "mockResponseRepeat": "Umieściłbym to w pętli: '{{#each items}}...{{/each}}'. Po jakiej kolekcji ma iterować?",
-    "repeatForEach": "Powtórz dla każdego elementu",
-    "selectedText": "Zaznaczony tekst",
-    "templateAssistant": "Asystent szablonów",
-    "title": "Czat",
-    "whatToDo": "Co chcesz zrobić z tym tekstem?"
   },
   "search": {
     "aiRefine": "Ulepsz zapytanie z AI",

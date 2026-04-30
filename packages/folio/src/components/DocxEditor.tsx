@@ -38,6 +38,8 @@ import {
   PenLineIcon,
   XIcon,
 } from "lucide-react";
+// Paginated editor
+import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
 import { repackDocx } from "../core/docx/rezip";
@@ -122,6 +124,8 @@ import {
 } from "../core/prosemirror/extensions/features/ParagraphChangeTrackerExtension";
 // Extension system
 import { createStarterKit } from "../core/prosemirror/extensions/StarterKit";
+import { createAICitationDecorationsPlugin } from "../core/prosemirror/plugins/aiCitationDecorations";
+import { createAISuggestionDecorationsPlugin } from "../core/prosemirror/plugins/aiSuggestionDecorations";
 import {
   createSuggestionModePlugin,
   setSuggestionMode,
@@ -143,7 +147,6 @@ import { collectHeadings } from "../core/utils/headingCollector";
 import { pointsToHalfPoints } from "../core/utils/units";
 import { useDocumentHistory } from "../hooks/useHistory";
 import { useTableSelection } from "../hooks/useTableSelection";
-// Paginated editor
 import { PagedEditor } from "../paged-editor/PagedEditor";
 import type { PagedEditorRef } from "../paged-editor/PagedEditor";
 import { CommentsSidebar } from "./CommentsSidebar";
@@ -321,6 +324,12 @@ export type DocxEditorProps = {
   mode?: EditorMode;
   /** Callback when the editing mode changes */
   onModeChange?: (mode: EditorMode) => void;
+  /**
+   * Fires when the live ProseMirror view is captured (or torn down).
+   * The host wires this so it can drive the AI suggestion overlay
+   * (decoration meta, apply, scroll-to) from outside the editor.
+   */
+  onEditorViewReady?: (view: EditorView | null) => void;
 };
 
 /**
@@ -503,6 +512,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       onPaste: _onPaste,
       mode: modeProp,
       onModeChange,
+      onEditorViewReady,
     },
     ref,
   ) {
@@ -720,7 +730,52 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       () => createSuggestionModePlugin(editingMode === "suggesting", author),
       [], // eslint-disable-line react-hooks/exhaustive-deps
     );
-    const editorPlugins = useMemo(() => [suggestionPlugin], [suggestionPlugin]);
+    // AI suggestion decorations — non-mutating overlay for the review
+    // queue. Always present; the plugin renders nothing until
+    // suggestions are pushed in.
+    const aiSuggestionPlugin = useMemo(
+      () => createAISuggestionDecorationsPlugin(),
+      [],
+    );
+    // AI citation decorations — pointers from chat answers / extraction
+    // justifications back to source ranges. Distinct visual from
+    // suggestions; renders nothing until citations are pushed in.
+    const aiCitationPlugin = useMemo(
+      () => createAICitationDecorationsPlugin(),
+      [],
+    );
+    const editorPlugins = useMemo(
+      () => [suggestionPlugin, aiSuggestionPlugin, aiCitationPlugin],
+      [suggestionPlugin, aiSuggestionPlugin, aiCitationPlugin],
+    );
+
+    // Surface the live PM view to the host for AI overlay wiring.
+    // We watch `history.state` because the document re-loads (e.g.,
+    // unlocking from preview into editing) re-mount the PagedEditor
+    // and replace the view instance.
+    const lastReportedViewRef = useRef<EditorView | null>(null);
+    useEffect(() => {
+      if (!onEditorViewReady) {
+        return;
+      }
+      const view = pagedEditorRef.current?.getView() ?? null;
+      if (lastReportedViewRef.current === view) {
+        return;
+      }
+      lastReportedViewRef.current = view;
+      onEditorViewReady(view);
+    }, [onEditorViewReady, history.state]);
+    useEffect(() => {
+      if (!onEditorViewReady) {
+        return;
+      }
+      return () => {
+        if (lastReportedViewRef.current !== null) {
+          lastReportedViewRef.current = null;
+          onEditorViewReady(null);
+        }
+      };
+    }, [onEditorViewReady]);
 
     // Refs
     const pagedEditorRef = useRef<PagedEditorRef>(null);
@@ -2892,6 +2947,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                 <div
                   ref={scrollContainerRef}
                   style={editorContainerStyle}
+                  data-folio-scroll=""
                   onScroll={(event) => {
                     onScrollTopChange?.(event.currentTarget.scrollTop);
                   }}

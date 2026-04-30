@@ -6,15 +6,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import {
-  ArrowUpIcon,
-  CalendarIcon,
-  CircleDotIcon,
-  ClockIcon,
-  HashIcon,
-  TableIcon,
-  UserIcon,
-} from "lucide-react";
+import { ClockIcon, HashIcon, TableIcon, UserIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { WorkspaceView } from "@/lib/types";
@@ -29,11 +21,6 @@ import { MetadataPopover } from "@/routes/_protected.workspaces/$workspaceId/-co
 import { getPropertyColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column";
 import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
-import {
-  DueDateCell,
-  PriorityCell,
-  StatusCell,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-table-cells";
 import { useSyncJustificationChunks } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
 import {
@@ -127,60 +114,6 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       const col = getPropertyColumn(property);
       columnDefs.push(col);
     }
-
-    columnDefs.push({
-      id: getInternalPropertyId("status"),
-      accessorKey: getInternalPropertyId("status"),
-      meta: { muted: true },
-      header: (ctx) => (
-        <MetadataPopover
-          column={ctx.header.column}
-          icon={CircleDotIcon}
-          label={t("common.status")}
-          sortHint="text"
-        />
-      ),
-      cell: (props) => (
-        <StatusCell entity={props.row.original} workspaceId={workspaceId} />
-      ),
-      size: 120,
-    });
-
-    columnDefs.push({
-      id: getInternalPropertyId("priority"),
-      accessorKey: getInternalPropertyId("priority"),
-      meta: { muted: true },
-      header: (ctx) => (
-        <MetadataPopover
-          column={ctx.header.column}
-          icon={ArrowUpIcon}
-          label={t("tasks.priority")}
-          sortHint="text"
-        />
-      ),
-      cell: (props) => (
-        <PriorityCell entity={props.row.original} workspaceId={workspaceId} />
-      ),
-      size: 100,
-    });
-
-    columnDefs.push({
-      id: getInternalPropertyId("due-date"),
-      accessorKey: getInternalPropertyId("due-date"),
-      meta: { muted: true },
-      header: (ctx) => (
-        <MetadataPopover
-          column={ctx.header.column}
-          icon={CalendarIcon}
-          label={t("tasks.dueDate")}
-          sortHint="date"
-        />
-      ),
-      cell: (props) => (
-        <DueDateCell entity={props.row.original} workspaceId={workspaceId} />
-      ),
-      size: 120,
-    });
 
     columnDefs.push({
       id: getInternalPropertyId("created-by"),

@@ -4,46 +4,49 @@ import { v7 as uuidv7 } from "uuid";
 
 import { useChatEditorManager } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
-import { useChatPanelStore } from "@/lib/chat-panel-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
+/**
+ * "Ask AI about this entity" — opens a fresh inspector chat tab
+ * scoped to the current matter and pre-populates the composer with
+ * the supplied mention chips. Used by row-action menus and the
+ * matter-detail "ask" affordance.
+ *
+ * The legacy implementation drove the right-panel chat directly;
+ * this version routes through the inspector store so chat lives
+ * inside the same multifunctional pane as file viewers and other
+ * tabs.
+ */
 export const useRequestChatAbout = (workspaceId?: string) => {
   const { focusThread, insertMentionIntoThread } = useChatEditorManager();
-  const open = useChatPanelStore((state) => state.open);
-  const globalThreadId = useChatPanelStore((state) => state.globalThreadId);
-  const setGlobalThreadId = useChatPanelStore(
-    (state) => state.setGlobalThreadId,
-  );
-  const setWorkspaceThreadId = useChatPanelStore(
-    (state) => state.setWorkspaceThreadId,
-  );
-  const workspaceThreadId = useChatPanelStore((state) =>
-    workspaceId ? (state.workspaceThreadIds[workspaceId] ?? null) : null,
-  );
+  const openChat = useInspectorStore((s) => s.openChat);
 
   return useCallback(
     (mentions: ChatMentionOption | ChatMentionOption[]) => {
-      useTemplateAssistantStore.getState().close();
-      open();
-
-      const threadRef: ChatThreadRef = workspaceId
-        ? {
-            scope: "workspace",
-            threadId: workspaceThreadId ?? uuidv7(),
-            workspaceId,
-          }
-        : {
-            scope: "global",
-            threadId: globalThreadId ?? uuidv7(),
-          };
-
-      if (workspaceId) {
-        setWorkspaceThreadId(workspaceId, threadRef.threadId);
-      } else {
-        setGlobalThreadId(threadRef.threadId);
+      // Outside a workspace there's no inspector to open. The
+      // legacy global chat is gone; if global "ask about" is ever
+      // needed it can re-route through a workspace selector.
+      if (!workspaceId) {
+        return;
       }
 
+      const threadId = uuidv7();
+      // Auto-unminimises the pane and activates the new chat tab.
+      openChat({
+        id: threadId,
+        contextMatterIds: [workspaceId],
+      });
+
+      const threadRef: ChatThreadRef = {
+        scope: "workspace",
+        threadId,
+        workspaceId,
+      };
+
+      // Insert chips into the draft store so they're already in
+      // the composer when ChatTabPanel mounts and the editor
+      // attaches to this thread.
       const mentionList = Array.isArray(mentions) ? mentions : [mentions];
       for (const mention of mentionList) {
         insertMentionIntoThread(threadRef, mention);
@@ -51,15 +54,6 @@ export const useRequestChatAbout = (workspaceId?: string) => {
 
       focusThread(threadRef);
     },
-    [
-      focusThread,
-      globalThreadId,
-      insertMentionIntoThread,
-      open,
-      setGlobalThreadId,
-      setWorkspaceThreadId,
-      workspaceId,
-      workspaceThreadId,
-    ],
+    [focusThread, insertMentionIntoThread, openChat, workspaceId],
   );
 };

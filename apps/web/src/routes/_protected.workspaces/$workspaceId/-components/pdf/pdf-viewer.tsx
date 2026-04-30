@@ -4,6 +4,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
 
+import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { StellaMark } from "@/components/stella-mark";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
@@ -66,7 +67,11 @@ const FullscreenPdfViewer = () => {
   );
 
   return (
-    <>
+    <FileViewerWithAI
+      activeFile={entityId ? { entityId, fileName: file.fileName } : undefined}
+      chatThreadId={fieldId}
+      workspaceId={workspaceId}
+    >
       <CreatingBBoxes />
       <PDFViewport
         buffer={file.buffer}
@@ -81,7 +86,7 @@ const FullscreenPdfViewer = () => {
           <PDFPage {...props} renderOverlay={renderPageOverlay} />
         )}
       />
-    </>
+    </FileViewerWithAI>
   );
 };
 

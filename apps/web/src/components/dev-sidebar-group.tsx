@@ -271,6 +271,14 @@ export const DevSidebarGroup = () => {
           <PlayIcon />
           Onboard again
         </MenuItem>
+        <MenuItem
+          onClick={() => {
+            window.location.href = "/dev";
+          }}
+        >
+          <WrenchIcon />
+          UI playground
+        </MenuItem>
       </MenuSubPopup>
     </MenuSub>
   );

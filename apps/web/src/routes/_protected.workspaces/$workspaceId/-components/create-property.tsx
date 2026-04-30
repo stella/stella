@@ -54,6 +54,16 @@ import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils
 
 type CreatePropertyProps = {
   workspaceId: string;
+  /**
+   * Visual presentation of the trigger:
+   *  - `icon` (default): bare "+" button used in the table's
+   *    column-header row, where space is tight and the label
+   *    would dominate the column.
+   *  - `labelled`: full "+ Nový sloupec" pill used in the view
+   *    toolbar so the action is discoverable next to the other
+   *    chip-shaped controls.
+   */
+  triggerVariant?: "icon" | "labelled";
 };
 
 type CreationMode = "ai" | "manual";
@@ -95,7 +105,11 @@ const isAIPreviewable = (entity: WorkspaceEntity): boolean =>
       (f.content.mimeType === PDF_MIME_TYPE || f.content.pdfFileId !== null),
   );
 
-export const CreateProperty = ({ workspaceId }: CreatePropertyProps) => {
+export const CreateProperty = ({
+  workspaceId,
+  triggerVariant = "icon",
+}: CreatePropertyProps) => {
+  const t = useTranslations();
   const isLimitReached = usePropertiesCountLimit(workspaceId);
   // Lifted out of the dialog body so the in-flight mutation survives
   // a close/reopen cycle. Without this, conditionally unmounting the
@@ -119,18 +133,36 @@ export const CreateProperty = ({ workspaceId }: CreatePropertyProps) => {
       }}
       open={dialogOpen}
     >
-      <DialogTrigger
-        render={
-          <Button
-            className="hover:bg-accent h-full! min-w-10 rounded-none"
-            size="icon"
-            type="button"
-            variant="ghost"
-          />
-        }
-      >
-        <PlusIcon />
-      </DialogTrigger>
+      {triggerVariant === "labelled" ? (
+        <DialogTrigger
+          render={
+            <Button
+              className="text-muted-foreground hover:bg-accent gap-1 px-2 font-normal"
+              size="xs"
+              type="button"
+              variant="ghost"
+            />
+          }
+        >
+          <PlusIcon className="size-3" />
+          {t("workspaces.properties.newColumn")}
+        </DialogTrigger>
+      ) : (
+        <DialogTrigger
+          render={
+            <Button
+              aria-label={t("workspaces.properties.newColumn")}
+              className="text-muted-foreground hover:bg-accent h-full! min-w-10 rounded-none"
+              size="icon"
+              title={t("workspaces.properties.newColumn")}
+              type="button"
+              variant="ghost"
+            />
+          }
+        >
+          <PlusIcon />
+        </DialogTrigger>
+      )}
 
       <DialogPopup className="sm:max-w-3xl">
         {dialogOpen && (

@@ -7,6 +7,7 @@ export const HOTKEYS = {
   TOGGLE_SIDEBAR: "Mod+B",
   SEARCH: "Mod+K",
   TOGGLE_CHAT: "Mod+J",
+  NEW_CHAT: "Mod+Shift+J",
   NEW_MATTER: "Mod+Shift+E",
   TOGGLE_TIME_TRACKING: "Mod+Shift+H",
   SELECT_ALL: "Mod+A",

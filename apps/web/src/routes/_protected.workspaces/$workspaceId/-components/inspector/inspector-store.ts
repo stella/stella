@@ -1,3 +1,4 @@
+import { v7 as uuidv7 } from "uuid";
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
@@ -29,7 +30,30 @@ export type TaskTab = {
   status?: string | null;
 };
 
-export type InspectorTab = PdfTab | TaskTab;
+export type ChatTab = {
+  type: "chat";
+  id: string;
+  label: string;
+  /**
+   * Workspaces this chat draws context from. Defaults to the
+   * matter the chat was opened in; users can extend it via the
+   * matter picker in the tab header so the AI sees content from
+   * additional matters. Phase D will persist this with the Chat
+   * record; today it's local to the tab instance.
+   */
+  contextMatterIds: string[];
+  /**
+   * Case-law decision the chat was opened *about*. Mirrors the
+   * legacy right-panel-chat behaviour where navigating to a
+   * decision auto-grounded a fresh chat in that decision's text.
+   * Persists on the tab so subsequent renders keep flowing the
+   * decision context into the system prompt regardless of the
+   * user's current route.
+   */
+  activeDecisionId?: string | undefined;
+};
+
+export type InspectorTab = PdfTab | TaskTab | ChatTab;
 
 type State = {
   tabs: InspectorTab[];
@@ -37,18 +61,60 @@ type State = {
   /** Increments on every activation; lets the UI flash
    *  a tab that is re-selected (e.g., open same file). */
   activationSeq: number;
+  /**
+   * One-shot rename request. Set by the rail's right-click menu;
+   * the active tab's ribbon reads it, enters edit mode, and clears
+   * it. Decouples the rail (which doesn't render the editable
+   * label) from the ribbon (which does).
+   */
+  pendingRenameTabId: string | null;
+  /**
+   * Collapsed view — the inspector pane is hidden but its tabs
+   * are kept. The right-side toggle in the workspace chrome flips
+   * this so users can reclaim screen space without losing their
+   * open tabs.
+   */
+  minimized: boolean;
 };
 
 type Actions = {
   openPdf: (tab: Omit<PdfTab, "type">) => void;
   openTask: (taskId: string, label?: string, isNew?: boolean) => void;
+  /**
+   * Open a chat tab. Without args, creates a new (local-only) chat
+   * with a generated id. Pass `id` + optional `threadId` to restore
+   * an existing thread; pass `contextMatterIds` to seed the chat's
+   * matter context (typically the matter the user opened it in).
+   */
+  openChat: (args?: {
+    id?: string;
+    label?: string;
+    contextMatterIds?: string[];
+    activeDecisionId?: string;
+  }) => void;
+  /**
+   * Replace a chat tab's matter context. Used by the matter
+   * picker in the tab header so users can extend the AI's view
+   * across multiple matters.
+   */
+  setChatContext: (tabId: string, matterIds: string[]) => void;
   closeTab: (id: string) => void;
+  /** Close every tab except the one with the given id. */
+  closeOthers: (id: string) => void;
   setActive: (id: string) => void;
   closeAll: () => void;
+  /** Ask the active tab's ribbon to start renaming. */
+  requestRename: (id: string) => void;
+  /** Clear the rename flag once the ribbon has consumed it. */
+  clearRenameRequest: () => void;
   clearTaskNewFlag: (taskId: string) => void;
   replacePdfFieldId: (oldFieldId: string, newFieldId: string) => void;
   updateLabel: (tabId: string, label: string) => void;
   updateTaskStatus: (taskId: string, status: string | null) => void;
+  /** Set the minimized state directly. */
+  setMinimized: (minimized: boolean) => void;
+  /** Flip the minimized state (right-side button toggle). */
+  toggleMinimized: () => void;
 };
 
 export const useInspectorStore = create<State & Actions>()(
@@ -56,6 +122,8 @@ export const useInspectorStore = create<State & Actions>()(
     tabs: [],
     activeId: null,
     activationSeq: 0,
+    pendingRenameTabId: null,
+    minimized: false,
 
     openPdf: (tab) =>
       set((state) => {
@@ -80,6 +148,10 @@ export const useInspectorStore = create<State & Actions>()(
         }
         state.activeId = tab.id;
         state.activationSeq += 1;
+        // Opening a tab while the inspector is collapsed should
+        // bring it back into view; otherwise the user's click
+        // appears to do nothing.
+        state.minimized = false;
       }),
 
     openTask: (taskId, label = "", isNew = false) =>
@@ -102,6 +174,43 @@ export const useInspectorStore = create<State & Actions>()(
         }
         state.activeId = taskId;
         state.activationSeq += 1;
+        state.minimized = false;
+      }),
+
+    openChat: (args = {}) =>
+      set((state) => {
+        const id = args.id ?? uuidv7();
+        const existing = state.tabs.find((t) => t.id === id);
+        if (!existing) {
+          state.tabs.push({
+            type: "chat",
+            id,
+            label: args.label ?? "New chat",
+            contextMatterIds: args.contextMatterIds ?? [],
+            activeDecisionId: args.activeDecisionId,
+          });
+        } else if (existing.type === "chat") {
+          if (args.label !== undefined) {
+            existing.label = args.label;
+          }
+          if (args.contextMatterIds !== undefined) {
+            existing.contextMatterIds = args.contextMatterIds;
+          }
+          if (args.activeDecisionId !== undefined) {
+            existing.activeDecisionId = args.activeDecisionId;
+          }
+        }
+        state.activeId = id;
+        state.activationSeq += 1;
+        state.minimized = false;
+      }),
+
+    setChatContext: (tabId, matterIds) =>
+      set((state) => {
+        const tab = state.tabs.find((t) => t.id === tabId);
+        if (tab?.type === "chat") {
+          tab.contextMatterIds = matterIds;
+        }
       }),
 
     closeTab: (id) =>
@@ -119,10 +228,32 @@ export const useInspectorStore = create<State & Actions>()(
         }
       }),
 
+    closeOthers: (id) =>
+      set((state) => {
+        const target = state.tabs.find((t) => t.id === id);
+        if (!target) {
+          return;
+        }
+        state.tabs = [target];
+        state.activeId = id;
+      }),
+
     setActive: (id) =>
       set((state) => {
         state.activeId = id;
         state.activationSeq += 1;
+      }),
+
+    requestRename: (id) =>
+      set((state) => {
+        state.activeId = id;
+        state.activationSeq += 1;
+        state.pendingRenameTabId = id;
+      }),
+
+    clearRenameRequest: () =>
+      set((state) => {
+        state.pendingRenameTabId = null;
       }),
 
     closeAll: () =>
@@ -177,6 +308,16 @@ export const useInspectorStore = create<State & Actions>()(
         if (tab && tab.type === "task") {
           tab.status = status;
         }
+      }),
+
+    setMinimized: (minimized) =>
+      set((state) => {
+        state.minimized = minimized;
+      }),
+
+    toggleMinimized: () =>
+      set((state) => {
+        state.minimized = !state.minimized;
       }),
   })),
 );

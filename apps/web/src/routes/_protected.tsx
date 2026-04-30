@@ -6,15 +6,18 @@ import {
   useRef,
   useState,
 } from "react";
+import type { MouseEvent } from "react";
 
 import { Button } from "@stll/ui/components/button";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
 import { Separator } from "@stll/ui/components/separator";
 import { useHotkey } from "@tanstack/react-hotkeys";
-import {
-  useQuery,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
   Outlet,
@@ -22,11 +25,10 @@ import {
   useMatch,
 } from "@tanstack/react-router";
 import {
-  LayersIcon,
+  MessageSquarePlusIcon,
   PanelRightIcon,
   PinIcon,
   PinOffIcon,
-  BookOpenTextIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -43,33 +45,26 @@ import {
   useSidebar,
 } from "@/components/sidebar";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { useChatPanelStore } from "@/lib/chat-panel-store";
-import { getCourtColor } from "@/lib/court-colors";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { getMatterSwatch } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { prefetchNonCriticalQuery } from "@/lib/react-query";
 import { roleOptions } from "@/routes/-queries";
 import { useGlobalChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-global-chat-mention-registration";
-import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
 import { CaseSearchTrigger } from "@/routes/_protected.knowledge/case/-components/case-viewer/case-search-trigger";
 import { DecisionMetadataSheet } from "@/routes/_protected.knowledge/case/-components/case-viewer/decision-metadata-sheet";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import type { InspectorTab } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { MatterMetadataSheet } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
 import { CreateMatterDialog } from "@/routes/_protected.workspaces/-components/create-matter-dialog";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
-const LazyTemplateAssistantPanel = lazy(
-  async () =>
-    await import("@/routes/_protected.knowledge/-components/template-assistant-panel").then(
-      (m) => ({ default: m.TemplateAssistantPanel }),
-    ),
-);
 
-const LazyRightPanelChat = lazy(
+const LazyInspectorPanel = lazy(
   async () =>
-    await import("@/components/right-panel-chat").then((m) => ({
-      default: m.RightPanelChat,
-    })),
+    await import("@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel").then(
+      (m) => ({ default: m.InspectorPanel }),
+    ),
 );
 
 export const Route = createFileRoute("/_protected")({
@@ -115,31 +110,6 @@ export const Route = createFileRoute("/_protected")({
 function ProtectedComponent() {
   const { data: role } = useSuspenseQuery(roleOptions);
 
-  const chatMatch = useMatch({
-    from: "/_protected/chat",
-    shouldThrow: false,
-  });
-  const isOnChatRoute = !!chatMatch;
-  const rightOpen = useChatPanelStore((state) => state.isOpen);
-  const setRightOpen = useChatPanelStore((state) => state.setOpen);
-  const toggleRightOpen = useChatPanelStore((state) => state.toggle);
-
-  const toggleRight = useCallback(() => {
-    if (isOnChatRoute) {
-      return;
-    }
-    toggleRightOpen();
-  }, [isOnChatRoute, toggleRightOpen]);
-
-  // Auto-close when navigating to /chat.
-  useEffect(() => {
-    if (isOnChatRoute && rightOpen) {
-      setRightOpen(false);
-    }
-  }, [isOnChatRoute, rightOpen, setRightOpen]);
-
-  useHotkey(HOTKEYS.TOGGLE_CHAT, toggleRight);
-
   const workspaceMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId",
     shouldThrow: false,
@@ -152,13 +122,51 @@ function ProtectedComponent() {
   });
   const activeDecisionId = decisionMatch?.params.decisionId;
 
-  // Auto-open chat panel when viewing a case law decision
-  useEffect(() => {
-    if (activeDecisionId && !isOnChatRoute && !rightOpen) {
-      setRightOpen(true);
+  // Mod+J — toggles the inspector pane. With tabs already open it
+  // restores or hides the pane regardless of route, so users can
+  // minimise inside a matter and reopen from anywhere. With no
+  // tabs the action becomes "open a fresh chat", which is only
+  // meaningful inside a matter (we need somewhere to scope the
+  // chat to); on non-workspace routes it's a no-op.
+  const handleToggleInspectorHotkey = useCallback(() => {
+    const store = useInspectorStore.getState();
+    if (store.tabs.length > 0) {
+      store.toggleMinimized();
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDecisionId]);
+    if (activeWorkspaceId) {
+      store.openChat({ contextMatterIds: [activeWorkspaceId] });
+    }
+  }, [activeWorkspaceId]);
+  useHotkey(HOTKEYS.TOGGLE_CHAT, handleToggleInspectorHotkey);
+
+  // Auto-open a chat tab grounded in the active case-law decision —
+  // mirrors the legacy right-panel-chat behaviour where landing on a
+  // decision page opened a chat about it. Fires once per (decision,
+  // workspace) pair so re-renders don't reopen a tab the user just
+  // closed; resets when the user navigates to a different decision
+  // or away from the case-law route.
+  //
+  // TODO: drop the `activeWorkspaceId` requirement when global-scope
+  // chat tabs land. Today the inspector tab + thread are
+  // workspace-scoped, so a decision visited outside a matter context
+  // can't get a tab; users have to manually navigate into a matter
+  // first. Tracked under Phase D-full.
+  const lastAutoOpenedDecisionRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeDecisionId || !activeWorkspaceId) {
+      lastAutoOpenedDecisionRef.current = null;
+      return;
+    }
+    if (lastAutoOpenedDecisionRef.current === activeDecisionId) {
+      return;
+    }
+    lastAutoOpenedDecisionRef.current = activeDecisionId;
+    useInspectorStore.getState().openChat({
+      contextMatterIds: [activeWorkspaceId],
+      activeDecisionId,
+    });
+  }, [activeDecisionId, activeWorkspaceId]);
 
   return (
     <SidebarProvider>
@@ -167,19 +175,8 @@ function ProtectedComponent() {
           <GlobalChatMentionRegistration />
           <AppSidebar role={role} />
           <CreateMatterDialog />
-          <ProtectedContent
-            decisionId={activeDecisionId}
-            isOnChatRoute={isOnChatRoute}
-            rightOpen={rightOpen}
-            toggleRight={toggleRight}
-          />
-          <RightPanel
-            decisionId={activeDecisionId}
-            isOnChatRoute={isOnChatRoute}
-            onToggle={toggleRight}
-            open={rightOpen}
-            workspaceId={activeWorkspaceId}
-          />
+          <ProtectedContent decisionId={activeDecisionId} />
+          <WorkspaceInspectorSidePanel />
           <ShortcutHintsOverlay />
         </ChatEditorProvider>
       </ChatMentionProviders>
@@ -195,16 +192,10 @@ function GlobalChatMentionRegistration() {
 
 type ProtectedContentProps = {
   decisionId: string | undefined;
-  isOnChatRoute: boolean;
-  rightOpen: boolean;
-  toggleRight: () => void;
 };
 
 function ProtectedContent({
   decisionId: activeDecisionId,
-  isOnChatRoute,
-  rightOpen,
-  toggleRight,
 }: ProtectedContentProps) {
   const t = useTranslations();
   const { isMobile } = useSidebar();
@@ -221,6 +212,70 @@ function ProtectedContent({
 
   const workspaceId = projectMatch?.params.workspaceId;
   const isPinned = workspaceId ? pinnedIds.has(workspaceId) : false;
+
+  // Inspector toggle wiring — the right-side `PanelRightIcon`
+  // button is the universal entry point for the inspector pane.
+  // It's available everywhere (workspace, knowledge, dashboards),
+  // not just inside a matter, so users can pop a minimised pane
+  // back open from any route. Inside a workspace it doubles as
+  // "create new chat" when no tabs are open yet.
+  const inspectorMinimized = useInspectorStore((s) => s.minimized);
+  const inspectorTabsCount = useInspectorStore((s) => s.tabs.length);
+  const toggleInspector = useInspectorStore((s) => s.toggleMinimized);
+  const openInspectorChat = useInspectorStore((s) => s.openChat);
+  const handleInspectorButtonClick = () => {
+    if (inspectorTabsCount === 0) {
+      // No tabs yet — only meaningful inside a matter where we
+      // can scope the new chat. Outside a matter the button has
+      // nothing useful to do, so it stays hidden via the
+      // `canShowInspectorButton` guard below.
+      if (workspaceId !== undefined) {
+        openInspectorChat({ contextMatterIds: [workspaceId] });
+      }
+      return;
+    }
+    toggleInspector();
+  };
+  // Show the chrome inspector button whenever there's a meaningful
+  // action behind it: open a chat (workspace + 0 tabs) or restore
+  // a minimised pane (any route + tabs). When the pane is fully
+  // open the in-pane close button takes over and this button hides.
+  const canShowInspectorButton =
+    (workspaceId !== undefined && inspectorTabsCount === 0) ||
+    (inspectorTabsCount > 0 && inspectorMinimized);
+  const inspectorButtonTitle =
+    inspectorTabsCount === 0
+      ? t("inspector.openChat")
+      : inspectorMinimized
+        ? t("inspector.showPane")
+        : t("inspector.hidePane");
+
+  // Right-clicking the chrome's icon row (including the empty
+  // space after the last icon) offers a quick "Open new chat"
+  // shortcut without forcing a trip to the inspector toggle.
+  const [chatMenuOpen, setChatMenuOpen] = useState(false);
+  const chatMenuAnchorRef = useRef<{
+    getBoundingClientRect: () => DOMRect;
+  } | null>(null);
+  const handleIconRowContextMenu = (e: MouseEvent) => {
+    if (workspaceId === undefined) {
+      return;
+    }
+    e.preventDefault();
+    const x = e.clientX;
+    const y = e.clientY;
+    chatMenuAnchorRef.current = {
+      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+    };
+    setChatMenuOpen(true);
+  };
+  const handleOpenNewChatFromMenu = () => {
+    if (workspaceId === undefined) {
+      return;
+    }
+    openInspectorChat({ contextMatterIds: [workspaceId] });
+    setChatMenuOpen(false);
+  };
 
   const { data: workspace } = useQuery({
     ...workspaceOptions(workspaceId ?? ""),
@@ -250,7 +305,10 @@ function ProtectedContent({
         )}
         <AppBreadcrumbs />
         {pdfMatch && <PdfViewerControls />}
-        <div className="ms-auto flex shrink-0 items-center gap-0.5">
+        <div
+          className="ms-auto flex shrink-0 items-center gap-0.5"
+          onContextMenu={handleIconRowContextMenu}
+        >
           {workspaceId && (
             <>
               <Button
@@ -276,14 +334,17 @@ function ProtectedContent({
               <DecisionMetadataSheet decisionId={activeDecisionId} />
             </>
           )}
-          {!rightOpen && !isOnChatRoute && (
+          {canShowInspectorButton && (
             <>
               <Separator className="mx-1 h-4" orientation="vertical" />
               <Button
+                aria-pressed={
+                  inspectorTabsCount > 0 ? !inspectorMinimized : undefined
+                }
                 className="size-7"
-                onClick={toggleRight}
+                onClick={handleInspectorButtonClick}
                 size="icon"
-                title={t("navigation.toggleChat")}
+                title={inspectorButtonTitle}
                 variant="ghost"
               >
                 <PanelRightIcon className="size-4" />
@@ -291,111 +352,98 @@ function ProtectedContent({
             </>
           )}
         </div>
+        {workspaceId !== undefined && (
+          <Menu
+            onOpenChange={(nextOpen) => {
+              setChatMenuOpen(nextOpen);
+              if (!nextOpen) {
+                chatMenuAnchorRef.current = null;
+              }
+            }}
+            open={chatMenuOpen}
+          >
+            <MenuTrigger
+              nativeButton={false}
+              render={<span className="sr-only" />}
+            />
+            <MenuPopup anchor={chatMenuAnchorRef.current ?? undefined}>
+              <MenuItem onClick={handleOpenNewChatFromMenu}>
+                <MessageSquarePlusIcon />
+                {t("chat.newChat")}
+              </MenuItem>
+            </MenuPopup>
+          </Menu>
+        )}
       </header>
       <Outlet />
     </SidebarInset>
   );
 }
 
-// -- Matter context badge --
+const INSPECTOR_PANE_DEFAULT_WIDTH = 512;
+const INSPECTOR_PANE_MIN_WIDTH = 320;
+const INSPECTOR_PANE_MAX_WIDTH = 800;
 
-const MatterContextBadge = ({ workspaceId }: { workspaceId: string }) => {
-  const { data: workspace } = useQuery(workspaceOptions(workspaceId));
-  if (!workspace?.name) {
-    return null;
-  }
-  const swatch = workspace.color
-    ? `var(${workspace.color})`
-    : `var(${getMatterSwatch(workspaceId)})`;
-  return (
-    <span
-      className="text-muted-foreground ms-auto flex max-w-[50%] items-center gap-1 rounded-md px-1.5 py-0.5 text-xs"
-      style={{
-        backgroundColor: `color-mix(in srgb, ${swatch} 10%, transparent)`,
-      }}
-    >
-      <LayersIcon className="size-3 shrink-0" style={{ color: swatch }} />
-      <span className="truncate">{workspace.name}</span>
-    </span>
+/**
+ * Workspace inspector pane — file viewers + chat tabs. Mounted at
+ * the protected layout level (next to `TemplateAssistantSidePanel`)
+ * so its mount survives matter→matter switches without the
+ * resizable group it used to live inside being unmounted by the
+ * `$workspaceId` route's re-render. Uses the same fixed/spacer
+ * pattern as the legacy right chat so the pane spans the full
+ * viewport height and the topbar doesn't need to leave room for
+ * inspector chrome.
+ */
+function WorkspaceInspectorSidePanel() {
+  const projectMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId",
+    shouldThrow: false,
+  });
+  const routeWorkspaceId = projectMatch?.params.workspaceId;
+  const tabs = useInspectorStore((s) => s.tabs);
+  const activeId = useInspectorStore((s) => s.activeId);
+  const minimized = useInspectorStore((s) => s.minimized);
+  const visible = tabs.length > 0 && !minimized;
+
+  // Pin the inspector's "current matter" to the ACTIVE TAB's
+  // origin so documents and started chats keep showing the
+  // matter they came from, even after the user navigates away
+  // to another matter (or to a non-workspace route like the
+  // knowledge / case-law viewer). Resolution order:
+  //   1. Active tab's origin (PDF.workspaceId or started-chat
+  //      contextMatterIds[0])
+  //   2. The current route's matter (for blank chats or task
+  //      tabs while inside a workspace)
+  //   3. Any other tab's stored workspaceId — keeps the pane
+  //      mounted when the user navigates away from a workspace
+  //      with only blank chats active but PDFs from earlier
+  //      matters still open in the rail.
+  const activeTab = tabs.find((tab) => tab.id === activeId);
+  const tabOriginWorkspaceId =
+    activeTab?.type === "pdf"
+      ? activeTab.workspaceId
+      : activeTab?.type === "chat"
+        ? (activeTab.contextMatterIds.at(0) ?? null)
+        : null;
+  // Last-resort: pick *any* tab's stored workspace so the inspector
+  // mounts even when the active tab can't dictate one (a task tab,
+  // or a chat that hasn't been pinned to a matter yet) and the
+  // route is also non-workspace. PDF tabs carry workspaceId
+  // directly; chat tabs surface theirs via contextMatterIds[0].
+  const fallbackPdfTab = tabs.find(
+    (tab): tab is Extract<InspectorTab, { type: "pdf" }> => tab.type === "pdf",
   );
-};
-
-// -- Decision context badge --
-
-const extractDecisionNanoid = (param: string): string => {
-  const sep = param.lastIndexOf("--");
-  return sep !== -1 ? param.slice(sep + 2) : param;
-};
-
-const DecisionContextBadge = ({ decisionId }: { decisionId: string }) => {
-  const queryClient = useQueryClient();
-  const id = extractDecisionNanoid(decisionId);
-  const decision = queryClient.getQueryData<{
-    caseNumber: string;
-    court: string;
-  }>(["case-law-decisions", id]);
-  if (!decision?.caseNumber) {
-    return null;
-  }
-  const color = getCourtColor(decision.court);
-  return (
-    <span
-      className="text-muted-foreground ms-auto flex max-w-[50%] items-center gap-1 rounded-md px-1.5 py-0.5 text-xs"
-      style={{
-        backgroundColor: `color-mix(in srgb, ${color} 10%, transparent)`,
-      }}
-    >
-      <BookOpenTextIcon className="size-3 shrink-0" style={{ color }} />
-      <span className="truncate">{decision.caseNumber}</span>
-    </span>
+  const fallbackChatTab = tabs.find(
+    (tab): tab is Extract<InspectorTab, { type: "chat" }> =>
+      tab.type === "chat" && tab.contextMatterIds.length > 0,
   );
-};
-
-// -- Right panel (chat mock) --
-
-const RIGHT_PANEL_DEFAULT_WIDTH = 384;
-const RIGHT_PANEL_MIN_WIDTH = 280;
-const RIGHT_PANEL_MAX_WIDTH = 640;
-
-type RightPanelProps = {
-  isOnChatRoute: boolean;
-  open: boolean;
-  onToggle: () => void;
-  workspaceId?: string | undefined;
-  decisionId?: string | undefined;
-};
-
-function RightPanel({
-  isOnChatRoute,
-  open,
-  onToggle,
-  workspaceId,
-  decisionId,
-}: RightPanelProps) {
-  const t = useTranslations();
-  const assistantActive = useTemplateAssistantStore(
-    (s) => s.session.status === "active",
-  );
-  // Start narrow when opened for case law decisions
-  const defaultWidth = decisionId
-    ? RIGHT_PANEL_MIN_WIDTH
-    : RIGHT_PANEL_DEFAULT_WIDTH;
-  const [width, setWidth] = useState(defaultWidth);
-
-  // Only reset width when the panel transitions from closed to open;
-  // if already open, keep whatever size the user chose. hasDecision
-  // is in the dep array for the linter but the wasJustOpened guard
-  // makes the extra run a no-op when navigating while already open.
-  const hasDecision = Boolean(decisionId);
-  const prevOpen = useRef(open);
-  useEffect(() => {
-    const wasJustOpened = open && !prevOpen.current;
-    prevOpen.current = open;
-    if (wasJustOpened) {
-      setWidth(hasDecision ? RIGHT_PANEL_MIN_WIDTH : RIGHT_PANEL_DEFAULT_WIDTH);
-    }
-  }, [open, hasDecision]);
-
+  const fallbackTabWorkspaceId =
+    fallbackPdfTab?.workspaceId ??
+    fallbackChatTab?.contextMatterIds.at(0) ??
+    null;
+  const activeWorkspaceId =
+    tabOriginWorkspaceId ?? routeWorkspaceId ?? fallbackTabWorkspaceId;
+  const [width, setWidth] = useState(INSPECTOR_PANE_DEFAULT_WIDTH);
   const isDragging = useRef(false);
 
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -411,8 +459,8 @@ function RightPanel({
     const newWidth = window.innerWidth - e.clientX;
     setWidth(
       Math.min(
-        RIGHT_PANEL_MAX_WIDTH,
-        Math.max(RIGHT_PANEL_MIN_WIDTH, newWidth),
+        INSPECTOR_PANE_MAX_WIDTH,
+        Math.max(INSPECTOR_PANE_MIN_WIDTH, newWidth),
       ),
     );
   };
@@ -421,36 +469,23 @@ function RightPanel({
     isDragging.current = false;
   };
 
+  if (!visible || !activeWorkspaceId) {
+    return null;
+  }
+
   const widthPx = `${width}px`;
 
   return (
     <div
       className="text-sidebar-foreground hidden md:block"
       data-side="right"
-      data-state={open ? "expanded" : "collapsed"}
+      data-state="expanded"
     >
-      {/* Gap element (mirrors left sidebar pattern) */}
+      <div className="relative bg-transparent" style={{ width: widthPx }} />
       <div
-        className="relative bg-transparent transition-[width] duration-200 ease-linear"
-        style={{
-          width: open ? widthPx : "0px",
-          ...(isDragging.current && {
-            transition: "none",
-          }),
-        }}
-      />
-      {/* Fixed panel */}
-      <div
-        className="fixed inset-y-0 right-0 z-10 hidden h-svh transition-[right,width] duration-200 ease-linear md:flex"
-        style={{
-          width: widthPx,
-          right: open ? "0" : `${width * -1}px`,
-          ...(isDragging.current && {
-            transition: "none",
-          }),
-        }}
+        className="fixed inset-y-0 right-0 z-10 hidden h-svh md:flex"
+        style={{ width: widthPx }}
       >
-        {/* Resize handle */}
         <div
           className="hover:bg-border active:bg-border absolute inset-y-0 -left-px z-20 flex w-1 cursor-col-resize items-center justify-center border-l"
           onPointerDown={handlePointerDown}
@@ -458,58 +493,9 @@ function RightPanel({
           onPointerUp={handlePointerUp}
         />
         <div className="bg-sidebar flex h-full w-full flex-col">
-          {assistantActive ? (
-            <>
-              <div className="bg-background flex h-12 shrink-0 items-center gap-2 border-b px-3">
-                <Button
-                  className="text-muted-foreground size-7"
-                  onClick={onToggle}
-                  size="icon"
-                  variant="ghost"
-                >
-                  <PanelRightIcon className="size-4" />
-                </Button>
-                <span className="text-sm font-medium">
-                  {t("rightPanel.templateAssistant")}
-                </span>
-              </div>
-              <Suspense>
-                <LazyTemplateAssistantPanel />
-              </Suspense>
-            </>
-          ) : (
-            <>
-              <div className="bg-background flex h-12 shrink-0 items-center gap-2 border-b px-3">
-                <Button
-                  className="text-muted-foreground size-7"
-                  onClick={onToggle}
-                  size="icon"
-                  variant="ghost"
-                >
-                  <PanelRightIcon className="size-4" />
-                </Button>
-                <span className="text-sm font-medium">
-                  {t("rightPanel.title")}
-                </span>
-                {workspaceId && (
-                  <MatterContextBadge workspaceId={workspaceId} />
-                )}
-                {decisionId && <DecisionContextBadge decisionId={decisionId} />}
-              </div>
-              {!isOnChatRoute && (
-                <Suspense>
-                  <LazyRightPanelChat
-                    decisionId={
-                      decisionId ? extractDecisionNanoid(decisionId) : undefined
-                    }
-                    key={workspaceId ?? decisionId ?? "global"}
-                    open={open}
-                    workspaceId={workspaceId}
-                  />
-                </Suspense>
-              )}
-            </>
-          )}
+          <Suspense>
+            <LazyInspectorPanel workspaceId={activeWorkspaceId} />
+          </Suspense>
         </div>
       </div>
     </div>

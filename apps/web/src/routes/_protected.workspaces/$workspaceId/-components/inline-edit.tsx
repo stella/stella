@@ -13,6 +13,16 @@ type InlineEditProps = {
   inputClassName?: string;
 };
 
+/**
+ * Compact inline rename used in toolbars / tab headers.
+ *
+ * Deliberately NOT built on the `<Input>` primitive: that's tuned
+ * for full-form inputs (rounded-lg, shadow, larger text) and looked
+ * oversized when dropped inline next to a label. This stays as a
+ * raw `<input>` with text-xs to match the surrounding label height
+ * exactly — only a subtle border + soft 2px focus ring at 16%
+ * opacity signals the edit affordance, no dark "primary" ring leak.
+ */
 export const InlineEdit = ({
   value,
   onChange,
@@ -29,8 +39,8 @@ export const InlineEdit = ({
       <input
         autoFocus
         className={cn(
-          "bg-background h-6 rounded border px-1.5 text-sm",
-          "focus:ring-primary outline-none focus:ring-1",
+          "border-input bg-background text-foreground h-6 min-w-0 rounded-sm border px-1.5 text-xs leading-none transition-[box-shadow,border-color] duration-150 outline-none",
+          "focus:border-ring focus:ring-ring/16 focus:ring-2 focus:ring-offset-0",
           inputClassName,
         )}
         onBlur={onCommit}

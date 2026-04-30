@@ -298,6 +298,14 @@
     }
   },
   "chat": {
+    "actionExpand": {
+      "toastDescription": "Full-page chat lands with persisted threads.",
+      "toastTitle": "Full view not yet available"
+    },
+    "actionPrint": {
+      "toastDescription": "Chat printing lands with persisted threads.",
+      "toastTitle": "Printing not yet available"
+    },
     "approval": {
       "allow": "Erlauben",
       "alwaysAllow": "Immer in diesem Thread erlauben",
@@ -319,6 +327,10 @@
       "original": "Original",
       "simple": "Akzeptiert",
       "trackedChanges": "Änderungsverfolgung"
+    },
+    "emptyState": {
+      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
+      "title": "What can we work on?"
     },
     "extractingContent": "Inhalt wird extrahiert...",
     "fileTooLarge": "Datei überschreitet das Limit von {maxSize}",
@@ -459,6 +471,8 @@
     "category": "Kategorie",
     "clauses": "Klauseln",
     "close": "Schließen",
+    "closeAll": "Alle schließen",
+    "closeOthers": "Andere schließen",
     "columns": "Spalten",
     "comingSoon": "Demnächst verfügbar",
     "confirm": "Bestätigen",
@@ -859,6 +873,21 @@
     "undo": "Undo",
     "undoShortcut": "Undo (Ctrl+Z)"
   },
+  "inspector": {
+    "hidePane": "Hide pane",
+    "matterPicker": {
+      "allMatters": "All matters",
+      "description": "Pick the matters this chat can draw on. The AI sees content from every matter you select.",
+      "directLabel": "Direct",
+      "empty": "No matters available.",
+      "noMatter": "No matter",
+      "noResults": "No matter matches “{query}”.",
+      "searchPlaceholder": "Search matters or clients…",
+      "title": "Matter context"
+    },
+    "openChat": "Open chat",
+    "showPane": "Show pane"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1043,22 +1072,6 @@
     },
     "settings": "Organisationseinstellungen",
     "settingsDescription": "Name und Slug der Organisation bearbeiten"
-  },
-  "rightPanel": {
-    "addConditional": "Bedingung hinzufügen",
-    "askAboutMatter": "Stellen Sie Fragen zu Ihrer Akte.",
-    "chatPlaceholder": "Chat wird hier angezeigt.",
-    "comingSoon": "KI-Vorlagenassistent kommt bald.",
-    "convertToPlaceholder": "In Platzhalter umwandeln",
-    "mockDisclaimer": "Dies ist eine Vorschau des KI-Assistenten. Antworten sind simuliert.",
-    "mockResponseConditional": "Ich würde diesen Text in einen bedingten Block einschließen: '{{#if condition}}...{{/if}}'. Welche Bedingung soll die Sichtbarkeit steuern?",
-    "mockResponsePlaceholder": "Ich kann den ausgewählten Text in einen Platzhalter wie '{{fieldName}}' umwandeln. Wie soll das Feld heißen?",
-    "mockResponseRepeat": "Ich würde dies in eine Schleife einschließen: '{{#each items}}...{{/each}}'. Welche Sammlung soll durchlaufen werden?",
-    "repeatForEach": "Für jedes Element wiederholen",
-    "selectedText": "Ausgewählter Text",
-    "templateAssistant": "Vorlagenassistent",
-    "title": "Chat",
-    "whatToDo": "Was möchten Sie mit diesem Text tun?"
   },
   "search": {
     "aiRefine": "Suchanfrage mit KI verbessern",

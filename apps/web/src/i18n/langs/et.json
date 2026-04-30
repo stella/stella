@@ -298,6 +298,14 @@
     }
   },
   "chat": {
+    "actionExpand": {
+      "toastDescription": "Full-page chat lands with persisted threads.",
+      "toastTitle": "Full view not yet available"
+    },
+    "actionPrint": {
+      "toastDescription": "Chat printing lands with persisted threads.",
+      "toastTitle": "Printing not yet available"
+    },
     "approval": {
       "allow": "Luba",
       "alwaysAllow": "Luba alati",
@@ -319,6 +327,10 @@
       "original": "Originaal",
       "simple": "Aktsepteeritud",
       "trackedChanges": "Muudatuste jälgimine"
+    },
+    "emptyState": {
+      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
+      "title": "What can we work on?"
     },
     "extractingContent": "Sisu ekstraktimine...",
     "fileTooLarge": "Fail ületab {maxSize} piirangu",
@@ -459,6 +471,8 @@
     "category": "Kategooria",
     "clauses": "Klauslid",
     "close": "Sulge",
+    "closeAll": "Sulge kõik",
+    "closeOthers": "Sulge teised",
     "columns": "Veerud",
     "comingSoon": "Tulemas peagi",
     "confirm": "Kinnita",
@@ -859,6 +873,21 @@
     "undo": "Undo",
     "undoShortcut": "Undo (Ctrl+Z)"
   },
+  "inspector": {
+    "hidePane": "Hide pane",
+    "matterPicker": {
+      "allMatters": "All matters",
+      "description": "Pick the matters this chat can draw on. The AI sees content from every matter you select.",
+      "directLabel": "Direct",
+      "empty": "No matters available.",
+      "noMatter": "No matter",
+      "noResults": "No matter matches “{query}”.",
+      "searchPlaceholder": "Search matters or clients…",
+      "title": "Matter context"
+    },
+    "openChat": "Open chat",
+    "showPane": "Show pane"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1043,22 +1072,6 @@
     },
     "settings": "Organisatsiooni seaded",
     "settingsDescription": "Muutke oma organisatsiooni nime ja slugi"
-  },
-  "rightPanel": {
-    "addConditional": "Lisa tingimuslik plokk",
-    "askAboutMatter": "Esitage küsimusi oma asja kohta.",
-    "chatPlaceholder": "Vestlus ilmub siia.",
-    "comingSoon": "Tehisintellekti malliassistent tulemas peagi.",
-    "convertToPlaceholder": "Teisenda kohatäitjaks",
-    "mockDisclaimer": "See on tehisintellekti assistendi eelvaade. Vastused on simuleeritud.",
-    "mockResponseConditional": "Mähiksin selle teksti tingimuslikku plokki: '{{#if condition}}...{{/if}}'. Milline tingimus peaks selle nähtavust kontrollima?",
-    "mockResponsePlaceholder": "Saan teisendada valitud teksti kohatäitjaks nagu '{{fieldName}}'. Kuidas peaks välja kutsutama?",
-    "mockResponseRepeat": "Mähiksin selle tsüklisse: '{{#each items}}...{{/each}}'. Millist kogumit peaks see itereerima?",
-    "repeatForEach": "Korda iga elemendi jaoks",
-    "selectedText": "Valitud tekst",
-    "templateAssistant": "Malliassistent",
-    "title": "Vestlus",
-    "whatToDo": "Mida soovite selle tekstiga teha?"
   },
   "search": {
     "aiRefine": "Täpsusta päringut AI-ga",

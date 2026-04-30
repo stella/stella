@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 
 import { toastManager } from "@stll/ui/components/toast";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import {
   createFileRoute,
   Navigate,
@@ -8,20 +9,20 @@ import {
   redirect,
   useMatch,
 } from "@tanstack/react-router";
-import { Group, Panel, Separator } from "react-resizable-panels";
 
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { APIError } from "@/lib/errors";
+import { HOTKEYS } from "@/lib/hotkeys";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import {
   ensureCriticalQueryData,
   prefetchNonCriticalQuery,
 } from "@/lib/react-query";
 import { useWorkspaceSSE } from "@/lib/sse";
+import { useWorkspaceChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration";
 import { DropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/drop-zone";
-import { InspectorPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
@@ -107,13 +108,23 @@ function RouteComponent() {
   // invalidation (replaces the Rivet sync actor for this workspace).
   useWorkspaceSSE(workspaceId);
 
-  // Clean up inspector tabs when the workspace changes so
-  // stale IDs from the previous workspace don't cause
-  // broken previews.
+  // Register the matter's entities as `@`-mention sources for any
+  // chat editor mounted inside this workspace (right-panel chat,
+  // inspector chat tab, file-overlay chat). Picks the first view
+  // automatically — entity mentions don't depend on the current
+  // view, but the underlying query needs one to scope the fetch.
+  useWorkspaceChatMentionRegistration(workspaceId);
+
+  // Reset workspace-bound visualisation state on matter switch
+  // (PDF viewer page state, justification overlays). Inspector
+  // tabs are intentionally NOT cleared — leaving them open lets
+  // the user pop back into a matter and find their tabs where
+  // they left them. PDF tabs from another matter will refetch
+  // with their own workspaceId; chat tabs are workspace-tagged
+  // so they only render under the matter they belong to.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(
     () => () => {
-      useInspectorStore.getState().closeAll();
       const workspaceStore = useWorkspaceStore.getState();
       workspaceStore.clearJustifications();
       workspaceStore.setActiveJustification(null);
@@ -139,30 +150,31 @@ function RouteComponent() {
     shouldThrow: false,
   });
 
-  const hasSidePanel = useInspectorStore((s) => s.tabs.length > 0);
+  // Always-new-chat shortcut. `Mod+J` (defined in `_protected.tsx`)
+  // is a smart toggle — it creates a chat only if no inspector
+  // tabs exist, otherwise it minimises/restores the pane.
+  // `Mod+Shift+J` here always spawns a fresh chat tab, so a user
+  // can start a new conversation without first dismissing whatever
+  // is currently open.
+  const openChat = useInspectorStore((s) => s.openChat);
+  const handleOpenChat = useCallback(() => {
+    openChat({ contextMatterIds: [workspaceId] });
+  }, [openChat, workspaceId]);
+  useHotkey(HOTKEYS.NEW_CHAT, handleOpenChat);
 
-  // Timesheets, analytics, invoices, and entity detail have their own layout
+  // The right-side inspector pane (file viewers + chat tabs) is
+  // mounted at the protected layout level (`_protected.tsx`) so
+  // its mount survives matter→matter switches without flinching.
+  // Timesheets, analytics, invoices, and entity detail bypass the
+  // DropZone (they have their own layouts), but the inspector
+  // pane is still available everywhere inside a workspace.
   if (timesheetsMatch || analyticsMatch || invoicesMatch || entityDetailMatch) {
     return <Outlet />;
   }
 
   return (
     <DropZone workspaceId={workspaceId}>
-      <Group orientation="horizontal">
-        <Panel className="flex min-w-0 flex-col">
-          <Outlet />
-        </Panel>
-        {hasSidePanel && (
-          <>
-            <Separator className="group data-[separator=active]:bg-border data-[separator=hover]:bg-border flex w-1 shrink-0 cursor-col-resize items-center justify-center">
-              <div className="bg-border h-8 w-0.5 rounded-full group-data-[separator=active]:hidden group-data-[separator=hover]:hidden" />
-            </Separator>
-            <Panel defaultSize="32rem" maxSize="50rem" minSize="20rem">
-              <InspectorPanel workspaceId={workspaceId} />
-            </Panel>
-          </>
-        )}
-      </Group>
+      <Outlet />
     </DropZone>
   );
 }

@@ -298,6 +298,14 @@
     }
   },
   "chat": {
+    "actionExpand": {
+      "toastDescription": "Full-page chat lands with persisted threads.",
+      "toastTitle": "Full view not yet available"
+    },
+    "actionPrint": {
+      "toastDescription": "Chat printing lands with persisted threads.",
+      "toastTitle": "Printing not yet available"
+    },
     "approval": {
       "allow": "Atļaut",
       "alwaysAllow": "Vienmēr atļaut",
@@ -319,6 +327,10 @@
       "original": "Oriģināls",
       "simple": "Pieņemts",
       "trackedChanges": "Izmaiņu izsekošana"
+    },
+    "emptyState": {
+      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
+      "title": "What can we work on?"
     },
     "extractingContent": "Satura izgūšana...",
     "fileTooLarge": "Fails pārsniedz {maxSize} ierobežojumu",
@@ -459,6 +471,8 @@
     "category": "Kategorija",
     "clauses": "Klauzulas",
     "close": "Aizvērt",
+    "closeAll": "Aizvērt visu",
+    "closeOthers": "Aizvērt citus",
     "columns": "Kolonnas",
     "comingSoon": "Drīzumā",
     "confirm": "Apstiprināt",
@@ -859,6 +873,21 @@
     "undo": "Undo",
     "undoShortcut": "Undo (Ctrl+Z)"
   },
+  "inspector": {
+    "hidePane": "Hide pane",
+    "matterPicker": {
+      "allMatters": "All matters",
+      "description": "Pick the matters this chat can draw on. The AI sees content from every matter you select.",
+      "directLabel": "Direct",
+      "empty": "No matters available.",
+      "noMatter": "No matter",
+      "noResults": "No matter matches “{query}”.",
+      "searchPlaceholder": "Search matters or clients…",
+      "title": "Matter context"
+    },
+    "openChat": "Open chat",
+    "showPane": "Show pane"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1043,22 +1072,6 @@
     },
     "settings": "Organizācijas iestatījumi",
     "settingsDescription": "Rediģēt organizācijas nosaukumu un slug"
-  },
-  "rightPanel": {
-    "addConditional": "Pievienot nosacījumu",
-    "askAboutMatter": "Uzdodiet jautājumus par savu lietu.",
-    "chatPlaceholder": "Saruna parādīsies šeit.",
-    "comingSoon": "AI veidnes asistents drīzumā.",
-    "convertToPlaceholder": "Konvertēt par vietturi",
-    "mockDisclaimer": "Šis ir AI asistenta priekšskatījums. Atbildes ir simulētas.",
-    "mockResponseConditional": "Es aptvertu šo tekstu nosacījuma blokā: '{{#if condition}}...{{/if}}'. Kādam nosacījumam vajadzētu vadīt tā redzamību?",
-    "mockResponsePlaceholder": "Es varu konvertēt atlasīto tekstu par vietturi, piem. '{{laukaNosaukums}}'. Kā vajadzētu saukties šim laukam?",
-    "mockResponseRepeat": "Es aptvertu to ciklā: '{{#each items}}...{{/each}}'. Kuru kolekciju vajadzētu iterēt?",
-    "repeatForEach": "Atkārtot katram elementam",
-    "selectedText": "Atlasītais teksts",
-    "templateAssistant": "Veidnes asistents",
-    "title": "Saruna",
-    "whatToDo": "Ko vēlaties darīt ar šo tekstu?"
   },
   "search": {
     "aiRefine": "Uzlabot vaicājumu ar AI",

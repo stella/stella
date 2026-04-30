@@ -565,9 +565,10 @@ const buildActiveFilePrompt = ({
   const matterRef = refRegistry.toMatterRef(workspaceId);
 
   return [
-    `The user is currently viewing "${safeName}" in the inspector sidebar.`,
-    `When they refer to "this document" or "the open file", they mean entity ref ${entityRef}.`,
-    `Use \`execute-typescript\` with \`stella.getMatterEntities\` or \`stella.getMatterEntityContents\`, plus matter ref ${matterRef} and entity ref ${entityRef}, to access its data.`,
+    `ACTIVE FILE: The user is viewing "${safeName}" (entity ref ${entityRef}) in the inspector sidebar.`,
+    `DEFAULT SCOPE: While an active file is set, treat it as the sole subject of any open-ended question ("what's going on", "summarize this", "what does it say", "explain", and similar). Read its contents with \`stella.getMatterEntityContents\` using \`matterRefs: ["${matterRef}"]\` and \`entityRefs: ["${entityRef}"]\`, and answer ONLY from that file.`,
+    `Do NOT call matter-wide retrieval (\`stella.searchEntities\`, \`stella.listEntities\`, or \`stella.getMatterEntities\`) for these open-ended questions — the user does not want answers synthesised from other files in the matter. The chat history is always available; reference earlier turns directly without re-fetching.`,
+    `Widen the scope to the rest of the matter ONLY when the user explicitly asks (e.g., "compare with the other contracts", "search across the matter", or names another document). When that happens, the matter-wide retrieval functions above are allowed again; scope them to \`matterRefs: ["${matterRef}"]\` as usual.`,
   ].join("\n");
 };
 

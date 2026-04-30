@@ -16,7 +16,6 @@ import { MessageSquareIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
-import { useChatPanelStore } from "@/lib/chat-panel-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import {
   chatKeys,
@@ -73,12 +72,6 @@ export const ThreadsSheet = () => {
   const t = useTranslations();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const setGlobalThreadId = useChatPanelStore(
-    (state) => state.setGlobalThreadId,
-  );
-  const setWorkspaceThreadId = useChatPanelStore(
-    (state) => state.setWorkspaceThreadId,
-  );
   const [isOpen, setIsOpen] = useState(false);
 
   const globalThreadMatch = useMatch({
@@ -112,12 +105,6 @@ export const ThreadsSheet = () => {
           ? { workspaceId: threadRef.workspaceId }
           : {},
     });
-
-    if (threadRef.scope === "global") {
-      setGlobalThreadId(null);
-    } else {
-      setWorkspaceThreadId(threadRef.workspaceId, null);
-    }
 
     queryClient.setQueryData(
       groupedChatThreadsOptions().queryKey,

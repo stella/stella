@@ -42,7 +42,6 @@ import {
   templateDetailOptions,
   templatesOptions,
 } from "@/routes/_protected.knowledge/-queries";
-import { useTemplateAssistantStore } from "@/routes/_protected.knowledge/-store/template-assistant-store";
 
 type TemplateItem = {
   id: string;
@@ -437,20 +436,6 @@ const TemplateDetail = ({
   const t = useTranslations();
   const format = useFormatter();
   const queryClient = useQueryClient();
-  const openTemplateAssistant = useTemplateAssistantStore(
-    (s) => s.openForTemplate,
-  );
-  const closeTemplateAssistant = useTemplateAssistantStore((s) => s.close);
-
-  useEffect(() => {
-    openTemplateAssistant({ id: template.id, name: template.name });
-    return closeTemplateAssistant;
-  }, [
-    template.id,
-    template.name,
-    openTemplateAssistant,
-    closeTemplateAssistant,
-  ]);
 
   const {
     data: detailData,

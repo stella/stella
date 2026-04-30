@@ -21,6 +21,7 @@ import {
 import { useTranslations } from "use-intl";
 import "@stll/folio/editor.css";
 import "./peek-docx.css";
+import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
@@ -111,16 +112,22 @@ export const PeekPdfViewer = ({
   }
 
   return (
-    <PDFViewport
-      buffer={file.buffer}
-      className="bg-muted relative space-y-2 px-2 pt-2"
-      fileId={file.fileId}
-      invertColors={isImageOrigin ? false : undefined}
-      scaleOffset={scaleOffset}
-      renderPage={(props) => (
-        <PDFPage {...props} renderOverlay={renderPageOverlay} />
-      )}
-    />
+    <FileViewerWithAI
+      activeFile={{ entityId, fileName: file.fileName }}
+      chatThreadId={fieldId}
+      workspaceId={workspaceId}
+    >
+      <PDFViewport
+        buffer={file.buffer}
+        className="bg-muted relative space-y-2 px-2 pt-2"
+        fileId={file.fileId}
+        invertColors={isImageOrigin ? false : undefined}
+        scaleOffset={scaleOffset}
+        renderPage={(props) => (
+          <PDFPage {...props} renderOverlay={renderPageOverlay} />
+        )}
+      />
+    </FileViewerWithAI>
   );
 };
 

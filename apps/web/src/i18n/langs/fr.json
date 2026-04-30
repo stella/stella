@@ -298,6 +298,14 @@
     }
   },
   "chat": {
+    "actionExpand": {
+      "toastDescription": "Full-page chat lands with persisted threads.",
+      "toastTitle": "Full view not yet available"
+    },
+    "actionPrint": {
+      "toastDescription": "Chat printing lands with persisted threads.",
+      "toastTitle": "Printing not yet available"
+    },
     "approval": {
       "allow": "Autoriser",
       "alwaysAllow": "Toujours autoriser",
@@ -319,6 +327,10 @@
       "original": "Original",
       "simple": "Accepté",
       "trackedChanges": "Suivi des modifications"
+    },
+    "emptyState": {
+      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
+      "title": "What can we work on?"
     },
     "extractingContent": "Extraction du contenu...",
     "fileTooLarge": "Le fichier dépasse la limite de {maxSize}",
@@ -459,6 +471,8 @@
     "category": "Catégorie",
     "clauses": "Clauses",
     "close": "Fermer",
+    "closeAll": "Tout fermer",
+    "closeOthers": "Fermer les autres",
     "columns": "Colonnes",
     "comingSoon": "Bientôt disponible",
     "confirm": "Confirmer",
@@ -859,6 +873,21 @@
     "undo": "Undo",
     "undoShortcut": "Undo (Ctrl+Z)"
   },
+  "inspector": {
+    "hidePane": "Hide pane",
+    "matterPicker": {
+      "allMatters": "All matters",
+      "description": "Pick the matters this chat can draw on. The AI sees content from every matter you select.",
+      "directLabel": "Direct",
+      "empty": "No matters available.",
+      "noMatter": "No matter",
+      "noResults": "No matter matches “{query}”.",
+      "searchPlaceholder": "Search matters or clients…",
+      "title": "Matter context"
+    },
+    "openChat": "Open chat",
+    "showPane": "Show pane"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1043,22 +1072,6 @@
     },
     "settings": "Paramètres de l'organisation",
     "settingsDescription": "Modifier le nom et le slug de votre organisation"
-  },
-  "rightPanel": {
-    "addConditional": "Ajouter une condition",
-    "askAboutMatter": "Posez des questions sur votre dossier.",
-    "chatPlaceholder": "La conversation s'affichera ici.",
-    "comingSoon": "L'assistant IA pour les modèles arrive bientôt.",
-    "convertToPlaceholder": "Convertir en champ variable",
-    "mockDisclaimer": "Ceci est un aperçu de l'assistant IA. Les réponses sont simulées.",
-    "mockResponseConditional": "J'envelopperais ce texte dans un bloc conditionnel : '{{#if condition}}…{{/if}}'. Quelle condition doit contrôler sa visibilité ?",
-    "mockResponsePlaceholder": "Je peux convertir le texte sélectionné en champ variable : '{{nomDuChamp}}'. Comment ce champ doit-il s'appeler ?",
-    "mockResponseRepeat": "J'envelopperais ce texte dans une boucle : '{{#each éléments}}…{{/each}}'. Sur quelle collection cette boucle doit-elle itérer ?",
-    "repeatForEach": "Répéter pour chaque élément",
-    "selectedText": "Texte sélectionné",
-    "templateAssistant": "Assistant de modèle",
-    "title": "Conversation",
-    "whatToDo": "Que souhaitez-vous faire avec ce texte ?"
   },
   "search": {
     "aiRefine": "Améliorer la requête avec l’IA",

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "A modern .docx-compatible document editor for the browser",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "author": "STLL",
   "type": "module",
   "sideEffects": [

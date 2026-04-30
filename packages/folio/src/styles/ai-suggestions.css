@@ -1,0 +1,906 @@
+/**
+ * AI Suggestions UI
+ *
+ * Visual language: subtle dotted underline in-document, glass-style
+ * pill bar centered at the bottom of the editor viewport, content-first
+ * review panel. No saturated accents — severity is signalled by a
+ * single muted dot per item, not coloured backgrounds.
+ *
+ * The "mention" tint (--folio-ai-mention*) is the soft blue used for
+ * slash references and pasted-content chips: present enough to read
+ * as a token, muted enough not to compete with the document accent.
+ */
+
+.folio-ai-host {
+  --folio-ai-mention: #2563eb;
+  --folio-ai-mention-soft: color-mix(in oklch, #2563eb 12%, transparent);
+}
+
+.dark .folio-ai-host,
+.folio-ai-host.dark {
+  --folio-ai-mention: #60a5fa;
+  --folio-ai-mention-soft: color-mix(in oklch, #60a5fa 18%, transparent);
+}
+
+/* -----------------------------------------------------------------------
+ * In-document decoration
+ * --------------------------------------------------------------------- */
+
+.folio-ai-suggestion {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  background-color: transparent;
+  transition:
+    background-color 150ms ease,
+    text-decoration-color 150ms ease;
+  cursor: pointer;
+}
+
+.folio-ai-suggestion--typo {
+  text-decoration-color: color-mix(
+    in oklch,
+    var(--doc-text-muted) 65%,
+    transparent
+  );
+}
+
+.folio-ai-suggestion--style {
+  text-decoration-color: color-mix(in oklch, var(--doc-text) 35%, transparent);
+}
+
+.folio-ai-suggestion--substantive {
+  text-decoration-color: color-mix(
+    in oklch,
+    var(--doc-error, currentColor) 60%,
+    transparent
+  );
+  text-decoration-thickness: 1.5px;
+}
+
+.folio-ai-suggestion:hover {
+  background-color: color-mix(in oklch, var(--doc-bg-hover) 60%, transparent);
+}
+
+.folio-ai-suggestion--focused {
+  background-color: color-mix(in oklch, var(--doc-bg-hover) 90%, transparent);
+}
+
+/* -----------------------------------------------------------------------
+ * Prompt bar
+ * --------------------------------------------------------------------- */
+
+.folio-ai-bar {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: min(560px, calc(100% - 32px));
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  color: var(--doc-text);
+  background-color: color-mix(in oklch, var(--doc-page) 78%, transparent);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid color-mix(in oklch, var(--doc-border) 70%, transparent);
+  border-radius: 9999px;
+  padding: 4px 4px 4px 6px;
+  /* Layered shadow:
+   *  1. crisp 1px ambient line for edge definition,
+   *  2. tight close shadow,
+   *  3. soft outer halo to lift the bar off the page.
+   * Inset highlight on top edge for the glass refraction look. */
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.02),
+    0 1px 2px rgb(0 0 0 / 0.06),
+    0 12px 32px rgb(0 0 0 / 0.1),
+    0 24px 56px rgb(0 0 0 / 0.06),
+    inset 0 1px 0 rgb(255 255 255 / 0.6);
+  user-select: none;
+  transition:
+    box-shadow 200ms ease,
+    border-color 200ms ease;
+}
+
+.folio-ai-bar::before {
+  /* Soft halo behind the bar so the doc text underneath fades out.
+   * Pure decoration; pointer-events: none so clicks pass through
+   * the halo region back to the document. */
+  content: "";
+  position: absolute;
+  inset: -16px;
+  z-index: -1;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in oklch, var(--doc-page) 45%, transparent) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.dark .folio-ai-bar,
+.folio-ai-bar.dark {
+  background-color: color-mix(in oklch, var(--doc-page) 70%, transparent);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.04),
+    0 1px 2px rgb(0 0 0 / 0.4),
+    0 12px 32px rgb(0 0 0 / 0.45),
+    0 24px 56px rgb(0 0 0 / 0.3),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+}
+
+.folio-ai-bar:focus-within {
+  border-color: color-mix(in oklch, var(--doc-text) 35%, var(--doc-border));
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.03),
+    0 1px 2px rgb(0 0 0 / 0.06),
+    0 16px 40px rgb(0 0 0 / 0.12),
+    0 32px 64px rgb(0 0 0 / 0.08),
+    inset 0 1px 0 rgb(255 255 255 / 0.6);
+}
+
+.folio-ai-bar__form {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 6px 0 4px;
+}
+
+.folio-ai-bar__leading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--doc-text-muted);
+  flex-shrink: 0;
+}
+
+.folio-ai-bar__input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--doc-text);
+  font: inherit;
+  font-size: 13px;
+  caret-color: var(--doc-text);
+  padding: 0;
+}
+
+.folio-ai-bar__input::placeholder {
+  color: var(--doc-text-muted);
+}
+
+.folio-ai-bar__input:disabled {
+  color: var(--doc-text-muted);
+  cursor: progress;
+}
+
+.folio-ai-bar__input--slash {
+  color: var(--folio-ai-mention);
+  font-weight: 500;
+}
+
+.folio-ai-bar__input--slash::placeholder {
+  color: color-mix(in oklch, var(--folio-ai-mention) 60%, transparent);
+}
+
+/* When the prompt bar's input is focused, suppress the document's
+   caret so the user only ever sees one blinking cursor. */
+.folio-editor:has(.folio-ai-bar__input:focus) [contenteditable="true"] {
+  caret-color: transparent;
+}
+
+.folio-ai-bar__paste-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 8px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid
+    color-mix(in oklch, var(--folio-ai-mention) 35%, transparent);
+  background-color: var(--folio-ai-mention-soft);
+  color: var(--folio-ai-mention);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.folio-ai-bar__paste-chip:hover {
+  background-color: color-mix(
+    in oklch,
+    var(--folio-ai-mention) 18%,
+    transparent
+  );
+  border-color: color-mix(in oklch, var(--folio-ai-mention) 50%, transparent);
+}
+
+.folio-ai-bar__paste-chip > svg {
+  opacity: 0.7;
+}
+
+.folio-ai-bar__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  background-color: var(--doc-bg-muted);
+  color: var(--doc-text);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.folio-ai-bar__divider {
+  width: 1px;
+  height: 18px;
+  background-color: var(--doc-border);
+  flex-shrink: 0;
+}
+
+.folio-ai-bar__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0 10px;
+  border: none;
+  background-color: transparent;
+  color: var(--doc-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 9999px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 120ms ease;
+}
+
+.folio-ai-bar__action:hover {
+  background-color: var(--doc-bg-muted);
+}
+
+.folio-ai-bar__action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.folio-ai-bar__icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
+  color: var(--doc-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.folio-ai-bar__icon-button:hover {
+  background-color: var(--doc-bg-muted);
+  color: var(--doc-text);
+}
+
+.folio-ai-bar__icon-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.folio-ai-bar__icon-button--primary {
+  background-color: var(--doc-text);
+  color: var(--doc-page);
+}
+
+.folio-ai-bar__icon-button--primary:hover {
+  background-color: color-mix(in oklch, var(--doc-text) 88%, transparent);
+  color: var(--doc-page);
+}
+
+.folio-ai-bar__icon-button--primary:disabled {
+  background-color: var(--doc-bg-muted);
+  color: var(--doc-text-muted);
+}
+
+.folio-ai-bar__spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  border: 1.5px solid var(--doc-border);
+  border-top-color: var(--doc-text);
+  animation: folio-ai-spin 720ms linear infinite;
+}
+
+@keyframes folio-ai-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.folio-ai-bar__presets {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: min(320px, 100%);
+  background-color: var(--doc-page);
+  border: 1px solid var(--doc-border);
+  border-radius: 12px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.04),
+    0 12px 36px rgb(0 0 0 / 0.1);
+  animation: folio-ai-panel-in 160ms ease;
+}
+
+.folio-ai-bar__presets-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--doc-text-muted);
+}
+
+.folio-ai-bar__presets-hint {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 10.5px;
+  color: var(--doc-text-muted);
+  opacity: 0.85;
+}
+
+.folio-ai-bar__presets-empty {
+  padding: 12px;
+  font-size: 12px;
+  color: var(--doc-text-muted);
+  text-align: center;
+}
+
+.folio-ai-bar__preset {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 0 8px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--doc-text);
+  transition: background-color 120ms ease;
+}
+
+.folio-ai-bar__preset:hover,
+.folio-ai-bar__preset:focus-visible,
+.folio-ai-bar__preset[data-highlighted="true"] {
+  background-color: var(--doc-bg-muted);
+  outline: none;
+}
+
+.folio-ai-bar__preset-label {
+  font-size: 13px;
+  font-weight: 500;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.folio-ai-bar__preset-description {
+  font-size: 11px;
+  color: var(--doc-text-muted);
+  text-wrap: pretty;
+  grid-column: 1 / span 2;
+  grid-row: 2;
+}
+
+.folio-ai-bar__preset-shortcut {
+  align-self: center;
+  grid-column: 2;
+  grid-row: 1;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--folio-ai-mention);
+  background-color: var(--folio-ai-mention-soft);
+  border-radius: 4px;
+}
+
+/* -----------------------------------------------------------------------
+ * Review panel
+ * --------------------------------------------------------------------- */
+
+.folio-ai-panel {
+  position: absolute;
+  bottom: 68px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, calc(100% - 32px));
+  max-height: min(60dvh, 560px);
+  display: flex;
+  flex-direction: column;
+  z-index: 41;
+  background-color: var(--doc-page);
+  border: 1px solid var(--doc-border);
+  border-radius: 14px;
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.04),
+    0 12px 40px rgb(0 0 0 / 0.08);
+  overflow: hidden;
+  animation: folio-ai-panel-in 180ms ease;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  color: var(--doc-text);
+}
+
+@keyframes folio-ai-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+.folio-ai-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 10px 14px;
+  border-bottom: 1px solid var(--doc-border);
+}
+
+.folio-ai-panel__title {
+  font-weight: 600;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.folio-ai-panel__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  background-color: var(--doc-bg-muted);
+  color: var(--doc-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.folio-ai-panel__group-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background-color: var(--doc-bg-muted);
+  border-radius: 9999px;
+}
+
+.folio-ai-panel__group-tab {
+  padding: 4px 10px;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
+  color: var(--doc-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.folio-ai-panel__group-tab:hover {
+  color: var(--doc-text);
+}
+
+.folio-ai-panel__group-tab[aria-selected="true"] {
+  background-color: var(--doc-page);
+  color: var(--doc-text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+.folio-ai-panel__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--doc-text-muted);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.folio-ai-panel__close:hover {
+  background-color: var(--doc-bg-muted);
+  color: var(--doc-text);
+}
+
+.folio-ai-panel__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--doc-border);
+  color: var(--doc-text-muted);
+  font-size: 12px;
+}
+
+.folio-ai-panel__toolbar-spacer {
+  flex: 1;
+}
+
+.folio-ai-panel__mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid var(--doc-border);
+  border-radius: 9999px;
+  color: var(--doc-text-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.folio-ai-panel__mode-toggle:hover {
+  color: var(--doc-text);
+  background-color: var(--doc-bg-muted);
+}
+
+.folio-ai-panel__mode-toggle[data-active="true"] {
+  border-color: var(--doc-text);
+  color: var(--doc-text);
+}
+
+.folio-ai-panel__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0 8px;
+}
+
+.folio-ai-panel__group {
+  padding: 4px 0;
+}
+
+.folio-ai-panel__group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 4px;
+  color: var(--doc-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.folio-ai-panel__group-name {
+  flex: 1;
+}
+
+.folio-ai-panel__group-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.folio-ai-panel__group-action {
+  padding: 2px 8px;
+  border: none;
+  background: transparent;
+  color: var(--doc-text-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.folio-ai-panel__group-action:hover {
+  background-color: var(--doc-bg-muted);
+  color: var(--doc-text);
+}
+
+.folio-ai-panel__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  border-top: 1px solid color-mix(in oklch, var(--doc-border) 60%, transparent);
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.folio-ai-panel__item:first-child {
+  border-top: none;
+}
+
+.folio-ai-panel__item:hover {
+  background-color: color-mix(in oklch, var(--doc-bg-muted) 50%, transparent);
+}
+
+.folio-ai-panel__item[data-focused="true"] {
+  background-color: color-mix(in oklch, var(--doc-bg-muted) 80%, transparent);
+}
+
+.folio-ai-panel__item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--doc-text-muted);
+  font: inherit;
+  font-size: 11px;
+}
+
+.folio-ai-panel__severity-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.folio-ai-panel__severity-dot--typo {
+  background-color: var(--doc-text-muted);
+}
+
+.folio-ai-panel__severity-dot--style {
+  background-color: color-mix(in oklch, var(--doc-text) 60%, transparent);
+}
+
+.folio-ai-panel__severity-dot--substantive {
+  background-color: var(--doc-error, currentColor);
+}
+
+.folio-ai-panel__item-topic {
+  font-weight: 500;
+  color: var(--doc-text);
+}
+
+.folio-ai-panel__diff {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background-color: var(--doc-bg-muted);
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-wrap: pretty;
+  word-break: break-word;
+}
+
+.folio-ai-panel__diff-row {
+  display: flex;
+  gap: 6px;
+}
+
+.folio-ai-panel__diff-marker {
+  color: var(--doc-text-muted);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  width: 12px;
+  text-align: center;
+}
+
+.folio-ai-panel__diff--original .folio-ai-panel__diff-text {
+  color: var(--doc-text-muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(
+    in oklch,
+    var(--doc-text-muted) 70%,
+    transparent
+  );
+}
+
+.folio-ai-panel__diff--suggested .folio-ai-panel__diff-text {
+  color: var(--doc-text);
+}
+
+.folio-ai-panel__rationale {
+  color: var(--doc-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.folio-ai-panel__item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.folio-ai-panel__item-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--doc-border);
+  background-color: transparent;
+  color: var(--doc-text);
+  font: inherit;
+  font-size: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.folio-ai-panel__item-button:hover {
+  background-color: var(--doc-bg-muted);
+}
+
+.folio-ai-panel__item-button--accept {
+  background-color: var(--doc-text);
+  color: var(--doc-page);
+  border-color: var(--doc-text);
+}
+
+.folio-ai-panel__item-button--accept:hover {
+  background-color: color-mix(in oklch, var(--doc-text) 88%, transparent);
+}
+
+.folio-ai-panel__item-button--ghost {
+  border-color: transparent;
+  color: var(--doc-text-muted);
+}
+
+.folio-ai-panel__item-button--ghost:hover {
+  color: var(--doc-text);
+  background-color: var(--doc-bg-muted);
+}
+
+.folio-ai-panel__stale-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  background-color: color-mix(
+    in oklch,
+    var(--doc-error, currentColor) 12%,
+    transparent
+  );
+  color: var(--doc-error, var(--doc-text));
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.folio-ai-panel__empty {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  padding: 36px 24px;
+  text-align: center;
+  color: var(--doc-text-muted);
+  font-size: 12.5px;
+  text-wrap: pretty;
+}
+
+.folio-ai-panel__empty-title {
+  color: var(--doc-text);
+  font-weight: 500;
+}
+
+/* -----------------------------------------------------------------------
+ * Compact mode (peek viewport)
+ *
+ * Activated when the editor container is narrower than ~520px. Tightens
+ * paddings and hides secondary text so the bar/panel still fits.
+ * --------------------------------------------------------------------- */
+
+.folio-ai-host[data-compact="true"] .folio-ai-bar {
+  bottom: 12px;
+  width: calc(100% - 24px);
+  padding: 3px 3px 3px 4px;
+  font-size: 12px;
+}
+
+.folio-ai-host[data-compact="true"] .folio-ai-bar__form {
+  height: 30px;
+}
+
+.folio-ai-host[data-compact="true"] .folio-ai-bar__input {
+  font-size: 12px;
+}
+
+.folio-ai-host[data-compact="true"] .folio-ai-panel {
+  width: calc(100% - 24px);
+  bottom: 56px;
+}
+
+.folio-ai-host[data-compact="true"] .folio-ai-panel__group-tab {
+  padding: 4px 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .folio-ai-bar,
+  .folio-ai-panel,
+  .folio-ai-suggestion {
+    transition: none;
+    animation: none;
+  }
+  .folio-ai-bar__spinner {
+    animation: none;
+    border-top-color: var(--doc-text-muted);
+  }
+}

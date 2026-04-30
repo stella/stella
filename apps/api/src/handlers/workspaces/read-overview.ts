@@ -44,9 +44,16 @@ export const readOverviewHandler = async ({
             currentVersion: {
               columns: { id: true },
               with: {
+                // The row UI needs the file field for documents (mime
+                // icon + click-to-open) but Drizzle's relational
+                // `orderBy` here can't take a SQL "prefer file" rule,
+                // so we fetch all fields and pick the file-first in
+                // JS. Acceptable while LIMITS.overviewRecentEntities
+                // and per-matter property counts stay small; revisit
+                // with a `DISTINCT ON ... ORDER BY (content->>'type'
+                // = 'file') DESC` raw query if either grows.
                 fields: {
                   columns: { id: true, propertyId: true, content: true },
-                  limit: 1,
                 },
               },
             },
@@ -99,20 +106,23 @@ export const readOverviewHandler = async ({
 
   const recent = recentEntities.map((e) => {
     const cv = e.currentVersion ?? panic("Entity has no currentVersion");
-    const firstField = cv.fields.at(0);
+    // Prefer the file field so document rows render the right mime
+    // icon and click-to-open works.
+    const primaryField =
+      cv.fields.find((f) => f.content.type === "file") ?? cv.fields.at(0);
     let name = e.name ?? "Untitled";
     let mimeType: string | null = null;
     let fieldId: string | null = null;
     let propertyId: string | null = null;
     let pdfFileId: string | null = null;
     let encrypted = false;
-    if (firstField) {
-      fieldId = firstField.id;
-      propertyId = firstField.propertyId;
-      const c = firstField.content;
-      if (c.type === "text" && "value" in c) {
+    if (primaryField) {
+      fieldId = primaryField.id;
+      propertyId = primaryField.propertyId;
+      const c = primaryField.content;
+      if (c.type === "text") {
         name = c.value;
-      } else if (c.type === "file" && "fileName" in c) {
+      } else if (c.type === "file") {
         name = c.fileName;
         mimeType = c.mimeType;
         pdfFileId = c.pdfFileId;

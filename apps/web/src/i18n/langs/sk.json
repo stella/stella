@@ -298,6 +298,14 @@
     }
   },
   "chat": {
+    "actionExpand": {
+      "toastDescription": "Full-page chat lands with persisted threads.",
+      "toastTitle": "Full view not yet available"
+    },
+    "actionPrint": {
+      "toastDescription": "Chat printing lands with persisted threads.",
+      "toastTitle": "Printing not yet available"
+    },
     "approval": {
       "allow": "Povoliť",
       "alwaysAllow": "Vždy povoliť v tomto vlákne",
@@ -319,6 +327,10 @@
       "original": "Originál",
       "simple": "Prijaté",
       "trackedChanges": "Sledované zmeny"
+    },
+    "emptyState": {
+      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
+      "title": "What can we work on?"
     },
     "extractingContent": "Extrahovanie obsahu...",
     "fileTooLarge": "Súbor prekračuje limit {maxSize}",
@@ -459,6 +471,8 @@
     "category": "Kategória",
     "clauses": "Klauzuly",
     "close": "Zavrieť",
+    "closeAll": "Zavrieť všetko",
+    "closeOthers": "Zavrieť ostatné",
     "columns": "Stĺpce",
     "comingSoon": "Čoskoro",
     "confirm": "Potvrdiť",
@@ -859,6 +873,21 @@
     "undo": "Undo",
     "undoShortcut": "Undo (Ctrl+Z)"
   },
+  "inspector": {
+    "hidePane": "Hide pane",
+    "matterPicker": {
+      "allMatters": "All matters",
+      "description": "Pick the matters this chat can draw on. The AI sees content from every matter you select.",
+      "directLabel": "Direct",
+      "empty": "No matters available.",
+      "noMatter": "No matter",
+      "noResults": "No matter matches “{query}”.",
+      "searchPlaceholder": "Search matters or clients…",
+      "title": "Matter context"
+    },
+    "openChat": "Open chat",
+    "showPane": "Show pane"
+  },
   "knowledge": {
     "sections": {
       "agents": {
@@ -1043,22 +1072,6 @@
     },
     "settings": "Nastavenia organizácie",
     "settingsDescription": "Upravte názov a slug organizácie"
-  },
-  "rightPanel": {
-    "addConditional": "Pridať podmienku",
-    "askAboutMatter": "Pýtajte sa na svoj spis.",
-    "chatPlaceholder": "Chat sa zobrazí tu.",
-    "comingSoon": "AI asistent šablón čoskoro.",
-    "convertToPlaceholder": "Previesť na zástupný symbol",
-    "mockDisclaimer": "Toto je náhľad AI asistenta. Odpovede sú simulované.",
-    "mockResponseConditional": "Zabalil by som tento text do podmieneného bloku: '{{#if condition}}...{{/if}}'. Aká podmienka má riadiť jeho viditeľnosť?",
-    "mockResponsePlaceholder": "Môžem previesť vybraný text na zástupný symbol ako '{{fieldName}}'. Ako sa má pole volať?",
-    "mockResponseRepeat": "Zabalil by som to do slučky: '{{#each items}}...{{/each}}'. Akú kolekciu má prechádzať?",
-    "repeatForEach": "Opakovať pre každú položku",
-    "selectedText": "Vybraný text",
-    "templateAssistant": "Asistent šablón",
-    "title": "Chat",
-    "whatToDo": "Čo chcete s týmto textom urobiť?"
   },
   "search": {
     "aiRefine": "Vylepšiť dotaz pomocou AI",
