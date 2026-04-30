@@ -850,6 +850,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         <AddEntityMenu
           onFolderCreated={setEditingEntityId}
           parentId={currentFolderId}
+          showTaskOption={false}
           workspaceId={workspaceId}
         />
       </div>
@@ -865,6 +866,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         }}
         open={bgContextOpen}
         parentId={currentFolderId}
+        showTaskOption={false}
         render={
           <button
             aria-label={t("common.add")}

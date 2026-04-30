@@ -1291,7 +1291,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
           {pinned.length > 0 && (
             <SidebarGroup className="min-h-0 flex-1">
               <SidebarGroupLabel>{t("navigation.pinned")}</SidebarGroupLabel>
-              <SidebarGroupContent className="overflow-y-auto">
+              <SidebarGroupContent className="overflow-x-hidden overflow-y-auto">
                 <SidebarMenu>
                   {pinned.map((ws, i) => (
                     <MatterItem
@@ -1313,7 +1313,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
           {recents.length > 0 && (
             <SidebarGroup className="min-h-0 flex-1">
               <SidebarGroupLabel>{t("navigation.recents")}</SidebarGroupLabel>
-              <SidebarGroupContent className="overflow-y-auto">
+              <SidebarGroupContent className="overflow-x-hidden overflow-y-auto">
                 <SidebarMenu>
                   {recents.map((ws) => (
                     <MatterItem
