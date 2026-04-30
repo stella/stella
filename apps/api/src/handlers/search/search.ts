@@ -4,9 +4,18 @@ import type { Static } from "elysia";
 import type { ScopedDb } from "@/api/db";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
-import { getSearchProvider } from "@/api/lib/search/provider";
+import { searchGlobal } from "@/api/lib/search/index-global";
+import { GLOBAL_SEARCH_RESULT_TYPES } from "@/api/lib/search/types";
+import type { GlobalSearchUpdatedWithin } from "@/api/lib/search/types";
+
+export const updatedWithinSchema = t.Union([
+  t.Literal("day"),
+  t.Literal("week"),
+  t.Literal("month"),
+  t.Literal("year"),
+]);
 
 export const searchBodySchema = t.Object({
   query: t.String({
@@ -14,7 +23,11 @@ export const searchBodySchema = t.Object({
     maxLength: LIMITS.searchQueryMaxLength,
   }),
   workspaceId: t.Optional(tSafeId("workspace")),
+  types: t.Optional(t.Array(t.UnionEnum(GLOBAL_SEARCH_RESULT_TYPES))),
   kinds: t.Optional(t.Array(entityKindSchema)),
+  editedByUserId: t.Optional(tUserId),
+  mimeTypes: t.Optional(t.Array(t.String({ minLength: 1, maxLength: 128 }))),
+  updatedWithin: t.Optional(updatedWithinSchema),
   cursor: t.Optional(t.String()),
   limit: t.Optional(
     t.Integer({
@@ -26,6 +39,22 @@ export const searchBodySchema = t.Object({
 });
 
 type SearchBodySchema = Static<typeof searchBodySchema>;
+
+const UPDATED_WITHIN_MS = {
+  day: 86_400_000,
+  week: 7 * 86_400_000,
+  month: 30 * 86_400_000,
+  year: 365 * 86_400_000,
+} as const satisfies Record<GlobalSearchUpdatedWithin, number>;
+
+export const resolveUpdatedAfter = (
+  updatedWithin: GlobalSearchUpdatedWithin | undefined,
+): string | undefined => {
+  if (!updatedWithin) {
+    return undefined;
+  }
+  return new Date(Date.now() - UPDATED_WITHIN_MS[updatedWithin]).toISOString();
+};
 
 type SearchHandlerProps = {
   scopedDb: ScopedDb;
@@ -62,13 +91,17 @@ export const searchHandler = async ({
     workspaceId = ws.id;
   }
 
-  const provider = getSearchProvider();
-  return provider.search({
+  const types = body.types ?? body.kinds;
+
+  return await searchGlobal({
     query: body.query,
     organizationId,
     workspaceIds: accessibleWorkspaceIds,
     workspaceId,
-    kinds: body.kinds,
+    types,
+    editedByUserId: body.editedByUserId,
+    mimeTypes: body.mimeTypes,
+    updatedAfter: resolveUpdatedAfter(body.updatedWithin),
     cursor: body.cursor,
     limit: body.limit ?? LIMITS.searchPageSizeDefault,
   });

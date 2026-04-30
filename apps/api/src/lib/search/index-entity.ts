@@ -8,16 +8,10 @@ import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
+import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
+import { fileNameSearchText } from "@/api/lib/search/query";
 
 type SearchDocumentRow = typeof searchDocuments.$inferInsert;
-
-/** Normalize file names for search: strip extension,
- *  replace underscores/hyphens with spaces. */
-const normalizeFileName = (name: string): string => {
-  const lastDot = name.lastIndexOf(".");
-  const base = lastDot > 0 ? name.slice(0, lastDot) : name;
-  return base.replace(/[_-]+/g, " ");
-};
 
 const extractFieldText = (content: FieldContent): string => {
   switch (content.type) {
@@ -32,7 +26,7 @@ const extractFieldText = (content: FieldContent): string => {
     case "int":
       return String(content.value);
     case "file":
-      return content.fileName ? normalizeFileName(content.fileName) : "";
+      return content.fileName ? fileNameSearchText(content.fileName) : "";
     case "error":
     case "pending":
     case "unsupported":
@@ -103,7 +97,10 @@ const buildSearchDocument = async (
         !title &&
         (field.content.type === "file" || field.content.type === "text")
       ) {
-        title = text.slice(0, 256);
+        title =
+          field.content.type === "file"
+            ? field.content.fileName
+            : text.slice(0, 256);
       }
       fieldTexts.push(text);
     }
@@ -178,8 +175,10 @@ export const upsertSearchDocument = async (
       now(),
       to_tsvector(
         ${regconfig}::regconfig,
-        coalesce(${doc.title}, '') || ' ' ||
-        coalesce(${doc.searchableText}, '')
+        unaccent(
+          coalesce(${doc.title}, '') || ' ' ||
+          coalesce(${doc.searchableText}, '')
+        )
       )
     )
     ON CONFLICT (entity_id) DO UPDATE SET
@@ -192,4 +191,6 @@ export const upsertSearchDocument = async (
       updated_at = EXCLUDED.updated_at,
       tsv = EXCLUDED.tsv
   `);
+
+  await syncWorkspaceSearchActivity(doc.workspaceId);
 };

@@ -1061,23 +1061,43 @@
     "whatToDo": "Mida soovite selle tekstiga teha?"
   },
   "search": {
+    "aiQueryLabel": "Saadeti kujul:",
+    "aiRefine": "Täpsusta päringut AI-ga",
+    "continueInChat": "Jätka vestluses",
+    "editedBy": "Muutja",
     "emptyState": "Alustage tippimist, et otsida kõigist asjadest.",
     "escKey": "ESC",
-    "facets": {
-      "workspace": "Tööruum"
-    },
     "filterLabel": "{type}:",
     "kinds": {
+      "caseLaw": "Kohtupraktika",
+      "contact": "Kontakt",
       "document": "Dokument",
       "folder": "Kaust",
       "link": "Link",
+      "matter": "Asi",
       "message": "Sõnum",
       "task": "Ülesanne"
     },
     "metaSeparator": "{workspace} · {time}",
+    "mimeType": "Failitüüp",
     "noResults": "Päringule „{query}\" tulemusi ei leitud.",
     "placeholder": "Otsi kõigist asjadest...",
-    "resultCount": "{count, plural, one {# tulemus} other {# tulemust}}"
+    "recentSearches": "Hiljutised otsingud",
+    "recentlyOpenedFiles": "Hiljuti avatud failid",
+    "resultCount": "{count, plural, one {# tulemus} other {# tulemust}}",
+    "summaryAction": "Võta parimad tulemused kokku",
+    "summaryCitations": "Viidatud tulemused",
+    "summaryError": "Kokkuvõte pole saadaval",
+    "summaryLoading": "Tulemuste kokkuvõtmine...",
+    "summaryPrompt": "Kasutab parimaid tulemusi ja nende sisu lühikese vastuse koostamiseks.",
+    "summaryRetry": "Klõpsake uuesti proovimiseks.",
+    "updatedWithin": "Uuendatud",
+    "updatedWithinOptions": {
+      "day": "Täna",
+      "month": "Viimased 30 päeva",
+      "week": "Viimased 7 päeva",
+      "year": "Viimane aasta"
+    }
   },
   "success": {
     "aiConfigDeleted": "AI configuration removed",

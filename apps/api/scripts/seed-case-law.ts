@@ -1,9 +1,10 @@
 /**
- * Seed the database with 10 real Czech Supreme Court decisions for local
- * testing of the Case Law feature.
+ * Seed the database with sample decisions for local testing of the
+ * Case Law feature.
  *
- * Based on real decisions from rozhodnuti.nsoud.cz with section text trimmed
- * for brevity. Includes citation cross-references between seeded decisions.
+ * Mostly based on real decisions from rozhodnuti.nsoud.cz with section text
+ * trimmed for brevity. Includes citation cross-references between seeded
+ * decisions plus a small English injunction sample for global search testing.
  *
  * Prerequisites:
  *   Run seed-test-user.ts first to create the test organization.
@@ -12,7 +13,7 @@
  *   bun apps/api/scripts/seed-case-law.ts
  */
 
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { createScopedDb } from "@/api/db";
 import { db } from "@/api/db/root";
@@ -24,6 +25,7 @@ import {
 import { indexDecision } from "@/api/handlers/case-law/search-index";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 
 import { DEFAULT_ORG_ID, DEFAULT_USER_ID, seedId } from "./seed-utils";
 
@@ -411,11 +413,43 @@ const decisions = [
     sourceHash:
       "fa31e910c538202f39507e1ebece00824de72dcd80732c8a40498e4abd265649",
   },
+  // 10 — 2025-02-20
+  {
+    caseNumber: "Smith v. Jones 2024",
+    ecli: null,
+    court: "High Court of Justice",
+    country: "GBR",
+    language: "en",
+    decisionDate: "2025-02-20",
+    decisionType: "judgment",
+    sections: [
+      {
+        index: 0,
+        type: "header",
+        title: null,
+        text: "Smith v. Jones 2024\n\nJUDGMENT\n\nThe High Court considered contractual interpretation, without prejudice communications, and interim injunctive relief.",
+      },
+      {
+        index: 1,
+        type: "argumentation",
+        title: "Reasons",
+        text: "The claimant sought interim injunctive relief to preserve confidential source materials pending trial. The court held that damages would not be an adequate remedy and granted a limited injunction.",
+      },
+    ],
+    sourceUrl: "https://example.test/case-law/smith-v-jones-2024",
+    metadata: {
+      keywords: ["interim injunction", "confidentiality", "contract"],
+      statutes: null,
+      category: "dev-sample",
+    },
+    sourceHash:
+      "0f5a08f15bd90a404d265d65df3bbeb3f4f81be0cf3774c2a839bfcdce4f8a14",
+  },
 ] as const satisfies readonly SeedDecision[];
 
 // ─── Type-safe cross-references ────────────────────────────
 
-type DecisionIdx = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+type DecisionIdx = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 /** All indices strictly less than N (decisions is date-sorted, so lower index = earlier date). */
 type LessThan<
@@ -518,10 +552,38 @@ const citations: SeedCitation[] = [
 
 // ─── Seed runner ───────────────────────────────────────────
 
-async function seed() {
+const ensureSearchPreviewConfig = async () => {
+  await db.execute(sql`CREATE EXTENSION IF NOT EXISTS unaccent`);
+  await db.execute(sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_ts_config
+        WHERE cfgname = 'stella_unaccent'
+          AND cfgnamespace = 'public'::regnamespace
+      ) THEN
+        CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple);
+      END IF;
+    END
+    $$;
+  `);
+  await db.execute(sql`
+    ALTER TEXT SEARCH CONFIGURATION public.stella_unaccent
+      ALTER MAPPING FOR
+        asciiword,
+        asciihword,
+        hword_asciipart,
+        word,
+        hword,
+        hword_part
+      WITH unaccent, simple
+  `);
+};
+
+export async function seedCaseLaw() {
   if (process.env.NODE_ENV === "production") {
-    console.error("Refusing to run: NODE_ENV must not be 'production'.");
-    process.exit(1);
+    throw new Error("Refusing to run: NODE_ENV must not be 'production'.");
   }
 
   const scopedDb = createScopedDb(
@@ -531,9 +593,11 @@ async function seed() {
     toSafeId<"user">(DEFAULT_USER_ID),
   );
 
+  await ensureSearchPreviewConfig();
+
   // --- source (reuse existing if cz-ns was already created by ingestion) ---
   const existingSource = await db.query.caseLawSources.findFirst({
-    where: eq(caseLawSources.adapterKey, "cz-ns"),
+    where: { adapterKey: { eq: "cz-ns" } },
     columns: { id: true },
   });
 
@@ -561,6 +625,7 @@ async function seed() {
 
   // --- decisions ---
   let insertedCount = 0;
+  const decisionIdsByCaseNumber = new Map<string, SafeId<"caseLawDecision">>();
 
   for (const d of decisions) {
     const id = decId(d.caseNumber);
@@ -585,8 +650,27 @@ async function seed() {
       })
       .onConflictDoNothing();
 
+    const existingDecision = await db
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .where(
+        and(
+          eq(caseLawDecisions.sourceId, sourceId),
+          eq(caseLawDecisions.caseNumber, d.caseNumber),
+          eq(caseLawDecisions.language, d.language),
+        ),
+      )
+      .limit(1)
+      .then((rows) => rows.at(0));
+
+    if (!existingDecision) {
+      throw new Error(`Seeded decision not found: ${d.caseNumber}`);
+    }
+
+    decisionIdsByCaseNumber.set(d.caseNumber, existingDecision.id);
+    await indexDecision(existingDecision.id, scopedDb);
+
     if (rowCount > 0) {
-      await indexDecision(id, scopedDb);
       insertedCount++;
     }
   }
@@ -599,12 +683,24 @@ async function seed() {
   let citInserted = 0;
 
   for (const [i, c] of citations.entries()) {
+    const citingDecisionId = decisionIdsByCaseNumber.get(c.citingCaseNumber);
+    const citedDecisionId = c.citedCaseNumber
+      ? decisionIdsByCaseNumber.get(c.citedCaseNumber)
+      : null;
+
+    if (!citingDecisionId) {
+      throw new Error(`Citing decision not found: ${c.citingCaseNumber}`);
+    }
+    if (c.citedCaseNumber && !citedDecisionId) {
+      throw new Error(`Cited decision not found: ${c.citedCaseNumber}`);
+    }
+
     const { rowCount } = await db
       .insert(caseLawCitations)
       .values({
         id: citId(`${c.citingCaseNumber}-${i}`),
-        citingDecisionId: decId(c.citingCaseNumber),
-        citedDecisionId: c.citedCaseNumber ? decId(c.citedCaseNumber) : null,
+        citingDecisionId,
+        citedDecisionId,
         citationText: c.citationText,
         sectionIndex: c.sectionIndex,
         polarity: c.polarity,
@@ -621,10 +717,13 @@ async function seed() {
   );
 
   console.log("\nDone. Case law data seeded successfully.");
-  process.exit(0);
 }
 
-seed().catch((error: unknown) => {
-  console.error("Seed failed:", error);
-  process.exit(1);
-});
+if (import.meta.main) {
+  seedCaseLaw()
+    .then(() => process.exit(0))
+    .catch((error: unknown) => {
+      console.error("Seed failed:", error);
+      process.exit(1);
+    });
+}

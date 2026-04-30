@@ -98,9 +98,8 @@ export const createOrgTools = ({
         });
       }
 
-      // extracted_content is indexed separately from entities and
-      // currently has no workspace RLS, so enforce the caller's
-      // workspace allowlist explicitly.
+      // Keep the explicit workspace allowlist alongside RLS so tool output
+      // stays scoped before any joined entity data is read.
       const row = await scopedDb((tx) =>
         tx.query.extractedContent.findFirst({
           where: {

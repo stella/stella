@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { count, eq } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -12,12 +12,14 @@ import {
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
+import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { upsertContactSearchDocument } from "@/api/lib/search/index-global";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const createContactBodySchema = t.Object({
@@ -71,7 +73,7 @@ const createContact = createSafeRootHandler(
       );
     }
 
-    const attorneyIds: SafeId<"user">[] = [];
+    const attorneyIds: string[] = [];
     if (body.originatingAttorneyId) {
       attorneyIds.push(body.originatingAttorneyId);
     }
@@ -81,23 +83,23 @@ const createContact = createSafeRootHandler(
 
     if (attorneyIds.length > 0) {
       const uniqueAttorneyIds = [...new Set(attorneyIds)];
-      const validAttorneyIds = yield* Result.await(
+      const hasInvalidAttorney = yield* Result.await(
         safeDb(async (tx) => {
-          const results: (SafeId<"user"> | null)[] = [];
           for (const attorneyId of uniqueAttorneyIds) {
-            results.push(
-              await validateOrgUserId(
-                tx,
-                attorneyId,
-                session.activeOrganizationId,
-              ),
+            const validAttorneyId = await validateOrgUserId(
+              tx,
+              brandPersistedUserId(attorneyId),
+              session.activeOrganizationId,
             );
+            if (!validAttorneyId) {
+              return true;
+            }
           }
-          return results;
+          return false;
         }),
       );
 
-      if (validAttorneyIds.some((attorneyId) => attorneyId === null)) {
+      if (hasInvalidAttorney) {
         return Result.err(
           new HandlerError({
             status: 400,
@@ -147,7 +149,11 @@ const createContact = createSafeRootHandler(
       ),
     );
 
-    return Result.ok(contact);
+    const created = contact ?? panic("Contact insert returned no row");
+
+    upsertContactSearchDocument(created.id).catch(captureError);
+
+    return Result.ok(created);
   },
 );
 

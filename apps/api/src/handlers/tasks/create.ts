@@ -8,12 +8,14 @@ import {
   taskAssignees,
   workspaces,
 } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { getSearchProvider } from "@/api/lib/search/provider";
 import { includes } from "@/api/lib/type-guards";
 
 const createTaskBodySchema = t.Object({
@@ -163,6 +165,8 @@ const createTask = createSafeHandler(
         }),
       );
     }
+
+    getSearchProvider().indexEntity(txResult.entityId).catch(captureError);
 
     return Result.ok({ entityId: txResult.entityId });
   },

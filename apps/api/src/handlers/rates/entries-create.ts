@@ -8,6 +8,7 @@ import { tSafeId, tUserId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const createRateEntryBodySchema = t.Object({
@@ -33,7 +34,11 @@ const createRateEntry = createSafeHandler(
       const validatedUserId = yield* Result.await(
         safeDb(
           async (tx) =>
-            await validateOrgUserId(tx, userId, session.activeOrganizationId),
+            await validateOrgUserId(
+              tx,
+              brandPersistedUserId(userId),
+              session.activeOrganizationId,
+            ),
         ),
       );
 

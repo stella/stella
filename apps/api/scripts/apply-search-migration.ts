@@ -150,6 +150,33 @@ const applyCaseLawSearchMigration = async () => {
 const ensureUnaccentExtension = async () => {
   console.log("Ensuring unaccent extension...");
   await db.execute(sql`CREATE EXTENSION IF NOT EXISTS unaccent`);
+
+  console.log("Ensuring unaccent text search config...");
+  await db.execute(sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_ts_config
+        WHERE cfgname = 'stella_unaccent'
+          AND cfgnamespace = 'public'::regnamespace
+      ) THEN
+        CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple);
+      END IF;
+    END
+    $$;
+  `);
+  await db.execute(sql`
+    ALTER TEXT SEARCH CONFIGURATION public.stella_unaccent
+      ALTER MAPPING FOR
+        asciiword,
+        asciihword,
+        hword_asciipart,
+        word,
+        hword,
+        hword_part
+      WITH unaccent, simple
+  `);
 };
 
 const main = async () => {

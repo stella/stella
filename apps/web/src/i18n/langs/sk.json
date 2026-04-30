@@ -1061,23 +1061,43 @@
     "whatToDo": "Čo chcete s týmto textom urobiť?"
   },
   "search": {
+    "aiQueryLabel": "Odoslané ako:",
+    "aiRefine": "Vylepšiť dotaz pomocou AI",
+    "continueInChat": "Pokračovať v chate",
+    "editedBy": "Upravil/a",
     "emptyState": "Začnite písať a vyhľadajte vo všetkých spisoch.",
     "escKey": "ESC",
-    "facets": {
-      "workspace": "Pracovný priestor"
-    },
     "filterLabel": "{type}:",
     "kinds": {
+      "caseLaw": "Judikatúra",
+      "contact": "Kontakt",
       "document": "Dokument",
       "folder": "Priečinok",
       "link": "Link",
+      "matter": "Vec",
       "message": "Správa",
       "task": "Úloha"
     },
     "metaSeparator": "{workspace} · {time}",
+    "mimeType": "Typ súboru",
     "noResults": "Nenašli sa žiadne výsledky pre „{query}“.",
     "placeholder": "Vyhľadávať vo všetkých spisoch...",
-    "resultCount": "{count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}"
+    "recentSearches": "Nedávne vyhľadávania",
+    "recentlyOpenedFiles": "Nedávno otvorené súbory",
+    "resultCount": "{count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
+    "summaryAction": "Zhrnúť najlepšie výsledky",
+    "summaryCitations": "Citované výsledky",
+    "summaryError": "Zhrnutie nie je dostupné",
+    "summaryLoading": "Zhŕňam výsledky...",
+    "summaryPrompt": "Použije najlepšie výsledky a ich obsah na krátku odpoveď.",
+    "summaryRetry": "Kliknutím skúste znova.",
+    "updatedWithin": "Upravené",
+    "updatedWithinOptions": {
+      "day": "Dnes",
+      "month": "Posledných 30 dní",
+      "week": "Posledných 7 dní",
+      "year": "Posledný rok"
+    }
   },
   "success": {
     "aiConfigDeleted": "AI configuration removed",

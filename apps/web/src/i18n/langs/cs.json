@@ -1061,23 +1061,43 @@
     "whatToDo": "Co chcete s tímto textem udělat?"
   },
   "search": {
+    "aiQueryLabel": "Odesláno jako:",
+    "aiRefine": "Vylepšit dotaz pomocí AI",
+    "continueInChat": "Pokračovat v chatu",
+    "editedBy": "Upravil/a",
     "emptyState": "Začněte psát pro vyhledávání ve všech spisech.",
     "escKey": "ESC",
-    "facets": {
-      "workspace": "Pracovní prostor"
-    },
     "filterLabel": "{type}:",
     "kinds": {
+      "caseLaw": "Judikatura",
+      "contact": "Kontakt",
       "document": "Dokument",
       "folder": "Složka",
       "link": "Link",
+      "matter": "Věc",
       "message": "Zpráva",
       "task": "Task"
     },
     "metaSeparator": "{workspace} · {time}",
+    "mimeType": "Typ souboru",
     "noResults": "Žádné výsledky pro „{query}“.",
     "placeholder": "Hledat ve všech spisech…",
-    "resultCount": "{count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}"
+    "recentSearches": "Nedávná hledání",
+    "recentlyOpenedFiles": "Nedávno otevřené soubory",
+    "resultCount": "{count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
+    "summaryAction": "Shrnout nejlepší výsledky",
+    "summaryCitations": "Citované výsledky",
+    "summaryError": "Shrnutí není dostupné",
+    "summaryLoading": "Shrnuji výsledky…",
+    "summaryPrompt": "Použije nejlepší výsledky a jejich obsah pro krátkou odpověď.",
+    "summaryRetry": "Kliknutím zkuste znovu.",
+    "updatedWithin": "Upraveno",
+    "updatedWithinOptions": {
+      "day": "Dnes",
+      "month": "Posledních 30 dní",
+      "week": "Posledních 7 dní",
+      "year": "Poslední rok"
+    }
   },
   "success": {
     "aiConfigDeleted": "AI configuration removed",

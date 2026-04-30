@@ -3,12 +3,14 @@ import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { workspaceContacts } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
 
 const WORKSPACE_CONTACT_ROLES = [
   "opposing_party",
@@ -108,6 +110,8 @@ const createWorkspaceContact = createSafeHandler(
         }),
       );
     }
+
+    upsertWorkspaceSearchDocument(workspaceId).catch(captureError);
 
     return Result.ok(txResult.value.created);
   },

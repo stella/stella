@@ -1064,23 +1064,43 @@ type Messages = {
     "whatToDo": "What would you like to do with this text?";
   };
   "search": {
+    "aiQueryLabel": "Sent as:";
+    "aiRefine": "Improve query with AI";
+    "continueInChat": "Continue in chat";
+    "editedBy": "Edited by";
     "emptyState": "Start typing to search across all matters.";
     "escKey": "ESC";
-    "facets": {
-      "workspace": "Workspace";
-    };
     "filterLabel": "{type}:";
     "kinds": {
+      "caseLaw": "Case law";
+      "contact": "Contact";
       "document": "Document";
       "folder": "Folder";
       "link": "Link";
+      "matter": "Matter";
       "message": "Message";
       "task": "Task";
     };
     "metaSeparator": "{workspace} · {time}";
+    "mimeType": "File type";
     "noResults": "No results found for \"{query}\".";
     "placeholder": "Search across all matters...";
+    "recentSearches": "Recent searches";
+    "recentlyOpenedFiles": "Recently opened files";
     "resultCount": "{count, plural, one {# result} other {# results}}";
+    "summaryAction": "Summarize top results";
+    "summaryCitations": "Cited results";
+    "summaryError": "Summary unavailable";
+    "summaryLoading": "Summarizing results...";
+    "summaryPrompt": "Use the top results and their content to draft a short answer.";
+    "summaryRetry": "Click to try again.";
+    "updatedWithin": "Updated";
+    "updatedWithinOptions": {
+      "day": "Today";
+      "month": "Last 30 days";
+      "week": "Last 7 days";
+      "year": "Last year";
+    };
   };
   "success": {
     "aiConfigDeleted": "AI configuration removed";

@@ -13,6 +13,7 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { authMacro } from "@/api/lib/auth";
+import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 const VITE_CACHE_DIR = resolve(
@@ -122,6 +123,7 @@ export const devRoute = new Elysia({ prefix: "/dev" })
   })
   .post("/rebuild-search", async (ctx) => {
     await getSearchProvider().rebuildIndex(ctx.session.activeOrganizationId);
+    await rebuildSupplementalSearchIndex(ctx.session.activeOrganizationId);
     return { ok: true };
   })
   .post("/clear-cache", () => {

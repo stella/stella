@@ -1061,23 +1061,43 @@
     "whatToDo": "Ko vēlaties darīt ar šo tekstu?"
   },
   "search": {
+    "aiQueryLabel": "Nosūtīts kā:",
+    "aiRefine": "Uzlabot vaicājumu ar AI",
+    "continueInChat": "Turpināt tērzēšanā",
+    "editedBy": "Rediģēja",
     "emptyState": "Sāciet rakstīt, lai meklētu visās lietās.",
     "escKey": "ESC",
-    "facets": {
-      "workspace": "Darba telpa"
-    },
     "filterLabel": "{type}:",
     "kinds": {
+      "caseLaw": "Judikatūra",
+      "contact": "Kontakts",
       "document": "Dokuments",
       "folder": "Mape",
       "link": "Link",
+      "matter": "Lieta",
       "message": "Ziņa",
       "task": "Uzdevums"
     },
     "metaSeparator": "{workspace} · {time}",
+    "mimeType": "Faila tips",
     "noResults": "Nav rezultātu meklēšanai \"{query}\".",
     "placeholder": "Meklēt visās lietās...",
-    "resultCount": "{count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}"
+    "recentSearches": "Nesenie meklējumi",
+    "recentlyOpenedFiles": "Nesen atvērtie faili",
+    "resultCount": "{count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
+    "summaryAction": "Apkopot labākos rezultātus",
+    "summaryCitations": "Citētie rezultāti",
+    "summaryError": "Kopsavilkums nav pieejams",
+    "summaryLoading": "Rezultātu apkopošana...",
+    "summaryPrompt": "Izmanto labākos rezultātus un to saturu īsai atbildei.",
+    "summaryRetry": "Noklikšķiniet, lai mēģinātu vēlreiz.",
+    "updatedWithin": "Atjaunināts",
+    "updatedWithinOptions": {
+      "day": "Šodien",
+      "month": "Pēdējās 30 dienas",
+      "week": "Pēdējās 7 dienas",
+      "year": "Pēdējais gads"
+    }
   },
   "success": {
     "aiConfigDeleted": "AI configuration removed",

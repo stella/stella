@@ -5,6 +5,7 @@ import type { Static } from "elysia";
 
 import type { SafeDb, Transaction } from "@/api/db";
 import { entities, workspaces } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
@@ -17,6 +18,7 @@ import type { AuditContext } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 
 const moveEntityBodySchema = t.Object({
   entityId: tSafeId("entity"),
@@ -188,6 +190,8 @@ const moveEntityHandler = async function* ({
       new HandlerError({ status: txResult.status, message: txResult.message }),
     );
   }
+
+  syncWorkspaceSearchActivity(workspaceId).catch(captureError);
 
   return Result.ok(undefined);
 };

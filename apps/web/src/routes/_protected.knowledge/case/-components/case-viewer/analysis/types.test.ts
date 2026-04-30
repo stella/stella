@@ -1,15 +1,17 @@
 import { describe, expect, it } from "bun:test";
 
 import type { AnalysisHeading } from "./types";
-import { buildSectionMap } from "./types";
+import { buildSectionMap, flattenAnalysisHeadings } from "./types";
 
 const heading = ({
   annotations = [],
+  children = [],
   end = "p4",
   id,
   start = "p0",
 }: {
   annotations?: AnalysisHeading["annotations"];
+  children?: AnalysisHeading["children"];
   end?: string;
   id: string;
   start?: string;
@@ -20,7 +22,7 @@ const heading = ({
   startAnchorId: start,
   endAnchorId: end,
   annotations,
-  children: [],
+  children,
 });
 
 const anchors = Array.from({ length: 8 }, (_, i) => `p${i}`);
@@ -57,5 +59,21 @@ describe("buildSectionMap", () => {
     expect(map.get("p2")?.headingId).toBe("annotation-1");
     expect(map.get("p3")?.headingId).toBe("annotation-1");
     expect(map.has("p4")).toBe(false);
+  });
+});
+
+describe("flattenAnalysisHeadings", () => {
+  it("keeps empty and nested headings visible for navigation surfaces", () => {
+    const flattened = flattenAnalysisHeadings([
+      heading({
+        id: "reasoning",
+        children: [heading({ id: "instruction" })],
+      }),
+    ]);
+
+    expect(flattened.map((item) => [item.id, item.depth])).toEqual([
+      ["reasoning", 0],
+      ["instruction", 1],
+    ]);
   });
 });

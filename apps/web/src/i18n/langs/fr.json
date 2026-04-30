@@ -1061,23 +1061,43 @@
     "whatToDo": "Que souhaitez-vous faire avec ce texte ?"
   },
   "search": {
+    "aiQueryLabel": "Envoyé comme :",
+    "aiRefine": "Améliorer la requête avec l’IA",
+    "continueInChat": "Continuer dans le chat",
+    "editedBy": "Modifié par",
     "emptyState": "Commencez à saisir pour rechercher dans tous les dossiers.",
     "escKey": "ESC",
-    "facets": {
-      "workspace": "Espace de travail"
-    },
     "filterLabel": "{type} :",
     "kinds": {
+      "caseLaw": "Jurisprudence",
+      "contact": "Contact",
       "document": "Document",
       "folder": "Dossier",
       "link": "Link",
+      "matter": "Dossier client",
       "message": "Message",
       "task": "Tâche"
     },
     "metaSeparator": "{workspace} · {time}",
+    "mimeType": "Type de fichier",
     "noResults": "Aucun résultat pour « {query} ».",
     "placeholder": "Rechercher dans tous les dossiers…",
-    "resultCount": "{count, plural, one {# résultat} other {# résultats}}"
+    "recentSearches": "Recherches récentes",
+    "recentlyOpenedFiles": "Fichiers ouverts récemment",
+    "resultCount": "{count, plural, one {# résultat} other {# résultats}}",
+    "summaryAction": "Résumer les meilleurs résultats",
+    "summaryCitations": "Résultats cités",
+    "summaryError": "Résumé indisponible",
+    "summaryLoading": "Résumé des résultats...",
+    "summaryPrompt": "Utilise les meilleurs résultats et leur contenu pour rédiger une réponse courte.",
+    "summaryRetry": "Cliquez pour réessayer.",
+    "updatedWithin": "Mis à jour",
+    "updatedWithinOptions": {
+      "day": "Aujourd’hui",
+      "month": "30 derniers jours",
+      "week": "7 derniers jours",
+      "year": "Dernière année"
+    }
   },
   "success": {
     "aiConfigDeleted": "AI configuration removed",

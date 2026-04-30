@@ -12,6 +12,8 @@ import {
   HIGHLIGHT_STOP,
 } from "@/api/lib/search/highlight";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
+import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
+import { typedPgArray } from "@/api/lib/search/sql";
 import {
   assertAuthorizedSearchScope,
   parseEntityKind,
@@ -55,7 +57,7 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
   const orgFilter = sql`sd.organization_id = ${organizationId}`;
   const workspaceAccessFilter = query.workspaceIds
     ? query.workspaceIds.length > 0
-      ? sql`AND sd.workspace_id = ANY(${query.workspaceIds}::uuid[])`
+      ? sql`AND sd.workspace_id = ANY(${typedPgArray(query.workspaceIds, "uuid")})`
       : sql`AND false`
     : sql`AND sd.workspace_id = ${query.workspaceId}`;
   const workspaceSelectionFilter =
@@ -64,7 +66,7 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
       : sql``;
   const kindFilter =
     query.kinds && query.kinds.length > 0
-      ? sql`AND sd.kind = ANY(${query.kinds})`
+      ? sql`AND sd.kind = ANY(${typedPgArray(query.kinds, "entity_kind")})`
       : sql``;
 
   // BM25 disjunction: matches documents containing any
@@ -249,9 +251,18 @@ const indexEntity = async (entityId: SafeId<"entity">): Promise<void> => {
 };
 
 const removeEntity = async (entityId: SafeId<"entity">): Promise<void> => {
+  const existing = await db.query.searchDocuments.findFirst({
+    where: { entityId: { eq: entityId } },
+    columns: { workspaceId: true },
+  });
+
   await db
     .delete(searchDocuments)
     .where(eq(searchDocuments.entityId, entityId));
+
+  if (existing) {
+    await syncWorkspaceSearchActivity(existing.workspaceId);
+  }
 };
 
 const rebuildIndex = async (orgId: SafeId<"organization">): Promise<void> => {
