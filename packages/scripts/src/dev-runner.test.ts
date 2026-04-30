@@ -10,8 +10,10 @@ import {
   createWebEnv,
   ensureWorktreeEnvLinks,
   findFirstAvailableOffset,
+  getSharedDockerServicesWaitFailure,
   infraPortsForOffset,
   isWorktreeCheckout,
+  parseDockerComposePsJson,
   parseArgs,
   portsForOffset,
   requiredPortsForMode,
@@ -183,6 +185,124 @@ describe("infraPortsForOffset", () => {
       postgres: 5442,
       valkey: 6389,
     });
+  });
+});
+
+describe("shared Docker service readiness", () => {
+  const readyStatuses = [
+    {
+      exitCode: undefined,
+      health: "healthy",
+      service: "postgres",
+      state: "running",
+    },
+    {
+      exitCode: undefined,
+      health: "healthy",
+      service: "valkey",
+      state: "running",
+    },
+    {
+      exitCode: undefined,
+      health: "healthy",
+      service: "minio",
+      state: "running",
+    },
+    {
+      exitCode: undefined,
+      health: "healthy",
+      service: "gotenberg",
+      state: "running",
+    },
+    {
+      exitCode: 0,
+      health: undefined,
+      service: "minio-setup",
+      state: "exited",
+    },
+  ];
+
+  test("parses compose ps JSON arrays", () => {
+    expect(
+      parseDockerComposePsJson(
+        JSON.stringify([
+          {
+            ExitCode: 0,
+            Health: "",
+            Service: "minio-setup",
+            State: "exited",
+          },
+        ]),
+      ),
+    ).toEqual([
+      {
+        exitCode: 0,
+        health: "",
+        service: "minio-setup",
+        state: "exited",
+      },
+    ]);
+  });
+
+  test("parses compose ps newline-delimited JSON", () => {
+    expect(
+      parseDockerComposePsJson(
+        [
+          JSON.stringify({
+            Health: "healthy",
+            Service: "postgres",
+            State: "running",
+          }),
+          JSON.stringify({
+            ExitCode: "0",
+            Service: "minio-setup",
+            State: "exited",
+          }),
+        ].join("\n"),
+      ),
+    ).toEqual([
+      {
+        exitCode: undefined,
+        health: "healthy",
+        service: "postgres",
+        state: "running",
+      },
+      {
+        exitCode: 0,
+        health: undefined,
+        service: "minio-setup",
+        state: "exited",
+      },
+    ]);
+  });
+
+  test("requires health-check readiness for long-running services", () => {
+    expect(
+      getSharedDockerServicesWaitFailure([
+        {
+          exitCode: undefined,
+          health: "starting",
+          service: "postgres",
+          state: "running",
+        },
+      ]),
+    ).toBe("postgres is health=starting");
+  });
+
+  test("requires the Minio setup init container to finish successfully", () => {
+    expect(
+      getSharedDockerServicesWaitFailure([
+        ...readyStatuses.slice(0, -1),
+        {
+          exitCode: undefined,
+          health: undefined,
+          service: "minio-setup",
+          state: "running",
+        },
+      ]),
+    ).toBe("minio-setup has not completed yet (state=running)");
+
+    expect(getSharedDockerServicesWaitFailure(readyStatuses)).toBeUndefined();
   });
 });
 

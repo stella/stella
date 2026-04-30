@@ -44,6 +44,13 @@ const DEFAULT_INFRA_PORTS = {
   valkey: 6379,
 } as const;
 const SHARED_DOCKER_PROJECT_BASE = "stella-dev";
+const SHARED_DOCKER_HEALTHY_SERVICES = [
+  "postgres",
+  "valkey",
+  "minio",
+  "gotenberg",
+] as const;
+const SHARED_DOCKER_COMPLETED_SERVICES = ["minio-setup"] as const;
 const MAX_HASH_OFFSET = 400;
 const MAX_PORT = 65_535;
 const MAX_INFRA_OFFSET =
@@ -124,6 +131,13 @@ type HttpReadinessCheck = {
     response: Response,
     bodyText: string,
   ) => Promise<string | undefined> | string | undefined;
+};
+
+export type DockerComposeServiceStatus = {
+  exitCode: number | undefined;
+  health: string | undefined;
+  service: string;
+  state: string;
 };
 
 type PersistentSteps = {
@@ -445,6 +459,17 @@ const checkHttpOk = async (url: string) => {
   }
 };
 
+const readJson = (bodyText: string): unknown => {
+  try {
+    return JSON.parse(bodyText) as unknown;
+  } catch {
+    return null;
+  }
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
 const areSharedDockerServicesHealthy = async (infraPorts: InfraPorts) => {
   const healthChecks = await Promise.all([
     connectToPort({ port: infraPorts.postgres }),
@@ -498,6 +523,186 @@ const dockerComposeEnv = (infraPorts: InfraPorts) => ({
   STELLA_VALKEY_HOST_PORT: String(infraPorts.valkey),
 });
 
+const DOCKER_SERVICES_READY_TIMEOUT_MS = 30_000;
+const DOCKER_SERVICES_POLL_INTERVAL_MS = 500;
+const SHARED_DOCKER_SERVICE_NAMES = [
+  ...SHARED_DOCKER_HEALTHY_SERVICES,
+  ...SHARED_DOCKER_COMPLETED_SERVICES,
+].join(", ");
+
+const stringField = (record: Record<string, unknown>, key: string) => {
+  const value = record[key];
+  return typeof value === "string" ? value : undefined;
+};
+
+const numberField = (record: Record<string, unknown>, key: string) => {
+  const value = record[key];
+  if (typeof value === "number") {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? undefined : parsed;
+};
+
+const normalizeComposeServiceStatus = (
+  value: unknown,
+): DockerComposeServiceStatus | null => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const service = stringField(value, "Service");
+  if (!service) {
+    return null;
+  }
+
+  return {
+    exitCode: numberField(value, "ExitCode"),
+    health: stringField(value, "Health"),
+    service,
+    state: stringField(value, "State") ?? "",
+  };
+};
+
+export const parseDockerComposePsJson = (output: string) => {
+  const trimmed = output.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const parsed = readJson(trimmed);
+  if (Array.isArray(parsed)) {
+    const statuses: DockerComposeServiceStatus[] = [];
+    for (const value of parsed) {
+      const status = normalizeComposeServiceStatus(value);
+      if (status) {
+        statuses.push(status);
+      }
+    }
+    return statuses;
+  }
+
+  const statuses: DockerComposeServiceStatus[] = [];
+  for (const line of trimmed.split(/\r?\n/)) {
+    const status = normalizeComposeServiceStatus(readJson(line));
+    if (status) {
+      statuses.push(status);
+    }
+  }
+
+  return statuses;
+};
+
+const statusByService = (statuses: readonly DockerComposeServiceStatus[]) => {
+  const statusMap = new Map<string, DockerComposeServiceStatus>();
+  for (const status of statuses) {
+    statusMap.set(status.service, status);
+  }
+  return statusMap;
+};
+
+export const getSharedDockerServicesWaitFailure = (
+  statuses: readonly DockerComposeServiceStatus[],
+) => {
+  const statusesByService = statusByService(statuses);
+
+  for (const service of SHARED_DOCKER_HEALTHY_SERVICES) {
+    const status = statusesByService.get(service);
+    if (!status) {
+      return `${service} status is missing`;
+    }
+    if (status.state !== "running") {
+      return `${service} is ${status.state || "not running"}`;
+    }
+    if (status.health !== "healthy") {
+      return `${service} is ${status.health ? `health=${status.health}` : "not reporting health"}`;
+    }
+  }
+
+  for (const service of SHARED_DOCKER_COMPLETED_SERVICES) {
+    const status = statusesByService.get(service);
+    if (!status) {
+      return `${service} status is missing`;
+    }
+    if (status.state === "exited" && status.exitCode === 0) {
+      continue;
+    }
+    if (status.state === "exited") {
+      return `${service} exited with code ${String(status.exitCode ?? "unknown")}`;
+    }
+    return `${service} has not completed yet (state=${status.state || "unknown"})`;
+  }
+
+  return undefined;
+};
+
+const dockerComposeCommand = (infraOffset: number, args: readonly string[]) => [
+  resolveCommandPath("docker"),
+  "compose",
+  "--project-name",
+  dockerProjectName(infraOffset),
+  "--profile",
+  "dev",
+  ...args,
+];
+
+const readSharedDockerServiceStatuses = ({
+  infraOffset,
+  infraPorts,
+  rootDir,
+}: {
+  infraOffset: number;
+  infraPorts: InfraPorts;
+  rootDir: string;
+}) =>
+  parseDockerComposePsJson(
+    runCommandText({
+      cmd: dockerComposeCommand(infraOffset, [
+        "ps",
+        "--all",
+        "--format",
+        "json",
+      ]),
+      cwd: rootDir,
+      env: dockerComposeEnv(infraPorts),
+    }),
+  );
+
+const waitForSharedDockerServices = async ({
+  infraOffset,
+  infraPorts,
+  rootDir,
+}: {
+  infraOffset: number;
+  infraPorts: InfraPorts;
+  rootDir: string;
+}) => {
+  const startedAt = Date.now();
+  let lastFailure = "service status has not been read yet";
+
+  while (Date.now() - startedAt < DOCKER_SERVICES_READY_TIMEOUT_MS) {
+    const statuses = readSharedDockerServiceStatuses({
+      infraOffset,
+      infraPorts,
+      rootDir,
+    });
+    const failure = getSharedDockerServicesWaitFailure(statuses);
+    if (!failure) {
+      return;
+    }
+    lastFailure = failure;
+    await Bun.sleep(DOCKER_SERVICES_POLL_INTERVAL_MS);
+  }
+
+  throw new Error(
+    `Timed out after ${String(DOCKER_SERVICES_READY_TIMEOUT_MS / 1000)}s waiting for shared Docker services (${SHARED_DOCKER_SERVICE_NAMES}) to become ready: ${lastFailure}.`,
+  );
+};
+
 const ensureDockerServices = async ({
   infraOffset,
   infraPorts,
@@ -508,33 +713,44 @@ const ensureDockerServices = async ({
   rootDir: string;
 }) => {
   if (await areSharedDockerServicesHealthy(infraPorts)) {
-    console.log("==> Reusing healthy shared Docker services...");
-    return;
-  }
+    const currentFailure = getSharedDockerServicesWaitFailure(
+      readSharedDockerServiceStatuses({
+        infraOffset,
+        infraPorts,
+        rootDir,
+      }),
+    );
+    if (!currentFailure) {
+      console.log("==> Reusing healthy shared Docker services...");
+      return;
+    }
 
-  if (!(await areSharedDockerPortsFree(infraPorts))) {
+    console.log(
+      `==> Shared Docker services are running but setup is incomplete (${currentFailure}); reconciling Compose project...`,
+    );
+  } else if (!(await areSharedDockerPortsFree(infraPorts))) {
     throw new Error(
       `Shared Docker ports (${sharedInfraPortList(infraPorts).join(", ")}) are already allocated, but the shared dev services did not pass health checks. Stop the conflicting stack, or use --infra-offset to shift Stella's infra ports.`,
     );
   }
 
+  // We deliberately omit `--wait` here: the `dev` profile includes the
+  // `minio-setup` one-shot init container, which exits 0 after creating the
+  // bucket. Compose's `--wait` treats that exit as a failure even on success,
+  // so we run detached and poll the four core services ourselves. The
+  // one-shot setup container is polled separately and must exit successfully.
   runStep({
-    cmd: [
-      resolveCommandPath("docker"),
-      "compose",
-      "--project-name",
-      dockerProjectName(infraOffset),
-      "--profile",
-      "dev",
-      "up",
-      "-d",
-      "--wait",
-      "--wait-timeout",
-      "30",
-    ],
+    cmd: dockerComposeCommand(infraOffset, ["up", "-d"]),
     cwd: rootDir,
     env: dockerComposeEnv(infraPorts),
     label: "Starting Docker services",
+  });
+
+  console.log("==> Waiting for shared Docker services to become ready...");
+  await waitForSharedDockerServices({
+    infraOffset,
+    infraPorts,
+    rootDir,
   });
 };
 
@@ -778,17 +994,6 @@ const runStep = (step: Step) => {
     );
   }
 };
-
-const readJson = (bodyText: string): unknown => {
-  try {
-    return JSON.parse(bodyText) as unknown;
-  } catch {
-    return null;
-  }
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
 
 const validateApiHealth = (response: Response, bodyText: string) => {
   if (!response.ok) {
