@@ -42,15 +42,57 @@ logical extensions. Built for due diligence, discovery and research.
 Agent searches external sources and returns what you need with
 references.
 
-## Getting started
+## Quickstart
 
-### Stella Cloud
+### Prerequisites
 
-Register for free at [stll.app](https://stll.app).
+- Bun 1.3.12
+- Git
+- Docker Desktop or Docker Engine
 
-### Self-hosting
+For hosted Stella, register at [stll.app](https://stll.app).
 
-[ to be added ]
+### Run Stella locally
+
+```bash
+git clone https://github.com/stella/stella.git
+cd stella
+bun run dev
+```
+
+This installs dependencies, prepares local env files, starts Docker services,
+pushes the database schema, starts the API at <http://localhost:3001>, starts
+the web app at <http://localhost:3000>, and opens the browser.
+
+### Optional demo data
+
+```bash
+bun --filter @stll/api db:seed-test-user
+bun --filter @stll/api db:seed-dev
+```
+
+### Common commands
+
+```bash
+# Run only the web app, reusing an existing API
+bun run dev:web
+
+# Run only the API and local infrastructure
+bun run dev:api
+
+# Run without opening a browser
+bun run dev --no-browser
+
+# Skip setup steps when iterating
+bun run dev --skip-install
+bun run dev --skip-db-push
+
+# Use shifted ports for parallel worktrees
+bun run dev --dev-instance feature-a
+```
+
+Local development uses mock AI by default. To use real AI, set provider keys in
+`apps/api/.env` and set `USE_MOCK_AI="false"`.
 
 ## Responsible use
 

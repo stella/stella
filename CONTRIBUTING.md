@@ -17,7 +17,7 @@ the default ports are already taken. Use `bun run dev:web` or
 `bun run dev:api` for a focused loop, `bun run dev:desktop` to launch the
 desktop app alongside web and API, or `bun run dev:all` for the raw
 Turborepo fan-out. Web-facing modes auto-open the app in your browser;
-pass `-- --no-browser` to skip that.
+pass `--no-browser` to skip that.
 
 See the [README](README.md) for the full tech stack and project
 structure.
