@@ -17,10 +17,7 @@ import {
   searchDocuments,
   workspaceSearchDocuments,
 } from "@/api/db/schema";
-import {
-  resolveUpdatedAfter,
-  updatedWithinSchema,
-} from "@/api/handlers/search/search";
+import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
@@ -73,6 +70,8 @@ export const refineSearchBodySchema = t.Object({
   locale: t.Optional(t.String({ maxLength: 16 })),
 });
 
+const isoDateTime = t.String({ format: "date-time" });
+
 export const summarizeSearchBodySchema = t.Object({
   query: t.String({
     minLength: 1,
@@ -85,11 +84,12 @@ export const summarizeSearchBodySchema = t.Object({
     }),
   ),
   locale: t.Optional(t.String({ maxLength: 16 })),
-  workspaceId: t.Optional(tSafeId("workspace")),
+  workspaceIds: t.Optional(t.Array(tSafeId("workspace"), { maxItems: 64 })),
   types: t.Optional(t.Array(t.UnionEnum(GLOBAL_SEARCH_RESULT_TYPES))),
-  editedByUserId: t.Optional(tUserId),
+  editedByUserIds: t.Optional(t.Array(tUserId, { maxItems: 64 })),
   mimeTypes: t.Optional(t.Array(t.String({ minLength: 1, maxLength: 128 }))),
-  updatedWithin: t.Optional(updatedWithinSchema),
+  updatedFrom: t.Optional(isoDateTime),
+  updatedTo: t.Optional(isoDateTime),
   limit: t.Optional(
     t.Integer({
       minimum: 1,
@@ -110,11 +110,12 @@ export const searchSummaryChatBodySchema = t.Object({
     }),
     { maxItems: SEARCH_SUMMARY_CITATION_LIMIT },
   ),
-  workspaceId: summarizeSearchBodySchema.properties.workspaceId,
+  workspaceIds: summarizeSearchBodySchema.properties.workspaceIds,
   types: summarizeSearchBodySchema.properties.types,
-  editedByUserId: summarizeSearchBodySchema.properties.editedByUserId,
+  editedByUserIds: summarizeSearchBodySchema.properties.editedByUserIds,
   mimeTypes: summarizeSearchBodySchema.properties.mimeTypes,
-  updatedWithin: summarizeSearchBodySchema.properties.updatedWithin,
+  updatedFrom: summarizeSearchBodySchema.properties.updatedFrom,
+  updatedTo: summarizeSearchBodySchema.properties.updatedTo,
   limit: summarizeSearchBodySchema.properties.limit,
 });
 
@@ -340,22 +341,21 @@ export const summarizeSearchResults = async ({
 }: SearchSummaryContext & {
   body: SummarizeSearchBody;
 }) => {
-  const workspaceIdResult = await resolveSummaryWorkspaceId({
-    accessibleWorkspaceIds,
-    filters: body,
-    organizationId,
+  const resolved = await resolveSelectedWorkspaceIds({
     scopedDb,
+    organizationId,
+    accessibleWorkspaceIds,
+    requestedWorkspaceIds: body.workspaceIds,
   });
-
-  if (typeof workspaceIdResult !== "string" && workspaceIdResult !== null) {
-    return workspaceIdResult;
+  if (resolved.kind === "error") {
+    return resolved.response;
   }
 
   const contextsResult = await loadSummaryContexts({
     accessibleWorkspaceIds,
     filters: body,
     organizationId,
-    workspaceId: workspaceIdResult,
+    selectedWorkspaceIds: resolved.ids,
   });
 
   if (!Array.isArray(contextsResult)) {
@@ -487,22 +487,21 @@ export const createSearchSummaryChatThread = async ({
 }: SearchSummaryChatContext & {
   body: SearchSummaryChatBody;
 }) => {
-  const workspaceIdResult = await resolveSummaryWorkspaceId({
-    accessibleWorkspaceIds,
-    filters: body,
-    organizationId,
+  const resolved = await resolveSelectedWorkspaceIds({
     scopedDb,
+    organizationId,
+    accessibleWorkspaceIds,
+    requestedWorkspaceIds: body.workspaceIds,
   });
-
-  if (typeof workspaceIdResult !== "string" && workspaceIdResult !== null) {
-    return workspaceIdResult;
+  if (resolved.kind === "error") {
+    return resolved.response;
   }
 
   const contextsResult = await loadSummaryContexts({
     accessibleWorkspaceIds,
     filters: body,
     organizationId,
-    workspaceId: workspaceIdResult,
+    selectedWorkspaceIds: resolved.ids,
   });
 
   if (!Array.isArray(contextsResult)) {
@@ -511,7 +510,7 @@ export const createSearchSummaryChatThread = async ({
 
   const chatWorkspaceIdResult = resolveSummaryChatWorkspaceId({
     contexts: contextsResult,
-    requestedWorkspaceId: workspaceIdResult,
+    selectedWorkspaceIds: resolved.ids,
   });
   if (
     typeof chatWorkspaceIdResult !== "string" &&
@@ -603,31 +602,32 @@ const loadSummaryContexts = async ({
   accessibleWorkspaceIds,
   filters,
   organizationId,
-  workspaceId,
+  selectedWorkspaceIds,
 }: {
   accessibleWorkspaceIds: SafeId<"workspace">[];
   filters: Pick<
     SummarizeSearchBody,
-    | "editedByUserId"
+    | "editedByUserIds"
     | "limit"
     | "mimeTypes"
     | "query"
     | "types"
-    | "updatedWithin"
-    | "workspaceId"
+    | "updatedFrom"
+    | "updatedTo"
   >;
   organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace"> | null;
+  selectedWorkspaceIds: readonly SafeId<"workspace">[];
 }) => {
   const searchResult = await searchGlobal({
     query: filters.query,
     organizationId,
-    workspaceIds: accessibleWorkspaceIds,
-    workspaceId: workspaceId ?? undefined,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds,
     types: filters.types,
-    editedByUserId: filters.editedByUserId,
+    editedByUserIds: filters.editedByUserIds,
     mimeTypes: filters.mimeTypes,
-    updatedAfter: resolveUpdatedAfter(filters.updatedWithin),
+    updatedFrom: filters.updatedFrom,
+    updatedTo: filters.updatedTo,
     limit: filters.limit ?? SEARCH_SUMMARY_RESULT_LIMIT,
   });
 
@@ -638,49 +638,15 @@ const loadSummaryContexts = async ({
   });
 };
 
-const resolveSummaryWorkspaceId = async ({
-  accessibleWorkspaceIds,
-  filters,
-  organizationId,
-  scopedDb,
-}: {
-  accessibleWorkspaceIds: SafeId<"workspace">[];
-  filters: Pick<SummarizeSearchBody, "workspaceId">;
-  organizationId: SafeId<"organization">;
-  scopedDb: ScopedDb;
-}) => {
-  const requestedWorkspaceId = filters.workspaceId;
-  if (!requestedWorkspaceId) {
-    return null;
-  }
-
-  const workspace = await scopedDb((tx) =>
-    tx.query.workspaces.findFirst({
-      where: {
-        id: { eq: requestedWorkspaceId },
-        organizationId: { eq: organizationId },
-        status: { ne: "deleting" },
-      },
-      columns: { id: true },
-    }),
-  );
-
-  if (!workspace || !accessibleWorkspaceIds.includes(workspace.id)) {
-    return status(400, { message: "Workspace not found in organization" });
-  }
-
-  return workspace.id;
-};
-
 const resolveSummaryChatWorkspaceId = ({
   contexts,
-  requestedWorkspaceId,
+  selectedWorkspaceIds,
 }: {
   contexts: readonly SearchResultContext[];
-  requestedWorkspaceId: SafeId<"workspace"> | null;
+  selectedWorkspaceIds: readonly SafeId<"workspace">[];
 }) => {
-  if (requestedWorkspaceId) {
-    return requestedWorkspaceId;
+  if (selectedWorkspaceIds.length === 1) {
+    return selectedWorkspaceIds[0] ?? null;
   }
 
   const workspaceIds = new Set<SafeId<"workspace">>();

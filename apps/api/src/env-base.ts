@@ -18,7 +18,6 @@ export const envBase = createEnv({
     S3_ACCESS_KEY_ID: v.optional(v.string()),
     S3_SECRET_ACCESS_KEY: v.optional(v.string()),
     S3_REGION: v.string(),
-    SEARCH_PROVIDER: v.optional(v.picklist(["pg-fts", "paradedb"]), "pg-fts"),
     POSTHOG_KEY: v.optional(v.string()),
     POSTHOG_HOST: v.optional(v.string()),
     POSTHOG_LOCAL_DEBUG: v.optional(

@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { db } from "@/api/db/root";
-import type { searchDocuments } from "@/api/db/schema";
+import type { LinkMetadata, searchDocuments } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -12,6 +12,21 @@ import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import { fileNameSearchText } from "@/api/lib/search/query";
 
 type SearchDocumentRow = typeof searchDocuments.$inferInsert;
+
+const linkMetadataSearchText = (metadata: LinkMetadata | null): string => {
+  if (!metadata) {
+    return "";
+  }
+  return [
+    metadata.url,
+    metadata.snippet,
+    metadata.citation,
+    metadata.jurisdiction,
+    metadata.sourceType,
+  ]
+    .filter((part): part is string => Boolean(part?.trim()))
+    .join(" ");
+};
 
 const extractFieldText = (content: FieldContent): string => {
   switch (content.type) {
@@ -49,6 +64,7 @@ const buildSearchDocument = async (
       workspaceId: true,
       kind: true,
       name: true,
+      metadata: true,
       updatedAt: true,
     },
     with: {
@@ -106,6 +122,13 @@ const buildSearchDocument = async (
     }
   }
 
+  // Link entities carry their meaningful searchable bits (URL,
+  // citation, jurisdiction, snippet, source type) in metadata.
+  const linkText = linkMetadataSearchText(entity.metadata);
+  if (linkText) {
+    fieldTexts.push(linkText);
+  }
+
   // Append decrypted file content when available.
   // Store the PG regconfig name (not ISO code) so the
   // FTS provider can use it directly.
@@ -146,8 +169,6 @@ const buildSearchDocument = async (
 /**
  * Build a search document and upsert it into `search_documents`,
  * computing the `tsv` column with the per-document regconfig.
- * Shared by both pg-fts and paradedb providers so the tsvector
- * is always populated regardless of the active provider.
  */
 export const upsertSearchDocument = async (
   entityId: SafeId<"entity">,

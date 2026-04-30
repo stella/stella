@@ -58,7 +58,7 @@ describe("search summary chat", () => {
     const tx = {
       query: {
         workspaces: {
-          findFirst: mock(async () => ({ id: workspaceId })),
+          findMany: mock(async () => [{ id: workspaceId }]),
         },
       },
       insert: mock((_table: unknown) => ({
@@ -100,7 +100,7 @@ describe("search summary chat", () => {
         query: "motion",
         summary: "Relevant document [1].",
         title: "Search summary",
-        workspaceId,
+        workspaceIds: [workspaceId],
       },
       organizationId,
       safeDb,
@@ -123,11 +123,7 @@ describe("search summary chat", () => {
     const workspaceId = toSafeId<"workspace">("ws_1");
     const insertedValues: unknown[] = [];
     const tx = {
-      query: {
-        workspaces: {
-          findFirst: mock(async () => null),
-        },
-      },
+      query: { workspaces: {} },
       insert: mock((_table: unknown) => ({
         values: mock(async (values: unknown) => {
           insertedValues.push(values);
@@ -192,11 +188,7 @@ describe("search summary chat", () => {
       values: mock(async () => undefined),
     }));
     const tx = {
-      query: {
-        workspaces: {
-          findFirst: mock(async () => null),
-        },
-      },
+      query: { workspaces: {} },
       insert: insertMock,
     };
     const { safeDb, scopedDb } = createScopedDbMock(tx);

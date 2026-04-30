@@ -1061,13 +1061,13 @@
     "whatToDo": "Que souhaitez-vous faire avec ce texte ?"
   },
   "search": {
-    "aiQueryLabel": "Envoyé comme :",
     "aiRefine": "Améliorer la requête avec l’IA",
     "continueInChat": "Continuer dans le chat",
+    "dateFrom": "Du",
+    "dateTo": "Au",
     "editedBy": "Modifié par",
     "emptyState": "Commencez à saisir pour rechercher dans tous les dossiers.",
     "escKey": "ESC",
-    "filterLabel": "{type} :",
     "kinds": {
       "caseLaw": "Jurisprudence",
       "contact": "Contact",
@@ -1091,6 +1091,7 @@
     "summaryLoading": "Résumé des résultats...",
     "summaryPrompt": "Utilise les meilleurs résultats et leur contenu pour rédiger une réponse courte.",
     "summaryRetry": "Cliquez pour réessayer.",
+    "timeFilterCustom": "Plage personnalisée",
     "updatedWithin": "Mis à jour",
     "updatedWithinOptions": {
       "day": "Aujourd’hui",
