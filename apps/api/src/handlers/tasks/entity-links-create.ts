@@ -45,14 +45,14 @@ const createEntityLink = createSafeHandler(
                 id: { eq: body.sourceEntityId },
                 workspaceId: { eq: workspaceId },
               },
-              columns: { id: true, kind: true },
+              columns: { id: true, kind: true, readOnly: true },
             }),
             tx.query.entities.findFirst({
               where: {
                 id: { eq: body.targetEntityId },
                 workspaceId: { eq: workspaceId },
               },
-              columns: { id: true, kind: true },
+              columns: { id: true, kind: true, readOnly: true },
             }),
           ]),
       ),
@@ -73,6 +73,14 @@ const createEntityLink = createSafeHandler(
           status: 400,
           message: "At least one entity must be a task",
         }),
+      );
+    }
+    if (
+      (sourceEntity.kind === "task" && sourceEntity.readOnly) ||
+      (targetEntity.kind === "task" && targetEntity.readOnly)
+    ) {
+      return Result.err(
+        new HandlerError({ status: 409, message: "Task is read-only" }),
       );
     }
 

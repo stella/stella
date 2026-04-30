@@ -1384,6 +1384,29 @@
       "title": "Fájlok rendezése",
       "wasNamed": "korábban {name}"
     },
+    "infosoud": {
+      "cancelled": "Törölve",
+      "court": "Bíróság",
+      "courtPlaceholder": "Bíróság vagy kód keresése",
+      "courtsFailed": "Nem sikerült betölteni az InfoSoud bíróságait",
+      "eventCount": "{count, plural, one {# esemény} other {# esemény}}",
+      "events": "Események",
+      "hearings": "Tárgyalások",
+      "importAgenda": "Mentés az Agendába",
+      "importAgendaFailed": "Az InfoSoud elemeket nem sikerült menteni az Agendába",
+      "importAgendaResult": "{count, plural, one {# elem mentve az Agendába} other {# elem mentve az Agendába}}",
+      "importAgendaUpToDate": "Az Agenda már naprakész",
+      "lookup": "Keresés",
+      "lookupFailed": "Az InfoSoud-keresés sikertelen",
+      "noHearings": "Nincs kitűzött tárgyalás",
+      "notFound": "Ehhez a bírósághoz és sp. zn.-hez nem található ügy az InfoSoudban.",
+      "relatedCases": "Kapcsolódó ügyek",
+      "spisZn": "Sp. zn.",
+      "spisZnPlaceholder": "pl. 1 T 64/2024",
+      "statusDate": "Állapot dátuma",
+      "title": "InfoSoud",
+      "validTo": "Érvényes eddig"
+    },
     "justification": "Indoklás:",
     "kanban": {
       "changeColor": "Szín módosítása",
@@ -1429,7 +1452,7 @@
       "matterDetails": "Ügy részletei",
       "membersCount": "{count, plural, one {# tag} other {# tag}}",
       "nextDeadline": "Következő határidő",
-      "openTasks": "Nyitott feladatok",
+      "openTasks": "Nyitott agenda",
       "recentActivity": "Legutóbbi tevékenység",
       "timeAndTeam": "Idő és csapat",
       "timeThisWeek": "Idő ezen a héten",
@@ -1437,7 +1460,7 @@
       "totalDocuments": "Összes dokumentum",
       "totalItems": "Elemek",
       "totalThisWeek": "Összesen ezen a héten",
-      "upcomingTasks": "Közelgő feladatok",
+      "upcomingTasks": "Közelgő agenda",
       "uploaded": "feltöltötte"
     },
     "parties": {
@@ -1560,7 +1583,7 @@
     "table": {
       "reorderReadOnly": "A táblázatsorok az aktuális rendezést követik"
     },
-    "tasksCount": "{count, plural, one {# feladat} other {# feladat}}",
+    "tasksCount": "{count, plural, one {# agendatétel} other {# agendatétel}}",
     "tools": {
       "aiModel": "AI modell",
       "manualInput": "Kézzel"
@@ -1573,7 +1596,7 @@
         "addDates": "+ Dátumok",
         "additionalDates": "+{count} dátum",
         "createdAt": "Létrehozva",
-        "dueDateTaskOnly": "Határidő csak feladatokhoz állítható be",
+        "dueDateTaskOnly": "Határidő csak agendatételeknél állítható be",
         "month": "Hónap",
         "more": "+{count} további",
         "noDates": "Nincs kiválasztott dátum tulajdonság",

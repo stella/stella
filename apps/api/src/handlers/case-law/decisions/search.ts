@@ -4,6 +4,7 @@ import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
+import { bodyPreviewJoin } from "@/api/handlers/case-law/decisions/search-sql";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
@@ -13,24 +14,6 @@ import {
 
 const toNullableString = (x: unknown): string | null =>
   x === null ? null : JSON.stringify(x);
-
-export const bodyPreviewJoin = sql`
-  LEFT JOIN LATERAL (
-    SELECT string_agg(
-      section_item.value ->> 'text',
-      ' '
-      ORDER BY (section_item.value ->> 'index')::int
-    ) AS text
-    FROM jsonb_array_elements(
-      CASE jsonb_typeof(d.sections)
-        WHEN 'array' THEN d.sections
-        ELSE '[]'::jsonb
-      END
-    ) section_item(value)
-    WHERE section_item.value ->> 'type' <> 'header'
-      AND nullif(section_item.value ->> 'text', '') IS NOT NULL
-  ) body_preview ON true
-`;
 
 const headlineRegconfig = sql`
   'public.stella_unaccent'::regconfig

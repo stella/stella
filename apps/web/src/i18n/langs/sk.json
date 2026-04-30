@@ -1384,6 +1384,29 @@
       "title": "Usporiadať súbory",
       "wasNamed": "pôvodne {name}"
     },
+    "infosoud": {
+      "cancelled": "Zrušené",
+      "court": "Súd",
+      "courtPlaceholder": "Vyhľadajte súd alebo kód",
+      "courtsFailed": "Súdy z InfoSoudu sa nepodarilo načítať",
+      "eventCount": "{count, plural, one {# udalosť} few {# udalosti} other {# udalostí}}",
+      "events": "Udalosti",
+      "hearings": "Pojednávania",
+      "importAgenda": "Uložiť do Agendy",
+      "importAgendaFailed": "Položky z InfoSoudu sa nepodarilo uložiť do Agendy",
+      "importAgendaResult": "{count, plural, one {# položka uložená do Agendy} few {# položky uložené do Agendy} other {# položiek uložených do Agendy}}",
+      "importAgendaUpToDate": "Agenda je už aktuálna",
+      "lookup": "Vyhľadať",
+      "lookupFailed": "Vyhľadanie v InfoSoude zlyhalo",
+      "noHearings": "Nie sú nariadené žiadne pojednávania",
+      "notFound": "Pre tento súd a sp. zn. sa v InfoSoude nenašla vec.",
+      "relatedCases": "Súvisiace veci",
+      "spisZn": "Sp. zn.",
+      "spisZnPlaceholder": "napr. 1 T 64/2024",
+      "statusDate": "Dátum stavu",
+      "title": "InfoSoud",
+      "validTo": "Platné k"
+    },
     "justification": "Odôvodnenie:",
     "kanban": {
       "changeColor": "Zmeniť farbu",
@@ -1429,7 +1452,7 @@
       "matterDetails": "Detaily spisu",
       "membersCount": "{count, plural, one {# člen} few {# členovia} other {# členov}}",
       "nextDeadline": "Ďalší termín",
-      "openTasks": "Otvorené úlohy",
+      "openTasks": "Otvorená agenda",
       "recentActivity": "Nedávna aktivita",
       "timeAndTeam": "Čas a tím",
       "timeThisWeek": "Čas tento týždeň",
@@ -1437,7 +1460,7 @@
       "totalDocuments": "Celkom dokumentov",
       "totalItems": "Položky",
       "totalThisWeek": "Celkom tento týždeň",
-      "upcomingTasks": "Nadchádzajúce úlohy",
+      "upcomingTasks": "Nadchádzajúca agenda",
       "uploaded": "nahral(a)"
     },
     "parties": {
@@ -1560,7 +1583,7 @@
     "table": {
       "reorderReadOnly": "Riadky tabuľky sa riadia aktuálnym zoradením"
     },
-    "tasksCount": "{count, plural, one {# úloha} few {# úlohy} other {# úloh}}",
+    "tasksCount": "{count, plural, one {# položka agendy} few {# položky agendy} other {# položiek agendy}}",
     "tools": {
       "aiModel": "AI model",
       "manualInput": "Ručne"
@@ -1573,7 +1596,7 @@
         "addDates": "+ Dátumy",
         "additionalDates": "+{count} dátumov",
         "createdAt": "Vytvorené",
-        "dueDateTaskOnly": "Termín je možné nastaviť iba pre úlohy",
+        "dueDateTaskOnly": "Dátum splnenia možno nastaviť iba pri položkách agendy",
         "month": "Mesiac",
         "more": "+{count} ďalších",
         "noDates": "Nevybratá žiadna vlastnosť dátumu",

@@ -22,6 +22,10 @@ export type PropertyCondition = SchemaValidators.PropertyCondition;
 
 export type EntityKind = SchemaValidators.EntityKind;
 export type {
+  AgendaItemKind,
+  AgendaItemSource,
+} from "@/api/lib/entity-constants";
+export type {
   GlobalSearchHit,
   GlobalSearchResultType,
   GlobalSearchUpdatedWithin,

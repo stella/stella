@@ -13,6 +13,14 @@ import {
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  AGENDA_ITEM_KIND,
+  AGENDA_ITEM_SOURCE,
+} from "@/api/lib/entity-constants";
+import type {
+  AgendaItemKind,
+  AgendaItemSource,
+} from "@/api/lib/entity-constants";
+import {
   buildFilterConditions,
   buildSortExpressions,
 } from "@/api/lib/entity-filters";
@@ -33,6 +41,26 @@ export type QueryEntityResult = {
   status: string | null;
   priority: string | null;
   dueDate: string | null;
+  agendaKind: AgendaItemKind;
+  startAt: string | null;
+  endAt: string | null;
+  occurredAt: string | null;
+  remindAt: string | null;
+  allDay: boolean;
+  timeZone: string | null;
+  location: string | null;
+  onlineMeetingUrl: string | null;
+  availability: string | null;
+  sensitivity: string | null;
+  organizer: unknown;
+  attendees: unknown;
+  recurrence: unknown;
+  agendaSource: AgendaItemSource;
+  externalSource: string | null;
+  externalId: string | null;
+  externalChangeKey: string | null;
+  externalICalUid: string | null;
+  readOnly: boolean;
   sortOrder: string | null;
   activeEditBy: { name: string; image: string | null; isMe: boolean } | null;
   fields: {
@@ -190,6 +218,26 @@ const queryEntitiesGenerator = async function* ({
           status: entities.status,
           priority: entities.priority,
           dueDate: entities.dueDate,
+          agendaKind: entities.agendaKind,
+          startAt: entities.startAt,
+          endAt: entities.endAt,
+          occurredAt: entities.occurredAt,
+          remindAt: entities.remindAt,
+          allDay: entities.allDay,
+          timeZone: entities.timeZone,
+          location: entities.location,
+          onlineMeetingUrl: entities.onlineMeetingUrl,
+          availability: entities.availability,
+          sensitivity: entities.sensitivity,
+          organizer: entities.organizer,
+          attendees: entities.attendees,
+          recurrence: entities.recurrence,
+          agendaSource: entities.agendaSource,
+          externalSource: entities.externalSource,
+          externalId: entities.externalId,
+          externalChangeKey: entities.externalChangeKey,
+          externalICalUid: entities.externalICalUid,
+          readOnly: entities.readOnly,
           sortOrder: entities.sortOrder,
         })
         .from(entities)
@@ -321,6 +369,26 @@ const queryEntitiesGenerator = async function* ({
       status: entity.status,
       priority: entity.priority,
       dueDate: entity.dueDate,
+      agendaKind: entity.agendaKind ?? AGENDA_ITEM_KIND.TASK,
+      startAt: entity.startAt?.toISOString() ?? null,
+      endAt: entity.endAt?.toISOString() ?? null,
+      occurredAt: entity.occurredAt?.toISOString() ?? null,
+      remindAt: entity.remindAt?.toISOString() ?? null,
+      allDay: entity.allDay,
+      timeZone: entity.timeZone,
+      location: entity.location,
+      onlineMeetingUrl: entity.onlineMeetingUrl,
+      availability: entity.availability,
+      sensitivity: entity.sensitivity,
+      organizer: entity.organizer,
+      attendees: entity.attendees,
+      recurrence: entity.recurrence,
+      agendaSource: entity.agendaSource ?? AGENDA_ITEM_SOURCE.MANUAL,
+      externalSource: entity.externalSource,
+      externalId: entity.externalId,
+      externalChangeKey: entity.externalChangeKey,
+      externalICalUid: entity.externalICalUid,
+      readOnly: entity.readOnly,
       sortOrder: entity.sortOrder,
       activeEditBy: activeEditMap.get(entity.id) ?? null,
       fields: entityFields.map((field) => ({

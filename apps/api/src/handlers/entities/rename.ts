@@ -48,7 +48,11 @@ const renameEntityHandler = async function* ({
   const txResult = yield* Result.await(
     safeDb(async (tx) => {
       const entityRows = await tx
-        .select({ id: entities.id, name: entities.name })
+        .select({
+          id: entities.id,
+          name: entities.name,
+          readOnly: entities.readOnly,
+        })
         .from(entities)
         .where(
           and(
@@ -64,6 +68,13 @@ const renameEntityHandler = async function* ({
           ok: false as const,
           status: 404 as const,
           message: "Entity not found",
+        };
+      }
+      if (entity.readOnly) {
+        return {
+          ok: false as const,
+          status: 409 as const,
+          message: "Entity is read-only",
         };
       }
 

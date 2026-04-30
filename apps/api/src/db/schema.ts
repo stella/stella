@@ -66,6 +66,67 @@ export type JustificationContent = {
   }[];
 };
 
+export type AgendaItemKind =
+  | "deadline"
+  | "event"
+  | "hearing"
+  | "meeting"
+  | "task";
+
+export type AgendaItemSource =
+  | "api"
+  | "calendar"
+  | "email"
+  | "import"
+  | "infosoud"
+  | "manual";
+
+export type AgendaAvailability =
+  | "busy"
+  | "free"
+  | "out_of_office"
+  | "tentative"
+  | "unknown"
+  | "working_elsewhere";
+
+export type AgendaSensitivity = "confidential" | "normal" | "private";
+
+export type AgendaParticipant = {
+  email: string | null;
+  name: string | null;
+};
+
+export type AgendaAttendee = AgendaParticipant & {
+  optional?: boolean;
+  responseStatus?: string | null;
+  type?: "optional" | "required" | "resource" | null;
+};
+
+export type AgendaRecurrence = {
+  pattern: string | null;
+  range: string | null;
+  raw?: unknown;
+};
+
+export type AgendaExternalData = Record<string, unknown>;
+
+export type SchedulerIntervalSchedule = {
+  type: "interval";
+  everyMs: number;
+};
+
+export type SchedulerDailySchedule = {
+  type: "daily";
+  hour: number;
+  minute: number;
+  timeZone: string;
+};
+
+export type SchedulerSchedule =
+  | SchedulerDailySchedule
+  | SchedulerIntervalSchedule;
+
+export type SchedulerPayload = Record<string, unknown>;
 const tsvector = customType<{ data: string }>({
   dataType: () => "tsvector",
 });
@@ -451,6 +512,124 @@ export const auditLogs = p.pgTable(
   ],
 );
 
+// -- Scheduler --
+
+export const schedulerJobs = p.pgTable(
+  "scheduler_jobs",
+  {
+    id: p.varchar({ length: 128 }).primaryKey(),
+    task: p.varchar({ length: 128 }).notNull(),
+    description: p.text(),
+    schedule: p.jsonb().$type<SchedulerSchedule>().notNull(),
+    payload: p.jsonb().$type<SchedulerPayload | null>(),
+    enabled: p.boolean().notNull().default(true),
+    nextRunAt: p.timestamp("next_run_at", { withTimezone: true }).notNull(),
+    lastRunAt: p.timestamp("last_run_at", { withTimezone: true }),
+    lastSuccessAt: p.timestamp("last_success_at", { withTimezone: true }),
+    lastFailureAt: p.timestamp("last_failure_at", { withTimezone: true }),
+    lastError: p.text("last_error"),
+    lockedAt: p.timestamp("locked_at", { withTimezone: true }),
+    lockedUntil: p.timestamp("locked_until", { withTimezone: true }),
+    lockedBy: p.varchar("locked_by", { length: 128 }),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p
+      .index("scheduler_jobs_enabled_next_run_idx")
+      .on(table.enabled, table.nextRunAt),
+    p.index("scheduler_jobs_task_idx").on(table.task),
+    p.index("scheduler_jobs_locked_until_idx").on(table.lockedUntil),
+    p.pgPolicy("scheduler_jobs_no_stella_access", {
+      for: "all",
+      to: stella,
+      using: sql`false`,
+      withCheck: sql`false`,
+    }),
+  ],
+);
+
+export const schedulerJobRuns = p.pgTable(
+  "scheduler_job_runs",
+  {
+    id: pUuid<"schedulerJobRun">().primaryKey(),
+    jobId: p
+      .varchar("job_id", { length: 128 })
+      .notNull()
+      .references(() => schedulerJobs.id, { onDelete: "cascade" }),
+    task: p.varchar({ length: 128 }).notNull(),
+    runnerId: p.varchar("runner_id", { length: 128 }).notNull(),
+    status: p
+      .text({ enum: ["running", "success", "failed", "skipped"] })
+      .notNull()
+      .default("running"),
+    startedAt: p
+      .timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    finishedAt: p.timestamp("finished_at", { withTimezone: true }),
+    durationMs: p.integer("duration_ms"),
+    error: p.text(),
+  },
+  (table) => [
+    p
+      .index("scheduler_job_runs_job_started_idx")
+      .on(table.jobId, table.startedAt),
+    p
+      .index("scheduler_job_runs_status_started_idx")
+      .on(table.status, table.startedAt),
+    p.pgPolicy("scheduler_job_runs_no_stella_access", {
+      for: "all",
+      to: stella,
+      using: sql`false`,
+      withCheck: sql`false`,
+    }),
+  ],
+);
+
+// -- InfoSoud Tracking --
+
+export const infoSoudTrackedCases = p.pgTable(
+  "infosoud_tracked_cases",
+  {
+    id: pUuid<"infoSoudTrackedCase">().primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    courtCode: p.varchar("court_code", { length: 16 }).notNull(),
+    spisZn: p.varchar("spis_zn", { length: 64 }).notNull(),
+    enabled: p.boolean().notNull().default(true),
+    createdBy: p
+      .text("created_by")
+      .references(() => user.id, { onDelete: "set null" }),
+    lastSyncAttemptAt: p.timestamp("last_sync_attempt_at", {
+      withTimezone: true,
+    }),
+    lastSyncedAt: p.timestamp("last_synced_at", { withTimezone: true }),
+    lastSyncError: p.text("last_sync_error"),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p.index("infosoud_tracked_cases_workspace_idx").on(table.workspaceId),
+    p
+      .index("infosoud_tracked_cases_enabled_sync_idx")
+      .on(table.enabled, table.lastSyncAttemptAt, table.id),
+    p
+      .uniqueIndex("infosoud_tracked_cases_workspace_case_uidx")
+      .on(table.workspaceId, table.courtCode, table.spisZn),
+    ...wsPolicies(),
+  ],
+);
+
 // -- Properties --
 
 export const properties = p.pgTable(
@@ -550,6 +729,42 @@ export const entities = p.pgTable(
     status: p.varchar({ length: 32 }),
     priority: p.varchar({ length: 16 }),
     dueDate: p.date("due_date", { mode: "string" }),
+    agendaKind: p.text("agenda_kind", {
+      enum: ["task", "deadline", "meeting", "hearing", "event"],
+    }),
+    startAt: p.timestamp("start_at", { withTimezone: true }),
+    endAt: p.timestamp("end_at", { withTimezone: true }),
+    occurredAt: p.timestamp("occurred_at", { withTimezone: true }),
+    remindAt: p.timestamp("remind_at", { withTimezone: true }),
+    allDay: p.boolean("all_day").notNull().default(false),
+    timeZone: p.varchar("time_zone", { length: 64 }),
+    location: p.text("location"),
+    onlineMeetingUrl: p.text("online_meeting_url"),
+    availability: p.text("availability", {
+      enum: [
+        "free",
+        "tentative",
+        "busy",
+        "out_of_office",
+        "working_elsewhere",
+        "unknown",
+      ],
+    }),
+    sensitivity: p.text("sensitivity", {
+      enum: ["normal", "private", "confidential"],
+    }),
+    organizer: p.jsonb("organizer").$type<AgendaParticipant | null>(),
+    attendees: p.jsonb("attendees").$type<AgendaAttendee[] | null>(),
+    recurrence: p.jsonb("recurrence").$type<AgendaRecurrence | null>(),
+    agendaSource: p.text("agenda_source", {
+      enum: ["manual", "infosoud", "calendar", "email", "import", "api"],
+    }),
+    externalSource: p.varchar("external_source", { length: 64 }),
+    externalId: p.varchar("external_id", { length: 256 }),
+    externalChangeKey: p.varchar("external_change_key", { length: 512 }),
+    externalICalUid: p.varchar("external_ical_uid", { length: 512 }),
+    externalData: p.jsonb("external_data").$type<AgendaExternalData | null>(),
+    readOnly: p.boolean("read_only").notNull().default(false),
     sortOrder: p.varchar("sort_order", { length: 64 }),
     /** Structured metadata for non-document entity kinds (e.g. links). */
     metadata: p.jsonb().$type<LinkMetadata | null>(),
@@ -580,6 +795,26 @@ export const entities = p.pgTable(
       .index("entities_due_date_idx")
       .on(table.workspaceId, table.dueDate)
       .where(isNotNull(table.dueDate)),
+    p
+      .index("entities_agenda_kind_idx")
+      .on(table.workspaceId, table.agendaKind)
+      .where(isNotNull(table.agendaKind)),
+    p
+      .index("entities_agenda_start_at_idx")
+      .on(table.workspaceId, table.startAt)
+      .where(isNotNull(table.startAt)),
+    p
+      .index("entities_agenda_occurred_at_idx")
+      .on(table.workspaceId, table.occurredAt)
+      .where(isNotNull(table.occurredAt)),
+    p
+      .uniqueIndex("entities_agenda_external_uidx")
+      .on(table.workspaceId, table.externalSource, table.externalId)
+      .where(isNotNull(table.externalId)),
+    p
+      .index("entities_agenda_ical_uid_idx")
+      .on(table.workspaceId, table.externalICalUid)
+      .where(isNotNull(table.externalICalUid)),
     ...wsPolicies(),
   ],
 );
@@ -2025,6 +2260,9 @@ export const relations = defineRelations(
     workspaceMembers,
     workspaceContacts,
     auditLogs,
+    schedulerJobs,
+    schedulerJobRuns,
+    infoSoudTrackedCases,
     properties,
     propertyDependencies,
     entities,
@@ -2099,6 +2337,28 @@ export const relations = defineRelations(
         from: r.contacts.responsibleAttorneyId,
         to: r.user.id,
         alias: "contactRespAttorney",
+      }),
+    },
+    schedulerJobs: {
+      runs: r.many.schedulerJobRuns({
+        from: r.schedulerJobs.id,
+        to: r.schedulerJobRuns.jobId,
+      }),
+    },
+    schedulerJobRuns: {
+      job: r.one.schedulerJobs({
+        from: r.schedulerJobRuns.jobId,
+        to: r.schedulerJobs.id,
+      }),
+    },
+    infoSoudTrackedCases: {
+      workspace: r.one.workspaces({
+        from: r.infoSoudTrackedCases.workspaceId,
+        to: r.workspaces.id,
+      }),
+      createdByUser: r.one.user({
+        from: r.infoSoudTrackedCases.createdBy,
+        to: r.user.id,
       }),
     },
     contactRelationships: {

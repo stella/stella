@@ -4,6 +4,9 @@ import archiveWorkspace from "@/api/handlers/workspaces/archive";
 import createWorkspaces from "@/api/handlers/workspaces/create";
 import deleteWorkspace from "@/api/handlers/workspaces/delete-by-id";
 import generateBoundingBoxes from "@/api/handlers/workspaces/generate-bounding-boxes";
+import infosoudCourts from "@/api/handlers/workspaces/infosoud-courts";
+import infosoudImportAgenda from "@/api/handlers/workspaces/infosoud-import-agenda";
+import infosoudLookup from "@/api/handlers/workspaces/infosoud-lookup";
 import readWorkspaces from "@/api/handlers/workspaces/read";
 import readActiveWorkspace from "@/api/handlers/workspaces/read-active";
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
@@ -84,6 +87,14 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         )
         .post("/bounding-boxes", generateBoundingBoxes.handler, {
           body: generateBoundingBoxes.config.body,
+          invalidateQuery: true,
+        })
+        .get("/infosoud/courts", infosoudCourts.handler)
+        .post("/infosoud/lookup", infosoudLookup.handler, {
+          body: infosoudLookup.config.body,
+        })
+        .post("/infosoud/import-agenda", infosoudImportAgenda.handler, {
+          body: infosoudImportAgenda.config.body,
           invalidateQuery: true,
         })
         .get(

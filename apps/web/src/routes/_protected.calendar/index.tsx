@@ -29,7 +29,7 @@ import {
   getMonthLabels,
   getWeekdayLabels,
   getWeekDays,
-  INTERNAL_DATE_IDS,
+  TASK_DATE_IDS,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils";
 import { CurrentTimeIndicator } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -51,7 +51,7 @@ type CalendarEntity = {
   workspaceColor: string | null;
 };
 
-const [DATE_PROPERTY] = INTERNAL_DATE_IDS;
+const DATE_PROPERTY = TASK_DATE_IDS[1];
 
 function CrossWorkspaceCalendar() {
   const t = useTranslations();

@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { toastManager } from "@stll/ui/components/toast";
 import {
   createFileRoute,
+  Navigate,
   Outlet,
   redirect,
   useMatch,
@@ -43,7 +44,7 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
         globalThis.location?.href,
       );
     }
-    throw redirect({ to: "/workspaces" });
+    return <Navigate replace to="/workspaces" />;
   },
   onError: (error) => {
     if (error instanceof APIError && error.status === 404) {

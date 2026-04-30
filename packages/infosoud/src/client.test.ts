@@ -29,7 +29,7 @@ const parseRequestBody = (
   return Object.fromEntries(Object.entries(parsedBody));
 };
 
-const getRequestPath = (input: URL | RequestInfo): string => {
+const getRequestPath = (input: URL | Request | string): string => {
   if (input instanceof URL) {
     return input.pathname;
   }
@@ -194,6 +194,96 @@ describe("InfoSoudClient", () => {
         druhVeci: "T",
         okresniSoud: "OSPHA02",
         rocnik: "2025",
+        typHledani: "SPZN",
+      },
+    ]);
+  });
+
+  test("returns case data with empty hearings when the hearings endpoint has no rows", async () => {
+    const seenBodies: Record<string, unknown>[] = [];
+
+    const client = new InfoSoudClient({
+      delayMs: 0,
+      fetch: async (input, init) => {
+        const path = getRequestPath(input);
+        const body = init ? parseRequestBody(init) : {};
+        seenBodies.push(body);
+
+        if (path === "/api/v1/rizeni/vyhledej") {
+          return jsonResponse(
+            createCaseSearchResponse({
+              organizace: "Obvodní soud Praha 2",
+              udalosti: [
+                {
+                  datum: "10.04.2025",
+                  jednani: [],
+                  poradi: 1,
+                  udalost: "ZAHAJ_RIZ",
+                  udalostId: null,
+                  znackaId: {
+                    bcVec: 64,
+                    cisloSenatu: 1,
+                    druhVeci: "T",
+                    organizace: "OSPHA02",
+                    rocnik: 2024,
+                  },
+                  zruseno: false,
+                },
+              ],
+            }),
+          );
+        }
+
+        if (path === "/api/v1/jednani/vyhledej") {
+          return jsonResponse(
+            {
+              error: "Bad Request",
+              message: "JEDNANI_0000#1 T 64 / 2024#Obvodní soud Praha 2",
+              path,
+              status: 400,
+              timestamp: "2026-04-05T00:00:00.000+00:00",
+            },
+            400,
+          );
+        }
+
+        throw new Error(`Unexpected request path: ${path}`);
+      },
+    });
+
+    const result = await client.searchCaseWithHearings({
+      courtCode: "OSPHA",
+      spisZn: "1 T 64/2024",
+    });
+
+    expect(result.case.organizace).toBe("Obvodní soud Praha 2");
+    expect(result.hearings).toEqual({
+      bcVec: 64,
+      cislo: 1,
+      datum: null,
+      druh: "T",
+      jednaciSin: null,
+      nadrizenaOrganizace: "Krajský soud Ústí nad Labem",
+      organizace: "Obvodní soud Praha 2",
+      platneK: null,
+      rocnik: 2024,
+      typ: "SPZN",
+      udalosti: [],
+    });
+    expect(seenBodies).toEqual([
+      {
+        bcVec: "64",
+        cisloSenatu: "1",
+        druhVeci: "T",
+        okresniSoud: "OSPHA01",
+        rocnik: "2024",
+      },
+      {
+        bcVec: "64",
+        cisloSenatu: "1",
+        druhVeci: "T",
+        okresniSoud: "OSPHA02",
+        rocnik: "2024",
         typHledani: "SPZN",
       },
     ]);

@@ -142,6 +142,8 @@ export const getEntityDate = (
     createdAt: string | Date;
     updatedAt: string | Date | null;
     dueDate?: string | Date | null;
+    startAt?: string | Date | null;
+    occurredAt?: string | Date | null;
   },
   propertyId: string,
 ): string | null => {
@@ -155,6 +157,10 @@ export const getEntityDate = (
     return entity.dueDate !== null && entity.dueDate !== undefined
       ? toDateString(entity.dueDate)
       : null;
+  }
+  if (propertyId === TASK_DATE_IDS[1]) {
+    const value = entity.startAt ?? entity.occurredAt ?? entity.dueDate;
+    return value !== null && value !== undefined ? toDateString(value) : null;
   }
 
   const field = entity.fields[propertyId];
@@ -177,8 +183,8 @@ export const isInternalDateProperty = (id: string) =>
 /**
  * Built-in task date pseudo-properties (`_due-date`, `_start-date`).
  * `_due-date` maps to the task entity's native `dueDate` field.
- * `_start-date` is retained for timeline/calendar configuration
- * but no longer has a built-in entity field backing it.
+ * `_start-date` maps to the agenda `startAt` field and falls back
+ * to `occurredAt` for imported historical items.
  */
 export const TASK_DATE_IDS = ["_due-date", "_start-date"] as const;
 

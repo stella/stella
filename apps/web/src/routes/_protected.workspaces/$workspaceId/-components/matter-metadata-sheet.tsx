@@ -28,6 +28,7 @@ import { useTranslations } from "use-intl";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { APIError } from "@/lib/errors";
+import { InfoSoudSection } from "@/routes/_protected.workspaces/$workspaceId/-components/infosoud-section";
 import { MembersSection } from "@/routes/_protected.workspaces/$workspaceId/-components/members-section";
 import { PartiesSection } from "@/routes/_protected.workspaces/$workspaceId/-components/parties-section";
 import {
@@ -178,6 +179,11 @@ export const MatterMetadataSheet = ({
                 </p>
               )}
             </section>
+
+            <Separator />
+
+            {/* InfoSoud */}
+            <InfoSoudSection active={isOpen} workspaceId={workspaceId} />
 
             <Separator />
 

@@ -47,9 +47,10 @@ export default createSafeHandler(
             workspaceId: { eq: workspaceId },
           },
           columns: {
-            id: true,
             currentVersionId: true,
             docSequence: true,
+            id: true,
+            readOnly: true,
           },
         }),
       ),
@@ -58,6 +59,11 @@ export default createSafeHandler(
     if (!entity || !entity.currentVersionId) {
       return Result.err(
         new HandlerError({ status: 404, message: "Entity not found" }),
+      );
+    }
+    if (entity.readOnly) {
+      return Result.err(
+        new HandlerError({ status: 409, message: "Entity is read-only" }),
       );
     }
 

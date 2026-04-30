@@ -1384,6 +1384,29 @@
       "title": "Uporządkuj pliki",
       "wasNamed": "wcześniej {name}"
     },
+    "infosoud": {
+      "cancelled": "Odwołane",
+      "court": "Sąd",
+      "courtPlaceholder": "Wyszukaj sąd lub kod",
+      "courtsFailed": "Nie udało się wczytać sądów z InfoSoud",
+      "eventCount": "{count, plural, one {# zdarzenie} few {# zdarzenia} many {# zdarzeń} other {# zdarzenia}}",
+      "events": "Zdarzenia",
+      "hearings": "Posiedzenia",
+      "importAgenda": "Zapisz w Agendzie",
+      "importAgendaFailed": "Nie udało się zapisać elementów InfoSoud w Agendzie",
+      "importAgendaResult": "{count, plural, one {# element zapisany w Agendzie} few {# elementy zapisane w Agendzie} other {# elementów zapisanych w Agendzie}}",
+      "importAgendaUpToDate": "Agenda jest już aktualna",
+      "lookup": "Szukaj",
+      "lookupFailed": "Wyszukiwanie w InfoSoud nie powiodło się",
+      "noHearings": "Brak wyznaczonych posiedzeń",
+      "notFound": "W InfoSoud nie znaleziono sprawy dla tego sądu i tej sp. zn.",
+      "relatedCases": "Sprawy powiązane",
+      "spisZn": "Sp. zn.",
+      "spisZnPlaceholder": "np. 1 T 64/2024",
+      "statusDate": "Data statusu",
+      "title": "InfoSoud",
+      "validTo": "Ważne do"
+    },
     "justification": "Uzasadnienie:",
     "kanban": {
       "changeColor": "Zmień kolor",
@@ -1429,7 +1452,7 @@
       "matterDetails": "Szczegóły sprawy",
       "membersCount": "{count, plural, one {# członek} few {# członków} other {# członków}}",
       "nextDeadline": "Następny termin",
-      "openTasks": "Otwarte zadania",
+      "openTasks": "Otwarta agenda",
       "recentActivity": "Ostatnia aktywność",
       "timeAndTeam": "Czas i zespół",
       "timeThisWeek": "Czas w tym tygodniu",
@@ -1437,7 +1460,7 @@
       "totalDocuments": "Łącznie dokumentów",
       "totalItems": "Elementy",
       "totalThisWeek": "Razem w tym tygodniu",
-      "upcomingTasks": "Nadchodzące zadania",
+      "upcomingTasks": "Nadchodząca agenda",
       "uploaded": "przesłał(a)"
     },
     "parties": {
@@ -1560,7 +1583,7 @@
     "table": {
       "reorderReadOnly": "Wiersze tabeli są zgodne z bieżącym sortowaniem"
     },
-    "tasksCount": "{count, plural, one {# zadanie} few {# zadania} other {# zadań}}",
+    "tasksCount": "{count, plural, one {# pozycja agendy} few {# pozycje agendy} other {# pozycji agendy}}",
     "tools": {
       "aiModel": "Model AI",
       "manualInput": "Ręcznie"
@@ -1573,7 +1596,7 @@
         "addDates": "+ Daty",
         "additionalDates": "+{count} dat",
         "createdAt": "Utworzono",
-        "dueDateTaskOnly": "Termin można ustawić tylko dla zadań",
+        "dueDateTaskOnly": "Termin można ustawić tylko dla pozycji agendy",
         "month": "Miesiąc",
         "more": "+{count} więcej",
         "noDates": "Nie wybrano właściwości daty",

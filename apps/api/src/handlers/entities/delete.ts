@@ -19,6 +19,7 @@ import {
 import type { AuditContext } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -62,6 +63,24 @@ const deleteEntitiesHandler = async function* ({
   auditContext,
   body,
 }: DeleteEntitiesHandlerProps) {
+  const readOnlyEntities = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.entities.findMany({
+        where: {
+          id: { in: body.entityIds },
+          readOnly: { eq: true },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { id: true },
+      }),
+    ),
+  );
+  if (readOnlyEntities.length > 0) {
+    return Result.err(
+      new HandlerError({ status: 409, message: "Entity is read-only" }),
+    );
+  }
+
   const fieldRows = yield* Result.await(
     safeDb((tx) => {
       const entityVersionIds = tx

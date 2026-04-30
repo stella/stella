@@ -289,7 +289,7 @@ export const createWorkspaceTools = ({
 
         const entity = await scopedDb((tx) =>
           tx.query.entities.findFirst({
-            columns: { id: true, currentVersionId: true },
+            columns: { id: true, currentVersionId: true, readOnly: true },
             where: {
               id: { eq: entityId },
               workspaceId: { eq: allowedWorkspaceId },
@@ -300,6 +300,11 @@ export const createWorkspaceTools = ({
         if (!entity) {
           throw new ChatToolError({
             message: `Entity "${entityId}" not found.`,
+          });
+        }
+        if (entity.readOnly) {
+          throw new ChatToolError({
+            message: `Entity "${entityId}" is read-only.`,
           });
         }
 

@@ -71,7 +71,7 @@ export const cleanStalePropertyIds = (
   if (layout.type === "calendar") {
     const valid = (id: string) => isInternal(id) || propertyIds.includes(id);
     if (!valid(layout.datePropertyId)) {
-      layout.datePropertyId = "_created-at";
+      layout.datePropertyId = "_start-date";
       changed = true;
     }
     if (layout.endDatePropertyId && !valid(layout.endDatePropertyId)) {
@@ -152,7 +152,7 @@ export const convertLayout = (
     return {
       type: "calendar",
       ...base,
-      datePropertyId: prev?.datePropertyId ?? "_created-at",
+      datePropertyId: prev?.datePropertyId ?? "_start-date",
       mode: prev?.mode ?? "month",
     };
   }

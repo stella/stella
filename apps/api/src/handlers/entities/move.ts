@@ -48,6 +48,7 @@ const moveEntityHandler = async function* ({
           id: entities.id,
           kind: entities.kind,
           parentId: entities.parentId,
+          readOnly: entities.readOnly,
         })
         .from(entities)
         .where(
@@ -64,6 +65,13 @@ const moveEntityHandler = async function* ({
           ok: false as const,
           status: 404 as const,
           message: "Entity not found",
+        };
+      }
+      if (entity.readOnly) {
+        return {
+          ok: false as const,
+          status: 409 as const,
+          message: "Entity is read-only",
         };
       }
 

@@ -56,6 +56,12 @@ export const LIMITS = {
   caseLawSearchPageSizeMax: 100,
   caseLawFacetLimit: 20,
   caseLawPolarityRulesPerLanguage: 500,
+  infoSoudEventsMax: 200,
+  infoSoudHearingsMax: 50,
+  infoSoudRelatedCasesMax: 50,
+  infoSoudAgendaImportItemsMax: 1000,
+  infoSoudTrackedCasesSyncBatch: 50,
+  agendaAttendeesMax: 500,
   /** Max chat context file attachment size per file. */
   chatContextFileMaxChars: 16_000,
   /** Max total chars across all text attachments per message. */

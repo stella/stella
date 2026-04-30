@@ -1384,6 +1384,29 @@
       "title": "Sakārtot failus",
       "wasNamed": "iepriekš {name}"
     },
+    "infosoud": {
+      "cancelled": "Atcelts",
+      "court": "Tiesa",
+      "courtPlaceholder": "Meklēt tiesu vai kodu",
+      "courtsFailed": "Neizdevās ielādēt InfoSoud tiesas",
+      "eventCount": "{count, plural, one {# notikums} other {# notikumi}}",
+      "events": "Notikumi",
+      "hearings": "Sēdes",
+      "importAgenda": "Saglabāt Agendā",
+      "importAgendaFailed": "Neizdevās saglabāt InfoSoud vienumus Agendā",
+      "importAgendaResult": "{count, plural, one {# vienums saglabāts Agendā} other {# vienumi saglabāti Agendā}}",
+      "importAgendaUpToDate": "Agenda jau ir atjaunināta",
+      "lookup": "Meklēt",
+      "lookupFailed": "InfoSoud meklēšana neizdevās",
+      "noHearings": "Nav nozīmētu sēžu",
+      "notFound": "InfoSoud neatrada lietu šai tiesai un sp. zn.",
+      "relatedCases": "Saistītās lietas",
+      "spisZn": "Sp. zn.",
+      "spisZnPlaceholder": "piem., 1 T 64/2024",
+      "statusDate": "Statusa datums",
+      "title": "InfoSoud",
+      "validTo": "Derīgs līdz"
+    },
     "justification": "Pamatojums:",
     "kanban": {
       "changeColor": "Mainīt krāsu",
@@ -1429,7 +1452,7 @@
       "matterDetails": "Lietas detaļas",
       "membersCount": "{count, plural, one {# dalībnieks} other {# dalībnieki}}",
       "nextDeadline": "Nākamais termiņš",
-      "openTasks": "Atvērtie uzdevumi",
+      "openTasks": "Atvērta agenda",
       "recentActivity": "Pēdējā aktivitāte",
       "timeAndTeam": "Laiks un komanda",
       "timeThisWeek": "Laiks šonedēļ",
@@ -1437,7 +1460,7 @@
       "totalDocuments": "Dokumenti kopā",
       "totalItems": "Vienumi",
       "totalThisWeek": "Kopā šonedēļ",
-      "upcomingTasks": "Gaidāmie uzdevumi",
+      "upcomingTasks": "Gaidāmā agenda",
       "uploaded": "augšupielādēja"
     },
     "parties": {
@@ -1560,7 +1583,7 @@
     "table": {
       "reorderReadOnly": "Tabulas rindas seko pašreizējai kārtošanai"
     },
-    "tasksCount": "{count, plural, one {# uzdevums} other {# uzdevumi}}",
+    "tasksCount": "{count, plural, one {# agendas vienums} other {# agendas vienumi}}",
     "tools": {
       "aiModel": "AI modelis",
       "manualInput": "Manuāli"
@@ -1573,7 +1596,7 @@
         "addDates": "+ Datumi",
         "additionalDates": "+{count} datumi",
         "createdAt": "Izveidots",
-        "dueDateTaskOnly": "Izpildes datumu var iestatīt tikai uzdevumiem",
+        "dueDateTaskOnly": "Termiņu var iestatīt tikai agendas vienumiem",
         "month": "Mēnesis",
         "more": "+{count} vairāk",
         "noDates": "Nav izvēlēta datuma īpašība",

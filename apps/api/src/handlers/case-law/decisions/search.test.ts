@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
-import { bodyPreviewJoin } from "@/api/handlers/case-law/decisions/search";
+import { bodyPreviewJoin } from "@/api/handlers/case-law/decisions/search-sql";
 
 describe("case-law search body preview SQL", () => {
   test("does not expand non-array sections JSONB values", () => {
