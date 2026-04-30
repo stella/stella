@@ -1,22 +1,38 @@
-import type {
-  EntityKind,
-  GlobalSearchResultType,
-  GlobalSearchUpdatedWithin,
-} from "@stll/api/types";
-import { infiniteQueryOptions, keepPreviousData } from "@tanstack/react-query";
+import type { EntityKind, GlobalSearchResultType } from "@stll/api/types";
+import {
+  infiniteQueryOptions,
+  keepPreviousData,
+  queryOptions,
+} from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 
+export type SearchableFacet = "editor" | "workspace" | "mimeType";
+
+type SearchFacetParams = {
+  facet: SearchableFacet;
+  search: string;
+  query: string;
+  workspaceIds?: string[];
+  types?: GlobalSearchResultType[];
+  editedByUserIds?: string[];
+  mimeTypes?: string[];
+  updatedFrom?: string;
+  updatedTo?: string;
+  limit?: number;
+};
+
 type SearchParams = {
   query: string;
-  workspaceId?: string;
+  workspaceIds?: string[];
   types?: GlobalSearchResultType[];
   kinds?: EntityKind[];
-  editedByUserId?: string;
+  editedByUserIds?: string[];
   mimeTypes?: string[];
-  updatedWithin?: GlobalSearchUpdatedWithin;
+  updatedFrom?: string;
+  updatedTo?: string;
   limit?: number;
 };
 
@@ -24,11 +40,12 @@ type SearchAISummaryParams = {
   query: string;
   locale: string;
   originalQuery?: string;
-  workspaceId?: string;
+  workspaceIds?: string[];
   types?: GlobalSearchResultType[];
-  editedByUserId?: string;
+  editedByUserIds?: string[];
   mimeTypes?: string[];
-  updatedWithin?: GlobalSearchUpdatedWithin;
+  updatedFrom?: string;
+  updatedTo?: string;
   limit?: number;
 };
 
@@ -58,19 +75,26 @@ export const searchInfiniteOptions = (params: SearchParams) =>
       const response = await api.search.post(
         {
           query: params.query,
-          ...(params.workspaceId !== undefined && {
-            workspaceId: toSafeId<"workspace">(params.workspaceId),
-          }),
+          ...(params.workspaceIds !== undefined &&
+            params.workspaceIds.length > 0 && {
+              workspaceIds: params.workspaceIds.map((id) =>
+                toSafeId<"workspace">(id),
+              ),
+            }),
           ...(params.kinds !== undefined && { kinds: params.kinds }),
           ...(params.types !== undefined && { types: params.types }),
-          ...(params.editedByUserId !== undefined && {
-            editedByUserId: params.editedByUserId,
-          }),
+          ...(params.editedByUserIds !== undefined &&
+            params.editedByUserIds.length > 0 && {
+              editedByUserIds: params.editedByUserIds,
+            }),
           ...(params.mimeTypes !== undefined && {
             mimeTypes: params.mimeTypes,
           }),
-          ...(params.updatedWithin !== undefined && {
-            updatedWithin: params.updatedWithin,
+          ...(params.updatedFrom !== undefined && {
+            updatedFrom: params.updatedFrom,
+          }),
+          ...(params.updatedTo !== undefined && {
+            updatedTo: params.updatedTo,
           }),
           ...(pageParam !== undefined && { cursor: pageParam }),
           ...(params.limit !== undefined && { limit: params.limit }),
@@ -89,6 +113,50 @@ export const searchInfiniteOptions = (params: SearchParams) =>
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
     enabled: params.query.length > 0,
+  });
+
+export const searchFacetOptions = (params: SearchFacetParams) =>
+  queryOptions({
+    queryKey: [...searchKeys.all, "facet", params] as const,
+    queryFn: async ({ signal }) => {
+      const response = await api.search.facets.post(
+        {
+          facet: params.facet,
+          search: params.search,
+          query: params.query,
+          ...(params.workspaceIds !== undefined &&
+            params.workspaceIds.length > 0 && {
+              workspaceIds: params.workspaceIds.map((id) =>
+                toSafeId<"workspace">(id),
+              ),
+            }),
+          ...(params.types !== undefined && { types: params.types }),
+          ...(params.editedByUserIds !== undefined &&
+            params.editedByUserIds.length > 0 && {
+              editedByUserIds: params.editedByUserIds,
+            }),
+          ...(params.mimeTypes !== undefined && {
+            mimeTypes: params.mimeTypes,
+          }),
+          ...(params.updatedFrom !== undefined && {
+            updatedFrom: params.updatedFrom,
+          }),
+          ...(params.updatedTo !== undefined && {
+            updatedTo: params.updatedTo,
+          }),
+          ...(params.limit !== undefined && { limit: params.limit }),
+        },
+        { fetch: { signal } },
+      );
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    enabled: params.query.length > 0,
+    placeholderData: keepPreviousData,
   });
 
 export const refineSearchQuery = async ({
@@ -114,17 +182,22 @@ export const summarizeSearchResults = async (params: SearchAISummaryParams) => {
     ...(params.originalQuery !== undefined && {
       originalQuery: params.originalQuery,
     }),
-    ...(params.workspaceId !== undefined && {
-      workspaceId: toSafeId<"workspace">(params.workspaceId),
-    }),
+    ...(params.workspaceIds !== undefined &&
+      params.workspaceIds.length > 0 && {
+        workspaceIds: params.workspaceIds.map((id) =>
+          toSafeId<"workspace">(id),
+        ),
+      }),
     ...(params.types !== undefined && { types: params.types }),
-    ...(params.editedByUserId !== undefined && {
-      editedByUserId: params.editedByUserId,
-    }),
+    ...(params.editedByUserIds !== undefined &&
+      params.editedByUserIds.length > 0 && {
+        editedByUserIds: params.editedByUserIds,
+      }),
     ...(params.mimeTypes !== undefined && { mimeTypes: params.mimeTypes }),
-    ...(params.updatedWithin !== undefined && {
-      updatedWithin: params.updatedWithin,
+    ...(params.updatedFrom !== undefined && {
+      updatedFrom: params.updatedFrom,
     }),
+    ...(params.updatedTo !== undefined && { updatedTo: params.updatedTo }),
     ...(params.limit !== undefined && { limit: params.limit }),
   });
 
@@ -148,17 +221,22 @@ export const createSearchSummaryChatThread = async (
     ...(params.originalQuery !== undefined && {
       originalQuery: params.originalQuery,
     }),
-    ...(params.workspaceId !== undefined && {
-      workspaceId: toSafeId<"workspace">(params.workspaceId),
-    }),
+    ...(params.workspaceIds !== undefined &&
+      params.workspaceIds.length > 0 && {
+        workspaceIds: params.workspaceIds.map((id) =>
+          toSafeId<"workspace">(id),
+        ),
+      }),
     ...(params.types !== undefined && { types: params.types }),
-    ...(params.editedByUserId !== undefined && {
-      editedByUserId: params.editedByUserId,
-    }),
+    ...(params.editedByUserIds !== undefined &&
+      params.editedByUserIds.length > 0 && {
+        editedByUserIds: params.editedByUserIds,
+      }),
     ...(params.mimeTypes !== undefined && { mimeTypes: params.mimeTypes }),
-    ...(params.updatedWithin !== undefined && {
-      updatedWithin: params.updatedWithin,
+    ...(params.updatedFrom !== undefined && {
+      updatedFrom: params.updatedFrom,
     }),
+    ...(params.updatedTo !== undefined && { updatedTo: params.updatedTo }),
     ...(params.limit !== undefined && { limit: params.limit }),
   });
 

@@ -8,26 +8,21 @@ import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { searchGlobal } from "@/api/lib/search/index-global";
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@/api/lib/search/types";
-import type { GlobalSearchUpdatedWithin } from "@/api/lib/search/types";
 
-export const updatedWithinSchema = t.Union([
-  t.Literal("day"),
-  t.Literal("week"),
-  t.Literal("month"),
-  t.Literal("year"),
-]);
+const isoDateTime = t.String({ format: "date-time" });
 
 export const searchBodySchema = t.Object({
   query: t.String({
     minLength: 1,
     maxLength: LIMITS.searchQueryMaxLength,
   }),
-  workspaceId: t.Optional(tSafeId("workspace")),
+  workspaceIds: t.Optional(t.Array(tSafeId("workspace"), { maxItems: 64 })),
   types: t.Optional(t.Array(t.UnionEnum(GLOBAL_SEARCH_RESULT_TYPES))),
   kinds: t.Optional(t.Array(entityKindSchema)),
-  editedByUserId: t.Optional(tUserId),
+  editedByUserIds: t.Optional(t.Array(tUserId, { maxItems: 64 })),
   mimeTypes: t.Optional(t.Array(t.String({ minLength: 1, maxLength: 128 }))),
-  updatedWithin: t.Optional(updatedWithinSchema),
+  updatedFrom: t.Optional(isoDateTime),
+  updatedTo: t.Optional(isoDateTime),
   cursor: t.Optional(t.String()),
   limit: t.Optional(
     t.Integer({
@@ -40,20 +35,59 @@ export const searchBodySchema = t.Object({
 
 type SearchBodySchema = Static<typeof searchBodySchema>;
 
-const UPDATED_WITHIN_MS = {
-  day: 86_400_000,
-  week: 7 * 86_400_000,
-  month: 30 * 86_400_000,
-  year: 365 * 86_400_000,
-} as const satisfies Record<GlobalSearchUpdatedWithin, number>;
+type WorkspaceNotFoundError = ReturnType<
+  typeof status<400, { message: "Workspace not found in organization" }>
+>;
 
-export const resolveUpdatedAfter = (
-  updatedWithin: GlobalSearchUpdatedWithin | undefined,
-): string | undefined => {
-  if (!updatedWithin) {
-    return undefined;
+type ResolvedWorkspaceIds =
+  | { kind: "ok"; ids: SafeId<"workspace">[] }
+  | { kind: "error"; response: WorkspaceNotFoundError };
+
+export const resolveSelectedWorkspaceIds = async ({
+  scopedDb,
+  organizationId,
+  accessibleWorkspaceIds,
+  requestedWorkspaceIds,
+}: {
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
+  requestedWorkspaceIds: readonly SafeId<"workspace">[] | undefined;
+}): Promise<ResolvedWorkspaceIds> => {
+  if (!requestedWorkspaceIds || requestedWorkspaceIds.length === 0) {
+    return { kind: "ok", ids: [] };
   }
-  return new Date(Date.now() - UPDATED_WITHIN_MS[updatedWithin]).toISOString();
+
+  // Dedupe so a client passing `[ws_1, ws_1]` doesn't fail validation
+  // against `findMany`, which only ever returns one row per id.
+  const requestedSet = new Set(requestedWorkspaceIds);
+  const accessSet = new Set(accessibleWorkspaceIds);
+  const accessible = [...requestedSet].filter((id) => accessSet.has(id));
+  if (accessible.length !== requestedSet.size) {
+    return {
+      kind: "error",
+      response: status(400, { message: "Workspace not found in organization" }),
+    };
+  }
+
+  const found = await scopedDb((tx) =>
+    tx.query.workspaces.findMany({
+      where: {
+        id: { in: accessible },
+        organizationId: { eq: organizationId },
+        status: { ne: "deleting" },
+      },
+      columns: { id: true },
+    }),
+  );
+  if (found.length !== accessible.length) {
+    return {
+      kind: "error",
+      response: status(400, { message: "Workspace not found in organization" }),
+    };
+  }
+
+  return { kind: "ok", ids: found.map(({ id }) => id) };
 };
 
 type SearchHandlerProps = {
@@ -69,26 +103,14 @@ export const searchHandler = async ({
   accessibleWorkspaceIds,
   body,
 }: SearchHandlerProps) => {
-  let workspaceId: SafeId<"workspace"> | undefined;
-
-  // Validate workspace belongs to the caller's organization and is not being deleted
-  if (body.workspaceId) {
-    const ws = await scopedDb((tx) =>
-      tx.query.workspaces.findFirst({
-        where: {
-          id: { eq: body.workspaceId },
-          organizationId: { eq: organizationId },
-          status: { ne: "deleting" },
-        },
-        columns: { id: true },
-      }),
-    );
-    if (!ws) {
-      return status(400, {
-        message: "Workspace not found in organization",
-      });
-    }
-    workspaceId = ws.id;
+  const resolved = await resolveSelectedWorkspaceIds({
+    scopedDb,
+    organizationId,
+    accessibleWorkspaceIds,
+    requestedWorkspaceIds: body.workspaceIds,
+  });
+  if (resolved.kind === "error") {
+    return resolved.response;
   }
 
   const types = body.types ?? body.kinds;
@@ -96,12 +118,13 @@ export const searchHandler = async ({
   return await searchGlobal({
     query: body.query,
     organizationId,
-    workspaceIds: accessibleWorkspaceIds,
-    workspaceId,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds: resolved.ids,
     types,
-    editedByUserId: body.editedByUserId,
+    editedByUserIds: body.editedByUserIds,
     mimeTypes: body.mimeTypes,
-    updatedAfter: resolveUpdatedAfter(body.updatedWithin),
+    updatedFrom: body.updatedFrom,
+    updatedTo: body.updatedTo,
     cursor: body.cursor,
     limit: body.limit ?? LIMITS.searchPageSizeDefault,
   });

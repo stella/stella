@@ -28,7 +28,6 @@ export type {
 export type {
   GlobalSearchHit,
   GlobalSearchResultType,
-  GlobalSearchUpdatedWithin,
 } from "@/api/lib/search/types";
 
 export type {

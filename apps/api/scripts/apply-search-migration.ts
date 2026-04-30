@@ -1,10 +1,7 @@
 /**
  * Apply search-specific migrations that Drizzle cannot
- * express declaratively.
- *
- * Creates:
- * 1. tsvector column + GIN index (pg-fts)
- * 2. BM25 index (paradedb, if pg_search extension exists)
+ * express declaratively. Creates the tsvector column +
+ * GIN index for pg-fts.
  *
  * The tsv column is a regular (non-generated) column so
  * each document can use its own regconfig for stemming.
@@ -69,37 +66,6 @@ const applyPgFtsMigration = async () => {
   `);
 
   console.log("pg-fts migration applied.");
-};
-
-const applyParadedbMigration = async () => {
-  // Check if pg_search extension is installed
-  const extResult = await db.execute(sql`
-    SELECT 1 FROM pg_extension
-    WHERE extname = 'pg_search'
-  `);
-
-  if (extResult.length === 0) {
-    console.log("pg_search extension not found, skipping BM25 index.");
-    return;
-  }
-
-  console.log("Creating BM25 index on search_documents...");
-
-  await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS search_documents_bm25_idx
-      ON search_documents
-      USING bm25 (
-        entity_id,
-        title,
-        searchable_text,
-        organization_id,
-        workspace_id,
-        kind
-      )
-      WITH (key_field = 'entity_id')
-  `);
-
-  console.log("ParadeDB BM25 index created.");
 };
 
 const applyCaseLawSearchMigration = async () => {
@@ -182,7 +148,6 @@ const ensureUnaccentExtension = async () => {
 const main = async () => {
   await ensureUnaccentExtension();
   await applyPgFtsMigration();
-  await applyParadedbMigration();
   await applyCaseLawSearchMigration();
   console.log("Search migration applied successfully.");
   process.exit(0);

@@ -1061,13 +1061,13 @@
     "whatToDo": "Mit szeretne ezzel a szöveggel?"
   },
   "search": {
-    "aiQueryLabel": "Elküldve így:",
     "aiRefine": "Keresés javítása AI-val",
     "continueInChat": "Folytatás chatben",
+    "dateFrom": "Mettől",
+    "dateTo": "Meddig",
     "editedBy": "Szerkesztette",
     "emptyState": "Kezdjen el gépelni az összes ügy közötti kereséshez.",
     "escKey": "ESC",
-    "filterLabel": "{type}:",
     "kinds": {
       "caseLaw": "Ítélkezési gyakorlat",
       "contact": "Kapcsolat",
@@ -1091,6 +1091,7 @@
     "summaryLoading": "Találatok összefoglalása...",
     "summaryPrompt": "A legjobb találatok és tartalmuk alapján rövid választ készít.",
     "summaryRetry": "Kattintson az újrapróbálkozáshoz.",
+    "timeFilterCustom": "Egyéni tartomány",
     "updatedWithin": "Frissítve",
     "updatedWithinOptions": {
       "day": "Ma",

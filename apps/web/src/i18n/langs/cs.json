@@ -1061,13 +1061,13 @@
     "whatToDo": "Co chcete s tímto textem udělat?"
   },
   "search": {
-    "aiQueryLabel": "Odesláno jako:",
     "aiRefine": "Vylepšit dotaz pomocí AI",
     "continueInChat": "Pokračovat v chatu",
+    "dateFrom": "Od",
+    "dateTo": "Do",
     "editedBy": "Upravil/a",
     "emptyState": "Začněte psát pro vyhledávání ve všech spisech.",
     "escKey": "ESC",
-    "filterLabel": "{type}:",
     "kinds": {
       "caseLaw": "Judikatura",
       "contact": "Kontakt",
@@ -1091,6 +1091,7 @@
     "summaryLoading": "Shrnuji výsledky…",
     "summaryPrompt": "Použije nejlepší výsledky a jejich obsah pro krátkou odpověď.",
     "summaryRetry": "Kliknutím zkuste znovu.",
+    "timeFilterCustom": "Vlastní rozsah",
     "updatedWithin": "Upraveno",
     "updatedWithinOptions": {
       "day": "Dnes",

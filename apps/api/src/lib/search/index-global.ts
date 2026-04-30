@@ -48,12 +48,15 @@ type SearchPromise = Promise<RawRow[]>;
 export type GlobalSearchQuery = {
   query: string;
   organizationId: SafeId<"organization">;
-  workspaceIds: readonly SafeId<"workspace">[];
-  workspaceId?: SafeId<"workspace"> | undefined;
+  /** All workspaces the caller is allowed to see. */
+  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
+  /** User-selected subset to filter by; empty means no extra filter. */
+  selectedWorkspaceIds?: readonly SafeId<"workspace">[] | undefined;
   types?: readonly GlobalSearchResultType[] | undefined;
-  editedByUserId?: string | undefined;
+  editedByUserIds?: readonly string[] | undefined;
   mimeTypes?: readonly string[] | undefined;
-  updatedAfter?: string | undefined;
+  updatedFrom?: string | undefined;
+  updatedTo?: string | undefined;
   cursor?: string | undefined;
   limit: number;
 };
@@ -192,25 +195,35 @@ const headlineRegconfig = sql`
   'public.stella_unaccent'::regconfig
 `;
 
+type WorkspaceScopeArgs = {
+  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
+  selectedWorkspaceIds?: readonly SafeId<"workspace">[] | undefined;
+};
+
+const resolveWorkspaceScope = ({
+  accessibleWorkspaceIds,
+  selectedWorkspaceIds,
+}: WorkspaceScopeArgs): readonly SafeId<"workspace">[] | null => {
+  if (accessibleWorkspaceIds.length === 0) {
+    return null;
+  }
+  if (!selectedWorkspaceIds || selectedWorkspaceIds.length === 0) {
+    return accessibleWorkspaceIds;
+  }
+  const accessSet = new Set(accessibleWorkspaceIds);
+  const intersection = selectedWorkspaceIds.filter((id) => accessSet.has(id));
+  return intersection.length > 0 ? intersection : null;
+};
+
 const workspaceAccessSql = ({
   column = sql`workspace_id`,
-  workspaceId,
-  workspaceIds,
-}: Pick<GlobalSearchQuery, "workspaceId" | "workspaceIds"> & {
-  column?: SQL;
-}) => {
-  if (workspaceIds.length === 0) {
+  ...scope
+}: WorkspaceScopeArgs & { column?: SQL }) => {
+  const effective = resolveWorkspaceScope(scope);
+  if (effective === null) {
     return sql`AND false`;
   }
-
-  const workspaceIdsSql = typedPgArray(workspaceIds, "uuid");
-
-  if (workspaceId) {
-    return sql`AND ${column} = ${workspaceId}
-      AND ${column} = ANY(${workspaceIdsSql})`;
-  }
-
-  return sql`AND ${column} = ANY(${workspaceIdsSql})`;
+  return sql`AND ${column} = ANY(${typedPgArray(effective, "uuid")})`;
 };
 
 const mapEntityHit = (row: RawRow): ScoredGlobalSearchHit => {
@@ -244,6 +257,7 @@ const mapMatterHit = (row: RawRow): ScoredGlobalSearchHit => {
     title: String(row["title"]),
     headline: toHeadline(row["headline"]),
     updatedAt: toIso(row["updated_at"]),
+    color: toNullableString(row["color"]),
   };
 
   return { hit, score: Number(row["score"]) + 0.15 };
@@ -283,7 +297,7 @@ const mapCaseLawHit = (row: RawRow): ScoredGlobalSearchHit => {
   return { hit, score: Number(row["score"]) };
 };
 
-const facet = (
+const facetBuckets = (
   map: Map<string, { label?: string | undefined; count: number }>,
 ): FacetBucket[] =>
   [...map.entries()]
@@ -327,26 +341,21 @@ const emptyWorkspaceFacetQuery = sql`
 
 export const contactWorkspaceAccessSql = ({
   organizationId,
-  workspaceId,
-  workspaceIds,
+  ...scope
 }: {
   organizationId: SafeId<"organization">;
-  workspaceId?: SafeId<"workspace"> | undefined;
-  workspaceIds: readonly SafeId<"workspace">[];
-}): SQL => {
-  if (workspaceIds.length === 0) {
+} & WorkspaceScopeArgs): SQL => {
+  const effective = resolveWorkspaceScope(scope);
+  if (effective === null) {
     return sql`AND false`;
   }
-
-  const workspaceFilter = workspaceId ? sql`AND w.id = ${workspaceId}` : sql``;
 
   return sql`AND EXISTS (
         SELECT 1
         FROM workspaces w
         LEFT JOIN workspace_contacts wc
           ON wc.workspace_id = w.id
-        WHERE w.id = ANY(${typedPgArray(workspaceIds, "uuid")})
-          ${workspaceFilter}
+        WHERE w.id = ANY(${typedPgArray(effective, "uuid")})
           AND w.organization_id = ${organizationId}
           AND (
             w.client_id = csd.contact_id
@@ -396,74 +405,170 @@ const globalSearchOffset = (cursor: string | undefined): number => {
   );
 };
 
-// oxlint-disable-next-line sonarjs/cognitive-complexity -- global search composes parallel scoped result queries and facets in one bounded round-trip
-export const searchGlobal = async ({
+type FilterFragmentInput = {
+  query: string;
+  organizationId: SafeId<"organization">;
+  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
+  selectedWorkspaceIds?: readonly SafeId<"workspace">[] | undefined;
+  types?: readonly GlobalSearchResultType[] | undefined;
+  editedByUserIds?: readonly string[] | undefined;
+  mimeTypes?: readonly string[] | undefined;
+  updatedFrom?: string | undefined;
+  updatedTo?: string | undefined;
+};
+
+/**
+ * Build the SQL fragments shared by all global-search code paths
+ * (the main hit/count/facet queries and per-facet bucket lookup).
+ *
+ * Each call site picks the fragments it needs and embeds them in
+ * its own outer query — the helper itself runs no SQL.
+ */
+const buildSearchFilterFragments = ({
   query,
   organizationId,
-  workspaceIds,
-  workspaceId,
+  accessibleWorkspaceIds,
+  selectedWorkspaceIds,
   types,
-  editedByUserId,
+  editedByUserIds,
   mimeTypes,
-  updatedAfter,
-  cursor,
-  limit,
-}: GlobalSearchQuery): Promise<GlobalSearchResult> => {
+  updatedFrom,
+  updatedTo,
+}: FilterFragmentInput) => {
   const selected = selectedTypes(types);
-  const restrictToEntities =
-    editedByUserId !== undefined || (mimeTypes?.length ?? 0) > 0;
-  const offset = globalSearchOffset(cursor);
-  const fetchLimit = offset + limit;
+  const hasEditorFilter =
+    editedByUserIds !== undefined && editedByUserIds.length > 0;
+  const hasMimeTypeFilter = mimeTypes !== undefined && mimeTypes.length > 0;
+  const restrictToEntities = hasEditorFilter || hasMimeTypeFilter;
   const tsQuery = buildSearchTsQuery(query);
+
+  const workspaceScope = { accessibleWorkspaceIds, selectedWorkspaceIds };
+  // Workspace-facet variants ignore the user's workspace selection so all
+  // accessible workspaces stay visible (you can always tick a sibling).
+  const accessOnlyScope = { accessibleWorkspaceIds };
   const entityWorkspaceFilter = workspaceAccessSql({
     column: sql`sd.workspace_id`,
-    workspaceId,
-    workspaceIds,
+    ...workspaceScope,
+  });
+  const entityWorkspaceFacetFilter = workspaceAccessSql({
+    column: sql`sd.workspace_id`,
+    ...accessOnlyScope,
   });
   const matterWorkspaceFilter = workspaceAccessSql({
     column: sql`wsd.workspace_id`,
-    workspaceId,
-    workspaceIds,
+    ...workspaceScope,
+  });
+  const matterWorkspaceFacetFilter = workspaceAccessSql({
+    column: sql`wsd.workspace_id`,
+    ...accessOnlyScope,
   });
   const contactWorkspaceFilter = contactWorkspaceAccessSql({
     organizationId,
-    workspaceId,
-    workspaceIds,
+    ...workspaceScope,
   });
+
   const entityTypes = [...selected].filter(
     (type) => type !== "matter" && type !== "contact" && type !== "case-law",
   );
-  const hasMimeTypeFilter = mimeTypes !== undefined && mimeTypes.length > 0;
+  const editorFilterValues = editedByUserIds ?? [];
   const mimeTypeFilterValues = mimeTypes ?? [];
   const entityEditorFilter = sqlWhen(
-    editedByUserId !== undefined,
-    () => sql`AND e.last_edited_by = ${editedByUserId}`,
+    hasEditorFilter,
+    () =>
+      sql`AND e.last_edited_by = ANY(${typedPgArray(editorFilterValues, "text")})`,
   );
   const entityMimeFilter = sqlWhen(
     hasMimeTypeFilter,
     () =>
       sql`AND file_field.mime_types && ${typedPgArray(mimeTypeFilterValues, "text")}`,
   );
-  const entityUpdatedFilter = sqlWhen(
-    updatedAfter !== undefined,
-    () => sql`AND sd.updated_at >= ${updatedAfter}`,
-  );
-  const matterUpdatedFilter = sqlWhen(
-    updatedAfter !== undefined,
-    () => sql`AND wsd.updated_at >= ${updatedAfter}`,
-  );
-  const contactUpdatedFilter = sqlWhen(
-    updatedAfter !== undefined,
-    () => sql`AND csd.updated_at >= ${updatedAfter}`,
-  );
-  const caseLawUpdatedFilter = sqlWhen(
-    updatedAfter !== undefined,
-    () => sql`AND clsd.updated_at >= ${updatedAfter}`,
-  );
+  const updatedRangeFilter = (column: SQL): SQL => {
+    const fragments: SQL[] = [];
+    if (updatedFrom !== undefined) {
+      fragments.push(sql`AND ${column} >= ${updatedFrom}`);
+    }
+    if (updatedTo !== undefined) {
+      fragments.push(sql`AND ${column} <= ${updatedTo}`);
+    }
+    return fragments.length > 0 ? sql.join(fragments, sql` `) : sql``;
+  };
+  const entityUpdatedFilter = updatedRangeFilter(sql`sd.updated_at`);
+  const matterUpdatedFilter = updatedRangeFilter(sql`wsd.updated_at`);
+  const contactUpdatedFilter = updatedRangeFilter(sql`csd.updated_at`);
+  const caseLawUpdatedFilter = updatedRangeFilter(sql`clsd.updated_at`);
   const entityTypeFilter = sqlWhen(
     selected.size > 0,
     () => sql`AND sd.kind = ANY(${typedPgArray(entityTypes, "text")})`,
   );
+
+  return {
+    selected,
+    hasEditorFilter,
+    hasMimeTypeFilter,
+    restrictToEntities,
+    tsQuery,
+    entityWorkspaceFilter,
+    entityWorkspaceFacetFilter,
+    matterWorkspaceFilter,
+    matterWorkspaceFacetFilter,
+    contactWorkspaceFilter,
+    entityEditorFilter,
+    entityMimeFilter,
+    entityUpdatedFilter,
+    matterUpdatedFilter,
+    contactUpdatedFilter,
+    caseLawUpdatedFilter,
+    entityTypeFilter,
+  };
+};
+
+// oxlint-disable-next-line sonarjs/cognitive-complexity -- global search composes parallel scoped result queries and facets in one bounded round-trip
+export const searchGlobal = async ({
+  query,
+  organizationId,
+  accessibleWorkspaceIds,
+  selectedWorkspaceIds,
+  types,
+  editedByUserIds,
+  mimeTypes,
+  updatedFrom,
+  updatedTo,
+  cursor,
+  limit,
+}: GlobalSearchQuery): Promise<GlobalSearchResult> => {
+  const offset = globalSearchOffset(cursor);
+  const fetchLimit = offset + limit;
+  // Counts and facets are computed only on the first page. Subsequent
+  // pages reuse the values the client already has, saving ~7 of the
+  // 15 SQL round-trips per request.
+  const isFirstPage = offset === 0;
+  const {
+    selected,
+    restrictToEntities,
+    tsQuery,
+    entityWorkspaceFilter,
+    entityWorkspaceFacetFilter,
+    matterWorkspaceFilter,
+    matterWorkspaceFacetFilter,
+    contactWorkspaceFilter,
+    entityEditorFilter,
+    entityMimeFilter,
+    entityUpdatedFilter,
+    matterUpdatedFilter,
+    contactUpdatedFilter,
+    caseLawUpdatedFilter,
+    entityTypeFilter,
+  } = buildSearchFilterFragments({
+    query,
+    organizationId,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds,
+    types,
+    editedByUserIds,
+    mimeTypes,
+    updatedFrom,
+    updatedTo,
+  });
 
   const entityPromise = rowsWhen(hasSelectedEntityType(selected), () =>
     db.execute(sql`
@@ -510,6 +615,7 @@ export const searchGlobal = async ({
       SELECT
         wsd.workspace_id AS id,
         wsd.title,
+        w.color,
         ts_headline(
           ${headlineRegconfig},
           wsd.title || ' ' || left(wsd.searchable_text, 2000),
@@ -519,6 +625,7 @@ export const searchGlobal = async ({
         ts_rank(wsd.tsv, ${tsQuery})::float8 AS score,
         wsd.updated_at
       FROM workspace_search_documents wsd
+      JOIN workspaces w ON w.id = wsd.workspace_id
       WHERE wsd.organization_id = ${organizationId}
         ${matterWorkspaceFilter}
         ${matterUpdatedFilter}
@@ -530,7 +637,7 @@ export const searchGlobal = async ({
 
   const contactPromise = rowsWhen(
     !restrictToEntities &&
-      workspaceIds.length > 0 &&
+      accessibleWorkspaceIds.length > 0 &&
       shouldSearchType(selected, "contact"),
     () =>
       db.execute(sql`
@@ -585,7 +692,7 @@ export const searchGlobal = async ({
   );
 
   const countPromises = [
-    countWhen(hasSelectedEntityType(selected), () =>
+    countWhen(isFirstPage && hasSelectedEntityType(selected), () =>
       db.execute(sql`
         SELECT count(*)::int AS total
         FROM search_documents sd
@@ -602,8 +709,12 @@ export const searchGlobal = async ({
           AND sd.tsv @@ ${tsQuery}
       `),
     ),
-    countWhen(!restrictToEntities && shouldSearchType(selected, "matter"), () =>
-      db.execute(sql`
+    countWhen(
+      isFirstPage &&
+        !restrictToEntities &&
+        shouldSearchType(selected, "matter"),
+      () =>
+        db.execute(sql`
         SELECT count(*)::int AS total
         FROM workspace_search_documents wsd
         WHERE wsd.organization_id = ${organizationId}
@@ -613,8 +724,9 @@ export const searchGlobal = async ({
       `),
     ),
     countWhen(
-      !restrictToEntities &&
-        workspaceIds.length > 0 &&
+      isFirstPage &&
+        !restrictToEntities &&
+        accessibleWorkspaceIds.length > 0 &&
         shouldSearchType(selected, "contact"),
       () =>
         db.execute(sql`
@@ -627,7 +739,9 @@ export const searchGlobal = async ({
       `),
     ),
     countWhen(
-      !restrictToEntities && shouldSearchType(selected, "case-law"),
+      isFirstPage &&
+        !restrictToEntities &&
+        shouldSearchType(selected, "case-law"),
       () =>
         db.execute(sql`
         SELECT count(*)::int AS total
@@ -638,8 +752,10 @@ export const searchGlobal = async ({
     ),
   ] as const;
 
-  const entityTypeFacetPromise = rowsWhen(hasSelectedEntityType(selected), () =>
-    db.execute(sql`
+  const entityTypeFacetPromise = rowsWhen(
+    isFirstPage && hasSelectedEntityType(selected),
+    () =>
+      db.execute(sql`
       SELECT sd.kind AS value, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -658,8 +774,10 @@ export const searchGlobal = async ({
     `),
   );
 
-  const matterTypeFacetCountPromise = countWhen(!restrictToEntities, () =>
-    db.execute(sql`
+  const matterTypeFacetCountPromise = countWhen(
+    isFirstPage && !restrictToEntities,
+    () =>
+      db.execute(sql`
       SELECT count(*)::int AS total
       FROM workspace_search_documents wsd
       WHERE wsd.organization_id = ${organizationId}
@@ -670,7 +788,7 @@ export const searchGlobal = async ({
   );
 
   const contactTypeFacetCountPromise = countWhen(
-    !restrictToEntities && workspaceIds.length > 0,
+    isFirstPage && !restrictToEntities && accessibleWorkspaceIds.length > 0,
     () =>
       db.execute(sql`
         SELECT count(*)::int AS total
@@ -682,8 +800,10 @@ export const searchGlobal = async ({
       `),
   );
 
-  const caseLawTypeFacetCountPromise = countWhen(!restrictToEntities, () =>
-    db.execute(sql`
+  const caseLawTypeFacetCountPromise = countWhen(
+    isFirstPage && !restrictToEntities,
+    () =>
+      db.execute(sql`
       SELECT count(*)::int AS total
       FROM case_law_search_documents clsd
       WHERE clsd.tsv @@ ${tsQuery}
@@ -701,7 +821,7 @@ export const searchGlobal = async ({
         AND e.workspace_id = sd.workspace_id
       ${fileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFilter}
+        ${entityWorkspaceFacetFilter}
         ${entityTypeFilter}
         ${entityEditorFilter}
         ${entityMimeFilter}
@@ -716,14 +836,15 @@ export const searchGlobal = async ({
       SELECT wsd.workspace_id AS value, wsd.title AS label
       FROM workspace_search_documents wsd
       WHERE wsd.organization_id = ${organizationId}
-        ${matterWorkspaceFilter}
+        ${matterWorkspaceFacetFilter}
         ${matterUpdatedFilter}
         AND wsd.tsv @@ ${tsQuery}
     `
       : emptyWorkspaceFacetQuery;
 
   const workspaceFacetPromise = rowsWhen(
-    hasSelectedEntityType(selected) || shouldSearchType(selected, "matter"),
+    isFirstPage &&
+      (hasSelectedEntityType(selected) || shouldSearchType(selected, "matter")),
     () =>
       db.execute(sql`
         SELECT value, label, count(*)::int AS count
@@ -738,8 +859,12 @@ export const searchGlobal = async ({
       `),
   );
 
-  const editorFacetPromise = rowsWhen(hasSelectedEntityType(selected), () =>
-    db.execute(sql`
+  // Editor facet drops its own filter so picking one editor still
+  // shows the others as toggleable options.
+  const editorFacetPromise = rowsWhen(
+    isFirstPage && hasSelectedEntityType(selected),
+    () =>
+      db.execute(sql`
       SELECT editor.id AS value, editor.name AS label, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -750,7 +875,6 @@ export const searchGlobal = async ({
       WHERE sd.organization_id = ${organizationId}
         ${entityWorkspaceFilter}
         ${entityTypeFilter}
-        ${entityEditorFilter}
         ${entityMimeFilter}
         ${entityUpdatedFilter}
         AND sd.tsv @@ ${tsQuery}
@@ -760,8 +884,11 @@ export const searchGlobal = async ({
     `),
   );
 
-  const mimeTypeFacetPromise = rowsWhen(hasSelectedEntityType(selected), () =>
-    db.execute(sql`
+  // Mime facet drops its own filter for the same reason.
+  const mimeTypeFacetPromise = rowsWhen(
+    isFirstPage && hasSelectedEntityType(selected),
+    () =>
+      db.execute(sql`
       SELECT mime_type.value AS value, mime_type.value AS label, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -775,7 +902,6 @@ export const searchGlobal = async ({
         ${entityWorkspaceFilter}
         ${entityTypeFilter}
         ${entityEditorFilter}
-        ${entityMimeFilter}
         ${entityUpdatedFilter}
         AND sd.tsv @@ ${tsQuery}
       GROUP BY mime_type.value
@@ -854,14 +980,203 @@ export const searchGlobal = async ({
   return {
     hits,
     facets: {
-      type: facet(typeFacetMap),
-      workspace: facet(workspaceFacetMap),
-      editor: facet(editorFacetMap),
-      mimeType: facet(mimeTypeFacetMap),
+      type: facetBuckets(typeFacetMap),
+      workspace: facetBuckets(workspaceFacetMap),
+      editor: facetBuckets(editorFacetMap),
+      mimeType: facetBuckets(mimeTypeFacetMap),
     },
     totalCount,
-    nextCursor: resolveGlobalSearchNextCursor({ limit, offset, totalCount }),
+    nextCursor: resolveGlobalSearchNextCursor({
+      limit,
+      offset,
+      // Counts are skipped on paginated requests; signal with `null`
+      // so the cursor decision falls back to the hit count instead of
+      // misreading a zeroed total as "no more results".
+      totalCount: isFirstPage ? totalCount : null,
+      hitsLength: hits.length,
+    }),
   };
+};
+
+// ---------------------------------------------------------------------------
+// Per-facet bucket search — used when a user types in a facet's search box
+// to look up bucket values that the top-N default may have hidden.
+// ---------------------------------------------------------------------------
+
+export type GlobalFacetName = "editor" | "workspace" | "mimeType";
+
+export type GlobalFacetSearchQuery = {
+  facet: GlobalFacetName;
+  /** Substring filter on the facet's bucket label. Empty = no filter. */
+  search: string;
+  query: string;
+  organizationId: SafeId<"organization">;
+  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
+  selectedWorkspaceIds?: readonly SafeId<"workspace">[] | undefined;
+  types?: readonly GlobalSearchResultType[] | undefined;
+  editedByUserIds?: readonly string[] | undefined;
+  mimeTypes?: readonly string[] | undefined;
+  updatedFrom?: string | undefined;
+  updatedTo?: string | undefined;
+  limit: number;
+};
+
+const escapeLikePattern = (value: string): string =>
+  value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
+
+const labelLikeFilter = (column: SQL, search: string): SQL => {
+  const trimmed = search.trim();
+  if (!trimmed) {
+    return sql``;
+  }
+  const pattern = `%${escapeLikePattern(trimmed)}%`;
+  return sql`AND ${column} ILIKE ${pattern}`;
+};
+
+export const searchGlobalFacet = async ({
+  facet,
+  search,
+  query,
+  organizationId,
+  accessibleWorkspaceIds,
+  selectedWorkspaceIds,
+  types,
+  editedByUserIds,
+  mimeTypes,
+  updatedFrom,
+  updatedTo,
+  limit,
+}: GlobalFacetSearchQuery): Promise<{ buckets: FacetBucket[] }> => {
+  const {
+    selected,
+    restrictToEntities,
+    tsQuery,
+    entityWorkspaceFilter,
+    entityWorkspaceFacetFilter,
+    matterWorkspaceFacetFilter,
+    entityEditorFilter,
+    entityMimeFilter,
+    entityUpdatedFilter,
+    matterUpdatedFilter,
+    entityTypeFilter,
+  } = buildSearchFilterFragments({
+    query,
+    organizationId,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds,
+    types,
+    editedByUserIds,
+    mimeTypes,
+    updatedFrom,
+    updatedTo,
+  });
+
+  if (facet === "editor") {
+    if (!hasSelectedEntityType(selected)) {
+      return { buckets: [] };
+    }
+    const rows = await db.execute(sql`
+      SELECT editor.id AS value, editor.name AS label, count(*)::int AS count
+      FROM search_documents sd
+      LEFT JOIN entities e
+        ON e.id = sd.entity_id
+        AND e.workspace_id = sd.workspace_id
+      JOIN "user" editor ON editor.id = e.last_edited_by
+      ${fileFieldJoin}
+      WHERE sd.organization_id = ${organizationId}
+        ${entityWorkspaceFilter}
+        ${entityTypeFilter}
+        ${entityMimeFilter}
+        ${entityUpdatedFilter}
+        AND sd.tsv @@ ${tsQuery}
+        ${labelLikeFilter(sql`editor.name`, search)}
+      GROUP BY editor.id, editor.name
+      ORDER BY count DESC, editor.name ASC
+      LIMIT ${limit}
+    `);
+    return { buckets: facetBuckets(toStringFacetMap(rows)) };
+  }
+
+  if (facet === "mimeType") {
+    if (!hasSelectedEntityType(selected)) {
+      return { buckets: [] };
+    }
+    const rows = await db.execute(sql`
+      SELECT mime_type.value AS value, mime_type.value AS label, count(*)::int AS count
+      FROM search_documents sd
+      LEFT JOIN entities e
+        ON e.id = sd.entity_id
+        AND e.workspace_id = sd.workspace_id
+      ${fileFieldJoin}
+      CROSS JOIN LATERAL unnest(
+        coalesce(file_field.mime_types, ARRAY[]::text[])
+      ) AS mime_type(value)
+      WHERE sd.organization_id = ${organizationId}
+        ${entityWorkspaceFilter}
+        ${entityTypeFilter}
+        ${entityEditorFilter}
+        ${entityUpdatedFilter}
+        AND sd.tsv @@ ${tsQuery}
+        ${labelLikeFilter(sql`mime_type.value`, search)}
+      GROUP BY mime_type.value
+      ORDER BY count DESC, mime_type.value ASC
+      LIMIT ${limit}
+    `);
+    return { buckets: facetBuckets(toMimeTypeFacetMap(rows)) };
+  }
+
+  // facet === "workspace"
+  const includeEntities = hasSelectedEntityType(selected);
+  const includeMatters =
+    !restrictToEntities && shouldSearchType(selected, "matter");
+  if (!includeEntities && !includeMatters) {
+    return { buckets: [] };
+  }
+
+  const entityWorkspaceFacetQuery = includeEntities
+    ? sql`
+      SELECT sd.workspace_id AS value, w.name AS label
+      FROM search_documents sd
+      JOIN workspaces w ON w.id = sd.workspace_id
+      LEFT JOIN entities e
+        ON e.id = sd.entity_id
+        AND e.workspace_id = sd.workspace_id
+      ${fileFieldJoin}
+      WHERE sd.organization_id = ${organizationId}
+        ${entityWorkspaceFacetFilter}
+        ${entityTypeFilter}
+        ${entityEditorFilter}
+        ${entityMimeFilter}
+        ${entityUpdatedFilter}
+        AND sd.tsv @@ ${tsQuery}
+    `
+    : emptyWorkspaceFacetQuery;
+
+  const matterWorkspaceFacetQuery = includeMatters
+    ? sql`
+      SELECT wsd.workspace_id AS value, wsd.title AS label
+      FROM workspace_search_documents wsd
+      WHERE wsd.organization_id = ${organizationId}
+        ${matterWorkspaceFacetFilter}
+        ${matterUpdatedFilter}
+        AND wsd.tsv @@ ${tsQuery}
+    `
+    : emptyWorkspaceFacetQuery;
+
+  const rows = await db.execute(sql`
+    SELECT value, label, count(*)::int AS count
+    FROM (
+      ${entityWorkspaceFacetQuery}
+      UNION ALL
+      ${matterWorkspaceFacetQuery}
+    ) hits
+    WHERE TRUE
+      ${labelLikeFilter(sql`label`, search)}
+    GROUP BY value, label
+    ORDER BY count DESC, value ASC
+    LIMIT ${limit}
+  `);
+  return { buckets: facetBuckets(toStringFacetMap(rows)) };
 };
 
 export const upsertContactSearchDocument = async (

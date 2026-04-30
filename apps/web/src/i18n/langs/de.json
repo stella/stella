@@ -1061,13 +1061,13 @@
     "whatToDo": "Was möchten Sie mit diesem Text tun?"
   },
   "search": {
-    "aiQueryLabel": "Gesendet als:",
     "aiRefine": "Suchanfrage mit KI verbessern",
     "continueInChat": "Im Chat fortsetzen",
+    "dateFrom": "Von",
+    "dateTo": "Bis",
     "editedBy": "Bearbeitet von",
     "emptyState": "Tippen Sie, um alle Akten zu durchsuchen.",
     "escKey": "ESC",
-    "filterLabel": "{type}:",
     "kinds": {
       "caseLaw": "Rechtsprechung",
       "contact": "Kontakt",
@@ -1091,6 +1091,7 @@
     "summaryLoading": "Ergebnisse werden zusammengefasst...",
     "summaryPrompt": "Nutzt die Top-Ergebnisse und deren Inhalt für eine kurze Antwort.",
     "summaryRetry": "Zum erneuten Versuch klicken.",
+    "timeFilterCustom": "Benutzerdefinierter Zeitraum",
     "updatedWithin": "Aktualisiert",
     "updatedWithinOptions": {
       "day": "Heute",

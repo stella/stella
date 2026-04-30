@@ -1061,13 +1061,13 @@
     "whatToDo": "Ką norėtumėte daryti su šiuo tekstu?"
   },
   "search": {
-    "aiQueryLabel": "Išsiųsta kaip:",
     "aiRefine": "Patobulinti užklausą su DI",
     "continueInChat": "Tęsti pokalbyje",
+    "dateFrom": "Nuo",
+    "dateTo": "Iki",
     "editedBy": "Redagavo",
     "emptyState": "Pradėkite rašyti, kad ieškotumėte visose bylose.",
     "escKey": "ESC",
-    "filterLabel": "{type}:",
     "kinds": {
       "caseLaw": "Teismų praktika",
       "contact": "Kontaktas",
@@ -1091,6 +1091,7 @@
     "summaryLoading": "Apibendrinami rezultatai...",
     "summaryPrompt": "Naudoja geriausius rezultatus ir jų turinį trumpam atsakymui parengti.",
     "summaryRetry": "Spustelėkite bandyti dar kartą.",
+    "timeFilterCustom": "Pasirinktinis intervalas",
     "updatedWithin": "Atnaujinta",
     "updatedWithinOptions": {
       "day": "Šiandien",

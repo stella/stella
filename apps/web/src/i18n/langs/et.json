@@ -1061,13 +1061,13 @@
     "whatToDo": "Mida soovite selle tekstiga teha?"
   },
   "search": {
-    "aiQueryLabel": "Saadeti kujul:",
     "aiRefine": "Täpsusta päringut AI-ga",
     "continueInChat": "Jätka vestluses",
+    "dateFrom": "Alates",
+    "dateTo": "Kuni",
     "editedBy": "Muutja",
     "emptyState": "Alustage tippimist, et otsida kõigist asjadest.",
     "escKey": "ESC",
-    "filterLabel": "{type}:",
     "kinds": {
       "caseLaw": "Kohtupraktika",
       "contact": "Kontakt",
@@ -1091,6 +1091,7 @@
     "summaryLoading": "Tulemuste kokkuvõtmine...",
     "summaryPrompt": "Kasutab parimaid tulemusi ja nende sisu lühikese vastuse koostamiseks.",
     "summaryRetry": "Klõpsake uuesti proovimiseks.",
+    "timeFilterCustom": "Kohandatud vahemik",
     "updatedWithin": "Uuendatud",
     "updatedWithinOptions": {
       "day": "Täna",

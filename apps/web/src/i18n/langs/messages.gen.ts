@@ -1064,13 +1064,13 @@ type Messages = {
     "whatToDo": "What would you like to do with this text?";
   };
   "search": {
-    "aiQueryLabel": "Sent as:";
     "aiRefine": "Improve query with AI";
     "continueInChat": "Continue in chat";
+    "dateFrom": "From";
+    "dateTo": "To";
     "editedBy": "Edited by";
     "emptyState": "Start typing to search across all matters.";
     "escKey": "ESC";
-    "filterLabel": "{type}:";
     "kinds": {
       "caseLaw": "Case law";
       "contact": "Contact";
@@ -1094,6 +1094,7 @@ type Messages = {
     "summaryLoading": "Summarizing results...";
     "summaryPrompt": "Use the top results and their content to draft a short answer.";
     "summaryRetry": "Click to try again.";
+    "timeFilterCustom": "Custom range";
     "updatedWithin": "Updated";
     "updatedWithinOptions": {
       "day": "Today";

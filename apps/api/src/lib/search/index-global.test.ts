@@ -25,7 +25,7 @@ describe("global search SQL scope", () => {
     const compiled = dialect.sqlToQuery(
       contactWorkspaceAccessSql({
         organizationId: toSafeId<"organization">("org_1"),
-        workspaceIds: [
+        accessibleWorkspaceIds: [
           toSafeId<"workspace">("ws_1"),
           toSafeId<"workspace">("ws_2"),
         ],
@@ -37,24 +37,23 @@ describe("global search SQL scope", () => {
     expect(compiled.params).toEqual(["ws_1", "ws_2", "org_1"]);
   });
 
-  test("adds the selected workspace without dropping the allowlist", async () => {
+  test("intersects the user's selection with the accessible allowlist", async () => {
     const { contactWorkspaceAccessSql } =
       await import("@/api/lib/search/index-global");
     const dialect = new PgDialect();
     const compiled = dialect.sqlToQuery(
       contactWorkspaceAccessSql({
         organizationId: toSafeId<"organization">("org_1"),
-        workspaceId: toSafeId<"workspace">("ws_1"),
-        workspaceIds: [
+        accessibleWorkspaceIds: [
           toSafeId<"workspace">("ws_1"),
           toSafeId<"workspace">("ws_2"),
         ],
+        selectedWorkspaceIds: [toSafeId<"workspace">("ws_1")],
       }),
     );
 
     expect(compiled.sql).toContain("w.id = ANY");
-    expect(compiled.sql).toContain("AND w.id =");
-    expect(compiled.params).toEqual(["ws_1", "ws_2", "ws_1", "org_1"]);
+    expect(compiled.params).toEqual(["ws_1", "org_1"]);
   });
 
   test("returns the last editor avatar for document hits", async () => {
@@ -88,7 +87,7 @@ describe("global search SQL scope", () => {
     const result = await searchGlobal({
       query: "injunction",
       organizationId: toSafeId<"organization">("org_1"),
-      workspaceIds: [toSafeId<"workspace">("ws_1")],
+      accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
       types: ["document"],
       limit: 10,
     });

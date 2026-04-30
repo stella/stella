@@ -8,6 +8,10 @@ import {
   summarizeSearchBodySchema,
   summarizeSearchResults,
 } from "@/api/handlers/search/ai";
+import {
+  searchFacetsBodySchema,
+  searchFacetsHandler,
+} from "@/api/handlers/search/facets";
 import { searchBodySchema, searchHandler } from "@/api/handlers/search/search";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
@@ -25,6 +29,17 @@ export const searchRoute = new Elysia({ prefix: "/search" })
         scopedDb: ctx.scopedDb,
       }),
     { body: searchBodySchema },
+  )
+  .post(
+    "/facets",
+    async (ctx) =>
+      await searchFacetsHandler({
+        organizationId: ctx.session.activeOrganizationId,
+        accessibleWorkspaceIds: ctx.activeWorkspaceIds,
+        body: ctx.body,
+        scopedDb: ctx.scopedDb,
+      }),
+    { body: searchFacetsBodySchema },
   )
   .post(
     "/refine",

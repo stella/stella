@@ -10,8 +10,7 @@ void mock.module("@/api/lib/search/index-global", () => ({
   searchGlobal: searchMock,
 }));
 
-const { resolveUpdatedAfter, searchHandler } =
-  await import("@/api/handlers/search/search");
+const { searchHandler } = await import("@/api/handlers/search/search");
 
 const realDateNow = Date.now;
 
@@ -26,17 +25,17 @@ const unusedScopedDb: ScopedDb = async () => {
 };
 
 const createWorkspaceLookupScopedDb =
-  (findFirst: (query: unknown) => Promise<unknown>): ScopedDb =>
+  (findMany: (query: unknown) => Promise<unknown>): ScopedDb =>
   async (callback) => {
     const tx = {
       query: {
         workspaces: {
-          findFirst,
+          findMany,
         },
       },
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only implements workspaces.findFirst
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only implements workspaces.findMany
     return await callback(tx as unknown as Transaction);
   };
 
@@ -71,57 +70,103 @@ describe("search handler workspace scoping", () => {
       organizationId: "org_1",
       query: "closing memo",
       types: undefined,
-      editedByUserId: undefined,
+      editedByUserIds: undefined,
       mimeTypes: undefined,
-      updatedAfter: undefined,
-      workspaceId: undefined,
-      workspaceIds: ["ws_1", "ws_2"],
+      updatedFrom: undefined,
+      updatedTo: undefined,
+      accessibleWorkspaceIds: ["ws_1", "ws_2"],
+      selectedWorkspaceIds: [],
     });
   });
 
-  test("keeps the accessible workspace allowlist when a workspace is selected", async () => {
+  test("validates and forwards the user's workspace selection", async () => {
     const workspaceId = toSafeId<"workspace">("ws_1");
-    const findFirstMock = mock(async () => ({ id: workspaceId }));
+    const findManyMock = mock(async () => [{ id: workspaceId }]);
 
     await searchHandler({
       accessibleWorkspaceIds,
       body: {
         query: "closing memo",
-        workspaceId,
+        workspaceIds: [workspaceId],
       },
       organizationId,
-      scopedDb: createWorkspaceLookupScopedDb(findFirstMock),
+      scopedDb: createWorkspaceLookupScopedDb(findManyMock),
     });
 
-    expect(findFirstMock).toHaveBeenCalledWith({
+    expect(findManyMock).toHaveBeenCalledWith({
       columns: { id: true },
       where: {
-        id: { eq: workspaceId },
+        id: { in: [workspaceId] },
         organizationId: { eq: organizationId },
         status: { ne: "deleting" },
       },
     });
     expect(searchMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        accessibleWorkspaceIds: ["ws_1", "ws_2"],
+        selectedWorkspaceIds: [workspaceId],
         organizationId: "org_1",
         query: "closing memo",
-        updatedAfter: undefined,
-        workspaceId: "ws_1",
-        workspaceIds: ["ws_1", "ws_2"],
       }),
     );
   });
 
-  test("passes editor, MIME, and time filters to global search", async () => {
-    Date.now = () => new Date("2026-04-30T12:00:00.000Z").getTime();
+  test("dedupes duplicate workspace ids before validation", async () => {
+    const workspaceId = toSafeId<"workspace">("ws_1");
+    const findManyMock = mock(async () => [{ id: workspaceId }]);
 
     await searchHandler({
       accessibleWorkspaceIds,
       body: {
-        editedByUserId: "user_1",
+        query: "closing memo",
+        workspaceIds: [workspaceId, workspaceId, workspaceId],
+      },
+      organizationId,
+      scopedDb: createWorkspaceLookupScopedDb(findManyMock),
+    });
+
+    expect(findManyMock).toHaveBeenCalledWith({
+      columns: { id: true },
+      where: {
+        id: { in: [workspaceId] },
+        organizationId: { eq: organizationId },
+        status: { ne: "deleting" },
+      },
+    });
+    expect(searchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selectedWorkspaceIds: [workspaceId],
+      }),
+    );
+  });
+
+  test("rejects workspace ids the caller cannot access", async () => {
+    const result = await searchHandler({
+      accessibleWorkspaceIds,
+      body: {
+        query: "closing memo",
+        workspaceIds: [toSafeId<"workspace">("ws_other")],
+      },
+      organizationId,
+      scopedDb: unusedScopedDb,
+    });
+
+    expect(result).toMatchObject({
+      code: 400,
+      response: { message: "Workspace not found in organization" },
+    });
+    expect(searchMock).not.toHaveBeenCalled();
+  });
+
+  test("passes editor, MIME, and date range filters to global search", async () => {
+    await searchHandler({
+      accessibleWorkspaceIds,
+      body: {
+        editedByUserIds: ["user_1", "user_2"],
         mimeTypes: ["application/pdf"],
         query: "closing memo",
-        updatedWithin: "week",
+        updatedFrom: "2026-04-23T12:00:00.000Z",
+        updatedTo: "2026-04-30T12:00:00.000Z",
       },
       organizationId,
       scopedDb: unusedScopedDb,
@@ -129,17 +174,11 @@ describe("search handler workspace scoping", () => {
 
     expect(searchMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        editedByUserId: "user_1",
+        editedByUserIds: ["user_1", "user_2"],
         mimeTypes: ["application/pdf"],
-        updatedAfter: "2026-04-23T12:00:00.000Z",
+        updatedFrom: "2026-04-23T12:00:00.000Z",
+        updatedTo: "2026-04-30T12:00:00.000Z",
       }),
     );
-  });
-
-  test("resolves relative updated filters from the current clock", () => {
-    Date.now = () => new Date("2026-04-30T12:00:00.000Z").getTime();
-
-    expect(resolveUpdatedAfter("day")).toBe("2026-04-29T12:00:00.000Z");
-    expect(resolveUpdatedAfter(undefined)).toBeUndefined();
   });
 });

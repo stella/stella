@@ -1061,13 +1061,13 @@
     "whatToDo": "Ko vēlaties darīt ar šo tekstu?"
   },
   "search": {
-    "aiQueryLabel": "Nosūtīts kā:",
     "aiRefine": "Uzlabot vaicājumu ar AI",
     "continueInChat": "Turpināt tērzēšanā",
+    "dateFrom": "No",
+    "dateTo": "Līdz",
     "editedBy": "Rediģēja",
     "emptyState": "Sāciet rakstīt, lai meklētu visās lietās.",
     "escKey": "ESC",
-    "filterLabel": "{type}:",
     "kinds": {
       "caseLaw": "Judikatūra",
       "contact": "Kontakts",
@@ -1091,6 +1091,7 @@
     "summaryLoading": "Rezultātu apkopošana...",
     "summaryPrompt": "Izmanto labākos rezultātus un to saturu īsai atbildei.",
     "summaryRetry": "Noklikšķiniet, lai mēģinātu vēlreiz.",
+    "timeFilterCustom": "Pielāgots diapazons",
     "updatedWithin": "Atjaunināts",
     "updatedWithinOptions": {
       "day": "Šodien",

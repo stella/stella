@@ -5,8 +5,12 @@
 export const HIGHLIGHT_START = "__HL_START__";
 export const HIGHLIGHT_STOP = "__HL_STOP__";
 
+// `MaxFragments=3` splits the headline into up to 3 separate
+// excerpts joined by `...`, surfacing more occurrences without
+// inflating snippet length per result. The delimiter is rendered
+// as a fragment separator by the result card.
 export const TS_HEADLINE_CONFIG =
-  "MaxWords=35, MinWords=15, " +
+  "MaxWords=20, MinWords=8, MaxFragments=3, FragmentDelimiter=..., " +
   `StartSel=${HIGHLIGHT_START}, ` +
   `StopSel=${HIGHLIGHT_STOP}`;
 

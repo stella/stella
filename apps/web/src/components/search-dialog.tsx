@@ -1,18 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type {
-  GlobalSearchHit,
-  GlobalSearchResultType,
-  GlobalSearchUpdatedWithin,
-} from "@stll/api/types";
+import type { GlobalSearchHit, GlobalSearchResultType } from "@stll/api/types";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
+import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
 import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   FileTextIcon,
   FolderIcon,
@@ -26,18 +24,20 @@ import {
   SparklesIcon,
   SquareCheckIcon,
   UserIcon,
-  XIcon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useLocale, useTranslations } from "use-intl";
 
 import { UserAvatar } from "@/components/user-avatar";
+import { getMatterSwatch } from "@/lib/matter-colors";
 import {
   createSearchSummaryChatThread,
   refineSearchQuery,
+  searchFacetOptions,
   searchInfiniteOptions,
   summarizeSearchResults,
 } from "@/lib/search";
+import type { SearchableFacet } from "@/lib/search";
 import {
   readRecentFiles,
   readRecentSearches,
@@ -52,6 +52,8 @@ import type {
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 const DEBOUNCE_MS = 300;
+const VIRTUAL_HIT_ESTIMATE_PX = 76;
+const VIRTUAL_HIT_OVERSCAN = 6;
 
 const KIND_ICONS = {
   matter: LayersIcon,
@@ -75,14 +77,22 @@ const KIND_TRANSLATION_KEYS = {
   link: "search.kinds.link",
 } as const satisfies Record<GlobalSearchResultType, string>;
 
-const UPDATED_WITHIN_OPTIONS = ["day", "week", "month", "year"] as const;
+const TIME_PRESETS = ["day", "week", "month", "year"] as const;
+type TimePreset = (typeof TIME_PRESETS)[number];
 
-const UPDATED_WITHIN_TRANSLATION_KEYS = {
+const TIME_PRESET_TRANSLATION_KEYS = {
   day: "search.updatedWithinOptions.day",
   week: "search.updatedWithinOptions.week",
   month: "search.updatedWithinOptions.month",
   year: "search.updatedWithinOptions.year",
-} as const satisfies Record<GlobalSearchUpdatedWithin, string>;
+} as const satisfies Record<TimePreset, string>;
+
+const TIME_PRESET_DURATIONS_MS = {
+  day: 86_400_000,
+  week: 7 * 86_400_000,
+  month: 30 * 86_400_000,
+  year: 365 * 86_400_000,
+} as const satisfies Record<TimePreset, number>;
 
 const isGlobalSearchResultType = (
   value: string,
@@ -133,21 +143,52 @@ const formatMimeTypeLabel = (mimeType: string): string => {
   return mimeType;
 };
 
+const isoToDateInputValue = (iso: string): string => iso.slice(0, 10);
+
+const dateInputToIsoStart = (value: string): string =>
+  new Date(`${value}T00:00:00.000Z`).toISOString();
+
+const dateInputToIsoEnd = (value: string): string =>
+  new Date(`${value}T23:59:59.999Z`).toISOString();
+
+const presetUpdatedFrom = (preset: TimePreset): string =>
+  new Date(Date.now() - TIME_PRESET_DURATIONS_MS[preset]).toISOString();
+
+const mergeSelectedBuckets = (
+  buckets: { value: string; label?: string; count: number }[],
+  selected: string[],
+  getLabel: (value: string) => string,
+): { value: string; label?: string; count: number }[] => {
+  const present = new Set(buckets.map((bucket) => bucket.value));
+  const missing = selected
+    .filter((value) => !present.has(value))
+    .map((value) => ({ value, label: getLabel(value), count: 0 }));
+  return [...buckets, ...missing];
+};
+
+type TimeFilter =
+  | { mode: "preset"; preset: TimePreset; updatedFrom: string }
+  | { mode: "custom"; updatedFrom?: string; updatedTo?: string };
+
 const initialSearchFilters = (
   initialWorkspaceId: string | undefined,
 ): SearchFilters => ({
-  ...(initialWorkspaceId !== undefined && {
-    workspaceId: initialWorkspaceId,
-  }),
+  workspaceIds: initialWorkspaceId ? [initialWorkspaceId] : [],
 });
 
 type SearchFilters = {
-  workspaceId?: string;
+  workspaceIds: string[];
   types?: GlobalSearchResultType[];
-  editedByUserId?: string;
+  editedByUserIds?: string[];
   mimeTypes?: string[];
-  updatedWithin?: GlobalSearchUpdatedWithin;
+  time?: TimeFilter;
 };
+
+const filterUpdatedFrom = (filters: SearchFilters): string | undefined =>
+  filters.time?.updatedFrom;
+
+const filterUpdatedTo = (filters: SearchFilters): string | undefined =>
+  filters.time?.mode === "custom" ? filters.time.updatedTo : undefined;
 
 type SearchSummaryState =
   | { status: "idle" }
@@ -165,11 +206,6 @@ type SearchSummaryState =
       }[];
     }
   | { status: "error"; message?: string };
-
-type OptimizedSearchQuery = {
-  originalQuery: string;
-  query: string;
-};
 
 type SearchDialogProps = {
   open: boolean;
@@ -216,15 +252,15 @@ export const SearchDialog = ({
   const [summaryState, setSummaryState] = useState<SearchSummaryState>({
     status: "idle",
   });
-  const [optimizedSearchQuery, setOptimizedSearchQuery] =
-    useState<OptimizedSearchQuery | null>(null);
 
   const debouncedSetQuery = useDebouncedCallback((value: string) => {
     setDebouncedQuery(value);
     setSelectedIndex(-1);
   }, DEBOUNCE_MS);
 
-  const searchQuery = optimizedSearchQuery?.query ?? debouncedQuery;
+  const searchQuery = debouncedQuery;
+  const updatedFrom = filterUpdatedFrom(filters);
+  const updatedTo = filterUpdatedTo(filters);
 
   const {
     data,
@@ -236,17 +272,16 @@ export const SearchDialog = ({
   } = useInfiniteQuery(
     searchInfiniteOptions({
       query: searchQuery,
-      ...(filters.workspaceId !== undefined && {
-        workspaceId: filters.workspaceId,
+      ...(filters.workspaceIds.length > 0 && {
+        workspaceIds: filters.workspaceIds,
       }),
       ...(filters.types !== undefined && { types: filters.types }),
-      ...(filters.editedByUserId !== undefined && {
-        editedByUserId: filters.editedByUserId,
+      ...(filters.editedByUserIds !== undefined && {
+        editedByUserIds: filters.editedByUserIds,
       }),
       ...(filters.mimeTypes !== undefined && { mimeTypes: filters.mimeTypes }),
-      ...(filters.updatedWithin !== undefined && {
-        updatedWithin: filters.updatedWithin,
-      }),
+      ...(updatedFrom !== undefined && { updatedFrom }),
+      ...(updatedTo !== undefined && { updatedTo }),
     }),
   );
 
@@ -254,11 +289,24 @@ export const SearchDialog = ({
     () => data?.pages.flatMap((page) => page.hits) ?? [],
     [data?.pages],
   );
-  const latestPage = data?.pages.at(-1);
-  const facets = latestPage?.facets;
-  const totalCount = latestPage?.totalCount ?? 0;
+  // Counts and facets are computed only on the first page (see backend);
+  // ignore them entirely while the query is empty so a cleared input
+  // doesn't leave stale numbers in the sidebar.
+  const firstPage = searchQuery.length > 0 ? data?.pages.at(0) : undefined;
+  const facets = firstPage?.facets;
+  const totalCount = firstPage?.totalCount ?? 0;
   const filterTypesKey = filters.types?.join("|") ?? "";
   const filterMimeTypesKey = filters.mimeTypes?.join("|") ?? "";
+  const filterWorkspaceIdsKey = filters.workspaceIds.join("|");
+
+  const hitVirtualizer = useVirtualizer({
+    count: allHits.length,
+    estimateSize: () => VIRTUAL_HIT_ESTIMATE_PX,
+    getItemKey: (index) => allHits.at(index)?.id ?? index,
+    getScrollElement: () => resultsRef.current,
+    overscan: VIRTUAL_HIT_OVERSCAN,
+  });
+  const virtualHits = hitVirtualizer.getVirtualItems();
 
   useEffect(() => {
     if (!open) {
@@ -269,28 +317,25 @@ export const SearchDialog = ({
   }, [open, searchRecentsScope]);
 
   useEffect(() => {
-    setFilters((prev): SearchFilters => {
-      const { workspaceId: _, ...rest } = prev;
-      if (initialWorkspaceId === undefined) {
-        return rest;
-      }
-      return { ...rest, workspaceId: initialWorkspaceId };
-    });
+    setFilters((prev) => ({
+      ...prev,
+      workspaceIds: initialWorkspaceId ? [initialWorkspaceId] : [],
+    }));
     setSelectedIndex(-1);
   }, [initialWorkspaceId]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    const el = resultsRef.current?.querySelector("[data-selected]");
-    el?.scrollIntoView({ block: "nearest" });
-  }, [selectedIndex]);
+    if (selectedIndex < 0) {
+      return;
+    }
+    hitVirtualizer.scrollToIndex(selectedIndex, { align: "auto" });
+  }, [hitVirtualizer, selectedIndex]);
 
   const handleQueryChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
       setQuery(value);
       debouncedSetQuery(value);
-      setOptimizedSearchQuery(null);
       setSummaryState({ status: "idle" });
     },
     [debouncedSetQuery],
@@ -300,7 +345,6 @@ export const SearchDialog = ({
     debouncedSetQuery.cancel();
     setQuery("");
     setDebouncedQuery("");
-    setOptimizedSearchQuery(null);
     setSelectedIndex(-1);
     setSummaryState({ status: "idle" });
   }, [debouncedSetQuery]);
@@ -308,6 +352,54 @@ export const SearchDialog = ({
   const closeSearchDialog = useCallback(() => {
     onOpenChange(false);
   }, [onOpenChange]);
+
+  const buildAIParams = useCallback(
+    () => ({
+      ...(filters.workspaceIds.length > 0 && {
+        workspaceIds: filters.workspaceIds,
+      }),
+      ...(filters.types !== undefined && { types: filters.types }),
+      ...(filters.editedByUserIds !== undefined && {
+        editedByUserIds: filters.editedByUserIds,
+      }),
+      ...(filters.mimeTypes !== undefined && { mimeTypes: filters.mimeTypes }),
+      ...(updatedFrom !== undefined && { updatedFrom }),
+      ...(updatedTo !== undefined && { updatedTo }),
+    }),
+    [
+      filters.editedByUserIds,
+      filters.mimeTypes,
+      filters.types,
+      filters.workspaceIds,
+      updatedFrom,
+      updatedTo,
+    ],
+  );
+
+  const facetSearchParams = useMemo(
+    () => ({
+      query: searchQuery,
+      ...(filters.workspaceIds.length > 0 && {
+        workspaceIds: filters.workspaceIds,
+      }),
+      ...(filters.types !== undefined && { types: filters.types }),
+      ...(filters.editedByUserIds !== undefined && {
+        editedByUserIds: filters.editedByUserIds,
+      }),
+      ...(filters.mimeTypes !== undefined && { mimeTypes: filters.mimeTypes }),
+      ...(updatedFrom !== undefined && { updatedFrom }),
+      ...(updatedTo !== undefined && { updatedTo }),
+    }),
+    [
+      filters.editedByUserIds,
+      filters.mimeTypes,
+      filters.types,
+      filters.workspaceIds,
+      searchQuery,
+      updatedFrom,
+      updatedTo,
+    ],
+  );
 
   const handleRefineQuery = useCallback(async () => {
     const trimmedQuery = query.trim();
@@ -321,11 +413,9 @@ export const SearchDialog = ({
         query: trimmedQuery,
         locale,
       });
-      setDebouncedQuery(trimmedQuery);
-      setOptimizedSearchQuery({
-        originalQuery: trimmedQuery,
-        query: refined.query,
-      });
+      debouncedSetQuery.cancel();
+      setQuery(refined.query);
+      setDebouncedQuery(refined.query);
       setSelectedIndex(-1);
       setSummaryState({ status: "idle" });
       setRecentSearches(recordRecentSearch(trimmedQuery, searchRecentsScope));
@@ -334,7 +424,7 @@ export const SearchDialog = ({
     } finally {
       setIsRefiningQuery(false);
     }
-  }, [isRefiningQuery, locale, query, searchRecentsScope]);
+  }, [debouncedSetQuery, isRefiningQuery, locale, query, searchRecentsScope]);
 
   const handleSummarizeResults = useCallback(async () => {
     const trimmedQuery = searchQuery.trim();
@@ -347,22 +437,7 @@ export const SearchDialog = ({
       const summary = await summarizeSearchResults({
         query: trimmedQuery,
         locale,
-        ...(optimizedSearchQuery?.originalQuery !== undefined && {
-          originalQuery: optimizedSearchQuery.originalQuery,
-        }),
-        ...(filters.workspaceId !== undefined && {
-          workspaceId: filters.workspaceId,
-        }),
-        ...(filters.types !== undefined && { types: filters.types }),
-        ...(filters.editedByUserId !== undefined && {
-          editedByUserId: filters.editedByUserId,
-        }),
-        ...(filters.mimeTypes !== undefined && {
-          mimeTypes: filters.mimeTypes,
-        }),
-        ...(filters.updatedWithin !== undefined && {
-          updatedWithin: filters.updatedWithin,
-        }),
+        ...buildAIParams(),
         limit: 5,
       });
       setSummaryState({
@@ -374,17 +449,7 @@ export const SearchDialog = ({
     } catch {
       setSummaryState({ status: "error" });
     }
-  }, [
-    filters.types,
-    filters.editedByUserId,
-    filters.mimeTypes,
-    filters.updatedWithin,
-    filters.workspaceId,
-    locale,
-    optimizedSearchQuery?.originalQuery,
-    searchQuery,
-    summaryState.status,
-  ]);
+  }, [buildAIParams, locale, searchQuery, summaryState.status]);
 
   const handleOpenSummaryChat = useCallback(async () => {
     const trimmedQuery = searchQuery.trim();
@@ -400,22 +465,7 @@ export const SearchDialog = ({
         title: summaryState.title,
         summary: summaryState.summary,
         citations: summaryState.citations,
-        ...(optimizedSearchQuery?.originalQuery !== undefined && {
-          originalQuery: optimizedSearchQuery.originalQuery,
-        }),
-        ...(filters.workspaceId !== undefined && {
-          workspaceId: filters.workspaceId,
-        }),
-        ...(filters.types !== undefined && { types: filters.types }),
-        ...(filters.editedByUserId !== undefined && {
-          editedByUserId: filters.editedByUserId,
-        }),
-        ...(filters.mimeTypes !== undefined && {
-          mimeTypes: filters.mimeTypes,
-        }),
-        ...(filters.updatedWithin !== undefined && {
-          updatedWithin: filters.updatedWithin,
-        }),
+        ...buildAIParams(),
         limit: 5,
       });
       closeSearchDialog();
@@ -429,15 +479,10 @@ export const SearchDialog = ({
       setIsOpeningSummaryChat(false);
     }
   }, [
-    filters.editedByUserId,
-    filters.mimeTypes,
-    filters.types,
-    filters.updatedWithin,
-    filters.workspaceId,
+    buildAIParams,
     locale,
     navigate,
     closeSearchDialog,
-    optimizedSearchQuery?.originalQuery,
     searchQuery,
     summaryState,
   ]);
@@ -446,23 +491,12 @@ export const SearchDialog = ({
     (recent: RecentSearch) => {
       setQuery(recent.query);
       setDebouncedQuery(recent.query);
-      setOptimizedSearchQuery(null);
       setSelectedIndex(-1);
       setSummaryState({ status: "idle" });
       setRecentSearches(recordRecentSearch(recent.query, searchRecentsScope));
     },
     [searchRecentsScope],
   );
-
-  const showOptimizedSearchQuery = useCallback(() => {
-    if (!optimizedSearchQuery) {
-      return;
-    }
-    setQuery(optimizedSearchQuery.query);
-    setDebouncedQuery(optimizedSearchQuery.query);
-    setOptimizedSearchQuery(null);
-    setSelectedIndex(-1);
-  }, [optimizedSearchQuery]);
 
   const openRecentFile = useCallback(
     async (file: RecentFile) => {
@@ -491,41 +525,78 @@ export const SearchDialog = ({
     setSelectedIndex(-1);
   }, []);
 
-  const setWorkspaceFilter = useCallback((workspaceId: string | undefined) => {
-    setFilters((prev): SearchFilters => {
-      const { workspaceId: _, ...rest } = prev;
-      if (!workspaceId) {
-        return rest;
-      }
-      return { ...rest, workspaceId };
+  const toggleWorkspaceFilter = useCallback((workspaceId: string) => {
+    setFilters((prev) => {
+      const next = prev.workspaceIds.includes(workspaceId)
+        ? prev.workspaceIds.filter((id) => id !== workspaceId)
+        : [...prev.workspaceIds, workspaceId];
+      return { ...prev, workspaceIds: next };
     });
     setSelectedIndex(-1);
   }, []);
 
-  const setEditorFilter = useCallback((editedByUserId: string | undefined) => {
-    setFilters((prev): SearchFilters => {
-      const { editedByUserId: _, ...rest } = prev;
-      if (!editedByUserId) {
-        return rest;
-      }
-      return { ...rest, editedByUserId };
+  const toggleEditorFilter = useCallback((editorId: string) => {
+    setFilters((prev) => {
+      const current = prev.editedByUserIds ?? [];
+      const next = current.includes(editorId)
+        ? current.filter((id) => id !== editorId)
+        : [...current, editorId];
+      const { editedByUserIds: _, ...rest } = prev;
+      return {
+        ...rest,
+        ...(next.length > 0 && { editedByUserIds: next }),
+      };
     });
     setSelectedIndex(-1);
   }, []);
 
-  const setUpdatedWithinFilter = useCallback(
-    (updatedWithin: GlobalSearchUpdatedWithin | undefined) => {
+  const setTimePreset = useCallback((preset: TimePreset | undefined) => {
+    setFilters((prev): SearchFilters => {
+      const { time: _, ...rest } = prev;
+      if (!preset) {
+        return rest;
+      }
+      return {
+        ...rest,
+        time: {
+          mode: "preset",
+          preset,
+          updatedFrom: presetUpdatedFrom(preset),
+        },
+      };
+    });
+    setSelectedIndex(-1);
+  }, []);
+
+  const setCustomDateRange = useCallback(
+    (range: { updatedFrom?: string; updatedTo?: string }) => {
       setFilters((prev): SearchFilters => {
-        const { updatedWithin: _, ...rest } = prev;
-        if (!updatedWithin) {
-          return rest;
-        }
-        return { ...rest, updatedWithin };
+        const { time: _, ...rest } = prev;
+        return {
+          ...rest,
+          time: {
+            mode: "custom",
+            ...(range.updatedFrom !== undefined && {
+              updatedFrom: range.updatedFrom,
+            }),
+            ...(range.updatedTo !== undefined && {
+              updatedTo: range.updatedTo,
+            }),
+          },
+        };
       });
       setSelectedIndex(-1);
     },
     [],
   );
+
+  const clearTimeFilter = useCallback(() => {
+    setFilters((prev): SearchFilters => {
+      const { time: _, ...rest } = prev;
+      return rest;
+    });
+    setSelectedIndex(-1);
+  }, []);
 
   const toggleMimeTypeFilter = useCallback((mimeType: string) => {
     setFilters((prev) => {
@@ -538,30 +609,6 @@ export const SearchDialog = ({
         ...rest,
         ...(next.length > 0 && { mimeTypes: next }),
       };
-    });
-    setSelectedIndex(-1);
-  }, []);
-
-  const removeTypeFilter = useCallback((type: GlobalSearchResultType) => {
-    setFilters((prev): SearchFilters => {
-      const next = (prev.types ?? []).filter((item) => item !== type);
-      const { types: _, ...rest } = prev;
-      if (next.length === 0) {
-        return rest;
-      }
-      return { ...rest, types: next };
-    });
-    setSelectedIndex(-1);
-  }, []);
-
-  const removeMimeTypeFilter = useCallback((mimeType: string) => {
-    setFilters((prev): SearchFilters => {
-      const next = (prev.mimeTypes ?? []).filter((item) => item !== mimeType);
-      const { mimeTypes: _, ...rest } = prev;
-      if (next.length === 0) {
-        return rest;
-      }
-      return { ...rest, mimeTypes: next };
     });
     setSelectedIndex(-1);
   }, []);
@@ -632,7 +679,7 @@ export const SearchDialog = ({
         setSelectedIndex((prev) => Math.min(prev + 1, allHits.length - 1));
       } else if (
         e.key === "Escape" &&
-        (query.trim() || debouncedQuery.trim() || optimizedSearchQuery)
+        (query.trim() || debouncedQuery.trim())
       ) {
         e.preventDefault();
         e.stopPropagation();
@@ -652,7 +699,6 @@ export const SearchDialog = ({
       allHits,
       clearSearchQuery,
       debouncedQuery,
-      optimizedSearchQuery,
       query,
       selectedIndex,
       handleResultClick,
@@ -668,23 +714,17 @@ export const SearchDialog = ({
 
   const hasResults = allHits.length > 0;
   const hasQuery = searchQuery.length > 0;
-  const hasTypedQuery =
-    query.trim().length > 0 || optimizedSearchQuery !== null;
-  const activeFilterCount =
-    (filters.types?.length ?? 0) +
-    (filters.mimeTypes?.length ?? 0) +
-    (filters.workspaceId ? 1 : 0) +
-    (filters.editedByUserId ? 1 : 0) +
-    (filters.updatedWithin ? 1 : 0);
+  const hasTypedQuery = query.trim().length > 0;
+  const filterEditorIdsKey = filters.editedByUserIds?.join("|") ?? "";
 
   useEffect(() => {
     setSummaryState({ status: "idle" });
   }, [
+    filterEditorIdsKey,
     filterMimeTypesKey,
     filterTypesKey,
-    filters.editedByUserId,
-    filters.updatedWithin,
-    filters.workspaceId,
+    filterWorkspaceIdsKey,
+    filters.time,
     searchQuery,
   ]);
 
@@ -753,97 +793,43 @@ export const SearchDialog = ({
           </kbd>
         </div>
 
-        {/* Active filter chips */}
-        {(activeFilterCount > 0 || optimizedSearchQuery) && (
-          <div className="flex shrink-0 flex-wrap gap-1.5 border-b px-4 py-2">
-            {optimizedSearchQuery && (
-              <Button
-                className="h-auto max-w-full min-w-0 gap-1.5 px-2 py-1 text-xs"
-                onClick={showOptimizedSearchQuery}
-                size="sm"
-                variant="secondary"
-              >
-                <SparklesIcon className="size-3 shrink-0" />
-                <span className="text-muted-foreground shrink-0">
-                  {t("search.aiQueryLabel")}
-                </span>
-                <span className="truncate font-medium">
-                  {optimizedSearchQuery.query}
-                </span>
-              </Button>
-            )}
-            {filters.workspaceId && (
-              <FilterChip
-                label={
-                  facets?.workspace.find((w) => w.value === filters.workspaceId)
-                    ?.label ?? filters.workspaceId
-                }
-                onRemove={() => setWorkspaceFilter(undefined)}
-                type={t("common.matter")}
-              />
-            )}
-            {filters.types?.map((type) => (
-              <FilterChip
-                key={type}
-                label={t(KIND_TRANSLATION_KEYS[type])}
-                onRemove={() => removeTypeFilter(type)}
-                type={t("common.kind")}
-              />
-            ))}
-            {filters.mimeTypes?.map((mimeType) => (
-              <FilterChip
-                key={mimeType}
-                label={formatMimeTypeLabel(mimeType)}
-                onRemove={() => removeMimeTypeFilter(mimeType)}
-                type={t("search.mimeType")}
-              />
-            ))}
-            {filters.editedByUserId && (
-              <FilterChip
-                label={
-                  facets?.editor.find(
-                    (editor) => editor.value === filters.editedByUserId,
-                  )?.label ?? filters.editedByUserId
-                }
-                onRemove={() => setEditorFilter(undefined)}
-                type={t("search.editedBy")}
-              />
-            )}
-            {filters.updatedWithin && (
-              <FilterChip
-                label={t(
-                  UPDATED_WITHIN_TRANSLATION_KEYS[filters.updatedWithin],
-                )}
-                onRemove={() => setUpdatedWithinFilter(undefined)}
-                type={t("search.updatedWithin")}
-              />
-            )}
-          </div>
-        )}
-
         {/* Content area */}
         <div className="flex min-h-0 flex-1">
-          {/* Facets sidebar */}
-          {hasTypedQuery && hasQuery && facets && (
-            <div className="hidden w-56 shrink-0 overflow-y-auto border-e px-3 py-3 sm:block">
-              <TimeFacetGroup
-                onChange={(value) =>
-                  setUpdatedWithinFilter(
-                    filters.updatedWithin === value ? undefined : value,
-                  )
-                }
-                selected={filters.updatedWithin}
-              />
+          {/* Facets sidebar — always present so the layout stays stable. */}
+          <div className="hidden w-56 shrink-0 overflow-y-auto border-e px-3 py-3 sm:block">
+            <TimeFacetGroup
+              locale={locale}
+              onClearCustom={clearTimeFilter}
+              onPresetChange={(preset) =>
+                setTimePreset(
+                  filters.time?.mode === "preset" &&
+                    filters.time.preset === preset
+                    ? undefined
+                    : preset,
+                )
+              }
+              onCustomChange={setCustomDateRange}
+              time={filters.time}
+            />
 
-              {facets.type.length > 0 && (
+            {hasQuery &&
+              (facets?.type.length ?? 0) + (filters.types?.length ?? 0) > 0 && (
                 <div className="mt-4">
                   <FacetGroup
-                    buckets={facets.type.map((bucket) => ({
-                      ...bucket,
-                      label: isGlobalSearchResultType(bucket.value)
-                        ? t(KIND_TRANSLATION_KEYS[bucket.value])
-                        : bucket.value,
-                    }))}
+                    buckets={mergeSelectedBuckets(
+                      (facets?.type ?? []).map((bucket) => ({
+                        value: bucket.value,
+                        count: bucket.count,
+                        label: isGlobalSearchResultType(bucket.value)
+                          ? t(KIND_TRANSLATION_KEYS[bucket.value])
+                          : bucket.value,
+                      })),
+                      filters.types ?? [],
+                      (value) =>
+                        isGlobalSearchResultType(value)
+                          ? t(KIND_TRANSLATION_KEYS[value])
+                          : value,
+                    )}
                     onChange={(value) => {
                       if (isGlobalSearchResultType(value)) {
                         toggleTypeFilter(value);
@@ -855,74 +841,46 @@ export const SearchDialog = ({
                 </div>
               )}
 
-              {facets.mimeType.length > 0 && (
-                <div className="mt-4">
-                  <FacetGroup
-                    buckets={facets.mimeType.map((bucket) => ({
-                      ...bucket,
-                      label: formatMimeTypeLabel(bucket.value),
-                    }))}
-                    onChange={toggleMimeTypeFilter}
-                    selected={filters.mimeTypes ?? []}
-                    title={t("search.mimeType")}
-                  />
-                </div>
-              )}
+            {hasQuery && (
+              <div className="mt-4">
+                <SearchableFacetGroup
+                  defaultBuckets={facets?.mimeType ?? []}
+                  facet="mimeType"
+                  formatLabel={(bucket) => formatMimeTypeLabel(bucket.value)}
+                  onChange={toggleMimeTypeFilter}
+                  searchParams={facetSearchParams}
+                  selected={filters.mimeTypes ?? []}
+                  title={t("search.mimeType")}
+                />
+              </div>
+            )}
 
-              {facets.editor.length > 0 && (
-                <div className="mt-4">
-                  <FacetGroup
-                    buckets={facets.editor}
-                    onChange={(value) =>
-                      setEditorFilter(
-                        filters.editedByUserId === value ? undefined : value,
-                      )
-                    }
-                    selected={
-                      filters.editedByUserId ? [filters.editedByUserId] : []
-                    }
-                    title={t("search.editedBy")}
-                  />
-                </div>
-              )}
+            {hasQuery && (
+              <div className="mt-4">
+                <SearchableFacetGroup
+                  defaultBuckets={facets?.editor ?? []}
+                  facet="editor"
+                  onChange={toggleEditorFilter}
+                  searchParams={facetSearchParams}
+                  selected={filters.editedByUserIds ?? []}
+                  title={t("search.editedBy")}
+                />
+              </div>
+            )}
 
-              {facets.workspace.length > 0 && (
-                <div className="mt-4">
-                  <p className="text-muted-foreground mb-2 text-xs font-medium">
-                    {t("common.matter")}
-                  </p>
-                  <div className="space-y-0.5">
-                    {facets.workspace.map((bucket) => (
-                      <Button
-                        className={cn(
-                          "h-auto w-full justify-between px-2 py-1 text-xs",
-                          filters.workspaceId === bucket.value &&
-                            "bg-muted font-medium",
-                        )}
-                        key={bucket.value}
-                        onClick={() =>
-                          setWorkspaceFilter(
-                            filters.workspaceId === bucket.value
-                              ? undefined
-                              : bucket.value,
-                          )
-                        }
-                        size="sm"
-                        variant="ghost"
-                      >
-                        <span className="truncate">
-                          {bucket.label ?? bucket.value}
-                        </span>
-                        <span className="text-muted-foreground ms-2">
-                          {bucket.count}
-                        </span>
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+            {hasQuery && (
+              <div className="mt-4">
+                <SearchableFacetGroup
+                  defaultBuckets={facets?.workspace ?? []}
+                  facet="workspace"
+                  onChange={toggleWorkspaceFilter}
+                  searchParams={facetSearchParams}
+                  selected={filters.workspaceIds}
+                  title={t("common.matter")}
+                />
+              </div>
+            )}
+          </div>
 
           {/* Results */}
           <div className="min-w-0 flex-1 overflow-y-auto" ref={resultsRef}>
@@ -951,7 +909,7 @@ export const SearchDialog = ({
               <div className="flex h-full items-center justify-center px-4 py-8">
                 <p className="text-muted-foreground text-sm">
                   {t("search.noResults", {
-                    query: optimizedSearchQuery?.originalQuery ?? searchQuery,
+                    query: searchQuery,
                   })}
                 </p>
               </div>
@@ -976,16 +934,36 @@ export const SearchDialog = ({
                   onOpenChat={handleOpenSummaryChat}
                   state={summaryState}
                 />
-                {allHits.map((hit, index) => (
-                  <SearchResultItem
-                    hit={hit}
-                    isSelected={index === selectedIndex}
-                    key={hit.id}
-                    // eslint-disable-next-line typescript/no-misused-promises
-                    onClick={handleResultClick}
-                    resultNumber={index + 1}
-                  />
-                ))}
+                <div
+                  className="relative"
+                  style={{ height: `${hitVirtualizer.getTotalSize()}px` }}
+                >
+                  {virtualHits.map((virtualHit) => {
+                    const hit = allHits.at(virtualHit.index);
+                    if (!hit) {
+                      return null;
+                    }
+                    return (
+                      <div
+                        className="absolute inset-x-0 top-0"
+                        data-index={virtualHit.index}
+                        key={hit.id}
+                        ref={hitVirtualizer.measureElement}
+                        style={{
+                          transform: `translateY(${virtualHit.start}px)`,
+                        }}
+                      >
+                        <SearchResultItem
+                          hit={hit}
+                          isSelected={virtualHit.index === selectedIndex}
+                          // eslint-disable-next-line typescript/no-misused-promises
+                          onClick={handleResultClick}
+                          resultNumber={virtualHit.index + 1}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
                 {hasNextPage && (
                   <div
                     className="flex h-10 items-center justify-center px-2 pt-2"
@@ -1251,33 +1229,6 @@ const SearchRecents = ({
   );
 };
 
-type FilterChipProps = {
-  type: string;
-  label: string;
-  onRemove: () => void;
-};
-
-const FilterChip = ({ type, label, onRemove }: FilterChipProps) => {
-  const t = useTranslations();
-  return (
-    <span className="bg-muted/50 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">
-      <span className="text-muted-foreground">
-        {t("search.filterLabel", { type })}
-      </span>
-      <span className="font-medium">{label}</span>
-      <Button
-        aria-label={`Remove ${type}: ${label}`}
-        className="ms-0.5 size-4 rounded-full"
-        onClick={onRemove}
-        size="icon-xs"
-        variant="ghost"
-      >
-        <XIcon className="size-3" />
-      </Button>
-    </span>
-  );
-};
-
 type FacetGroupProps = {
   title: string;
   buckets: {
@@ -1290,12 +1241,62 @@ type FacetGroupProps = {
 };
 
 type TimeFacetGroupProps = {
-  selected: GlobalSearchUpdatedWithin | undefined;
-  onChange: (value: GlobalSearchUpdatedWithin) => void;
+  time: TimeFilter | undefined;
+  locale: string;
+  onPresetChange: (preset: TimePreset) => void;
+  onCustomChange: (range: { updatedFrom?: string; updatedTo?: string }) => void;
+  onClearCustom: () => void;
 };
 
-const TimeFacetGroup = ({ selected, onChange }: TimeFacetGroupProps) => {
+const TimeFacetGroup = ({
+  time,
+  locale,
+  onPresetChange,
+  onCustomChange,
+  onClearCustom,
+}: TimeFacetGroupProps) => {
   const t = useTranslations();
+  const isCustom = time?.mode === "custom";
+  const customFromValue =
+    time?.mode === "custom" && time.updatedFrom
+      ? isoToDateInputValue(time.updatedFrom)
+      : null;
+  const customToValue =
+    time?.mode === "custom" && time.updatedTo
+      ? isoToDateInputValue(time.updatedTo)
+      : null;
+
+  const handleFromChange = (value: string | null) => {
+    if (!value) {
+      if (!customToValue) {
+        onClearCustom();
+        return;
+      }
+      onCustomChange({ updatedTo: dateInputToIsoEnd(customToValue) });
+      return;
+    }
+    onCustomChange({
+      updatedFrom: dateInputToIsoStart(value),
+      ...(customToValue && { updatedTo: dateInputToIsoEnd(customToValue) }),
+    });
+  };
+
+  const handleToChange = (value: string | null) => {
+    if (!value) {
+      if (!customFromValue) {
+        onClearCustom();
+        return;
+      }
+      onCustomChange({ updatedFrom: dateInputToIsoStart(customFromValue) });
+      return;
+    }
+    onCustomChange({
+      ...(customFromValue && {
+        updatedFrom: dateInputToIsoStart(customFromValue),
+      }),
+      updatedTo: dateInputToIsoEnd(value),
+    });
+  };
 
   return (
     <div>
@@ -1303,21 +1304,67 @@ const TimeFacetGroup = ({ selected, onChange }: TimeFacetGroupProps) => {
         {t("search.updatedWithin")}
       </p>
       <div className="space-y-0.5">
-        {UPDATED_WITHIN_OPTIONS.map((value) => (
-          <Button
-            className="h-auto w-full justify-start gap-2 px-2 py-1 text-xs"
-            key={value}
-            onClick={() => onChange(value)}
-            size="sm"
-            variant="ghost"
-          >
-            <Checkbox checked={selected === value} tabIndex={-1} />
-            <span className="flex-1 truncate text-start">
-              {t(UPDATED_WITHIN_TRANSLATION_KEYS[value])}
-            </span>
-          </Button>
-        ))}
+        {TIME_PRESETS.map((preset) => {
+          const isActive = time?.mode === "preset" && time.preset === preset;
+          return (
+            <Button
+              className="h-auto w-full justify-start gap-2 px-2 py-1 text-xs"
+              key={preset}
+              onClick={() => onPresetChange(preset)}
+              size="sm"
+              variant="ghost"
+            >
+              <Checkbox checked={isActive} tabIndex={-1} />
+              <span className="flex-1 truncate text-start">
+                {t(TIME_PRESET_TRANSLATION_KEYS[preset])}
+              </span>
+            </Button>
+          );
+        })}
+        <Button
+          className="h-auto w-full justify-start gap-2 px-2 py-1 text-xs"
+          onClick={() => {
+            if (isCustom) {
+              onClearCustom();
+            } else {
+              onCustomChange({});
+            }
+          }}
+          size="sm"
+          variant="ghost"
+        >
+          <Checkbox checked={isCustom} tabIndex={-1} />
+          <span className="flex-1 truncate text-start">
+            {t("search.timeFilterCustom")}
+          </span>
+        </Button>
       </div>
+      {isCustom && (
+        <div className="mt-2 space-y-1 px-2">
+          <div>
+            <p className="text-muted-foreground text-[0.625rem] font-medium tracking-wide uppercase">
+              {t("search.dateFrom")}
+            </p>
+            <DatePickerPopover
+              locale={locale}
+              onChange={handleFromChange}
+              value={customFromValue}
+              {...(customToValue !== null && { maxDate: customToValue })}
+            />
+          </div>
+          <div>
+            <p className="text-muted-foreground text-[0.625rem] font-medium tracking-wide uppercase">
+              {t("search.dateTo")}
+            </p>
+            <DatePickerPopover
+              locale={locale}
+              onChange={handleToChange}
+              value={customToValue}
+              {...(customFromValue !== null && { minDate: customFromValue })}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1330,25 +1377,154 @@ const FacetGroup = ({
 }: FacetGroupProps) => (
   <div>
     <p className="text-muted-foreground mb-2 text-xs font-medium">{title}</p>
-    <div className="space-y-0.5">
-      {buckets.map((bucket) => (
-        <Button
-          className="h-auto w-full justify-start gap-2 px-2 py-1 text-xs"
-          key={bucket.value}
-          onClick={() => onChange(bucket.value)}
-          size="sm"
-          variant="ghost"
-        >
-          <Checkbox checked={selected.includes(bucket.value)} tabIndex={-1} />
-          <span className="flex-1 truncate text-start">
-            {bucket.label ?? bucket.value}
-          </span>
-          <span className="text-muted-foreground">{bucket.count}</span>
-        </Button>
-      ))}
-    </div>
+    <FacetBucketList
+      buckets={buckets}
+      onChange={onChange}
+      selected={selected}
+    />
   </div>
 );
+
+type FacetBucket = { value: string; label?: string; count: number };
+
+type FacetBucketListProps = {
+  buckets: FacetBucket[];
+  selected: string[];
+  onChange: (value: string) => void;
+};
+
+const FacetBucketList = ({
+  buckets,
+  selected,
+  onChange,
+}: FacetBucketListProps) => (
+  <div className="space-y-0.5">
+    {buckets.map((bucket) => (
+      <Button
+        className="h-auto w-full justify-start gap-2 px-2 py-1 text-xs"
+        key={bucket.value}
+        onClick={() => onChange(bucket.value)}
+        size="sm"
+        variant="ghost"
+      >
+        <Checkbox checked={selected.includes(bucket.value)} tabIndex={-1} />
+        <span className="flex-1 truncate text-start">
+          {bucket.label ?? bucket.value}
+        </span>
+        <span className="text-muted-foreground tabular-nums">
+          {bucket.count}
+        </span>
+      </Button>
+    ))}
+  </div>
+);
+
+const FACET_SEARCH_DEBOUNCE_MS = 250;
+const FACET_SEARCH_LIMIT = 20;
+
+type SearchableFacetGroupProps = {
+  facet: SearchableFacet;
+  title: string;
+  defaultBuckets: FacetBucket[];
+  selected: string[];
+  onChange: (value: string) => void;
+  searchParams: {
+    query: string;
+    workspaceIds?: string[];
+    types?: GlobalSearchResultType[];
+    editedByUserIds?: string[];
+    mimeTypes?: string[];
+    updatedFrom?: string;
+    updatedTo?: string;
+  };
+  formatLabel?: (bucket: FacetBucket) => string;
+};
+
+const SearchableFacetGroup = ({
+  facet,
+  title,
+  defaultBuckets,
+  selected,
+  onChange,
+  searchParams,
+  formatLabel,
+}: SearchableFacetGroupProps) => {
+  const t = useTranslations();
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debouncedSetSearch = useDebouncedCallback(
+    setDebouncedSearch,
+    FACET_SEARCH_DEBOUNCE_MS,
+  );
+  const labelCacheRef = useRef<Record<string, string>>({});
+  const isSearching = debouncedSearch.trim().length > 0;
+
+  const { data: searchData } = useQuery({
+    ...searchFacetOptions({
+      facet,
+      search: debouncedSearch,
+      limit: FACET_SEARCH_LIMIT,
+      ...searchParams,
+    }),
+    enabled: isSearching && searchParams.query.length > 0,
+  });
+
+  const resolveLabel = (bucket: FacetBucket): string =>
+    formatLabel ? formatLabel(bucket) : (bucket.label ?? bucket.value);
+
+  // Refs are intentionally mutated during render — they don't trigger
+  // re-renders, and we want every label seen in the current render's
+  // buckets to be available when computing `buckets` below.
+  for (const bucket of defaultBuckets) {
+    labelCacheRef.current[bucket.value] = resolveLabel(bucket);
+  }
+  for (const bucket of searchData?.buckets ?? []) {
+    labelCacheRef.current[bucket.value] = resolveLabel(bucket);
+  }
+
+  const sourceBuckets =
+    isSearching && searchData ? searchData.buckets : defaultBuckets;
+
+  const visible: FacetBucket[] = sourceBuckets.map((bucket) => ({
+    value: bucket.value,
+    count: bucket.count,
+    label: resolveLabel(bucket),
+  }));
+  const present = new Set(visible.map((bucket) => bucket.value));
+  const missingSelected: FacetBucket[] = selected
+    .filter((id) => !present.has(id))
+    .map((id) => ({
+      value: id,
+      label: labelCacheRef.current[id] ?? id,
+      count: 0,
+    }));
+  const buckets: FacetBucket[] = [...visible, ...missingSelected];
+
+  if (buckets.length === 0 && !isSearching && searchData === undefined) {
+    return null;
+  }
+
+  return (
+    <div>
+      <p className="text-muted-foreground mb-2 text-xs font-medium">{title}</p>
+      <Input
+        className="mb-1.5 h-7 px-2 text-xs"
+        onChange={(e) => {
+          const value = e.target.value;
+          setSearch(value);
+          debouncedSetSearch(value);
+        }}
+        placeholder={t("common.search")}
+        value={search}
+      />
+      <FacetBucketList
+        buckets={buckets}
+        onChange={onChange}
+        selected={selected}
+      />
+    </div>
+  );
+};
 
 type SearchResultItemProps = {
   hit: GlobalSearchHit;
@@ -1450,5 +1626,13 @@ const SearchHitIcon = ({ hit }: { hit: GlobalSearchHit }) => {
   }
 
   const Icon = KIND_ICONS[hit.type] ?? FileTextIcon;
+
+  if (hit.type === "matter") {
+    const color = hit.color
+      ? `var(${hit.color})`
+      : `var(${getMatterSwatch(hit.workspaceId)})`;
+    return <Icon className="mt-0.5 size-4 shrink-0" style={{ color }} />;
+  }
+
   return <Icon className="text-muted-foreground mt-0.5 size-4 shrink-0" />;
 };

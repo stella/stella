@@ -1061,13 +1061,13 @@
     "whatToDo": "Co chcesz zrobić z tym tekstem?"
   },
   "search": {
-    "aiQueryLabel": "Wysłano jako:",
     "aiRefine": "Ulepsz zapytanie z AI",
     "continueInChat": "Kontynuuj na czacie",
+    "dateFrom": "Od",
+    "dateTo": "Do",
     "editedBy": "Edytowane przez",
     "emptyState": "Zacznij pisać, aby przeszukać wszystkie sprawy.",
     "escKey": "ESC",
-    "filterLabel": "{type}:",
     "kinds": {
       "caseLaw": "Orzecznictwo",
       "contact": "Kontakt",
@@ -1091,6 +1091,7 @@
     "summaryLoading": "Podsumowywanie wyników...",
     "summaryPrompt": "Używa najlepszych wyników i ich treści, aby przygotować krótką odpowiedź.",
     "summaryRetry": "Kliknij, aby spróbować ponownie.",
+    "timeFilterCustom": "Niestandardowy zakres",
     "updatedWithin": "Zaktualizowano",
     "updatedWithinOptions": {
       "day": "Dzisiaj",

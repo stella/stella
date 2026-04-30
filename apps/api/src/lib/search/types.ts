@@ -120,16 +120,6 @@ export const GLOBAL_SEARCH_RESULT_TYPES = [
 export type GlobalSearchResultType =
   (typeof GLOBAL_SEARCH_RESULT_TYPES)[number];
 
-export const GLOBAL_SEARCH_UPDATED_WITHIN = [
-  "day",
-  "week",
-  "month",
-  "year",
-] as const;
-
-export type GlobalSearchUpdatedWithin =
-  (typeof GLOBAL_SEARCH_UPDATED_WITHIN)[number];
-
 export const parseGlobalSearchResultType = (
   value: unknown,
 ): GlobalSearchResultType => {
@@ -163,6 +153,8 @@ export type MatterGlobalSearchHit = GlobalSearchHitBase & {
   type: "matter";
   workspaceId: string;
   workspaceName: string;
+  /** Stored workspace color token (e.g. "--option-blue"); null if unset. */
+  color: string | null;
 };
 
 export type ContactGlobalSearchHit = GlobalSearchHitBase & {
