@@ -740,14 +740,6 @@
     "uploadFailed": "Upload fehlgeschlagen"
   },
   "feedback": {
-    "describeIssue": "Was können wir besser machen?",
-    "describeIssuePlaceholder": "Fehler, Stolperstelle oder Feature-Idee; alles hilft…",
-    "description": "Ihr Feedback wird direkt an das Team gesendet.",
-    "sent": "Feedback gesendet, vielen Dank!",
-    "submit": "Feedback senden",
-    "suggestedFix": "Lösungsvorschlag (optional)",
-    "suggestedFixPlaceholder": "z. B. Senden-Schaltfläche deaktivieren, wenn das Formular leer ist",
-    "title": "Feedback",
     "trigger": "Feedback"
   },
   "fileDetail": {

@@ -740,14 +740,6 @@
     "uploadFailed": "Nahrávání selhalo"
   },
   "feedback": {
-    "describeIssue": "Co můžeme zlepšit?",
-    "describeIssuePlaceholder": "Chyba, nedostatek nebo nápad na funkci; cokoliv pomůže…",
-    "description": "Vaše zpětná vazba je odeslána přímo týmu.",
-    "sent": "Zpětná vazba odeslána, děkujeme!",
-    "submit": "Odeslat zpětnou vazbu",
-    "suggestedFix": "Navrhovaná oprava (nepovinné)",
-    "suggestedFixPlaceholder": "např. Tlačítko odeslat by mělo být neaktivní, když je formulář prázdný",
-    "title": "Zpětná vazba",
     "trigger": "Zpětná vazba"
   },
   "fileDetail": {

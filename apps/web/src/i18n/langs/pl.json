@@ -740,14 +740,6 @@
     "uploadFailed": "Przesyłanie nie powiodło się"
   },
   "feedback": {
-    "describeIssue": "Co możemy poprawić?",
-    "describeIssuePlaceholder": "Błąd, niedogodność lub pomysł na funkcję; wszystko się przyda…",
-    "description": "Twoja opinia trafia bezpośrednio do zespołu.",
-    "sent": "Opinia wysłana, dziękujemy!",
-    "submit": "Wyślij opinię",
-    "suggestedFix": "Sugerowana poprawka (opcjonalnie)",
-    "suggestedFixPlaceholder": "np. Wyłącz przycisk wysyłania, gdy formularz jest pusty",
-    "title": "Opinia",
     "trigger": "Opinia"
   },
   "fileDetail": {

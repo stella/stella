@@ -740,14 +740,6 @@
     "uploadFailed": "Feltöltés sikertelen"
   },
   "feedback": {
-    "describeIssue": "Min javíthatunk?",
-    "describeIssuePlaceholder": "Hiba, döccenő vagy ötlet; bármi segít…",
-    "description": "Visszajelzése közvetlenül a csapathoz érkezik.",
-    "sent": "Visszajelzés elküldve, köszönjük!",
-    "submit": "Visszajelzés küldése",
-    "suggestedFix": "Javasolt javítás (opcionális)",
-    "suggestedFixPlaceholder": "pl. A küldés gomb legyen inaktív, ha az űrlap üres",
-    "title": "Visszajelzés",
     "trigger": "Visszajelzés"
   },
   "fileDetail": {

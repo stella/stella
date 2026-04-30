@@ -740,14 +740,6 @@
     "uploadFailed": "Nahrávanie zlyhalo"
   },
   "feedback": {
-    "describeIssue": "Čo môžeme zlepšiť?",
-    "describeIssuePlaceholder": "Chyba, nedostatok alebo nápad na funkciu; čokoľvek pomôže…",
-    "description": "Vaša spätná väzba je odoslaná priamo tímu.",
-    "sent": "Spätná väzba odoslaná, ďakujeme!",
-    "submit": "Odoslať spätnú väzbu",
-    "suggestedFix": "Navrhovaná oprava (nepovinné)",
-    "suggestedFixPlaceholder": "napr. Tlačidlo odoslať by malo byť neaktívne, keď je formulár prázdny",
-    "title": "Spätná väzba",
     "trigger": "Spätná väzba"
   },
   "fileDetail": {
