@@ -181,7 +181,7 @@ function Toasts({ position }: { position: ToastPosition }) {
           return (
             <Toast.Root
               className={cn(
-                "bg-popover text-popover-foreground absolute z-[calc(9999-var(--toast-index))] h-(--toast-calc-height) w-full rounded-lg border shadow-lg/5 select-none [transition:transform_.5s_cubic-bezier(.22,1,.36,1),opacity_.5s,height_.15s] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+                "bg-popover text-popover-foreground absolute z-[calc(9999-var(--toast-index))] h-(--toast-calc-height) w-full rounded-lg border shadow-lg/5 [transition:transform_.5s_cubic-bezier(.22,1,.36,1),opacity_.5s,height_.15s] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
                 // Base positioning using data-position
                 "data-[position*=right]:start-auto data-[position*=right]:end-0",
                 "data-[position*=left]:start-0 data-[position*=left]:end-auto",
@@ -232,18 +232,18 @@ function Toasts({ position }: { position: ToastPosition }) {
               }
               toast={toastItem}
             >
-              <Toast.Content className="pointer-events-auto flex items-center justify-between gap-1.5 overflow-hidden px-3.5 py-3 text-sm transition-opacity duration-250 data-behind:opacity-0 data-behind:not-data-expanded:pointer-events-none data-expanded:opacity-100">
+              <Toast.Content className="pointer-events-auto flex items-center justify-between gap-1.5 overflow-hidden px-3.5 py-3 text-sm transition-opacity duration-250 select-text data-behind:opacity-0 data-behind:not-data-expanded:pointer-events-none data-expanded:opacity-100">
                 <div className="flex min-w-0 gap-2">
                   {Icon && (
                     <div
-                      className="[&_svg]:pointer-events-none [&_svg]:shrink-0 [&>svg]:h-lh [&>svg]:w-4"
+                      className="select-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&>svg]:h-lh [&>svg]:w-4"
                       data-slot="toast-icon"
                     >
                       <Icon className="in-data-[type=error]:text-destructive in-data-[type=info]:text-info in-data-[type=success]:text-success in-data-[type=warning]:text-warning in-data-[type=loading]:animate-spin in-data-[type=loading]:opacity-80" />
                     </div>
                   )}
 
-                  <div className="flex flex-col gap-0.5">
+                  <div className="flex flex-col gap-0.5 select-text">
                     <Toast.Title
                       className="font-medium"
                       data-slot="toast-title"
@@ -256,14 +256,17 @@ function Toasts({ position }: { position: ToastPosition }) {
                 </div>
                 {toastItem.actionProps && (
                   <Toast.Action
-                    className={buttonVariants({ size: "xs" })}
+                    className={cn(
+                      buttonVariants({ size: "xs" }),
+                      "select-none",
+                    )}
                     data-slot="toast-action"
                   >
                     {toastItem.actionProps.children}
                   </Toast.Action>
                 )}
                 <Toast.Close
-                  className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer rounded p-0.5 transition-colors"
+                  className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer rounded p-0.5 transition-colors select-none"
                   data-slot="toast-close"
                   aria-label="Close notification"
                 >
@@ -324,22 +327,22 @@ function AnchoredToasts() {
                 toast={toastItem}
               >
                 {tooltipStyle ? (
-                  <Toast.Content className="pointer-events-auto px-2 py-1">
+                  <Toast.Content className="pointer-events-auto px-2 py-1 select-text">
                     <Toast.Title data-slot="toast-title" />
                   </Toast.Content>
                 ) : (
-                  <Toast.Content className="pointer-events-auto flex items-center justify-between gap-1.5 overflow-hidden px-3.5 py-3 text-sm">
+                  <Toast.Content className="pointer-events-auto flex items-center justify-between gap-1.5 overflow-hidden px-3.5 py-3 text-sm select-text">
                     <div className="flex min-w-0 gap-2">
                       {Icon && (
                         <div
-                          className="[&_svg]:pointer-events-none [&_svg]:shrink-0 [&>svg]:h-lh [&>svg]:w-4"
+                          className="select-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&>svg]:h-lh [&>svg]:w-4"
                           data-slot="toast-icon"
                         >
                           <Icon className="in-data-[type=error]:text-destructive in-data-[type=info]:text-info in-data-[type=success]:text-success in-data-[type=warning]:text-warning in-data-[type=loading]:animate-spin in-data-[type=loading]:opacity-80" />
                         </div>
                       )}
 
-                      <div className="flex flex-col gap-0.5">
+                      <div className="flex flex-col gap-0.5 select-text">
                         <Toast.Title
                           className="font-medium"
                           data-slot="toast-title"
@@ -352,7 +355,10 @@ function AnchoredToasts() {
                     </div>
                     {toastItem.actionProps && (
                       <Toast.Action
-                        className={buttonVariants({ size: "xs" })}
+                        className={cn(
+                          buttonVariants({ size: "xs" }),
+                          "select-none",
+                        )}
                         data-slot="toast-action"
                       >
                         {toastItem.actionProps.children}
