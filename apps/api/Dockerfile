@@ -13,8 +13,15 @@ FROM base AS deps
 COPY --from=pruner /app/out/json/ .
 RUN bun install --frozen-lockfile --ignore-scripts
 
-# Copy source code and compile the API to a Bun binary
+# Copy source code and compile the API to a Bun binary.
+#
+# NODE_ENV must be set during `bun build` because Bun inlines
+# `process.env.NODE_ENV` at bundle time. Without this, every
+# `process.env.NODE_ENV !== "production"` check in the source
+# is baked as `true` in the compiled binary, and the resulting
+# image runs as if it were dev (e.g. OTP emails are skipped).
 FROM deps AS builder
+ENV NODE_ENV=production
 COPY --from=pruner /app/out/full/ .
 RUN bun build \
     --compile \

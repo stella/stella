@@ -115,6 +115,24 @@ function LoginOrSignup() {
         return;
       }
 
+      if (import.meta.env.DEV) {
+        const url = new URL("/dev-public/last-otp", env.VITE_API_URL);
+        url.searchParams.set("email", parsedValue.email);
+        const response = await fetch(url, { credentials: "include" });
+        if (response.ok) {
+          const parsed = v.safeParse(
+            v.object({ otp: v.string() }),
+            await response.json(),
+          );
+          if (parsed.success) {
+            toastManager.add({
+              title: `Dev OTP: ${parsed.output.otp}`,
+              type: "info",
+            });
+          }
+        }
+      }
+
       await navigate({
         to: "/auth/otp",
         search: { email: parsedValue.email, redirectTo },

@@ -14,7 +14,7 @@ import {
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
-import { devRoute } from "@/api/handlers/dev/routes";
+import { devPublicRoute, devRoute } from "@/api/handlers/dev/routes";
 import { desktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
 import { entitiesRoute } from "@/api/handlers/entities/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
@@ -279,6 +279,7 @@ const api = new Elysia()
   .use(healthRoute)
   .use(verifyRoute)
   .use(mcpRoute)
+  .use(devPublicRoute)
   .mount(getAuth().handler)
   .group("/v1", (app) =>
     app

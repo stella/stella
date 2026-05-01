@@ -1,5 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
-import Elysia from "elysia";
+import Elysia, { t } from "elysia";
 import { rmSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -13,6 +13,7 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { authMacro } from "@/api/lib/auth";
+import { popDevOtp } from "@/api/lib/dev-otp-store";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
@@ -130,3 +131,29 @@ export const devRoute = new Elysia({ prefix: "/dev" })
     rmSync(VITE_CACHE_DIR, { recursive: true, force: true });
     return { ok: true };
   });
+
+// Public dev-only routes (no auth — needed for the unauthenticated
+// email-OTP flow). Returns 404 outside dev so this never exists in
+// the production API surface.
+export const devPublicRoute = new Elysia({ prefix: "/dev-public" })
+  .guard({
+    beforeHandle: () => {
+      if (!env.isDev) {
+        return new Response("Not available", { status: 404 });
+      }
+      return undefined;
+    },
+  })
+  .get(
+    "/last-otp",
+    ({ query }) => {
+      const otp = popDevOtp(query.email);
+      if (!otp) {
+        return new Response("No OTP", { status: 404 });
+      }
+      return { otp };
+    },
+    {
+      query: t.Object({ email: t.String() }),
+    },
+  );

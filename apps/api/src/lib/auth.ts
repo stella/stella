@@ -28,6 +28,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUuid } from "@/api/lib/custom-schema";
 import { DEV_INSPECTOR_ORIGINS } from "@/api/lib/dev-origins";
+import { stashDevOtp } from "@/api/lib/dev-otp-store";
 import {
   sendNewDeviceLoginEmail,
   sendOrganizationInvitation,
@@ -234,6 +235,7 @@ const createAuth = () => {
           if (env.isDev) {
             // eslint-disable-next-line no-console
             console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
+            stashDevOtp(email, otp);
             return;
           }
 
