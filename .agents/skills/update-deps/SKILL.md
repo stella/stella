@@ -12,9 +12,9 @@ validate whether a release looks suspicious before bumping it.
 
 ## Scope
 
-Default to Bun packages and Docker base images. Expand to
-GitHub Actions when the request mentions them or the affected
-files live in `.github/`.
+Default to Bun packages, Rust crates, and Docker base images.
+Expand to GitHub Actions when the request mentions them or the
+affected files live in `.github/`.
 
 Stella already has automated controls:
 
@@ -53,12 +53,19 @@ If the request is vague, default to:
    - root `package.json` `catalog`, `catalogs`, and `resolutions`
    - workspace `package.json` files
    - `bun.lock`
+   - Rust workspace or crate manifests, usually `Cargo.toml`
+   - Rust lockfiles, usually `Cargo.lock`
+   - Rust toolchain pins, usually `rust-toolchain.toml`
    - `.github/dependabot.yml` for grouping expectations
    - `.github/workflows/*.yml` for GitHub Action pins
    - `apps/api/Dockerfile` for the base image digest
 
 2. **Inventory outdated candidates**:
    - run `bun outdated --recursive` for Bun packages
+   - run `cargo outdated` for Rust crates when available
+   - if `cargo outdated` is unavailable, use `cargo update
+     --dry-run` plus targeted `cargo search` or `cargo info`
+     checks for direct dependencies
    - inspect open dependency PRs if the request is about
      triage rather than local edits
    - include GitHub Actions only when the request covers them
@@ -85,6 +92,8 @@ If the request is vague, default to:
    - breaking changes
    - peer dependency, engine, runtime, and module-format
      changes
+   - for Rust crates, read crate docs, repository releases,
+     and RustSec advisories when relevant
 
    Prefer official docs, releases, and package metadata over
    blog posts or third-party summaries.
@@ -126,6 +135,8 @@ If the request is vague, default to:
    bun info <pkg>@<version> --json
    npm view <pkg>@<version>
    bun pm untrusted
+   cargo info <crate>@<version>
+   cargo audit
    ```
 
    Use tarball inspection when the metadata looks odd or the
@@ -134,6 +145,9 @@ If the request is vague, default to:
 8. **Apply the change at the real source of truth**:
    - prefer root `catalog`, `catalogs`, or `resolutions`
      updates over per-workspace drift
+   - prefer `Cargo.toml` updates for intentional direct Rust
+     dependency range changes, and `cargo update` for compatible
+     lockfile refreshes
    - update GitHub Actions by commit SHA, not floating tags
    - keep Docker images pinned by digest
    - after each batch passes validation, commit that batch
@@ -141,9 +155,14 @@ If the request is vague, default to:
 
 9. **Review the lockfile delta**:
    - use `bun update`, or edit manifests and run `bun install`
+   - use `cargo update`, or edit manifests and run `cargo
+     update -p <crate>` for targeted Rust updates
    - read the `bun.lock` diff for unexpected transitive
      additions, dependency replacement, or new script-bearing
      packages
+   - read the `Cargo.lock` diff for unexpected crate additions,
+     major-version jumps, duplicated crate versions, new native
+     build dependencies, or git/path source changes
    - if the new tree introduces untrusted packages with
      scripts, inspect them before trusting anything
 
@@ -153,6 +172,9 @@ If the request is vague, default to:
     - then run repo checks relevant to the touched surfaces
     - for Bun package updates, default to `bun run lint`,
       `bun run typecheck`, and the relevant tests
+    - for Rust updates, default to `cargo check`, then targeted
+      `cargo test` or `cargo clippy` when the changed crates
+      affect compiled paths or lint-sensitive code
     - verify generated artifacts or migrations explicitly when
       the upgraded dependency affects them
 

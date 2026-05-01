@@ -39,6 +39,42 @@ updates:
     reviewers:
       - "jan-kubica"
 
+  - package-ecosystem: "cargo"
+    directory: "/apps/desktop/src-tauri"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+      time: "09:00"
+      timezone: "Europe/Prague"
+    # Match minimumReleaseAge (5 days) in bunfig.toml
+    cooldown:
+      default-days: 5
+    open-pull-requests-limit: 10
+    groups:
+      tauri:
+        patterns:
+          - "tauri"
+          - "tauri-*"
+      async-runtime:
+        patterns:
+          - "tokio"
+          - "futures-*"
+      serialization:
+        patterns:
+          - "serde"
+          - "serde_*"
+      http:
+        patterns:
+          - "axum"
+          - "reqwest"
+          - "tower-*"
+    labels:
+      - "📦 dependencies"
+    commit-message:
+      prefix: "chore"
+    reviewers:
+      - "jan-kubica"
+
   - package-ecosystem: "bun"
     # given that we use monorepo setup, Dependabot should only point to the root
     directories:
