@@ -70,6 +70,14 @@ const SUSTAINED_FAILURE_THRESHOLD = 5;
 const SEARCH_INDEX_INTERVAL_MS = 10_000;
 const SEARCH_INDEX_BATCH_SIZE = 20;
 
+// Idle backoff: once an adapter is caught up (no new decisions
+// for IDLE_THRESHOLD consecutive cycles), poll once a day instead
+// of every CYCLE_DELAY_MS. Resets to fast cadence on the next
+// non-zero insert. Keeps us from hammering court servers in
+// steady state.
+const IDLE_THRESHOLD = 3;
+const IDLE_DELAY_MS = 24 * 60 * 60 * 1000;
+
 /**
  * Max adapters doing DB-heavy work (insert + search index +
  * citation extraction) simultaneously. The pipeline acquires
@@ -225,6 +233,11 @@ const scriptUserId = toSafeId<"user">("script_case_law");
 
 type CycleOutcome = "completed" | "failed" | "timeout";
 
+type CycleResult = {
+  outcome: CycleOutcome;
+  inserted: number;
+};
+
 /**
  * Run a single ingestion cycle for one adapter.
  * "timeout" means the cycle hit MAX_CYCLE_MS but progress
@@ -233,7 +246,7 @@ type CycleOutcome = "completed" | "failed" | "timeout";
 const runOneCycle = async (
   adapterKey: string,
   name: string,
-): Promise<CycleOutcome> => {
+): Promise<CycleResult> => {
   const initialCursor =
     adapterKey === ADAPTER_KEYS.CZ_REGIONAL ? daysAgoCursor(7) : null;
 
@@ -323,7 +336,7 @@ const runOneCycle = async (
     console.error(`[${adapterKey}] Failed: ${errorMessage}`);
   }
 
-  return outcome;
+  return { outcome, inserted: result?.inserted ?? 0 };
 };
 
 /**
@@ -334,17 +347,39 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
   let consecutiveFailures = 0;
   /** Separate counter for backoff; not reset by alert threshold. */
   let backoffFailures = 0;
+  /** Consecutive completed cycles with zero inserts; drives idle backoff. */
+  let idleCycles = 0;
 
   while (true) {
     try {
-      const status = await runOneCycle(adapterKey, name);
+      const { outcome, inserted } = await runOneCycle(adapterKey, name);
 
-      if (status === "failed") {
+      if (outcome === "failed") {
         consecutiveFailures++;
         backoffFailures++;
       } else {
         consecutiveFailures = 0;
         backoffFailures = 0;
+        // Only "completed" outcomes count toward idle. A "timeout"
+        // means the cycle hit MAX_CYCLE_MS mid-work; the adapter is
+        // slow, not caught up, so leave idleCycles unchanged.
+        if (outcome === "completed") {
+          if (inserted > 0) {
+            if (idleCycles >= IDLE_THRESHOLD) {
+              console.log(
+                `[${adapterKey}] New decisions found; resuming fast cadence`,
+              );
+            }
+            idleCycles = 0;
+          } else {
+            idleCycles++;
+            if (idleCycles === IDLE_THRESHOLD) {
+              console.log(
+                `[${adapterKey}] Caught up; switching to daily polling`,
+              );
+            }
+          }
+        }
       }
     } catch (error) {
       consecutiveFailures++;
@@ -370,13 +405,16 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
     }
 
     writeHeartbeat();
-    // Exponential backoff: 5s, 10s, 20s, 40s, capped at 60s.
-    // Uses a separate counter from alert threshold so the
-    // delay doesn't reset every 5 failures.
-    const delayMs =
-      backoffFailures > 0
-        ? Math.min(CYCLE_DELAY_MS * 2 ** backoffFailures, 60_000)
-        : CYCLE_DELAY_MS;
+    // Failure backoff wins when active (5s, 10s, 20s, 40s, cap 60s).
+    // Otherwise: idle delay if caught up, else fast cadence.
+    let delayMs: number;
+    if (backoffFailures > 0) {
+      delayMs = Math.min(CYCLE_DELAY_MS * 2 ** backoffFailures, 60_000);
+    } else if (idleCycles >= IDLE_THRESHOLD) {
+      delayMs = IDLE_DELAY_MS;
+    } else {
+      delayMs = CYCLE_DELAY_MS;
+    }
     await Bun.sleep(delayMs);
   }
 };
@@ -396,8 +434,8 @@ if (filterKey) {
     process.exit(1);
   }
   await refreshS3();
-  const status = await runOneCycle(match.adapterKey, match.name);
-  process.exit(status === "completed" ? 0 : 1);
+  const { outcome } = await runOneCycle(match.adapterKey, match.name);
+  process.exit(outcome === "completed" ? 0 : 1);
 }
 
 if (SOURCES.length === 0) {

@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { asc, eq, gt, notExists, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 import { caseLawDecisions, caseLawSearchDocuments } from "@/api/db/schema";
@@ -113,26 +113,59 @@ export const backfillSearchIndex = async (
   scopedDb: ScopedDb,
   batchSize: number,
 ): Promise<number> => {
-  // Find decisions that are either missing from the search table
-  // or were updated after the search doc was last indexed.
-  // ASC order so the backlog clears in insertion order; avoids
-  // a "poison pill" where a consistently-failing decision at
-  // the top of DESC blocks the rest of the queue.
-  const rows = await scopedDb((tx) =>
+  // Find decisions that need (re)indexing. ASC order so the backlog
+  // clears in insertion order, avoiding a "poison pill" where a
+  // consistently-failing decision at the top of DESC blocks the
+  // rest of the queue.
+  //
+  // Split into two queries because Postgres' planner can't use
+  // any index for `LEFT JOIN ... WHERE x IS NULL OR y > z` — the
+  // OR forces a sequential scan, which timed out hourly once most
+  // decisions were already indexed. Each branch below uses its
+  // own efficient plan:
+  //   - missing: NOT EXISTS scans created_at_idx and probes the
+  //     search_documents PK per row, stopping at LIMIT.
+  //   - stale: inner join bounded by LIMIT; the row-level
+  //     updated_at comparison is unindexed but only evaluated
+  //     against joined rows, not the full table.
+  //
+  // Reserve a quarter of the batch for stale so re-indexing of
+  // updated decisions can't be starved by a sustained backlog of
+  // missing-doc inserts.
+  const staleReserved = Math.max(1, Math.floor(batchSize / 4));
+  const missingLimit = Math.max(1, batchSize - staleReserved);
+
+  const missing = await scopedDb((tx) =>
     tx
       .select({ id: caseLawDecisions.id })
       .from(caseLawDecisions)
-      .leftJoin(
+      .where(
+        notExists(
+          tx
+            .select({ one: sql`1` })
+            .from(caseLawSearchDocuments)
+            .where(eq(caseLawSearchDocuments.decisionId, caseLawDecisions.id)),
+        ),
+      )
+      .orderBy(asc(caseLawDecisions.createdAt))
+      .limit(missingLimit),
+  );
+
+  const staleLimit = batchSize - missing.length;
+  const stale = await scopedDb((tx) =>
+    tx
+      .select({ id: caseLawDecisions.id })
+      .from(caseLawDecisions)
+      .innerJoin(
         caseLawSearchDocuments,
         eq(caseLawSearchDocuments.decisionId, caseLawDecisions.id),
       )
-      .where(
-        sql`${caseLawSearchDocuments.decisionId} IS NULL
-         OR ${caseLawDecisions.updatedAt} > ${caseLawSearchDocuments.updatedAt}`,
-      )
-      .orderBy(sql`${caseLawDecisions.createdAt} ASC`)
-      .limit(batchSize),
+      .where(gt(caseLawDecisions.updatedAt, caseLawSearchDocuments.updatedAt))
+      .orderBy(asc(caseLawDecisions.createdAt))
+      .limit(staleLimit),
   );
+
+  const rows = [...missing, ...stale];
 
   const indexRow = async (row: { id: string }): Promise<number> => {
     try {
