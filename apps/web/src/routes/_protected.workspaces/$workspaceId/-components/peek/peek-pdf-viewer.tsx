@@ -6,12 +6,13 @@ import {
   useRef,
   useState,
 } from "react";
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 
 import type { DocxEditorRef } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
+  AlertTriangleIcon,
   FoldHorizontalIcon,
   MinusIcon,
   PlusIcon,
@@ -22,6 +23,7 @@ import { useTranslations } from "use-intl";
 import "@stll/folio/editor.css";
 import "./peek-docx.css";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
@@ -60,9 +62,33 @@ type PeekPdfViewerProps = {
   onPeekNavigate?: (() => void) | undefined;
   docxPrintActionsRef?: RefObject<Map<string, () => void>> | undefined;
   onDocxScrollTopChange?: ((scrollTop: number) => void) | undefined;
+  errorFallback?: ((props: { reset: () => void }) => ReactNode) | undefined;
+  onError?: ((error: Error) => void) | undefined;
 };
 
-export const PeekPdfViewer = ({
+export const PeekPdfViewer = (props: PeekPdfViewerProps) => {
+  const {
+    errorFallback,
+    fieldId,
+    filePurpose = "display",
+    onError,
+    workspaceId,
+  } = props;
+
+  return (
+    <QuerySuspenseBoundary
+      area="peek-viewer"
+      errorFallback={errorFallback ?? defaultPeekViewerErrorFallback}
+      suspenseFallback={<PeekSuspenseFallback />}
+      onError={onError}
+      resetKeys={[workspaceId, fieldId, filePurpose]}
+    >
+      <PeekPdfViewerContent {...props} filePurpose={filePurpose} />
+    </QuerySuspenseBoundary>
+  );
+};
+
+const PeekPdfViewerContent = ({
   workspaceId,
   viewId,
   fieldId,
@@ -131,11 +157,31 @@ export const PeekPdfViewer = ({
   );
 };
 
+const defaultPeekViewerErrorFallback = ({ reset }: { reset: () => void }) => (
+  <PeekViewerErrorFallback onRetry={reset} />
+);
+
 export const PeekSuspenseFallback = () => (
   <div className="flex h-full w-full items-center justify-center">
     <StellaMark className="text-muted-foreground size-8 animate-pulse" />
   </div>
 );
+
+const PeekViewerErrorFallback = ({ onRetry }: { onRetry: () => void }) => {
+  const t = useTranslations();
+
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+      <AlertTriangleIcon className="text-muted-foreground/40 size-8" />
+      <p className="text-muted-foreground text-sm">
+        {t("common.somethingWentWrong")}
+      </p>
+      <Button onClick={onRetry} size="sm" variant="outline">
+        {t("common.tryAgain")}
+      </Button>
+    </div>
+  );
+};
 
 export const PeekPdfControls = ({
   canResetZoom,

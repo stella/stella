@@ -709,6 +709,30 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           />
         );
 
+        const viewerErrorFallback = ({ reset }: { reset: () => void }) => (
+          <InspectorPdfErrorFallback
+            onClose={() => {
+              handleCloseTab(tab.id);
+            }}
+            onRetry={reset}
+          />
+        );
+
+        const handleViewerError = () => {
+          toastManager.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        };
+
+        const handleDocxScrollTopChange = (scrollTop: number) => {
+          setDocxScrollTopByTab((prev) => {
+            const next = new Map(prev);
+            next.set(tab.id, scrollTop);
+            return next;
+          });
+        };
+
         const viewerContent = (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {!isNativeDocxDisplay && tab.justificationFieldId && (
@@ -733,90 +757,76 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
               </Suspense>
             )}
             {isNativeDocxDisplay && tab.propertyId !== undefined ? (
-              <Suspense fallback={<PeekSuspenseFallback />}>
-                <DocxBrowserEditor
-                  actionsKey={tab.id}
-                  actionsMapRef={docxActionsRef}
-                  entityId={tab.entityId}
-                  fieldId={tab.id}
-                  initialScrollTop={docxScrollTopByTab.get(tab.id)}
-                  isEditing={isEditingNativeDocx}
-                  onClose={() => {
-                    docxActionsRef.current.delete(tab.id);
-                    setEditingDocxTabId(null);
-                  }}
-                  onPreviewDoubleClick={() => {
-                    if (
-                      canUpdateEntity &&
-                      isNativeDocxDisplay &&
-                      tab.propertyId !== undefined &&
-                      !isEditingNativeDocx
-                    ) {
-                      flashDocxEditButton(tab.id);
-                    }
-                  }}
-                  onSaved={(fieldId) => {
-                    if (fieldId !== tab.id) {
-                      setDocxScrollTopByTab((prev) => {
-                        const scrollTop = prev.get(tab.id);
-                        if (scrollTop === undefined) {
-                          return prev;
-                        }
-                        const next = new Map(prev);
-                        next.set(fieldId, scrollTop);
-                        return next;
-                      });
-                      setScaleOffsets((prev) => {
-                        const scaleOffset = prev.get(tab.id);
-                        if (scaleOffset === undefined) {
-                          return prev;
-                        }
-                        const next = new Map(prev);
-                        next.set(fieldId, scaleOffset);
-                        return next;
-                      });
-                      useInspectorStore
-                        .getState()
-                        .replacePdfFieldId(tab.id, fieldId);
-                    }
-                  }}
-                  onScrollTopChange={(scrollTop) => {
-                    setDocxScrollTopByTab((prev) => {
-                      const next = new Map(prev);
-                      next.set(tab.id, scrollTop);
-                      return next;
-                    });
-                  }}
-                  propertyId={tab.propertyId}
-                  scaleOffset={scaleOffsets.get(tab.id) ?? 0}
-                  showActionBar={false}
-                  workspaceId={workspaceId}
-                />
-              </Suspense>
-            ) : (
-              <Suspense fallback={<PeekSuspenseFallback />}>
-                <PeekPdfViewer
-                  activePropertyId={tab.propertyId ?? ""}
-                  entityId={tab.entityId}
-                  fieldId={tab.id}
-                  filePurpose={
-                    isNativeDocxDisplay ? "native-display" : "display"
+              <DocxBrowserEditor
+                actionsKey={tab.id}
+                actionsMapRef={docxActionsRef}
+                entityId={tab.entityId}
+                errorFallback={viewerErrorFallback}
+                fieldId={tab.id}
+                initialScrollTop={docxScrollTopByTab.get(tab.id)}
+                isEditing={isEditingNativeDocx}
+                onClose={() => {
+                  docxActionsRef.current.delete(tab.id);
+                  setEditingDocxTabId(null);
+                }}
+                onError={handleViewerError}
+                onPreviewDoubleClick={() => {
+                  if (
+                    canUpdateEntity &&
+                    isNativeDocxDisplay &&
+                    tab.propertyId !== undefined &&
+                    !isEditingNativeDocx
+                  ) {
+                    flashDocxEditButton(tab.id);
                   }
-                  docxPrintActionsRef={docxPrintActionsRef}
-                  mimeType={tab.mimeType ?? undefined}
-                  onDocxScrollTopChange={(scrollTop) => {
+                }}
+                onSaved={(fieldId) => {
+                  if (fieldId !== tab.id) {
                     setDocxScrollTopByTab((prev) => {
+                      const scrollTop = prev.get(tab.id);
+                      if (scrollTop === undefined) {
+                        return prev;
+                      }
                       const next = new Map(prev);
-                      next.set(tab.id, scrollTop);
+                      next.set(fieldId, scrollTop);
                       return next;
                     });
-                  }}
-                  onPeekNavigate={closeAll}
-                  scaleOffset={scaleOffsets.get(tab.id) ?? 0}
-                  viewId={peekPdfViewId}
-                  workspaceId={workspaceId}
-                />
-              </Suspense>
+                    setScaleOffsets((prev) => {
+                      const scaleOffset = prev.get(tab.id);
+                      if (scaleOffset === undefined) {
+                        return prev;
+                      }
+                      const next = new Map(prev);
+                      next.set(fieldId, scaleOffset);
+                      return next;
+                    });
+                    useInspectorStore
+                      .getState()
+                      .replacePdfFieldId(tab.id, fieldId);
+                  }
+                }}
+                onScrollTopChange={handleDocxScrollTopChange}
+                propertyId={tab.propertyId}
+                scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+                showActionBar={false}
+                workspaceId={workspaceId}
+              />
+            ) : (
+              <PeekPdfViewer
+                activePropertyId={tab.propertyId ?? ""}
+                entityId={tab.entityId}
+                errorFallback={viewerErrorFallback}
+                fieldId={tab.id}
+                filePurpose={isNativeDocxDisplay ? "native-display" : "display"}
+                docxPrintActionsRef={docxPrintActionsRef}
+                mimeType={tab.mimeType ?? undefined}
+                onDocxScrollTopChange={handleDocxScrollTopChange}
+                onError={handleViewerError}
+                onPeekNavigate={closeAll}
+                scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+                viewId={peekPdfViewId}
+                workspaceId={workspaceId}
+              />
             )}
           </div>
         );
@@ -850,12 +860,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 }}
                 fieldId={tab.id}
                 initialScaleOffset={scaleOffsets.get(tab.id) ?? 0}
-                onError={() => {
-                  toastManager.add({
-                    title: t("errors.actionFailed"),
-                    type: "error",
-                  });
-                }}
+                onError={handleViewerError}
               >
                 {contextBar}
                 {viewerContent}
@@ -944,7 +949,13 @@ const MeasuredPdfProvider = ({
 
 // ── Error fallback ────────────────────────────────
 
-const InspectorPdfErrorFallback = ({ onClose }: { onClose: () => void }) => {
+const InspectorPdfErrorFallback = ({
+  onClose,
+  onRetry,
+}: {
+  onClose: () => void;
+  onRetry?: (() => void) | undefined;
+}) => {
   const t = useTranslations();
 
   return (
@@ -964,6 +975,11 @@ const InspectorPdfErrorFallback = ({ onClose }: { onClose: () => void }) => {
         <p className="text-muted-foreground text-sm">
           {t("common.somethingWentWrong")}
         </p>
+        {onRetry && (
+          <Button onClick={onRetry} size="sm" variant="outline">
+            {t("common.tryAgain")}
+          </Button>
+        )}
       </div>
     </div>
   );
