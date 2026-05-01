@@ -117,9 +117,19 @@ import { HiddenProseMirror } from "./HiddenProseMirror";
 import type { HiddenProseMirrorRef } from "./HiddenProseMirror";
 import { ImageSelectionOverlay } from "./ImageSelectionOverlay";
 import type { ImageSelectionInfo } from "./ImageSelectionOverlay";
+import {
+  mergeDirtyRanges,
+  tryBuildIncrementalMeasures,
+} from "./incrementalMeasure";
+import type { DirtyRange } from "./incrementalMeasure";
+import {
+  recordLayoutComplete,
+  recordMeasureBlock,
+} from "./layoutInstrumentation";
 // Selection sync
 import { LayoutSelectionGate } from "./LayoutSelectionGate";
 import { SelectionOverlay } from "./SelectionOverlay";
+import { getTransactionDirtyRange } from "./transactionDirtyRange";
 import { useDragAutoScroll } from "./useDragAutoScroll";
 // Visual line navigation hook
 import { useVisualLineNavigation } from "./useVisualLineNavigation";
@@ -1106,6 +1116,8 @@ function measureBlocks(
   let activeZones: FloatingImageZone[] = [];
 
   return blocks.map((block, blockIndex) => {
+    recordMeasureBlock(blockIndex, block);
+
     // Check if this block is an anchor for floating images
     // If so, reset cumulative Y and replace active zones (old zones from previous
     // anchors are invalid after the Y reset since their topY/bottomY are in the old
@@ -1137,6 +1149,15 @@ function measureBlocks(
       return { totalHeight: 20 } as Measure;
     }
   });
+}
+
+function measureSingleBlockWithoutFloatingZones(
+  block: FlowBlock,
+  blockWidth: number,
+  blockIndex: number,
+): Measure {
+  recordMeasureBlock(blockIndex, block);
+  return measureBlock(block, blockWidth);
 }
 
 /**
@@ -1855,6 +1876,11 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const [layout, setLayout] = useState<Layout | null>(null);
     const [blocks, setBlocks] = useState<FlowBlock[]>([]);
     const [measures, setMeasures] = useState<Measure[]>([]);
+    const layoutArtifactsRef = useRef<{
+      blocks: FlowBlock[];
+      blockWidths: number[];
+      measures: Measure[];
+    } | null>(null);
     const [isFocused, setIsFocused] = useState(false);
     const [selectionRects, setSelectionRects] = useState<SelectionRect[]>([]);
     const [caretPosition, setCaretPosition] = useState<CaretPosition | null>(
@@ -1995,7 +2021,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      * 4. Paint pages to DOM
      */
     const runLayoutPipeline = useCallback(
-      (state: EditorState) => {
+      (
+        state: EditorState,
+        options: { dirtyRange?: DirtyRange; forceFull?: boolean } = {},
+      ) => {
         // Capture current state sequence for this layout run
         const currentEpoch = syncCoordinator.getStateSeq();
 
@@ -2015,19 +2044,34 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           const newBlocks = toFlowBlocks(state.doc, flowOpts);
           setBlocks(newBlocks);
 
-          // Step 2: Measure all blocks.
-          // Must use full measureBlocks() because measurements depend on
-          // inter-block context (floating zones, cumulative Y). Individual
-          // block measurements cannot be cached by PM node identity since
-          // floating tables/images create exclusion zones that affect
-          // neighboring paragraphs' line widths.
           // Compute per-block widths accounting for section breaks with different column configs
           const blockWidths = computePerBlockWidths(
             newBlocks,
             contentWidth,
             columns,
           );
-          const newMeasures = measureBlocks(newBlocks, blockWidths);
+          const incrementalResult =
+            options.dirtyRange &&
+            !options.forceFull &&
+            layoutArtifactsRef.current
+              ? tryBuildIncrementalMeasures({
+                  previousBlocks: layoutArtifactsRef.current.blocks,
+                  previousMeasures: layoutArtifactsRef.current.measures,
+                  previousBlockWidths: layoutArtifactsRef.current.blockWidths,
+                  nextBlocks: newBlocks,
+                  nextBlockWidths: blockWidths,
+                  dirtyRange: options.dirtyRange,
+                  measureBlock: measureSingleBlockWithoutFloatingZones,
+                })
+              : null;
+          const newMeasures =
+            incrementalResult?.measures ??
+            measureBlocks(newBlocks, blockWidths);
+          layoutArtifactsRef.current = {
+            blocks: newBlocks,
+            blockWidths,
+            measures: newMeasures,
+          };
           setMeasures(newMeasures);
 
           // Step 2.5: Collect footnote references from blocks
@@ -2198,6 +2242,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
 
           setLayout(newLayout);
+          recordLayoutComplete();
 
           // Step 4: Paint to DOM
           if (pagesContainerRef.current && painterRef.current) {
@@ -2281,11 +2326,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         footerContent,
         firstPageHeaderContent,
         firstPageFooterContent,
+        _theme,
         sectionProperties,
         onAnchorPositionsChange,
         document,
       ],
     );
+    const runLayoutPipelineRef = useRef(runLayoutPipeline);
+    runLayoutPipelineRef.current = runLayoutPipeline;
 
     // =========================================================================
     // Coalesced Layout (rAF throttle)
@@ -2294,35 +2342,68 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     /**
      * Ref holding a pending requestAnimationFrame ID and the latest state.
      * Multiple rapid transactions (e.g. typing "hello") within the same frame
-     * are coalesced so only the final state triggers a full layout pass.
+     * are coalesced so only the final state triggers an interactive layout pass.
      */
     const pendingLayoutRef = useRef<{
+      dirtyRange: DirtyRange | null;
       rafId: number;
       state: EditorState;
     } | null>(null);
+    const idleLayoutTimerRef = useRef<number | null>(null);
+
+    const scheduleIdleFullLayout = useCallback(
+      (state: EditorState) => {
+        if (idleLayoutTimerRef.current !== null) {
+          window.clearTimeout(idleLayoutTimerRef.current);
+        }
+        idleLayoutTimerRef.current = window.setTimeout(() => {
+          idleLayoutTimerRef.current = null;
+          runLayoutPipeline(state, { forceFull: true });
+        }, 200);
+      },
+      [runLayoutPipeline],
+    );
 
     /**
      * Schedule a layout pipeline run for the next animation frame.
      * If a run is already scheduled, the pending state is replaced so only
-     * the most recent document state gets laid out.
+     * the most recent document state gets laid out. A full source-of-truth
+     * reconcile is scheduled after the interactive pass has been idle.
      */
     const scheduleLayout = useCallback(
-      (state: EditorState) => {
+      (state: EditorState, dirtyRange: DirtyRange | null) => {
+        if (idleLayoutTimerRef.current !== null) {
+          window.clearTimeout(idleLayoutTimerRef.current);
+          idleLayoutTimerRef.current = null;
+        }
+
         if (pendingLayoutRef.current) {
           // Already scheduled — just update the state to the latest
           pendingLayoutRef.current.state = state;
+          pendingLayoutRef.current.dirtyRange = mergeDirtyRanges(
+            pendingLayoutRef.current.dirtyRange,
+            dirtyRange,
+          );
           return;
         }
         const rafId = requestAnimationFrame(() => {
           const pending = pendingLayoutRef.current;
           pendingLayoutRef.current = null;
           if (pending) {
-            runLayoutPipeline(pending.state);
+            const layoutOptions: {
+              dirtyRange?: DirtyRange;
+              forceFull?: boolean;
+            } = {};
+            if (pending.dirtyRange) {
+              layoutOptions.dirtyRange = pending.dirtyRange;
+            }
+            runLayoutPipeline(pending.state, layoutOptions);
+            scheduleIdleFullLayout(pending.state);
           }
         });
-        pendingLayoutRef.current = { rafId, state };
+        pendingLayoutRef.current = { dirtyRange, rafId, state };
       },
-      [runLayoutPipeline],
+      [runLayoutPipeline, scheduleIdleFullLayout],
     );
 
     // Clean up pending rAF on unmount
@@ -2331,6 +2412,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         if (pendingLayoutRef.current) {
           cancelAnimationFrame(pendingLayoutRef.current.rafId);
           pendingLayoutRef.current = null;
+        }
+        if (idleLayoutTimerRef.current !== null) {
+          window.clearTimeout(idleLayoutTimerRef.current);
+          idleLayoutTimerRef.current = null;
         }
       },
       [],
@@ -2754,7 +2839,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           syncCoordinator.incrementStateSeq();
 
           // Content changed - schedule layout (coalesced via rAF)
-          scheduleLayout(newState);
+          scheduleLayout(newState, getTransactionDirtyRange(transaction));
 
           // Notify document change - use ref to avoid infinite loops
           const newDoc = hiddenPMRef.current?.getDocument();
@@ -4390,26 +4475,33 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Re-layout when header/footer content changes (e.g., after HF editor save).
-    // runLayoutPipeline includes headerContent/footerContent in its deps, but it
+    // Re-layout when non-document layout inputs change (e.g., after HF editor save
+    // or parent-driven page setup/theme updates).
+    // runLayoutPipeline includes these values in its deps, but it
     // only runs when explicitly called — this effect triggers it.
-    const headerFooterEpochRef = useRef(0);
+    const layoutInputEpochRef = useRef(0);
     useEffect(() => {
       // Skip the initial render — handleEditorViewReady already does the first layout
-      if (headerFooterEpochRef.current === 0) {
-        headerFooterEpochRef.current = 1;
+      if (layoutInputEpochRef.current === 0) {
+        layoutInputEpochRef.current = 1;
         return;
       }
       const view = hiddenPMRef.current?.getView();
       if (view) {
-        runLayoutPipeline(view.state);
+        runLayoutPipelineRef.current(view.state);
       }
     }, [
       headerContent,
       footerContent,
       firstPageHeaderContent,
       firstPageFooterContent,
-      runLayoutPipeline,
+      contentWidth,
+      columns,
+      pageSize,
+      margins,
+      pageGap,
+      sectionProperties,
+      _theme,
     ]);
 
     // Re-compute selection overlay when the container resizes.

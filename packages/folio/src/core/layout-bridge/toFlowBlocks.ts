@@ -1381,6 +1381,8 @@ export function toFlowBlocks(
   doc: PMNode,
   options: ToFlowBlocksOptions = {},
 ): FlowBlock[] {
+  resetBlockIdCounter();
+
   const opts: ToFlowBlocksOptions = {
     ...options,
     defaultFont: options.defaultFont ?? DEFAULT_FONT,

@@ -10,6 +10,49 @@ import { Button } from "@stll/ui/components/button";
 import { Separator } from "@stll/ui/components/separator";
 import { PenLineIcon, EyeIcon } from "lucide-react";
 
+declare global {
+  var __folioPlayground:
+    | {
+        getEditorRef: () => DocxEditorRef | null;
+      }
+    | undefined;
+}
+
+function createLargeDocument(paragraphCount: number): FolioDocument {
+  const document = createEmptyDocument();
+  const paragraphs: FolioDocument["package"]["document"]["content"] = [];
+
+  for (let i = 0; i < paragraphCount; i += 1) {
+    paragraphs.push({
+      type: "paragraph",
+      content: [
+        {
+          type: "run",
+          content: [
+            {
+              type: "text",
+              text: `Performance paragraph ${i + 1}: This legal drafting fixture provides enough body text to exercise paged layout measurement.`,
+            },
+          ],
+          formatting: {
+            fontSize: 22,
+            fontFamily: {
+              ascii: "Arial",
+              hAnsi: "Arial",
+            },
+          },
+        },
+      ],
+      formatting: {
+        lineSpacing: 276,
+      },
+    });
+  }
+
+  document.package.document.content = paragraphs;
+  return document;
+}
+
 export function App() {
   const editorRef = useRef<DocxEditorRef>(null);
   const [currentDocument, setCurrentDocument] = useState<FolioDocument | null>(
@@ -27,6 +70,7 @@ export function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const fixtureFile = params.get("file");
+    const paragraphCount = Number(params.get("paragraphs"));
     if (fixtureFile) {
       void (async () => {
         try {
@@ -45,6 +89,11 @@ export function App() {
           setStatus("Error loading fixture");
         }
       })();
+      return;
+    }
+    if (Number.isInteger(paragraphCount) && paragraphCount > 0) {
+      setCurrentDocument(createLargeDocument(paragraphCount));
+      setFileName(`Generated ${paragraphCount} paragraphs.docx`);
       return;
     }
     setCurrentDocument(createEmptyDocument());
@@ -114,6 +163,15 @@ export function App() {
   }, []);
 
   const trackChangesOn = editorMode === "suggesting";
+
+  useEffect(() => {
+    globalThis.__folioPlayground = {
+      getEditorRef: () => editorRef.current,
+    };
+    return () => {
+      delete globalThis.__folioPlayground;
+    };
+  }, []);
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">

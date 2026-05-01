@@ -4,6 +4,18 @@ import { schema } from "../prosemirror/schema";
 import { toFlowBlocks } from "./toFlowBlocks";
 
 describe("toFlowBlocks paragraph formatting", () => {
+  test("assigns stable block ids for repeated conversions of the same document", () => {
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.text("First paragraph")]),
+      schema.node("paragraph", null, [schema.text("Second paragraph")]),
+    ]);
+
+    const first = toFlowBlocks(doc).map((block) => block.id);
+    const second = toFlowBlocks(doc).map((block) => block.id);
+
+    expect(second).toEqual(first);
+  });
+
   test("does not convert absent paragraph spacing defaults to zero line height", () => {
     const doc = schema.node("doc", null, [
       schema.node("paragraph", null, [schema.text("First paragraph")]),
