@@ -2,12 +2,13 @@ import { defineRelationsPart } from "drizzle-orm";
 import {
   boolean,
   index,
-  jsonb,
   pgTable,
   text,
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+
+import { jsonb } from "@/api/db/columns";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),

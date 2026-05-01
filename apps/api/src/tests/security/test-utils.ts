@@ -22,16 +22,13 @@ const allRelations = {
   ...authSchema.authRelationsPart,
 };
 
-export type TestDatabase = ReturnType<
-  typeof drizzle<typeof allSchema, typeof allRelations>
->;
+export type TestDatabase = ReturnType<typeof drizzle<typeof allRelations>>;
 export type TestDatabaseTransaction = TransactionOf<TestDatabase>;
 
 const createTestDb = async (): Promise<TestDatabase> => {
   const client = await PGlite.create();
   const testDb = drizzle({
     client,
-    schema: allSchema,
     relations: allRelations,
   });
   const pushSchemaDb = drizzle({ client });

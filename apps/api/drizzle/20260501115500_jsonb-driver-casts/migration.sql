@@ -1,0 +1,6 @@
+-- Type-only JSONB driver mapping; no database changes.
+--
+-- The schema now uses a custom Drizzle jsonb column that still emits
+-- the same PostgreSQL jsonb type, but maps writes through a
+-- ::text::jsonb cast so bun-sql stores structured values instead of
+-- JSON string primitives.

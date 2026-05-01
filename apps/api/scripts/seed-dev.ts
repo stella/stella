@@ -80,12 +80,6 @@ const HEAVY_MATTER_LABEL = "ws-heavy-virtualization";
 const HEAVY_MATTER_FILE_COUNT = 1000;
 const HEAVY_MATTER_FOLDER_COUNT = 25;
 
-// Bun SQL binds JSON strings with a JSONB wire type unless we
-// force text first; without this, Postgres stores a JSONB string
-// primitive and `content->>'value'` cannot be sorted/filtered.
-const jsonbValue = <T>(value: T) =>
-  sql<T>`${JSON.stringify(value)}::text::jsonb`;
-
 type BillingCodeId = SafeId<"billingCode">;
 type ContactId = SafeId<"contact">;
 type EntityId = SafeId<"entity">;
@@ -3227,8 +3221,8 @@ export async function seed(organizationId?: string, userId?: string) {
         id: prop.id,
         workspaceId: toWs(prop.workspaceId),
         name: prop.name,
-        content: jsonbValue(prop.content),
-        tool: jsonbValue(prop.tool),
+        content: prop.content,
+        tool: prop.tool,
         ...(prop.system !== undefined && { system: prop.system }),
         ...(prop.kinds !== undefined && { kinds: prop.kinds }),
       })
@@ -3350,7 +3344,7 @@ export async function seed(organizationId?: string, userId?: string) {
           workspaceId: toWs(entity.workspaceId),
           propertyId: filePropertyId,
           entityVersionId: entity.versionId,
-          content: jsonbValue({
+          content: {
             version: 1,
             type: "file",
             id: fileId,
@@ -3360,7 +3354,7 @@ export async function seed(organizationId?: string, userId?: string) {
             encrypted: false,
             sha256Hex,
             pdfFileId,
-          }),
+          },
         })
         .onConflictDoNothing();
       fileCount++;
@@ -3451,7 +3445,7 @@ export async function seed(organizationId?: string, userId?: string) {
         workspaceId: toWs(f.workspaceId),
         propertyId: f.propertyId,
         entityVersionId: f.entityVersionId,
-        content: jsonbValue(f.content),
+        content: f.content,
       })
       .onConflictDoNothing();
   }

@@ -23,13 +23,12 @@ import {
 import type { DocumentAst } from "@stll/case-law/document-ast";
 import { hasUsableAst } from "@stll/case-law/document-ast";
 import { Output, streamText } from "ai";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 // SAFETY: rootDb is used only inside runGeneration, which runs in
 // a fire-and-forget background task after the request scope has
-// ended. scopedDb is request-tied and would double-stringify the
-// JSONB analysis payload in this context.
+// ended.
 // eslint-disable-next-line no-restricted-imports
 import { db as rootDb } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
@@ -43,22 +42,6 @@ import { formatDecisionForPrompt } from "./prompts/base";
 import { getSystemPrompt } from "./prompts/index";
 
 const SENTINEL_STALE_MS = 5 * 60 * 1000;
-
-/**
- * Serialise a JS value into a JSONB literal for SQL.
- *
- * The single-cast form `${JSON.stringify(value)}::jsonb` looks
- * obvious but stores the payload as a jsonb-string primitive
- * (`jsonb_typeof = 'string'`). bun-sql binds the parameter with
- * the jsonb wire type, so Postgres treats the JSON-text value as
- * a JSON string literal rather than parsing it.
- *
- * `${...}::text::jsonb` is the only reliable form: cast to text
- * first to drop the jsonb wire type, then `::jsonb` parses the
- * text as JSON. Same fix as in the case-law ingestion pipeline.
- */
-const jsonbValue = <TValue>(value: TValue) =>
-  sql<TValue>`${JSON.stringify(value)}::text::jsonb`;
 
 type StreamedAnalysisHeading = Omit<AnalysisHeading, "children">;
 
@@ -157,7 +140,7 @@ ${decisionText}`;
 
       await rootDb
         .update(caseLawDecisions)
-        .set({ analysis: jsonbValue(partial) })
+        .set({ analysis: partial })
         .where(eq(caseLawDecisions.id, decisionId));
     };
 
@@ -179,13 +162,11 @@ ${decisionText}`;
       tree: finalTree,
     };
 
-    // Use rootDb directly (not scopedDb) because:
-    // 1. Case law analysis is global, not workspace-scoped
-    // 2. The scopedDb from the request context may double-stringify
-    //    JSONB values when used in a fire-and-forget background task
+    // Use rootDb (not scopedDb) because case-law analysis is global,
+    // not workspace-scoped.
     await rootDb
       .update(caseLawDecisions)
-      .set({ analysis: jsonbValue(analysis) })
+      .set({ analysis })
       .where(eq(caseLawDecisions.id, decisionId));
   } catch (error) {
     captureError(error, {
@@ -262,11 +243,11 @@ export const generateAnalysis = async (
   const [updated] = await rootDb
     .update(caseLawDecisions)
     .set({
-      analysis: jsonbValue({
+      analysis: {
         version: 1,
         status: "generating",
         startedAt: new Date().toISOString(),
-      }),
+      },
     })
     .where(
       and(
