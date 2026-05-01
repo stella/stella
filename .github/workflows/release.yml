@@ -143,6 +143,10 @@ jobs:
     timeout-minutes: 45
     needs: smoke
 
+    outputs:
+      image_digest: ${{ steps.build.outputs.digest }}
+      release_ref: ${{ steps.release.outputs.ref }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -235,3 +239,40 @@ jobs:
               "${prerelease_args[@]}"
           fi
           gh release upload "$RELEASE_REF" release-manifest.json --clobber
+
+  promote:
+    # Auto-promote stable releases (vX.Y.Z) to production. Any tag
+    # carrying a prerelease label (vX.Y.Z-anything) publishes the
+    # artifact and stops here, so the flow can be exercised end-to-
+    # end without deploying. The check is intentionally an allow-list
+    # ("no hyphen") rather than a deny-list against `-rc.`, so future
+    # prerelease conventions (-rc1, -beta.N, -alpha) cannot reach
+    # production by accident if the upstream validation regex changes.
+    name: Promote to production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: publish
+    if: ${{ !contains(needs.publish.outputs.release_ref, '-') }}
+
+    steps:
+      - name: Mint App token for the infra repo
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.STELLA_RELEASE_APP_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: stella-infra
+
+      - name: Dispatch promote-release.yml
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_REF: ${{ needs.publish.outputs.release_ref }}
+          IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}
+        run: |
+          gh workflow run promote-release.yml \
+            --repo "${{ github.repository_owner }}/stella-infra" \
+            --field release_ref="$RELEASE_REF" \
+            --field image_digest="$IMAGE_DIGEST" \
+            --field run_migrations=true \
+            --field frontend=true
