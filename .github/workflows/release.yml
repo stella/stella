@@ -166,6 +166,16 @@ jobs:
           fi
           echo "ref=$release_ref" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve app version (strip leading `v`)
+        # The frontend reads `VERSION` literally (`0.0.1-rc.1`) at
+        # build time, so the backend's `STELLA_VERSION` must match
+        # without the `v` prefix or PostHog `app_version` events from
+        # the two sides won't group together.
+        id: app-version
+        env:
+          REF: ${{ steps.release.outputs.ref }}
+        run: echo "value=${REF#v}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
@@ -195,6 +205,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            STELLA_VERSION=${{ steps.app-version.outputs.value }}
 
       - name: Attest image provenance
         # Soft-fail: artifact attestations on private repos are

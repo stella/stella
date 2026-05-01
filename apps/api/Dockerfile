@@ -39,6 +39,11 @@ RUN bun build \
 # (not the compiled binary). It needs the source tree and
 # node_modules at runtime.
 FROM deps AS runner
+# Stamp the running container with the release version so the API can
+# return it from /health and tag PostHog events with `app_version`.
+# Defaults to "dev" for local `docker build` outside the release flow.
+ARG STELLA_VERSION=dev
+ENV STELLA_VERSION=${STELLA_VERSION}
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 COPY --chown=stella:stella --from=pruner /app/out/full/ .

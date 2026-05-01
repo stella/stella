@@ -3,17 +3,26 @@ import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { visualizer } from "rollup-plugin-visualizer";
 import { defineConfig } from "vite";
 
 const APP_ROOT = import.meta.dirname;
 const ANALYZE_MODE = "analyze";
+const APP_VERSION = readFileSync(
+  resolve(APP_ROOT, "../../VERSION"),
+  "utf-8",
+).trim();
 
 export default defineConfig(({ mode }) => {
   const shouldAnalyze = mode === ANALYZE_MODE || process.env["ANALYZE"] === "1";
 
   return {
     root: APP_ROOT,
+    define: {
+      __APP_VERSION__: JSON.stringify(APP_VERSION),
+    },
     server: {
       port: 3000,
       headers: {

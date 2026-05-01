@@ -2,6 +2,8 @@ import { PostHog } from "posthog-node";
 
 import type { Analytics } from "@/api/lib/analytics/types";
 
+const APP_VERSION = process.env["STELLA_VERSION"] ?? "dev";
+
 export const createPostHogAnalytics = (
   key: string,
   host: string,
@@ -9,7 +11,11 @@ export const createPostHogAnalytics = (
   const client = new PostHog(key, { host });
 
   return {
-    capture: (params) => client.capture(params),
+    capture: ({ properties, ...rest }) =>
+      client.capture({
+        ...rest,
+        properties: { ...properties, app_version: APP_VERSION },
+      }),
     identify: (params) => client.identify(params),
     // eslint-disable-next-line promise-function-async
     flush: () => client.flush(),

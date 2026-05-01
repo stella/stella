@@ -43,6 +43,11 @@ export const createPostHogAnalytics = (
     },
   });
 
+  // Attach app_version as a super-property so every captured event
+  // (including pageviews, exceptions, and session recordings) carries
+  // the build's version. Set once here so call sites don't have to.
+  posthog.register({ app_version: __APP_VERSION__ });
+
   const analytics: Analytics = {
     capture: (event, properties) => {
       void posthog.capture(event, properties);
