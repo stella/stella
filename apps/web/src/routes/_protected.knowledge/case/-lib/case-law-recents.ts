@@ -64,7 +64,7 @@ const readList = (
     return [];
   }
 
-  const parsed = JSON.parse(raw);
+  const parsed: unknown = JSON.parse(raw);
   const result = v.safeParse(caseLawRecentSearchesStoreSchema, parsed);
 
   return result.success

@@ -1,7 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Checkbox } from "@stll/ui/components/checkbox";
 import {
   Command,
   CommandInput,
@@ -9,6 +8,7 @@ import {
   CommandList,
 } from "@stll/ui/components/command";
 import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
+import { Radio, RadioGroup } from "@stll/ui/components/radio-group";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -561,7 +561,7 @@ const FacetGroup = ({
   return (
     <div>
       <p className="text-muted-foreground mb-2 text-xs font-medium">{title}</p>
-      <div className="space-y-0.5">
+      <RadioGroup className="gap-0.5" value={selected ?? ""}>
         {buckets.map((bucket) => {
           const isSelected = selected === bucket.value;
           const nextValue = isSelected ? null : bucket.value;
@@ -577,7 +577,7 @@ const FacetGroup = ({
               }
               to="."
             >
-              <Checkbox checked={isSelected} tabIndex={-1} />
+              <Radio value={bucket.value} />
               <span className="flex-1 truncate text-start">{bucket.value}</span>
               <span className="text-muted-foreground tabular-nums">
                 {bucket.count}
@@ -585,7 +585,7 @@ const FacetGroup = ({
             </Link>
           );
         })}
-      </div>
+      </RadioGroup>
     </div>
   );
 };
