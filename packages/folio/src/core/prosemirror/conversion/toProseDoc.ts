@@ -1426,7 +1426,7 @@ function convertRunContent(
   switch (content.type) {
     case "text":
       if (content.text) {
-        return [schema.text(content.text, marks)];
+        return textToInlineNodes(content.text, marks);
       }
       return [];
 
@@ -1479,6 +1479,27 @@ function convertRunContent(
     default:
       return [];
   }
+}
+
+function textToInlineNodes(
+  text: string,
+  marks: ReturnType<typeof schema.mark>[],
+): PMNode[] {
+  const nodes: PMNode[] = [];
+  const parts = text.split(/(\r\n|\r|\n)/);
+
+  for (const part of parts) {
+    if (part === "") {
+      continue;
+    }
+    if (part === "\r\n" || part === "\r" || part === "\n") {
+      nodes.push(schema.node("hardBreak"));
+      continue;
+    }
+    nodes.push(schema.text(part, marks));
+  }
+
+  return nodes;
 }
 
 /**
@@ -1713,7 +1734,7 @@ function convertHyperlink(
 
       for (const content of child.content) {
         if (content.type === "text" && content.text) {
-          nodes.push(schema.text(content.text, allMarks));
+          nodes.push(...textToInlineNodes(content.text, allMarks));
         }
       }
     }

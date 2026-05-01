@@ -98,6 +98,55 @@ describe("toProseDoc", () => {
     expect(commentMark?.attrs.commentId).toBe(42);
   });
 
+  test("converts embedded DOCX text newlines to hard breaks", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "run",
+                  content: [
+                    { type: "text", text: "Seller\nBuyer\r\nPrice\rDate" },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const doc = toProseDoc(document);
+    const paragraph = doc.firstChild;
+    const childTypes: string[] = [];
+    const textNodes: string[] = [];
+
+    for (let index = 0; index < (paragraph?.childCount ?? 0); index++) {
+      const child = paragraph?.child(index);
+      if (!child) {
+        continue;
+      }
+      childTypes.push(child.type.name);
+      if (child.isText) {
+        textNodes.push(child.text ?? "");
+      }
+    }
+
+    expect(childTypes).toEqual([
+      "text",
+      "hardBreak",
+      "text",
+      "hardBreak",
+      "text",
+      "hardBreak",
+      "text",
+    ]);
+    expect(textNodes).toEqual(["Seller", "Buyer", "Price", "Date"]);
+  });
+
   test("applies active comment ranges to every text-emitting inline branch", () => {
     const document: Document = {
       package: {
