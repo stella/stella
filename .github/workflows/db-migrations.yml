@@ -43,3 +43,75 @@ jobs:
         env:
           BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'HEAD^' }}
         run: bash scripts/check-migrations.sh
+
+  apply-fresh:
+    # Validates that `drizzle-kit migrate` can apply every migration end-to-end
+    # against an empty Postgres. Catches: missing `_journal.json`, ordering bugs,
+    # syntax errors, and any migration that would crash on a real DB.
+    if: github.event.pull_request.draft != true || github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:18.3
+        env:
+          POSTGRES_USER: stella
+          POSTGRES_PASSWORD: stella
+          POSTGRES_DB: stella
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stella -d stella"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun ci
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Apply all migrations to fresh Postgres
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
+        run: bun --bun drizzle-kit migrate
+
+      - name: Verify schema parity with schema.ts
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
+        # `push --explain` exits with "[i] No changes detected" when the
+        # migrated schema already matches schema.ts. Any pending diff fails CI.
+        run: |
+          OUT=$(bun --bun drizzle-kit push --explain 2>&1)
+          echo "$OUT"
+          echo "$OUT" | grep -q "No changes detected" || {
+            echo "::error::Migrated schema does not match schema.ts. Either commit a generated migration that closes the gap, or fix the migration files."
+            exit 1
+          }
+
+      - name: Verify __drizzle_migrations recorded all migrations
+        env:
+          PGPASSWORD: stella
+        run: |
+          set -euo pipefail
+          EXPECTED=$(find apps/api/drizzle -mindepth 1 -maxdepth 1 -type d -name '20*' | wc -l | tr -d ' ')
+          APPLIED=$(psql -h 127.0.0.1 -U stella -d stella -tAc "SELECT count(*) FROM drizzle.__drizzle_migrations")
+          echo "Expected $EXPECTED migrations, drizzle.__drizzle_migrations has $APPLIED"
+          [ "$EXPECTED" = "$APPLIED" ] || {
+            echo "::error::Migration count mismatch: $APPLIED applied, $EXPECTED on disk."
+            exit 1
+          }
