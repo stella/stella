@@ -19,23 +19,6 @@
       "timezoneSaved": "Zona horaria actualizada"
     }
   },
-  "analytics": {
-    "billedAmount": "Importe facturado",
-    "billedHours": "Horas facturadas",
-    "entries": "Registros",
-    "hoursByMatter": "Horas por asunto",
-    "hoursByPeriod": "Horas por período",
-    "hoursByUser": "Horas por usuario",
-    "invalidDateRange": "La fecha de inicio es posterior a la fecha de fin",
-    "last30Days": "Últimos 30 días",
-    "last7Days": "Últimos 7 días",
-    "last90Days": "Últimos 90 días",
-    "noData": "Sin datos para este período",
-    "revenueByPeriod": "Ingresos por período",
-    "thisMonth": "Este mes",
-    "totalHours": "Horas totales",
-    "utilization": "Utilización"
-  },
   "anonymize": {
     "addEntity": "Añadir entidad",
     "checkAnonymization": "Check anonymisation",
@@ -363,9 +346,7 @@
       "displayDocument": "Visualizando documento",
       "execute-typescript": "Running TypeScript",
       "list-entities": "Listed entities",
-      "list-templates": "Listing templates",
       "load-skill": "Loading skill",
-      "read-clause": "Reading clause",
       "read-contact": "Reading contact",
       "read-content": "Read content",
       "read-content-across-matters": "Reading document from another matter",
@@ -468,7 +449,6 @@
     "actions": "Acciones",
     "add": "Añadir",
     "all": "Todos",
-    "analytics": "Analítica",
     "cancel": "Cancelar",
     "caseLaw": "Jurisprudencia",
     "category": "Categoría",
@@ -885,14 +865,6 @@
   },
   "knowledge": {
     "sections": {
-      "agents": {
-        "description": "Agentes autónomos para flujos de trabajo legales",
-        "title": "Agentes"
-      },
-      "analytics": {
-        "description": "Estadísticas de uso y cumplimentación de plantillas",
-        "title": "Analítica"
-      },
       "caseLaw": {
         "description": "Resoluciones judiciales y base de jurisprudencia",
         "title": "Jurisprudencia"
@@ -917,7 +889,6 @@
   },
   "navigation": {
     "account": "Cuenta",
-    "agents": "Agentes",
     "calendar": "Calendario",
     "chat": "Chat",
     "chatAlreadyOpen": "El chat ya está abierto",
@@ -1170,22 +1141,6 @@
     "subtasks": "Subtareas",
     "title": "Tareas",
     "untitled": "Tarea sin título"
-  },
-  "templateAnalytics": {
-    "errorRate": "Tasa de error",
-    "fills": "Usos",
-    "fillsByPeriod": "Usos a lo largo del tiempo",
-    "fillsByUser": "Usos por usuario",
-    "last30Days": "30 días",
-    "last7Days": "7 días",
-    "last90Days": "90 días",
-    "noData": "Sin datos para este período",
-    "pdfRatio": "Exportaciones PDF",
-    "template": "Plantilla",
-    "title": "Analítica de plantillas",
-    "topTemplates": "Plantillas más usadas",
-    "totalFills": "Total de usos",
-    "uniqueTemplates": "Plantillas utilizadas"
   },
   "templates": {
     "addItem": "Añadir elemento",

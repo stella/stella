@@ -19,23 +19,6 @@
       "timezoneSaved": "Laiko juosta atnaujinta"
     }
   },
-  "analytics": {
-    "billedAmount": "Apskaičiuota suma",
-    "billedHours": "Apskaičiuotos valandos",
-    "entries": "Įrašai",
-    "hoursByMatter": "Valandos pagal bylą",
-    "hoursByPeriod": "Valandos pagal laikotarpį",
-    "hoursByUser": "Valandos pagal naudotoją",
-    "invalidDateRange": "Pradžios data yra vėlesnė nei pabaigos data",
-    "last30Days": "Paskutinės 30 dienų",
-    "last7Days": "Paskutinės 7 dienos",
-    "last90Days": "Paskutinės 90 dienų",
-    "noData": "Nėra duomenų šiam laikotarpiui",
-    "revenueByPeriod": "Pajamos pagal laikotarpį",
-    "thisMonth": "Šis mėnuo",
-    "totalHours": "Iš viso valandų",
-    "utilization": "Panaudojimas"
-  },
   "anonymize": {
     "addEntity": "Pridėti subjektą",
     "checkAnonymization": "Check anonymisation",
@@ -363,9 +346,7 @@
       "displayDocument": "Dokumento peržiūra",
       "execute-typescript": "Running TypeScript",
       "list-entities": "Listed entities",
-      "list-templates": "Listing templates",
       "load-skill": "Loading skill",
-      "read-clause": "Reading clause",
       "read-contact": "Reading contact",
       "read-content": "Read content",
       "read-content-across-matters": "Reading document from another matter",
@@ -468,7 +449,6 @@
     "actions": "Veiksmai",
     "add": "Pridėti",
     "all": "Visi",
-    "analytics": "Analitika",
     "cancel": "Atšaukti",
     "caseLaw": "Teismų praktika",
     "category": "Kategorija",
@@ -885,14 +865,6 @@
   },
   "knowledge": {
     "sections": {
-      "agents": {
-        "description": "Autonominiai agentai teisinėms darbo eigoms",
-        "title": "Agentai"
-      },
-      "analytics": {
-        "description": "Šablonų naudojimo ir pildymo statistika",
-        "title": "Analitika"
-      },
       "caseLaw": {
         "description": "Teismų sprendimai iš įvairių jurisdikcijų",
         "title": "Teismų praktika"
@@ -917,7 +889,6 @@
   },
   "navigation": {
     "account": "Paskyra",
-    "agents": "Agentai",
     "calendar": "Kalendorius",
     "chat": "Pokalbis",
     "chatAlreadyOpen": "Pokalbis jau atidarytas",
@@ -1170,22 +1141,6 @@
     "subtasks": "Použduočiai",
     "title": "Užduotys",
     "untitled": "Užduotis be pavadinimo"
-  },
-  "templateAnalytics": {
-    "errorRate": "Klaidų dažnis",
-    "fills": "Pildymai",
-    "fillsByPeriod": "Pildymai per laikotarpį",
-    "fillsByUser": "Pildymai pagal naudotoją",
-    "last30Days": "30 days",
-    "last7Days": "7 days",
-    "last90Days": "90 days",
-    "noData": "Nėra duomenų šiam laikotarpiui",
-    "pdfRatio": "PDF eksportai",
-    "template": "Šablonas",
-    "title": "Šablonų analitika",
-    "topTemplates": "Dažniausiai naudojami šablonai",
-    "totalFills": "Iš viso pildymų",
-    "uniqueTemplates": "Naudoti šablonai"
   },
   "templates": {
     "addItem": "Pridėti elementą",

@@ -3,7 +3,6 @@ import { Elysia } from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 
 import { env } from "@/api/env";
-import { analyticsRoute } from "@/api/handlers/analytics/routes";
 import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
 import { authMetadataRoute } from "@/api/handlers/auth/routes";
 import { authUiRoute } from "@/api/handlers/auth/ui-routes";
@@ -30,7 +29,6 @@ import { ratesRoute } from "@/api/handlers/rates/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
 import { myTasksRoute } from "@/api/handlers/tasks/my-tasks-route";
 import { tasksRoute } from "@/api/handlers/tasks/routes";
-import { templateAnalyticsRoute } from "@/api/handlers/template-analytics/routes";
 import {
   templateCategoriesRoute,
   templatesRoute,
@@ -316,8 +314,6 @@ const api = new Elysia()
       .use(contactsRoute)
       .use(searchRoute)
       .use(auditLogsRoute)
-      .use(analyticsRoute)
-      .use(templateAnalyticsRoute)
       .use(caseLawRoute)
       .use(chatRoute)
       .use(userFilesRoute)

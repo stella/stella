@@ -79,7 +79,6 @@
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "react-resizable-panels": "^4.10.0",
-    "recharts": "^3.7.0",
     "streamdown": "^2.4.0",
     "use-debounce": "^10.1.1",
     "use-intl": "catalog:",

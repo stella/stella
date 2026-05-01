@@ -19,23 +19,6 @@
       "timezoneSaved": "Zeitzone aktualisiert"
     }
   },
-  "analytics": {
-    "billedAmount": "Abgerechneter Betrag",
-    "billedHours": "Abgerechnete Stunden",
-    "entries": "Einträge",
-    "hoursByMatter": "Stunden nach Akte",
-    "hoursByPeriod": "Stunden nach Zeitraum",
-    "hoursByUser": "Stunden nach Benutzer",
-    "invalidDateRange": "Startdatum liegt nach dem Enddatum",
-    "last30Days": "Letzte 30 Tage",
-    "last7Days": "Letzte 7 Tage",
-    "last90Days": "Letzte 90 Tage",
-    "noData": "Keine Daten für diesen Zeitraum",
-    "revenueByPeriod": "Umsatz nach Zeitraum",
-    "thisMonth": "Dieser Monat",
-    "totalHours": "Gesamtstunden",
-    "utilization": "Auslastung"
-  },
   "anonymize": {
     "addEntity": "Entität hinzufügen",
     "checkAnonymization": "Check anonymisation",
@@ -363,9 +346,7 @@
       "displayDocument": "Dokument anzeigen",
       "execute-typescript": "Running TypeScript",
       "list-entities": "Einträge aufgelistet",
-      "list-templates": "Listing templates",
       "load-skill": "Loading skill",
-      "read-clause": "Reading clause",
       "read-contact": "Reading contact",
       "read-content": "Inhalt gelesen",
       "read-content-across-matters": "Reading document from another matter",
@@ -468,7 +449,6 @@
     "actions": "Aktionen",
     "add": "Hinzufügen",
     "all": "Alle",
-    "analytics": "Analytik",
     "cancel": "Abbrechen",
     "caseLaw": "Rechtsprechung",
     "category": "Kategorie",
@@ -885,14 +865,6 @@
   },
   "knowledge": {
     "sections": {
-      "agents": {
-        "description": "Autonome Agenten für juristische Arbeitsabläufe",
-        "title": "Agenten"
-      },
-      "analytics": {
-        "description": "Vorlagennutzung und Ausfüllstatistiken",
-        "title": "Analytik"
-      },
       "caseLaw": {
         "description": "Gerichtsentscheidungen und Rechtsprechungsdatenbank",
         "title": "Rechtsprechung"
@@ -917,7 +889,6 @@
   },
   "navigation": {
     "account": "Konto",
-    "agents": "Agenten",
     "calendar": "Kalender",
     "chat": "Chat",
     "chatAlreadyOpen": "Chat ist bereits geöffnet",
@@ -1170,22 +1141,6 @@
     "subtasks": "Unteraufgaben",
     "title": "Aufgaben",
     "untitled": "Aufgabe ohne Titel"
-  },
-  "templateAnalytics": {
-    "errorRate": "Fehlerrate",
-    "fills": "Ausfüllungen",
-    "fillsByPeriod": "Ausfüllungen im Zeitverlauf",
-    "fillsByUser": "Ausfüllungen nach Benutzer",
-    "last30Days": "30 Tage",
-    "last7Days": "7 Tage",
-    "last90Days": "90 Tage",
-    "noData": "Keine Daten für diesen Zeitraum",
-    "pdfRatio": "PDF-Exporte",
-    "template": "Vorlage",
-    "title": "Vorlagen-Analytik",
-    "topTemplates": "Meistgenutzte Vorlagen",
-    "totalFills": "Ausfüllungen gesamt",
-    "uniqueTemplates": "Genutzte Vorlagen"
   },
   "templates": {
     "addItem": "Element hinzufügen",

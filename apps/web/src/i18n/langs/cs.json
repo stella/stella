@@ -19,23 +19,6 @@
       "timezoneSaved": "Časové pásmo aktualizováno"
     }
   },
-  "analytics": {
-    "billedAmount": "Fakturovaná částka",
-    "billedHours": "Fakturované hodiny",
-    "entries": "Záznamy",
-    "hoursByMatter": "Hodiny podle spisu",
-    "hoursByPeriod": "Hodiny podle období",
-    "hoursByUser": "Hodiny podle uživatele",
-    "invalidDateRange": "Datum začátku je po datu konce",
-    "last30Days": "Posledních 30 dní",
-    "last7Days": "Posledních 7 dní",
-    "last90Days": "Posledních 90 dní",
-    "noData": "Žádná data za toto období",
-    "revenueByPeriod": "Příjmy podle období",
-    "thisMonth": "Tento měsíc",
-    "totalHours": "Celkové hodiny",
-    "utilization": "Využití"
-  },
   "anonymize": {
     "addEntity": "Přidat entitu",
     "checkAnonymization": "Zkontrolovat anonymizaci",
@@ -363,9 +346,7 @@
       "displayDocument": "Zobrazuji dokument",
       "execute-typescript": "Running TypeScript",
       "list-entities": "Procházím dokumenty",
-      "list-templates": "Listing templates",
       "load-skill": "Loading skill",
-      "read-clause": "Reading clause",
       "read-contact": "Reading contact",
       "read-content": "Čtu obsah",
       "read-content-across-matters": "Reading document from another matter",
@@ -468,7 +449,6 @@
     "actions": "Akce",
     "add": "Přidat",
     "all": "Vše",
-    "analytics": "Analytika",
     "cancel": "Zrušit",
     "caseLaw": "Judikatura",
     "category": "Kategorie",
@@ -885,14 +865,6 @@
   },
   "knowledge": {
     "sections": {
-      "agents": {
-        "description": "Autonomní agenti pro právní pracovní postupy",
-        "title": "Agenti"
-      },
-      "analytics": {
-        "description": "Statistiky použití a vyplňování šablon",
-        "title": "Analytika"
-      },
       "caseLaw": {
         "description": "Rozhodnutí soudů a databáze judikatury",
         "title": "Judikatura"
@@ -917,7 +889,6 @@
   },
   "navigation": {
     "account": "Účet",
-    "agents": "Agenti",
     "calendar": "Kalendář",
     "chat": "Chat",
     "chatAlreadyOpen": "Chat je již otevřený",
@@ -1170,22 +1141,6 @@
     "subtasks": "Podúkoly",
     "title": "Úkoly",
     "untitled": "Úkol bez názvu"
-  },
-  "templateAnalytics": {
-    "errorRate": "Chybovost",
-    "fills": "Vyplnění",
-    "fillsByPeriod": "Vyplnění v čase",
-    "fillsByUser": "Vyplnění podle uživatele",
-    "last30Days": "30 dní",
-    "last7Days": "7 dní",
-    "last90Days": "90 dní",
-    "noData": "Za toto období nejsou data",
-    "pdfRatio": "Exporty PDF",
-    "template": "Šablona",
-    "title": "Analytika šablon",
-    "topTemplates": "Nejpoužívanější šablony",
-    "totalFills": "Celkem vyplnění",
-    "uniqueTemplates": "Použité šablony"
   },
   "templates": {
     "addItem": "Přidat položku",
