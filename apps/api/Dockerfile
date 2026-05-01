@@ -24,10 +24,17 @@ RUN bun build \
     --outfile /app/server \
     apps/api/src/index.ts
 
-# Run the compiled API as non-root
-FROM base AS runner
+# Run the compiled API as non-root.
+#
+# Build off `deps` (not `base`) so node_modules is present.
+# The same image runs the case-law ingestion daemon on the
+# utility worker, whose entrypoint is `bun scripts/ingest-case-law.ts`
+# (not the compiled binary). It needs the source tree and
+# node_modules at runtime.
+FROM deps AS runner
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
+COPY --chown=stella:stella --from=pruner /app/out/full/ .
 COPY --chown=stella:stella --from=builder /app/server /app/server
 RUN mkdir -p '/$bunfs/root'
 COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/file-scan/yara /\$bunfs/root/yara
@@ -38,6 +45,23 @@ COPY --chown=stella:stella --from=deps \
     /\$bunfs/root/
 COPY --chown=stella:stella --from=deps /app/node_modules/@stll/aho-corasick-wasm/dist/wasi-worker-browser.mjs /\$bunfs/root/wasi-worker-browser.mjs
 WORKDIR /app/apps/api
+
+# Build-time smoke: invoke the ingestion entrypoint with a fake
+# adapter key to verify all imports resolve. This catches future
+# regressions where the runner stage drops files that the utility
+# worker's docker-compose entrypoint (`bun scripts/ingest-case-law.ts`)
+# needs at runtime — e.g., source, packages, or node_modules. On
+# success the script exits 1 with "Unknown adapter"; if any import
+# fails ("Cannot find module"), the build fails.
+RUN out=$(DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
+            S3_ENDPOINT=http://localhost \
+            S3_BUCKET=smoke \
+            S3_REGION=eu-central-1 \
+            bun scripts/ingest-case-law.ts __smoke__ 2>&1 || true); \
+    echo "$out"; \
+    echo "$out" | grep -q 'Unknown adapter: __smoke__' \
+      || { echo "ERROR: ingestion entrypoint smoke failed" >&2; exit 1; }
+
 USER stella
 EXPOSE 3001
 CMD ["/app/server"]
