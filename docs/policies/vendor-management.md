@@ -1,7 +1,7 @@
 # Vendor and Third-Party Management Policy
 
 **Owner:** Engineering
-**Last reviewed:** 2026-02-22
+**Last reviewed:** 2026-05-01
 **Review cadence:** Annual
 
 ## Purpose
@@ -74,27 +74,22 @@ service SDKs (AI providers, email, analytics, storage).
 
 ### Ongoing monitoring
 
-10. **Container scanning.** Trivy scans the production Docker
-    image for CRITICAL and HIGH vulnerabilities on a weekly
-    schedule and on every Dockerfile change
-    (`container-scan.yml`).
-
-11. **OpenSSF Scorecard.** The repository is evaluated weekly
+10. **OpenSSF Scorecard.** The repository is evaluated weekly
     against OpenSSF best practices (`scorecard.yml`),
     covering dependency update tooling, branch protection,
     signed commits, and other supply-chain hygiene signals.
 
-12. **CodeQL.** Weekly static analysis includes checks for
+11. **CodeQL.** Weekly static analysis includes checks for
     insecure use of third-party APIs.
 
 ### Provider abstraction
 
-13. **AI provider independence.** AI features use the Vercel
+12. **AI provider independence.** AI features use the Vercel
     AI SDK, which abstracts the underlying model provider.
     The provider is selectable via configuration, enabling
     failover or migration without rewriting business logic.
 
-14. **Storage abstraction.** File storage uses the S3 API,
+13. **Storage abstraction.** File storage uses the S3 API,
     compatible with multiple providers (AWS S3,
     Cloudflare R2, MinIO for self-hosting).
 
@@ -108,8 +103,7 @@ service SDKs (AI providers, email, analytics, storage).
 - Pinned SHAs and digests are reviewed during workflow PR
   review; `CODEOWNERS` assigns `.github/` changes to an admin
   reviewer.
-- Trivy and Scorecard results are visible in the GitHub
-  Security tab.
+- Scorecard results are visible in the GitHub Security tab.
 
 ## Review
 
