@@ -184,41 +184,13 @@ state, and stops. Do not schedule future runs from inside this skill.
       lint errors, type errors, test failures
     - Fix the issues in code, don't just suppress them
 
-11. **Check React Doctor diagnostics**:
-
-    The React Doctor CI workflow posts a score comment on the PR.
-    Check it and fix real issues.
-
-    ```bash
-    # Find the React Doctor CI run
-    gh run list --branch $(git branch --show-current) \
-      --json conclusion,name,databaseId \
-      | jq '.[] | select(.name == "React Doctor")'
-
-    # Read the output
-    gh run view {run_id} --log | grep -E "(✗|⚠|score|Score)"
-    ```
-
-    - Run React Doctor locally for full diagnostics:
-      ```bash
-      cd apps/web && npx -y react-doctor@latest .
-      ```
-    - Fix errors (✗) first, then impactful warnings (⚠)
-    - **Skip false positives** — common ones in this codebase:
-      - `useMemo` wrapping `Math.random()` (keeps value stable)
-      - `passive: false` on wheel listeners that call
-        `preventDefault()`
-      - Zustand store syncs in useEffect (legitimate side effects)
-    - Note which issues are false positives and which are real in
-      your commit message
-
-12. **Run quality checks**:
+11. **Run quality checks**:
 
     Run the quality checks for the project (using `ruff format`,
     `ruff check`, `ty` for Python, `bun run lint`, `bun run format`,
     `bun run typecheck` for TypeScript).
 
-13. **Commit and push**:
+12. **Commit and push**:
     - Create a commit with a message like
       `fix: address review comments`
     - Push to the current branch
@@ -226,7 +198,7 @@ state, and stops. Do not schedule future runs from inside this skill.
       in the final status because CI and review bots need to run on
       the new commit
 
-14. **Report one round status and stop**:
+13. **Report one round status and stop**:
 
     Return exactly one of:
     - `clean`: no actionable bot comments remain, review bot checks are
