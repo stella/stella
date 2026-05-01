@@ -6,7 +6,7 @@ description: How to set up stella locally or deploy to production.
 ## Prerequisites
 
 - [Bun](https://bun.sh) v1.3 or later
-- PostgreSQL 16+
+- PostgreSQL 18+
 - S3-compatible object storage
 
 ## Quick start

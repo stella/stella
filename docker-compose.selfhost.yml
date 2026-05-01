@@ -1,0 +1,32 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - ${STELLA_API_ENV_FILE:-apps/api/.env}
+    environment:
+      NODE_ENV: production
+    ports:
+      - "${STELLA_API_HOST_PORT:-3001}:3001"
+    depends_on:
+      gotenberg:
+        condition: service_healthy
+    restart: unless-stopped
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    environment:
+      API_ENABLE_BASIC_AUTH: "true"
+      GOTENBERG_API_BASIC_AUTH_USERNAME: ${GOTENBERG_USERNAME:?set GOTENBERG_USERNAME in the Compose env file}
+      GOTENBERG_API_BASIC_AUTH_PASSWORD: ${GOTENBERG_PASSWORD:?set GOTENBERG_PASSWORD in the Compose env file}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'curl -fsS -u "$${GOTENBERG_API_BASIC_AUTH_USERNAME}:$${GOTENBERG_API_BASIC_AUTH_PASSWORD}" http://localhost:3000/health',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
