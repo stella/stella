@@ -197,6 +197,13 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Attest image provenance
+        # Soft-fail: artifact attestations on private repos are
+        # plan-gated by GitHub. If the org plan or feature flag isn't
+        # eligible, the rest of the publish (release object, manifest
+        # upload, prod promote) should still succeed. Once attestations
+        # become available, this step starts succeeding again with no
+        # code change.
+        continue-on-error: true
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
