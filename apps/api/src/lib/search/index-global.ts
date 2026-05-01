@@ -476,8 +476,7 @@ const buildSearchFilterFragments = ({
   );
   const entityMimeFilter = sqlWhen(
     hasMimeTypeFilter,
-    () =>
-      sql`AND file_field.mime_types && ${typedPgArray(mimeTypes, "text")}`,
+    () => sql`AND file_field.mime_types && ${typedPgArray(mimeTypes, "text")}`,
   );
   const updatedRangeFilter = (column: SQL): SQL => {
     const fragments: SQL[] = [];

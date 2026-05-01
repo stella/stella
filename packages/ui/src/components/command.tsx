@@ -54,10 +54,7 @@ function CommandDialogPopup({
   );
 }
 
-type CommandInputProps = Omit<
-  AutocompletePrimitive.Input.Props,
-  "size"
-> & {
+type CommandInputProps = Omit<AutocompletePrimitive.Input.Props, "size"> & {
   size?: "sm" | "default" | "lg" | number;
   wrapperClassName?: string;
   ref?: React.Ref<HTMLInputElement>;
@@ -110,7 +107,10 @@ function CommandEmpty({
 }: AutocompletePrimitive.Empty.Props) {
   return (
     <AutocompletePrimitive.Empty
-      className={cn("text-muted-foreground py-6 text-center text-sm", className)}
+      className={cn(
+        "text-muted-foreground py-6 text-center text-sm",
+        className,
+      )}
       data-slot="command-empty"
       {...props}
     />
@@ -217,10 +217,7 @@ function CommandShortcut({
   );
 }
 
-function CommandFooter({
-  className,
-  ...props
-}: React.ComponentProps<"div">) {
+function CommandFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(

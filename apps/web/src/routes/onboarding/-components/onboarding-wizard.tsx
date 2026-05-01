@@ -5,12 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { LanguagePicker } from "@/components/language-picker";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 import { sessionOptions } from "@/routes/-queries";
-import { LanguagePicker } from "@/routes/onboarding/-components/language-picker";
 import { OnboardingLayout } from "@/routes/onboarding/-components/onboarding-layout";
 import { SidebarPreview } from "@/routes/onboarding/-components/sidebar-preview";
 import type { Phase } from "@/routes/onboarding/-components/steps/creating-step";

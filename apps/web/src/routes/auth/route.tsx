@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { LanguagePicker } from "@/components/language-picker";
 import { StellaWordmark } from "@/components/stella-wordmark";
 
 export const Route = createFileRoute("/auth")({
@@ -12,6 +13,7 @@ function AuthLayout() {
 
   return (
     <div className="auth-gradient flex min-h-dvh flex-col">
+      <LanguagePicker />
       <style>{`
         .auth-gradient {
           background: linear-gradient(

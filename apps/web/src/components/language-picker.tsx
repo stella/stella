@@ -13,10 +13,6 @@ import {
   useI18nStore,
 } from "@/i18n/i18n-store";
 
-/**
- * Language picker for the onboarding screens.
- * Fixed in the upper-right corner across all steps.
- */
 export const LanguagePicker = () => {
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
