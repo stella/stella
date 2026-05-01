@@ -23,4 +23,3 @@ High-level priorities for Stella. Updated as the project evolves.
 ## Non-Goals (for now)
 
 - Word/Outlook plugin (parked)
-- Self-hosting documentation (placeholder in README)

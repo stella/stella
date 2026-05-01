@@ -3,7 +3,6 @@ import * as v from "valibot";
 
 import { envBase } from "@/api/env-base";
 
-const HTTPS_PROTOCOL = "https:";
 const featureFlagSchema = v.optional(
   v.pipe(v.string(), v.parseBoolean()),
   "false",
@@ -81,24 +80,7 @@ const envApi = createEnv({
     TRANSACTIONAL_EMAIL_FROM: v.string(),
     FRONTEND_URL: v.pipe(v.string(), v.url()),
     PUBLIC_URL: v.optional(v.pipe(v.string(), v.url())),
-    GOTENBERG_URL: v.pipe(
-      v.string(),
-      v.url(),
-      v.check((url) => {
-        const parsed = new URL(url);
-        // Localhost sidecar (ECS Fargate) is always HTTP
-        if (
-          parsed.hostname === "localhost" ||
-          parsed.hostname === "127.0.0.1"
-        ) {
-          return true;
-        }
-        return (
-          process.env.NODE_ENV !== "production" ||
-          parsed.protocol === HTTPS_PROTOCOL
-        );
-      }, "GOTENBERG_URL must use HTTPS in production (except localhost)"),
-    ),
+    GOTENBERG_URL: v.pipe(v.string(), v.url()),
     GOTENBERG_USERNAME: v.string(),
     GOTENBERG_PASSWORD: v.string(),
     CONTENT_ENCRYPTION_KEY: v.optional(
