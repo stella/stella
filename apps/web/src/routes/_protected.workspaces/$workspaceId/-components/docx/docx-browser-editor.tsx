@@ -21,6 +21,7 @@ import { CheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import "@stll/folio/editor.css";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import {
   DefaultPendingComponent,
   StatusMessage,
@@ -72,6 +73,8 @@ type DocxBrowserEditorBaseProps = {
   actionsRef?: RefObject<DocxBrowserEditorActions | null> | undefined;
   actionBarControls?: ReactNode | undefined;
   showActionBar?: boolean | undefined;
+  errorFallback?: ((props: { reset: () => void }) => ReactNode) | undefined;
+  onError?: ((error: Error) => void) | undefined;
 };
 
 type DocxBrowserEditorProps = DocxBrowserEditorBaseProps;
@@ -83,7 +86,23 @@ export type DocxBrowserEditorActions = {
   unlock: () => void;
 };
 
-export const DocxBrowserEditor = ({
+export const DocxBrowserEditor = (props: DocxBrowserEditorProps) => {
+  const { errorFallback, fieldId, onError, workspaceId } = props;
+
+  return (
+    <QuerySuspenseBoundary
+      area="docx-browser-editor"
+      errorFallback={errorFallback ?? defaultDocxBrowserEditorErrorFallback}
+      suspenseFallback={<DocxBrowserEditorPendingFallback />}
+      onError={onError}
+      resetKeys={[workspaceId, fieldId]}
+    >
+      <DocxBrowserEditorContent {...props} />
+    </QuerySuspenseBoundary>
+  );
+};
+
+const DocxBrowserEditorContent = ({
   workspaceId,
   entityId,
   fieldId,
@@ -419,6 +438,40 @@ export const DocxBrowserEditor = ({
         </FileViewerWithAI>
       </div>
     </div>
+  );
+};
+
+const defaultDocxBrowserEditorErrorFallback = ({
+  reset,
+}: {
+  reset: () => void;
+}) => <DocxBrowserEditorErrorFallback onRetry={reset} />;
+
+const DocxBrowserEditorPendingFallback = () => (
+  <div className="flex h-full w-full items-center justify-center">
+    <DefaultPendingComponent className="bg-transparent" />
+  </div>
+);
+
+const DocxBrowserEditorErrorFallback = ({
+  onRetry,
+}: {
+  onRetry: () => void;
+}) => {
+  const t = useTranslations();
+
+  return (
+    <StatusMessage
+      actionButton={
+        <Button onClick={onRetry} size="sm" variant="outline">
+          {t("common.tryAgain")}
+        </Button>
+      }
+      className="h-full w-full"
+      description={t("common.unexpectedError")}
+      status="error"
+      title={t("common.somethingWentWrong")}
+    />
   );
 };
 
