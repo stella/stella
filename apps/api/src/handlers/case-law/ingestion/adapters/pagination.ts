@@ -36,6 +36,11 @@ type PagePaginationOptions<TResponse> = {
   /** Number of items per page (used to detect last page). */
   pageSize: number;
   /**
+   * Page size used by existing bare page-number cursors.
+   * New cursors are persisted as item offsets.
+   */
+  legacyPageSize?: number | undefined;
+  /**
    * Build the fetch request for a given page number.
    * Return the URL and optional RequestInit overrides.
    */
@@ -104,6 +109,27 @@ type PagePaginationOptions<TResponse> = {
  */
 /** Max retries for transient 5xx / timeout errors before skipping. */
 const SERVER_ERROR_RETRIES = 2;
+const OFFSET_CURSOR_PREFIX = "offset:";
+
+const encodeOffsetCursor = (offset: number): string =>
+  `${OFFSET_CURSOR_PREFIX}${offset}`;
+
+const parseOffsetCursor = (
+  cursor: string | null,
+  firstPage: number,
+  legacyPageSize: number,
+): number => {
+  if (!cursor) {
+    return 0;
+  }
+
+  if (cursor.startsWith(OFFSET_CURSOR_PREFIX)) {
+    return Number.parseInt(cursor.slice(OFFSET_CURSOR_PREFIX.length), 10);
+  }
+
+  const legacyPage = Number.parseInt(cursor, 10);
+  return (legacyPage - firstPage) * legacyPageSize;
+};
 
 export const createPagePaginatedFetch = <TResponse>(
   opts: PagePaginationOptions<TResponse>,
@@ -117,15 +143,24 @@ export const createPagePaginatedFetch = <TResponse>(
   ): Promise<Result<SyncPage, AdapterFetchError>> =>
     await Result.tryPromise({
       try: async () => {
-        const page = cursor ? Number.parseInt(cursor, 10) : firstPage;
+        const offset = parseOffsetCursor(
+          cursor,
+          firstPage,
+          opts.legacyPageSize ?? opts.pageSize,
+        );
 
-        if (Number.isNaN(page) || page < firstPage) {
+        if (Number.isNaN(offset) || offset < 0) {
           throw new AdapterFetchError({
             message: `${opts.adapterKey}: invalid cursor`,
             adapterKey: opts.adapterKey,
             cursor,
           });
         }
+
+        const pageIndex = Math.floor(offset / opts.pageSize);
+        const page = firstPage + pageIndex;
+        const pageStartOffset = pageIndex * opts.pageSize;
+        const itemsAlreadyFetched = offset - pageStartOffset;
 
         const { url, init } = opts.buildRequest(page);
         const fetchT0 = performance.now();
@@ -162,7 +197,7 @@ export const createPagePaginatedFetch = <TResponse>(
             );
             return {
               decisions: [],
-              nextCursor: String(page + 1),
+              nextCursor: encodeOffsetCursor(pageStartOffset + opts.pageSize),
             };
           }
           throw error;
@@ -186,7 +221,7 @@ export const createPagePaginatedFetch = <TResponse>(
             );
             return {
               decisions: [],
-              nextCursor: String(page + 1),
+              nextCursor: encodeOffsetCursor(pageStartOffset + opts.pageSize),
             };
           }
 
@@ -246,14 +281,18 @@ export const createPagePaginatedFetch = <TResponse>(
           }
         }
         const fetchMs = Math.round(performance.now() - fetchT0);
-        const { items, total } = opts.extractItems(data);
+        const { items: fetchedItems, total } = opts.extractItems(data);
+        const items = fetchedItems.slice(itemsAlreadyFetched);
         const decisions: IngestionResult[] = [];
 
         let itemsSkipped = 0;
         // Process items in parallel batches when the adapter
         // opts in via itemConcurrency. Default is serial.
-        // Each batch is gated on signal so an aborted cycle
-        // returns partial results without stalling the cursor.
+        // On abort, discard the in-flight chunk's results and keep
+        // processedThroughIndex at the previous chunk boundary so the
+        // next cycle re-fetches and re-processes that chunk.
+        // Idempotent inserts handle the resulting duplicates.
+        let processedThroughIndex = 0;
         const chunkSize = Math.max(1, opts.itemConcurrency ?? 1);
         for (let i = 0; i < items.length; i += chunkSize) {
           if (signal?.aborted) {
@@ -263,17 +302,21 @@ export const createPagePaginatedFetch = <TResponse>(
           const results = await Promise.allSettled(
             chunk.map(async (item) => await opts.parseItem(item, signal)),
           );
+          if (signal?.aborted) {
+            break;
+          }
           for (const result of results) {
             if (result.status === "fulfilled") {
               if (result.value) {
                 decisions.push(result.value);
               }
-            } else if (!signal?.aborted) {
+            } else {
               // Skip individual items that fail to parse;
               // don't abort the entire page.
               itemsSkipped++;
             }
           }
+          processedThroughIndex = i + chunk.length;
         }
 
         if (itemsSkipped > 0) {
@@ -289,6 +332,8 @@ export const createPagePaginatedFetch = <TResponse>(
         logger.info("case_law.ingestion.page_completed", {
           adapterKey: opts.adapterKey,
           page,
+          offset,
+          skippedOffsetItems: itemsAlreadyFetched,
           decisions: decisions.length,
           items: items.length,
           skipped: itemsSkipped,
@@ -299,23 +344,27 @@ export const createPagePaginatedFetch = <TResponse>(
             : {}),
         });
 
-        const fetched = (page - firstPage + 1) * opts.pageSize;
+        const fetched = pageStartOffset + fetchedItems.length;
         const hasMore =
-          items.length >= opts.pageSize &&
+          fetchedItems.length >= opts.pageSize &&
           (total === undefined || total === null || fetched < total);
 
-        // When exhausted with results, park at the current page
-        // so the next cycle re-checks it for new entries.
-        // Parking at page-1 causes a ping-pong: page-1 (all
-        // skipped) → page (parks at page-1) → stagnation.
-        //
+        // On abort, rewind to the start of the in-flight chunk so the
+        // next cycle re-processes it.
+        // When exhausted with results, park at the current offset
+        // so the next cycle can detect stagnation without
+        // re-processing the already consumed page tail.
         // When exhausted with zero results (overshot past end),
         // step back so the cursor recovers into the valid range.
-        const nextCursor = hasMore
-          ? String(page + 1)
-          : items.length > 0
-            ? String(page)
-            : String(Math.max(firstPage, page - 1));
+        const nextCursor = signal?.aborted
+          ? encodeOffsetCursor(offset + processedThroughIndex)
+          : hasMore
+            ? encodeOffsetCursor(fetched)
+            : fetchedItems.length > 0
+              ? encodeOffsetCursor(offset + items.length)
+              : encodeOffsetCursor(
+                  Math.max(0, pageStartOffset - opts.pageSize),
+                );
 
         return { decisions, nextCursor };
       },

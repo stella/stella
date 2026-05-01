@@ -25,17 +25,18 @@ import { isRecord } from "@/api/lib/type-guards";
  * Slovak Courts adapter.
  *
  * Fetches decisions from the obcan.justice.sk REST API.
- * Page-based pagination (0-indexed, 10 items per page).
+ * Page-based pagination (0-indexed).
  *
  * Each list item is enriched with a detail fetch for
  * ECLI, document URL, and referenced legislation.
  *
- * Cursor format: page number as string (e.g. "0", "1").
+ * Cursor format: item offset as string (e.g. "offset:100").
  */
 
 const BASE_URL =
   "https://obcan.justice.sk/pilot/api/ress-isu-service/v1/rozhodnutie";
 const PAGE_SIZE = 100;
+const LEGACY_PAGE_SIZE = 100;
 const ITEM_CONCURRENCY = 10;
 
 type SkSud = {
@@ -299,6 +300,7 @@ export const skCourtsAdapter: SourceAdapter = {
   fetchPage: createPagePaginatedFetch<SkApiResponse>({
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     pageSize: PAGE_SIZE,
+    legacyPageSize: LEGACY_PAGE_SIZE,
     zeroIndexed: true,
     listTimeoutMs: 60_000,
     itemConcurrency: ITEM_CONCURRENCY,

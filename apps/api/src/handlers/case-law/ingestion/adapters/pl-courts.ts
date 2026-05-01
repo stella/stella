@@ -33,7 +33,7 @@ import { isRecord } from "@/api/lib/type-guards";
  * referenced cases, reporters, publication metadata, and the
  * original court document URL.
  *
- * Cursor format: page number as string (e.g. "0", "1").
+ * Cursor format: item offset as string (e.g. "offset:100").
  */
 
 const DUMP_URL = "https://www.saos.org.pl/api/dump/judgments";
@@ -41,6 +41,7 @@ const SEARCH_URL = "https://www.saos.org.pl/api/search/judgments";
 const DETAIL_URL = "https://www.saos.org.pl/api/judgments";
 const PUBLIC_JUDGMENT_URL = "https://www.saos.org.pl/judgments";
 const PAGE_SIZE = 100;
+const LEGACY_PAGE_SIZE = 100;
 const ITEM_CONCURRENCY = 10;
 
 const COURT_TYPE_MAP: Record<string, string> = {
@@ -604,12 +605,7 @@ export const plCourtsAdapter: SourceAdapter = {
   country: "POL",
   language: "pl",
   minRequestIntervalMs: 200,
-  // Detail fetches are slower than SK (rich JSON, sometimes ~3s).
-  // PAGE_SIZE=100 with ITEM_CONCURRENCY=10 → ~30s wall time per
-  // page; 5 min headroom covers the slowest pages.
-  pageTimeoutMs: 300_000,
-  // Page is ~30s wall time; 30 min cycle covers ~60 pages = ~6000
-  // decisions per cursor persist.
+  pageTimeoutMs: 280_000,
   maxCycleMs: 30 * 60 * 1000,
 
   async getTotalCount(signal) {
@@ -651,6 +647,7 @@ export const plCourtsAdapter: SourceAdapter = {
   fetchPage: createPagePaginatedFetch<SaosDumpResponse>({
     adapterKey: ADAPTER_KEYS.PL_COURTS,
     pageSize: PAGE_SIZE,
+    legacyPageSize: LEGACY_PAGE_SIZE,
     zeroIndexed: true,
     listTimeoutMs: 60_000,
     itemConcurrency: ITEM_CONCURRENCY,

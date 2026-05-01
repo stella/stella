@@ -29,7 +29,7 @@ import { isRecord } from "@/api/lib/type-guards";
  * HTML, XML, RTF, and PDF formats. No authentication
  * required.
  *
- * Cursor format: page number as string (e.g. "1", "2").
+ * Cursor format: item offset as string (e.g. "offset:20").
  * Each page fetches PAGE_SIZE items.
  */
 
@@ -413,6 +413,7 @@ export const atCourtsAdapter: SourceAdapter = {
   fetchPage: createPagePaginatedFetch<RisApiResponse>({
     adapterKey: ADAPTER_KEYS.AT_COURTS,
     pageSize: PAGE_SIZE,
+    legacyPageSize: PAGE_SIZE,
 
     buildRequest: (page) => ({
       url: `${API_URL}?${new URLSearchParams({
