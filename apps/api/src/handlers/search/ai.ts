@@ -84,10 +84,12 @@ export const summarizeSearchBodySchema = t.Object({
     }),
   ),
   locale: t.Optional(t.String({ maxLength: 16 })),
-  workspaceIds: t.Optional(t.Array(tSafeId("workspace"), { maxItems: 64 })),
-  types: t.Optional(t.Array(t.UnionEnum(GLOBAL_SEARCH_RESULT_TYPES))),
-  editedByUserIds: t.Optional(t.Array(tUserId, { maxItems: 64 })),
-  mimeTypes: t.Optional(t.Array(t.String({ minLength: 1, maxLength: 128 }))),
+  workspaceIds: t.Array(tSafeId("workspace"), { maxItems: 64 }),
+  types: t.Array(t.UnionEnum(GLOBAL_SEARCH_RESULT_TYPES), {
+    maxItems: GLOBAL_SEARCH_RESULT_TYPES.length,
+  }),
+  editedByUserIds: t.Array(tUserId, { maxItems: 64 }),
+  mimeTypes: t.Array(t.String({ minLength: 1, maxLength: 128 })),
   updatedFrom: t.Optional(isoDateTime),
   updatedTo: t.Optional(isoDateTime),
   limit: t.Optional(
@@ -508,17 +510,6 @@ export const createSearchSummaryChatThread = async ({
     return contextsResult;
   }
 
-  const chatWorkspaceIdResult = resolveSummaryChatWorkspaceId({
-    contexts: contextsResult,
-    selectedWorkspaceIds: resolved.ids,
-  });
-  if (
-    typeof chatWorkspaceIdResult !== "string" &&
-    chatWorkspaceIdResult !== null
-  ) {
-    return chatWorkspaceIdResult;
-  }
-
   const citations = resolveSummaryCitations({
     contexts: contextsResult,
     citations: body.citations.map((citation) => ({
@@ -552,7 +543,7 @@ export const createSearchSummaryChatThread = async ({
       id: threadId,
       title: body.title,
       userId,
-      workspaceId: chatWorkspaceIdResult,
+      workspaceId: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -560,7 +551,7 @@ export const createSearchSummaryChatThread = async ({
       {
         id: userMessageId,
         threadId,
-        workspaceId: chatWorkspaceIdResult,
+        workspaceId: null,
         userId,
         role: "user",
         content: {
@@ -572,7 +563,7 @@ export const createSearchSummaryChatThread = async ({
       {
         id: assistantMessageId,
         threadId,
-        workspaceId: chatWorkspaceIdResult,
+        workspaceId: null,
         userId,
         role: "assistant",
         content: {
@@ -636,47 +627,6 @@ const loadSummaryContexts = async ({
     organizationId,
     accessibleWorkspaceIds,
   });
-};
-
-const resolveSummaryChatWorkspaceId = ({
-  contexts,
-  selectedWorkspaceIds,
-}: {
-  contexts: readonly SearchResultContext[];
-  selectedWorkspaceIds: readonly SafeId<"workspace">[];
-}) => {
-  if (selectedWorkspaceIds.length === 1) {
-    return selectedWorkspaceIds[0] ?? null;
-  }
-
-  const workspaceIds = new Set<SafeId<"workspace">>();
-  for (const context of contexts) {
-    const workspaceId = getWorkspaceScopedHitWorkspaceId(context.hit);
-    if (workspaceId) {
-      workspaceIds.add(workspaceId);
-    }
-  }
-
-  if (workspaceIds.size === 0) {
-    return null;
-  }
-
-  if (workspaceIds.size === 1) {
-    return Array.from(workspaceIds).at(0) ?? null;
-  }
-
-  return status(400, {
-    message: "Search summaries can only be opened as chat from one workspace.",
-  });
-};
-
-const getWorkspaceScopedHitWorkspaceId = (
-  hit: GlobalSearchHit,
-): SafeId<"workspace"> | null => {
-  if (hit.type === "case-law" || hit.type === "contact") {
-    return null;
-  }
-  return toSafeId<"workspace">(hit.workspaceId);
 };
 
 const toModelSearchResultContext = (context: SearchResultContext) => ({

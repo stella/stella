@@ -24,10 +24,12 @@ export const searchFacetsBodySchema = t.Object({
     minLength: 1,
     maxLength: LIMITS.searchQueryMaxLength,
   }),
-  workspaceIds: t.Optional(t.Array(tSafeId("workspace"), { maxItems: 64 })),
-  types: t.Optional(t.Array(t.UnionEnum(GLOBAL_SEARCH_RESULT_TYPES))),
-  editedByUserIds: t.Optional(t.Array(tUserId, { maxItems: 64 })),
-  mimeTypes: t.Optional(t.Array(t.String({ minLength: 1, maxLength: 128 }))),
+  workspaceIds: t.Array(tSafeId("workspace"), { maxItems: 64 }),
+  types: t.Array(t.UnionEnum(GLOBAL_SEARCH_RESULT_TYPES), {
+    maxItems: GLOBAL_SEARCH_RESULT_TYPES.length,
+  }),
+  editedByUserIds: t.Array(tUserId, { maxItems: 64 }),
+  mimeTypes: t.Array(t.String({ minLength: 1, maxLength: 128 })),
   updatedFrom: t.Optional(isoDateTime),
   updatedTo: t.Optional(isoDateTime),
   limit: t.Optional(

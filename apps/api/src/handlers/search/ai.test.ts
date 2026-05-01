@@ -40,6 +40,13 @@ beforeEach(() => {
   dbLimitMock.mockClear();
 });
 
+const emptySearchSummaryFilters = () => ({
+  editedByUserIds: [],
+  mimeTypes: [],
+  types: [],
+  workspaceIds: [],
+});
+
 describe("search AI output schemas", () => {
   test("convert to JSON Schema for structured model output", async () => {
     const { refineSearchOutputSchema, searchSummaryOutputSchema } =
@@ -51,7 +58,7 @@ describe("search AI output schemas", () => {
 });
 
 describe("search summary chat", () => {
-  test("stores workspace-scoped summaries on the requested workspace", async () => {
+  test("stores global summary chat thread when a workspace filter is set", async () => {
     const organizationId = toSafeId<"organization">("org_1");
     const workspaceId = toSafeId<"workspace">("ws_1");
     const insertedValues: unknown[] = [];
@@ -95,6 +102,7 @@ describe("search summary chat", () => {
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
       body: {
+        ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],
         limit: 1,
         query: "motion",
@@ -109,16 +117,16 @@ describe("search summary chat", () => {
     });
 
     expect(result).toHaveProperty("threadId");
-    expect(insertedValues.at(0)).toMatchObject({ workspaceId });
+    expect(insertedValues.at(0)).toMatchObject({ workspaceId: null });
     expect(insertedValues.at(1)).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ role: "user", workspaceId }),
-        expect.objectContaining({ role: "assistant", workspaceId }),
+        expect.objectContaining({ role: "user", workspaceId: null }),
+        expect.objectContaining({ role: "assistant", workspaceId: null }),
       ]),
     );
   });
 
-  test("infers one workspace for unfiltered summary chats with workspace hits", async () => {
+  test("stores global summary chat thread for unfiltered summary chats", async () => {
     const organizationId = toSafeId<"organization">("org_1");
     const workspaceId = toSafeId<"workspace">("ws_1");
     const insertedValues: unknown[] = [];
@@ -158,6 +166,7 @@ describe("search summary chat", () => {
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
       body: {
+        ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],
         limit: 1,
         query: "motion",
@@ -171,21 +180,24 @@ describe("search summary chat", () => {
     });
 
     expect(result).toHaveProperty("threadId");
-    expect(insertedValues.at(0)).toMatchObject({ workspaceId });
+    expect(insertedValues.at(0)).toMatchObject({ workspaceId: null });
     expect(insertedValues.at(1)).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ role: "user", workspaceId }),
-        expect.objectContaining({ role: "assistant", workspaceId }),
+        expect.objectContaining({ role: "user", workspaceId: null }),
+        expect.objectContaining({ role: "assistant", workspaceId: null }),
       ]),
     );
   });
 
-  test("rejects unfiltered summary chats with hits from multiple workspaces", async () => {
+  test("stores global summary chat thread when hits span multiple workspaces", async () => {
     const organizationId = toSafeId<"organization">("org_1");
     const firstWorkspaceId = toSafeId<"workspace">("ws_1");
     const secondWorkspaceId = toSafeId<"workspace">("ws_2");
+    const insertedValues: unknown[] = [];
     const insertMock = mock((_table: unknown) => ({
-      values: mock(async () => undefined),
+      values: mock(async (values: unknown) => {
+        insertedValues.push(values);
+      }),
     }));
     const tx = {
       query: { workspaces: {} },
@@ -232,6 +244,7 @@ describe("search summary chat", () => {
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [firstWorkspaceId, secondWorkspaceId],
       body: {
+        ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],
         limit: 2,
         query: "motion",
@@ -244,13 +257,14 @@ describe("search summary chat", () => {
       userId: toSafeId<"user">("user_1"),
     });
 
-    expect(result).toMatchObject({
-      code: 400,
-      response: {
-        message:
-          "Search summaries can only be opened as chat from one workspace.",
-      },
-    });
-    expect(insertMock).not.toHaveBeenCalled();
+    expect(result).toHaveProperty("threadId");
+    expect(insertMock).toHaveBeenCalled();
+    expect(insertedValues.at(0)).toMatchObject({ workspaceId: null });
+    expect(insertedValues.at(1)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: "user", workspaceId: null }),
+        expect.objectContaining({ role: "assistant", workspaceId: null }),
+      ]),
+    );
   });
 });

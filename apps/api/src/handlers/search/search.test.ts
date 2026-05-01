@@ -24,6 +24,14 @@ const unusedScopedDb: ScopedDb = async () => {
   throw new Error("scopedDb should not be called");
 };
 
+const emptySearchFilters = () => ({
+  editedByUserIds: [],
+  kinds: [],
+  mimeTypes: [],
+  types: [],
+  workspaceIds: [],
+});
+
 const createWorkspaceLookupScopedDb =
   (findMany: (query: unknown) => Promise<unknown>): ScopedDb =>
   async (callback) => {
@@ -58,6 +66,7 @@ describe("search handler workspace scoping", () => {
     await searchHandler({
       accessibleWorkspaceIds,
       body: {
+        ...emptySearchFilters(),
         query: "closing memo",
       },
       organizationId,
@@ -86,6 +95,7 @@ describe("search handler workspace scoping", () => {
     await searchHandler({
       accessibleWorkspaceIds,
       body: {
+        ...emptySearchFilters(),
         query: "closing memo",
         workspaceIds: [workspaceId],
       },
@@ -118,6 +128,7 @@ describe("search handler workspace scoping", () => {
     await searchHandler({
       accessibleWorkspaceIds,
       body: {
+        ...emptySearchFilters(),
         query: "closing memo",
         workspaceIds: [workspaceId, workspaceId, workspaceId],
       },
@@ -144,6 +155,7 @@ describe("search handler workspace scoping", () => {
     const result = await searchHandler({
       accessibleWorkspaceIds,
       body: {
+        ...emptySearchFilters(),
         query: "closing memo",
         workspaceIds: [toSafeId<"workspace">("ws_other")],
       },
@@ -162,6 +174,7 @@ describe("search handler workspace scoping", () => {
     await searchHandler({
       accessibleWorkspaceIds,
       body: {
+        ...emptySearchFilters(),
         editedByUserIds: ["user_1", "user_2"],
         mimeTypes: ["application/pdf"],
         query: "closing memo",

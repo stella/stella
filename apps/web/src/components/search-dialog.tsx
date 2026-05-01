@@ -1,13 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { GlobalSearchHit, GlobalSearchResultType } from "@stll/api/types";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
+import {
+  Command,
+  CommandDialog,
+  CommandDialogPopup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@stll/ui/components/command";
 import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
-import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
 import { Skeleton } from "@stll/ui/components/skeleton";
-import { cn } from "@stll/ui/lib/utils";
+import { toastManager } from "@stll/ui/components/toast";
+import type { UseMutationResult } from "@tanstack/react-query";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -20,7 +28,6 @@ import {
   LinkIcon,
   LoaderIcon,
   MessageSquareIcon,
-  SearchIcon,
   SparklesIcon,
   SquareCheckIcon,
   UserIcon,
@@ -29,17 +36,19 @@ import { useDebouncedCallback } from "use-debounce";
 import { useLocale, useTranslations } from "use-intl";
 
 import { UserAvatar } from "@/components/user-avatar";
+import type { TranslationKey } from "@/i18n/types";
 import { getMatterSwatch } from "@/lib/matter-colors";
 import {
-  createSearchSummaryChatThread,
   presetUpdatedFrom,
-  refineSearchQuery,
   searchFacetOptions,
   searchInfiniteOptions,
-  summarizeSearchResults,
   TIME_PRESETS,
 } from "@/lib/search";
-import type { SearchableFacet, TimePreset } from "@/lib/search";
+import type {
+  SearchAISummaryParams,
+  SearchableFacet,
+  TimePreset,
+} from "@/lib/search";
 import {
   readRecentFiles,
   readRecentSearches,
@@ -51,6 +60,12 @@ import type {
   RecentSearch,
   SearchRecentsScope,
 } from "@/lib/search-recents";
+import type { SearchSummaryData } from "@/lib/search/mutations";
+import {
+  useCreateSearchSummaryChatMutation,
+  useRefineSearchMutation,
+  useSummarizeSearchMutation,
+} from "@/lib/search/mutations";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 const DEBOUNCE_MS = 300;
@@ -77,14 +92,14 @@ const KIND_TRANSLATION_KEYS = {
   task: "search.kinds.task",
   message: "search.kinds.message",
   link: "search.kinds.link",
-} as const satisfies Record<GlobalSearchResultType, string>;
+} as const satisfies Record<GlobalSearchResultType, TranslationKey>;
 
 const TIME_PRESET_TRANSLATION_KEYS = {
   day: "search.updatedWithinOptions.day",
   week: "search.updatedWithinOptions.week",
   month: "search.updatedWithinOptions.month",
   year: "search.updatedWithinOptions.year",
-} as const satisfies Record<TimePreset, string>;
+} as const satisfies Record<TimePreset, TranslationKey>;
 
 const isGlobalSearchResultType = (
   value: string,
@@ -159,39 +174,16 @@ type TimeFilter =
   | { mode: "preset"; preset: TimePreset }
   | { mode: "custom"; updatedFrom?: string; updatedTo?: string };
 
-const initialSearchFilters = (
-  initialWorkspaceId: string | undefined,
-): SearchFilters => ({
-  workspaceIds: initialWorkspaceId ? [initialWorkspaceId] : [],
-});
-
 type SearchFilters = {
   workspaceIds: string[];
-  types?: GlobalSearchResultType[];
-  editedByUserIds?: string[];
-  mimeTypes?: string[];
+  types: GlobalSearchResultType[];
+  editedByUserIds: string[];
+  mimeTypes: string[];
   time?: TimeFilter;
 };
 
 const filterUpdatedTo = (filters: SearchFilters): string | undefined =>
   filters.time?.mode === "custom" ? filters.time.updatedTo : undefined;
-
-type SearchSummaryState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | {
-      status: "ready";
-      title: string;
-      summary: string;
-      citations: {
-        id: string;
-        number: number;
-        title: string;
-        type: string;
-        reason: string;
-      }[];
-    }
-  | { status: "error"; message?: string };
 
 type SearchDialogProps = {
   open: boolean;
@@ -222,26 +214,24 @@ export const SearchDialog = ({
     }),
     [searchRecentsOrganizationId, searchRecentsUserId],
   );
-  const resultsRef = useRef<HTMLDivElement>(null);
+  const [resultsElement, setResultsElement] = useState<HTMLDivElement | null>(
+    null,
+  );
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
-  const [filters, setFilters] = useState<SearchFilters>(() =>
-    initialSearchFilters(initialWorkspaceId),
-  );
-  const [selectedIndex, setSelectedIndex] = useState(-1);
-  const [isRefiningQuery, setIsRefiningQuery] = useState(false);
-  const [isOpeningSummaryChat, setIsOpeningSummaryChat] = useState(false);
-  const [summaryState, setSummaryState] = useState<SearchSummaryState>({
-    status: "idle",
+  const [filters, setFilters] = useState<SearchFilters>({
+    editedByUserIds: [],
+    mimeTypes: [],
+    types: [],
+    workspaceIds: initialWorkspaceId ? [initialWorkspaceId] : [],
   });
 
   const debouncedSetQuery = useDebouncedCallback((value: string) => {
     setDebouncedQuery(value);
-    setSelectedIndex(-1);
   }, DEBOUNCE_MS);
 
   const searchQuery = debouncedQuery;
@@ -272,16 +262,13 @@ export const SearchDialog = ({
   } = useInfiniteQuery(
     searchInfiniteOptions({
       query: searchQuery,
-      ...(filters.workspaceIds.length > 0 && {
-        workspaceIds: filters.workspaceIds,
-      }),
-      ...(filters.types !== undefined && { types: filters.types }),
-      ...(filters.editedByUserIds !== undefined && {
-        editedByUserIds: filters.editedByUserIds,
-      }),
-      ...(filters.mimeTypes !== undefined && { mimeTypes: filters.mimeTypes }),
-      ...(updatedFrom !== undefined && { updatedFrom }),
-      ...(updatedTo !== undefined && { updatedTo }),
+      workspaceIds: filters.workspaceIds,
+      kinds: [],
+      types: filters.types,
+      editedByUserIds: filters.editedByUserIds,
+      mimeTypes: filters.mimeTypes,
+      updatedFrom,
+      updatedTo,
     }),
   );
 
@@ -289,21 +276,24 @@ export const SearchDialog = ({
     () => data?.pages.flatMap((page) => page.hits) ?? [],
     [data?.pages],
   );
+  const getHitVirtualKey = (index: number) => allHits.at(index)?.id ?? index;
+
   // Counts and facets are computed only on the first page (see backend);
   // ignore them entirely while the query is empty so a cleared input
   // doesn't leave stale numbers in the sidebar.
   const firstPage = searchQuery.length > 0 ? data?.pages.at(0) : undefined;
   const facets = firstPage?.facets;
   const totalCount = firstPage?.totalCount ?? 0;
-  const filterTypesKey = filters.types?.join("|") ?? "";
-  const filterMimeTypesKey = filters.mimeTypes?.join("|") ?? "";
+  const filterTypesKey = filters.types.join("|");
+  const filterMimeTypesKey = filters.mimeTypes.join("|");
   const filterWorkspaceIdsKey = filters.workspaceIds.join("|");
 
   const hitVirtualizer = useVirtualizer({
     count: allHits.length,
+    enabled: open && resultsElement !== null,
     estimateSize: () => VIRTUAL_HIT_ESTIMATE_PX,
-    getItemKey: (index) => allHits.at(index)?.id ?? index,
-    getScrollElement: () => resultsRef.current,
+    getItemKey: getHitVirtualKey,
+    getScrollElement: () => resultsElement,
     overscan: VIRTUAL_HIT_OVERSCAN,
   });
   const virtualHits = hitVirtualizer.getVirtualItems();
@@ -316,241 +306,165 @@ export const SearchDialog = ({
     setRecentFiles(readRecentFiles(searchRecentsScope));
   }, [open, searchRecentsScope]);
 
-  useEffect(() => {
-    setFilters((prev) => ({
-      ...prev,
-      workspaceIds: initialWorkspaceId ? [initialWorkspaceId] : [],
-    }));
-    setSelectedIndex(-1);
-  }, [initialWorkspaceId]);
+  const searchFilterParams = {
+    workspaceIds: filters.workspaceIds,
+    types: filters.types,
+    editedByUserIds: filters.editedByUserIds,
+    mimeTypes: filters.mimeTypes,
+    updatedFrom,
+    updatedTo,
+  };
 
-  useEffect(() => {
-    if (selectedIndex < 0) {
-      return;
-    }
-    hitVirtualizer.scrollToIndex(selectedIndex, { align: "auto" });
-  }, [hitVirtualizer, selectedIndex]);
+  const facetSearchParams = {
+    query: searchQuery,
+    ...searchFilterParams,
+  };
 
-  const handleQueryChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value;
-      setQuery(value);
-      debouncedSetQuery(value);
-      setSummaryState({ status: "idle" });
-    },
-    [debouncedSetQuery],
-  );
+  const summarizeSearchMutation = useSummarizeSearchMutation();
 
-  const clearSearchQuery = useCallback(() => {
+  const refineSearchMutation = useRefineSearchMutation();
+
+  const createSummaryChatMutation = useCreateSearchSummaryChatMutation();
+
+  const clearSearchQuery = () => {
     debouncedSetQuery.cancel();
     setQuery("");
     setDebouncedQuery("");
-    setSelectedIndex(-1);
-    setSummaryState({ status: "idle" });
-  }, [debouncedSetQuery]);
+    summarizeSearchMutation.reset();
+  };
 
-  const closeSearchDialog = useCallback(() => {
-    onOpenChange(false);
-  }, [onOpenChange]);
+  const handleSummarizeResults = () => {
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery || summarizeSearchMutation.isPending) {
+      return;
+    }
 
-  const buildAIParams = useCallback(
-    () => ({
-      ...(filters.workspaceIds.length > 0 && {
-        workspaceIds: filters.workspaceIds,
-      }),
-      ...(filters.types !== undefined && { types: filters.types }),
-      ...(filters.editedByUserIds !== undefined && {
-        editedByUserIds: filters.editedByUserIds,
-      }),
-      ...(filters.mimeTypes !== undefined && { mimeTypes: filters.mimeTypes }),
-      ...(updatedFrom !== undefined && { updatedFrom }),
-      ...(updatedTo !== undefined && { updatedTo }),
-    }),
-    [
-      filters.editedByUserIds,
-      filters.mimeTypes,
-      filters.types,
-      filters.workspaceIds,
-      updatedFrom,
-      updatedTo,
-    ],
-  );
+    summarizeSearchMutation.mutate({
+      query: trimmedQuery,
+      locale,
+      ...searchFilterParams,
+      limit: 5,
+    });
+  };
 
-  const facetSearchParams = useMemo(
-    () => ({
-      query: searchQuery,
-      ...(filters.workspaceIds.length > 0 && {
-        workspaceIds: filters.workspaceIds,
-      }),
-      ...(filters.types !== undefined && { types: filters.types }),
-      ...(filters.editedByUserIds !== undefined && {
-        editedByUserIds: filters.editedByUserIds,
-      }),
-      ...(filters.mimeTypes !== undefined && { mimeTypes: filters.mimeTypes }),
-      ...(updatedFrom !== undefined && { updatedFrom }),
-      ...(updatedTo !== undefined && { updatedTo }),
-    }),
-    [
-      filters.editedByUserIds,
-      filters.mimeTypes,
-      filters.types,
-      filters.workspaceIds,
-      searchQuery,
-      updatedFrom,
-      updatedTo,
-    ],
-  );
+  const handleOpenSummaryChat = () => {
+    const trimmedQuery = searchQuery.trim();
+    const summaryData = summarizeSearchMutation.data;
+    if (
+      !summarizeSearchMutation.isSuccess ||
+      summaryData === undefined ||
+      !trimmedQuery ||
+      createSummaryChatMutation.isPending
+    ) {
+      return;
+    }
 
-  const handleRefineQuery = useCallback(async () => {
+    createSummaryChatMutation.mutate(
+      {
+        query: trimmedQuery,
+        locale,
+        title: summaryData.title,
+        summary: summaryData.summary,
+        citations: summaryData.citations,
+        ...searchFilterParams,
+        limit: 5,
+      },
+      {
+        onSuccess: (thread) => {
+          onOpenChange(false);
+          void navigate({
+            to: "/chat/$threadId",
+            params: { threadId: thread.threadId },
+          });
+        },
+        onError: () => {
+          toastManager.add({
+            title: t("common.somethingWentWrong"),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
+
+  const handleRefineQuery = () => {
     const trimmedQuery = query.trim();
-    if (!trimmedQuery || isRefiningQuery) {
+    if (!trimmedQuery || refineSearchMutation.isPending) {
       return;
     }
 
-    setIsRefiningQuery(true);
-    try {
-      const refined = await refineSearchQuery({
-        query: trimmedQuery,
-        locale,
-      });
-      debouncedSetQuery.cancel();
-      setQuery(refined.query);
-      setDebouncedQuery(refined.query);
-      setSelectedIndex(-1);
-      setSummaryState({ status: "idle" });
-      setRecentSearches(recordRecentSearch(trimmedQuery, searchRecentsScope));
-    } catch {
-      setSummaryState({ status: "error" });
-    } finally {
-      setIsRefiningQuery(false);
-    }
-  }, [debouncedSetQuery, isRefiningQuery, locale, query, searchRecentsScope]);
+    refineSearchMutation.mutate(
+      { query: trimmedQuery, locale },
+      {
+        onSuccess: (refined, variables) => {
+          debouncedSetQuery.cancel();
+          setQuery(refined.query);
+          setDebouncedQuery(refined.query);
+          summarizeSearchMutation.reset();
+          setRecentSearches(
+            recordRecentSearch(variables.query, searchRecentsScope),
+          );
+        },
+        onError: () => {
+          toastManager.add({
+            title: t("common.somethingWentWrong"),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
 
-  const handleSummarizeResults = useCallback(async () => {
-    const trimmedQuery = searchQuery.trim();
-    if (!trimmedQuery || summaryState.status === "loading") {
-      return;
-    }
+  const applyRecentSearch = (recent: RecentSearch) => {
+    setQuery(recent.query);
+    setDebouncedQuery(recent.query);
+    summarizeSearchMutation.reset();
+    setRecentSearches(recordRecentSearch(recent.query, searchRecentsScope));
+  };
 
-    setSummaryState({ status: "loading" });
-    try {
-      const summary = await summarizeSearchResults({
-        query: trimmedQuery,
-        locale,
-        ...buildAIParams(),
-        limit: 5,
-      });
-      setSummaryState({
-        status: "ready",
-        title: summary.title,
-        summary: summary.summary,
-        citations: summary.citations,
-      });
-    } catch {
-      setSummaryState({ status: "error" });
-    }
-  }, [buildAIParams, locale, searchQuery, summaryState.status]);
+  const openRecentFile = async (file: RecentFile) => {
+    onOpenChange(false);
+    setRecentFiles(recordRecentFile(file, searchRecentsScope));
+    await navigate({
+      to: "/workspaces/$workspaceId/entities/$entityId",
+      params: { workspaceId: file.workspaceId, entityId: file.entityId },
+    });
+  };
 
-  const handleOpenSummaryChat = useCallback(async () => {
-    const trimmedQuery = searchQuery.trim();
-    if (summaryState.status !== "ready" || !trimmedQuery) {
-      return;
-    }
-
-    setIsOpeningSummaryChat(true);
-    try {
-      const thread = await createSearchSummaryChatThread({
-        query: trimmedQuery,
-        locale,
-        title: summaryState.title,
-        summary: summaryState.summary,
-        citations: summaryState.citations,
-        ...buildAIParams(),
-        limit: 5,
-      });
-      closeSearchDialog();
-      await navigate({
-        to: "/chat/$threadId",
-        params: { threadId: thread.threadId },
-      });
-    } catch {
-      setSummaryState({ status: "error" });
-    } finally {
-      setIsOpeningSummaryChat(false);
-    }
-  }, [
-    buildAIParams,
-    locale,
-    navigate,
-    closeSearchDialog,
-    searchQuery,
-    summaryState,
-  ]);
-
-  const applyRecentSearch = useCallback(
-    (recent: RecentSearch) => {
-      setQuery(recent.query);
-      setDebouncedQuery(recent.query);
-      setSelectedIndex(-1);
-      setSummaryState({ status: "idle" });
-      setRecentSearches(recordRecentSearch(recent.query, searchRecentsScope));
-    },
-    [searchRecentsScope],
-  );
-
-  const openRecentFile = useCallback(
-    async (file: RecentFile) => {
-      closeSearchDialog();
-      setRecentFiles(recordRecentFile(file, searchRecentsScope));
-      await navigate({
-        to: "/workspaces/$workspaceId/entities/$entityId",
-        params: { workspaceId: file.workspaceId, entityId: file.entityId },
-      });
-    },
-    [closeSearchDialog, navigate, searchRecentsScope],
-  );
-
-  const toggleTypeFilter = useCallback((type: GlobalSearchResultType) => {
+  const toggleTypeFilter = (type: GlobalSearchResultType) => {
     setFilters((prev) => {
-      const current = prev.types ?? [];
-      const next = current.includes(type)
-        ? current.filter((item) => item !== type)
-        : [...current, type];
-      const { types: _, ...rest } = prev;
+      const next = prev.types.includes(type)
+        ? prev.types.filter((item) => item !== type)
+        : [...prev.types, type];
       return {
-        ...rest,
-        ...(next.length > 0 && { types: next }),
+        ...prev,
+        types: next,
       };
     });
-    setSelectedIndex(-1);
-  }, []);
+  };
 
-  const toggleWorkspaceFilter = useCallback((workspaceId: string) => {
+  const toggleWorkspaceFilter = (workspaceId: string) => {
     setFilters((prev) => {
       const next = prev.workspaceIds.includes(workspaceId)
         ? prev.workspaceIds.filter((id) => id !== workspaceId)
         : [...prev.workspaceIds, workspaceId];
       return { ...prev, workspaceIds: next };
     });
-    setSelectedIndex(-1);
-  }, []);
+  };
 
-  const toggleEditorFilter = useCallback((editorId: string) => {
+  const toggleEditorFilter = (editorId: string) => {
     setFilters((prev) => {
-      const current = prev.editedByUserIds ?? [];
-      const next = current.includes(editorId)
-        ? current.filter((id) => id !== editorId)
-        : [...current, editorId];
-      const { editedByUserIds: _, ...rest } = prev;
+      const next = prev.editedByUserIds.includes(editorId)
+        ? prev.editedByUserIds.filter((id) => id !== editorId)
+        : [...prev.editedByUserIds, editorId];
       return {
-        ...rest,
-        ...(next.length > 0 && { editedByUserIds: next }),
+        ...prev,
+        editedByUserIds: next,
       };
     });
-    setSelectedIndex(-1);
-  }, []);
+  };
 
-  const setTimePreset = useCallback((preset: TimePreset | undefined) => {
+  const setTimePreset = (preset: TimePreset | undefined) => {
     setFilters((prev): SearchFilters => {
       const { time: _, ...rest } = prev;
       if (!preset) {
@@ -558,171 +472,135 @@ export const SearchDialog = ({
       }
       return { ...rest, time: { mode: "preset", preset } };
     });
-    setSelectedIndex(-1);
-  }, []);
+  };
 
-  const setCustomDateRange = useCallback(
-    (range: { updatedFrom?: string; updatedTo?: string }) => {
-      setFilters((prev): SearchFilters => {
-        const { time: _, ...rest } = prev;
-        return {
-          ...rest,
-          time: {
-            mode: "custom",
-            ...(range.updatedFrom !== undefined && {
-              updatedFrom: range.updatedFrom,
-            }),
-            ...(range.updatedTo !== undefined && {
-              updatedTo: range.updatedTo,
-            }),
-          },
-        };
-      });
-      setSelectedIndex(-1);
-    },
-    [],
-  );
+  const setCustomDateRange = (range: {
+    updatedFrom?: string;
+    updatedTo?: string;
+  }) => {
+    setFilters((prev): SearchFilters => {
+      const { time: _, ...rest } = prev;
+      return {
+        ...rest,
+        time: {
+          mode: "custom",
+          ...(range.updatedFrom !== undefined && {
+            updatedFrom: range.updatedFrom,
+          }),
+          ...(range.updatedTo !== undefined && {
+            updatedTo: range.updatedTo,
+          }),
+        },
+      };
+    });
+  };
 
-  const clearTimeFilter = useCallback(() => {
+  const clearTimeFilter = () => {
     setFilters((prev): SearchFilters => {
       const { time: _, ...rest } = prev;
       return rest;
     });
-    setSelectedIndex(-1);
-  }, []);
+  };
 
-  const toggleMimeTypeFilter = useCallback((mimeType: string) => {
+  const toggleMimeTypeFilter = (mimeType: string) => {
     setFilters((prev) => {
-      const current = prev.mimeTypes ?? [];
-      const next = current.includes(mimeType)
-        ? current.filter((item) => item !== mimeType)
-        : [...current, mimeType];
-      const { mimeTypes: _, ...rest } = prev;
+      const next = prev.mimeTypes.includes(mimeType)
+        ? prev.mimeTypes.filter((item) => item !== mimeType)
+        : [...prev.mimeTypes, mimeType];
       return {
-        ...rest,
-        ...(next.length > 0 && { mimeTypes: next }),
+        ...prev,
+        mimeTypes: next,
       };
     });
-    setSelectedIndex(-1);
-  }, []);
+  };
 
-  const handleResultClick = useCallback(
-    async (hit: GlobalSearchHit) => {
-      if (query.trim()) {
-        setRecentSearches(recordRecentSearch(query, searchRecentsScope));
-      }
+  const handleResultClick = async (hit: GlobalSearchHit) => {
+    if (query.trim()) {
+      setRecentSearches(recordRecentSearch(query, searchRecentsScope));
+    }
 
-      closeSearchDialog();
-      if (hit.type === "contact") {
-        await navigate({
-          to: "/contacts/$contactId",
-          params: { contactId: hit.contactId },
-        });
-        return;
-      }
-
-      if (hit.type === "case-law") {
-        await navigate({
-          to: "/knowledge/case/$decisionId",
-          params: { decisionId: hit.decisionId },
-          search: {
-            ...(hit.headline && {
-              q: extractHighlightedText(hit.headline),
-            }),
-          },
-        });
-        return;
-      }
-
-      if (hit.type === "matter") {
-        await navigate({
-          to: "/workspaces/$workspaceId",
-          params: { workspaceId: hit.workspaceId },
-        });
-        return;
-      }
-
-      if (hit.type === "document") {
-        setRecentFiles(
-          recordRecentFile(
-            {
-              entityId: hit.entityId,
-              mimeType: hit.mimeType,
-              title: hit.title || hit.id,
-              workspaceId: hit.workspaceId,
-              workspaceName: hit.workspaceName,
-            },
-            searchRecentsScope,
-          ),
-        );
-      }
-
+    onOpenChange(false);
+    if (hit.type === "contact") {
       await navigate({
-        to: "/workspaces/$workspaceId/entities/$entityId",
-        params: { workspaceId: hit.workspaceId, entityId: hit.entityId },
+        to: "/contacts/$contactId",
+        params: { contactId: hit.contactId },
       });
-    },
-    [closeSearchDialog, navigate, query, searchRecentsScope],
-  );
+      return;
+    }
 
-  const handleKeyDown = useCallback(
-    async (e: React.KeyboardEvent) => {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setSelectedIndex((prev) => Math.min(prev + 1, allHits.length - 1));
-      } else if (
-        e.key === "Escape" &&
-        (query.trim() || debouncedQuery.trim())
-      ) {
-        e.preventDefault();
-        e.stopPropagation();
-        clearSearchQuery();
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setSelectedIndex((prev) => Math.max(prev - 1, -1));
-      } else if (e.key === "Enter" && selectedIndex >= 0) {
-        e.preventDefault();
-        const hit = allHits[selectedIndex];
-        if (hit !== undefined) {
-          await handleResultClick(hit);
-        }
-      }
-    },
-    [
-      allHits,
-      clearSearchQuery,
-      debouncedQuery,
-      query,
-      selectedIndex,
-      handleResultClick,
-    ],
-  );
+    if (hit.type === "case-law") {
+      await navigate({
+        to: "/knowledge/case/$decisionId",
+        params: { decisionId: hit.decisionId },
+        search: {
+          ...(hit.headline && {
+            q: extractHighlightedText(hit.headline),
+          }),
+        },
+      });
+      return;
+    }
 
-  const handleOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      onOpenChange(nextOpen);
-    },
-    [onOpenChange],
-  );
+    if (hit.type === "matter") {
+      await navigate({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId: hit.workspaceId },
+      });
+      return;
+    }
+
+    if (hit.type === "document") {
+      setRecentFiles(
+        recordRecentFile(
+          {
+            entityId: hit.entityId,
+            mimeType: hit.mimeType,
+            title: hit.title || hit.id,
+            workspaceId: hit.workspaceId,
+            workspaceName: hit.workspaceName,
+          },
+          searchRecentsScope,
+        ),
+      );
+    }
+
+    await navigate({
+      to: "/workspaces/$workspaceId/entities/$entityId",
+      params: { workspaceId: hit.workspaceId, entityId: hit.entityId },
+    });
+  };
+
+  const handleCommandInputKeyDownCapture = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (e.key === "Escape" && (query.trim() || debouncedQuery.trim())) {
+      e.preventDefault();
+      e.stopPropagation();
+      clearSearchQuery();
+    }
+  };
 
   const hasResults = allHits.length > 0;
   const hasQuery = searchQuery.length > 0;
   const hasTypedQuery = query.trim().length > 0;
-  const filterEditorIdsKey = filters.editedByUserIds?.join("|") ?? "";
+  const commandHits = hasTypedQuery && hasResults ? allHits : [];
+  const filterEditorIdsKey = filters.editedByUserIds.join("|");
 
   useEffect(() => {
-    setSummaryState({ status: "idle" });
+    summarizeSearchMutation.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset is the stable mutation method needed here
   }, [
     filterEditorIdsKey,
     filterMimeTypesKey,
     filterTypesKey,
     filterWorkspaceIdsKey,
     filters.time,
+    summarizeSearchMutation.reset,
     searchQuery,
   ]);
 
   useEffect(() => {
-    const root = resultsRef.current;
+    const root = resultsElement;
     const target = loadMoreRef.current;
     if (!hasQuery || !hasNextPage || !root || !target) {
       return undefined;
@@ -741,251 +619,283 @@ export const SearchDialog = ({
 
     observer.observe(target);
     return () => observer.disconnect();
-  }, [fetchNextPage, hasNextPage, hasQuery, isFetchingNextPage]);
+  }, [
+    fetchNextPage,
+    hasNextPage,
+    hasQuery,
+    isFetchingNextPage,
+    resultsElement,
+  ]);
 
   return (
-    <Dialog onOpenChange={handleOpenChange} open={open}>
-      <DialogPopup
+    <CommandDialog onOpenChange={onOpenChange} open={open}>
+      <CommandDialogPopup
         className="flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-hidden sm:h-[min(720px,calc(100dvh-96px))] sm:w-[min(960px,calc(100vw-32px))]"
         showCloseButton={false}
       >
-        {/* Search input */}
-        <div className="flex shrink-0 items-center gap-3 border-b px-4 py-3">
-          <SearchIcon className="text-muted-foreground size-5 shrink-0" />
-          <Input
-            autoFocus
-            className="placeholder:text-muted-foreground min-w-0 flex-1 border-0 bg-transparent text-sm shadow-none outline-none focus-visible:ring-0"
-            onChange={handleQueryChange}
-            onKeyDown={(event) => {
-              void handleKeyDown(event);
-            }}
-            placeholder={t("search.placeholder")}
-            value={query}
-          />
-          {isFetching && !isFetchingNextPage && (
-            <LoaderIcon className="text-muted-foreground size-4 shrink-0 animate-spin" />
-          )}
-          <Button
-            aria-label={t("search.aiRefine")}
-            className="size-8 shrink-0"
-            disabled={!query.trim() || isRefiningQuery}
-            onClick={() => {
-              void handleRefineQuery();
-            }}
-            size="icon-sm"
-            title={t("search.aiRefine")}
-            variant="ghost"
-          >
-            {isRefiningQuery ? (
-              <LoaderIcon className="size-4 animate-spin" />
-            ) : (
-              <SparklesIcon className="size-4" />
-            )}
-          </Button>
-          <kbd className="bg-muted text-muted-foreground hidden rounded border px-1.5 py-0.5 text-[0.625rem] sm:inline-flex">
-            {t("search.escKey")}
-          </kbd>
-        </div>
-
-        {/* Content area */}
-        <div className="flex min-h-0 flex-1">
-          {/* Facets sidebar — always present so the layout stays stable. */}
-          <div className="hidden w-56 shrink-0 overflow-y-auto border-e px-3 py-3 sm:block">
-            <TimeFacetGroup
-              locale={locale}
-              onClearCustom={clearTimeFilter}
-              onPresetChange={(preset) =>
-                setTimePreset(
-                  filters.time?.mode === "preset" &&
-                    filters.time.preset === preset
-                    ? undefined
-                    : preset,
-                )
-              }
-              onCustomChange={setCustomDateRange}
-              time={filters.time}
+        <Command
+          itemToStringValue={(hit) => hit.title}
+          items={commandHits}
+          keepHighlight={false}
+          mode="none"
+          onItemHighlighted={(_, eventDetails) => {
+            if (eventDetails.index < 0 || eventDetails.reason !== "keyboard") {
+              return;
+            }
+            hitVirtualizer.scrollToIndex(eventDetails.index, { align: "auto" });
+          }}
+          onValueChange={(value, eventDetails) => {
+            if (eventDetails.reason === "item-press") {
+              return;
+            }
+            setQuery(value);
+            debouncedSetQuery(value);
+            summarizeSearchMutation.reset();
+          }}
+          value={query}
+          virtualized
+        >
+          {/* Search input */}
+          <div className="flex shrink-0 items-center gap-3 border-b px-4 py-3">
+            <CommandInput
+              autoFocus
+              className="text-sm"
+              onKeyDownCapture={handleCommandInputKeyDownCapture}
+              placeholder={t("search.placeholder")}
             />
+            {isFetching && !isFetchingNextPage && (
+              <LoaderIcon className="text-muted-foreground size-4 shrink-0 animate-spin" />
+            )}
+            <Button
+              aria-label={t("search.aiRefine")}
+              className="size-8 shrink-0"
+              disabled={!query.trim() || refineSearchMutation.isPending}
+              onClick={() => {
+                handleRefineQuery();
+              }}
+              size="icon-sm"
+              title={t("search.aiRefine")}
+              variant="ghost"
+            >
+              {refineSearchMutation.isPending ? (
+                <LoaderIcon className="size-4 animate-spin" />
+              ) : (
+                <SparklesIcon className="size-4" />
+              )}
+            </Button>
+            <kbd className="bg-muted text-muted-foreground hidden rounded border px-1.5 py-0.5 text-[0.625rem] sm:inline-flex">
+              {t("search.escKey")}
+            </kbd>
+          </div>
 
-            {hasQuery &&
-              (facets?.type.length ?? 0) + (filters.types?.length ?? 0) > 0 && (
-                <div className="mt-4">
-                  <FacetGroup
-                    buckets={mergeSelectedBuckets(
-                      (facets?.type ?? []).map((bucket) => ({
-                        value: bucket.value,
-                        count: bucket.count,
-                        label: isGlobalSearchResultType(bucket.value)
-                          ? t(KIND_TRANSLATION_KEYS[bucket.value])
-                          : bucket.value,
-                      })),
-                      filters.types ?? [],
-                      (value) =>
-                        isGlobalSearchResultType(value)
-                          ? t(KIND_TRANSLATION_KEYS[value])
-                          : value,
-                    )}
-                    onChange={(value) => {
-                      if (isGlobalSearchResultType(value)) {
-                        toggleTypeFilter(value);
+          {/* Content area */}
+          <div className="flex min-h-0 flex-1">
+            {/* Facets sidebar — always present so the layout stays stable. */}
+            <div className="hidden w-56 shrink-0 overflow-y-auto border-e px-3 py-3 sm:block">
+              <TimeFacetGroup
+                locale={locale}
+                onClearCustom={clearTimeFilter}
+                onPresetChange={(preset) =>
+                  setTimePreset(
+                    filters.time?.mode === "preset" &&
+                      filters.time.preset === preset
+                      ? undefined
+                      : preset,
+                  )
+                }
+                onCustomChange={setCustomDateRange}
+                time={filters.time}
+              />
+
+              {hasQuery && (
+                <>
+                  {(facets?.type.length ?? 0) + filters.types.length > 0 && (
+                    <div className="mt-4">
+                      <FacetGroup
+                        buckets={mergeSelectedBuckets(
+                          (facets?.type ?? []).map((bucket) => ({
+                            value: bucket.value,
+                            count: bucket.count,
+                            label: isGlobalSearchResultType(bucket.value)
+                              ? t(KIND_TRANSLATION_KEYS[bucket.value])
+                              : bucket.value,
+                          })),
+                          filters.types,
+                          (value) =>
+                            isGlobalSearchResultType(value)
+                              ? t(KIND_TRANSLATION_KEYS[value])
+                              : value,
+                        )}
+                        onChange={(value) => {
+                          if (isGlobalSearchResultType(value)) {
+                            toggleTypeFilter(value);
+                          }
+                        }}
+                        selected={filters.types}
+                        title={t("common.kind")}
+                      />
+                    </div>
+                  )}
+
+                  <div className="mt-4">
+                    <SearchableFacetGroup
+                      defaultBuckets={facets?.mimeType ?? []}
+                      facet="mimeType"
+                      formatLabel={(bucket) =>
+                        formatMimeTypeLabel(bucket.value)
                       }
-                    }}
-                    selected={filters.types ?? []}
-                    title={t("common.kind")}
-                  />
+                      onChange={toggleMimeTypeFilter}
+                      searchParams={facetSearchParams}
+                      selected={filters.mimeTypes}
+                      title={t("search.mimeType")}
+                    />
+                  </div>
+
+                  <div className="mt-4">
+                    <SearchableFacetGroup
+                      defaultBuckets={facets?.editor ?? []}
+                      facet="editor"
+                      onChange={toggleEditorFilter}
+                      searchParams={facetSearchParams}
+                      selected={filters.editedByUserIds}
+                      title={t("search.editedBy")}
+                    />
+                  </div>
+
+                  <div className="mt-4">
+                    <SearchableFacetGroup
+                      defaultBuckets={facets?.workspace ?? []}
+                      facet="workspace"
+                      onChange={toggleWorkspaceFilter}
+                      searchParams={facetSearchParams}
+                      selected={filters.workspaceIds}
+                      title={t("common.matter")}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Results */}
+            <CommandList
+              className="max-h-none min-w-0 flex-1 overflow-y-auto"
+              ref={setResultsElement}
+            >
+              {!hasTypedQuery && (
+                <SearchRecents
+                  onFileClick={openRecentFile}
+                  onSearchClick={applyRecentSearch}
+                  recentFiles={recentFiles}
+                  recentSearches={recentSearches}
+                />
+              )}
+
+              {hasTypedQuery && !hasResults && (!hasQuery || isLoading) && (
+                <div className="space-y-3 px-4 py-3">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    // eslint-disable-next-line react/no-array-index-key
+                    <div className="space-y-2" key={`skeleton-${i}`}>
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-3 w-1/2" />
+                    </div>
+                  ))}
                 </div>
               )}
 
-            {hasQuery && (
-              <div className="mt-4">
-                <SearchableFacetGroup
-                  defaultBuckets={facets?.mimeType ?? []}
-                  facet="mimeType"
-                  formatLabel={(bucket) => formatMimeTypeLabel(bucket.value)}
-                  onChange={toggleMimeTypeFilter}
-                  searchParams={facetSearchParams}
-                  selected={filters.mimeTypes ?? []}
-                  title={t("search.mimeType")}
-                />
-              </div>
-            )}
-
-            {hasQuery && (
-              <div className="mt-4">
-                <SearchableFacetGroup
-                  defaultBuckets={facets?.editor ?? []}
-                  facet="editor"
-                  onChange={toggleEditorFilter}
-                  searchParams={facetSearchParams}
-                  selected={filters.editedByUserIds ?? []}
-                  title={t("search.editedBy")}
-                />
-              </div>
-            )}
-
-            {hasQuery && (
-              <div className="mt-4">
-                <SearchableFacetGroup
-                  defaultBuckets={facets?.workspace ?? []}
-                  facet="workspace"
-                  onChange={toggleWorkspaceFilter}
-                  searchParams={facetSearchParams}
-                  selected={filters.workspaceIds}
-                  title={t("common.matter")}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Results */}
-          <div className="min-w-0 flex-1 overflow-y-auto" ref={resultsRef}>
-            {!hasTypedQuery && (
-              <SearchRecents
-                onFileClick={openRecentFile}
-                onSearchClick={applyRecentSearch}
-                recentFiles={recentFiles}
-                recentSearches={recentSearches}
-              />
-            )}
-
-            {hasTypedQuery && !hasResults && (!hasQuery || isLoading) && (
-              <div className="space-y-3 px-4 py-3">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  // eslint-disable-next-line react/no-array-index-key
-                  <div className="space-y-2" key={`skeleton-${i}`}>
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-3 w-1/2" />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {hasTypedQuery && hasQuery && !isLoading && !hasResults && (
-              <div className="flex h-full items-center justify-center px-4 py-8">
-                <p className="text-muted-foreground text-sm">
-                  {t("search.noResults", {
-                    query: searchQuery,
-                  })}
-                </p>
-              </div>
-            )}
-
-            {hasTypedQuery && hasResults && (
-              <div className="px-2 py-2">
-                <p className="text-muted-foreground px-2 pb-2 text-xs">
-                  {t("search.resultCount", {
-                    count: totalCount,
-                  })}
-                </p>
-                <SearchSummaryItem
-                  isOpeningChat={isOpeningSummaryChat}
-                  onCitationClick={(citationId) => {
-                    const hit = allHits.find((item) => item.id === citationId);
-                    if (hit) {
-                      void handleResultClick(hit);
-                    }
-                  }}
-                  onClick={() => {
-                    void handleSummarizeResults();
-                  }}
-                  onOpenChat={() => {
-                    void handleOpenSummaryChat();
-                  }}
-                  state={summaryState}
-                />
-                <div
-                  className="relative"
-                  style={{ height: `${hitVirtualizer.getTotalSize()}px` }}
-                >
-                  {virtualHits.map((virtualHit) => {
-                    const hit = allHits.at(virtualHit.index);
-                    if (!hit) {
-                      return null;
-                    }
-                    return (
-                      <div
-                        className="absolute inset-x-0 top-0"
-                        data-index={virtualHit.index}
-                        key={hit.id}
-                        ref={hitVirtualizer.measureElement}
-                        style={{
-                          transform: `translateY(${virtualHit.start}px)`,
-                        }}
-                      >
-                        <SearchResultItem
-                          hit={hit}
-                          isSelected={virtualHit.index === selectedIndex}
-                          onClick={(selectedHit) => {
-                            void handleResultClick(selectedHit);
-                          }}
-                          resultNumber={virtualHit.index + 1}
-                        />
-                      </div>
-                    );
-                  })}
+              {hasTypedQuery && hasQuery && !isLoading && !hasResults && (
+                <div className="flex h-full items-center justify-center px-4 py-8">
+                  <p className="text-muted-foreground text-sm">
+                    {t("search.noResults", {
+                      query: searchQuery,
+                    })}
+                  </p>
                 </div>
-                {hasNextPage && (
+              )}
+
+              {hasTypedQuery && hasResults && (
+                <div className="px-2 py-2">
+                  <p className="text-muted-foreground px-2 pb-2 text-xs">
+                    {t("search.resultCount", {
+                      count: totalCount,
+                    })}
+                  </p>
+                  <SearchSummaryItem
+                    isOpeningChat={createSummaryChatMutation.isPending}
+                    onCitationClick={(citationId) => {
+                      const hit = allHits.find(
+                        (item) => item.id === citationId,
+                      );
+                      if (hit) {
+                        void handleResultClick(hit);
+                      }
+                    }}
+                    onClick={() => {
+                      handleSummarizeResults();
+                    }}
+                    onOpenChat={() => {
+                      handleOpenSummaryChat();
+                    }}
+                    summarizeMutation={summarizeSearchMutation}
+                  />
                   <div
-                    className="flex h-10 items-center justify-center px-2 pt-2"
-                    ref={loadMoreRef}
+                    className="relative"
+                    style={{ height: `${hitVirtualizer.getTotalSize()}px` }}
                   >
-                    {isFetchingNextPage ? (
-                      <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
-                    ) : (
-                      <span className="sr-only">{t("common.loadMore")}</span>
-                    )}
+                    {virtualHits.map((virtualHit) => {
+                      const hit = allHits.at(virtualHit.index);
+                      if (!hit) {
+                        return null;
+                      }
+                      return (
+                        <div
+                          className="absolute inset-x-0 top-0"
+                          data-index={virtualHit.index}
+                          key={hit.id}
+                          ref={hitVirtualizer.measureElement}
+                          style={{
+                            transform: `translateY(${virtualHit.start}px)`,
+                          }}
+                        >
+                          <SearchResultItem
+                            hit={hit}
+                            index={virtualHit.index}
+                            onClick={(selectedHit) => {
+                              void handleResultClick(selectedHit);
+                            }}
+                            resultNumber={virtualHit.index + 1}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
-            )}
+                  {hasNextPage && (
+                    <div
+                      className="flex h-10 items-center justify-center px-2 pt-2"
+                      ref={loadMoreRef}
+                    >
+                      {isFetchingNextPage ? (
+                        <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
+                      ) : (
+                        <span className="sr-only">{t("common.loadMore")}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CommandList>
           </div>
-        </div>
-      </DialogPopup>
-    </Dialog>
+        </Command>
+      </CommandDialogPopup>
+    </CommandDialog>
   );
 };
 
 type SearchSummaryItemProps = {
-  state: SearchSummaryState;
+  summarizeMutation: UseMutationResult<
+    SearchSummaryData,
+    Error,
+    SearchAISummaryParams
+  >;
   isOpeningChat: boolean;
   onClick: () => void;
   onOpenChat: () => void;
@@ -994,97 +904,91 @@ type SearchSummaryItemProps = {
 
 const SearchSummaryItem = ({
   isOpeningChat,
-  state,
+  summarizeMutation,
   onClick,
   onOpenChat,
   onCitationClick,
 }: SearchSummaryItemProps) => {
   const t = useTranslations();
 
-  let title = t("search.summaryAction");
-  let body = t("search.summaryPrompt");
-  if (state.status === "loading") {
-    title = t("search.summaryLoading");
-    body = t("search.summaryPrompt");
-  } else if (state.status === "ready") {
-    title = state.title;
-    body = state.summary;
-  } else if (state.status === "error") {
-    title = t("search.summaryError");
-    body = state.message ?? t("search.summaryRetry");
+  const { isPending, isError, isSuccess, data } = summarizeMutation;
+
+  if (!isSuccess) {
+    let title = t("search.summaryAction");
+    let body = t("search.summaryPrompt");
+    if (isPending) {
+      title = t("search.summaryLoading");
+    } else if (isError) {
+      title = t("search.summaryError");
+      body = t("search.summaryRetry");
+    }
+
+    return (
+      <Button
+        className="mb-2 h-auto w-full items-start justify-start gap-3 rounded-md px-2.5 py-2.5 text-start whitespace-normal sm:h-auto"
+        disabled={isPending}
+        onClick={onClick}
+        variant={isError ? "destructive-outline" : "outline"}
+      >
+        <span className="bg-background text-foreground mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border">
+          {isPending ? (
+            <LoaderIcon className="size-3.5 animate-spin" />
+          ) : (
+            <SparklesIcon className="size-3.5" />
+          )}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">{title}</span>
+          <span className="text-muted-foreground line-clamp-2 text-xs font-normal">
+            {body}
+          </span>
+        </span>
+      </Button>
+    );
   }
 
   return (
-    <div
-      className={cn(
-        "bg-muted/60 border-primary/30 mb-2 w-full rounded-md border px-2.5 py-2.5 text-start shadow-xs",
-        state.status === "ready" && "border-border bg-background",
-        state.status === "error" && "border-destructive/40 bg-destructive/5",
-      )}
-    >
-      {state.status === "ready" ? (
-        <div className="flex w-full items-start gap-3 text-start">
-          <span className="bg-background text-foreground mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border">
-            <SparklesIcon className="size-3.5" />
+    <div className="border-border bg-background mb-2 w-full rounded-md border px-2.5 py-2.5 text-start shadow-xs">
+      <div className="flex w-full items-start gap-3 text-start">
+        <span className="bg-background text-foreground mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border">
+          <SparklesIcon className="size-3.5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">
+            {data.title}
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium">{title}</span>
-            <span className="text-muted-foreground block text-xs font-normal whitespace-pre-line">
-              <SummaryBody
-                citations={state.citations}
-                onCitationClick={onCitationClick}
-                text={body}
-              />
-            </span>
+          <span className="text-muted-foreground block text-xs font-normal whitespace-pre-line">
+            <SummaryBody
+              citations={data.citations}
+              onCitationClick={onCitationClick}
+              text={data.summary}
+            />
           </span>
-        </div>
-      ) : (
+        </span>
+      </div>
+      <div className="border-border/70 mt-2 border-t pt-2">
         <Button
-          className="h-auto w-full items-start justify-start gap-3 p-0 text-start whitespace-normal hover:bg-transparent sm:h-auto"
-          disabled={state.status === "loading"}
-          onClick={onClick}
+          className="h-auto gap-2 px-1.5 py-1 text-xs"
+          disabled={isOpeningChat}
+          onClick={onOpenChat}
+          size="sm"
           variant="ghost"
         >
-          <span className="bg-background text-foreground mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border">
-            {state.status === "loading" ? (
-              <LoaderIcon className="size-3.5 animate-spin" />
-            ) : (
-              <SparklesIcon className="size-3.5" />
-            )}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium">{title}</span>
-            <span className="text-muted-foreground line-clamp-2 text-xs font-normal">
-              {body}
-            </span>
-          </span>
+          {isOpeningChat ? (
+            <LoaderIcon className="size-3.5 animate-spin" />
+          ) : (
+            <MessageSquareIcon className="size-3.5" />
+          )}
+          {t("search.continueInChat")}
         </Button>
-      )}
-      {state.status === "ready" && (
-        <div className="border-border/70 mt-2 border-t pt-2">
-          <Button
-            className="h-auto gap-2 px-1.5 py-1 text-xs"
-            disabled={isOpeningChat}
-            onClick={onOpenChat}
-            size="sm"
-            variant="ghost"
-          >
-            {isOpeningChat ? (
-              <LoaderIcon className="size-3.5 animate-spin" />
-            ) : (
-              <MessageSquareIcon className="size-3.5" />
-            )}
-            {t("search.continueInChat")}
-          </Button>
-        </div>
-      )}
+      </div>
     </div>
   );
 };
 
 type SummaryBodyProps = {
   text: string;
-  citations: Extract<SearchSummaryState, { status: "ready" }>["citations"];
+  citations: SearchSummaryData["citations"];
   onCitationClick: (citationId: string) => void;
 };
 
@@ -1195,10 +1099,10 @@ const SearchRecents = ({
           <h3 className="text-muted-foreground mb-2 text-xs font-medium">
             {t("search.recentlyOpenedFiles")}
           </h3>
-          <div className="space-y-1">
+          <div className="flex flex-col gap-y-1">
             {recentFiles.map((file) => (
               <Button
-                className="h-auto w-full justify-start gap-2 px-2 py-2 text-start text-sm"
+                className="h-auto! w-full justify-start gap-2 py-1 text-start text-sm"
                 key={file.entityId}
                 onClick={() => {
                   void onFileClick(file);
@@ -1429,12 +1333,12 @@ type SearchableFacetGroupProps = {
   onChange: (value: string) => void;
   searchParams: {
     query: string;
-    workspaceIds?: string[];
-    types?: GlobalSearchResultType[];
-    editedByUserIds?: string[];
-    mimeTypes?: string[];
-    updatedFrom?: string;
-    updatedTo?: string;
+    workspaceIds: string[];
+    types: GlobalSearchResultType[];
+    editedByUserIds: string[];
+    mimeTypes: string[];
+    updatedFrom?: string | undefined;
+    updatedTo?: string | undefined;
   };
   formatLabel?: (bucket: FacetBucket) => string;
 };
@@ -1527,14 +1431,14 @@ const SearchableFacetGroup = ({
 
 type SearchResultItemProps = {
   hit: GlobalSearchHit;
-  isSelected?: boolean;
+  index: number;
   resultNumber: number;
   onClick: (hit: GlobalSearchHit) => void;
 };
 
 const SearchResultItem = ({
   hit,
-  isSelected,
+  index,
   resultNumber,
   onClick,
 }: SearchResultItemProps) => {
@@ -1566,14 +1470,11 @@ const SearchResultItem = ({
   }
 
   return (
-    <Button
-      className={cn(
-        "h-auto w-full items-start justify-start gap-3 px-2 py-2 text-start whitespace-normal sm:h-auto",
-        isSelected && "bg-accent",
-      )}
-      data-selected={isSelected || undefined}
+    <CommandItem
+      className="h-auto w-full items-start justify-start gap-3 px-2 py-2 text-start whitespace-normal sm:h-auto"
+      index={index}
       onClick={() => onClick(hit)}
-      variant="ghost"
+      value={hit}
     >
       <SearchHitIcon hit={hit} />
       <div className="min-w-0 flex-1">
@@ -1610,7 +1511,7 @@ const SearchResultItem = ({
       <span className="text-muted-foreground/45 mt-0.5 shrink-0 px-1 text-xs tabular-nums">
         {resultNumber}
       </span>
-    </Button>
+    </CommandItem>
   );
 };
 

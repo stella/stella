@@ -8,6 +8,7 @@ import {
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
+import { stripUndefined } from "@/lib/utils";
 
 export const TIME_PRESETS = ["day", "week", "month", "year"] as const;
 export type TimePreset = (typeof TIME_PRESETS)[number];
@@ -30,56 +31,42 @@ export const presetUpdatedFrom = (preset: TimePreset): string =>
 
 export type SearchableFacet = "editor" | "workspace" | "mimeType";
 
+export type SearchParams = {
+  query: string;
+  workspaceIds: string[];
+  types: GlobalSearchResultType[];
+  kinds: EntityKind[];
+  editedByUserIds: string[];
+  mimeTypes: string[];
+  updatedFrom?: string | undefined;
+  updatedTo?: string | undefined;
+  limit?: number | undefined;
+};
+
 type SearchFacetParams = {
   facet: SearchableFacet;
   search: string;
   query: string;
-  workspaceIds?: string[];
-  types?: GlobalSearchResultType[];
-  editedByUserIds?: string[];
-  mimeTypes?: string[];
-  updatedFrom?: string;
-  updatedTo?: string;
-  limit?: number;
+  workspaceIds: string[];
+  types: GlobalSearchResultType[];
+  editedByUserIds: string[];
+  mimeTypes: string[];
+  updatedFrom?: string | undefined;
+  updatedTo?: string | undefined;
+  limit?: number | undefined;
 };
 
-type SearchParams = {
-  query: string;
-  workspaceIds?: string[];
-  types?: GlobalSearchResultType[];
-  kinds?: EntityKind[];
-  editedByUserIds?: string[];
-  mimeTypes?: string[];
-  updatedFrom?: string;
-  updatedTo?: string;
-  limit?: number;
-};
-
-type SearchAISummaryParams = {
+export type SearchAISummaryParams = {
   query: string;
   locale: string;
-  originalQuery?: string;
-  workspaceIds?: string[];
-  types?: GlobalSearchResultType[];
-  editedByUserIds?: string[];
-  mimeTypes?: string[];
-  updatedFrom?: string;
-  updatedTo?: string;
-  limit?: number;
-};
-
-type SearchSummaryCitation = {
-  id: string;
-  number: number;
-  title: string;
-  type: string;
-  reason: string;
-};
-
-type CreateSearchSummaryChatParams = SearchAISummaryParams & {
-  title: string;
-  summary: string;
-  citations: SearchSummaryCitation[];
+  originalQuery?: string | undefined;
+  workspaceIds: string[];
+  types: GlobalSearchResultType[];
+  editedByUserIds: string[];
+  mimeTypes: string[];
+  updatedFrom?: string | undefined;
+  updatedTo?: string | undefined;
+  limit?: number | undefined;
 };
 
 const searchKeys = {
@@ -92,32 +79,20 @@ export const searchInfiniteOptions = (params: SearchParams) =>
     queryKey: searchKeys.query(params),
     queryFn: async ({ signal, pageParam }) => {
       const response = await api.search.post(
-        {
+        stripUndefined({
           query: params.query,
-          ...(params.workspaceIds !== undefined &&
-            params.workspaceIds.length > 0 && {
-              workspaceIds: params.workspaceIds.map((id) =>
-                toSafeId<"workspace">(id),
-              ),
-            }),
-          ...(params.kinds !== undefined && { kinds: params.kinds }),
-          ...(params.types !== undefined && { types: params.types }),
-          ...(params.editedByUserIds !== undefined &&
-            params.editedByUserIds.length > 0 && {
-              editedByUserIds: params.editedByUserIds,
-            }),
-          ...(params.mimeTypes !== undefined && {
-            mimeTypes: params.mimeTypes,
-          }),
-          ...(params.updatedFrom !== undefined && {
-            updatedFrom: params.updatedFrom,
-          }),
-          ...(params.updatedTo !== undefined && {
-            updatedTo: params.updatedTo,
-          }),
-          ...(pageParam !== undefined && { cursor: pageParam }),
-          ...(params.limit !== undefined && { limit: params.limit }),
-        },
+          workspaceIds: params.workspaceIds.map((id) =>
+            toSafeId<"workspace">(id),
+          ),
+          kinds: params.kinds,
+          types: params.types,
+          editedByUserIds: params.editedByUserIds,
+          mimeTypes: params.mimeTypes,
+          updatedFrom: params.updatedFrom,
+          updatedTo: params.updatedTo,
+          cursor: pageParam,
+          limit: params.limit,
+        }),
         { fetch: { signal } },
       );
 
@@ -139,32 +114,20 @@ export const searchFacetOptions = (params: SearchFacetParams) =>
     queryKey: [...searchKeys.all, "facet", params] as const,
     queryFn: async ({ signal }) => {
       const response = await api.search.facets.post(
-        {
+        stripUndefined({
           facet: params.facet,
           search: params.search,
           query: params.query,
-          ...(params.workspaceIds !== undefined &&
-            params.workspaceIds.length > 0 && {
-              workspaceIds: params.workspaceIds.map((id) =>
-                toSafeId<"workspace">(id),
-              ),
-            }),
-          ...(params.types !== undefined && { types: params.types }),
-          ...(params.editedByUserIds !== undefined &&
-            params.editedByUserIds.length > 0 && {
-              editedByUserIds: params.editedByUserIds,
-            }),
-          ...(params.mimeTypes !== undefined && {
-            mimeTypes: params.mimeTypes,
-          }),
-          ...(params.updatedFrom !== undefined && {
-            updatedFrom: params.updatedFrom,
-          }),
-          ...(params.updatedTo !== undefined && {
-            updatedTo: params.updatedTo,
-          }),
-          ...(params.limit !== undefined && { limit: params.limit }),
-        },
+          workspaceIds: params.workspaceIds.map((id) =>
+            toSafeId<"workspace">(id),
+          ),
+          types: params.types,
+          editedByUserIds: params.editedByUserIds,
+          mimeTypes: params.mimeTypes,
+          updatedFrom: params.updatedFrom,
+          updatedTo: params.updatedTo,
+          limit: params.limit,
+        }),
         { fetch: { signal } },
       );
 
@@ -177,91 +140,3 @@ export const searchFacetOptions = (params: SearchFacetParams) =>
     enabled: params.query.length > 0,
     placeholderData: keepPreviousData,
   });
-
-export const refineSearchQuery = async ({
-  query,
-  locale,
-}: {
-  query: string;
-  locale: string;
-}) => {
-  const response = await api.search.refine.post({ query, locale });
-
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  return response.data;
-};
-
-export const summarizeSearchResults = async (params: SearchAISummaryParams) => {
-  const response = await api.search.summary.post({
-    query: params.query,
-    locale: params.locale,
-    ...(params.originalQuery !== undefined && {
-      originalQuery: params.originalQuery,
-    }),
-    ...(params.workspaceIds !== undefined &&
-      params.workspaceIds.length > 0 && {
-        workspaceIds: params.workspaceIds.map((id) =>
-          toSafeId<"workspace">(id),
-        ),
-      }),
-    ...(params.types !== undefined && { types: params.types }),
-    ...(params.editedByUserIds !== undefined &&
-      params.editedByUserIds.length > 0 && {
-        editedByUserIds: params.editedByUserIds,
-      }),
-    ...(params.mimeTypes !== undefined && { mimeTypes: params.mimeTypes }),
-    ...(params.updatedFrom !== undefined && {
-      updatedFrom: params.updatedFrom,
-    }),
-    ...(params.updatedTo !== undefined && { updatedTo: params.updatedTo }),
-    ...(params.limit !== undefined && { limit: params.limit }),
-  });
-
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  return response.data;
-};
-
-export const createSearchSummaryChatThread = async (
-  params: CreateSearchSummaryChatParams,
-) => {
-  const response = await api.search.summary.chat.post({
-    query: params.query,
-    title: params.title,
-    summary: params.summary,
-    citations: params.citations.map((citation) => ({
-      number: citation.number,
-    })),
-    ...(params.originalQuery !== undefined && {
-      originalQuery: params.originalQuery,
-    }),
-    ...(params.workspaceIds !== undefined &&
-      params.workspaceIds.length > 0 && {
-        workspaceIds: params.workspaceIds.map((id) =>
-          toSafeId<"workspace">(id),
-        ),
-      }),
-    ...(params.types !== undefined && { types: params.types }),
-    ...(params.editedByUserIds !== undefined &&
-      params.editedByUserIds.length > 0 && {
-        editedByUserIds: params.editedByUserIds,
-      }),
-    ...(params.mimeTypes !== undefined && { mimeTypes: params.mimeTypes }),
-    ...(params.updatedFrom !== undefined && {
-      updatedFrom: params.updatedFrom,
-    }),
-    ...(params.updatedTo !== undefined && { updatedTo: params.updatedTo }),
-    ...(params.limit !== undefined && { limit: params.limit }),
-  });
-
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  return response.data;
-};

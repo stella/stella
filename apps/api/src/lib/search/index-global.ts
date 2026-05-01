@@ -51,10 +51,10 @@ export type GlobalSearchQuery = {
   /** All workspaces the caller is allowed to see. */
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   /** User-selected subset to filter by; empty means no extra filter. */
-  selectedWorkspaceIds?: readonly SafeId<"workspace">[] | undefined;
-  types?: readonly GlobalSearchResultType[] | undefined;
-  editedByUserIds?: readonly string[] | undefined;
-  mimeTypes?: readonly string[] | undefined;
+  selectedWorkspaceIds: readonly SafeId<"workspace">[];
+  types: readonly GlobalSearchResultType[];
+  editedByUserIds: readonly string[];
+  mimeTypes: readonly string[];
   updatedFrom?: string | undefined;
   updatedTo?: string | undefined;
   cursor?: string | undefined;
@@ -136,7 +136,7 @@ const toHeadline = (value: unknown): string | null => {
   return text === null ? null : escapeAndHighlight(text);
 };
 
-const selectedTypes = (types: readonly GlobalSearchResultType[] | undefined) =>
+const selectedTypes = (types: readonly GlobalSearchResultType[]) =>
   new Set<GlobalSearchResultType>(types);
 
 const shouldSearchType = (
@@ -197,7 +197,7 @@ const headlineRegconfig = sql`
 
 type WorkspaceScopeArgs = {
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
-  selectedWorkspaceIds?: readonly SafeId<"workspace">[] | undefined;
+  selectedWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
 const resolveWorkspaceScope = ({
@@ -207,7 +207,7 @@ const resolveWorkspaceScope = ({
   if (accessibleWorkspaceIds.length === 0) {
     return null;
   }
-  if (!selectedWorkspaceIds || selectedWorkspaceIds.length === 0) {
+  if (selectedWorkspaceIds.length === 0) {
     return accessibleWorkspaceIds;
   }
   const accessSet = new Set(accessibleWorkspaceIds);
@@ -409,10 +409,10 @@ type FilterFragmentInput = {
   query: string;
   organizationId: SafeId<"organization">;
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
-  selectedWorkspaceIds?: readonly SafeId<"workspace">[] | undefined;
-  types?: readonly GlobalSearchResultType[] | undefined;
-  editedByUserIds?: readonly string[] | undefined;
-  mimeTypes?: readonly string[] | undefined;
+  selectedWorkspaceIds: readonly SafeId<"workspace">[];
+  types: readonly GlobalSearchResultType[];
+  editedByUserIds: readonly string[];
+  mimeTypes: readonly string[];
   updatedFrom?: string | undefined;
   updatedTo?: string | undefined;
 };
@@ -436,16 +436,15 @@ const buildSearchFilterFragments = ({
   updatedTo,
 }: FilterFragmentInput) => {
   const selected = selectedTypes(types);
-  const hasEditorFilter =
-    editedByUserIds !== undefined && editedByUserIds.length > 0;
-  const hasMimeTypeFilter = mimeTypes !== undefined && mimeTypes.length > 0;
+  const hasEditorFilter = editedByUserIds.length > 0;
+  const hasMimeTypeFilter = mimeTypes.length > 0;
   const restrictToEntities = hasEditorFilter || hasMimeTypeFilter;
   const tsQuery = buildSearchTsQuery(query);
 
   const workspaceScope = { accessibleWorkspaceIds, selectedWorkspaceIds };
   // Workspace-facet variants ignore the user's workspace selection so all
   // accessible workspaces stay visible (you can always tick a sibling).
-  const accessOnlyScope = { accessibleWorkspaceIds };
+  const accessOnlyScope = { accessibleWorkspaceIds, selectedWorkspaceIds: [] };
   const entityWorkspaceFilter = workspaceAccessSql({
     column: sql`sd.workspace_id`,
     ...workspaceScope,
@@ -470,17 +469,15 @@ const buildSearchFilterFragments = ({
   const entityTypes = [...selected].filter(
     (type) => type !== "matter" && type !== "contact" && type !== "case-law",
   );
-  const editorFilterValues = editedByUserIds ?? [];
-  const mimeTypeFilterValues = mimeTypes ?? [];
   const entityEditorFilter = sqlWhen(
     hasEditorFilter,
     () =>
-      sql`AND e.last_edited_by = ANY(${typedPgArray(editorFilterValues, "text")})`,
+      sql`AND e.last_edited_by = ANY(${typedPgArray(editedByUserIds, "text")})`,
   );
   const entityMimeFilter = sqlWhen(
     hasMimeTypeFilter,
     () =>
-      sql`AND file_field.mime_types && ${typedPgArray(mimeTypeFilterValues, "text")}`,
+      sql`AND file_field.mime_types && ${typedPgArray(mimeTypes, "text")}`,
   );
   const updatedRangeFilter = (column: SQL): SQL => {
     const fragments: SQL[] = [];
@@ -1012,10 +1009,10 @@ export type GlobalFacetSearchQuery = {
   query: string;
   organizationId: SafeId<"organization">;
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
-  selectedWorkspaceIds?: readonly SafeId<"workspace">[] | undefined;
-  types?: readonly GlobalSearchResultType[] | undefined;
-  editedByUserIds?: readonly string[] | undefined;
-  mimeTypes?: readonly string[] | undefined;
+  selectedWorkspaceIds: readonly SafeId<"workspace">[];
+  types: readonly GlobalSearchResultType[];
+  editedByUserIds: readonly string[];
+  mimeTypes: readonly string[];
   updatedFrom?: string | undefined;
   updatedTo?: string | undefined;
   limit: number;

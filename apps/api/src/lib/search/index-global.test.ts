@@ -29,6 +29,7 @@ describe("global search SQL scope", () => {
           toSafeId<"workspace">("ws_1"),
           toSafeId<"workspace">("ws_2"),
         ],
+        selectedWorkspaceIds: [],
       }),
     );
 
@@ -88,7 +89,10 @@ describe("global search SQL scope", () => {
       query: "injunction",
       organizationId: toSafeId<"organization">("org_1"),
       accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
+      selectedWorkspaceIds: [],
       types: ["document"],
+      editedByUserIds: [],
+      mimeTypes: [],
       limit: 10,
     });
 

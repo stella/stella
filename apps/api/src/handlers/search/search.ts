@@ -2,6 +2,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
+import { ENTITY_KINDS } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
@@ -16,11 +17,13 @@ export const searchBodySchema = t.Object({
     minLength: 1,
     maxLength: LIMITS.searchQueryMaxLength,
   }),
-  workspaceIds: t.Optional(t.Array(tSafeId("workspace"), { maxItems: 64 })),
-  types: t.Optional(t.Array(t.UnionEnum(GLOBAL_SEARCH_RESULT_TYPES))),
-  kinds: t.Optional(t.Array(entityKindSchema)),
-  editedByUserIds: t.Optional(t.Array(tUserId, { maxItems: 64 })),
-  mimeTypes: t.Optional(t.Array(t.String({ minLength: 1, maxLength: 128 }))),
+  workspaceIds: t.Array(tSafeId("workspace"), { maxItems: 64 }),
+  types: t.Array(t.UnionEnum(GLOBAL_SEARCH_RESULT_TYPES), {
+    maxItems: GLOBAL_SEARCH_RESULT_TYPES.length,
+  }),
+  kinds: t.Array(entityKindSchema, { maxItems: ENTITY_KINDS.length }),
+  editedByUserIds: t.Array(tUserId, { maxItems: 64 }),
+  mimeTypes: t.Array(t.String({ minLength: 1, maxLength: 128 })),
   updatedFrom: t.Optional(isoDateTime),
   updatedTo: t.Optional(isoDateTime),
   cursor: t.Optional(t.String()),
@@ -113,7 +116,7 @@ export const searchHandler = async ({
     return resolved.response;
   }
 
-  const types = body.types ?? body.kinds;
+  const types = body.types.length > 0 ? body.types : body.kinds;
 
   return await searchGlobal({
     query: body.query,
