@@ -1,3 +1,166 @@
 ---
-return Astro.redirect("/imprint", 302);
+import ThemeToggle from "../components/ThemeToggle.astro";
+import Base from "../layouts/Base.astro";
+
+const sections = [
+  {
+    title: "1. Who these terms apply to",
+    body: [
+      "These Terms of Service govern access to stella's hosted website, cloud service, beta features, support channels, and related services. They do not replace the open-source license that governs your use, copying, modification, or distribution of stella source code.",
+      "If we sign a separate written agreement with you or your organization for the same subject matter, that agreement controls over these terms.",
+    ],
+  },
+  {
+    title: "2. Beta service",
+    body: [
+      "stella is currently in beta. The service may change quickly, contain defects, become unavailable, or be discontinued. You should keep independent backups of important data and should not rely on beta features as your only system of record unless we separately agree otherwise in writing.",
+      "We may add, remove, limit, suspend, or reset beta features when needed to operate, secure, or improve the service.",
+    ],
+  },
+  {
+    title: "3. Your account and use",
+    body: [
+      "You are responsible for your account, users you invite, and activity under your organization. Keep credentials secure, use the service lawfully, and notify us promptly if you suspect unauthorized access.",
+      "Do not misuse the service, interfere with its operation, bypass technical limits, upload unlawful or malicious content, or use stella to infringe another party's rights.",
+    ],
+  },
+  {
+    title: "4. Your content and confidential information",
+    body: [
+      "You retain ownership of documents, data, prompts, outputs, and other content you submit to stella. You grant us the limited rights needed to host, process, transmit, secure, back up, and display that content for the purpose of providing the service.",
+      "Each party will protect the other's non-public confidential information with reasonable care and use it only for purposes connected with these terms or the service.",
+    ],
+  },
+  {
+    title: "5. AI features",
+    body: [
+      "stella may include AI-assisted review, drafting, research, summarization, classification, or similar features. AI output may be incomplete, inaccurate, or unsuitable for a particular legal matter. stella is a tool for legal professionals; it does not provide legal advice.",
+      "You are responsible for reviewing outputs, checking authorities and citations, applying professional judgment, and ensuring that your use of stella complies with law, professional duties, client instructions, and court or regulator requirements.",
+    ],
+  },
+  {
+    title: "6. Open source, third-party services, and feedback",
+    body: [
+      "Some parts of stella are open source and some dependencies or integrations are provided by third parties. Open-source software and third-party services are governed by their own licenses or terms, not by these terms.",
+      "If you send us feedback, suggestions, or issue reports, we may use them without restriction or compensation, while respecting confidentiality obligations that apply to your non-public information.",
+    ],
+  },
+  {
+    title: "7. Fees",
+    body: [
+      "Some parts of stella may be free, in beta, usage-based, or offered under a separate paid plan. Fees, credits, limits, taxes, billing periods, renewals, and cancellation terms will be stated in the applicable order, product screen, or written agreement.",
+      "Unless a separate written agreement says otherwise, paid fees are non-refundable except where required by law or where we terminate a paid service without cause before the end of a prepaid period.",
+    ],
+  },
+  {
+    title: "8. Suspension and termination",
+    body: [
+      "You may stop using the service at any time. We may suspend or terminate access if you breach these terms, create security or legal risk, fail to pay amounts due, exceed applicable limits, or if operating the service becomes impractical.",
+      "After termination, your right to use the hosted service ends. Provisions that by their nature should survive, including confidentiality, ownership, disclaimers, liability limits, and governing law, will continue to apply.",
+    ],
+  },
+  {
+    title: "9. Disclaimers and liability",
+    body: [
+      'The service is provided "as is" and "as available". To the maximum extent permitted by law, we disclaim warranties of merchantability, fitness for a particular purpose, non-infringement, uninterrupted availability, accuracy, and error-free operation.',
+      "To the maximum extent permitted by law, stella labs, s.r.o. will not be liable for lost profits, lost revenue, lost data, business interruption, substitute services, or indirect, incidental, special, consequential, exemplary, or punitive damages. Where liability cannot be excluded, our aggregate liability is limited to the greater of EUR 100 or the fees you paid us for the service in the three months before the event giving rise to the claim.",
+    ],
+  },
+  {
+    title: "10. Changes",
+    body: [
+      "We may update these terms from time to time.",
+    ],
+  },
+  {
+    title: "11. Governing law and courts",
+    body: [
+      "These terms are governed by the laws of the Czech Republic. The Czech courts have exclusive jurisdiction over disputes arising from or connected with these terms or the service, unless mandatory law requires otherwise.",
+    ],
+  },
+];
 ---
+
+<Base title="Terms of Service — stella" description="Terms of Service for stella.">
+  <div class="flex min-h-dvh flex-col">
+    <nav class="mx-auto flex w-full max-w-300 items-center justify-between px-6 py-5">
+      <a href="/">
+        <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
+      </a>
+      <div class="flex items-center gap-4">
+        <ThemeToggle />
+        <a
+          href="mailto:contact@stll.app"
+          class="text-sm font-medium transition-colors whitespace-nowrap"
+          style="color: var(--muted-foreground)"
+        >
+          Contact
+        </a>
+      </div>
+    </nav>
+
+    <main class="flex-1 px-6 py-14 lg:py-20">
+      <div class="mx-auto grid w-full max-w-300 grid-cols-1 gap-12 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.35fr)] lg:gap-20">
+        <header>
+          <p class="text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">
+            Legal
+          </p>
+          <h1 class="mt-3 font-display text-4xl font-medium tracking-tight sm:text-5xl">
+            Terms of Service
+          </h1>
+          <p class="mt-5 max-w-xl text-base leading-relaxed" style="color: var(--muted-foreground)">
+            Short terms for using stella's beta service.
+          </p>
+          <div class="mt-8 space-y-2 text-sm leading-relaxed" style="color: var(--muted-foreground)">
+            <p>Effective: May 1, 2026</p>
+            <p>
+              Provider:
+              <a href="/imprint" class="transition-opacity hover:opacity-70" style="color: var(--foreground)">
+                stella labs, s.r.o.
+              </a>
+            </p>
+            <p>Registered office: Nad Porubkou 2355, Poruba, 708 00 Ostrava, Czech Republic</p>
+            <p>Company ID (IČO): 24632872</p>
+            <p>
+              Registered in the Commercial Register maintained by the Regional Court in Ostrava,
+              Section C, File No. 103233
+            </p>
+            <p>
+              Contact:
+              <a href="mailto:contact@stll.app" class="transition-opacity hover:opacity-70" style="color: var(--foreground)">
+                contact@stll.app
+              </a>
+            </p>
+          </div>
+        </header>
+
+        <div class="space-y-10">
+          {sections.map((section) => (
+            <section>
+              <h2 class="font-display text-xl font-medium tracking-tight">{section.title}</h2>
+              <div class="mt-3 space-y-3 text-sm leading-[1.8]" style="color: var(--muted-foreground)">
+                {section.body.map((paragraph) => <p>{paragraph}</p>)}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    </main>
+
+    <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
+      <div class="mx-auto flex max-w-300 flex-col items-center justify-between gap-4 text-sm sm:flex-row" style="color: var(--muted-foreground)">
+        <a href="/imprint" class="transition-opacity hover:opacity-70">stella labs, s.r.o.</a>
+        <nav class="flex items-center gap-4" aria-label="Legal">
+          <a href="/security" class="transition-opacity hover:opacity-70">Security</a>
+          <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
+          <a href="/imprint" class="transition-opacity hover:opacity-70">Imprint</a>
+          <a href="mailto:contact@stll.app" class="transition-opacity hover:opacity-70">Contact</a>
+        </nav>
+      </div>
+      <div
+        class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
+        style="background: linear-gradient(to bottom, transparent, var(--auth-gradient-end))"
+      ></div>
+    </footer>
+  </div>
+</Base>
