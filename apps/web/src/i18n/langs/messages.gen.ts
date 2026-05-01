@@ -371,18 +371,10 @@ type Messages = {
       "ask-user": "Asking for clarification";
       "create-document": "Creating document";
       "describe-stella-function": "Inspecting stella function";
-      "displayDocument": "Viewing document";
       "execute-typescript": "Running TypeScript";
-      "list-entities": "Browsing documents";
       "load-skill": "Loading skill";
       "read-contact": "Reading contact";
-      "read-content": "Reading content";
-      "read-content-across-matters": "Reading document from another matter";
-      "read-entity": "Reading document details";
       "read-skill-resource": "Reading skill resource";
-      "search-across-matters": "Searching across matters";
-      "search-content": "Searching document text";
-      "search-matter": "Searching the matter";
       "searchCaseLaw": "Searching case law";
       "update-entity-fields": "Updating metadata";
     };
@@ -922,14 +914,12 @@ type Messages = {
     "chatAlreadyOpen": "Chat is already open";
     "clients": "Clients";
     "contacts": "Contacts";
-    "getDesktopApp": "Get desktop app";
     "inbox": "Inbox";
     "invitations": "Invitations";
     "knowledge": "Knowledge";
     "members": "Members";
     "myTodos": "My tasks";
     "newMatter": "New matter";
-    "openInDesktop": "Open in desktop app";
     "pinned": "Pinned";
     "recents": "Recents";
     "search": "Search";
@@ -1113,7 +1103,6 @@ type Messages = {
     "clientUpdated": "Client updated";
     "contactCreated": "Client created";
     "contactDeleted": "Client deleted";
-    "contactUpdated": "Client updated";
     "documentCreated": "Document created";
     "folderCreated": "Folder created";
     "invitationCanceled": "Invitation canceled";
@@ -1266,7 +1255,6 @@ type Messages = {
   };
   "workspaces": {
     "active": "Active";
-    "answer": "Answer:";
     "archiveMatter": "Archive";
     "archived": "Archived";
     "archivedBadge": "Archived";
@@ -1568,7 +1556,6 @@ type Messages = {
     "referencePlaceholder": "e.g. 2024/001";
     "referenceTaken": "This reference number is already in use";
     "sections": {
-      "documents": "Documents";
       "members": "Members";
       "parties": "Parties";
     };
@@ -1602,12 +1589,6 @@ type Messages = {
       "cannotDeleteRequired": "At least one view of this type is required";
       "copySuffix": "{name} (copy)";
       "deleteView": "Delete view";
-      "failedToChangeViewType": "Failed to change view type";
-      "failedToCreateView": "Failed to create view";
-      "failedToDeleteView": "Failed to delete view";
-      "failedToDuplicateView": "Failed to duplicate view";
-      "failedToRenameView": "Failed to rename view";
-      "failedToReorderViews": "Failed to reorder views";
       "fields": "Fields:";
       "fieldsSelected": "{count, plural, one {# selected} other {# selected}}";
       "groupBy": "Group by:";
