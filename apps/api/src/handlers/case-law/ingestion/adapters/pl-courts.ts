@@ -40,7 +40,8 @@ const DUMP_URL = "https://www.saos.org.pl/api/dump/judgments";
 const SEARCH_URL = "https://www.saos.org.pl/api/search/judgments";
 const DETAIL_URL = "https://www.saos.org.pl/api/judgments";
 const PUBLIC_JUDGMENT_URL = "https://www.saos.org.pl/judgments";
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 100;
+const ITEM_CONCURRENCY = 10;
 
 const COURT_TYPE_MAP: Record<string, string> = {
   COMMON: "Sąd powszechny",
@@ -603,8 +604,13 @@ export const plCourtsAdapter: SourceAdapter = {
   country: "POL",
   language: "pl",
   minRequestIntervalMs: 200,
-  pageTimeoutMs: 280_000,
-  maxSyncPages: 20,
+  // Detail fetches are slower than SK (rich JSON, sometimes ~3s).
+  // PAGE_SIZE=100 with ITEM_CONCURRENCY=10 → ~30s wall time per
+  // page; 5 min headroom covers the slowest pages.
+  pageTimeoutMs: 300_000,
+  // Page is ~30s wall time; 30 min cycle covers ~60 pages = ~6000
+  // decisions per cursor persist.
+  maxCycleMs: 30 * 60 * 1000,
 
   async getTotalCount(signal) {
     try {
@@ -647,6 +653,7 @@ export const plCourtsAdapter: SourceAdapter = {
     pageSize: PAGE_SIZE,
     zeroIndexed: true,
     listTimeoutMs: 60_000,
+    itemConcurrency: ITEM_CONCURRENCY,
 
     buildRequest: (page) => ({
       url: `${DUMP_URL}?${new URLSearchParams({

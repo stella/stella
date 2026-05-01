@@ -35,7 +35,8 @@ import { isRecord } from "@/api/lib/type-guards";
 
 const BASE_URL =
   "https://obcan.justice.sk/pilot/api/ress-isu-service/v1/rozhodnutie";
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 100;
+const ITEM_CONCURRENCY = 10;
 
 type SkSud = {
   registreGuid?: string | null;
@@ -287,11 +288,12 @@ export const skCourtsAdapter: SourceAdapter = {
   language: "sk",
   minRequestIntervalMs: 300,
   // PDF download deferred; pages now only do list + detail JSON.
-  // 60s is generous for 25 detail fetches (~2s each).
-  pageTimeoutMs: 90_000,
-  // Metadata-only pages are lightweight (~15s each). Use a longer
-  // cycle to maximize throughput: 30 min fits ~120 pages (3000
-  // decisions) per cursor persist vs ~35 with the 10 min default.
+  // With ITEM_CONCURRENCY = 10 detail fetches in parallel and
+  // ~2s per detail, 100 items take ~20s wall time. Allow headroom
+  // for network jitter and the list fetch itself.
+  pageTimeoutMs: 120_000,
+  // Page is ~25s wall time at PAGE_SIZE=100, ITEM_CONCURRENCY=10.
+  // 30 min cycle fits ~70 pages = ~7000 decisions per cursor persist.
   maxCycleMs: 30 * 60 * 1000,
 
   fetchPage: createPagePaginatedFetch<SkApiResponse>({
@@ -299,6 +301,7 @@ export const skCourtsAdapter: SourceAdapter = {
     pageSize: PAGE_SIZE,
     zeroIndexed: true,
     listTimeoutMs: 60_000,
+    itemConcurrency: ITEM_CONCURRENCY,
 
     buildRequest: (page) => ({
       url: `${BASE_URL}?${new URLSearchParams({

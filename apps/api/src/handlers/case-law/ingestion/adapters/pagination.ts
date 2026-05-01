@@ -67,6 +67,13 @@ type PagePaginationOptions<TResponse> = {
     item: unknown,
     signal?: AbortSignal,
   ) => Promise<IngestionResult | null>;
+  /**
+   * Max parallel parseItem calls within a single page.
+   * Defaults to 1 (serial). Raise for adapters whose
+   * parseItem performs detail fetches and where the
+   * source can tolerate concurrent requests.
+   */
+  itemConcurrency?: number | undefined;
 };
 
 /**
@@ -243,29 +250,29 @@ export const createPagePaginatedFetch = <TResponse>(
         const decisions: IngestionResult[] = [];
 
         let itemsSkipped = 0;
-        for (const item of items) {
-          // Stop processing if the page/cycle signal fired
-          // during a previous item's detail fetch. Return
-          // partial results so the cursor still advances.
+        // Process items in parallel batches when the adapter
+        // opts in via itemConcurrency. Default is serial.
+        // Each batch is gated on signal so an aborted cycle
+        // returns partial results without stalling the cursor.
+        const chunkSize = Math.max(1, opts.itemConcurrency ?? 1);
+        for (let i = 0; i < items.length; i += chunkSize) {
           if (signal?.aborted) {
             break;
           }
-          try {
-            const parsed = await opts.parseItem(item, signal);
-            if (parsed) {
-              decisions.push(parsed);
+          const chunk = items.slice(i, i + chunkSize);
+          const results = await Promise.allSettled(
+            chunk.map( async (item) => opts.parseItem(item, signal)),
+          );
+          for (const result of results) {
+            if (result.status === "fulfilled") {
+              if (result.value) {
+                decisions.push(result.value);
+              }
+            } else if (!signal?.aborted) {
+              // Skip individual items that fail to parse;
+              // don't abort the entire page.
+              itemsSkipped++;
             }
-          } catch {
-            // Page/cycle timeout fired during this item's
-            // processing. Stop and return partial results
-            // instead of throwing (which stalls the cursor).
-            if (signal?.aborted) {
-              break;
-            }
-            itemsSkipped++;
-            // Skip individual items that fail to parse;
-            // don't abort the entire page.
-            continue;
           }
         }
 
