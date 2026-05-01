@@ -1,0 +1,1302 @@
+{
+  "source": {
+    "id": "a4d8f134-e0d6-4dc0-afde-05e8afa665b2",
+    "name": "Slovak Constitutional Court",
+    "config": "{}",
+    "enabled": true,
+    "created_at": "2026-04-03T16:52:09.785366",
+    "updated_at": "2026-05-01T16:31:07.231",
+    "adapter_key": "sk-us",
+    "sync_cursor": "2026:920",
+    "last_sync_at": "2026-05-01T16:31:07.23"
+  },
+  "decisions": [
+    {
+      "id": "019dd032-2c2f-7000-86c9-682f8c28bd72",
+      "ecli": "ECLI:SK:USSR:2026:3.US.265.2026.1",
+      "slug": null,
+      "court": "Ústavný súd SR",
+      "country": "SVK",
+      "analysis": null,
+      "fulltext": "SLOVENSKÁ REPUBLIKA\n\nUZNESENIE\n\nÚstavného súdu Slovenskej republiky\n\nIII. ÚS 265/2026-14 Ústavný súd Slovenskej republiky v senáte zloženom z predsedu senátu Roberta Šorla (sudca spravodajca) a zo sudcov Ivana Fiačana a Martina Vernarského v konaní podľa čl. 127 Ústavy Slovenskej republiky o ústavnej sťažnosti sťažovateľa , anonymizované anonymizované , , zastúpeného JUDr. Erikou Beňovou, advokátkou, Škultétyho 2, proti postupu Mestského súdu Košice v konaní sp. zn. 25C/28/2020 o oznámení dôvodov vylúčenia sudcu Ústavného súdu Slovenskej republiky Petra Molnára ao námietke zaujatosti sťažovateľa proti sudcovi Ústavného súdu Slovenskej republiky Petrovi Molnárovi takto\n\nrozhodol:\n\nSudca II. senátu Ústavného súdu Slovenskej republiky Peter Molnár nie je vylúčený z konania a rozhodovania o ústavnej sťažnosti sťažovateľa sp. zn. Rvp 278/2026.\n\nOdôvodnenie:\n\nI.\n\n1. Sťažovateľ sa ústavnou sťažnosťou doručenou ústavnému súdu 1. februára 2026, ktorá bola ako sudcovi spravodajcovi pridelená Petrovi Molnárovi, predsedovi II. senátu ústavného súdu (ďalej len „sudca spravodajca“), domáha vyslovenia porušenia ústavných práv postupom mestského súdu v konaní o jeho žalobe, ktorou sa proti žalovanej Univerzite Pavla Jozefa Šafárika v Košiciach (ďalej len „univerzita“) domáha ochrany osobnosti. Namietané porušenie ústavných práv identifikuje v tom, že mestský súd o jeho žalobe nerozhodol, hoci ju podal ešte v novembri 2019.\n\n2. Sudca spravodajca predsedovi ústavného súdu oznámil, že sa dozvedel, že sťažovateľ elektronicky komunikuje s vedením a členmi akademického senátu univerzity a aj verejne o ňom šíri, že potom, ako namiesto vylúčeného sudcu ústavného súdu Martina Vernarského rozhodoval o inej ústavnej sťažnosti sťažovateľa (III. ÚS 1/2024), sám nevzniesol námietku vlastnej zaujatosti pre pomer k univerzite, ktorej je zamestnancom. K tomu sudca spravodajca dopĺňa, že aj v iných konaniach, v ktorých vystupovala univerzita, skutočnosť, že je zamestnancom univerzity, neoznamoval, keďže učí na fakulte univerzity, na ktorej nepôsobil sťažovateľ, a to nemôže vzbudiť pochybnosti o jeho nestrannosti. Sudca spravodajca na záver vyjadruje obavu, že jeho účasť na rozhodovaní o ústavnej sťažnosti sťažovateľa napriek tomu sťažovateľovi poslúži ako zámienka pre ďalšie neopodstatnené útoky na jeho osobu a prenesene aj na ústavný súd.\n\n3. Sťažovateľ 28. februára 2026 vzniesol námietku zaujatosti sudcu spravodajcu z dôvodu, že je zamestnancom žalovanej univerzity a jeho poradkyňami sú dve zamestnankyne tejto univerzity. S námietkou spojil podnet na zjednotenie právnych názorov rozhodnutí ústavného súdu: na strane jednej (I. ÚS 102/2018) a na strane druhej (IV. ÚS 344/2020, IV. ÚS 686/2023, IV. ÚS 598/2024), a to s ohľadom na rozhodnutia Európskeho súdu pre ľudské práva (ďalej len „ESĽP“).\n\n4. Sudca spravodajca na námietku reagoval tak, že odkázal na svoje oznámenie. Uviedol, že vec pridelil poradkyni, ktorá nie je zamestnankyňou univerzity.\n\nII.\n\n5. Podľa čl. IV bodu 1 písm. c) rozvrhu práce ústavného súdu o vylúčení sudcu pri rozhodovaní v senáte podľa § 51 ods. 2 prvej vety zákona č. 314/2018 Z. z. o Ústavnom súde Slovenskej republiky ao zmene a doplnení niektorých zákonov v znení neskorších predpisov (ďalej len ,,zákon o ústavnom súde“) rozhoduje tretí senát, ak ide o sudcov druhého senátu.\n\n6. Podľa § 49 ods. 1 prvej vety zákona o ústavnom súde sudca ústavného súdu je vylúčený z konania a rozhodovania vo veci, ak so zreteľom na jeho pomer k veci, účastníkom konania, zúčastnenej osobe alebo ich zástupcom možno mať pochybnosti o jeho nezaujatosti. Dôvod vylúčenia sudcu ústavného súdu spočívajúci v pochybnostiach o nezaujatosti podľa § 49 ods. 1 prvej vety zákona o ústavnom súde nadväzuje na požiadavku nestrannosti súdneho rozhodovania tak, ako je okrem iného definovaná aj v rozhodnutiach ESĽP. Nestrannosť má stránku subjektívnu a objektívnu, keďže nestrannosť sudcu má význam pre dôveru verejnosti v súdnictvo (Olujić proti Chorvátsku, sťažnosť č. 22330/05, rozsudok ESĽP z 5. 2. 2005, bod 57).\n\n7. Pri teste subjektívnych okolností sa zisťuje osobné presvedčenie, postoj sudcu alebo jeho záujem v prerokúvanej veci. Osobná nestrannosť sudcu sa predpokladá, kým sa nepreukáže opak. Takýmto opakom môže byť sudcom prejavené nepriateľstvo alebo neznášanlivosť. Pri teste objektívnych okolností je dôležitá perspektíva nestranného pozorovateľa a relevantné je aj zdanie sa zaujatosti, teda či sú dané okolnosti, ktoré môžu vzbudzovať pochybnosti o nestrannosti sudcu (Daktaras proti Litve, sťažnosť č. 42095/98, rozsudok ESĽP z 10. 10. 2000, bod 32). Pri objektívnom teste sú dôležitými kritériami dôvera verejnosti v rozhodovanie (II. ÚS 36/2012).\n\n8. Sudca spravodajca v oznámení označuje komunikáciu sťažovateľa, ktorá sa týka jeho osoby ako negatívny záujem sťažovateľa, ktorý sa prejavuje v jeho obsesívnej aktivite. Z tohto vyjadrenia sudcu spravodajcu je zrejmé, že komunikáciu sťažovateľa vníma negatívne. Nemožno však z toho vyvodiť, že by šlo o otvorené nepriateľstvo alebo neznášanlivosť vo vzťahu k sťažovateľovi. Preto zo subjektívneho hľadiska niet pochýb o nezaujatosti sudcu spravodajcu.\n\n9. Z hľadiska objektívneho je zrejmé, že sťažovateľ sa vyjadruje negatívne ku konaniu sudcu spravodajcu, ktoré spočívalo v tom, že neoznámil skutočnosti, ktoré by podľa jeho názoru mali odôvodňovať vylúčenie sudcu spravodajcu podľa § 49 ods. 1 a 2 zákona o ústavnom súde. K tomu treba uviesť, že kritika postupov súdov a sudcov je prirodzená ao jej oprávnenosti si spoločnosť môže utvárať vlastné názory. Kritiku postupov sudcov však nie je dôvod vnímať ako okolnosť, z ktorej by bolo možné vyvodiť pomer medzi kritizovaným sudcom a kritizujúcou osobou, v tomto prípade sťažovateľom.\n\n10. V konečnom dôsledku je však rozhodujúce, či skutočnosť, že sudca spravodajca je zamestnancom univerzity, voči ktorej sa sťažovateľ ako jej zamestnanec domáha svojich práv, je skutočnosťou, ktorú by bolo možné posúdiť ako pomer k veci, účastníkom konania, zúčastnenej osobe alebo ich zástupcom. Z toho, že sudca spravodajca je zamestnancom sťažovateľom žalovanej univerzity, nemožno vyvodiť pomer k veci a ani k sťažovateľovi. Podstatou ústavnej sťažnosti sťažovateľa nie je jeho spor so žalovanou univerzitou, ktorej zamestnancom je sudca spravodajca, ale ochrana ústavných práv sťažovateľa, ktoré mali byť porušené nečinnosťou mestského súdu. Rozhodnutie ústavného súdu o tom, či prieťahmi v namietanom konaní boli porušené ústavné práva sťažovateľa, je bez akéhokoľvek významu pre jeho vzťah so žalovanou univerzitou. Ústavné sťažnosti, ktorých predmetom je zásah do základného práva na prerokovanie veci bez zbytočných prieťahov, sa v naznačenom pohľade odlišujú od ústavných sťažností, ktoré v prípade vyhovenia vedú k zrušeniu právoplatného rozhodnutia orgánu verejnej moci, čo rezultuje do priameho vplyvu na subjektívno-právne postavenie zúčastnenej osoby podľa § 33 ods. 2 zákona o ústavnom súde. Rovnako je toto rozhodnutie ústavného súdu nespôsobilé akokoľvek ovplyvniť vzťah sudcu spravodajcu so žalovanou univerzitou. Ani nezaujatý a racionálne uvažujúci pozorovateľ tak nemôže dospieť k pochybnostiam, že by sudca ústavného súdu mohol mať pomer či už k veci, alebo sťažovateľovi, ktorý by bol spôsobilý viesť k jeho zaujatosti. Podľa § 49 ods. 1 prvej vety zákona o ústavnom súde nie je dôvod mať pochybnosti o nezaujatosti sudcu ústavného súdu, čo má za následok, že sudca ústavného súdu nie je vylúčený z konania a rozhodovania o ústavnej sťažnosti sťažovateľa.\n\n11. Obdobný záver bol vyslovený aj v uznesení ústavného súdu (I. ÚS 102/2018) o nevylúčení sudcu ústavného súdu Orosza, dlhoročného zamestnanca univerzity, ktorá ústavnou sťažnosťou namietala porušenie ústavných práv rozhodnutiami v správnom súdnom konaní. Iný záver o vylúčení bol vyslovený v uzneseniach ústavného súdu (IV. ÚS 145/2019, IV. ÚS 344/2020, IV. ÚS 28/2020, IV. ÚS 93/2020, IV. ÚS 686/2023, IV. ÚS 598/2024) vo vzťahu k sudcovi ústavného súdu Vernarskému, ktorého pomer k univerzite vychádzal nielen z jeho zamestnaneckého pomeru k fakulte univerzity, ale aj z toho, že bol členom vedeckej rady univerzity, ktorej predsedom a zároveň štatutárom univerzity je rektor s právomocou menovať a odvolávať členov vedeckej rady.\n\n12. K nedostatku objektívnej nestrannosti pri vzťahoch sudcu k univerzite ako účastníkovi konania dospel ESĽP (rozsudok zo 17. 6. 2003 o sťažnosti č. 62435/00, Pescador Valero v. Španielsko, bod 27) z dôvodu, že sudca bol zároveň docentom na univerzite av čase rozhodovania „mal už niekoľko rokov úzke a pravidelné profesionálne vzťahy s univerzitou“ a poberal od nej za pedagogickú činnosť pravidelný príjem v nezanedbateľnej výške. K obdobnému záveru ESĽP dospel (rozsudok z 1. 12. 2015 o sťažnosti č. 61131/12, Blesa Rodríguez v. Španielsko, bod 44), keď bol sudca na univerzite funkčne závislý od rektora. ESĽP (rozsudok zo 14. 12. 2023 o sťažnosti č. 41236/18, Syndicat national des journalistes a iní v. Francúzsko, body 51 – 57) dospel k záveru, že objektívne nestranní nie sú sudcovia, ktorí rozhodovali v civilnej veci, kde protistranou bolo vydavateľstvo, u ktorého títo sudcovia pravidelne publikovali odborné články a organizovali semináre, teda mali s touto protistranou pravidelné, úzke a odplatné vzťahy.\n\n13. Tieto rozhodnutia ESĽP a rozhodnutia ústavného súdu týkajúce sa vylúčenia sudcu ústavného súdu Vernarského nie je dôvod vztiahnuť na posúdenie možných pochybností o nezaujatosti sudcu ústavného súdu Molnára v konaní o ústavnej sťažnosti sťažovateľa. Je tomu tak preto, že hoci fakulta univerzity nemá na rozdiel od univerzity právnu subjektivitu, je to nie rektor univerzity, ale dekan fakulty, ktorý uzatvára, mení a zrušuje pracovnoprávne vzťahy zamestnancov, ktorí sú organizačne zaradení na fakultu. Pozícia rektora sa obmedzuje na vydanie dekrétu určeným zamestnancom a priznanie osobného platu podľa návrhu dekana [čl. 29 bod 1 písm. e) a f) štatútu univerzity z 19. 12. 2022].\n\n14. Z tejto konštrukcie vyplýva nezávislosť dekanov fakúlt pri utváraní pracovnoprávnych vzťahov bez priamej možnosti zasahovania zo strany rektora, ktorý na zamestnancov univerzity zaradených na jednotlivých fakultách nemá priamy dosah. Pri takomto vzťahu sudcu ústavného súdu Petra Molnára, ktorý je zaradený na fakulte univerzity, nemožno dospieť k záveru o objektívnych pochybnostiach o jeho nezaujatosti pre jeho pomer, či už k sťažovateľovi, alebo k univerzite. To platí o to viac, že sťažovateľ namieta prieťahy v postupe mestského súdu v konaní o jeho žalobe, a tak je zrejmé, že rozhodnutie o ústavnej sťažnosti sťažovateľa bude bez významu pre výsledok sporu sťažovateľa a ním žalovanej univerzity.\n\nPoučenie: Proti tomuto rozhodnutiu ústavného súdu nemožno podať opravný prostriedok.\n\nV Košiciach 23. apríla 2026\n\nRobert Šorl\n\npredseda senátu",
+      "language": "sk",
+      "metadata": {
+        "ecli": "ECLI:SK:USSR:2026:3.US.265.2026.1",
+        "cause": [],
+        "court": "Ústavný súd SR",
+        "judge": "Robert Šorl",
+        "result": ["sudca nie je vylúčený"],
+        "underage": null,
+        "entryDate": null,
+        "rvpNumber": "565/2026",
+        "caseNumber": "III. ÚS 265/2026",
+        "documentId": "695d557a-08eb-41d2-8cea-2b895f9860e7",
+        "legalBasis": ["§ 51 ods. 2 zákona o ústavnom súde"],
+        "references": null,
+        "formOfEntry": null,
+        "typeOfEntry": null,
+        "decisionDate": "2026-04-23",
+        "decisionType": "uznesenie",
+        "documentType": "Rozhodnutie - Uznesenie o námietke zaujatosti sudcu",
+        "wordRegister": ["námietka zaujatosti sudcu ÚS SR"],
+        "fileReference": null,
+        "includeToZnaU": false,
+        "legalForceDate": "2026-04-27",
+        "typeOfDecision": ["Uznesenie o námietke zaujatosti"],
+        "typeOfProposer": null,
+        "publicationDate": null,
+        "materialRegister": ["sudca-námietka zaujatosti"],
+        "typeOfProceeding": "procesné konanie ÚS SR",
+        "dissentingOpinion": [],
+        "typeOfNegotiation": ["Prerokovanie vo veci"],
+        "challengedLegislation": null,
+        "affectedLegalRegulation": null
+      },
+      "sections": [
+        {
+          "text": "SLOVENSKÁ REPUBLIKA\n\nUZNESENIE\n\nÚstavného súdu Slovenskej republiky\n\nIII. ÚS 265/2026-14 Ústavný súd Slovenskej republiky v senáte zloženom z predsedu senátu Roberta Šorla (sudca spravodajca) a zo sudcov Ivana Fiačana a Martina Vernarského v konaní podľa čl. 127 Ústavy Slovenskej republiky o ústavnej sťažnosti sťažovateľa , anonymizované anonymizované , , zastúpeného JUDr. Erikou Beňovou, advokátkou, Škultétyho 2, proti postupu Mestského súdu Košice v konaní sp. zn. 25C/28/2020 o oznámení dôvodov vylúčenia sudcu Ústavného súdu Slovenskej republiky Petra Molnára ao námietke zaujatosti sťažovateľa proti sudcovi Ústavného súdu Slovenskej republiky Petrovi Molnárovi takto\n\nrozhodol:\n\nSudca II. senátu Ústavného súdu Slovenskej republiky Peter Molnár nie je vylúčený z konania a rozhodovania o ústavnej sťažnosti sťažovateľa sp. zn. Rvp 278/2026.",
+          "type": "header",
+          "index": 0,
+          "title": null
+        },
+        {
+          "text": "I.\n\n1. Sťažovateľ sa ústavnou sťažnosťou doručenou ústavnému súdu 1. februára 2026, ktorá bola ako sudcovi spravodajcovi pridelená Petrovi Molnárovi, predsedovi II. senátu ústavného súdu (ďalej len „sudca spravodajca“), domáha vyslovenia porušenia ústavných práv postupom mestského súdu v konaní o jeho žalobe, ktorou sa proti žalovanej Univerzite Pavla Jozefa Šafárika v Košiciach (ďalej len „univerzita“) domáha ochrany osobnosti. Namietané porušenie ústavných práv identifikuje v tom, že mestský súd o jeho žalobe nerozhodol, hoci ju podal ešte v novembri 2019.\n\n2. Sudca spravodajca predsedovi ústavného súdu oznámil, že sa dozvedel, že sťažovateľ elektronicky komunikuje s vedením a členmi akademického senátu univerzity a aj verejne o ňom šíri, že potom, ako namiesto vylúčeného sudcu ústavného súdu Martina Vernarského rozhodoval o inej ústavnej sťažnosti sťažovateľa (III. ÚS 1/2024), sám nevzniesol námietku vlastnej zaujatosti pre pomer k univerzite, ktorej je zamestnancom. K tomu sudca spravodajca dopĺňa, že aj v iných konaniach, v ktorých vystupovala univerzita, skutočnosť, že je zamestnancom univerzity, neoznamoval, keďže učí na fakulte univerzity, na ktorej nepôsobil sťažovateľ, a to nemôže vzbudiť pochybnosti o jeho nestrannosti. Sudca spravodajca na záver vyjadruje obavu, že jeho účasť na rozhodovaní o ústavnej sťažnosti sťažovateľa napriek tomu sťažovateľovi poslúži ako zámienka pre ďalšie neopodstatnené útoky na jeho osobu a prenesene aj na ústavný súd.\n\n3. Sťažovateľ 28. februára 2026 vzniesol námietku zaujatosti sudcu spravodajcu z dôvodu, že je zamestnancom žalovanej univerzity a jeho poradkyňami sú dve zamestnankyne tejto univerzity. S námietkou spojil podnet na zjednotenie právnych názorov rozhodnutí ústavného súdu: na strane jednej (I. ÚS 102/2018) a na strane druhej (IV. ÚS 344/2020, IV. ÚS 686/2023, IV. ÚS 598/2024), a to s ohľadom na rozhodnutia Európskeho súdu pre ľudské práva (ďalej len „ESĽP“).\n\n4. Sudca spravodajca na námietku reagoval tak, že odkázal na svoje oznámenie. Uviedol, že vec pridelil poradkyni, ktorá nie je zamestnankyňou univerzity.\n\nII.\n\n5. Podľa čl. IV bodu 1 písm. c) rozvrhu práce ústavného súdu o vylúčení sudcu pri rozhodovaní v senáte podľa § 51 ods. 2 prvej vety zákona č. 314/2018 Z. z. o Ústavnom súde Slovenskej republiky ao zmene a doplnení niektorých zákonov v znení neskorších predpisov (ďalej len ,,zákon o ústavnom súde“) rozhoduje tretí senát, ak ide o sudcov druhého senátu.\n\n6. Podľa § 49 ods. 1 prvej vety zákona o ústavnom súde sudca ústavného súdu je vylúčený z konania a rozhodovania vo veci, ak so zreteľom na jeho pomer k veci, účastníkom konania, zúčastnenej osobe alebo ich zástupcom možno mať pochybnosti o jeho nezaujatosti. Dôvod vylúčenia sudcu ústavného súdu spočívajúci v pochybnostiach o nezaujatosti podľa § 49 ods. 1 prvej vety zákona o ústavnom súde nadväzuje na požiadavku nestrannosti súdneho rozhodovania tak, ako je okrem iného definovaná aj v rozhodnutiach ESĽP. Nestrannosť má stránku subjektívnu a objektívnu, keďže nestrannosť sudcu má význam pre dôveru verejnosti v súdnictvo (Olujić proti Chorvátsku, sťažnosť č. 22330/05, rozsudok ESĽP z 5. 2. 2005, bod 57).\n\n7. Pri teste subjektívnych okolností sa zisťuje osobné presvedčenie, postoj sudcu alebo jeho záujem v prerokúvanej veci. Osobná nestrannosť sudcu sa predpokladá, kým sa nepreukáže opak. Takýmto opakom môže byť sudcom prejavené nepriateľstvo alebo neznášanlivosť. Pri teste objektívnych okolností je dôležitá perspektíva nestranného pozorovateľa a relevantné je aj zdanie sa zaujatosti, teda či sú dané okolnosti, ktoré môžu vzbudzovať pochybnosti o nestrannosti sudcu (Daktaras proti Litve, sťažnosť č. 42095/98, rozsudok ESĽP z 10. 10. 2000, bod 32). Pri objektívnom teste sú dôležitými kritériami dôvera verejnosti v rozhodovanie (II. ÚS 36/2012).\n\n8. Sudca spravodajca v oznámení označuje komunikáciu sťažovateľa, ktorá sa týka jeho osoby ako negatívny záujem sťažovateľa, ktorý sa prejavuje v jeho obsesívnej aktivite. Z tohto vyjadrenia sudcu spravodajcu je zrejmé, že komunikáciu sťažovateľa vníma negatívne. Nemožno však z toho vyvodiť, že by šlo o otvorené nepriateľstvo alebo neznášanlivosť vo vzťahu k sťažovateľovi. Preto zo subjektívneho hľadiska niet pochýb o nezaujatosti sudcu spravodajcu.\n\n9. Z hľadiska objektívneho je zrejmé, že sťažovateľ sa vyjadruje negatívne ku konaniu sudcu spravodajcu, ktoré spočívalo v tom, že neoznámil skutočnosti, ktoré by podľa jeho názoru mali odôvodňovať vylúčenie sudcu spravodajcu podľa § 49 ods. 1 a 2 zákona o ústavnom súde. K tomu treba uviesť, že kritika postupov súdov a sudcov je prirodzená ao jej oprávnenosti si spoločnosť môže utvárať vlastné názory. Kritiku postupov sudcov však nie je dôvod vnímať ako okolnosť, z ktorej by bolo možné vyvodiť pomer medzi kritizovaným sudcom a kritizujúcou osobou, v tomto prípade sťažovateľom.\n\n10. V konečnom dôsledku je však rozhodujúce, či skutočnosť, že sudca spravodajca je zamestnancom univerzity, voči ktorej sa sťažovateľ ako jej zamestnanec domáha svojich práv, je skutočnosťou, ktorú by bolo možné posúdiť ako pomer k veci, účastníkom konania, zúčastnenej osobe alebo ich zástupcom. Z toho, že sudca spravodajca je zamestnancom sťažovateľom žalovanej univerzity, nemožno vyvodiť pomer k veci a ani k sťažovateľovi. Podstatou ústavnej sťažnosti sťažovateľa nie je jeho spor so žalovanou univerzitou, ktorej zamestnancom je sudca spravodajca, ale ochrana ústavných práv sťažovateľa, ktoré mali byť porušené nečinnosťou mestského súdu. Rozhodnutie ústavného súdu o tom, či prieťahmi v namietanom konaní boli porušené ústavné práva sťažovateľa, je bez akéhokoľvek významu pre jeho vzťah so žalovanou univerzitou. Ústavné sťažnosti, ktorých predmetom je zásah do základného práva na prerokovanie veci bez zbytočných prieťahov, sa v naznačenom pohľade odlišujú od ústavných sťažností, ktoré v prípade vyhovenia vedú k zrušeniu právoplatného rozhodnutia orgánu verejnej moci, čo rezultuje do priameho vplyvu na subjektívno-právne postavenie zúčastnenej osoby podľa § 33 ods. 2 zákona o ústavnom súde. Rovnako je toto rozhodnutie ústavného súdu nespôsobilé akokoľvek ovplyvniť vzťah sudcu spravodajcu so žalovanou univerzitou. Ani nezaujatý a racionálne uvažujúci pozorovateľ tak nemôže dospieť k pochybnostiam, že by sudca ústavného súdu mohol mať pomer či už k veci, alebo sťažovateľovi, ktorý by bol spôsobilý viesť k jeho zaujatosti. Podľa § 49 ods. 1 prvej vety zákona o ústavnom súde nie je dôvod mať pochybnosti o nezaujatosti sudcu ústavného súdu, čo má za následok, že sudca ústavného súdu nie je vylúčený z konania a rozhodovania o ústavnej sťažnosti sťažovateľa.\n\n11. Obdobný záver bol vyslovený aj v uznesení ústavného súdu (I. ÚS 102/2018) o nevylúčení sudcu ústavného súdu Orosza, dlhoročného zamestnanca univerzity, ktorá ústavnou sťažnosťou namietala porušenie ústavných práv rozhodnutiami v správnom súdnom konaní. Iný záver o vylúčení bol vyslovený v uzneseniach ústavného súdu (IV. ÚS 145/2019, IV. ÚS 344/2020, IV. ÚS 28/2020, IV. ÚS 93/2020, IV. ÚS 686/2023, IV. ÚS 598/2024) vo vzťahu k sudcovi ústavného súdu Vernarskému, ktorého pomer k univerzite vychádzal nielen z jeho zamestnaneckého pomeru k fakulte univerzity, ale aj z toho, že bol členom vedeckej rady univerzity, ktorej predsedom a zároveň štatutárom univerzity je rektor s právomocou menovať a odvolávať členov vedeckej rady.\n\n12. K nedostatku objektívnej nestrannosti pri vzťahoch sudcu k univerzite ako účastníkovi konania dospel ESĽP (rozsudok zo 17. 6. 2003 o sťažnosti č. 62435/00, Pescador Valero v. Španielsko, bod 27) z dôvodu, že sudca bol zároveň docentom na univerzite av čase rozhodovania „mal už niekoľko rokov úzke a pravidelné profesionálne vzťahy s univerzitou“ a poberal od nej za pedagogickú činnosť pravidelný príjem v nezanedbateľnej výške. K obdobnému záveru ESĽP dospel (rozsudok z 1. 12. 2015 o sťažnosti č. 61131/12, Blesa Rodríguez v. Španielsko, bod 44), keď bol sudca na univerzite funkčne závislý od rektora. ESĽP (rozsudok zo 14. 12. 2023 o sťažnosti č. 41236/18, Syndicat national des journalistes a iní v. Francúzsko, body 51 – 57) dospel k záveru, že objektívne nestranní nie sú sudcovia, ktorí rozhodovali v civilnej veci, kde protistranou bolo vydavateľstvo, u ktorého títo sudcovia pravidelne publikovali odborné články a organizovali semináre, teda mali s touto protistranou pravidelné, úzke a odplatné vzťahy.\n\n13. Tieto rozhodnutia ESĽP a rozhodnutia ústavného súdu týkajúce sa vylúčenia sudcu ústavného súdu Vernarského nie je dôvod vztiahnuť na posúdenie možných pochybností o nezaujatosti sudcu ústavného súdu Molnára v konaní o ústavnej sťažnosti sťažovateľa. Je tomu tak preto, že hoci fakulta univerzity nemá na rozdiel od univerzity právnu subjektivitu, je to nie rektor univerzity, ale dekan fakulty, ktorý uzatvára, mení a zrušuje pracovnoprávne vzťahy zamestnancov, ktorí sú organizačne zaradení na fakultu. Pozícia rektora sa obmedzuje na vydanie dekrétu určeným zamestnancom a priznanie osobného platu podľa návrhu dekana [čl. 29 bod 1 písm. e) a f) štatútu univerzity z 19. 12. 2022].\n\n14. Z tejto konštrukcie vyplýva nezávislosť dekanov fakúlt pri utváraní pracovnoprávnych vzťahov bez priamej možnosti zasahovania zo strany rektora, ktorý na zamestnancov univerzity zaradených na jednotlivých fakultách nemá priamy dosah. Pri takomto vzťahu sudcu ústavného súdu Petra Molnára, ktorý je zaradený na fakulte univerzity, nemožno dospieť k záveru o objektívnych pochybnostiach o jeho nezaujatosti pre jeho pomer, či už k sťažovateľovi, alebo k univerzite. To platí o to viac, že sťažovateľ namieta prieťahy v postupe mestského súdu v konaní o jeho žalobe, a tak je zrejmé, že rozhodnutie o ústavnej sťažnosti sťažovateľa bude bez významu pre výsledok sporu sťažovateľa a ním žalovanej univerzity.\n\nPoučenie: Proti tomuto rozhodnutiu ústavného súdu nemožno podať opravný prostriedok.\n\nV Košiciach 23. apríla 2026\n\nRobert Šorl\n\npredseda senátu",
+          "type": "argumentation",
+          "index": 1,
+          "title": "Odôvodnenie:"
+        }
+      ],
+      "source_id": "a4d8f134-e0d6-4dc0-afde-05e8afa665b2",
+      "created_at": "2026-04-27T18:27:22.286137",
+      "source_raw": null,
+      "source_url": "https://www.ustavnysud.sk/docDownload/695d557a-08eb-41d2-8cea-2b895f9860e7",
+      "updated_at": "2026-04-27T18:27:22.286137",
+      "case_number": "III. ÚS 265/2026",
+      "source_hash": "f54e513d281320d2b09dacfb831fb5c7ba50d2e87a0998c369ce8f4cf12a7367",
+      "document_ast": {
+        "blocks": [
+          {
+            "id": "b1",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "text": "SLOVENSKÁ REPUBLIKA",
+                "type": "text"
+              }
+            ],
+            "anchorId": "h-title",
+            "plainText": "SLOVENSKÁ REPUBLIKA"
+          },
+          {
+            "id": "b2",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "text": "UZNESENIE",
+                "type": "text"
+              }
+            ],
+            "anchorId": "h-title",
+            "plainText": "UZNESENIE"
+          },
+          {
+            "id": "b3",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "text": "Ústavného súdu Slovenskej republiky",
+                "type": "text"
+              }
+            ],
+            "anchorId": "h-title",
+            "plainText": "Ústavného súdu Slovenskej republiky"
+          },
+          {
+            "id": "b4",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "III. ÚS 265/2026-14 Ústavný súd Slovenskej republiky v senáte zloženom z predsedu senátu Roberta Šorla (sudca spravodajca) a zo sudcov Ivana Fiačana a Martina Vernarského v konaní podľa čl. 127 Ústavy Slovenskej republiky o ústavnej sťažnosti sťažovateľa",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": " ,",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": " ",
+                "type": "text"
+              },
+              {
+                "text": "anonymizované",
+                "type": "text",
+                "anonymized": true
+              },
+              {
+                "text": " ",
+                "type": "text"
+              },
+              {
+                "text": "anonymizované",
+                "type": "text",
+                "anonymized": true
+              },
+              {
+                "text": " , , zastúpeného JUDr. Erikou Beňovou, advokátkou, Škultétyho 2, proti postupu Mestského súdu Košice v konaní sp. zn. 25C/28/2020 o oznámení dôvodov vylúčenia sudcu Ústavného súdu Slovenskej republiky Petra Molnára a o námietke zaujatosti sťažovateľa proti sudcovi Ústavného súdu Slovenskej republiky Petrovi Molnárovi takto",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p1",
+            "plainText": "III. ÚS 265/2026-14 Ústavný súd Slovenskej republiky v senáte zloženom z predsedu senátu Roberta Šorla (sudca spravodajca) a zo sudcov Ivana Fiačana a Martina Vernarského v konaní podľa čl. 127 Ústavy Slovenskej republiky o ústavnej sťažnosti sťažovateľa , anonymizované anonymizované , , zastúpeného JUDr. Erikou Beňovou, advokátkou, Škultétyho 2, proti postupu Mestského súdu Košice v konaní sp. zn. 25C/28/2020 o oznámení dôvodov vylúčenia sudcu Ústavného súdu Slovenskej republiky Petra Molnára ao námietke zaujatosti sťažovateľa proti sudcovi Ústavného súdu Slovenskej republiky Petrovi Molnárovi takto"
+          },
+          {
+            "id": "b5",
+            "role": "section-heading",
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "rozhodol:",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-holding",
+            "plainText": "rozhodol:"
+          },
+          {
+            "id": "b6",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "Sudca II. senátu Ústavného súdu Slovenskej republiky Peter Molnár",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": " nie je vylúčený",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": " z konania a rozhodovania o ústavnej sťažnosti sťažovateľa sp. zn. Rvp 278/2026.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p2",
+            "plainText": "Sudca II. senátu Ústavného súdu Slovenskej republiky Peter Molnár nie je vylúčený z konania a rozhodovania o ústavnej sťažnosti sťažovateľa sp. zn. Rvp 278/2026."
+          },
+          {
+            "id": "b7",
+            "role": "section-heading",
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "Odôvodnenie:",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-reasoning",
+            "plainText": "Odôvodnenie:"
+          },
+          {
+            "id": "b8",
+            "type": "heading",
+            "level": 3,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "I.",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p3",
+            "plainText": "I."
+          },
+          {
+            "id": "b9",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "1. Sťažovateľ sa ústavnou sťažnosťou doručenou ústavnému súdu 1. februára 2026, ktorá bola ako sudcovi spravodajcovi pridelená Petrovi Molnárovi, predsedovi II. senátu ústavného súdu (ďalej len „sudca spravodajca“), domáha vyslovenia porušenia ústavných práv postupom mestského súdu v konaní o jeho žalobe, ktorou sa proti žalovanej Univerzite Pavla Jozefa Šafárika v Košiciach (ďalej len „univerzita“) domáha ochrany osobnosti. Namietané porušenie ústavných práv identifikuje v tom, že mestský súd o jeho žalobe nerozhodol, hoci ju podal ešte v novembri 2019.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p4",
+            "plainText": "1. Sťažovateľ sa ústavnou sťažnosťou doručenou ústavnému súdu 1. februára 2026, ktorá bola ako sudcovi spravodajcovi pridelená Petrovi Molnárovi, predsedovi II. senátu ústavného súdu (ďalej len „sudca spravodajca“), domáha vyslovenia porušenia ústavných práv postupom mestského súdu v konaní o jeho žalobe, ktorou sa proti žalovanej Univerzite Pavla Jozefa Šafárika v Košiciach (ďalej len „univerzita“) domáha ochrany osobnosti. Namietané porušenie ústavných práv identifikuje v tom, že mestský súd o jeho žalobe nerozhodol, hoci ju podal ešte v novembri 2019."
+          },
+          {
+            "id": "b10",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "2. Sudca spravodajca predsedovi ústavného súdu oznámil, že sa dozvedel, že sťažovateľ elektronicky komunikuje s vedením a členmi akademického senátu univerzity a aj verejne o ňom šíri, že potom, ako namiesto vylúčeného sudcu ústavného súdu Martina Vernarského rozhodoval o inej ústavnej sťažnosti sťažovateľa (III. ÚS 1/2024), sám nevzniesol námietku vlastnej zaujatosti pre pomer k univerzite, ktorej je zamestnancom. K tomu sudca spravodajca dopĺňa, že aj v iných konaniach, v ktorých vystupovala univerzita, skutočnosť, že je zamestnancom univerzity, neoznamoval, keďže učí na fakulte univerzity, na ktorej nepôsobil sťažovateľ, a to nemôže vzbudiť pochybnosti o jeho nestrannosti. Sudca spravodajca na záver vyjadruje obavu, že jeho účasť na rozhodovaní o ústavnej sťažnosti sťažovateľa napriek tomu sťažovateľovi poslúži ako zámienka pre ďalšie neopodstatnené útoky na jeho osobu a prenesene aj na ústavný súd.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p5",
+            "plainText": "2. Sudca spravodajca predsedovi ústavného súdu oznámil, že sa dozvedel, že sťažovateľ elektronicky komunikuje s vedením a členmi akademického senátu univerzity a aj verejne o ňom šíri, že potom, ako namiesto vylúčeného sudcu ústavného súdu Martina Vernarského rozhodoval o inej ústavnej sťažnosti sťažovateľa (III. ÚS 1/2024), sám nevzniesol námietku vlastnej zaujatosti pre pomer k univerzite, ktorej je zamestnancom. K tomu sudca spravodajca dopĺňa, že aj v iných konaniach, v ktorých vystupovala univerzita, skutočnosť, že je zamestnancom univerzity, neoznamoval, keďže učí na fakulte univerzity, na ktorej nepôsobil sťažovateľ, a to nemôže vzbudiť pochybnosti o jeho nestrannosti. Sudca spravodajca na záver vyjadruje obavu, že jeho účasť na rozhodovaní o ústavnej sťažnosti sťažovateľa napriek tomu sťažovateľovi poslúži ako zámienka pre ďalšie neopodstatnené útoky na jeho osobu a prenesene aj na ústavný súd."
+          },
+          {
+            "id": "b11",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "3. Sťažovateľ 28. februára 2026 vzniesol námietku zaujatosti sudcu spravodajcu z dôvodu, že je zamestnancom žalovanej univerzity a jeho poradkyňami sú dve zamestnankyne tejto univerzity. S námietkou spojil podnet na zjednotenie právnych názorov rozhodnutí ústavného súdu: na strane jednej (I. ÚS 102/2018) a na strane druhej (IV. ÚS 344/2020, IV. ÚS 686/2023, IV. ÚS 598/2024), a to s ohľadom na rozhodnutia Európskeho súdu pre ľudské práva (ďalej len „ESĽP“).",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p6",
+            "plainText": "3. Sťažovateľ 28. februára 2026 vzniesol námietku zaujatosti sudcu spravodajcu z dôvodu, že je zamestnancom žalovanej univerzity a jeho poradkyňami sú dve zamestnankyne tejto univerzity. S námietkou spojil podnet na zjednotenie právnych názorov rozhodnutí ústavného súdu: na strane jednej (I. ÚS 102/2018) a na strane druhej (IV. ÚS 344/2020, IV. ÚS 686/2023, IV. ÚS 598/2024), a to s ohľadom na rozhodnutia Európskeho súdu pre ľudské práva (ďalej len „ESĽP“)."
+          },
+          {
+            "id": "b12",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "4. Sudca spravodajca na námietku reagoval tak, že odkázal na svoje oznámenie. Uviedol, že vec pridelil poradkyni, ktorá nie je zamestnankyňou univerzity.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p7",
+            "plainText": "4. Sudca spravodajca na námietku reagoval tak, že odkázal na svoje oznámenie. Uviedol, že vec pridelil poradkyni, ktorá nie je zamestnankyňou univerzity."
+          },
+          {
+            "id": "b13",
+            "type": "heading",
+            "level": 3,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "II.",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p8",
+            "plainText": "II."
+          },
+          {
+            "id": "b14",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "5. Podľa čl. IV bodu 1 písm. c) rozvrhu práce ústavného súdu o vylúčení sudcu pri rozhodovaní v senáte podľa § 51 ods. 2 prvej vety zákona č. 314/2018 Z. z. o Ústavnom súde Slovenskej republiky a o zmene a doplnení niektorých zákonov v znení neskorších predpisov (ďalej len ,,zákon o ústavnom súde“) rozhoduje tretí senát, ak ide o sudcov druhého senátu.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p9",
+            "plainText": "5. Podľa čl. IV bodu 1 písm. c) rozvrhu práce ústavného súdu o vylúčení sudcu pri rozhodovaní v senáte podľa § 51 ods. 2 prvej vety zákona č. 314/2018 Z. z. o Ústavnom súde Slovenskej republiky ao zmene a doplnení niektorých zákonov v znení neskorších predpisov (ďalej len ,,zákon o ústavnom súde“) rozhoduje tretí senát, ak ide o sudcov druhého senátu."
+          },
+          {
+            "id": "b15",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "6. Podľa § 49 ods. 1 prvej vety zákona o ústavnom súde sudca ústavného súdu je vylúčený z konania a rozhodovania vo veci, ak so zreteľom na jeho pomer k veci, účastníkom konania, zúčastnenej osobe alebo ich zástupcom možno mať pochybnosti o jeho nezaujatosti. Dôvod vylúčenia sudcu ústavného súdu spočívajúci v pochybnostiach o nezaujatosti podľa § 49 ods. 1 prvej vety zákona o ústavnom súde nadväzuje na požiadavku nestrannosti súdneho rozhodovania tak, ako je okrem iného definovaná aj v rozhodnutiach ESĽP. Nestrannosť má stránku subjektívnu a objektívnu, keďže nestrannosť sudcu má význam pre dôveru verejnosti v súdnictvo (Olujić proti Chorvátsku, sťažnosť č. 22330/05, rozsudok ESĽP z 5. 2. 2005, bod 57).",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p10",
+            "plainText": "6. Podľa § 49 ods. 1 prvej vety zákona o ústavnom súde sudca ústavného súdu je vylúčený z konania a rozhodovania vo veci, ak so zreteľom na jeho pomer k veci, účastníkom konania, zúčastnenej osobe alebo ich zástupcom možno mať pochybnosti o jeho nezaujatosti. Dôvod vylúčenia sudcu ústavného súdu spočívajúci v pochybnostiach o nezaujatosti podľa § 49 ods. 1 prvej vety zákona o ústavnom súde nadväzuje na požiadavku nestrannosti súdneho rozhodovania tak, ako je okrem iného definovaná aj v rozhodnutiach ESĽP. Nestrannosť má stránku subjektívnu a objektívnu, keďže nestrannosť sudcu má význam pre dôveru verejnosti v súdnictvo (Olujić proti Chorvátsku, sťažnosť č. 22330/05, rozsudok ESĽP z 5. 2. 2005, bod 57)."
+          },
+          {
+            "id": "b16",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "7. Pri teste subjektívnych okolností sa zisťuje osobné presvedčenie, postoj sudcu alebo jeho záujem v prerokúvanej veci. Osobná nestrannosť sudcu sa predpokladá, kým sa nepreukáže opak. Takýmto opakom môže byť sudcom prejavené nepriateľstvo alebo neznášanlivosť. Pri teste objektívnych okolností je dôležitá perspektíva nestranného pozorovateľa a relevantné je aj zdanie sa zaujatosti, teda či sú dané okolnosti, ktoré môžu vzbudzovať pochybnosti o nestrannosti sudcu (Daktaras proti Litve, sťažnosť č. 42095/98, rozsudok ESĽP z 10. 10. 2000, bod 32). Pri objektívnom teste sú dôležitými kritériami dôvera verejnosti v rozhodovanie (II. ÚS 36/2012).",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p11",
+            "plainText": "7. Pri teste subjektívnych okolností sa zisťuje osobné presvedčenie, postoj sudcu alebo jeho záujem v prerokúvanej veci. Osobná nestrannosť sudcu sa predpokladá, kým sa nepreukáže opak. Takýmto opakom môže byť sudcom prejavené nepriateľstvo alebo neznášanlivosť. Pri teste objektívnych okolností je dôležitá perspektíva nestranného pozorovateľa a relevantné je aj zdanie sa zaujatosti, teda či sú dané okolnosti, ktoré môžu vzbudzovať pochybnosti o nestrannosti sudcu (Daktaras proti Litve, sťažnosť č. 42095/98, rozsudok ESĽP z 10. 10. 2000, bod 32). Pri objektívnom teste sú dôležitými kritériami dôvera verejnosti v rozhodovanie (II. ÚS 36/2012)."
+          },
+          {
+            "id": "b17",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "8. Sudca spravodajca v oznámení označuje komunikáciu sťažovateľa, ktorá sa týka jeho osoby ako negatívny záujem sťažovateľa, ktorý sa prejavuje v jeho obsesívnej aktivite. Z tohto vyjadrenia sudcu spravodajcu je zrejmé, že komunikáciu sťažovateľa vníma negatívne. Nemožno však z toho vyvodiť, že by šlo o otvorené nepriateľstvo alebo neznášanlivosť vo vzťahu k sťažovateľovi. Preto zo subjektívneho hľadiska niet pochýb o nezaujatosti sudcu spravodajcu.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p12",
+            "plainText": "8. Sudca spravodajca v oznámení označuje komunikáciu sťažovateľa, ktorá sa týka jeho osoby ako negatívny záujem sťažovateľa, ktorý sa prejavuje v jeho obsesívnej aktivite. Z tohto vyjadrenia sudcu spravodajcu je zrejmé, že komunikáciu sťažovateľa vníma negatívne. Nemožno však z toho vyvodiť, že by šlo o otvorené nepriateľstvo alebo neznášanlivosť vo vzťahu k sťažovateľovi. Preto zo subjektívneho hľadiska niet pochýb o nezaujatosti sudcu spravodajcu."
+          },
+          {
+            "id": "b18",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "9. Z hľadiska objektívneho je zrejmé, že sťažovateľ sa vyjadruje negatívne ku konaniu sudcu spravodajcu, ktoré spočívalo v tom, že neoznámil skutočnosti, ktoré by podľa jeho názoru mali odôvodňovať vylúčenie sudcu spravodajcu podľa § 49 ods. 1 a 2 zákona o ústavnom súde. K tomu treba uviesť, že kritika postupov súdov a sudcov je prirodzená a o jej oprávnenosti si spoločnosť môže utvárať vlastné názory. Kritiku postupov sudcov však nie je dôvod vnímať ako okolnosť, z ktorej by bolo možné vyvodiť pomer medzi kritizovaným sudcom a kritizujúcou osobou, v tomto prípade sťažovateľom.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p13",
+            "plainText": "9. Z hľadiska objektívneho je zrejmé, že sťažovateľ sa vyjadruje negatívne ku konaniu sudcu spravodajcu, ktoré spočívalo v tom, že neoznámil skutočnosti, ktoré by podľa jeho názoru mali odôvodňovať vylúčenie sudcu spravodajcu podľa § 49 ods. 1 a 2 zákona o ústavnom súde. K tomu treba uviesť, že kritika postupov súdov a sudcov je prirodzená ao jej oprávnenosti si spoločnosť môže utvárať vlastné názory. Kritiku postupov sudcov však nie je dôvod vnímať ako okolnosť, z ktorej by bolo možné vyvodiť pomer medzi kritizovaným sudcom a kritizujúcou osobou, v tomto prípade sťažovateľom."
+          },
+          {
+            "id": "b19",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "10. V konečnom dôsledku je však rozhodujúce, či skutočnosť, že sudca spravodajca je zamestnancom univerzity, voči ktorej sa sťažovateľ ako jej zamestnanec domáha svojich práv, je skutočnosťou, ktorú by bolo možné posúdiť ako pomer k veci, účastníkom konania, zúčastnenej osobe alebo ich zástupcom. Z toho, že sudca spravodajca je zamestnancom sťažovateľom žalovanej univerzity, nemožno vyvodiť pomer k veci a ani k sťažovateľovi. Podstatou ústavnej sťažnosti sťažovateľa nie je jeho spor so žalovanou univerzitou, ktorej zamestnancom je sudca spravodajca, ale ochrana ústavných práv sťažovateľa, ktoré mali byť porušené nečinnosťou mestského súdu. Rozhodnutie ústavného súdu o tom, či prieťahmi v namietanom konaní boli porušené ústavné práva sťažovateľa, je bez akéhokoľvek významu pre jeho vzťah so žalovanou univerzitou. Ústavné sťažnosti, ktorých predmetom je zásah do základného práva na prerokovanie veci bez zbytočných prieťahov, sa v naznačenom pohľade odlišujú od ústavných sťažností, ktoré v prípade vyhovenia vedú k zrušeniu právoplatného rozhodnutia orgánu verejnej moci, čo rezultuje do priameho vplyvu na subjektívno-právne postavenie zúčastnenej osoby podľa § 33 ods. 2 zákona o ústavnom súde. Rovnako je toto rozhodnutie ústavného súdu nespôsobilé akokoľvek ovplyvniť vzťah sudcu spravodajcu so žalovanou univerzitou. Ani nezaujatý a racionálne uvažujúci pozorovateľ tak nemôže dospieť k pochybnostiam, že by sudca ústavného súdu mohol mať pomer či už k veci, alebo sťažovateľovi, ktorý by bol spôsobilý viesť k jeho zaujatosti. Podľa § 49 ods. 1 prvej vety zákona o ústavnom súde nie je dôvod mať pochybnosti o nezaujatosti sudcu ústavného súdu, čo má za následok, že sudca ústavného súdu nie je vylúčený z konania a rozhodovania o ústavnej sťažnosti sťažovateľa.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p14",
+            "plainText": "10. V konečnom dôsledku je však rozhodujúce, či skutočnosť, že sudca spravodajca je zamestnancom univerzity, voči ktorej sa sťažovateľ ako jej zamestnanec domáha svojich práv, je skutočnosťou, ktorú by bolo možné posúdiť ako pomer k veci, účastníkom konania, zúčastnenej osobe alebo ich zástupcom. Z toho, že sudca spravodajca je zamestnancom sťažovateľom žalovanej univerzity, nemožno vyvodiť pomer k veci a ani k sťažovateľovi. Podstatou ústavnej sťažnosti sťažovateľa nie je jeho spor so žalovanou univerzitou, ktorej zamestnancom je sudca spravodajca, ale ochrana ústavných práv sťažovateľa, ktoré mali byť porušené nečinnosťou mestského súdu. Rozhodnutie ústavného súdu o tom, či prieťahmi v namietanom konaní boli porušené ústavné práva sťažovateľa, je bez akéhokoľvek významu pre jeho vzťah so žalovanou univerzitou. Ústavné sťažnosti, ktorých predmetom je zásah do základného práva na prerokovanie veci bez zbytočných prieťahov, sa v naznačenom pohľade odlišujú od ústavných sťažností, ktoré v prípade vyhovenia vedú k zrušeniu právoplatného rozhodnutia orgánu verejnej moci, čo rezultuje do priameho vplyvu na subjektívno-právne postavenie zúčastnenej osoby podľa § 33 ods. 2 zákona o ústavnom súde. Rovnako je toto rozhodnutie ústavného súdu nespôsobilé akokoľvek ovplyvniť vzťah sudcu spravodajcu so žalovanou univerzitou. Ani nezaujatý a racionálne uvažujúci pozorovateľ tak nemôže dospieť k pochybnostiam, že by sudca ústavného súdu mohol mať pomer či už k veci, alebo sťažovateľovi, ktorý by bol spôsobilý viesť k jeho zaujatosti. Podľa § 49 ods. 1 prvej vety zákona o ústavnom súde nie je dôvod mať pochybnosti o nezaujatosti sudcu ústavného súdu, čo má za následok, že sudca ústavného súdu nie je vylúčený z konania a rozhodovania o ústavnej sťažnosti sťažovateľa."
+          },
+          {
+            "id": "b20",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "11. Obdobný záver bol vyslovený aj v uznesení ústavného súdu (I. ÚS 102/2018) o nevylúčení sudcu ústavného súdu Orosza, dlhoročného zamestnanca univerzity, ktorá ústavnou sťažnosťou namietala porušenie ústavných práv rozhodnutiami v správnom súdnom konaní. Iný záver o vylúčení bol vyslovený v uzneseniach ústavného súdu (IV. ÚS 145/2019, IV. ÚS 344/2020, IV. ÚS 28/2020, IV. ÚS 93/2020, IV. ÚS 686/2023, IV. ÚS 598/2024) vo vzťahu k sudcovi ústavného súdu Vernarskému, ktorého pomer k univerzite vychádzal nielen z jeho zamestnaneckého pomeru k fakulte univerzity, ale aj z toho, že bol členom vedeckej rady univerzity, ktorej predsedom a zároveň štatutárom univerzity je rektor s právomocou menovať a odvolávať členov vedeckej rady.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p15",
+            "plainText": "11. Obdobný záver bol vyslovený aj v uznesení ústavného súdu (I. ÚS 102/2018) o nevylúčení sudcu ústavného súdu Orosza, dlhoročného zamestnanca univerzity, ktorá ústavnou sťažnosťou namietala porušenie ústavných práv rozhodnutiami v správnom súdnom konaní. Iný záver o vylúčení bol vyslovený v uzneseniach ústavného súdu (IV. ÚS 145/2019, IV. ÚS 344/2020, IV. ÚS 28/2020, IV. ÚS 93/2020, IV. ÚS 686/2023, IV. ÚS 598/2024) vo vzťahu k sudcovi ústavného súdu Vernarskému, ktorého pomer k univerzite vychádzal nielen z jeho zamestnaneckého pomeru k fakulte univerzity, ale aj z toho, že bol členom vedeckej rady univerzity, ktorej predsedom a zároveň štatutárom univerzity je rektor s právomocou menovať a odvolávať členov vedeckej rady."
+          },
+          {
+            "id": "b21",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "12. K nedostatku objektívnej nestrannosti pri vzťahoch sudcu k univerzite ako účastníkovi konania dospel ESĽP (rozsudok zo 17. 6. 2003 o sťažnosti č. 62435/00, Pescador Valero v. Španielsko, bod 27) z dôvodu, že sudca bol zároveň docentom na univerzite a v čase rozhodovania „mal už niekoľko rokov úzke a pravidelné profesionálne vzťahy s univerzitou“ a poberal od nej za pedagogickú činnosť pravidelný príjem v nezanedbateľnej výške. K obdobnému záveru ESĽP dospel (rozsudok z 1. 12. 2015 o sťažnosti č. 61131/12, Blesa Rodríguez v. Španielsko, bod 44), keď bol sudca na univerzite funkčne závislý od rektora. ESĽP (rozsudok zo 14. 12. 2023 o sťažnosti č. 41236/18, Syndicat national des journalistes a iní v. Francúzsko, body 51 – 57) dospel k záveru, že objektívne nestranní nie sú sudcovia, ktorí rozhodovali v civilnej veci, kde protistranou bolo vydavateľstvo, u ktorého títo sudcovia pravidelne publikovali odborné články a organizovali semináre, teda mali s touto protistranou pravidelné, úzke a odplatné vzťahy.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p16",
+            "plainText": "12. K nedostatku objektívnej nestrannosti pri vzťahoch sudcu k univerzite ako účastníkovi konania dospel ESĽP (rozsudok zo 17. 6. 2003 o sťažnosti č. 62435/00, Pescador Valero v. Španielsko, bod 27) z dôvodu, že sudca bol zároveň docentom na univerzite av čase rozhodovania „mal už niekoľko rokov úzke a pravidelné profesionálne vzťahy s univerzitou“ a poberal od nej za pedagogickú činnosť pravidelný príjem v nezanedbateľnej výške. K obdobnému záveru ESĽP dospel (rozsudok z 1. 12. 2015 o sťažnosti č. 61131/12, Blesa Rodríguez v. Španielsko, bod 44), keď bol sudca na univerzite funkčne závislý od rektora. ESĽP (rozsudok zo 14. 12. 2023 o sťažnosti č. 41236/18, Syndicat national des journalistes a iní v. Francúzsko, body 51 – 57) dospel k záveru, že objektívne nestranní nie sú sudcovia, ktorí rozhodovali v civilnej veci, kde protistranou bolo vydavateľstvo, u ktorého títo sudcovia pravidelne publikovali odborné články a organizovali semináre, teda mali s touto protistranou pravidelné, úzke a odplatné vzťahy."
+          },
+          {
+            "id": "b22",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "13. Tieto rozhodnutia ESĽP a rozhodnutia ústavného súdu týkajúce sa vylúčenia sudcu ústavného súdu Vernarského nie je dôvod vztiahnuť na posúdenie možných pochybností o nezaujatosti sudcu ústavného súdu Molnára v konaní o ústavnej sťažnosti sťažovateľa. Je tomu tak preto, že hoci fakulta univerzity nemá na rozdiel od univerzity právnu subjektivitu, je to nie rektor univerzity, ale dekan fakulty, ktorý uzatvára, mení a zrušuje pracovnoprávne vzťahy zamestnancov, ktorí sú organizačne zaradení na fakultu. Pozícia rektora sa obmedzuje na vydanie dekrétu určeným zamestnancom a priznanie osobného platu podľa návrhu dekana [čl. 29 bod 1 písm. e) a f) štatútu univerzity z 19. 12. 2022].",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p17",
+            "plainText": "13. Tieto rozhodnutia ESĽP a rozhodnutia ústavného súdu týkajúce sa vylúčenia sudcu ústavného súdu Vernarského nie je dôvod vztiahnuť na posúdenie možných pochybností o nezaujatosti sudcu ústavného súdu Molnára v konaní o ústavnej sťažnosti sťažovateľa. Je tomu tak preto, že hoci fakulta univerzity nemá na rozdiel od univerzity právnu subjektivitu, je to nie rektor univerzity, ale dekan fakulty, ktorý uzatvára, mení a zrušuje pracovnoprávne vzťahy zamestnancov, ktorí sú organizačne zaradení na fakultu. Pozícia rektora sa obmedzuje na vydanie dekrétu určeným zamestnancom a priznanie osobného platu podľa návrhu dekana [čl. 29 bod 1 písm. e) a f) štatútu univerzity z 19. 12. 2022]."
+          },
+          {
+            "id": "b23",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "14. Z tejto konštrukcie vyplýva nezávislosť dekanov fakúlt pri utváraní pracovnoprávnych vzťahov bez priamej možnosti zasahovania zo strany rektora, ktorý na zamestnancov univerzity zaradených na jednotlivých fakultách nemá priamy dosah. Pri takomto vzťahu sudcu ústavného súdu Petra Molnára, ktorý je zaradený na fakulte univerzity, nemožno dospieť k záveru o objektívnych pochybnostiach o jeho nezaujatosti pre jeho pomer, či už k sťažovateľovi, alebo k univerzite. To platí o to viac, že sťažovateľ namieta prieťahy v postupe mestského súdu v konaní o jeho žalobe, a tak je zrejmé, že rozhodnutie o ústavnej sťažnosti sťažovateľa bude bez významu pre výsledok sporu sťažovateľa a ním žalovanej univerzity.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p18",
+            "plainText": "14. Z tejto konštrukcie vyplýva nezávislosť dekanov fakúlt pri utváraní pracovnoprávnych vzťahov bez priamej možnosti zasahovania zo strany rektora, ktorý na zamestnancov univerzity zaradených na jednotlivých fakultách nemá priamy dosah. Pri takomto vzťahu sudcu ústavného súdu Petra Molnára, ktorý je zaradený na fakulte univerzity, nemožno dospieť k záveru o objektívnych pochybnostiach o jeho nezaujatosti pre jeho pomer, či už k sťažovateľovi, alebo k univerzite. To platí o to viac, že sťažovateľ namieta prieťahy v postupe mestského súdu v konaní o jeho žalobe, a tak je zrejmé, že rozhodnutie o ústavnej sťažnosti sťažovateľa bude bez významu pre výsledok sporu sťažovateľa a ním žalovanej univerzity."
+          },
+          {
+            "id": "b24",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "Poučenie:",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": " Proti tomuto rozhodnutiu ústavného súdu nemožno podať opravný prostriedok.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p19",
+            "plainText": "Poučenie: Proti tomuto rozhodnutiu ústavného súdu nemožno podať opravný prostriedok."
+          },
+          {
+            "id": "b25",
+            "role": "closing",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "V Košiciach 23. apríla 2026",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p20",
+            "plainText": "V Košiciach 23. apríla 2026"
+          },
+          {
+            "id": "b26",
+            "role": "signature",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "Robert Šorl",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p21",
+            "plainText": "Robert Šorl"
+          },
+          {
+            "id": "b27",
+            "role": "signature",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "predseda senátu",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p22",
+            "plainText": "predseda senátu"
+          }
+        ],
+        "source": {
+          "system": "ustavnysud.sk",
+          "webUrl": "",
+          "printUrl": "",
+          "documentId": "III. ÚS 265/2026"
+        },
+        "version": 1,
+        "metadata": {
+          "ecli": "ECLI:SK:USSR:2026:3.US.265.2026.1",
+          "court": "Ústavný súd SR",
+          "keywords": [],
+          "statutes": [],
+          "caseNumber": "III. ÚS 265/2026",
+          "decisionDate": "2026-04-23",
+          "decisionType": "uznesenie"
+        }
+      },
+      "document_url": "https://www.ustavnysud.sk/docDownload/695d557a-08eb-41d2-8cea-2b895f9860e7",
+      "decision_date": "2026-04-23",
+      "decision_type": "uznesenie",
+      "parser_version": 2,
+      "source_raw_s3_key": "case-law/raw/a4d8f134-e0d6-4dc0-afde-05e8afa665b2/1cdb5c68a18c1a2fc227006a56fbbb9685942b4ff14f9b25488546446198fe33",
+      "language_group_key": "ECLI:SK:USSR:2026:3.US.265.2026.1",
+      "source_raw_content_type": "application/pdf"
+    },
+    {
+      "id": "019dd032-2c01-7000-a9b7-9bcc2743ba57",
+      "ecli": "ECLI:SK:USSR:2026:3.US.268.2026.1",
+      "slug": null,
+      "court": "Ústavný súd SR",
+      "country": "SVK",
+      "analysis": null,
+      "fulltext": "SLOVENSKÁ REPUBLIKA\n\nUZNESENIE\n\nÚstavného súdu Slovenskej republiky\n\nIII. ÚS 268/2026-5 Ústavný súd Slovenskej republiky v senáte zloženom z predsedu senátu Roberta Šorla (sudca spravodajca) a zo sudcov Ivana Fiačana a Martina Vernarského v konaní podľa čl. 127 Ústavy Slovenskej republiky o ústavnej sťažnosti sťažovateľov 1/ , anonymizované , , 2/ , , anonymizované , a 3/ , , , zastúpených Advokátska kancelária JUDr. Daniel Blyšťan s.r.o., Thurzova 3367/6A, Košice, o oznámení dôvodov zaujatosti sudcu Ústavného súdu Slovenskej republiky Petra Straku takto\n\nrozhodol:\n\nSudca Ústavného súdu Slovenskej republiky Peter Straka nie je vylúčený z konania a rozhodovania o ústavnej sťažnosti sťažovateľov (Rvp 506/2026).\n\nOdôvodnenie:\n\n1. Ústavná sťažnosť bola ako sudcovi spravodajcovi pridelená sudcovi ústavného súdu Petrovi Molnárovi, sudcovi II. senátu ústavného súdu. Jeho sudcom je aj sudca ústavného súdu Peter Straka, ktorý oznámil dôvod svojho vylúčenia z konania a rozhodovania o ústavnej sťažnosti. Ten má spočívať v tom, že sťažovateľ 1 podal po rozhodnutí ústavného súdu (III. ÚS 89/2019) proti nemu žalobu na Mestskom súde Košice, a tak objektívne môžu byť dané pochybnosti o jeho nestrannosti.\n\n2. Podľa § 51 ods. 2 prvej vety zákona č. 314/2018 Z. z. o Ústavnom súde Slovenskej republiky ao zmene a doplnení niektorých zákonov v znení neskorších predpisov (ďalej len „zákon o ústavnom súde“) a čl. IV bodu 1 písm. c) a čl. II bodu 3.3 rozvrhu práce ústavného súdu o vylúčení sudcu pri rozhodovaní v II. senáte ústavného súdu rozhoduje III. senát ústavného súdu.\n\n3. Podľa § 49 ods. 1 prvej vety zákona o ústavnom súde sudca ústavného súdu je vylúčený z konania a rozhodovania vo veci, ak so zreteľom na jeho pomer k veci, účastníkom konania, zúčastnenej osobe alebo ich zástupcom možno mať pochybnosti o jeho nezaujatosti. Dôvod vylúčenia sudcu ústavného súdu spočívajúci v pochybnostiach o nezaujatosti podľa § 49 ods. 1 prvej vety zákona o ústavnom súde nadväzuje na požiadavku nestrannosti súdneho rozhodovania tak, ako je definovaná aj v rozhodnutiach Európskeho súdu pre ľudské práva. Nestrannosť má stránku subjektívnu a stránku objektívnu. Nestrannosť sudcu má význam pre dôveru verejnosti v súdnictvo [Olujić proti Chorvátsku, sťažnosť č. 22330/05, rozsudok Európskeho súdu pre ľudské práva (ďalej len ,,ESĽP“) z 5. 2. 2005, bod 57].\n\n4. Pri teste subjektívnych okolností sa zisťuje osobné presvedčenie, postoj sudcu alebo jeho záujem vo veci. Osobná nestrannosť sudcu sa predpokladá, kým sa nepreukáže opak. Takýmto opakom môže byť sudcom prejavené nepriateľstvo alebo neznášanlivosť. Pri teste objektívnych okolností je dôležitá perspektíva nestranného pozorovateľa a relevantné je aj zdanie sa zaujatosti, teda či sú dané okolnosti, ktoré môžu vzbudzovať pochybnosti o nestrannosti sudcu (Daktaras proti Litve, sťažnosť č. 42095/98, rozsudok ESĽP z 10. 10. 2000, bod 32). Pri objektívnom teste sú dôležitými kritériami dôvera verejnosti v rozhodovanie (II. ÚS 36/2012).\n\n5. Z oznámenia sudcu ústavného súdu vyplýva, že podanie žaloby zo strany sťažovateľa 1 proti sudcovi ústavného súdu vyplynulo z jeho rozhodovacej činnosti sudcu ústavného súdu. Podanie takejto žaloby je prejavom kritiky sťažovateľa 1 vo vzťahu k sudcovi ústavného súdu. Účastníkom konaní v zásade nemožno brániť v tom, aby sudcov kritizovali vo verejnom priestore, a to aj prostredníctvom podaní na iné orgány verejnej moci (trestné oznámenia, civilné žaloby, podnety na disciplinárne stíhania a námietky zaujatosti). Preto z takýchto skutočností bez ďalšieho nemožno vyvodiť taký pomer sudcu k účastníkovi konania, pre ktorý by mali byť dané pochybnosti o nezaujatosti sudcu (NS SR 2Ndob/39/2010, ÚS ČR II. ÚS 105/01, NSS ČR Nao/36/2009). Je tomu tak preto, že sudca musí pri výkone svojej funkcie byť pripravený aj na nedôvodnú a nepodloženú kritiku zo strany účastníka konania, ktorá sa môže prejavovať aj v konfrontačnom prístupe, ktorý sa prejavuje kritikou smerovanou v podaniach na iné orgány verejnej moci.\n\n6. K vzniku pochybnosti o nezaujatosti sudcu môže dôjsť len v prípade, ak z okolností prípadu a predovšetkým konania sudcu vyplynie náznak jeho nepriateľského pomeru k účastníkovi konania. Tak tomu v prípade sudcu ústavného súdu nie je, keďže z jeho vyjadrenia, ktoré sa obmedzuje len na to, že sťažovateľ 1 proti nemu podal civilnú žalobu, nevyplýva, že by akokoľvek prejavil negatívny vzťah k sťažovateľovi 1. Táto okolnosť odlišuje vec sťažovateľa 1 od prípadu, v ktorom ESĽP vyslovil porušenie čl. 6 ods. 1 Dohovoru o ochrane ľudských práv a základných slobôd tým, že vo veci rozhodoval sudca, u ktorého nedostatok objektívnej nestrannosti vyplynul z toho, že v rozhodnutí, ktorým bola účastníkovi uložená pomerne vysoká poriadková pokuta (50 000 Kč), konanie tohto účastníka označil ako bezostyšný a bezprecedentný útok na svoju osobu s tým, že takéto konanie účastníka môže byť trestným činom. Podľa ESĽP takéto vyjadrenia sudcu vyvolávajú objektívny dojem, že nedokázal udržať potrebný odstup od konania účastníka (rozsudok zo 7. 6. 2005 o sťažnosti č. 64935/01, Chmelíř proti Českej republike). Z objektívneho hľadiska tak nemôžu vzniknúť pochybnosti o nezaujatosti sudcu ústavného súdu Petra Straku, keďže niet okolností, ktoré by nasvedčovali jeho negatívnemu postoju vo vzťahu k sťažovateľovi 1. Nie sú tak splnené podmienky podľa § 49 ods. 1 zákona o ústavnom súde na vylúčenie sudcu ústavného súdu z konania a rozhodovania o ústavnej sťažnosti sťažovateľa 1.\n\nPoučenie: Proti tomuto rozhodnutiu ústavného súdu nemožno podať opravný prostriedok.\n\nV Košiciach 23. apríla 2026\n\nRobert Šorl\n\npredseda senátu",
+      "language": "sk",
+      "metadata": {
+        "ecli": "ECLI:SK:USSR:2026:3.US.268.2026.1",
+        "cause": [],
+        "court": "Ústavný súd SR",
+        "judge": "Robert Šorl",
+        "result": ["sudca nie je vylúčený"],
+        "underage": null,
+        "entryDate": null,
+        "rvpNumber": "1038/2026",
+        "caseNumber": "III. ÚS 268/2026",
+        "documentId": "3f515d16-2088-402d-92c1-9cfb157b4a5a",
+        "legalBasis": ["§ 51 ods. 2 zákona o ústavnom súde"],
+        "references": null,
+        "formOfEntry": null,
+        "typeOfEntry": null,
+        "decisionDate": "2026-04-23",
+        "decisionType": "uznesenie",
+        "documentType": "Rozhodnutie - Uznesenie o námietke zaujatosti sudcu",
+        "wordRegister": ["námietka zaujatosti sudcu ÚS SR"],
+        "fileReference": null,
+        "includeToZnaU": false,
+        "legalForceDate": "2026-04-27",
+        "typeOfDecision": ["Uznesenie o námietke zaujatosti"],
+        "typeOfProposer": null,
+        "publicationDate": null,
+        "materialRegister": [
+          "zaujatosť / predpojatosť-vyhlásenie o predpojatosti"
+        ],
+        "typeOfProceeding": "procesné konanie ÚS SR",
+        "dissentingOpinion": [],
+        "typeOfNegotiation": ["Prerokovanie vo veci"],
+        "challengedLegislation": null,
+        "affectedLegalRegulation": null
+      },
+      "sections": [
+        {
+          "text": "SLOVENSKÁ REPUBLIKA\n\nUZNESENIE\n\nÚstavného súdu Slovenskej republiky\n\nIII. ÚS 268/2026-5 Ústavný súd Slovenskej republiky v senáte zloženom z predsedu senátu Roberta Šorla (sudca spravodajca) a zo sudcov Ivana Fiačana a Martina Vernarského v konaní podľa čl. 127 Ústavy Slovenskej republiky o ústavnej sťažnosti sťažovateľov 1/ , anonymizované , , 2/ , , anonymizované , a 3/ , , , zastúpených Advokátska kancelária JUDr. Daniel Blyšťan s.r.o., Thurzova 3367/6A, Košice, o oznámení dôvodov zaujatosti sudcu Ústavného súdu Slovenskej republiky Petra Straku takto\n\nrozhodol:\n\nSudca Ústavného súdu Slovenskej republiky Peter Straka nie je vylúčený z konania a rozhodovania o ústavnej sťažnosti sťažovateľov (Rvp 506/2026).",
+          "type": "header",
+          "index": 0,
+          "title": null
+        },
+        {
+          "text": "1. Ústavná sťažnosť bola ako sudcovi spravodajcovi pridelená sudcovi ústavného súdu Petrovi Molnárovi, sudcovi II. senátu ústavného súdu. Jeho sudcom je aj sudca ústavného súdu Peter Straka, ktorý oznámil dôvod svojho vylúčenia z konania a rozhodovania o ústavnej sťažnosti. Ten má spočívať v tom, že sťažovateľ 1 podal po rozhodnutí ústavného súdu (III. ÚS 89/2019) proti nemu žalobu na Mestskom súde Košice, a tak objektívne môžu byť dané pochybnosti o jeho nestrannosti.\n\n2. Podľa § 51 ods. 2 prvej vety zákona č. 314/2018 Z. z. o Ústavnom súde Slovenskej republiky ao zmene a doplnení niektorých zákonov v znení neskorších predpisov (ďalej len „zákon o ústavnom súde“) a čl. IV bodu 1 písm. c) a čl. II bodu 3.3 rozvrhu práce ústavného súdu o vylúčení sudcu pri rozhodovaní v II. senáte ústavného súdu rozhoduje III. senát ústavného súdu.\n\n3. Podľa § 49 ods. 1 prvej vety zákona o ústavnom súde sudca ústavného súdu je vylúčený z konania a rozhodovania vo veci, ak so zreteľom na jeho pomer k veci, účastníkom konania, zúčastnenej osobe alebo ich zástupcom možno mať pochybnosti o jeho nezaujatosti. Dôvod vylúčenia sudcu ústavného súdu spočívajúci v pochybnostiach o nezaujatosti podľa § 49 ods. 1 prvej vety zákona o ústavnom súde nadväzuje na požiadavku nestrannosti súdneho rozhodovania tak, ako je definovaná aj v rozhodnutiach Európskeho súdu pre ľudské práva. Nestrannosť má stránku subjektívnu a stránku objektívnu. Nestrannosť sudcu má význam pre dôveru verejnosti v súdnictvo [Olujić proti Chorvátsku, sťažnosť č. 22330/05, rozsudok Európskeho súdu pre ľudské práva (ďalej len ,,ESĽP“) z 5. 2. 2005, bod 57].\n\n4. Pri teste subjektívnych okolností sa zisťuje osobné presvedčenie, postoj sudcu alebo jeho záujem vo veci. Osobná nestrannosť sudcu sa predpokladá, kým sa nepreukáže opak. Takýmto opakom môže byť sudcom prejavené nepriateľstvo alebo neznášanlivosť. Pri teste objektívnych okolností je dôležitá perspektíva nestranného pozorovateľa a relevantné je aj zdanie sa zaujatosti, teda či sú dané okolnosti, ktoré môžu vzbudzovať pochybnosti o nestrannosti sudcu (Daktaras proti Litve, sťažnosť č. 42095/98, rozsudok ESĽP z 10. 10. 2000, bod 32). Pri objektívnom teste sú dôležitými kritériami dôvera verejnosti v rozhodovanie (II. ÚS 36/2012).\n\n5. Z oznámenia sudcu ústavného súdu vyplýva, že podanie žaloby zo strany sťažovateľa 1 proti sudcovi ústavného súdu vyplynulo z jeho rozhodovacej činnosti sudcu ústavného súdu. Podanie takejto žaloby je prejavom kritiky sťažovateľa 1 vo vzťahu k sudcovi ústavného súdu. Účastníkom konaní v zásade nemožno brániť v tom, aby sudcov kritizovali vo verejnom priestore, a to aj prostredníctvom podaní na iné orgány verejnej moci (trestné oznámenia, civilné žaloby, podnety na disciplinárne stíhania a námietky zaujatosti). Preto z takýchto skutočností bez ďalšieho nemožno vyvodiť taký pomer sudcu k účastníkovi konania, pre ktorý by mali byť dané pochybnosti o nezaujatosti sudcu (NS SR 2Ndob/39/2010, ÚS ČR II. ÚS 105/01, NSS ČR Nao/36/2009). Je tomu tak preto, že sudca musí pri výkone svojej funkcie byť pripravený aj na nedôvodnú a nepodloženú kritiku zo strany účastníka konania, ktorá sa môže prejavovať aj v konfrontačnom prístupe, ktorý sa prejavuje kritikou smerovanou v podaniach na iné orgány verejnej moci.\n\n6. K vzniku pochybnosti o nezaujatosti sudcu môže dôjsť len v prípade, ak z okolností prípadu a predovšetkým konania sudcu vyplynie náznak jeho nepriateľského pomeru k účastníkovi konania. Tak tomu v prípade sudcu ústavného súdu nie je, keďže z jeho vyjadrenia, ktoré sa obmedzuje len na to, že sťažovateľ 1 proti nemu podal civilnú žalobu, nevyplýva, že by akokoľvek prejavil negatívny vzťah k sťažovateľovi 1. Táto okolnosť odlišuje vec sťažovateľa 1 od prípadu, v ktorom ESĽP vyslovil porušenie čl. 6 ods. 1 Dohovoru o ochrane ľudských práv a základných slobôd tým, že vo veci rozhodoval sudca, u ktorého nedostatok objektívnej nestrannosti vyplynul z toho, že v rozhodnutí, ktorým bola účastníkovi uložená pomerne vysoká poriadková pokuta (50 000 Kč), konanie tohto účastníka označil ako bezostyšný a bezprecedentný útok na svoju osobu s tým, že takéto konanie účastníka môže byť trestným činom. Podľa ESĽP takéto vyjadrenia sudcu vyvolávajú objektívny dojem, že nedokázal udržať potrebný odstup od konania účastníka (rozsudok zo 7. 6. 2005 o sťažnosti č. 64935/01, Chmelíř proti Českej republike). Z objektívneho hľadiska tak nemôžu vzniknúť pochybnosti o nezaujatosti sudcu ústavného súdu Petra Straku, keďže niet okolností, ktoré by nasvedčovali jeho negatívnemu postoju vo vzťahu k sťažovateľovi 1. Nie sú tak splnené podmienky podľa § 49 ods. 1 zákona o ústavnom súde na vylúčenie sudcu ústavného súdu z konania a rozhodovania o ústavnej sťažnosti sťažovateľa 1.\n\nPoučenie: Proti tomuto rozhodnutiu ústavného súdu nemožno podať opravný prostriedok.\n\nV Košiciach 23. apríla 2026\n\nRobert Šorl\n\npredseda senátu",
+          "type": "argumentation",
+          "index": 1,
+          "title": "Odôvodnenie:"
+        }
+      ],
+      "source_id": "a4d8f134-e0d6-4dc0-afde-05e8afa665b2",
+      "created_at": "2026-04-27T18:27:22.240203",
+      "source_raw": null,
+      "source_url": "https://www.ustavnysud.sk/docDownload/3f515d16-2088-402d-92c1-9cfb157b4a5a",
+      "updated_at": "2026-04-27T18:27:22.240203",
+      "case_number": "III. ÚS 268/2026",
+      "source_hash": "a04c542beb8cff3e4ec59a7bd8c225f9afaffcad3bac995731faa0d4f8cd1e73",
+      "document_ast": {
+        "blocks": [
+          {
+            "id": "b1",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "text": "SLOVENSKÁ REPUBLIKA",
+                "type": "text"
+              }
+            ],
+            "anchorId": "h-title",
+            "plainText": "SLOVENSKÁ REPUBLIKA"
+          },
+          {
+            "id": "b2",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "text": "UZNESENIE",
+                "type": "text"
+              }
+            ],
+            "anchorId": "h-title",
+            "plainText": "UZNESENIE"
+          },
+          {
+            "id": "b3",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "text": "Ústavného súdu Slovenskej republiky",
+                "type": "text"
+              }
+            ],
+            "anchorId": "h-title",
+            "plainText": "Ústavného súdu Slovenskej republiky"
+          },
+          {
+            "id": "b4",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "III. ÚS 268/2026-5 Ústavný súd Slovenskej republiky v senáte zloženom z predsedu senátu Roberta Šorla (sudca spravodajca) a zo sudcov Ivana Fiačana a Martina Vernarského v konaní podľa čl. 127 Ústavy Slovenskej republiky o ústavnej sťažnosti sťažovateľov 1/",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": " ,",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": " ",
+                "type": "text"
+              },
+              {
+                "text": "anonymizované",
+                "type": "text",
+                "anonymized": true
+              },
+              {
+                "text": " , , 2/",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": " ,",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": " , ",
+                "type": "text"
+              },
+              {
+                "text": "anonymizované",
+                "type": "text",
+                "anonymized": true
+              },
+              {
+                "text": " , a 3/",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": " ,",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": " , , zastúpených Advokátska kancelária JUDr. Daniel Blyšťan s.r.o., Thurzova 3367/6A, Košice, o oznámení dôvodov zaujatosti sudcu Ústavného súdu Slovenskej republiky Petra Straku takto",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p1",
+            "plainText": "III. ÚS 268/2026-5 Ústavný súd Slovenskej republiky v senáte zloženom z predsedu senátu Roberta Šorla (sudca spravodajca) a zo sudcov Ivana Fiačana a Martina Vernarského v konaní podľa čl. 127 Ústavy Slovenskej republiky o ústavnej sťažnosti sťažovateľov 1/ , anonymizované , , 2/ , , anonymizované , a 3/ , , , zastúpených Advokátska kancelária JUDr. Daniel Blyšťan s.r.o., Thurzova 3367/6A, Košice, o oznámení dôvodov zaujatosti sudcu Ústavného súdu Slovenskej republiky Petra Straku takto"
+          },
+          {
+            "id": "b5",
+            "role": "section-heading",
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "rozhodol:",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-holding",
+            "plainText": "rozhodol:"
+          },
+          {
+            "id": "b6",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "Sudca Ústavného súdu Slovenskej republiky Peter Straka",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": " nie je vylúčený",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": " z konania a rozhodovania o ústavnej sťažnosti sťažovateľov (Rvp 506/2026).",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p2",
+            "plainText": "Sudca Ústavného súdu Slovenskej republiky Peter Straka nie je vylúčený z konania a rozhodovania o ústavnej sťažnosti sťažovateľov (Rvp 506/2026)."
+          },
+          {
+            "id": "b7",
+            "role": "section-heading",
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "Odôvodnenie:",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-reasoning",
+            "plainText": "Odôvodnenie:"
+          },
+          {
+            "id": "b8",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "1. Ústavná sťažnosť bola ako sudcovi spravodajcovi pridelená sudcovi ústavného súdu Petrovi Molnárovi, sudcovi II. senátu ústavného súdu. Jeho sudcom je aj sudca ústavného súdu Peter Straka, ktorý oznámil dôvod svojho vylúčenia z konania a rozhodovania o ústavnej sťažnosti. Ten má spočívať v tom, že sťažovateľ 1 podal po rozhodnutí ústavného súdu (III. ÚS 89/2019) proti nemu žalobu na Mestskom súde Košice, a tak objektívne môžu byť dané pochybnosti o jeho nestrannosti.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p3",
+            "plainText": "1. Ústavná sťažnosť bola ako sudcovi spravodajcovi pridelená sudcovi ústavného súdu Petrovi Molnárovi, sudcovi II. senátu ústavného súdu. Jeho sudcom je aj sudca ústavného súdu Peter Straka, ktorý oznámil dôvod svojho vylúčenia z konania a rozhodovania o ústavnej sťažnosti. Ten má spočívať v tom, že sťažovateľ 1 podal po rozhodnutí ústavného súdu (III. ÚS 89/2019) proti nemu žalobu na Mestskom súde Košice, a tak objektívne môžu byť dané pochybnosti o jeho nestrannosti."
+          },
+          {
+            "id": "b9",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "2. Podľa § 51 ods. 2 prvej vety zákona č. 314/2018 Z. z. o Ústavnom súde Slovenskej republiky a o zmene a doplnení niektorých zákonov v znení neskorších predpisov (ďalej len „zákon o ústavnom súde“) a čl. IV bodu 1 písm. c) a čl. II bodu 3.3 rozvrhu práce ústavného súdu o vylúčení sudcu pri rozhodovaní v II. senáte ústavného súdu rozhoduje III. senát ústavného súdu.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p4",
+            "plainText": "2. Podľa § 51 ods. 2 prvej vety zákona č. 314/2018 Z. z. o Ústavnom súde Slovenskej republiky ao zmene a doplnení niektorých zákonov v znení neskorších predpisov (ďalej len „zákon o ústavnom súde“) a čl. IV bodu 1 písm. c) a čl. II bodu 3.3 rozvrhu práce ústavného súdu o vylúčení sudcu pri rozhodovaní v II. senáte ústavného súdu rozhoduje III. senát ústavného súdu."
+          },
+          {
+            "id": "b10",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "3. Podľa § 49 ods. 1 prvej vety zákona o ústavnom súde sudca ústavného súdu je vylúčený z konania a rozhodovania vo veci, ak so zreteľom na jeho pomer k veci, účastníkom konania, zúčastnenej osobe alebo ich zástupcom možno mať pochybnosti o jeho nezaujatosti. Dôvod vylúčenia sudcu ústavného súdu spočívajúci v pochybnostiach o nezaujatosti podľa § 49 ods. 1 prvej vety zákona o ústavnom súde nadväzuje na požiadavku nestrannosti súdneho rozhodovania tak, ako je definovaná aj v rozhodnutiach Európskeho súdu pre ľudské práva. Nestrannosť má stránku subjektívnu a stránku objektívnu. Nestrannosť sudcu má význam pre dôveru verejnosti v súdnictvo [Olujić proti Chorvátsku, sťažnosť č. 22330/05, rozsudok Európskeho súdu pre ľudské práva (ďalej len ,,ESĽP“) z 5. 2. 2005, bod 57].",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p5",
+            "plainText": "3. Podľa § 49 ods. 1 prvej vety zákona o ústavnom súde sudca ústavného súdu je vylúčený z konania a rozhodovania vo veci, ak so zreteľom na jeho pomer k veci, účastníkom konania, zúčastnenej osobe alebo ich zástupcom možno mať pochybnosti o jeho nezaujatosti. Dôvod vylúčenia sudcu ústavného súdu spočívajúci v pochybnostiach o nezaujatosti podľa § 49 ods. 1 prvej vety zákona o ústavnom súde nadväzuje na požiadavku nestrannosti súdneho rozhodovania tak, ako je definovaná aj v rozhodnutiach Európskeho súdu pre ľudské práva. Nestrannosť má stránku subjektívnu a stránku objektívnu. Nestrannosť sudcu má význam pre dôveru verejnosti v súdnictvo [Olujić proti Chorvátsku, sťažnosť č. 22330/05, rozsudok Európskeho súdu pre ľudské práva (ďalej len ,,ESĽP“) z 5. 2. 2005, bod 57]."
+          },
+          {
+            "id": "b11",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "4. Pri teste subjektívnych okolností sa zisťuje osobné presvedčenie, postoj sudcu alebo jeho záujem vo veci. Osobná nestrannosť sudcu sa predpokladá, kým sa nepreukáže opak. Takýmto opakom môže byť sudcom prejavené nepriateľstvo alebo neznášanlivosť. Pri teste objektívnych okolností je dôležitá perspektíva nestranného pozorovateľa a relevantné je aj zdanie sa zaujatosti, teda či sú dané okolnosti, ktoré môžu vzbudzovať pochybnosti o nestrannosti sudcu (Daktaras proti Litve, sťažnosť č. 42095/98, rozsudok ESĽP z 10. 10. 2000, bod 32). Pri objektívnom teste sú dôležitými kritériami dôvera verejnosti v rozhodovanie (II. ÚS 36/2012).",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p6",
+            "plainText": "4. Pri teste subjektívnych okolností sa zisťuje osobné presvedčenie, postoj sudcu alebo jeho záujem vo veci. Osobná nestrannosť sudcu sa predpokladá, kým sa nepreukáže opak. Takýmto opakom môže byť sudcom prejavené nepriateľstvo alebo neznášanlivosť. Pri teste objektívnych okolností je dôležitá perspektíva nestranného pozorovateľa a relevantné je aj zdanie sa zaujatosti, teda či sú dané okolnosti, ktoré môžu vzbudzovať pochybnosti o nestrannosti sudcu (Daktaras proti Litve, sťažnosť č. 42095/98, rozsudok ESĽP z 10. 10. 2000, bod 32). Pri objektívnom teste sú dôležitými kritériami dôvera verejnosti v rozhodovanie (II. ÚS 36/2012)."
+          },
+          {
+            "id": "b12",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "5. Z oznámenia sudcu ústavného súdu vyplýva, že podanie žaloby zo strany sťažovateľa 1 proti sudcovi ústavného súdu vyplynulo z jeho rozhodovacej činnosti sudcu ústavného súdu. Podanie takejto žaloby je prejavom kritiky sťažovateľa 1 vo vzťahu k sudcovi ústavného súdu. Účastníkom konaní v zásade nemožno brániť v tom, aby sudcov kritizovali vo verejnom priestore, a to aj prostredníctvom podaní na iné orgány verejnej moci (trestné oznámenia, civilné žaloby, podnety na disciplinárne stíhania a námietky zaujatosti). Preto z takýchto skutočností bez ďalšieho nemožno vyvodiť taký pomer sudcu k účastníkovi konania, pre ktorý by mali byť dané pochybnosti o nezaujatosti sudcu (NS SR 2Ndob/39/2010, ÚS ČR II. ÚS 105/01, NSS ČR Nao/36/2009). Je tomu tak preto, že sudca musí pri výkone svojej funkcie byť pripravený aj na nedôvodnú a nepodloženú kritiku zo strany účastníka konania, ktorá sa môže prejavovať aj v konfrontačnom prístupe, ktorý sa prejavuje kritikou smerovanou v podaniach na iné orgány verejnej moci.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p7",
+            "plainText": "5. Z oznámenia sudcu ústavného súdu vyplýva, že podanie žaloby zo strany sťažovateľa 1 proti sudcovi ústavného súdu vyplynulo z jeho rozhodovacej činnosti sudcu ústavného súdu. Podanie takejto žaloby je prejavom kritiky sťažovateľa 1 vo vzťahu k sudcovi ústavného súdu. Účastníkom konaní v zásade nemožno brániť v tom, aby sudcov kritizovali vo verejnom priestore, a to aj prostredníctvom podaní na iné orgány verejnej moci (trestné oznámenia, civilné žaloby, podnety na disciplinárne stíhania a námietky zaujatosti). Preto z takýchto skutočností bez ďalšieho nemožno vyvodiť taký pomer sudcu k účastníkovi konania, pre ktorý by mali byť dané pochybnosti o nezaujatosti sudcu (NS SR 2Ndob/39/2010, ÚS ČR II. ÚS 105/01, NSS ČR Nao/36/2009). Je tomu tak preto, že sudca musí pri výkone svojej funkcie byť pripravený aj na nedôvodnú a nepodloženú kritiku zo strany účastníka konania, ktorá sa môže prejavovať aj v konfrontačnom prístupe, ktorý sa prejavuje kritikou smerovanou v podaniach na iné orgány verejnej moci."
+          },
+          {
+            "id": "b13",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "6. K vzniku pochybnosti o nezaujatosti sudcu môže dôjsť len v prípade, ak z okolností prípadu a predovšetkým konania sudcu vyplynie náznak jeho nepriateľského pomeru k účastníkovi konania. Tak tomu v prípade sudcu ústavného súdu nie je, keďže z jeho vyjadrenia, ktoré sa obmedzuje len na to, že sťažovateľ 1 proti nemu podal civilnú žalobu, nevyplýva, že by akokoľvek prejavil negatívny vzťah k sťažovateľovi 1. Táto okolnosť odlišuje vec sťažovateľa 1 od prípadu, v ktorom ESĽP vyslovil porušenie čl. 6 ods. 1 Dohovoru o ochrane ľudských práv a základných slobôd tým, že vo veci rozhodoval sudca, u ktorého nedostatok objektívnej nestrannosti vyplynul z toho, že v rozhodnutí, ktorým bola účastníkovi uložená pomerne vysoká poriadková pokuta (50 000 Kč), konanie tohto účastníka označil ako bezostyšný a bezprecedentný útok na svoju osobu s tým, že takéto konanie účastníka môže byť trestným činom. Podľa ESĽP takéto vyjadrenia sudcu vyvolávajú objektívny dojem, že nedokázal udržať potrebný odstup od konania účastníka (rozsudok zo 7. 6. 2005 o sťažnosti č. 64935/01, Chmelíř proti Českej republike). Z objektívneho hľadiska tak nemôžu vzniknúť pochybnosti o nezaujatosti sudcu ústavného súdu Petra Straku, keďže niet okolností, ktoré by nasvedčovali jeho negatívnemu postoju vo vzťahu k sťažovateľovi 1. Nie sú tak splnené podmienky podľa § 49 ods. 1 zákona o ústavnom súde na vylúčenie sudcu ústavného súdu z konania a rozhodovania o ústavnej sťažnosti sťažovateľa 1.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p8",
+            "plainText": "6. K vzniku pochybnosti o nezaujatosti sudcu môže dôjsť len v prípade, ak z okolností prípadu a predovšetkým konania sudcu vyplynie náznak jeho nepriateľského pomeru k účastníkovi konania. Tak tomu v prípade sudcu ústavného súdu nie je, keďže z jeho vyjadrenia, ktoré sa obmedzuje len na to, že sťažovateľ 1 proti nemu podal civilnú žalobu, nevyplýva, že by akokoľvek prejavil negatívny vzťah k sťažovateľovi 1. Táto okolnosť odlišuje vec sťažovateľa 1 od prípadu, v ktorom ESĽP vyslovil porušenie čl. 6 ods. 1 Dohovoru o ochrane ľudských práv a základných slobôd tým, že vo veci rozhodoval sudca, u ktorého nedostatok objektívnej nestrannosti vyplynul z toho, že v rozhodnutí, ktorým bola účastníkovi uložená pomerne vysoká poriadková pokuta (50 000 Kč), konanie tohto účastníka označil ako bezostyšný a bezprecedentný útok na svoju osobu s tým, že takéto konanie účastníka môže byť trestným činom. Podľa ESĽP takéto vyjadrenia sudcu vyvolávajú objektívny dojem, že nedokázal udržať potrebný odstup od konania účastníka (rozsudok zo 7. 6. 2005 o sťažnosti č. 64935/01, Chmelíř proti Českej republike). Z objektívneho hľadiska tak nemôžu vzniknúť pochybnosti o nezaujatosti sudcu ústavného súdu Petra Straku, keďže niet okolností, ktoré by nasvedčovali jeho negatívnemu postoju vo vzťahu k sťažovateľovi 1. Nie sú tak splnené podmienky podľa § 49 ods. 1 zákona o ústavnom súde na vylúčenie sudcu ústavného súdu z konania a rozhodovania o ústavnej sťažnosti sťažovateľa 1."
+          },
+          {
+            "id": "b14",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "Poučenie:",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": " Proti tomuto rozhodnutiu ústavného súdu nemožno podať opravný prostriedok.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p9",
+            "plainText": "Poučenie: Proti tomuto rozhodnutiu ústavného súdu nemožno podať opravný prostriedok."
+          },
+          {
+            "id": "b15",
+            "role": "closing",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "V Košiciach 23. apríla 2026",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p10",
+            "plainText": "V Košiciach 23. apríla 2026"
+          },
+          {
+            "id": "b16",
+            "role": "signature",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "Robert Šorl",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p11",
+            "plainText": "Robert Šorl"
+          },
+          {
+            "id": "b17",
+            "role": "signature",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "predseda senátu",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p12",
+            "plainText": "predseda senátu"
+          }
+        ],
+        "source": {
+          "system": "ustavnysud.sk",
+          "webUrl": "",
+          "printUrl": "",
+          "documentId": "III. ÚS 268/2026"
+        },
+        "version": 1,
+        "metadata": {
+          "ecli": "ECLI:SK:USSR:2026:3.US.268.2026.1",
+          "court": "Ústavný súd SR",
+          "keywords": [],
+          "statutes": [],
+          "caseNumber": "III. ÚS 268/2026",
+          "decisionDate": "2026-04-23",
+          "decisionType": "uznesenie"
+        }
+      },
+      "document_url": "https://www.ustavnysud.sk/docDownload/3f515d16-2088-402d-92c1-9cfb157b4a5a",
+      "decision_date": "2026-04-23",
+      "decision_type": "uznesenie",
+      "parser_version": 2,
+      "source_raw_s3_key": "case-law/raw/a4d8f134-e0d6-4dc0-afde-05e8afa665b2/ad71ba3701eef7092803c5eb6e26eee0787161b598f83bff63601d5a0576e832",
+      "language_group_key": "ECLI:SK:USSR:2026:3.US.268.2026.1",
+      "source_raw_content_type": "application/pdf"
+    },
+    {
+      "id": "019dd032-2bd3-7000-a02e-58632075ea6b",
+      "ecli": "ECLI:SK:USSR:2026:3.US.267.2026.1",
+      "slug": null,
+      "court": "Ústavný súd SR",
+      "country": "SVK",
+      "analysis": null,
+      "fulltext": "SLOVENSKÁ REPUBLIKA\n\nUZNESENIE\n\nÚstavného súdu Slovenskej republiky\n\nIII. ÚS 267/2026-5 Ústavný súd Slovenskej republiky v senáte zloženom z predsedu senátu Roberta Šorla (sudca spravodajca) a zo sudcov Ivana Fiačana a Martina Vernarského v konaní podľa čl. 127 Ústavy Slovenskej republiky o ústavnej sťažnosti sťažovateľa , , anonymizované , zastúpeného AK PITOŇÁKOVÁ, s.r.o., Slovenská 5, Prešov, proti postupu Okresného súdu Prešov v konaní sp. zn. 15T/31/2020 o oznámení dôvodov zaujatosti sudcu Ústavného súdu Slovenskej republiky Petra Straku takto\n\nrozhodol:\n\nSudca Ústavného súdu Slovenskej republiky Peter Straka je vylúčený z konania a rozhodovania o ústavnej sťažnosti sťažovateľa vedenej pod sp. zn. Rvp 451/2026.\n\nOdôvodnenie:\n\n1. Ústavná sťažnosť bola ako sudcovi spravodajcovi pridelená sudcovi ústavného súdu Ľubošovi Szigetimu, členovi II. senátu ústavného súdu. Jeho členom je aj sudca ústavného súdu Peter Straka, ktorý oznámil dôvod svojho vylúčenia z konania a rozhodovania o ústavnej sťažnosti. Ten má spočívať v tom, že sťažovateľa v konaní o ústavnej sťažnosti zastupuje advokátka, ktorá bola jeho externou poradkyňou sudcu ústavného súdu.\n\n2. Podľa § 51 ods. 2 prvej vety zákona č. 314/2018 Z. z. o Ústavnom súde Slovenskej republiky ao zmene a doplnení niektorých zákonov v znení neskorších predpisov (ďalej len „zákon o ústavnom súde“) a čl. IV bodu 1 písm. c) a čl. II bodu 3.3 rozvrhu práce ústavného súdu o vylúčení sudcu pri rozhodovaní v II. senáte ústavného súdu rozhoduje III. senát ústavného súdu.\n\n3. Podľa § 49 ods. 1 prvej vety zákona o ústavnom súde sudca ústavného súdu je vylúčený z konania a rozhodovania vo veci, ak so zreteľom na jeho pomer k veci, účastníkom konania, zúčastnenej osobe alebo ich zástupcom možno mať pochybnosti o jeho nezaujatosti. Dôvodom na vylúčenie sudcu ústavného súdu z konania o rozhodovaní o ústavnej sťažnosti je stav, keď sťažovateľa alebo zúčastnenú osobu zastupuje externý poradca sudcu ústavného súdu (IV. ÚS 132/2023, I. ÚS 442/2020, I. ÚS 154/2020, I. ÚS 402/2020, IV. ÚS 630/2021), a to aj v situácii, že sťažovateľa alebo zúčastnenú osobu zastupoval v konaní pred všeobecnými súdmi (IV. ÚS 52/2022, IV. ÚS 336/2021, I. ÚS 211/2018).\n\n4. Od týchto záverov ústavného súdu je situácia v tejto veci odlišná v tom, že sťažovateľa zastupuje advokátka, ktorá bola poradkyňou sudcu ústavného súdu. To však nie je dôvodom odchýliť sa od záverov ústavného súdu, podľa ktorých zastupovanie sťažovateľa poradcom ústavného súdu v ústavnou sťažnosťou namietanom konaní odôvodňuje vylúčenie sudcu ústavného súdu z konania a rozhodovania o ústavnej sťažnosti. Z objektívneho hľadiska i tak môžu vzniknúť pochybnosti o nezaujatosti sudcu ústavného súdu Petra Straku pre jeho prirodzený pracovný a kolegiálny pomer k jeho bývalej poradkyni, ktorá zastupuje sťažovateľa v konaní o ústavnej sťažnosti. Preto sú splnené podmienky podľa § 49 ods. 1 zákona o ústavnom súde na vylúčenie sudcu ústavného súdu z konania a rozhodovania o ústavnej sťažnosti sťažovateľa.\n\nPoučenie: Proti tomuto rozhodnutiu ústavného súdu nemožno podať opravný prostriedok.\n\nV Košiciach 23. apríla 2026\n\nRobert Šorl\n\npredseda senátu",
+      "language": "sk",
+      "metadata": {
+        "ecli": "ECLI:SK:USSR:2026:3.US.267.2026.1",
+        "cause": [],
+        "court": "Ústavný súd SR",
+        "judge": "Robert Šorl",
+        "result": ["sudca je vylúčený"],
+        "underage": null,
+        "entryDate": null,
+        "rvpNumber": "1037/2026",
+        "caseNumber": "III. ÚS 267/2026",
+        "documentId": "4350ae8b-1873-42a2-a53c-a25fe23da8bc",
+        "legalBasis": ["§ 51 ods. 2 zákona o ústavnom súde"],
+        "references": null,
+        "formOfEntry": null,
+        "typeOfEntry": null,
+        "decisionDate": "2026-04-23",
+        "decisionType": "uznesenie",
+        "documentType": "Rozhodnutie - Uznesenie o námietke zaujatosti sudcu",
+        "wordRegister": ["námietka zaujatosti sudcu ÚS SR"],
+        "fileReference": null,
+        "includeToZnaU": false,
+        "legalForceDate": "2026-04-27",
+        "typeOfDecision": ["Uznesenie o námietke zaujatosti"],
+        "typeOfProposer": null,
+        "publicationDate": null,
+        "materialRegister": [
+          "zaujatosť / predpojatosť-vyhlásenie o predpojatosti"
+        ],
+        "typeOfProceeding": "procesné konanie ÚS SR",
+        "dissentingOpinion": [],
+        "typeOfNegotiation": ["Prerokovanie vo veci"],
+        "challengedLegislation": null,
+        "affectedLegalRegulation": null
+      },
+      "sections": [
+        {
+          "text": "SLOVENSKÁ REPUBLIKA\n\nUZNESENIE\n\nÚstavného súdu Slovenskej republiky\n\nIII. ÚS 267/2026-5 Ústavný súd Slovenskej republiky v senáte zloženom z predsedu senátu Roberta Šorla (sudca spravodajca) a zo sudcov Ivana Fiačana a Martina Vernarského v konaní podľa čl. 127 Ústavy Slovenskej republiky o ústavnej sťažnosti sťažovateľa , , anonymizované , zastúpeného AK PITOŇÁKOVÁ, s.r.o., Slovenská 5, Prešov, proti postupu Okresného súdu Prešov v konaní sp. zn. 15T/31/2020 o oznámení dôvodov zaujatosti sudcu Ústavného súdu Slovenskej republiky Petra Straku takto\n\nrozhodol:\n\nSudca Ústavného súdu Slovenskej republiky Peter Straka je vylúčený z konania a rozhodovania o ústavnej sťažnosti sťažovateľa vedenej pod sp. zn. Rvp 451/2026.",
+          "type": "header",
+          "index": 0,
+          "title": null
+        },
+        {
+          "text": "1. Ústavná sťažnosť bola ako sudcovi spravodajcovi pridelená sudcovi ústavného súdu Ľubošovi Szigetimu, členovi II. senátu ústavného súdu. Jeho členom je aj sudca ústavného súdu Peter Straka, ktorý oznámil dôvod svojho vylúčenia z konania a rozhodovania o ústavnej sťažnosti. Ten má spočívať v tom, že sťažovateľa v konaní o ústavnej sťažnosti zastupuje advokátka, ktorá bola jeho externou poradkyňou sudcu ústavného súdu.\n\n2. Podľa § 51 ods. 2 prvej vety zákona č. 314/2018 Z. z. o Ústavnom súde Slovenskej republiky ao zmene a doplnení niektorých zákonov v znení neskorších predpisov (ďalej len „zákon o ústavnom súde“) a čl. IV bodu 1 písm. c) a čl. II bodu 3.3 rozvrhu práce ústavného súdu o vylúčení sudcu pri rozhodovaní v II. senáte ústavného súdu rozhoduje III. senát ústavného súdu.\n\n3. Podľa § 49 ods. 1 prvej vety zákona o ústavnom súde sudca ústavného súdu je vylúčený z konania a rozhodovania vo veci, ak so zreteľom na jeho pomer k veci, účastníkom konania, zúčastnenej osobe alebo ich zástupcom možno mať pochybnosti o jeho nezaujatosti. Dôvodom na vylúčenie sudcu ústavného súdu z konania o rozhodovaní o ústavnej sťažnosti je stav, keď sťažovateľa alebo zúčastnenú osobu zastupuje externý poradca sudcu ústavného súdu (IV. ÚS 132/2023, I. ÚS 442/2020, I. ÚS 154/2020, I. ÚS 402/2020, IV. ÚS 630/2021), a to aj v situácii, že sťažovateľa alebo zúčastnenú osobu zastupoval v konaní pred všeobecnými súdmi (IV. ÚS 52/2022, IV. ÚS 336/2021, I. ÚS 211/2018).\n\n4. Od týchto záverov ústavného súdu je situácia v tejto veci odlišná v tom, že sťažovateľa zastupuje advokátka, ktorá bola poradkyňou sudcu ústavného súdu. To však nie je dôvodom odchýliť sa od záverov ústavného súdu, podľa ktorých zastupovanie sťažovateľa poradcom ústavného súdu v ústavnou sťažnosťou namietanom konaní odôvodňuje vylúčenie sudcu ústavného súdu z konania a rozhodovania o ústavnej sťažnosti. Z objektívneho hľadiska i tak môžu vzniknúť pochybnosti o nezaujatosti sudcu ústavného súdu Petra Straku pre jeho prirodzený pracovný a kolegiálny pomer k jeho bývalej poradkyni, ktorá zastupuje sťažovateľa v konaní o ústavnej sťažnosti. Preto sú splnené podmienky podľa § 49 ods. 1 zákona o ústavnom súde na vylúčenie sudcu ústavného súdu z konania a rozhodovania o ústavnej sťažnosti sťažovateľa.\n\nPoučenie: Proti tomuto rozhodnutiu ústavného súdu nemožno podať opravný prostriedok.\n\nV Košiciach 23. apríla 2026\n\nRobert Šorl\n\npredseda senátu",
+          "type": "argumentation",
+          "index": 1,
+          "title": "Odôvodnenie:"
+        }
+      ],
+      "source_id": "a4d8f134-e0d6-4dc0-afde-05e8afa665b2",
+      "created_at": "2026-04-27T18:27:22.1943",
+      "source_raw": null,
+      "source_url": "https://www.ustavnysud.sk/docDownload/4350ae8b-1873-42a2-a53c-a25fe23da8bc",
+      "updated_at": "2026-04-27T18:27:22.1943",
+      "case_number": "III. ÚS 267/2026",
+      "source_hash": "695c1124a7e58788bfb8afd7999ce7df74e4244571a474ebe6a32179105ed3c4",
+      "document_ast": {
+        "blocks": [
+          {
+            "id": "b1",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "text": "SLOVENSKÁ REPUBLIKA",
+                "type": "text"
+              }
+            ],
+            "anchorId": "h-title",
+            "plainText": "SLOVENSKÁ REPUBLIKA"
+          },
+          {
+            "id": "b2",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "text": "UZNESENIE",
+                "type": "text"
+              }
+            ],
+            "anchorId": "h-title",
+            "plainText": "UZNESENIE"
+          },
+          {
+            "id": "b3",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "text": "Ústavného súdu Slovenskej republiky",
+                "type": "text"
+              }
+            ],
+            "anchorId": "h-title",
+            "plainText": "Ústavného súdu Slovenskej republiky"
+          },
+          {
+            "id": "b4",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "III. ÚS 267/2026-5 Ústavný súd Slovenskej republiky v senáte zloženom z predsedu senátu Roberta Šorla (sudca spravodajca) a zo sudcov Ivana Fiačana a Martina Vernarského v konaní podľa čl. 127 Ústavy Slovenskej republiky o ústavnej sťažnosti sťažovateľa",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": " ,",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": " , ",
+                "type": "text"
+              },
+              {
+                "text": "anonymizované",
+                "type": "text",
+                "anonymized": true
+              },
+              {
+                "text": " , zastúpeného AK PITOŇÁKOVÁ, s.r.o., Slovenská 5, Prešov, proti postupu Okresného súdu Prešov v konaní sp. zn. 15T/31/2020 o oznámení dôvodov zaujatosti sudcu Ústavného súdu Slovenskej republiky Petra Straku takto",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p1",
+            "plainText": "III. ÚS 267/2026-5 Ústavný súd Slovenskej republiky v senáte zloženom z predsedu senátu Roberta Šorla (sudca spravodajca) a zo sudcov Ivana Fiačana a Martina Vernarského v konaní podľa čl. 127 Ústavy Slovenskej republiky o ústavnej sťažnosti sťažovateľa , , anonymizované , zastúpeného AK PITOŇÁKOVÁ, s.r.o., Slovenská 5, Prešov, proti postupu Okresného súdu Prešov v konaní sp. zn. 15T/31/2020 o oznámení dôvodov zaujatosti sudcu Ústavného súdu Slovenskej republiky Petra Straku takto"
+          },
+          {
+            "id": "b5",
+            "role": "section-heading",
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "rozhodol:",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-holding",
+            "plainText": "rozhodol:"
+          },
+          {
+            "id": "b6",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "Sudca Ústavného súdu Slovenskej republiky Peter Straka",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": " je vylúčený",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": " z konania a rozhodovania o ústavnej sťažnosti sťažovateľa vedenej pod sp. zn. Rvp 451/2026.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p2",
+            "plainText": "Sudca Ústavného súdu Slovenskej republiky Peter Straka je vylúčený z konania a rozhodovania o ústavnej sťažnosti sťažovateľa vedenej pod sp. zn. Rvp 451/2026."
+          },
+          {
+            "id": "b7",
+            "role": "section-heading",
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "Odôvodnenie:",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-reasoning",
+            "plainText": "Odôvodnenie:"
+          },
+          {
+            "id": "b8",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "1. Ústavná sťažnosť bola ako sudcovi spravodajcovi pridelená sudcovi ústavného súdu Ľubošovi Szigetimu, členovi II. senátu ústavného súdu. Jeho členom je aj sudca ústavného súdu Peter Straka, ktorý oznámil dôvod svojho vylúčenia z konania a rozhodovania o ústavnej sťažnosti. Ten má spočívať v tom, že sťažovateľa v konaní o ústavnej sťažnosti zastupuje advokátka, ktorá bola jeho externou poradkyňou sudcu ústavného súdu.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p3",
+            "plainText": "1. Ústavná sťažnosť bola ako sudcovi spravodajcovi pridelená sudcovi ústavného súdu Ľubošovi Szigetimu, členovi II. senátu ústavného súdu. Jeho členom je aj sudca ústavného súdu Peter Straka, ktorý oznámil dôvod svojho vylúčenia z konania a rozhodovania o ústavnej sťažnosti. Ten má spočívať v tom, že sťažovateľa v konaní o ústavnej sťažnosti zastupuje advokátka, ktorá bola jeho externou poradkyňou sudcu ústavného súdu."
+          },
+          {
+            "id": "b9",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "2. Podľa § 51 ods. 2 prvej vety zákona č. 314/2018 Z. z. o Ústavnom súde Slovenskej republiky a o zmene a doplnení niektorých zákonov v znení neskorších predpisov (ďalej len „zákon o ústavnom súde“) a čl. IV bodu 1 písm. c) a čl. II bodu 3.3 rozvrhu práce ústavného súdu o vylúčení sudcu pri rozhodovaní v II. senáte ústavného súdu rozhoduje III. senát ústavného súdu.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p4",
+            "plainText": "2. Podľa § 51 ods. 2 prvej vety zákona č. 314/2018 Z. z. o Ústavnom súde Slovenskej republiky ao zmene a doplnení niektorých zákonov v znení neskorších predpisov (ďalej len „zákon o ústavnom súde“) a čl. IV bodu 1 písm. c) a čl. II bodu 3.3 rozvrhu práce ústavného súdu o vylúčení sudcu pri rozhodovaní v II. senáte ústavného súdu rozhoduje III. senát ústavného súdu."
+          },
+          {
+            "id": "b10",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "3. Podľa § 49 ods. 1 prvej vety zákona o ústavnom súde sudca ústavného súdu je vylúčený z konania a rozhodovania vo veci, ak so zreteľom na jeho pomer k veci, účastníkom konania, zúčastnenej osobe alebo ich zástupcom možno mať pochybnosti o jeho nezaujatosti. Dôvodom na vylúčenie sudcu ústavného súdu z konania o rozhodovaní o ústavnej sťažnosti je stav, keď sťažovateľa alebo zúčastnenú osobu zastupuje externý poradca sudcu ústavného súdu (IV. ÚS 132/2023, I. ÚS 442/2020, I. ÚS 154/2020, I. ÚS 402/2020, IV. ÚS 630/2021), a to aj v situácii, že sťažovateľa alebo zúčastnenú osobu zastupoval v konaní pred všeobecnými súdmi (IV. ÚS 52/2022, IV. ÚS 336/2021, I. ÚS 211/2018).",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p5",
+            "plainText": "3. Podľa § 49 ods. 1 prvej vety zákona o ústavnom súde sudca ústavného súdu je vylúčený z konania a rozhodovania vo veci, ak so zreteľom na jeho pomer k veci, účastníkom konania, zúčastnenej osobe alebo ich zástupcom možno mať pochybnosti o jeho nezaujatosti. Dôvodom na vylúčenie sudcu ústavného súdu z konania o rozhodovaní o ústavnej sťažnosti je stav, keď sťažovateľa alebo zúčastnenú osobu zastupuje externý poradca sudcu ústavného súdu (IV. ÚS 132/2023, I. ÚS 442/2020, I. ÚS 154/2020, I. ÚS 402/2020, IV. ÚS 630/2021), a to aj v situácii, že sťažovateľa alebo zúčastnenú osobu zastupoval v konaní pred všeobecnými súdmi (IV. ÚS 52/2022, IV. ÚS 336/2021, I. ÚS 211/2018)."
+          },
+          {
+            "id": "b11",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "4. Od týchto záverov ústavného súdu je situácia v tejto veci odlišná v tom, že sťažovateľa zastupuje advokátka, ktorá bola poradkyňou sudcu ústavného súdu. To však nie je dôvodom odchýliť sa od záverov ústavného súdu, podľa ktorých zastupovanie sťažovateľa poradcom ústavného súdu v ústavnou sťažnosťou namietanom konaní odôvodňuje vylúčenie sudcu ústavného súdu z konania a rozhodovania o ústavnej sťažnosti. Z objektívneho hľadiska i tak môžu vzniknúť pochybnosti o nezaujatosti sudcu ústavného súdu Petra Straku pre jeho prirodzený pracovný a kolegiálny pomer k jeho bývalej poradkyni, ktorá zastupuje sťažovateľa v konaní o ústavnej sťažnosti. Preto sú splnené podmienky podľa § 49 ods. 1 zákona o ústavnom súde na vylúčenie sudcu ústavného súdu z konania a rozhodovania o ústavnej sťažnosti sťažovateľa.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p6",
+            "plainText": "4. Od týchto záverov ústavného súdu je situácia v tejto veci odlišná v tom, že sťažovateľa zastupuje advokátka, ktorá bola poradkyňou sudcu ústavného súdu. To však nie je dôvodom odchýliť sa od záverov ústavného súdu, podľa ktorých zastupovanie sťažovateľa poradcom ústavného súdu v ústavnou sťažnosťou namietanom konaní odôvodňuje vylúčenie sudcu ústavného súdu z konania a rozhodovania o ústavnej sťažnosti. Z objektívneho hľadiska i tak môžu vzniknúť pochybnosti o nezaujatosti sudcu ústavného súdu Petra Straku pre jeho prirodzený pracovný a kolegiálny pomer k jeho bývalej poradkyni, ktorá zastupuje sťažovateľa v konaní o ústavnej sťažnosti. Preto sú splnené podmienky podľa § 49 ods. 1 zákona o ústavnom súde na vylúčenie sudcu ústavného súdu z konania a rozhodovania o ústavnej sťažnosti sťažovateľa."
+          },
+          {
+            "id": "b12",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "Poučenie:",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": " Proti tomuto rozhodnutiu ústavného súdu nemožno podať opravný prostriedok.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p7",
+            "plainText": "Poučenie: Proti tomuto rozhodnutiu ústavného súdu nemožno podať opravný prostriedok."
+          },
+          {
+            "id": "b13",
+            "role": "closing",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "V Košiciach 23. apríla 2026",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p8",
+            "plainText": "V Košiciach 23. apríla 2026"
+          },
+          {
+            "id": "b14",
+            "role": "signature",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "Robert Šorl",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p9",
+            "plainText": "Robert Šorl"
+          },
+          {
+            "id": "b15",
+            "role": "signature",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "predseda senátu",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p10",
+            "plainText": "predseda senátu"
+          }
+        ],
+        "source": {
+          "system": "ustavnysud.sk",
+          "webUrl": "",
+          "printUrl": "",
+          "documentId": "III. ÚS 267/2026"
+        },
+        "version": 1,
+        "metadata": {
+          "ecli": "ECLI:SK:USSR:2026:3.US.267.2026.1",
+          "court": "Ústavný súd SR",
+          "keywords": [],
+          "statutes": [],
+          "caseNumber": "III. ÚS 267/2026",
+          "decisionDate": "2026-04-23",
+          "decisionType": "uznesenie"
+        }
+      },
+      "document_url": "https://www.ustavnysud.sk/docDownload/4350ae8b-1873-42a2-a53c-a25fe23da8bc",
+      "decision_date": "2026-04-23",
+      "decision_type": "uznesenie",
+      "parser_version": 2,
+      "source_raw_s3_key": "case-law/raw/a4d8f134-e0d6-4dc0-afde-05e8afa665b2/27b69d3c25ed500e1565082ff5fbeb480bd7d7cb2e104abb6c26db3bdc9b7a97",
+      "language_group_key": "ECLI:SK:USSR:2026:3.US.267.2026.1",
+      "source_raw_content_type": "application/pdf"
+    }
+  ]
+}

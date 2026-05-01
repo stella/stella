@@ -1,0 +1,958 @@
+{
+  "source": {
+    "id": "4c6a3fd0-27fc-4bde-80cf-48c084406975",
+    "name": "Slovak Courts",
+    "config": "{}",
+    "enabled": true,
+    "created_at": "2026-04-16T13:39:24.804857",
+    "updated_at": "2026-05-01T17:26:47.38",
+    "adapter_key": "sk-courts",
+    "sync_cursor": "offset:767800",
+    "last_sync_at": "2026-05-01T17:26:47.38"
+  },
+  "decisions": [
+    {
+      "id": "b3926f63-a85d-4416-a6dd-cbbb7692d5b2",
+      "ecli": "ECLI:SK:MSKE:2026:7126011275.1",
+      "slug": null,
+      "court": "Mestský súd Košice",
+      "country": "SVK",
+      "analysis": null,
+      "fulltext": "TRESTNÝ ROZKAZ V MENE\n\nSLOVENSKEJ REPUBLIKY\n\nMestský súd Košice, samosudkyňa A. B. C. D. dňa 15. apríla 2026 v Košiciach, vydáva podľa § 353 ods. 1 Trestného poriadku\n\nrozhodol:\n\nObvinený E. C., nar. XX.X.XXXX v F., trvale bytom F., F. XX, jevinný, že 1.) dňa 20.04.2022 v čase o 07.30 hod. nezisteným spôsobom a predmetom poškodil biele drevené dvere vedúce na terasu na 1. poschodí administratívnej budovy nachádzajúcej sa na ul. Štúrova č. X, Košice, a následne toho istého dňa nožom a opakovaním kopaním poškodil pravé spätne zrkadlo, prednú kapotu, predný nárazník a pravý kryt chladiča na osobnom motorovom vozidle zn. BMW, 525 D, čiernej farby, EVČ: XXXXXXX, ktoré bolo zaparkované vo dvore areálu G. H. X, F., čím tak spoločnosti Mudrink s. r. o., so sídlom Štúrova 8, Košice poškodením dverí na 1. poschodí administratívnej budovy spôsobil škodu vo výške 67,25 € a poškodenej I. J. poškodením OMV zn. BMW, XXX D, čiernej farby, EVČ: XXXXXXX spôsobil podľa znaleckého posudku č. 15/2022 škodu vo výške 712,-€, 2.) dňa 20.04.2022 do 10.00 hod. vF. neoprávnene prechovával u seba pre vlastnú potrebu 1 ks ružový obal s obsahom bielej kryštalickej látky o celkovej hmotnosti 270 mg s obsahom metamfetamínu, izopropylbenzylamínu a metylsulfonylmetánu (MSM), s priemerným obsahom 49,1% metamfetamínu schopnej ovplyvniť psychiku užívateľa (konzumenta) a rovnako prechovával pre vlastnú potrebu jeden kus ružový obal s obsahom zelenej sušiny rastlinného materiálu o celkovej hmotnosti 380 mg vrcholcových častí rastliny konope (Cannabis) so zistenou prítomnosťou tetrahydrokanabinolu (THC) o priemernej koncentrácii 17,6% hmotnostných THC, obsahujúce 67 mg THC, ktorá je schopná ovplyvniť psychiku užívateľa (konzumenta), ktoré dobrovoľne vydal príslušníkom Obvodného oddelenia PZ Košice - Juh na základe výzvy na vydanie veci podľa § 89a ods. 1 Trestného poriadku, pričom látka metamfetamín je v zmysle zákona Národnej rady Slovenskej republiky č. 139/1998 Z. z. o omamných a psychotropných látkach a prípravkoch v znení neskorších predpisov zaradená do II. skupiny psychotropných látok a látka THC je v zmysle uvedeného zákona zaradená do II. skupiny omamných látok, tedav bode 1.) obžaloby - poškodil cudziu vec a spôsobil tak na cudzom majetku malú škodu, v bode 2.) obžaloby - neoprávnene prechovával omamnú látku obsahujúcu tetrahydrokanabinol a inú psychotropnú látku ako rastlinu z rodu konopa v malom množstve. týmspáchalv bode 1.) obžaloby prečin poškodzovania cudzej veci podľa § 245 ods. 1 Trestného zákona účinného v čase spáchania skutku v bode 2.) obžaloby prečin neoprávneného prechovávania omamnej látky a psychotropnej látky podľa § 171 ods. 1, ods. 2, ods. 3 Trestného zákona č. 416/2025 Z. z. v platnom a účinnom znení. Podľa § 44 Tr. zákona upúšťa od uloženia súhrnného trestu, nakoľko trest uložený trestným rozkazom Mestského súdu Košice, sp. zn. K2-7T 46/2022 zo dňa 3.8.2023, právoplatným dňa 18.7.2024, ktorým bol obvinenému uložený podľa § 194 ods. 1 Tr. zákona trest odňatia slobody vo výmere 16 mesiacov so skúšobnou dobou vo výmere 24 mesiacov do 19.7.2026, podkladá na ochranu spoločnosti a nápravu páchateľa za dostatočný. Podľa § 287 ods. 1 Tr. poriadku ukladá obvinenému povinnosť uhradiť poškodenej I. J., nar. XX.XX.XXXX, trvale bytom K. J., D. XX/XX, H. L. škodu vo výške 712 eur (sedemstodvanásť eur). Podľa § 287 ods. 1 Tr. poriadku ukladá obvinenému povinnosť uhradiť poškodenému M. N. N., nar. XX.X.XXXX, trvale bytom F., O. XX škodu vo výške 67,25 eur (šesťdesiatsedem eur dvadsaťpäť centov).\n\nPoučenie:\n\nProti trestnému rozkazu môže podať odpor obvinený a osoby, ktoré sú oprávnené podať v jeho prospech odvolanie, ako aj prokurátor. Odpor sa podáva na súde, ktorý trestný rozkaz vydal, a to do ôsmich dní od jeho doručenia. Ak proti trestnému rozkazu podá oprávnená osoba v lehote odpor, samosudca rozhodne podľa § 241 ods. 1 písm. j) Tr. poriadku o prijatí obžaloby a nariadi vo veci hlavné pojednávanie. Poškodený môže podať odpor proti výroku o náhrade škody, ktorým bola priznaná náhrada škody; ak poškodený podá odpor, trestný rozkaz sa ruší vo výroku o náhrade škody. Ak bol odpor podaný v lehote a nebol vzatý späť, trestný rozkaz sa prednesením obžaloby prokurátorom na hlavnom pojednávaní ruší. Ak sa v určenej lehote nepodá odpor, stane sa trestný rozkaz právoplatným a vykonateľným.",
+      "language": "sk",
+      "metadata": {
+        "ecli": "ECLI:SK:MSKE:2026:7126011275.1",
+        "guid": "544684fb-054c-4aca-8275-4589ce717f38:01d3ae8c-7f88-4b1a-8e21-b84fa85802b1",
+        "court": "Mestský súd Košice",
+        "judge": "JUDr. Zuzana Slebodniková Levkušová",
+        "subArea": ["Majetok"],
+        "caseNumber": "8T/25/2026",
+        "updateDate": "16.04.2026",
+        "decisionDate": "2026-04-15",
+        "decisionType": "Trestný rozkaz",
+        "documentName": "Trestný_rozkaz_8T-25-2026.pdf",
+        "documentSize": 69399,
+        "decisionNature": ["Prvostupňové nenapadnuté opravnými prostriedkami"],
+        "courtRegistreGuid": "sud_148",
+        "documentExtension": "PDF",
+        "judgeRegistreGuid": "sudca_1683",
+        "identifikacneCislo": "7126011275",
+        "referencedLegislation": [
+          {
+            "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-44",
+            "nazov": "/SK/ZZ/2005/300/#paragraf-44"
+          },
+          {
+            "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/301/#paragraf-287.odsek-1",
+            "nazov": "/SK/ZZ/2005/301/#paragraf-287.odsek-1"
+          }
+        ]
+      },
+      "sections": [
+        {
+          "text": "TRESTNÝ ROZKAZ V MENE\n\nSLOVENSKEJ REPUBLIKY\n\nMestský súd Košice, samosudkyňa A. B. C. D. dňa 15. apríla 2026 v Košiciach, vydáva podľa § 353 ods. 1 Trestného poriadku\n\nrozhodol:\n\nObvinený E. C., nar. XX.X.XXXX v F., trvale bytom F., F. XX, jevinný, že 1.) dňa 20.04.2022 v čase o 07.30 hod. nezisteným spôsobom a predmetom poškodil biele drevené dvere vedúce na terasu na 1. poschodí administratívnej budovy nachádzajúcej sa na ul. Štúrova č. X, Košice, a následne toho istého dňa nožom a opakovaním kopaním poškodil pravé spätne zrkadlo, prednú kapotu, predný nárazník a pravý kryt chladiča na osobnom motorovom vozidle zn. BMW, 525 D, čiernej farby, EVČ: XXXXXXX, ktoré bolo zaparkované vo dvore areálu G. H. X, F., čím tak spoločnosti Mudrink s. r. o., so sídlom Štúrova 8, Košice poškodením dverí na 1. poschodí administratívnej budovy spôsobil škodu vo výške 67,25 € a poškodenej I. J. poškodením OMV zn. BMW, XXX D, čiernej farby, EVČ: XXXXXXX spôsobil podľa znaleckého posudku č. 15/2022 škodu vo výške 712,-€, 2.) dňa 20.04.2022 do 10.00 hod. vF. neoprávnene prechovával u seba pre vlastnú potrebu 1 ks ružový obal s obsahom bielej kryštalickej látky o celkovej hmotnosti 270 mg s obsahom metamfetamínu, izopropylbenzylamínu a metylsulfonylmetánu (MSM), s priemerným obsahom 49,1% metamfetamínu schopnej ovplyvniť psychiku užívateľa (konzumenta) a rovnako prechovával pre vlastnú potrebu jeden kus ružový obal s obsahom zelenej sušiny rastlinného materiálu o celkovej hmotnosti 380 mg vrcholcových častí rastliny konope (Cannabis) so zistenou prítomnosťou tetrahydrokanabinolu (THC) o priemernej koncentrácii 17,6% hmotnostných THC, obsahujúce 67 mg THC, ktorá je schopná ovplyvniť psychiku užívateľa (konzumenta), ktoré dobrovoľne vydal príslušníkom Obvodného oddelenia PZ Košice - Juh na základe výzvy na vydanie veci podľa § 89a ods. 1 Trestného poriadku, pričom látka metamfetamín je v zmysle zákona Národnej rady Slovenskej republiky č. 139/1998 Z. z. o omamných a psychotropných látkach a prípravkoch v znení neskorších predpisov zaradená do II. skupiny psychotropných látok a látka THC je v zmysle uvedeného zákona zaradená do II. skupiny omamných látok, tedav bode 1.) obžaloby - poškodil cudziu vec a spôsobil tak na cudzom majetku malú škodu, v bode 2.) obžaloby - neoprávnene prechovával omamnú látku obsahujúcu tetrahydrokanabinol a inú psychotropnú látku ako rastlinu z rodu konopa v malom množstve. týmspáchalv bode 1.) obžaloby prečin poškodzovania cudzej veci podľa § 245 ods. 1 Trestného zákona účinného v čase spáchania skutku v bode 2.) obžaloby prečin neoprávneného prechovávania omamnej látky a psychotropnej látky podľa § 171 ods. 1, ods. 2, ods. 3 Trestného zákona č. 416/2025 Z. z. v platnom a účinnom znení. Podľa § 44 Tr. zákona upúšťa od uloženia súhrnného trestu, nakoľko trest uložený trestným rozkazom Mestského súdu Košice, sp. zn. K2-7T 46/2022 zo dňa 3.8.2023, právoplatným dňa 18.7.2024, ktorým bol obvinenému uložený podľa § 194 ods. 1 Tr. zákona trest odňatia slobody vo výmere 16 mesiacov so skúšobnou dobou vo výmere 24 mesiacov do 19.7.2026, podkladá na ochranu spoločnosti a nápravu páchateľa za dostatočný. Podľa § 287 ods. 1 Tr. poriadku ukladá obvinenému povinnosť uhradiť poškodenej I. J., nar. XX.XX.XXXX, trvale bytom K. J., D. XX/XX, H. L. škodu vo výške 712 eur (sedemstodvanásť eur). Podľa § 287 ods. 1 Tr. poriadku ukladá obvinenému povinnosť uhradiť poškodenému M. N. N., nar. XX.X.XXXX, trvale bytom F., O. XX škodu vo výške 67,25 eur (šesťdesiatsedem eur dvadsaťpäť centov).",
+          "type": "header",
+          "index": 0,
+          "title": null
+        },
+        {
+          "text": "Proti trestnému rozkazu môže podať odpor obvinený a osoby, ktoré sú oprávnené podať v jeho prospech odvolanie, ako aj prokurátor. Odpor sa podáva na súde, ktorý trestný rozkaz vydal, a to do ôsmich dní od jeho doručenia. Ak proti trestnému rozkazu podá oprávnená osoba v lehote odpor, samosudca rozhodne podľa § 241 ods. 1 písm. j) Tr. poriadku o prijatí obžaloby a nariadi vo veci hlavné pojednávanie. Poškodený môže podať odpor proti výroku o náhrade škody, ktorým bola priznaná náhrada škody; ak poškodený podá odpor, trestný rozkaz sa ruší vo výroku o náhrade škody. Ak bol odpor podaný v lehote a nebol vzatý späť, trestný rozkaz sa prednesením obžaloby prokurátorom na hlavnom pojednávaní ruší. Ak sa v určenej lehote nepodá odpor, stane sa trestný rozkaz právoplatným a vykonateľným.",
+          "type": "footer",
+          "index": 1,
+          "title": "Poučenie:"
+        }
+      ],
+      "source_id": "4c6a3fd0-27fc-4bde-80cf-48c084406975",
+      "created_at": "2026-04-16T14:02:27.467796",
+      "source_raw": null,
+      "source_url": "https://obcan.justice.sk/content/public/item/01d3ae8c-7f88-4b1a-8e21-b84fa85802b1",
+      "updated_at": "2026-04-16T14:02:27.467796",
+      "case_number": "8T/25/2026",
+      "source_hash": "3c2a420a7c1be955a9a5def1f25c5c6f0dacce9639cbcc47f79950ee26ce9f95",
+      "document_ast": {
+        "blocks": [
+          {
+            "id": "b1",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "TRESTNÝ ROZKAZ V MENE",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-title",
+            "plainText": "TRESTNÝ ROZKAZ V MENE"
+          },
+          {
+            "id": "b2",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "SLOVENSKEJ REPUBLIKY",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-title",
+            "plainText": "SLOVENSKEJ REPUBLIKY"
+          },
+          {
+            "id": "b3",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "Mestský súd Košice, samosudkyňa A. B. C. D. dňa 15. apríla 2026 v Košiciach, vydáva podľa § 353 ods. 1 Trestného poriadku",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p1",
+            "plainText": "Mestský súd Košice, samosudkyňa A. B. C. D. dňa 15. apríla 2026 v Košiciach, vydáva podľa § 353 ods. 1 Trestného poriadku"
+          },
+          {
+            "id": "b4",
+            "role": "section-heading",
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "r o z h o d o l :",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-holding",
+            "plainText": "rozhodol:"
+          },
+          {
+            "id": "b5",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "Obvinený E. C., nar. XX.X.XXXX v F., trvale bytom F., F. XX, j e v i n n ý, ž e 1.) dňa 20.04.2022 v čase o 07.30 hod. nezisteným spôsobom a predmetom poškodil biele drevené dvere vedúce na terasu na 1. poschodí administratívnej budovy nachádzajúcej sa na ul. Štúrova č. X, Košice, a následne toho istého dňa nožom a opakovaním kopaním poškodil pravé spätne zrkadlo, prednú kapotu, predný nárazník a pravý kryt chladiča na osobnom motorovom vozidle zn. BMW, 525 D, čiernej farby, EVČ: XXXXXXX, ktoré bolo zaparkované vo dvore areálu G. H. X, F., čím tak spoločnosti Mudrink s. r. o., so sídlom Štúrova 8, Košice poškodením dverí na 1. poschodí administratívnej budovy spôsobil škodu vo výške 67,25 € a poškodenej I. J. poškodením OMV zn. BMW, XXX D, čiernej farby, EVČ: XXXXXXX spôsobil podľa znaleckého posudku č. 15/2022 škodu vo výške 712,-€, 2.) dňa 20.04.2022 do 10.00 hod. v F. neoprávnene prechovával u seba pre vlastnú potrebu 1 ks ružový obal s obsahom bielej kryštalickej látky o celkovej hmotnosti 270 mg s obsahom metamfetamínu, izopropylbenzylamínu a metylsulfonylmetánu (MSM), s priemerným obsahom 49,1% metamfetamínu schopnej ovplyvniť psychiku užívateľa (konzumenta) a rovnako prechovával pre vlastnú potrebu jeden kus ružový obal s obsahom zelenej sušiny rastlinného materiálu o celkovej hmotnosti 380 mg vrcholcových častí rastliny konope (Cannabis) so zistenou prítomnosťou tetrahydrokanabinolu (THC) o priemernej koncentrácii 17,6% hmotnostných THC, obsahujúce 67 mg THC, ktorá je schopná ovplyvniť psychiku užívateľa (konzumenta), ktoré dobrovoľne vydal príslušníkom Obvodného oddelenia PZ Košice - Juh na základe výzvy na vydanie veci podľa § 89a ods. 1 Trestného poriadku, pričom látka metamfetamín je v zmysle zákona Národnej rady Slovenskej republiky č. 139/1998 Z. z. o omamných a psychotropných látkach a prípravkoch v znení neskorších predpisov zaradená do II. skupiny psychotropných látok a látka THC je v zmysle uvedeného zákona zaradená do II. skupiny omamných látok, t e d a v bode 1.) obžaloby - poškodil cudziu vec a spôsobil tak na cudzom majetku malú škodu, v bode 2.) obžaloby - neoprávnene prechovával omamnú látku obsahujúcu tetrahydrokanabinol a inú psychotropnú látku ako rastlinu z rodu konopa v malom množstve. t ý m s p á c h a l v bode 1.) obžaloby prečin poškodzovania cudzej veci podľa § 245 ods. 1 Trestného zákona účinného v čase spáchania skutku v bode 2.) obžaloby prečin neoprávneného prechovávania omamnej látky a psychotropnej látky podľa § 171 ods. 1, ods. 2, ods. 3 Trestného zákona č. 416/2025 Z. z. v platnom a účinnom znení. Podľa § 44 Tr. zákona upúšťa od uloženia súhrnného trestu, nakoľko trest uložený trestným rozkazom Mestského súdu Košice, sp. zn. K2-7T 46/2022 zo dňa 3.8.2023, právoplatným dňa 18.7.2024, ktorým bol obvinenému uložený podľa § 194 ods. 1 Tr. zákona trest odňatia slobody vo výmere 16 mesiacov so skúšobnou dobou vo výmere 24 mesiacov do 19.7.2026, podkladá na ochranu spoločnosti a nápravu páchateľa za dostatočný. Podľa § 287 ods. 1 Tr. poriadku ukladá obvinenému povinnosť uhradiť poškodenej I. J., nar. XX.XX.XXXX, trvale bytom K. J., D. XX/XX, H. L. škodu vo výške 712 eur (sedemstodvanásť eur). Podľa § 287 ods. 1 Tr. poriadku ukladá obvinenému povinnosť uhradiť poškodenému M. N. N., nar. XX.X.XXXX, trvale bytom F., O. XX škodu vo výške 67,25 eur (šesťdesiatsedem eur dvadsaťpäť centov).",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p2",
+            "plainText": "Obvinený E. C., nar. XX.X.XXXX v F., trvale bytom F., F. XX, jevinný, že 1.) dňa 20.04.2022 v čase o 07.30 hod. nezisteným spôsobom a predmetom poškodil biele drevené dvere vedúce na terasu na 1. poschodí administratívnej budovy nachádzajúcej sa na ul. Štúrova č. X, Košice, a následne toho istého dňa nožom a opakovaním kopaním poškodil pravé spätne zrkadlo, prednú kapotu, predný nárazník a pravý kryt chladiča na osobnom motorovom vozidle zn. BMW, 525 D, čiernej farby, EVČ: XXXXXXX, ktoré bolo zaparkované vo dvore areálu G. H. X, F., čím tak spoločnosti Mudrink s. r. o., so sídlom Štúrova 8, Košice poškodením dverí na 1. poschodí administratívnej budovy spôsobil škodu vo výške 67,25 € a poškodenej I. J. poškodením OMV zn. BMW, XXX D, čiernej farby, EVČ: XXXXXXX spôsobil podľa znaleckého posudku č. 15/2022 škodu vo výške 712,-€, 2.) dňa 20.04.2022 do 10.00 hod. vF. neoprávnene prechovával u seba pre vlastnú potrebu 1 ks ružový obal s obsahom bielej kryštalickej látky o celkovej hmotnosti 270 mg s obsahom metamfetamínu, izopropylbenzylamínu a metylsulfonylmetánu (MSM), s priemerným obsahom 49,1% metamfetamínu schopnej ovplyvniť psychiku užívateľa (konzumenta) a rovnako prechovával pre vlastnú potrebu jeden kus ružový obal s obsahom zelenej sušiny rastlinného materiálu o celkovej hmotnosti 380 mg vrcholcových častí rastliny konope (Cannabis) so zistenou prítomnosťou tetrahydrokanabinolu (THC) o priemernej koncentrácii 17,6% hmotnostných THC, obsahujúce 67 mg THC, ktorá je schopná ovplyvniť psychiku užívateľa (konzumenta), ktoré dobrovoľne vydal príslušníkom Obvodného oddelenia PZ Košice - Juh na základe výzvy na vydanie veci podľa § 89a ods. 1 Trestného poriadku, pričom látka metamfetamín je v zmysle zákona Národnej rady Slovenskej republiky č. 139/1998 Z. z. o omamných a psychotropných látkach a prípravkoch v znení neskorších predpisov zaradená do II. skupiny psychotropných látok a látka THC je v zmysle uvedeného zákona zaradená do II. skupiny omamných látok, tedav bode 1.) obžaloby - poškodil cudziu vec a spôsobil tak na cudzom majetku malú škodu, v bode 2.) obžaloby - neoprávnene prechovával omamnú látku obsahujúcu tetrahydrokanabinol a inú psychotropnú látku ako rastlinu z rodu konopa v malom množstve. týmspáchalv bode 1.) obžaloby prečin poškodzovania cudzej veci podľa § 245 ods. 1 Trestného zákona účinného v čase spáchania skutku v bode 2.) obžaloby prečin neoprávneného prechovávania omamnej látky a psychotropnej látky podľa § 171 ods. 1, ods. 2, ods. 3 Trestného zákona č. 416/2025 Z. z. v platnom a účinnom znení. Podľa § 44 Tr. zákona upúšťa od uloženia súhrnného trestu, nakoľko trest uložený trestným rozkazom Mestského súdu Košice, sp. zn. K2-7T 46/2022 zo dňa 3.8.2023, právoplatným dňa 18.7.2024, ktorým bol obvinenému uložený podľa § 194 ods. 1 Tr. zákona trest odňatia slobody vo výmere 16 mesiacov so skúšobnou dobou vo výmere 24 mesiacov do 19.7.2026, podkladá na ochranu spoločnosti a nápravu páchateľa za dostatočný. Podľa § 287 ods. 1 Tr. poriadku ukladá obvinenému povinnosť uhradiť poškodenej I. J., nar. XX.XX.XXXX, trvale bytom K. J., D. XX/XX, H. L. škodu vo výške 712 eur (sedemstodvanásť eur). Podľa § 287 ods. 1 Tr. poriadku ukladá obvinenému povinnosť uhradiť poškodenému M. N. N., nar. XX.X.XXXX, trvale bytom F., O. XX škodu vo výške 67,25 eur (šesťdesiatsedem eur dvadsaťpäť centov)."
+          },
+          {
+            "id": "b6",
+            "role": "section-heading",
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "Poučenie:",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-instruction",
+            "plainText": "Poučenie:"
+          },
+          {
+            "id": "b7",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "Proti trestnému rozkazu môže podať odpor obvinený a osoby, ktoré sú oprávnené podať v jeho prospech odvolanie, ako aj prokurátor. Odpor sa podáva na súde, ktorý trestný rozkaz vydal, a to do ôsmich dní od jeho doručenia. Ak proti trestnému rozkazu podá oprávnená osoba v lehote odpor, samosudca rozhodne podľa § 241 ods. 1 písm. j) Tr. poriadku o prijatí obžaloby a nariadi vo veci hlavné pojednávanie. Poškodený môže podať odpor proti výroku o náhrade škody, ktorým bola priznaná náhrada škody; ak poškodený podá odpor, trestný rozkaz sa ruší vo výroku o náhrade škody. Ak bol odpor podaný v lehote a nebol vzatý späť, trestný rozkaz sa prednesením obžaloby prokurátorom na hlavnom pojednávaní ruší. Ak sa v určenej lehote nepodá odpor, stane sa trestný rozkaz právoplatným a vykonateľným.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p3",
+            "plainText": "Proti trestnému rozkazu môže podať odpor obvinený a osoby, ktoré sú oprávnené podať v jeho prospech odvolanie, ako aj prokurátor. Odpor sa podáva na súde, ktorý trestný rozkaz vydal, a to do ôsmich dní od jeho doručenia. Ak proti trestnému rozkazu podá oprávnená osoba v lehote odpor, samosudca rozhodne podľa § 241 ods. 1 písm. j) Tr. poriadku o prijatí obžaloby a nariadi vo veci hlavné pojednávanie. Poškodený môže podať odpor proti výroku o náhrade škody, ktorým bola priznaná náhrada škody; ak poškodený podá odpor, trestný rozkaz sa ruší vo výroku o náhrade škody. Ak bol odpor podaný v lehote a nebol vzatý späť, trestný rozkaz sa prednesením obžaloby prokurátorom na hlavnom pojednávaní ruší. Ak sa v určenej lehote nepodá odpor, stane sa trestný rozkaz právoplatným a vykonateľným."
+          }
+        ],
+        "source": {
+          "system": "obcan.justice.sk",
+          "webUrl": "",
+          "printUrl": "",
+          "documentId": "8T/25/2026"
+        },
+        "version": 1,
+        "metadata": {
+          "ecli": "ECLI:SK:MSKE:2026:7126011275.1",
+          "court": "Mestský súd Košice",
+          "keywords": [],
+          "statutes": [],
+          "caseNumber": "8T/25/2026",
+          "decisionDate": "2026-04-15",
+          "decisionType": "trestný rozkaz"
+        }
+      },
+      "document_url": "https://obcan.justice.sk/content/public/item/01d3ae8c-7f88-4b1a-8e21-b84fa85802b1",
+      "decision_date": "2026-04-15",
+      "decision_type": "Trestný rozkaz",
+      "parser_version": 2,
+      "source_raw_s3_key": "case-law/raw/4c6a3fd0-27fc-4bde-80cf-48c084406975/31b10e8d4690b9bdc4813042d98e744bf32122c4750696f96fa5a86948a33eaa",
+      "language_group_key": "ECLI:SK:MSKE:2026:7126011275.1",
+      "source_raw_content_type": "application/pdf"
+    },
+    {
+      "id": "7d0aa2e5-4f9a-4f1b-8c27-4522b7ec5036",
+      "ecli": "ECLI:SK:MSBA1:2026:1126011379.2",
+      "slug": null,
+      "court": "Mestský súd Bratislava I",
+      "country": "SVK",
+      "analysis": null,
+      "fulltext": "TRESTNÝ ROZKAZ V MENE\n\nSLOVENSKEJ REPUBLIKY\n\nMestský súd Bratislava I, samosudkyňou JUDr. Erikou Némethovou Stiffelovou, LL.M., postupom podľa § 241 ods. 1 písm. j) Trestného poriadku s poukazom na § 353 ods. 1 Trestného poriadku, v trestnej veci obvineného U. P. pre prečin krádeže podľa § 212 ods. 1 písm. g), ods. 2 písm. b) Trestného zákona, dňa 14.04.2026, takto\n\nrozhodol:\n\nobvinený: U. P., nar.: XX.XX.XXXX v Trnave, trvale bytom P. XX/XX, Hlohovec, t.č. vo väzbe v ÚVV Bratislava, sa uznáva za vinného, že: dňa 09.01.2026 v čase okolo 11:40 hod. v predajni Sinsay OC Bory Mall, na adrese Lamač 6780, Bratislava - Dúbravka, odcudzil počas predajnej doby z predajnej plochy bez použitia násilia tovar a to 2 ks PÁNSKA MIKINA XXXEU-XXX-I. v hodnote spolu 29,98,- eur, 1 ks PÁNSKA BUNDA XXXEU-XXX- H. v hodnote 39,99,- eur, 1 ks PÁNSKA ŠILTOVKA XXXDH-XXX-S. v hodnote 4,49,- eur, 1 ks PÁNSKE PONOZKY XXXEL-XXX-XXR v hodnote 4,49,- eur a 1 ks PÁNSKA MIKINA XXXEU-XXX-R. v hodnote 24,99,- eur tým spôsobom, že 2 ks pánskych mikín a 1 ks pánskej bundy si najneskôr v čase do 11:40 hod obliekol na svoje telo a ostatný tovar si vložil pod bundu, hned' po tom ako z tovaru odstránil obchodnú „visačku\" s cenou a následne sa presunul k vstupu do predajne, ktorým opustil predajnú plochu bez zaplatenia, následkom čoho sa spustil alarm nachádzajúci sa pri vstupe do predajne, pričom ho v čase približne 0 11:40 hod. v priestore za pokladničnou zónou zadržal a kontroloval pracovník SBS, čím takto poškodenej spoločnosti LPP Slovakia, s.r.o., IČO: 36 787 507, so sídlom Janka Kráľa 9, Banská Bystrica 974 01 spôsobil škodu krádežou vo výške 103,94,- eur, a to napriek tomu, že bol postihnutý za priestupky proti majetku podľa § 50 ods. 1 zákona číslo 372/1990 Z.z. spáchané drobnými krádežami tovaru:\n\n1. dňa 17.12.2025 v predajni Tesco Expres, Odborárske nám. 3, Bratislava - Staré Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Staré Mesto - východ,\n\n2. dňa 17.12.2025 v predajni Tesco Expres, Stromová 54, Bratislava - Kramáre, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - západ,\n\n3. dňa 02.12.2025 v predajni Potraviny Malina, Račianska 14433/26C, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na 00 PZ Bratislava Nové Mesto - východ,\n\n4. dňa 25.11.2025 v predajni Tesco Expres, Ševčenkova 23, Bratislava - Petržalka, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Petržalka - stred,\n\n5. dňa 24.11.2025 v predajni Lidl v OC Vivo, Vajnorská 100, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - Rača,\n\n6. dňa 21.11.2025 v predajni Lidl, Betliarska 1, Bratislava - Petržalka, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo loku: C., pričom skutok je evidovaný na OO PZ Bratislava Petržalka - juh,\n\n7. dňa 19.11.2025 v predajni Kaufland, Jantárová cesta 30, Bratislava - Petržalka, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Petržalka - stred,\n\n8. dňa 11.11.2025 v predajni Tesco Expres, Račianska 9, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - východ,\n\n9. dňa 04.11.2025 v predajni Lidl, Račianska 64A, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - východ,\n\n10. dňa 30.09.2025 v predajni Lidl v OC Nivy, Mlynské nivy 5A, Bratislava - Ružinov, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Ružinov - východ,\n\n11. dňa 10.08.2025 v predajni DM Drogérie v OC Nivy, Mlynské nivy 5A, Bratislava - Ružinov, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Ružinov - západ,\n\n12. dňa 06.08.2025 v predajni Lidl v OC Nivy, Mlynské nivy 5A, Bratislava - Ružinov, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Ružinov - západ,\n\n13. dňa 27.07.2025 v predajni Tesco Expres, Odborárske nám. 3, Bratislava - Staré Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 250,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Staré Mesto - východ,\n\n14. dňa 22.07.2025 v predajni Tesco Expres, Martinčekova 2, Bratislava - Ružinov, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 200,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Ružinov - západ,\n\n15. dňa 12.07.2025 v predajni Lidl, Račianska 64A, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 33,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - východ, a hoci bol rozsudkom Krajinského súdu Eisenstadt sp. zn. XXHv XX/XXH zo dňa 13.06.2025, právoplatným dňa 17.06.2025 uznaný vinným zo spáchania prečinu organizovanej krádeže, čiastočne vlámaním podľa §§ 127,129 ods. 1 č. 2, 130 ods. 1,15 Trestného zákona Rakúskej republiky. teda - prisvojil si cudziu vec tým, že sa jej zmocnil a bol za dva obdobné činy v predchádzajúcich dvanástich mesiacoch postihnutý a hoci bol za taký čin v predchádzajúcich dvadsiatich štyroch mesiacoch odsúdený, čímspáchal prečin krádeže podľa § 212 ods. 1 písm. g), ods. 2 písm. b) Trestného zákona, Za to sa odsudzuje Podľa 212 ods. 2 Trestného zákona, § 38 ods. 2, § 39 ods. 1 Trestného zákona k trestu odňatia slobody vo výmere 8 (osem) mesiacov. Podľa § 48 ods. 2 písm. a) Trestného zákona súd obvineného na výkon trestu zaraďuje do ústavu na výkon trestu s minimálnym stupňom stráženia. Podľa § 73 ods. 2 písm. c), § 74 ods. 1 Trestného zákona mu súd ukladá ochranné protialkoholické a protitoxikomanické liečenie ústavnou formou.\n\nPoučenie:\n\n(1) Obvinený a osoby, ktoré sú oprávnené podať v jeho prospech odvolanie, ako aj prokurátor môžu podať proti trestnému rozkazu odpor. Odpor sa podáva na súde, ktorý trestný rozkaz vydal, a to do ôsmich dní od jeho doručenia. Osobám, ktoré môžu podať odvolanie v prospech obvineného okrem prokurátora, sa lehota končí tým dňom ako obvinenému. Ak sa trestný rozkaz doručuje obvinenému a aj jeho obhajcovi, plynie lehota od toho doručenia, ktoré bolo vykonané neskôr. Na navrátenie lehoty sa primerane použije ustanovenie § 64. (2) Proti výroku o náhrade škody, ktorým bola priznaná náhrada škody, môže poškodený podať odpor; ak poškodený podal odpor, trestný rozkaz sa ruší vo výroku o náhrade škody. Samosudca odkáže uznesením poškodeného na civilný proces, prípadne na konanie pred iným príslušným orgánom. Rovnako sa postupuje aj vtedy, ak odpor proti výroku o náhrade škody podá iná oprávnená osoba. (3) Ak proti trestnému rozkazu podala oprávnená osoba podľa odseku 1 v lehote odpor, samosudca rozhodne podľa § 241 ods. 1 písm. j/ o prijatí obžaloby a nariadi vo veci hlavné pojednávanie; pri prejednávaní veci na hlavnom pojednávaní nie je samosudca viazaný právnou kvalifikáciou ani druhom a výmerou trestu obsiahnutými v trestnom rozkaze. Inak sa trestný rozkaz stane právoplatným a vykonateľným podľa § 356. (4) Proti výroku, ktorým bolo uložené ochranné opatrenie, môže zúčastnená osoba podať odpor. Odpor sa podáva na súde, ktorý trestný rozkaz vydal, a to do ôsmich dní od jeho doručenia. Ak zúčastnená osoba podala odpor a nie je dôvod na postup podľa odseku 3, prejedná samosudca návrh na uloženie ochranného opatrenia na verejnom zasadnutí. (5) Ak samosudca po doručení odporu nenariadi hlavné pojednávanie z dôvodu, že odpor podala neoprávnená osoba alebo bol podaný oneskorene, odmietne odpor uznesením. Proti tomuto uzneseniu je prípustná sťažnosť, ktorá má odkladný účinok. (6) Ak bol obvinený stíhaný pre trestný čin uvedený v § 211, môže poškodený vziať súhlas s trestným stíhaním späť až dovtedy, kým sa trestný rozkaz nedoručí niektorej z osôb uvedených v odseku 1. Späťvzatím súhlasu sa trestný rozkaz ruší a samosudca trestné stíhanie zastaví. (7) Ak bol vydaný trestný rozkaz, môže prokurátor vziať späť obžalobu dovtedy, kým sa trestný rozkaz nedoručí niektorej z osôb uvedených v odseku 1. Späťvzatím obžaloby sa trestný rozkaz ruší a vec sa vracia do prípravného konania. Trestný rozkaz sa ruší a vec sa vracia do prípravného konania aj vydaním uznesenia, ktorým nadriadený súd na základe sťažnosti podľa § 241 ods. 4 zrušil uznesenie samosudcu o prijatí obžaloby podľa § 241 ods. 1 písm. j/. (8) Obvinený a osoby, ktoré sú oprávnené podať v jeho prospech odvolanie, poškodený, zúčastnená osoba, ako aj prokurátor sa môžu výslovným vyhlásením vzdať práva podať odpor a okrem poškodeného môžu výslovným vyhlásením vziať podaný odpor späť, a to až dovtedy, kým prokurátor neprednesie na hlavnom pojednávaní obžalobu; po tomto vyhlásení už nemôžu odpor podať. Osoba, ktorá je oprávnená podať v prospech obvineného odvolanie, môže vziať podaný odpor späť len s jeho výslovným súhlasom. (9) Vzatie odporu späť, ak niet prekážok, vezme samosudca uznesením na vedomie. (10) Ak bol odpor podaný v lehote a nebol vzatý späť podľa ods. 8, trestný rozkaz sa prednesením obžaloby prokurátorom na hlavnom pojednávaní ruší. Ak na hlavnom pojednávaní súd postupuje podľa § 255 ods. 3 a prokurátor neprednesie obžalobu, trestný rozkaz sa ruší vyhlásením uznesenia o vrátení veci prokurátorovi na postup podľa § 232 a § 233 alebo vyhlásením rozsudku, ktorým súd schválil dohodu o vine a treste. (11) Trestný rozkaz sa stane právoplatným, a ak neustanovuje tento zákon niečo iné, aj vykonateľným, ak a) odpor nebol podaný, uplynutím lehoty na podanie odporu, b) odpor bol vzatý späť, dňom jeho späťvzatia, c) sa oprávnená osoba vzdala práva podať odpor a obvinený súčasne vyhlásil, že nesúhlasí, aby odpor podala v jeho prospech iná oprávnená osoba, dňom vzdania sa práva podať odpor. Mestský súd Bratislava I, odd. 13T V Bratislave, dňa 14.04.2026",
+      "language": "sk",
+      "metadata": {
+        "ecli": "ECLI:SK:MSBA1:2026:1126011379.2",
+        "guid": "c00e6e9a-3d2b-49e9-8ea7-8532e90079ad:128d23b3-131f-4ffd-add6-f813c84b1773",
+        "court": "Mestský súd Bratislava I",
+        "judge": "JUDr. Erika Némethová Stiffelová, LL.M.",
+        "subArea": ["Majetok"],
+        "caseNumber": "13T/39/2026",
+        "updateDate": "16.04.2026",
+        "decisionDate": "2026-04-14",
+        "decisionType": "Trestný rozkaz",
+        "documentName": "Trestný_rozkaz_13T-39-2026.pdf",
+        "documentSize": 80598,
+        "decisionNature": ["Prvostupňové nenapadnuté opravnými prostriedkami"],
+        "courtRegistreGuid": "sud_102",
+        "documentExtension": "PDF",
+        "judgeRegistreGuid": "sudca_1710",
+        "identifikacneCislo": "1126011379",
+        "referencedLegislation": [
+          {
+            "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300",
+            "nazov": "/SK/ZZ/2005/300"
+          },
+          {
+            "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-212.odsek-1.pismeno-g",
+            "nazov": "/SK/ZZ/2005/300/#paragraf-212.odsek-1.pismeno-g"
+          },
+          {
+            "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/2005/300/#paragraf-212.odsek-2.pismeno-b",
+            "nazov": "/SK/ZZ/2005/300/#paragraf-212.odsek-2.pismeno-b"
+          }
+        ]
+      },
+      "sections": [
+        {
+          "text": "TRESTNÝ ROZKAZ V MENE\n\nSLOVENSKEJ REPUBLIKY\n\nMestský súd Bratislava I, samosudkyňou JUDr. Erikou Némethovou Stiffelovou, LL.M., postupom podľa § 241 ods. 1 písm. j) Trestného poriadku s poukazom na § 353 ods. 1 Trestného poriadku, v trestnej veci obvineného U. P. pre prečin krádeže podľa § 212 ods. 1 písm. g), ods. 2 písm. b) Trestného zákona, dňa 14.04.2026, takto\n\nrozhodol:\n\nobvinený: U. P., nar.: XX.XX.XXXX v Trnave, trvale bytom P. XX/XX, Hlohovec, t.č. vo väzbe v ÚVV Bratislava, sa uznáva za vinného, že: dňa 09.01.2026 v čase okolo 11:40 hod. v predajni Sinsay OC Bory Mall, na adrese Lamač 6780, Bratislava - Dúbravka, odcudzil počas predajnej doby z predajnej plochy bez použitia násilia tovar a to 2 ks PÁNSKA MIKINA XXXEU-XXX-I. v hodnote spolu 29,98,- eur, 1 ks PÁNSKA BUNDA XXXEU-XXX- H. v hodnote 39,99,- eur, 1 ks PÁNSKA ŠILTOVKA XXXDH-XXX-S. v hodnote 4,49,- eur, 1 ks PÁNSKE PONOZKY XXXEL-XXX-XXR v hodnote 4,49,- eur a 1 ks PÁNSKA MIKINA XXXEU-XXX-R. v hodnote 24,99,- eur tým spôsobom, že 2 ks pánskych mikín a 1 ks pánskej bundy si najneskôr v čase do 11:40 hod obliekol na svoje telo a ostatný tovar si vložil pod bundu, hned' po tom ako z tovaru odstránil obchodnú „visačku\" s cenou a následne sa presunul k vstupu do predajne, ktorým opustil predajnú plochu bez zaplatenia, následkom čoho sa spustil alarm nachádzajúci sa pri vstupe do predajne, pričom ho v čase približne 0 11:40 hod. v priestore za pokladničnou zónou zadržal a kontroloval pracovník SBS, čím takto poškodenej spoločnosti LPP Slovakia, s.r.o., IČO: 36 787 507, so sídlom Janka Kráľa 9, Banská Bystrica 974 01 spôsobil škodu krádežou vo výške 103,94,- eur, a to napriek tomu, že bol postihnutý za priestupky proti majetku podľa § 50 ods. 1 zákona číslo 372/1990 Z.z. spáchané drobnými krádežami tovaru:\n\n1. dňa 17.12.2025 v predajni Tesco Expres, Odborárske nám. 3, Bratislava - Staré Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Staré Mesto - východ,\n\n2. dňa 17.12.2025 v predajni Tesco Expres, Stromová 54, Bratislava - Kramáre, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - západ,\n\n3. dňa 02.12.2025 v predajni Potraviny Malina, Račianska 14433/26C, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na 00 PZ Bratislava Nové Mesto - východ,\n\n4. dňa 25.11.2025 v predajni Tesco Expres, Ševčenkova 23, Bratislava - Petržalka, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Petržalka - stred,\n\n5. dňa 24.11.2025 v predajni Lidl v OC Vivo, Vajnorská 100, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - Rača,\n\n6. dňa 21.11.2025 v predajni Lidl, Betliarska 1, Bratislava - Petržalka, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo loku: C., pričom skutok je evidovaný na OO PZ Bratislava Petržalka - juh,\n\n7. dňa 19.11.2025 v predajni Kaufland, Jantárová cesta 30, Bratislava - Petržalka, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Petržalka - stred,\n\n8. dňa 11.11.2025 v predajni Tesco Expres, Račianska 9, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - východ,\n\n9. dňa 04.11.2025 v predajni Lidl, Račianska 64A, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - východ,\n\n10. dňa 30.09.2025 v predajni Lidl v OC Nivy, Mlynské nivy 5A, Bratislava - Ružinov, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Ružinov - východ,\n\n11. dňa 10.08.2025 v predajni DM Drogérie v OC Nivy, Mlynské nivy 5A, Bratislava - Ružinov, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Ružinov - západ,\n\n12. dňa 06.08.2025 v predajni Lidl v OC Nivy, Mlynské nivy 5A, Bratislava - Ružinov, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Ružinov - západ,\n\n13. dňa 27.07.2025 v predajni Tesco Expres, Odborárske nám. 3, Bratislava - Staré Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 250,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Staré Mesto - východ,\n\n14. dňa 22.07.2025 v predajni Tesco Expres, Martinčekova 2, Bratislava - Ružinov, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 200,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Ružinov - západ,\n\n15. dňa 12.07.2025 v predajni Lidl, Račianska 64A, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 33,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - východ, a hoci bol rozsudkom Krajinského súdu Eisenstadt sp. zn. XXHv XX/XXH zo dňa 13.06.2025, právoplatným dňa 17.06.2025 uznaný vinným zo spáchania prečinu organizovanej krádeže, čiastočne vlámaním podľa §§ 127,129 ods. 1 č. 2, 130 ods. 1,15 Trestného zákona Rakúskej republiky. teda - prisvojil si cudziu vec tým, že sa jej zmocnil a bol za dva obdobné činy v predchádzajúcich dvanástich mesiacoch postihnutý a hoci bol za taký čin v predchádzajúcich dvadsiatich štyroch mesiacoch odsúdený, čímspáchal prečin krádeže podľa § 212 ods. 1 písm. g), ods. 2 písm. b) Trestného zákona, Za to sa odsudzuje Podľa 212 ods. 2 Trestného zákona, § 38 ods. 2, § 39 ods. 1 Trestného zákona k trestu odňatia slobody vo výmere 8 (osem) mesiacov. Podľa § 48 ods. 2 písm. a) Trestného zákona súd obvineného na výkon trestu zaraďuje do ústavu na výkon trestu s minimálnym stupňom stráženia. Podľa § 73 ods. 2 písm. c), § 74 ods. 1 Trestného zákona mu súd ukladá ochranné protialkoholické a protitoxikomanické liečenie ústavnou formou.",
+          "type": "header",
+          "index": 0,
+          "title": null
+        },
+        {
+          "text": "(1) Obvinený a osoby, ktoré sú oprávnené podať v jeho prospech odvolanie, ako aj prokurátor môžu podať proti trestnému rozkazu odpor. Odpor sa podáva na súde, ktorý trestný rozkaz vydal, a to do ôsmich dní od jeho doručenia. Osobám, ktoré môžu podať odvolanie v prospech obvineného okrem prokurátora, sa lehota končí tým dňom ako obvinenému. Ak sa trestný rozkaz doručuje obvinenému a aj jeho obhajcovi, plynie lehota od toho doručenia, ktoré bolo vykonané neskôr. Na navrátenie lehoty sa primerane použije ustanovenie § 64. (2) Proti výroku o náhrade škody, ktorým bola priznaná náhrada škody, môže poškodený podať odpor; ak poškodený podal odpor, trestný rozkaz sa ruší vo výroku o náhrade škody. Samosudca odkáže uznesením poškodeného na civilný proces, prípadne na konanie pred iným príslušným orgánom. Rovnako sa postupuje aj vtedy, ak odpor proti výroku o náhrade škody podá iná oprávnená osoba. (3) Ak proti trestnému rozkazu podala oprávnená osoba podľa odseku 1 v lehote odpor, samosudca rozhodne podľa § 241 ods. 1 písm. j/ o prijatí obžaloby a nariadi vo veci hlavné pojednávanie; pri prejednávaní veci na hlavnom pojednávaní nie je samosudca viazaný právnou kvalifikáciou ani druhom a výmerou trestu obsiahnutými v trestnom rozkaze. Inak sa trestný rozkaz stane právoplatným a vykonateľným podľa § 356. (4) Proti výroku, ktorým bolo uložené ochranné opatrenie, môže zúčastnená osoba podať odpor. Odpor sa podáva na súde, ktorý trestný rozkaz vydal, a to do ôsmich dní od jeho doručenia. Ak zúčastnená osoba podala odpor a nie je dôvod na postup podľa odseku 3, prejedná samosudca návrh na uloženie ochranného opatrenia na verejnom zasadnutí. (5) Ak samosudca po doručení odporu nenariadi hlavné pojednávanie z dôvodu, že odpor podala neoprávnená osoba alebo bol podaný oneskorene, odmietne odpor uznesením. Proti tomuto uzneseniu je prípustná sťažnosť, ktorá má odkladný účinok. (6) Ak bol obvinený stíhaný pre trestný čin uvedený v § 211, môže poškodený vziať súhlas s trestným stíhaním späť až dovtedy, kým sa trestný rozkaz nedoručí niektorej z osôb uvedených v odseku 1. Späťvzatím súhlasu sa trestný rozkaz ruší a samosudca trestné stíhanie zastaví. (7) Ak bol vydaný trestný rozkaz, môže prokurátor vziať späť obžalobu dovtedy, kým sa trestný rozkaz nedoručí niektorej z osôb uvedených v odseku 1. Späťvzatím obžaloby sa trestný rozkaz ruší a vec sa vracia do prípravného konania. Trestný rozkaz sa ruší a vec sa vracia do prípravného konania aj vydaním uznesenia, ktorým nadriadený súd na základe sťažnosti podľa § 241 ods. 4 zrušil uznesenie samosudcu o prijatí obžaloby podľa § 241 ods. 1 písm. j/. (8) Obvinený a osoby, ktoré sú oprávnené podať v jeho prospech odvolanie, poškodený, zúčastnená osoba, ako aj prokurátor sa môžu výslovným vyhlásením vzdať práva podať odpor a okrem poškodeného môžu výslovným vyhlásením vziať podaný odpor späť, a to až dovtedy, kým prokurátor neprednesie na hlavnom pojednávaní obžalobu; po tomto vyhlásení už nemôžu odpor podať. Osoba, ktorá je oprávnená podať v prospech obvineného odvolanie, môže vziať podaný odpor späť len s jeho výslovným súhlasom. (9) Vzatie odporu späť, ak niet prekážok, vezme samosudca uznesením na vedomie. (10) Ak bol odpor podaný v lehote a nebol vzatý späť podľa ods. 8, trestný rozkaz sa prednesením obžaloby prokurátorom na hlavnom pojednávaní ruší. Ak na hlavnom pojednávaní súd postupuje podľa § 255 ods. 3 a prokurátor neprednesie obžalobu, trestný rozkaz sa ruší vyhlásením uznesenia o vrátení veci prokurátorovi na postup podľa § 232 a § 233 alebo vyhlásením rozsudku, ktorým súd schválil dohodu o vine a treste. (11) Trestný rozkaz sa stane právoplatným, a ak neustanovuje tento zákon niečo iné, aj vykonateľným, ak a) odpor nebol podaný, uplynutím lehoty na podanie odporu, b) odpor bol vzatý späť, dňom jeho späťvzatia, c) sa oprávnená osoba vzdala práva podať odpor a obvinený súčasne vyhlásil, že nesúhlasí, aby odpor podala v jeho prospech iná oprávnená osoba, dňom vzdania sa práva podať odpor. Mestský súd Bratislava I, odd. 13T V Bratislave, dňa 14.04.2026",
+          "type": "footer",
+          "index": 1,
+          "title": "Poučenie:"
+        }
+      ],
+      "source_id": "4c6a3fd0-27fc-4bde-80cf-48c084406975",
+      "created_at": "2026-04-16T14:02:28.960182",
+      "source_raw": null,
+      "source_url": "https://obcan.justice.sk/content/public/item/128d23b3-131f-4ffd-add6-f813c84b1773",
+      "updated_at": "2026-04-16T14:02:28.960182",
+      "case_number": "13T/39/2026",
+      "source_hash": "179d1450afc0fa1f81e3604cfee46288bac7b0e39329b14197bf95fadd4ee44a",
+      "document_ast": {
+        "blocks": [
+          {
+            "id": "b1",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "TRESTNÝ ROZKAZ V MENE",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-title",
+            "plainText": "TRESTNÝ ROZKAZ V MENE"
+          },
+          {
+            "id": "b2",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "SLOVENSKEJ REPUBLIKY",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-title",
+            "plainText": "SLOVENSKEJ REPUBLIKY"
+          },
+          {
+            "id": "b3",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "Mestský súd Bratislava I, samosudkyňou JUDr. Erikou Némethovou Stiffelovou, LL.M., postupom podľa § 241 ods. 1 písm. j) Trestného poriadku s poukazom na § 353 ods. 1 Trestného poriadku, v trestnej veci obvineného U. P. pre prečin krádeže podľa § 212 ods. 1 písm. g), ods. 2 písm. b) Trestného zákona, dňa 14.04.2026, takto",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p1",
+            "plainText": "Mestský súd Bratislava I, samosudkyňou JUDr. Erikou Némethovou Stiffelovou, LL.M., postupom podľa § 241 ods. 1 písm. j) Trestného poriadku s poukazom na § 353 ods. 1 Trestného poriadku, v trestnej veci obvineného U. P. pre prečin krádeže podľa § 212 ods. 1 písm. g), ods. 2 písm. b) Trestného zákona, dňa 14.04.2026, takto"
+          },
+          {
+            "id": "b4",
+            "role": "section-heading",
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "r o z h o d o l :",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-holding",
+            "plainText": "rozhodol:"
+          },
+          {
+            "id": "b5",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "obvinený: U. P., nar.: XX.XX.XXXX v Trnave, trvale bytom P. XX/XX, Hlohovec, t.č. vo väzbe v ÚVV Bratislava, sa uznáva za vinného, že: dňa 09.01.2026 v čase okolo 11:40 hod. v predajni Sinsay OC Bory Mall, na adrese Lamač 6780, Bratislava - Dúbravka, odcudzil počas predajnej doby z predajnej plochy bez použitia násilia tovar a to 2 ks PÁNSKA MIKINA XXXEU-XXX-I. v hodnote spolu 29,98,- eur, 1 ks PÁNSKA BUNDA XXXEU-XXX- H. v hodnote 39,99,- eur, 1 ks PÁNSKA ŠILTOVKA XXXDH-XXX-S. v hodnote 4,49,- eur, 1 ks PÁNSKE PONOZKY XXXEL-XXX-XXR v hodnote 4,49,- eur a 1 ks PÁNSKA MIKINA XXXEU-XXX-R. v hodnote 24,99,- eur tým spôsobom, že 2 ks pánskych mikín a 1 ks pánskej bundy si najneskôr v čase do 11:40 hod obliekol na svoje telo a ostatný tovar si vložil pod bundu, hned' po tom ako z tovaru odstránil obchodnú „visačku\" s cenou a následne sa presunul k vstupu do predajne, ktorým opustil predajnú plochu bez zaplatenia, následkom čoho sa spustil alarm nachádzajúci sa pri vstupe do predajne, pričom ho v čase približne 0 11:40 hod. v priestore za pokladničnou zónou zadržal a kontroloval pracovník SBS, čím takto poškodenej spoločnosti LPP Slovakia, s.r.o., IČO: 36 787 507, so sídlom Janka Kráľa 9, Banská Bystrica 974 01 spôsobil škodu krádežou vo výške 103,94,- eur, a to napriek tomu, že bol postihnutý za priestupky proti majetku podľa § 50 ods. 1 zákona číslo 372/1990 Z.z. spáchané drobnými krádežami tovaru:",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p2",
+            "plainText": "obvinený: U. P., nar.: XX.XX.XXXX v Trnave, trvale bytom P. XX/XX, Hlohovec, t.č. vo väzbe v ÚVV Bratislava, sa uznáva za vinného, že: dňa 09.01.2026 v čase okolo 11:40 hod. v predajni Sinsay OC Bory Mall, na adrese Lamač 6780, Bratislava - Dúbravka, odcudzil počas predajnej doby z predajnej plochy bez použitia násilia tovar a to 2 ks PÁNSKA MIKINA XXXEU-XXX-I. v hodnote spolu 29,98,- eur, 1 ks PÁNSKA BUNDA XXXEU-XXX- H. v hodnote 39,99,- eur, 1 ks PÁNSKA ŠILTOVKA XXXDH-XXX-S. v hodnote 4,49,- eur, 1 ks PÁNSKE PONOZKY XXXEL-XXX-XXR v hodnote 4,49,- eur a 1 ks PÁNSKA MIKINA XXXEU-XXX-R. v hodnote 24,99,- eur tým spôsobom, že 2 ks pánskych mikín a 1 ks pánskej bundy si najneskôr v čase do 11:40 hod obliekol na svoje telo a ostatný tovar si vložil pod bundu, hned' po tom ako z tovaru odstránil obchodnú „visačku\" s cenou a následne sa presunul k vstupu do predajne, ktorým opustil predajnú plochu bez zaplatenia, následkom čoho sa spustil alarm nachádzajúci sa pri vstupe do predajne, pričom ho v čase približne 0 11:40 hod. v priestore za pokladničnou zónou zadržal a kontroloval pracovník SBS, čím takto poškodenej spoločnosti LPP Slovakia, s.r.o., IČO: 36 787 507, so sídlom Janka Kráľa 9, Banská Bystrica 974 01 spôsobil škodu krádežou vo výške 103,94,- eur, a to napriek tomu, že bol postihnutý za priestupky proti majetku podľa § 50 ods. 1 zákona číslo 372/1990 Z.z. spáchané drobnými krádežami tovaru:"
+          },
+          {
+            "id": "b6",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "1. dňa 17.12.2025 v predajni Tesco Expres, Odborárske nám. 3, Bratislava - Staré Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Staré Mesto - východ,",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p3",
+            "plainText": "1. dňa 17.12.2025 v predajni Tesco Expres, Odborárske nám. 3, Bratislava - Staré Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Staré Mesto - východ,"
+          },
+          {
+            "id": "b7",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "2. dňa 17.12.2025 v predajni Tesco Expres, Stromová 54, Bratislava - Kramáre, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - západ,",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p4",
+            "plainText": "2. dňa 17.12.2025 v predajni Tesco Expres, Stromová 54, Bratislava - Kramáre, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - západ,"
+          },
+          {
+            "id": "b8",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "3. dňa 02.12.2025 v predajni Potraviny Malina, Račianska 14433/26C, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na 00 PZ Bratislava Nové Mesto - východ,",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p5",
+            "plainText": "3. dňa 02.12.2025 v predajni Potraviny Malina, Račianska 14433/26C, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na 00 PZ Bratislava Nové Mesto - východ,"
+          },
+          {
+            "id": "b9",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "4. dňa 25.11.2025 v predajni Tesco Expres, Ševčenkova 23, Bratislava - Petržalka, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Petržalka - stred,",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p6",
+            "plainText": "4. dňa 25.11.2025 v predajni Tesco Expres, Ševčenkova 23, Bratislava - Petržalka, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Petržalka - stred,"
+          },
+          {
+            "id": "b10",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "5. dňa 24.11.2025 v predajni Lidl v OC Vivo, Vajnorská 100, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - Rača,",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p7",
+            "plainText": "5. dňa 24.11.2025 v predajni Lidl v OC Vivo, Vajnorská 100, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - Rača,"
+          },
+          {
+            "id": "b11",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "6. dňa 21.11.2025 v predajni Lidl, Betliarska 1, Bratislava - Petržalka, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo loku: C., pričom skutok je evidovaný na OO PZ Bratislava Petržalka - juh,",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p8",
+            "plainText": "6. dňa 21.11.2025 v predajni Lidl, Betliarska 1, Bratislava - Petržalka, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo loku: C., pričom skutok je evidovaný na OO PZ Bratislava Petržalka - juh,"
+          },
+          {
+            "id": "b12",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "7. dňa 19.11.2025 v predajni Kaufland, Jantárová cesta 30, Bratislava - Petržalka, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Petržalka - stred,",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p9",
+            "plainText": "7. dňa 19.11.2025 v predajni Kaufland, Jantárová cesta 30, Bratislava - Petržalka, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Petržalka - stred,"
+          },
+          {
+            "id": "b13",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "8. dňa 11.11.2025 v predajni Tesco Expres, Račianska 9, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - východ,",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p10",
+            "plainText": "8. dňa 11.11.2025 v predajni Tesco Expres, Račianska 9, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - východ,"
+          },
+          {
+            "id": "b14",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "9. dňa 04.11.2025 v predajni Lidl, Račianska 64A, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - východ,",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p11",
+            "plainText": "9. dňa 04.11.2025 v predajni Lidl, Račianska 64A, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - východ,"
+          },
+          {
+            "id": "b15",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "10. dňa 30.09.2025 v predajni Lidl v OC Nivy, Mlynské nivy 5A, Bratislava - Ružinov, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Ružinov - východ,",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p12",
+            "plainText": "10. dňa 30.09.2025 v predajni Lidl v OC Nivy, Mlynské nivy 5A, Bratislava - Ružinov, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Ružinov - východ,"
+          },
+          {
+            "id": "b16",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "11. dňa 10.08.2025 v predajni DM Drogérie v OC Nivy, Mlynské nivy 5A, Bratislava - Ružinov, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Ružinov - západ,",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p13",
+            "plainText": "11. dňa 10.08.2025 v predajni DM Drogérie v OC Nivy, Mlynské nivy 5A, Bratislava - Ružinov, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Ružinov - západ,"
+          },
+          {
+            "id": "b17",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "12. dňa 06.08.2025 v predajni Lidl v OC Nivy, Mlynské nivy 5A, Bratislava - Ružinov, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Ružinov - západ,",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p14",
+            "plainText": "12. dňa 06.08.2025 v predajni Lidl v OC Nivy, Mlynské nivy 5A, Bratislava - Ružinov, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 500,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Ružinov - západ,"
+          },
+          {
+            "id": "b18",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "13. dňa 27.07.2025 v predajni Tesco Expres, Odborárske nám. 3, Bratislava - Staré Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 250,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Staré Mesto - východ,",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p15",
+            "plainText": "13. dňa 27.07.2025 v predajni Tesco Expres, Odborárske nám. 3, Bratislava - Staré Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 250,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Staré Mesto - východ,"
+          },
+          {
+            "id": "b19",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "14. dňa 22.07.2025 v predajni Tesco Expres, Martinčekova 2, Bratislava - Ružinov, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 200,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Ružinov - západ,",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p16",
+            "plainText": "14. dňa 22.07.2025 v predajni Tesco Expres, Martinčekova 2, Bratislava - Ružinov, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 200,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Ružinov - západ,"
+          },
+          {
+            "id": "b20",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "15. dňa 12.07.2025 v predajni Lidl, Račianska 64A, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 33,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - východ, a hoci bol rozsudkom Krajinského súdu Eisenstadt sp. zn. XXHv XX/XXH zo dňa 13.06.2025, právoplatným dňa 17.06.2025 uznaný vinným zo spáchania prečinu organizovanej krádeže, čiastočne vlámaním podľa §§ 127,129 ods. 1 č. 2, 130 ods. 1,15 Trestného zákona Rakúskej republiky. t e d a - prisvojil si cudziu vec tým, že sa jej zmocnil a bol za dva obdobné činy v predchádzajúcich dvanástich mesiacoch postihnutý a hoci bol za taký čin v predchádzajúcich dvadsiatich štyroch mesiacoch odsúdený, č í m s p á c h a l prečin krádeže podľa § 212 ods. 1 písm. g), ods. 2 písm. b) Trestného zákona, Za to sa odsudzuje Podľa 212 ods. 2 Trestného zákona, § 38 ods. 2, § 39 ods. 1 Trestného zákona k trestu odňatia slobody vo výmere 8 (osem) mesiacov. Podľa § 48 ods. 2 písm. a) Trestného zákona súd obvineného na výkon trestu zaraďuje do ústavu na výkon trestu s minimálnym stupňom stráženia. Podľa § 73 ods. 2 písm. c), § 74 ods. 1 Trestného zákona mu súd ukladá ochranné protialkoholické a protitoxikomanické liečenie ústavnou formou.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p17",
+            "plainText": "15. dňa 12.07.2025 v predajni Lidl, Račianska 64A, Bratislava - Nové Mesto, za čo mu bola uložená bloková pokuta nezaplatená na mieste vo výške 33,- eur, číslo bloku: C., pričom skutok je evidovaný na OO PZ Bratislava Nové Mesto - východ, a hoci bol rozsudkom Krajinského súdu Eisenstadt sp. zn. XXHv XX/XXH zo dňa 13.06.2025, právoplatným dňa 17.06.2025 uznaný vinným zo spáchania prečinu organizovanej krádeže, čiastočne vlámaním podľa §§ 127,129 ods. 1 č. 2, 130 ods. 1,15 Trestného zákona Rakúskej republiky. teda - prisvojil si cudziu vec tým, že sa jej zmocnil a bol za dva obdobné činy v predchádzajúcich dvanástich mesiacoch postihnutý a hoci bol za taký čin v predchádzajúcich dvadsiatich štyroch mesiacoch odsúdený, čímspáchal prečin krádeže podľa § 212 ods. 1 písm. g), ods. 2 písm. b) Trestného zákona, Za to sa odsudzuje Podľa 212 ods. 2 Trestného zákona, § 38 ods. 2, § 39 ods. 1 Trestného zákona k trestu odňatia slobody vo výmere 8 (osem) mesiacov. Podľa § 48 ods. 2 písm. a) Trestného zákona súd obvineného na výkon trestu zaraďuje do ústavu na výkon trestu s minimálnym stupňom stráženia. Podľa § 73 ods. 2 písm. c), § 74 ods. 1 Trestného zákona mu súd ukladá ochranné protialkoholické a protitoxikomanické liečenie ústavnou formou."
+          },
+          {
+            "id": "b21",
+            "role": "section-heading",
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "Poučenie:",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-instruction",
+            "plainText": "Poučenie:"
+          },
+          {
+            "id": "b22",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "(1) Obvinený a osoby, ktoré sú oprávnené podať v jeho prospech odvolanie, ako aj prokurátor môžu podať proti trestnému rozkazu odpor. Odpor sa podáva na súde, ktorý trestný rozkaz vydal, a to do ôsmich dní od jeho doručenia. Osobám, ktoré môžu podať odvolanie v prospech obvineného okrem prokurátora, sa lehota končí tým dňom ako obvinenému. Ak sa trestný rozkaz doručuje obvinenému a aj jeho obhajcovi, plynie lehota od toho doručenia, ktoré bolo vykonané neskôr. Na navrátenie lehoty sa primerane použije ustanovenie § 64. (2) Proti výroku o náhrade škody, ktorým bola priznaná náhrada škody, môže poškodený podať odpor; ak poškodený podal odpor, trestný rozkaz sa ruší vo výroku o náhrade škody. Samosudca odkáže uznesením poškodeného na civilný proces, prípadne na konanie pred iným príslušným orgánom. Rovnako sa postupuje aj vtedy, ak odpor proti výroku o náhrade škody podá iná oprávnená osoba. (3) Ak proti trestnému rozkazu podala oprávnená osoba podľa odseku 1 v lehote odpor, samosudca rozhodne podľa § 241 ods. 1 písm. j/ o prijatí obžaloby a nariadi vo veci hlavné pojednávanie; pri prejednávaní veci na hlavnom pojednávaní nie je samosudca viazaný právnou kvalifikáciou ani druhom a výmerou trestu obsiahnutými v trestnom rozkaze. Inak sa trestný rozkaz stane právoplatným a vykonateľným podľa § 356. (4) Proti výroku, ktorým bolo uložené ochranné opatrenie, môže zúčastnená osoba podať odpor. Odpor sa podáva na súde, ktorý trestný rozkaz vydal, a to do ôsmich dní od jeho doručenia. Ak zúčastnená osoba podala odpor a nie je dôvod na postup podľa odseku 3, prejedná samosudca návrh na uloženie ochranného opatrenia na verejnom zasadnutí. (5) Ak samosudca po doručení odporu nenariadi hlavné pojednávanie z dôvodu, že odpor podala neoprávnená osoba alebo bol podaný oneskorene, odmietne odpor uznesením. Proti tomuto uzneseniu je prípustná sťažnosť, ktorá má odkladný účinok. (6) Ak bol obvinený stíhaný pre trestný čin uvedený v § 211, môže poškodený vziať súhlas s trestným stíhaním späť až dovtedy, kým sa trestný rozkaz nedoručí niektorej z osôb uvedených v odseku 1. Späťvzatím súhlasu sa trestný rozkaz ruší a samosudca trestné stíhanie zastaví. (7) Ak bol vydaný trestný rozkaz, môže prokurátor vziať späť obžalobu dovtedy, kým sa trestný rozkaz nedoručí niektorej z osôb uvedených v odseku 1. Späťvzatím obžaloby sa trestný rozkaz ruší a vec sa vracia do prípravného konania. Trestný rozkaz sa ruší a vec sa vracia do prípravného konania aj vydaním uznesenia, ktorým nadriadený súd na základe sťažnosti podľa § 241 ods. 4 zrušil uznesenie samosudcu o prijatí obžaloby podľa § 241 ods. 1 písm. j/. (8) Obvinený a osoby, ktoré sú oprávnené podať v jeho prospech odvolanie, poškodený, zúčastnená osoba, ako aj prokurátor sa môžu výslovným vyhlásením vzdať práva podať odpor a okrem poškodeného môžu výslovným vyhlásením vziať podaný odpor späť, a to až dovtedy, kým prokurátor neprednesie na hlavnom pojednávaní obžalobu; po tomto vyhlásení už nemôžu odpor podať. Osoba, ktorá je oprávnená podať v prospech obvineného odvolanie, môže vziať podaný odpor späť len s jeho výslovným súhlasom. (9) Vzatie odporu späť, ak niet prekážok, vezme samosudca uznesením na vedomie. (10) Ak bol odpor podaný v lehote a nebol vzatý späť podľa ods. 8, trestný rozkaz sa prednesením obžaloby prokurátorom na hlavnom pojednávaní ruší. Ak na hlavnom pojednávaní súd postupuje podľa § 255 ods. 3 a prokurátor neprednesie obžalobu, trestný rozkaz sa ruší vyhlásením uznesenia o vrátení veci prokurátorovi na postup podľa § 232 a § 233 alebo vyhlásením rozsudku, ktorým súd schválil dohodu o vine a treste. (11) Trestný rozkaz sa stane právoplatným, a ak neustanovuje tento zákon niečo iné, aj vykonateľným, ak a) odpor nebol podaný, uplynutím lehoty na podanie odporu, b) odpor bol vzatý späť, dňom jeho späťvzatia, c) sa oprávnená osoba vzdala práva podať odpor a obvinený súčasne vyhlásil, že nesúhlasí, aby odpor podala v jeho prospech iná oprávnená osoba, dňom vzdania sa práva podať odpor. Mestský súd Bratislava I, odd. 13T V Bratislave, dňa 14.04.2026",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p18",
+            "plainText": "(1) Obvinený a osoby, ktoré sú oprávnené podať v jeho prospech odvolanie, ako aj prokurátor môžu podať proti trestnému rozkazu odpor. Odpor sa podáva na súde, ktorý trestný rozkaz vydal, a to do ôsmich dní od jeho doručenia. Osobám, ktoré môžu podať odvolanie v prospech obvineného okrem prokurátora, sa lehota končí tým dňom ako obvinenému. Ak sa trestný rozkaz doručuje obvinenému a aj jeho obhajcovi, plynie lehota od toho doručenia, ktoré bolo vykonané neskôr. Na navrátenie lehoty sa primerane použije ustanovenie § 64. (2) Proti výroku o náhrade škody, ktorým bola priznaná náhrada škody, môže poškodený podať odpor; ak poškodený podal odpor, trestný rozkaz sa ruší vo výroku o náhrade škody. Samosudca odkáže uznesením poškodeného na civilný proces, prípadne na konanie pred iným príslušným orgánom. Rovnako sa postupuje aj vtedy, ak odpor proti výroku o náhrade škody podá iná oprávnená osoba. (3) Ak proti trestnému rozkazu podala oprávnená osoba podľa odseku 1 v lehote odpor, samosudca rozhodne podľa § 241 ods. 1 písm. j/ o prijatí obžaloby a nariadi vo veci hlavné pojednávanie; pri prejednávaní veci na hlavnom pojednávaní nie je samosudca viazaný právnou kvalifikáciou ani druhom a výmerou trestu obsiahnutými v trestnom rozkaze. Inak sa trestný rozkaz stane právoplatným a vykonateľným podľa § 356. (4) Proti výroku, ktorým bolo uložené ochranné opatrenie, môže zúčastnená osoba podať odpor. Odpor sa podáva na súde, ktorý trestný rozkaz vydal, a to do ôsmich dní od jeho doručenia. Ak zúčastnená osoba podala odpor a nie je dôvod na postup podľa odseku 3, prejedná samosudca návrh na uloženie ochranného opatrenia na verejnom zasadnutí. (5) Ak samosudca po doručení odporu nenariadi hlavné pojednávanie z dôvodu, že odpor podala neoprávnená osoba alebo bol podaný oneskorene, odmietne odpor uznesením. Proti tomuto uzneseniu je prípustná sťažnosť, ktorá má odkladný účinok. (6) Ak bol obvinený stíhaný pre trestný čin uvedený v § 211, môže poškodený vziať súhlas s trestným stíhaním späť až dovtedy, kým sa trestný rozkaz nedoručí niektorej z osôb uvedených v odseku 1. Späťvzatím súhlasu sa trestný rozkaz ruší a samosudca trestné stíhanie zastaví. (7) Ak bol vydaný trestný rozkaz, môže prokurátor vziať späť obžalobu dovtedy, kým sa trestný rozkaz nedoručí niektorej z osôb uvedených v odseku 1. Späťvzatím obžaloby sa trestný rozkaz ruší a vec sa vracia do prípravného konania. Trestný rozkaz sa ruší a vec sa vracia do prípravného konania aj vydaním uznesenia, ktorým nadriadený súd na základe sťažnosti podľa § 241 ods. 4 zrušil uznesenie samosudcu o prijatí obžaloby podľa § 241 ods. 1 písm. j/. (8) Obvinený a osoby, ktoré sú oprávnené podať v jeho prospech odvolanie, poškodený, zúčastnená osoba, ako aj prokurátor sa môžu výslovným vyhlásením vzdať práva podať odpor a okrem poškodeného môžu výslovným vyhlásením vziať podaný odpor späť, a to až dovtedy, kým prokurátor neprednesie na hlavnom pojednávaní obžalobu; po tomto vyhlásení už nemôžu odpor podať. Osoba, ktorá je oprávnená podať v prospech obvineného odvolanie, môže vziať podaný odpor späť len s jeho výslovným súhlasom. (9) Vzatie odporu späť, ak niet prekážok, vezme samosudca uznesením na vedomie. (10) Ak bol odpor podaný v lehote a nebol vzatý späť podľa ods. 8, trestný rozkaz sa prednesením obžaloby prokurátorom na hlavnom pojednávaní ruší. Ak na hlavnom pojednávaní súd postupuje podľa § 255 ods. 3 a prokurátor neprednesie obžalobu, trestný rozkaz sa ruší vyhlásením uznesenia o vrátení veci prokurátorovi na postup podľa § 232 a § 233 alebo vyhlásením rozsudku, ktorým súd schválil dohodu o vine a treste. (11) Trestný rozkaz sa stane právoplatným, a ak neustanovuje tento zákon niečo iné, aj vykonateľným, ak a) odpor nebol podaný, uplynutím lehoty na podanie odporu, b) odpor bol vzatý späť, dňom jeho späťvzatia, c) sa oprávnená osoba vzdala práva podať odpor a obvinený súčasne vyhlásil, že nesúhlasí, aby odpor podala v jeho prospech iná oprávnená osoba, dňom vzdania sa práva podať odpor. Mestský súd Bratislava I, odd. 13T V Bratislave, dňa 14.04.2026"
+          }
+        ],
+        "source": {
+          "system": "obcan.justice.sk",
+          "webUrl": "",
+          "printUrl": "",
+          "documentId": "13T/39/2026"
+        },
+        "version": 1,
+        "metadata": {
+          "ecli": "ECLI:SK:MSBA1:2026:1126011379.2",
+          "court": "Mestský súd Bratislava I",
+          "keywords": [],
+          "statutes": [],
+          "caseNumber": "13T/39/2026",
+          "decisionDate": "2026-04-14",
+          "decisionType": "trestný rozkaz"
+        }
+      },
+      "document_url": "https://obcan.justice.sk/content/public/item/128d23b3-131f-4ffd-add6-f813c84b1773",
+      "decision_date": "2026-04-14",
+      "decision_type": "Trestný rozkaz",
+      "parser_version": 2,
+      "source_raw_s3_key": "case-law/raw/4c6a3fd0-27fc-4bde-80cf-48c084406975/74a38b500c77fbd4c23661b712f38f229a34b11b6279ff830e58246175937f9c",
+      "language_group_key": "ECLI:SK:MSBA1:2026:1126011379.2",
+      "source_raw_content_type": "application/pdf"
+    },
+    {
+      "id": "f3e768d0-f7a1-4002-87f8-c7f9aa6e3703",
+      "ecli": "ECLI:SK:OSBB:2026:6124370470.4",
+      "slug": null,
+      "court": "Okresný súd Banská Bystrica",
+      "country": "SVK",
+      "analysis": null,
+      "fulltext": "Uznesenie\n\nOkresný súd Banská Bystrica v právnej veci obchodnej spoločnosti DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 974 01 Banská Bystrica, IČO: 46 265 074, zapísanej v Obchodnom registri Okresného súdu Banská Bystrica, v oddiele Sro, vložke číslo 51523/S, v konaní o zrušení obchodnej spoločnosti, takto\n\nrozhodol:\n\nVymazáva obchodnú spoločnosť DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 974 01 Banská Bystrica, IČO: 46 265 074, zapísanú v obchodnom registri Okresného súdu Banská Bystrica, v oddiele Sro, vložke číslo 51523/S podľa § 309h ods. 1 Civilného mimosporového poriadku z obchodného registra bez likvidácie.\n\nodôvodnenie:\n\n1. Okresný súd Banská Bystrica uznesením č.k. 25Cbr/166/2024-25 zo dňa 24.04.2025, právoplatným dňa 28.05.2025 zrušil obchodnú spoločnosť DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 974 01 Banská Bystrica, IČO: 46 265 074 (ďalej len \"spoločnosť\") z dôvodu, že zanikli predpoklady ustanovené zákonom pre vznik spoločnosti podľa § 68b ods. 1 písm. a) Obchodného zákonníka a že spoločnosť nespĺňa podmienky podľa § 68b ods. 1 písm. c) Obchodného zákonníka v spojení s § 2 ods. 3 Obchodného zákonníka.\n\n2. Podľa § 309e zák.č. 161/2015 Z.z. Civilného mimosporového poriadku v znení neskorších predpisov (ďalej len \"CMP\"), ak rozhodnutie súdu o zrušení spoločnosti nadobudlo právoplatnosť, súd zverejní oznámenie o zrušení spoločnosti v Obchodnom vestníku.\n\n3. Oznámenie o zrušení spoločnosti bolo zverejnené v Obchodnom vestníku dňa 05.06.2025 pod č. 106/2025.\n\n4. Podľa § 309f CMP, ak spoločnosť do 90 dní od zverejnenia oznámenia o zrušení spoločnosti v Obchodnom vestníku nevstúpi do likvidácie, predpokladá sa, že je v úpadku.\n\n5. Podľa § 309g CMP, ak sa predpokladá úpadok spoločnosti, súd bezodkladne zverejní v Obchodnom vestníku oznámenie o predpoklade úpadku spoločnosti. V oznámení poučí veriteľov spoločnosti, osoby, ktoré majú právo na likvidačný zostatok, a iné orgány a osoby dotknuté zrušením spoločnosti, že ak do šiestich mesiacov od zverejnenia tohto oznámenia v Obchodnom vestníku nebude podaný návrh na ustanovenie likvidátora spolu s osvedčením o zložení preddavku na jeho odmenu a náhradu výdavkov alebo nebude podaný návrh na vyhlásenie konkurzu na majetok spoločnosti, spoločnosť bude vymazaná z obchodného registra.\n\n6. Oznámenie o predpoklade úpadku spoločnosti bolo zverejnené v Obchodnom vestníku dňa 23.09.2025 pod č. 182/2025.\n\n7. Podľa § 309h ods. 1 CMP, ak odseky 2 a 3 neustanovujú inak, súd po uplynutí šiestich mesiacov od zverejnenia oznámenia o predpoklade úpadku spoločnosti v Obchodnom vestníku rozhodne o výmaze spoločnosti z obchodného registra bez likvidácie.\n\n8. Podľa § 309h ods. 2 CMP, ak veriteľ spoločnosti, osoba, ktorá má právo na likvidačný zostatok, orgán štátnej správy v oblasti daní, poplatkov a colníctva podľa osobitného zákona, alebo ten, kto je dotknutý zrušením spoločnosti do výmazu spoločnosti z obchodného registra, navrhne ustanovenie likvidátora, súd ustanoví likvidátora. Na návrh na ustanovenie likvidátora sa neprihliada, ak nie je zložený preddavok na úhrady odmeny a výdavkov likvidátora. Proti rozhodnutiu o ustanovení likvidátora nie je prípustné odvolanie.\n\n9. Podľa § 309h ods. 3 CMP, ak voči spoločnosti prebieha konkurzné konanie, súd pred rozhodnutím o výmaze spoločnosti postupuje v závislosti od jeho výsledku. Ak sa na majetok spoločnosti vyhlási konkurz, konanie o zrušení spoločnosti sa zastavuje.\n\n10. Podľa § 309h ods. 5 CMP, rozhodnutie súdu o výmaze spoločnosti sa doručí uložením v spise. Proti tomuto rozhodnutiu nie je prípustné odvolanie.\n\n11. Na základe vyššie uvedeného súd v predmetnej veci konštatuje, že do šiestich mesiacov od zverejnenia oznámenia o predpoklade úpadku spoločnosti v Obchodnom vestníku nebol podaný návrh na ustanovenie likvidátora spolu s osvedčením o zložení preddavku na jeho odmenu a náhradu výdavkov, ani nebol podaný návrh na vyhlásenie konkurzu na majetok spoločnosti.\n\n12. Vzhľadom na vyššie uvedené skutočnosti a citované zákonné ustanovenia súd rozhodol tak, ako je uvedené vo výrokovej časti tohto uznesenia.\n\nPoučenie:\n\nProti tomuto uzneseniu nie je prípustné odvolanie.",
+      "language": "sk",
+      "metadata": {
+        "ecli": "ECLI:SK:OSBB:2026:6124370470.4",
+        "guid": "7f18c54d-8d19-4794-9769-9c96add1c17e:dd9c248e-a816-44d6-b802-632253761376",
+        "court": "Okresný súd Banská Bystrica",
+        "judge": "JUDr. Dominika Vavreková, LL.M.",
+        "subArea": ["Obchodné spoločnosti"],
+        "caseNumber": "25Cbr/166/2024",
+        "updateDate": "16.04.2026",
+        "decisionDate": "2026-04-14",
+        "decisionType": "Uznesenie",
+        "documentName": "Uznesenie_25Cbr-166-2024.pdf",
+        "documentSize": 63457,
+        "decisionNature": ["Prvostupňové nenapadnuté opravnými prostriedkami"],
+        "courtRegistreGuid": "sud_139",
+        "documentExtension": "PDF",
+        "judgeRegistreGuid": "sudca_null",
+        "identifikacneCislo": "6124370470",
+        "referencedLegislation": [
+          {
+            "url": "https://www.slov-lex.sk/pravne-predpisy/SK/ZZ/1991/513/#paragraf-68b.odsek-1.pismeno-a",
+            "nazov": "/SK/ZZ/1991/513/#paragraf-68b.odsek-1.pismeno-a"
+          }
+        ]
+      },
+      "sections": [
+        {
+          "text": "Uznesenie\n\nOkresný súd Banská Bystrica v právnej veci obchodnej spoločnosti DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 974 01 Banská Bystrica, IČO: 46 265 074, zapísanej v Obchodnom registri Okresného súdu Banská Bystrica, v oddiele Sro, vložke číslo 51523/S, v konaní o zrušení obchodnej spoločnosti, takto\n\nrozhodol:\n\nVymazáva obchodnú spoločnosť DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 974 01 Banská Bystrica, IČO: 46 265 074, zapísanú v obchodnom registri Okresného súdu Banská Bystrica, v oddiele Sro, vložke číslo 51523/S podľa § 309h ods. 1 Civilného mimosporového poriadku z obchodného registra bez likvidácie.",
+          "type": "header",
+          "index": 0,
+          "title": null
+        },
+        {
+          "text": "1. Okresný súd Banská Bystrica uznesením č.k. 25Cbr/166/2024-25 zo dňa 24.04.2025, právoplatným dňa 28.05.2025 zrušil obchodnú spoločnosť DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 974 01 Banská Bystrica, IČO: 46 265 074 (ďalej len \"spoločnosť\") z dôvodu, že zanikli predpoklady ustanovené zákonom pre vznik spoločnosti podľa § 68b ods. 1 písm. a) Obchodného zákonníka a že spoločnosť nespĺňa podmienky podľa § 68b ods. 1 písm. c) Obchodného zákonníka v spojení s § 2 ods. 3 Obchodného zákonníka.\n\n2. Podľa § 309e zák.č. 161/2015 Z.z. Civilného mimosporového poriadku v znení neskorších predpisov (ďalej len \"CMP\"), ak rozhodnutie súdu o zrušení spoločnosti nadobudlo právoplatnosť, súd zverejní oznámenie o zrušení spoločnosti v Obchodnom vestníku.\n\n3. Oznámenie o zrušení spoločnosti bolo zverejnené v Obchodnom vestníku dňa 05.06.2025 pod č. 106/2025.\n\n4. Podľa § 309f CMP, ak spoločnosť do 90 dní od zverejnenia oznámenia o zrušení spoločnosti v Obchodnom vestníku nevstúpi do likvidácie, predpokladá sa, že je v úpadku.\n\n5. Podľa § 309g CMP, ak sa predpokladá úpadok spoločnosti, súd bezodkladne zverejní v Obchodnom vestníku oznámenie o predpoklade úpadku spoločnosti. V oznámení poučí veriteľov spoločnosti, osoby, ktoré majú právo na likvidačný zostatok, a iné orgány a osoby dotknuté zrušením spoločnosti, že ak do šiestich mesiacov od zverejnenia tohto oznámenia v Obchodnom vestníku nebude podaný návrh na ustanovenie likvidátora spolu s osvedčením o zložení preddavku na jeho odmenu a náhradu výdavkov alebo nebude podaný návrh na vyhlásenie konkurzu na majetok spoločnosti, spoločnosť bude vymazaná z obchodného registra.\n\n6. Oznámenie o predpoklade úpadku spoločnosti bolo zverejnené v Obchodnom vestníku dňa 23.09.2025 pod č. 182/2025.\n\n7. Podľa § 309h ods. 1 CMP, ak odseky 2 a 3 neustanovujú inak, súd po uplynutí šiestich mesiacov od zverejnenia oznámenia o predpoklade úpadku spoločnosti v Obchodnom vestníku rozhodne o výmaze spoločnosti z obchodného registra bez likvidácie.\n\n8. Podľa § 309h ods. 2 CMP, ak veriteľ spoločnosti, osoba, ktorá má právo na likvidačný zostatok, orgán štátnej správy v oblasti daní, poplatkov a colníctva podľa osobitného zákona, alebo ten, kto je dotknutý zrušením spoločnosti do výmazu spoločnosti z obchodného registra, navrhne ustanovenie likvidátora, súd ustanoví likvidátora. Na návrh na ustanovenie likvidátora sa neprihliada, ak nie je zložený preddavok na úhrady odmeny a výdavkov likvidátora. Proti rozhodnutiu o ustanovení likvidátora nie je prípustné odvolanie.\n\n9. Podľa § 309h ods. 3 CMP, ak voči spoločnosti prebieha konkurzné konanie, súd pred rozhodnutím o výmaze spoločnosti postupuje v závislosti od jeho výsledku. Ak sa na majetok spoločnosti vyhlási konkurz, konanie o zrušení spoločnosti sa zastavuje.\n\n10. Podľa § 309h ods. 5 CMP, rozhodnutie súdu o výmaze spoločnosti sa doručí uložením v spise. Proti tomuto rozhodnutiu nie je prípustné odvolanie.\n\n11. Na základe vyššie uvedeného súd v predmetnej veci konštatuje, že do šiestich mesiacov od zverejnenia oznámenia o predpoklade úpadku spoločnosti v Obchodnom vestníku nebol podaný návrh na ustanovenie likvidátora spolu s osvedčením o zložení preddavku na jeho odmenu a náhradu výdavkov, ani nebol podaný návrh na vyhlásenie konkurzu na majetok spoločnosti.\n\n12. Vzhľadom na vyššie uvedené skutočnosti a citované zákonné ustanovenia súd rozhodol tak, ako je uvedené vo výrokovej časti tohto uznesenia.",
+          "type": "argumentation",
+          "index": 1,
+          "title": "odôvodnenie:"
+        },
+        {
+          "text": "Proti tomuto uzneseniu nie je prípustné odvolanie.",
+          "type": "footer",
+          "index": 2,
+          "title": "Poučenie:"
+        }
+      ],
+      "source_id": "4c6a3fd0-27fc-4bde-80cf-48c084406975",
+      "created_at": "2026-04-16T14:02:28.711431",
+      "source_raw": null,
+      "source_url": "https://obcan.justice.sk/content/public/item/dd9c248e-a816-44d6-b802-632253761376",
+      "updated_at": "2026-04-16T14:02:28.711431",
+      "case_number": "25Cbr/166/2024",
+      "source_hash": "0fbd96604b32fbd74c2f01f85aed6e8fb2e1050afd071ea5c83b993e13f024a1",
+      "document_ast": {
+        "blocks": [
+          {
+            "id": "b1",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "Uznesenie",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-title",
+            "plainText": "Uznesenie"
+          },
+          {
+            "id": "b2",
+            "role": "intro",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "Okresný súd Banská Bystrica v právnej veci obchodnej spoločnosti DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 974 01 Banská Bystrica, IČO: 46 265 074, zapísanej v Obchodnom registri Okresného súdu Banská Bystrica, v oddiele Sro, vložke číslo 51523/S, v konaní o zrušení obchodnej spoločnosti, takto",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p1",
+            "plainText": "Okresný súd Banská Bystrica v právnej veci obchodnej spoločnosti DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 974 01 Banská Bystrica, IČO: 46 265 074, zapísanej v Obchodnom registri Okresného súdu Banská Bystrica, v oddiele Sro, vložke číslo 51523/S, v konaní o zrušení obchodnej spoločnosti, takto"
+          },
+          {
+            "id": "b3",
+            "role": "section-heading",
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "r o z h o d o l :",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-holding",
+            "plainText": "rozhodol:"
+          },
+          {
+            "id": "b4",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "V y m a z á v a obchodnú spoločnosť DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 974 01 Banská Bystrica, IČO: 46 265 074, zapísanú v obchodnom registri Okresného súdu Banská Bystrica, v oddiele Sro, vložke číslo 51523/S podľa § 309h ods. 1 Civilného mimosporového poriadku z obchodného registra bez likvidácie.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p2",
+            "plainText": "Vymazáva obchodnú spoločnosť DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 974 01 Banská Bystrica, IČO: 46 265 074, zapísanú v obchodnom registri Okresného súdu Banská Bystrica, v oddiele Sro, vložke číslo 51523/S podľa § 309h ods. 1 Civilného mimosporového poriadku z obchodného registra bez likvidácie."
+          },
+          {
+            "id": "b5",
+            "role": "section-heading",
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "o d ô v o d n e n i e :",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-reasoning",
+            "plainText": "odôvodnenie:"
+          },
+          {
+            "id": "b6",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "1. Okresný súd Banská Bystrica uznesením č.k. 25Cbr/166/2024-25 zo dňa 24.04.2025, právoplatným dňa 28.05.2025 zrušil obchodnú spoločnosť DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 974 01 Banská Bystrica, IČO: 46 265 074 (ďalej len \"spoločnosť\") z dôvodu, že zanikli predpoklady ustanovené zákonom pre vznik spoločnosti podľa § 68b ods. 1 písm. a) Obchodného zákonníka a že spoločnosť nespĺňa podmienky podľa § 68b ods. 1 písm. c) Obchodného zákonníka v spojení s § 2 ods. 3 Obchodného zákonníka.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p3",
+            "plainText": "1. Okresný súd Banská Bystrica uznesením č.k. 25Cbr/166/2024-25 zo dňa 24.04.2025, právoplatným dňa 28.05.2025 zrušil obchodnú spoločnosť DREVOVÝROBA Plus, s.r.o., so sídlom ul. 29. augusta 1524/24, 974 01 Banská Bystrica, IČO: 46 265 074 (ďalej len \"spoločnosť\") z dôvodu, že zanikli predpoklady ustanovené zákonom pre vznik spoločnosti podľa § 68b ods. 1 písm. a) Obchodného zákonníka a že spoločnosť nespĺňa podmienky podľa § 68b ods. 1 písm. c) Obchodného zákonníka v spojení s § 2 ods. 3 Obchodného zákonníka."
+          },
+          {
+            "id": "b7",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "2. Podľa § 309e zák.č. 161/2015 Z.z. Civilného mimosporového poriadku v znení neskorších predpisov (ďalej len \"CMP\"), ak rozhodnutie súdu o zrušení spoločnosti nadobudlo právoplatnosť, súd zverejní oznámenie o zrušení spoločnosti v Obchodnom vestníku.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p4",
+            "plainText": "2. Podľa § 309e zák.č. 161/2015 Z.z. Civilného mimosporového poriadku v znení neskorších predpisov (ďalej len \"CMP\"), ak rozhodnutie súdu o zrušení spoločnosti nadobudlo právoplatnosť, súd zverejní oznámenie o zrušení spoločnosti v Obchodnom vestníku."
+          },
+          {
+            "id": "b8",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "3. Oznámenie o zrušení spoločnosti bolo zverejnené v Obchodnom vestníku dňa 05.06.2025 pod č. 106/2025.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p5",
+            "plainText": "3. Oznámenie o zrušení spoločnosti bolo zverejnené v Obchodnom vestníku dňa 05.06.2025 pod č. 106/2025."
+          },
+          {
+            "id": "b9",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "4. Podľa § 309f CMP, ak spoločnosť do 90 dní od zverejnenia oznámenia o zrušení spoločnosti v Obchodnom vestníku nevstúpi do likvidácie, predpokladá sa, že je v úpadku.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p6",
+            "plainText": "4. Podľa § 309f CMP, ak spoločnosť do 90 dní od zverejnenia oznámenia o zrušení spoločnosti v Obchodnom vestníku nevstúpi do likvidácie, predpokladá sa, že je v úpadku."
+          },
+          {
+            "id": "b10",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "5. Podľa § 309g CMP, ak sa predpokladá úpadok spoločnosti, súd bezodkladne zverejní v Obchodnom vestníku oznámenie o predpoklade úpadku spoločnosti. V oznámení poučí veriteľov spoločnosti, osoby, ktoré majú právo na likvidačný zostatok, a iné orgány a osoby dotknuté zrušením spoločnosti, že ak do šiestich mesiacov od zverejnenia tohto oznámenia v Obchodnom vestníku nebude podaný návrh na ustanovenie likvidátora spolu s osvedčením o zložení preddavku na jeho odmenu a náhradu výdavkov alebo nebude podaný návrh na vyhlásenie konkurzu na majetok spoločnosti, spoločnosť bude vymazaná z obchodného registra.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p7",
+            "plainText": "5. Podľa § 309g CMP, ak sa predpokladá úpadok spoločnosti, súd bezodkladne zverejní v Obchodnom vestníku oznámenie o predpoklade úpadku spoločnosti. V oznámení poučí veriteľov spoločnosti, osoby, ktoré majú právo na likvidačný zostatok, a iné orgány a osoby dotknuté zrušením spoločnosti, že ak do šiestich mesiacov od zverejnenia tohto oznámenia v Obchodnom vestníku nebude podaný návrh na ustanovenie likvidátora spolu s osvedčením o zložení preddavku na jeho odmenu a náhradu výdavkov alebo nebude podaný návrh na vyhlásenie konkurzu na majetok spoločnosti, spoločnosť bude vymazaná z obchodného registra."
+          },
+          {
+            "id": "b11",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "6. Oznámenie o predpoklade úpadku spoločnosti bolo zverejnené v Obchodnom vestníku dňa 23.09.2025 pod č. 182/2025.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p8",
+            "plainText": "6. Oznámenie o predpoklade úpadku spoločnosti bolo zverejnené v Obchodnom vestníku dňa 23.09.2025 pod č. 182/2025."
+          },
+          {
+            "id": "b12",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "7. Podľa § 309h ods. 1 CMP, ak odseky 2 a 3 neustanovujú inak, súd po uplynutí šiestich mesiacov od zverejnenia oznámenia o predpoklade úpadku spoločnosti v Obchodnom vestníku rozhodne o výmaze spoločnosti z obchodného registra bez likvidácie.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p9",
+            "plainText": "7. Podľa § 309h ods. 1 CMP, ak odseky 2 a 3 neustanovujú inak, súd po uplynutí šiestich mesiacov od zverejnenia oznámenia o predpoklade úpadku spoločnosti v Obchodnom vestníku rozhodne o výmaze spoločnosti z obchodného registra bez likvidácie."
+          },
+          {
+            "id": "b13",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "8. Podľa § 309h ods. 2 CMP, ak veriteľ spoločnosti, osoba, ktorá má právo na likvidačný zostatok, orgán štátnej správy v oblasti daní, poplatkov a colníctva podľa osobitného zákona, alebo ten, kto je dotknutý zrušením spoločnosti do výmazu spoločnosti z obchodného registra, navrhne ustanovenie likvidátora, súd ustanoví likvidátora. Na návrh na ustanovenie likvidátora sa neprihliada, ak nie je zložený preddavok na úhrady odmeny a výdavkov likvidátora. Proti rozhodnutiu o ustanovení likvidátora nie je prípustné odvolanie.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p10",
+            "plainText": "8. Podľa § 309h ods. 2 CMP, ak veriteľ spoločnosti, osoba, ktorá má právo na likvidačný zostatok, orgán štátnej správy v oblasti daní, poplatkov a colníctva podľa osobitného zákona, alebo ten, kto je dotknutý zrušením spoločnosti do výmazu spoločnosti z obchodného registra, navrhne ustanovenie likvidátora, súd ustanoví likvidátora. Na návrh na ustanovenie likvidátora sa neprihliada, ak nie je zložený preddavok na úhrady odmeny a výdavkov likvidátora. Proti rozhodnutiu o ustanovení likvidátora nie je prípustné odvolanie."
+          },
+          {
+            "id": "b14",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "9. Podľa § 309h ods. 3 CMP, ak voči spoločnosti prebieha konkurzné konanie, súd pred rozhodnutím o výmaze spoločnosti postupuje v závislosti od jeho výsledku. Ak sa na majetok spoločnosti vyhlási konkurz, konanie o zrušení spoločnosti sa zastavuje.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p11",
+            "plainText": "9. Podľa § 309h ods. 3 CMP, ak voči spoločnosti prebieha konkurzné konanie, súd pred rozhodnutím o výmaze spoločnosti postupuje v závislosti od jeho výsledku. Ak sa na majetok spoločnosti vyhlási konkurz, konanie o zrušení spoločnosti sa zastavuje."
+          },
+          {
+            "id": "b15",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "10. Podľa § 309h ods. 5 CMP, rozhodnutie súdu o výmaze spoločnosti sa doručí uložením v spise. Proti tomuto rozhodnutiu nie je prípustné odvolanie.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p12",
+            "plainText": "10. Podľa § 309h ods. 5 CMP, rozhodnutie súdu o výmaze spoločnosti sa doručí uložením v spise. Proti tomuto rozhodnutiu nie je prípustné odvolanie."
+          },
+          {
+            "id": "b16",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "11. Na základe vyššie uvedeného súd v predmetnej veci konštatuje, že do šiestich mesiacov od zverejnenia oznámenia o predpoklade úpadku spoločnosti v Obchodnom vestníku nebol podaný návrh na ustanovenie likvidátora spolu s osvedčením o zložení preddavku na jeho odmenu a náhradu výdavkov, ani nebol podaný návrh na vyhlásenie konkurzu na majetok spoločnosti.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p13",
+            "plainText": "11. Na základe vyššie uvedeného súd v predmetnej veci konštatuje, že do šiestich mesiacov od zverejnenia oznámenia o predpoklade úpadku spoločnosti v Obchodnom vestníku nebol podaný návrh na ustanovenie likvidátora spolu s osvedčením o zložení preddavku na jeho odmenu a náhradu výdavkov, ani nebol podaný návrh na vyhlásenie konkurzu na majetok spoločnosti."
+          },
+          {
+            "id": "b17",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "12. Vzhľadom na vyššie uvedené skutočnosti a citované zákonné ustanovenia súd rozhodol tak, ako je uvedené vo výrokovej časti tohto uznesenia.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p14",
+            "plainText": "12. Vzhľadom na vyššie uvedené skutočnosti a citované zákonné ustanovenia súd rozhodol tak, ako je uvedené vo výrokovej časti tohto uznesenia."
+          },
+          {
+            "id": "b18",
+            "role": "section-heading",
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "Poučenie:",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "h-instruction",
+            "plainText": "Poučenie:"
+          },
+          {
+            "id": "b19",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "Proti tomuto uzneseniu nie je prípustné odvolanie.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p15",
+            "plainText": "Proti tomuto uzneseniu nie je prípustné odvolanie."
+          }
+        ],
+        "source": {
+          "system": "obcan.justice.sk",
+          "webUrl": "",
+          "printUrl": "",
+          "documentId": "25Cbr/166/2024"
+        },
+        "version": 1,
+        "metadata": {
+          "ecli": "ECLI:SK:OSBB:2026:6124370470.4",
+          "court": "Okresný súd Banská Bystrica",
+          "keywords": [],
+          "statutes": [],
+          "caseNumber": "25Cbr/166/2024",
+          "decisionDate": "2026-04-14",
+          "decisionType": "uznesenie"
+        }
+      },
+      "document_url": "https://obcan.justice.sk/content/public/item/dd9c248e-a816-44d6-b802-632253761376",
+      "decision_date": "2026-04-14",
+      "decision_type": "Uznesenie",
+      "parser_version": 2,
+      "source_raw_s3_key": "case-law/raw/4c6a3fd0-27fc-4bde-80cf-48c084406975/aefff2a01b5d745ca3751775f6ca82d82e321756d537972352ab5a527d81ba32",
+      "language_group_key": "ECLI:SK:OSBB:2026:6124370470.4",
+      "source_raw_content_type": "application/pdf"
+    }
+  ]
+}

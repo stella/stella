@@ -1,0 +1,1529 @@
+{
+  "source": {
+    "id": "d6ecc585-b704-4a4c-b4c3-d81593d91529",
+    "name": "Czech Supreme Court",
+    "config": "{}",
+    "enabled": true,
+    "created_at": "2026-04-03T16:52:09.78829",
+    "updated_at": "2026-05-01T16:31:33.861",
+    "adapter_key": "cz-ns",
+    "sync_cursor": "162727",
+    "last_sync_at": "2026-05-01T16:31:33.86"
+  },
+  "decisions": [
+    {
+      "id": "019dcfc1-26f8-7000-b4c4-4128e9d8bc56",
+      "ecli": "ECLI:CZ:NS:2026:27.CDO.1525.2025.1",
+      "slug": null,
+      "court": "Nejvyšší soud",
+      "country": "CZE",
+      "analysis": null,
+      "fulltext": "27 Cdo 1525/2025-953\n\nUSNESENÍ\n\nNejvyšší soud České republiky rozhodl v senátu složeném z předsedy JUDr. Filipa Cilečka a JUDr. Marka Doležala a JUDr. Jiřího Zavázala v právní věci žalobkyně MIPL, spol. sr. o., se sídlem v Uherském Brodě, Šumická 2325, PSČ 688 01, identifikační číslo osoby 47911034, proti žalovaným 1) Ing. Ivu Beerovi, zastoupenému Mgr. Vladanem Valou, advokátem, se sídlem v Brně, Marie Steyskalové 767/62, PSČ 616 00, 2) Ing. Vladimíru Neznalovi, zastoupenému Mgr. Jindřichem Skácelem, advokátem, se sídlem v Brně, Zachova 633/4, PSČ 602 00, 3) Mgr. Jiřímu Ostravskému, zastoupenému JUDr. Adamem Rakovským, advokátem, se sídlem v Praze 2, Václavská 316/12, PSČ 120 00, 4) Komerční bance, a. s., se sídlem v Praze 1, Na Příkopě 969/33, PSČ 114 07, identifikační číslo osoby 45317054, 5) TIPAFROST, a. s., se sídlem v Kožichovicích, Žďárského 188, PSČ 674 01, identifikační číslo osoby 06626033, zastoupené JUDr. Miroslavem Zvěřinou, advokátem, se sídlem v Třebíči, Bráfova tř. 161/20, PSČ 674 01, a 6) Československé obchodní bance, a. s., se sídlem v Praze 5, Radlická 333/150, PSČ 150 57, identifikační číslo osoby 00001350, o zaplacení 237.960.185,35 Kč s příslušenstvím, vedené u Městského soudu v Praze pod sp. zn. 37 Cm 72/2013, o dovolání žalobkyně proti usnesení Vrchního soudu v Praze ze dne 6. 1. 2025, č. j. 7 Cmo 331/2024-903, takto:\n\nDovolání se odmítá.\n\nOdůvodnění:\n\n1.\tŽalobou doručenou Městskému soudu v Praze dne 3. 6. 2013 se žalobkyně domáhá zaplacení částky 237.960.185,35 Kč s příslušenstvím jako náhrady škody způsobené jí v průběhu insolvenčního řízení.\n\n2.\tMěstský soud v Praze usnesením ze dne 7. 10. 2024, č. j. 37 Cm 72/2013-885, ustanovil procesní opatrovnicí žalobkyně JUDr. Magdalenu Kubátovou, advokátku, se sídlem v Praze 7, Veverkova 1101/1, PSČ 170 00.\n\n3.\tK odvolání žalobkyně a žalovaného 3) Vrchní soud v Praze v záhlaví označeným usnesením odmítl odvolání žalovaného 3) [první výrok] a potvrdil usnesení soudu prvního stupně (druhý výrok).\n\n4.\tProti druhému výroku usnesení odvolacího soudu podala žalobkyně, zastoupená J. K., (dále jen „J. K.“), dovolání. Nejvyšší soud dovolání odmítl podle § 243c odst. 1 a 2 zákona č. 99/1963 Sb., občanského soudního řádu (dále jen „o. s. ř.“), jako nepřípustné. Učinil tak proto, že dovolání nesměřuje proti žádnému z usnesení vypočtených v § 238a o. s. ř. a není přípustné ani podle § 237 o. s. ř.\n\n5.\tNejvyšší soud předesílá, že než mohl přistoupit k posouzení přípustnosti dovolání, musel nejdříve posoudit, zda jsou splněny podmínky dovolacího řízení. Je přitom třeba výslovně uvést, že dovolací soud se nezabýval otázkou, zda je J. K. oprávněn podat za společnost dovolání. Je tomu tak proto, že právě otázka existence oprávnění J. K. zastupovat žalobkyni představuje jednu ze sporných otázek v projednávané věci, jakož i důvod podaného dovolání (k tomu obdobně například usnesení Ústavního soudu ze dne 26. 7. 2016, sp. zn. II. ÚS 2502/15, ze dne 23. 10. 2018, sp. zn. III. ÚS 1472/18, v rozhodovací praxi dovolacího soudu pak například usnesení Nejvyššího soudu ze dne 25. 3. 2021, sp. zn. 27 Cdo 2099/2020, odst. 5, ze dne 3. 2. 2022, sp. zn. 27 Cdo 3152/2021, odst. 6, ze dne 9. 2. 2022, sp. zn. 27 Cdo 2286/2021, uveřejněné pod číslem 1/2023 Sb. rozh. obč., odst. 25, ze dne 19. 1. 2023, sp. zn. 27 Cdo 3039/2022, uveřejněné pod číslem 42/2024 Sb. rozh. obč., odst. 24, nebo ze dne 24. 4. 2024, sp. zn. 27 Cdo 3126/2023).\n\n6.\tDovolatelka má za to, že dovolání je přípustné, neboť se odvolací soud – podle jejího mínění – odchýlil od ustálené rozhodovací praxe Nejvyššího soudu při řešení otázky, zda soud může správnost údajů zapsaných v obchodním rejstříku posoudit jako předběžnou otázku i mimo řízení o statusových věcech právnických osob.\n\n7.\tTato otázka však přípustnost dovolání založit nemůže. Je tomu tak proto, že ji odvolací soud vyřešil v souladu s ustálenou rozhodovací praxí Nejvyššího soudu, z níž se podává, že princip materiální publicity zápisů statutárního orgánu společnosti s ručením omezeným do obchodního rejstříku neplatí pro vymezení toho, kdo je v občanském soudním řízení oprávněn jednat za právnickou osobu před soudem. Jednatel společnosti s ručením omezeným je tedy oprávněn jednat za právnickou osobu před soudem [§ 21 odst. 1 písm. a) o. s. ř.], i když o tom (dosud) nebyl proveden zápis v obchodním rejstříku (a – případně – jako jednatel téže společnosti s ručením omezeným je dosud zapsán někdo jiný); \n\ndošlo-li však k ukončení výkonu funkce jednatele, nesmí za právnickou osobu vystupovat v řízení před soudem, i když (zatím) nedošlo k zápisu změny do obchodního rejstříku (srov. usnesení Nejvyššího soudu ze dne 16. 4. 2008, sp. zn. 21 Cdo 1388/2007 nebo ze dne 12. 4. 2018, sp. zn. 21 Cdo 2646/2016).\n\n8.\tStejně tak je v souladu s ustálenou judikaturou Nejvyššího soudu názor odvolacího soudu, podle kterého si může „nicotnost“ usnesení valné hromady posoudit jako předběžnou otázku. Z ustálené rozhodovací praxe Nejvyššího soudu se totiž podává, že závěr o nicotnosti usnesení valné hromady lze přijmout v jakémkoliv řízení, tj. jak v řízení o vyslovení neplatnosti usnesení valné hromady, tak i jako řešení předběžné otázky v jiném řízení. Vadou způsobující nicotnost usnesení přitom může být např. nedostatek působnosti valné hromady rozhodnout o určité záležitosti, či skutečnost, že rozhodnutí v působnosti valné hromady přijala osoba, jež nebyla oprávněna vykonávat práva jediného společníka. K tomu srovnej např. usnesení Nejvyššího soudu ze dne 31. 10. 2007, sp. zn. 29 Odo 1138/2005, uveřejněné pod číslem 55/2008 Sb. rozh. obč., ze dne 16. 6. 2010, sp. zn. 29 Cdo 3247/2009, ze dne 11. 4. 2012, sp. zn. 29 Cdo 3397/2010, ze dne 20. 3. 2014, sp. zn. 29 Cdo 3656/2012, a ze dne 27. 8. 2020, sp. zn. 27 Cdo 4364/2018.\n\n9.\tVe vztahu k ostatním dovolacím námitkám dovolatelka nevymezuje předpoklady přípustnosti dovolání. Požadavek, aby dovolatelka v dovolání uvedla, v čem spatřuje splnění předpokladů přípustnosti dovolání, je podle § 241a odst. 2 o. s. ř. obligatorní náležitostí dovolání. Může-li být dovolání přípustné jen podle § 237 o. s. ř. (jako v této věci), je dovolatelka povinna v dovolání vymezit, které z tam uvedených hledisek považuje za splněné a blíže je specifikovat, přičemž k projednání dovolání nepostačuje pouhá citace textu § 237 o. s. ř. či jeho části. K tomu srov. např. usnesení Nejvyššího soudu ze dne 25. 9. 2013, sp. zn. 29 Cdo 2394/2013, uveřejněné pod číslem 4/2014 Sb. rozh. obč., usnesení velkého senátu občanskoprávního a obchodního kolegia Nejvyššího soudu ze dne 8. 4. 2015, sen. zn. 31 NSČR 9/2015, či usnesení Nejvyššího soudu ze dne 23. 10. 2013, sp. zn. 29 Cdo 2649/2013, ze dne 29. 8. 2013, sp. zn. 29 Cdo 2488/2013, anebo usnesení Ústavního soudu ze dne 21. 1. 2014, sp. zn. I. ÚS 3524/13, ze dne 21. 7. 2015, sp. zn. II. ÚS 1346/15, či ze dne 12. 8. 2015, sp. zn. IV. ÚS 3548/14\n\n10.\tNáležitosti dovolání a následky plynoucí z jejich nedodržení jsou přitom v občanském soudním řádu stanoveny zcela jasně. Účastníkovi řízení podávajícímu dovolání proto nemohou při zachování minimální míry obezřetnosti (spočívající pouze v přečtení relevantních zákonných ustanovení) vzniknout pochybnosti o tom, co má v dovolání uvést (srovnej např. závěry stanoviska pléna Ústavního soudu ze dne 28. 11. 2017, sp. zn. Pl. ÚS st. 45/16).\n\n11.\tA konečně přípustnost dovolání nemůže založit ani námitka dovolatelky stran vad řízení (nedostatečné vypořádání se s předloženými důkazy a argumenty). Dovolatelka totiž jejím prostřednictvím nepředkládá Nejvyššímu soudu žádnou otázku hmotného či procesního práva, na jejímž řešení by napadené rozhodnutí spočívalo, a jež by splňovala kritéria § 237 o. s. ř. Nejvyšší soud k vadám, které mohou mít za následek nesprávné rozhodnutí ve věci přihlíží pouze tehdy, je-li dovolání přípustné, avšak samy o sobě tyto vady nejsou způsobilým dovolacím důvodem (viz § 241a o. s. ř.).\n\n12.\tO náhradě nákladů dovolacího řízení Nejvyšší soud nerozhodoval, když rozhodnutí Nejvyššího soudu není rozhodnutím, kterým se řízení končí, a řízení nebylo již dříve skončeno (srovnej např. usnesení Nejvyššího soudu ze dne 23. 7. 2002, sp. zn. 20 Cdo 970/2001, uveřejněné pod číslem 48/2003 Sb. rozh. obč.).\n\nPoučení: Proti tomuto rozhodnutí není přípustný opravný prostředek.\n\nV Brně dne 22. 4. 2026\n\nJUDr. Filip Cileček\n\tpředseda senátu",
+      "language": "cs",
+      "metadata": {
+        "ecli": "ECLI:CZ:NS:2026:27.CDO.1525.2025.1",
+        "court": "Nejvyšší soud",
+        "judge": "JUDr. Filip Cileček",
+        "category": "E",
+        "keywords": [
+          "Usnesení valné hromady (zdánlivost) [ Valná hromada ]",
+          "Opatrovník procesně právní [ Opatrovník ]",
+          "Předběžná otázka",
+          "Zápis do veřejného rejstříku [ Veřejný rejstřík (zápis & výmaz) (o. z.) ]",
+          "Obchodní rejstřík",
+          "Jednatel"
+        ],
+        "statutes": ["§ 243c odst. 1 o. s. ř."],
+        "caseNumber": "27 Cdo 1525/2025",
+        "decisionDate": "2026-04-22",
+        "decisionType": "usnesení",
+        "legalSentence": null,
+        "kategorieRozhodnuti": "E"
+      },
+      "sections": [
+        {
+          "text": "27 Cdo 1525/2025-953\n\nUSNESENÍ\n\nNejvyšší soud České republiky rozhodl v senátu složeném z předsedy JUDr. Filipa Cilečka a JUDr. Marka Doležala a JUDr. Jiřího Zavázala v právní věci žalobkyně MIPL, spol. sr. o., se sídlem v Uherském Brodě, Šumická 2325, PSČ 688 01, identifikační číslo osoby 47911034, proti žalovaným 1) Ing. Ivu Beerovi, zastoupenému Mgr. Vladanem Valou, advokátem, se sídlem v Brně, Marie Steyskalové 767/62, PSČ 616 00, 2) Ing. Vladimíru Neznalovi, zastoupenému Mgr. Jindřichem Skácelem, advokátem, se sídlem v Brně, Zachova 633/4, PSČ 602 00, 3) Mgr. Jiřímu Ostravskému, zastoupenému JUDr. Adamem Rakovským, advokátem, se sídlem v Praze 2, Václavská 316/12, PSČ 120 00, 4) Komerční bance, a. s., se sídlem v Praze 1, Na Příkopě 969/33, PSČ 114 07, identifikační číslo osoby 45317054, 5) TIPAFROST, a. s., se sídlem v Kožichovicích, Žďárského 188, PSČ 674 01, identifikační číslo osoby 06626033, zastoupené JUDr. Miroslavem Zvěřinou, advokátem, se sídlem v Třebíči, Bráfova tř. 161/20, PSČ 674 01, a 6) Československé obchodní bance, a. s., se sídlem v Praze 5, Radlická 333/150, PSČ 150 57, identifikační číslo osoby 00001350, o zaplacení 237.960.185,35 Kč s příslušenstvím, vedené u Městského soudu v Praze pod sp. zn. 37 Cm 72/2013, o dovolání žalobkyně proti usnesení Vrchního soudu v Praze ze dne 6. 1. 2025, č. j. 7 Cmo 331/2024-903, takto:\n\nDovolání se odmítá.",
+          "type": "header",
+          "index": 0,
+          "title": null
+        },
+        {
+          "text": "1.\tŽalobou doručenou Městskému soudu v Praze dne 3. 6. 2013 se žalobkyně domáhá zaplacení částky 237.960.185,35 Kč s příslušenstvím jako náhrady škody způsobené jí v průběhu insolvenčního řízení.\n\n2.\tMěstský soud v Praze usnesením ze dne 7. 10. 2024, č. j. 37 Cm 72/2013-885, ustanovil procesní opatrovnicí žalobkyně JUDr. Magdalenu Kubátovou, advokátku, se sídlem v Praze 7, Veverkova 1101/1, PSČ 170 00.\n\n3.\tK odvolání žalobkyně a žalovaného 3) Vrchní soud v Praze v záhlaví označeným usnesením odmítl odvolání žalovaného 3) [první výrok] a potvrdil usnesení soudu prvního stupně (druhý výrok).\n\n4.\tProti druhému výroku usnesení odvolacího soudu podala žalobkyně, zastoupená J. K., (dále jen „J. K.“), dovolání. Nejvyšší soud dovolání odmítl podle § 243c odst. 1 a 2 zákona č. 99/1963 Sb., občanského soudního řádu (dále jen „o. s. ř.“), jako nepřípustné. Učinil tak proto, že dovolání nesměřuje proti žádnému z usnesení vypočtených v § 238a o. s. ř. a není přípustné ani podle § 237 o. s. ř.\n\n5.\tNejvyšší soud předesílá, že než mohl přistoupit k posouzení přípustnosti dovolání, musel nejdříve posoudit, zda jsou splněny podmínky dovolacího řízení. Je přitom třeba výslovně uvést, že dovolací soud se nezabýval otázkou, zda je J. K. oprávněn podat za společnost dovolání. Je tomu tak proto, že právě otázka existence oprávnění J. K. zastupovat žalobkyni představuje jednu ze sporných otázek v projednávané věci, jakož i důvod podaného dovolání (k tomu obdobně například usnesení Ústavního soudu ze dne 26. 7. 2016, sp. zn. II. ÚS 2502/15, ze dne 23. 10. 2018, sp. zn. III. ÚS 1472/18, v rozhodovací praxi dovolacího soudu pak například usnesení Nejvyššího soudu ze dne 25. 3. 2021, sp. zn. 27 Cdo 2099/2020, odst. 5, ze dne 3. 2. 2022, sp. zn. 27 Cdo 3152/2021, odst. 6, ze dne 9. 2. 2022, sp. zn. 27 Cdo 2286/2021, uveřejněné pod číslem 1/2023 Sb. rozh. obč., odst. 25, ze dne 19. 1. 2023, sp. zn. 27 Cdo 3039/2022, uveřejněné pod číslem 42/2024 Sb. rozh. obč., odst. 24, nebo ze dne 24. 4. 2024, sp. zn. 27 Cdo 3126/2023).\n\n6.\tDovolatelka má za to, že dovolání je přípustné, neboť se odvolací soud – podle jejího mínění – odchýlil od ustálené rozhodovací praxe Nejvyššího soudu při řešení otázky, zda soud může správnost údajů zapsaných v obchodním rejstříku posoudit jako předběžnou otázku i mimo řízení o statusových věcech právnických osob.\n\n7.\tTato otázka však přípustnost dovolání založit nemůže. Je tomu tak proto, že ji odvolací soud vyřešil v souladu s ustálenou rozhodovací praxí Nejvyššího soudu, z níž se podává, že princip materiální publicity zápisů statutárního orgánu společnosti s ručením omezeným do obchodního rejstříku neplatí pro vymezení toho, kdo je v občanském soudním řízení oprávněn jednat za právnickou osobu před soudem. Jednatel společnosti s ručením omezeným je tedy oprávněn jednat za právnickou osobu před soudem [§ 21 odst. 1 písm. a) o. s. ř.], i když o tom (dosud) nebyl proveden zápis v obchodním rejstříku (a – případně – jako jednatel téže společnosti s ručením omezeným je dosud zapsán někdo jiný); \n\ndošlo-li však k ukončení výkonu funkce jednatele, nesmí za právnickou osobu vystupovat v řízení před soudem, i když (zatím) nedošlo k zápisu změny do obchodního rejstříku (srov. usnesení Nejvyššího soudu ze dne 16. 4. 2008, sp. zn. 21 Cdo 1388/2007 nebo ze dne 12. 4. 2018, sp. zn. 21 Cdo 2646/2016).\n\n8.\tStejně tak je v souladu s ustálenou judikaturou Nejvyššího soudu názor odvolacího soudu, podle kterého si může „nicotnost“ usnesení valné hromady posoudit jako předběžnou otázku. Z ustálené rozhodovací praxe Nejvyššího soudu se totiž podává, že závěr o nicotnosti usnesení valné hromady lze přijmout v jakémkoliv řízení, tj. jak v řízení o vyslovení neplatnosti usnesení valné hromady, tak i jako řešení předběžné otázky v jiném řízení. Vadou způsobující nicotnost usnesení přitom může být např. nedostatek působnosti valné hromady rozhodnout o určité záležitosti, či skutečnost, že rozhodnutí v působnosti valné hromady přijala osoba, jež nebyla oprávněna vykonávat práva jediného společníka. K tomu srovnej např. usnesení Nejvyššího soudu ze dne 31. 10. 2007, sp. zn. 29 Odo 1138/2005, uveřejněné pod číslem 55/2008 Sb. rozh. obč., ze dne 16. 6. 2010, sp. zn. 29 Cdo 3247/2009, ze dne 11. 4. 2012, sp. zn. 29 Cdo 3397/2010, ze dne 20. 3. 2014, sp. zn. 29 Cdo 3656/2012, a ze dne 27. 8. 2020, sp. zn. 27 Cdo 4364/2018.\n\n9.\tVe vztahu k ostatním dovolacím námitkám dovolatelka nevymezuje předpoklady přípustnosti dovolání. Požadavek, aby dovolatelka v dovolání uvedla, v čem spatřuje splnění předpokladů přípustnosti dovolání, je podle § 241a odst. 2 o. s. ř. obligatorní náležitostí dovolání. Může-li být dovolání přípustné jen podle § 237 o. s. ř. (jako v této věci), je dovolatelka povinna v dovolání vymezit, které z tam uvedených hledisek považuje za splněné a blíže je specifikovat, přičemž k projednání dovolání nepostačuje pouhá citace textu § 237 o. s. ř. či jeho části. K tomu srov. např. usnesení Nejvyššího soudu ze dne 25. 9. 2013, sp. zn. 29 Cdo 2394/2013, uveřejněné pod číslem 4/2014 Sb. rozh. obč., usnesení velkého senátu občanskoprávního a obchodního kolegia Nejvyššího soudu ze dne 8. 4. 2015, sen. zn. 31 NSČR 9/2015, či usnesení Nejvyššího soudu ze dne 23. 10. 2013, sp. zn. 29 Cdo 2649/2013, ze dne 29. 8. 2013, sp. zn. 29 Cdo 2488/2013, anebo usnesení Ústavního soudu ze dne 21. 1. 2014, sp. zn. I. ÚS 3524/13, ze dne 21. 7. 2015, sp. zn. II. ÚS 1346/15, či ze dne 12. 8. 2015, sp. zn. IV. ÚS 3548/14\n\n10.\tNáležitosti dovolání a následky plynoucí z jejich nedodržení jsou přitom v občanském soudním řádu stanoveny zcela jasně. Účastníkovi řízení podávajícímu dovolání proto nemohou při zachování minimální míry obezřetnosti (spočívající pouze v přečtení relevantních zákonných ustanovení) vzniknout pochybnosti o tom, co má v dovolání uvést (srovnej např. závěry stanoviska pléna Ústavního soudu ze dne 28. 11. 2017, sp. zn. Pl. ÚS st. 45/16).\n\n11.\tA konečně přípustnost dovolání nemůže založit ani námitka dovolatelky stran vad řízení (nedostatečné vypořádání se s předloženými důkazy a argumenty). Dovolatelka totiž jejím prostřednictvím nepředkládá Nejvyššímu soudu žádnou otázku hmotného či procesního práva, na jejímž řešení by napadené rozhodnutí spočívalo, a jež by splňovala kritéria § 237 o. s. ř. Nejvyšší soud k vadám, které mohou mít za následek nesprávné rozhodnutí ve věci přihlíží pouze tehdy, je-li dovolání přípustné, avšak samy o sobě tyto vady nejsou způsobilým dovolacím důvodem (viz § 241a o. s. ř.).\n\n12.\tO náhradě nákladů dovolacího řízení Nejvyšší soud nerozhodoval, když rozhodnutí Nejvyššího soudu není rozhodnutím, kterým se řízení končí, a řízení nebylo již dříve skončeno (srovnej např. usnesení Nejvyššího soudu ze dne 23. 7. 2002, sp. zn. 20 Cdo 970/2001, uveřejněné pod číslem 48/2003 Sb. rozh. obč.).\n\nPoučení: Proti tomuto rozhodnutí není přípustný opravný prostředek.\n\nV Brně dne 22. 4. 2026\n\nJUDr. Filip Cileček\n\tpředseda senátu",
+          "type": "argumentation",
+          "index": 1,
+          "title": "Odůvodnění:"
+        }
+      ],
+      "source_id": "d6ecc585-b704-4a4c-b4c3-d81593d91529",
+      "created_at": "2026-04-27T16:23:55.383819",
+      "source_raw": null,
+      "source_url": "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf/WebSearch/B6F93638E00EE5ACC1258DE2004D2713?openDocument",
+      "updated_at": "2026-04-27T16:23:55.383819",
+      "case_number": "27 Cdo 1525/2025",
+      "source_hash": "3ea0cc8597502fbb6ca69ba8c805d8597de1f07f22aeafbb969070e14cdfe40d",
+      "document_ast": {
+        "blocks": [
+          {
+            "id": "b1",
+            "role": "case-number",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "27 Cdo 1525/2025-953",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p-1",
+            "plainText": "27 Cdo 1525/2025-953"
+          },
+          {
+            "id": "b2",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "USNESENÍ",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p-2",
+            "plainText": "USNESENÍ"
+          },
+          {
+            "id": "b3",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "Nejvyšší soud České republiky rozhodl v senátu složeném z předsedy JUDr. Filipa Cilečka a JUDr. Marka Doležala a JUDr. Jiřího Zavázala v právní věci žalobkyně ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "MIPL, spol. s r. o.",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": ", se sídlem v Uherském Brodě, Šumická 2325, PSČ 688 01, identifikační číslo osoby 47911034, proti žalovaným ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "1) Ing. Ivu Beerovi",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": ", zastoupenému Mgr. Vladanem Valou, advokátem, se ",
+                "type": "text"
+              },
+              {
+                "text": "sídlem v Brně, Marie Steyskalové 767/62, PSČ 616 00, ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "2) Ing. Vladimíru Neznalovi",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": ", ",
+                "type": "text"
+              },
+              {
+                "text": "zastoupenému Mgr. Jindřichem Skácelem, advokátem, se sídlem v Brně, Zachova 633/4, PSČ 602 00, ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "3) Mgr. Jiřímu Ostravskému",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": ", zastoupenému JUDr. Adamem Rakovským, ad",
+                "type": "text"
+              },
+              {
+                "text": "vokátem, se sídlem v Praze 2, Václavská 316/12, PSČ 120 00, ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "4) Komerční bance, a. s.",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": ", se sídlem v Praze 1, Na Příkopě ",
+                "type": "text"
+              },
+              {
+                "text": "969/",
+                "type": "text"
+              },
+              {
+                "text": "33, PSČ 114 07, identifikační číslo osoby 45317054, ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "5) TIPAFROST, a. s.",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": ", se sídlem v Kožichovicích, Žďárského 188, PSČ 674 01, identifikační číslo osoby 06626033, zastoupené JUDr. Miroslavem Zvěřinou, advokátem, se sídlem v Třebíči, Bráfova tř. 161/20, PSČ 674 01, a ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "6) Československé obchodní bance, a. s.",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": ", se sídlem v Praze 5, Radlická 333/150, PSČ 150 57, identifikační číslo osoby 00001",
+                "type": "text"
+              },
+              {
+                "text": "350, ",
+                "type": "text"
+              },
+              {
+                "text": "o zaplacení 237.960.185,35 Kč s příslušenstvím, vedené u Městského soudu v Praze pod sp. zn. 37 Cm 72/2013, o dovolání žalobkyně proti usnesení Vrchního soudu v Praze ze dne 6. 1. 2025, č. j. 7 Cmo 331/2024-903, ",
+                "type": "text"
+              },
+              {
+                "text": "takto:",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-3",
+            "plainText": "Nejvyšší soud České republiky rozhodl v senátu složeném z předsedy JUDr. Filipa Cilečka a JUDr. Marka Doležala a JUDr. Jiřího Zavázala v právní věci žalobkyně MIPL, spol. sr. o., se sídlem v Uherském Brodě, Šumická 2325, PSČ 688 01, identifikační číslo osoby 47911034, proti žalovaným 1) Ing. Ivu Beerovi, zastoupenému Mgr. Vladanem Valou, advokátem, se sídlem v Brně, Marie Steyskalové 767/62, PSČ 616 00, 2) Ing. Vladimíru Neznalovi, zastoupenému Mgr. Jindřichem Skácelem, advokátem, se sídlem v Brně, Zachova 633/4, PSČ 602 00, 3) Mgr. Jiřímu Ostravskému, zastoupenému JUDr. Adamem Rakovským, advokátem, se sídlem v Praze 2, Václavská 316/12, PSČ 120 00, 4) Komerční bance, a. s., se sídlem v Praze 1, Na Příkopě 969/33, PSČ 114 07, identifikační číslo osoby 45317054, 5) TIPAFROST, a. s., se sídlem v Kožichovicích, Žďárského 188, PSČ 674 01, identifikační číslo osoby 06626033, zastoupené JUDr. Miroslavem Zvěřinou, advokátem, se sídlem v Třebíči, Bráfova tř. 161/20, PSČ 674 01, a 6) Československé obchodní bance, a. s., se sídlem v Praze 5, Radlická 333/150, PSČ 150 57, identifikační číslo osoby 00001350, o zaplacení 237.960.185,35 Kč s příslušenstvím, vedené u Městského soudu v Praze pod sp. zn. 37 Cm 72/2013, o dovolání žalobkyně proti usnesení Vrchního soudu v Praze ze dne 6. 1. 2025, č. j. 7 Cmo 331/2024-903, takto:"
+          },
+          {
+            "id": "b4",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "\n",
+                "type": "text"
+              },
+              {
+                "text": "Dovolání ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "se odmítá",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": ". ",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-4",
+            "plainText": "Dovolání se odmítá."
+          },
+          {
+            "id": "b5",
+            "role": "section-heading",
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "text": "Odůvodnění:",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-5",
+            "plainText": "Odůvodnění:"
+          },
+          {
+            "id": "b6",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "1.\t",
+                "type": "text"
+              },
+              {
+                "text": "Žalobou doručenou Městskému soudu v Praze dne 3. 6. 2013 se žalobkyně domáhá zaplacení částky 237.960.185,35 Kč s příslušenstvím jako náhrady škody způsobené jí v průběhu insolvenčního řízení.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-6",
+            "plainText": "1.\tŽalobou doručenou Městskému soudu v Praze dne 3. 6. 2013 se žalobkyně domáhá zaplacení částky 237.960.185,35 Kč s příslušenstvím jako náhrady škody způsobené jí v průběhu insolvenčního řízení."
+          },
+          {
+            "id": "b7",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "2.\t",
+                "type": "text"
+              },
+              {
+                "text": "Městský soud v Praze usnesením ze dne 7. 10. 2024, č. j. 37 Cm 72/2013-885, ustanovil procesní opatrovnicí žalobkyně JUDr. Magdalenu Kubátovou, advokátku, se sídlem v Praze 7, Veverkova 1101/1, PSČ 170 00.",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-7",
+            "plainText": "2.\tMěstský soud v Praze usnesením ze dne 7. 10. 2024, č. j. 37 Cm 72/2013-885, ustanovil procesní opatrovnicí žalobkyně JUDr. Magdalenu Kubátovou, advokátku, se sídlem v Praze 7, Veverkova 1101/1, PSČ 170 00."
+          },
+          {
+            "id": "b8",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "3.\t",
+                "type": "text"
+              },
+              {
+                "text": "K odvolání žalobkyně a žalovaného 3) Vrchní soud v Praze v záhlaví označeným usnesením odmítl odvolání žalovaného 3) [první výrok] a potvrdil usnesení soudu prvního stupně (druhý výrok).",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-8",
+            "plainText": "3.\tK odvolání žalobkyně a žalovaného 3) Vrchní soud v Praze v záhlaví označeným usnesením odmítl odvolání žalovaného 3) [první výrok] a potvrdil usnesení soudu prvního stupně (druhý výrok)."
+          },
+          {
+            "id": "b9",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "4.\tProti druhému výroku usnesení odvolacího soudu podala ",
+                "type": "text"
+              },
+              {
+                "text": "žalobkyně, zastoupená",
+                "type": "text"
+              },
+              {
+                "text": " J. K., (dále jen „J. K.“), dovolání. ",
+                "type": "text"
+              },
+              {
+                "text": "Nejvyšší soud dovolání odmítl podle § 243c odst. 1 a 2 zákona č. 99/1963 Sb., občanského soudního řádu (dále jen „o. s. ř.“), jako nepřípustné. Učinil tak proto, že dovolání nesměřuje proti žádnému z usnesení vypočtených v § 238a o. s. ř. a není přípustné ani podle § 237 o. s. ř.",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-9",
+            "plainText": "4.\tProti druhému výroku usnesení odvolacího soudu podala žalobkyně, zastoupená J. K., (dále jen „J. K.“), dovolání. Nejvyšší soud dovolání odmítl podle § 243c odst. 1 a 2 zákona č. 99/1963 Sb., občanského soudního řádu (dále jen „o. s. ř.“), jako nepřípustné. Učinil tak proto, že dovolání nesměřuje proti žádnému z usnesení vypočtených v § 238a o. s. ř. a není přípustné ani podle § 237 o. s. ř."
+          },
+          {
+            "id": "b10",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "5.\t",
+                "type": "text"
+              },
+              {
+                "text": "Nejvyšší soud předesílá, že než mohl přistoupit k posouzení přípustnosti dovolání, musel nejdříve posoudit, zda jsou splněny podmínky dovolacího řízení. Je přitom třeba výslovně uvést, že dovolací soud se nezabýval otázkou, zda je J. K. oprávněn podat za společnost dovolání. Je tomu tak proto, že právě otázka existence oprávnění J. K. zastupovat žalobkyni představuje jednu ze sporných otázek v projednávané věci, jakož i důvod podaného dovolání (k tomu obdobně například usnesení Ústavního soudu ze dne 26. 7. 2016, sp. zn. II. ÚS 2502/15, ze dne 23. 10. 2018, sp. zn. III. ÚS 1472/18, v rozhodovací praxi dovolacího soudu pak například usnesení Nejvyššího soudu ze dne 25. 3. 2021,",
+                "type": "text"
+              },
+              {
+                "text": " ",
+                "type": "text"
+              },
+              {
+                "text": "sp. zn. 27 Cdo 2099/2020, odst. 5, ze dne 3. 2. 2022, sp. zn. 27 Cdo 3152/2021, odst. 6, ze dne 9. 2. 2022, sp. zn. 27 Cdo 2286/2021, uveřejněné pod číslem 1/2023 Sb. rozh. obč., odst. 25, ze dne 19. 1. 2023, sp. zn. 27 Cdo 3039/2022, uveřejněné pod číslem 42/2024 Sb. rozh. obč., odst. 24, nebo ze dne 24. 4. 2024, sp. zn. 27 Cdo 3126/20",
+                "type": "text"
+              },
+              {
+                "text": "23).",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-10",
+            "plainText": "5.\tNejvyšší soud předesílá, že než mohl přistoupit k posouzení přípustnosti dovolání, musel nejdříve posoudit, zda jsou splněny podmínky dovolacího řízení. Je přitom třeba výslovně uvést, že dovolací soud se nezabýval otázkou, zda je J. K. oprávněn podat za společnost dovolání. Je tomu tak proto, že právě otázka existence oprávnění J. K. zastupovat žalobkyni představuje jednu ze sporných otázek v projednávané věci, jakož i důvod podaného dovolání (k tomu obdobně například usnesení Ústavního soudu ze dne 26. 7. 2016, sp. zn. II. ÚS 2502/15, ze dne 23. 10. 2018, sp. zn. III. ÚS 1472/18, v rozhodovací praxi dovolacího soudu pak například usnesení Nejvyššího soudu ze dne 25. 3. 2021, sp. zn. 27 Cdo 2099/2020, odst. 5, ze dne 3. 2. 2022, sp. zn. 27 Cdo 3152/2021, odst. 6, ze dne 9. 2. 2022, sp. zn. 27 Cdo 2286/2021, uveřejněné pod číslem 1/2023 Sb. rozh. obč., odst. 25, ze dne 19. 1. 2023, sp. zn. 27 Cdo 3039/2022, uveřejněné pod číslem 42/2024 Sb. rozh. obč., odst. 24, nebo ze dne 24. 4. 2024, sp. zn. 27 Cdo 3126/2023)."
+          },
+          {
+            "id": "b11",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "6.\t",
+                "type": "text"
+              },
+              {
+                "text": "Dovolatelka má za to, že dovolání je přípustné, neboť se odvolací soud – podle jejího mínění – odchýlil od ustálené rozhodovací praxe Nejvyššího soudu při řešení otázky, zda soud může správnost údajů zapsaných v obchodním rejstříku posoudit jako předběžnou otázku i mimo řízení o statusových věcech právnických osob.",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-11",
+            "plainText": "6.\tDovolatelka má za to, že dovolání je přípustné, neboť se odvolací soud – podle jejího mínění – odchýlil od ustálené rozhodovací praxe Nejvyššího soudu při řešení otázky, zda soud může správnost údajů zapsaných v obchodním rejstříku posoudit jako předběžnou otázku i mimo řízení o statusových věcech právnických osob."
+          },
+          {
+            "id": "b12",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "7.\t",
+                "type": "text"
+              },
+              {
+                "text": "Tato otázka však přípustnost dovolání založit nemůže. Je tomu tak proto, že",
+                "type": "text"
+              },
+              {
+                "text": " ji ",
+                "type": "text"
+              },
+              {
+                "text": "odvolací soud vyřešil v souladu s ustálenou rozhodovací praxí Nejvyššího soudu, z níž se podává, že princip materiální publicity zápisů statutárního orgánu společnosti s ručením omezeným do obchodního rejstříku neplatí pro vymezení toho, kdo je v občanském soudním řízení oprávněn jednat za právnickou osobu před soudem. Jednatel společnosti s ručením omezeným je tedy oprávněn jednat za právnickou osobu před soudem [§ 21 odst. 1 pí",
+                "type": "text"
+              },
+              {
+                "text": "sm. a) o. ",
+                "type": "text"
+              },
+              {
+                "text": "s. ř.], i když o tom (dosud) nebyl proveden zápis v obchodním rejstříku (a – případně – jako jednatel téže společnosti s ručením omezeným je dosud zapsán někdo jiný); ",
+                "type": "text"
+              },
+              {
+                "type": "line-break"
+              },
+              {
+                "text": "\ndošlo-li však k ukončení výkonu funkce jednatele, nesmí za právnickou osobu vystupovat v řízení před soudem, i když (zatím) nedošlo k zápisu změny do obchodního rejstříku (srov. usnesení Nejvyššího soudu ze dne 16. 4. 2008, sp. zn. 21 Cdo 1388/2007 nebo ze dne 12. 4. 2018, sp. zn. 21 Cdo 2646/2016).",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-12",
+            "plainText": "7.\tTato otázka však přípustnost dovolání založit nemůže. Je tomu tak proto, že ji odvolací soud vyřešil v souladu s ustálenou rozhodovací praxí Nejvyššího soudu, z níž se podává, že princip materiální publicity zápisů statutárního orgánu společnosti s ručením omezeným do obchodního rejstříku neplatí pro vymezení toho, kdo je v občanském soudním řízení oprávněn jednat za právnickou osobu před soudem. Jednatel společnosti s ručením omezeným je tedy oprávněn jednat za právnickou osobu před soudem [§ 21 odst. 1 písm. a) o. s. ř.], i když o tom (dosud) nebyl proveden zápis v obchodním rejstříku (a – případně – jako jednatel téže společnosti s ručením omezeným je dosud zapsán někdo jiný); \n\ndošlo-li však k ukončení výkonu funkce jednatele, nesmí za právnickou osobu vystupovat v řízení před soudem, i když (zatím) nedošlo k zápisu změny do obchodního rejstříku (srov. usnesení Nejvyššího soudu ze dne 16. 4. 2008, sp. zn. 21 Cdo 1388/2007 nebo ze dne 12. 4. 2018, sp. zn. 21 Cdo 2646/2016)."
+          },
+          {
+            "id": "b13",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "8.\t",
+                "type": "text"
+              },
+              {
+                "text": "Stejně tak je v souladu s ustálenou judikaturou Nejvyššího soudu názor odvolacího soudu, podle kterého si může „nicotnost“ usnesení valné hromady posoudit jako předběžnou otázku. Z ustálené rozhodovací praxe Nejvyššího soudu se totiž podává, že závěr o nicotnosti usnesení valné hromady lze přijmout v jakémkoliv řízení, tj. jak v řízení o vyslovení neplatnosti usnesení valné hromady, tak i jako řešení předběžné otázky v jiném řízení. Vadou způsobující nicotnost usnesení přitom může být např. nedostatek působnosti valné hromady rozhodnout o určité záležitosti, či skutečnost, že rozhodnutí v působnosti valné hromady přijala osoba, jež nebyla oprávněna vykonávat práva jediného společníka. K tomu srovnej např. ",
+                "type": "text"
+              },
+              {
+                "text": "usnesení Nejvyššího soudu ",
+                "type": "text"
+              },
+              {
+                "text": "ze dne 31. 10. 2007, sp. zn. 29 Odo 1138/2005, uveřejněné pod číslem 55/2008 Sb. rozh. obč.",
+                "type": "text"
+              },
+              {
+                "text": ", ",
+                "type": "text"
+              },
+              {
+                "text": "ze dne 16. 6. 2010, sp. zn. 29 Cdo 3247/2009, ze dne 11. 4. 2012, sp. zn. 29 Cdo 3397/2010, ze dne 20. 3. 2014, sp. zn. 29 Cdo 3656/2012",
+                "type": "text"
+              },
+              {
+                "text": ",",
+                "type": "text"
+              },
+              {
+                "text": " a ze dne 27. 8. 2020, sp. zn. 27 Cdo 4364/2018.",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-13",
+            "plainText": "8.\tStejně tak je v souladu s ustálenou judikaturou Nejvyššího soudu názor odvolacího soudu, podle kterého si může „nicotnost“ usnesení valné hromady posoudit jako předběžnou otázku. Z ustálené rozhodovací praxe Nejvyššího soudu se totiž podává, že závěr o nicotnosti usnesení valné hromady lze přijmout v jakémkoliv řízení, tj. jak v řízení o vyslovení neplatnosti usnesení valné hromady, tak i jako řešení předběžné otázky v jiném řízení. Vadou způsobující nicotnost usnesení přitom může být např. nedostatek působnosti valné hromady rozhodnout o určité záležitosti, či skutečnost, že rozhodnutí v působnosti valné hromady přijala osoba, jež nebyla oprávněna vykonávat práva jediného společníka. K tomu srovnej např. usnesení Nejvyššího soudu ze dne 31. 10. 2007, sp. zn. 29 Odo 1138/2005, uveřejněné pod číslem 55/2008 Sb. rozh. obč., ze dne 16. 6. 2010, sp. zn. 29 Cdo 3247/2009, ze dne 11. 4. 2012, sp. zn. 29 Cdo 3397/2010, ze dne 20. 3. 2014, sp. zn. 29 Cdo 3656/2012, a ze dne 27. 8. 2020, sp. zn. 27 Cdo 4364/2018."
+          },
+          {
+            "id": "b14",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "9.\t",
+                "type": "text"
+              },
+              {
+                "text": "Ve vztahu k ostatním dovolacím námitkám dovolatelka nevymezuje předpoklady přípustnosti dovolání. Požadavek, aby dovolatelka v dovolání uvedla, v čem spatřuje splnění předpokladů přípustnosti dovolání, je podle § 241a odst. 2 o. s. ř. obligatorní náležitostí dovolání. Může-li být dovolání přípustné jen podle § 237 o. s. ř. (jako v této věci), je dovolatelka povinna v dovolání vymezit, které z tam uvedených hledisek považuje za splněné a blíže je specifikovat, přičemž k projednání dovolání nepostačuje pouhá citace textu § 237 o. s. ř. či jeho části. K tomu srov. např. usnesení Nejvyššího soudu ze dne 25. 9. 2013, sp. zn. 29 Cdo 2394/2013, uveřejněné pod číslem 4/2014 Sb. rozh. obč., usnesení velkého senátu občanskoprávního a obchodního kolegia Nejvyššího soudu ze dne 8. 4. 2015, sen. zn. 31 NSČR 9/2015, či usnesení Nejvyššího soudu ze dne 23. 10. 2013, sp. zn. 29 Cdo 2649/2013, ze dne 29. 8. 2013, sp. zn. 29 Cdo 2488/2013, anebo usnesení Ústavního soudu ze dne 21. 1. 2014, sp. zn. I. ÚS 3524/13, ze dne 21. 7. 2015, sp. zn. II. ÚS 1346/15, či ze dne 12. 8. 2015, sp. zn. IV. ÚS 3548/14",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-14",
+            "plainText": "9.\tVe vztahu k ostatním dovolacím námitkám dovolatelka nevymezuje předpoklady přípustnosti dovolání. Požadavek, aby dovolatelka v dovolání uvedla, v čem spatřuje splnění předpokladů přípustnosti dovolání, je podle § 241a odst. 2 o. s. ř. obligatorní náležitostí dovolání. Může-li být dovolání přípustné jen podle § 237 o. s. ř. (jako v této věci), je dovolatelka povinna v dovolání vymezit, které z tam uvedených hledisek považuje za splněné a blíže je specifikovat, přičemž k projednání dovolání nepostačuje pouhá citace textu § 237 o. s. ř. či jeho části. K tomu srov. např. usnesení Nejvyššího soudu ze dne 25. 9. 2013, sp. zn. 29 Cdo 2394/2013, uveřejněné pod číslem 4/2014 Sb. rozh. obč., usnesení velkého senátu občanskoprávního a obchodního kolegia Nejvyššího soudu ze dne 8. 4. 2015, sen. zn. 31 NSČR 9/2015, či usnesení Nejvyššího soudu ze dne 23. 10. 2013, sp. zn. 29 Cdo 2649/2013, ze dne 29. 8. 2013, sp. zn. 29 Cdo 2488/2013, anebo usnesení Ústavního soudu ze dne 21. 1. 2014, sp. zn. I. ÚS 3524/13, ze dne 21. 7. 2015, sp. zn. II. ÚS 1346/15, či ze dne 12. 8. 2015, sp. zn. IV. ÚS 3548/14"
+          },
+          {
+            "id": "b15",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "10.\t",
+                "type": "text"
+              },
+              {
+                "text": "Náležitosti dovolání a následky plynoucí z jejich nedodržení jsou přitom v občanském soudním řádu stanoveny zcela jasně. Účastníkovi řízení podávajícímu dovolání proto nemohou při zachování minimální míry obezřetnosti (spočívající pouze v přečtení relevantních zákonných ustanovení) vzniknout pochybnosti o tom, co má v dovolání uvést (srovnej např. závěry stanoviska pléna Ústavního soudu ze dne 28. 11. 2017, sp. zn. Pl. ÚS st. 45/16). ",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-15",
+            "plainText": "10.\tNáležitosti dovolání a následky plynoucí z jejich nedodržení jsou přitom v občanském soudním řádu stanoveny zcela jasně. Účastníkovi řízení podávajícímu dovolání proto nemohou při zachování minimální míry obezřetnosti (spočívající pouze v přečtení relevantních zákonných ustanovení) vzniknout pochybnosti o tom, co má v dovolání uvést (srovnej např. závěry stanoviska pléna Ústavního soudu ze dne 28. 11. 2017, sp. zn. Pl. ÚS st. 45/16)."
+          },
+          {
+            "id": "b16",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "11.\t",
+                "type": "text"
+              },
+              {
+                "text": "A konečně přípustnost dovolání nemůže založit ani námitka dovolatelky stran vad řízení (nedostatečné vypořádání se s předloženými důkazy a argumenty)",
+                "type": "text"
+              },
+              {
+                "text": ". ",
+                "type": "text"
+              },
+              {
+                "text": "Dovolatelka totiž jejím prostřednictvím nepředkládá Nejvyššímu soudu žádnou otázku hmotného či procesního práva, na jejímž řešení by napadené rozhodnutí spočívalo, a jež by splňovala kritéria § 237 o. s. ř. Nejvyšší soud k vadám, které mohou mít za následek nesprávné rozhodnutí ve věci přihlíží pouze tehdy, je-li dovolání přípustné, avšak samy o sobě tyto vady nejsou způsobilým dovolacím důvodem (viz § 241a o. s. ř.).",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-16",
+            "plainText": "11.\tA konečně přípustnost dovolání nemůže založit ani námitka dovolatelky stran vad řízení (nedostatečné vypořádání se s předloženými důkazy a argumenty). Dovolatelka totiž jejím prostřednictvím nepředkládá Nejvyššímu soudu žádnou otázku hmotného či procesního práva, na jejímž řešení by napadené rozhodnutí spočívalo, a jež by splňovala kritéria § 237 o. s. ř. Nejvyšší soud k vadám, které mohou mít za následek nesprávné rozhodnutí ve věci přihlíží pouze tehdy, je-li dovolání přípustné, avšak samy o sobě tyto vady nejsou způsobilým dovolacím důvodem (viz § 241a o. s. ř.)."
+          },
+          {
+            "id": "b17",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "12.\t",
+                "type": "text"
+              },
+              {
+                "text": "O náhradě nákladů dovolacího řízení Nejvyšší soud nerozhodoval, když rozhodnutí Nejvyššího soudu není rozhodnutím, kterým se řízení končí, a řízení nebylo již dříve skončeno (srovnej např. usnesení Nejvyššího soudu ze dne 23. 7. 2002, sp. zn. 20 Cdo 970/2001, uveřejněné pod číslem 48/2003 Sb. rozh. obč.).",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-17",
+            "plainText": "12.\tO náhradě nákladů dovolacího řízení Nejvyšší soud nerozhodoval, když rozhodnutí Nejvyššího soudu není rozhodnutím, kterým se řízení končí, a řízení nebylo již dříve skončeno (srovnej např. usnesení Nejvyššího soudu ze dne 23. 7. 2002, sp. zn. 20 Cdo 970/2001, uveřejněné pod číslem 48/2003 Sb. rozh. obč.)."
+          },
+          {
+            "id": "b18",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "Poučení",
+                "type": "text"
+              },
+              {
+                "text": ":",
+                "type": "text"
+              },
+              {
+                "text": " Proti tomuto rozhodnutí není přípustný opravný prostředek.",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-18",
+            "plainText": "Poučení: Proti tomuto rozhodnutí není přípustný opravný prostředek."
+          },
+          {
+            "id": "b19",
+            "role": "closing",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "V Brně ",
+                "type": "text"
+              },
+              {
+                "text": "dne 22. 4. 2026",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-19",
+            "plainText": "V Brně dne 22. 4. 2026"
+          },
+          {
+            "id": "b20",
+            "role": "signature",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "\t",
+                "type": "text"
+              },
+              {
+                "text": "JUDr. Filip Cileček",
+                "type": "text"
+              },
+              {
+                "type": "line-break"
+              },
+              {
+                "text": "\tpředsed",
+                "type": "text"
+              },
+              {
+                "text": "a senátu",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-20",
+            "plainText": "JUDr. Filip Cileček\n\tpředseda senátu"
+          }
+        ],
+        "source": {
+          "system": "cz_ns",
+          "webUrl": "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf/WebSearch/B6F93638E00EE5ACC1258DE2004D2713?openDocument",
+          "printUrl": "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf/WebPrint/B6F93638E00EE5ACC1258DE2004D2713?openDocument",
+          "documentId": "B6F93638E00EE5ACC1258DE2004D2713"
+        },
+        "version": 1,
+        "metadata": {
+          "ecli": "ECLI:CZ:NS:2026:27.CDO.1525.2025.1",
+          "court": "Nejvyšší soud",
+          "keywords": [
+            "Usnesení valné hromady (zdánlivost) [ Valná hromada ]",
+            "Opatrovník procesně právní [ Opatrovník ]",
+            "Předběžná otázka",
+            "Zápis do veřejného rejstříku [ Veřejný rejstřík (zápis & výmaz) (o. z.) ]",
+            "Obchodní rejstřík",
+            "Jednatel"
+          ],
+          "statutes": ["§ 243c odst. 1 o. s. ř."],
+          "caseNumber": "27 Cdo 1525/2025",
+          "decisionDate": "2026-04-22",
+          "decisionType": "USNESENÍ"
+        }
+      },
+      "document_url": "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf/WebSearch/B6F93638E00EE5ACC1258DE2004D2713?openDocument",
+      "decision_date": "2026-04-22",
+      "decision_type": "usnesení",
+      "parser_version": 2,
+      "source_raw_s3_key": "case-law/raw/d6ecc585-b704-4a4c-b4c3-d81593d91529/8173822ef2a8bb4a2cb17cc173d727736e268d5b835935e5765c7442cdeb0245",
+      "language_group_key": "ECLI:CZ:NS:2026:27.CDO.1525.2025.1",
+      "source_raw_content_type": "text/html"
+    },
+    {
+      "id": "019dcde2-9333-7000-b83e-ac635adbbc80",
+      "ecli": "ECLI:CZ:NS:2026:27.CDO.1116.2025.1",
+      "slug": null,
+      "court": "Nejvyšší soud",
+      "country": "CZE",
+      "analysis": null,
+      "fulltext": "27 Cdo 1116/2025-1316\n\nUSNESENÍ\n\nNejvyšší soud České republiky rozhodl předsedou senátu JUDr. Filipem Cilečkem v právní věci žalobkyně KOKAM, společnosti s ručením omezeným, se sídlem v Kocbeřích č. p. 194, PSČ 544 64, identifikační číslo osoby 46506446 zastoupené JUDr. Milanem Plíškem, advokátem, se sídlem v Jičíně, Denisova 585/0, PSČ 506 01, proti žalovanému Karlu Hrdinovi, zastoupenému Mgr. Martinem Panuškou, advokátem, se sídlem v Praze 2, Belgická 276/20, PSČ 120 00, o zaplacení 5.061.652 Kč s příslušenstvím, vedené u Krajského soudu v Hradci Králové pod sp. zn. 43 Cm 2/2007, o dovolání žalobkyně proti rozsudku Vrchního soudu v Praze ze dne 16. 10. 2024, č. j. 6 Cmo 108/2022-1242, takto:\n\nI.\tDovolací řízení se zastavuje.\n\nII.\tŽádný z účastníků nemá právo na náhradu nákladů dovolacího řízení.\n\nOdůvodnění:\n\n1.\tProti v záhlaví označenému rozsudku odvolacího soudu podala žalobkyně dovolání, které posléze podáním ze dne 8. 4. 2026, doručeným Nejvyššímu soudu dne 20. 4. 2026, vzala v plném rozsahu zpět.\n\n2.\tNejvyšší soud proto dovolací řízení zastavil podle § 243c odst. 3 věty druhé a § 243f odst. 2 zákona č. 99/1963 Sb., občanského soudního řádu (dále jen „o. s. ř.“).\n\n3.\tVýrok o náhradě nákladů dovolacího řízení nemusí být odůvodněn (§ 243f odst. 3 in fine o. s. ř.).\n\nPoučení: Proti tomuto rozhodnutí není přípustný opravný prostředek.\n\nV Brně dne 21. 4. 2026\n\nJUDr. Filip Cileček\n\tpředseda senátu",
+      "language": "cs",
+      "metadata": {
+        "ecli": "ECLI:CZ:NS:2026:27.CDO.1116.2025.1",
+        "court": "Nejvyšší soud",
+        "judge": "JUDr. Filip Cileček",
+        "category": "E",
+        "keywords": ["Zpětvzetí návrhu na zahájení řízení"],
+        "statutes": ["§ 243f odst. 2 o. s. ř.", "§ 243c odst. 3 o. s. ř."],
+        "caseNumber": "27 Cdo 1116/2025",
+        "decisionDate": "2026-04-21",
+        "decisionType": "usnesení",
+        "legalSentence": null,
+        "kategorieRozhodnuti": "E"
+      },
+      "sections": [
+        {
+          "text": "27 Cdo 1116/2025-1316\n\nUSNESENÍ\n\nNejvyšší soud České republiky rozhodl předsedou senátu JUDr. Filipem Cilečkem v právní věci žalobkyně KOKAM, společnosti s ručením omezeným, se sídlem v Kocbeřích č. p. 194, PSČ 544 64, identifikační číslo osoby 46506446 zastoupené JUDr. Milanem Plíškem, advokátem, se sídlem v Jičíně, Denisova 585/0, PSČ 506 01, proti žalovanému Karlu Hrdinovi, zastoupenému Mgr. Martinem Panuškou, advokátem, se sídlem v Praze 2, Belgická 276/20, PSČ 120 00, o zaplacení 5.061.652 Kč s příslušenstvím, vedené u Krajského soudu v Hradci Králové pod sp. zn. 43 Cm 2/2007, o dovolání žalobkyně proti rozsudku Vrchního soudu v Praze ze dne 16. 10. 2024, č. j. 6 Cmo 108/2022-1242, takto:\n\nI.\tDovolací řízení se zastavuje.\n\nII.\tŽádný z účastníků nemá právo na náhradu nákladů dovolacího řízení.",
+          "type": "header",
+          "index": 0,
+          "title": null
+        },
+        {
+          "text": "1.\tProti v záhlaví označenému rozsudku odvolacího soudu podala žalobkyně dovolání, které posléze podáním ze dne 8. 4. 2026, doručeným Nejvyššímu soudu dne 20. 4. 2026, vzala v plném rozsahu zpět.\n\n2.\tNejvyšší soud proto dovolací řízení zastavil podle § 243c odst. 3 věty druhé a § 243f odst. 2 zákona č. 99/1963 Sb., občanského soudního řádu (dále jen „o. s. ř.“).\n\n3.\tVýrok o náhradě nákladů dovolacího řízení nemusí být odůvodněn (§ 243f odst. 3 in fine o. s. ř.).\n\nPoučení: Proti tomuto rozhodnutí není přípustný opravný prostředek.\n\nV Brně dne 21. 4. 2026\n\nJUDr. Filip Cileček\n\tpředseda senátu",
+          "type": "argumentation",
+          "index": 1,
+          "title": "Odůvodnění:"
+        }
+      ],
+      "source_id": "d6ecc585-b704-4a4c-b4c3-d81593d91529",
+      "created_at": "2026-04-27T07:41:11.344912",
+      "source_raw": null,
+      "source_url": "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf/WebSearch/7C9A99B78DA805BBC1258DE2004D2717?openDocument",
+      "updated_at": "2026-04-27T07:41:11.344912",
+      "case_number": "27 Cdo 1116/2025",
+      "source_hash": "4490b3a64ed1bbec8f41120fb8f04306549dd95b1c53addfb2fae015b0306505",
+      "document_ast": {
+        "blocks": [
+          {
+            "id": "b1",
+            "role": "case-number",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "27 Cdo 1116/2025-1316",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p-1",
+            "plainText": "27 Cdo 1116/2025-1316"
+          },
+          {
+            "id": "b2",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "USNESENÍ",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p-2",
+            "plainText": "USNESENÍ"
+          },
+          {
+            "id": "b3",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "Nejvyšší soud České republiky rozhodl předsedou senátu JUDr. Filipem Cilečkem v právní věci žalobkyně ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "K O K A M, společnosti s ručením omezeným",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": ", se sídlem v Kocbeřích č. p. 194, PSČ 544 64, identifikační číslo osoby 46506446 zastoupené JUDr. Milanem Plíškem, advokátem, se sídlem v Jičíně, Denisova 585/0, PSČ 506 01, proti žalovanému ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "Karlu Hrdinovi",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": ", ",
+                "type": "text"
+              },
+              {
+                "text": "zastoupenému Mgr. Martinem Panuškou, advokátem, se sídlem v Praze 2, Belgická 276/20, PSČ 120 00, o zaplacení 5.061.652 Kč s příslušenstvím, vedené u Krajského soudu v Hradci Králové pod sp. zn. ",
+                "type": "text"
+              },
+              {
+                "text": "43 Cm 2/2007",
+                "type": "text"
+              },
+              {
+                "text": ", o dovolání žalobkyně proti rozsudku Vrchního soudu v Praze ze dne 16. 10. 2024, č. j. 6 Cmo 108",
+                "type": "text"
+              },
+              {
+                "text": "/2022-1242, t a k t o:",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-3",
+            "plainText": "Nejvyšší soud České republiky rozhodl předsedou senátu JUDr. Filipem Cilečkem v právní věci žalobkyně KOKAM, společnosti s ručením omezeným, se sídlem v Kocbeřích č. p. 194, PSČ 544 64, identifikační číslo osoby 46506446 zastoupené JUDr. Milanem Plíškem, advokátem, se sídlem v Jičíně, Denisova 585/0, PSČ 506 01, proti žalovanému Karlu Hrdinovi, zastoupenému Mgr. Martinem Panuškou, advokátem, se sídlem v Praze 2, Belgická 276/20, PSČ 120 00, o zaplacení 5.061.652 Kč s příslušenstvím, vedené u Krajského soudu v Hradci Králové pod sp. zn. 43 Cm 2/2007, o dovolání žalobkyně proti rozsudku Vrchního soudu v Praze ze dne 16. 10. 2024, č. j. 6 Cmo 108/2022-1242, takto:"
+          },
+          {
+            "id": "b5",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "I.\tDovolací řízení ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "se zastavuje",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": ".",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-5",
+            "plainText": "I.\tDovolací řízení se zastavuje."
+          },
+          {
+            "id": "b6",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "II.\tŽádný z účastníků ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "nemá právo",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": " na náhradu nákladů dovolacího řízení",
+                "type": "text"
+              },
+              {
+                "text": ".",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-6",
+            "plainText": "II.\tŽádný z účastníků nemá právo na náhradu nákladů dovolacího řízení."
+          },
+          {
+            "id": "b7",
+            "role": "section-heading",
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "text": "Odůvodnění:",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-7",
+            "plainText": "Odůvodnění:"
+          },
+          {
+            "id": "b8",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "1.\tProti v záhlaví označenému rozsudku odvolacího soudu podala žalobkyně dovolání, které posléze podáním ze dne 8. 4. 2026, doručeným Nejvyššímu soudu dne 20. 4. 2026, vzala v plném rozsahu zpět.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-8",
+            "plainText": "1.\tProti v záhlaví označenému rozsudku odvolacího soudu podala žalobkyně dovolání, které posléze podáním ze dne 8. 4. 2026, doručeným Nejvyššímu soudu dne 20. 4. 2026, vzala v plném rozsahu zpět."
+          },
+          {
+            "id": "b9",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "2.\tNejvyšší soud proto dovolací řízení zastavil podle § 243c odst. 3 věty druhé a § 243f odst. 2 zákona č. 99/1963 Sb., občanského soudního řádu (dále jen „o. s. ř.“).",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-9",
+            "plainText": "2.\tNejvyšší soud proto dovolací řízení zastavil podle § 243c odst. 3 věty druhé a § 243f odst. 2 zákona č. 99/1963 Sb., občanského soudního řádu (dále jen „o. s. ř.“)."
+          },
+          {
+            "id": "b10",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "3.\tVýrok o náhradě nákladů dovolacího řízení nemusí být odůvodněn (§ 243f odst. 3 in fine o. s. ř.).",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-10",
+            "plainText": "3.\tVýrok o náhradě nákladů dovolacího řízení nemusí být odůvodněn (§ 243f odst. 3 in fine o. s. ř.)."
+          },
+          {
+            "id": "b11",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "Poučení: Proti tomuto rozhodnutí není přípustný opravný prostředek.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-11",
+            "plainText": "Poučení: Proti tomuto rozhodnutí není přípustný opravný prostředek."
+          },
+          {
+            "id": "b13",
+            "role": "closing",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "V Brně ",
+                "type": "text"
+              },
+              {
+                "text": "dne 21. 4. 2026",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-13",
+            "plainText": "V Brně dne 21. 4. 2026"
+          },
+          {
+            "id": "b14",
+            "role": "signature",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "\t",
+                "type": "text"
+              },
+              {
+                "text": "JUDr. Filip Cileček",
+                "type": "text"
+              },
+              {
+                "type": "line-break"
+              },
+              {
+                "text": "\tpředsed",
+                "type": "text"
+              },
+              {
+                "text": "a senátu",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-14",
+            "plainText": "JUDr. Filip Cileček\n\tpředseda senátu"
+          }
+        ],
+        "source": {
+          "system": "cz_ns",
+          "webUrl": "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf/WebSearch/7C9A99B78DA805BBC1258DE2004D2717?openDocument",
+          "printUrl": "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf/WebPrint/7C9A99B78DA805BBC1258DE2004D2717?openDocument",
+          "documentId": "7C9A99B78DA805BBC1258DE2004D2717"
+        },
+        "version": 1,
+        "metadata": {
+          "ecli": "ECLI:CZ:NS:2026:27.CDO.1116.2025.1",
+          "court": "Nejvyšší soud",
+          "keywords": ["Zpětvzetí návrhu na zahájení řízení"],
+          "statutes": ["§ 243f odst. 2 o. s. ř.", "§ 243c odst. 3 o. s. ř."],
+          "caseNumber": "27 Cdo 1116/2025",
+          "decisionDate": "2026-04-21",
+          "decisionType": "USNESENÍ"
+        }
+      },
+      "document_url": "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf/WebSearch/7C9A99B78DA805BBC1258DE2004D2717?openDocument",
+      "decision_date": "2026-04-21",
+      "decision_type": "usnesení",
+      "parser_version": 2,
+      "source_raw_s3_key": "case-law/raw/d6ecc585-b704-4a4c-b4c3-d81593d91529/0ef2953823d384dece45a3e2c333c79355732bfbfc0ea99a07796880a7da4f71",
+      "language_group_key": "ECLI:CZ:NS:2026:27.CDO.1116.2025.1",
+      "source_raw_content_type": "text/html"
+    },
+    {
+      "id": "019dd169-5697-7000-959e-9618cecde6c7",
+      "ecli": "ECLI:CZ:NS:2026:30.CDO.535.2026.1",
+      "slug": null,
+      "court": "Nejvyšší soud",
+      "country": "CZE",
+      "analysis": null,
+      "fulltext": "30 Cdo 535/2026-260\n\nUSNESENÍ\n\nNejvyšší soud rozhodl v senátu složeném z předsedy JUDr. Pavla Simona a soudců JUDr. Tomáše Lichovníka a Mgr. Víta Bičáka v právní věci žalobce V. M., zastoupeného Mgr. Janem Hraškem, advokátem se sídlem v Liberci, Revoluční 123/17, proti žalované České republice – Ministerstvu spravedlnosti, se sídlem v Praze 2, Vyšehradská 424/16, jednající Úřadem pro zastupování státu ve věcech majetkových, se sídlem v Praze 2, Rašínovo nábřeží 390/42, o náhradu nemajetkové újmy ve výši 890 000 Kč s příslušenstvím, vedené u Okresního soudu v Liberci pod sp. zn. 23 C 186/2023, o dovolání žalobce proti rozsudku Krajského soudu v Ústí nad Labem – pobočky v Liberci ze dne 28. 8. 2025, č. j. 30 Co 366/2024-233, takto:\n\nI.\tDovolání se odmítá.\n\nII.\tŽalobce je povinen zaplatit žalované na náhradě nákladů dovolacího řízení částku 300 Kč, a to do tří dnů od právní moci usnesení.\n\nOdůvodnění:\n\n1.\tŽalobce se po žalované domáhá zaplacení částky v celkové výši 890 000 Kč s příslušným úrokem z prodlení z titulu svého nezákonného trestního stíhání. Konkrétně šlo o trestní stíhání nejprve pro trestný čin organizování a umožnění nedovoleného překročení státní hranice podle § 340 odst. 1, 2 písm. a), d) trestního zákoníku a později pro trestný čin napomáhání k neoprávněnému pobytu na území republiky podle § 341 odst. 1 trestního zákoníku. Žalobce byl obžaloby zproštěn. Podle zákona č. 82/1998 Sb., o odpovědnosti za škodu způsobenou při výkonu veřejné moci rozhodnutím nebo nesprávným úředním postupem ao změně zákona České národní rady č. 358/1992 Sb., o notářích a jejich činnosti (notářský řád), ve znění pozdějších předpisů, požadoval žalobce částku 100 000 Kč za nemajetkovou újmu způsobenou nepřiměřenou délkou trestního stíhání, částku 390 000 Kč za „osmiměsíční záznam v trestním rejstříku“ a částku 400 000 Kč za „osmileté útrapy nezákonného stíhání“, které neskončilo pravomocným odsuzujícím rozsudkem. Žalovaná poskytla žalobci odškodnění ve výši 106 750 Kč, z čehož částka 96 750 Kč byla určena k odškodnění nemajetkové újmy spojené s nepřiměřenou délkou řízení a částka 10 000 Kč k odškodnění nemajetkové újmy způsobené trestním stíháním.\n\n2.\tOkresní soud v Liberci (dále jen „soud prvního stupně“) rozsudkem ze dne 11. 6. 2024, č. j. 23 C 186/2023-192, řízení co do částky 106 750 Kč a co do zaplacení úroku z prodlení ve výši 15 % ročně z částky 106 750 Kč od 13. 10. 2023 do zaplacení zastavil (výrok I). Uložil žalované povinnost zaplatit žalobci částku 85 000 Kč s úrokem z prodlení ve výši 15 % ročně z částky 85 000 Kč od 2. 8. 2023 do zaplacení (výrok II). Pokud se žalobce domáhal více, než je uvedeno ve výroku II, v tomto rozsahu žalobu zamítnul (výrok III). Výrokem IV uložil žalované zaplatit žalobci náhradu nákladů řízení. Z přiznané částky 85 000 Kč připadala částka 21 500 Kč na odškodnění nepřiměřené délky řízení a částka 63 500 Kč na odškodnění újmy způsobené samotným trestním stíháním.\n\n3.\tK odvolání žalobce i žalované Krajský soud v Ústí nad Labem – pobočka v Liberci (dále jen „odvolací soud“) rozsudkem ze dne 28. 8. 2025, č. j. 30 Co 366/2024-233, řízení o odvolání žalované proti výroku I rozsudku soudu prvního stupně zastavil (výrok I rozsudku odvolacího soudu) a odvolání žalované proti výroku III odmítnul (výrok II rozsudku odvolacího soudu). Rozsudek soudu prvního stupně v části výroku II, jíž byla žalované uložena povinnost zaplatit žalobci částku 3 250 Kč s úrokem z prodlení ve výši 15 % ročně z částky 3 250 Kč od 2. 8. 2023 do zaplacení, potvrdil (výrok III rozsudku odvolacího soudu). V části výroku II, jíž byla žalované uložena povinnost zaplatit žalobci částku 81 750 Kč s úrokem z prodlení ve výši 15 % ročně z částky 81 750 Kč od 2. 8. 2023 do zaplacení, rozsudek soudu prvního stupně změnil tak, že se v této části žaloba zamítá (výrok IV rozsudku odvolacího soudu). Rozsudek soudu prvního stupně v části výroku III, jíž byla žaloba zamítnuta co do úroku z prodlení ve výši 15 % ročně z částky 106 750 Kč od 2. 8. 2023 do 12. 10. 2023, změnil tak, že žalovaná je povinna zaplatit žalobci úrok z prodlení ve výši 15 % ročně z částky 106 750 Kč od 2. 8. 2023 do 12. 10. 2023 (výrok V rozsudku odvolacího soudu). V části výroku III, jíž byla žaloba zamítnuta co do požadavku žalobce na zaplacení úroku z prodlení ve výši 15 % ročně z částky 890 000 Kč za den 1. 8. 2023 a na zaplacení částky 698 250 Kč s úrokem z prodlení ve výši 15 % ročně z částky 698 250 Kč od 2. 8. 2023 do zaplacení, rozsudek soudu prvního stupně potvrdil (výrok VI rozsudku odvolacího soudu). Výroky VII a VIII odvolací soud rozhodl o náhradě nákladů řízení před soudy obou stupňů. Odvolacím soudem „potvrzená“ částka 3 250 Kč připadá na odškodnění nepřiměřené délky řízení. Za tu žalobce požadoval celkem „jen“ 100 000 Kč, a proto odvolací soud ohledně částky 18 250 Kč rozsudek soudu prvního stupně změnil a žalobu zamítl. Ohledně náhrady nemajetkové újmy za trestní stíhání potvrdil zamítavý rozsudek soudu prvního stupně a zamítl i tímto soudem přiznanou částku 10 000 Kč, protože dospěl k závěru, že „žalobce vznik konkrétní újmy vzniklé v důsledku nezákonného rozhodnutí neprokázal“. Na náhradě nemajetkové újmy způsobené nepřiměřenou délkou řízení tak byla žalobci pravomocně přiznána celá jím z tohoto důvodu požadovaná částka 100 000 Kč.\n\n4.\tRozsudek odvolacího soudu ohledně výroků III, IV, Va VI napadl žalobce včasným dovoláním, jež však Nejvyšší soud podle § 243c odst. 1 zákona č. 99/1963 Sb., občanský soudní řád, ve znění účinném od 1. 1. 2022 (viz čl. II a XII zákona č. 286/2021 Sb.), dále jen „o. s. ř.“, odmítl.\n\n5.\tDovolání není subjektivně přípustné v části, která směřuje proti výrokům III aV rozsudku odvolacího soudu. Těmito výroky bylo rozhodnuto ve prospěch žalobce. Oprávnění podat dovolání (subjektivní přípustnost) však svědčí pouze tomu účastníku, v jehož poměrech rozhodnutím odvolacího soudu nastala újma odstranitelná jen tím, že dovolací soud toto rozhodnutí zruší, popřípadě změní (srov. usnesení Nejvyššího soudu ze dne 1. 6. 2000, sp. zn. 31 Cdo 2675/99). Nejvyšší soud tedy dovolání v této části jako subjektivně nepřípustné dle § 243c odst. 3 věty první a § 218 písm. b) o. s. ř. odmítl.\n\n6.\tDle odvolacího soudu byla žalobci na odškodnění nemajetkové újmy za nepřiměřenou délku řízení přiznána celá částka 100 000 Kč, kterou na toto odškodnění požadoval. Proti tomuto závěru odvolacího soudu žalobce nic nenamítá. Ohledně tohoto odškodnění dovolání neobsahuje vymezení důvodu a ani přípustnosti dovolání, jak požaduje § 241a odst. 2 o. s. ř., a trpí tak vadami, pro něž nelze v dovolacím řízení pokračovat, a tyto vady nebyly žalobcem v zákonné lhůtě odstraněny (§ 241b odst. 3 o. s. ř.).\n\n7.\tŽalobce dovolání odůvodnil tím, že napadené rozhodnutí závisí na vyřešení otázky hmotného práva ohledně skutečnosti, že se do odškodnění žalobce za nemajetkovou újmu má promítnout též „zlý úmysl“ státu, s tím, že tato otázka má být dovolacím soudem posouzena jinak, než doposud byla. Tento „zlý úmysl“ státu žalobce spatřoval v neprofesionálním postupu orgánů činných v trestním řízení. Dle žalobce by soudy „v řízení o odškodnění měly odlišovat situaci, kdy trestní soudy, resp. všechny orgány činné v trestním řízení, přistupují k věci s plnou mírou profesionality (tj. se znalostí judikatury), resp. legality, kdy se v rozhodnutí vyjádří k odvolacím důvodům obžalovaného (byť i tak, že vyloží, v čem s judikaturou vyššího soudu nesouhlasí a proč ji tak nerespektuje, a nikoli tak, že zamítne odvolání, aniž se s jeho obsahem vypořádá), přičemž bude obžalovaný následně obžaloby zproštěn a založen tak jeho nárok na odškodnění za nemajetkovou újmu, a situací, kdy trestní soud toto neučiní“.\n\n8.\tOtázka, zda je finanční zadostiučinění možné navýšit pro „zlý úmysl“, však přípustnost dovolání podle § 237 o. s. ř. nezakládá. Jak již bylo uvedeno výše, odvolací soud dospěl k závěru, že „žalobce vznik konkrétní újmy vzniklé v důsledku nezákonného rozhodnutí neprokázal“, a proto žalobci z tohoto titulu žádné odškodnění nepřiznal. Domáhá-li se žalobce navýšení odškodnění, které nebylo přiznáno proto, že nebyla prokázána újma, staví svou argumentaci na odlišných skutkových závěrech. Nebyla-li prokázána újma, nelze zvyšovat její odškodnění. Dovolání lze ale podle § 241a odst. 1 o. s. ř. podat pouze z důvodu, že rozhodnutí odvolacího soudu spočívá na nesprávném právním posouzení věci, nikoliv proto, že je založeno na nesprávném skutkovém zjištění. Odškodněním údajného „zlého úmyslu“ se odvolací soud zabýval toliko nad rámec nezbytného odůvodnění a nejedná se o právní posouzení, na kterém by bylo jeho rozhodnutí založeno.\n\n9.\tK případným vadám řízení, které mohly mít za následek nesprávné rozhodnutí ve věci, dovolací soud přihlíží pouze tehdy, je-li dovolání přípustné (§ 242 odst. 3 o. s. ř.). To však v projednávané věci splněno nebylo.\n\n10.\tS ohledem na výše uvedené Nejvyšší soud dovolání odmítl zčásti jako vadné a zčásti jako nepřípustné (§ 243c odst. 1 o. s. ř.).\n\n11.\tRozhodnutí o náhradě nákladů dovolacího řízení nemusí být odůvodněno (§ 243f odst. 3 o. s. ř.).\n\nPoučení: Proti tomuto rozhodnutí není přípustný opravný prostředek.\n\nV Brně dne 17. 4. 2026\n\nJUDr. Pavel Simon\n\tpředseda senátu",
+      "language": "cs",
+      "metadata": {
+        "ecli": "ECLI:CZ:NS:2026:30.CDO.535.2026.1",
+        "court": "Nejvyšší soud",
+        "judge": "JUDr. Pavel Simon",
+        "category": "D",
+        "keywords": ["Dovolání"],
+        "statutes": ["§ 241a odst. 1 o. s. ř."],
+        "caseNumber": "30 Cdo 535/2026",
+        "decisionDate": "2026-04-17",
+        "decisionType": "usnesení",
+        "legalSentence": null,
+        "kategorieRozhodnuti": "D"
+      },
+      "sections": [
+        {
+          "text": "30 Cdo 535/2026-260\n\nUSNESENÍ\n\nNejvyšší soud rozhodl v senátu složeném z předsedy JUDr. Pavla Simona a soudců JUDr. Tomáše Lichovníka a Mgr. Víta Bičáka v právní věci žalobce V. M., zastoupeného Mgr. Janem Hraškem, advokátem se sídlem v Liberci, Revoluční 123/17, proti žalované České republice – Ministerstvu spravedlnosti, se sídlem v Praze 2, Vyšehradská 424/16, jednající Úřadem pro zastupování státu ve věcech majetkových, se sídlem v Praze 2, Rašínovo nábřeží 390/42, o náhradu nemajetkové újmy ve výši 890 000 Kč s příslušenstvím, vedené u Okresního soudu v Liberci pod sp. zn. 23 C 186/2023, o dovolání žalobce proti rozsudku Krajského soudu v Ústí nad Labem – pobočky v Liberci ze dne 28. 8. 2025, č. j. 30 Co 366/2024-233, takto:\n\nI.\tDovolání se odmítá.\n\nII.\tŽalobce je povinen zaplatit žalované na náhradě nákladů dovolacího řízení částku 300 Kč, a to do tří dnů od právní moci usnesení.",
+          "type": "header",
+          "index": 0,
+          "title": null
+        },
+        {
+          "text": "1.\tŽalobce se po žalované domáhá zaplacení částky v celkové výši 890 000 Kč s příslušným úrokem z prodlení z titulu svého nezákonného trestního stíhání. Konkrétně šlo o trestní stíhání nejprve pro trestný čin organizování a umožnění nedovoleného překročení státní hranice podle § 340 odst. 1, 2 písm. a), d) trestního zákoníku a později pro trestný čin napomáhání k neoprávněnému pobytu na území republiky podle § 341 odst. 1 trestního zákoníku. Žalobce byl obžaloby zproštěn. Podle zákona č. 82/1998 Sb., o odpovědnosti za škodu způsobenou při výkonu veřejné moci rozhodnutím nebo nesprávným úředním postupem ao změně zákona České národní rady č. 358/1992 Sb., o notářích a jejich činnosti (notářský řád), ve znění pozdějších předpisů, požadoval žalobce částku 100 000 Kč za nemajetkovou újmu způsobenou nepřiměřenou délkou trestního stíhání, částku 390 000 Kč za „osmiměsíční záznam v trestním rejstříku“ a částku 400 000 Kč za „osmileté útrapy nezákonného stíhání“, které neskončilo pravomocným odsuzujícím rozsudkem. Žalovaná poskytla žalobci odškodnění ve výši 106 750 Kč, z čehož částka 96 750 Kč byla určena k odškodnění nemajetkové újmy spojené s nepřiměřenou délkou řízení a částka 10 000 Kč k odškodnění nemajetkové újmy způsobené trestním stíháním.\n\n2.\tOkresní soud v Liberci (dále jen „soud prvního stupně“) rozsudkem ze dne 11. 6. 2024, č. j. 23 C 186/2023-192, řízení co do částky 106 750 Kč a co do zaplacení úroku z prodlení ve výši 15 % ročně z částky 106 750 Kč od 13. 10. 2023 do zaplacení zastavil (výrok I). Uložil žalované povinnost zaplatit žalobci částku 85 000 Kč s úrokem z prodlení ve výši 15 % ročně z částky 85 000 Kč od 2. 8. 2023 do zaplacení (výrok II). Pokud se žalobce domáhal více, než je uvedeno ve výroku II, v tomto rozsahu žalobu zamítnul (výrok III). Výrokem IV uložil žalované zaplatit žalobci náhradu nákladů řízení. Z přiznané částky 85 000 Kč připadala částka 21 500 Kč na odškodnění nepřiměřené délky řízení a částka 63 500 Kč na odškodnění újmy způsobené samotným trestním stíháním.\n\n3.\tK odvolání žalobce i žalované Krajský soud v Ústí nad Labem – pobočka v Liberci (dále jen „odvolací soud“) rozsudkem ze dne 28. 8. 2025, č. j. 30 Co 366/2024-233, řízení o odvolání žalované proti výroku I rozsudku soudu prvního stupně zastavil (výrok I rozsudku odvolacího soudu) a odvolání žalované proti výroku III odmítnul (výrok II rozsudku odvolacího soudu). Rozsudek soudu prvního stupně v části výroku II, jíž byla žalované uložena povinnost zaplatit žalobci částku 3 250 Kč s úrokem z prodlení ve výši 15 % ročně z částky 3 250 Kč od 2. 8. 2023 do zaplacení, potvrdil (výrok III rozsudku odvolacího soudu). V části výroku II, jíž byla žalované uložena povinnost zaplatit žalobci částku 81 750 Kč s úrokem z prodlení ve výši 15 % ročně z částky 81 750 Kč od 2. 8. 2023 do zaplacení, rozsudek soudu prvního stupně změnil tak, že se v této části žaloba zamítá (výrok IV rozsudku odvolacího soudu). Rozsudek soudu prvního stupně v části výroku III, jíž byla žaloba zamítnuta co do úroku z prodlení ve výši 15 % ročně z částky 106 750 Kč od 2. 8. 2023 do 12. 10. 2023, změnil tak, že žalovaná je povinna zaplatit žalobci úrok z prodlení ve výši 15 % ročně z částky 106 750 Kč od 2. 8. 2023 do 12. 10. 2023 (výrok V rozsudku odvolacího soudu). V části výroku III, jíž byla žaloba zamítnuta co do požadavku žalobce na zaplacení úroku z prodlení ve výši 15 % ročně z částky 890 000 Kč za den 1. 8. 2023 a na zaplacení částky 698 250 Kč s úrokem z prodlení ve výši 15 % ročně z částky 698 250 Kč od 2. 8. 2023 do zaplacení, rozsudek soudu prvního stupně potvrdil (výrok VI rozsudku odvolacího soudu). Výroky VII a VIII odvolací soud rozhodl o náhradě nákladů řízení před soudy obou stupňů. Odvolacím soudem „potvrzená“ částka 3 250 Kč připadá na odškodnění nepřiměřené délky řízení. Za tu žalobce požadoval celkem „jen“ 100 000 Kč, a proto odvolací soud ohledně částky 18 250 Kč rozsudek soudu prvního stupně změnil a žalobu zamítl. Ohledně náhrady nemajetkové újmy za trestní stíhání potvrdil zamítavý rozsudek soudu prvního stupně a zamítl i tímto soudem přiznanou částku 10 000 Kč, protože dospěl k závěru, že „žalobce vznik konkrétní újmy vzniklé v důsledku nezákonného rozhodnutí neprokázal“. Na náhradě nemajetkové újmy způsobené nepřiměřenou délkou řízení tak byla žalobci pravomocně přiznána celá jím z tohoto důvodu požadovaná částka 100 000 Kč.\n\n4.\tRozsudek odvolacího soudu ohledně výroků III, IV, Va VI napadl žalobce včasným dovoláním, jež však Nejvyšší soud podle § 243c odst. 1 zákona č. 99/1963 Sb., občanský soudní řád, ve znění účinném od 1. 1. 2022 (viz čl. II a XII zákona č. 286/2021 Sb.), dále jen „o. s. ř.“, odmítl.\n\n5.\tDovolání není subjektivně přípustné v části, která směřuje proti výrokům III aV rozsudku odvolacího soudu. Těmito výroky bylo rozhodnuto ve prospěch žalobce. Oprávnění podat dovolání (subjektivní přípustnost) však svědčí pouze tomu účastníku, v jehož poměrech rozhodnutím odvolacího soudu nastala újma odstranitelná jen tím, že dovolací soud toto rozhodnutí zruší, popřípadě změní (srov. usnesení Nejvyššího soudu ze dne 1. 6. 2000, sp. zn. 31 Cdo 2675/99). Nejvyšší soud tedy dovolání v této části jako subjektivně nepřípustné dle § 243c odst. 3 věty první a § 218 písm. b) o. s. ř. odmítl.\n\n6.\tDle odvolacího soudu byla žalobci na odškodnění nemajetkové újmy za nepřiměřenou délku řízení přiznána celá částka 100 000 Kč, kterou na toto odškodnění požadoval. Proti tomuto závěru odvolacího soudu žalobce nic nenamítá. Ohledně tohoto odškodnění dovolání neobsahuje vymezení důvodu a ani přípustnosti dovolání, jak požaduje § 241a odst. 2 o. s. ř., a trpí tak vadami, pro něž nelze v dovolacím řízení pokračovat, a tyto vady nebyly žalobcem v zákonné lhůtě odstraněny (§ 241b odst. 3 o. s. ř.).\n\n7.\tŽalobce dovolání odůvodnil tím, že napadené rozhodnutí závisí na vyřešení otázky hmotného práva ohledně skutečnosti, že se do odškodnění žalobce za nemajetkovou újmu má promítnout též „zlý úmysl“ státu, s tím, že tato otázka má být dovolacím soudem posouzena jinak, než doposud byla. Tento „zlý úmysl“ státu žalobce spatřoval v neprofesionálním postupu orgánů činných v trestním řízení. Dle žalobce by soudy „v řízení o odškodnění měly odlišovat situaci, kdy trestní soudy, resp. všechny orgány činné v trestním řízení, přistupují k věci s plnou mírou profesionality (tj. se znalostí judikatury), resp. legality, kdy se v rozhodnutí vyjádří k odvolacím důvodům obžalovaného (byť i tak, že vyloží, v čem s judikaturou vyššího soudu nesouhlasí a proč ji tak nerespektuje, a nikoli tak, že zamítne odvolání, aniž se s jeho obsahem vypořádá), přičemž bude obžalovaný následně obžaloby zproštěn a založen tak jeho nárok na odškodnění za nemajetkovou újmu, a situací, kdy trestní soud toto neučiní“.\n\n8.\tOtázka, zda je finanční zadostiučinění možné navýšit pro „zlý úmysl“, však přípustnost dovolání podle § 237 o. s. ř. nezakládá. Jak již bylo uvedeno výše, odvolací soud dospěl k závěru, že „žalobce vznik konkrétní újmy vzniklé v důsledku nezákonného rozhodnutí neprokázal“, a proto žalobci z tohoto titulu žádné odškodnění nepřiznal. Domáhá-li se žalobce navýšení odškodnění, které nebylo přiznáno proto, že nebyla prokázána újma, staví svou argumentaci na odlišných skutkových závěrech. Nebyla-li prokázána újma, nelze zvyšovat její odškodnění. Dovolání lze ale podle § 241a odst. 1 o. s. ř. podat pouze z důvodu, že rozhodnutí odvolacího soudu spočívá na nesprávném právním posouzení věci, nikoliv proto, že je založeno na nesprávném skutkovém zjištění. Odškodněním údajného „zlého úmyslu“ se odvolací soud zabýval toliko nad rámec nezbytného odůvodnění a nejedná se o právní posouzení, na kterém by bylo jeho rozhodnutí založeno.\n\n9.\tK případným vadám řízení, které mohly mít za následek nesprávné rozhodnutí ve věci, dovolací soud přihlíží pouze tehdy, je-li dovolání přípustné (§ 242 odst. 3 o. s. ř.). To však v projednávané věci splněno nebylo.\n\n10.\tS ohledem na výše uvedené Nejvyšší soud dovolání odmítl zčásti jako vadné a zčásti jako nepřípustné (§ 243c odst. 1 o. s. ř.).\n\n11.\tRozhodnutí o náhradě nákladů dovolacího řízení nemusí být odůvodněno (§ 243f odst. 3 o. s. ř.).\n\nPoučení: Proti tomuto rozhodnutí není přípustný opravný prostředek.\n\nV Brně dne 17. 4. 2026\n\nJUDr. Pavel Simon\n\tpředseda senátu",
+          "type": "argumentation",
+          "index": 1,
+          "title": "Odůvodnění:"
+        }
+      ],
+      "source_id": "d6ecc585-b704-4a4c-b4c3-d81593d91529",
+      "created_at": "2026-04-28T00:07:14.838919",
+      "source_raw": null,
+      "source_url": "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf/WebSearch/FA2D2FF862EF7DB2C1258DE4004D5579?openDocument",
+      "updated_at": "2026-04-28T00:07:14.838919",
+      "case_number": "30 Cdo 535/2026",
+      "source_hash": "1c067aed6c853738c90214ae52e7b1fc9aa91d3555a7ffa8e370753a475d7aa4",
+      "document_ast": {
+        "blocks": [
+          {
+            "id": "b1",
+            "role": "case-number",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "30 Cdo 535/2026-260",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p-1",
+            "plainText": "30 Cdo 535/2026-260"
+          },
+          {
+            "id": "b2",
+            "role": "decision-title",
+            "type": "heading",
+            "level": 1,
+            "inlines": [
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "USNESENÍ",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "anchorId": "p-2",
+            "plainText": "USNESENÍ"
+          },
+          {
+            "id": "b3",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "Nejvyšší soud rozhodl v senátu složeném z předsedy JUDr. Pavla Simona a soudců JUDr. Tomáše Lichovníka a Mgr. Víta Bičáka v právní věci žalobce ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "V. M.",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": ", zastoupeného Mgr. Janem Hraškem, advokátem se sídlem v Liberci, Revoluční 123/17, proti žalované ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "České republice – Ministerstvu spravedlnosti, ",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": "se sídlem v Praze 2, Vyšehradská 424/16, jednající Úřadem pro zastupování státu ve věcech majetkových, se sídlem v Praze 2, Rašínovo nábřeží 390/42, o náhradu nemajetkové újmy ve výši 890 000 Kč s příslušenstvím, vedené u Okresního soudu v Liberci pod sp. zn. 23 C 186/2023, o dovolání žalobce proti rozsudku Krajského soudu v Ústí nad Labem – pobočky v Liberci ze dne 28. 8. 2025, č. j. 30 Co 366/2024-233, takto:",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-3",
+            "plainText": "Nejvyšší soud rozhodl v senátu složeném z předsedy JUDr. Pavla Simona a soudců JUDr. Tomáše Lichovníka a Mgr. Víta Bičáka v právní věci žalobce V. M., zastoupeného Mgr. Janem Hraškem, advokátem se sídlem v Liberci, Revoluční 123/17, proti žalované České republice – Ministerstvu spravedlnosti, se sídlem v Praze 2, Vyšehradská 424/16, jednající Úřadem pro zastupování státu ve věcech majetkových, se sídlem v Praze 2, Rašínovo nábřeží 390/42, o náhradu nemajetkové újmy ve výši 890 000 Kč s příslušenstvím, vedené u Okresního soudu v Liberci pod sp. zn. 23 C 186/2023, o dovolání žalobce proti rozsudku Krajského soudu v Ústí nad Labem – pobočky v Liberci ze dne 28. 8. 2025, č. j. 30 Co 366/2024-233, takto:"
+          },
+          {
+            "id": "b5",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "I.\tDovolání ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "se",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": " ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "odmítá",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": ".",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-5",
+            "plainText": "I.\tDovolání se odmítá."
+          },
+          {
+            "id": "b6",
+            "role": "holding",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "II.\tŽalobce ",
+                "type": "text"
+              },
+              {
+                "type": "bold",
+                "children": [
+                  {
+                    "text": "je povinen",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": " zaplatit žalované na náhradě nákladů dovolacího řízení částku 300 Kč, a to do tří dnů od právní moci usnesení.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-6",
+            "plainText": "II.\tŽalobce je povinen zaplatit žalované na náhradě nákladů dovolacího řízení částku 300 Kč, a to do tří dnů od právní moci usnesení."
+          },
+          {
+            "id": "b7",
+            "role": "section-heading",
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "text": " ",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              },
+              {
+                "text": "Odůvodnění:",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-7",
+            "plainText": "Odůvodnění:"
+          },
+          {
+            "id": "b8",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "1.\tŽalobce se po žalované domáhá zaplacení částky v celkové výši 890 000 Kč s příslušným úrokem z prodlení z titulu svého nezákonného trestního stíhání. Konkrétně šlo o trestní stíhání nejprve pro trestný čin organizování a umožnění nedovoleného překročení státní hranice podle § 340 odst. 1, 2 písm. a), d) trestního zákoníku a později pro trestný čin napomáhání k neoprávněnému pobytu na území republiky podle § 341 odst. 1 trestního zákoníku. Žalobce byl obžaloby zproštěn. Podle zákona č. 82/1998 Sb., o odpovědnosti za škodu způsobenou při výkonu veřejné moci rozhodnutím nebo nesprávným úředním postupem a o změně zákona České národní rady č. 358/1992 Sb., o notářích a jejich činnosti (notářský řád), ve znění pozdějších předpisů, požadoval žalobce částku 100 000 Kč za nemajetkovou újmu způsobenou nepřiměřenou délkou trestního stíhání, částku 390 000 Kč za „osmiměsíční záznam v trestním rejstříku“ a částku 400 000 Kč za „osmileté útrapy nezákonného stíhání“, které neskončilo pravomocným odsuzujícím rozsudkem. Žalovaná poskytla žalobci odškodnění ve výši 106 750 Kč, z čehož částka 96 750 Kč byla určena k odškodnění nemajetkové újmy spojené s nepřiměřenou délkou řízení a částka 10 000 Kč k odškodnění nemajetkové újmy způsobené trestním stíháním.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-8",
+            "plainText": "1.\tŽalobce se po žalované domáhá zaplacení částky v celkové výši 890 000 Kč s příslušným úrokem z prodlení z titulu svého nezákonného trestního stíhání. Konkrétně šlo o trestní stíhání nejprve pro trestný čin organizování a umožnění nedovoleného překročení státní hranice podle § 340 odst. 1, 2 písm. a), d) trestního zákoníku a později pro trestný čin napomáhání k neoprávněnému pobytu na území republiky podle § 341 odst. 1 trestního zákoníku. Žalobce byl obžaloby zproštěn. Podle zákona č. 82/1998 Sb., o odpovědnosti za škodu způsobenou při výkonu veřejné moci rozhodnutím nebo nesprávným úředním postupem ao změně zákona České národní rady č. 358/1992 Sb., o notářích a jejich činnosti (notářský řád), ve znění pozdějších předpisů, požadoval žalobce částku 100 000 Kč za nemajetkovou újmu způsobenou nepřiměřenou délkou trestního stíhání, částku 390 000 Kč za „osmiměsíční záznam v trestním rejstříku“ a částku 400 000 Kč za „osmileté útrapy nezákonného stíhání“, které neskončilo pravomocným odsuzujícím rozsudkem. Žalovaná poskytla žalobci odškodnění ve výši 106 750 Kč, z čehož částka 96 750 Kč byla určena k odškodnění nemajetkové újmy spojené s nepřiměřenou délkou řízení a částka 10 000 Kč k odškodnění nemajetkové újmy způsobené trestním stíháním."
+          },
+          {
+            "id": "b9",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "2.\tOkresní soud v Liberci (dále jen „soud prvního stupně“) rozsudkem ze dne 11. 6. 2024, č. j. 23 C 186/2023-192, řízení co do částky 106 750 Kč a co do zaplacení úroku z prodlení ve výši 15 % ročně z částky 106 750 Kč od 13. 10. 2023 do zaplacení zastavil (výrok I). Uložil žalované povinnost zaplatit žalobci částku 85 000 Kč s úrokem z prodlení ve výši 15 % ročně z částky 85 000 Kč od 2. 8. 2023 do zaplacení (výrok II). Pokud se žalobce domáhal více, než je uvedeno ve výroku II, v tomto rozsahu žalobu zamítnul (výrok III). Výrokem IV uložil žalované zaplatit žalobci náhradu nákladů řízení. Z přiznané částky 85 000 Kč připadala částka 21 500 Kč na odškodnění nepřiměřené délky řízení a částka 63 500 Kč na odškodnění újmy způsobené samotným trestním stíháním.",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-9",
+            "plainText": "2.\tOkresní soud v Liberci (dále jen „soud prvního stupně“) rozsudkem ze dne 11. 6. 2024, č. j. 23 C 186/2023-192, řízení co do částky 106 750 Kč a co do zaplacení úroku z prodlení ve výši 15 % ročně z částky 106 750 Kč od 13. 10. 2023 do zaplacení zastavil (výrok I). Uložil žalované povinnost zaplatit žalobci částku 85 000 Kč s úrokem z prodlení ve výši 15 % ročně z částky 85 000 Kč od 2. 8. 2023 do zaplacení (výrok II). Pokud se žalobce domáhal více, než je uvedeno ve výroku II, v tomto rozsahu žalobu zamítnul (výrok III). Výrokem IV uložil žalované zaplatit žalobci náhradu nákladů řízení. Z přiznané částky 85 000 Kč připadala částka 21 500 Kč na odškodnění nepřiměřené délky řízení a částka 63 500 Kč na odškodnění újmy způsobené samotným trestním stíháním."
+          },
+          {
+            "id": "b10",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "3.\tK odvolání žalobce i žalované Krajský soud v Ústí nad Labem – pobočka v Liberci (dále jen „odvolací soud“) rozsudkem ze dne 28. 8. 2025, č. j. 30 Co 366/2024-233, řízení o odvolání žalované proti výroku I rozsudku soudu prvního stupně zastavil (výrok I rozsudku odvolacího soudu) a odvolání žalované proti výroku III odmítnul (výrok II rozsudku odvolacího soudu). Rozsudek soudu prvního stupně v části výroku II, jíž byla žalované uložena povinnost zaplatit žalobci částku 3 250 Kč s úrokem z prodlení ve výši 15 % ročně z částky 3 250 Kč od 2. 8. 2023 do zaplacení, potvrdil (výrok III rozsudku odvolacího soudu). V části výroku II, jíž byla žalované uložena povinnost zaplatit žalobci částku 81 750 Kč s úrokem z prodlení ve výši 15 % ročně z částky 81 750 Kč od 2. 8. 2023 do zaplacení, rozsudek soudu prvního stupně změnil tak, že se v této části žaloba zamítá (výrok IV rozsudku odvolacího soudu). Rozsudek soudu prvního stupně v části výroku III, jíž byla žaloba zamítnuta co do úroku z prodlení ve výši 15 % ročně z částky 106 750 Kč od 2. 8. 2023 do 12. 10. 2023, změnil tak, že žalovaná je povinna zaplatit žalobci úrok z prodlení ve výši 15 % ročně z částky 106 750 Kč od 2. 8. 2023 do 12. 10. 2023 (výrok V rozsudku odvolacího soudu). V části výroku III, jíž byla žaloba zamítnuta co do požadavku žalobce na zaplacení úroku z prodlení ve výši 15 % ročně z částky 890 000 Kč za den 1. 8. 2023 a na zaplacení částky 698 250 Kč s úrokem z prodlení ve výši 15 % ročně z částky 698 250 Kč od 2. 8. 2023 do zaplacení, rozsudek soudu prvního stupně potvrdil (výrok VI rozsudku odvolacího soudu). Výroky VII a VIII odvolací soud rozhodl o náhradě nákladů řízení před soudy obou stupňů. Odvolacím soudem „potvrzená“ částka 3 250 Kč připadá na odškodnění nepřiměřené délky řízení. Za tu žalobce požadoval celkem „jen“ 100 000 Kč, a proto odvolací soud ohledně částky 18 250 Kč rozsudek soudu prvního stupně změnil a žalobu zamítl. Ohledně náhrady nemajetkové újmy za trestní stíhání potvrdil zamítavý rozsudek soudu prvního stupně a zamítl i tímto soudem přiznanou částku 10 000 Kč, protože dospěl k závěru, že „žalobce vznik konkrétní újmy vzniklé v důsledku nezákonného rozhodnutí neprokázal“. Na náhradě nemajetkové újmy způsobené nepřiměřenou délkou řízení tak byla žalobci pravomocně přiznána celá jím z tohoto důvodu požadovaná částka 100 000 Kč. ",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-10",
+            "plainText": "3.\tK odvolání žalobce i žalované Krajský soud v Ústí nad Labem – pobočka v Liberci (dále jen „odvolací soud“) rozsudkem ze dne 28. 8. 2025, č. j. 30 Co 366/2024-233, řízení o odvolání žalované proti výroku I rozsudku soudu prvního stupně zastavil (výrok I rozsudku odvolacího soudu) a odvolání žalované proti výroku III odmítnul (výrok II rozsudku odvolacího soudu). Rozsudek soudu prvního stupně v části výroku II, jíž byla žalované uložena povinnost zaplatit žalobci částku 3 250 Kč s úrokem z prodlení ve výši 15 % ročně z částky 3 250 Kč od 2. 8. 2023 do zaplacení, potvrdil (výrok III rozsudku odvolacího soudu). V části výroku II, jíž byla žalované uložena povinnost zaplatit žalobci částku 81 750 Kč s úrokem z prodlení ve výši 15 % ročně z částky 81 750 Kč od 2. 8. 2023 do zaplacení, rozsudek soudu prvního stupně změnil tak, že se v této části žaloba zamítá (výrok IV rozsudku odvolacího soudu). Rozsudek soudu prvního stupně v části výroku III, jíž byla žaloba zamítnuta co do úroku z prodlení ve výši 15 % ročně z částky 106 750 Kč od 2. 8. 2023 do 12. 10. 2023, změnil tak, že žalovaná je povinna zaplatit žalobci úrok z prodlení ve výši 15 % ročně z částky 106 750 Kč od 2. 8. 2023 do 12. 10. 2023 (výrok V rozsudku odvolacího soudu). V části výroku III, jíž byla žaloba zamítnuta co do požadavku žalobce na zaplacení úroku z prodlení ve výši 15 % ročně z částky 890 000 Kč za den 1. 8. 2023 a na zaplacení částky 698 250 Kč s úrokem z prodlení ve výši 15 % ročně z částky 698 250 Kč od 2. 8. 2023 do zaplacení, rozsudek soudu prvního stupně potvrdil (výrok VI rozsudku odvolacího soudu). Výroky VII a VIII odvolací soud rozhodl o náhradě nákladů řízení před soudy obou stupňů. Odvolacím soudem „potvrzená“ částka 3 250 Kč připadá na odškodnění nepřiměřené délky řízení. Za tu žalobce požadoval celkem „jen“ 100 000 Kč, a proto odvolací soud ohledně částky 18 250 Kč rozsudek soudu prvního stupně změnil a žalobu zamítl. Ohledně náhrady nemajetkové újmy za trestní stíhání potvrdil zamítavý rozsudek soudu prvního stupně a zamítl i tímto soudem přiznanou částku 10 000 Kč, protože dospěl k závěru, že „žalobce vznik konkrétní újmy vzniklé v důsledku nezákonného rozhodnutí neprokázal“. Na náhradě nemajetkové újmy způsobené nepřiměřenou délkou řízení tak byla žalobci pravomocně přiznána celá jím z tohoto důvodu požadovaná částka 100 000 Kč."
+          },
+          {
+            "id": "b11",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "4.\tRozsudek odvolacího soudu ohledně výroků III, IV, V a VI napadl žalobce včasným dovoláním, jež však Nejvyšší soud podle § 243c odst. 1 zákona č. 99/1963 Sb., občanský soudní řád, ve znění účinném od 1. 1. 2022 (viz čl. II a XII zákona č. 286/2021 Sb.), dále jen „o. s. ř.“, odmítl.",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-11",
+            "plainText": "4.\tRozsudek odvolacího soudu ohledně výroků III, IV, Va VI napadl žalobce včasným dovoláním, jež však Nejvyšší soud podle § 243c odst. 1 zákona č. 99/1963 Sb., občanský soudní řád, ve znění účinném od 1. 1. 2022 (viz čl. II a XII zákona č. 286/2021 Sb.), dále jen „o. s. ř.“, odmítl."
+          },
+          {
+            "id": "b12",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "5.\tDovolání není subjektivně přípustné v části, která směřuje proti výrokům III a V rozsudku odvolacího soudu. Těmito výroky bylo rozhodnuto ve prospěch žalobce. Oprávnění podat dovolání (subjektivní přípustnost) však svědčí pouze tomu účastníku, v jehož poměrech rozhodnutím odvolacího soudu nastala újma odstranitelná jen tím, že dovolací soud toto rozhodnutí zruší, popřípadě změní (srov. usnesení Nejvyššího soudu ze dne 1. 6. 2000, sp. zn. ",
+                "type": "text"
+              },
+              {
+                "href": "https://app.beck-online.cz/bo/document-view.seam?documentId=njptcojzhfptgmk7mnsg6xzsgy3tk&refSource=text",
+                "type": "link",
+                "children": [
+                  {
+                    "text": "31 Cdo 2675/99",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": "). Nejvyšší soud tedy dovolání v této části jako subjektivně nepřípustné dle ",
+                "type": "text"
+              },
+              {
+                "href": "https://app.beck-online.cz/bo/document-view.seam?documentId=onrf6mjzgyzv6ojzfzygmmrugnrq&refSource=text",
+                "type": "link",
+                "children": [
+                  {
+                    "text": "§ 243c",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": " odst. 3 věty první a ",
+                "type": "text"
+              },
+              {
+                "href": "https://app.beck-online.cz/bo/document-view.seam?documentId=onrf6mjzgyzv6ojzfzygmmrrha&refSource=text",
+                "type": "link",
+                "children": [
+                  {
+                    "text": "§ 218",
+                    "type": "text"
+                  }
+                ]
+              },
+              {
+                "text": " písm. b) o. s. ř. odmítl.",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-12",
+            "plainText": "5.\tDovolání není subjektivně přípustné v části, která směřuje proti výrokům III aV rozsudku odvolacího soudu. Těmito výroky bylo rozhodnuto ve prospěch žalobce. Oprávnění podat dovolání (subjektivní přípustnost) však svědčí pouze tomu účastníku, v jehož poměrech rozhodnutím odvolacího soudu nastala újma odstranitelná jen tím, že dovolací soud toto rozhodnutí zruší, popřípadě změní (srov. usnesení Nejvyššího soudu ze dne 1. 6. 2000, sp. zn. 31 Cdo 2675/99). Nejvyšší soud tedy dovolání v této části jako subjektivně nepřípustné dle § 243c odst. 3 věty první a § 218 písm. b) o. s. ř. odmítl."
+          },
+          {
+            "id": "b13",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "6.\tDle odvolacího soudu byla žalobci na odškodnění nemajetkové újmy za nepřiměřenou délku řízení přiznána celá částka 100 000 Kč, kterou na toto odškodnění požadoval. Proti tomuto závěru odvolacího soudu žalobce nic nenamítá. Ohledně tohoto odškodnění dovolání neobsahuje vymezení důvodu a ani přípustnosti dovolání, jak požaduje § 241a odst. 2 o. s. ř., a trpí tak vadami, pro něž nelze v dovolacím řízení pokračovat, a tyto vady nebyly žalobcem v zákonné lhůtě odstraněny (§ 241b odst. 3 o. s. ř.).",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-13",
+            "plainText": "6.\tDle odvolacího soudu byla žalobci na odškodnění nemajetkové újmy za nepřiměřenou délku řízení přiznána celá částka 100 000 Kč, kterou na toto odškodnění požadoval. Proti tomuto závěru odvolacího soudu žalobce nic nenamítá. Ohledně tohoto odškodnění dovolání neobsahuje vymezení důvodu a ani přípustnosti dovolání, jak požaduje § 241a odst. 2 o. s. ř., a trpí tak vadami, pro něž nelze v dovolacím řízení pokračovat, a tyto vady nebyly žalobcem v zákonné lhůtě odstraněny (§ 241b odst. 3 o. s. ř.)."
+          },
+          {
+            "id": "b14",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "7.\tŽalobce dovolání odůvodnil tím, že napadené rozhodnutí závisí na vyřešení otázky hmotného práva ohledně skutečnosti, že se do odškodnění žalobce za nemajetkovou újmu má promítnout též „zlý úmysl“ státu, s tím, že tato otázka má být dovolacím soudem posouzena jinak, než doposud byla. Tento „zlý úmysl“ státu žalobce spatřoval v neprofesionálním postupu orgánů činných v trestním řízení. Dle žalobce by soudy „v řízení o odškodnění měly odlišovat situaci, kdy trestní soudy, resp. všechny orgány činné v trestním řízení, přistupují k věci s plnou mírou profesionality (tj. se znalostí judikatury), resp. legality, kdy se v rozhodnutí vyjádří k odvolacím důvodům obžalovaného (byť i tak, že vyloží, v čem s judikaturou vyššího soudu nesouhlasí a proč ji tak nerespektuje, a nikoli tak, že zamítne odvolání, aniž se s jeho obsahem vypořádá), přičemž bude obžalovaný následně obžaloby zproštěn a založen tak jeho nárok na odškodnění za nemajetkovou újmu, a situací, kdy trestní soud toto neučiní“. ",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-14",
+            "plainText": "7.\tŽalobce dovolání odůvodnil tím, že napadené rozhodnutí závisí na vyřešení otázky hmotného práva ohledně skutečnosti, že se do odškodnění žalobce za nemajetkovou újmu má promítnout též „zlý úmysl“ státu, s tím, že tato otázka má být dovolacím soudem posouzena jinak, než doposud byla. Tento „zlý úmysl“ státu žalobce spatřoval v neprofesionálním postupu orgánů činných v trestním řízení. Dle žalobce by soudy „v řízení o odškodnění měly odlišovat situaci, kdy trestní soudy, resp. všechny orgány činné v trestním řízení, přistupují k věci s plnou mírou profesionality (tj. se znalostí judikatury), resp. legality, kdy se v rozhodnutí vyjádří k odvolacím důvodům obžalovaného (byť i tak, že vyloží, v čem s judikaturou vyššího soudu nesouhlasí a proč ji tak nerespektuje, a nikoli tak, že zamítne odvolání, aniž se s jeho obsahem vypořádá), přičemž bude obžalovaný následně obžaloby zproštěn a založen tak jeho nárok na odškodnění za nemajetkovou újmu, a situací, kdy trestní soud toto neučiní“."
+          },
+          {
+            "id": "b15",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "8.\tOtázka, zda je finanční zadostiučinění možné navýšit pro „zlý úmysl“, však přípustnost dovolání podle § 237 o. s. ř. nezakládá. Jak již bylo uvedeno výše, odvolací soud dospěl k závěru, že „žalobce vznik konkrétní újmy vzniklé v důsledku nezákonného rozhodnutí neprokázal“, a proto žalobci z tohoto titulu žádné odškodnění nepřiznal. Domáhá-li se žalobce navýšení odškodnění, které nebylo přiznáno proto, že nebyla prokázána újma, staví svou argumentaci na odlišných skutkových závěrech. Nebyla-li prokázána újma, nelze zvyšovat její odškodnění. Dovolání lze ale podle § 241a odst. 1 o. s. ř. podat pouze z důvodu, že rozhodnutí odvolacího soudu spočívá na nesprávném právním posouzení věci, nikoliv proto, že je založeno na nesprávném skutkovém zjištění. Odškodněním údajného „zlého úmyslu“ se odvolací soud zabýval toliko nad rámec nezbytného odůvodnění a nejedná se o právní posouzení, na kterém by bylo jeho rozhodnutí založeno. ",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-15",
+            "plainText": "8.\tOtázka, zda je finanční zadostiučinění možné navýšit pro „zlý úmysl“, však přípustnost dovolání podle § 237 o. s. ř. nezakládá. Jak již bylo uvedeno výše, odvolací soud dospěl k závěru, že „žalobce vznik konkrétní újmy vzniklé v důsledku nezákonného rozhodnutí neprokázal“, a proto žalobci z tohoto titulu žádné odškodnění nepřiznal. Domáhá-li se žalobce navýšení odškodnění, které nebylo přiznáno proto, že nebyla prokázána újma, staví svou argumentaci na odlišných skutkových závěrech. Nebyla-li prokázána újma, nelze zvyšovat její odškodnění. Dovolání lze ale podle § 241a odst. 1 o. s. ř. podat pouze z důvodu, že rozhodnutí odvolacího soudu spočívá na nesprávném právním posouzení věci, nikoliv proto, že je založeno na nesprávném skutkovém zjištění. Odškodněním údajného „zlého úmyslu“ se odvolací soud zabýval toliko nad rámec nezbytného odůvodnění a nejedná se o právní posouzení, na kterém by bylo jeho rozhodnutí založeno."
+          },
+          {
+            "id": "b16",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "9.\tK případným vadám řízení, které mohly mít za následek nesprávné rozhodnutí ve věci, dovolací soud přihlíží pouze tehdy, je-li dovolání přípustné (§ 242 odst. 3 o. s. ř.). To však v projednávané věci splněno nebylo.",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-16",
+            "plainText": "9.\tK případným vadám řízení, které mohly mít za následek nesprávné rozhodnutí ve věci, dovolací soud přihlíží pouze tehdy, je-li dovolání přípustné (§ 242 odst. 3 o. s. ř.). To však v projednávané věci splněno nebylo."
+          },
+          {
+            "id": "b17",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "10.\tS ohledem na výše uvedené Nejvyšší soud dovolání odmítl zčásti jako vadné a zčásti jako nepřípustné (§ 243c odst. 1 o. s. ř.).",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-17",
+            "plainText": "10.\tS ohledem na výše uvedené Nejvyšší soud dovolání odmítl zčásti jako vadné a zčásti jako nepřípustné (§ 243c odst. 1 o. s. ř.)."
+          },
+          {
+            "id": "b18",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "11.\tRozhodnutí o náhradě nákladů dovolacího řízení nemusí být odůvodněno (§ 243f odst. 3 o. s. ř.).",
+                "type": "text"
+              },
+              {
+                "text": "\n",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-18",
+            "plainText": "11.\tRozhodnutí o náhradě nákladů dovolacího řízení nemusí být odůvodněno (§ 243f odst. 3 o. s. ř.)."
+          },
+          {
+            "id": "b19",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "Poučení: Proti tomuto rozhodnutí není přípustný opravný prostředek.",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-19",
+            "plainText": "Poučení: Proti tomuto rozhodnutí není přípustný opravný prostředek."
+          },
+          {
+            "id": "b21",
+            "role": "closing",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "V Brně dne 17. 4. 2026",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-21",
+            "plainText": "V Brně dne 17. 4. 2026"
+          },
+          {
+            "id": "b22",
+            "role": "signature",
+            "type": "paragraph",
+            "inlines": [
+              {
+                "text": "\tJUDr. Pavel Simon",
+                "type": "text"
+              },
+              {
+                "type": "line-break"
+              },
+              {
+                "text": "\tpředseda senátu",
+                "type": "text"
+              }
+            ],
+            "anchorId": "p-22",
+            "plainText": "JUDr. Pavel Simon\n\tpředseda senátu"
+          }
+        ],
+        "source": {
+          "system": "cz_ns",
+          "webUrl": "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf/WebSearch/FA2D2FF862EF7DB2C1258DE4004D5579?openDocument",
+          "printUrl": "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf/WebPrint/FA2D2FF862EF7DB2C1258DE4004D5579?openDocument",
+          "documentId": "FA2D2FF862EF7DB2C1258DE4004D5579"
+        },
+        "version": 1,
+        "metadata": {
+          "ecli": "ECLI:CZ:NS:2026:30.CDO.535.2026.1",
+          "court": "Nejvyšší soud",
+          "keywords": ["Dovolání"],
+          "statutes": ["§ 241a odst. 1 o. s. ř."],
+          "caseNumber": "30 Cdo 535/2026",
+          "decisionDate": "2026-04-17",
+          "decisionType": "USNESENÍ"
+        }
+      },
+      "document_url": "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf/WebSearch/FA2D2FF862EF7DB2C1258DE4004D5579?openDocument",
+      "decision_date": "2026-04-17",
+      "decision_type": "usnesení",
+      "parser_version": 2,
+      "source_raw_s3_key": "case-law/raw/d6ecc585-b704-4a4c-b4c3-d81593d91529/8647fc75fd89d02750f39d6dec63d5cb645599c8adbbf8ab4201b1e28277b953",
+      "language_group_key": "ECLI:CZ:NS:2026:30.CDO.535.2026.1",
+      "source_raw_content_type": "text/html"
+    }
+  ]
+}
