@@ -154,7 +154,9 @@ export function getLoadedFonts(): string[] {
 
 export function onFontsLoaded(callback: (fonts: string[]) => void): () => void {
   loadCallbacks.add(callback);
-  return () => loadCallbacks.delete(callback);
+  return () => {
+    loadCallbacks.delete(callback);
+  };
 }
 
 function notifyCallbacks(fonts: string[]): void {

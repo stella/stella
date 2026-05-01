@@ -190,7 +190,7 @@ function calculateStats(values: number[]): {
  * Run a function multiple times and measure timing.
  */
 function benchmark(
-  fn: () => void,
+  fn: () => unknown,
   warmupIterations: number,
   measureIterations: number,
 ): { stats: ReturnType<typeof calculateStats>; timings: number[] } {

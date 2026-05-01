@@ -412,9 +412,8 @@ function ViewShell({
       >
         <ViewSwitcher
           activeViewId={activeView.id}
-          // eslint-disable-next-line typescript/no-misused-promises
-          onViewChange={async (viewId) => {
-            await navigate({
+          onViewChange={(viewId) => {
+            void navigate({
               to: "/workspaces/$workspaceId/$viewId",
               params: { workspaceId, viewId },
               search: { page: undefined },

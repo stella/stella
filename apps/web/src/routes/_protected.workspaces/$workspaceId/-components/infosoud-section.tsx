@@ -333,7 +333,9 @@ export const InfoSoudSection = ({
         <InfoSoudResult
           canImport={canCreateAgenda && lastLookupInput !== null}
           importPending={importPending}
-          onImport={handleImportAgenda}
+          onImport={() => {
+            void handleImportAgenda();
+          }}
           result={result}
         />
       ) : null}

@@ -974,10 +974,10 @@ export class InfoSoudClient {
     return deserialize(cloneData(cachedValue.value));
   }
 
-  #setCachedValue<T>(
+  #setCachedValue(
     cacheKey: string | undefined,
     cacheTtlMs: number | undefined,
-    value: T,
+    value: unknown,
   ): void {
     if (
       !cacheKey ||

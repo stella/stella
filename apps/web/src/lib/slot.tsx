@@ -51,7 +51,9 @@ const composeRefs =
       if (typeof ref === "function") {
         const cleanup = ref(node);
         if (typeof cleanup === "function") {
-          cleanups.push(cleanup);
+          cleanups.push(() => {
+            void cleanup();
+          });
         }
       } else if (ref !== undefined && ref !== null) {
         ref.current = node;

@@ -630,7 +630,7 @@ export async function seedCaseLaw() {
   for (const d of decisions) {
     const id = decId(d.caseNumber);
 
-    const { rowCount } = await db
+    const insertedDecisions = await db
       .insert(caseLawDecisions)
       .values({
         id,
@@ -648,7 +648,8 @@ export async function seedCaseLaw() {
         metadata: d.metadata,
         sourceHash: d.sourceHash,
       })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: caseLawDecisions.id });
 
     const existingDecision = await db
       .select({ id: caseLawDecisions.id })
@@ -670,7 +671,7 @@ export async function seedCaseLaw() {
     decisionIdsByCaseNumber.set(d.caseNumber, existingDecision.id);
     await indexDecision(existingDecision.id, scopedDb);
 
-    if (rowCount > 0) {
+    if (insertedDecisions.length > 0) {
       insertedCount++;
     }
   }
@@ -695,7 +696,7 @@ export async function seedCaseLaw() {
       throw new Error(`Cited decision not found: ${c.citedCaseNumber}`);
     }
 
-    const { rowCount } = await db
+    const insertedCitations = await db
       .insert(caseLawCitations)
       .values({
         id: citId(`${c.citingCaseNumber}-${i}`),
@@ -705,9 +706,10 @@ export async function seedCaseLaw() {
         sectionIndex: c.sectionIndex,
         polarity: c.polarity,
       })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: caseLawCitations.id });
 
-    if (rowCount > 0) {
+    if (insertedCitations.length > 0) {
       citInserted++;
     }
   }

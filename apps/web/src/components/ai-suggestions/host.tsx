@@ -925,7 +925,9 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       pendingCount={pendingCount}
       panelOpen={panelOpen}
       showThreadToggle={layout === "floating" && hasMessages}
-      onSubmit={handleGenerate}
+      onSubmit={(input) => {
+        void handleGenerate(input);
+      }}
       onTogglePanel={() => setPanelOpen((v) => !v)}
       editorController={editorController}
     />

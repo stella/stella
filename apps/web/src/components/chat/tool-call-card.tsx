@@ -148,7 +148,11 @@ export const ToolCallCard = ({
           "flex w-full items-center gap-1.5 px-2 py-1.5 text-start",
           !canExpand && "cursor-default",
         )}
-        onClick={() => canExpand && setExpanded((e) => !e)}
+        onClick={() => {
+          if (canExpand) {
+            setExpanded((e) => !e);
+          }
+        }}
         type="button"
       >
         {isLoading ? (

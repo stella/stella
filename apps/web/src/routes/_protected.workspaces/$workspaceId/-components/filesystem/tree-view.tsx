@@ -684,8 +684,9 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                 <BreadcrumbItem>
                   <button
                     className="text-muted-foreground hover:text-foreground text-xs"
-                    // eslint-disable-next-line typescript/no-misused-promises
-                    onClick={async () => await navigateToFolder()}
+                    onClick={() => {
+                      void navigateToFolder();
+                    }}
                     type="button"
                   >
                     <FolderIcon className="size-3.5" />
@@ -719,8 +720,9 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                         ) : isLast ? (
                           <button
                             className="text-xs font-medium"
-                            // eslint-disable-next-line typescript/no-misused-promises
-                            onClick={async () => await navigateToFolder()}
+                            onClick={() => {
+                              void navigateToFolder();
+                            }}
                             onDoubleClick={(e) => {
                               e.stopPropagation();
                               setBreadcrumbEditValue(crumb.name);
@@ -733,10 +735,9 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                         ) : (
                           <button
                             className="text-muted-foreground hover:text-foreground text-xs"
-                            // eslint-disable-next-line typescript/no-misused-promises
-                            onClick={async () =>
-                              await navigateToFolder(crumb.id)
-                            }
+                            onClick={() => {
+                              void navigateToFolder(crumb.id);
+                            }}
                             type="button"
                           >
                             {crumb.name}
@@ -825,8 +826,9 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                   guideDepths={row.guideDepths}
                   isLast={row.isLast}
                   node={row.node}
-                  // eslint-disable-next-line typescript/no-misused-promises
-                  onNavigateToFolder={navigateToFolder}
+                  onNavigateToFolder={(folderId) => {
+                    void navigateToFolder(folderId);
+                  }}
                   onRename={(entityId, newName) => {
                     renameEntity.mutate({
                       workspaceId,

@@ -272,8 +272,9 @@ const LinkedClauseRow = ({
         {link.isOutdated && !isDeleted && (
           <Button
             disabled={syncing}
-            // eslint-disable-next-line typescript/no-misused-promises
-            onClick={handleSync}
+            onClick={() => {
+              void handleSync();
+            }}
             size="sm"
             variant="ghost"
           >
@@ -300,8 +301,9 @@ const LinkedClauseRow = ({
               </AlertDialogClose>
               <Button
                 disabled={unlinking}
-                // eslint-disable-next-line typescript/no-misused-promises
-                onClick={handleUnlink}
+                onClick={() => {
+                  void handleUnlink();
+                }}
                 variant="destructive"
               >
                 {t("clauses.unlinkClause")}

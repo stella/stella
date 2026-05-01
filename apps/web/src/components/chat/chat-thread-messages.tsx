@@ -249,7 +249,9 @@ export const ChatThreadMessages = ({
                   return (
                     <AskUserCard
                       key={part.toolCallId}
-                      onSubmit={onAskUserSubmit}
+                      onSubmit={(...args) => {
+                        void onAskUserSubmit(...args);
+                      }}
                       part={part}
                       workspaceId={workspaceId}
                     />

@@ -4,13 +4,7 @@ import { drizzle } from "drizzle-orm/bun-sql";
 
 import type { ScopedDb } from "@/api/db";
 import { authRelationsPart } from "@/api/db/auth-schema";
-import {
-  auditLogs,
-  caseLawCitations,
-  caseLawDecisions,
-  caseLawSources,
-  relations,
-} from "@/api/db/schema";
+import { caseLawSources, relations } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -81,14 +75,6 @@ if (!databaseUrl) {
     const adapterKey = `jsonb-regression-cz-ns-${Bun.randomUUIDv7()}`;
     const db = drizzle(databaseUrl, {
       relations: { ...relations, ...authRelationsPart },
-      schema: {
-        ...relations,
-        ...authRelationsPart,
-        auditLogs,
-        caseLawSources,
-        caseLawDecisions,
-        caseLawCitations,
-      },
     });
     const scopedDb: ScopedDb = async (callback) =>
       await db.transaction(async (tx) => await callback(tx));

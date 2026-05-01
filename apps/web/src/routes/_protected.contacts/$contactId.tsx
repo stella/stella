@@ -84,15 +84,17 @@ function ContactDetailPage() {
       { contactId },
       {
         // eslint-disable-next-line typescript/no-misused-promises
-        onSuccess: async () => {
-          toastManager.add({
-            title: t("success.contactDeleted"),
-            type: "success",
-          });
-          await queryClient.invalidateQueries({
-            queryKey: contactsKeys.all,
-          });
-          await navigate({ to: "/contacts" });
+        onSuccess: () => {
+          void (async () => {
+            toastManager.add({
+              title: t("success.contactDeleted"),
+              type: "success",
+            });
+            await queryClient.invalidateQueries({
+              queryKey: contactsKeys.all,
+            });
+            await navigate({ to: "/contacts" });
+          })();
         },
         onError: (error) => {
           toastManager.add({
@@ -111,7 +113,9 @@ function ContactDetailPage() {
       <div className="flex items-center gap-3">
         <Button
           // eslint-disable-next-line typescript/no-misused-promises
-          onClick={async () => await navigate({ to: "/contacts" })}
+          onClick={() => {
+            void (async () => await navigate({ to: "/contacts" }))();
+          }}
           size="icon-xs"
           variant="ghost"
         >

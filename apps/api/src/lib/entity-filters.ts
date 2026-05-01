@@ -62,8 +62,8 @@ const findField = (
 ): EntityField | undefined =>
   entityFields.find((f) => f.propertyId === propertyId);
 
-const matchesFilter = <T extends FilterableEntity>(
-  entity: T,
+const matchesFilter = (
+  entity: FilterableEntity,
   filter: ViewFilterCondition,
 ): boolean => {
   if (filter.field === "kind") {

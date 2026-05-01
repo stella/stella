@@ -31,6 +31,26 @@ const BATCH_SIZE = 500;
 const DRY_RUN = process.argv.includes("--dry-run");
 const REPORT_ONLY = process.argv.includes("--report-only");
 
+const formatSqlValue = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (
+    typeof value === "number" ||
+    typeof value === "bigint" ||
+    typeof value === "boolean"
+  ) {
+    return String(value);
+  }
+
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  return JSON.stringify(value) ?? "";
+};
+
 // ── Citation normalization ──────────────────────────────
 
 /**
@@ -488,10 +508,18 @@ const printReport = async () => {
   `);
   console.log("\nTop 15 most cited decisions:");
   for (const row of topCited) {
+    const caseNumber = formatSqlValue(row["case_number"]);
+    const court = formatSqlValue(row["court"]);
+    const citationCount = formatSqlValue(row["citation_count"]);
+    const positive = formatSqlValue(row["positive"]);
+    const supportive = formatSqlValue(row["supportive"]);
+    const neutral = formatSqlValue(row["neutral"]);
+    const negative = formatSqlValue(row["negative"]);
+
     console.log(
-      `  ${row["case_number"]} (${row["court"]}) — ` +
-        `${row["citation_count"]} citations ` +
-        `(+${row["positive"]} / ^${row["supportive"]} / ~${row["neutral"]} / -${row["negative"]})`,
+      `  ${caseNumber} (${court}) — ` +
+        `${citationCount} citations ` +
+        `(+${positive} / ^${supportive} / ~${neutral} / -${negative})`,
     );
   }
 
@@ -506,13 +534,15 @@ const printReport = async () => {
   `);
   console.log("\nTop 20 unresolved citations (not in our DB):");
   for (const row of unresolved) {
-    const norm = normalizeCitation(String(row["citation_text"]));
+    const citationText = formatSqlValue(row["citation_text"]);
+    const count = formatSqlValue(row["cnt"]);
+    const norm = normalizeCitation(citationText);
     const suffix = norm.caseNumber
       ? ` → "${norm.caseNumber}"`
       : norm.ecli
         ? ` → ECLI`
         : " → ???";
-    console.log(`  [${row["cnt"]}x] ${row["citation_text"]}${suffix}`);
+    console.log(`  [${count}x] ${citationText}${suffix}`);
   }
 
   // Sample ambiguous citations (same case number, multiple decisions)
@@ -526,9 +556,10 @@ const printReport = async () => {
   `);
   console.log("\nTop 15 ambiguous case numbers (multiple decisions):");
   for (const row of ambiguous) {
-    console.log(
-      `  "${row["case_number"]}" → ${row["decision_count"]} decisions`,
-    );
+    const caseNumber = formatSqlValue(row["case_number"]);
+    const decisionCount = formatSqlValue(row["decision_count"]);
+
+    console.log(`  "${caseNumber}" → ${decisionCount} decisions`);
   }
 
   // Sample POSITIVE polarity with context (how the rule matched)
@@ -564,21 +595,23 @@ const printReport = async () => {
         `\n=== ${pol.toUpperCase()} examples (${examples.length}) ===`,
       );
       for (const row of examples) {
+        const citationText = formatSqlValue(row["citation_text"]);
+        const citingCase = formatSqlValue(row["citing_case"]);
+        const citedCase = formatSqlValue(row["cited_case"]);
+        const rulePattern = formatSqlValue(row["rule_pattern"]) || "none";
+
         // Extract ~100 chars around the citation in fulltext
-        const ft = String(row["fulltext"] ?? "");
-        const citPos = ft.indexOf(String(row["citation_text"]));
+        const ft = formatSqlValue(row["fulltext"]);
+        const citPos = ft.indexOf(citationText);
         const start = Math.max(0, citPos - 80);
-        const end = Math.min(
-          ft.length,
-          citPos + String(row["citation_text"]).length + 80,
-        );
+        const end = Math.min(ft.length, citPos + citationText.length + 80);
         const context =
           citPos !== -1
             ? `...${ft.slice(start, end).replace(/\n/g, " ")}...`
             : "(context not found in fulltext)";
 
-        console.log(`  ${row["citing_case"]} → ${row["cited_case"]}`);
-        console.log(`    rule: /${row["rule_pattern"] ?? "none"}/`);
+        console.log(`  ${citingCase} → ${citedCase}`);
+        console.log(`    rule: /${rulePattern}/`);
         console.log(`    context: ${context}`);
         console.log();
       }
@@ -605,19 +638,19 @@ const printReport = async () => {
   if (unknownPol.length > 0) {
     console.log("\n=== UNKNOWN polarity (10 samples for manual review) ===");
     for (const row of unknownPol) {
-      const ft = String(row["fulltext"] ?? "");
-      const citPos = ft.indexOf(String(row["citation_text"]));
+      const citationText = formatSqlValue(row["citation_text"]);
+      const citingCase = formatSqlValue(row["citing_case"]);
+      const citedCase = formatSqlValue(row["cited_case"]);
+      const ft = formatSqlValue(row["fulltext"]);
+      const citPos = ft.indexOf(citationText);
       const start = Math.max(0, citPos - 100);
-      const end = Math.min(
-        ft.length,
-        citPos + String(row["citation_text"]).length + 100,
-      );
+      const end = Math.min(ft.length, citPos + citationText.length + 100);
       const context =
         citPos !== -1
           ? `...${ft.slice(start, end).replace(/\n/g, " ")}...`
           : "(context not found)";
 
-      console.log(`  ${row["citing_case"]} → ${row["cited_case"]}`);
+      console.log(`  ${citingCase} → ${citedCase}`);
       console.log(`    context: ${context}`);
       console.log();
     }

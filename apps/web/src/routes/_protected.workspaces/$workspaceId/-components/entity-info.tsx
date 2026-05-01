@@ -85,53 +85,57 @@ export const EntityFileInfo = ({
         {isDocx ? (
           <Button
             // eslint-disable-next-line typescript/no-misused-promises
-            onClick={async () => {
-              setIsOpeningInDesktop(true);
-              try {
-                const linkedAccount = await getFreshLinkedAccount();
+            onClick={() => {
+              void (async () => {
+                setIsOpeningInDesktop(true);
+                try {
+                  const linkedAccount = await getFreshLinkedAccount();
 
-                await openDocxInDesktop({
-                  apiBaseUrl: env.VITE_API_URL,
-                  entityId,
-                  linkedAccount,
-                  propertyId: field.propertyId,
-                  workspaceId,
-                });
+                  await openDocxInDesktop({
+                    apiBaseUrl: env.VITE_API_URL,
+                    entityId,
+                    linkedAccount,
+                    propertyId: field.propertyId,
+                    workspaceId,
+                  });
 
-                toastManager.add({
-                  description: t(
-                    "workspaces.files.desktopEdit.openedDescription",
-                  ),
-                  title: t("workspaces.files.desktopEdit.openedTitle"),
-                  type: "success",
-                });
-              } catch (error) {
-                if (error instanceof Error && isUnauthorizedError(error)) {
                   toastManager.add({
                     description: t(
-                      "workspaces.files.desktopEdit.authRequiredDescription",
+                      "workspaces.files.desktopEdit.openedDescription",
                     ),
-                    title: t("workspaces.files.desktopEdit.authRequiredTitle"),
+                    title: t("workspaces.files.desktopEdit.openedTitle"),
+                    type: "success",
+                  });
+                } catch (error) {
+                  if (error instanceof Error && isUnauthorizedError(error)) {
+                    toastManager.add({
+                      description: t(
+                        "workspaces.files.desktopEdit.authRequiredDescription",
+                      ),
+                      title: t(
+                        "workspaces.files.desktopEdit.authRequiredTitle",
+                      ),
+                      type: "error",
+                    });
+                    return;
+                  }
+
+                  toastManager.add({
+                    description: t(
+                      "workspaces.files.desktopEdit.unavailableDescription",
+                    ),
+                    title:
+                      error instanceof DesktopBridgeUnavailableError
+                        ? t("workspaces.files.desktopEdit.unavailableTitle")
+                        : error instanceof Error
+                          ? error.message
+                          : t("workspaces.files.desktopEdit.unavailableTitle"),
                     type: "error",
                   });
-                  return;
+                } finally {
+                  setIsOpeningInDesktop(false);
                 }
-
-                toastManager.add({
-                  description: t(
-                    "workspaces.files.desktopEdit.unavailableDescription",
-                  ),
-                  title:
-                    error instanceof DesktopBridgeUnavailableError
-                      ? t("workspaces.files.desktopEdit.unavailableTitle")
-                      : error instanceof Error
-                        ? error.message
-                        : t("workspaces.files.desktopEdit.unavailableTitle"),
-                  type: "error",
-                });
-              } finally {
-                setIsOpeningInDesktop(false);
-              }
+              })();
             }}
             disabled={isOpeningInDesktop}
             size="sm"
@@ -146,33 +150,35 @@ export const EntityFileInfo = ({
         <Button
           disabled={!prevFile}
           // eslint-disable-next-line typescript/no-misused-promises
-          onClick={async () => {
-            const previousPdfViewer = {
-              ...useWorkspaceStore.getState().pdfViewer,
-            };
-            try {
-              setPdfViewerState({ scaleOffset: 0 });
-              await navigate({
-                resetScroll: true,
-                search: (prev) =>
-                  produce(prev, (s) => {
-                    if (!prevFile) {
-                      return;
-                    }
+          onClick={() => {
+            void (async () => {
+              const previousPdfViewer = {
+                ...useWorkspaceStore.getState().pdfViewer,
+              };
+              try {
+                setPdfViewerState({ scaleOffset: 0 });
+                await navigate({
+                  resetScroll: true,
+                  search: (prev) =>
+                    produce(prev, (s) => {
+                      if (!prevFile) {
+                        return;
+                      }
 
-                    s.field = prevFile.fieldId;
-                    s.pdfPage = undefined;
-                    s.entity = prevFile.entityId;
-                    s.justification = undefined;
-                    s.justificationPage = undefined;
-                  }),
-              });
-            } catch (error) {
-              setPdfViewerState(previousPdfViewer);
-              throw error;
-            }
+                      s.field = prevFile.fieldId;
+                      s.pdfPage = undefined;
+                      s.entity = prevFile.entityId;
+                      s.justification = undefined;
+                      s.justificationPage = undefined;
+                    }),
+                });
+              } catch (error) {
+                setPdfViewerState(previousPdfViewer);
+                throw error;
+              }
 
-            scrollContainerRef.current?.scrollTo({ top: 0 });
+              scrollContainerRef.current?.scrollTo({ top: 0 });
+            })();
           }}
           size="icon"
           variant="ghost"
@@ -182,33 +188,35 @@ export const EntityFileInfo = ({
         <Button
           disabled={!nextFile}
           // eslint-disable-next-line typescript/no-misused-promises
-          onClick={async () => {
-            const previousPdfViewer = {
-              ...useWorkspaceStore.getState().pdfViewer,
-            };
-            try {
-              setPdfViewerState({ scaleOffset: 0 });
-              await navigate({
-                replace: true,
-                search: (prev) =>
-                  produce(prev, (s) => {
-                    if (!nextFile) {
-                      return;
-                    }
+          onClick={() => {
+            void (async () => {
+              const previousPdfViewer = {
+                ...useWorkspaceStore.getState().pdfViewer,
+              };
+              try {
+                setPdfViewerState({ scaleOffset: 0 });
+                await navigate({
+                  replace: true,
+                  search: (prev) =>
+                    produce(prev, (s) => {
+                      if (!nextFile) {
+                        return;
+                      }
 
-                    s.field = nextFile.fieldId;
-                    s.pdfPage = undefined;
-                    s.entity = nextFile.entityId;
-                    s.justification = undefined;
-                    s.justificationPage = undefined;
-                  }),
-              });
-            } catch (error) {
-              setPdfViewerState(previousPdfViewer);
-              throw error;
-            }
+                      s.field = nextFile.fieldId;
+                      s.pdfPage = undefined;
+                      s.entity = nextFile.entityId;
+                      s.justification = undefined;
+                      s.justificationPage = undefined;
+                    }),
+                });
+              } catch (error) {
+                setPdfViewerState(previousPdfViewer);
+                throw error;
+              }
 
-            scrollContainerRef.current?.scrollTo({ top: 0 });
+              scrollContainerRef.current?.scrollTo({ top: 0 });
+            })();
           }}
           size="icon"
           variant="ghost"

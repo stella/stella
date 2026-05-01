@@ -71,15 +71,14 @@ export function extractSelectionContext(state: EditorState): SelectionContext {
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   doc.forEach((_node, offset, index) => {
     if (offset > to) {
-      return false;
-    } // early-exit once past selection
+      return;
+    }
     if (offset <= from) {
       startParagraphIndex = index;
     }
     if (offset <= to) {
       endParagraphIndex = index;
     }
-    return undefined;
   });
 
   // Extract text formatting from marks

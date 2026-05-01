@@ -262,8 +262,9 @@ export const ClauseDetailView = ({
                     </AlertDialogClose>
                     <Button
                       disabled={deleting}
-                      // eslint-disable-next-line typescript/no-misused-promises
-                      onClick={handleDelete}
+                      onClick={() => {
+                        void handleDelete();
+                      }}
                       variant="destructive"
                     >
                       {t("common.delete")}
@@ -297,8 +298,9 @@ export const ClauseDetailView = ({
           categories={categories}
           clauseId={clauseId}
           detail={state.detail}
-          // eslint-disable-next-line typescript/no-misused-promises
-          onRefresh={load}
+          onRefresh={() => {
+            void load();
+          }}
         />
       )}
 
@@ -306,17 +308,13 @@ export const ClauseDetailView = ({
         <ClauseFormDialog
           categories={categories}
           initial={{
-            id: state.detail.id,
-            title: state.detail.title,
-            description: state.detail.description,
-            usageNotes: state.detail.usageNotes,
-            language: state.detail.language,
-            categoryId: state.detail.categoryId,
+            ...state.detail,
             bodyParagraphs: state.detail.body,
           }}
           onOpenChange={setEditOpen}
-          // eslint-disable-next-line typescript/no-misused-promises
-          onSaved={load}
+          onSaved={() => {
+            void load();
+          }}
           open={editOpen}
         />
       )}
@@ -544,8 +542,9 @@ const VariantRow = ({
               </AlertDialogClose>
               <Button
                 disabled={deleting}
-                // eslint-disable-next-line typescript/no-misused-promises
-                onClick={handleDelete}
+                onClick={() => {
+                  void handleDelete();
+                }}
                 variant="destructive"
               >
                 {t("common.delete")}
@@ -653,8 +652,12 @@ const VariantFormDialog = ({
           <DialogClose render={<Button variant="ghost" />}>
             {t("common.cancel")}
           </DialogClose>
-          {/* eslint-disable-next-line typescript/no-misused-promises */}
-          <Button disabled={saving || !label.trim()} onClick={handleSave}>
+          <Button
+            disabled={saving || !label.trim()}
+            onClick={() => {
+              void handleSave();
+            }}
+          >
             {t("common.save")}
           </Button>
         </DialogFooter>
@@ -749,8 +752,9 @@ const HistoryTab = ({
                   "hover:bg-muted/50",
                   selectedId === ver.id && "bg-muted",
                 )}
-                // eslint-disable-next-line typescript/no-misused-promises
-                onClick={async () => await handleVersionClick(ver.id)}
+                onClick={() => {
+                  void handleVersionClick(ver.id);
+                }}
                 type="button"
               >
                 <span className="font-medium">

@@ -72,37 +72,41 @@ const Citation = ({
         isActive && "bg-accent hover:bg-accent",
       )}
       // eslint-disable-next-line typescript/no-misused-promises
-      onClick={async () => {
-        createBoundingBoxes();
-        setActiveJustification({
-          id: justification.id,
-          pageNumber,
-        });
-
-        const boundingBoxes = useWorkspaceStore
-          .getState()
-          .justifications.find((j) => j.id === justification.id)?.boundingBoxes;
-        const pageIds = [...pages.keys()];
-        const pageId = pageIds[pageNumber - 1];
-
-        if (pageId !== undefined) {
-          setScrollTo({
-            pageId,
-            target: boundingBoxes
-              ? { kind: "justification", id: justification.id }
-              : undefined,
+      onClick={() => {
+        void (async () => {
+          createBoundingBoxes();
+          setActiveJustification({
+            id: justification.id,
+            pageNumber,
           });
-        }
-        await navigate({
-          replace: true,
-          search: (prev) =>
-            produce(prev, (s) => {
-              s.field = fileFieldId;
-              s.justification = justification.id;
-              s.justificationPage = pageNumber;
-              s.pdfPage = pageNumber;
-            }),
-        });
+
+          const boundingBoxes = useWorkspaceStore
+            .getState()
+            .justifications.find(
+              (j) => j.id === justification.id,
+            )?.boundingBoxes;
+          const pageIds = [...pages.keys()];
+          const pageId = pageIds[pageNumber - 1];
+
+          if (pageId !== undefined) {
+            setScrollTo({
+              pageId,
+              target: boundingBoxes
+                ? { kind: "justification", id: justification.id }
+                : undefined,
+            });
+          }
+          await navigate({
+            replace: true,
+            search: (prev) =>
+              produce(prev, (s) => {
+                s.field = fileFieldId;
+                s.justification = justification.id;
+                s.justificationPage = pageNumber;
+                s.pdfPage = pageNumber;
+              }),
+          });
+        })();
       }}
       onMouseEnter={() => {
         createBoundingBoxes();

@@ -1180,8 +1180,10 @@ const JustificationBar = ({
         <div className="flex shrink-0 items-center gap-1 ps-4">
           <Button
             disabled={!prevSlot}
-            onClick={() =>
-              prevSlot &&
+            onClick={() => {
+              if (!prevSlot) {
+                return;
+              }
               openPdf({
                 id: activeTab.id,
                 entityId: activeTab.entityId,
@@ -1191,8 +1193,8 @@ const JustificationBar = ({
                 pdfFileId: activeTab.pdfFileId,
                 justificationFieldId: prevSlot.fieldId,
                 propertyId: prevSlot.property.id,
-              })
-            }
+              });
+            }}
             size="icon-xs"
             variant="ghost"
           >
@@ -1203,8 +1205,10 @@ const JustificationBar = ({
           </span>
           <Button
             disabled={!nextSlot}
-            onClick={() =>
-              nextSlot &&
+            onClick={() => {
+              if (!nextSlot) {
+                return;
+              }
               openPdf({
                 id: activeTab.id,
                 entityId: activeTab.entityId,
@@ -1214,8 +1218,8 @@ const JustificationBar = ({
                 pdfFileId: activeTab.pdfFileId,
                 justificationFieldId: nextSlot.fieldId,
                 propertyId: nextSlot.property.id,
-              })
-            }
+              });
+            }}
             size="icon-xs"
             variant="ghost"
           >

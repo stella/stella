@@ -102,7 +102,9 @@ function arbFormattedParagraph(): fc.Arbitrary<PMNode> {
       // Rebuild paragraph with attrs
       const content: PMNode[] = [];
       // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
-      para.forEach((child) => content.push(child));
+      para.forEach((child) => {
+        content.push(child);
+      });
       return schema.nodes.paragraph.create(attrs, content);
     });
 }

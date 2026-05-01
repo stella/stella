@@ -460,8 +460,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             </h2>
             <Button
               className="h-7 text-xs"
-              // eslint-disable-next-line typescript/no-misused-promises
-              onClick={handleCreateTask}
+              onClick={() => {
+                void handleCreateTask();
+              }}
               size="sm"
               variant="ghost"
             >

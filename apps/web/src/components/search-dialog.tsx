@@ -756,8 +756,9 @@ export const SearchDialog = ({
             autoFocus
             className="placeholder:text-muted-foreground min-w-0 flex-1 border-0 bg-transparent text-sm shadow-none outline-none focus-visible:ring-0"
             onChange={handleQueryChange}
-            // eslint-disable-next-line typescript/no-misused-promises
-            onKeyDown={handleKeyDown}
+            onKeyDown={(event) => {
+              void handleKeyDown(event);
+            }}
             placeholder={t("search.placeholder")}
             value={query}
           />
@@ -923,8 +924,12 @@ export const SearchDialog = ({
                       void handleResultClick(hit);
                     }
                   }}
-                  onClick={handleSummarizeResults}
-                  onOpenChat={handleOpenSummaryChat}
+                  onClick={() => {
+                    void handleSummarizeResults();
+                  }}
+                  onOpenChat={() => {
+                    void handleOpenSummaryChat();
+                  }}
                   state={summaryState}
                 />
                 <div
@@ -949,8 +954,9 @@ export const SearchDialog = ({
                         <SearchResultItem
                           hit={hit}
                           isSelected={virtualHit.index === selectedIndex}
-                          // eslint-disable-next-line typescript/no-misused-promises
-                          onClick={handleResultClick}
+                          onClick={(selectedHit) => {
+                            void handleResultClick(selectedHit);
+                          }}
                           resultNumber={virtualHit.index + 1}
                         />
                       </div>

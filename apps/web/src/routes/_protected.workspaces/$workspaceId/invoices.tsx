@@ -118,15 +118,16 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
                 className="hover:bg-muted/30 cursor-pointer border-b last:border-0"
                 key={invoice.id}
                 // eslint-disable-next-line typescript/no-misused-promises
-                onClick={async () =>
-                  await navigate({
-                    to: "/workspaces/$workspaceId/invoices/$invoiceId",
-                    params: {
-                      workspaceId,
-                      invoiceId: invoice.id,
-                    },
-                  })
-                }
+                onClick={() => {
+                  void (async () =>
+                    await navigate({
+                      to: "/workspaces/$workspaceId/invoices/$invoiceId",
+                      params: {
+                        workspaceId,
+                        invoiceId: invoice.id,
+                      },
+                    }))();
+                }}
               >
                 <td className="px-4 py-2.5 font-medium">
                   {invoice.invoiceNumber}

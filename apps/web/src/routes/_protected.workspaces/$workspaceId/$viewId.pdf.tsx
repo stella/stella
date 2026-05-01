@@ -766,8 +766,7 @@ const VersionDropZone = ({
       canDrop: containsFiles,
       onDragEnter: () => setIsDropTarget(true),
       onDragLeave: () => setIsDropTarget(false),
-      // eslint-disable-next-line typescript/no-misused-promises
-      onDrop: async ({ source }) => {
+      onDrop: ({ source }) => {
         setIsDropTarget(false);
         if (isUploadingRef.current) {
           return;
@@ -777,24 +776,26 @@ const VersionDropZone = ({
         if (!file) {
           return;
         }
-        setIsUploading(true);
-        try {
-          const response = await api
-            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            ["upload-version"].post({
-              entityId: toSafeId<"entity">(entityId),
-              file,
+        void (async () => {
+          setIsUploading(true);
+          try {
+            const response = await api
+              .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+              ["upload-version"].post({
+                entityId: toSafeId<"entity">(entityId),
+                file,
+                queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
+              });
+            if (response.error) {
+              throw toAPIError(response.error);
+            }
+            await queryClient.invalidateQueries({
               queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
             });
-          if (response.error) {
-            throw toAPIError(response.error);
+          } finally {
+            setIsUploading(false);
           }
-          await queryClient.invalidateQueries({
-            queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
-          });
-        } finally {
-          setIsUploading(false);
-        }
+        })();
       },
     });
   }, [disabled, entityId, queryClient, workspaceId]);

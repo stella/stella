@@ -93,7 +93,7 @@ const downloadZipHandler = async function* ({
   );
 
   const descendantIds = descendantRows.map((r) =>
-    toSafeId<"entity">(String(r["id"])),
+    toSafeId<"entity">(String(r.id)),
   );
 
   if (descendantIds.length === 0) {

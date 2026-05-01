@@ -46,22 +46,24 @@ export const useConfigStore = create<ConfigState>()(
     (set) => ({
       matters: DEFAULT_MATTERS,
 
-      updateMatters: (patch) =>
-        set((s) => ({
+      updateMatters: (patch) => {
+        void set((s) => ({
           matters: { ...s.matters, ...patch },
-        })),
+        }));
+      },
 
-      toggleGroupCollapsed: (groupId) =>
-        set((s) => {
+      toggleGroupCollapsed: (groupId) => {
+        void set((s) => {
           const current = s.matters.collapsedGroups ?? [];
           const next = current.includes(groupId)
             ? current.filter((id) => id !== groupId)
             : [...current, groupId];
           return { matters: { ...s.matters, collapsedGroups: next } };
-        }),
+        });
+      },
 
-      toggleMattersColumn: (id) =>
-        set((s) => {
+      toggleMattersColumn: (id) => {
+        void set((s) => {
           const cur = s.matters.hiddenColumns;
           const isHidden = cur.includes(id);
           const next = isHidden ? cur.filter((c) => c !== id) : [...cur, id];
@@ -75,7 +77,8 @@ export const useConfigStore = create<ConfigState>()(
               hiddenColumns: next,
             },
           };
-        }),
+        });
+      },
     }),
     {
       name: getStorageKey("config"),

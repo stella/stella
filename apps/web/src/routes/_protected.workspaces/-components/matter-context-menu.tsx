@@ -287,9 +287,9 @@ export const MatterContextMenu = ({
             isArchived={isArchived}
             isPinned={pinned}
             onAddMember={() => setAddMemberOpen(true)}
-            onOpenInNewTab={() =>
-              window.open(`/workspaces/${workspaceId}`, "_blank")
-            }
+            onOpenInNewTab={() => {
+              void window.open(`/workspaces/${workspaceId}`, "_blank");
+            }}
             onArchive={() => {
               const onError = () => {
                 toastManager.add({
@@ -304,7 +304,9 @@ export const MatterContextMenu = ({
                 archiveWorkspace.mutate({ workspaceId }, { onError });
               }
             }}
-            onCopyLink={handleCopyLink}
+            onCopyLink={() => {
+              void handleCopyLink();
+            }}
             onDelete={() => setDeleteOpen(true)}
             onRename={() => {
               setRename({ status: "editing", draft: workspaceName });
