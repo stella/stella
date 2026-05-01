@@ -72,6 +72,7 @@ BASE_SCHEMA_FILES="$(
 SCHEMA_CHANGED=false
 MIGRATION_CHANGED=false
 SCHEMA_INPUTS_CHANGED=false
+MIGRATION_SQL_FILES=()
 
 if [[ -n "$BASE_SCHEMA_FILES" && "$BASE_SCHEMA_FILES" != "$SCHEMA_FILES" ]]; then
   SCHEMA_INPUTS_CHANGED=true
@@ -99,6 +100,10 @@ while IFS= read -r file; do
   case "$file" in
     apps/api/drizzle/*)
       MIGRATION_CHANGED=true
+
+      if [[ "$file" == apps/api/drizzle/*.sql && -f "$file" ]]; then
+        MIGRATION_SQL_FILES+=("$file")
+      fi
       ;;
   esac
 done <<< "$CHANGED_FILES"
@@ -114,6 +119,10 @@ if [[ "$SCHEMA_CHANGED" == "true" && "$MIGRATION_CHANGED" != "true" ]]; then
 fi
 
 if [[ -d apps/api/drizzle ]]; then
+  if [[ "${#MIGRATION_SQL_FILES[@]}" -gt 0 ]]; then
+    bun scripts/check-migration-safety.ts "${MIGRATION_SQL_FILES[@]}"
+  fi
+
   (cd apps/api && bun --bun drizzle-kit check)
 else
   echo "No apps/api/drizzle directory yet; migration consistency check skipped."

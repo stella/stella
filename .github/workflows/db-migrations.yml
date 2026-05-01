@@ -7,6 +7,7 @@ on:
       - "apps/api/src/db/**"
       - "apps/api/drizzle/**"
       - "apps/api/drizzle.config.ts"
+      - "scripts/check-migration-safety.ts"
       - "scripts/check-migrations.sh"
       - ".github/workflows/db-migrations.yml"
   workflow_dispatch:
