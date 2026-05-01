@@ -7,6 +7,7 @@ import * as p from "drizzle-orm/pg-core";
 import { customType } from "drizzle-orm/pg-core";
 
 import { organization, user } from "@/api/db/auth-schema";
+import { jsonb } from "@/api/db/columns";
 import {
   chatPolicies,
   organizationCheck,
@@ -236,11 +237,11 @@ export const contacts = p.pgTable(
     // Shared fields
     displayName: p.varchar("display_name", { length: 512 }).notNull(),
     notes: p.text(),
-    emails: p.jsonb().$type<ContactEmail[]>(),
-    phones: p.jsonb().$type<ContactPhone[]>(),
-    addresses: p.jsonb().$type<ContactAddress[]>(),
+    emails: jsonb().$type<ContactEmail[]>(),
+    phones: jsonb().$type<ContactPhone[]>(),
+    addresses: jsonb().$type<ContactAddress[]>(),
     tags: p.text().array(),
-    metadata: p.jsonb().$type<ContactPersistedMetadata | null>(),
+    metadata: jsonb().$type<ContactPersistedMetadata | null>(),
     color: p.varchar({ length: 32 }),
 
     // Billing fields
@@ -248,8 +249,8 @@ export const contacts = p.pgTable(
       length: 64,
     }),
     taxId: p.varchar("tax_id", { length: 64 }),
-    bankAccounts: p.jsonb("bank_accounts").$type<BankAccount[]>(),
-    billingAddress: p.jsonb("billing_address").$type<BillingAddress>(),
+    bankAccounts: jsonb("bank_accounts").$type<BankAccount[]>(),
+    billingAddress: jsonb("billing_address").$type<BillingAddress>(),
     defaultHourlyRate: centsColumn("default_hourly_rate"),
     currency: p.varchar({ length: 3 }),
     paymentTermDays: p.integer("payment_term_days"),
@@ -468,8 +469,8 @@ export const auditLogs = p.pgTable(
     action: p.text().notNull(),
     resourceType: p.text("resource_type").notNull(),
     resourceId: p.text("resource_id").notNull(),
-    metadata: p.jsonb().$type<Record<string, unknown>>(),
-    changes: p.jsonb().$type<Record<string, unknown>>(),
+    metadata: jsonb().$type<Record<string, unknown>>(),
+    changes: jsonb().$type<Record<string, unknown>>(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -512,8 +513,8 @@ export const schedulerJobs = p.pgTable(
     id: p.varchar({ length: 128 }).primaryKey(),
     task: p.varchar({ length: 128 }).notNull(),
     description: p.text(),
-    schedule: p.jsonb().$type<SchedulerSchedule>().notNull(),
-    payload: p.jsonb().$type<SchedulerPayload | null>(),
+    schedule: jsonb().$type<SchedulerSchedule>().notNull(),
+    payload: jsonb().$type<SchedulerPayload | null>(),
     enabled: p.boolean().notNull().default(true),
     nextRunAt: p.timestamp("next_run_at", { withTimezone: true }).notNull(),
     lastRunAt: p.timestamp("last_run_at", { withTimezone: true }),
@@ -636,8 +637,8 @@ export const properties = p.pgTable(
       .text("status", { enum: PROPERTY_STATUSES })
       .notNull()
       .default("uninitialized"),
-    content: p.jsonb().$type<PropertyContent>().notNull(),
-    tool: p.jsonb().$type<PropertyTool>().notNull(),
+    content: jsonb().$type<PropertyContent>().notNull(),
+    tool: jsonb().$type<PropertyTool>().notNull(),
     system: p.boolean().notNull().default(false),
     kinds: p.varchar({ length: 64 }).array().$type<EntityKind>(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
@@ -658,7 +659,7 @@ export const propertyDependencies = p.pgTable(
     dependsOnPropertyId: safeUuid<"property">(
       "depends_on_property_id",
     ).notNull(),
-    condition: p.jsonb().$type<PropertyCondition>(),
+    condition: jsonb().$type<PropertyCondition>(),
   },
   (table) => [
     p
@@ -748,9 +749,9 @@ export const entities = p.pgTable(
     sensitivity: p.text("sensitivity", {
       enum: ["normal", "private", "confidential"],
     }),
-    organizer: p.jsonb("organizer").$type<AgendaParticipant | null>(),
-    attendees: p.jsonb("attendees").$type<AgendaAttendee[] | null>(),
-    recurrence: p.jsonb("recurrence").$type<AgendaRecurrence | null>(),
+    organizer: jsonb("organizer").$type<AgendaParticipant | null>(),
+    attendees: jsonb("attendees").$type<AgendaAttendee[] | null>(),
+    recurrence: jsonb("recurrence").$type<AgendaRecurrence | null>(),
     agendaSource: p.text("agenda_source", {
       enum: ["manual", "infosoud", "calendar", "email", "import", "api"],
     }),
@@ -758,11 +759,11 @@ export const entities = p.pgTable(
     externalId: p.varchar("external_id", { length: 256 }),
     externalChangeKey: p.varchar("external_change_key", { length: 512 }),
     externalICalUid: p.varchar("external_ical_uid", { length: 512 }),
-    externalData: p.jsonb("external_data").$type<AgendaExternalData | null>(),
+    externalData: jsonb("external_data").$type<AgendaExternalData | null>(),
     readOnly: p.boolean("read_only").notNull().default(false),
     sortOrder: p.varchar("sort_order", { length: 64 }),
     /** Structured metadata for non-document entity kinds (e.g. links). */
-    metadata: p.jsonb().$type<LinkMetadata | null>(),
+    metadata: jsonb().$type<LinkMetadata | null>(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p.timestamp("updated_at").defaultNow(),
   },
@@ -997,9 +998,9 @@ export const desktopEditSessions = p.pgTable(
     checkpointFileId: safeUuid<"userFile">("checkpoint_file_id").notNull(),
     checkpointSha256Hex: p.varchar("checkpoint_sha256_hex", { length: 64 }),
     checkpointSizeBytes: p.integer("checkpoint_size_bytes"),
-    checkpointScanWarnings: p
-      .jsonb("checkpoint_scan_warnings")
-      .$type<string[] | null>(),
+    checkpointScanWarnings: jsonb("checkpoint_scan_warnings").$type<
+      string[] | null
+    >(),
     checkpointUpdatedAt: p.timestamp("checkpoint_updated_at"),
     sessionTokenHash: p.varchar("session_token_hash", { length: 64 }).notNull(),
     tokenExpiresAt: p.timestamp("token_expires_at").notNull(),
@@ -1055,7 +1056,7 @@ export const fields = p.pgTable(
       .notNull()
       .references(() => entityVersions.id, { onDelete: "cascade" }),
     fileId: safeUuid<"userFile">("file_id"),
-    content: p.jsonb().$type<FieldContent>().notNull(),
+    content: jsonb().$type<FieldContent>().notNull(),
   },
   (table) => [
     p
@@ -1079,8 +1080,8 @@ export const justifications = p.pgTable(
     id: pUuid<"justification">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     fieldId: safeUuid<"field">("field_id").notNull(),
-    content: p.jsonb().$type<JustificationContent>().notNull(),
-    boundingBoxes: p.jsonb("bounding_boxes").$type<BoundingBoxes>(),
+    content: jsonb().$type<JustificationContent>().notNull(),
+    boundingBoxes: jsonb("bounding_boxes").$type<BoundingBoxes>(),
     fileFieldIds: safeUuid<"field">("file_field_ids")
       .array()
       .notNull()
@@ -1116,7 +1117,7 @@ export const templates = p.pgTable(
     fileName: p.varchar("file_name", { length: 256 }).notNull(),
     s3Key: p.varchar("s3_key", { length: 512 }).notNull(),
     sizeBytes: p.integer("size_bytes").notNull(),
-    manifest: p.jsonb().$type<TemplateManifest>(),
+    manifest: jsonb().$type<TemplateManifest>(),
     fieldCount: p.integer("field_count").notNull().default(0),
     currentVersion: p.integer("current_version").notNull().default(1),
     createdBy: p
@@ -1150,7 +1151,7 @@ export const templateVersions = p.pgTable(
     templateId: safeUuid<"template">("template_id").notNull(),
     version: p.integer().notNull(),
     s3Key: p.varchar("s3_key", { length: 512 }).notNull(),
-    manifest: p.jsonb().$type<TemplateManifest>(),
+    manifest: jsonb().$type<TemplateManifest>(),
     fieldCount: p.integer("field_count").notNull().default(0),
     createdBy: p
       .text("created_by")
@@ -1644,8 +1645,8 @@ export const clauses = p.pgTable(
     description: p.text(),
     usageNotes: p.text("usage_notes"),
     language: p.varchar({ length: 10 }),
-    body: p.jsonb().$type<ClauseBody>().notNull(),
-    metadata: p.jsonb().$type<ClauseMetadata | null>(),
+    body: jsonb().$type<ClauseBody>().notNull(),
+    metadata: jsonb().$type<ClauseMetadata | null>(),
     searchVector: tsvector("search_vector"),
     currentVersion: p.integer("current_version").notNull().default(1),
     createdBy: p
@@ -1676,7 +1677,7 @@ export const clauseVariants = p.pgTable(
     organizationId: safeOrganizationId("organization_id").notNull(),
     clauseId: safeUuid<"clause">("clause_id").notNull(),
     label: p.varchar({ length: 256 }).notNull(),
-    body: p.jsonb().$type<ClauseBody>().notNull(),
+    body: jsonb().$type<ClauseBody>().notNull(),
     sortOrder: p.integer("sort_order").notNull().default(0),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
@@ -1701,7 +1702,7 @@ export const clauseVersions = p.pgTable(
     organizationId: safeOrganizationId("organization_id").notNull(),
     clauseId: safeUuid<"clause">("clause_id").notNull(),
     version: p.integer().notNull(),
-    body: p.jsonb().$type<ClauseBody>().notNull(),
+    body: jsonb().$type<ClauseBody>().notNull(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -1811,11 +1812,9 @@ export const templateFills = p.pgTable(
     status: p.text().notNull(),
     unmatchedCount: p.integer("unmatched_count").notNull().default(0),
     unusedCount: p.integer("unused_count").notNull().default(0),
-    structureErrors: p
-      .jsonb("structure_errors")
-      .$type<
-        { message: string; paragraphIndex: number; directive: string }[] | null
-      >(),
+    structureErrors: jsonb("structure_errors").$type<
+      { message: string; paragraphIndex: number; directive: string }[] | null
+    >(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -1843,7 +1842,7 @@ export const caseLawSources = p.pgTable(
     enabled: p.boolean().default(true).notNull(),
     syncCursor: p.text("sync_cursor"),
     lastSyncAt: p.timestamp("last_sync_at"),
-    config: p.jsonb().$type<Record<string, unknown>>().default({}),
+    config: jsonb().$type<Record<string, unknown>>().default({}),
     createdAt: p.timestamp("created_at").defaultNow().notNull(),
     updatedAt: p
       .timestamp("updated_at")
@@ -1873,15 +1872,15 @@ export const caseLawDecisions = p.pgTable(
     decisionDate: p.date("decision_date"),
     decisionType: p.varchar("decision_type", { length: 128 }),
     fulltext: p.text(),
-    sections: p.jsonb().$type<DecisionSection[]>(),
-    documentAst: p.jsonb("document_ast").$type<DocumentAst | EmptyAst>(),
+    sections: jsonb().$type<DecisionSection[]>(),
+    documentAst: jsonb("document_ast").$type<DocumentAst | EmptyAst>(),
     /**
      * AI-generated structural analysis: hierarchical headings
      * with annotations anchored to paragraph ranges. Generated
      * on-demand on first open, persisted permanently.
      * null = not yet generated.
      */
-    analysis: p.jsonb().$type<PersistedDecisionAnalysis>(),
+    analysis: jsonb().$type<PersistedDecisionAnalysis>(),
     /**
      * Parser version that produced documentAst. Compared
      * against the adapter's current version on read; stale
@@ -1900,7 +1899,7 @@ export const caseLawDecisions = p.pgTable(
     sourceRawContentType: p.varchar("source_raw_content_type", { length: 128 }),
     sourceUrl: p.varchar("source_url", { length: 2048 }),
     documentUrl: p.varchar("document_url", { length: 2048 }),
-    metadata: p.jsonb().$type<Record<string, unknown>>().default({}),
+    metadata: jsonb().$type<Record<string, unknown>>().default({}),
     sourceHash: p.varchar("source_hash", { length: 64 }),
     createdAt: p.timestamp("created_at").defaultNow().notNull(),
     updatedAt: p
@@ -1975,7 +1974,7 @@ export const caseLawPolarityRules = p.pgTable(
     source: p.varchar("source", { length: 16 }).notNull().default("manual"),
     confidence: p.doublePrecision("confidence").notNull().default(1),
     matchCount: p.integer("match_count").notNull().default(0),
-    surfaceForms: p.jsonb("surface_forms").$type<string[]>().default([]),
+    surfaceForms: jsonb("surface_forms").$type<string[]>().default([]),
     createdAt: p.timestamp("created_at").defaultNow().notNull(),
     updatedAt: p
       .timestamp("updated_at")
@@ -2182,7 +2181,7 @@ export const chatMessages = p.pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     role: p.varchar({ length: 16 }).notNull().$type<ChatMessageRole>(),
-    content: p.jsonb().notNull().$type<PersistedChatMessageContent>(),
+    content: jsonb().notNull().$type<PersistedChatMessageContent>(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -2245,7 +2244,7 @@ export const workspaceViews = p.pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: p.varchar({ length: 256 }).notNull(),
-    layout: p.jsonb().$type<ViewLayout>().notNull(),
+    layout: jsonb().$type<ViewLayout>().notNull(),
     position: p.integer().notNull(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
   },

@@ -43,7 +43,7 @@ export const jsonField =
       panic("JSON field key literal must be a string");
     }
 
-    if (column.dataType !== "object json") {
+    if (column.getSQLType() !== "jsonb") {
       panic("Column must be a JSON column");
     }
 
