@@ -37,12 +37,8 @@ const getMessages = createSafeRootHandler(
           where: {
             id: { eq: threadId },
             userId: { eq: user.id },
-            workspaceId:
-              scope.scope === "workspace"
-                ? { eq: scope.workspaceId }
-                : { isNull: true },
           },
-          columns: {},
+          columns: { workspaceId: true, contextMatterIds: true },
           with: {
             messages: {
               columns: {
@@ -59,7 +55,7 @@ const getMessages = createSafeRootHandler(
 
     if (!thread) {
       if (allowMissingThread) {
-        return Result.ok([]);
+        return Result.ok({ messages: [], contextMatterIds: [] });
       }
 
       return Result.err(
@@ -70,13 +66,30 @@ const getMessages = createSafeRootHandler(
       );
     }
 
-    return Result.ok(
-      thread.messages.map((row) => ({
+    // Reject requests whose scope contradicts the persisted thread.
+    // A workspace-scoped thread asked for as global (or vice versa)
+    // is a client bug — fail loud instead of silently 404'ing or
+    // creating a duplicate.
+    const persistedWorkspaceId = thread.workspaceId ?? null;
+    const requestedWorkspaceId =
+      scope.scope === "workspace" ? scope.workspaceId : null;
+    if (persistedWorkspaceId !== requestedWorkspaceId) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Chat thread scope does not match request",
+        }),
+      );
+    }
+
+    return Result.ok({
+      messages: thread.messages.map((row) => ({
         id: row.id,
         role: row.role,
         parts: row.content.data,
       })),
-    );
+      contextMatterIds: thread.contextMatterIds,
+    });
   },
 );
 

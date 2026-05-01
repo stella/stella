@@ -48,6 +48,15 @@ export const activeDecisionSchema = t.Object({
 export const sendMessageBodySchema = t.Object({
   threadId: tSafeId("chatThread"),
   workspaceId: t.Optional(tSafeId("workspace")),
+  /**
+   * Matters the chat draws context from. Empty (or omitted) means
+   * "no matters pinned" — the AI discovers matters lazily via the
+   * readonly stella API. Non-empty narrows tool authorization so
+   * requested matterRefs must be a subset of this set. The set is
+   * persisted on the chat thread so subsequent turns reuse it
+   * without re-sending.
+   */
+  contextMatterIds: t.Optional(t.Array(tSafeId("workspace"))),
   message: rawMessageSchema,
   userContext: t.Optional(userContextSchema),
   activeFile: t.Optional(activeFileSchema),

@@ -13,6 +13,7 @@
  * still renders the bar + thread, but accept buttons are hidden.
  */
 
+import "@/components/chat-editor.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -1079,7 +1080,7 @@ export function PromptBar(props: PromptBarProps) {
     <div
       className={cn(
         // ── Shared bar look — IDENTICAL in floating and standalone.
-        "group/bar bg-background/75 flex items-center gap-1 rounded-2xl border backdrop-blur-xl backdrop-saturate-150 transition-shadow select-none",
+        "group/bar bg-background/75 flex items-end gap-1 rounded-2xl border backdrop-blur-xl backdrop-saturate-150 transition-shadow",
         "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
         "after:pointer-events-none after:absolute after:-inset-4 after:-z-10 after:rounded-2xl after:bg-[radial-gradient(ellipse_at_center,var(--background)_0%,transparent_70%)] after:opacity-50",
         "focus-within:border-foreground/30",
@@ -1092,20 +1093,16 @@ export function PromptBar(props: PromptBarProps) {
       role="toolbar"
       aria-label="AI prompt"
     >
-      <div className="flex h-8 min-w-0 flex-1 items-center gap-1.5 px-1.5">
-        {status === "generating" && (
-          <span
-            className="border-border border-t-foreground inline-block size-3.5 shrink-0 animate-spin rounded-full border-[1.5px]"
-            aria-hidden="true"
-          />
-        )}
+      <div className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 px-1.5">
         <EditorContent
-          // ProseMirror's content fills the bar's row height with
-          // `leading-8` (matches the form's `h-8`), so single-line
-          // text sits vertically centered without a stray
-          // padding offset. Multi-line content scrolls within
-          // `max-h-32` and the leading reverts to relaxed.
-          className="folio-ai-bar-editor text-foreground h-full min-w-0 flex-1 [&_.ProseMirror]:max-h-32 [&_.ProseMirror]:min-h-0 [&_.ProseMirror]:overflow-y-auto [&_.ProseMirror]:text-[13px] [&_.ProseMirror]:leading-8 [&_.ProseMirror]:focus-visible:outline-none"
+          // Height is content-driven: a single line of 13px text
+          // is ~20px tall (`leading-5`) and the cell's `min-h-8`
+          // (2rem) + `items-center` centres it vertically;
+          // multiple wrapped lines stay tight. The cell grows up
+          // to `max-h-32` before scrolling, and `min-h-0`
+          // overrides the provider's `min-h-10` so it shrinks
+          // back as the user deletes content.
+          className="folio-ai-bar-editor text-foreground min-w-0 flex-1 [&_.ProseMirror]:field-sizing-fixed [&_.ProseMirror]:max-h-32 [&_.ProseMirror]:min-h-0 [&_.ProseMirror]:overflow-y-auto [&_.ProseMirror]:py-1.5 [&_.ProseMirror]:text-[13px] [&_.ProseMirror]:leading-5 [&_.ProseMirror]:select-text [&_.ProseMirror]:focus-visible:outline-none [&_.ProseMirror_p]:my-0"
           editor={editor}
         />
       </div>
@@ -1124,7 +1121,7 @@ export function PromptBar(props: PromptBarProps) {
                 }
                 void submitDraft();
               }}
-              size="icon-sm"
+              size="icon"
               type="button"
             >
               {showStop ? (

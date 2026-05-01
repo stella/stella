@@ -7,8 +7,10 @@ export const PDF_MIME = "application/pdf" as const;
 /**
  * Shared layout heights so rows stay vertically aligned
  * across the main content area and the right panel.
+ * Must match the chrome topbar (`h-12`) so right-side
+ * sub-screens line up with the matter header.
  */
-export const TOOLBAR_ROW_HEIGHT = "h-10" as const;
+export const TOOLBAR_ROW_HEIGHT = "h-12" as const;
 
 export const STALE_TIME = {
   INFINITE: Number.POSITIVE_INFINITY,

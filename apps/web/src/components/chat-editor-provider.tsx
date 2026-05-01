@@ -29,6 +29,10 @@ import {
 } from "@/components/chat-mention-extension";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import { getMentionViewScope } from "@/components/chat-mention-helpers";
+import {
+  createPromptSlashSuggestion,
+  PromptSlash,
+} from "@/components/chat/prompt-slash-extension";
 import { getAnalytics } from "@/lib/analytics/provider";
 import {
   createChatDraftState,
@@ -37,6 +41,7 @@ import {
 } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
+import { useStockPrompts } from "@/lib/prompts/stock";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 import {
@@ -457,20 +462,40 @@ export const useChatEditor = ({
     }
   });
 
+  const stockPrompts = useStockPrompts();
+  const promptsRef = useRef(stockPrompts);
+  promptsRef.current = stockPrompts;
+
   const editor = useEditor({
     autofocus: false,
     content: draftDoc,
     extensions: [
-      Document,
+      Document.extend({
+        // ProseMirror's `selectAll` command is built in but not
+        // bound by default when the editor is composed manually
+        // (no `StarterKit`); without this, Cmd/Ctrl+A in the
+        // composer reads as a no-op.
+        addKeyboardShortcuts() {
+          return {
+            "Mod-a": () => this.editor.commands.selectAll(),
+          };
+        },
+      }),
       Paragraph,
       Text,
       // Shift+Enter inserts a hard break (newline) instead of
       // splitting the paragraph; matches expected chat-input
       // behaviour everywhere — Slack, Discord, ChatGPT, etc.
+      // Chained with `scrollIntoView()` so adding a new line at
+      // the bottom of an overflowed input keeps the cursor in
+      // view (ProseMirror's auto-scroll only fires on selection
+      // changes that already include the flag — `setHardBreak`
+      // alone doesn't).
       HardBreak.extend({
         addKeyboardShortcuts() {
           return {
-            "Shift-Enter": () => this.editor.commands.setHardBreak(),
+            "Shift-Enter": () =>
+              this.editor.chain().setHardBreak().scrollIntoView().run(),
           };
         },
       }),
@@ -485,6 +510,9 @@ export const useChatEditor = ({
           loadWorkspaceEntities,
         ),
         deleteTriggerWithBackspace: true,
+      }),
+      PromptSlash.configure({
+        suggestion: createPromptSlashSuggestion(() => promptsRef.current),
       }),
     ],
     onCreate: ({ editor: nextEditor }) => {

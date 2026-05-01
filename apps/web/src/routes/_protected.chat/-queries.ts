@@ -35,6 +35,14 @@ type ChatThreadOptionsContext = {
   allowMissingThread?: boolean | undefined;
   getActiveDecision?: (() => ActiveDecisionContext | undefined) | undefined;
   getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
+  /**
+   * Matters this chat draws context from. The transport sends the
+   * current value (an empty array means "no matters pinned"). The
+   * server persists it on the thread and re-uses it on subsequent
+   * turns; the picker UI calls back here on every change so the
+   * next send carries the latest set.
+   */
+  getContextMatterIds?: (() => string[]) | undefined;
   getUserContext?: (() => ChatUserContext) | undefined;
 };
 
@@ -69,6 +77,11 @@ export const chatKeys = {
         ],
 };
 
+type ThreadFetch = {
+  messages: PersistedChatMessage[];
+  contextMatterIds: string[];
+};
+
 const fetchThreadMessages = async (
   key: ChatThreadKey,
   {
@@ -76,7 +89,7 @@ const fetchThreadMessages = async (
   }: {
     allowMissingThread?: boolean | undefined;
   } = {},
-): Promise<PersistedChatMessage[]> => {
+): Promise<ThreadFetch> => {
   const response = await api.chat
     .threads({ threadId: key.threadId })
     .messages.get({
@@ -92,7 +105,7 @@ const fetchThreadMessages = async (
     const error = toAPIError(response.error);
 
     if (allowMissingThread && APIError.is(error) && error.status === 404) {
-      return [];
+      return { messages: [], contextMatterIds: [] };
     }
 
     throw error;
@@ -130,6 +143,7 @@ const buildSendRequestBody = ({
   const body: {
     activeDecision?: ActiveDecisionContext | undefined;
     activeFile?: ActiveFileContext | undefined;
+    contextMatterIds?: string[] | undefined;
     message: PersistedChatMessage;
     threadId: string;
     userContext?: ChatUserContext | undefined;
@@ -158,7 +172,23 @@ const buildSendRequestBody = ({
     body.activeDecision = activeDecision;
   }
 
+  const contextMatterIds = context?.getContextMatterIds?.();
+  if (contextMatterIds !== undefined) {
+    body.contextMatterIds = contextMatterIds;
+  }
+
   return body;
+};
+
+export type ChatThreadFetched = {
+  chat: Chat<PersistedChatMessage>;
+  /**
+   * Persisted contextMatterIds for this thread, fresh from the
+   * server. Consumers feed this into local picker state on mount;
+   * subsequent changes flow back through `getContextMatterIds` on
+   * the transport, not through this read.
+   */
+  contextMatterIds: string[];
 };
 
 export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
@@ -170,12 +200,12 @@ export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
       ...key,
       allowMissingThread: context?.allowMissingThread,
     }),
-    queryFn: async () => {
-      const messages = await fetchThreadMessages(key, {
+    queryFn: async (): Promise<ChatThreadFetched> => {
+      const { messages, contextMatterIds } = await fetchThreadMessages(key, {
         allowMissingThread: context?.allowMissingThread,
       });
 
-      return new Chat<PersistedChatMessage>({
+      const chat = new Chat<PersistedChatMessage>({
         generateId: uuidv7,
         messages,
         transport: new DefaultChatTransport({
@@ -192,6 +222,8 @@ export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
         sendAutomaticallyWhen:
           lastAssistantMessageIsCompleteWithApprovalResponses,
       });
+
+      return { chat, contextMatterIds };
     },
   });
 
@@ -234,4 +266,47 @@ export const invalidateChatThread = async ({
         queryKey.at(4) === threadRef.threadId
       );
     },
+  });
+
+/**
+ * Whether a query key targets the given chat thread under any
+ * scope. Exported for tests; the runtime uses it via
+ * `invalidateChatThreadAcrossScopes` below.
+ */
+export const matchesChatThreadAcrossScopes = (
+  queryKey: readonly unknown[],
+  threadId: string,
+): boolean => {
+  if (queryKey.at(0) !== "chat" || queryKey.at(1) !== "thread") {
+    return false;
+  }
+  const scope = queryKey.at(2);
+  if (scope === "global") {
+    return queryKey.at(3) === threadId;
+  }
+  if (scope === "workspace") {
+    return queryKey.at(4) === threadId;
+  }
+  return false;
+};
+
+/**
+ * Invalidate every cached query for a chat thread regardless of
+ * scope. Used when a thread moves between the standalone /chat
+ * surface and the inspector tab — the destination surface uses a
+ * different cache key (the scope is part of the key), so the old
+ * scope's entry would otherwise serve stale data on the next
+ * visit. Scoped by `threadId` only because that's the durable
+ * identity; scope+workspace are surface-bound.
+ */
+export const invalidateChatThreadAcrossScopes = async ({
+  queryClient,
+  threadId,
+}: {
+  queryClient: QueryClient;
+  threadId: string;
+}) =>
+  await queryClient.invalidateQueries({
+    predicate: (query) =>
+      matchesChatThreadAcrossScopes(query.queryKey, threadId),
   });

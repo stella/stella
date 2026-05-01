@@ -7,6 +7,8 @@ import { v7 as uuidv7 } from "uuid";
 
 import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
+import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
+import { useStockPrompts } from "@/lib/prompts/stock";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
@@ -29,6 +31,7 @@ function ChatIndex() {
   const controller = useChatEditor({
     threadRef: { scope: "global", threadId: threadIdRef.current },
   });
+  const stockPrompts = useStockPrompts();
 
   return (
     <div className="flex w-full max-w-2xl flex-1 flex-col overflow-hidden">
@@ -44,7 +47,13 @@ function ChatIndex() {
             autoFocus
             controller={controller}
             onSubmit={async (draft) => {
-              const chat = await queryClient.ensureQueryData(
+              // Build the request payload first, then resolve the
+              // Chat<> instance from the cache; the thread route
+              // reads the *same* cached instance, so kicking off
+              // `sendMessage` here lets the thread page observe
+              // the in-flight stream as soon as it mounts.
+              const message = await buildChatRequestMessage(draft);
+              const { chat } = await queryClient.ensureQueryData(
                 chatThreadOptions({
                   key: { scope: "global", threadId: threadIdRef.current },
                   context: {
@@ -54,15 +63,31 @@ function ChatIndex() {
                 }),
               );
 
-              await chat.sendMessage(await buildChatRequestMessage(draft));
-              await invalidateGroupedChatThreads(queryClient);
+              // Fire-and-forget: don't block navigation on the
+              // streaming response. The thread page picks up the
+              // same Chat instance from cache and renders the
+              // user message + streaming reply as it arrives.
+              void chat.sendMessage(message);
+
               await navigate({
                 to: "/chat/$threadId",
                 params: { threadId: threadIdRef.current },
               });
+              void invalidateGroupedChatThreads(queryClient);
             }}
           />
         </div>
+        <PromptSuggestions
+          onSelect={(prompt) => {
+            const editor = controller.editor;
+            if (!editor) {
+              return;
+            }
+            editor.commands.setContent(prompt.body);
+            editor.commands.focus("end");
+          }}
+          prompts={stockPrompts}
+        />
       </div>
     </div>
   );

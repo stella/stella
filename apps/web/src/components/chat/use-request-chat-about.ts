@@ -35,6 +35,7 @@ export const useRequestChatAbout = (workspaceId?: string) => {
       // Auto-unminimises the pane and activates the new chat tab.
       openChat({
         id: threadId,
+        workspaceId,
         contextMatterIds: [workspaceId],
       });
 

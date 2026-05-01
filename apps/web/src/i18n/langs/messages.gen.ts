@@ -309,17 +309,13 @@ type Messages = {
       "submit": "Submit answers";
     };
     "attachFile": "Attach file";
-    "caseLawGreeting": "Ask me about this decision — I have the full text available.";
+    "caseLawGreeting": "Ask about this decision — its full text is available here.";
     "chatAbout": "Chat about this";
     "deleteThread": "Delete conversation";
     "documentView": {
       "original": "Original";
       "simple": "Accepted";
       "trackedChanges": "Tracked changes";
-    };
-    "emptyState": {
-      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.";
-      "title": "What can we work on?";
     };
     "extractingContent": "Extracting content...";
     "fileTooLarge": "File exceeds {maxSize} limit";
@@ -336,9 +332,38 @@ type Messages = {
       "loadError": "Failed to load entities";
       "noResults": "No results";
     };
+    "moveToMain": "Move to main view";
+    "moveToSide": "Move to side panel";
     "newChat": "New chat";
     "noThreads": "No conversations yet";
     "placeholder": "What would you like to know?";
+    "prompts": {
+      "noResults": "No matching prompts";
+      "scope": {
+        "private": "Your prompts";
+        "stock": "Built-in";
+        "team": "Team prompts";
+      };
+      "stock": {
+        "compareVersions": {
+          "body": "Compare two versions of this document and list every material change with its location.";
+          "name": "Compare versions";
+        };
+        "draftResponse": {
+          "body": "Draft a measured response to this letter. Keep the tone professional, address each point raised, and flag any open questions for me to confirm.";
+          "name": "Draft a response";
+        };
+        "findRisks": {
+          "body": "Review this document for legal risks, missing protections, and ambiguous clauses. Cite the specific clause for each finding.";
+          "name": "Find risks";
+        };
+        "summarizeDocument": {
+          "body": "Summarise this document. Cover parties, key obligations, dates, financial terms, and any termination or liability provisions.";
+          "name": "Summarise a document";
+        };
+      };
+      "tryOne": "Try one of these to start";
+    };
     "send": "Send message";
     "thinking": "Working with context";
     "threads": "Conversations";

@@ -56,19 +56,24 @@ const buildPromptMentionExample = ({
 }: BuildPromptMentionExampleProps) => `[${label}](${prefix}${id})`;
 
 const CORE_RULE_SECTIONS = [
-  "You are AI within a legal workspace product called " +
-    "Stella. You retrieve documents, draft text, and " +
-    "answer questions on behalf of the user.",
+  "You are an AI feature inside a legal workspace product named " +
+    "Stella. You retrieve documents, draft text, and answer " +
+    "questions on behalf of the user. Stella is the product the " +
+    "user works *in*; you are the AI *within* it — not a persona " +
+    "called Stella.",
   "CRITICAL: Never guess, infer, or fabricate document " +
     "content. Always retrieve real data through the " +
     "`execute-typescript` tool and the typed readonly `stella` " +
     "API before answering. If a tool call fails, report the " +
     "error honestly.",
-  "IDENTITY: When drafting documents, emails, or letters, " +
-    "always sign using the user's registered name (provided " +
-    "below). The user is the author. Never refer to yourself " +
-    "by name or present yourself as an entity with opinions, " +
-    "feelings, or independent judgment.",
+  "IDENTITY: Do not introduce yourself, name yourself, or refer " +
+    "to yourself with a persona. Never write greetings like " +
+    "'Hi, I am Stella' or 'I'm your AI assistant' — the user " +
+    "knows what they opened. Skip the preamble and answer " +
+    "directly. When drafting documents, emails, or letters, " +
+    "sign using the user's registered name (provided below); " +
+    "the user is the author. Never present yourself as an " +
+    "entity with opinions, feelings, or independent judgment.",
   "PLANNING: For complex or ambiguous tasks (drafting " +
     "documents, multi-step workflows), call ask-user to " +
     "gather requirements BEFORE acting. Wait for the " +
@@ -128,34 +133,29 @@ export const buildChatPromptCacheKey = (cacheStablePrefix: string) => {
 type BuildChatSystemPromptProps = {
   activeDecision: IncomingActiveDecision | undefined;
   activeFile: IncomingActiveFile | undefined;
+  /**
+   * Matters this chat draws context from. Empty means "no
+   * specific matters pinned" — the AI is told to discover
+   * relevant matters on demand. Non-empty narrows the AI's
+   * declared scope to those matters' refs (tool authorisation
+   * also enforces the constraint at call time).
+   */
+  contextMatterIds: SafeId<"workspace">[];
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
   userContext: IncomingUserContext | undefined;
   workspaceId: SafeId<"workspace"> | null;
 };
 
-export const buildChatSystemPrompt = async ({
-  activeDecision,
-  activeFile,
-  refRegistry,
-  safeDb,
-  userContext,
-  workspaceId,
-}: BuildChatSystemPromptProps): Promise<Result<string, SafeDbError>> =>
-  (
-    await buildChatSystemPromptParts({
-      activeDecision,
-      activeFile,
-      refRegistry,
-      safeDb,
-      userContext,
-      workspaceId,
-    })
-  ).map(({ fullPrompt }) => fullPrompt);
+export const buildChatSystemPrompt = async (
+  props: BuildChatSystemPromptProps,
+): Promise<Result<string, SafeDbError>> =>
+  (await buildChatSystemPromptParts(props)).map(({ fullPrompt }) => fullPrompt);
 
 export const buildChatSystemPromptParts = async ({
   activeDecision,
   activeFile,
+  contextMatterIds,
   refRegistry,
   safeDb,
   userContext,
@@ -174,7 +174,7 @@ export const buildChatSystemPromptParts = async ({
         userContext: userContext ?? null,
       });
 
-      const fullPrompt = yield* Result.await(
+      const decisionPrompt = yield* Result.await(
         appendActiveDecisionPromptIfExists({
           activeDecision,
           prompt: prompt.fullPrompt,
@@ -183,7 +183,12 @@ export const buildChatSystemPromptParts = async ({
       );
       return Result.ok({
         cacheStablePrefix: prompt.cacheStablePrefix,
-        fullPrompt,
+        fullPrompt: appendContextMatterScope({
+          contextMatterIds,
+          prompt: decisionPrompt,
+          refRegistry,
+          scope: "global",
+        }),
       });
     }
 
@@ -204,10 +209,18 @@ export const buildChatSystemPromptParts = async ({
       }),
     );
 
+    const scopedPrompt = appendContextMatterScope({
+      contextMatterIds,
+      prompt: decisionPrompt,
+      refRegistry,
+      scope: "workspace",
+      workspaceId,
+    });
+
     if (!activeFile) {
       return Result.ok({
         cacheStablePrefix: prompt.cacheStablePrefix,
-        fullPrompt: decisionPrompt,
+        fullPrompt: scopedPrompt,
       });
     }
 
@@ -228,12 +241,82 @@ export const buildChatSystemPromptParts = async ({
       fullPrompt: appendActiveFilePromptIfEntityExists({
         activeFile,
         entityExists: Boolean(entity),
-        prompt: decisionPrompt,
+        prompt: scopedPrompt,
         refRegistry,
         workspaceId,
       }),
     });
   });
+
+type AppendContextMatterScopeProps =
+  | {
+      contextMatterIds: SafeId<"workspace">[];
+      prompt: string;
+      refRegistry: ChatRefRegistry;
+      scope: "global";
+      workspaceId?: undefined;
+    }
+  | {
+      contextMatterIds: SafeId<"workspace">[];
+      prompt: string;
+      refRegistry: ChatRefRegistry;
+      scope: "workspace";
+      workspaceId: SafeId<"workspace">;
+    };
+
+/**
+ * Append a "matter context" instruction block based on what the
+ * caller pinned. Empty list → tell the model to discover via
+ * tools. Non-empty → list the matterRefs in scope and tell the
+ * model to constrain matter-scoped function calls accordingly.
+ * For workspace-scoped chats the chat's own matter is implicit;
+ * we surface it alongside any extras so the AI sees the full set.
+ */
+const appendContextMatterScope = ({
+  contextMatterIds,
+  prompt,
+  refRegistry,
+  scope,
+  workspaceId,
+}: AppendContextMatterScopeProps): string => {
+  // Workspace-scoped chats already include "Connected to matter X"
+  // and a default `matterRefs: ["X"]` instruction in the matter
+  // prompt. Empty contextMatterIds is the no-op case there.
+  if (scope === "workspace" && contextMatterIds.length === 0) {
+    return prompt;
+  }
+
+  // Effective set: for workspace chats we include the chat's own
+  // matter alongside any extras the user pinned, deduplicated and
+  // stable-ordered.
+  const effective =
+    scope === "workspace"
+      ? Array.from(
+          new Set<SafeId<"workspace">>([workspaceId, ...contextMatterIds]),
+        )
+      : contextMatterIds;
+
+  if (effective.length === 0) {
+    return [
+      prompt,
+      "MATTER SCOPE: No matters are pinned to this chat. The user may ask about anything across the matters they can access. Discover relevant matters with `stella.listMatters` (paginated) or `stella.searchEntities` before answering — do NOT ask the user to name a matter unless the question is genuinely ambiguous after lookup.",
+    ].join("\n\n");
+  }
+
+  const refs = effective.map((id) => refRegistry.toMatterRef(id));
+  const refList = refs.map((ref) => `"${ref}"`).join(", ");
+  const heading =
+    effective.length === 1
+      ? "MATTER SCOPE: This chat is pinned to one matter."
+      : `MATTER SCOPE: This chat is pinned to ${effective.length} matters.`;
+  return [
+    prompt,
+    [
+      heading,
+      `Restrict matter-scoped function calls (\`stella.list*\`, \`stella.search*\`, \`stella.get*\`) to \`matterRefs: [${refList}]\`. Do NOT call them with matter refs outside this set — even if the user names another matter, surface that as a clarification instead of widening scope yourself.`,
+    ].join("\n"),
+  ].join("\n\n");
+};
 
 export const extractTitle = (parts: ChatMessage["parts"]) => {
   const raw = parts

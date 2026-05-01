@@ -1,9 +1,9 @@
-import { useEffectEvent } from "react";
+import { useEffectEvent, useState } from "react";
 
 import { Button, buttonVariants } from "@stll/ui/components/button";
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { PlusIcon, SquareIcon } from "lucide-react";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { PanelRightIcon, PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -13,14 +13,20 @@ import {
 } from "@/components/ai-elements/conversation";
 import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
+import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import Tooltip from "@/components/tooltip";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
-import { chatThreadOptions } from "@/routes/_protected.chat/-queries";
+import {
+  chatThreadOptions,
+  invalidateChatThreadAcrossScopes,
+} from "@/routes/_protected.chat/-queries";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 type ChatThreadPageProps = {
   threadRef: ChatThreadRef;
@@ -37,12 +43,42 @@ export const ChatThreadPage = ({
   const showToolCalls = useDevStore((state) => state.showToolCalls);
   const controller = useChatEditor({ threadRef });
 
-  const { data: chat } = useSuspenseQuery(
+  // Local copy of the persisted contextMatterIds, seeded from the
+  // server and re-seeded whenever the page navigates to a different
+  // thread. The picker mutates this directly; the transport pulls
+  // the latest value via getContextMatterIds on every send, and
+  // the server persists the new set on receipt — so we don't need
+  // a dedicated PATCH round-trip just to widen scope.
+  const [contextMatterIds, setContextMatterIds] = useState<string[] | null>(
+    null,
+  );
+  // Track which thread our local state was seeded for so we can
+  // detect navigation between two `/chat/$threadId` routes inside
+  // the same mounted component and reset before the next send.
+  const [seededForThreadId, setSeededForThreadId] = useState<string | null>(
+    null,
+  );
+  const getContextMatterIds = useEffectEvent(() => contextMatterIds ?? []);
+
+  const { data } = useSuspenseQuery(
     chatThreadOptions({
       key: threadRef,
-      context: { getUserContext },
+      // A thread can be opened (e.g. via "Move to main" from the
+      // inspector) before its first message has reached the server,
+      // so the row may not exist yet. The fetch handles missing
+      // threads gracefully; the row is created on first send.
+      context: {
+        allowMissingThread: true,
+        getUserContext,
+        getContextMatterIds,
+      },
     }),
   );
+  const { chat } = data;
+  if (seededForThreadId !== threadRef.threadId) {
+    setSeededForThreadId(threadRef.threadId);
+    setContextMatterIds(data.contextMatterIds);
+  }
 
   const {
     messages,
@@ -57,20 +93,74 @@ export const ChatThreadPage = ({
     approvalPendingMessageId,
   } = useChatSession({ chat, threadRef, workspaceId });
 
+  const openInspectorChat = useInspectorStore((s) => s.openChat);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  // "Move to side" — re-host this thread inside the inspector
+  // tab. Workspace-scoped chats land on the matter so the pane
+  // sits next to its matter content; global chats land on /chat
+  // (the thread list) so the inspector pane can mount on a non-
+  // workspace route and surface the chat there. Both scopes'
+  // caches are invalidated so the inspector doesn't read whichever
+  // entry happens to predate the move.
+  const moveToSide = () => {
+    const persistedContext = contextMatterIds ?? data.contextMatterIds;
+    void invalidateChatThreadAcrossScopes({
+      queryClient,
+      threadId: threadRef.threadId,
+    });
+    if (threadRef.scope === "workspace") {
+      openInspectorChat({
+        id: threadRef.threadId,
+        workspaceId: threadRef.workspaceId,
+        contextMatterIds: persistedContext,
+      });
+      void navigate({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId: threadRef.workspaceId },
+      });
+      return;
+    }
+    openInspectorChat({
+      id: threadRef.threadId,
+      contextMatterIds: persistedContext,
+    });
+    void navigate({ to: "/chat" });
+  };
+
   return (
     <div className="flex w-full max-w-2xl flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2">
-        <Link
-          className={buttonVariants({
-            variant: "ghost",
-            size: "sm",
-          })}
-          to="/chat"
-        >
-          <PlusIcon />
-          {t("chat.newChat")}
-        </Link>
-        <ThreadsSheet />
+      <div className="flex items-center justify-between gap-2 px-4 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Link
+            className={buttonVariants({
+              variant: "ghost",
+              size: "sm",
+            })}
+            to="/chat"
+          >
+            <PlusIcon />
+            {t("chat.newChat")}
+          </Link>
+          {contextMatterIds !== null && (
+            <ChatMatterPicker
+              matterIds={contextMatterIds}
+              onChange={setContextMatterIds}
+            />
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <Tooltip
+            content={t("chat.moveToSide")}
+            render={
+              <Button onClick={moveToSide} size="icon-sm" variant="ghost">
+                <PanelRightIcon className="size-4" />
+              </Button>
+            }
+          />
+          <ThreadsSheet />
+        </div>
       </div>
 
       <Conversation>
@@ -95,27 +185,17 @@ export const ChatThreadPage = ({
         <ConversationScrollButton />
       </Conversation>
 
-      <div className="flex items-end gap-2 p-4">
+      <div className="p-4">
         <ChatInputSurface
-          className="flex-1"
           controller={controller}
-          disabled={isGenerating}
+          isGenerating={isGenerating}
+          onStop={() => {
+            void stop();
+          }}
           onSubmit={async (draft) => {
             await sendMessage(await buildChatRequestMessage(draft));
           }}
         />
-        {isGenerating && (
-          <Button
-            aria-label={t("common.cancel")}
-            onClick={() => {
-              void (async () => await stop())();
-            }}
-            size="icon-sm"
-            variant="outline"
-          >
-            <SquareIcon className="size-4" />
-          </Button>
-        )}
       </div>
     </div>
   );

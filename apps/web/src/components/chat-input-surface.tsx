@@ -4,7 +4,7 @@ import { useCallback, useEffect } from "react";
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 import { EditorContent } from "@tiptap/react";
-import { ArrowUpIcon, PaperclipIcon } from "lucide-react";
+import { ArrowUpIcon, PaperclipIcon, SquareIcon } from "lucide-react";
 
 import type {
   ChatEditorController,
@@ -18,6 +18,13 @@ type ChatInputSurfaceProps = {
   controller: ChatEditorController;
   disabled?: boolean;
   onSubmit: (draft: ChatInputDraft) => Promise<void> | void;
+  /**
+   * When set, the surface renders an in-line stop button while
+   * generating instead of the send affordance, replacing the need
+   * for a separate Stop button next to the input.
+   */
+  isGenerating?: boolean;
+  onStop?: () => void;
 };
 
 // todo: check the code quality
@@ -27,6 +34,8 @@ export const ChatInputSurface = ({
   controller,
   disabled = false,
   onSubmit,
+  isGenerating = false,
+  onStop,
 }: ChatInputSurfaceProps) => {
   const {
     attachments,
@@ -46,14 +55,18 @@ export const ChatInputSurface = ({
   } = controller;
 
   const submitDraft = useCallback(async () => {
-    if (disabled) {
+    // While the assistant is streaming we render Stop in place of
+    // Send, but Enter still calls submit unless we gate it here.
+    // Without this guard, a user pressing Enter during a turn fires
+    // an overlapping `sendMessage` and the two responses interleave.
+    if (disabled || isGenerating) {
       return;
     }
 
     await submit(async (draft) => {
       await onSubmit(draft);
     });
-  }, [disabled, onSubmit, submit]);
+  }, [disabled, isGenerating, onSubmit, submit]);
 
   useEffect(() => {
     setSubmitHandler(submitDraft);
@@ -108,22 +121,33 @@ export const ChatInputSurface = ({
           ref={fileInputRef}
           type="file"
         />
-        <Button
-          className={cn(
-            "ms-auto shrink-0 transition-colors",
-            canSubmit &&
-              !disabled &&
-              "bg-foreground text-background hover:bg-foreground/90",
-          )}
-          disabled={disabled || !canSubmit}
-          onClick={() => {
-            void submitDraft();
-          }}
-          size="icon-sm"
-          variant={canSubmit && !disabled ? "default" : "ghost"}
-        >
-          <ArrowUpIcon className="size-3.5" />
-        </Button>
+        {isGenerating && onStop ? (
+          <Button
+            className="ms-auto shrink-0"
+            onClick={onStop}
+            size="icon-sm"
+            variant="outline"
+          >
+            <SquareIcon className="size-3.5" />
+          </Button>
+        ) : (
+          <Button
+            className={cn(
+              "ms-auto shrink-0 transition-colors",
+              canSubmit &&
+                !disabled &&
+                "bg-foreground text-background hover:bg-foreground/90",
+            )}
+            disabled={disabled || !canSubmit}
+            onClick={() => {
+              void submitDraft();
+            }}
+            size="icon-sm"
+            variant={canSubmit && !disabled ? "default" : "ghost"}
+          >
+            <ArrowUpIcon className="size-3.5" />
+          </Button>
+        )}
       </div>
     </div>
   );

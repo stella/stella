@@ -58,7 +58,7 @@ import {
   Loader2Icon,
   LogOutIcon,
   MailIcon,
-  MessageCircleIcon,
+  MessageSquareIcon,
   MonitorIcon,
   MonitorSmartphoneIcon,
   MoonIcon,
@@ -1209,7 +1209,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
               <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip={t("navigation.chat")}>
                   <Link activeProps={{ "data-active": true }} to="/chat">
-                    <MessageCircleIcon />
+                    <MessageSquareIcon />
                     <span>{t("navigation.chat")}</span>
                   </Link>
                 </SidebarMenuButton>

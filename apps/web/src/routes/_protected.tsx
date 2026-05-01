@@ -135,26 +135,25 @@ function ProtectedComponent() {
       return;
     }
     if (activeWorkspaceId) {
-      store.openChat({ contextMatterIds: [activeWorkspaceId] });
+      store.openChat({
+        workspaceId: activeWorkspaceId,
+        contextMatterIds: [activeWorkspaceId],
+      });
     }
   }, [activeWorkspaceId]);
   useHotkey(HOTKEYS.TOGGLE_CHAT, handleToggleInspectorHotkey);
 
   // Auto-open a chat tab grounded in the active case-law decision —
   // mirrors the legacy right-panel-chat behaviour where landing on a
-  // decision page opened a chat about it. Fires once per (decision,
-  // workspace) pair so re-renders don't reopen a tab the user just
-  // closed; resets when the user navigates to a different decision
-  // or away from the case-law route.
-  //
-  // TODO: drop the `activeWorkspaceId` requirement when global-scope
-  // chat tabs land. Today the inspector tab + thread are
-  // workspace-scoped, so a decision visited outside a matter context
-  // can't get a tab; users have to manually navigate into a matter
-  // first. Tracked under Phase D-full.
+  // decision page opened a chat about it. Fires once per decision so
+  // re-renders don't reopen a tab the user just closed; resets when
+  // the user navigates to a different decision or away from the
+  // case-law route. Inside a matter the chat is workspace-scoped and
+  // seeded with that matter's contextMatterIds; outside a matter the
+  // tab is global and only carries the decision context.
   const lastAutoOpenedDecisionRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!activeDecisionId || !activeWorkspaceId) {
+    if (!activeDecisionId) {
       lastAutoOpenedDecisionRef.current = null;
       return;
     }
@@ -162,10 +161,15 @@ function ProtectedComponent() {
       return;
     }
     lastAutoOpenedDecisionRef.current = activeDecisionId;
-    useInspectorStore.getState().openChat({
-      contextMatterIds: [activeWorkspaceId],
-      activeDecisionId,
-    });
+    useInspectorStore.getState().openChat(
+      activeWorkspaceId === undefined
+        ? { activeDecisionId }
+        : {
+            workspaceId: activeWorkspaceId,
+            contextMatterIds: [activeWorkspaceId],
+            activeDecisionId,
+          },
+    );
   }, [activeDecisionId, activeWorkspaceId]);
 
   return (
@@ -225,24 +229,28 @@ function ProtectedContent({
   const openInspectorChat = useInspectorStore((s) => s.openChat);
   const handleInspectorButtonClick = () => {
     if (inspectorTabsCount === 0) {
-      // No tabs yet — only meaningful inside a matter where we
-      // can scope the new chat. Outside a matter the button has
-      // nothing useful to do, so it stays hidden via the
-      // `canShowInspectorButton` guard below.
-      if (workspaceId !== undefined) {
-        openInspectorChat({ contextMatterIds: [workspaceId] });
-      }
+      // No tabs yet — open a new chat. With a matter context the
+      // chat is workspace-scoped and seeded with that matter's
+      // contextMatterIds; outside a matter we open a global chat.
+      openInspectorChat(
+        workspaceId === undefined
+          ? {}
+          : { workspaceId, contextMatterIds: [workspaceId] },
+      );
       return;
     }
     toggleInspector();
   };
-  // Show the chrome inspector button whenever there's a meaningful
-  // action behind it: open a chat (workspace + 0 tabs) or restore
-  // a minimised pane (any route + tabs). When the pane is fully
-  // open the in-pane close button takes over and this button hides.
-  const canShowInspectorButton =
-    (workspaceId !== undefined && inspectorTabsCount === 0) ||
-    (inspectorTabsCount > 0 && inspectorMinimized);
+  // Show the chrome inspector button always, unless it would
+  // duplicate the in-pane close (i.e., pane visible). The pane
+  // is "visible" when there are tabs and it isn't minimised; in
+  // that state the rail's Hide button is the close affordance.
+  // Otherwise the chrome button is the entry point — opens a
+  // fresh chat in a workspace, restores a minimised pane, or
+  // (outside a workspace with no tabs) sits inert as a hint that
+  // the inspector exists.
+  const inspectorPaneVisible = inspectorTabsCount > 0 && !inspectorMinimized;
+  const canShowInspectorButton = !inspectorPaneVisible;
   const inspectorButtonTitle =
     inspectorTabsCount === 0
       ? t("inspector.openChat")
@@ -258,9 +266,6 @@ function ProtectedContent({
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
   const handleIconRowContextMenu = (e: MouseEvent) => {
-    if (workspaceId === undefined) {
-      return;
-    }
     e.preventDefault();
     const x = e.clientX;
     const y = e.clientY;
@@ -270,10 +275,11 @@ function ProtectedContent({
     setChatMenuOpen(true);
   };
   const handleOpenNewChatFromMenu = () => {
-    if (workspaceId === undefined) {
-      return;
-    }
-    openInspectorChat({ contextMatterIds: [workspaceId] });
+    openInspectorChat(
+      workspaceId === undefined
+        ? {}
+        : { workspaceId, contextMatterIds: [workspaceId] },
+    );
     setChatMenuOpen(false);
   };
 
@@ -352,28 +358,26 @@ function ProtectedContent({
             </>
           )}
         </div>
-        {workspaceId !== undefined && (
-          <Menu
-            onOpenChange={(nextOpen) => {
-              setChatMenuOpen(nextOpen);
-              if (!nextOpen) {
-                chatMenuAnchorRef.current = null;
-              }
-            }}
-            open={chatMenuOpen}
-          >
-            <MenuTrigger
-              nativeButton={false}
-              render={<span className="sr-only" />}
-            />
-            <MenuPopup anchor={chatMenuAnchorRef.current ?? undefined}>
-              <MenuItem onClick={handleOpenNewChatFromMenu}>
-                <MessageSquarePlusIcon />
-                {t("chat.newChat")}
-              </MenuItem>
-            </MenuPopup>
-          </Menu>
-        )}
+        <Menu
+          onOpenChange={(nextOpen) => {
+            setChatMenuOpen(nextOpen);
+            if (!nextOpen) {
+              chatMenuAnchorRef.current = null;
+            }
+          }}
+          open={chatMenuOpen}
+        >
+          <MenuTrigger
+            nativeButton={false}
+            render={<span className="sr-only" />}
+          />
+          <MenuPopup anchor={chatMenuAnchorRef.current ?? undefined}>
+            <MenuItem onClick={handleOpenNewChatFromMenu}>
+              <MessageSquarePlusIcon />
+              {t("chat.newChat")}
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
       </header>
       <Outlet />
     </SidebarInset>
@@ -469,7 +473,7 @@ function WorkspaceInspectorSidePanel() {
     isDragging.current = false;
   };
 
-  if (!visible || !activeWorkspaceId) {
+  if (!visible) {
     return null;
   }
 
@@ -494,7 +498,7 @@ function WorkspaceInspectorSidePanel() {
         />
         <div className="bg-sidebar flex h-full w-full flex-col">
           <Suspense>
-            <LazyInspectorPanel workspaceId={activeWorkspaceId} />
+            <LazyInspectorPanel workspaceId={activeWorkspaceId ?? undefined} />
           </Suspense>
         </div>
       </div>

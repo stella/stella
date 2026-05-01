@@ -306,17 +306,13 @@
       "submit": "Envoyer les réponses"
     },
     "attachFile": "Joindre un fichier",
-    "caseLawGreeting": "Ask me about this decision — I have the full text available.",
+    "caseLawGreeting": "Pose des questions sur cette décision — le texte complet est disponible ici.",
     "chatAbout": "Insérer dans le chat IA",
     "deleteThread": "Supprimer la conversation",
     "documentView": {
       "original": "Original",
       "simple": "Accepté",
       "trackedChanges": "Suivi des modifications"
-    },
-    "emptyState": {
-      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
-      "title": "What can we work on?"
     },
     "extractingContent": "Extraction du contenu...",
     "fileTooLarge": "Le fichier dépasse la limite de {maxSize}",
@@ -333,9 +329,38 @@
       "loadError": "Échec du chargement des entités",
       "noResults": "No matching entities"
     },
+    "moveToMain": "Déplacer vers la vue principale",
+    "moveToSide": "Déplacer vers le panneau latéral",
     "newChat": "Nouvelle conversation",
     "noThreads": "Aucune conversation",
     "placeholder": "Que souhaitez-vous savoir ?",
+    "prompts": {
+      "noResults": "Aucun prompt correspondant",
+      "scope": {
+        "private": "Vos prompts",
+        "stock": "Intégrés",
+        "team": "Prompts d'équipe"
+      },
+      "stock": {
+        "compareVersions": {
+          "body": "Compare deux versions de ce document et liste chaque changement substantiel avec son emplacement.",
+          "name": "Comparer les versions"
+        },
+        "draftResponse": {
+          "body": "Rédige une réponse mesurée à ce courrier. Conserve un ton professionnel, traite chaque point soulevé et signale les questions ouvertes à confirmer.",
+          "name": "Rédiger une réponse"
+        },
+        "findRisks": {
+          "body": "Examine ce document à la recherche de risques juridiques, de protections manquantes et de clauses ambiguës. Cite la clause précise pour chaque constat.",
+          "name": "Identifier les risques"
+        },
+        "summarizeDocument": {
+          "body": "Résume ce document. Couvre les parties, les obligations principales, les dates, les conditions financières et les clauses de résiliation ou de responsabilité.",
+          "name": "Résumer un document"
+        }
+      },
+      "tryOne": "Essaie l'un d'entre eux pour commencer"
+    },
     "send": "Envoyer le message",
     "thinking": "Traitement du contexte",
     "threads": "Conversations",

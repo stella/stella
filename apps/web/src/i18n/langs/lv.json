@@ -306,17 +306,13 @@
       "submit": "Iesniegt atbildes"
     },
     "attachFile": "Pievienot failu",
-    "caseLawGreeting": "Ask me about this decision — I have the full text available.",
+    "caseLawGreeting": "Uzdod jautājumus par šo lēmumu — pilns teksts ir pieejams šeit.",
     "chatAbout": "Ievietot AI čatā",
     "deleteThread": "Dzēst sarunu",
     "documentView": {
       "original": "Oriģināls",
       "simple": "Pieņemts",
       "trackedChanges": "Izmaiņu izsekošana"
-    },
-    "emptyState": {
-      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
-      "title": "What can we work on?"
     },
     "extractingContent": "Satura izgūšana...",
     "fileTooLarge": "Fails pārsniedz {maxSize} ierobežojumu",
@@ -333,9 +329,38 @@
       "loadError": "Neizdevās ielādēt entītijas",
       "noResults": "No matching entities"
     },
+    "moveToMain": "Pārvietot uz galveno skatu",
+    "moveToSide": "Pārvietot uz sānu paneli",
     "newChat": "Jauna saruna",
     "noThreads": "Sarunu vēl nav",
     "placeholder": "Ko vēlaties uzzināt?",
+    "prompts": {
+      "noResults": "Nav atbilstošu uzvedņu",
+      "scope": {
+        "private": "Jūsu uzvednes",
+        "stock": "Iebūvētas",
+        "team": "Komandas uzvednes"
+      },
+      "stock": {
+        "compareVersions": {
+          "body": "Salīdzini divas šī dokumenta versijas un uzskaiti katru būtisko izmaiņu kopā ar tās atrašanās vietu.",
+          "name": "Salīdzināt versijas"
+        },
+        "draftResponse": {
+          "body": "Sastādi izsvērtu atbildi uz šo vēstuli. Saglabā profesionālu toni, atbildi uz katru izvirzīto punktu un atzīmē atvērtos jautājumus, kas man jāapstiprina.",
+          "name": "Sastādīt atbildi"
+        },
+        "findRisks": {
+          "body": "Pārskati šo dokumentu, lai atrastu juridiskos riskus, trūkstošas aizsardzības un divdomīgus punktus. Katram atklājumam norādi konkrēto punktu.",
+          "name": "Atrast riskus"
+        },
+        "summarizeDocument": {
+          "body": "Apkopo šo dokumentu. Aptver puses, galvenos pienākumus, datumus, finanšu nosacījumus un visus izbeigšanas vai atbildības noteikumus.",
+          "name": "Apkopot dokumentu"
+        }
+      },
+      "tryOne": "Izmēģini vienu no tiem"
+    },
     "send": "Nosūtīt ziņu",
     "thinking": "Strādāju ar kontekstu",
     "threads": "Sarunas",
