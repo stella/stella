@@ -113,4 +113,60 @@ describe("cloneFieldsForRevision", () => {
       },
     ]);
   });
+
+  test("uses the replacement field id only for the targeted file field", () => {
+    const workspaceId = toSafeId<"workspace">("ws_test123");
+    const filePropertyId = toSafeId<"property">("prop_file");
+    const textPropertyId = toSafeId<"property">("prop_text");
+    const nextVersionId = toSafeId<"entityVersion">("version_next");
+    const replacementFieldId = toSafeId<"field">("field_replacement");
+    const replacementFile = {
+      encrypted: false,
+      fileName: "agreement.docx",
+      id: Bun.randomUUIDv7(),
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      pdfFileId: null,
+      sha256Hex: "a".repeat(64),
+      sizeBytes: 128,
+      type: "file",
+      version: 1,
+    } as const;
+
+    const cloned = cloneFieldsForRevision({
+      currentFields: [
+        {
+          content: {
+            encrypted: false,
+            fileName: "old.docx",
+            id: Bun.randomUUIDv7(),
+            mimeType:
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            pdfFileId: null,
+            sha256Hex: "b".repeat(64),
+            sizeBytes: 64,
+            type: "file",
+            version: 1,
+          },
+          propertyId: filePropertyId,
+        },
+        {
+          content: {
+            type: "text",
+            value: "Keep me",
+            version: 1,
+          },
+          propertyId: textPropertyId,
+        },
+      ],
+      entityVersionId: nextVersionId,
+      propertyId: filePropertyId,
+      replacementContent: replacementFile,
+      replacementFieldId,
+      workspaceId,
+    });
+
+    expect(cloned.at(0)).toMatchObject({ id: replacementFieldId });
+    expect(cloned.at(1)).not.toHaveProperty("id");
+  });
 });

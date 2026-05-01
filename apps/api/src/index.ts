@@ -46,6 +46,7 @@ import { getAuth } from "@/api/lib/auth";
 import { DEV_INSPECTOR_ORIGINS } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
 import { errorTag } from "@/api/lib/errors/utils";
+import { initFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -58,6 +59,9 @@ import {
 } from "@/api/lib/rate-limit";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 import { initWorkflowWorker } from "@/api/lib/workflow-queue";
+
+// BullMQ worker for asynchronous file derivatives.
+initFileDerivativeWorker();
 
 // BullMQ workflow worker for AI extraction.
 initWorkflowWorker();

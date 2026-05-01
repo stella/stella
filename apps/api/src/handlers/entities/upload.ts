@@ -6,10 +6,7 @@ import type { Static } from "elysia";
 import type { SafeDb, Transaction } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
-import {
-  convertToPdf,
-  isConvertibleMimeType,
-} from "@/api/handlers/files/gotenberg";
+import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { isEncryptedPdf } from "@/api/handlers/files/pdf-utils";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
@@ -28,6 +25,7 @@ import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
+import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
@@ -206,53 +204,12 @@ const uploadEntityHandler = async function* ({
 
   const s3Keys = [sourceKey];
 
-  // Keep a converted PDF derivative for AI workflows and bbox generation.
-  const shouldConvert = !encrypted && isConvertibleMimeType(file.type);
-
-  const [, conversionResult] = await Promise.all([
-    getS3().write(sourceKey, new Uint8Array(fileBuffer)),
-    shouldConvert
-      ? convertToPdf(fileBuffer, name, file.type)
-      : Promise.resolve(null),
-  ]);
-
-  // If conversion was expected but failed, clean up and
-  // return error so the client can retry
-  if (conversionResult && Result.isError(conversionResult)) {
-    captureError(conversionResult.error, {
-      mimeType: file.type,
-      sizeBytes: String(fileBuffer.byteLength),
-    });
-    await getS3().delete(sourceKey);
-    return Result.err(
-      new HandlerError({
-        status: 502,
-        message: "File conversion to PDF failed",
-      }),
-    );
-  }
-
-  // Upload converted PDF if conversion succeeded
-  let pdfFileId: string | null = null;
-
-  if (conversionResult && Result.isOk(conversionResult)) {
-    pdfFileId = Bun.randomUUIDv7();
-
-    const pdfKey = createFileKey({
-      organizationId,
-      workspaceId,
-      fileId: pdfFileId,
-      mimeType: PDF_MIME_TYPE,
-    });
-
-    s3Keys.push(pdfKey);
-
-    await getS3().write(pdfKey, new Uint8Array(conversionResult.value.buffer));
-  }
+  await getS3().write(sourceKey, new Uint8Array(fileBuffer));
 
   try {
     const entityId = createSafeId<"entity">();
     const entityVersionId = createSafeId<"entityVersion">();
+    const fieldId = createSafeId<"field">();
 
     const fileName = yield* Result.await(
       safeDb(async (tx) => {
@@ -283,6 +240,7 @@ const uploadEntityHandler = async function* ({
           .where(eq(entities.id, entityId));
 
         await tx.insert(fields).values({
+          id: fieldId,
           workspaceId,
           propertyId: property.id,
           entityVersionId,
@@ -295,7 +253,11 @@ const uploadEntityHandler = async function* ({
             sizeBytes: file.size,
             encrypted,
             sha256Hex,
-            pdfFileId,
+            pdfFileId: null,
+            pdfDerivative: pdfDerivativeStateForFile({
+              encrypted,
+              mimeType: file.type,
+            }),
             ...(scanWarnings !== undefined && { scanWarnings }),
           },
         });
@@ -334,6 +296,22 @@ const uploadEntityHandler = async function* ({
     await processExtraction(entityId).catch((error: unknown) =>
       captureError(error, { entityId, mimeType: file.type }),
     );
+
+    enqueuePdfDerivativeOrMarkFailed({
+      encrypted,
+      entityId,
+      fieldId,
+      mimeType: file.type,
+      organizationId,
+      userId,
+      workspaceId,
+    }).catch((error: unknown) => {
+      captureError(error, {
+        entityId,
+        fieldId,
+        mimeType: file.type,
+      });
+    });
 
     return Result.ok({
       entityId,

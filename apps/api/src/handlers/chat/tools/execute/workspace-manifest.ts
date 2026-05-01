@@ -139,6 +139,23 @@ const sourceDocumentSchema = v.strictObject({
 /** Mirrors `fieldContentSchema` in `@/api/db/schema-validators` for tool output. */
 const fieldVersionSchema = v.literal(1);
 
+const pdfDerivativeSchema = v.optional(
+  v.variant("status", [
+    v.strictObject({
+      status: v.literal("failed"),
+    }),
+    v.strictObject({
+      status: v.literal("not-required"),
+    }),
+    v.strictObject({
+      status: v.literal("pending"),
+    }),
+    v.strictObject({
+      status: v.literal("ready"),
+    }),
+  ]),
+);
+
 const fieldContentSchema = v.variant("type", [
   v.strictObject({
     type: v.literal("error"),
@@ -157,6 +174,7 @@ const fieldContentSchema = v.variant("type", [
     fileName: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
     id: storedFileIdSchema,
     mimeType: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
+    pdfDerivative: pdfDerivativeSchema,
     pdfFileId: v.nullable(storedFileIdSchema),
     scanWarnings: v.optional(v.array(v.pipe(v.string(), v.maxLength(256)))),
     sha256Hex: v.pipe(v.string(), v.minLength(64), v.maxLength(64)),

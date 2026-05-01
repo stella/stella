@@ -98,6 +98,7 @@ describe("workspace manifest helpers", () => {
                 id: "141d8c88-2fa5-5127-8e37-3ea75f52f890",
                 mimeType:
                   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                pdfDerivative: { status: "not-required" },
                 pdfFileId: null,
                 sha256Hex:
                   "7079424dfa5247d9f4745e86a487dc9602f78b5944d640e589927fea6b4b4eda",

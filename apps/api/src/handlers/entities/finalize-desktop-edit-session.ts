@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -17,13 +17,10 @@ import {
   buildVersionStamp,
   cloneFieldsForRevision,
 } from "@/api/handlers/entities/version-utils";
-import {
-  convertToPdf,
-  isConvertibleMimeType,
-} from "@/api/handlers/files/gotenberg";
+import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
@@ -32,10 +29,11 @@ import {
   DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE,
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
+import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { getS3 } from "@/api/lib/s3";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
-import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 export const finalizeDesktopEditSessionParamsSchema = t.Object({
   sessionId: tSafeId("desktopEditSession"),
@@ -382,47 +380,8 @@ export const finalizeDesktopEditSessionHandler = async ({
       });
       uploadedKeys.push(sourceKey);
 
-      const shouldConvert = isConvertibleMimeType(DOCX_MIME_TYPE);
-      const [, conversionResult] = await Promise.all([
-        getS3().write(sourceKey, storedBytes),
-        shouldConvert
-          ? convertToPdf(checkpointBuffer, editSession.fileName, DOCX_MIME_TYPE)
-          : Promise.resolve(null),
-      ]);
-
-      let pdfFileId: string | null = null;
-
-      if (conversionResult && Result.isError(conversionResult)) {
-        captureError(conversionResult.error, {
-          mimeType: DOCX_MIME_TYPE,
-          scanWarnings: JSON.stringify(
-            editSession.checkpointScanWarnings ?? [],
-          ),
-          sizeBytes: String(storedBytes.byteLength),
-        });
-
-        return {
-          error: {
-            message: "File conversion to PDF failed.",
-            statusCode: 502,
-          },
-        } as const;
-      }
-
-      if (conversionResult && Result.isOk(conversionResult)) {
-        pdfFileId = Bun.randomUUIDv7();
-        const pdfKey = createFileKey({
-          fileId: pdfFileId,
-          mimeType: PDF_MIME_TYPE,
-          organizationId: authorizedSession.value.organizationId,
-          workspaceId: authorizedSession.value.workspaceId,
-        });
-        uploadedKeys.push(pdfKey);
-        await getS3().write(
-          pdfKey,
-          new Uint8Array(conversionResult.value.buffer),
-        );
-      }
+      // DOCX is rendered natively by Folio; do not create a PDF twin.
+      await getS3().write(sourceKey, storedBytes);
 
       await tx.insert(entityVersions).values({
         entityId: editSession.entityId,
@@ -442,7 +401,11 @@ export const finalizeDesktopEditSessionHandler = async ({
           fileName: editSession.fileName,
           id: sourceFileId,
           mimeType: DOCX_MIME_TYPE,
-          pdfFileId,
+          pdfFileId: null,
+          pdfDerivative: pdfDerivativeStateForFile({
+            encrypted: false,
+            mimeType: DOCX_MIME_TYPE,
+          }),
           sha256Hex: editSession.checkpointSha256Hex,
           sizeBytes: editSession.checkpointSizeBytes,
           type: "file",
@@ -527,6 +490,22 @@ export const finalizeDesktopEditSessionHandler = async ({
       await processExtraction(result.entityId).catch((error: unknown) => {
         captureError(error, {
           entityId: result.entityId,
+        });
+      });
+
+      enqueuePdfDerivativeOrMarkFailed({
+        encrypted: false,
+        entityId: result.entityId,
+        fieldId: result.fieldId,
+        mimeType: DOCX_MIME_TYPE,
+        organizationId: authorizedSession.value.organizationId,
+        userId: toSafeId<"user">(authorizedSession.value.userId),
+        workspaceId: authorizedSession.value.workspaceId,
+      }).catch((error: unknown) => {
+        captureError(error, {
+          entityId: result.entityId,
+          fieldId: result.fieldId,
+          mimeType: DOCX_MIME_TYPE,
         });
       });
 

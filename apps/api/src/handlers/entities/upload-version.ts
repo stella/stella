@@ -8,22 +8,19 @@ import {
   buildVersionStamp,
   cloneFieldsForRevision,
 } from "@/api/handlers/entities/version-utils";
-import {
-  convertToPdf,
-  isConvertibleMimeType,
-} from "@/api/handlers/files/gotenberg";
+import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
-import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
   permissions: { entity: ["update"] },
@@ -129,7 +126,8 @@ export default createSafeHandler(
 
     const scanWarnings = getScanWarnings(scanResult.value) ?? undefined;
 
-    // Upload to S3 and convert to PDF
+    // Upload the source file first; PDF derivatives are generated
+    // asynchronously by the file-derivative queue.
     const fileId = Bun.randomUUIDv7();
     const sha256Hex = new Bun.CryptoHasher("sha256")
       .update(new Uint8Array(fileBuffer))
@@ -141,38 +139,7 @@ export default createSafeHandler(
       mimeType: file.type,
     });
 
-    const shouldConvert = isConvertibleMimeType(file.type);
-    const [, conversionResult] = await Promise.all([
-      getS3().write(sourceKey, new Uint8Array(fileBuffer)),
-      shouldConvert
-        ? convertToPdf(fileBuffer, sanitizedName, file.type)
-        : Promise.resolve(null),
-    ]);
-
-    if (conversionResult && Result.isError(conversionResult)) {
-      await getS3().delete(sourceKey);
-      return Result.err(
-        new HandlerError({
-          status: 502,
-          message: "File conversion to PDF failed",
-        }),
-      );
-    }
-
-    let pdfFileId: string | null = null;
-    if (conversionResult && Result.isOk(conversionResult)) {
-      pdfFileId = Bun.randomUUIDv7();
-      const pdfKey = createFileKey({
-        organizationId,
-        workspaceId,
-        fileId: pdfFileId,
-        mimeType: PDF_MIME_TYPE,
-      });
-      await getS3().write(
-        pdfKey,
-        new Uint8Array(conversionResult.value.buffer),
-      );
-    }
+    await getS3().write(sourceKey, new Uint8Array(fileBuffer));
 
     // Get workspace reference for stamp
     const workspace = yield* Result.await(
@@ -186,6 +153,7 @@ export default createSafeHandler(
 
     const nextVersionNumber = currentVersion.versionNumber + 1;
     const nextVersionId = createSafeId<"entityVersion">();
+    const fileFieldId = createSafeId<"field">();
     const nextVersionStamp = buildVersionStamp({
       docSequence: entity.docSequence,
       versionNumber: nextVersionNumber,
@@ -210,16 +178,21 @@ export default createSafeHandler(
             currentFields: currentVersion.fields,
             entityVersionId: nextVersionId,
             propertyId: fileField.propertyId,
+            replacementFieldId: fileFieldId,
             replacementContent: {
               encrypted: false,
               fileName: sanitizedName,
               id: fileId,
               mimeType: file.type,
-              pdfFileId,
+              pdfFileId: null,
               sha256Hex,
               sizeBytes: file.size,
               type: "file",
               version: 1,
+              pdfDerivative: pdfDerivativeStateForFile({
+                encrypted: false,
+                mimeType: file.type,
+              }),
               ...(scanWarnings !== undefined && { scanWarnings }),
             },
             workspaceId,
@@ -245,6 +218,22 @@ export default createSafeHandler(
     // Fire-and-forget: extraction + diff stats
     processExtraction(entityId).catch((error: unknown) => {
       captureError(error, { entityId });
+    });
+
+    enqueuePdfDerivativeOrMarkFailed({
+      encrypted: false,
+      entityId,
+      fieldId: fileFieldId,
+      mimeType: file.type,
+      organizationId,
+      userId,
+      workspaceId,
+    }).catch((error: unknown) => {
+      captureError(error, {
+        entityId,
+        fieldId: fileFieldId,
+        mimeType: file.type,
+      });
     });
 
     computeVersionDiffStats({
