@@ -453,7 +453,21 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       {/* Two-column layout: tasks + team */}
       <div className="grid gap-6 @3xl:grid-cols-2">
         {/* Upcoming tasks */}
-        <section className="flex flex-col">
+        <section
+          className="flex flex-col"
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setUpcomingMenu({
+              open: true,
+              anchor: {
+                getBoundingClientRect: () =>
+                  new DOMRect(e.clientX, e.clientY, 0, 0),
+              },
+              task: null,
+            });
+          }}
+        >
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-muted-foreground text-sm font-medium">
               {t("workspaces.overview.upcomingTasks")}
@@ -550,7 +564,16 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               render={<span className="sr-only" />}
             />
             <MenuPopup anchor={upcomingMenu.anchor ?? undefined}>
-              {upcomingMenu.task !== null ? (
+              {upcomingMenu.task === null ? (
+                <MenuItem
+                  onClick={() => {
+                    void handleCreateTask();
+                  }}
+                >
+                  <EntityKindIcon kind="task" />
+                  {t("tasks.newTask")}
+                </MenuItem>
+              ) : (
                 <>
                   <MenuItem
                     onClick={() => {
@@ -621,7 +644,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                     </MenuSubPopup>
                   </MenuSub>
                 </>
-              ) : null}
+              )}
             </MenuPopup>
           </Menu>
         </section>
