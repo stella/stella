@@ -97,43 +97,86 @@ const FILESYSTEM_ROW_HEIGHT_PX = 36;
 const FILESYSTEM_ROW_OVERSCAN = 16;
 const FILESYSTEM_INDENT_PX = 20;
 const FILESYSTEM_GUIDE_OFFSET_PX = 10;
+const FILESYSTEM_GUIDE_LINE_COLOR_CLASS = "bg-muted-foreground/30";
+const FILESYSTEM_CREATED_BY_ID = "_created-by" satisfies InternalPropertyId;
+const FILESYSTEM_UPDATED_AT_ID = "_updated-at" satisfies InternalPropertyId;
+const FILESYSTEM_VERSION_ID = "_version" satisfies InternalPropertyId;
+const FILESYSTEM_METADATA_IDS = [
+  FILESYSTEM_CREATED_BY_ID,
+  FILESYSTEM_UPDATED_AT_ID,
+  FILESYSTEM_VERSION_ID,
+] as const;
 
 // -- Column descriptors --
+
+type FilesystemMetadataId = (typeof FILESYSTEM_METADATA_IDS)[number];
 
 type ExtraColumn =
   | { type: "property"; id: string; label: string; property: WorkspaceProperty }
   | {
       type: "metadata";
-      id: InternalPropertyId;
+      id: FilesystemMetadataId;
       label: string;
     };
 
 const ACTIONS_COL_RE = / 2rem$/;
 
-const METADATA_IDS = new Set<string>([
-  getInternalPropertyId("created-by"),
-  getInternalPropertyId("updated-at"),
-  getInternalPropertyId("version"),
-]);
+const isFilesystemMetadataId = (id: string): id is FilesystemMetadataId =>
+  FILESYSTEM_METADATA_IDS.some((metadataId) => metadataId === id);
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const hasNullableParentId = (
+  value: unknown,
+): value is { parentId: string | null } => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const parentId = value["parentId"];
+  return typeof parentId === "string" || parentId === null;
+};
+
+const isDragEntityList = (
+  value: unknown,
+): value is { parentId: string | null }[] =>
+  Array.isArray(value) && value.every(hasNullableParentId);
+
+const getDragEntityId = (
+  data: Record<string | symbol, unknown>,
+): string | null => {
+  const entityId = data["entityId"];
+  return typeof entityId === "string" ? entityId : null;
+};
+
+const getDragEntityIds = (
+  data: Record<string | symbol, unknown>,
+): string[] | null => {
+  const entityIds = data["entityIds"];
+  return isStringArray(entityIds) ? entityIds : null;
+};
 
 const resolveExtraColumns = (
   hiddenProperties: string[],
   properties: WorkspaceProperty[],
   metadataLabels: Record<string, string>,
 ): ExtraColumn[] => {
-  const ids = [...METADATA_IDS, ...properties.map((p) => p.id)].filter(
-    (id) => !hiddenProperties.includes(id),
-  );
+  const ids = [
+    ...FILESYSTEM_METADATA_IDS,
+    ...properties.map((p) => p.id),
+  ].filter((id) => !hiddenProperties.includes(id));
 
   const cols: ExtraColumn[] = [];
 
   for (const id of ids) {
-    if (METADATA_IDS.has(id)) {
+    if (isFilesystemMetadataId(id)) {
       cols.push({
         type: "metadata",
-        // SAFETY: id from METADATA_IDS (internal property ids)
-        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-        id: id as InternalPropertyId,
+        id,
         label: metadataLabels[id] ?? id,
       });
     } else {
@@ -501,11 +544,9 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   const metadataLabels = useMemo(
     () => ({
-      [getInternalPropertyId("created-by")]: t("workspaces.filesystem.author"),
-      [getInternalPropertyId("updated-at")]: t(
-        "workspaces.filesystem.lastUpdated",
-      ),
-      [getInternalPropertyId("version")]: t("workspaces.filesystem.version"),
+      [FILESYSTEM_CREATED_BY_ID]: t("workspaces.filesystem.author"),
+      [FILESYSTEM_UPDATED_AT_ID]: t("workspaces.filesystem.lastUpdated"),
+      [FILESYSTEM_VERSION_ID]: t("workspaces.filesystem.version"),
     }),
     [t],
   );
@@ -590,17 +631,11 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       monitorForElements({
         canMonitor: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
         onDragStart: ({ source }) => {
-          // Check if any entity in the drag has a parentId.
-          // SAFETY: from our draggable getInitialData
-          const entities =
-            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-            source.data["entities"] as
-              | { parentId: string | null }[]
-              | undefined;
-          const hasNested = entities
-            ? entities.some((e) => e.parentId)
-            : source.data["parentId"] !== undefined &&
-              source.data["parentId"] !== null;
+          const entities = source.data["entities"];
+          const parentId = source.data["parentId"];
+          const hasNested = isDragEntityList(entities)
+            ? entities.some((entity) => entity.parentId !== null)
+            : typeof parentId === "string";
           if (hasNested) {
             setIsDragActive(true);
           }
@@ -629,9 +664,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       onDragLeave: () => setIsRootDropTarget(false),
       onDrop: ({ source }) => {
         setIsRootDropTarget(false);
-        // SAFETY: entityIds is always string[]; set by our own draggable getInitialData.
-        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-        const entityIds = source.data["entityIds"] as string[];
+        const entityIds = getDragEntityIds(source.data);
+        if (!entityIds) {
+          return;
+        }
         for (const entityId of entityIds) {
           moveEntityRefRoot.current.mutate(
             { workspaceId, entityId, parentId: null },
@@ -1216,14 +1252,18 @@ const FilesystemRow = ({
         ? [
             dropTargetForElements({
               element: el,
-              canDrop: ({ source }) =>
-                source.data["type"] === ENTITY_DRAG_TYPE &&
-                source.data["entityId"] !== node.entityId &&
-                // SAFETY: entityId is always a string; set by our own draggable getInitialData.
-                !ancestorIdsRef.current.has(
-                  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-                  source.data["entityId"] as string,
-                ),
+              canDrop: ({ source }) => {
+                if (source.data["type"] !== ENTITY_DRAG_TYPE) {
+                  return false;
+                }
+
+                const entityId = getDragEntityId(source.data);
+                return (
+                  entityId !== null &&
+                  entityId !== node.entityId &&
+                  !ancestorIdsRef.current.has(entityId)
+                );
+              },
               getData: () => ({ entityId: node.entityId }),
               onDragEnter: () => {
                 setIsDropTarget(true);
@@ -1246,9 +1286,10 @@ const FilesystemRow = ({
                   clearTimeout(autoExpandTimer.current);
                   autoExpandTimer.current = null;
                 }
-                // SAFETY: entityIds is always string[]; set by our own draggable getInitialData.
-                // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-                const entityIds = source.data["entityIds"] as string[];
+                const entityIds = getDragEntityIds(source.data);
+                if (!entityIds) {
+                  return;
+                }
                 for (const entityId of entityIds) {
                   if (ancestorIdsRef.current.has(entityId)) {
                     continue;
@@ -1298,7 +1339,7 @@ const FilesystemRow = ({
   // Shared cells: Name + Type
   const nameCell = (
     <span
-      className="relative flex min-w-0 items-center gap-1.5"
+      className="relative flex h-full min-w-0 items-center gap-1.5 self-stretch"
       style={{ paddingLeft: `${depth * FILESYSTEM_INDENT_PX}px` }}
     >
       <TreeGuideLines depth={depth} guideDepths={guideDepths} isLast={isLast} />
@@ -1375,6 +1416,7 @@ const FilesystemRow = ({
     display: "grid",
     gridTemplateColumns: gridTemplate.replace(ACTIONS_COL_RE, ""),
     alignItems: "center",
+    alignSelf: "stretch",
     columnGap: "1rem",
   } as const;
   const contentCells = (
@@ -1532,12 +1574,21 @@ const TreeGuideLines = ({
 
   const currentLineLeft =
     depth * FILESYSTEM_INDENT_PX - FILESYSTEM_GUIDE_OFFSET_PX;
+  // The immediate parent's column is the same x as this row's own
+  // current line; rendering a full-height guide there would mask the
+  // half-height "L" stop on the last child.
+  const continuationGuideDepths = guideDepths.filter(
+    (guideDepth) => guideDepth !== depth - 1,
+  );
 
   return (
     <span aria-hidden="true" className="pointer-events-none absolute inset-y-0">
-      {guideDepths.map((guideDepth) => (
+      {continuationGuideDepths.map((guideDepth) => (
         <span
-          className="bg-muted-foreground/20 absolute top-0 bottom-0 w-px"
+          className={cn(
+            FILESYSTEM_GUIDE_LINE_COLOR_CLASS,
+            "absolute top-0 bottom-0 w-px",
+          )}
           key={guideDepth}
           style={{
             left:
@@ -1547,13 +1598,17 @@ const TreeGuideLines = ({
       ))}
       <span
         className={cn(
-          "bg-muted-foreground/20 absolute top-0 w-px",
+          FILESYSTEM_GUIDE_LINE_COLOR_CLASS,
+          "absolute top-0 w-px",
           isLast ? "h-1/2" : "bottom-0",
         )}
         style={{ left: currentLineLeft }}
       />
       <span
-        className="bg-muted-foreground/20 absolute top-1/2 h-px w-2"
+        className={cn(
+          FILESYSTEM_GUIDE_LINE_COLOR_CLASS,
+          "absolute top-1/2 h-px w-2.5",
+        )}
         style={{ left: currentLineLeft }}
       />
     </span>
@@ -1585,13 +1640,12 @@ const formatDateValue = (
 const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
   const locale = useLocale();
   if (column.type === "metadata") {
-    // oxlint-disable-next-line typescript/switch-exhaustiveness-check
     switch (column.id) {
-      case getInternalPropertyId("created-by"):
+      case FILESYSTEM_CREATED_BY_ID:
         return <AuthorCell entity={entity} />;
-      case getInternalPropertyId("updated-at"):
+      case FILESYSTEM_UPDATED_AT_ID:
         return <LastUpdatedCell entity={entity} />;
-      case getInternalPropertyId("version"):
+      case FILESYSTEM_VERSION_ID:
         return <VersionCell entity={entity} />;
       default:
         return null;
