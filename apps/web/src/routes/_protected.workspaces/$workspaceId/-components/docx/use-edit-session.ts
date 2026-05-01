@@ -16,6 +16,8 @@ import { toSafeId } from "@/lib/safe-id";
 import { filesKeys } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
+import { selectStableArrayBuffer } from "./array-buffer-utils";
+
 type EditSessionState =
   | { status: "idle" }
   | { status: "opening" }
@@ -57,6 +59,8 @@ type UseEditSessionOptions = {
   entityId: string;
   fieldId: string;
   propertyId: string;
+  /** Already-rendered preview buffer, reused when the edit download matches it. */
+  initialBuffer?: ArrayBuffer | undefined;
   /** Called after finalize succeeds (new version created). */
   onFinalized?: (result: FinalizeEditSessionResult) => void;
   /** Called after cancel/discard. */
@@ -107,6 +111,7 @@ export const useEditSession = ({
   entityId,
   fieldId,
   propertyId,
+  initialBuffer,
   onFinalized,
   onCancelled,
 }: UseEditSessionOptions) => {
@@ -114,6 +119,7 @@ export const useEditSession = ({
   const [state, setState] = useState<EditSessionState>({ status: "idle" });
   const [isDirty, setIsDirty] = useState(false);
   const sessionRef = useRef<{
+    fileName: string;
     sessionId: string;
     sessionToken: string;
   } | null>(null);
@@ -161,7 +167,7 @@ export const useEditSession = ({
     }
 
     const { sessionId, sessionToken, downloadUrl, fileName } = response.data;
-    sessionRef.current = { sessionId, sessionToken };
+    sessionRef.current = { fileName, sessionId, sessionToken };
     if (!isMountedRef.current) {
       sessionRef.current = null;
       await releaseEditSession(releaseContext);
@@ -187,7 +193,7 @@ export const useEditSession = ({
       return;
     }
 
-    const buffer = await fileResponse.arrayBuffer();
+    const downloadedBuffer = await fileResponse.arrayBuffer();
     if (!isMountedRef.current) {
       if (sessionRef.current !== null) {
         sessionRef.current = null;
@@ -200,7 +206,10 @@ export const useEditSession = ({
       status: "editing",
       sessionId,
       sessionToken,
-      buffer,
+      buffer: selectStableArrayBuffer({
+        incomingBuffer: downloadedBuffer,
+        stableBuffer: initialBuffer,
+      }),
       fileName,
     });
     await queryClient.invalidateQueries({
@@ -214,7 +223,7 @@ export const useEditSession = ({
       return false;
     }
 
-    const file = new File([docxBuffer], "document.docx", {
+    const file = new File([docxBuffer], session.fileName, {
       type: DOCX_MIME,
     });
 
@@ -240,6 +249,7 @@ export const useEditSession = ({
 
     if (response.data.rotatedSessionToken) {
       sessionRef.current = {
+        fileName: session.fileName,
         sessionId: session.sessionId,
         sessionToken: response.data.rotatedSessionToken,
       };

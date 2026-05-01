@@ -872,7 +872,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
               "flex flex-1 flex-col overflow-hidden",
               !isActive && "hidden",
             )}
-            key={tab.id}
+            key={tab.renderId ?? tab.id}
             ref={isActive ? pdfContentRef : undefined}
           >
             {isNativeDocxDisplay ? (

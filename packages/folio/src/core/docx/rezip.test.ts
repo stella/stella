@@ -103,7 +103,7 @@ describe("repackDocx", () => {
                           type: "drawing",
                           image: {
                             type: "image",
-                            rId: "",
+                            rId: "rId_img_123",
                             src: ONE_PIXEL_PNG_DATA_URL,
                             filename: "header.png",
                             alt: "Header image",
@@ -133,5 +133,93 @@ describe("repackDocx", () => {
     expect(headerRels).toContain('Target="media/image1.png"');
     expect(headerXml).toContain('r:embed="rId1"');
     expect(zip.file("word/media/image1.png")).not.toBeNull();
+  });
+
+  test("does not repackage existing header images that already have relationships", async () => {
+    const originalBuffer = await createHeaderFixture();
+    const originalZip = await JSZip.loadAsync(originalBuffer);
+    originalZip.file("word/media/image1.png", new Uint8Array([1, 2, 3, 4]));
+    originalZip.file(
+      "word/_rels/header1.xml.rels",
+      `${XML_DECLARATION}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="${RELATIONSHIP_TYPES.image}" Target="media/image1.png"/>
+</Relationships>`,
+    );
+    const sourceBuffer = await originalZip.generateAsync({
+      type: "arraybuffer",
+    });
+    const document: Document = {
+      originalBuffer: sourceBuffer,
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                { type: "run", content: [{ type: "text", text: "Body" }] },
+              ],
+            },
+          ],
+        },
+        relationships: new Map([
+          [
+            "rId1",
+            {
+              id: "rId1",
+              type: RELATIONSHIP_TYPES.header,
+              target: "header1.xml",
+            },
+          ],
+        ]),
+        headers: new Map([
+          [
+            "rId1",
+            {
+              type: "header",
+              hdrFtrType: "default",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    {
+                      type: "run",
+                      content: [
+                        {
+                          type: "drawing",
+                          image: {
+                            type: "image",
+                            rId: "rId1",
+                            src: ONE_PIXEL_PNG_DATA_URL,
+                            filename: "image1.png",
+                            size: { width: 9525, height: 9525 },
+                            wrap: { type: "inline" },
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        ]),
+      },
+    };
+
+    const result = await repackDocx(document, { updateModifiedDate: false });
+    const zip = await JSZip.loadAsync(result);
+    const headerRels = await zip
+      .file("word/_rels/header1.xml.rels")
+      ?.async("text");
+    const headerXml = await zip.file("word/header1.xml")?.async("text");
+    const mediaFiles = Object.entries(zip.files)
+      .filter(([path, file]) => path.startsWith("word/media/") && !file.dir)
+      .map(([path]) => path);
+
+    expect(headerRels?.match(/relationships\/image/g)).toHaveLength(1);
+    expect(headerRels).toContain('Target="media/image1.png"');
+    expect(headerXml).toContain('r:embed="rId1"');
+    expect(mediaFiles).toEqual(["word/media/image1.png"]);
   });
 });

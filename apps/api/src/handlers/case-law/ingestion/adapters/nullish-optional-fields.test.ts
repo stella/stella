@@ -655,6 +655,6 @@ describe("case-law adapter nullish optionals", () => {
   });
 
   test("PL Courts uses the extended page timeout budget for sequential detail fetches", () => {
-    expect(plCourtsAdapter.pageTimeoutMs).toBe(280_000);
+    expect(plCourtsAdapter.pageTimeoutMs).toBe(300_000);
   });
 });

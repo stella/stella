@@ -67,3 +67,37 @@ describe("openChat", () => {
     expect(tab.contextMatterIds).toEqual(["ws-2"]);
   });
 });
+
+describe("replacePdfFieldId", () => {
+  test("preserves the pdf tab render id across version replacement", () => {
+    useInspectorStore.getState().openPdf({
+      id: "field-old",
+      entityId: "entity-1",
+      label: "Contract.docx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+
+    const before = useInspectorStore
+      .getState()
+      .tabs.find((tab) => tab.id === "field-old");
+    if (before?.type !== "pdf") {
+      throw new Error("expected pdf tab");
+    }
+
+    useInspectorStore.getState().replacePdfFieldId("field-old", "field-new");
+
+    const after = useInspectorStore
+      .getState()
+      .tabs.find((tab) => tab.id === "field-new");
+    if (after?.type !== "pdf") {
+      throw new Error("expected pdf tab");
+    }
+
+    expect(after.renderId).toBe(before.renderId);
+    expect(useInspectorStore.getState().activeId).toBe("field-new");
+  });
+});
