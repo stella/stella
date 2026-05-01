@@ -105,6 +105,11 @@ export const AppBreadcrumbs = () => {
           {t("navigation.invitations")}
         </BreadcrumbLink>
       ),
+      [serializeKey(["/organization/settings"])]: () => (
+        <BreadcrumbLink to="/organization/settings">
+          {t("organization.settings")}
+        </BreadcrumbLink>
+      ),
       [serializeKey(["/account"])]: () => (
         <BreadcrumbItem>{t("navigation.account")}</BreadcrumbItem>
       ),

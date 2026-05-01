@@ -52,6 +52,7 @@ import type { Role } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 import { toFormErrors } from "@/lib/schema";
 import { roleOptions } from "@/routes/-queries";
+import { OrganizationListToolbar } from "@/routes/_protected.organization/-components/organization-list-toolbar";
 import {
   getRoles,
   rolePriority,
@@ -91,74 +92,77 @@ function Members() {
   const removeMember = useRemoveMember();
 
   return (
-    <Frame>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>{t("common.user")}</TableHead>
-            <TableHead>{t("common.role")}</TableHead>
-            <TableHead>{t("organization.members.joined")}</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filtered.map((member) => (
-            <TableRow className="group" key={member.id}>
-              <TableCell>
-                <UserIdentity
-                  avatarClassName="size-8 shrink-0 text-[0.625rem]"
-                  image={member.user.image}
-                  name={member.user.name}
-                  secondaryText={member.user.email}
-                />
-              </TableCell>
-              <TableCell>{t(`organization.roles.${member.role}`)}</TableCell>
-              <TableCell>{formatDate(member.createdAt)}</TableCell>
-              <TableCell className="text-end">
-                <Menu>
-                  <Tooltip
-                    content={t("common.actions")}
-                    render={
-                      <MenuTrigger
-                        className="opacity-0! transition-opacity group-hover:opacity-100!"
-                        disabled={member.userId === userId}
-                        render={<Button size="icon-xs" variant="ghost" />}
-                      />
-                    }
-                  >
-                    <EllipsisVerticalIcon />
-                  </Tooltip>
-                  <MenuPopup>
-                    <UpdateRoleDialog
-                      email={member.user.email}
-                      memberId={member.id}
-                      role={member.role}
-                    />
-                    <MenuItem
-                      disabled={removeMember.isPending}
-                      onClick={() => removeMember.mutate(member.id)}
-                      variant="destructive"
-                    >
-                      {t("organization.members.removeMember")}
-                    </MenuItem>
-                  </MenuPopup>
-                </Menu>
-              </TableCell>
-            </TableRow>
-          ))}
-          {filtered.length === 0 && (
+    <div className="flex flex-col gap-4">
+      <OrganizationListToolbar />
+      <Frame>
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell
-                className="text-muted-foreground text-center"
-                colSpan={4}
-              >
-                {t("organization.members.noMembersFound")}
-              </TableCell>
+              <TableHead>{t("common.user")}</TableHead>
+              <TableHead>{t("common.role")}</TableHead>
+              <TableHead>{t("organization.members.joined")}</TableHead>
+              <TableHead />
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </Frame>
+          </TableHeader>
+          <TableBody>
+            {filtered.map((member) => (
+              <TableRow className="group" key={member.id}>
+                <TableCell>
+                  <UserIdentity
+                    avatarClassName="size-8 shrink-0 text-[0.625rem]"
+                    image={member.user.image}
+                    name={member.user.name}
+                    secondaryText={member.user.email}
+                  />
+                </TableCell>
+                <TableCell>{t(`organization.roles.${member.role}`)}</TableCell>
+                <TableCell>{formatDate(member.createdAt)}</TableCell>
+                <TableCell className="text-end">
+                  <Menu>
+                    <Tooltip
+                      content={t("common.actions")}
+                      render={
+                        <MenuTrigger
+                          className="opacity-0! transition-opacity group-hover:opacity-100!"
+                          disabled={member.userId === userId}
+                          render={<Button size="icon-xs" variant="ghost" />}
+                        />
+                      }
+                    >
+                      <EllipsisVerticalIcon />
+                    </Tooltip>
+                    <MenuPopup>
+                      <UpdateRoleDialog
+                        email={member.user.email}
+                        memberId={member.id}
+                        role={member.role}
+                      />
+                      <MenuItem
+                        disabled={removeMember.isPending}
+                        onClick={() => removeMember.mutate(member.id)}
+                        variant="destructive"
+                      >
+                        {t("organization.members.removeMember")}
+                      </MenuItem>
+                    </MenuPopup>
+                  </Menu>
+                </TableCell>
+              </TableRow>
+            ))}
+            {filtered.length === 0 && (
+              <TableRow>
+                <TableCell
+                  className="text-muted-foreground text-center"
+                  colSpan={4}
+                >
+                  {t("organization.members.noMembersFound")}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </Frame>
+    </div>
   );
 }
 

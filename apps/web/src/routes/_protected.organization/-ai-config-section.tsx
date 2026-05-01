@@ -165,7 +165,7 @@ export const AIConfigSection = () => {
   });
 
   return (
-    <div className="bg-card flex flex-col gap-3 rounded-xl border p-4">
+    <section className="bg-card flex flex-col gap-3 rounded-lg border p-4">
       <div className="flex items-start justify-between">
         <div>
           <h3 className="text-sm font-medium">{t("aiConfig.title")}</h3>
@@ -310,6 +310,6 @@ export const AIConfigSection = () => {
             : t("aiConfig.configure")}
         </Button>
       </div>
-    </div>
+    </section>
   );
 };

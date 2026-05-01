@@ -60,7 +60,6 @@ import {
   MailIcon,
   MessageSquareIcon,
   MonitorIcon,
-  MonitorSmartphoneIcon,
   MoonIcon,
   PanelLeftIcon,
   PinIcon,
@@ -1393,6 +1392,16 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                     <MenuItem
                       onClick={() => {
                         void navigate({
+                          to: "/organization/settings",
+                        });
+                      }}
+                    >
+                      <Settings2Icon />
+                      {t("organization.settings")}
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        void navigate({
                           to: "/organization/members",
                         });
                       }}
@@ -1498,16 +1507,6 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                 >
                   <Settings2Icon />
                   {t("common.settings")}
-                </MenuItem>
-                <MenuItem
-                  onClick={() => {
-                    void navigate({
-                      to: "/account/sessions",
-                    });
-                  }}
-                >
-                  <MonitorSmartphoneIcon />
-                  {t("common.sessions")}
                 </MenuItem>
                 {isDev && <DevSidebarGroup />}
                 <MenuSeparator />

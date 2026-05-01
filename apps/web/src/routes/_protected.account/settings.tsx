@@ -27,6 +27,7 @@ import { toAuthClientError } from "@/lib/errors";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 import type { CommonTimezone } from "@/lib/timezones";
 import { sessionOptions } from "@/routes/-queries";
+import { SessionsSection } from "@/routes/_protected.account/-sessions-section";
 
 export const Route = createFileRoute("/_protected/account/settings")({
   component: Settings,
@@ -69,41 +70,46 @@ function Settings() {
   });
 
   return (
-    <Frame>
-      <FrameHeader>
-        <FrameTitle>{t("common.settings")}</FrameTitle>
-        <FrameDescription>{t("account.settings.description")}</FrameDescription>
-      </FrameHeader>
-      <FramePanel>
-        <div className="flex flex-col gap-2 p-4">
-          <Label htmlFor="timezone-select">
-            {t("account.settings.timezone")}
-          </Label>
-          <p className="text-muted-foreground text-sm">
-            {t("account.settings.timezoneDescription")}
-          </p>
-          <Select
-            disabled={updateTimezone.isPending}
-            value={currentTz}
-            onValueChange={(tz) => {
-              if (tz) {
-                updateTimezone.mutate(tz);
-              }
-            }}
-          >
-            <SelectTrigger className="w-72" id="timezone-select">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectPopup>
-              {COMMON_TIMEZONES.map((tz) => (
-                <SelectItem key={tz} value={tz}>
-                  {tz.replace(/_/g, " ")}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
-        </div>
-      </FramePanel>
-    </Frame>
+    <div className="flex max-w-4xl flex-col gap-4">
+      <Frame>
+        <FrameHeader>
+          <FrameTitle>{t("common.settings")}</FrameTitle>
+          <FrameDescription>
+            {t("account.settings.description")}
+          </FrameDescription>
+        </FrameHeader>
+        <FramePanel>
+          <div className="flex flex-col gap-2 p-4">
+            <Label htmlFor="timezone-select">
+              {t("account.settings.timezone")}
+            </Label>
+            <p className="text-muted-foreground text-sm">
+              {t("account.settings.timezoneDescription")}
+            </p>
+            <Select
+              disabled={updateTimezone.isPending}
+              value={currentTz}
+              onValueChange={(tz) => {
+                if (tz) {
+                  updateTimezone.mutate(tz);
+                }
+              }}
+            >
+              <SelectTrigger className="w-72" id="timezone-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                {COMMON_TIMEZONES.map((tz) => (
+                  <SelectItem key={tz} value={tz}>
+                    {tz.replace(/_/g, " ")}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          </div>
+        </FramePanel>
+      </Frame>
+      <SessionsSection />
+    </div>
   );
 }
