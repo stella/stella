@@ -72,7 +72,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Turbo remote cache
-        uses: rharkor/caching-for-turbo@00a0515f175df9fd2e15c4560144ad5fdbebb0c7 # v2.3.13
+        uses: rharkor/caching-for-turbo@56219402aacc0d06b650d898c222996dbc1191ec # v2.3.14
         with:
           max-age: 7d
 

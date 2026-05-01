@@ -49,7 +49,7 @@ jobs:
         if: steps.changes.outputs.has_react_changes == 'true'
         id: doctor
         continue-on-error: true
-        uses: millionco/react-doctor@7da4ce4e27cb5208ed52ad9d01cae32f96ac177f # main
+        uses: millionco/react-doctor@6641f7e95df1659c9e1ca3cbc181fcdbd0396f98 # main
         with:
           diff: main
           github-token: ${{ secrets.GITHUB_TOKEN }}
