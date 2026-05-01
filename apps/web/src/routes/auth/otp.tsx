@@ -27,6 +27,8 @@ import { redirectToSchema } from "@/lib/redirect";
 import { emailSchema } from "@/lib/schema";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 
+const OTP_LENGTH = 6;
+
 const searchSchema = v.strictObject({
   email: emailSchema(),
   redirectTo: redirectToSchema,
@@ -55,6 +57,7 @@ function OTP() {
   const navigate = Route.useNavigate();
   const [otp, setOtp] = useState("");
   const invalidateSession = useInvalidateSession();
+  const isOtpComplete = otp.length === OTP_LENGTH;
 
   const resendOtp = useMutation({
     mutationFn: async () => {
@@ -99,6 +102,7 @@ function OTP() {
       });
 
       if (signInError) {
+        setOtp("");
         if (signInError.status !== HTTP_TOO_MANY_REQUESTS) {
           toastManager.add({
             title: signInError.message ?? t("errors.actionFailed"),
@@ -148,7 +152,7 @@ function OTP() {
         <div className="flex flex-col items-center gap-2 px-5 pb-4">
           <InputOTP
             autoFocus
-            maxLength={6}
+            maxLength={OTP_LENGTH}
             onChange={setOtp}
             onComplete={(code: string) =>
               verifyOtp.mutate({ email, otp: code })
@@ -167,6 +171,7 @@ function OTP() {
         </div>
         <Button
           className="w-full"
+          disabled={!isOtpComplete || verifyOtp.isPending}
           loading={verifyOtp.isPending}
           onClick={() => verifyOtp.mutate({ email, otp })}
         >
@@ -174,13 +179,13 @@ function OTP() {
         </Button>
         <div className="mt-3 flex flex-col gap-1">
           <Button
-            className="w-full"
+            className="h-auto min-h-9 w-full py-2 text-center leading-snug break-words whitespace-normal"
             disabled={verifyOtp.isPending || resendOtp.isPending}
             loading={resendOtp.isPending}
             onClick={() => resendOtp.mutate()}
             variant="ghost"
           >
-            {t("auth.resendCode")}
+            {t("auth.resendCode", { email })}
           </Button>
           <Button
             className="w-full"

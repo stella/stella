@@ -61,6 +61,10 @@ const now = new Date();
 const DEFAULT_MEMBER_ROLE = "member" as const;
 const OWNER_MEMBER_ROLE = "owner" as const;
 
+const AUTH_COOKIE_NAME = `${
+  env.BETTER_AUTH_COOKIE_PREFIX ?? (env.isDev ? "stella-dev" : "better-auth")
+}.session_token`;
+
 const getSeedOrganizationIdentity = (organizationId: string) => {
   if (organizationId === TEST_ORG.id) {
     return TEST_ORG;
@@ -328,7 +332,7 @@ async function seed() {
   const storageState = {
     cookies: [
       {
-        name: "better-auth.session_token",
+        name: AUTH_COOKIE_NAME,
         value: signedCookieValue,
         domain: "localhost",
         path: "/",

@@ -1022,22 +1022,12 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
   };
 
   const fixedNavTargets: [
-    /* 1: chat */ FixedNavTarget,
-    /* 2: search */ FixedNavTarget,
+    /* 1: search */ FixedNavTarget,
+    /* 2: chat */ FixedNavTarget,
     /* 3: workspaces */ FixedNavTarget,
     /* 4: knowledge */ FixedNavTarget,
     /* 5: time tracking */ FixedNavTarget,
   ] = [
-    {
-      action: openChat,
-      contextMenu: {
-        primaryAction: {
-          label: t("chat.newChat"),
-          icon: <PlusIcon />,
-          onClick: openChat,
-        },
-      },
-    },
     {
       action: () => setSearchOpen(true),
       contextMenu: {
@@ -1045,6 +1035,16 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
           label: t("navigation.search"),
           icon: <SearchIcon />,
           onClick: () => setSearchOpen(true),
+        },
+      },
+    },
+    {
+      action: openChat,
+      contextMenu: {
+        primaryAction: {
+          label: t("chat.newChat"),
+          icon: <PlusIcon />,
+          onClick: openChat,
         },
       },
     },
@@ -1187,17 +1187,6 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
           <SidebarMenu>
             <NavContextMenu config={fixedNavTargets[0].contextMenu}>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip={t("navigation.chat")}>
-                  <Link activeProps={{ "data-active": true }} to="/chat">
-                    <MessageCircleIcon />
-                    <span>{t("navigation.chat")}</span>
-                  </Link>
-                </SidebarMenuButton>
-                {showNavBadges && <NavBadge digit={1} />}
-              </SidebarMenuItem>
-            </NavContextMenu>
-            <NavContextMenu config={fixedNavTargets[1].contextMenu}>
-              <SidebarMenuItem>
                 <SidebarMenuButton
                   onClick={() => setSearchOpen(true)}
                   tooltip={t("navigation.search")}
@@ -1206,7 +1195,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                   <span>{t("navigation.search")}</span>
                 </SidebarMenuButton>
                 {showNavBadges ? (
-                  <NavBadge digit={2} />
+                  <NavBadge digit={1} />
                 ) : (
                   <SidebarMenuBadge>
                     <kbd className="text-muted-foreground text-[0.625rem]">
@@ -1214,6 +1203,17 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                     </kbd>
                   </SidebarMenuBadge>
                 )}
+              </SidebarMenuItem>
+            </NavContextMenu>
+            <NavContextMenu config={fixedNavTargets[1].contextMenu}>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip={t("navigation.chat")}>
+                  <Link activeProps={{ "data-active": true }} to="/chat">
+                    <MessageCircleIcon />
+                    <span>{t("navigation.chat")}</span>
+                  </Link>
+                </SidebarMenuButton>
+                {showNavBadges && <NavBadge digit={2} />}
               </SidebarMenuItem>
             </NavContextMenu>
             <NavContextMenu config={fixedNavTargets[2].contextMenu}>

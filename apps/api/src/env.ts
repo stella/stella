@@ -41,6 +41,15 @@ const envApi = createEnv({
     USE_MOCK_AI: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
     BETTER_AUTH_SECRET: v.pipe(v.string(), v.minLength(32)),
     BETTER_AUTH_URL: v.pipe(v.string(), v.url()),
+    BETTER_AUTH_COOKIE_PREFIX: v.optional(
+      v.pipe(
+        v.string(),
+        v.regex(
+          /^[A-Za-z0-9_-]+$/,
+          "BETTER_AUTH_COOKIE_PREFIX may only contain letters, numbers, underscores, and hyphens",
+        ),
+      ),
+    ),
     EMAIL_PROVIDER: v.pipe(
       v.picklist(["ses", "smtp"]),
       v.check((provider) => {

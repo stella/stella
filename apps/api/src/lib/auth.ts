@@ -57,6 +57,10 @@ const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
 /** How often the session expiry is refreshed, in seconds (1 day). */
 const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
 
+const authCookiePrefix = env.isDev
+  ? (env.BETTER_AUTH_COOKIE_PREFIX ?? "stella-dev")
+  : undefined;
+
 /**
  * Validates a timezone identifier via the Intl API.
  * Throws an APIError if the value is present and not a
@@ -122,6 +126,7 @@ const createAuth = () => {
       storeSessionInDatabase: true,
     },
     advanced: {
+      ...(authCookiePrefix ? { cookiePrefix: authCookiePrefix } : {}),
       useSecureCookies: !env.isDev,
     },
     rateLimit: {

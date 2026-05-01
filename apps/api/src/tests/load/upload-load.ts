@@ -110,8 +110,9 @@ const authenticate = async (
     throw new Error(`Auth failed (${response.status}): no set-cookie header`);
   }
 
-  // Extract the session cookie name and value
-  const match = /^(better-auth[^=]*)=([^;]+)/.exec(setCookie);
+  // Extract the session cookie name and value. Dev runs may use a
+  // per-port cookie prefix so multiple localhost servers can coexist.
+  const match = /^([^=]*\.session_token)=([^;]+)/.exec(setCookie);
   if (!match) {
     throw new Error("Could not parse session cookie");
   }

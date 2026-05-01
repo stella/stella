@@ -518,6 +518,7 @@ describe("dev env factories", () => {
     });
 
     expect(result).toMatchObject({
+      BETTER_AUTH_COOKIE_PREFIX: "stella-dev-3101",
       BETTER_AUTH_URL: "http://localhost:3101",
       FRONTEND_URL: "http://localhost:3100",
       KEEP_ME: "1",

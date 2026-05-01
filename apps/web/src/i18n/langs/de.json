@@ -74,7 +74,7 @@
     "orSignInWithEmail": "oder mit E-Mail anmelden",
     "organizationNamePlaceholder": "Meine Organisation",
     "rateLimitExceeded": "Zu viele Versuche. Bitte versuchen Sie es später erneut.",
-    "resendCode": "Code erneut senden",
+    "resendCode": "Code erneut an {email} senden",
     "selectOrganization": "Organisation auswählen",
     "signIn": "Anmelden",
     "signInBeforeInvitation": "Sie müssen sich anmelden, bevor Sie eine Einladung zu einer Organisation annehmen können.",
