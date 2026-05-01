@@ -3,20 +3,17 @@ import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
-import {
-  convertToPdf,
-  isConvertibleMimeType,
-} from "@/api/handlers/files/gotenberg";
+import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
-import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const MAX_FILENAME_LENGTH = 255;
 
@@ -118,33 +115,12 @@ export const createEntityFromBuffer = async ({
   // Track S3 keys for cleanup before any uploads.
   const s3Keys = [s3Key];
 
-  let pdfFileId: string | null = null;
-
   const entityId = createSafeId<"entity">();
   const entityVersionId = createSafeId<"entityVersion">();
+  const fieldId = createSafeId<"field">();
 
   try {
-    // Upload source file and convert to PDF in parallel.
-    const shouldConvert = isConvertibleMimeType(mimeType);
-
-    const [pdfResult] = await Promise.all([
-      shouldConvert
-        ? convertToPdf(bytes.slice().buffer, fileName, mimeType)
-        : Promise.resolve(null),
-      getS3().write(s3Key, bytes),
-    ]);
-
-    if (pdfResult && Result.isOk(pdfResult)) {
-      pdfFileId = Bun.randomUUIDv7();
-      const pdfKey = createFileKey({
-        organizationId,
-        workspaceId,
-        fileId: pdfFileId,
-        mimeType: PDF_MIME_TYPE,
-      });
-      s3Keys.push(pdfKey);
-      await getS3().write(pdfKey, new Uint8Array(pdfResult.value.buffer));
-    }
+    await getS3().write(s3Key, bytes);
 
     await scopedDb(async (tx) => {
       // The authoritative limit check must stay in the same
@@ -184,6 +160,7 @@ export const createEntityFromBuffer = async ({
         .where(eq(entities.id, entityId));
 
       await tx.insert(fields).values({
+        id: fieldId,
         workspaceId,
         propertyId: fileProperty.id,
         entityVersionId,
@@ -196,7 +173,11 @@ export const createEntityFromBuffer = async ({
           sizeBytes: bytes.byteLength,
           encrypted: false,
           sha256Hex,
-          pdfFileId,
+          pdfFileId: null,
+          pdfDerivative: pdfDerivativeStateForFile({
+            encrypted: false,
+            mimeType,
+          }),
         },
       });
 
@@ -216,6 +197,16 @@ export const createEntityFromBuffer = async ({
   }
 
   processExtraction(entityId).catch(captureError);
+
+  enqueuePdfDerivativeOrMarkFailed({
+    encrypted: false,
+    entityId,
+    fieldId,
+    mimeType,
+    organizationId,
+    userId,
+    workspaceId,
+  }).catch(captureError);
 
   return Result.ok({ entityId, fileName });
 };

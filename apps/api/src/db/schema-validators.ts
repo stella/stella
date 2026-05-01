@@ -138,6 +138,22 @@ export const fieldContentSchema = t.Union([
     encrypted: t.Boolean(),
     sha256Hex: t.String({ minLength: 64, maxLength: 64 }),
     pdfFileId: t.Nullable(t.String({ format: "uuid" })),
+    pdfDerivative: t.Optional(
+      t.Union([
+        t.Object({
+          status: t.Literal("not-required"),
+        }),
+        t.Object({
+          status: t.Literal("pending"),
+        }),
+        t.Object({
+          status: t.Literal("ready"),
+        }),
+        t.Object({
+          status: t.Literal("failed"),
+        }),
+      ]),
+    ),
     scanWarnings: t.Optional(t.Array(t.String({ maxLength: 256 }))),
   }),
   t.Object({

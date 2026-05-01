@@ -59,6 +59,26 @@ const NATIVELY_RENDERABLE_MIME_TYPES = {
 export const isNativelyRenderableMimeType = (mimeType: string): boolean =>
   mimeType in NATIVELY_RENDERABLE_MIME_TYPES;
 
+type ShouldGeneratePdfDerivativeOptions = {
+  encrypted?: boolean;
+  mimeType: string;
+};
+
+export const shouldGeneratePdfDerivative = ({
+  encrypted = false,
+  mimeType,
+}: ShouldGeneratePdfDerivativeOptions): boolean =>
+  !encrypted &&
+  isConvertibleMimeType(mimeType) &&
+  !isNativelyRenderableMimeType(mimeType);
+
+export const pdfDerivativeStateForFile = (
+  options: ShouldGeneratePdfDerivativeOptions,
+) =>
+  shouldGeneratePdfDerivative(options)
+    ? ({ status: "pending" } as const)
+    : ({ status: "not-required" } as const);
+
 /**
  * Spreadsheet MIME types (.xls, .xlsx) that benefit from the
  * fit-to-page pre-processor. ODS uses ODF format (different ZIP

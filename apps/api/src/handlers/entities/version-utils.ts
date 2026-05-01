@@ -15,6 +15,7 @@ type RevisionFileContent = Extract<FieldContent, { type: "file" }>;
 type CloneRevisionFieldsInput = {
   currentFields: RevisionField[];
   entityVersionId: SafeId<"entityVersion">;
+  replacementFieldId?: SafeId<"field">;
   propertyId: SafeId<"property">;
   replacementContent: RevisionFileContent;
   workspaceId: SafeId<"workspace">;
@@ -47,11 +48,15 @@ export const buildVersionStamp = ({
 export const cloneFieldsForRevision = ({
   currentFields,
   entityVersionId,
+  replacementFieldId,
   propertyId,
   replacementContent,
   workspaceId,
 }: CloneRevisionFieldsInput) =>
   currentFields.map((field) => ({
+    ...(replacementFieldId &&
+      field.propertyId === propertyId &&
+      field.content.type === "file" && { id: replacementFieldId }),
     content:
       field.propertyId === propertyId && field.content.type === "file"
         ? replacementContent
