@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
@@ -27,17 +27,22 @@ export const DmsStep = ({ onNext, onSelectionChange }: DmsStepProps) => {
   const t = useTranslations();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(new Set<string>());
+  const queryText = query.trim();
+  const normalizedQuery = queryText.toLowerCase();
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) {
-      return [...KNOWN_DMS];
-    }
-    const q = query.toLowerCase();
-    return KNOWN_DMS.filter((dms) => dms.toLowerCase().includes(q));
-  }, [query]);
+  const customSelected = [...selected].filter(
+    (v) =>
+      v !== DMS_NONE &&
+      !KNOWN_DMS.some((dms) => dms.toLowerCase() === v.toLowerCase()),
+  );
 
-  const hasExactMatch = KNOWN_DMS.some(
-    (dms) => dms.toLowerCase() === query.trim().toLowerCase(),
+  const filtered =
+    normalizedQuery === ""
+      ? [...KNOWN_DMS]
+      : KNOWN_DMS.filter((dms) => dms.toLowerCase().includes(normalizedQuery));
+
+  const hasExactMatch = [...KNOWN_DMS, ...customSelected].some(
+    (dms) => dms.toLowerCase() === normalizedQuery,
   );
 
   const toggleSelect = (value: string) => {
@@ -102,22 +107,44 @@ export const DmsStep = ({ onNext, onSelectionChange }: DmsStepProps) => {
             </button>
           ))}
 
+          {/* Selected custom values */}
+          {customSelected
+            .filter(
+              (v) =>
+                normalizedQuery === "" ||
+                v.toLowerCase().includes(normalizedQuery),
+            )
+            .map((dms) => (
+              <button
+                className={cn(
+                  "flex items-center justify-between rounded-lg border px-4 py-2.5 text-start text-sm transition-colors",
+                  "border-primary bg-primary/5 text-foreground",
+                )}
+                key={dms}
+                onClick={() => toggleSelect(dms)}
+                type="button"
+              >
+                <span>&ldquo;{dms}&rdquo;</span>
+                <CheckIcon className="text-primary size-4" />
+              </button>
+            ))}
+
           {/* Custom value */}
-          {query.trim() &&
+          {queryText !== "" &&
             !hasExactMatch &&
             filtered.length < KNOWN_DMS.length && (
               <button
                 className={cn(
                   "flex items-center justify-between rounded-lg border px-4 py-2.5 text-start text-sm transition-colors",
-                  isSelected(query.trim())
+                  isSelected(queryText)
                     ? "border-primary bg-primary/5 text-foreground"
                     : "border-border text-foreground hover:bg-accent/50",
                 )}
-                onClick={() => toggleSelect(query.trim())}
+                onClick={() => toggleSelect(queryText)}
                 type="button"
               >
-                <span>&ldquo;{query.trim()}&rdquo;</span>
-                {isSelected(query.trim()) && (
+                <span>&ldquo;{queryText}&rdquo;</span>
+                {isSelected(queryText) && (
                   <CheckIcon className="text-primary size-4" />
                 )}
               </button>
