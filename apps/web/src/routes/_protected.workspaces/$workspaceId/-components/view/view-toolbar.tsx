@@ -487,12 +487,12 @@ const INTERNAL_DATE_OPTIONS = [
     id: "_updated-at",
     labelKey: "workspaces.views.calendar.updatedAt",
   },
-] as const;
+] as const satisfies readonly { id: string; labelKey: TranslationKey }[];
 
 const TASK_DATE_OPTIONS = [
   { id: "_due-date", labelKey: "tasks.dueDate" },
   { id: "_start-date", labelKey: "workspaces.views.timeline.startDate" },
-] as const;
+] as const satisfies readonly { id: string; labelKey: TranslationKey }[];
 
 type CalendarDatePropertyControlProps = {
   properties: WorkspaceProperty[];

@@ -39,6 +39,17 @@ const TARGETS = {
    * This ensures responsive typing without visible lag.
    */
   incrementalTime: 50, // ms
+
+  /**
+   * Per-paragraph layout cost must stay within a small constant factor as
+   * document size grows.
+   */
+  layoutTimePerBlockRatio: 3,
+
+  /**
+   * Conservative upper bound for per-paragraph layout cost.
+   */
+  layoutTimePerBlock: 0.5, // ms
 } as const;
 
 /**
@@ -51,6 +62,12 @@ const WARMUP_ITERATIONS = 3;
  * Number of measurement iterations for statistical accuracy.
  */
 const MEASURE_ITERATIONS = 10;
+
+/**
+ * Repeat tiny scaling samples enough times that timing noise does not dominate
+ * the linearity check.
+ */
+const SCALING_SAMPLE_REPETITIONS = 100;
 
 // =============================================================================
 // BENCHMARK HELPERS
@@ -187,6 +204,20 @@ function calculateStats(values: number[]): {
 }
 
 /**
+ * Calculate a stable typical value while ignoring the noisiest timings at both
+ * ends of the sample.
+ */
+function calculateTrimmedMean(values: number[]): number {
+  const sorted = [...values].toSorted((a, b) => a - b);
+  const trimCount = Math.floor(sorted.length * 0.2);
+  const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
+  const sample = trimmed.length > 0 ? trimmed : sorted;
+  const sum = sample.reduce((a, b) => a + b, 0);
+
+  return sum / sample.length;
+}
+
+/**
  * Run a function multiple times and measure timing.
  */
 function benchmark(
@@ -287,12 +318,19 @@ describe("Layout Engine Performance", () => {
 
       for (const size of sizes) {
         const doc = generateNParagraphDocument(size);
-        const { stats } = benchmark(
-          () => layoutDocument(doc.blocks, doc.measures, DEFAULT_OPTIONS),
+        const { timings } = benchmark(
+          () => {
+            for (let i = 0; i < SCALING_SAMPLE_REPETITIONS; i++) {
+              layoutDocument(doc.blocks, doc.measures, DEFAULT_OPTIONS);
+            }
+          },
           WARMUP_ITERATIONS,
           MEASURE_ITERATIONS,
         );
-        timePerBlock.push(stats.median / size);
+        const perRunTimings = timings.map(
+          (timing) => timing / SCALING_SAMPLE_REPETITIONS,
+        );
+        timePerBlock.push(calculateTrimmedMean(perRunTimings) / size);
       }
 
       // Log results
@@ -303,11 +341,15 @@ describe("Layout Engine Performance", () => {
         );
       }
 
-      // Per-block time should stay roughly stable across sizes. 3x catches
-      // a real super-linear regression while leaving headroom for jitter.
+      // Batched measurements plus a trimmed mean keep the ratio sensitive to
+      // super-linear regressions without depending on a single best run.
       const minTime = Math.min(...timePerBlock);
       const maxTime = Math.max(...timePerBlock);
-      expect(maxTime / minTime).toBeLessThanOrEqual(3);
+
+      expect(maxTime / minTime).toBeLessThanOrEqual(
+        TARGETS.layoutTimePerBlockRatio,
+      );
+      expect(maxTime).toBeLessThanOrEqual(TARGETS.layoutTimePerBlock);
     });
   });
 

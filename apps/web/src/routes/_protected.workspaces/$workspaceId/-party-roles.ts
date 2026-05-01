@@ -1,3 +1,5 @@
+import type { TranslationKey } from "@/i18n/types";
+
 export const PARTY_ROLES = [
   "opposing_party",
   "opposing_counsel",
@@ -22,7 +24,7 @@ export const PARTY_ROLE_LABEL_KEYS = {
   judge: "workspaces.parties.partyRoles.judge",
   mediator: "workspaces.parties.partyRoles.mediator",
   other: "workspaces.parties.partyRoles.other",
-} as const satisfies Record<PartyRole, string>;
+} as const satisfies Record<PartyRole, TranslationKey>;
 
 const PARTY_ROLES_SET = new Set<string>(PARTY_ROLES);
 

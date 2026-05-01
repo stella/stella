@@ -5,6 +5,8 @@ import type {
   AnalysisHeading,
 } from "@stll/case-law/analysis";
 
+import type { TranslationKey } from "@/i18n/types";
+
 export type {
   AnalysisAnnotation,
   AnalysisHeading,
@@ -72,7 +74,7 @@ export const categoryLineStyle = (category: string): React.CSSProperties => ({
 });
 
 /** i18n key for a category. Used with useTranslations(). */
-const CATEGORY_I18N: Record<string, string> = {
+const CATEGORY_I18N: Record<string, TranslationKey> = {
   facts: "caseLaw.analysis.categories.facts",
   "procedural-history": "caseLaw.analysis.categories.procedural-history",
   reasoning: "caseLaw.analysis.categories.reasoning",
@@ -88,7 +90,7 @@ export const formatCategoryLabel = (category: string): string =>
   category.replace(/-/g, " ");
 
 /** Get the i18n message key for a core category, or null. */
-export const getCategoryI18nKey = (category: string): string | null =>
+export const getCategoryI18nKey = (category: string): TranslationKey | null =>
   CATEGORY_I18N[category] ?? null;
 
 /**
