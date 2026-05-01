@@ -74,7 +74,7 @@
     "orSignInWithEmail": "vagy jelentkezz be e-maillel",
     "organizationNamePlaceholder": "Szervezetem",
     "rateLimitExceeded": "Túl sok próbálkozás. Kérjük, próbálja újra később.",
-    "resendCode": "Kód újraküldése",
+    "resendCode": "Kód újraküldése erre: {email}",
     "selectOrganization": "Válasszon szervezetet",
     "signIn": "Bejelentkezés",
     "signInBeforeInvitation": "A szervezeti meghívó elfogadásához először be kell jelentkeznie.",

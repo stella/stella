@@ -74,7 +74,7 @@
     "orSignInWithEmail": "o inicia sesión con el correo electrónico",
     "organizationNamePlaceholder": "Mi Organización",
     "rateLimitExceeded": "Demasiados intentos. Inténtelo de nuevo más tarde.",
-    "resendCode": "Enviar código de nuevo",
+    "resendCode": "Enviar código de nuevo a {email}",
     "selectOrganization": "Seleccione una organización",
     "signIn": "Iniciar sesión",
     "signInBeforeInvitation": "Debe iniciar sesión antes de aceptar una invitación a una organización.",

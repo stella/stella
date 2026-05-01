@@ -74,7 +74,7 @@
     "orSignInWithEmail": "või logi sisse e-postiga",
     "organizationNamePlaceholder": "Minu organisatsioon",
     "rateLimitExceeded": "Liiga palju katseid. Palun proovige hiljem uuesti.",
-    "resendCode": "Saada kood uuesti",
+    "resendCode": "Saada kood uuesti aadressile {email}",
     "selectOrganization": "Valige organisatsioon",
     "signIn": "Logi sisse",
     "signInBeforeInvitation": "Enne organisatsiooni kutse vastuvõtmist peate sisse logima.",

@@ -74,7 +74,7 @@
     "orSignInWithEmail": "lub zaloguj się e-mailem",
     "organizationNamePlaceholder": "Moja organizacja",
     "rateLimitExceeded": "Zbyt wiele prób. Spróbuj ponownie później.",
-    "resendCode": "Wyślij kod ponownie",
+    "resendCode": "Wyślij kod ponownie na {email}",
     "selectOrganization": "Wybierz organizację",
     "signIn": "Zaloguj się",
     "signInBeforeInvitation": "Musisz się zalogować, zanim będziesz mógł przyjąć zaproszenie do organizacji.",

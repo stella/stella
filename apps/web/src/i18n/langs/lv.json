@@ -74,7 +74,7 @@
     "orSignInWithEmail": "vai pierakstieties ar e-pastu",
     "organizationNamePlaceholder": "Mana organizācija",
     "rateLimitExceeded": "Pārāk daudz mēģinājumu. Lūdzu, mēģiniet vēlāk.",
-    "resendCode": "Nosūtīt kodu vēlreiz",
+    "resendCode": "Nosūtīt kodu vēlreiz uz {email}",
     "selectOrganization": "Izvēlieties organizāciju",
     "signIn": "Pieslēgties",
     "signInBeforeInvitation": "Lai pieņemtu uzaicinājumu organizācijā, vispirms jāpieslēdzas.",

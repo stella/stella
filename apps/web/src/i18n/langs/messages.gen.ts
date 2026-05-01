@@ -77,7 +77,7 @@ type Messages = {
     "orSignInWithEmail": "or sign in with email";
     "organizationNamePlaceholder": "My organization";
     "rateLimitExceeded": "Too many attempts. Please try again later.";
-    "resendCode": "Send code again";
+    "resendCode": "Send code again to {email}";
     "selectOrganization": "Select an organization";
     "signIn": "Sign in";
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.";

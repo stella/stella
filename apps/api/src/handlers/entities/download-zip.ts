@@ -92,8 +92,8 @@ const downloadZipHandler = async function* ({
     collectDescendantIds(safeDb, entityId, workspaceId),
   );
 
-  const descendantIds = descendantRows.map((r) =>
-    toSafeId<"entity">(String(r.id)),
+  const descendantIds = descendantRows.map(({ id }) =>
+    toSafeId<"entity">(String(id)),
   );
 
   if (descendantIds.length === 0) {

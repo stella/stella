@@ -74,7 +74,7 @@
     "orSignInWithEmail": "ou connectez-vous avec l'e-mail",
     "organizationNamePlaceholder": "Mon organisation",
     "rateLimitExceeded": "Trop de tentatives. Veuillez réessayer plus tard.",
-    "resendCode": "Renvoyer le code",
+    "resendCode": "Renvoyer le code à {email}",
     "selectOrganization": "Sélectionner une organisation",
     "signIn": "Se connecter",
     "signInBeforeInvitation": "Vous devez vous connecter avant de pouvoir accepter une invitation à une organisation.",

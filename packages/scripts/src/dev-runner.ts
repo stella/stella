@@ -858,6 +858,7 @@ export const createApiEnv = ({
   ports: DevPorts;
 }) => ({
   ...baseEnv,
+  BETTER_AUTH_COOKIE_PREFIX: `stella-dev-${String(ports.api)}`,
   BETTER_AUTH_URL: apiUrlForPort(ports.api),
   FRONTEND_URL: webUrlForPort(ports.web),
   STELLA_API_PORT: String(ports.api),
