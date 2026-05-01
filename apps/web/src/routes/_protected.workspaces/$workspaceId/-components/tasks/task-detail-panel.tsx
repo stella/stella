@@ -217,7 +217,7 @@ export const TaskDetailPanel = ({
       <div className="bg-background flex h-full min-w-0 flex-1 flex-col">
         <div
           className={cn(
-            "flex items-center gap-1 border-b px-2",
+            "flex shrink-0 items-center gap-1 border-b px-2",
             TOOLBAR_ROW_HEIGHT,
           )}
         >
@@ -240,7 +240,7 @@ export const TaskDetailPanel = ({
       <div className="bg-background flex h-full min-w-0 flex-1 flex-col">
         <div
           className={cn(
-            "flex items-center gap-1 border-b px-2",
+            "flex shrink-0 items-center gap-1 border-b px-2",
             TOOLBAR_ROW_HEIGHT,
           )}
         >

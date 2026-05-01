@@ -24,9 +24,9 @@ import {
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  ExternalLinkIcon,
   FileTextIcon,
   LoaderCircleIcon,
+  Maximize2Icon,
   MessageSquareIcon,
   MessageSquarePlusIcon,
   PanelRightIcon,
@@ -51,7 +51,10 @@ import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-
 import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import { clearAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymize-pdf";
-import { ChatTabPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel";
+import {
+  ChatTabPanel,
+  ChatTabPanelShell,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type {
   InspectorTab,
@@ -61,6 +64,7 @@ import {
   InspectorTabHeader,
   MatterOriginLink,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header";
+import { buildMaximizeTabAction } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/maximize-tab";
 import { useRailContextMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-rail-context-menu";
 import { useTabContextMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-tab-context-menu";
 import { PeekJustification } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-justification";
@@ -79,7 +83,14 @@ import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 
 type InspectorPanelProps = {
-  workspaceId: string;
+  /**
+   * Matter context the pane was mounted under. `undefined` means
+   * the pane is mounted on a non-workspace route (e.g. the global
+   * /chat surface) — only chat tabs are meaningful in that mode;
+   * matter-bound affordances (originating-matter ribbon, "New
+   * matter chat" rail button) hide themselves.
+   */
+  workspaceId?: string | undefined;
 };
 
 /** Strip the file extension (e.g. ".pdf", ".docx") from a filename. */
@@ -110,20 +121,27 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const closeAll = useInspectorStore((s) => s.closeAll);
   const setMinimized = useInspectorStore((s) => s.setMinimized);
   const openChat = useInspectorStore((s) => s.openChat);
-  const navigate = useNavigate({
-    from: "/workspaces/$workspaceId/$viewId",
-  });
+  // The inspector pane mounts under non-workspace routes too
+  // (e.g. /chat for a global chat tab). All callers below use
+  // absolute `to:` paths, so we don't need a `from` template —
+  // and a mismatched one would throw under TanStack Router's
+  // route-typed navigation when the inspector is open off-workspace.
+  const navigate = useNavigate();
   const setPdfViewerState = useWorkspaceStore((s) => s.setPdfViewerState);
 
   // Originating matter — surfaced in every tab header as
   // "label · Matter" so users always know which matter the tab
   // belongs to (matters can host related-matter content; chats are
   // moving to nullable matter binding in Phase D). Cache hit thanks
-  // to the workspace route loader.
-  const { data: workspace } = useQuery(workspaceOptions(workspaceId));
+  // to the workspace route loader. Fetch is skipped when the pane
+  // is mounted off-workspace (e.g. a global chat tab on /chat).
+  const { data: workspace } = useQuery({
+    ...workspaceOptions(workspaceId ?? ""),
+    enabled: workspaceId !== undefined,
+  });
   const matterOrigin = useMemo(
     () =>
-      workspace?.name
+      workspaceId !== undefined && workspace?.name
         ? {
             id: workspaceId,
             name: workspace.name,
@@ -305,7 +323,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       const previousLabel = tab.label;
       useInspectorStore.getState().updateLabel(tab.id, newName);
       renameEntity.mutate(
-        { workspaceId, entityId: tab.entityId, name: newName },
+        { workspaceId: tab.workspaceId, entityId: tab.entityId, name: newName },
         {
           onError: () => {
             useInspectorStore.getState().updateLabel(tab.id, previousLabel);
@@ -317,7 +335,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         },
       );
     },
-    [editValue, workspaceId, renameEntity, t],
+    [editValue, renameEntity, t],
   );
 
   const handleOpenFullView = useCallback(async () => {
@@ -338,7 +356,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       });
       await navigate({
         to: "/workspaces/$workspaceId/$viewId/pdf",
-        params: { workspaceId, viewId: "all" },
+        params: { workspaceId: activeTab.workspaceId, viewId: "all" },
         search: {
           entity: activeTab.entityId,
           field: activeTab.id,
@@ -352,7 +370,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     } finally {
       closeAll();
     }
-  }, [activeTab, closeAll, navigate, setPdfViewerState, workspaceId]);
+  }, [activeTab, closeAll, navigate, setPdfViewerState]);
 
   // Keep at most MAX_MOUNTED_PDFS viewers mounted to limit memory.
   // The active tab is always mounted; the rest are the most recently
@@ -436,6 +454,8 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     return () => el.removeEventListener("wheel", onWheel);
   }, [activeId, activeTab?.type]);
 
+  const panelQueryClient = useQueryClient();
+
   // One context menu shared by every ribbon label. Only the active
   // tab's ribbon is mounted at a time so a single instance suffices,
   // and we avoid calling hooks inside the pdfTabs.map.
@@ -446,6 +466,12 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         handleCloseTab(activeTab.id);
       }
     },
+    onMaximize: activeTab
+      ? buildMaximizeTabAction(activeTab, {
+          navigate,
+          queryClient: panelQueryClient,
+        })
+      : undefined,
   });
 
   // Right-click in the rail's empty space (below the tabs) opens
@@ -463,22 +489,27 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           the full vertical space to the right of the rail. */}
       {tabs.length > 0 && (
         <div className="bg-muted/50 flex w-10 shrink-0 flex-col border-e">
-          <Tooltip
-            content={t("inspector.hidePane")}
-            render={
-              <Button
-                aria-label={t("inspector.hidePane")}
-                className="text-muted-foreground hover:bg-accent hover:text-foreground h-12 w-full shrink-0 rounded-none border-b"
-                onClick={() => setMinimized(true)}
-                size="icon"
-                type="button"
-                variant="ghost"
-              />
-            }
-            side="left"
+          <div
+            className={cn(
+              "flex w-full shrink-0 items-center justify-center border-b",
+              TOOLBAR_ROW_HEIGHT,
+            )}
           >
-            <PanelRightIcon className="size-3.5" />
-          </Tooltip>
+            <Tooltip
+              content={t("inspector.hidePane")}
+              render={
+                <button
+                  aria-label={t("inspector.hidePane")}
+                  className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-7 items-center justify-center rounded-md transition-colors"
+                  onClick={() => setMinimized(true)}
+                  type="button"
+                />
+              }
+              side="left"
+            >
+              <PanelRightIcon className="size-4" />
+            </Tooltip>
+          </div>
           <ScrollArea className="flex-1">
             {/* Right-clicking in the rail's empty space (below
                 the last tab) offers "New chat" so users can
@@ -505,30 +536,38 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             </div>
           </ScrollArea>
           {railContextMenu.element}
-          <Tooltip
-            content={t("chat.newChat")}
-            render={
-              <Button
-                aria-label={t("chat.newChat")}
-                className={cn(
-                  "text-muted-foreground hover:bg-accent hover:text-foreground w-full shrink-0 rounded-none border-t",
-                  TOOLBAR_ROW_HEIGHT,
-                )}
-                onClick={() => openChat({ contextMatterIds: [workspaceId] })}
-                size="icon"
-                type="button"
-                variant="ghost"
-              />
-            }
-            side="left"
+          <div
+            className={cn(
+              "flex w-full shrink-0 items-center justify-center border-t",
+              TOOLBAR_ROW_HEIGHT,
+            )}
           >
-            <MessageSquarePlusIcon className="size-3.5" />
-          </Tooltip>
+            <Tooltip
+              content={t("chat.newChat")}
+              render={
+                <button
+                  aria-label={t("chat.newChat")}
+                  className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-7 items-center justify-center rounded-md transition-colors"
+                  onClick={() =>
+                    openChat(
+                      workspaceId === undefined
+                        ? {}
+                        : { workspaceId, contextMatterIds: [workspaceId] },
+                    )
+                  }
+                  type="button"
+                />
+              }
+              side="left"
+            >
+              <MessageSquarePlusIcon className="size-4" />
+            </Tooltip>
+          </div>
         </div>
       )}
 
       {/* Task content */}
-      {activeTab?.type === "task" && (
+      {activeTab?.type === "task" && workspaceId !== undefined && (
         <TaskDetailPanel taskId={activeTab.id} workspaceId={workspaceId} />
       )}
 
@@ -538,21 +577,17 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       {activeTab?.type === "chat" && (
         // Local Suspense boundary so the chat-thread fetch (cold
         // cache: a brand-new chat tab) doesn't bubble up to the
-        // workspace route's pending component, which otherwise
-        // shows the full-page loading screen and reads as a
-        // refresh.
-        <Suspense
-          fallback={
-            <div className="flex flex-1 items-center justify-center">
-              <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
-            </div>
-          }
-        >
+        // workspace route's pending component. The fallback is a
+        // visual shell that mirrors the real panel's chrome —
+        // header, empty state with stock prompts, prompt-bar
+        // shape — so the user sees the expected interface
+        // immediately and the data hydrates a frame later, no
+        // spinner.
+        <Suspense fallback={<ChatTabPanelShell tab={activeTab} />}>
           <ChatTabPanel
             onClose={() => handleCloseTab(activeTab.id)}
             onLabelContextMenu={ribbonContextMenu.openAt}
             tab={activeTab}
-            workspaceId={workspaceId}
           />
         </Suspense>
       )}
@@ -675,7 +710,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   size="icon-xs"
                   variant="ghost"
                 >
-                  <ExternalLinkIcon className="size-3.5" />
+                  <Maximize2Icon className="size-3.5" />
                 </Button>
               }
             />
@@ -752,7 +787,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   activeTab={tab}
                   fieldId={tab.justificationFieldId}
                   isActiveTab={isActive}
-                  workspaceId={workspaceId}
+                  workspaceId={tab.workspaceId}
                 />
               </Suspense>
             )}
@@ -809,7 +844,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 propertyId={tab.propertyId}
                 scaleOffset={scaleOffsets.get(tab.id) ?? 0}
                 showActionBar={false}
-                workspaceId={workspaceId}
+                workspaceId={tab.workspaceId}
               />
             ) : (
               <PeekPdfViewer
@@ -825,7 +860,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 onPeekNavigate={closeAll}
                 scaleOffset={scaleOffsets.get(tab.id) ?? 0}
                 viewId={peekPdfViewId}
-                workspaceId={workspaceId}
+                workspaceId={tab.workspaceId}
               />
             )}
           </div>
@@ -1282,8 +1317,17 @@ const VerticalTab = ({
 }: VerticalTabProps) => {
   const tooltipLabel = tab.label || tab.id.slice(0, 6);
   const tabRef = useRef<HTMLButtonElement>(null);
+  const tabNavigate = useNavigate();
+  const tabQueryClient = useQueryClient();
 
-  const contextMenu = useTabContextMenu({ tabId: tab.id, onClose });
+  const contextMenu = useTabContextMenu({
+    tabId: tab.id,
+    onClose,
+    onMaximize: buildMaximizeTabAction(tab, {
+      navigate: tabNavigate,
+      queryClient: tabQueryClient,
+    }),
+  });
 
   // Flash the tab on (re-)activation.
   const activationSeq = useInspectorStore((s) => s.activationSeq);

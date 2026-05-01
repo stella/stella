@@ -3,7 +3,7 @@ import {
   BookOpenIcon,
   FileIcon,
   LayersIcon,
-  MessageCircleIcon,
+  MessageSquareIcon,
   SearchIcon,
   UsersIcon,
 } from "lucide-react";
@@ -114,7 +114,7 @@ export const SidebarPreview = ({
       <div className="flex flex-col gap-0.5 px-3 py-2">
         <NavItem active icon={LayersIcon} label={t("common.matters")} />
         <NavItem icon={BookOpenIcon} label={t("navigation.knowledge")} />
-        <NavItem icon={MessageCircleIcon} label={t("navigation.chat")} />
+        <NavItem icon={MessageSquareIcon} label={t("navigation.chat")} />
       </div>
 
       {/* Documents section — shows import animation */}

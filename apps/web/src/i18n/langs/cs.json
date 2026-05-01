@@ -306,17 +306,13 @@
       "submit": "Odeslat odpovědi"
     },
     "attachFile": "Připojit soubor",
-    "caseLawGreeting": "Zeptejte se mě na toto rozhodnutí — mám k dispozici jeho plný text.",
+    "caseLawGreeting": "Zeptejte se na toto rozhodnutí — plný text je k dispozici.",
     "chatAbout": "Vložit do AI chatu",
     "deleteThread": "Smazat konverzaci",
     "documentView": {
       "original": "Originál",
       "simple": "Přijaté",
       "trackedChanges": "Sledované změny"
-    },
-    "emptyState": {
-      "description": "Vyberte spisy nahoře a zadejte dotaz. @-zmiňte dokument, aby odpověď vycházela z jeho obsahu.",
-      "title": "Na čem budeme pracovat?"
     },
     "extractingContent": "Extrahování obsahu...",
     "fileTooLarge": "Soubor překračuje limit {maxSize}",
@@ -333,9 +329,38 @@
       "loadError": "Nepodařilo se načíst entity",
       "noResults": "Žádné odpovídající entity"
     },
+    "moveToMain": "Přesunout do hlavního zobrazení",
+    "moveToSide": "Přesunout do bočního panelu",
     "newChat": "Nový chat",
     "noThreads": "Zatím žádné konverzace",
     "placeholder": "Co byste chtěli vědět?",
+    "prompts": {
+      "noResults": "Žádné odpovídající promty",
+      "scope": {
+        "private": "Vaše promty",
+        "stock": "Vestavěné",
+        "team": "Týmové promty"
+      },
+      "stock": {
+        "compareVersions": {
+          "body": "Porovnej dvě verze tohoto dokumentu a vypiš každou věcnou změnu i s jejím umístěním.",
+          "name": "Porovnat verze"
+        },
+        "draftResponse": {
+          "body": "Navrhni vyváženou odpověď na tento dopis. Zachovej profesionální tón, reaguj na každý vznesený bod a označ otevřené otázky, které mám potvrdit.",
+          "name": "Navrhnout odpověď"
+        },
+        "findRisks": {
+          "body": "Projdi tento dokument a najdi právní rizika, chybějící ochrany a nejednoznačné klauzule. Pro každý nález uveď konkrétní klauzuli.",
+          "name": "Najít rizika"
+        },
+        "summarizeDocument": {
+          "body": "Shrň tento dokument. Pokryj strany, hlavní povinnosti, termíny, finanční podmínky a všechna ustanovení o ukončení nebo odpovědnosti.",
+          "name": "Shrnout dokument"
+        }
+      },
+      "tryOne": "Začni s jedním z těchto"
+    },
     "send": "Odeslat zprávu",
     "thinking": "Pracuji s kontextem",
     "threads": "Konverzace",

@@ -306,17 +306,13 @@
       "submit": "Wyślij odpowiedzi"
     },
     "attachFile": "Załącz plik",
-    "caseLawGreeting": "Ask me about this decision — I have the full text available.",
+    "caseLawGreeting": "Zadaj pytanie o tę decyzję — pełny tekst jest tutaj dostępny.",
     "chatAbout": "Wstaw do czatu AI",
     "deleteThread": "Usuń rozmowę",
     "documentView": {
       "original": "Oryginał",
       "simple": "Zaakceptowane",
       "trackedChanges": "Śledzenie zmian"
-    },
-    "emptyState": {
-      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
-      "title": "What can we work on?"
     },
     "extractingContent": "Wyodrębnianie treści...",
     "fileTooLarge": "Plik przekracza limit {maxSize}",
@@ -333,9 +329,38 @@
       "loadError": "Nie udało się załadować encji",
       "noResults": "Brak pasujących elementów"
     },
+    "moveToMain": "Przenieś do widoku głównego",
+    "moveToSide": "Przenieś do panelu bocznego",
     "newChat": "Nowy czat",
     "noThreads": "Brak rozmów",
     "placeholder": "Co chciałbyś wiedzieć?",
+    "prompts": {
+      "noResults": "Brak pasujących promptów",
+      "scope": {
+        "private": "Twoje prompty",
+        "stock": "Wbudowane",
+        "team": "Prompty zespołu"
+      },
+      "stock": {
+        "compareVersions": {
+          "body": "Porównaj dwie wersje tego dokumentu i wymień każdą istotną zmianę wraz z jej miejscem.",
+          "name": "Porównaj wersje"
+        },
+        "draftResponse": {
+          "body": "Sporządź wyważoną odpowiedź na to pismo. Zachowaj profesjonalny ton, odnieś się do każdego poruszonego punktu i zaznacz otwarte kwestie do potwierdzenia.",
+          "name": "Sporządź odpowiedź"
+        },
+        "findRisks": {
+          "body": "Przejrzyj ten dokument pod kątem ryzyk prawnych, brakujących zabezpieczeń i niejednoznacznych klauzul. Dla każdego wniosku wskaż konkretną klauzulę.",
+          "name": "Znajdź ryzyka"
+        },
+        "summarizeDocument": {
+          "body": "Podsumuj ten dokument. Omów strony, główne zobowiązania, daty, warunki finansowe oraz wszelkie postanowienia dotyczące rozwiązania umowy lub odpowiedzialności.",
+          "name": "Podsumuj dokument"
+        }
+      },
+      "tryOne": "Zacznij od jednego z tych"
+    },
     "send": "Wyślij wiadomość",
     "thinking": "Pracuję z kontekstem",
     "threads": "Rozmowy",

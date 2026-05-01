@@ -306,17 +306,13 @@
       "submit": "Esita vastused"
     },
     "attachFile": "Lisa fail",
-    "caseLawGreeting": "Ask me about this decision — I have the full text available.",
+    "caseLawGreeting": "Esita küsimusi selle otsuse kohta — täistekst on siin saadaval.",
     "chatAbout": "Lisa AI vestlusesse",
     "deleteThread": "Kustuta vestlus",
     "documentView": {
       "original": "Originaal",
       "simple": "Aktsepteeritud",
       "trackedChanges": "Muudatuste jälgimine"
-    },
-    "emptyState": {
-      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
-      "title": "What can we work on?"
     },
     "extractingContent": "Sisu ekstraktimine...",
     "fileTooLarge": "Fail ületab {maxSize} piirangu",
@@ -333,9 +329,38 @@
       "loadError": "Üksuste laadimine ebaõnnestus",
       "noResults": "No matching entities"
     },
+    "moveToMain": "Vii põhivaatesse",
+    "moveToSide": "Vii külgpaneeli",
     "newChat": "Uus vestlus",
     "noThreads": "Vestlusi pole veel",
     "placeholder": "Mida soovite teada?",
+    "prompts": {
+      "noResults": "Sobivaid küsimusi pole",
+      "scope": {
+        "private": "Sinu küsimused",
+        "stock": "Sisseehitatud",
+        "team": "Tiimi küsimused"
+      },
+      "stock": {
+        "compareVersions": {
+          "body": "Võrdle selle dokumendi kahte versiooni ja loetle kõik sisulised muudatused koos asukohaga.",
+          "name": "Võrdle versioone"
+        },
+        "draftResponse": {
+          "body": "Koosta sellele kirjale tasakaalukas vastus. Hoia toon professionaalne, vasta igale tõstatatud punktile ja märgi avatud küsimused, mida pean kinnitama.",
+          "name": "Koosta vastus"
+        },
+        "findRisks": {
+          "body": "Vaata see dokument üle ja tuvasta õiguslikud riskid, puuduvad kaitsed ja mitmetähenduslikud klauslid. Iga leiu juurde lisa konkreetne klausel.",
+          "name": "Leia riskid"
+        },
+        "summarizeDocument": {
+          "body": "Tee sellest dokumendist kokkuvõte. Käsitle pooli, peamisi kohustusi, kuupäevi, finantstingimusi ning lõpetamis- ja vastutusklausleid.",
+          "name": "Tee dokumendist kokkuvõte"
+        }
+      },
+      "tryOne": "Alusta ühe nendest"
+    },
     "send": "Saada sõnum",
     "thinking": "Töötan kontekstiga",
     "threads": "Vestlused",

@@ -97,7 +97,7 @@ const FileChatOverlayInner = ({
     [chatThreadId, workspaceId],
   );
 
-  const { data: chat } = useSuspenseQuery(
+  const { data } = useSuspenseQuery(
     chatThreadOptions({
       key: threadRef,
       context: {
@@ -107,6 +107,7 @@ const FileChatOverlayInner = ({
       },
     }),
   );
+  const { chat } = data;
 
   const {
     messages,

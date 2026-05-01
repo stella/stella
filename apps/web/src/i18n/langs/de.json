@@ -306,17 +306,13 @@
       "submit": "Antworten absenden"
     },
     "attachFile": "Datei anhängen",
-    "caseLawGreeting": "Ask me about this decision — I have the full text available.",
+    "caseLawGreeting": "Stelle Fragen zu dieser Entscheidung — der vollständige Text ist hier verfügbar.",
     "chatAbout": "In AI-Chat einfügen",
     "deleteThread": "Konversation löschen",
     "documentView": {
       "original": "Original",
       "simple": "Akzeptiert",
       "trackedChanges": "Änderungsverfolgung"
-    },
-    "emptyState": {
-      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
-      "title": "What can we work on?"
     },
     "extractingContent": "Inhalt wird extrahiert...",
     "fileTooLarge": "Datei überschreitet das Limit von {maxSize}",
@@ -333,9 +329,38 @@
       "loadError": "Entitäten konnten nicht geladen werden",
       "noResults": "Keine passenden Einträge"
     },
+    "moveToMain": "In Hauptansicht verschieben",
+    "moveToSide": "In Seitenleiste verschieben",
     "newChat": "Neuer Chat",
     "noThreads": "Noch keine Konversationen",
     "placeholder": "Was möchten Sie wissen?",
+    "prompts": {
+      "noResults": "Keine passenden Prompts",
+      "scope": {
+        "private": "Eigene Prompts",
+        "stock": "Vorgegeben",
+        "team": "Team-Prompts"
+      },
+      "stock": {
+        "compareVersions": {
+          "body": "Vergleiche zwei Versionen dieses Dokuments und liste jede inhaltliche Änderung mit Fundstelle auf.",
+          "name": "Versionen vergleichen"
+        },
+        "draftResponse": {
+          "body": "Entwirf eine sachliche Antwort auf dieses Schreiben. Halte den Ton professionell, gehe auf jeden Punkt ein und markiere offene Fragen zur Bestätigung.",
+          "name": "Antwort entwerfen"
+        },
+        "findRisks": {
+          "body": "Prüfe dieses Dokument auf rechtliche Risiken, fehlende Absicherungen und mehrdeutige Klauseln. Nenne für jeden Befund die konkrete Klausel.",
+          "name": "Risiken finden"
+        },
+        "summarizeDocument": {
+          "body": "Fasse dieses Dokument zusammen. Behandle Parteien, Hauptpflichten, Fristen, Finanzbedingungen und Kündigungs- oder Haftungsklauseln.",
+          "name": "Dokument zusammenfassen"
+        }
+      },
+      "tryOne": "Probiere einen davon zum Start"
+    },
     "send": "Nachricht senden",
     "thinking": "Arbeite mit Kontext",
     "threads": "Konversationen",

@@ -7,20 +7,29 @@ import { useAnchoredMenu } from "@/routes/_protected.workspaces/$workspaceId/-co
 
 /**
  * Right-click menu for the inspector rail's empty space — one
- * "New chat" item, scoped to the caller's matter so the resulting
- * tab inherits the right `contextMatterIds`.
+ * "New chat" item, scoped to the caller's matter when present so
+ * the resulting tab inherits `contextMatterIds`. With no matter
+ * (pane mounted on a global route), the menu opens a global chat.
  */
 export const useRailContextMenu = ({
   workspaceId,
 }: {
-  workspaceId: string;
+  workspaceId?: string | undefined;
 }) => {
   const t = useTranslations();
   const openChat = useInspectorStore((s) => s.openChat);
 
   return useAnchoredMenu({
     children: (
-      <MenuItem onClick={() => openChat({ contextMatterIds: [workspaceId] })}>
+      <MenuItem
+        onClick={() =>
+          openChat(
+            workspaceId === undefined
+              ? {}
+              : { workspaceId, contextMatterIds: [workspaceId] },
+          )
+        }
+      >
         <MessageSquarePlusIcon />
         {t("chat.newChat")}
       </MenuItem>

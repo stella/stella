@@ -261,7 +261,7 @@ export const createPagePaginatedFetch = <TResponse>(
           }
           const chunk = items.slice(i, i + chunkSize);
           const results = await Promise.allSettled(
-            chunk.map( async (item) => opts.parseItem(item, signal)),
+            chunk.map(async (item) => await opts.parseItem(item, signal)),
           );
           for (const result of results) {
             if (result.status === "fulfilled") {

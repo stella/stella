@@ -2145,6 +2145,19 @@ export const chatThreads = p.pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     title: p.varchar({ length: 255 }).notNull(),
+    /**
+     * Matters the chat draws context from. Empty array (the
+     * default) means "no specific matters pinned" — the AI
+     * discovers matters lazily via the readonly stella API.
+     * Non-empty narrows tool authorization so requested matterRefs
+     * must be a subset of this set. Distinct from `workspaceId`,
+     * which is the matter the chat itself lives under (or null
+     * for global threads).
+     */
+    contextMatterIds: safeWorkspaceId("context_matter_ids")
+      .array()
+      .notNull()
+      .default([]),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p
       .timestamp("updated_at")

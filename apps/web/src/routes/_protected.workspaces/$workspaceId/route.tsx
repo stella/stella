@@ -154,7 +154,7 @@ function RouteComponent() {
   // is currently open.
   const openChat = useInspectorStore((s) => s.openChat);
   const handleOpenChat = useCallback(() => {
-    openChat({ contextMatterIds: [workspaceId] });
+    openChat({ workspaceId, contextMatterIds: [workspaceId] });
   }, [openChat, workspaceId]);
   useHotkey(HOTKEYS.NEW_CHAT, handleOpenChat);
 

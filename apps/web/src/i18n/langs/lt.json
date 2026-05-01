@@ -306,17 +306,13 @@
       "submit": "Pateikti atsakymus"
     },
     "attachFile": "Prisegti failą",
-    "caseLawGreeting": "Ask me about this decision — I have the full text available.",
+    "caseLawGreeting": "Klausk apie šį sprendimą — visas tekstas pasiekiamas čia.",
     "chatAbout": "Įterpti į AI pokalbį",
     "deleteThread": "Ištrinti pokalbį",
     "documentView": {
       "original": "Originalas",
       "simple": "Priimta",
       "trackedChanges": "Pakeitimų sekimas"
-    },
-    "emptyState": {
-      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
-      "title": "What can we work on?"
     },
     "extractingContent": "Turinio ištraukimas...",
     "fileTooLarge": "Failas viršija {maxSize} limitą",
@@ -333,9 +329,38 @@
       "loadError": "Nepavyko įkelti objektų",
       "noResults": "No matching entities"
     },
+    "moveToMain": "Perkelti į pagrindinį rodinį",
+    "moveToSide": "Perkelti į šoninį skydelį",
     "newChat": "Naujas pokalbis",
     "noThreads": "Pokalbių dar nėra",
     "placeholder": "Ko norėtumėte paklausti?",
+    "prompts": {
+      "noResults": "Nėra atitinkančių raginimų",
+      "scope": {
+        "private": "Jūsų raginimai",
+        "stock": "Įmontuoti",
+        "team": "Komandos raginimai"
+      },
+      "stock": {
+        "compareVersions": {
+          "body": "Palygink dvi šio dokumento versijas ir išvardink kiekvieną esminį pakeitimą su jo vieta.",
+          "name": "Palyginti versijas"
+        },
+        "draftResponse": {
+          "body": "Parenk apgalvotą atsakymą į šį laišką. Išlaikyk profesionalų toną, atsakyk į kiekvieną iškeltą klausimą ir pažymėk atvirus klausimus, kuriuos turiu patvirtinti.",
+          "name": "Parengti atsakymą"
+        },
+        "findRisks": {
+          "body": "Peržiūrėk šį dokumentą ir rask teisines rizikas, trūkstamas apsaugas ir dviprasmiškas nuostatas. Kiekvienam radiniui nurodyk konkrečią nuostatą.",
+          "name": "Rasti rizikas"
+        },
+        "summarizeDocument": {
+          "body": "Apibendrink šį dokumentą. Aptark šalis, pagrindinius įsipareigojimus, datas, finansines sąlygas ir visas nutraukimo ar atsakomybės nuostatas.",
+          "name": "Apibendrinti dokumentą"
+        }
+      },
+      "tryOne": "Pradėk vienu iš šių"
+    },
     "send": "Siųsti žinutę",
     "thinking": "Dirbama su kontekstu",
     "threads": "Pokalbiai",

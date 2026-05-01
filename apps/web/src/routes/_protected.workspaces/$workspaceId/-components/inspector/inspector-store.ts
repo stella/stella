@@ -35,11 +35,21 @@ export type ChatTab = {
   id: string;
   label: string;
   /**
+   * Owning workspace for the underlying chat thread. `undefined`
+   * means the thread is *global* — same UI shell, no matter
+   * binding on the thread itself. Distinct from
+   * `contextMatterIds` (the AI's draw-from set, which can list
+   * matters even when the thread is global). Drives the
+   * threadRef scope ChatTabPanel resolves, so the same threadId
+   * moves cleanly between the standalone `/chat` surface and the
+   * inspector tab.
+   */
+  workspaceId?: string | undefined;
+  /**
    * Workspaces this chat draws context from. Defaults to the
    * matter the chat was opened in; users can extend it via the
    * matter picker in the tab header so the AI sees content from
-   * additional matters. Phase D will persist this with the Chat
-   * record; today it's local to the tab instance.
+   * additional matters. Persisted server-side on the chat thread.
    */
   contextMatterIds: string[];
   /**
@@ -89,6 +99,11 @@ type Actions = {
   openChat: (args?: {
     id?: string;
     label?: string;
+    /**
+     * Owning workspace for the thread. Omit for a global tab —
+     * same UI, no matter scope on the thread.
+     */
+    workspaceId?: string | undefined;
     contextMatterIds?: string[];
     activeDecisionId?: string;
   }) => void;
@@ -186,12 +201,16 @@ export const useInspectorStore = create<State & Actions>()(
             type: "chat",
             id,
             label: args.label ?? "New chat",
+            workspaceId: args.workspaceId,
             contextMatterIds: args.contextMatterIds ?? [],
             activeDecisionId: args.activeDecisionId,
           });
         } else if (existing.type === "chat") {
           if (args.label !== undefined) {
             existing.label = args.label;
+          }
+          if (args.workspaceId !== undefined) {
+            existing.workspaceId = args.workspaceId;
           }
           if (args.contextMatterIds !== undefined) {
             existing.contextMatterIds = args.contextMatterIds;

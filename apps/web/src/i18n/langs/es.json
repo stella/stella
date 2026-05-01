@@ -306,17 +306,13 @@
       "submit": "Enviar respuestas"
     },
     "attachFile": "Adjuntar archivo",
-    "caseLawGreeting": "Ask me about this decision — I have the full text available.",
+    "caseLawGreeting": "Pregunta sobre esta decisión — el texto completo está disponible aquí.",
     "chatAbout": "Insertar en chat de IA",
     "deleteThread": "Eliminar conversación",
     "documentView": {
       "original": "Original",
       "simple": "Aceptado",
       "trackedChanges": "Control de cambios"
-    },
-    "emptyState": {
-      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
-      "title": "What can we work on?"
     },
     "extractingContent": "Extrayendo contenido...",
     "fileTooLarge": "El archivo supera el límite de {maxSize}",
@@ -333,9 +329,38 @@
       "loadError": "Error al cargar entidades",
       "noResults": "No matching entities"
     },
+    "moveToMain": "Mover a la vista principal",
+    "moveToSide": "Mover al panel lateral",
     "newChat": "Nueva conversación",
     "noThreads": "Aún no hay conversaciones",
     "placeholder": "¿Qué le gustaría saber?",
+    "prompts": {
+      "noResults": "Sin prompts coincidentes",
+      "scope": {
+        "private": "Tus prompts",
+        "stock": "Predefinidos",
+        "team": "Prompts del equipo"
+      },
+      "stock": {
+        "compareVersions": {
+          "body": "Compara dos versiones de este documento y enumera cada cambio sustancial con su ubicación.",
+          "name": "Comparar versiones"
+        },
+        "draftResponse": {
+          "body": "Redacta una respuesta mesurada a esta carta. Mantén un tono profesional, aborda cada punto y señala las preguntas abiertas que deba confirmar.",
+          "name": "Redactar una respuesta"
+        },
+        "findRisks": {
+          "body": "Revisa este documento en busca de riesgos legales, protecciones ausentes y cláusulas ambiguas. Indica la cláusula concreta de cada hallazgo.",
+          "name": "Buscar riesgos"
+        },
+        "summarizeDocument": {
+          "body": "Resume este documento. Cubre las partes, las principales obligaciones, las fechas, las condiciones económicas y cualquier cláusula de terminación o responsabilidad.",
+          "name": "Resumir un documento"
+        }
+      },
+      "tryOne": "Prueba uno de estos para empezar"
+    },
     "send": "Enviar mensaje",
     "thinking": "Trabajando con contexto",
     "threads": "Conversaciones",

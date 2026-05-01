@@ -306,17 +306,13 @@
       "submit": "Válaszok elküldése"
     },
     "attachFile": "Fájl csatolása",
-    "caseLawGreeting": "Ask me about this decision — I have the full text available.",
+    "caseLawGreeting": "Kérdezz erről a határozatról — a teljes szöveg itt elérhető.",
     "chatAbout": "Beszúrás az AI chatbe",
     "deleteThread": "Beszélgetés törlése",
     "documentView": {
       "original": "Eredeti",
       "simple": "Elfogadott",
       "trackedChanges": "Változáskövetés"
-    },
-    "emptyState": {
-      "description": "Pick the matters in scope above and ask a question. @-mention any document to ground the answer in its content.",
-      "title": "What can we work on?"
     },
     "extractingContent": "Tartalom kinyerése...",
     "fileTooLarge": "A fájl meghaladja a {maxSize} korlátot",
@@ -333,9 +329,38 @@
       "loadError": "Az entitások betöltése sikertelen",
       "noResults": "Nincs találat"
     },
+    "moveToMain": "Áthelyezés a fő nézetbe",
+    "moveToSide": "Áthelyezés az oldalsó panelbe",
     "newChat": "Új csevegés",
     "noThreads": "Még nincsenek beszélgetések",
     "placeholder": "Mit szeretne tudni?",
+    "prompts": {
+      "noResults": "Nincs egyező prompt",
+      "scope": {
+        "private": "Saját promptok",
+        "stock": "Beépített",
+        "team": "Csapat promptjai"
+      },
+      "stock": {
+        "compareVersions": {
+          "body": "Hasonlítsd össze ennek a dokumentumnak két verzióját, és sorold fel az összes lényeges változást a helyével együtt.",
+          "name": "Verziók összehasonlítása"
+        },
+        "draftResponse": {
+          "body": "Fogalmazz mérsékelt választ erre a levélre. Tartsd a hangvételt szakszerűnek, válaszolj minden felvetett pontra, és jelöld a megerősítendő nyitott kérdéseket.",
+          "name": "Válasz megfogalmazása"
+        },
+        "findRisks": {
+          "body": "Vizsgáld át ezt a dokumentumot jogi kockázatok, hiányzó védelmek és kétértelmű klauzulák szempontjából. Minden megállapításhoz hivatkozd a konkrét klauzulát.",
+          "name": "Kockázatok keresése"
+        },
+        "summarizeDocument": {
+          "body": "Foglald össze ezt a dokumentumot. Térj ki a felekre, főbb kötelezettségekre, határidőkre, pénzügyi feltételekre és minden megszüntetési vagy felelősségi rendelkezésre.",
+          "name": "Dokumentum összefoglalása"
+        }
+      },
+      "tryOne": "Próbáld ki valamelyiket"
+    },
     "send": "Üzenet küldése",
     "thinking": "Kontextussal dolgozom",
     "threads": "Beszélgetések",
