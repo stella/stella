@@ -5,6 +5,7 @@ import { immer } from "zustand/middleware/immer";
 export type PdfTab = {
   type: "pdf";
   id: string;
+  renderId?: string | undefined;
   entityId: string;
   /** The PDF filename; preserved across justification slot
    *  navigation so the tab header always shows the file name. */
@@ -144,7 +145,7 @@ export const useInspectorStore = create<State & Actions>()(
       set((state) => {
         const existing = state.tabs.find((t) => t.id === tab.id);
         if (!existing) {
-          state.tabs.push({ type: "pdf", ...tab });
+          state.tabs.push({ type: "pdf", renderId: uuidv7(), ...tab });
         } else if (existing.type === "pdf") {
           existing.justificationFieldId = tab.justificationFieldId;
           existing.propertyId = tab.propertyId;

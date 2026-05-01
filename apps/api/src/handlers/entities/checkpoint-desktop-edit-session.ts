@@ -18,7 +18,6 @@ import {
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { broadcast } from "@/api/lib/sse";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -74,7 +73,7 @@ export const checkpointDesktopEditSessionHandler = async ({
     });
   }
 
-  const fileName = sanitizeFilename(file.name);
+  const fileName = authorizedSession.value.fileName;
   const buffer = await file.arrayBuffer();
   const sha256Hex = new Bun.CryptoHasher("sha256").update(buffer).digest("hex");
 
@@ -113,6 +112,7 @@ export const checkpointDesktopEditSessionHandler = async ({
         checkpointFileId: desktopEditSessions.checkpointFileId,
         checkpointSha256Hex: desktopEditSessions.checkpointSha256Hex,
         checkpointUpdatedAt: desktopEditSessions.checkpointUpdatedAt,
+        fileName: desktopEditSessions.fileName,
         id: desktopEditSessions.id,
         sessionTokenHash: desktopEditSessions.sessionTokenHash,
       })
@@ -186,7 +186,7 @@ export const checkpointDesktopEditSessionHandler = async ({
         checkpointSha256Hex: sha256Hex,
         checkpointSizeBytes: file.size,
         checkpointUpdatedAt: checkpointedAt,
-        fileName,
+        fileName: existingSession.fileName,
         sessionTokenHash: nextSessionTokenHash,
         tokenExpiresAt: nextTokenExpiresAt,
       })

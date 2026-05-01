@@ -14,6 +14,7 @@ import {
   useCallback,
   useState,
   useEffect,
+  useLayoutEffect,
   useMemo,
   forwardRef,
   useImperativeHandle,
@@ -179,6 +180,11 @@ import { getBuiltinTableStyle } from "./ui/table-styles";
 import type { TableStylePreset } from "./ui/table-styles";
 import type { TableAction } from "./ui/table-types";
 import { Tooltip } from "./ui/Tooltip";
+import {
+  getViewportCenterZoomAnchorForZoomChange,
+  getScrollTopForZoomAnchor,
+} from "./zoomScrollAnchor";
+import type { ViewportCenterZoomAnchor } from "./zoomScrollAnchor";
 
 // Toast stub — host app provides the real toast system.
 // Uses a temporary DOM banner so the user sees feedback even without
@@ -786,6 +792,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const imageInputRef = useRef<HTMLInputElement>(null);
     const editorContentRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const zoomRef = useRef(state.zoom);
+    const pendingZoomAnchorRef = useRef<ViewportCenterZoomAnchor | null>(null);
     const toolbarWrapperRef = useRef<HTMLDivElement>(null);
     const toolbarRoRef = useRef<ResizeObserver | null>(null);
     const [_toolbarHeight, setToolbarHeight] = useState(0);
@@ -816,6 +824,29 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       [],
     );
 
+    const setZoomWithViewportAnchor = useCallback((zoom: number) => {
+      const currentZoom = zoomRef.current;
+      const scrollContainer = scrollContainerRef.current;
+      const previousAnchor = pendingZoomAnchorRef.current;
+
+      pendingZoomAnchorRef.current = scrollContainer
+        ? getViewportCenterZoomAnchorForZoomChange({
+            clientHeight: scrollContainer.clientHeight,
+            currentZoom,
+            nextZoom: zoom,
+            pendingAnchor: previousAnchor,
+            scrollTop: scrollContainer.scrollTop,
+          })
+        : null;
+
+      if (currentZoom === zoom) {
+        return;
+      }
+
+      zoomRef.current = zoom;
+      setState((prev) => (prev.zoom === zoom ? prev : { ...prev, zoom }));
+    }, []);
+
     // Scroll-based page indicator (Google Docs style)
     const [scrollPageInfo, setScrollPageInfo] = useState<{
       currentPage: number;
@@ -829,6 +860,77 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const scrollFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
       null,
     );
+    const scheduleScrollPageInfoFade = useCallback(() => {
+      if (scrollFadeTimerRef.current) {
+        clearTimeout(scrollFadeTimerRef.current);
+      }
+
+      scrollFadeTimerRef.current = setTimeout(() => {
+        setScrollPageInfo((prev) => ({ ...prev, visible: false }));
+      }, 600);
+    }, []);
+    const updateScrollPageInfo = useCallback(
+      (scrollContainer: HTMLDivElement) => {
+        const layout = pagedEditorRef.current?.getLayout();
+        if (!layout || layout.pages.length === 0) {
+          return;
+        }
+
+        const scrollTop = scrollContainer.scrollTop;
+        const totalPages = layout.pages.length;
+        const pageGap = 24; // DEFAULT_PAGE_GAP from PagedEditor
+        const paddingTop = 24; // top padding in paged-editor__pages
+        const scaledViewportCenter =
+          scrollTop + scrollContainer.clientHeight / 2;
+        const viewportCenter =
+          scaledViewportCenter / Math.max(zoomRef.current, Number.EPSILON);
+        let accumulatedY = paddingTop;
+        let currentPage = 1;
+
+        for (let i = 0; i < layout.pages.length; i++) {
+          // SAFETY: i is bounded by layout.pages.length
+          const pageHeight = layout.pages[i]!.size.h;
+          const pageEnd = accumulatedY + pageHeight;
+          if (viewportCenter < pageEnd) {
+            currentPage = i + 1;
+            break;
+          }
+          accumulatedY = pageEnd + pageGap;
+          currentPage = i + 2; // next page
+        }
+        currentPage = Math.min(currentPage, totalPages);
+
+        setScrollPageInfo({ currentPage, totalPages, visible: true });
+      },
+      [],
+    );
+
+    useLayoutEffect(() => {
+      zoomRef.current = state.zoom;
+    }, [state.zoom]);
+
+    useLayoutEffect(() => {
+      const anchor = pendingZoomAnchorRef.current;
+      if (!anchor) {
+        return;
+      }
+
+      pendingZoomAnchorRef.current = null;
+      if (anchor.zoom === state.zoom) {
+        return;
+      }
+
+      const scrollContainer = scrollContainerRef.current;
+      if (!scrollContainer) {
+        return;
+      }
+
+      const nextScrollTop = getScrollTopForZoomAnchor(anchor, state.zoom);
+
+      scrollContainer.scrollTop = nextScrollTop;
+      updateScrollPageInfo(scrollContainer);
+      scheduleScrollPageInfoFade();
+    }, [state.zoom, scheduleScrollPageInfoFade, updateScrollPageInfo]);
 
     // Measure toolbar height for positioning the outline panel below it
     const toolbarRefCallback = useCallback((el: HTMLDivElement | null) => {
@@ -2142,9 +2244,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     );
 
     // Handle zoom change
-    const handleZoomChange = useCallback((zoom: number) => {
-      setState((prev) => ({ ...prev, zoom }));
-    }, []);
+    const handleZoomChange = useCallback(
+      (zoom: number) => {
+        setZoomWithViewportAnchor(zoom);
+      },
+      [setZoomWithViewportAnchor],
+    );
 
     // Right-click context menu handlers
     const handleContextMenu = useCallback(
@@ -2467,44 +2572,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       }
 
       const handleScroll = () => {
-        const layout = pagedEditorRef.current?.getLayout();
-        if (!layout || layout.pages.length === 0) {
-          return;
-        }
-
-        const scrollTop = scrollContainerEl.scrollTop;
-        const totalPages = layout.pages.length;
-        const pageGap = 24; // DEFAULT_PAGE_GAP from PagedEditor
-        const paddingTop = 24; // top padding in paged-editor__pages
-
-        // Calculate which page is visible at the viewport center
-        const viewportCenter = scrollTop + scrollContainerEl.clientHeight / 2;
-        let accumulatedY = paddingTop;
-        let currentPage = 1;
-
-        for (let i = 0; i < layout.pages.length; i++) {
-          // SAFETY: i is bounded by layout.pages.length
-          const pageHeight = layout.pages[i]!.size.h;
-          const pageEnd = accumulatedY + pageHeight;
-          if (viewportCenter < pageEnd) {
-            currentPage = i + 1;
-            break;
-          }
-          accumulatedY = pageEnd + pageGap;
-          currentPage = i + 2; // next page
-        }
-        currentPage = Math.min(currentPage, totalPages);
-
-        setScrollPageInfo({ currentPage, totalPages, visible: true });
-
-        // Clear existing fade timer
-        if (scrollFadeTimerRef.current) {
-          clearTimeout(scrollFadeTimerRef.current);
-        }
-        // Hide after 0.6s of no scrolling
-        scrollFadeTimerRef.current = setTimeout(() => {
-          setScrollPageInfo((prev) => ({ ...prev, visible: false }));
-        }, 600);
+        updateScrollPageInfo(scrollContainerEl);
+        scheduleScrollPageInfoFade();
       };
 
       scrollContainerEl.addEventListener("scroll", handleScroll, {
@@ -2516,7 +2585,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           clearTimeout(scrollFadeTimerRef.current);
         }
       };
-    }, [scrollContainerEl]);
+    }, [scrollContainerEl, scheduleScrollPageInfoFade, updateScrollPageInfo]);
 
     // Handle save
     const handleSave = useCallback(
@@ -2593,8 +2662,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         getDocument: () => history.state,
         getEditorRef: () => pagedEditorRef.current,
         save: handleSave,
-        setZoom: (zoom: number) => setState((prev) => ({ ...prev, zoom })),
-        getZoom: () => state.zoom,
+        setZoom: setZoomWithViewportAnchor,
+        getZoom: () => zoomRef.current,
         focus: () => {
           pagedEditorRef.current?.focus();
         },
@@ -2610,9 +2679,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       }),
       [
         history.state,
-        state.zoom,
         scrollPageInfo,
         handleSave,
+        setZoomWithViewportAnchor,
         handleDirectPrint,
         loadParsedDocument,
         loadBuffer,

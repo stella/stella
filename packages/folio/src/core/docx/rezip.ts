@@ -205,9 +205,17 @@ async function registerImageExtensions(
 }
 
 /**
- * Collect all images with data-URL src from the document content.
- * These are newly inserted images that need to be added to the ZIP.
+ * Collect all newly inserted images with data-URL src from the document content.
+ * Existing DOCX images may also have a resolved data URL for preview; those must
+ * continue to reference their original media part. Editor-created images use a
+ * synthetic rId until they are assigned a real DOCX relationship here.
  */
+const SYNTHETIC_IMAGE_RID_PREFIX = "rId_img_";
+
+const isNewDataUrlImage = (image: Image) =>
+  image.src?.startsWith("data:") &&
+  (!image.rId || image.rId.startsWith(SYNTHETIC_IMAGE_RID_PREFIX));
+
 function collectNewImages(blocks: BlockContent[]): Image[] {
   const images: Image[] = [];
 
@@ -216,7 +224,7 @@ function collectNewImages(blocks: BlockContent[]): Image[] {
       for (const item of block.content) {
         if (item.type === "run") {
           for (const c of item.content) {
-            if (c.type === "drawing" && c.image.src?.startsWith("data:")) {
+            if (c.type === "drawing" && isNewDataUrlImage(c.image)) {
               images.push(c.image);
             }
           }

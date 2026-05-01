@@ -16,7 +16,7 @@ import type { ReactNode, RefObject } from "react";
 import type { DocxEditorRef, EditorMode } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
 import { toastManager } from "@stll/ui/components/toast";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { CheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import "@stll/folio/editor.css";
@@ -32,6 +32,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
+import { selectStableArrayBuffer } from "./array-buffer-utils";
 import type { EditSessionErrorReason } from "./use-edit-session";
 import { useEditSession } from "./use-edit-session";
 
@@ -79,6 +80,43 @@ type DocxBrowserEditorBaseProps = {
 
 type DocxBrowserEditorProps = DocxBrowserEditorBaseProps;
 
+type DocxPreviewFile = {
+  fileId: string;
+  fileName: string;
+  mimeType: string;
+  originalMimeType: string;
+  buffer: ArrayBuffer;
+};
+
+type OptimisticPreviewFile = {
+  fieldId: string;
+  file: DocxPreviewFile;
+};
+
+type SelectPreviewFileOptions = {
+  file: DocxPreviewFile;
+  fieldId: string;
+  optimisticPreview: OptimisticPreviewFile | null;
+};
+
+const selectPreviewFile = ({
+  file,
+  fieldId,
+  optimisticPreview,
+}: SelectPreviewFileOptions): DocxPreviewFile => {
+  if (optimisticPreview?.fieldId !== fieldId) {
+    return file;
+  }
+
+  return {
+    ...file,
+    buffer: selectStableArrayBuffer({
+      incomingBuffer: file.buffer,
+      stableBuffer: optimisticPreview.file.buffer,
+    }),
+  };
+};
+
 export type DocxBrowserEditorActions = {
   cancel: () => Promise<void>;
   finalize: () => void;
@@ -124,12 +162,33 @@ const DocxBrowserEditorContent = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const didOpenRef = useRef(false);
   const errorToastShownRef = useRef(false);
+  const optimisticPreviewRef = useRef<OptimisticPreviewFile | null>(null);
+  const finalizedBufferRef = useRef<ArrayBuffer | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>("editing");
   const targetZoom = useDocxFitZoom(containerRef, scaleOffset, 0.85);
   const t = useTranslations();
-  const { data: previewFile } = useSuspenseQuery(
-    fileOptions({ workspaceId, fieldId, purpose: "native-display" }),
-  );
+  const previewPlaceholder =
+    optimisticPreviewRef.current?.fieldId === fieldId
+      ? optimisticPreviewRef.current.file
+      : undefined;
+  const previewFileQuery = useQuery({
+    ...fileOptions({ workspaceId, fieldId, purpose: "native-display" }),
+    ...(previewPlaceholder !== undefined
+      ? { placeholderData: previewPlaceholder }
+      : {}),
+  });
+
+  if (previewFileQuery.error) {
+    throw previewFileQuery.error;
+  }
+
+  const previewFile = previewFileQuery.data
+    ? selectPreviewFile({
+        file: previewFileQuery.data,
+        optimisticPreview: optimisticPreviewRef.current,
+        fieldId,
+      })
+    : null;
 
   const {
     state,
@@ -144,10 +203,22 @@ const DocxBrowserEditorContent = ({
     entityId,
     fieldId,
     propertyId,
+    initialBuffer: previewFile?.buffer,
     onFinalized: (result) => {
       if (result.outcome === "finalized") {
+        const finalizedBuffer = finalizedBufferRef.current;
+        if (finalizedBuffer !== null && previewFile !== null) {
+          optimisticPreviewRef.current = {
+            fieldId: result.fieldId,
+            file: {
+              ...previewFile,
+              buffer: finalizedBuffer,
+            },
+          };
+        }
         onSaved?.(result.fieldId);
       }
+      finalizedBufferRef.current = null;
       onClose();
     },
     onCancelled: onClose,
@@ -156,13 +227,18 @@ const DocxBrowserEditorContent = ({
   // Auto-open when this component is used as a direct editor, or when the
   // preview is explicitly unlocked from the shell toolbar.
   useEffect(() => {
-    if (!isEditing || didOpenRef.current || state.status !== "idle") {
+    if (
+      !isEditing ||
+      previewFile === null ||
+      didOpenRef.current ||
+      state.status !== "idle"
+    ) {
       return;
     }
     didOpenRef.current = true;
     errorToastShownRef.current = false;
     void open();
-  }, [isEditing, open, state.status]);
+  }, [isEditing, open, previewFile, state.status]);
 
   useEffect(() => {
     if (!isEditing) {
@@ -213,7 +289,7 @@ const DocxBrowserEditorContent = ({
         return;
       }
 
-      void ref.save({ selective: false }).then((buffer) => {
+      void ref.save({ selective: true }).then((buffer) => {
         if (buffer) {
           void saveCheckpoint(buffer);
         }
@@ -255,7 +331,7 @@ const DocxBrowserEditorContent = ({
       return;
     }
 
-    const buffer = await ref.save({ selective: false });
+    const buffer = await ref.save({ selective: true });
     if (!buffer) {
       debugDocxEdit("finalize-aborted-null-buffer");
       toastManager.add({
@@ -280,6 +356,7 @@ const DocxBrowserEditorContent = ({
       return;
     }
     debugDocxEdit("finalize-start");
+    finalizedBufferRef.current = buffer;
     await finalize();
   }, [finalize, saveCheckpoint, t]);
 
@@ -300,7 +377,11 @@ const DocxBrowserEditorContent = ({
         editorRef.current?.print();
       },
       unlock: () => {
-        if (state.status === "idle" && !didOpenRef.current) {
+        if (
+          previewFile !== null &&
+          state.status === "idle" &&
+          !didOpenRef.current
+        ) {
           didOpenRef.current = true;
           errorToastShownRef.current = false;
           void open();
@@ -330,6 +411,7 @@ const DocxBrowserEditorContent = ({
     handleCancel,
     handleFinalize,
     open,
+    previewFile,
     state.status,
   ]);
 
@@ -347,7 +429,7 @@ const DocxBrowserEditorContent = ({
       ? state.buffer
       : state.status === "saving" && lastEditingBufferRef.current !== null
         ? lastEditingBufferRef.current
-        : previewFile.buffer;
+        : previewFile?.buffer;
 
   useEffect(() => {
     if (!isUnlocked) {
@@ -373,6 +455,10 @@ const DocxBrowserEditorContent = ({
         title={t("errors.actionFailed")}
       />
     );
+  }
+
+  if (previewFile === null || editorBuffer === undefined) {
+    return <DocxBrowserEditorPendingFallback />;
   }
 
   // While the finalize request is in flight we keep the editor

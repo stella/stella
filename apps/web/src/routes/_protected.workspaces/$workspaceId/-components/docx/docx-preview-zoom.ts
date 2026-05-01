@@ -77,8 +77,11 @@ export const useDocxWheelZoom = (
       }
 
       const delta = -event.deltaY * DOCX_PINCH_SENSITIVITY;
-      const nextZoom = clampDocxZoom(editor.getZoom() + delta);
-      editor.setZoom(Math.round(nextZoom * 100) / 100);
+      const currentZoom = editor.getZoom();
+      const nextZoom =
+        Math.round(clampDocxZoom(currentZoom + delta) * 100) / 100;
+
+      editor.setZoom(nextZoom);
     };
 
     container.addEventListener("wheel", handleWheel, { passive: false });

@@ -10,9 +10,11 @@ import {
 
 describe("unzipDocx security limits", () => {
   test("rejects input larger than the configured limit", async () => {
-    await expect(
+    const error = await getRejectedError(
       unzipDocx(new ArrayBuffer(2), { maxInputBytes: 1 }),
-    ).rejects.toBeInstanceOf(DocxSecurityError);
+    );
+
+    expect(error).toBeInstanceOf(DocxSecurityError);
   });
 
   test("rejects archives with too many file entries", async () => {
@@ -20,20 +22,20 @@ describe("unzipDocx security limits", () => {
     zip.file("[Content_Types].xml", "<Types />");
     zip.file("word/document.xml", "<w:document />");
 
-    await expect(
-      unzipDocx(await zip.generateAsync({ type: "arraybuffer" }), {
-        maxFiles: 1,
-      }),
-    ).rejects.toBeInstanceOf(DocxSecurityError);
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+    const error = await getRejectedError(unzipDocx(buffer, { maxFiles: 1 }));
+
+    expect(error).toBeInstanceOf(DocxSecurityError);
   });
 
   test("rejects unsafe archive paths", async () => {
     const zip = new JSZip();
     zip.file("/word/document.xml", "<w:document />");
 
-    await expect(
-      unzipDocx(await zip.generateAsync({ type: "arraybuffer" })),
-    ).rejects.toBeInstanceOf(DocxSecurityError);
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+    const error = await getRejectedError(unzipDocx(buffer));
+
+    expect(error).toBeInstanceOf(DocxSecurityError);
   });
 
   test("skips media entries with mismatched content signatures", async () => {
@@ -98,3 +100,6 @@ describe("unzipDocx security limits", () => {
     expect(getFileList(content)).toContain("word/media/image1.emf");
   });
 });
+
+const getRejectedError = async (promise: Promise<unknown>) =>
+  promise.then(() => null).catch((error: unknown) => error);

@@ -903,6 +903,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
         overflowY: hasPositions ? "visible" : "auto",
         overflowX: "visible",
         opacity: hasPositions ? 1 : 0,
+        pointerEvents: hasPositions ? "auto" : "none",
         transition: "opacity 0.15s ease",
       }}
       onMouseDown={(e) => e.stopPropagation()}
