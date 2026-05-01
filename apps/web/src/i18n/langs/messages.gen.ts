@@ -979,7 +979,7 @@ type Messages = {
     "stepDocuments": "Documents";
     "stepOrganization": "Team";
     "stepTeam": "Invite";
-    "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>.";
+    "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms>.";
     "welcomeSubtitle": "Set up takes less than a minute.";
   };
   "organization": {

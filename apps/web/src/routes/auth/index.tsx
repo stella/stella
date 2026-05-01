@@ -17,6 +17,7 @@ import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 import { pageTitle } from "@/lib/page-title";
 import { isAcceptInvitationRedirect, redirectToSchema } from "@/lib/redirect";
+import { sanitizeHref } from "@/lib/sanitize-href";
 import { emailSchema, toFormErrors } from "@/lib/schema";
 
 const searchSchema = v.strictObject({
@@ -45,6 +46,7 @@ const formSchema = v.strictObject({
 });
 
 const hasSocialProviders = env.VITE_AUTH_GOOGLE || env.VITE_AUTH_MICROSOFT;
+const termsUrl = sanitizeHref(env.VITE_TERMS_URL) ?? "/terms";
 
 function LoginOrSignup() {
   const t = useTranslations();
@@ -234,17 +236,7 @@ function LoginOrSignup() {
           terms: (chunks: React.ReactNode) => (
             <a
               className="hover:text-foreground underline"
-              href="/terms"
-              rel="noopener"
-              target="_blank"
-            >
-              {chunks}
-            </a>
-          ),
-          privacy: (chunks: React.ReactNode) => (
-            <a
-              className="hover:text-foreground underline"
-              href="/privacy"
+              href={termsUrl}
               rel="noopener"
               target="_blank"
             >
