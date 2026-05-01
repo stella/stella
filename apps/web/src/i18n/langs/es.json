@@ -70,6 +70,7 @@
   },
   "auth": {
     "chooseOrganization": "Seleccione en qué organización desea trabajar",
+    "codeSentAgain": "Hemos enviado un código nuevo.",
     "continueWithEmail": "Continuar",
     "continueWithGoogle": "Continuar con Google",
     "continueWithMicrosoft": "Continuar con Microsoft",
@@ -90,11 +91,13 @@
     "orSignInWithEmail": "o inicia sesión con el correo electrónico",
     "organizationNamePlaceholder": "Mi Organización",
     "rateLimitExceeded": "Demasiados intentos. Inténtelo de nuevo más tarde.",
+    "resendCode": "Enviar código de nuevo",
     "selectOrganization": "Seleccione una organización",
     "signIn": "Iniciar sesión",
     "signInBeforeInvitation": "Debe iniciar sesión antes de aceptar una invitación a una organización.",
     "signInWithEmail": "Iniciar sesión con e-mail",
     "subtitle": "Documentos, jurisprudencia y revisión bajo control. Con ayuda de la IA.",
+    "useDifferentEmail": "Usar otro correo",
     "weSentCodeTo": "Hemos enviado un código a {email}"
   },
   "billing": {
@@ -956,7 +959,7 @@
     "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
     "dmsNone": "Empiezo desde cero",
     "dmsPlaceholder": "Buscar o escribir su DMS...",
-    "dmsSubtitle": "Le ayudaremos con el traslado.",
+    "dmsSubtitle": "Esto nos ayuda a priorizar posibles opciones de sincronización.",
     "dmsTitle": "Dónde tiene sus documentos actualmente?",
     "enterTeamName": "Introduzca el nombre del equipo arriba",
     "getStarted": "Comenzar",

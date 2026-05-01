@@ -239,10 +239,7 @@ export const DefaultPendingComponent = ({
   className,
 }: DefaultPendingComponentProps) => (
   <div
-    className={cn(
-      "bg-background flex h-full w-full items-center justify-center",
-      className,
-    )}
+    className={cn("flex h-full w-full items-center justify-center", className)}
   >
     <StellaMark className="text-muted-foreground size-8 animate-pulse" />
   </div>

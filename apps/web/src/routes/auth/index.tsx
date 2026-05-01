@@ -278,7 +278,7 @@ function SocialButton({
     <div className="relative">
       <Button
         className={cn(
-          "w-full",
+          "w-full min-w-0 shrink max-sm:h-auto max-sm:min-h-10 max-sm:px-2 max-sm:py-2 max-sm:text-[0.95rem] max-sm:leading-tight max-sm:whitespace-normal sm:whitespace-nowrap",
           lastUsed && "border-primary/40 shadow-primary/8 shadow-sm",
         )}
         disabled={disabled}
@@ -288,7 +288,7 @@ function SocialButton({
         variant="outline"
       >
         {icon}
-        {label}
+        <span className="min-w-0 text-center">{label}</span>
       </Button>
       {lastUsed && (
         <span className="bg-primary text-primary-foreground absolute end-3 -top-2 rounded-full px-2 py-0.5 text-[10px] font-medium">
