@@ -232,6 +232,13 @@
         "reasoning": "Právne posúdenie"
       }
     },
+    "authority": {
+      "moderate": "Stredná autorita",
+      "strong": "Silná autorita",
+      "weak": "Slabá autorita"
+    },
+    "authorityScore": "{label} · {percent} %",
+    "citationCount": "{count, plural, one {# citácia} few {# citácie} other {# citácií}}",
     "columns": {
       "caseNumber": "Spisová značka",
       "country": "Krajina",
@@ -244,10 +251,11 @@
       "court": "Súd",
       "dateFrom": "Od",
       "dateTo": "Do",
-      "searchPlaceholder": "Hľadať podľa spisovej značky..."
+      "searchPlaceholder": "Hľadať rozhodnutia podľa textu, citácie alebo spisovej značky..."
     },
     "loading": "Načítava sa...",
     "loadingMore": "Načítavajú sa ďalšie...",
+    "searchEmptyState": "Začnite písať a vyhľadajte v judikatúre.",
     "sectionTypes": {
       "argumentation": "Argumentácia",
       "dissent": "Odlišné stanovisko",
@@ -262,6 +270,11 @@
       "lastSync": "Posledná synchronizácia: {date, date, medium}",
       "neverSynced": "Ešte nesynchronizované",
       "title": "Zdroje"
+    },
+    "treatment": {
+      "badLaw": "Zlé právo",
+      "cited": "Citované",
+      "goodLaw": "Dobré právo"
     },
     "viewer": {
       "abstract": "Abstrakt",

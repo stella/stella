@@ -232,6 +232,13 @@
         "reasoning": "Reasoning"
       }
     },
+    "authority": {
+      "moderate": "Keskmine autoriteet",
+      "strong": "Tugev autoriteet",
+      "weak": "Nõrk autoriteet"
+    },
+    "authorityScore": "{label} · {percent}%",
+    "citationCount": "{count, plural, one {# viide} other {# viidet}}",
     "columns": {
       "caseNumber": "Kohtuasja number",
       "country": "Riik",
@@ -244,10 +251,11 @@
       "court": "Kohus",
       "dateFrom": "Alates",
       "dateTo": "Kuni",
-      "searchPlaceholder": "Otsi kohtuasja numbri järgi..."
+      "searchPlaceholder": "Otsi lahendeid teksti, viite või kohtuasja numbri järgi..."
     },
     "loading": "Laadimine...",
     "loadingMore": "Laadib rohkem...",
+    "searchEmptyState": "Alusta kirjutamist, et otsida kohtupraktikast.",
     "sectionTypes": {
       "argumentation": "Argumentatsioon",
       "dissent": "Eriarvamus",
@@ -262,6 +270,11 @@
       "lastSync": "Viimane sünkroonimine: {date, date, medium}",
       "neverSynced": "Pole veel sünkroonitud",
       "title": "Allikad"
+    },
+    "treatment": {
+      "badLaw": "Negatiivne käsitlus",
+      "cited": "Viidatud",
+      "goodLaw": "Kehtiv õigus"
     },
     "viewer": {
       "abstract": "Kokkuvõte",

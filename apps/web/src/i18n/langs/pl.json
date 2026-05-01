@@ -232,6 +232,13 @@
         "reasoning": "Uzasadnienie"
       }
     },
+    "authority": {
+      "moderate": "Średni autorytet",
+      "strong": "Silny autorytet",
+      "weak": "Słaby autorytet"
+    },
+    "authorityScore": "{label} · {percent}%",
+    "citationCount": "{count, plural, one {# cytowanie} few {# cytowania} many {# cytowań} other {# cytowania}}",
     "columns": {
       "caseNumber": "Sygnatura akt",
       "country": "Kraj",
@@ -244,10 +251,11 @@
       "court": "Sąd",
       "dateFrom": "Od",
       "dateTo": "Do",
-      "searchPlaceholder": "Szukaj po sygnaturze akt..."
+      "searchPlaceholder": "Szukaj orzeczeń według tekstu, cytowania lub sygnatury..."
     },
     "loading": "Ładowanie...",
     "loadingMore": "Ładowanie kolejnych...",
+    "searchEmptyState": "Zacznij pisać, aby przeszukać orzecznictwo.",
     "sectionTypes": {
       "argumentation": "Uzasadnienie",
       "dissent": "Zdanie odrębne",
@@ -262,6 +270,11 @@
       "lastSync": "Ostatnia synchronizacja: {date, date, medium}",
       "neverSynced": "Nigdy nie synchronizowano",
       "title": "Źródła"
+    },
+    "treatment": {
+      "badLaw": "Złe prawo",
+      "cited": "Cytowane",
+      "goodLaw": "Dobre prawo"
     },
     "viewer": {
       "abstract": "Streszczenie",

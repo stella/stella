@@ -232,6 +232,13 @@
         "reasoning": "Reasoning"
       }
     },
+    "authority": {
+      "moderate": "Autorité moyenne",
+      "strong": "Autorité forte",
+      "weak": "Autorité faible"
+    },
+    "authorityScore": "{label} · {percent} %",
+    "citationCount": "{count, plural, one {# citation} other {# citations}}",
     "columns": {
       "caseNumber": "Numéro d'affaire",
       "country": "Pays",
@@ -244,10 +251,11 @@
       "court": "Juridiction",
       "dateFrom": "Du",
       "dateTo": "Au",
-      "searchPlaceholder": "Rechercher par numéro d'affaire..."
+      "searchPlaceholder": "Rechercher des décisions par texte, citation ou numéro d’affaire..."
     },
     "loading": "Chargement…",
     "loadingMore": "Chargement en cours…",
+    "searchEmptyState": "Commencez à saisir pour rechercher dans la jurisprudence.",
     "sectionTypes": {
       "argumentation": "Argumentation",
       "dissent": "Opinion dissidente",
@@ -262,6 +270,11 @@
       "lastSync": "Dernière synchronisation : {date, date, medium}",
       "neverSynced": "Jamais synchronisé",
       "title": "Sources"
+    },
+    "treatment": {
+      "badLaw": "Droit écarté",
+      "cited": "Cité",
+      "goodLaw": "Droit positif"
     },
     "viewer": {
       "abstract": "Résumé",

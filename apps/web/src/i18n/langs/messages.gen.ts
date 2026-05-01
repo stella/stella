@@ -235,6 +235,13 @@ type Messages = {
         "reasoning": "Reasoning";
       };
     };
+    "authority": {
+      "moderate": "Moderate authority";
+      "strong": "Strong authority";
+      "weak": "Weak authority";
+    };
+    "authorityScore": "{label} · {percent}%";
+    "citationCount": "{count, plural, one {# citation} other {# citations}}";
     "columns": {
       "caseNumber": "Case number";
       "country": "Country";
@@ -247,10 +254,11 @@ type Messages = {
       "court": "Court";
       "dateFrom": "From";
       "dateTo": "To";
-      "searchPlaceholder": "Search by case number...";
+      "searchPlaceholder": "Search decisions by text, citation, or case number...";
     };
     "loading": "Loading...";
     "loadingMore": "Loading more...";
+    "searchEmptyState": "Start typing to search case law.";
     "sectionTypes": {
       "argumentation": "Argumentation";
       "dissent": "Dissent";
@@ -265,6 +273,11 @@ type Messages = {
       "lastSync": "Last sync: {date, date, medium}";
       "neverSynced": "Never synced";
       "title": "Sources";
+    };
+    "treatment": {
+      "badLaw": "Bad law";
+      "cited": "Cited";
+      "goodLaw": "Good law";
     };
     "viewer": {
       "abstract": "Abstract";

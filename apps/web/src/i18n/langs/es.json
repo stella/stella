@@ -232,6 +232,13 @@
         "reasoning": "Reasoning"
       }
     },
+    "authority": {
+      "moderate": "Autoridad media",
+      "strong": "Autoridad fuerte",
+      "weak": "Autoridad débil"
+    },
+    "authorityScore": "{label} · {percent} %",
+    "citationCount": "{count, plural, one {# cita} other {# citas}}",
     "columns": {
       "caseNumber": "Número de expediente",
       "country": "País",
@@ -244,10 +251,11 @@
       "court": "Tribunal",
       "dateFrom": "Desde",
       "dateTo": "Hasta",
-      "searchPlaceholder": "Buscar por número de expediente..."
+      "searchPlaceholder": "Buscar decisiones por texto, cita o número de asunto..."
     },
     "loading": "Cargando...",
     "loadingMore": "Cargando más...",
+    "searchEmptyState": "Empieza a escribir para buscar jurisprudencia.",
     "sectionTypes": {
       "argumentation": "Argumentación",
       "dissent": "Voto particular",
@@ -262,6 +270,11 @@
       "lastSync": "Última sincronización: {date, date, medium}",
       "neverSynced": "Sin sincronizar",
       "title": "Fuentes"
+    },
+    "treatment": {
+      "badLaw": "Derecho desfavorable",
+      "cited": "Citado",
+      "goodLaw": "Derecho vigente"
     },
     "viewer": {
       "abstract": "Resumen",

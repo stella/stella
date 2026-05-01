@@ -1,14 +1,19 @@
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import {
+  infiniteQueryOptions,
+  keepPreviousData,
+  queryOptions,
+} from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
+import { stripUndefined } from "@/lib/utils";
 
 const DEFAULT_PAGE_SIZE = 50;
 
 const caseLawDecisionKeys = {
   all: ["case-law-decisions"],
-  list: (filters?: Record<string, unknown>) => [
+  list: (filters?: DecisionListFilters) => [
     ...caseLawDecisionKeys.all,
     "list",
     filters,
@@ -32,46 +37,63 @@ type FacetBucket = { value: string; count: number };
 export type SearchFacets = {
   court: FacetBucket[];
   country: FacetBucket[];
+  decisionType: FacetBucket[];
   language: FacetBucket[];
 } | null;
+
+export type Decision = {
+  id: string;
+  authorityScore: number;
+  caseNumber: string;
+  citationCount: number;
+  court: string;
+  country: string;
+  createdAt: Date | string;
+  decisionDate: Date | string | null;
+  decisionType: string | null;
+  ecli: string | null;
+  headline?: string | null;
+  language: string;
+  languageGroupKey?: string | null;
+  negativeCitationCount: number;
+  positiveCitationCount: number;
+  sourceName: string | null;
+  sourceUrl: string | null;
+  supportiveCitationCount: number;
+};
+
+const normalizeUserSearch = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim();
+  return trimmed || undefined;
+};
+
+const normalizeSourceId = (
+  value: string | undefined,
+): ReturnType<typeof toSafeId<"caseLawSource">> | undefined =>
+  value ? toSafeId<"caseLawSource">(value) : undefined;
 
 export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
   infiniteQueryOptions({
     queryKey: caseLawDecisionKeys.list(filters),
     queryFn: async ({ pageParam, signal }) => {
-      const { search, ...listFilters } = filters;
+      const search = normalizeUserSearch(filters.search);
 
       if (search) {
-        const cursor = pageParam ?? undefined;
-        const response = await api.case.decisions.search.post(
-          {
-            query: search,
-            limit: DEFAULT_PAGE_SIZE,
-            ...(cursor !== undefined && { cursor }),
-            ...(listFilters.court !== undefined && {
-              court: listFilters.court,
-            }),
-            ...(listFilters.country !== undefined && {
-              country: listFilters.country,
-            }),
-            ...(listFilters.dateFrom !== undefined && {
-              dateFrom: listFilters.dateFrom,
-            }),
-            ...(listFilters.dateTo !== undefined && {
-              dateTo: listFilters.dateTo,
-            }),
-            ...(listFilters.decisionType !== undefined && {
-              decisionType: listFilters.decisionType,
-            }),
-            ...(listFilters.language !== undefined && {
-              language: listFilters.language,
-            }),
-            ...(listFilters.sourceId !== undefined && {
-              sourceId: toSafeId<"caseLawSource">(listFilters.sourceId),
-            }),
-          },
-          { fetch: { signal } },
-        );
+        const request = stripUndefined({
+          query: search,
+          limit: DEFAULT_PAGE_SIZE,
+          cursor: pageParam,
+          court: filters.court,
+          country: filters.country,
+          dateFrom: filters.dateFrom,
+          dateTo: filters.dateTo,
+          decisionType: filters.decisionType,
+          language: filters.language,
+          sourceId: normalizeSourceId(filters.sourceId),
+        });
+        const response = await api.case.decisions.search.post(request, {
+          fetch: { signal },
+        });
 
         if (response.error) {
           throw toAPIError(response.error);
@@ -89,7 +111,13 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
             languageGroupKey: null,
             decisionDate: h.decisionDate,
             decisionType: h.decisionType,
+            authorityScore: h.authorityScore,
+            citationCount: h.citationCount,
+            negativeCitationCount: h.negativeCitationCount,
+            positiveCitationCount: h.positiveCitationCount,
+            supportiveCitationCount: h.supportiveCitationCount,
             sourceUrl: h.sourceUrl,
+            sourceName: h.sourceName,
             headline: h.headline,
             createdAt: new Date(h.createdAt),
           })),
@@ -98,32 +126,19 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
         };
       }
 
+      const request = stripUndefined({
+        limit: DEFAULT_PAGE_SIZE,
+        cursor: pageParam,
+        court: filters.court,
+        country: filters.country,
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+        decisionType: filters.decisionType,
+        language: filters.language,
+        sourceId: normalizeSourceId(filters.sourceId),
+      });
       const response = await api.case.decisions.get({
-        query: {
-          limit: DEFAULT_PAGE_SIZE,
-          ...(pageParam !== null && { cursor: pageParam }),
-          ...(listFilters.court !== undefined && {
-            court: listFilters.court,
-          }),
-          ...(listFilters.country !== undefined && {
-            country: listFilters.country,
-          }),
-          ...(listFilters.dateFrom !== undefined && {
-            dateFrom: listFilters.dateFrom,
-          }),
-          ...(listFilters.dateTo !== undefined && {
-            dateTo: listFilters.dateTo,
-          }),
-          ...(listFilters.decisionType !== undefined && {
-            decisionType: listFilters.decisionType,
-          }),
-          ...(listFilters.language !== undefined && {
-            language: listFilters.language,
-          }),
-          ...(listFilters.sourceId !== undefined && {
-            sourceId: toSafeId<"caseLawSource">(listFilters.sourceId),
-          }),
-        },
+        query: request,
         fetch: { signal },
       });
 
@@ -131,14 +146,34 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
         throw toAPIError(response.error);
       }
 
-      const facets: SearchFacets = null;
-      return { ...response.data, facets };
+      return {
+        decisions: response.data.decisions.map((decision) => ({
+          id: decision.id,
+          caseNumber: decision.caseNumber,
+          ecli: decision.ecli,
+          court: decision.court,
+          country: decision.country,
+          language: decision.language,
+          languageGroupKey: decision.languageGroupKey,
+          decisionDate: decision.decisionDate,
+          decisionType: decision.decisionType,
+          sourceUrl: decision.sourceUrl,
+          createdAt: decision.createdAt,
+          authorityScore: decision.authorityScore,
+          citationCount: decision.citationCount,
+          negativeCitationCount: decision.negativeCitationCount,
+          positiveCitationCount: decision.positiveCitationCount,
+          sourceName: decision.sourceName,
+          supportiveCitationCount: decision.supportiveCitationCount,
+        })),
+        facets: response.data.facets,
+        nextCursor: response.data.nextCursor,
+      };
     },
-    // SAFETY: TanStack Query needs the initial param typed as
-    // string | null; `null` alone infers `null`.
     // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-    initialPageParam: null as string | null,
+    initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
+    placeholderData: keepPreviousData,
   });
 
 export const decisionOptions = (decisionId: string) =>

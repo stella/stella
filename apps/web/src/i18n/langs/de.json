@@ -232,6 +232,13 @@
         "reasoning": "Begründung"
       }
     },
+    "authority": {
+      "moderate": "Mittlere Autorität",
+      "strong": "Starke Autorität",
+      "weak": "Schwache Autorität"
+    },
+    "authorityScore": "{label} · {percent} %",
+    "citationCount": "{count, plural, one {# Zitat} other {# Zitate}}",
     "columns": {
       "caseNumber": "Aktenzeichen",
       "country": "Land",
@@ -244,10 +251,11 @@
       "court": "Gericht",
       "dateFrom": "Von",
       "dateTo": "Bis",
-      "searchPlaceholder": "Nach Aktenzeichen suchen..."
+      "searchPlaceholder": "Entscheidungen nach Text, Zitat oder Aktenzeichen suchen..."
     },
     "loading": "Wird geladen…",
     "loadingMore": "Weitere werden geladen…",
+    "searchEmptyState": "Beginnen Sie mit der Eingabe, um Rechtsprechung zu durchsuchen.",
     "sectionTypes": {
       "argumentation": "Begründung",
       "dissent": "Sondervotum",
@@ -262,6 +270,11 @@
       "lastSync": "Letzte Synchronisierung: {date, date, medium}",
       "neverSynced": "Noch nie synchronisiert",
       "title": "Quellen"
+    },
+    "treatment": {
+      "badLaw": "Schlechtes Recht",
+      "cited": "Zitiert",
+      "goodLaw": "Gutes Recht"
     },
     "viewer": {
       "abstract": "Zusammenfassung",

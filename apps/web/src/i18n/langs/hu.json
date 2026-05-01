@@ -232,6 +232,13 @@
         "reasoning": "Reasoning"
       }
     },
+    "authority": {
+      "moderate": "Közepes tekintély",
+      "strong": "Erős tekintély",
+      "weak": "Gyenge tekintély"
+    },
+    "authorityScore": "{label} · {percent}%",
+    "citationCount": "{count, plural, one {# hivatkozás} other {# hivatkozás}}",
     "columns": {
       "caseNumber": "Ügyszám",
       "country": "Ország",
@@ -244,10 +251,11 @@
       "court": "Bíróság",
       "dateFrom": "Dátumtól",
       "dateTo": "Dátumig",
-      "searchPlaceholder": "Keresés ügyszám alapján..."
+      "searchPlaceholder": "Döntések keresése szöveg, hivatkozás vagy ügyszám alapján..."
     },
     "loading": "Betöltés...",
     "loadingMore": "Betöltés folyamatban...",
+    "searchEmptyState": "Kezdjen gépelni az ítélkezési gyakorlat kereséséhez.",
     "sectionTypes": {
       "argumentation": "Indokolás",
       "dissent": "Különvélemény",
@@ -262,6 +270,11 @@
       "lastSync": "Utolsó szinkronizálás: {date, date, medium}",
       "neverSynced": "Még nem volt szinkronizálva",
       "title": "Források"
+    },
+    "treatment": {
+      "badLaw": "Rossz jog",
+      "cited": "Hivatkozott",
+      "goodLaw": "Jó jog"
     },
     "viewer": {
       "abstract": "Kivonat",

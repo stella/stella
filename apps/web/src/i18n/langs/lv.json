@@ -232,6 +232,13 @@
         "reasoning": "Reasoning"
       }
     },
+    "authority": {
+      "moderate": "Vidēja autoritāte",
+      "strong": "Spēcīga autoritāte",
+      "weak": "Vāja autoritāte"
+    },
+    "authorityScore": "{label} · {percent}%",
+    "citationCount": "{count, plural, one {# atsauce} other {# atsauces}}",
     "columns": {
       "caseNumber": "Lietas numurs",
       "country": "Valsts",
@@ -244,10 +251,11 @@
       "court": "Tiesa",
       "dateFrom": "No",
       "dateTo": "Līdz",
-      "searchPlaceholder": "Meklēt pēc lietas numura..."
+      "searchPlaceholder": "Meklēt nolēmumus pēc teksta, atsauces vai lietas numura..."
     },
     "loading": "Ielādē...",
     "loadingMore": "Ielādē vairāk...",
+    "searchEmptyState": "Sāciet rakstīt, lai meklētu judikatūrā.",
     "sectionTypes": {
       "argumentation": "Argumentācija",
       "dissent": "Atsevišķās domas",
@@ -262,6 +270,11 @@
       "lastSync": "Pēdējā sinhronizācija: {date, date, medium}",
       "neverSynced": "Vēl nav sinhronizēts",
       "title": "Avoti"
+    },
+    "treatment": {
+      "badLaw": "Negatīvs vērtējums",
+      "cited": "Citēts",
+      "goodLaw": "Labs tiesību avots"
     },
     "viewer": {
       "abstract": "Kopsavilkums",

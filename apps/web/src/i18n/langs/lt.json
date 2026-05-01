@@ -232,6 +232,13 @@
         "reasoning": "Reasoning"
       }
     },
+    "authority": {
+      "moderate": "Vidutinis autoritetas",
+      "strong": "Stiprus autoritetas",
+      "weak": "Silpnas autoritetas"
+    },
+    "authorityScore": "{label} · {percent} %",
+    "citationCount": "{count, plural, one {# citata} few {# citatos} other {# citatų}}",
     "columns": {
       "caseNumber": "Bylos numeris",
       "country": "Valstybė",
@@ -244,10 +251,11 @@
       "court": "Teismas",
       "dateFrom": "Nuo",
       "dateTo": "Iki",
-      "searchPlaceholder": "Ieškoti pagal bylos numerį..."
+      "searchPlaceholder": "Ieškoti sprendimų pagal tekstą, citatą arba bylos numerį..."
     },
     "loading": "Kraunama...",
     "loadingMore": "Kraunama daugiau...",
+    "searchEmptyState": "Pradėkite rašyti, kad ieškotumėte teismų praktikoje.",
     "sectionTypes": {
       "argumentation": "Argumentavimas",
       "dissent": "Atskiroji nuomonė",
@@ -262,6 +270,11 @@
       "lastSync": "Paskutinė sinchronizacija: {date, date, medium}",
       "neverSynced": "Dar nesinchronizuota",
       "title": "Šaltiniai"
+    },
+    "treatment": {
+      "badLaw": "Bloga teisė",
+      "cited": "Cituota",
+      "goodLaw": "Gera teisė"
     },
     "viewer": {
       "abstract": "Santrauka",

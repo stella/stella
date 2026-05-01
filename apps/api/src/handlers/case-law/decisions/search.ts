@@ -3,6 +3,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
+import { caseLawSources } from "@/api/db/schema";
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import { bodyPreviewJoin } from "@/api/handlers/case-law/decisions/search-sql";
 import { LIMITS } from "@/api/lib/limits";
@@ -12,8 +13,25 @@ import {
   TS_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
 
-const toNullableString = (x: unknown): string | null =>
-  x === null ? null : JSON.stringify(x);
+const toNullableString = (x: unknown): string | null => {
+  if (x === null || x === undefined) {
+    return null;
+  }
+  if (x instanceof Date) {
+    return x.toISOString();
+  }
+  return String(x);
+};
+
+const normalizeHeadline = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return escapeAndHighlight(String(value))
+    .replaceAll("\\n", " ")
+    .replaceAll(/\s+/gu, " ")
+    .trim();
+};
 
 const headlineRegconfig = sql`
   'public.stella_unaccent'::regconfig
@@ -114,7 +132,10 @@ export const searchDecisionsHandler = async (
         extract(epoch FROM (now() - d.decision_date)) / (365.25 * 86400),
         1.0
       ) AS boost,
-      count(*)::int AS cnt
+      count(*)::int AS cnt,
+      count(*) FILTER (WHERE c.polarity = 'positive')::int AS positive_count,
+      count(*) FILTER (WHERE c.polarity = 'supportive')::int AS supportive_count,
+      count(*) FILTER (WHERE c.polarity = 'negative')::int AS negative_count
       FROM case_law_citations c
       JOIN case_law_decisions citing_d
         ON citing_d.id = c.citing_decision_id
@@ -133,6 +154,7 @@ export const searchDecisionsHandler = async (
       d.decision_date,
       d.decision_type,
       d.source_url,
+      s.name AS source_name,
       ts_headline(
         ${headlineRegconfig},
         coalesce(nullif(body_preview.text, ''), d.fulltext, sd.searchable_text),
@@ -142,11 +164,17 @@ export const searchDecisionsHandler = async (
       (ts_rank(sd.tsv, ${tsQuery})::float8
         + 0.3 * ln(1 + cb.boost)
       ) AS score,
+      ln(1 + cb.boost) AS authority_score,
       cb.cnt AS citation_count,
+      cb.positive_count AS positive_citation_count,
+      cb.supportive_count AS supportive_citation_count,
+      cb.negative_count AS negative_citation_count,
       d.created_at
     FROM case_law_search_documents sd
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
+    JOIN ${caseLawSources} s
+      ON s.id = d.source_id
     ${bodyPreviewJoin}
     LEFT JOIN ${citationBoost} ON true
     WHERE sd.tsv @@ ${tsQuery}
@@ -219,6 +247,25 @@ export const searchDecisionsHandler = async (
     LIMIT ${LIMITS.caseLawFacetLimit}
   `;
 
+  // Decision type facet: cross-filtered (respects court + country + language)
+  const decisionTypeFacetQuery = sql`
+    SELECT d.decision_type AS value, count(*)::int AS count
+    FROM case_law_search_documents sd
+    JOIN case_law_decisions d
+      ON d.id = sd.decision_id
+    WHERE sd.tsv @@ ${tsQuery}
+      AND d.decision_type IS NOT NULL
+      ${courtFilter}
+      ${countryFilter}
+      ${dateFromFilter}
+      ${dateToFilter}
+      ${sourceFilter}
+      ${languageFilter}
+    GROUP BY d.decision_type
+    ORDER BY count DESC
+    LIMIT ${LIMITS.caseLawFacetLimit}
+  `;
+
   type RawRows = Record<string, unknown>[];
   const emptyRows: Promise<RawRows> = Promise.resolve([]);
 
@@ -230,6 +277,9 @@ export const searchDecisionsHandler = async (
     parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(courtFacetQuery)),
     parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(countryFacetQuery)),
     parsedCursor ? emptyRows : scopedDb((tx) => tx.execute(languageFacetQuery)),
+    parsedCursor
+      ? emptyRows
+      : scopedDb((tx) => tx.execute(decisionTypeFacetQuery)),
   ];
 
   const [
@@ -238,6 +288,7 @@ export const searchDecisionsHandler = async (
     courtResultRaw,
     countryResultRaw,
     languageResultRaw,
+    decisionTypeResultRaw,
   ] = await Promise.all(queries);
 
   const hitsResult = hitsResultRaw ?? [];
@@ -245,6 +296,7 @@ export const searchDecisionsHandler = async (
   const courtResult = courtResultRaw ?? [];
   const countryResult = countryResultRaw ?? [];
   const languageResult = languageResultRaw ?? [];
+  const decisionTypeResult = decisionTypeResultRaw ?? [];
 
   const hasMore = hitsResult.length > limit;
   const resultRows = hasMore ? hitsResult.slice(0, limit) : hitsResult;
@@ -265,10 +317,12 @@ export const searchDecisionsHandler = async (
     decisionDate: toNullableString(row["decision_date"]),
     decisionType: toNullableString(row["decision_type"]),
     sourceUrl: toNullableString(row["source_url"]),
-    // oxlint-disable-next-line typescript/strict-boolean-expressions -- row.headline from DB (any)
-    headline: row["headline"]
-      ? escapeAndHighlight(JSON.stringify(row["headline"]))
-      : null,
+    sourceName: String(row["source_name"]),
+    authorityScore: Number(row["authority_score"]) || 0,
+    positiveCitationCount: Number(row["positive_citation_count"]) || 0,
+    supportiveCitationCount: Number(row["supportive_citation_count"]) || 0,
+    negativeCitationCount: Number(row["negative_citation_count"]) || 0,
+    headline: normalizeHeadline(row["headline"]),
     citationCount: Number(row["citation_count"]) || 0,
     createdAt:
       row["created_at"] instanceof Date
@@ -292,6 +346,10 @@ export const searchDecisionsHandler = async (
           count: Number(row["count"]),
         })),
         language: languageResult.map((row) => ({
+          value: String(row["value"]),
+          count: Number(row["count"]),
+        })),
+        decisionType: decisionTypeResult.map((row) => ({
           value: String(row["value"]),
           count: Number(row["count"]),
         })),
