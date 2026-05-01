@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { toastManager } from "@stll/ui/components/toast";
 import { useQuery } from "@tanstack/react-query";
@@ -15,10 +15,7 @@ import { OnboardingLayout } from "@/routes/onboarding/-components/onboarding-lay
 import { SidebarPreview } from "@/routes/onboarding/-components/sidebar-preview";
 import type { Phase } from "@/routes/onboarding/-components/steps/creating-step";
 import { CreatingStep } from "@/routes/onboarding/-components/steps/creating-step";
-import {
-  DMS_NONE,
-  DmsStep,
-} from "@/routes/onboarding/-components/steps/dms-step";
+import { DmsStep } from "@/routes/onboarding/-components/steps/dms-step";
 import { InviteStep } from "@/routes/onboarding/-components/steps/invite-step";
 import { OrganizationStep } from "@/routes/onboarding/-components/steps/organization-step";
 type Step = "organization" | "dms" | "invite" | "creating";
@@ -45,6 +42,7 @@ export const OnboardingWizard = () => {
   const invalidateSession = useInvalidateSession();
   const { data: sessionData } = useQuery(sessionOptions);
   const userEmail = sessionData?.user?.email ?? "";
+  const capturedDmsSelectionRef = useRef(false);
   const [step, setStep] = useState<Step>("organization");
   const [data, setData] = useState<WizardData>({
     orgName: "",
@@ -76,6 +74,12 @@ export const OnboardingWizard = () => {
       // Phase 1: Create organization
       setCreatingPhase("org");
       setCreatingProgress(15);
+      if (!capturedDmsSelectionRef.current) {
+        capturedDmsSelectionRef.current = true;
+        analytics.capture("onboarding_dms_selected", {
+          dms: finalData.previousDms,
+        });
+      }
       analytics.capture("onboarding_started");
       await delay(800);
 
@@ -153,13 +157,6 @@ export const OnboardingWizard = () => {
 
         await delay(500);
         setCreatingProgress(90);
-
-        // Capture DMS selection for sales/product
-        if (finalData.previousDms !== DMS_NONE) {
-          analytics.capture("onboarding_dms_selected", {
-            dms: finalData.previousDms,
-          });
-        }
 
         // Phase 3: Complete
         setCreatingPhase("done");
@@ -250,7 +247,6 @@ export const OnboardingWizard = () => {
               }));
               analytics.capture("onboarding_step_completed", {
                 step: "dms",
-                dms,
               });
               setStep("invite");
             }}

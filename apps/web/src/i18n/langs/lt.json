@@ -70,6 +70,7 @@
   },
   "auth": {
     "chooseOrganization": "Pasirinkite organizaciją, kurioje norite dirbti",
+    "codeSentAgain": "Išsiuntėme naują kodą.",
     "continueWithEmail": "Tęsti",
     "continueWithGoogle": "Tęsti su Google",
     "continueWithMicrosoft": "Tęsti su Microsoft",
@@ -90,11 +91,13 @@
     "orSignInWithEmail": "arba prisijunkite el. paštu",
     "organizationNamePlaceholder": "Mano organizacija",
     "rateLimitExceeded": "Per daug bandymų. Bandykite dar kartą vėliau.",
+    "resendCode": "Siųsti kodą dar kartą",
     "selectOrganization": "Pasirinkite organizaciją",
     "signIn": "Prisijungti",
     "signInBeforeInvitation": "Norėdami priimti kvietimą į organizaciją, pirmiausia turite prisijungti.",
     "signInWithEmail": "Prisijungti el. paštu",
     "subtitle": "Dokumentai, teismų praktika ir peržiūra po kontrole. Su AI pagalba.",
+    "useDifferentEmail": "Naudoti kitą el. pašto adresą",
     "weSentCodeTo": "Išsiuntėme kodą adresu {email}"
   },
   "billing": {
@@ -956,7 +959,7 @@
     "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
     "dmsNone": "Pradedu nuo nulio",
     "dmsPlaceholder": "Ieškokite arba įveskite DMS...",
-    "dmsSubtitle": "Padėsime perkelti duomenis.",
+    "dmsSubtitle": "Tai padeda mums nustatyti galimų sinchronizavimo parinkčių prioritetus.",
     "dmsTitle": "Kur šiuo metu laikote dokumentus?",
     "enterTeamName": "Įveskite aukščiau komandos pavadinimą",
     "getStarted": "Pradėti",

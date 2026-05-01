@@ -73,6 +73,7 @@ type Messages = {
   };
   "auth": {
     "chooseOrganization": "Choose which organization to work in";
+    "codeSentAgain": "We sent a new code.";
     "continueWithEmail": "Continue";
     "continueWithGoogle": "Continue with Google";
     "continueWithMicrosoft": "Continue with Microsoft";
@@ -93,11 +94,13 @@ type Messages = {
     "orSignInWithEmail": "or sign in with email";
     "organizationNamePlaceholder": "My organization";
     "rateLimitExceeded": "Too many attempts. Please try again later.";
+    "resendCode": "Send code again";
     "selectOrganization": "Select an organization";
     "signIn": "Sign in";
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.";
     "signInWithEmail": "Sign in with email";
     "subtitle": "Documents, case law, and review under control. Powered by AI.";
+    "useDifferentEmail": "Use a different email";
     "weSentCodeTo": "We sent a code to {email}";
   };
   "billing": {
@@ -959,7 +962,7 @@ type Messages = {
     "dmsNoCommitment": "No commitment required. You can start fresh and import later.";
     "dmsNone": "Starting fresh";
     "dmsPlaceholder": "Search or type your DMS...";
-    "dmsSubtitle": "We'll help you bring them over.";
+    "dmsSubtitle": "This helps us prioritize possible sync options.";
     "dmsTitle": "Where are your documents today?";
     "enterTeamName": "Enter your team name above";
     "getStarted": "Get Started";

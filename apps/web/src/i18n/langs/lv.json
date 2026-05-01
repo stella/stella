@@ -70,6 +70,7 @@
   },
   "auth": {
     "chooseOrganization": "Izvēlieties organizāciju, kurā strādāt",
+    "codeSentAgain": "Nosūtījām jaunu kodu.",
     "continueWithEmail": "Turpināt",
     "continueWithGoogle": "Turpināt ar Google",
     "continueWithMicrosoft": "Turpināt ar Microsoft",
@@ -90,11 +91,13 @@
     "orSignInWithEmail": "vai pierakstieties ar e-pastu",
     "organizationNamePlaceholder": "Mana organizācija",
     "rateLimitExceeded": "Pārāk daudz mēģinājumu. Lūdzu, mēģiniet vēlāk.",
+    "resendCode": "Nosūtīt kodu vēlreiz",
     "selectOrganization": "Izvēlieties organizāciju",
     "signIn": "Pieslēgties",
     "signInBeforeInvitation": "Lai pieņemtu uzaicinājumu organizācijā, vispirms jāpieslēdzas.",
     "signInWithEmail": "Pieslēgties ar e-pastu",
     "subtitle": "Dokumenti, tiesu prakse un pārskatīšana kontrolēti. Ar AI palīdzību.",
+    "useDifferentEmail": "Izmantot citu e-pasta adresi",
     "weSentCodeTo": "Mēs nosūtījām kodu uz {email}"
   },
   "billing": {
@@ -956,7 +959,7 @@
     "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
     "dmsNone": "Sāku no nulles",
     "dmsPlaceholder": "Meklējiet vai ievadiet savu DMS...",
-    "dmsSubtitle": "Palīdzēsim pārnest jūsu datus.",
+    "dmsSubtitle": "Tas palīdz mums noteikt iespējamo sinhronizācijas iespēju prioritātes.",
     "dmsTitle": "Kur šobrīd atrodas jūsu dokumenti?",
     "enterTeamName": "Ievadiet augstāk komandas nosaukumu",
     "getStarted": "Sākt",

@@ -70,6 +70,7 @@
   },
   "auth": {
     "chooseOrganization": "Wählen Sie die Organisation, in der Sie arbeiten möchten",
+    "codeSentAgain": "Wir haben einen neuen Code gesendet.",
     "continueWithEmail": "Weiter",
     "continueWithGoogle": "Weiter mit Google",
     "continueWithMicrosoft": "Weiter mit Microsoft",
@@ -90,11 +91,13 @@
     "orSignInWithEmail": "oder mit E-Mail anmelden",
     "organizationNamePlaceholder": "Meine Organisation",
     "rateLimitExceeded": "Zu viele Versuche. Bitte versuchen Sie es später erneut.",
+    "resendCode": "Code erneut senden",
     "selectOrganization": "Organisation auswählen",
     "signIn": "Anmelden",
     "signInBeforeInvitation": "Sie müssen sich anmelden, bevor Sie eine Einladung zu einer Organisation annehmen können.",
     "signInWithEmail": "Mit E-Mail anmelden",
     "subtitle": "Dokumente, Rechtsprechung und Prüfung im Griff. Mit Hilfe von KI.",
+    "useDifferentEmail": "Andere E-Mail verwenden",
     "weSentCodeTo": "Wir haben einen Code an {email} gesendet"
   },
   "billing": {
@@ -956,7 +959,7 @@
     "dmsNoCommitment": "Sie können auch ganz ohne Datenimport loslegen.",
     "dmsNone": "Ich fange neu an",
     "dmsPlaceholder": "DMS suchen oder eingeben...",
-    "dmsSubtitle": "Wir helfen Ihnen beim Umzug.",
+    "dmsSubtitle": "Das hilft uns, mögliche Synchronisierungsoptionen zu priorisieren.",
     "dmsTitle": "Wo liegen Ihre Dokumente heute?",
     "enterTeamName": "Teamname eingeben",
     "getStarted": "Loslegen",

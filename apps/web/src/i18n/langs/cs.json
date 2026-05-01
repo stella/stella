@@ -70,6 +70,7 @@
   },
   "auth": {
     "chooseOrganization": "Vyberte organizaci, ve které chcete pracovat",
+    "codeSentAgain": "Poslali jsme nový kód.",
     "continueWithEmail": "Pokračovat",
     "continueWithGoogle": "Pokračovat přes Google",
     "continueWithMicrosoft": "Pokračovat přes Microsoft",
@@ -90,11 +91,13 @@
     "orSignInWithEmail": "nebo se přihlaste e-mailem",
     "organizationNamePlaceholder": "Moje organizace",
     "rateLimitExceeded": "Příliš mnoho pokusů. Zkuste to prosím později.",
+    "resendCode": "Poslat kód znovu",
     "selectOrganization": "Vyberte organizaci",
     "signIn": "Přihlásit se",
     "signInBeforeInvitation": "Pro přijetí pozvánky do organizace se musíte nejprve přihlásit.",
     "signInWithEmail": "Přihlásit se e-mailem",
     "subtitle": "Dokumenty, judikatura i revize pod kontrolou. S pomocí AI.",
+    "useDifferentEmail": "Použít jiný e-mail",
     "weSentCodeTo": "Odeslali jsme kód na {email}"
   },
   "billing": {
@@ -956,7 +959,7 @@
     "dmsNoCommitment": "Můžete začít i bez jakéhokoliv importu dat.",
     "dmsNone": "Začínám od začátku",
     "dmsPlaceholder": "Hledejte nebo napište název DMS...",
-    "dmsSubtitle": "Pomůžeme vám s přenosem.",
+    "dmsSubtitle": "Pomůže nám to určit priority pro budoucí možnosti synchronizace.",
     "dmsTitle": "Kde současně máte své dokumenty?",
     "enterTeamName": "Zadejte výše název týmu",
     "getStarted": "Začít",

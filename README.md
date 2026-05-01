@@ -21,9 +21,7 @@
 
 ---
 
-Stella is an open-source workspace for legal teams. Matters, documents, search — free forever. AI-powered review and research — paid by usage. No lock-in, no per-seat licensing, no hidden pricing.
-
-Currently in beta.
+Stella is an open-source workspace for legal teams, currently in beta.
 
 ## Features
 
@@ -31,28 +29,30 @@ Currently in beta.
 deadlines, parties and related documents in one place.
 
 **Documents.** Store, search and manage files across your organization.
-Full-text search, versioning and granular access control included. Free
-forever.
+Full-text search, versioning and granular access control included.
 
-**Review.** Analyze thousands of files at scale. Tabular Review pulls
-structured data from documents using basic prompts or more complex
-logical extensions. Built for due diligence, discovery and research.
+**Review.** Analyze files at scale. Tabular Review pulls structured data from documents,
+built for due diligence, discovery and research.
 
-**Research.** Find relevant laws, cases or doctrinal materials. Research
-Agent searches external sources and returns what you need with
-references.
+**Research.** Find relevant laws, cases or doctrinal materials, with a database of
+legal sources, premium reading experience and connection to AI.
+
+**Anonymization.** Remove personally identifiable information from documents and data
+before they are sent to AI or shared with external parties.
 
 ## Quickstart
 
+### stella Cloud
+
+Hosted stella available at [stll.app](https://stll.app).
+
 ### Prerequisites
 
-- Bun 1.3.12
+- Bun
 - Git
 - Docker Desktop or Docker Engine
 
-For hosted Stella, register at [stll.app](https://stll.app).
-
-### Run Stella locally
+### Run stella locally
 
 ```bash
 git clone https://github.com/stella/stella.git
@@ -96,18 +96,16 @@ Local development uses mock AI by default. To use real AI, set provider keys in
 
 ## Responsible use
 
-The legal profession has ethical obligations that predate software by
-centuries. We design around them from the start.
-
-Stella relies on AI models, which can produce incorrect or misleading
-output. AI-powered flows are grounded by citations and traceable to
-source material, but we encourage users to always validate the answers.
+Stella does not aim to replace human judgment or provide legal advice. Stella relies
+on AI models, which can produce incorrect or misleading output. We aim to ground AI
+flows in citations and traceable source material, but we encourage users to
+always validate the answers.
 
 ## Contributing
 
-We welcome contributions. You can help not only by writing code, but also by providing
-feedback, or translating. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for more
-information and our policy on AI-generated contributions.
+We welcome contributions. You can help not only by writing code, but also, e.g., by
+providing feedback, or translating. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for
+more information and our policy on AI-generated contributions.
 
 PRs must pass the linting and testing pipeline. You will be prompted
 to sign the Contributor License Agreement (CLA) by CI.
@@ -121,11 +119,7 @@ to sign the Contributor License Agreement (CLA) by CI.
 
 ## Licensing
 
-Dual-licensed:
-
-1. **AGPL v3** — open-source use. See [LICENSE](LICENSE).
-2. **Commercial** — for proprietary use cases where the AGPL is not
-   appropriate. Contact [hello@stll.app](mailto:hello@stll.app).
+Licensed under the AGPL v3. See [LICENSE](LICENSE) for details.
 
 ## Development
 
@@ -137,4 +131,3 @@ Dual-licensed:
 - [Stella Desktop App](/apps/desktop/README.md)
 - [Stella Landing Site](/apps/landing/README.md)
 - [Stella API](/apps/api/README.md)
-- [InfoSoud SDK](/packages/infosoud/README.md)

@@ -56,6 +56,35 @@ function OTP() {
   const [otp, setOtp] = useState("");
   const invalidateSession = useInvalidateSession();
 
+  const resendOtp = useMutation({
+    mutationFn: async () => {
+      const { error } = await authClient.emailOtp.sendVerificationOtp({
+        email,
+        type: "sign-in",
+      });
+
+      if (error) {
+        toastManager.add({
+          title:
+            error.status === HTTP_TOO_MANY_REQUESTS
+              ? t("auth.rateLimitExceeded")
+              : (error.message ?? t("errors.actionFailed")),
+          type: "error",
+        });
+        throw toAuthClientError(error);
+      }
+
+      setOtp("");
+      toastManager.add({
+        title: t("auth.codeSentAgain"),
+        type: "success",
+      });
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+
   const verifyOtp = useMutation({
     mutationFn: async ({
       email: emailArg,
@@ -143,6 +172,31 @@ function OTP() {
         >
           {t("common.verify")}
         </Button>
+        <div className="mt-3 flex flex-col gap-1">
+          <Button
+            className="w-full"
+            disabled={verifyOtp.isPending || resendOtp.isPending}
+            loading={resendOtp.isPending}
+            onClick={() => resendOtp.mutate()}
+            variant="ghost"
+          >
+            {t("auth.resendCode")}
+          </Button>
+          <Button
+            className="w-full"
+            disabled={verifyOtp.isPending || resendOtp.isPending}
+            onClick={() => {
+              void navigate({
+                to: "/auth",
+                search: { redirectTo },
+                replace: true,
+              });
+            }}
+            variant="ghost"
+          >
+            {t("auth.useDifferentEmail")}
+          </Button>
+        </div>
       </FramePanel>
     </Frame>
   );

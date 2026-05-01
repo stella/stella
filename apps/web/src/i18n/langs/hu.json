@@ -70,6 +70,7 @@
   },
   "auth": {
     "chooseOrganization": "Válassza ki a szervezetet, amelyben dolgozni szeretne",
+    "codeSentAgain": "Új kódot küldtünk.",
     "continueWithEmail": "Tovább",
     "continueWithGoogle": "Folytatás Google-lel",
     "continueWithMicrosoft": "Folytatás Microsofttal",
@@ -90,11 +91,13 @@
     "orSignInWithEmail": "vagy jelentkezz be e-maillel",
     "organizationNamePlaceholder": "Szervezetem",
     "rateLimitExceeded": "Túl sok próbálkozás. Kérjük, próbálja újra később.",
+    "resendCode": "Kód újraküldése",
     "selectOrganization": "Válasszon szervezetet",
     "signIn": "Bejelentkezés",
     "signInBeforeInvitation": "A szervezeti meghívó elfogadásához először be kell jelentkeznie.",
     "signInWithEmail": "Bejelentkezés e-mailben",
     "subtitle": "Dokumentumok, ítélkezési gyakorlat és felülvizsgálat kézben tartva. AI segítségével.",
+    "useDifferentEmail": "Másik e-mail-cím használata",
     "weSentCodeTo": "Kódot küldtünk a következő címre: {email}"
   },
   "billing": {
@@ -956,7 +959,7 @@
     "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
     "dmsNone": "Nulláról indulok",
     "dmsPlaceholder": "DMS keresése vagy beírása...",
-    "dmsSubtitle": "Segítünk az átvitelben.",
+    "dmsSubtitle": "Ez segít rangsorolni a lehetséges szinkronizálási opciókat.",
     "dmsTitle": "Hol vannak jelenleg a dokumentumai?",
     "enterTeamName": "Adja meg fent a csapat nevét",
     "getStarted": "Kezdés",

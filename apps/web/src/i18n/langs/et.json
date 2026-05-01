@@ -70,6 +70,7 @@
   },
   "auth": {
     "chooseOrganization": "Valige organisatsioon, milles soovite töötada",
+    "codeSentAgain": "Saatsime uue koodi.",
     "continueWithEmail": "Jätka",
     "continueWithGoogle": "Jätka Google'iga",
     "continueWithMicrosoft": "Jätka Microsoftiga",
@@ -90,11 +91,13 @@
     "orSignInWithEmail": "või logi sisse e-postiga",
     "organizationNamePlaceholder": "Minu organisatsioon",
     "rateLimitExceeded": "Liiga palju katseid. Palun proovige hiljem uuesti.",
+    "resendCode": "Saada kood uuesti",
     "selectOrganization": "Valige organisatsioon",
     "signIn": "Logi sisse",
     "signInBeforeInvitation": "Enne organisatsiooni kutse vastuvõtmist peate sisse logima.",
     "signInWithEmail": "Logi sisse e-postiga",
     "subtitle": "Dokumendid, kohtupraktika ja ülevaatus kontrolli all. Tehisintellekti abiga.",
+    "useDifferentEmail": "Kasuta teist e-posti aadressi",
     "weSentCodeTo": "Saatsime koodi aadressile {email}"
   },
   "billing": {
@@ -956,7 +959,7 @@
     "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
     "dmsNone": "Alustan nullist",
     "dmsPlaceholder": "Otsige või sisestage oma DMS...",
-    "dmsSubtitle": "Aitame teil andmed üle tuua.",
+    "dmsSubtitle": "See aitab meil võimalikke sünkroonimisvõimalusi prioriseerida.",
     "dmsTitle": "Kus on teie dokumendid praegu?",
     "enterTeamName": "Sisestage ülal meeskonna nimi",
     "getStarted": "Alusta",
