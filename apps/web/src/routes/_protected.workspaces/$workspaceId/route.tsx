@@ -137,10 +137,6 @@ function RouteComponent() {
     from: "/_protected/workspaces/$workspaceId/timesheets",
     shouldThrow: false,
   });
-  const analyticsMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/analytics",
-    shouldThrow: false,
-  });
   const invoicesMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId/invoices",
     shouldThrow: false,
@@ -165,10 +161,10 @@ function RouteComponent() {
   // The right-side inspector pane (file viewers + chat tabs) is
   // mounted at the protected layout level (`_protected.tsx`) so
   // its mount survives matter→matter switches without flinching.
-  // Timesheets, analytics, invoices, and entity detail bypass the
+  // Timesheets, invoices, and entity detail bypass the
   // DropZone (they have their own layouts), but the inspector
   // pane is still available everywhere inside a workspace.
-  if (timesheetsMatch || analyticsMatch || invoicesMatch || entityDetailMatch) {
+  if (timesheetsMatch || invoicesMatch || entityDetailMatch) {
     return <Outlet />;
   }
 

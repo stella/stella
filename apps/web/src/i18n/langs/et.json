@@ -19,23 +19,6 @@
       "timezoneSaved": "Ajavöönd uuendatud"
     }
   },
-  "analytics": {
-    "billedAmount": "Arveldatud summa",
-    "billedHours": "Arveldatud tunnid",
-    "entries": "Kirjed",
-    "hoursByMatter": "Tunnid asja järgi",
-    "hoursByPeriod": "Tunnid perioodi järgi",
-    "hoursByUser": "Tunnid kasutaja järgi",
-    "invalidDateRange": "Alguskuupäev on lõppkuupäevast hilisem",
-    "last30Days": "Viimased 30 päeva",
-    "last7Days": "Viimased 7 päeva",
-    "last90Days": "Viimased 90 päeva",
-    "noData": "Selle perioodi kohta andmed puuduvad",
-    "revenueByPeriod": "Tulu perioodi järgi",
-    "thisMonth": "See kuu",
-    "totalHours": "Tunnid kokku",
-    "utilization": "Kasutusaste"
-  },
   "anonymize": {
     "addEntity": "Lisa olem",
     "checkAnonymization": "Check anonymisation",
@@ -363,9 +346,7 @@
       "displayDocument": "Dokumendi kuvamine",
       "execute-typescript": "Running TypeScript",
       "list-entities": "Listed entities",
-      "list-templates": "Listing templates",
       "load-skill": "Loading skill",
-      "read-clause": "Reading clause",
       "read-contact": "Reading contact",
       "read-content": "Read content",
       "read-content-across-matters": "Reading document from another matter",
@@ -468,7 +449,6 @@
     "actions": "Toimingud",
     "add": "Lisa",
     "all": "Kõik",
-    "analytics": "Analüütika",
     "cancel": "Tühista",
     "caseLaw": "Kohtupraktika",
     "category": "Kategooria",
@@ -885,14 +865,6 @@
   },
   "knowledge": {
     "sections": {
-      "agents": {
-        "description": "Autonoomsed agendid õiguslike töövoogude jaoks",
-        "title": "Agendid"
-      },
-      "analytics": {
-        "description": "Malli kasutus- ja täitmisstatistika",
-        "title": "Analüütika"
-      },
       "caseLaw": {
         "description": "Kohtulahendid erinevatest jurisdiktsioonidest",
         "title": "Kohtupraktika"
@@ -917,7 +889,6 @@
   },
   "navigation": {
     "account": "Konto",
-    "agents": "Agendid",
     "calendar": "Kalender",
     "chat": "Vestlus",
     "chatAlreadyOpen": "Vestlus on juba avatud",
@@ -1170,22 +1141,6 @@
     "subtasks": "Alamülesanded",
     "title": "Ülesanded",
     "untitled": "Pealkirjata ülesanne"
-  },
-  "templateAnalytics": {
-    "errorRate": "Veamäär",
-    "fills": "Täitmised",
-    "fillsByPeriod": "Täitmised aja jooksul",
-    "fillsByUser": "Täitmised kasutaja järgi",
-    "last30Days": "30 päeva",
-    "last7Days": "7 päeva",
-    "last90Days": "90 päeva",
-    "noData": "Selle perioodi kohta andmed puuduvad",
-    "pdfRatio": "PDF-eksportimised",
-    "template": "Mall",
-    "title": "Malli analüütika",
-    "topTemplates": "Enim kasutatud mallid",
-    "totalFills": "Täitmisi kokku",
-    "uniqueTemplates": "Kasutatud mallid"
   },
   "templates": {
     "addItem": "Lisa element",

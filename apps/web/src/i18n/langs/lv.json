@@ -19,23 +19,6 @@
       "timezoneSaved": "Laika josla atjaunināta"
     }
   },
-  "analytics": {
-    "billedAmount": "Rēķinā iekļautā summa",
-    "billedHours": "Rēķinā iekļautās stundas",
-    "entries": "Ieraksti",
-    "hoursByMatter": "Stundas pēc lietas",
-    "hoursByPeriod": "Stundas pēc perioda",
-    "hoursByUser": "Stundas pēc lietotāja",
-    "invalidDateRange": "Sākuma datums ir pēc beigu datuma",
-    "last30Days": "Pēdējās 30 dienas",
-    "last7Days": "Pēdējās 7 dienas",
-    "last90Days": "Pēdējās 90 dienas",
-    "noData": "Nav datu šim periodam",
-    "revenueByPeriod": "Ieņēmumi pēc perioda",
-    "thisMonth": "Šis mēnesis",
-    "totalHours": "Kopējās stundas",
-    "utilization": "Noslogojums"
-  },
   "anonymize": {
     "addEntity": "Pievienot entītiju",
     "checkAnonymization": "Check anonymisation",
@@ -363,9 +346,7 @@
       "displayDocument": "Dokumenta skatīšana",
       "execute-typescript": "Running TypeScript",
       "list-entities": "Listed entities",
-      "list-templates": "Listing templates",
       "load-skill": "Loading skill",
-      "read-clause": "Reading clause",
       "read-contact": "Reading contact",
       "read-content": "Read content",
       "read-content-across-matters": "Reading document from another matter",
@@ -468,7 +449,6 @@
     "actions": "Darbības",
     "add": "Pievienot",
     "all": "Visi",
-    "analytics": "Analītika",
     "cancel": "Atcelt",
     "caseLaw": "Tiesu prakse",
     "category": "Kategorija",
@@ -885,14 +865,6 @@
   },
   "knowledge": {
     "sections": {
-      "agents": {
-        "description": "Autonomi aģenti juridiskajām darbplūsmām",
-        "title": "Aģenti"
-      },
-      "analytics": {
-        "description": "Veidņu lietošanas un aizpildīšanas statistika",
-        "title": "Analītika"
-      },
       "caseLaw": {
         "description": "Tiesas lēmumi no dažādām jurisdikcijām",
         "title": "Tiesu prakse"
@@ -917,7 +889,6 @@
   },
   "navigation": {
     "account": "Konts",
-    "agents": "Aģenti",
     "calendar": "Kalendārs",
     "chat": "Tērzēšana",
     "chatAlreadyOpen": "Saruna jau ir atvērta",
@@ -1170,22 +1141,6 @@
     "subtasks": "Apakšuzdevumi",
     "title": "Uzdevumi",
     "untitled": "Uzdevums bez nosaukuma"
-  },
-  "templateAnalytics": {
-    "errorRate": "Kļūdu biežums",
-    "fills": "Aizpildījumi",
-    "fillsByPeriod": "Aizpildījumi laika gaitā",
-    "fillsByUser": "Aizpildījumi pēc lietotāja",
-    "last30Days": "30 days",
-    "last7Days": "7 days",
-    "last90Days": "90 days",
-    "noData": "Nav datu šajā periodā",
-    "pdfRatio": "PDF eksporti",
-    "template": "Veidne",
-    "title": "Veidņu analītika",
-    "topTemplates": "Visbiežāk izmantotās veidnes",
-    "totalFills": "Kopā aizpildījumi",
-    "uniqueTemplates": "Izmantotas veidnes"
   },
   "templates": {
     "addItem": "Pievienot vienību",

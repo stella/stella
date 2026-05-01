@@ -61,10 +61,6 @@
     "apps/landing": {
       "entry": ["src/**/*.astro", "astro.config.*"]
     },
-    "packages/extension": {
-      "entry": ["src/entrypoints/**/*.{ts,tsx}", "wxt.config.ts"],
-      "ignoreDependencies": ["@wxt-dev/module-react"]
-    },
     "packages/permissions": {
       "entry": ["src/index.ts"]
     },

@@ -1,13 +1,6 @@
 import { cn } from "@stll/ui/lib/utils";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  BarChart3Icon,
-  LandmarkIcon,
-  LayoutTemplateIcon,
-  LightbulbIcon,
-  PlugIcon,
-  TextQuoteIcon,
-} from "lucide-react";
+import { LandmarkIcon, LightbulbIcon, PlugIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -16,26 +9,13 @@ export const Route = createFileRoute("/_protected/knowledge/")({
 });
 
 type KnowledgeSection = {
-  key:
-    | "templates"
-    | "clauses"
-    | "analytics"
-    | "caseLaw"
-    | "skills"
-    | "connectors";
+  key: "caseLaw" | "skills" | "connectors";
   icon: LucideIcon;
-  to?:
-    | "/knowledge/templates"
-    | "/knowledge/clauses"
-    | "/knowledge/analytics"
-    | "/knowledge/case";
+  to?: "/knowledge/case";
 };
 
 export const knowledgeSections: readonly KnowledgeSection[] = [
-  { key: "templates", icon: LayoutTemplateIcon, to: "/knowledge/templates" },
-  { key: "clauses", icon: TextQuoteIcon, to: "/knowledge/clauses" },
   { key: "caseLaw", icon: LandmarkIcon, to: "/knowledge/case" },
-  { key: "analytics", icon: BarChart3Icon, to: "/knowledge/analytics" },
   { key: "skills", icon: LightbulbIcon },
   { key: "connectors", icon: PlugIcon },
 ];

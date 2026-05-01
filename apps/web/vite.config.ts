@@ -45,9 +45,6 @@ export default defineConfig(({ mode }) => {
             if (id.includes("node_modules/@napi-rs/wasm-runtime")) {
               return "wasm-vendor";
             }
-            if (id.includes("node_modules/recharts")) {
-              return "vendor-charts";
-            }
             if (id.includes("node_modules/cytoscape")) {
               return "vendor-graphs";
             }

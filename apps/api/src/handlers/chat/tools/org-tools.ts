@@ -9,7 +9,6 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
-import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
@@ -212,88 +211,6 @@ export const createOrgTools = ({
         organizationName: contact.organizationName,
         emails: contact.emails ?? [],
         phones: contact.phones ?? [],
-      };
-    },
-  }),
-
-  "list-templates": tool({
-    description: "List available document templates.",
-    inputSchema: valibotSchema(
-      v.strictObject({
-        query: v.optional(
-          v.pipe(v.string(), v.description("Filter by name (substring match)")),
-        ),
-        limit: v.optional(
-          v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(50)),
-          20,
-        ),
-      }),
-    ),
-    execute: async ({ query, limit }) => {
-      const templates = await scopedDb((tx) =>
-        tx.query.templates.findMany({
-          where: {
-            organizationId: { eq: organizationId },
-            ...(query ? { name: { ilike: `%${escapeLike(query)}%` } } : {}),
-          },
-          columns: {
-            id: true,
-            name: true,
-            fileName: true,
-            createdAt: true,
-          },
-          limit,
-          orderBy: { createdAt: "desc" },
-        }),
-      );
-
-      return templates.map((t) => ({
-        templateId: t.id,
-        name: t.name,
-        fileName: t.fileName,
-        createdAt: t.createdAt.toISOString(),
-      }));
-    },
-  }),
-
-  "read-clause": tool({
-    description: "Read a legal clause including its full text body.",
-    inputSchema: valibotSchema(
-      v.strictObject({
-        clauseId: idSchema("The clause ID to read"),
-      }),
-    ),
-    execute: async (input) => {
-      const clauseId = toSafeId<"clause">(input.clauseId);
-
-      const clause = await scopedDb((tx) =>
-        tx.query.clauses.findFirst({
-          where: {
-            id: { eq: clauseId },
-            organizationId: { eq: organizationId },
-          },
-          columns: {
-            id: true,
-            title: true,
-            language: true,
-            description: true,
-            body: true,
-            currentVersion: true,
-          },
-        }),
-      );
-
-      if (!clause) {
-        throw new ChatToolError({ message: "Clause not found" });
-      }
-
-      return {
-        clauseId: clause.id,
-        title: clause.title,
-        language: clause.language,
-        description: clause.description,
-        version: clause.currentVersion,
-        body: clause.body,
       };
     },
   }),

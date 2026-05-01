@@ -22,23 +22,6 @@ type Messages = {
       "timezoneSaved": "Timezone updated";
     };
   };
-  "analytics": {
-    "billedAmount": "Billed amount";
-    "billedHours": "Billed hours";
-    "entries": "Entries";
-    "hoursByMatter": "Hours by matter";
-    "hoursByPeriod": "Hours by period";
-    "hoursByUser": "Hours by user";
-    "invalidDateRange": "Start date is after end date";
-    "last30Days": "Last 30 days";
-    "last7Days": "Last 7 days";
-    "last90Days": "Last 90 days";
-    "noData": "No data for this period";
-    "revenueByPeriod": "Revenue by period";
-    "thisMonth": "This month";
-    "totalHours": "Total hours";
-    "utilization": "Utilization";
-  };
   "anonymize": {
     "addEntity": "Add entity";
     "checkAnonymization": "Check anonymization";
@@ -366,9 +349,7 @@ type Messages = {
       "displayDocument": "Viewing document";
       "execute-typescript": "Running TypeScript";
       "list-entities": "Browsing documents";
-      "list-templates": "Listing templates";
       "load-skill": "Loading skill";
-      "read-clause": "Reading clause";
       "read-contact": "Reading contact";
       "read-content": "Reading content";
       "read-content-across-matters": "Reading document from another matter";
@@ -471,7 +452,6 @@ type Messages = {
     "actions": "Actions";
     "add": "Add";
     "all": "All";
-    "analytics": "Analytics";
     "cancel": "Cancel";
     "caseLaw": "Case Law";
     "category": "Category";
@@ -888,14 +868,6 @@ type Messages = {
   };
   "knowledge": {
     "sections": {
-      "agents": {
-        "description": "Autonomous agents for legal workflows";
-        "title": "Agents";
-      };
-      "analytics": {
-        "description": "Template usage and fill statistics";
-        "title": "Analytics";
-      };
       "caseLaw": {
         "description": "Court decisions and case law database";
         "title": "Case Law";
@@ -920,7 +892,6 @@ type Messages = {
   };
   "navigation": {
     "account": "Account";
-    "agents": "Agents";
     "calendar": "Calendar";
     "chat": "Chat";
     "chatAlreadyOpen": "Chat is already open";
@@ -1173,22 +1144,6 @@ type Messages = {
     "subtasks": "Subtasks";
     "title": "Tasks";
     "untitled": "Untitled task";
-  };
-  "templateAnalytics": {
-    "errorRate": "Error rate";
-    "fills": "Fills";
-    "fillsByPeriod": "Fills over time";
-    "fillsByUser": "Fills by user";
-    "last30Days": "30 days";
-    "last7Days": "7 days";
-    "last90Days": "90 days";
-    "noData": "No data for this period";
-    "pdfRatio": "PDF exports";
-    "template": "Template";
-    "title": "Template Analytics";
-    "topTemplates": "Most used templates";
-    "totalFills": "Total fills";
-    "uniqueTemplates": "Templates used";
   };
   "templates": {
     "addItem": "Add item";

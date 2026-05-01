@@ -33,7 +33,6 @@ import { Route as ProtectedOrganizationMembersRouteImport } from './routes/_prot
 import { Route as ProtectedOrganizationInvitationsRouteImport } from './routes/_protected.organization/invitations'
 import { Route as ProtectedKnowledgeTemplatesRouteImport } from './routes/_protected.knowledge/templates'
 import { Route as ProtectedKnowledgeClausesRouteImport } from './routes/_protected.knowledge/clauses'
-import { Route as ProtectedKnowledgeAnalyticsRouteImport } from './routes/_protected.knowledge/analytics'
 import { Route as ProtectedContactsContactIdRouteImport } from './routes/_protected.contacts/$contactId'
 import { Route as ProtectedChatThreadIdRouteImport } from './routes/_protected.chat/$threadId'
 import { Route as ProtectedAccountSettingsRouteImport } from './routes/_protected.account/settings'
@@ -45,7 +44,6 @@ import { Route as ProtectedKnowledgeCaseIndexRouteImport } from './routes/_prote
 import { Route as ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport } from './routes/_protected.workspaces/$workspaceId/timesheets'
 import { Route as ProtectedWorkspacesWorkspaceIdInvoicesRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices'
 import { Route as ProtectedWorkspacesWorkspaceIdExpensesRouteImport } from './routes/_protected.workspaces/$workspaceId/expenses'
-import { Route as ProtectedWorkspacesWorkspaceIdAnalyticsRouteImport } from './routes/_protected.workspaces/$workspaceId/analytics'
 import { Route as ProtectedKnowledgeCaseDecisionIdRouteImport } from './routes/_protected.knowledge/case/$decisionId'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.route'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.index'
@@ -180,12 +178,6 @@ const ProtectedKnowledgeClausesRoute =
     path: '/clauses',
     getParentRoute: () => ProtectedKnowledgeRouteRoute,
   } as any)
-const ProtectedKnowledgeAnalyticsRoute =
-  ProtectedKnowledgeAnalyticsRouteImport.update({
-    id: '/analytics',
-    path: '/analytics',
-    getParentRoute: () => ProtectedKnowledgeRouteRoute,
-  } as any)
 const ProtectedContactsContactIdRoute =
   ProtectedContactsContactIdRouteImport.update({
     id: '/contacts/$contactId',
@@ -251,12 +243,6 @@ const ProtectedWorkspacesWorkspaceIdExpensesRoute =
     path: '/expenses',
     getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
   } as any)
-const ProtectedWorkspacesWorkspaceIdAnalyticsRoute =
-  ProtectedWorkspacesWorkspaceIdAnalyticsRouteImport.update({
-    id: '/analytics',
-    path: '/analytics',
-    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
-  } as any)
 const ProtectedKnowledgeCaseDecisionIdRoute =
   ProtectedKnowledgeCaseDecisionIdRouteImport.update({
     id: '/$decisionId',
@@ -319,7 +305,6 @@ export interface FileRoutesByFullPath {
   '/account/settings': typeof ProtectedAccountSettingsRoute
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
-  '/knowledge/analytics': typeof ProtectedKnowledgeAnalyticsRoute
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/organization/invitations': typeof ProtectedOrganizationInvitationsRoute
@@ -333,7 +318,6 @@ export interface FileRoutesByFullPath {
   '/workspaces/': typeof ProtectedWorkspacesIndexRoute
   '/workspaces/$workspaceId/$viewId': typeof ProtectedWorkspacesWorkspaceIdViewIdRouteRouteWithChildren
   '/knowledge/case/$decisionId': typeof ProtectedKnowledgeCaseDecisionIdRoute
-  '/workspaces/$workspaceId/analytics': typeof ProtectedWorkspacesWorkspaceIdAnalyticsRoute
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
   '/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
@@ -359,7 +343,6 @@ export interface FileRoutesByTo {
   '/account/settings': typeof ProtectedAccountSettingsRoute
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
-  '/knowledge/analytics': typeof ProtectedKnowledgeAnalyticsRoute
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/organization/invitations': typeof ProtectedOrganizationInvitationsRoute
@@ -372,7 +355,6 @@ export interface FileRoutesByTo {
   '/todos': typeof ProtectedTodosIndexRoute
   '/workspaces': typeof ProtectedWorkspacesIndexRoute
   '/knowledge/case/$decisionId': typeof ProtectedKnowledgeCaseDecisionIdRoute
-  '/workspaces/$workspaceId/analytics': typeof ProtectedWorkspacesWorkspaceIdAnalyticsRoute
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
   '/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
@@ -405,7 +387,6 @@ export interface FileRoutesById {
   '/_protected/account/settings': typeof ProtectedAccountSettingsRoute
   '/_protected/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/_protected/contacts/$contactId': typeof ProtectedContactsContactIdRoute
-  '/_protected/knowledge/analytics': typeof ProtectedKnowledgeAnalyticsRoute
   '/_protected/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/_protected/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/_protected/organization/invitations': typeof ProtectedOrganizationInvitationsRoute
@@ -419,7 +400,6 @@ export interface FileRoutesById {
   '/_protected/workspaces/': typeof ProtectedWorkspacesIndexRoute
   '/_protected/workspaces/$workspaceId/$viewId': typeof ProtectedWorkspacesWorkspaceIdViewIdRouteRouteWithChildren
   '/_protected/knowledge/case/$decisionId': typeof ProtectedKnowledgeCaseDecisionIdRoute
-  '/_protected/workspaces/$workspaceId/analytics': typeof ProtectedWorkspacesWorkspaceIdAnalyticsRoute
   '/_protected/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/_protected/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
   '/_protected/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
@@ -452,7 +432,6 @@ export interface FileRouteTypes {
     | '/account/settings'
     | '/chat/$threadId'
     | '/contacts/$contactId'
-    | '/knowledge/analytics'
     | '/knowledge/clauses'
     | '/knowledge/templates'
     | '/organization/invitations'
@@ -466,7 +445,6 @@ export interface FileRouteTypes {
     | '/workspaces/'
     | '/workspaces/$workspaceId/$viewId'
     | '/knowledge/case/$decisionId'
-    | '/workspaces/$workspaceId/analytics'
     | '/workspaces/$workspaceId/expenses'
     | '/workspaces/$workspaceId/invoices'
     | '/workspaces/$workspaceId/timesheets'
@@ -492,7 +470,6 @@ export interface FileRouteTypes {
     | '/account/settings'
     | '/chat/$threadId'
     | '/contacts/$contactId'
-    | '/knowledge/analytics'
     | '/knowledge/clauses'
     | '/knowledge/templates'
     | '/organization/invitations'
@@ -505,7 +482,6 @@ export interface FileRouteTypes {
     | '/todos'
     | '/workspaces'
     | '/knowledge/case/$decisionId'
-    | '/workspaces/$workspaceId/analytics'
     | '/workspaces/$workspaceId/expenses'
     | '/workspaces/$workspaceId/invoices'
     | '/workspaces/$workspaceId/timesheets'
@@ -537,7 +513,6 @@ export interface FileRouteTypes {
     | '/_protected/account/settings'
     | '/_protected/chat/$threadId'
     | '/_protected/contacts/$contactId'
-    | '/_protected/knowledge/analytics'
     | '/_protected/knowledge/clauses'
     | '/_protected/knowledge/templates'
     | '/_protected/organization/invitations'
@@ -551,7 +526,6 @@ export interface FileRouteTypes {
     | '/_protected/workspaces/'
     | '/_protected/workspaces/$workspaceId/$viewId'
     | '/_protected/knowledge/case/$decisionId'
-    | '/_protected/workspaces/$workspaceId/analytics'
     | '/_protected/workspaces/$workspaceId/expenses'
     | '/_protected/workspaces/$workspaceId/invoices'
     | '/_protected/workspaces/$workspaceId/timesheets'
@@ -743,13 +717,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedKnowledgeClausesRouteImport
       parentRoute: typeof ProtectedKnowledgeRouteRoute
     }
-    '/_protected/knowledge/analytics': {
-      id: '/_protected/knowledge/analytics'
-      path: '/analytics'
-      fullPath: '/knowledge/analytics'
-      preLoaderRoute: typeof ProtectedKnowledgeAnalyticsRouteImport
-      parentRoute: typeof ProtectedKnowledgeRouteRoute
-    }
     '/_protected/contacts/$contactId': {
       id: '/_protected/contacts/$contactId'
       path: '/contacts/$contactId'
@@ -825,13 +792,6 @@ declare module '@tanstack/react-router' {
       path: '/expenses'
       fullPath: '/workspaces/$workspaceId/expenses'
       preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdExpensesRouteImport
-      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
-    }
-    '/_protected/workspaces/$workspaceId/analytics': {
-      id: '/_protected/workspaces/$workspaceId/analytics'
-      path: '/analytics'
-      fullPath: '/workspaces/$workspaceId/analytics'
-      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdAnalyticsRouteImport
       parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
     }
     '/_protected/knowledge/case/$decisionId': {
@@ -954,7 +914,6 @@ const ProtectedKnowledgeCaseRouteRouteWithChildren =
 
 interface ProtectedKnowledgeRouteRouteChildren {
   ProtectedKnowledgeCaseRouteRoute: typeof ProtectedKnowledgeCaseRouteRouteWithChildren
-  ProtectedKnowledgeAnalyticsRoute: typeof ProtectedKnowledgeAnalyticsRoute
   ProtectedKnowledgeClausesRoute: typeof ProtectedKnowledgeClausesRoute
   ProtectedKnowledgeTemplatesRoute: typeof ProtectedKnowledgeTemplatesRoute
   ProtectedKnowledgeIndexRoute: typeof ProtectedKnowledgeIndexRoute
@@ -964,7 +923,6 @@ const ProtectedKnowledgeRouteRouteChildren: ProtectedKnowledgeRouteRouteChildren
   {
     ProtectedKnowledgeCaseRouteRoute:
       ProtectedKnowledgeCaseRouteRouteWithChildren,
-    ProtectedKnowledgeAnalyticsRoute: ProtectedKnowledgeAnalyticsRoute,
     ProtectedKnowledgeClausesRoute: ProtectedKnowledgeClausesRoute,
     ProtectedKnowledgeTemplatesRoute: ProtectedKnowledgeTemplatesRoute,
     ProtectedKnowledgeIndexRoute: ProtectedKnowledgeIndexRoute,
@@ -1027,7 +985,6 @@ const ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren =
 
 interface ProtectedWorkspacesWorkspaceIdRouteRouteChildren {
   ProtectedWorkspacesWorkspaceIdViewIdRouteRoute: typeof ProtectedWorkspacesWorkspaceIdViewIdRouteRouteWithChildren
-  ProtectedWorkspacesWorkspaceIdAnalyticsRoute: typeof ProtectedWorkspacesWorkspaceIdAnalyticsRoute
   ProtectedWorkspacesWorkspaceIdExpensesRoute: typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   ProtectedWorkspacesWorkspaceIdInvoicesRoute: typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
   ProtectedWorkspacesWorkspaceIdTimesheetsRoute: typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
@@ -1039,8 +996,6 @@ const ProtectedWorkspacesWorkspaceIdRouteRouteChildren: ProtectedWorkspacesWorks
   {
     ProtectedWorkspacesWorkspaceIdViewIdRouteRoute:
       ProtectedWorkspacesWorkspaceIdViewIdRouteRouteWithChildren,
-    ProtectedWorkspacesWorkspaceIdAnalyticsRoute:
-      ProtectedWorkspacesWorkspaceIdAnalyticsRoute,
     ProtectedWorkspacesWorkspaceIdExpensesRoute:
       ProtectedWorkspacesWorkspaceIdExpensesRoute,
     ProtectedWorkspacesWorkspaceIdInvoicesRoute:

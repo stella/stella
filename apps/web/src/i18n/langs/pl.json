@@ -19,23 +19,6 @@
       "timezoneSaved": "Strefa czasowa zaktualizowana"
     }
   },
-  "analytics": {
-    "billedAmount": "Kwota rozliczona",
-    "billedHours": "Godziny rozliczone",
-    "entries": "Wpisy",
-    "hoursByMatter": "Godziny według sprawy",
-    "hoursByPeriod": "Godziny według okresu",
-    "hoursByUser": "Godziny według użytkownika",
-    "invalidDateRange": "Data początkowa jest późniejsza niż data końcowa",
-    "last30Days": "Ostatnie 30 dni",
-    "last7Days": "Ostatnie 7 dni",
-    "last90Days": "Ostatnie 90 dni",
-    "noData": "Brak danych za ten okres",
-    "revenueByPeriod": "Przychody według okresu",
-    "thisMonth": "Ten miesiąc",
-    "totalHours": "Łączne godziny",
-    "utilization": "Wykorzystanie"
-  },
   "anonymize": {
     "addEntity": "Dodaj podmiot",
     "checkAnonymization": "Check anonymisation",
@@ -363,9 +346,7 @@
       "displayDocument": "Wyświetlanie dokumentu",
       "execute-typescript": "Running TypeScript",
       "list-entities": "Wylistowano elementy",
-      "list-templates": "Listing templates",
       "load-skill": "Loading skill",
-      "read-clause": "Reading clause",
       "read-contact": "Reading contact",
       "read-content": "Odczytano treść",
       "read-content-across-matters": "Reading document from another matter",
@@ -468,7 +449,6 @@
     "actions": "Akcje",
     "add": "Dodaj",
     "all": "Wszystkie",
-    "analytics": "Analityka",
     "cancel": "Anuluj",
     "caseLaw": "Orzecznictwo",
     "category": "Kategoria",
@@ -885,14 +865,6 @@
   },
   "knowledge": {
     "sections": {
-      "agents": {
-        "description": "Autonomiczni agenci dla procesów prawnych",
-        "title": "Agenci"
-      },
-      "analytics": {
-        "description": "Statystyki użycia i wypełnienia szablonów",
-        "title": "Analityka"
-      },
       "caseLaw": {
         "description": "Orzeczenia sądowe i baza orzecznictwa",
         "title": "Orzecznictwo"
@@ -917,7 +889,6 @@
   },
   "navigation": {
     "account": "Konto",
-    "agents": "Agenci",
     "calendar": "Kalendarz",
     "chat": "Czat",
     "chatAlreadyOpen": "Czat jest już otwarty",
@@ -1170,22 +1141,6 @@
     "subtasks": "Podzadania",
     "title": "Zadania",
     "untitled": "Zadanie bez tytułu"
-  },
-  "templateAnalytics": {
-    "errorRate": "Wskaźnik błędów",
-    "fills": "Wypełnienia",
-    "fillsByPeriod": "Wypełnienia w czasie",
-    "fillsByUser": "Wypełnienia według użytkownika",
-    "last30Days": "30 dni",
-    "last7Days": "7 dni",
-    "last90Days": "90 dni",
-    "noData": "Brak danych za ten okres",
-    "pdfRatio": "Eksporty PDF",
-    "template": "Szablon",
-    "title": "Analityka szablonów",
-    "topTemplates": "Najczęściej używane szablony",
-    "totalFills": "Łącznie wypełnień",
-    "uniqueTemplates": "Użyte szablony"
   },
   "templates": {
     "addItem": "Dodaj element",
