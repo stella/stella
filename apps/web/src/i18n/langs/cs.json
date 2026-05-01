@@ -288,10 +288,6 @@
       "toastDescription": "Celostránkový chat bude k dispozici s perzistentními vlákny.",
       "toastTitle": "Celý pohled zatím není dostupný"
     },
-    "actionPrint": {
-      "toastDescription": "Tisk chatu bude k dispozici s perzistentními vlákny.",
-      "toastTitle": "Tisk zatím není dostupný"
-    },
     "approval": {
       "allow": "Povolit",
       "alwaysAllow": "Vždy povolit v tomto vlákně",

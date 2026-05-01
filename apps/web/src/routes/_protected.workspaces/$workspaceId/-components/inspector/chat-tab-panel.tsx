@@ -19,10 +19,9 @@ import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 
 import { Button } from "@stll/ui/components/button";
-import { toastManager } from "@stll/ui/components/toast";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowUpIcon, Maximize2Icon, PrinterIcon } from "lucide-react";
+import { ArrowUpIcon, Maximize2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
@@ -66,7 +65,6 @@ export const ChatTabPanel = ({
   // under a matter) or global (chat lives at /chat/$threadId).
   // Use the tab's own workspaceId — undefined means global.
   const tabWorkspaceId = tab.workspaceId;
-  const t = useTranslations();
   const userContext = useChatUserContext();
   // useEffectEvent so the chat transport's `getUserContext` is a
   // stable reference across renders (matches legacy chat's pattern
@@ -199,13 +197,6 @@ export const ChatTabPanel = ({
       onClose={onClose}
       onLabelContextMenu={onLabelContextMenu}
       onMoveToMain={moveToMain}
-      onPrint={() => {
-        toastManager.add({
-          title: t("chat.actionPrint.toastTitle"),
-          description: t("chat.actionPrint.toastDescription"),
-          type: "info",
-        });
-      }}
       onSetContext={(next) => setChatContext(tab.id, next)}
       onStartRename={startRename}
       rename={{
@@ -303,7 +294,6 @@ type ChatTabPanelChromeProps = {
     onCommit: () => void;
     onCancel: () => void;
   };
-  onPrint: () => void;
   onMoveToMain?: (() => void) | undefined;
   onSetContext: (matterIds: string[]) => void;
   children: React.ReactNode;
@@ -325,7 +315,6 @@ const ChatTabPanelChrome = ({
   onLabelContextMenu,
   onStartRename,
   rename,
-  onPrint,
   onMoveToMain,
   onSetContext,
   children,
@@ -333,14 +322,6 @@ const ChatTabPanelChrome = ({
   const t = useTranslations();
   const actions = (
     <>
-      <Tooltip
-        content={t("common.print")}
-        render={
-          <Button onClick={onPrint} size="icon-xs" variant="ghost">
-            <PrinterIcon className="size-3.5" />
-          </Button>
-        }
-      />
       {onMoveToMain && (
         <Tooltip
           content={t("chat.moveToMain")}
@@ -435,7 +416,6 @@ export const ChatTabPanelShell = ({ tab }: { tab: ChatTab }) => {
       onClose={noop}
       onLabelContextMenu={noop}
       onMoveToMain={noop}
-      onPrint={noop}
       onSetContext={noop}
       onStartRename={noop}
       rename={{

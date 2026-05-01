@@ -288,10 +288,6 @@
       "toastDescription": "Pełnoekranowy czat zostanie udostępniony wraz z zapisanymi wątkami.",
       "toastTitle": "Pełny widok niedostępny"
     },
-    "actionPrint": {
-      "toastDescription": "Drukowanie czatu zostanie udostępnione wraz z zapisanymi wątkami.",
-      "toastTitle": "Drukowanie niedostępne"
-    },
     "approval": {
       "allow": "Zezwól",
       "alwaysAllow": "Zawsze zezwalaj w tym wątku",

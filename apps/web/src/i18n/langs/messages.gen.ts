@@ -291,10 +291,6 @@ type Messages = {
       "toastDescription": "Full-page chat lands with persisted threads.";
       "toastTitle": "Full view not yet available";
     };
-    "actionPrint": {
-      "toastDescription": "Chat printing lands with persisted threads.";
-      "toastTitle": "Printing not yet available";
-    };
     "approval": {
       "allow": "Allow";
       "alwaysAllow": "Always allow in this thread";
