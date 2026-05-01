@@ -115,7 +115,14 @@ export function FootnotePropertiesDialog({
   const sectionCls = "mb-4 rounded border p-3";
 
   return (
-    <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+        }
+      }}
+    >
       <DialogPortal>
         <DialogBackdrop className="fixed inset-0 z-[10000] bg-black/50" />
         <DialogPopup className="bg-popover fixed start-1/2 top-1/2 z-[10001] w-full max-w-[500px] min-w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-lg border shadow-xl">

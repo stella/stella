@@ -681,8 +681,9 @@ const TemplateDetail = ({
                   aria-label={t("templates.templateName")}
                   className="h-8 text-lg font-semibold"
                   disabled={rename.saving}
-                  // eslint-disable-next-line typescript/no-misused-promises
-                  onBlur={saveRename}
+                  onBlur={() => {
+                    void saveRename();
+                  }}
                   onChange={(e) =>
                     renameDispatch({ type: "setDraft", value: e.target.value })
                   }
@@ -799,8 +800,9 @@ const TemplateDetail = ({
                     </Button>
                     <Button
                       disabled={fieldEdit.saving}
-                      // eslint-disable-next-line typescript/no-misused-promises
-                      onClick={saveFields}
+                      onClick={() => {
+                        void saveFields();
+                      }}
                       size="sm"
                     >
                       {t("common.save")}

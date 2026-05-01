@@ -390,7 +390,9 @@ export const CreateMatterDialog = () => {
                 autoFocus={!selectedClient}
                 inputRef={clientInputRef}
                 invalid={clientInvalid}
-                onCreate={handleCreateClient}
+                onCreate={(...args) => {
+                  void handleCreateClient(...args);
+                }}
                 onSelect={(contact) => {
                   setSelectedClient({
                     id: contact.id,

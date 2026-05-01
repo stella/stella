@@ -538,7 +538,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
             }}
             onDrop={(entityId) => handleDrop(value, entityId)}
             // eslint-disable-next-line typescript/no-misused-promises
-            onFileUpload={async (files) => await handleFileUpload(value, files)}
+            onFileUpload={(files) => {
+              void (async () => await handleFileUpload(value, files))();
+            }}
             onHideColumn={
               value !== null ? () => handleHideColumn(value) : undefined
             }

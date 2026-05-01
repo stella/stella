@@ -278,7 +278,14 @@ export function HyperlinkDialog({
   const hintCls = "text-muted-foreground mt-1 text-xs";
 
   return (
-    <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+        }
+      }}
+    >
       <DialogPortal>
         <DialogBackdrop className="fixed inset-0 z-[10000] bg-black/50" />
         <DialogPopup

@@ -7,7 +7,7 @@ describe("prefetchNonCriticalQuery", () => {
   test("reports errors through onError", async () => {
     const queryClient = new QueryClient();
     const expectedError = new Error("boom");
-    const onError = mock((error: unknown) => error);
+    const onError = mock((_error: unknown): void => {});
 
     await prefetchNonCriticalQuery(
       queryClient,
@@ -25,7 +25,7 @@ describe("prefetchNonCriticalQuery", () => {
 
   test("does not report successful prefetches", async () => {
     const queryClient = new QueryClient();
-    const onError = mock((error: unknown) => error);
+    const onError = mock((_error: unknown): void => {});
 
     await prefetchNonCriticalQuery(
       queryClient,

@@ -3333,7 +3333,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               hasSelection={contextMenu.hasSelection}
               isEditable={!readOnly}
               items={contextMenuItems}
-              onAction={handleContextMenuAction}
+              onAction={(action) => {
+                void handleContextMenuAction(action);
+              }}
               onClose={handleContextMenuClose}
             />
 

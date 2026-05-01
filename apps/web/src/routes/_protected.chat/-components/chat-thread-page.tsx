@@ -107,7 +107,9 @@ export const ChatThreadPage = ({
         {isGenerating && (
           <Button
             aria-label={t("common.cancel")}
-            onClick={async () => await stop()}
+            onClick={() => {
+              void (async () => await stop())();
+            }}
             size="icon-sm"
             variant="outline"
           >

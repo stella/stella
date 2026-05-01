@@ -253,51 +253,53 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
     <Popover
       modal={true}
       // eslint-disable-next-line typescript/no-misused-promises
-      onOpenChange={async (open) => {
-        if (open || !form.state.isDirty) {
-          setIsOpen(open);
-          return;
-        }
-
-        const toolType = form.state.values.tool.type;
-
-        if (toolType === "ai-model") {
-          const properties = await queryClient.ensureQueryData(
-            propertiesOptions(workspaceId),
-          );
-
-          const dependencies = form.getFieldValue("tool.dependencies") ?? [];
-
-          const result = validatePropertyInputs({
-            currentPropertyId: id,
-            currentInputs: dependencies.map(
-              (dependency) => dependency.dependsOnPropertyId,
-            ),
-            properties,
-          });
-
-          if (Result.isError(result)) {
-            form.setErrorMap({
-              onSubmit: {
-                fields: {
-                  "tool.prompt": t("workspaces.properties.referencesItself"),
-                },
-              },
-            });
-
+      onOpenChange={(open) => {
+        void (async () => {
+          if (open || !form.state.isDirty) {
+            setIsOpen(open);
             return;
           }
-        }
 
-        const errors = await form.validate("submit");
+          const toolType = form.state.values.tool.type;
 
-        if (Object.keys(errors).length > 0) {
-          return;
-        }
+          if (toolType === "ai-model") {
+            const properties = await queryClient.ensureQueryData(
+              propertiesOptions(workspaceId),
+            );
 
-        // eslint-disable-next-line typescript/no-floating-promises
-        form.handleSubmit();
-        setIsOpen(open);
+            const dependencies = form.getFieldValue("tool.dependencies") ?? [];
+
+            const result = validatePropertyInputs({
+              currentPropertyId: id,
+              currentInputs: dependencies.map(
+                (dependency) => dependency.dependsOnPropertyId,
+              ),
+              properties,
+            });
+
+            if (Result.isError(result)) {
+              form.setErrorMap({
+                onSubmit: {
+                  fields: {
+                    "tool.prompt": t("workspaces.properties.referencesItself"),
+                  },
+                },
+              });
+
+              return;
+            }
+          }
+
+          const errors = await form.validate("submit");
+
+          if (Object.keys(errors).length > 0) {
+            return;
+          }
+
+          // eslint-disable-next-line typescript/no-floating-promises
+          form.handleSubmit();
+          setIsOpen(open);
+        })();
       }}
       open={isOpen}
     >

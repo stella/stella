@@ -32,7 +32,7 @@ export const DecisionFilters = ({
 
   /** Update a single filter key, omitting it when empty. */
   const updateFilter = useCallback(
-    <K extends keyof DecisionListFilters>(key: K, value: string | null) => {
+    (key: keyof DecisionListFilters, value: string | null) => {
       const { [key]: _, ...rest } = filters;
       const trimmed = value || undefined;
       onFiltersChange({

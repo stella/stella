@@ -276,7 +276,9 @@ const ThreadGroup = ({
             <Button
               aria-label={`${heading}-${thread.title}`}
               className="me-1 opacity-0 group-hover:opacity-100"
-              onClick={async () => await onDelete(thread.ref)}
+              onClick={() => {
+                void (async () => await onDelete(thread.ref))();
+              }}
               size="icon-sm"
               variant="ghost"
             >

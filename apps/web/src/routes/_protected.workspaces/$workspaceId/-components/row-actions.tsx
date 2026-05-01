@@ -465,15 +465,21 @@ export const RowActions = ({
           />
         )}
         {canOpenInDesktop && (
-          // eslint-disable-next-line typescript/no-misused-promises
-          <MenuItem onClick={handleOpenInDesktop}>
+          <MenuItem
+            onClick={() => {
+              void handleOpenInDesktop();
+            }}
+          >
             <LaptopIcon />
             {t("workspaces.files.desktopEdit.action")}
           </MenuItem>
         )}
         {isLockedByOther && (
-          // eslint-disable-next-line typescript/no-misused-promises
-          <MenuItem onClick={handleReleaseLock}>
+          <MenuItem
+            onClick={() => {
+              void handleReleaseLock();
+            }}
+          >
             <LockOpenIcon />
             {t("workspaces.files.desktopEdit.releaseLock")}
           </MenuItem>
@@ -497,8 +503,11 @@ export const RowActions = ({
 
         {/* --- File operations --- */}
         {hasAnyFile && (isBulk || !hasPdfConversion) && (
-          // eslint-disable-next-line typescript/no-misused-promises
-          <MenuItem onClick={async () => await handleDownload()}>
+          <MenuItem
+            onClick={() => {
+              void handleDownload();
+            }}
+          >
             <DownloadIcon />
             {t("common.download")}
           </MenuItem>
@@ -530,14 +539,20 @@ export const RowActions = ({
           </MenuSub>
         )}
         {hasAnyFolder && (
-          // eslint-disable-next-line typescript/no-misused-promises
-          <MenuItem onClick={handleZipDownload}>
+          <MenuItem
+            onClick={() => {
+              void handleZipDownload();
+            }}
+          >
             <ArchiveIcon />
             {t("workspaces.files.downloadAsZip")}
           </MenuItem>
         )}
-        {/* eslint-disable-next-line typescript/no-misused-promises */}
-        <MenuItem onClick={handleDuplicate}>
+        <MenuItem
+          onClick={() => {
+            void handleDuplicate();
+          }}
+        >
           <CopyIcon />
           {t("common.duplicate")}
         </MenuItem>

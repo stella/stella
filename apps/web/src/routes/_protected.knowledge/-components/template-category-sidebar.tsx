@@ -228,8 +228,9 @@ const CategoryRow = ({
             </AlertDialogClose>
             <Button
               disabled={deleting}
-              // eslint-disable-next-line typescript/no-misused-promises
-              onClick={handleDelete}
+              onClick={() => {
+                void handleDelete();
+              }}
               variant="destructive"
             >
               {t("common.delete")}
@@ -354,8 +355,12 @@ const CategoryFormDialog = ({
           <DialogClose render={<Button variant="ghost" />}>
             {t("common.cancel")}
           </DialogClose>
-          {/* eslint-disable-next-line typescript/no-misused-promises */}
-          <Button disabled={saving || !name.trim()} onClick={handleSave}>
+          <Button
+            disabled={saving || !name.trim()}
+            onClick={() => {
+              void handleSave();
+            }}
+          >
             {t("common.save")}
           </Button>
         </DialogFooter>

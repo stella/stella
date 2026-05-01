@@ -72,9 +72,9 @@ const readList = <T>(
   }
 };
 
-const writeList = <T>(
+const writeList = (
   key: string,
-  items: readonly T[],
+  items: readonly unknown[],
   storage: Storage | null = getStorage(),
 ): void => {
   if (!storage) {

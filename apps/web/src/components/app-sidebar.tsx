@@ -744,25 +744,27 @@ const MatterItem = ({
                       },
                     )
                   }
-                  onCopyLink={async () => {
-                    try {
-                      const url = `${window.location.origin}/workspaces/${ws.id}`;
-                      await navigator.clipboard.writeText(url);
-                      toastManager.add({
-                        title: t("common.copied"),
-                        type: "success",
-                      });
-                    } catch {
-                      toastManager.add({
-                        title: t("errors.actionFailed"),
-                        type: "error",
-                      });
-                    }
+                  onCopyLink={() => {
+                    void (async () => {
+                      try {
+                        const url = `${window.location.origin}/workspaces/${ws.id}`;
+                        await navigator.clipboard.writeText(url);
+                        toastManager.add({
+                          title: t("common.copied"),
+                          type: "success",
+                        });
+                      } catch {
+                        toastManager.add({
+                          title: t("errors.actionFailed"),
+                          type: "error",
+                        });
+                      }
+                    })();
                   }}
                   onDelete={() => onDelete(ws.id)}
-                  onOpenInNewTab={() =>
-                    window.open(`/workspaces/${ws.id}`, "_blank")
-                  }
+                  onOpenInNewTab={() => {
+                    void window.open(`/workspaces/${ws.id}`, "_blank");
+                  }}
                   onRename={() => {
                     setRenameValue(ws.name);
                     setIsRenaming(true);
@@ -905,18 +907,19 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
     deleteWorkspace.mutate(
       { workspaceId },
       {
-        // eslint-disable-next-line typescript/no-misused-promises
-        onSuccess: async () => {
+        onSuccess: () => {
           toastManager.update(toastId, {
             title: t("success.workspaceDeletedSuccessfully"),
             type: "success",
           });
-          await queryClient.invalidateQueries({
-            queryKey: workspacesKeys.all,
-          });
-          if (workspaceMatch?.params.workspaceId === workspaceId) {
-            await navigate({ to: "/workspaces" });
-          }
+          void (async () => {
+            await queryClient.invalidateQueries({
+              queryKey: workspacesKeys.all,
+            });
+            if (workspaceMatch?.params.workspaceId === workspaceId) {
+              await navigate({ to: "/workspaces" });
+            }
+          })();
         },
         onError: () => {
           toastManager.update(toastId, {
@@ -936,10 +939,9 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
     handleCreateWorkspace();
   });
 
-  // eslint-disable-next-line typescript/no-misused-promises
-  useHotkey(HOTKEYS.TOGGLE_TIME_TRACKING, async () => {
+  useHotkey(HOTKEYS.TOGGLE_TIME_TRACKING, () => {
     if (currentWorkspaceId) {
-      await navigate({
+      void navigate({
         to: `/workspaces/${currentWorkspaceId}/timesheets`,
       });
     }
@@ -1007,12 +1009,12 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
   const recentMatterAction = (ws: MatterIdentity): ContextAction => ({
     label: ws.name,
     icon: <MatterIcon color={ws.color} id={ws.id} />,
-    // eslint-disable-next-line typescript/no-misused-promises
-    onClick: async () =>
-      await navigate({
+    onClick: () => {
+      void navigate({
         to: "/workspaces/$workspaceId",
         params: { workspaceId: ws.id },
-      }),
+      });
+    },
   });
 
   const openChat = () => {
@@ -1047,8 +1049,9 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
       },
     },
     {
-      // eslint-disable-next-line typescript/no-misused-promises
-      action: async () => await navigate({ to: "/workspaces" }),
+      action: () => {
+        void navigate({ to: "/workspaces" });
+      },
       contextMenu: {
         primaryAction: {
           label: t("navigation.newMatter"),
@@ -1059,8 +1062,9 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
       },
     },
     {
-      // eslint-disable-next-line typescript/no-misused-promises
-      action: async () => await navigate({ to: "/knowledge" }),
+      action: () => {
+        void navigate({ to: "/knowledge" });
+      },
       contextMenu: {
         recents: knowledgeSections
           .filter(
@@ -1072,17 +1076,17 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
             return {
               label: t(`knowledge.sections.${s.key}.title`),
               icon: <Icon />,
-              // eslint-disable-next-line typescript/no-misused-promises
-              onClick: async () => await navigate({ to: s.to }),
+              onClick: () => {
+                void navigate({ to: s.to });
+              },
             };
           }),
       },
     },
     {
-      // eslint-disable-next-line typescript/no-misused-promises
-      action: async () => {
+      action: () => {
         if (currentWorkspaceId) {
-          await navigate({
+          void navigate({
             to: "/workspaces/$workspaceId/timesheets",
             params: { workspaceId: currentWorkspaceId },
           });
@@ -1093,12 +1097,12 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
             primaryAction: {
               label: t("navigation.timeTracking"),
               icon: <ClockIcon />,
-              // eslint-disable-next-line typescript/no-misused-promises
-              onClick: async () =>
-                await navigate({
+              onClick: () => {
+                void navigate({
                   to: "/workspaces/$workspaceId/timesheets",
                   params: { workspaceId: currentWorkspaceId },
-                }),
+                });
+              },
             },
           }
         : {},
@@ -1109,12 +1113,12 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
     ...fixedNavTargets,
     ...pinned.slice(0, 3).map(
       (ws): NavTarget => ({
-        // eslint-disable-next-line typescript/no-misused-promises
-        action: async () =>
-          await navigate({
+        action: () => {
+          void navigate({
             to: "/workspaces/$workspaceId",
             params: { workspaceId: ws.id },
-          }),
+          });
+        },
       }),
     ),
   ];
@@ -1387,9 +1391,8 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                 {managementRoles.includes(role) && (
                   <>
                     <MenuItem
-                      // eslint-disable-next-line typescript/no-misused-promises
-                      onClick={async () => {
-                        await navigate({
+                      onClick={() => {
+                        void navigate({
                           to: "/organization/members",
                         });
                       }}
@@ -1398,9 +1401,8 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                       {t("navigation.members")}
                     </MenuItem>
                     <MenuItem
-                      // eslint-disable-next-line typescript/no-misused-promises
-                      onClick={async () => {
-                        await navigate({
+                      onClick={() => {
+                        void navigate({
                           to: "/organization/invitations",
                         });
                       }}
@@ -1412,9 +1414,8 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                   </>
                 )}
                 <MenuItem
-                  // eslint-disable-next-line typescript/no-misused-promises
-                  onClick={async () => {
-                    await navigate({
+                  onClick={() => {
+                    void navigate({
                       to: "/contacts",
                     });
                   }}
@@ -1489,9 +1490,8 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                   </MenuSubPopup>
                 </MenuSub>
                 <MenuItem
-                  // eslint-disable-next-line typescript/no-misused-promises
-                  onClick={async () => {
-                    await navigate({
+                  onClick={() => {
+                    void navigate({
                       to: "/account/settings",
                     });
                   }}
@@ -1500,9 +1500,8 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                   {t("common.settings")}
                 </MenuItem>
                 <MenuItem
-                  // eslint-disable-next-line typescript/no-misused-promises
-                  onClick={async () => {
-                    await navigate({
+                  onClick={() => {
+                    void navigate({
                       to: "/account/sessions",
                     });
                   }}

@@ -176,8 +176,13 @@ export const ClauseList = ({
                 {t("clauses.import")}
               </Button>
             )}
-            {/* eslint-disable-next-line typescript/no-misused-promises */}
-            <Button onClick={handleExport} size="sm" variant="outline">
+            <Button
+              onClick={() => {
+                void handleExport();
+              }}
+              size="sm"
+              variant="outline"
+            >
               <DownloadIcon />
               {t("clauses.export")}
             </Button>
@@ -460,8 +465,9 @@ const CategoryRow = ({
             </AlertDialogClose>
             <Button
               disabled={deleting}
-              // eslint-disable-next-line typescript/no-misused-promises
-              onClick={handleDelete}
+              onClick={() => {
+                void handleDelete();
+              }}
               variant="destructive"
             >
               {t("common.delete")}
@@ -582,8 +588,12 @@ const CategoryFormDialog = ({
           <DialogClose render={<Button variant="ghost" />}>
             {t("common.cancel")}
           </DialogClose>
-          {/* eslint-disable-next-line typescript/no-misused-promises */}
-          <Button disabled={saving || !name.trim()} onClick={handleSave}>
+          <Button
+            disabled={saving || !name.trim()}
+            onClick={() => {
+              void handleSave();
+            }}
+          >
             {t("common.save")}
           </Button>
         </DialogFooter>

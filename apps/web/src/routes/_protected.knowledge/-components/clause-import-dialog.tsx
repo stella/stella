@@ -194,8 +194,12 @@ export const ClauseImportDialog = ({
             {t("common.cancel")}
           </DialogClose>
           {!result && (
-            // eslint-disable-next-line typescript/no-misused-promises
-            <Button disabled={!file || importing} onClick={handleImport}>
+            <Button
+              disabled={!file || importing}
+              onClick={() => {
+                void handleImport();
+              }}
+            >
               {importing ? t("clauses.importing") : t("clauses.import")}
             </Button>
           )}

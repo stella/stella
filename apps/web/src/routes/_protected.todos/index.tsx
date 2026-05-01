@@ -158,8 +158,10 @@ function MyTodosPage() {
                 <MenuItem
                   key={ws.id}
                   // eslint-disable-next-line typescript/no-misused-promises
-                  onClick={async () => {
-                    await handleCreateTask(ws.id);
+                  onClick={() => {
+                    void (async () => {
+                      await handleCreateTask(ws.id);
+                    })();
                   }}
                 >
                   {ws.name}
@@ -211,8 +213,10 @@ function MyTodosPage() {
                   <MenuItem
                     key={ws.id}
                     // eslint-disable-next-line typescript/no-misused-promises
-                    onClick={async () => {
-                      await handleCreateTask(ws.id);
+                    onClick={() => {
+                      void (async () => {
+                        await handleCreateTask(ws.id);
+                      })();
                     }}
                   >
                     {ws.name}

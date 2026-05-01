@@ -297,8 +297,9 @@ const TemplateRow = ({
               </AlertDialogClose>
               <Button
                 disabled={deleting}
-                // eslint-disable-next-line typescript/no-misused-promises
-                onClick={handleDelete}
+                onClick={() => {
+                  void handleDelete();
+                }}
                 variant="destructive"
               >
                 {t("common.delete")}

@@ -44,7 +44,9 @@ export const createPostHogAnalytics = (
   });
 
   const analytics: Analytics = {
-    capture: (event, properties) => posthog.capture(event, properties),
+    capture: (event, properties) => {
+      void posthog.capture(event, properties);
+    },
     captureError: (error) => {
       if (error instanceof CancelledError) {
         return;

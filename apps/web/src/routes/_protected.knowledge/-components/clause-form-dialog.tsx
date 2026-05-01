@@ -310,8 +310,12 @@ export const ClauseFormDialog = ({
           <DialogClose render={<Button variant="ghost" />}>
             {t("common.cancel")}
           </DialogClose>
-          {/* eslint-disable-next-line typescript/no-misused-promises */}
-          <Button disabled={saving || !form.title.trim()} onClick={handleSave}>
+          <Button
+            disabled={saving || !form.title.trim()}
+            onClick={() => {
+              void handleSave();
+            }}
+          >
             {t("common.save")}
           </Button>
         </DialogFooter>

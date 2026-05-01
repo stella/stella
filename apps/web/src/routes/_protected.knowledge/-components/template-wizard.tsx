@@ -209,7 +209,12 @@ export const ConfigureStep = ({
         )}
 
         {/* eslint-disable-next-line typescript/no-misused-promises */}
-        <form className="flex flex-col gap-5" onSubmit={handleSave}>
+        <form
+          className="flex flex-col gap-5"
+          onSubmit={(...args) => {
+            void handleSave(...args);
+          }}
+        >
           <Field>
             <FieldLabel>{t("templates.templateName")}</FieldLabel>
             <FieldControl

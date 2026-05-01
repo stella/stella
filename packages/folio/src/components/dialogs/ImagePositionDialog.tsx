@@ -130,7 +130,14 @@ export function ImagePositionDialog({
   const distLabelCls = "w-[45px] text-muted-foreground text-xs";
 
   return (
-    <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+        }
+      }}
+    >
       <DialogPortal>
         <DialogBackdrop className="fixed inset-0 z-[10000] bg-black/50" />
         <DialogPopup className="bg-popover fixed start-1/2 top-1/2 z-[10001] w-full max-w-[480px] min-w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-lg border shadow-xl">

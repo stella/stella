@@ -1048,8 +1048,9 @@ export const TemplateForm = ({
             {templateId && (
               <Button
                 disabled={loading || preview.kind === "loading"}
-                // eslint-disable-next-line typescript/no-misused-promises
-                onClick={handlePreview}
+                onClick={() => {
+                  void handlePreview();
+                }}
                 type="button"
                 variant="ghost"
               >
@@ -1061,9 +1062,9 @@ export const TemplateForm = ({
             )}
             <Button
               disabled={loading || hasErrors}
-              // TODO: fix this
-              // eslint-disable-next-line typescript/no-misused-promises no-empty-function
-              onClick={async () => await handleDownload("pdf").catch(() => {})}
+              onClick={() => {
+                void handleDownload("pdf").catch(() => undefined);
+              }}
               type="button"
               variant="outline"
             >

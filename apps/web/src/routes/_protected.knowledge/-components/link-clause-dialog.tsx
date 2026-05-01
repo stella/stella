@@ -227,8 +227,12 @@ export const LinkClauseDialog = ({
           <DialogClose render={<Button variant="ghost" />}>
             {t("common.cancel")}
           </DialogClose>
-          {/* eslint-disable-next-line typescript/no-misused-promises */}
-          <Button disabled={linking || !selectedClauseId} onClick={handleLink}>
+          <Button
+            disabled={linking || !selectedClauseId}
+            onClick={() => {
+              void handleLink();
+            }}
+          >
             {t("clauses.linkClause")}
           </Button>
         </DialogFooter>

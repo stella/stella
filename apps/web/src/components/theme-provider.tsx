@@ -28,9 +28,13 @@ type ThemeProviderState = {
 
 const initialState: ThemeProviderState = {
   theme: "system",
-  setTheme: () => "system",
+  setTheme: () => {
+    void "system";
+  },
   palette: "neutral",
-  setPalette: () => "neutral",
+  setPalette: () => {
+    void "neutral";
+  },
   resolvedTheme: "light",
 };
 

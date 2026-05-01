@@ -14,7 +14,7 @@
     "format": "echo 'no formatter configured'"
   },
   "dependencies": {
-    "@astrojs/react": "^5.0.3",
+    "@astrojs/react": "^5.0.4",
     "@astrojs/sitemap": "^3.7.2",
     "@stll/ui": "workspace:*",
     "@tailwindcss/vite": "catalog:",

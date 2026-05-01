@@ -247,19 +247,31 @@ export const DevSidebarGroup = () => {
           </MenuRadioGroup>
         </MenuGroup>
         <MenuSeparator />
-        {/* eslint-disable-next-line typescript/no-misused-promises */}
-        <MenuItem disabled={seeding} onClick={handleSeed}>
+        <MenuItem
+          disabled={seeding}
+          onClick={() => {
+            void handleSeed();
+          }}
+        >
           <DatabaseIcon />
           {seeding ? "Seeding..." : "Seed data"}
         </MenuItem>
-        {/* eslint-disable-next-line typescript/no-misused-promises */}
-        <MenuItem disabled={cleaning} onClick={handleClean}>
+        <MenuItem
+          disabled={cleaning}
+          onClick={() => {
+            void handleClean();
+          }}
+        >
           <Trash2Icon />
           {cleaning ? "Cleaning..." : "Clean data"}
         </MenuItem>
         <MenuSeparator />
-        {/* eslint-disable-next-line typescript/no-misused-promises */}
-        <MenuItem disabled={clearingCache} onClick={handleClearCache}>
+        <MenuItem
+          disabled={clearingCache}
+          onClick={() => {
+            void handleClearCache();
+          }}
+        >
           <RotateCcwIcon />
           {clearingCache ? "Clearing…" : "Clear cache"}
         </MenuItem>

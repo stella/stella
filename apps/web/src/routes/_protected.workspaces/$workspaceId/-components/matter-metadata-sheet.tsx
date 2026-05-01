@@ -123,12 +123,14 @@ export const MatterMetadataSheet = ({
           });
         },
         // eslint-disable-next-line typescript/no-misused-promises
-        onSuccess: async () => {
-          toastManager.update(toastId, {
-            title: t("success.workspaceDeletedSuccessfully"),
-            type: "success",
-          });
-          await navigate({ to: "/workspaces" });
+        onSuccess: () => {
+          void (async () => {
+            toastManager.update(toastId, {
+              title: t("success.workspaceDeletedSuccessfully"),
+              type: "success",
+            });
+            await navigate({ to: "/workspaces" });
+          })();
         },
       },
     );

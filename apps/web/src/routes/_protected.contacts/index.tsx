@@ -706,7 +706,9 @@ const CreateContactDialog = () => {
                           />
                           <Button
                             loading={isAresLoading}
-                            onClick={handleAresLookup}
+                            onClick={() => {
+                              void handleAresLookup();
+                            }}
                             type="button"
                             variant="outline"
                           >

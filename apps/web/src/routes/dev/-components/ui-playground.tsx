@@ -943,28 +943,34 @@ export function UiPlayground() {
                 title="Toast"
               >
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => toast.success("Saved")}>
+                  <Button
+                    onClick={() => {
+                      void toast.success("Saved");
+                    }}
+                  >
                     Success
                   </Button>
                   <Button
-                    onClick={() =>
-                      toast.error("Unable to save", {
+                    onClick={() => {
+                      void toast.error("Unable to save", {
                         description: "The server rejected the update.",
-                      })
-                    }
+                      });
+                    }}
                     variant="destructive-outline"
                   >
                     Error
                   </Button>
                   <Button
-                    onClick={() =>
-                      toast.warning("Missing approver", {
+                    onClick={() => {
+                      void toast.warning("Missing approver", {
                         action: {
                           label: "Assign",
-                          onClick: () => toast.info("Assignee picker opened"),
+                          onClick: () => {
+                            void toast.info("Assignee picker opened");
+                          },
                         },
-                      })
-                    }
+                      });
+                    }}
                     variant="outline"
                   >
                     Action
@@ -976,15 +982,15 @@ export function UiPlayground() {
                     Promise
                   </Button>
                   <Button
-                    onClick={() =>
-                      toast.info(
+                    onClick={() => {
+                      void toast.info(
                         "This is a deliberately long notification title that should wrap cleanly inside the toast viewport",
                         {
                           description:
                             "Descriptions should wrap without pushing the close button out of the toast.",
                         },
-                      )
-                    }
+                      );
+                    }}
                     variant="outline"
                   >
                     Long text

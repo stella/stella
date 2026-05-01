@@ -28,11 +28,21 @@ export const useDevStore = create<State & Actions>()(
       showToolCalls: false,
       reactGrab: false,
 
-      setTanstackDevtools: (tanstackDevtools) => set({ tanstackDevtools }),
-      setSourceInspector: (sourceInspector) => set({ sourceInspector }),
-      setChatModelId: (chatModelId) => set({ chatModelId }),
-      setShowToolCalls: (showToolCalls) => set({ showToolCalls }),
-      setReactGrab: (reactGrab) => set({ reactGrab }),
+      setTanstackDevtools: (tanstackDevtools) => {
+        void set({ tanstackDevtools });
+      },
+      setSourceInspector: (sourceInspector) => {
+        void set({ sourceInspector });
+      },
+      setChatModelId: (chatModelId) => {
+        void set({ chatModelId });
+      },
+      setShowToolCalls: (showToolCalls) => {
+        void set({ showToolCalls });
+      },
+      setReactGrab: (reactGrab) => {
+        void set({ reactGrab });
+      },
     }),
     {
       name: getStorageKey("dev"),

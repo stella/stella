@@ -641,7 +641,9 @@ export default function App() {
                 <div className="space-y-4 p-4">
                   <NotificationsPane
                     notificationPreferences={notificationPreferences}
-                    onPreferenceChange={handlePreferenceChange}
+                    onPreferenceChange={(preferenceKey, checked) => {
+                      void handlePreferenceChange(preferenceKey, checked);
+                    }}
                     ready={state !== null}
                   />
                 </div>
