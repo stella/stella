@@ -137,11 +137,13 @@ function convertBulletToUnicode(bulletChar: string): string {
  * @param paragraph - The paragraph to compute marker for
  * @param numbering - Numbering definitions
  * @param listCounters - Map tracking counters per numId
+ * @param abstractCounters - Map tracking latest counters per abstractNumId
  */
 function computeListMarker(
   paragraph: Paragraph,
   numbering: NumberingMap | null,
   listCounters: Map<number, number[]>,
+  abstractCounters: Map<number, number[]>,
 ): void {
   const listRendering = paragraph.listRendering;
   if (!listRendering || !numbering) {
@@ -163,12 +165,29 @@ function computeListMarker(
     return;
   }
 
+  const abstractNumId = numbering.getAbstractNumId(numId);
+  if (abstractNumId !== null && level > 0) {
+    const latestAbstractCounters = abstractCounters.get(abstractNumId);
+    const missingParentCounters = counters
+      .slice(0, level)
+      .every((value) => value === 0);
+    if (latestAbstractCounters && missingParentCounters) {
+      for (let i = 0; i < level; i += 1) {
+        counters[i] = latestAbstractCounters[i] ?? 0;
+      }
+    }
+  }
+
   // Increment counter at current level
   counters[level] = (counters[level] || 0) + 1;
 
   // Reset all deeper level counters when we go to a shallower level
   for (let i = level + 1; i < counters.length; i++) {
     counters[i] = 0;
+  }
+
+  if (abstractNumId !== null) {
+    abstractCounters.set(abstractNumId, [...counters]);
   }
 
   // Get the lvlText pattern (e.g., "%1.%2.%3.")
@@ -185,6 +204,9 @@ function computeListMarker(
 
   // Compute the actual marker by replacing %1, %2, etc.
   let computedMarker = pattern;
+  const currentLevelInfo = numbering.getLevel(numId, level);
+  const useLegalNumbering =
+    currentLevelInfo?.isLgl === true || listRendering.isLegal === true;
 
   // Replace %1, %2, etc. with actual counter values
   // Format each level according to its numFmt
@@ -193,7 +215,10 @@ function computeListMarker(
     if (computedMarker.includes(placeholder)) {
       const value = counters[lvl] ?? 0;
       const levelInfo = numbering.getLevel(numId, lvl);
-      const formatted = formatNumber(value, levelInfo?.numFmt || "decimal");
+      const formatted = formatNumber(
+        value,
+        useLegalNumbering ? "decimal" : levelInfo?.numFmt || "decimal",
+      );
       computedMarker = computedMarker.replace(placeholder, formatted);
     }
   }
@@ -488,6 +513,7 @@ function parseBlockContent(
   // Track list counters for computing markers
   // Map: numId -> array of counters for each level
   const listCounters = new Map<number, number[]>();
+  const abstractCounters = new Map<number, number[]>();
 
   for (const child of children) {
     const name = child.name ?? "";
@@ -513,7 +539,7 @@ function parseBlockContent(
         media,
       );
       // Compute list marker if this is a list item
-      computeListMarker(paragraph, numbering, listCounters);
+      computeListMarker(paragraph, numbering, listCounters, abstractCounters);
       content.push(paragraph);
     }
     // Table (w:tbl)

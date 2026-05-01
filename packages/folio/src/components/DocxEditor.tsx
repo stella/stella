@@ -24,6 +24,16 @@ import {
 import type { CSSProperties, ReactNode } from "react";
 
 import {
+  Menu,
+  MenuCheckboxItem,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import {
   Select as StSelect,
   SelectItem as StSelectItem,
   SelectPopup as StSelectPopup,
@@ -35,14 +45,17 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   EyeIcon,
-  MessageSquarePlusIcon,
   PenLineIcon,
+  SquarePenIcon,
+  StickyNoteIcon,
   XIcon,
 } from "lucide-react";
+import { Selection } from "prosemirror-state";
 // Paginated editor
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
+import type { DocxCompatibility } from "../core/docx/compatibility";
 import { repackDocx } from "../core/docx/rezip";
 import { attemptSelectiveSave } from "../core/docx/selectiveSave";
 // ProseMirror editor
@@ -150,6 +163,11 @@ import { useDocumentHistory } from "../hooks/useHistory";
 import { useTableSelection } from "../hooks/useTableSelection";
 import { PagedEditor } from "../paged-editor/PagedEditor";
 import type { PagedEditorRef } from "../paged-editor/PagedEditor";
+import {
+  clampCommentMarkRange,
+  resolveCommentCreationRange,
+} from "./commentAnchors";
+import type { CommentMarkRange } from "./commentAnchors";
 import { CommentsSidebar } from "./CommentsSidebar";
 import type { TrackedChangeEntry } from "./CommentsSidebar";
 import { useHyperlinkDialog } from "./dialogs/HyperlinkDialog";
@@ -330,6 +348,10 @@ export type DocxEditorProps = {
   mode?: EditorMode;
   /** Callback when the editing mode changes */
   onModeChange?: (mode: EditorMode) => void;
+  /** Callback when a readonly user action would mutate the document. */
+  onReadonlyEditAttempt?: () => void;
+  /** Callback with the parsed document's editing compatibility report. */
+  onCompatibilityChange?: (compatibility: DocxCompatibility) => void;
   /**
    * Fires when the live ProseMirror view is captured (or torn down).
    * The host wires this so it can drive the AI suggestion overlay
@@ -344,6 +366,8 @@ export type DocxEditorProps = {
 export type DocxEditorRef = {
   /** Get the current document */
   getDocument: () => Document | null;
+  /** Whether the live ProseMirror state has edits that have not been serialized. */
+  hasPendingChanges: () => boolean;
   /** Get the editor ref */
   getEditorRef: () => PagedEditorRef | null;
   /** Save the document to buffer. Pass { selective: false } to force full repack. */
@@ -428,6 +452,11 @@ let nextCommentId = Date.now();
 const PENDING_COMMENT_ID = -1;
 const EMPTY_ANCHOR_POSITIONS = new Map<string, number>();
 
+function getCommentAuthorKey(author?: string): string {
+  const trimmed = author?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : "Unknown";
+}
+
 /**
  * Find the Y position (relative to parentEl) of the element containing the given PM position.
  * Used by both the floating comment button and the context menu comment action.
@@ -453,11 +482,24 @@ function findSelectionYPosition(
     const pmEnd = Number(el.dataset["pmEnd"]);
     if (pmPos >= pmStart && pmPos <= pmEnd) {
       return (
-        el.getBoundingClientRect().top - parentEl.getBoundingClientRect().top
+        el.getBoundingClientRect().top -
+        scrollContainer.getBoundingClientRect().top +
+        scrollContainer.scrollTop
       );
     }
   }
   return null;
+}
+
+function getFallbackCommentYPosition(
+  scrollContainer: HTMLElement | null,
+): number {
+  if (!scrollContainer) {
+    return 80;
+  }
+  return (
+    scrollContainer.scrollTop + Math.max(80, scrollContainer.clientHeight / 3)
+  );
 }
 
 function createComment(
@@ -480,6 +522,55 @@ function createComment(
     ],
     ...(parentId !== undefined && { parentId }),
   };
+}
+
+function applyCommentMarkRange(
+  view: EditorView,
+  range: CommentMarkRange,
+  commentId: number,
+  options?: { replacePending?: boolean; selectEnd?: boolean },
+): boolean {
+  const commentMark = view.state.schema.marks["comment"];
+  const safeRange = clampCommentMarkRange(view.state.doc.content.size, range);
+  if (!commentMark || !safeRange) {
+    return false;
+  }
+
+  let tr = view.state.tr;
+  if (options?.replacePending) {
+    tr = tr.removeMark(safeRange.from, safeRange.to, commentMark);
+  }
+  tr = tr.addMark(
+    safeRange.from,
+    safeRange.to,
+    commentMark.create({ commentId }),
+  );
+
+  if (options?.selectEnd) {
+    tr = tr.setSelection(Selection.near(tr.doc.resolve(safeRange.to), -1));
+  }
+
+  view.dispatch(tr);
+  return true;
+}
+
+function removePendingCommentMarkRange(
+  view: EditorView,
+  range: CommentMarkRange,
+): void {
+  const commentMark = view.state.schema.marks["comment"];
+  const safeRange = clampCommentMarkRange(view.state.doc.content.size, range);
+  if (!commentMark || !safeRange) {
+    return;
+  }
+
+  view.dispatch(
+    view.state.tr.removeMark(
+      safeRange.from,
+      safeRange.to,
+      commentMark.create({ commentId: PENDING_COMMENT_ID }),
+    ),
+  );
 }
 
 /**
@@ -518,6 +609,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       onPaste: _onPaste,
       mode: modeProp,
       onModeChange,
+      onReadonlyEditAttempt,
+      onCompatibilityChange,
       onEditorViewReady,
     },
     ref,
@@ -553,7 +646,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
 
     // Comments sidebar state
     const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
+    const [visibleCommentAuthors, setVisibleCommentAuthors] =
+      useState<Set<string> | null>(null);
+    const [activeCommentId, setActiveCommentId] = useState<number | null>(null);
     const [comments, setComments] = useState<Comment[]>([]);
+    const commentsDirtyRef = useRef(false);
+    const commentsRef = useRef<Comment[]>([]);
+    commentsRef.current = comments;
     const [, setTrackedChanges] = useState<TrackedChangeEntry[]>([]);
     const [anchorPositions, setAnchorPositions] = useState<Map<string, number>>(
       EMPTY_ANCHOR_POSITIONS,
@@ -595,6 +694,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const [floatingCommentBtn, setFloatingCommentBtn] = useState<{
       top: number;
       left: number;
+      from: number;
+      to: number;
     } | null>(null);
 
     // Right-click context menu state
@@ -718,10 +819,71 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       const bodyComments = doc.package?.document?.comments;
       if (bodyComments && bodyComments.length > 0) {
         setComments(bodyComments);
+        setVisibleCommentAuthors(null);
+        setActiveCommentId(null);
         setShowCommentsSidebar(true);
         commentsLoadedRef.current = true;
       }
     }, [history.state]);
+
+    const commentAuthors = useMemo(() => {
+      const seen = new Set<string>();
+      const authors: string[] = [];
+      for (const comment of comments) {
+        const commentAuthor = getCommentAuthorKey(comment.author);
+        if (!seen.has(commentAuthor)) {
+          seen.add(commentAuthor);
+          authors.push(commentAuthor);
+        }
+      }
+      return authors;
+    }, [comments]);
+
+    const visibleCommentAuthorSet = useMemo(
+      () => visibleCommentAuthors ?? new Set(commentAuthors),
+      [visibleCommentAuthors, commentAuthors],
+    );
+
+    const visibleCommentIds = useMemo(() => {
+      const ids = new Set<number>([PENDING_COMMENT_ID]);
+      for (const comment of comments) {
+        if (visibleCommentAuthorSet.has(getCommentAuthorKey(comment.author))) {
+          ids.add(comment.id);
+        }
+      }
+      return ids;
+    }, [comments, visibleCommentAuthorSet]);
+
+    const visibleComments = useMemo(() => {
+      const visibleRootIds = new Set<number>();
+      for (const comment of comments) {
+        if (
+          comment.parentId === null ||
+          comment.parentId === undefined ||
+          !visibleCommentIds.has(comment.id)
+        ) {
+          continue;
+        }
+        visibleRootIds.add(comment.parentId);
+      }
+      return comments.filter((comment) => {
+        if (comment.parentId !== null && comment.parentId !== undefined) {
+          return visibleCommentIds.has(comment.id);
+        }
+        return (
+          visibleCommentIds.has(comment.id) || visibleRootIds.has(comment.id)
+        );
+      });
+    }, [comments, visibleCommentIds]);
+
+    const activeCommentVisible =
+      activeCommentId !== null && visibleCommentIds.has(activeCommentId);
+
+    useEffect(() => {
+      if (!activeCommentVisible) {
+        setActiveCommentId(null);
+      }
+    }, [activeCommentVisible]);
 
     // Extension manager — built once, provides schema + plugins + commands
     const extensionManager = useMemo(() => {
@@ -806,6 +968,63 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       size: 4,
       color: { rgb: "000000" },
     });
+
+    const syncCommentHighlightStyles = useCallback(() => {
+      const root = editorContentRef.current;
+      if (!root) {
+        return;
+      }
+
+      const nodes = root.querySelectorAll<HTMLElement>(
+        ".layout-run-text[data-comment-id], .docx-comment[data-comment-id]",
+      );
+      for (const node of nodes) {
+        const commentId = Number.parseInt(node.dataset["commentId"] ?? "", 10);
+        const isPending = commentId === PENDING_COMMENT_ID;
+        const isVisible = isPending || visibleCommentIds.has(commentId);
+        if (!isVisible) {
+          node.style.backgroundColor = "transparent";
+          node.style.borderBottom = "2px solid transparent";
+          node.style.boxShadow = "none";
+          delete node.dataset["activeComment"];
+          continue;
+        }
+
+        if (activeCommentId === commentId) {
+          node.style.backgroundColor =
+            "var(--doc-comment-active-bg, rgba(255, 212, 0, 0.22))";
+          node.style.borderBottom =
+            "1px solid var(--doc-comment-active-border, rgba(180, 130, 0, 0.62))";
+          node.style.boxShadow = "none";
+          node.dataset["activeComment"] = "true";
+          continue;
+        }
+
+        node.style.backgroundColor =
+          "var(--doc-comment-bg, rgba(255, 212, 0, 0.08))";
+        node.style.borderBottom =
+          "1px solid var(--doc-comment-border, rgba(180, 130, 0, 0.24))";
+        node.style.boxShadow = "none";
+        delete node.dataset["activeComment"];
+      }
+    }, [visibleCommentIds, activeCommentId]);
+
+    useLayoutEffect(() => {
+      syncCommentHighlightStyles();
+    }, [syncCommentHighlightStyles, anchorPositions]);
+
+    useEffect(() => {
+      syncCommentHighlightStyles();
+      const firstFrame = requestAnimationFrame(() => {
+        syncCommentHighlightStyles();
+        requestAnimationFrame(syncCommentHighlightStyles);
+      });
+      const timeout = setTimeout(syncCommentHighlightStyles, 120);
+      return () => {
+        cancelAnimationFrame(firstFrame);
+        clearTimeout(timeout);
+      };
+    }, [comments.length, syncCommentHighlightStyles]);
     // Cache style resolver to avoid recreating on every selection change
     const styleResolverCacheRef = useRef<{
       styles: unknown;
@@ -1081,11 +1300,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         initialDocument: initialDocument ?? null,
         history,
         onError,
+        onCompatibilityChange,
         onReset: useCallback(() => {
+          commentsDirtyRef.current = false;
           commentsLoadedRef.current = false;
           trackedChangesLoadedRef.current = false;
           setComments([]);
           setTrackedChanges([]);
+          setVisibleCommentAuthors(null);
+          setActiveCommentId(null);
           setHeadingInfos([]);
           setShowCommentsSidebar(false);
           setIsAddingComment(false);
@@ -1179,8 +1402,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     // Handle document change
     const handleDocumentChange = useCallback(
       (newDocument: Document) => {
-        pushDocument(newDocument);
-        onChange?.(newDocument);
+        const currentComments = commentsRef.current;
+        const documentWithComments = structuredClone(newDocument);
+        documentWithComments.package.document.comments = currentComments;
+        pushDocument(documentWithComments);
+        onChange?.(documentWithComments);
         // Update outline headings if sidebar is open
         if (showOutlineRef.current) {
           const view = pagedEditorRef.current?.getView();
@@ -1205,6 +1431,43 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         extractTrackedChanges,
         refreshBodyHistoryAvailability,
       ],
+    );
+
+    const buildCurrentDocument = useCallback(() => {
+      if (!history.state) {
+        return null;
+      }
+
+      const doc = structuredClone(history.state);
+      const pmDoc = pagedEditorRef.current?.getDocument();
+      if (pmDoc?.package?.document) {
+        doc.package.document.content = pmDoc.package.document.content;
+      }
+      doc.package.document.comments = commentsRef.current;
+      return doc;
+    }, [history.state]);
+
+    const replaceComments = useCallback(
+      (nextComments: Comment[]) => {
+        commentsDirtyRef.current = true;
+        commentsRef.current = nextComments;
+        setComments(nextComments);
+
+        const currentDocument = buildCurrentDocument();
+        if (!currentDocument) {
+          return;
+        }
+
+        onChange?.(currentDocument);
+      },
+      [buildCurrentDocument, onChange],
+    );
+
+    const updateComments = useCallback(
+      (updater: (comments: Comment[]) => Comment[]) => {
+        replaceComments(updater(commentsRef.current));
+      },
+      [replaceComments],
     );
 
     // Find/Replace handlers (depends on handleDocumentChange)
@@ -1454,7 +1717,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               ? pageEl.getBoundingClientRect().right - parentRect.left + 12
               : parentRect.width / 2 + 408;
             const left = Math.max(16, Math.min(rawLeft, parentRect.width - 16));
-            setFloatingCommentBtn({ top, left });
+            const { from, to } = view.state.selection;
+            if (from !== to) {
+              setFloatingCommentBtn({ top, left, from, to });
+            } else {
+              setFloatingCommentBtn(null);
+            }
           }
         } else {
           setFloatingCommentBtn(null);
@@ -2307,6 +2575,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       const isMac =
         typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
       const mod = isMac ? "⌘" : "Ctrl";
+      if (readOnly) {
+        return [
+          { action: "copy", label: t("copy"), shortcut: `${mod}+C` },
+          {
+            action: "selectAll",
+            label: t("selectAll"),
+            shortcut: `${mod}+A`,
+          },
+        ];
+      }
       const items: TextContextMenuItem[] = [
         { action: "cut", label: t("cut"), shortcut: `${mod}+X` },
         { action: "copy", label: t("copy"), shortcut: `${mod}+C` },
@@ -2365,6 +2643,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       contextMenu.hasSelection,
       contextMenu.cursorInTable,
       contextMenu.cursorInTrackedChange,
+      readOnly,
       t,
     ]);
 
@@ -2378,8 +2657,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         // Focus the hidden PM so clipboard operations target the right element
         focusActiveEditor();
 
+        if (readOnly && action !== "copy" && action !== "selectAll") {
+          return;
+        }
+
         switch (action) {
           case "cut": {
+            if (readOnly) {
+              return;
+            }
             // Copy selected text to clipboard, then delete selection
             const { from, to } = view.state.selection;
             const text = view.state.doc.textBetween(from, to, "\n");
@@ -2394,6 +2680,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             break;
           }
           case "paste": {
+            if (readOnly) {
+              return;
+            }
             // Use Clipboard API — document.execCommand('paste') is blocked in modern browsers
             try {
               const items = await navigator.clipboard.read();
@@ -2497,18 +2786,21 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               editorContentRef.current,
               from,
             );
+            const commentY =
+              yPos ?? getFallbackCommentYPosition(scrollContainerRef.current);
             setCommentSelectionRange({ from, to });
-            const commentMarkType = view.state.schema.marks["comment"];
-            if (!commentMarkType) {
-              return;
+            const marked = applyCommentMarkRange(
+              view,
+              { from, to },
+              PENDING_COMMENT_ID,
+              {
+                selectEnd: true,
+              },
+            );
+            if (!marked) {
+              break;
             }
-            const pendingMark = commentMarkType.create({
-              commentId: PENDING_COMMENT_ID,
-            });
-            const tr = view.state.tr.addMark(from, to, pendingMark);
-            tr.setSelection(TextSelection.create(tr.doc, to));
-            view.dispatch(tr);
-            setAddCommentYPosition(yPos);
+            setAddCommentYPosition(commentY);
             setShowCommentsSidebar(true);
             setIsAddingComment(true);
             setFloatingCommentBtn(null);
@@ -2534,6 +2826,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       [
         getActiveEditorView,
         focusActiveEditor,
+        readOnly,
         contextMenu.selectionRange.from,
         contextMenu.selectionRange.to,
       ],
@@ -2592,20 +2885,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       async (options?: {
         selective?: boolean;
       }): Promise<ArrayBuffer | null> => {
-        if (!history.state) {
-          return null;
-        }
-
         try {
           // Build current document from PM editor state
-          const doc = structuredClone(history.state);
-          const pmDoc = pagedEditorRef.current?.getDocument();
-          if (pmDoc?.package?.document) {
-            doc.package.document.content = pmDoc.package.document.content;
+          const doc = buildCurrentDocument();
+          if (!doc) {
+            return null;
           }
-          doc.package.document.comments = comments;
 
-          // Try selective save first (patches only changed paragraphs)
+          // Try selective save first (patches only changed paragraphs). If the
+          // edit cannot be patched, fall back to guarded repack: repackDocx now
+          // validates section/header/footer references before returning bytes.
           const useSelective = options?.selective !== false;
           const view = pagedEditorRef.current?.getView();
           let buffer: ArrayBuffer | null = null;
@@ -2623,15 +2912,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             );
           }
 
-          // Fall back to full repack
           if (!buffer) {
             buffer = await repackDocx(doc);
           }
 
           // Clear change tracker after successful save
           if (view) {
+            originalBufferRef.current = buffer;
             view.dispatch(clearTrackedChanges(view.state));
           }
+          commentsDirtyRef.current = false;
 
           onSave?.(buffer);
           return buffer;
@@ -2644,7 +2934,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           return null;
         }
       },
-      [history.state, onSave, onError, comments, originalBufferRef],
+      [buildCurrentDocument, onSave, onError, originalBufferRef],
     );
 
     // Handle error from editor
@@ -2659,7 +2949,19 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     useImperativeHandle(
       ref,
       () => ({
-        getDocument: () => history.state,
+        getDocument: () => buildCurrentDocument(),
+        hasPendingChanges: () => {
+          const view = pagedEditorRef.current?.getView();
+          if (!view) {
+            return false;
+          }
+          return (
+            commentsDirtyRef.current ||
+            getChangedParagraphIds(view.state).size > 0 ||
+            hasStructuralChanges(view.state) ||
+            hasUntrackedChanges(view.state)
+          );
+        },
         getEditorRef: () => pagedEditorRef.current,
         save: handleSave,
         setZoom: setZoomWithViewportAnchor,
@@ -2678,7 +2980,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         loadDocumentBuffer: loadBuffer,
       }),
       [
-        history.state,
+        buildCurrentDocument,
         scrollPageInfo,
         handleSave,
         setZoomWithViewportAnchor,
@@ -2777,6 +3079,42 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     } as const satisfies Record<DisplayMode, string>;
 
     const toolbarChildren = toolbarExtra ?? null;
+    const visibleCommentAuthorCount = commentAuthors.filter((commentAuthor) =>
+      visibleCommentAuthorSet.has(commentAuthor),
+    ).length;
+    const allCommentAuthorsVisible =
+      commentAuthors.length > 0 &&
+      showCommentsSidebar &&
+      visibleCommentAuthorCount === commentAuthors.length;
+    const commentVisibilityLabel =
+      visibleCommentAuthorCount === commentAuthors.length
+        ? t("comments.showAll")
+        : `${visibleCommentAuthorCount}/${commentAuthors.length}`;
+    const showAllCommentAuthors = () => {
+      setVisibleCommentAuthors(null);
+      setShowCommentsSidebar(true);
+    };
+    const hideAllCommentAuthors = () => {
+      setVisibleCommentAuthors(new Set());
+      setShowCommentsSidebar(false);
+      setActiveCommentId(null);
+    };
+    const setCommentAuthorVisible = (
+      commentAuthor: string,
+      visible: boolean,
+    ) => {
+      const next = new Set(visibleCommentAuthorSet);
+      if (visible) {
+        next.add(commentAuthor);
+      } else {
+        next.delete(commentAuthor);
+      }
+      setVisibleCommentAuthors(next);
+      setShowCommentsSidebar(next.size > 0);
+      if (next.size === 0) {
+        setActiveCommentId(null);
+      }
+    };
 
     const toolbarInlineExtra = (
       <>
@@ -2826,6 +3164,65 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             ))}
           </StSelectPopup>
         </StSelect>
+        <Menu>
+          <MenuTrigger
+            type="button"
+            disabled={comments.length === 0}
+            aria-label={t("comments.visibility")}
+            onMouseDown={(e) => e.preventDefault()}
+            className={`flex h-8 min-w-0 items-center gap-1.5 rounded-md border px-2.5 text-xs transition-colors duration-100 disabled:cursor-not-allowed disabled:border-transparent disabled:text-[var(--doc-text-subtle)] disabled:opacity-[0.16] disabled:hover:bg-transparent disabled:hover:text-[var(--doc-text-subtle)] ${
+              showCommentsSidebar && visibleCommentAuthorCount > 0
+                ? "border-[var(--doc-primary)] bg-[var(--doc-primary-light)] text-[var(--doc-text)]"
+                : "border-transparent text-[var(--doc-text-muted)] hover:border-[var(--doc-border)] hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)]"
+            }`}
+          >
+            <StickyNoteIcon size={14} className="shrink-0" />
+            <span className="max-w-24 truncate">{commentVisibilityLabel}</span>
+          </MenuTrigger>
+          <MenuPopup align="start" className="min-w-52">
+            <MenuGroup>
+              <MenuGroupLabel>{t("comments.visibility")}</MenuGroupLabel>
+              <MenuCheckboxItem
+                checked={allCommentAuthorsVisible}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    showAllCommentAuthors();
+                  } else {
+                    hideAllCommentAuthors();
+                  }
+                }}
+              >
+                {t("comments.showAll")}
+              </MenuCheckboxItem>
+              <MenuItem onClick={hideAllCommentAuthors}>
+                {t("comments.hideAll")}
+              </MenuItem>
+            </MenuGroup>
+            {commentAuthors.length > 0 ? (
+              <>
+                <MenuSeparator />
+                <MenuGroup>
+                  {commentAuthors.map((commentAuthor) => (
+                    <MenuCheckboxItem
+                      checked={
+                        showCommentsSidebar &&
+                        visibleCommentAuthorSet.has(commentAuthor)
+                      }
+                      key={commentAuthor}
+                      onCheckedChange={(checked) =>
+                        setCommentAuthorVisible(commentAuthor, checked)
+                      }
+                    >
+                      {commentAuthor === "Unknown"
+                        ? t("comments.unknownAuthor")
+                        : commentAuthor}
+                    </MenuCheckboxItem>
+                  ))}
+                </MenuGroup>
+              </>
+            ) : null}
+          </MenuPopup>
+        </Menu>
         <ToolbarSeparator />
         {state.activeTrackedChange && (
           <span
@@ -3019,6 +3416,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                   data-folio-scroll=""
                   onScroll={(event) => {
                     onScrollTopChange?.(event.currentTarget.scrollTop);
+                    requestAnimationFrame(syncCommentHighlightStyles);
                   }}
                 >
                   {/* Editor content wrapper */}
@@ -3068,6 +3466,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                         {...(extensionManager !== undefined
                           ? { extensionManager }
                           : {})}
+                        {...(onReadonlyEditAttempt !== undefined
+                          ? { onReadOnlyEditAttempt: onReadonlyEditAttempt }
+                          : {})}
                         onSelectionChange={(_from, _to) => {
                           // Extract full selection state from PM and use the standard handler
                           const view = pagedEditorRef.current?.getView();
@@ -3084,12 +3485,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                         onHyperlinkClick={handleHyperlinkClick}
                         onContextMenu={handleContextMenu}
                         commentsSidebarOpen={showCommentsSidebar}
+                        anchorPositionMode="comments"
                         onAnchorPositionsChange={setAnchorPositions}
                         scrollContainerRef={scrollContainerRef}
                         sidebarOverlay={
                           showCommentsSidebar ? (
                             <CommentsSidebar
-                              comments={comments}
+                              activeCommentId={activeCommentId}
+                              comments={visibleComments}
                               anchorPositions={anchorPositions}
                               pageWidth={(() => {
                                 const sp =
@@ -3100,22 +3503,28 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                                   : 816;
                               })()}
                               editorContainerRef={scrollContainerRef}
+                              onCommentClick={(id) => {
+                                setActiveCommentId(id);
+                              }}
                               onCommentResolve={(id) => {
-                                setComments((prev) =>
+                                updateComments((prev) =>
                                   prev.map((c) =>
                                     c.id === id ? { ...c, done: true } : c,
                                   ),
                                 );
                               }}
                               onCommentDelete={(id) => {
-                                setComments((prev) =>
+                                updateComments((prev) =>
                                   prev.filter(
                                     (c) => c.id !== id && c.parentId !== id,
                                   ),
                                 );
+                                if (activeCommentId === id) {
+                                  setActiveCommentId(null);
+                                }
                               }}
                               onCommentReply={(id, text) => {
-                                setComments((prev) => [
+                                updateComments((prev) => [
                                   ...prev,
                                   createComment(text, author, id),
                                 ]);
@@ -3124,32 +3533,45 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                                 const comment = createComment(addText, author);
                                 // Replace pending comment mark with the real comment ID
                                 const view = pagedEditorRef.current?.getView();
-                                const commentMark =
-                                  view?.state.schema.marks["comment"];
-                                if (
-                                  view &&
-                                  commentMark &&
-                                  commentSelectionRange
-                                ) {
-                                  const { from, to } = commentSelectionRange;
-                                  const pendingMark = commentMark.create({
-                                    commentId: PENDING_COMMENT_ID,
-                                  });
-                                  const realMark = commentMark.create({
-                                    commentId: comment.id,
-                                  });
-                                  const tr = view.state.tr
-                                    .removeMark(from, to, pendingMark)
-                                    .addMark(from, to, realMark);
-                                  view.dispatch(tr);
+                                if (!view || !commentSelectionRange) {
+                                  return false;
                                 }
-                                setComments((prev) => [...prev, comment]);
+                                const marked = applyCommentMarkRange(
+                                  view,
+                                  commentSelectionRange,
+                                  comment.id,
+                                  { replacePending: true },
+                                );
+                                if (!marked) {
+                                  return false;
+                                }
+                                const commentAuthor = getCommentAuthorKey(
+                                  comment.author,
+                                );
+                                setVisibleCommentAuthors((current) => {
+                                  if (current === null) {
+                                    return null;
+                                  }
+                                  const next = new Set(current);
+                                  next.add(commentAuthor);
+                                  return next;
+                                });
+                                setActiveCommentId(comment.id);
+                                updateComments((prev) => [...prev, comment]);
+                                pagedEditorRef.current?.relayout();
+                                requestAnimationFrame(() => {
+                                  syncCommentHighlightStyles();
+                                  requestAnimationFrame(
+                                    syncCommentHighlightStyles,
+                                  );
+                                });
                                 setIsAddingComment(false);
                                 setCommentSelectionRange(null);
                                 setAddCommentYPosition(null);
+                                return true;
                               }}
                               onTrackedChangeReply={(revisionId, text) => {
-                                setComments((prev) => [
+                                updateComments((prev) => [
                                   ...prev,
                                   createComment(text, author, revisionId),
                                 ]);
@@ -3157,23 +3579,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                               onCancelAddComment={() => {
                                 // Remove pending comment highlight
                                 const view = pagedEditorRef.current?.getView();
-                                const cancelCommentMark =
-                                  view?.state.schema.marks["comment"];
-                                if (
-                                  view &&
-                                  cancelCommentMark &&
-                                  commentSelectionRange
-                                ) {
-                                  const { from, to } = commentSelectionRange;
-                                  const pendingMark = cancelCommentMark.create({
-                                    commentId: PENDING_COMMENT_ID,
-                                  });
-                                  view.dispatch(
-                                    view.state.tr.removeMark(
-                                      from,
-                                      to,
-                                      pendingMark,
-                                    ),
+                                if (view && commentSelectionRange) {
+                                  removePendingCommentMarkRange(
+                                    view,
+                                    commentSelectionRange,
                                   );
                                 }
                                 setIsAddingComment(false);
@@ -3224,27 +3633,53 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                                 e.preventDefault();
                                 e.stopPropagation();
                                 const view = pagedEditorRef.current?.getView();
-                                const btnCommentMark =
-                                  view?.state.schema.marks["comment"];
-                                if (view && btnCommentMark) {
-                                  const { from, to } = view.state.selection;
-                                  if (from !== to) {
-                                    setCommentSelectionRange({ from, to });
-                                    const pendingMark = btnCommentMark.create({
-                                      commentId: PENDING_COMMENT_ID,
-                                    });
-                                    const tr = view.state.tr.addMark(
-                                      from,
-                                      to,
-                                      pendingMark,
-                                    );
-                                    tr.setSelection(
-                                      TextSelection.create(tr.doc, to),
-                                    );
-                                    view.dispatch(tr);
-                                  }
+                                if (!view) {
+                                  setFloatingCommentBtn(null);
+                                  return;
                                 }
-                                setAddCommentYPosition(floatingCommentBtn.top);
+                                const capturedRange = {
+                                  from: floatingCommentBtn.from,
+                                  to: floatingCommentBtn.to,
+                                };
+                                const currentSelection = view.state.selection;
+                                const safeRange = resolveCommentCreationRange({
+                                  docSize: view.state.doc.content.size,
+                                  capturedRange,
+                                  currentRange: {
+                                    from: currentSelection.from,
+                                    to: currentSelection.to,
+                                  },
+                                  savedRange: lastSelectionRef.current,
+                                });
+                                if (!safeRange) {
+                                  setCommentSelectionRange(null);
+                                  setFloatingCommentBtn(null);
+                                  return;
+                                }
+                                setCommentSelectionRange(safeRange);
+                                const marked = applyCommentMarkRange(
+                                  view,
+                                  safeRange,
+                                  PENDING_COMMENT_ID,
+                                  { selectEnd: true },
+                                );
+                                if (!marked) {
+                                  setCommentSelectionRange(null);
+                                  setFloatingCommentBtn(null);
+                                  return;
+                                }
+                                const yPos = findSelectionYPosition(
+                                  scrollContainerRef.current,
+                                  editorContentRef.current,
+                                  safeRange.from,
+                                );
+                                setAddCommentYPosition(
+                                  yPos ??
+                                    floatingCommentBtn.top ??
+                                    getFallbackCommentYPosition(
+                                      scrollContainerRef.current,
+                                    ),
+                                );
                                 setShowCommentsSidebar(true);
                                 setIsAddingComment(true);
                                 setFloatingCommentBtn(null);
@@ -3302,7 +3737,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                                   "var(--doc-canvas, #fff)";
                               }}
                             >
-                              <MessageSquarePlusIcon size={16} />
+                              <SquarePenIcon size={16} />
                             </button>
                           </Tooltip>
                         )}
@@ -3361,8 +3796,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                       padding: "6px 12px",
                       borderRadius: "4px",
                       fontSize: "12px",
-                      fontFamily:
-                        '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
                       fontWeight: 500,
                       whiteSpace: "nowrap",
                       pointerEvents: "none",

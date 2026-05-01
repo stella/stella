@@ -153,10 +153,7 @@ function convertPMParagraph(
   documentCounts?: TrackedChangeCounts,
 ): Paragraph {
   const attrs = node.attrs as ParagraphAttrs;
-  let content = insertCommentRanges(
-    extractParagraphContent(node, documentCounts),
-    node,
-  );
+  let content = extractParagraphContent(node, documentCounts);
 
   // Emit BookmarkStart/End from bookmarks attr (for TOC anchors, cross-references)
   const bookmarks = attrs.bookmarks as
@@ -200,81 +197,6 @@ function convertPMParagraph(
   }
 
   return paragraph;
-}
-
-/**
- * Convert ProseMirror paragraph attrs to ParagraphFormatting
- */
-/**
- * Scan paragraph PM node for comment marks and insert commentRangeStart/End
- * markers in the content array for round-trip serialization.
- */
-function insertCommentRanges(
-  content: ParagraphContent[],
-  paragraph: PMNode,
-): ParagraphContent[] {
-  // Collect which comment IDs appear as marks on child nodes
-  const commentIds = new Set<number>();
-  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
-  paragraph.forEach((node) => {
-    for (const mark of node.marks) {
-      if (mark.type.name === "comment") {
-        commentIds.add(mark.attrs["commentId"] as number);
-      }
-    }
-  });
-
-  if (commentIds.size === 0) {
-    return content;
-  }
-
-  // For each comment ID, find the first and last content item that belongs to it
-  // and wrap with commentRangeStart/End
-  const result: ParagraphContent[] = [];
-  const openedComments = new Set<number>();
-  let nodeIndex = 0;
-
-  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
-  paragraph.forEach((node) => {
-    const nodeCommentIds = new Set<number>();
-    for (const mark of node.marks) {
-      if (mark.type.name === "comment") {
-        nodeCommentIds.add(mark.attrs["commentId"] as number);
-      }
-    }
-
-    // Close comments that are no longer active BEFORE pushing current content,
-    // so commentRangeEnd lands after the last marked node, not after the first unmarked one
-    for (const cid of [...openedComments]) {
-      if (!nodeCommentIds.has(cid)) {
-        result.push({ type: "commentRangeEnd", id: cid });
-        openedComments.delete(cid);
-      }
-    }
-
-    // Open new comments
-    for (const cid of nodeCommentIds) {
-      if (!openedComments.has(cid)) {
-        result.push({ type: "commentRangeStart", id: cid });
-        openedComments.add(cid);
-      }
-    }
-
-    // Push the actual content item
-    if (nodeIndex < content.length) {
-      // SAFETY: nodeIndex < content.length verified above
-      result.push(content[nodeIndex]!);
-    }
-
-    nodeIndex++;
-  });
-
-  // Close any remaining open comments
-  for (const cid of openedComments) {
-    result.push({ type: "commentRangeEnd", id: cid });
-  }
-
-  return result;
 }
 
 function paragraphAttrsToFormatting(
@@ -433,22 +355,67 @@ function extractParagraphContent(
   let currentRun: Run | null = null;
   let currentMarksKey: string | null = null;
   let currentHyperlink: Hyperlink | null = null;
+  const openedComments = new Set<number>();
+
+  const flushCurrentInline = () => {
+    if (currentRun) {
+      content.push(currentRun);
+      currentRun = null;
+      currentMarksKey = null;
+    }
+    if (currentHyperlink) {
+      content.push(currentHyperlink);
+      currentHyperlink = null;
+    }
+  };
+
+  const syncCommentRanges = (node: PMNode) => {
+    const nodeCommentIds = getCommentMarkIds(node.marks);
+    let changed = false;
+    for (const commentId of openedComments) {
+      if (!nodeCommentIds.has(commentId)) {
+        changed = true;
+        break;
+      }
+    }
+    if (!changed) {
+      for (const commentId of nodeCommentIds) {
+        if (!openedComments.has(commentId)) {
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (!changed) {
+      return;
+    }
+
+    flushCurrentInline();
+
+    for (const commentId of [...openedComments]) {
+      if (!nodeCommentIds.has(commentId)) {
+        content.push({ type: "commentRangeEnd", id: commentId });
+        openedComments.delete(commentId);
+      }
+    }
+
+    for (const commentId of nodeCommentIds) {
+      if (!openedComments.has(commentId)) {
+        content.push({ type: "commentRangeStart", id: commentId });
+        openedComments.add(commentId);
+      }
+    }
+  };
 
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   paragraph.forEach((node) => {
+    syncCommentRanges(node);
+
     // Check for footnote/endnote reference mark
     const noteRefMark = node.marks.find((m) => m.type.name === "footnoteRef");
     if (noteRefMark) {
       // Finish any current content
-      if (currentRun) {
-        content.push(currentRun);
-        currentRun = null;
-        currentMarksKey = null;
-      }
-      if (currentHyperlink) {
-        content.push(currentHyperlink);
-        currentHyperlink = null;
-      }
+      flushCurrentInline();
       const noteType =
         noteRefMark.attrs["noteType"] === "endnote"
           ? "endnoteRef"
@@ -469,15 +436,7 @@ function extractParagraphContent(
     const deletionMark = node.marks.find((m) => m.type.name === "deletion");
     if (insertionMark || deletionMark) {
       // Finish any current content
-      if (currentRun) {
-        content.push(currentRun);
-        currentRun = null;
-        currentMarksKey = null;
-      }
-      if (currentHyperlink) {
-        content.push(currentHyperlink);
-        currentHyperlink = null;
-      }
+      flushCurrentInline();
 
       const changeMark = insertionMark ?? deletionMark;
       if (!changeMark) {
@@ -539,14 +498,7 @@ function extractParagraphContent(
         addNodeToHyperlink(currentHyperlink, node);
       } else {
         // Finish previous content
-        if (currentRun) {
-          content.push(currentRun);
-          currentRun = null;
-          currentMarksKey = null;
-        }
-        if (currentHyperlink) {
-          content.push(currentHyperlink);
-        }
+        flushCurrentInline();
 
         // Start new hyperlink
         currentHyperlink = createHyperlink(linkMark);
@@ -557,8 +509,7 @@ function extractParagraphContent(
 
     // Not in hyperlink - finish any current hyperlink
     if (currentHyperlink) {
-      content.push(currentHyperlink);
-      currentHyperlink = null;
+      flushCurrentInline();
     }
 
     // Handle node types
@@ -578,72 +529,52 @@ function extractParagraphContent(
       }
     } else if (node.type.name === "hardBreak") {
       // Hard break ends current run
-      if (currentRun) {
-        content.push(currentRun);
-        currentRun = null;
-        currentMarksKey = null;
-      }
+      flushCurrentInline();
       content.push(createBreakRun());
     } else if (node.type.name === "image") {
       // Image ends current run
-      if (currentRun) {
-        content.push(currentRun);
-        currentRun = null;
-        currentMarksKey = null;
-      }
+      flushCurrentInline();
       content.push(createImageRun(node));
     } else if (node.type.name === "shape") {
       // Shape ends current run
-      if (currentRun) {
-        content.push(currentRun);
-        currentRun = null;
-        currentMarksKey = null;
-      }
+      flushCurrentInline();
       content.push(createShapeRun(node));
     } else if (node.type.name === "tab") {
       // Tab ends current run
-      if (currentRun) {
-        content.push(currentRun);
-        currentRun = null;
-        currentMarksKey = null;
-      }
+      flushCurrentInline();
       content.push(createTabRun());
     } else if (node.type.name === "field") {
       // Field ends current run and emits a field content item
-      if (currentRun) {
-        content.push(currentRun);
-        currentRun = null;
-        currentMarksKey = null;
-      }
+      flushCurrentInline();
       content.push(createFieldFromNode(node, node.marks));
     } else if (node.type.name === "sdt") {
       // SDT ends current run and emits an InlineSdt content item
-      if (currentRun) {
-        content.push(currentRun);
-        currentRun = null;
-        currentMarksKey = null;
-      }
+      flushCurrentInline();
       content.push(createInlineSdtFromNode(node));
     } else if (node.type.name === "math") {
       // Math ends current run and emits a MathEquation content item
-      if (currentRun) {
-        content.push(currentRun);
-        currentRun = null;
-        currentMarksKey = null;
-      }
+      flushCurrentInline();
       content.push(createMathFromNode(node));
     }
   });
 
   // Don't forget the last run/hyperlink
-  if (currentRun) {
-    content.push(currentRun);
-  }
-  if (currentHyperlink) {
-    content.push(currentHyperlink);
+  flushCurrentInline();
+  for (const commentId of openedComments) {
+    content.push({ type: "commentRangeEnd", id: commentId });
   }
 
   return content;
+}
+
+function getCommentMarkIds(marks: readonly Mark[]): Set<number> {
+  const commentIds = new Set<number>();
+  for (const mark of marks) {
+    if (mark.type.name === "comment") {
+      commentIds.add(mark.attrs["commentId"] as number);
+    }
+  }
+  return commentIds;
 }
 
 type TrackedChangeCounts = {

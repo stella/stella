@@ -186,6 +186,7 @@ function resolveListTemplate(
   template: string,
   counters: number[],
   levelFormats: NumberFormat[] | undefined,
+  forceDecimal = false,
 ): string {
   return template.replace(/%(\d)([.):\]])?/g, (_match, digit, punct = "") => {
     const index = Number.parseInt(String(digit), 10) - 1;
@@ -194,7 +195,7 @@ function resolveListTemplate(
     }
     const formatted = formatCounter(
       counters[index] ?? 0,
-      levelFormats?.[index],
+      forceDecimal ? "decimal" : levelFormats?.[index],
     );
     return formatted ? `${formatted}${String(punct)}` : "";
   });
@@ -223,6 +224,7 @@ function computeListMarker(
           pmAttrs.listMarker,
           counters,
           pmAttrs.listLevelNumFmts,
+          pmAttrs.listIsLegal,
         );
       }
     }
@@ -246,7 +248,12 @@ function computeListMarker(
     pmAttrs.listLevelNumFmts ??
     (pmAttrs.listNumFmt ? [pmAttrs.listNumFmt] : undefined);
   if (pmAttrs.listMarker && pmAttrs.listMarker.includes("%")) {
-    return resolveListTemplate(pmAttrs.listMarker, counters, levelFormats);
+    return resolveListTemplate(
+      pmAttrs.listMarker,
+      counters,
+      levelFormats,
+      pmAttrs.listIsLegal,
+    );
   }
   if (pmAttrs.listMarker) {
     return pmAttrs.listMarker;

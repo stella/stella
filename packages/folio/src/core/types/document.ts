@@ -105,6 +105,7 @@ export type {
   Comment,
   CommentRangeStart,
   CommentRangeEnd,
+  CommentReference,
   MathEquation,
   TrackedChangeInfo,
   TrackedRunChange,

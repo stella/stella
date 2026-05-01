@@ -28,8 +28,6 @@ export type SelectionOverlayProps = {
   caretPosition: CaretPosition | null;
   /** Whether the editor is focused. */
   isFocused: boolean;
-  /** Hide caret/selection when in read-only mode. */
-  readOnly?: boolean;
   /** Gap between pages (for coordinate adjustment). */
   pageGap?: number;
   /** Custom caret color. */
@@ -197,15 +195,11 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
   selectionRects,
   caretPosition,
   isFocused,
-  readOnly = false,
   caretColor = DEFAULT_CARET_COLOR,
   selectionColor = DEFAULT_SELECTION_COLOR,
   caretWidth = DEFAULT_CARET_WIDTH,
   blinkInterval = DEFAULT_BLINK_INTERVAL,
 }) => {
-  if (readOnly) {
-    return null;
-  }
   // Determine if we have a range selection or collapsed selection
   const hasRangeSelection = selectionRects.length > 0;
   const hasCollapsedSelection = caretPosition !== null && !hasRangeSelection;

@@ -42,6 +42,7 @@ import { fromProseDoc } from "../core/prosemirror/conversion/fromProseDoc";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
 import { schema } from "../core/prosemirror/schema";
 import type { Document, Theme, StyleDefinitions } from "../core/types/document";
+import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
 // Import ProseMirror CSS
 import "prosemirror-view/style/prosemirror.css";
 import "../core/prosemirror/editor.css";
@@ -75,6 +76,8 @@ export type HiddenProseMirrorProps = {
   onEditorViewDestroy?: () => void;
   /** Intercept key events before ProseMirror processes them. Return true to prevent PM handling. */
   onKeyDown?: (view: EditorView, event: KeyboardEvent) => boolean;
+  /** Callback when a readonly user action would mutate the document. */
+  onReadOnlyEditAttempt?: () => void;
 };
 
 export type HiddenProseMirrorRef = {
@@ -212,6 +215,7 @@ const HiddenProseMirrorComponent = forwardRef<
     onEditorViewReady,
     onEditorViewDestroy,
     onKeyDown,
+    onReadOnlyEditAttempt,
   } = props;
 
   // Refs
@@ -233,6 +237,7 @@ const HiddenProseMirrorComponent = forwardRef<
   const onEditorViewReadyRef = useRef(onEditorViewReady);
   const onEditorViewDestroyRef = useRef(onEditorViewDestroy);
   const onKeyDownRef = useRef(onKeyDown);
+  const onReadOnlyEditAttemptRef = useRef(onReadOnlyEditAttempt);
 
   // Keep refs in sync
   readOnlyRef.current = readOnly;
@@ -241,6 +246,7 @@ const HiddenProseMirrorComponent = forwardRef<
   onEditorViewReadyRef.current = onEditorViewReady;
   onEditorViewDestroyRef.current = onEditorViewDestroy;
   onKeyDownRef.current = onKeyDown;
+  onReadOnlyEditAttemptRef.current = onReadOnlyEditAttempt;
 
   // Keep document ref in sync
   documentRef.current = document;
@@ -273,6 +279,11 @@ const HiddenProseMirrorComponent = forwardRef<
           return;
         }
 
+        if (readOnlyRef.current && transaction.docChanged) {
+          onReadOnlyEditAttemptRef.current?.();
+          return;
+        }
+
         const newState = viewRef.current.state.apply(transaction);
         viewRef.current.updateState(newState);
 
@@ -285,12 +296,43 @@ const HiddenProseMirrorComponent = forwardRef<
         }
       },
       // Intercept key events before ProseMirror processes them
-      handleKeyDown: (view: EditorView, event: KeyboardEvent): boolean =>
-        onKeyDownRef.current?.(view, event) ?? false,
+      handleKeyDown: (view: EditorView, event: KeyboardEvent): boolean => {
+        if (readOnlyRef.current && isReadOnlyEditKey(event)) {
+          onReadOnlyEditAttemptRef.current?.();
+          event.preventDefault();
+          return true;
+        }
+
+        return onKeyDownRef.current?.(view, event) ?? false;
+      },
       // Prevent focus handling from interfering with visual layer
       handleDOMEvents: {
         focus: () => false,
         blur: () => false,
+        beforeinput: (_view, event) => {
+          if (!readOnlyRef.current) {
+            return false;
+          }
+          onReadOnlyEditAttemptRef.current?.();
+          event.preventDefault();
+          return true;
+        },
+        paste: (_view, event) => {
+          if (!readOnlyRef.current) {
+            return false;
+          }
+          onReadOnlyEditAttemptRef.current?.();
+          event.preventDefault();
+          return true;
+        },
+        drop: (_view, event) => {
+          if (!readOnlyRef.current) {
+            return false;
+          }
+          onReadOnlyEditAttemptRef.current?.();
+          event.preventDefault();
+          return true;
+        },
       },
     };
 

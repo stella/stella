@@ -19,6 +19,7 @@ import React, {
 } from "react";
 
 import { CheckIcon, MoreVerticalIcon } from "lucide-react";
+import { useLocale, useTranslations } from "use-intl";
 
 import type { Comment, Paragraph } from "../core/types/content";
 
@@ -38,17 +39,20 @@ function getCommentText(paragraphs?: Paragraph[]): string {
     .join("");
 }
 
-function formatDate(dateStr?: string): string {
+function formatDate(dateStr: string | undefined, locale: string): string {
   if (!dateStr) {
     return "";
   }
   const d = new Date(dateStr);
-  return d.toLocaleString(undefined, {
+  if (Number.isNaN(d.getTime())) {
+    return dateStr;
+  }
+  return new Intl.DateTimeFormat(locale, {
     hour: "numeric",
     minute: "2-digit",
     month: "short",
     day: "numeric",
-  });
+  }).format(d);
 }
 
 function getInitials(name: string): string {
@@ -98,11 +102,12 @@ export type TrackedChangeEntry = {
 
 export type CommentsSidebarProps = {
   comments: Comment[];
-  onCommentClick?: (commentId: number) => void;
+  activeCommentId?: number | null;
+  onCommentClick?: (commentId: number | null) => void;
   onCommentReply?: (commentId: number, text: string) => void;
   onCommentResolve?: (commentId: number) => void;
   onCommentDelete?: (commentId: number) => void;
-  onAddComment?: (text: string) => void;
+  onAddComment?: (text: string) => boolean | undefined;
   onCancelAddComment?: () => void;
   onAcceptChange?: (from: number, to: number) => void;
   onRejectChange?: (from: number, to: number) => void;
@@ -118,12 +123,30 @@ export type CommentsSidebarProps = {
   editorContainerRef?: React.RefObject<HTMLDivElement | null>;
   /** Pre-computed Y positions from layout engine (keys: "comment-{id}") */
   anchorPositions?: Map<string, number>;
+  /** Temporary position for a newly added comment before layout anchors update. */
 };
 
-export const SIDEBAR_WIDTH = 340;
+export const SIDEBAR_WIDTH = 280;
 
 // Minimum gap between stacked cards to avoid overlap
-const MIN_CARD_GAP = 8;
+const MIN_CARD_GAP = 6;
+const DEFAULT_CARD_HEIGHT = 64;
+const DEFAULT_INPUT_HEIGHT = 104;
+
+function arePositionMapsEqual(
+  a: Map<string, number>,
+  b: Map<string, number>,
+): boolean {
+  if (a.size !== b.size) {
+    return false;
+  }
+  for (const [key, value] of b) {
+    if (a.get(key) !== value) {
+      return false;
+    }
+  }
+  return true;
+}
 
 // Static styles hoisted out of component to avoid recreating on each render
 const ICON_BUTTON_STYLE: React.CSSProperties = {
@@ -137,11 +160,13 @@ const ICON_BUTTON_STYLE: React.CSSProperties = {
 };
 
 const CANCEL_BUTTON_STYLE: React.CSSProperties = {
-  padding: "6px 16px",
-  fontSize: 14,
-  border: "none",
-  background: "none",
-  color: "var(--doc-primary)",
+  minHeight: 28,
+  padding: "5px 10px",
+  fontSize: 12,
+  border: "1px solid transparent",
+  borderRadius: 6,
+  background: "transparent",
+  color: "var(--muted-foreground, var(--doc-text-muted))",
   cursor: "pointer",
   fontWeight: 500,
   fontFamily: "inherit",
@@ -150,6 +175,7 @@ const CANCEL_BUTTON_STYLE: React.CSSProperties = {
 export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   comments,
   onCommentClick,
+  activeCommentId = null,
   onCommentReply,
   onCommentResolve,
   onCommentDelete,
@@ -166,6 +192,8 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   editorContainerRef,
   anchorPositions,
 }) => {
+  const t = useTranslations("folio");
+  const locale = useLocale();
   const [replyingTo, setReplyingTo] = useState<number | null>(null);
   const [replyText, setReplyText] = useState("");
   const [newCommentText, setNewCommentText] = useState("");
@@ -178,6 +206,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   const [initialPositionsDone, setInitialPositionsDone] = useState(false);
   // Track which cards have had at least one positioned render (to avoid "fall from top" animation)
   const knownCardsRef = useRef<Set<string>>(new Set());
+  const lastKnownCardPositionsRef = useRef<Map<string, number>>(new Map());
   const sidebarRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -197,8 +226,8 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     const parentRect = offsetParent.getBoundingClientRect();
     const pageRect = pageEl.getBoundingClientRect();
     const rawLeft = pageRect.right - parentRect.left + 12;
-    const maxLeft = Math.max(8, parentRect.width - SIDEBAR_WIDTH - 8);
-    setMeasuredLeft(Math.max(8, Math.min(rawLeft, maxLeft)));
+    const maxVisibleLeft = Math.max(8, parentRect.width - SIDEBAR_WIDTH - 8);
+    setMeasuredLeft(Math.max(8, Math.min(rawLeft, maxVisibleLeft)));
   }, [editorContainerRef]);
 
   useLayoutEffect(() => {
@@ -276,28 +305,57 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     const containerRect = container.getBoundingClientRect();
     const scrollTop = container.scrollTop;
     const positions: { id: string; targetY: number; height: number }[] = [];
+    const pushPosition = (id: string, targetY: number, height: number) => {
+      lastKnownCardPositionsRef.current.set(id, targetY);
+      positions.push({ id, targetY, height });
+    };
 
-    // Find comment positions — prefer layout-computed positions, fall back to DOM
+    // Find comment positions. Prefer the rendered highlight span when present,
+    // because it is the same element the user sees in the document. The
+    // layout-computed map is the fallback for virtualized/non-rendered pages.
     for (const comment of visibleComments) {
       const cardId = `comment-${comment.id}`;
+      const el = pagesEl.querySelector(`[data-comment-id="${comment.id}"]`);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        pushPosition(
+          cardId,
+          rect.top - containerRect.top + scrollTop,
+          cardRefs.current.get(cardId)?.offsetHeight || DEFAULT_CARD_HEIGHT,
+        );
+        continue;
+      }
+
       const layoutY = anchorPositions?.get(cardId);
       if (layoutY !== null && layoutY !== undefined) {
+        pushPosition(
+          cardId,
+          layoutY,
+          cardRefs.current.get(cardId)?.offsetHeight || DEFAULT_CARD_HEIGHT,
+        );
+        continue;
+      }
+
+      const lastKnownY = lastKnownCardPositionsRef.current.get(cardId);
+      if (lastKnownY !== undefined && activeCommentId === comment.id) {
         positions.push({
           id: cardId,
-          targetY: layoutY,
-          height: cardRefs.current.get(cardId)?.offsetHeight || 80,
+          targetY: lastKnownY,
+          height:
+            cardRefs.current.get(cardId)?.offsetHeight || DEFAULT_CARD_HEIGHT,
         });
-      } else {
-        // Fallback: query DOM (only works for rendered/non-virtualized pages)
-        const el = pagesEl.querySelector(`[data-comment-id="${comment.id}"]`);
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          positions.push({
-            id: cardId,
-            targetY: rect.top - containerRect.top + scrollTop,
-            height: cardRefs.current.get(cardId)?.offsetHeight || 80,
-          });
-        }
+        continue;
+      }
+
+      const newCommentY =
+        lastKnownCardPositionsRef.current.get("new-comment-input");
+      if (activeCommentId === comment.id && newCommentY !== undefined) {
+        pushPosition(
+          cardId,
+          newCommentY,
+          cardRefs.current.get(cardId)?.offsetHeight || DEFAULT_CARD_HEIGHT,
+        );
+        continue;
       }
     }
 
@@ -310,8 +368,14 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       positions.push({
         id: "new-comment-input",
         targetY: addCommentYPosition,
-        height: cardRefs.current.get("new-comment-input")?.offsetHeight || 120,
+        height:
+          cardRefs.current.get("new-comment-input")?.offsetHeight ||
+          DEFAULT_INPUT_HEIGHT,
       });
+      lastKnownCardPositionsRef.current.set(
+        "new-comment-input",
+        addCommentYPosition,
+      );
     }
 
     // Sort by target Y and resolve overlaps
@@ -325,13 +389,23 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       lastBottom = y + pos.height;
     }
 
-    setCardPositions(resolvedPositions);
+    setCardPositions((prev) =>
+      arePositionMapsEqual(prev, resolvedPositions) ? prev : resolvedPositions,
+    );
+
+    const visiblePositionIds = new Set(resolvedPositions.keys());
+    for (const key of lastKnownCardPositionsRef.current.keys()) {
+      if (!visiblePositionIds.has(key) && key !== "new-comment-input") {
+        lastKnownCardPositionsRef.current.delete(key);
+      }
+    }
   }, [
     visibleComments,
     editorContainerRef,
     isAddingComment,
     addCommentYPosition,
     anchorPositions,
+    activeCommentId,
   ]);
 
   // Listen for clicks on comment/change elements in the document body → expand the sidebar card
@@ -404,6 +478,35 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     };
   }, [updateCardPositions, editorContainerRef]);
 
+  // Keep sidebar cards aligned while scrolling. This matters when page
+  // virtualization swaps rendered anchors, and the map equality guard above
+  // keeps the common precomputed-anchor path from rerendering on every tick.
+  useEffect(() => {
+    const container = editorContainerRef?.current;
+    if (!container) {
+      return;
+    }
+
+    let rafId: number | null = null;
+    const scheduleUpdate = () => {
+      if (rafId !== null) {
+        return;
+      }
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        updateCardPositions();
+      });
+    };
+
+    container.addEventListener("scroll", scheduleUpdate, { passive: true });
+    return () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+      container.removeEventListener("scroll", scheduleUpdate);
+    };
+  }, [editorContainerRef, updateCardPositions]);
+
   // Recalculate positions after a card expand/collapse or add-comment toggle.
   useEffect(() => {
     const raf = requestAnimationFrame(updateCardPositions);
@@ -444,16 +547,30 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
 
   const handleNewCommentSubmit = () => {
     if (newCommentText.trim()) {
-      onAddComment?.(newCommentText.trim());
-      setNewCommentText("");
+      const submitted = onAddComment?.(newCommentText.trim());
+      if (submitted !== false) {
+        setNewCommentText("");
+      }
     }
   };
 
+  useEffect(() => {
+    if (activeCommentId === null || activeCommentId === undefined) {
+      return;
+    }
+    setExpandedCard(`comment-${activeCommentId}`);
+  }, [activeCommentId]);
+
   const handleCardClick = (cardId: string, commentId?: number) => {
-    setExpandedCard(expandedCard === cardId ? null : cardId);
+    const nextExpandedCard = expandedCard === cardId ? null : cardId;
+    setExpandedCard(nextExpandedCard);
     setMenuOpenFor(null);
     if (commentId !== undefined) {
-      onCommentClick?.(commentId);
+      onCommentClick?.(
+        nextExpandedCard === null && activeCommentId === commentId
+          ? null
+          : commentId,
+      );
     }
   };
 
@@ -463,7 +580,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   // --- Shared styles ---
   const avatarStyle = (
     name: string,
-    size: 32 | 28 = 32,
+    size: 28 | 22 = 28,
   ): React.CSSProperties => ({
     width: size,
     height: size,
@@ -473,20 +590,25 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: size === 32 ? 13 : 11,
+    fontSize: size === 28 ? 12 : 10,
     fontWeight: 500,
     flexShrink: 0,
   });
 
   const submitButtonStyle = (enabled: boolean): React.CSSProperties => ({
-    padding: "6px 16px",
-    fontSize: 14,
+    minHeight: 28,
+    padding: "5px 12px",
+    fontSize: 12,
     border: enabled
-      ? "1px solid var(--doc-primary)"
-      : "1px solid var(--doc-border)",
-    borderRadius: 20,
-    background: enabled ? "var(--doc-primary)" : "var(--doc-bg)",
-    color: enabled ? "var(--doc-bg)" : "var(--doc-text-muted)",
+      ? "1px solid var(--primary, var(--doc-primary))"
+      : "1px solid var(--border, var(--doc-border))",
+    borderRadius: 6,
+    background: enabled
+      ? "var(--primary, var(--doc-primary))"
+      : "var(--muted, var(--doc-bg))",
+    color: enabled
+      ? "var(--primary-foreground, var(--doc-page))"
+      : "var(--muted-foreground, var(--doc-text-muted))",
     cursor: enabled ? "pointer" : "default",
     fontWeight: 500,
     fontFamily: "inherit",
@@ -520,13 +642,13 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
               visibility: "hidden" as const,
             }
         : { marginBottom: 6 }),
-      padding: isExpanded ? "10px 12px" : "8px 10px",
-      borderRadius: 8,
+      padding: isExpanded ? "8px 10px" : "7px 9px",
+      borderRadius: 6,
       backgroundColor: "var(--doc-page)",
       cursor: "pointer",
       boxShadow: isExpanded
-        ? "0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)"
-        : "0 1px 3px rgba(60,64,67,0.2), 0 2px 6px rgba(60,64,67,0.08)",
+        ? "0 1px 2px rgba(60,64,67,0.22), 0 3px 8px rgba(60,64,67,0.12)"
+        : "0 1px 2px rgba(60,64,67,0.16), 0 2px 5px rgba(60,64,67,0.08)",
       transition: noPosition
         ? "none"
         : isNewCard
@@ -548,35 +670,35 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
           <div
             key={reply.id}
             style={{
-              marginBottom: isExpanded ? 8 : 0,
-              paddingTop: 8,
+              marginBottom: isExpanded ? 6 : 0,
+              paddingTop: 6,
               borderTop: "1px solid var(--doc-border)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-              <div style={avatarStyle(reply.author || "U", 28)}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+              <div style={avatarStyle(reply.author || "U", 22)}>
                 {getInitials(reply.author || "U")}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
                   style={{
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: 600,
                     color: "var(--doc-text)",
                   }}
                 >
                   {reply.author || "Unknown"}
                 </div>
-                <div style={{ fontSize: 11, color: "var(--doc-text-muted)" }}>
-                  {formatDate(reply.date)}
+                <div style={{ fontSize: 10, color: "var(--doc-text-muted)" }}>
+                  {formatDate(reply.date, locale)}
                 </div>
               </div>
             </div>
             <div
               style={{
-                fontSize: 13,
+                fontSize: 12,
                 color: "var(--doc-text)",
-                lineHeight: "20px",
+                lineHeight: "17px",
                 marginTop: 4,
                 ...(!isExpanded
                   ? {
@@ -595,13 +717,14 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
         {!isExpanded && replies.length > 1 && (
           <div
             style={{
-              fontSize: 12,
+              fontSize: 11,
               color: "var(--doc-text-muted)",
               marginTop: 4,
             }}
           >
-            {replies.length - 1} more{" "}
-            {replies.length - 1 === 1 ? "reply" : "replies"}
+            {t("comments.moreReplies", {
+              count: String(replies.length - 1),
+            })}
           </div>
         )}
       </div>
@@ -618,7 +741,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       onClick={(e) => e.stopPropagation()}
       role="presentation"
       onKeyDown={(e) => e.stopPropagation()}
-      style={{ marginTop: 12 }}
+      style={{ marginTop: 8 }}
     >
       {replyingTo === replyKey ? (
         <div>
@@ -643,17 +766,17 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                 setReplyText("");
               }
             }}
-            placeholder="Reply or add others with @"
+            placeholder={t("comments.replyPlaceholder")}
             style={{
               width: "100%",
               border: "1px solid var(--doc-primary)",
-              borderRadius: 20,
+              borderRadius: 6,
               outline: "none",
-              fontSize: 14,
-              padding: "8px 16px",
-              fontFamily: "inherit",
+              fontSize: 12,
+              padding: "7px 10px",
               boxSizing: "border-box",
               color: "var(--doc-text)",
+              backgroundColor: "var(--doc-page)",
             }}
           />
           <div
@@ -673,7 +796,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
               }}
               style={CANCEL_BUTTON_STYLE}
             >
-              Cancel
+              {t("comments.cancel")}
             </button>
             <button
               type="button"
@@ -688,7 +811,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
               disabled={!replyText.trim()}
               style={submitButtonStyle(!!replyText.trim())}
             >
-              Reply
+              {t("comments.reply")}
             </button>
           </div>
         </div>
@@ -700,15 +823,14 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
             e.stopPropagation();
             setReplyingTo(replyKey);
           }}
-          placeholder="Reply or add others with @"
+          placeholder={t("comments.replyPlaceholder")}
           style={{
             width: "100%",
             border: "1px solid var(--doc-border)",
-            borderRadius: 20,
+            borderRadius: 6,
             outline: "none",
-            fontSize: 14,
-            padding: "8px 16px",
-            fontFamily: "inherit",
+            fontSize: 12,
+            padding: "7px 10px",
             color: "var(--doc-text-subtle)",
             cursor: "text",
             backgroundColor: "var(--doc-page)",
@@ -723,7 +845,10 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     const replies = getReplies(comment.id);
     const cardId = `comment-${comment.id}`;
     const isExpanded = expandedCard === cardId;
-    const yPos = cardPositions.get(cardId);
+    const isActive = activeCommentId === comment.id;
+    const yPos =
+      cardPositions.get(cardId) ??
+      lastKnownCardPositionsRef.current.get(cardId);
 
     return (
       // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
@@ -747,35 +872,38 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
         onMouseDown={(e) => e.stopPropagation()}
         style={{
           ...cardContainerStyle(cardId, isExpanded, yPos),
-          opacity:
-            hasPositions && yPos === undefined ? 0 : comment.done ? 0.6 : 1,
+          opacity: comment.done ? 0.6 : 1,
+          outline: isActive
+            ? "2px solid var(--doc-primary, var(--primary))"
+            : "none",
+          outlineOffset: 2,
         }}
       >
         {/* Header: avatar + name/date + actions */}
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
           <div style={avatarStyle(comment.author || "U")}>
             {getInitials(comment.author || "U")}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
               style={{
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: 600,
                 color: "var(--doc-text)",
               }}
             >
               {comment.author || "Unknown"}
             </div>
-            <div style={{ fontSize: 11, color: "var(--doc-text-muted)" }}>
-              {formatDate(comment.date)}
+            <div style={{ fontSize: 10, color: "var(--doc-text-muted)" }}>
+              {formatDate(comment.date, locale)}
             </div>
           </div>
           {isExpanded && (
             <div
               style={{
                 display: "flex",
-                gap: 4,
-                marginTop: 2,
+                gap: 2,
+                marginTop: 1,
                 position: "relative",
               }}
             >
@@ -788,7 +916,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                 title="Resolve"
                 style={ICON_BUTTON_STYLE}
               >
-                <CheckIcon size={20} />
+                <CheckIcon size={16} />
               </button>
               <button
                 type="button"
@@ -799,7 +927,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                 title="More options"
                 style={ICON_BUTTON_STYLE}
               >
-                <MoreVerticalIcon size={20} />
+                <MoreVerticalIcon size={16} />
               </button>
               {menuOpenFor === cardId && (
                 <div
@@ -809,10 +937,10 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                   role="menu"
                   style={{
                     position: "absolute",
-                    top: 32,
+                    top: 28,
                     right: 0,
                     background: "var(--doc-page)",
-                    borderRadius: 8,
+                    borderRadius: 6,
                     boxShadow:
                       "0 2px 6px var(--doc-shadow-md, rgba(60,64,67,0.3)), 0 1px 2px var(--doc-shadow-sm, rgba(60,64,67,0.15))",
                     zIndex: 100,
@@ -829,11 +957,11 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                     style={{
                       display: "block",
                       width: "100%",
-                      padding: "8px 16px",
+                      padding: "7px 12px",
                       border: "none",
                       background: "none",
                       textAlign: "left",
-                      fontSize: 14,
+                      fontSize: 12,
                       color: "var(--doc-text)",
                       cursor: "pointer",
                       fontFamily: "inherit",
@@ -866,10 +994,10 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
         {/* Comment body */}
         <div
           style={{
-            fontSize: 13,
+            fontSize: 12,
             color: "var(--doc-text)",
-            lineHeight: "20px",
-            marginTop: 6,
+            lineHeight: "17px",
+            marginTop: 5,
           }}
         >
           {getCommentText(comment.content)}
@@ -897,13 +1025,14 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
         left: measuredLeft ?? `calc(50% - 120px + ${pageWidth / 2 + 12}px)`,
         bottom: 0,
         width: SIDEBAR_WIDTH,
-        fontFamily: "'Google Sans', Roboto, Arial, sans-serif",
+        fontFamily: "inherit",
         zIndex: 40,
         backgroundColor: "transparent",
-        overflowY: hasPositions ? "visible" : "auto",
+        overflowY: "visible",
         overflowX: "visible",
-        opacity: hasPositions ? 1 : 0,
-        pointerEvents: hasPositions ? "auto" : "none",
+        opacity: initialPositionsDone || cardPositions.size > 0 ? 1 : 0,
+        pointerEvents:
+          initialPositionsDone || cardPositions.size > 0 ? "auto" : "none",
         transition: "opacity 0.15s ease",
       }}
       onMouseDown={(e) => e.stopPropagation()}
@@ -930,18 +1059,16 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                       right: 0,
                     }
                   : {
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      visibility: "hidden" as const,
+                      position: "relative",
+                      marginBottom: 8,
                     }
                 : { marginBottom: 8 }),
-              padding: 12,
-              borderRadius: 8,
-              backgroundColor: "var(--doc-page)",
-              boxShadow:
-                "0 1px 3px var(--doc-shadow-md, rgba(60,64,67,0.3)), 0 4px 8px 3px var(--doc-shadow-sm, rgba(60,64,67,0.15))",
+              padding: 10,
+              borderRadius: 6,
+              border: "1px solid var(--border, var(--doc-border))",
+              backgroundColor: "var(--popover, var(--doc-page))",
+              color: "var(--popover-foreground, var(--doc-text))",
+              boxShadow: "0 12px 36px var(--doc-shadow-md, rgba(0,0,0,0.28))",
               zIndex: 50,
             }}
           >
@@ -961,21 +1088,21 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                   setNewCommentText("");
                 }
               }}
-              placeholder="Add a comment..."
+              placeholder={t("comments.addPlaceholder")}
               style={{
                 width: "100%",
-                border: "1px solid var(--doc-primary)",
-                borderRadius: 20,
+                border: "1px solid var(--input, var(--doc-border-input))",
+                borderRadius: 6,
                 outline: "none",
                 resize: "none",
-                fontSize: 14,
-                lineHeight: "20px",
-                padding: "8px 16px",
+                fontSize: 13,
+                lineHeight: "18px",
+                padding: "8px 9px",
                 fontFamily: "inherit",
-                minHeight: 40,
+                minHeight: 64,
                 boxSizing: "border-box",
-                color: "var(--doc-text)",
-                background: "var(--doc-page)",
+                color: "var(--foreground, var(--doc-text))",
+                background: "var(--background, var(--doc-page))",
               }}
             />
             <div
@@ -988,21 +1115,25 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
             >
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   onCancelAddComment?.();
                   setNewCommentText("");
                 }}
                 style={CANCEL_BUTTON_STYLE}
               >
-                Cancel
+                {t("comments.cancel")}
               </button>
               <button
                 type="button"
-                onClick={handleNewCommentSubmit}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleNewCommentSubmit();
+                }}
                 disabled={!newCommentText.trim()}
                 style={submitButtonStyle(!!newCommentText.trim())}
               >
-                Comment
+                {t("comment")}
               </button>
             </div>
           </div>
@@ -1021,7 +1152,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
               fontSize: 13,
             }}
           >
-            No comments yet.
+            {t("comments.noComments")}
           </div>
         )}
       </div>

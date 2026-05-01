@@ -35,6 +35,7 @@ import type {
 } from "../../types/document";
 // oxlint-disable-next-line import/no-cycle
 import { serializeRun, serializeTextFormatting } from "./runSerializer";
+import { serializeSectionProperties } from "./sectionPropertiesSerializer";
 import { escapeXml } from "./xmlUtils";
 
 // ============================================================================
@@ -911,6 +912,8 @@ function serializeParagraphContent(content: ParagraphContent): string {
         `<w:commentRangeEnd w:id="${content.id}"/>` +
         `<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="${content.id}"/></w:r>`
       );
+    case "commentReference":
+      return `<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="${content.id}"/></w:r>`;
     case "insertion":
       return serializeTrackedChange("ins", content);
     case "deletion":
@@ -969,8 +972,13 @@ export function serializeParagraph(paragraph: Paragraph): string {
     paragraph.formatting,
     paragraph.propertyChanges,
   );
-  if (pPrXml) {
-    parts.push(pPrXml);
+  const sectionPropertiesXml = serializeSectionProperties(
+    paragraph.sectionProperties,
+  );
+  if (pPrXml || sectionPropertiesXml) {
+    parts.push(
+      `<w:pPr>${extractPPrInner(pPrXml)}${sectionPropertiesXml}</w:pPr>`,
+    );
   }
 
   // Add paragraph content

@@ -5,7 +5,7 @@
  * open (acquire lock + presigned URL) → checkpoint (auto-save) → finalize / cancel.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
@@ -288,6 +288,10 @@ export const useEditSession = ({
     debouncedCheckpoint(buffer);
   };
 
+  const markDirty = useCallback(() => {
+    setIsDirty(true);
+  }, []);
+
   const finalize = async () => {
     const session = sessionRef.current;
     if (!session) {
@@ -395,8 +399,12 @@ export const useEditSession = ({
 
   return {
     state,
+    /** Whether the current edit session has user-visible changes. */
+    isDirty,
     /** Acquire lock and load the DOCX. */
     open,
+    /** Mark the document dirty without serializing a checkpoint yet. */
+    markDirty,
     /** Mark the document dirty and queue a debounced checkpoint (auto-save). */
     checkpoint: markDirtyAndCheckpoint,
     /** Save the current document immediately. */

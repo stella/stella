@@ -99,4 +99,22 @@ describe("parseParagraph tracked-change hardening", () => {
     expect(insertion.info.author).toBe("Unknown");
     expect(insertion.info.date).toBeUndefined();
   });
+
+  test("preserves point comment references from runs", () => {
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:r><w:t>Commented text</w:t></w:r>
+        <w:r>
+          <w:rPr><w:rStyle w:val="CommentReference"/></w:rPr>
+          <w:commentReference w:id="42"/>
+        </w:r>
+      </w:p>
+    `);
+
+    expect(paragraph.content.at(0)?.type).toBe("run");
+    expect(paragraph.content.at(1)).toEqual({
+      type: "commentReference",
+      id: 42,
+    });
+  });
 });

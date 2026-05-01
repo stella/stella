@@ -128,6 +128,7 @@ import {
 } from "./layoutInstrumentation";
 // Selection sync
 import { LayoutSelectionGate } from "./LayoutSelectionGate";
+import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
 import { SelectionOverlay } from "./SelectionOverlay";
 import { getTransactionDirtyRange } from "./transactionDirtyRange";
 import { useDragAutoScroll } from "./useDragAutoScroll";
@@ -163,6 +164,8 @@ export type PagedEditorProps = {
   zoom?: number;
   /** Callback when document changes. */
   onDocumentChange?: (document: Document) => void;
+  /** Callback when a readonly user action would mutate the document. */
+  onReadOnlyEditAttempt?: () => void;
   /** Callback when selection changes. */
   onSelectionChange?: (from: number, to: number) => void;
   /** External ProseMirror plugins. */
@@ -203,6 +206,8 @@ export type PagedEditorProps = {
   }) => void;
   /** Callback with pre-computed Y positions for comment/tracked-change anchors (for sidebar positioning without DOM queries). */
   onAnchorPositionsChange?: (positions: Map<string, number>) => void;
+  /** Which mark anchors should be mapped for sidebars/margin markers. */
+  anchorPositionMode?: "comments" | "comments-and-revisions";
 };
 
 export type PagedEditorRef = {
@@ -255,12 +260,17 @@ const DEFAULT_MARGINS: PageMargins = {
 };
 
 const DEFAULT_PAGE_GAP = 24;
+const COMMENTS_SIDEBAR_SCROLL_GUTTER = 304;
 
 /** Distance in px from a row/column boundary that triggers the insert button */
 /** Distance in px from the table edge where boundary detection is active */
 const TABLE_INSERT_EDGE_PROXIMITY = 30;
 /** Delay in ms before hiding the insert button when cursor moves away */
 const TABLE_INSERT_HIDE_DELAY = 200;
+/** Delay before converting PM state back to the Folio document model. */
+const DOCUMENT_CHANGE_NOTIFY_DELAY = 250;
+/** Keep the visual caret hidden briefly while typed content relayouts. */
+const SELECTION_REVEAL_AFTER_INPUT_DELAY = 120;
 
 // Stable empty array to avoid re-creating on each render
 const EMPTY_PLUGINS: Plugin[] = [];
@@ -313,6 +323,7 @@ function computeAnchorPositions(
   blocks: FlowBlock[],
   measures: Measure[],
   _renderedPageGap: number,
+  options: { includeRevisions: boolean },
 ): Map<string, number> {
   const positions = new Map<string, number>();
   if (!pmView?.state) {
@@ -321,8 +332,12 @@ function computeAnchorPositions(
 
   const { doc: pmDoc, schema } = pmView.state;
   const commentType = schema.marks["comment"];
-  const insertionType = schema.marks["insertion"];
-  const deletionType = schema.marks["deletion"];
+  const insertionType = options.includeRevisions
+    ? schema.marks["insertion"]
+    : undefined;
+  const deletionType = options.includeRevisions
+    ? schema.marks["deletion"]
+    : undefined;
   if (!commentType && !insertionType && !deletionType) {
     return positions;
   }
@@ -1821,6 +1836,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       pageGap = DEFAULT_PAGE_GAP,
       zoom = 1,
       onDocumentChange,
+      onReadOnlyEditAttempt,
       onSelectionChange,
       externalPlugins = EMPTY_PLUGINS,
       extensionManager,
@@ -1829,12 +1845,13 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onBodyClick,
       className,
       style,
-      commentsSidebarOpen: _commentsSidebarOpen = false,
+      commentsSidebarOpen = false,
       sidebarOverlay,
       scrollContainerRef: scrollContainerRefProp,
       onHyperlinkClick,
       onContextMenu,
       onAnchorPositionsChange,
+      anchorPositionMode = "comments-and-revisions",
     } = props;
 
     // Resolve the scroll container: prefer parent-provided ref, fallback to own container
@@ -1886,6 +1903,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const [caretPosition, setCaretPosition] = useState<CaretPosition | null>(
       null,
     );
+    const suppressSelectionOverlayRef = useRef(false);
+    const revealSelectionOverlayTimerRef = useRef<number | null>(null);
 
     // Image selection state
     const [selectedImageInfo, setSelectedImageInfo] =
@@ -2295,14 +2314,22 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
 
           // Compute anchor Y positions for comments sidebar (works without DOM queries).
-          // Only runs when the sidebar callback is registered.
-          if (onAnchorPositionsChange) {
+          // This is expensive on docs with many comments/tracked changes, so typing
+          // layouts skip it and let the idle full-layout reconcile update the sidebar.
+          const shouldComputeAnchorPositions =
+            onAnchorPositionsChange &&
+            (options.forceFull === true || !options.dirtyRange);
+          if (shouldComputeAnchorPositions) {
             const positions = computeAnchorPositions(
               hiddenPMRef.current?.getView() ?? null,
               newLayout,
               newBlocks,
               newMeasures,
               pageGap,
+              {
+                includeRevisions:
+                  anchorPositionMode === "comments-and-revisions",
+              },
             );
             onAnchorPositionsChange(positions);
           }
@@ -2329,6 +2356,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         _theme,
         sectionProperties,
         onAnchorPositionsChange,
+        anchorPositionMode,
         document,
       ],
     );
@@ -2350,6 +2378,30 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       state: EditorState;
     } | null>(null);
     const idleLayoutTimerRef = useRef<number | null>(null);
+    const documentChangeNotifyTimerRef = useRef<number | null>(null);
+
+    const flushDocumentChangeNotification = useCallback(() => {
+      if (documentChangeNotifyTimerRef.current !== null) {
+        window.clearTimeout(documentChangeNotifyTimerRef.current);
+        documentChangeNotifyTimerRef.current = null;
+      }
+
+      const newDoc = hiddenPMRef.current?.getDocument();
+      if (newDoc) {
+        onDocumentChangeRef.current?.(newDoc);
+      }
+    }, []);
+
+    const scheduleDocumentChangeNotification = useCallback(() => {
+      if (documentChangeNotifyTimerRef.current !== null) {
+        window.clearTimeout(documentChangeNotifyTimerRef.current);
+      }
+
+      documentChangeNotifyTimerRef.current = window.setTimeout(() => {
+        documentChangeNotifyTimerRef.current = null;
+        flushDocumentChangeNotification();
+      }, DOCUMENT_CHANGE_NOTIFY_DELAY);
+    }, [flushDocumentChangeNotification]);
 
     const scheduleIdleFullLayout = useCallback(
       (state: EditorState) => {
@@ -2416,6 +2468,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         if (idleLayoutTimerRef.current !== null) {
           window.clearTimeout(idleLayoutTimerRef.current);
           idleLayoutTimerRef.current = null;
+        }
+        if (documentChangeNotifyTimerRef.current !== null) {
+          window.clearTimeout(documentChangeNotifyTimerRef.current);
+          documentChangeNotifyTimerRef.current = null;
         }
       },
       [],
@@ -2615,6 +2671,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         // Always notify selection change (for toolbar sync) even if layout not ready
         // Use ref to avoid infinite loops when callback is unstable
         onSelectionChangeRef.current?.(from, to);
+
+        if (suppressSelectionOverlayRef.current) {
+          setCaretPosition(null);
+          setSelectionRects([]);
+          return;
+        }
 
         // Update visual cell selection highlighting on visible layout table cells
         if (pagesContainerRef.current) {
@@ -2825,6 +2887,35 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       // NOTE: onSelectionChange removed from dependencies - accessed via ref to prevent infinite loops
     );
 
+    const hideSelectionOverlayDuringInput = useCallback(
+      (state: EditorState) => {
+        suppressSelectionOverlayRef.current = true;
+        setCaretPosition(null);
+        setSelectionRects([]);
+
+        if (revealSelectionOverlayTimerRef.current !== null) {
+          window.clearTimeout(revealSelectionOverlayTimerRef.current);
+        }
+
+        revealSelectionOverlayTimerRef.current = window.setTimeout(() => {
+          revealSelectionOverlayTimerRef.current = null;
+          suppressSelectionOverlayRef.current = false;
+          updateSelectionOverlay(hiddenPMRef.current?.getState() ?? state);
+        }, SELECTION_REVEAL_AFTER_INPUT_DELAY);
+      },
+      [updateSelectionOverlay],
+    );
+
+    useEffect(
+      () => () => {
+        if (revealSelectionOverlayTimerRef.current !== null) {
+          window.clearTimeout(revealSelectionOverlayTimerRef.current);
+          revealSelectionOverlayTimerRef.current = null;
+        }
+      },
+      [],
+    );
+
     // =========================================================================
     // Event Handlers
     // =========================================================================
@@ -2838,14 +2929,13 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // Increment state sequence to signal document changed
           syncCoordinator.incrementStateSeq();
 
+          hideSelectionOverlayDuringInput(newState);
+
           // Content changed - schedule layout (coalesced via rAF)
           scheduleLayout(newState, getTransactionDirtyRange(transaction));
 
-          // Notify document change - use ref to avoid infinite loops
-          const newDoc = hiddenPMRef.current?.getDocument();
-          if (newDoc) {
-            onDocumentChangeRef.current?.(newDoc);
-          }
+          // Convert back to the Folio document model off the keypress path.
+          scheduleDocumentChangeNotification();
         }
 
         // Request selection update (will only execute when layout is current)
@@ -2859,7 +2949,13 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           updateSelectionOverlay(newState);
         }
       },
-      [scheduleLayout, updateSelectionOverlay, syncCoordinator],
+      [
+        scheduleLayout,
+        scheduleDocumentChangeNotification,
+        hideSelectionOverlayDuringInput,
+        updateSelectionOverlay,
+        syncCoordinator,
+      ],
       // NOTE: onDocumentChange removed from dependencies - accessed via ref to prevent infinite loops
     );
 
@@ -3075,6 +3171,72 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       }
     }, []);
 
+    const focusHiddenEditor = useCallback(() => {
+      if (readOnly) {
+        containerRef.current?.focus({ preventScroll: true });
+        setIsFocused(true);
+        return;
+      }
+
+      hiddenPMRef.current?.focus();
+      setIsFocused(true);
+    }, [readOnly]);
+
+    const startPointerTextSelection = useCallback(
+      (clientX: number, clientY: number) => {
+        const pmPos = getPositionFromMouse(clientX, clientY);
+
+        if (pmPos !== null) {
+          const cellPos = findCellPosFromPmPos(pmPos);
+          cellDragAnchorPosRef.current = cellPos;
+          isCellDraggingRef.current = false;
+          cellDragLastPmPosRef.current = null;
+          cellDragOverflowXRef.current = null;
+
+          isDraggingRef.current = true;
+          dragAnchorRef.current = pmPos;
+          hiddenPMRef.current?.setSelection(pmPos);
+        } else {
+          cellDragAnchorPosRef.current = null;
+          isCellDraggingRef.current = false;
+          const view = hiddenPMRef.current?.getView();
+          if (view) {
+            const endPos = Math.max(0, view.state.doc.content.size - 1);
+            hiddenPMRef.current?.setSelection(endPos);
+            dragAnchorRef.current = endPos;
+            isDraggingRef.current = true;
+          }
+        }
+
+        focusHiddenEditor();
+      },
+      [findCellPosFromPmPos, focusHiddenEditor, getPositionFromMouse],
+    );
+
+    const copySelectionText = useCallback(() => {
+      const view = hiddenPMRef.current?.getView();
+      if (!view) {
+        return false;
+      }
+
+      const { from, to } = view.state.selection;
+      if (from === to) {
+        return false;
+      }
+
+      const text = view.state.doc.textBetween(from, to, "\n");
+      if (!text) {
+        return false;
+      }
+
+      if (!navigator.clipboard) {
+        return false;
+      }
+
+      void navigator.clipboard.writeText(text).catch(() => undefined);
+      return false;
+    }, []);
+
     /**
      * Handle mousedown on pages - start selection or drag.
      */
@@ -3109,12 +3271,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           e.preventDefault(); // Prevent navigation only
         }
 
-        if (readOnly) {
-          return;
-        }
-
         // When in HF edit mode, clicks outside header/footer area close the HF editor
-        if (hfEditMode && onBodyClick) {
+        if (!readOnly && hfEditMode && onBodyClick) {
           const target = e.target as HTMLElement;
           const isInHfArea =
             target.closest(".layout-page-header") ||
@@ -3130,7 +3288,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         // In normal mode, clicks in header/footer area should place cursor at
         // start of body content, not inside header/footer (matches Word/Google Docs)
-        if (!hfEditMode) {
+        if (!readOnly && !hfEditMode) {
           const target = e.target as HTMLElement;
           const isInHfArea =
             target.closest(".layout-page-header") ||
@@ -3149,7 +3307,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         // Column resize: intercept clicks on resize handles
         const target = e.target as HTMLElement;
-        if (target.classList.contains("layout-table-resize-handle")) {
+        if (
+          !readOnly &&
+          target.classList.contains("layout-table-resize-handle")
+        ) {
           e.preventDefault();
           e.stopPropagation();
           isResizingColumnRef.current = true;
@@ -3196,8 +3357,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         // Row resize: intercept clicks on row resize handles or bottom edge handle
         if (
-          target.classList.contains("layout-table-row-resize-handle") ||
-          target.classList.contains("layout-table-edge-handle-bottom")
+          !readOnly &&
+          (target.classList.contains("layout-table-row-resize-handle") ||
+            target.classList.contains("layout-table-edge-handle-bottom"))
         ) {
           e.preventDefault();
           e.stopPropagation();
@@ -3263,7 +3425,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         }
 
         // Right edge resize: intercept clicks on right edge handle
-        if (target.classList.contains("layout-table-edge-handle-right")) {
+        if (
+          !readOnly &&
+          target.classList.contains("layout-table-edge-handle-right")
+        ) {
           e.preventDefault();
           e.stopPropagation();
           isResizingRightEdgeRef.current = true;
@@ -3303,7 +3468,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         // Check if the click target is an image element
         const imageEl = findImageElement(target);
-        if (imageEl) {
+        if (!readOnly && imageEl) {
           e.preventDefault();
           e.stopPropagation();
 
@@ -3316,8 +3481,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             setCaretPosition(null);
           }
 
-          hiddenPMRef.current.focus();
-          setIsFocused(true);
+          focusHiddenEditor();
           return;
         }
 
@@ -3326,38 +3490,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         e.preventDefault(); // Prevent native text selection
 
-        const pmPos = getPositionFromMouse(e.clientX, e.clientY);
-
-        if (pmPos !== null) {
-          // Check if click is inside a table cell - track for potential cell drag selection
-          const cellPos = findCellPosFromPmPos(pmPos);
-          cellDragAnchorPosRef.current = cellPos;
-          isCellDraggingRef.current = false;
-          cellDragLastPmPosRef.current = null;
-          cellDragOverflowXRef.current = null;
-
-          // Start dragging
-          isDraggingRef.current = true;
-          dragAnchorRef.current = pmPos;
-
-          // Set initial selection (collapsed)
-          hiddenPMRef.current.setSelection(pmPos);
-        } else {
-          // Clicked outside content - move to end
-          cellDragAnchorPosRef.current = null;
-          isCellDraggingRef.current = false;
-          const view = hiddenPMRef.current.getView();
-          if (view) {
-            const endPos = Math.max(0, view.state.doc.content.size - 1);
-            hiddenPMRef.current.setSelection(endPos);
-            dragAnchorRef.current = endPos;
-            isDraggingRef.current = true;
-          }
-        }
-
-        // Focus the hidden editor
-        hiddenPMRef.current.focus();
-        setIsFocused(true);
+        startPointerTextSelection(e.clientX, e.clientY);
       },
       // oxlint-disable-next-line react-hooks/exhaustive-deps
       [
@@ -3369,6 +3502,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         zoom,
         onHyperlinkClick,
         clearTableInsertTimer,
+        focusHiddenEditor,
+        startPointerTextSelection,
       ],
     );
 
@@ -3992,7 +4127,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         }
 
         // Double-click on header/footer area triggers editing mode
-        if (e.detail === 2 && onHeaderFooterDoubleClick) {
+        if (!readOnly && e.detail === 2 && onHeaderFooterDoubleClick) {
           const target = e.target as HTMLElement;
           const headerEl = target.closest(".layout-page-header");
           const footerEl = target.closest(".layout-page-footer");
@@ -4084,7 +4219,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         }
       },
       // oxlint-disable-next-line react-hooks/exhaustive-deps
-      [getPositionFromMouse, onHeaderFooterDoubleClick, onHyperlinkClick],
+      [
+        getPositionFromMouse,
+        onHeaderFooterDoubleClick,
+        onHyperlinkClick,
+        readOnly,
+      ],
     );
 
     /**
@@ -4130,18 +4270,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const handleContainerFocus = useCallback(
       (e: React.FocusEvent) => {
-        if (readOnly) {
-          return;
-        }
         // Don't steal focus from sidebar inputs (textareas, inputs, buttons)
         const target = e.target as HTMLElement;
         if (target.closest(".docx-comments-sidebar")) {
           return;
         }
-        hiddenPMRef.current?.focus();
-        setIsFocused(true);
+        focusHiddenEditor();
       },
-      [readOnly],
+      [focusHiddenEditor],
     );
 
     /**
@@ -4333,13 +4469,28 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const handleKeyDown = useCallback(
       (e: React.KeyboardEvent) => {
-        if (readOnly) {
+        if (
+          readOnly &&
+          (e.metaKey || e.ctrlKey) &&
+          e.key.toLowerCase() === "c"
+        ) {
+          if (copySelectionText()) {
+            e.preventDefault();
+          }
           return;
         }
+
+        if (readOnly) {
+          if (isReadOnlyEditKey(e)) {
+            onReadOnlyEditAttempt?.();
+            e.preventDefault();
+          }
+          return;
+        }
+
         // Ensure hidden PM is focused if user types
         if (!hiddenPMRef.current?.isFocused()) {
-          hiddenPMRef.current?.focus();
-          setIsFocused(true);
+          focusHiddenEditor();
         }
 
         // Prevent space from scrolling the container - let PM handle it as text input.
@@ -4401,7 +4552,13 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
         }
       },
-      [readOnly, getScrollContainer],
+      [
+        copySelectionText,
+        focusHiddenEditor,
+        getScrollContainer,
+        onReadOnlyEditAttempt,
+        readOnly,
+      ],
     );
 
     /**
@@ -4409,20 +4566,16 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const handleContainerMouseDown = useCallback(
       (e: React.MouseEvent) => {
-        if (readOnly) {
-          return;
-        }
         // Don't steal focus from sidebar inputs
         if ((e.target as HTMLElement).closest(".docx-comments-sidebar")) {
           return;
         }
         // Focus hidden PM if clicking outside pages area
         if (!hiddenPMRef.current?.isFocused()) {
-          hiddenPMRef.current?.focus();
-          setIsFocused(true);
+          focusHiddenEditor();
         }
       },
-      [readOnly],
+      [focusHiddenEditor],
     );
 
     // =========================================================================
@@ -4607,7 +4760,11 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       return numPages * pageSize.h + (numPages - 1) * pageGap + 48;
     }, [layout, pageSize.h, pageGap]);
     const scaledViewportHeight = Math.max(1, totalHeight * zoom);
-    const scaledViewportWidth = Math.max(1, pageSize.w * zoom);
+    const scaledViewportWidth = Math.max(
+      1,
+      pageSize.w * zoom +
+        (commentsSidebarOpen ? COMMENTS_SIDEBAR_SCROLL_GUTTER : 0),
+    );
     const viewportExtentStyle: CSSProperties = {
       position: "relative",
       width: `max(100%, ${String(scaledViewportWidth)}px)`,
@@ -4629,7 +4786,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         return parts.length > 0 ? parts.join(" ") : undefined;
       })(),
       transformOrigin: "top left",
-      transition: "transform 0.2s ease",
     };
 
     return (
@@ -4659,6 +4815,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           {...(styles !== undefined ? { styles } : {})}
           {...(externalPlugins !== undefined ? { externalPlugins } : {})}
           {...(extensionManager !== undefined ? { extensionManager } : {})}
+          {...(onReadOnlyEditAttempt !== undefined
+            ? { onReadOnlyEditAttempt }
+            : {})}
         />
 
         {/* Viewport for visible pages */}
@@ -4685,21 +4844,22 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               caretPosition={caretPosition}
               isFocused={isFocused}
               pageGap={pageGap}
-              readOnly={readOnly}
             />
 
             {/* Image selection overlay */}
-            <ImageSelectionOverlay
-              imageInfo={selectedImageInfo}
-              zoom={zoom}
-              isFocused={isFocused}
-              onResize={handleImageResize}
-              onResizeStart={handleImageResizeStart}
-              onResizeEnd={handleImageResizeEnd}
-              onDragMove={handleImageDragMove}
-              onDragStart={handleImageDragStart}
-              onDragEnd={handleImageDragEnd}
-            />
+            {!readOnly && (
+              <ImageSelectionOverlay
+                imageInfo={selectedImageInfo}
+                zoom={zoom}
+                isFocused={isFocused}
+                onResize={handleImageResize}
+                onResizeStart={handleImageResizeStart}
+                onResizeEnd={handleImageResizeEnd}
+                onDragMove={handleImageDragMove}
+                onDragStart={handleImageDragStart}
+                onDragEnd={handleImageDragEnd}
+              />
+            )}
 
             {/* Table quick action insert button */}
             {tableInsertButton && (

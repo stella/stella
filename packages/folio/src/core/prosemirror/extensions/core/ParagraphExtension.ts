@@ -317,6 +317,7 @@ const paragraphNodeSpec: NodeSpec = {
     numPr: { default: null },
     listNumFmt: { default: null },
     listIsBullet: { default: null },
+    listIsLegal: { default: null },
     listMarker: { default: null },
     listMarkerHidden: { default: null },
     listMarkerFontFamily: { default: null },

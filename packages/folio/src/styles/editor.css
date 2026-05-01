@@ -411,7 +411,7 @@
 }
 
 .paged-editor--readonly .layout-page-content {
-  cursor: default;
+  cursor: text;
 }
 
 /* ============================================================================

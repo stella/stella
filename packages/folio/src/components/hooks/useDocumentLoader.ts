@@ -6,6 +6,8 @@
 
 import { useRef, useCallback, useEffect } from "react";
 
+import { inspectDocxCompatibility } from "../../core/docx/compatibility";
+import type { DocxCompatibility } from "../../core/docx/compatibility";
 import { parseDocx } from "../../core/docx/parser";
 import type { Document } from "../../core/types/document";
 import { resetAuthorColors } from "../../core/utils/authorColors";
@@ -26,6 +28,10 @@ type UseDocumentLoaderParams = {
   history: UseHistoryReturn<Document | null>;
   /** Called when an unrecoverable parse error occurs. */
   onError: ((error: Error) => void) | undefined;
+  /** Called after parsing to report whether editing can preserve fidelity. */
+  onCompatibilityChange:
+    | ((compatibility: DocxCompatibility) => void)
+    | undefined;
   /**
    * Callback invoked at the start of every load to let the host component
    * clear UI state that is coupled to the previous document (comments,
@@ -61,6 +67,7 @@ export const useDocumentLoader = ({
   initialDocument,
   history,
   onError,
+  onCompatibilityChange,
   onReset,
   setDocumentLoadState,
 }: UseDocumentLoaderParams): UseDocumentLoaderReturn => {
@@ -87,13 +94,14 @@ export const useDocumentLoader = ({
     (doc: Document) => {
       resetForNewDocument();
       history.reset(doc);
+      onCompatibilityChange?.(inspectDocxCompatibility(doc));
       setDocumentLoadState({ status: "ready" });
       // Defer font loading so the first page renders immediately
       if (doc.requiredFonts && doc.requiredFonts.length > 0) {
         loadFontsWithMapping(doc.requiredFonts).catch(() => undefined);
       }
     },
-    [resetForNewDocument, history, setDocumentLoadState],
+    [resetForNewDocument, history, onCompatibilityChange, setDocumentLoadState],
   );
 
   // -------------------------------------------------------------------
@@ -103,8 +111,10 @@ export const useDocumentLoader = ({
   const loadBuffer = useCallback(
     async (buffer: DocxInput) => {
       const generation = ++loadGenerationRef.current;
-      resetForNewDocument();
-      setDocumentLoadState({ status: "loading" });
+      const hasLoadedDocument = history.state !== null;
+      if (!hasLoadedDocument) {
+        setDocumentLoadState({ status: "loading" });
+      }
 
       try {
         // Skip blocking font preload during parsing; fonts are loaded
@@ -125,7 +135,7 @@ export const useDocumentLoader = ({
         onError?.(error instanceof Error ? error : new Error(message));
       }
     },
-    [resetForNewDocument, loadParsedDocument, onError, setDocumentLoadState],
+    [history.state, loadParsedDocument, onError, setDocumentLoadState],
   );
 
   // -------------------------------------------------------------------

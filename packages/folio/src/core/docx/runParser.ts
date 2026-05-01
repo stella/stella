@@ -52,6 +52,7 @@ import {
   getTextContent,
   parseBooleanElement,
   parseNumericAttribute,
+  elementToXml,
 } from "./xmlParser";
 import type { XmlElement } from "./xmlParser";
 
@@ -674,10 +675,15 @@ function parseDrawingContent(
     return null;
   }
 
-  return {
+  const drawing: DrawingContent = {
     type: "drawing",
     image,
   };
+  if (!image.src) {
+    drawing.rawXml = elementToXml(element);
+  }
+
+  return drawing;
 }
 
 /**
@@ -801,8 +807,12 @@ function parseRunContents(
             const innerName = getLocalName(innerChild.name);
             if (innerName === "drawing") {
               const innerDrawing = parseDrawingContent(innerChild, rels, media);
-              // Only include drawings that have actual image data (skip shapes/connectors)
-              if (innerDrawing?.image?.src) {
+              // Keep package-referenced drawings even when the browser cannot render
+              // the media. The serializer must preserve the relationship reference.
+              if (innerDrawing) {
+                if (!innerDrawing.image.src) {
+                  innerDrawing.rawXml = elementToXml(child);
+                }
                 contents.push(innerDrawing);
               }
             }

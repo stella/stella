@@ -6,6 +6,7 @@
  */
 
 import type {
+  BlockContent,
   Paragraph,
   Table,
   TableCell,
@@ -309,37 +310,60 @@ export function findInDocument(
     return matches;
   }
 
-  let paragraphIndex = 0;
-  for (const block of body.content) {
-    if (isParagraph(block)) {
-      const paragraphMatches = findInParagraph(
-        block,
-        searchText,
-        options,
-        paragraphIndex,
-      );
-      matches.push(...paragraphMatches);
-      paragraphIndex++;
-    } else if (isTable(block)) {
-      for (const row of block.rows) {
-        if (!isTableRow(row)) {
-          continue;
-        }
-        for (const cell of row.cells) {
-          if (!isTableCell(cell)) {
-            continue;
-          }
-          for (const cellContent of cell.content) {
-            if (isParagraph(cellContent)) {
-              // Table paragraphs tracked separately - skip for now
-            }
-          }
-        }
-      }
-    }
-  }
+  forEachParagraph(body.content, (block, paragraphIndex) => {
+    const paragraphMatches = findInParagraph(
+      block,
+      searchText,
+      options,
+      paragraphIndex,
+    );
+    matches.push(...paragraphMatches);
+  });
 
   return matches;
+}
+
+type ParagraphVisitor = (paragraph: Paragraph, paragraphIndex: number) => void;
+
+function forEachParagraph(
+  blocks: readonly BlockContent[],
+  visit: ParagraphVisitor,
+): void {
+  let paragraphIndex = 0;
+  const walkBlocks = (items: readonly BlockContent[]): void => {
+    for (const block of items) {
+      if (isParagraph(block)) {
+        visit(block, paragraphIndex);
+        paragraphIndex++;
+        continue;
+      }
+
+      if (isTable(block)) {
+        walkTable(block);
+        continue;
+      }
+
+      if (isBlockSdt(block)) {
+        walkBlocks(block.content);
+      }
+    }
+  };
+
+  const walkTable = (table: Table): void => {
+    for (const row of table.rows) {
+      if (!isTableRow(row)) {
+        continue;
+      }
+      for (const cell of row.cells) {
+        if (!isTableCell(cell)) {
+          continue;
+        }
+        walkBlocks(cell.content);
+      }
+    }
+  };
+
+  walkBlocks(blocks);
 }
 
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
@@ -372,6 +396,16 @@ function isTableRow(value: unknown): value is TableRow {
 
 function isTableCell(value: unknown): value is TableCell {
   return isRecord(value) && Array.isArray(value["content"]);
+}
+
+function isBlockSdt(
+  value: unknown,
+): value is Extract<BlockContent, { type: "blockSdt" }> {
+  return (
+    isRecord(value) &&
+    value["type"] === "blockSdt" &&
+    Array.isArray(value["content"])
+  );
 }
 
 /**
@@ -462,9 +496,16 @@ export function scrollToMatch(
     return;
   }
 
-  const paragraphElement = containerElement.querySelector(
-    `[data-paragraph-index="${match.paragraphIndex}"]`,
-  );
+  const paragraphElement =
+    containerElement.querySelector(
+      `[data-paragraph-index="${match.paragraphIndex}"]`,
+    ) ??
+    containerElement.querySelector(
+      `.layout-paragraph[data-block-id="block-${match.paragraphIndex + 1}"]`,
+    ) ??
+    containerElement
+      .querySelectorAll(".layout-paragraph")
+      .item(match.paragraphIndex);
 
   if (paragraphElement) {
     paragraphElement.scrollIntoView({ behavior: "smooth", block: "center" });

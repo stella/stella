@@ -54,6 +54,8 @@ export type ParagraphAttrs = {
   listNumFmt?: NumberFormat;
   /** Whether this is a bullet list */
   listIsBullet?: boolean;
+  /** Whether this level uses legal numbering (parent placeholders render decimal). */
+  listIsLegal?: boolean;
   /** Computed list marker text (e.g., "1.", "1.1.", "•") */
   listMarker?: string;
   /** Whether the list marker is hidden (w:vanish on numbering level rPr) */

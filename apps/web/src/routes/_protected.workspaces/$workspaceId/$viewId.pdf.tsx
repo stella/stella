@@ -39,6 +39,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type { EntityField, EntityKind } from "@/lib/types";
 import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
+import { shouldUseDocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
 import {
   useDocxFitZoom,
   useDocxWheelZoom,
@@ -287,6 +288,12 @@ function RouteComponentInner({
   const filePropertyId =
     activeFileField?.propertyId ?? activeVersionFile?.propertyId;
   const isCurrentVersionFile = activeFileField !== undefined;
+  const useDocxBrowserEditor = shouldUseDocxBrowserEditor({
+    isCurrentVersionFile,
+    isDocxFile,
+    hasFilePropertyId: filePropertyId !== undefined,
+    isComparing,
+  });
 
   return (
     <div className="bg-secondary relative flex h-full max-h-[calc(100vh-3rem)] flex-1 overflow-hidden border-t">
@@ -326,47 +333,13 @@ function RouteComponentInner({
 
         {/* Center: DOCX editor, PDF viewer, or redline comparison */}
         <Panel>
-          {editing && isCurrentVersionFile && isDocxFile && filePropertyId ? (
-            <DocxBrowserEditor
-              actionsRef={docxEditorActionsRef}
-              actionBarControls={
-                <FullViewDocxEditControls
-                  actionsRef={docxEditorActionsRef}
-                  onScaleOffsetChange={setPdfScaleOffset}
-                  scaleOffset={scaleOffset}
-                />
-              }
-              entityId={entityId}
-              fieldId={fieldId}
-              onClose={() => {
-                void navigate({
-                  search: (prev) => ({ ...prev, editing: undefined }),
-                });
-              }}
-              onSaved={(savedFieldId) => {
-                setActiveFieldId(savedFieldId);
-                void navigate({
-                  replace: true,
-                  search: (prev) => ({
-                    ...prev,
-                    editing: undefined,
-                    field: savedFieldId,
-                    pdfPage: undefined,
-                  }),
-                });
-              }}
-              propertyId={filePropertyId}
-              scaleOffset={scaleOffset}
-              workspaceId={workspaceId}
-            />
-          ) : (
+          {useDocxBrowserEditor && filePropertyId ? (
             <VersionDropZone
-              disabled={!!compareState}
+              disabled={false}
               entityId={entityId}
               workspaceId={workspaceId}
             >
-              {/* "Edit in browser" button for DOCX files */}
-              {isCurrentVersionFile && isDocxFile && !compareState && (
+              {!editing && (
                 <div className="absolute end-2 top-2 z-10">
                   <Button
                     onClick={() => {
@@ -382,6 +355,51 @@ function RouteComponentInner({
                   </Button>
                 </div>
               )}
+              <DocxBrowserEditor
+                actionsRef={docxEditorActionsRef}
+                actionBarControls={
+                  <FullViewDocxEditControls
+                    actionsRef={docxEditorActionsRef}
+                    onScaleOffsetChange={setPdfScaleOffset}
+                    scaleOffset={scaleOffset}
+                  />
+                }
+                entityId={entityId}
+                fieldId={fieldId}
+                isEditing={editing}
+                onClose={() => {
+                  void navigate({
+                    search: (prev) => ({ ...prev, editing: undefined }),
+                  });
+                }}
+                onPreviewDoubleClick={() => {
+                  void navigate({
+                    search: (prev) => ({ ...prev, editing: true }),
+                  });
+                }}
+                onSaved={(savedFieldId) => {
+                  setActiveFieldId(savedFieldId);
+                  void navigate({
+                    replace: true,
+                    search: (prev) => ({
+                      ...prev,
+                      editing: undefined,
+                      field: savedFieldId,
+                      pdfPage: undefined,
+                    }),
+                  });
+                }}
+                propertyId={filePropertyId}
+                scaleOffset={scaleOffset}
+                workspaceId={workspaceId}
+              />
+            </VersionDropZone>
+          ) : (
+            <VersionDropZone
+              disabled={!!compareState}
+              entityId={entityId}
+              workspaceId={workspaceId}
+            >
               {compareState ? (
                 <RedlineOverlay
                   compareState={compareState}
@@ -626,7 +644,7 @@ const ReadOnlyDocxDocumentViewer = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const targetZoom = useDocxFitZoom(containerRef, scaleOffset, 0.85);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     editorRef.current?.setZoom(targetZoom);
   }, [targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);

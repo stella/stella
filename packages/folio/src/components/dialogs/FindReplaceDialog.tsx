@@ -12,6 +12,17 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import type { CSSProperties, KeyboardEvent, ChangeEvent } from "react";
 
+import { Button } from "@stll/ui/components/button";
+import { Checkbox } from "@stll/ui/components/checkbox";
+import { Input } from "@stll/ui/components/input";
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  SearchIcon,
+  XIcon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import type { FindOptions, FindResult, FindMatch } from "./findReplaceUtils";
 
 // Re-export types and utilities so existing imports still work
@@ -86,210 +97,6 @@ export type FindReplaceDialogProps = {
 };
 
 // ============================================================================
-// STYLES
-// ============================================================================
-
-const DIALOG_OVERLAY_STYLE: CSSProperties = {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: "transparent",
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "flex-end",
-  zIndex: 10_000,
-  pointerEvents: "none",
-};
-
-const DIALOG_CONTENT_STYLE: CSSProperties = {
-  backgroundColor: "var(--doc-page)",
-  borderRadius: "4px",
-  boxShadow: "0 4px 20px var(--doc-shadow-md)",
-  minWidth: "360px",
-  maxWidth: "440px",
-  width: "100%",
-  margin: "60px 20px 20px 20px",
-  pointerEvents: "auto",
-};
-
-const DIALOG_HEADER_STYLE: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: "12px 16px",
-  borderBottom: "1px solid var(--doc-border)",
-  backgroundColor: "var(--doc-bg-subtle)",
-  borderTopLeftRadius: "4px",
-  borderTopRightRadius: "4px",
-};
-
-const DIALOG_TITLE_STYLE: CSSProperties = {
-  margin: 0,
-  fontSize: "14px",
-  fontWeight: 600,
-  color: "var(--doc-text)",
-};
-
-const CLOSE_BUTTON_STYLE: CSSProperties = {
-  background: "none",
-  border: "none",
-  fontSize: "18px",
-  cursor: "pointer",
-  color: "var(--doc-text-muted)",
-  padding: "2px 6px",
-  lineHeight: 1,
-};
-
-const DIALOG_BODY_STYLE: CSSProperties = {
-  padding: "16px",
-};
-
-const ROW_STYLE: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  marginBottom: "12px",
-};
-
-const LABEL_STYLE: CSSProperties = {
-  width: "60px",
-  fontSize: "13px",
-  color: "var(--doc-text)",
-  flexShrink: 0,
-};
-
-const INPUT_STYLE: CSSProperties = {
-  flex: 1,
-  padding: "8px 10px",
-  border: "1px solid var(--doc-border-input)",
-  borderRadius: "3px",
-  fontSize: "13px",
-  boxSizing: "border-box",
-  outline: "none",
-};
-
-const INPUT_FOCUS_STYLE: CSSProperties = {
-  ...INPUT_STYLE,
-  borderColor: "var(--doc-link)",
-  boxShadow: "0 0 0 2px var(--doc-focus-ring)",
-};
-
-const BUTTON_CONTAINER_STYLE: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "6px",
-  marginLeft: "8px",
-};
-
-const BUTTON_BASE_STYLE: CSSProperties = {
-  padding: "6px 12px",
-  borderRadius: "3px",
-  fontSize: "12px",
-  fontWeight: 500,
-  cursor: "pointer",
-  border: "1px solid var(--doc-border-input)",
-  backgroundColor: "var(--doc-bg-input)",
-  color: "var(--doc-text)",
-  minWidth: "80px",
-  textAlign: "center",
-};
-
-const BUTTON_DISABLED_STYLE: CSSProperties = {
-  ...BUTTON_BASE_STYLE,
-  backgroundColor: "var(--doc-bg-hover)",
-  color: "var(--doc-text-placeholder)",
-  cursor: "not-allowed",
-};
-
-const NAV_BUTTON_STYLE: CSSProperties = {
-  padding: "6px 10px",
-  borderRadius: "3px",
-  fontSize: "14px",
-  cursor: "pointer",
-  border: "1px solid var(--doc-border-input)",
-  backgroundColor: "var(--doc-bg-input)",
-  color: "var(--doc-text)",
-};
-
-const NAV_BUTTON_DISABLED_STYLE: CSSProperties = {
-  ...NAV_BUTTON_STYLE,
-  color: "var(--doc-border-input)",
-  cursor: "not-allowed",
-};
-
-const OPTIONS_CONTAINER_STYLE: CSSProperties = {
-  display: "flex",
-  gap: "16px",
-  marginTop: "4px",
-  marginLeft: "68px",
-};
-
-const CHECKBOX_LABEL_STYLE: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "6px",
-  fontSize: "12px",
-  color: "var(--doc-text-muted)",
-  cursor: "pointer",
-};
-
-const CHECKBOX_STYLE: CSSProperties = {
-  width: "14px",
-  height: "14px",
-  cursor: "pointer",
-};
-
-const STATUS_STYLE: CSSProperties = {
-  marginLeft: "68px",
-  fontSize: "12px",
-  color: "var(--doc-text-muted)",
-  marginBottom: "8px",
-};
-
-const NO_RESULTS_STYLE: CSSProperties = {
-  ...STATUS_STYLE,
-  color: "var(--doc-error)",
-};
-
-// ============================================================================
-// ICONS
-// ============================================================================
-
-const ChevronUpIcon: React.FC<{ style?: CSSProperties }> = ({ style }) => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    style={style}
-  >
-    <polyline points="18 15 12 9 6 15" />
-  </svg>
-);
-
-const ChevronDownIcon: React.FC<{ style?: CSSProperties }> = ({ style }) => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    style={style}
-  >
-    <polyline points="6 9 12 15 18 9" />
-  </svg>
-);
-
-// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -312,6 +119,7 @@ export function FindReplaceDialog({
   className,
   style,
 }: FindReplaceDialogProps): React.ReactElement | null {
+  const t = useTranslations("folio");
   // State
   const [searchText, setSearchText] = useState("");
   const [replaceText, setReplaceText] = useState("");
@@ -319,8 +127,6 @@ export function FindReplaceDialog({
   const [matchCase, setMatchCase] = useState(false);
   const [matchWholeWord, setMatchWholeWord] = useState(false);
   const [result, setResult] = useState<FindResult | null>(null);
-  const [searchFocused, setSearchFocused] = useState(false);
-  const [replaceFocused, setReplaceFocused] = useState(false);
 
   // Refs
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -563,211 +369,166 @@ export function FindReplaceDialog({
   return (
     <div
       role="presentation"
-      className={`docx-find-replace-dialog-overlay ${className || ""}`}
-      style={{ ...DIALOG_OVERLAY_STYLE, ...style }}
+      className={`docx-find-replace-dialog-overlay pointer-events-none fixed inset-0 z-[10000] flex items-start justify-end bg-transparent ${className || ""}`}
+      style={style}
+      data-slot="folio-find-replace-overlay"
       onClick={handleOverlayClick}
       onKeyDown={handleDialogKeyDown}
     >
       <div
-        className="docx-find-replace-dialog"
+        className="docx-find-replace-dialog bg-popover text-popover-foreground pointer-events-auto me-5 mt-15 w-[min(440px,calc(100vw-40px))] rounded-lg border shadow-xl"
         data-testid="find-replace-dialog"
-        style={DIALOG_CONTENT_STYLE}
         role="dialog"
         aria-modal="false"
         aria-labelledby="find-replace-dialog-title"
       >
-        {/* Header */}
-        <div
-          className="docx-find-replace-dialog-header"
-          style={DIALOG_HEADER_STYLE}
-        >
-          <h2 id="find-replace-dialog-title" style={DIALOG_TITLE_STYLE}>
-            {showReplace ? "Find and Replace" : "Find"}
-          </h2>
-          <button
-            type="button"
-            className="docx-find-replace-dialog-close"
-            style={CLOSE_BUTTON_STYLE}
-            onClick={onClose}
-            aria-label="Close dialog"
+        <div className="bg-muted/30 flex items-center justify-between gap-3 border-b px-3 py-2">
+          <h2
+            id="find-replace-dialog-title"
+            className="flex min-w-0 items-center gap-2 text-sm font-medium"
           >
-            &times;
-          </button>
+            <SearchIcon className="text-muted-foreground size-4 shrink-0" />
+            <span className="truncate">
+              {showReplace
+                ? t("findReplace.findAndReplace")
+                : t("findReplace.find")}
+            </span>
+          </h2>
+          <Button
+            onClick={onClose}
+            aria-label={t("findReplace.close")}
+            size="icon-xs"
+            title={t("findReplace.close")}
+            variant="ghost"
+          >
+            <XIcon />
+          </Button>
         </div>
 
-        {/* Body */}
-        <div
-          className="docx-find-replace-dialog-body"
-          style={DIALOG_BODY_STYLE}
-        >
-          {/* Find row */}
-          <div className="docx-find-replace-dialog-row" style={ROW_STYLE}>
-            <label htmlFor="find-text" style={LABEL_STYLE}>
-              Find:
+        <div className="space-y-2 p-3">
+          <div className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2">
+            <label
+              className="text-muted-foreground text-xs font-medium"
+              htmlFor="find-text"
+            >
+              {t("findReplace.find")}
             </label>
-            <input
+            <Input
               ref={searchInputRef}
               id="find-text"
+              nativeInput
               type="text"
-              className="docx-find-replace-dialog-input"
-              style={searchFocused ? INPUT_FOCUS_STYLE : INPUT_STYLE}
+              className="h-8"
+              size="sm"
               value={searchText}
               onChange={handleSearchChange}
               onKeyDown={handleSearchKeyDown}
-              onFocus={() => setSearchFocused(true)}
               onBlur={() => {
-                setSearchFocused(false);
                 if (searchText.trim() && !result) {
                   performSearch();
                 }
               }}
-              placeholder="Enter text to find..."
-              aria-label="Find text"
+              placeholder={t("findReplace.findPlaceholder")}
+              aria-label={t("findReplace.findText")}
             />
-            <div style={{ display: "flex", gap: "4px" }}>
-              <button
-                type="button"
-                className="docx-find-replace-dialog-nav"
-                style={
-                  hasMatches ? NAV_BUTTON_STYLE : NAV_BUTTON_DISABLED_STYLE
-                }
+            <div className="flex items-center gap-0.5">
+              <Button
                 onClick={handleFindPrevious}
                 disabled={!hasMatches}
-                aria-label="Find previous"
-                title="Find Previous (Shift+Enter)"
+                aria-label={t("findReplace.previous")}
+                title={t("findReplace.previousShortcut")}
+                size="icon-xs"
+                variant="ghost"
               >
                 <ChevronUpIcon />
-              </button>
-              <button
-                type="button"
-                className="docx-find-replace-dialog-nav"
-                style={
-                  hasMatches ? NAV_BUTTON_STYLE : NAV_BUTTON_DISABLED_STYLE
-                }
+              </Button>
+              <Button
                 onClick={handleFindNext}
                 disabled={!hasMatches}
-                aria-label="Find next"
-                title="Find Next (Enter)"
+                aria-label={t("findReplace.next")}
+                title={t("findReplace.nextShortcut")}
+                size="icon-xs"
+                variant="ghost"
               >
                 <ChevronDownIcon />
-              </button>
+              </Button>
             </div>
           </div>
 
-          {/* Status line */}
           {hasMatches && (
-            <div
-              className="docx-find-replace-dialog-status"
-              style={STATUS_STYLE}
-            >
-              {result.currentIndex + 1} of {result.totalCount} matches
+            <div className="text-muted-foreground ms-20 text-xs tabular-nums">
+              {t("findReplace.matchCounter", {
+                current: String(result.currentIndex + 1),
+                total: String(result.totalCount),
+              })}
             </div>
           )}
           {noMatches && (
-            <div
-              className="docx-find-replace-dialog-status"
-              style={NO_RESULTS_STYLE}
-            >
-              No results found
+            <div className="text-destructive ms-20 text-xs">
+              {t("findReplace.noResults")}
             </div>
           )}
 
-          {/* Replace row (togglable) */}
           {showReplace && (
-            // oxlint-disable-next-line react/jsx-no-useless-fragment
-            <>
-              <div className="docx-find-replace-dialog-row" style={ROW_STYLE}>
-                <label htmlFor="replace-text" style={LABEL_STYLE}>
-                  Replace:
-                </label>
-                <input
-                  ref={replaceInputRef}
-                  id="replace-text"
-                  type="text"
-                  className="docx-find-replace-dialog-input"
-                  style={replaceFocused ? INPUT_FOCUS_STYLE : INPUT_STYLE}
-                  value={replaceText}
-                  onChange={(e) => setReplaceText(e.target.value)}
-                  onKeyDown={handleReplaceKeyDown}
-                  onFocus={() => setReplaceFocused(true)}
-                  onBlur={() => setReplaceFocused(false)}
-                  placeholder="Enter replacement text..."
-                  aria-label="Replace text"
-                />
-                <div style={BUTTON_CONTAINER_STYLE}>
-                  <button
-                    type="button"
-                    className="docx-find-replace-dialog-button"
-                    style={
-                      hasMatches ? BUTTON_BASE_STYLE : BUTTON_DISABLED_STYLE
-                    }
-                    onClick={handleReplace}
-                    disabled={!hasMatches}
-                    title="Replace current match"
-                  >
-                    Replace
-                  </button>
-                  <button
-                    type="button"
-                    className="docx-find-replace-dialog-button"
-                    style={
-                      hasMatches ? BUTTON_BASE_STYLE : BUTTON_DISABLED_STYLE
-                    }
-                    onClick={handleReplaceAll}
-                    disabled={!hasMatches}
-                    title="Replace all matches"
-                  >
-                    Replace All
-                  </button>
-                </div>
+            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2">
+              <label
+                className="text-muted-foreground text-xs font-medium"
+                htmlFor="replace-text"
+              >
+                {t("findReplace.replace")}
+              </label>
+              <Input
+                ref={replaceInputRef}
+                id="replace-text"
+                nativeInput
+                type="text"
+                className="h-8"
+                size="sm"
+                value={replaceText}
+                onChange={(e) => setReplaceText(e.target.value)}
+                onKeyDown={handleReplaceKeyDown}
+                placeholder={t("findReplace.replacePlaceholder")}
+                aria-label={t("findReplace.replaceText")}
+              />
+              <div className="flex items-center gap-1">
+                <Button
+                  onClick={handleReplace}
+                  disabled={!hasMatches}
+                  size="xs"
+                  title={t("findReplace.replaceCurrent")}
+                  variant="outline"
+                >
+                  {t("findReplace.replace")}
+                </Button>
+                <Button
+                  onClick={handleReplaceAll}
+                  disabled={!hasMatches}
+                  size="xs"
+                  title={t("findReplace.replaceAll")}
+                  variant="outline"
+                >
+                  {t("findReplace.replaceAll")}
+                </Button>
               </div>
-            </>
+            </div>
           )}
 
-          {/* Options */}
-          <div
-            className="docx-find-replace-dialog-options"
-            style={OPTIONS_CONTAINER_STYLE}
-          >
-            <label
-              className="docx-find-replace-dialog-option"
-              style={CHECKBOX_LABEL_STYLE}
-            >
-              <input
-                type="checkbox"
-                style={CHECKBOX_STYLE}
-                checked={matchCase}
-                onChange={(e) => setMatchCase(e.target.checked)}
-              />
-              Match case
+          <div className="ms-20 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <label className="text-muted-foreground flex items-center gap-2 text-xs">
+              <Checkbox checked={matchCase} onCheckedChange={setMatchCase} />
+              {t("findReplace.matchCase")}
             </label>
-            <label
-              className="docx-find-replace-dialog-option"
-              style={CHECKBOX_LABEL_STYLE}
-            >
-              <input
-                type="checkbox"
-                style={CHECKBOX_STYLE}
+            <label className="text-muted-foreground flex items-center gap-2 text-xs">
+              <Checkbox
                 checked={matchWholeWord}
-                onChange={(e) => setMatchWholeWord(e.target.checked)}
+                onCheckedChange={setMatchWholeWord}
               />
-              Whole words
+              {t("findReplace.wholeWords")}
             </label>
             {!showReplace && (
-              <button
-                type="button"
-                style={{
-                  ...CHECKBOX_LABEL_STYLE,
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "var(--doc-link)",
-                  padding: 0,
-                }}
-                onClick={toggleReplaceMode}
-              >
-                + Replace
-              </button>
+              <Button onClick={toggleReplaceMode} size="xs" variant="ghost">
+                {t("findReplace.showReplace")}
+              </Button>
             )}
           </div>
         </div>

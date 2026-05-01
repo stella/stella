@@ -800,10 +800,15 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
 
     return {
       backgroundColor: "var(--popover, var(--doc-bg, #ffffff))",
+      border: "1px solid var(--border, var(--doc-border, #e5e7eb))",
+      boxShadow:
+        "0 12px 32px var(--doc-shadow-md, rgba(0,0,0,0.22)), 0 2px 8px var(--doc-shadow-sm, rgba(0,0,0,0.14))",
       color: "var(--popover-foreground, var(--doc-text, #171717))",
+      fontFamily: "inherit",
       left: `${x}px`,
       minWidth: `${menuWidth}px`,
       top: `${y}px`,
+      zIndex: 2_147_483_647,
     } as React.CSSProperties;
   }, [hasSelection, position, menuItems.length]);
 

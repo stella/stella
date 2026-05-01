@@ -115,6 +115,8 @@ export type DrawingContent = {
   type: "drawing";
   /** Image data */
   image: Image;
+  /** Original OOXML for package-preserving round-trips of unsupported drawing markup. */
+  rawXml?: string;
 };
 
 /**
@@ -852,6 +854,15 @@ export type CommentRangeEnd = {
   id: number;
 };
 
+/**
+ * Point comment reference (w:commentReference without an explicit range).
+ * Word sometimes stores comments this way; we anchor them to nearby text for display.
+ */
+export type CommentReference = {
+  type: "commentReference";
+  id: number;
+};
+
 // ============================================================================
 // MATH EQUATIONS
 // ============================================================================
@@ -1139,6 +1150,7 @@ export type ParagraphContent =
   | InlineSdt
   | CommentRangeStart
   | CommentRangeEnd
+  | CommentReference
   | Insertion
   | Deletion
   | MoveFrom

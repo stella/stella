@@ -1363,7 +1363,10 @@ type PageContainer = {
  * Compute a fingerprint string for a page that changes when its content changes.
  * Used to detect which pages need re-rendering on incremental updates.
  */
-function computePageFingerprint(page: Page): string {
+export function computePageFingerprint(
+  page: Page,
+  blockLookup?: BlockLookup,
+): string {
   const parts: string[] = [];
 
   // Page-level properties
@@ -1391,11 +1394,73 @@ function computePageFingerprint(page: Page): string {
     } else if (frag.kind === "table") {
       fp += `,fr:${frag.fromRow},tr:${frag.toRow}`;
     }
+    if (blockLookup && frag.blockId !== undefined) {
+      const block = blockLookup.get(String(frag.blockId))?.block;
+      const annotationFingerprint = block
+        ? computeAnnotationFingerprint(block)
+        : "";
+      if (annotationFingerprint) {
+        fp += `,ann:${annotationFingerprint}`;
+      }
+    }
 
     parts.push(fp);
   }
 
   return parts.join("|");
+}
+
+function computeAnnotationFingerprint(block: FlowBlock): string {
+  const parts: string[] = [];
+  collectAnnotationFingerprint(block, parts);
+  return parts.join(";");
+}
+
+function collectAnnotationFingerprint(block: FlowBlock, parts: string[]): void {
+  if (block.kind === "paragraph") {
+    for (let index = 0; index < block.runs.length; index++) {
+      const run = block.runs[index];
+      if (!run) {
+        continue;
+      }
+      if (run.kind !== "text" && run.kind !== "tab" && run.kind !== "field") {
+        continue;
+      }
+      const runParts: string[] = [];
+      if (run.commentIds?.length) {
+        runParts.push(`c:${run.commentIds.join(",")}`);
+      }
+      if (run.isInsertion) {
+        runParts.push(`ins:${run.changeRevisionId ?? ""}`);
+      }
+      if (run.isDeletion) {
+        runParts.push(`del:${run.changeRevisionId ?? ""}`);
+      }
+      if (runParts.length > 0) {
+        parts.push(
+          `${index}:${run.pmStart ?? ""}-${run.pmEnd ?? ""}:${runParts.join("|")}`,
+        );
+      }
+    }
+    return;
+  }
+
+  if (block.kind === "table") {
+    for (const row of block.rows) {
+      for (const cell of row.cells) {
+        for (const child of cell.blocks) {
+          collectAnnotationFingerprint(child, parts);
+        }
+      }
+    }
+    return;
+  }
+
+  if (block.kind === "textBox") {
+    for (const child of block.content) {
+      collectAnnotationFingerprint(child, parts);
+    }
+  }
 }
 
 /**
@@ -1521,7 +1586,7 @@ export function renderPages(
     // Compute new fingerprints
     const newFingerprints: string[] = [];
     for (const page of pages) {
-      newFingerprints.push(computePageFingerprint(page));
+      newFingerprints.push(computePageFingerprint(page, options.blockLookup));
     }
 
     // If total page count changed, NUMPAGES fields in headers/footers are stale.
@@ -1637,7 +1702,7 @@ export function renderPages(
 
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i]!; // SAFETY: i < pages.length
-    fingerprints.push(computePageFingerprint(page));
+    fingerprints.push(computePageFingerprint(page, options.blockLookup));
 
     if (!useVirtualization) {
       // Small document: render all pages eagerly

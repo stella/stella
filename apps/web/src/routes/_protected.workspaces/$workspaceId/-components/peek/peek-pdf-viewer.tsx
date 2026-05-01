@@ -3,6 +3,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -436,7 +437,7 @@ const PeekDocxViewer = ({
   const targetZoom = useDocxFitZoom(containerRef, scaleOffset);
 
   // Sync scaleOffset from inspector +/- buttons to Folio zoom
-  useEffect(() => {
+  useLayoutEffect(() => {
     editorRef.current?.setZoom(targetZoom);
   }, [targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);

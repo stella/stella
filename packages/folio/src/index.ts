@@ -9,6 +9,7 @@ export {
   type CreateEmptyDocumentOptions,
 } from "./core/utils/createDocument";
 export type { Document } from "./core/types/document";
+export type { DocxCompatibility } from "./core/docx/compatibility";
 
 // AI suggestion primitives — types, conflict resolution, apply, and
 // the prosemirror decoration plugin. The bar/panel UI itself lives in

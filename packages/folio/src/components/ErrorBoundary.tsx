@@ -322,7 +322,7 @@ export class ErrorBoundary extends Component<
 
   override render(): ReactNode {
     if (this.state.hasError) {
-      const { fallback, showDetails = true } = this.props;
+      const { fallback, showDetails = false } = this.props;
       const { error, errorInfo } = this.state;
 
       // Custom fallback

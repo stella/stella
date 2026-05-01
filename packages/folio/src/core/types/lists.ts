@@ -158,6 +158,8 @@ export type ListRendering = {
   numId: number;
   /** Whether this is a bullet or numbered list */
   isBullet: boolean;
+  /** Whether this level uses legal numbering (parent placeholders render decimal). */
+  isLegal?: boolean;
   /** Number format type (decimal, lowerRoman, upperRoman, etc.) */
   numFmt?: NumberFormat;
   /** Whether the list marker is hidden (w:vanish on level rPr) */

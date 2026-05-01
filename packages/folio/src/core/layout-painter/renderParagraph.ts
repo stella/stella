@@ -164,8 +164,8 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
 
   // Comment highlight
   if (run.commentIds && run.commentIds.length > 0) {
-    element.style.backgroundColor = "rgba(255, 212, 0, 0.25)";
-    element.style.borderBottom = "2px solid rgba(255, 212, 0, 0.6)";
+    element.style.backgroundColor = "rgba(255, 212, 0, 0.08)";
+    element.style.borderBottom = "1px solid rgba(180, 130, 0, 0.24)";
     element.dataset["commentId"] = String(run.commentIds[0]);
   }
 

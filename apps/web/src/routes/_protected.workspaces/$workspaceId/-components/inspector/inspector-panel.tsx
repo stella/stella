@@ -9,9 +9,10 @@ import {
 } from "react";
 import type { PropsWithChildren } from "react";
 
+import type { DocxCompatibility } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { toastManager } from "@stll/ui/components/toast";
+import { toast, toastManager } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import {
   useQuery,
@@ -49,6 +50,7 @@ import { toSafeId } from "@/lib/safe-id";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
+import { getDocxEditBlockReason } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import { clearAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymize-pdf";
 import {
@@ -208,6 +210,9 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const [docxScrollTopByTab, setDocxScrollTopByTab] = useState<
     Map<string, number>
   >(() => new Map());
+  const [docxCompatibilityByTab, setDocxCompatibilityByTab] = useState<
+    Map<string, DocxCompatibility>
+  >(() => new Map());
   const [editValue, setEditValue] = useState("");
   const renameEntity = useRenameEntity();
 
@@ -238,6 +243,24 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 
   const handleStartDocxEdit = useCallback(
     async (tabId: string) => {
+      const compatibility = docxCompatibilityByTab.get(tabId);
+      const blockReason = getDocxEditBlockReason({
+        canSafelyEdit: compatibility?.canSafelyEdit,
+      });
+      if (blockReason === "pendingCompatibility") {
+        toast.info(t("folio.checkingDocxEditTitle"), {
+          description: t("folio.checkingDocxEditDescription"),
+        });
+        return;
+      }
+
+      if (blockReason === "unsafe") {
+        toast.warning(t("folio.unsupportedDocxEditTitle"), {
+          description: t("folio.unsupportedDocxEditDescription"),
+        });
+        return;
+      }
+
       if (editingDocxTabId !== null && editingDocxTabId !== tabId) {
         const currentAction = docxActionsRef.current.get(editingDocxTabId);
         if (currentAction !== undefined) {
@@ -252,7 +275,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       setEditingDocxTabId(tabId);
       docxActionsRef.current.get(tabId)?.unlock();
     },
-    [editingDocxTabId],
+    [docxCompatibilityByTab, editingDocxTabId, t],
   );
 
   const flashDocxEditButton = useCallback((tabId: string) => {
@@ -607,6 +630,34 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           isNativeDocxDisplay &&
           editingDocxTabId === tab.id &&
           tab.propertyId !== undefined;
+        const canUnlockNativeDocx =
+          canUpdateEntity &&
+          isNativeDocxDisplay &&
+          tab.propertyId !== undefined &&
+          !isEditingNativeDocx;
+        const isPromptingDocxUnlock = flashingDocxEditTabId === tab.id;
+        const promptDocxUnlock = () => {
+          const compatibility = docxCompatibilityByTab.get(tab.id);
+          const blockReason = getDocxEditBlockReason({
+            canSafelyEdit: compatibility?.canSafelyEdit,
+          });
+          if (blockReason === "pendingCompatibility") {
+            toast.info(t("folio.checkingDocxEditTitle"), {
+              description: t("folio.checkingDocxEditDescription"),
+            });
+            return;
+          }
+
+          if (blockReason === "unsafe") {
+            toast.warning(t("folio.unsupportedDocxEditTitle"), {
+              description: t("folio.unsupportedDocxEditDescription"),
+            });
+            return;
+          }
+          if (canUnlockNativeDocx) {
+            flashDocxEditButton(tab.id);
+          }
+        };
 
         const fileActions = isEditingNativeDocx ? (
           <>
@@ -645,28 +696,32 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           </>
         ) : (
           <>
-            {canUpdateEntity &&
-              isNativeDocxDisplay &&
-              tab.propertyId !== undefined && (
-                <Tooltip
-                  content={t("common.edit")}
-                  render={
-                    <Button
-                      className={cn(
-                        flashingDocxEditTabId === tab.id &&
-                          "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
-                      )}
-                      onClick={() => {
-                        void handleStartDocxEdit(tab.id);
-                      }}
-                      size="icon-xs"
-                      variant="ghost"
-                    >
-                      <PencilIcon className="size-3.5" />
-                    </Button>
-                  }
-                />
-              )}
+            {canUnlockNativeDocx && (
+              <Tooltip
+                content={t("common.edit")}
+                render={
+                  <Button
+                    className={cn(
+                      "transition-all",
+                      isPromptingDocxUnlock &&
+                        "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
+                    )}
+                    onClick={() => {
+                      void handleStartDocxEdit(tab.id);
+                    }}
+                    size={isPromptingDocxUnlock ? "sm" : "icon-xs"}
+                    variant="ghost"
+                  >
+                    <PencilIcon className="size-3.5" />
+                    {isPromptingDocxUnlock && (
+                      <span className="whitespace-nowrap">
+                        {t("workspaces.pdf.unlock")}
+                      </span>
+                    )}
+                  </Button>
+                }
+              />
+            )}
             <div className="flex items-center rounded-md border p-0.5">
               <PeekPdfControls
                 canResetZoom={scaleOffsets.get(tab.id) !== 0}
@@ -804,17 +859,19 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   docxActionsRef.current.delete(tab.id);
                   setEditingDocxTabId(null);
                 }}
-                onError={handleViewerError}
-                onPreviewDoubleClick={() => {
-                  if (
-                    canUpdateEntity &&
-                    isNativeDocxDisplay &&
-                    tab.propertyId !== undefined &&
-                    !isEditingNativeDocx
-                  ) {
-                    flashDocxEditButton(tab.id);
-                  }
+                onCompatibilityChange={(compatibility) => {
+                  setDocxCompatibilityByTab((prev) => {
+                    if (prev.get(tab.id) === compatibility) {
+                      return prev;
+                    }
+                    const next = new Map(prev);
+                    next.set(tab.id, compatibility);
+                    return next;
+                  });
                 }}
+                onError={handleViewerError}
+                onPreviewDoubleClick={promptDocxUnlock}
+                onReadonlyEditAttempt={promptDocxUnlock}
                 onSaved={(fieldId) => {
                   if (fieldId !== tab.id) {
                     setDocxScrollTopByTab((prev) => {

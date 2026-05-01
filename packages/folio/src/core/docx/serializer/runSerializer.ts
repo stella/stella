@@ -987,6 +987,9 @@ function serializeRunContent(content: RunContent): string {
     case "noBreakHyphen":
       return serializeNoBreakHyphen(content);
     case "drawing":
+      if (content.rawXml) {
+        return content.rawXml;
+      }
       return serializeDrawingContent(content);
     case "shape":
       return serializeShapeContent(content);

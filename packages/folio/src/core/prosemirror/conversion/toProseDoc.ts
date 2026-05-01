@@ -120,6 +120,18 @@ function convertParagraph(
 
   // Track active comment ranges for this paragraph
   const commentIds = activeCommentIds ?? new Set<number>();
+  const emitInlineNodes = (nodes: PMNode[]): void => {
+    if (nodes.length === 0) {
+      return;
+    }
+    inlineNodes.push(...applyCommentMarks(nodes, commentIds));
+  };
+  const emitInlineNode = (node: PMNode | null): void => {
+    if (!node) {
+      return;
+    }
+    emitInlineNodes([node]);
+  };
 
   // Get style-based text formatting (font size, bold, color, etc.)
   let styleRunFormatting: TextFormatting | undefined;
@@ -139,83 +151,50 @@ function convertParagraph(
     styleRunFormatting,
     extraRunFormatting,
   );
+  const emitTrackedChange = (
+    change: Insertion | Deletion | MoveFrom | MoveTo,
+    markType: "insertion" | "deletion",
+  ): void => {
+    emitInlineNodes(
+      convertTrackedChange(
+        change,
+        markType,
+        mergedStyleRunFormatting,
+        styleResolver,
+      ),
+    );
+  };
 
   for (const content of paragraph.content) {
     if (content.type === "commentRangeStart") {
       commentIds.add(content.id);
     } else if (content.type === "commentRangeEnd") {
       commentIds.delete(content.id);
+    } else if (content.type === "commentReference") {
+      anchorPointComment(inlineNodes, content.id);
     } else if (content.type === "run") {
-      let runNodes = convertRun(
-        content,
-        mergedStyleRunFormatting,
-        styleResolver,
+      emitInlineNodes(
+        convertRun(content, mergedStyleRunFormatting, styleResolver),
       );
-      if (commentIds.size > 0) {
-        runNodes = applyCommentMarks(runNodes, commentIds);
-      }
-      inlineNodes.push(...runNodes);
     } else if (content.type === "hyperlink") {
-      const linkNodes = convertHyperlink(
-        content,
-        mergedStyleRunFormatting,
-        styleResolver,
+      emitInlineNodes(
+        convertHyperlink(content, mergedStyleRunFormatting, styleResolver),
       );
-      inlineNodes.push(...linkNodes);
     } else if (
       content.type === "simpleField" ||
       content.type === "complexField"
     ) {
-      const fieldNode = convertField(content, mergedStyleRunFormatting);
-      if (fieldNode) {
-        inlineNodes.push(fieldNode);
-      }
+      emitInlineNode(convertField(content, mergedStyleRunFormatting));
     } else if (content.type === "inlineSdt") {
-      const sdtNode = convertInlineSdt(
-        content,
-        mergedStyleRunFormatting,
-        styleResolver,
+      emitInlineNode(
+        convertInlineSdt(content, mergedStyleRunFormatting, styleResolver),
       );
-      if (sdtNode) {
-        inlineNodes.push(sdtNode);
-      }
-    } else if (content.type === "insertion") {
-      const insNodes = convertTrackedChange(
-        content,
-        "insertion",
-        mergedStyleRunFormatting,
-        styleResolver,
-      );
-      inlineNodes.push(...insNodes);
-    } else if (content.type === "deletion") {
-      const delNodes = convertTrackedChange(
-        content,
-        "deletion",
-        mergedStyleRunFormatting,
-        styleResolver,
-      );
-      inlineNodes.push(...delNodes);
-    } else if (content.type === "moveFrom") {
-      const moveFromNodes = convertTrackedChange(
-        content,
-        "deletion",
-        mergedStyleRunFormatting,
-        styleResolver,
-      );
-      inlineNodes.push(...moveFromNodes);
-    } else if (content.type === "moveTo") {
-      const moveToNodes = convertTrackedChange(
-        content,
-        "insertion",
-        mergedStyleRunFormatting,
-        styleResolver,
-      );
-      inlineNodes.push(...moveToNodes);
+    } else if (content.type === "insertion" || content.type === "moveTo") {
+      emitTrackedChange(content, "insertion");
+    } else if (content.type === "deletion" || content.type === "moveFrom") {
+      emitTrackedChange(content, "deletion");
     } else if (content.type === "mathEquation") {
-      const mathNode = convertMathEquation(content);
-      if (mathNode) {
-        inlineNodes.push(mathNode);
-      }
+      emitInlineNode(convertMathEquation(content));
     }
     // Collect bookmarkStart entries for round-trip
     if (content.type === "bookmarkStart") {
@@ -245,11 +224,30 @@ function applyCommentMarks(nodes: PMNode[], commentIds: Set<number>): PMNode[] {
   const commentMark = schema.marks["comment"]!.create({ commentId });
 
   return nodes.map((node) => {
-    if (node.isText) {
+    if (
+      node.isText ||
+      (node.isInline && node.type.allowsMarkType(commentMark.type))
+    ) {
       return node.mark(commentMark.addToSet(node.marks));
     }
     return node;
   });
+}
+
+function anchorPointComment(nodes: PMNode[], commentId: number): void {
+  const commentMark = schema.marks["comment"]?.create({ commentId });
+  if (!commentMark) {
+    return;
+  }
+
+  for (let index = nodes.length - 1; index >= 0; index--) {
+    const node = nodes[index];
+    if (!node?.isText) {
+      continue;
+    }
+    nodes[index] = node.mark(commentMark.addToSet(node.marks));
+    return;
+  }
 }
 
 /**
@@ -320,6 +318,9 @@ function paragraphFormattingToAttrs(
   }
   if (paragraph.listRendering?.isBullet) {
     attrs.listIsBullet = paragraph.listRendering.isBullet;
+  }
+  if (paragraph.listRendering?.isLegal) {
+    attrs.listIsLegal = paragraph.listRendering.isLegal;
   }
   if (paragraph.listRendering?.marker) {
     attrs.listMarker = paragraph.listRendering.marker;

@@ -8,14 +8,15 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
 import type { ReactNode, RefObject } from "react";
 
-import type { DocxEditorRef, EditorMode } from "@stll/folio";
+import type { DocxCompatibility, DocxEditorRef, EditorMode } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
-import { toastManager } from "@stll/ui/components/toast";
+import { toast, toastManager } from "@stll/ui/components/toast";
 import { useQuery } from "@tanstack/react-query";
 import { CheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -32,7 +33,13 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
-import { selectStableArrayBuffer } from "./array-buffer-utils";
+import {
+  getDocxEditBlockReason,
+  selectEditorBuffer,
+  selectPreviewFile,
+  shouldFinalizeEditSession,
+} from "./docx-browser-editor.logic";
+import type { OptimisticPreviewFile } from "./docx-browser-editor.logic";
 import type { EditSessionErrorReason } from "./use-edit-session";
 import { useEditSession } from "./use-edit-session";
 
@@ -41,21 +48,7 @@ const DocxEditor = lazy(async () => {
   return { default: m.DocxEditor };
 });
 
-const isDocxEditDebugEnabled = () => {
-  try {
-    return localStorage.getItem("folio:docx-edit-debug") === "1";
-  } catch {
-    return false;
-  }
-};
-
-const debugDocxEdit = (event: string, data: Record<string, unknown> = {}) => {
-  if (!isDocxEditDebugEnabled()) {
-    return;
-  }
-  // eslint-disable-next-line no-console -- gated opt-in DOCX edit diagnostics.
-  console.debug("[folio:docx-edit]", event, data);
-};
+const CHANGE_CHECKPOINT_DELAY = 5000;
 
 type DocxBrowserEditorBaseProps = {
   workspaceId: string;
@@ -65,8 +58,12 @@ type DocxBrowserEditorBaseProps = {
   initialScrollTop?: number | undefined;
   isEditing?: boolean | undefined;
   onClose: () => void;
+  onCompatibilityChange?:
+    | ((compatibility: DocxCompatibility) => void)
+    | undefined;
   onSaved?: ((fieldId: string) => void) | undefined;
   onPreviewDoubleClick?: (() => void) | undefined;
+  onReadonlyEditAttempt?: (() => void) | undefined;
   onScrollTopChange?: ((scrollTop: number) => void) | undefined;
   scaleOffset?: number | undefined;
   actionsKey?: string | undefined;
@@ -79,43 +76,6 @@ type DocxBrowserEditorBaseProps = {
 };
 
 type DocxBrowserEditorProps = DocxBrowserEditorBaseProps;
-
-type DocxPreviewFile = {
-  fileId: string;
-  fileName: string;
-  mimeType: string;
-  originalMimeType: string;
-  buffer: ArrayBuffer;
-};
-
-type OptimisticPreviewFile = {
-  fieldId: string;
-  file: DocxPreviewFile;
-};
-
-type SelectPreviewFileOptions = {
-  file: DocxPreviewFile;
-  fieldId: string;
-  optimisticPreview: OptimisticPreviewFile | null;
-};
-
-const selectPreviewFile = ({
-  file,
-  fieldId,
-  optimisticPreview,
-}: SelectPreviewFileOptions): DocxPreviewFile => {
-  if (optimisticPreview?.fieldId !== fieldId) {
-    return file;
-  }
-
-  return {
-    ...file,
-    buffer: selectStableArrayBuffer({
-      incomingBuffer: file.buffer,
-      stableBuffer: optimisticPreview.file.buffer,
-    }),
-  };
-};
 
 export type DocxBrowserEditorActions = {
   cancel: () => Promise<void>;
@@ -152,8 +112,10 @@ const DocxBrowserEditorContent = ({
   isEditing = true,
   initialScrollTop,
   onClose,
+  onCompatibilityChange,
   onSaved,
   onPreviewDoubleClick,
+  onReadonlyEditAttempt,
   onScrollTopChange,
   scaleOffset = 0,
   showActionBar = true,
@@ -164,7 +126,20 @@ const DocxBrowserEditorContent = ({
   const errorToastShownRef = useRef(false);
   const optimisticPreviewRef = useRef<OptimisticPreviewFile | null>(null);
   const finalizedBufferRef = useRef<ArrayBuffer | null>(null);
+  const lastEditingBufferRef = useRef<ArrayBuffer | null>(null);
+  const hasSessionChangesRef = useRef(false);
+  const preservedLoadedBufferRef = useRef<{
+    buffer: ArrayBuffer;
+    fieldId: string;
+  } | null>(null);
+  const changeCheckpointTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const changeCheckpointIdleCallbackRef = useRef<number | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>("editing");
+  const [compatibility, setCompatibility] = useState<DocxCompatibility | null>(
+    null,
+  );
   const targetZoom = useDocxFitZoom(containerRef, scaleOffset, 0.85);
   const t = useTranslations();
   const previewPlaceholder =
@@ -192,8 +167,9 @@ const DocxBrowserEditorContent = ({
 
   const {
     state,
+    isDirty,
     open,
-    checkpoint,
+    markDirty,
     saveCheckpoint,
     finalize,
     cancel,
@@ -216,6 +192,13 @@ const DocxBrowserEditorContent = ({
             },
           };
         }
+        const preservedLoadedBuffer = preservedLoadedBufferRef.current;
+        if (preservedLoadedBuffer !== null) {
+          preservedLoadedBufferRef.current = {
+            ...preservedLoadedBuffer,
+            fieldId: result.fieldId,
+          };
+        }
         onSaved?.(result.fieldId);
       }
       finalizedBufferRef.current = null;
@@ -224,21 +207,58 @@ const DocxBrowserEditorContent = ({
     onCancelled: onClose,
   });
 
+  useEffect(() => {
+    if (optimisticPreviewRef.current?.fieldId === fieldId) {
+      return;
+    }
+    optimisticPreviewRef.current = null;
+    finalizedBufferRef.current = null;
+    lastEditingBufferRef.current = null;
+    hasSessionChangesRef.current = false;
+    preservedLoadedBufferRef.current = null;
+    setCompatibility(null);
+  }, [fieldId]);
+
+  const reportUnsupportedEditAttempt = useCallback(() => {
+    toast.warning(t("folio.unsupportedDocxEditTitle"), {
+      description: t("folio.unsupportedDocxEditDescription"),
+    });
+    onClose();
+  }, [onClose, t]);
+
+  const reportPendingCompatibility = useCallback(() => {
+    toast.info(t("folio.checkingDocxEditTitle"), {
+      description: t("folio.checkingDocxEditDescription"),
+    });
+  }, [t]);
+
   // Auto-open when this component is used as a direct editor, or when the
   // preview is explicitly unlocked from the shell toolbar.
   useEffect(() => {
+    if (!isEditing || previewFile === null || didOpenRef.current) {
+      return;
+    }
+    if (compatibility === null || state.status !== "idle") {
+      return;
+    }
     if (
-      !isEditing ||
-      previewFile === null ||
-      didOpenRef.current ||
-      state.status !== "idle"
+      getDocxEditBlockReason({ canSafelyEdit: compatibility.canSafelyEdit }) ===
+      "unsafe"
     ) {
+      reportUnsupportedEditAttempt();
       return;
     }
     didOpenRef.current = true;
     errorToastShownRef.current = false;
     void open();
-  }, [isEditing, open, previewFile, state.status]);
+  }, [
+    compatibility,
+    isEditing,
+    open,
+    previewFile,
+    reportUnsupportedEditAttempt,
+    state.status,
+  ]);
 
   useEffect(() => {
     if (!isEditing) {
@@ -246,7 +266,7 @@ const DocxBrowserEditorContent = ({
     }
   }, [isEditing]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     editorRef.current?.setZoom(targetZoom);
   }, [targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);
@@ -263,7 +283,7 @@ const DocxBrowserEditorContent = ({
     errorToastShownRef.current = true;
     toastManager.add({
       description: t(editSessionErrorDescriptionKey(state.reason)),
-      title: t("errors.actionFailed"),
+      title: t("folio.editOpenFailedTitle"),
       type: "error",
     });
     onClose();
@@ -271,6 +291,49 @@ const DocxBrowserEditorContent = ({
   }, [onClose, resetError, state, t]);
 
   const isUnlocked = state.status === "editing";
+  const wasUnlockedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isUnlocked) {
+      wasUnlockedRef.current = false;
+      return undefined;
+    }
+
+    if (wasUnlockedRef.current) {
+      return undefined;
+    }
+
+    wasUnlockedRef.current = true;
+    const frame = requestAnimationFrame(() => {
+      editorRef.current?.focus();
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [isUnlocked]);
+
+  const clearQueuedChangeCheckpoint = useCallback(() => {
+    if (changeCheckpointTimerRef.current !== null) {
+      clearTimeout(changeCheckpointTimerRef.current);
+      changeCheckpointTimerRef.current = null;
+    }
+    if (changeCheckpointIdleCallbackRef.current !== null) {
+      window.cancelIdleCallback(changeCheckpointIdleCallbackRef.current);
+      changeCheckpointIdleCallbackRef.current = null;
+    }
+  }, []);
+
+  const saveChangeCheckpoint = useCallback(() => {
+    const ref = editorRef.current;
+    if (!ref) {
+      return;
+    }
+
+    void ref.save({ selective: true }).then((buffer) => {
+      if (buffer) {
+        void saveCheckpoint(buffer);
+      }
+    });
+  }, [saveCheckpoint]);
 
   // Cmd+S / Ctrl+S checkpoints only while the document is actively editable.
   useEffect(() => {
@@ -284,6 +347,7 @@ const DocxBrowserEditorContent = ({
       }
 
       e.preventDefault();
+      clearQueuedChangeCheckpoint();
       const ref = editorRef.current;
       if (!ref) {
         return;
@@ -297,72 +361,122 @@ const DocxBrowserEditorContent = ({
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [isUnlocked, saveCheckpoint]);
+  }, [clearQueuedChangeCheckpoint, isUnlocked, saveCheckpoint]);
 
-  const handleChange = () => {
-    // On each document change, serialize and queue a checkpoint
-    const ref = editorRef.current;
-    if (!ref) {
-      debugDocxEdit("change-skipped-missing-editor");
+  useEffect(
+    () => () => clearQueuedChangeCheckpoint(),
+    [clearQueuedChangeCheckpoint],
+  );
+
+  const scheduleChangeCheckpointSave = useCallback(() => {
+    changeCheckpointTimerRef.current = setTimeout(() => {
+      changeCheckpointTimerRef.current = null;
+      changeCheckpointIdleCallbackRef.current = window.requestIdleCallback(
+        () => {
+          changeCheckpointIdleCallbackRef.current = null;
+          saveChangeCheckpoint();
+        },
+        { timeout: 2000 },
+      );
+    }, CHANGE_CHECKPOINT_DELAY);
+  }, [saveChangeCheckpoint]);
+
+  const handleChange = useCallback(() => {
+    if (!isUnlocked) {
       return;
     }
-    void ref.save({ selective: true }).then((buffer) => {
-      if (buffer) {
-        debugDocxEdit("change-checkpoint-queued", {
-          byteLength: buffer.byteLength,
-        });
-        checkpoint(buffer);
-        return;
-      }
-      debugDocxEdit("change-save-returned-null");
-    });
-  };
+
+    hasSessionChangesRef.current = true;
+    markDirty();
+    clearQueuedChangeCheckpoint();
+    scheduleChangeCheckpointSave();
+  }, [
+    clearQueuedChangeCheckpoint,
+    isUnlocked,
+    markDirty,
+    scheduleChangeCheckpointSave,
+  ]);
 
   const handleFinalize = useCallback(async () => {
     // Save the final version before finalizing
+    clearQueuedChangeCheckpoint();
+
     const ref = editorRef.current;
     if (!ref) {
-      debugDocxEdit("finalize-aborted-missing-editor");
       toastManager.add({
-        description: t("common.somethingWentWrong"),
-        title: t("errors.actionFailed"),
+        description: t("folio.saveEditorUnavailableDescription"),
+        title: t("folio.saveEditorUnavailableTitle"),
         type: "error",
       });
+      return;
+    }
+
+    const hasPendingEditorChanges = ref.hasPendingChanges();
+    if (
+      !shouldFinalizeEditSession({
+        isDirty,
+        hasSessionChanges: hasSessionChangesRef.current,
+        hasPendingEditorChanges,
+      })
+    ) {
+      await cancel();
       return;
     }
 
     const buffer = await ref.save({ selective: true });
     if (!buffer) {
-      debugDocxEdit("finalize-aborted-null-buffer");
       toastManager.add({
-        description: t("common.somethingWentWrong"),
-        title: t("errors.actionFailed"),
+        description: t("folio.saveSerializeFailedDescription"),
+        title: t("folio.saveSerializeFailedTitle"),
         type: "error",
       });
       return;
     }
 
-    debugDocxEdit("finalize-checkpoint-start", {
-      byteLength: buffer.byteLength,
-    });
     const saved = await saveCheckpoint(buffer);
     if (!saved) {
-      debugDocxEdit("finalize-aborted-checkpoint-failed");
       toastManager.add({
-        description: t("common.somethingWentWrong"),
-        title: t("errors.actionFailed"),
+        description: t("folio.saveCheckpointFailedDescription"),
+        title: t("folio.saveCheckpointFailedTitle"),
         type: "error",
       });
       return;
     }
-    debugDocxEdit("finalize-start");
+    if (previewFile !== null) {
+      optimisticPreviewRef.current = {
+        fieldId,
+        file: {
+          ...previewFile,
+          buffer,
+        },
+      };
+    }
+    if (lastEditingBufferRef.current !== null) {
+      preservedLoadedBufferRef.current = {
+        fieldId,
+        buffer: lastEditingBufferRef.current,
+      };
+    }
     finalizedBufferRef.current = buffer;
+    hasSessionChangesRef.current = false;
     await finalize();
-  }, [finalize, saveCheckpoint, t]);
+  }, [
+    cancel,
+    clearQueuedChangeCheckpoint,
+    fieldId,
+    finalize,
+    isDirty,
+    previewFile,
+    saveCheckpoint,
+    t,
+  ]);
 
   const handleCancel = useCallback(async () => {
+    clearQueuedChangeCheckpoint();
+    preservedLoadedBufferRef.current = null;
+    hasSessionChangesRef.current = false;
     await cancel();
-  }, [cancel]);
+  }, [cancel, clearQueuedChangeCheckpoint]);
 
   useEffect(() => {
     const actionsMap = actionsMapRef?.current;
@@ -377,6 +491,18 @@ const DocxBrowserEditorContent = ({
         editorRef.current?.print();
       },
       unlock: () => {
+        const blockReason = getDocxEditBlockReason({
+          canSafelyEdit: compatibility?.canSafelyEdit,
+        });
+        if (blockReason === "pendingCompatibility") {
+          reportPendingCompatibility();
+          return;
+        }
+
+        if (blockReason === "unsafe") {
+          reportUnsupportedEditAttempt();
+          return;
+        }
         if (
           previewFile !== null &&
           state.status === "idle" &&
@@ -408,10 +534,13 @@ const DocxBrowserEditorContent = ({
     actionsKey,
     actionsMapRef,
     actionsRef,
+    compatibility?.canSafelyEdit,
     handleCancel,
     handleFinalize,
     open,
     previewFile,
+    reportPendingCompatibility,
+    reportUnsupportedEditAttempt,
     state.status,
   ]);
 
@@ -420,16 +549,30 @@ const DocxBrowserEditorContent = ({
   // "saving" with no buffer of its own). Without this we'd reload the
   // editor against `previewFile.buffer` for the few hundred ms before
   // the parent unmounts us — and the Stella fallback would flash.
-  const lastEditingBufferRef = useRef<ArrayBuffer | null>(null);
-  if (state.status === "editing") {
-    lastEditingBufferRef.current = state.buffer;
-  }
-  const editorBuffer =
+  const preservedLoadedBuffer =
+    preservedLoadedBufferRef.current?.fieldId === fieldId
+      ? preservedLoadedBufferRef.current.buffer
+      : null;
+  const editorBuffer = selectEditorBuffer(
     state.status === "editing"
-      ? state.buffer
-      : state.status === "saving" && lastEditingBufferRef.current !== null
-        ? lastEditingBufferRef.current
-        : previewFile?.buffer;
+      ? {
+          status: state.status,
+          editingBuffer: state.buffer,
+          lastEditingBuffer: lastEditingBufferRef.current,
+          preservedLoadedBuffer,
+          previewBuffer: previewFile?.buffer,
+        }
+      : {
+          status: state.status,
+          lastEditingBuffer: lastEditingBufferRef.current,
+          preservedLoadedBuffer,
+          previewBuffer: previewFile?.buffer,
+        },
+  );
+  if (state.status === "editing" && editorBuffer !== undefined) {
+    lastEditingBufferRef.current = editorBuffer;
+    preservedLoadedBufferRef.current = null;
+  }
 
   useEffect(() => {
     if (!isUnlocked) {
@@ -452,7 +595,7 @@ const DocxBrowserEditorContent = ({
         className="h-full w-full"
         description={t(editSessionErrorDescriptionKey(state.reason))}
         status="error"
-        title={t("errors.actionFailed")}
+        title={t("folio.editSaveFailedTitle")}
       />
     );
   }
@@ -510,8 +653,15 @@ const DocxBrowserEditorContent = ({
                   setEditorMode(mode);
                 }
               }}
+              onCompatibilityChange={(nextCompatibility) => {
+                setCompatibility(nextCompatibility);
+                onCompatibilityChange?.(nextCompatibility);
+              }}
               showToolbar={isUnlocked}
               {...(isUnlocked ? { onChange: handleChange } : {})}
+              {...(onReadonlyEditAttempt !== undefined
+                ? { onReadonlyEditAttempt }
+                : {})}
               {...(initialScrollTop !== undefined ? { initialScrollTop } : {})}
               {...(onScrollTopChange !== undefined
                 ? { onScrollTopChange }

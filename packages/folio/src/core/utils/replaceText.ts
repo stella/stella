@@ -4,6 +4,7 @@
  */
 
 import type {
+  BlockContent,
   Document,
   DocumentBody,
   Paragraph,
@@ -30,12 +31,11 @@ export function replaceTextInDocument(
   const { start, end } = range;
 
   if (start.paragraphIndex === end.paragraphIndex) {
-    const blockIndex = getBlockIndexForParagraph(body, start.paragraphIndex);
-    if (blockIndex === -1) {
+    const paragraph = getParagraphByIndex(body, start.paragraphIndex);
+    if (!paragraph) {
       return newDoc;
     }
 
-    const paragraph = body.content[blockIndex] as Paragraph;
     paragraph.content = deleteTextInParagraph(
       paragraph,
       start.offset,
@@ -48,11 +48,10 @@ export function replaceTextInDocument(
       formatting,
     );
   } else {
-    const startBlockIndex = getBlockIndexForParagraph(
-      body,
-      start.paragraphIndex,
-    );
-    const startParagraph = body.content[startBlockIndex] as Paragraph;
+    const startParagraph = getParagraphByIndex(body, start.paragraphIndex);
+    if (!startParagraph) {
+      return newDoc;
+    }
     const startText = getParagraphText(startParagraph);
 
     startParagraph.content = deleteTextInParagraph(
@@ -69,7 +68,7 @@ export function replaceTextInDocument(
 
     const paragraphsToRemove: number[] = [];
     for (let i = start.paragraphIndex + 1; i <= end.paragraphIndex; i++) {
-      paragraphsToRemove.push(getBlockIndexForParagraph(body, i));
+      paragraphsToRemove.push(getTopLevelParagraphBlockIndex(body, i));
     }
     for (let i = paragraphsToRemove.length - 1; i >= 0; i--) {
       // SAFETY: i >= 0 and i < paragraphsToRemove.length in for loop
@@ -87,7 +86,7 @@ export function replaceTextInDocument(
 // Helpers (extracted from the former agent/executor)
 // ---------------------------------------------------------------------------
 
-function getBlockIndexForParagraph(
+function getTopLevelParagraphBlockIndex(
   body: DocumentBody,
   paragraphIndex: number,
 ): number {
@@ -102,6 +101,49 @@ function getBlockIndexForParagraph(
     }
   }
   return -1;
+}
+
+function getParagraphByIndex(
+  body: DocumentBody,
+  paragraphIndex: number,
+): Paragraph | null {
+  let currentIndex = 0;
+  let found: Paragraph | null = null;
+
+  const walkBlocks = (blocks: readonly BlockContent[]): void => {
+    if (found) {
+      return;
+    }
+    for (const block of blocks) {
+      if (block.type === "paragraph") {
+        if (currentIndex === paragraphIndex) {
+          found = block;
+          return;
+        }
+        currentIndex++;
+        continue;
+      }
+
+      if (block.type === "table") {
+        for (const row of block.rows) {
+          for (const cell of row.cells) {
+            walkBlocks(cell.content);
+            if (found) {
+              return;
+            }
+          }
+        }
+        continue;
+      }
+
+      if (block.type === "blockSdt") {
+        walkBlocks(block.content);
+      }
+    }
+  };
+
+  walkBlocks(body.content);
+  return found;
 }
 
 function getParagraphText(paragraph: Paragraph): string {

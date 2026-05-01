@@ -103,6 +103,10 @@ export function useFindReplace({
 
     const newIndex = findReplace.goToNextMatch();
     const match = findResultRef.current.matches[newIndex];
+    findResultRef.current = {
+      ...findResultRef.current,
+      currentIndex: newIndex,
+    };
 
     // Scroll to the match
     if (match && containerRef.current) {
@@ -120,6 +124,10 @@ export function useFindReplace({
 
     const newIndex = findReplace.goToPreviousMatch();
     const match = findResultRef.current.matches[newIndex];
+    findResultRef.current = {
+      ...findResultRef.current,
+      currentIndex: newIndex,
+    };
 
     // Scroll to the match
     if (match && containerRef.current) {

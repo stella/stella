@@ -39,6 +39,8 @@ export type NumberingMap = {
   definitions: NumberingDefinitions;
   /** Get level info for a numId and ilvl */
   getLevel: (numId: number, ilvl: number) => ListLevel | null;
+  /** Get the abstract numbering ID referenced by a numId */
+  getAbstractNumId: (numId: number) => number | null;
   /** Get abstract numbering by ID */
   getAbstract: (abstractNumId: number) => AbstractNumbering | null;
   /** Check if numId exists */
@@ -683,6 +685,10 @@ function createNumberingMap(definitions: NumberingDefinitions): NumberingMap {
       }
 
       return abstractNum.levels.find((l) => l.ilvl === ilvl) ?? null;
+    },
+
+    getAbstractNumId(numId: number): number | null {
+      return numMap.get(numId)?.abstractNumId ?? null;
     },
 
     getAbstract(abstractNumId: number): AbstractNumbering | null {

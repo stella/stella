@@ -220,6 +220,55 @@ describe("toFlowBlocks list numbering", () => {
     expect(blocks.at(1)?.attrs?.listMarker).toBe("I.a)");
   });
 
+  test("formats legal multilevel markers with decimal parent placeholders", () => {
+    const paragraphs = [];
+    for (let index = 1; index <= 7; index += 1) {
+      paragraphs.push(
+        schema.node(
+          "paragraph",
+          {
+            numPr: { numId: 7, ilvl: 0 },
+            listMarker: "%1",
+            listNumFmt: "lowerLetter",
+            listLevelNumFmts: ["lowerLetter"],
+          },
+          [schema.text(`Level ${index}`)],
+        ),
+      );
+    }
+    for (let index = 1; index <= 5; index += 1) {
+      paragraphs.push(
+        schema.node(
+          "paragraph",
+          {
+            numPr: { numId: 7, ilvl: 1 },
+            listMarker: "%1.%2",
+            listNumFmt: "lowerLetter",
+            listLevelNumFmts: ["lowerLetter", "lowerLetter"],
+          },
+          [schema.text(`Level 7.${index}`)],
+        ),
+      );
+    }
+    paragraphs.push(
+      schema.node(
+        "paragraph",
+        {
+          numPr: { numId: 7, ilvl: 2 },
+          listIsLegal: true,
+          listMarker: "%1.%2.%3",
+          listNumFmt: "decimal",
+          listLevelNumFmts: ["lowerLetter", "lowerLetter", "decimal"],
+        },
+        [schema.text("Level 7.5.1")],
+      ),
+    );
+
+    const blocks = toFlowBlocks(schema.node("doc", null, paragraphs));
+
+    expect(blocks.at(-1)?.attrs?.listMarker).toBe("7.5.1");
+  });
+
   test("continues numbering inside text boxes", () => {
     const textBoxNode = schema.nodes.textBox;
     if (!textBoxNode) {

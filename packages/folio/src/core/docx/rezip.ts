@@ -46,6 +46,13 @@ import { escapeXml } from "./serializer/xmlUtils";
 import { isPreservableDocxEntry } from "./unzip";
 import type { RawDocxContent } from "./unzip";
 
+export class DocxPackageFidelityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DocxPackageFidelityError";
+  }
+}
+
 /**
  * Find the highest rId number in a relationships XML string.
  */
@@ -59,6 +66,60 @@ export function findMaxRId(relsXml: string): number {
     }
   }
   return maxId;
+}
+
+const countDocumentSections = (xml: string): number =>
+  Array.from(xml.matchAll(/<w:sectPr\b/g)).length;
+
+type HeaderFooterReference = {
+  element: string;
+  type: string;
+  rId: string;
+};
+
+const extractHeaderFooterReferences = (
+  xml: string,
+): HeaderFooterReference[] => {
+  const references: HeaderFooterReference[] = [];
+  const pattern = /<w:(headerReference|footerReference)\b[^>]*>/g;
+  for (const match of xml.matchAll(pattern)) {
+    const tag = match[0];
+    const type = tag.match(/\bw:type="([^"]+)"/)?.at(1) ?? "default";
+    const rId = tag.match(/\br:id="([^"]+)"/)?.at(1);
+    const element = match[1];
+    if (!rId || !element) {
+      continue;
+    }
+    references.push({ element, type, rId });
+  }
+  return references;
+};
+
+function assertDocumentPackageFidelity(
+  originalDocumentXml: string,
+  serializedDocumentXml: string,
+): void {
+  const originalSectionCount = countDocumentSections(originalDocumentXml);
+  const serializedSectionCount = countDocumentSections(serializedDocumentXml);
+  if (serializedSectionCount < originalSectionCount) {
+    throw new DocxPackageFidelityError(
+      "Full DOCX repack would drop section properties. Use selective patching instead.",
+    );
+  }
+
+  const serializedRefs = new Set(
+    extractHeaderFooterReferences(serializedDocumentXml).map(
+      (ref) => `${ref.element}:${ref.type}:${ref.rId}`,
+    ),
+  );
+  const missingRefs = extractHeaderFooterReferences(originalDocumentXml).filter(
+    (ref) => !serializedRefs.has(`${ref.element}:${ref.type}:${ref.rId}`),
+  );
+  if (missingRefs.length > 0) {
+    throw new DocxPackageFidelityError(
+      "Full DOCX repack would drop header/footer references. Use selective patching instead.",
+    );
+  }
 }
 
 // ============================================================================
@@ -517,6 +578,12 @@ export async function repackDocx(
 
   // Serialize and update document.xml (after image/hyperlink rIds have been rewritten)
   const documentXml = serializeDocument(exportDocument);
+  const originalDocumentXml = await originalZip
+    .file("word/document.xml")
+    ?.async("text");
+  if (originalDocumentXml) {
+    assertDocumentPackageFidelity(originalDocumentXml, documentXml);
+  }
   newZip.file("word/document.xml", documentXml, {
     compression: "DEFLATE",
     compressionOptions: { level: compressionLevel },
@@ -615,6 +682,9 @@ export async function repackDocxFromRaw(
   await processNewHyperlinks(newHyperlinks, newZip, compressionLevel);
 
   const documentXml = serializeDocument(exportDocument);
+  if (rawContent.documentXml) {
+    assertDocumentPackageFidelity(rawContent.documentXml, documentXml);
+  }
   newZip.file("word/document.xml", documentXml, {
     compression: "DEFLATE",
     compressionOptions: { level: compressionLevel },

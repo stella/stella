@@ -1024,6 +1024,7 @@ function parseParagraphContents(
             ? normalizeDeletionContentElement(child)
             : child;
         const run = parseRun(runElement, styles, theme, rels, media);
+        const commentReferenceId = getCommentReferenceId(runElement);
 
         // Look for field characters
         let hasFieldBegin = false;
@@ -1099,11 +1100,23 @@ function parseParagraphContents(
             }
 
             contents.push(complexField);
+            if (commentReferenceId !== null) {
+              contents.push({
+                type: "commentReference",
+                id: commentReferenceId,
+              });
+            }
             inComplexField = false;
           }
         } else {
           // Regular run, not part of a field
           contents.push(run);
+          if (commentReferenceId !== null) {
+            contents.push({
+              type: "commentReference",
+              id: commentReferenceId,
+            });
+          }
         }
         break;
       }
@@ -1331,6 +1344,19 @@ function parseParagraphContents(
   return contents;
 }
 
+function getCommentReferenceId(runElement: XmlElement): number | null {
+  const commentReference = findChild(runElement, "w", "commentReference");
+  if (!commentReference) {
+    return null;
+  }
+
+  const id = Number.parseInt(
+    getAttribute(commentReference, "w", "id") ?? "",
+    10,
+  );
+  return Number.isFinite(id) ? id : null;
+}
+
 // ============================================================================
 // MAIN PARAGRAPH PARSER
 // ============================================================================
@@ -1439,7 +1465,9 @@ export function parseParagraph(
         >["levelNumFmts"] = [];
         for (let levelIndex = 0; levelIndex <= ilvl; levelIndex += 1) {
           levelNumFmts.push(
-            numbering.getLevel(numId, levelIndex)?.numFmt ?? "decimal",
+            level.isLgl
+              ? "decimal"
+              : (numbering.getLevel(numId, levelIndex)?.numFmt ?? "decimal"),
           );
         }
         const listRendering: typeof paragraph.listRendering & object = {
@@ -1449,8 +1477,11 @@ export function parseParagraph(
           isBullet: level.numFmt === "bullet",
           levelNumFmts,
         };
+        if (level.isLgl) {
+          listRendering.isLegal = true;
+        }
         if (level.numFmt) {
-          listRendering.numFmt = level.numFmt;
+          listRendering.numFmt = level.isLgl ? "decimal" : level.numFmt;
         }
         if (level.rPr?.hidden) {
           listRendering.markerHidden = true;
