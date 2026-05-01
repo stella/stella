@@ -229,6 +229,14 @@ jobs:
           path: release-manifest.json
           retention-days: 90
 
+      - name: Generate release notes from Conventional Commits
+        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: NOTES.md
+
       - name: Publish GitHub release manifest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -241,7 +249,7 @@ jobs:
             fi
             gh release create "$RELEASE_REF" \
               --title "$RELEASE_REF" \
-              --generate-notes \
+              --notes-file NOTES.md \
               --verify-tag \
               "${prerelease_args[@]}"
           fi
