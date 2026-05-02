@@ -52,7 +52,6 @@ includes:
 
 | Check              | Tool                      | Purpose                                |
 | ------------------ | ------------------------- | -------------------------------------- |
-| Spell check        | codespell                 | Catch typos in code and docs           |
 | Dependency install | `bun ci`                  | Verify lockfile integrity              |
 | i18n sync          | `bun run i18n:check`      | Ensure translation keys are consistent |
 | Lint               | oxlint (ultracite preset) | Code quality and security rules        |

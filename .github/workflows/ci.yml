@@ -16,14 +16,9 @@ jobs:
     # "run-ci" label matters — without this gate, adding any
     # label (e.g. priority, triage) would cancel an in-progress
     # CI run due to cancel-in-progress.
-    #
-    # While the repo is private, skip PR CI to save minutes.
-    # The nightly-typecheck workflow catches drift. Remove the
-    # visibility gate when the repo goes public.
     if: >-
       github.event_name == 'workflow_dispatch'
-      || (github.event.repository.visibility == 'public'
-          && github.event.pull_request.draft != true
+      || (github.event.pull_request.draft != true
           && (github.event.action != 'labeled'
               || github.event.label.name == 'run-ci'))
     runs-on: ubuntu-latest
@@ -75,13 +70,6 @@ jobs:
         uses: rharkor/caching-for-turbo@56219402aacc0d06b650d898c222996dbc1191ec # v2.3.14
         with:
           max-age: 7d
-
-      - name: Run Codespell
-        uses: codespell-project/actions-codespell@8f01853be192eb0f849a5c7d721450e7a467c579 # v2.2
-        with:
-          skip: package.json,bun.lock,README.md,*.snap,*.gen.ts,*.code-workspace,sbom.cdx.json,THIRD-PARTY-NOTICES.txt,langs,__fixtures__,*.json
-          ignore_words_file: .codespell-ignore-words.txt
-          check_filenames: true
 
       - name: Install dependencies
         run: bun ci

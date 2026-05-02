@@ -10,6 +10,7 @@ import type {
 } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decodeCursor } from "@/api/lib/search/cursor";
+import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
 import {
   escapeAndHighlight,
   TS_HEADLINE_CONFIG,
@@ -20,10 +21,8 @@ import {
 } from "@/api/lib/search/pagination";
 import { buildSearchTsQuery } from "@/api/lib/search/query";
 import { typedPgArray } from "@/api/lib/search/sql";
-import { parseEntityKind } from "@/api/lib/search/types";
 import type {
   ContactGlobalSearchHit,
-  EntityGlobalSearchHit,
   FacetBucket,
   GlobalSearchHit,
   GlobalSearchResult,
@@ -224,27 +223,6 @@ const workspaceAccessSql = ({
     return sql`AND false`;
   }
   return sql`AND ${column} = ANY(${typedPgArray(effective, "uuid")})`;
-};
-
-const mapEntityHit = (row: RawRow): ScoredGlobalSearchHit => {
-  const kind = parseEntityKind(row["type"]);
-  const entityId = String(row["id"]);
-  const workspaceId = String(row["workspace_id"]);
-  const hit: EntityGlobalSearchHit = {
-    id: `entity:${entityId}`,
-    type: kind,
-    entityId,
-    workspaceId,
-    workspaceName: String(row["workspace_name"]),
-    title: String(row["title"]),
-    headline: toHeadline(row["headline"]),
-    updatedAt: toIso(row["updated_at"]),
-    lastEditedByName: toNullableString(row["last_edited_by_name"]),
-    lastEditedByImage: toNullableString(row["last_edited_by_image"]),
-    mimeType: toNullableString(row["mime_type"]),
-  };
-
-  return { hit, score: Number(row["score"]) };
 };
 
 const mapMatterHit = (row: RawRow): ScoredGlobalSearchHit => {

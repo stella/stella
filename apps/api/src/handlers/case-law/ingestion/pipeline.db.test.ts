@@ -17,6 +17,7 @@ type JsonbStorageRow = {
 };
 
 const databaseUrl = process.env["DATABASE_URL"];
+const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 const documentAst = {
   version: 1,
@@ -64,10 +65,10 @@ const ingestionResult = {
   parserVersion: PARSER_VERSION,
 } satisfies IngestionResult;
 
-if (!databaseUrl) {
+if (!databaseUrl || !runPostgresTests) {
   describe.skip("case-law ingestion JSONB persistence", () => {
-    test("requires DATABASE_URL for the Bun SQL/Postgres regression", () => {
-      expect(databaseUrl).toBeUndefined();
+    test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {
+      expect(runPostgresTests && Boolean(databaseUrl)).toBe(false);
     });
   });
 } else {

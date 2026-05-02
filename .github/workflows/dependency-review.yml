@@ -18,10 +18,6 @@ name: Dependency Review
 #
 # See: https://choosealicense.com/appendix/
 #
-# TODO: remove the `if` condition once the repo is public.
-# Dependency review requires GitHub Advanced Security, which is
-# only free on public repos.
-
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -34,6 +30,9 @@ jobs:
   dependency-review:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Dependency Review needs Dependency Graph + GitHub Advanced Security on
+    # private repos, but is available for public repositories. Keep it wired up
+    # for launch while avoiding a hard failure before the repository is public.
     if: >-
       github.event.repository.visibility == 'public'
       && github.event.pull_request.draft != true

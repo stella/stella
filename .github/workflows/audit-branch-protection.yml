@@ -1,8 +1,5 @@
 name: Audit Branch Protection
 
-# TODO: remove the `if` condition once the repo is public.
-# Repository rulesets require GitHub Pro or a public repo.
-
 on:
   schedule:
     - cron: "0 8 * * 1" # Monday 08:00 UTC
@@ -14,7 +11,6 @@ concurrency:
 
 jobs:
   audit:
-    if: github.event.repository.visibility == 'public'
     uses: stella/.github/.github/workflows/audit-branch-protection.yml@main
     with:
       expected-config-path: .github/branch-protection/ruleset-main.json

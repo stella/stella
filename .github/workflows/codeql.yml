@@ -16,14 +16,10 @@ permissions:
 
 jobs:
   analyze:
-    # Keep the workflow wired up, but skip the job entirely while the
-    # repository is private so we do not burn runner minutes on setup.
-    # Once the repo is public, set the repository variable
-    # `REPO_IS_PUBLIC=true` to re-enable CodeQL across push, PR,
-    # schedule, and manual runs.
     if: >-
-      vars.REPO_IS_PUBLIC == 'true'
-      && (github.event.pull_request.draft != true || github.event_name != 'pull_request')
+      github.event.repository.visibility == 'public'
+      && (github.event_name != 'pull_request'
+          || github.event.pull_request.draft != true)
     runs-on: ubuntu-latest
     permissions:
       actions: read
