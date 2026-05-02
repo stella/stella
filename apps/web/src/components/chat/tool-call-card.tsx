@@ -7,12 +7,13 @@ import {
   CodeIcon,
   CircleHelpIcon,
   FileTextIcon,
-  LandmarkIcon,
   LibraryIcon,
   SearchIcon,
   UserIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { getChatToolTitleKey } from "@/components/chat/chat-ui-tools";
 
 type ToolPart = Parameters<typeof getToolName>[0];
 
@@ -65,11 +66,19 @@ const getStringInputValue = ({
   return typeof value === "string" ? value : undefined;
 };
 
-const getToolSubtitle = (part: ToolPart, toolName: string) => {
+const getToolSubtitle = ({
+  formatCharacterCount,
+  part,
+  toolName,
+}: {
+  formatCharacterCount: (count: number) => string;
+  part: ToolPart;
+  toolName: string;
+}) => {
   switch (toolName) {
     case "execute-typescript": {
       const source = getExecuteTypescriptSource(part, toolName);
-      return source ? `${source.length.toLocaleString()} chars` : null;
+      return source ? formatCharacterCount(source.length) : null;
     }
     case "load-skill":
       return getStringInputValue({ key: "skillName", part }) ?? null;
@@ -94,7 +103,6 @@ const TOOL_ICONS: Record<string, typeof SearchIcon> = {
   "load-skill": LibraryIcon,
   "read-skill-resource": FileTextIcon,
   "read-contact": UserIcon,
-  searchCaseLaw: LandmarkIcon,
 };
 
 export const ToolCallCard = ({
@@ -116,17 +124,13 @@ export const ToolCallCard = ({
     ),
   );
   const Icon = TOOL_ICONS[name] ?? SearchIcon;
-  const toolLabels: Record<string, string> = {
-    "ask-user": t("chat.tool.ask-user"),
-    "describe-stella-function": t("chat.tool.describe-stella-function"),
-    "execute-typescript": t("chat.tool.execute-typescript"),
-    "load-skill": t("chat.tool.load-skill"),
-    "read-contact": t("chat.tool.read-contact"),
-    "read-skill-resource": t("chat.tool.read-skill-resource"),
-    searchCaseLaw: t("chat.tool.searchCaseLaw"),
-  };
-  const label = toolLabels[name] ?? name;
-  const subtitle = getToolSubtitle(part, name);
+  const label = t(getChatToolTitleKey(name));
+  const subtitle = getToolSubtitle({
+    formatCharacterCount: (count) =>
+      t("chat.toolCall.characterCount", { count }),
+    part,
+    toolName: name,
+  });
 
   const isLoading =
     part.state === "input-streaming" || part.state === "input-available";

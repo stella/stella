@@ -11,11 +11,13 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { getChatToolTitleKey } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
   ApprovalToolPart,
   ChatUITools,
 } from "@/components/chat/chat-ui-tools";
+import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import type { WorkspaceProperty } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import {
@@ -30,6 +32,7 @@ const DOCX_MIME =
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
 type CreateDocumentInput = ChatUITools["create-document"]["input"];
+type CreateDocumentOutput = ChatUITools["create-document"]["output"];
 
 /** Guess a mime type from a file name extension. */
 const mimeFromName = (name: string): string => {
@@ -120,8 +123,9 @@ type UpdateSummaryProps = {
 };
 
 const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
+  const t = useTranslations();
   const qc = useQueryClient();
-  const propName = input.propertyName ?? "field";
+  const propName = input.propertyName ?? t("chat.toolCall.field");
   const entityName = input.entityName;
   const newVal = input.value;
   const oldVal = input.oldValue;
@@ -177,7 +181,7 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
                 {" → "}
               </>
             )}
-            {displayNew ?? "(empty)"}
+            {displayNew ?? t("common.empty")}
           </span>
         )}
       </div>
@@ -204,10 +208,22 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
 
 type CreateSummaryProps = {
   input: CreateDocumentInput;
+  output?: CreateDocumentOutput | undefined;
 };
 
-const CreateSummary = ({ input }: CreateSummaryProps) => {
+const CreateSummary = ({ input, output }: CreateSummaryProps) => {
   const name = `${input.name}.docx`;
+
+  if (output && output.success) {
+    return (
+      <div className="border-border/50 text-muted-foreground flex items-center gap-1.5 border-t px-3 py-2 text-xs">
+        <StreamdownMentionLink href={output.href} interactive>
+          {output.fileName}
+        </StreamdownMentionLink>
+      </div>
+    );
+  }
+
   return (
     <div className="border-border/50 text-muted-foreground flex items-center gap-1.5 border-t px-3 py-2 text-xs">
       <DocumentIcon className="size-3.5 shrink-0" mimeType={DOCX_MIME} />
@@ -268,11 +284,7 @@ export const ToolApprovalCard = ({
     onApprove(id);
   }, [isApprovalRequested, autoApprovedTools, name, part, onApprove]);
 
-  const toolLabels = {
-    "update-entity-fields": t("chat.tool.update-entity-fields"),
-    "create-document": t("chat.tool.create-document"),
-  } as const satisfies Record<ApprovalToolName, string>;
-  const label = toolLabels[name];
+  const label = t(getChatToolTitleKey(name));
 
   const approvalId = isApprovalRequested ? getApprovalId(part) : null;
 
@@ -308,7 +320,12 @@ export const ToolApprovalCard = ({
         )}
       {part.type === "tool-create-document" &&
         part.state !== "input-streaming" &&
-        part.input !== undefined && <CreateSummary input={part.input} />}
+        part.input !== undefined && (
+          <CreateSummary
+            input={part.input}
+            output={part.state === "output-available" ? part.output : undefined}
+          />
+        )}
 
       {/* Actions */}
       {approvalId && !isProcessing && (

@@ -305,10 +305,13 @@
     "askUser": {
       "custom": "Napísať vlastnú",
       "default": "Predvolená",
+      "noAnswer": "Bez odpovede",
       "placeholder": "Vaša odpoveď",
       "submit": "Odoslať odpovede"
     },
     "attachFile": "Priložiť súbor",
+    "attachedImage": "Priložený obrázok",
+    "attachment": "Príloha",
     "caseLawGreeting": "Spýtajte sa na toto rozhodnutie — plný text je k dispozícii.",
     "chatAbout": "Vložiť do AI chatu",
     "contextPlaceholder": "Chat o {context}",
@@ -373,17 +376,21 @@
     "thinking": "Pracujem s kontextom",
     "threads": "Konverzácie",
     "tool": {
-      "ask-user": "Asking for clarification",
-      "create-document": "Vytvoriť dokument",
-      "describe-stella-function": "Inspecting stella function",
-      "execute-typescript": "Running TypeScript",
-      "load-skill": "Loading skill",
-      "read-contact": "Reading contact",
-      "read-skill-resource": "Reading skill resource",
-      "searchCaseLaw": "Vyhľadávanie v judikatúre",
-      "update-entity-fields": "Aktualizovať metadáta"
+      "ask-user": "Žiadosť o upresnenie",
+      "create-document": "Vytváranie dokumentu",
+      "describe-stella-function": "Kontrola funkcie stella",
+      "execute-typescript": "Spúšťanie TypeScriptu",
+      "load-skill": "Načítavanie zručnosti",
+      "read-contact": "Čítanie kontaktu",
+      "read-content-across-matters": "Čítanie obsahu naprieč vecami",
+      "read-skill-resource": "Čítanie zdroja zručnosti",
+      "search-across-matters": "Vyhľadávanie naprieč vecami",
+      "unknown": "Používanie nástroja",
+      "update-entity-fields": "Aktualizácia metadát"
     },
     "toolCall": {
+      "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znakov}}",
+      "field": "Pole",
       "input": "Vstup",
       "output": "Výstup",
       "sourceCode": "Zdrojový kód"

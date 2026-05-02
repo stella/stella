@@ -268,10 +268,15 @@ export const createOrgTools = ({
         ),
       }),
     ),
-    execute: ({ analysis, questions }) => ({
-      status: "awaiting_response",
-      analysis,
-      questionCount: questions.length,
-    }),
+    outputSchema: valibotSchema(
+      v.strictObject({
+        answers: v.array(
+          v.strictObject({
+            question: v.string(),
+            answer: v.string(),
+          }),
+        ),
+      }),
+    ),
   }),
 });

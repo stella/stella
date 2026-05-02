@@ -63,6 +63,7 @@ export const getChatTools = ({
   const workspaceTools = createWorkspaceTools({
     allowedWorkspaceIds: accessibleWorkspaceIds,
     organizationId,
+    refRegistry,
     userId,
     scopedDb,
   });

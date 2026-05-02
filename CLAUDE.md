@@ -324,6 +324,9 @@ conventions in `/conventions-testing`.
 
 `use-intl` runtime. Source language: en. Check `apps/web/src/i18n/langs/` for
 supported languages. Prefer reusable `common.*` keys over feature-scoped duplicates.
+When storing translation keys in constants, maps, props, helper return types, or
+similar indirection, type them with `TranslationKey` from `apps/web/src/i18n/types`
+instead of `string` so stale or missing translation keys fail typecheck.
 Full translation flow and key naming rules in `/conventions-i18n`.
 
 ## Linting

@@ -305,10 +305,13 @@
     "askUser": {
       "custom": "Saját válasz",
       "default": "Alapértelmezett",
+      "noAnswer": "Nincs válasz",
       "placeholder": "Az Ön válasza",
       "submit": "Válaszok elküldése"
     },
     "attachFile": "Fájl csatolása",
+    "attachedImage": "Csatolt kép",
+    "attachment": "Melléklet",
     "caseLawGreeting": "Kérdezz erről a határozatról — a teljes szöveg itt elérhető.",
     "chatAbout": "Beszúrás az AI chatbe",
     "contextPlaceholder": "Csevegés erről: {context}",
@@ -373,17 +376,21 @@
     "thinking": "Kontextussal dolgozom",
     "threads": "Beszélgetések",
     "tool": {
-      "ask-user": "Asking for clarification",
+      "ask-user": "Pontosítás kérése",
       "create-document": "Dokumentum létrehozása",
-      "describe-stella-function": "Inspecting stella function",
-      "execute-typescript": "Running TypeScript",
-      "load-skill": "Loading skill",
-      "read-contact": "Reading contact",
-      "read-skill-resource": "Reading skill resource",
-      "searchCaseLaw": "Joggyakorlat keresése",
+      "describe-stella-function": "stella-függvény vizsgálata",
+      "execute-typescript": "TypeScript futtatása",
+      "load-skill": "Készség betöltése",
+      "read-contact": "Kapcsolat olvasása",
+      "read-content-across-matters": "Tartalom olvasása az ügyek között",
+      "read-skill-resource": "Készség-erőforrás olvasása",
+      "search-across-matters": "Keresés az ügyek között",
+      "unknown": "Eszköz használata",
       "update-entity-fields": "Metaadatok frissítése"
     },
     "toolCall": {
+      "characterCount": "{count, plural, one {# karakter} other {# karakter}}",
+      "field": "Mező",
       "input": "Bemenet",
       "output": "Kimenet",
       "sourceCode": "Forráskód"

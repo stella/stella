@@ -14,6 +14,7 @@ import {
 import { AskUserCard } from "@/components/chat/ask-user-card";
 import type {
   ApprovalToolName,
+  AskUserOutput,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import { isApprovalPart } from "@/components/chat/chat-ui-tools";
@@ -98,6 +99,8 @@ const IMAGE_MEDIA_TYPES = new Set([
 ]);
 
 const UserAttachments = ({ parts }: { parts: readonly FileUIPart[] }) => {
+  const t = useTranslations();
+
   if (parts.length === 0) {
     return null;
   }
@@ -107,11 +110,12 @@ const UserAttachments = ({ parts }: { parts: readonly FileUIPart[] }) => {
       {parts.map((part, index) => {
         const key = `${part.filename ?? "attachment"}-${index}`;
         const contentUrl = getUserFileContentUrl(part.url) ?? part.url;
+        const fallbackLabel = t("chat.attachment");
         if (IMAGE_MEDIA_TYPES.has(part.mediaType)) {
           return (
             <a href={contentUrl} key={key} rel="noreferrer" target="_blank">
               <img
-                alt={part.filename ?? "Attached image"}
+                alt={part.filename ?? t("chat.attachedImage")}
                 className="max-h-32 rounded-md object-cover"
                 height={128}
                 src={contentUrl}
@@ -134,7 +138,7 @@ const UserAttachments = ({ parts }: { parts: readonly FileUIPart[] }) => {
             target="_blank"
           >
             <FileTextIcon className="size-3" />
-            <span>{part.filename ?? "Attachment"}</span>
+            <span>{part.filename ?? fallbackLabel}</span>
           </a>
         );
       })}
@@ -195,7 +199,10 @@ type ChatThreadMessagesProps = {
   handleDeny: (id: string) => void | PromiseLike<void>;
   isGenerating?: boolean | undefined;
   messages: PersistedChatMessage[];
-  onAskUserSubmit: (text: string) => Promise<void>;
+  onAskUserSubmit: (
+    toolCallId: string,
+    output: AskUserOutput,
+  ) => void | PromiseLike<void>;
   showThinkingIndicator?: boolean | undefined;
   showToolCalls: boolean;
   streamdownComponents: {
@@ -249,8 +256,8 @@ export const ChatThreadMessages = ({
                   return (
                     <AskUserCard
                       key={part.toolCallId}
-                      onSubmit={(...args) => {
-                        void onAskUserSubmit(...args);
+                      onSubmit={(toolCallId, output) => {
+                        void onAskUserSubmit(toolCallId, output);
                       }}
                       part={part}
                       workspaceId={workspaceId}

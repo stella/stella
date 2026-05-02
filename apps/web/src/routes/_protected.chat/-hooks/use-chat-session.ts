@@ -8,6 +8,7 @@ import { isToolUIPart } from "ai";
 
 import type {
   ApprovalToolName,
+  AskUserOutput,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
@@ -39,6 +40,7 @@ export const useChatSession = ({
     stop,
     status,
     addToolApprovalResponse,
+    addToolOutput,
   } = useChat({ chat });
 
   const sendMessage = useCallback(
@@ -57,6 +59,15 @@ export const useChatSession = ({
   const handleDeny = useCallback(
     (id: string) => addToolApprovalResponse({ id, approved: false }),
     [addToolApprovalResponse],
+  );
+  const handleAskUserSubmit = useCallback(
+    (toolCallId: string, output: AskUserOutput) =>
+      addToolOutput({
+        tool: "ask-user",
+        toolCallId,
+        output,
+      }),
+    [addToolOutput],
   );
   const handleAlwaysAllow = useCallback(
     (toolName: ApprovalToolName) =>
@@ -91,6 +102,7 @@ export const useChatSession = ({
     autoApprovedTools,
     handleApprove,
     handleDeny,
+    handleAskUserSubmit,
     handleAlwaysAllow,
     streamdownComponents,
     approvalPendingMessageId,

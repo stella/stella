@@ -308,10 +308,13 @@ type Messages = {
     "askUser": {
       "custom": "Write your own";
       "default": "Default";
+      "noAnswer": "No answer";
       "placeholder": "Your answer";
       "submit": "Submit answers";
     };
     "attachFile": "Attach file";
+    "attachedImage": "Attached image";
+    "attachment": "Attachment";
     "caseLawGreeting": "Ask about this decision — its full text is available here.";
     "chatAbout": "Chat about this";
     "contextPlaceholder": "Chat about {context}";
@@ -382,11 +385,15 @@ type Messages = {
       "execute-typescript": "Running TypeScript";
       "load-skill": "Loading skill";
       "read-contact": "Reading contact";
+      "read-content-across-matters": "Reading content across matters";
       "read-skill-resource": "Reading skill resource";
-      "searchCaseLaw": "Searching case law";
+      "search-across-matters": "Searching across matters";
+      "unknown": "Using tool";
       "update-entity-fields": "Updating metadata";
     };
     "toolCall": {
+      "characterCount": "{count, plural, one {# character} other {# characters}}";
+      "field": "Field";
       "input": "Input";
       "output": "Output";
       "sourceCode": "Source code";

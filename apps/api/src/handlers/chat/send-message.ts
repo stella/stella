@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
@@ -22,7 +22,7 @@ import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { ChatError } from "@/api/handlers/chat/errors";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import {
-  collectNewAssistantMessages,
+  planAssistantFinishPersistence,
   planMessagePersistence,
 } from "@/api/handlers/chat/persist-message";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
@@ -223,34 +223,38 @@ const sendMessage = createSafeRootHandler(
           await streamChat({
             abortSignal: request.signal,
             messages: chatContext.hydratedMessages,
-            onFinish: async (streamedMessages) => {
-              const newAssistantMessages = collectNewAssistantMessages({
-                existingIds: latestMessagePlan.existingIds,
-                messages: streamedMessages,
+            onFinish: async ({ isAborted, responseMessage }) => {
+              const resolvedMessages = resolveAssistantMessageRefs({
+                messages: [responseMessage],
+                refRegistry,
               });
-
-              if (newAssistantMessages.length === 0) {
-                return;
+              const resolvedResponseMessage = resolvedMessages.at(0);
+              if (!resolvedResponseMessage) {
+                panic("Missing chat response message");
               }
 
-              const insertResult = await insertMessages({
-                messages: resolveAssistantMessageRefs({
-                  messages: newAssistantMessages,
-                  refRegistry,
-                }),
+              const persistencePlan = planAssistantFinishPersistence({
+                existingIds: latestMessagePlan.existingIds,
+                isAborted,
+                message: resolvedResponseMessage,
+              });
+
+              const persistResult = await persistMessage({
+                persistencePlan,
                 safeDb,
                 threadId: body.threadId,
                 userId: user.id,
                 workspaceId,
               });
 
-              if (Result.isError(insertResult)) {
-                captureError(insertResult.error, { threadId: body.threadId });
+              if (Result.isError(persistResult)) {
+                captureError(persistResult.error, { threadId: body.threadId });
               }
             },
             orgAIConfig,
             promptCacheKey: chatContext.promptCacheKey,
             resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
+            resolveAssistantValueRefs: refRegistry.resolveAssistantValueRefs,
             threadId: body.threadId,
             tools: chatTools,
             system: chatContext.system,

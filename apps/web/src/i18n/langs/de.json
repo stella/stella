@@ -305,10 +305,13 @@
     "askUser": {
       "custom": "Eigene Antwort",
       "default": "Standard",
+      "noAnswer": "Keine Antwort",
       "placeholder": "Ihre Antwort",
       "submit": "Antworten absenden"
     },
     "attachFile": "Datei anhängen",
+    "attachedImage": "Angehängtes Bild",
+    "attachment": "Anhang",
     "caseLawGreeting": "Stelle Fragen zu dieser Entscheidung — der vollständige Text ist hier verfügbar.",
     "chatAbout": "In AI-Chat einfügen",
     "contextPlaceholder": "Chat über {context}",
@@ -373,17 +376,21 @@
     "thinking": "Arbeite mit Kontext",
     "threads": "Konversationen",
     "tool": {
-      "ask-user": "Asking for clarification",
+      "ask-user": "Um Klärung bitten",
       "create-document": "Dokument erstellen",
-      "describe-stella-function": "Inspecting stella function",
-      "execute-typescript": "Running TypeScript",
-      "load-skill": "Loading skill",
-      "read-contact": "Reading contact",
-      "read-skill-resource": "Reading skill resource",
-      "searchCaseLaw": "Rechtsprechung durchsuchen",
+      "describe-stella-function": "stella-Funktion prüfen",
+      "execute-typescript": "TypeScript ausführen",
+      "load-skill": "Skill laden",
+      "read-contact": "Kontakt lesen",
+      "read-content-across-matters": "Inhalte in allen Mandaten lesen",
+      "read-skill-resource": "Skill-Ressource lesen",
+      "search-across-matters": "In allen Mandaten suchen",
+      "unknown": "Werkzeug verwenden",
       "update-entity-fields": "Metadaten aktualisieren"
     },
     "toolCall": {
+      "characterCount": "{count, plural, one {# Zeichen} other {# Zeichen}}",
+      "field": "Feld",
       "input": "Eingabe",
       "output": "Ausgabe",
       "sourceCode": "Quellcode"

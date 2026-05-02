@@ -6,12 +6,13 @@ import {
   stepCountIs,
   streamText,
 } from "ai";
-import type { InferUIMessageChunk } from "ai";
+import type { InferUIMessageChunk, UIMessageStreamOnFinishCallback } from "ai";
 import { panic, Result } from "better-result";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { getUserFileIdFromPart } from "@/api/handlers/chat/attachment-validation";
 import type { ChatTools } from "@/api/handlers/chat/tools/chat-tools";
+import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
@@ -20,6 +21,8 @@ import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 
 const MAX_TOOL_STEPS = 8;
+
+type AssistantValueRefResolver = ChatRefRegistry["resolveAssistantValueRefs"];
 
 type StoredUserFile = {
   id: SafeId<"userFile">;
@@ -33,10 +36,11 @@ type StoredUserFile = {
 type StreamChatProps = {
   abortSignal: AbortSignal;
   messages: ChatMessage[];
-  onFinish: (messages: ChatMessage[]) => Promise<void>;
+  onFinish: UIMessageStreamOnFinishCallback<ChatMessage>;
   orgAIConfig: OrgAIConfig | null;
   promptCacheKey: string;
   resolveAssistantTextRefs?: ((text: string) => string) | undefined;
+  resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
   system: string;
   threadId: SafeId<"chatThread">;
   tools: ChatTools;
@@ -49,6 +53,7 @@ export const streamChat = async ({
   orgAIConfig,
   promptCacheKey,
   resolveAssistantTextRefs,
+  resolveAssistantValueRefs,
   system,
   threadId,
   tools,
@@ -57,9 +62,7 @@ export const streamChat = async ({
   const stream = createUIMessageStream<ChatMessage>({
     generateId: () => Bun.randomUUIDv7(),
     originalMessages: messages,
-    onFinish: async ({ messages: streamedMessages }) => {
-      await onFinish(streamedMessages);
-    },
+    onFinish,
     onError: (error) => {
       captureError(error, { threadId });
       return "error";
@@ -83,7 +86,11 @@ export const streamChat = async ({
       const uiStream = result.toUIMessageStream<ChatMessage>();
       writer.merge(
         resolveAssistantTextRefs
-          ? resolveRefsInTextStream(uiStream, resolveAssistantTextRefs)
+          ? resolveRefsInTextStream(
+              uiStream,
+              resolveAssistantTextRefs,
+              resolveAssistantValueRefs,
+            )
           : uiStream,
       );
     },
@@ -109,6 +116,7 @@ const getResolvedTextPrefixLength = (text: string) => {
 export const resolveRefsInTextStream = (
   stream: ReadableStream<InferUIMessageChunk<ChatMessage>>,
   resolveAssistantTextRefs: (text: string) => string,
+  resolveAssistantValueRefs?: AssistantValueRefResolver,
 ) => {
   const buffers = new Map<string, string>();
 
@@ -159,6 +167,17 @@ export const resolveRefsInTextStream = (
             text: buffers.get(chunk.id) ?? "",
           });
           buffers.delete(chunk.id);
+        }
+
+        if (
+          chunk.type === "tool-output-available" &&
+          resolveAssistantValueRefs
+        ) {
+          controller.enqueue({
+            ...chunk,
+            output: resolveAssistantValueRefs(chunk.output),
+          });
+          return;
         }
 
         controller.enqueue(chunk);

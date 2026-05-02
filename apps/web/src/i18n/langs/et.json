@@ -305,10 +305,13 @@
     "askUser": {
       "custom": "Kirjuta oma",
       "default": "Vaikimisi",
+      "noAnswer": "Vastus puudub",
       "placeholder": "Teie vastus",
       "submit": "Esita vastused"
     },
     "attachFile": "Lisa fail",
+    "attachedImage": "Manustatud pilt",
+    "attachment": "Manus",
     "caseLawGreeting": "Esita küsimusi selle otsuse kohta — täistekst on siin saadaval.",
     "chatAbout": "Lisa AI vestlusesse",
     "contextPlaceholder": "Vestle teemal {context}",
@@ -373,17 +376,21 @@
     "thinking": "Töötan kontekstiga",
     "threads": "Vestlused",
     "tool": {
-      "ask-user": "Asking for clarification",
-      "create-document": "Loo dokument",
-      "describe-stella-function": "Inspecting stella function",
-      "execute-typescript": "Running TypeScript",
-      "load-skill": "Loading skill",
-      "read-contact": "Reading contact",
-      "read-skill-resource": "Reading skill resource",
-      "searchCaseLaw": "Kohtupraktika otsing",
-      "update-entity-fields": "Uuenda välja"
+      "ask-user": "Täpsustuse küsimine",
+      "create-document": "Dokumendi loomine",
+      "describe-stella-function": "stella funktsiooni kontrollimine",
+      "execute-typescript": "TypeScripti käivitamine",
+      "load-skill": "Oskuse laadimine",
+      "read-contact": "Kontakti lugemine",
+      "read-content-across-matters": "Sisu lugemine kõigist asjadest",
+      "read-skill-resource": "Oskuse ressursi lugemine",
+      "search-across-matters": "Otsing kõigis asjades",
+      "unknown": "Tööriista kasutamine",
+      "update-entity-fields": "Metaandmete uuendamine"
     },
     "toolCall": {
+      "characterCount": "{count, plural, one {# märk} other {# märki}}",
+      "field": "Väli",
       "input": "Sisend",
       "output": "Väljund",
       "sourceCode": "Lähtekood"

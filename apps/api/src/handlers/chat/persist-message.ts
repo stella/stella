@@ -112,15 +112,28 @@ export const planMessagePersistence = ({
   };
 };
 
-type CollectNewAssistantMessagesProps = {
+type PlanAssistantFinishPersistenceProps = {
   existingIds: Set<string>;
-  messages: ChatMessage[];
+  isAborted: boolean;
+  message: ChatMessage;
 };
 
-export const collectNewAssistantMessages = ({
+export const planAssistantFinishPersistence = ({
   existingIds,
-  messages,
-}: CollectNewAssistantMessagesProps): ChatMessage[] =>
-  messages.filter(
-    (message) => message.role === "assistant" && !existingIds.has(message.id),
-  );
+  isAborted,
+  message,
+}: PlanAssistantFinishPersistenceProps): MessagePersistencePlan => {
+  if (isAborted || message.role !== "assistant") {
+    return { type: "none" };
+  }
+
+  if (existingIds.has(message.id)) {
+    return {
+      type: "update",
+      messageId: message.id,
+      message,
+    };
+  }
+
+  return { type: "insert", message };
+};

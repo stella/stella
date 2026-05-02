@@ -149,6 +149,7 @@ export const ChatTabPanel = ({
     autoApprovedTools,
     handleApprove,
     handleDeny,
+    handleAskUserSubmit,
     handleAlwaysAllow,
     streamdownComponents,
     approvalPendingMessageId,
@@ -234,9 +235,7 @@ export const ChatTabPanel = ({
               handleDeny={handleDeny}
               isGenerating={isGenerating}
               messages={messages}
-              onAskUserSubmit={async (text) => {
-                await sendMessage({ text });
-              }}
+              onAskUserSubmit={handleAskUserSubmit}
               showThinkingIndicator
               showToolCalls={showToolCalls}
               streamdownComponents={streamdownComponents}

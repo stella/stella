@@ -88,6 +88,7 @@ export const ChatThreadPage = ({
     autoApprovedTools,
     handleApprove,
     handleDeny,
+    handleAskUserSubmit,
     handleAlwaysAllow,
     streamdownComponents,
     approvalPendingMessageId,
@@ -173,9 +174,7 @@ export const ChatThreadPage = ({
             handleDeny={handleDeny}
             isGenerating={isGenerating}
             messages={messages}
-            onAskUserSubmit={async (text) => {
-              await sendMessage({ text });
-            }}
+            onAskUserSubmit={handleAskUserSubmit}
             showThinkingIndicator
             showToolCalls={showToolCalls}
             streamdownComponents={streamdownComponents}

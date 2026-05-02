@@ -305,10 +305,13 @@
     "askUser": {
       "custom": "Napisz własną",
       "default": "Domyślna",
+      "noAnswer": "Brak odpowiedzi",
       "placeholder": "Twoja odpowiedź",
       "submit": "Wyślij odpowiedzi"
     },
     "attachFile": "Załącz plik",
+    "attachedImage": "Załączony obraz",
+    "attachment": "Załącznik",
     "caseLawGreeting": "Zapytaj mnie o to orzeczenie — mam dostęp do pełnej treści.",
     "chatAbout": "Omów na czacie",
     "contextPlaceholder": "Czat o {context}",
@@ -374,16 +377,20 @@
     "threads": "Rozmowy",
     "tool": {
       "ask-user": "Prośba o wyjaśnienie",
-      "create-document": "Utwórz dokument",
+      "create-document": "Tworzenie dokumentu",
       "describe-stella-function": "Inspekcja funkcji stella",
       "execute-typescript": "Wykonywanie kodu TypeScript",
       "load-skill": "Ładowanie umiejętności",
       "read-contact": "Odczyt kontaktu",
+      "read-content-across-matters": "Odczyt treści w różnych sprawach",
       "read-skill-resource": "Odczyt zasobu umiejętności",
-      "searchCaseLaw": "Przeszukiwanie orzecznictwa",
-      "update-entity-fields": "Zaktualizuj metadane"
+      "search-across-matters": "Wyszukiwanie w różnych sprawach",
+      "unknown": "Używanie narzędzia",
+      "update-entity-fields": "Aktualizacja metadanych"
     },
     "toolCall": {
+      "characterCount": "{count, plural, one {# znak} few {# znaki} many {# znaków} other {# znaku}}",
+      "field": "Pole",
       "input": "Dane wejściowe",
       "output": "Wynik",
       "sourceCode": "Kod źródłowy"

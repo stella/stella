@@ -305,10 +305,13 @@
     "askUser": {
       "custom": "Rašyti savo",
       "default": "Numatytasis",
+      "noAnswer": "Atsakymo nėra",
       "placeholder": "Jūsų atsakymas",
       "submit": "Pateikti atsakymus"
     },
     "attachFile": "Prisegti failą",
+    "attachedImage": "Pridėtas vaizdas",
+    "attachment": "Priedas",
     "caseLawGreeting": "Klausk apie šį sprendimą — visas tekstas pasiekiamas čia.",
     "chatAbout": "Įterpti į AI pokalbį",
     "contextPlaceholder": "Pokalbis apie {context}",
@@ -373,17 +376,21 @@
     "thinking": "Dirbama su kontekstu",
     "threads": "Pokalbiai",
     "tool": {
-      "ask-user": "Asking for clarification",
-      "create-document": "Sukurti dokumentą",
-      "describe-stella-function": "Inspecting stella function",
-      "execute-typescript": "Running TypeScript",
-      "load-skill": "Loading skill",
-      "read-contact": "Reading contact",
-      "read-skill-resource": "Reading skill resource",
-      "searchCaseLaw": "Ieškoma teismų praktikoje",
-      "update-entity-fields": "Atnaujinti lauką"
+      "ask-user": "Prašoma patikslinimo",
+      "create-document": "Kuriamas dokumentas",
+      "describe-stella-function": "Tikrinama stella funkcija",
+      "execute-typescript": "Vykdomas TypeScript",
+      "load-skill": "Įkeliamas įgūdis",
+      "read-contact": "Skaitomas kontaktas",
+      "read-content-across-matters": "Skaitomas turinys keliose bylose",
+      "read-skill-resource": "Skaitomas įgūdžio išteklius",
+      "search-across-matters": "Ieškoma keliose bylose",
+      "unknown": "Naudojamas įrankis",
+      "update-entity-fields": "Atnaujinami metaduomenys"
     },
     "toolCall": {
+      "characterCount": "{count, plural, one {# simbolis} few {# simboliai} many {# simbolių} other {# simbolio}}",
+      "field": "Laukas",
       "input": "Įvestis",
       "output": "Išvestis",
       "sourceCode": "Pradinis kodas"

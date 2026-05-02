@@ -305,10 +305,13 @@
     "askUser": {
       "custom": "Escribir propia",
       "default": "Predeterminada",
+      "noAnswer": "Sin respuesta",
       "placeholder": "Su respuesta",
       "submit": "Enviar respuestas"
     },
     "attachFile": "Adjuntar archivo",
+    "attachedImage": "Imagen adjunta",
+    "attachment": "Adjunto",
     "caseLawGreeting": "Pregunta sobre esta decisión — el texto completo está disponible aquí.",
     "chatAbout": "Insertar en chat de IA",
     "contextPlaceholder": "Chat sobre {context}",
@@ -373,17 +376,21 @@
     "thinking": "Trabajando con contexto",
     "threads": "Conversaciones",
     "tool": {
-      "ask-user": "Asking for clarification",
-      "create-document": "Crear documento",
-      "describe-stella-function": "Inspecting stella function",
-      "execute-typescript": "Running TypeScript",
-      "load-skill": "Loading skill",
-      "read-contact": "Reading contact",
-      "read-skill-resource": "Reading skill resource",
-      "searchCaseLaw": "Buscando jurisprudencia",
-      "update-entity-fields": "Actualizar campo"
+      "ask-user": "Pidiendo una aclaración",
+      "create-document": "Creando documento",
+      "describe-stella-function": "Inspeccionando función de stella",
+      "execute-typescript": "Ejecutando TypeScript",
+      "load-skill": "Cargando habilidad",
+      "read-contact": "Leyendo contacto",
+      "read-content-across-matters": "Leyendo contenido entre asuntos",
+      "read-skill-resource": "Leyendo recurso de habilidad",
+      "search-across-matters": "Buscando entre asuntos",
+      "unknown": "Usando herramienta",
+      "update-entity-fields": "Actualizando metadatos"
     },
     "toolCall": {
+      "characterCount": "{count, plural, one {# carácter} many {# caracteres} other {# caracteres}}",
+      "field": "Campo",
       "input": "Entrada",
       "output": "Salida",
       "sourceCode": "Código fuente"

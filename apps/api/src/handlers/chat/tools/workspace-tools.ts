@@ -10,6 +10,8 @@ import { entities, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { markdownToDocx } from "@/api/handlers/docx/markdown-to-docx";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
+import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import { CHAT_ENTITY_REF_PREFIX } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError, unreachable } from "@/api/lib/errors/tagged-errors";
@@ -74,8 +76,40 @@ const formatFieldValue = (content: FieldContent): string => {
 type WorkspaceToolsContext = {
   allowedWorkspaceIds: readonly SafeId<"workspace">[];
   organizationId: SafeId<"organization">;
+  refRegistry: ChatRefRegistry;
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
+};
+
+type CreatedDocumentToolOutputProps = {
+  entityId: SafeId<"entity">;
+  fileName: string;
+  refRegistry: ChatRefRegistry;
+  workspaceId: SafeId<"workspace">;
+};
+
+export const buildCreatedDocumentToolOutput = ({
+  entityId,
+  fileName,
+  refRegistry,
+  workspaceId,
+}: CreatedDocumentToolOutputProps) => {
+  const entityRef = refRegistry.toEntityRef({ entityId, workspaceId });
+  const matterRef = refRegistry.toMatterRef(workspaceId);
+  const href = `${CHAT_ENTITY_REF_PREFIX}${entityRef}`;
+
+  return {
+    success: true,
+    fileName,
+    entityRef,
+    matterRef,
+    href,
+    mention: refRegistry.toEntityMention({
+      entityId,
+      label: fileName,
+      workspaceId,
+    }),
+  };
 };
 
 const createAllowedWorkspaceIdMap = (
@@ -121,6 +155,7 @@ const requireAllowedWorkspaceId = ({
 export const createWorkspaceTools = ({
   allowedWorkspaceIds,
   organizationId,
+  refRegistry,
   scopedDb,
   userId,
 }: WorkspaceToolsContext) => {
@@ -364,7 +399,9 @@ export const createWorkspaceTools = ({
         "Create a new DOCX document in the matter from " +
         "markdown content. Write the document body as " +
         "markdown; it is converted to a styled DOCX file " +
-        "and stored in the matter.",
+        "and stored in the matter. On success, copy the " +
+        "`mention` field exactly when naming the created " +
+        "document in a user-facing answer.",
       needsApproval: true,
       inputSchema: valibotSchema(
         v.strictObject({
@@ -399,11 +436,12 @@ export const createWorkspaceTools = ({
         });
 
         if (Result.isOk(result)) {
-          return {
-            success: true,
+          return buildCreatedDocumentToolOutput({
             entityId: result.value.entityId,
             fileName: result.value.fileName,
-          };
+            refRegistry,
+            workspaceId: allowedWorkspaceId,
+          });
         }
 
         switch (result.error._tag) {

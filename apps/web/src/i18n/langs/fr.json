@@ -305,10 +305,13 @@
     "askUser": {
       "custom": "Écrire la vôtre",
       "default": "Par défaut",
+      "noAnswer": "Aucune réponse",
       "placeholder": "Votre réponse",
       "submit": "Envoyer les réponses"
     },
     "attachFile": "Joindre un fichier",
+    "attachedImage": "Image jointe",
+    "attachment": "Pièce jointe",
     "caseLawGreeting": "Pose des questions sur cette décision — le texte complet est disponible ici.",
     "chatAbout": "Insérer dans le chat IA",
     "contextPlaceholder": "Discuter de {context}",
@@ -373,17 +376,21 @@
     "thinking": "Traitement du contexte",
     "threads": "Conversations",
     "tool": {
-      "ask-user": "Asking for clarification",
-      "create-document": "Créer un document",
-      "describe-stella-function": "Inspecting stella function",
-      "execute-typescript": "Running TypeScript",
-      "load-skill": "Loading skill",
-      "read-contact": "Reading contact",
-      "read-skill-resource": "Reading skill resource",
-      "searchCaseLaw": "Recherche de jurisprudence",
-      "update-entity-fields": "Mettre à jour le champ"
+      "ask-user": "Demande de précision",
+      "create-document": "Création du document",
+      "describe-stella-function": "Inspection de la fonction stella",
+      "execute-typescript": "Exécution de TypeScript",
+      "load-skill": "Chargement de la compétence",
+      "read-contact": "Lecture du contact",
+      "read-content-across-matters": "Lecture du contenu dans tous les dossiers",
+      "read-skill-resource": "Lecture de la ressource de compétence",
+      "search-across-matters": "Recherche dans tous les dossiers",
+      "unknown": "Utilisation d’un outil",
+      "update-entity-fields": "Mise à jour des métadonnées"
     },
     "toolCall": {
+      "characterCount": "{count, plural, one {# caractère} many {# caractères} other {# caractères}}",
+      "field": "Champ",
       "input": "Entrée",
       "output": "Résultat",
       "sourceCode": "Code source"

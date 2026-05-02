@@ -5,6 +5,16 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 import { createChatRefRegistry } from "./ref-registry";
 
+type HydratedEntityValue = {
+  entityRef?: string;
+  entityRefs?: string[];
+  fields?: { dependsOnPropertyRef: string }[];
+  matterRef?: string;
+  matterRefs?: string[];
+  mention?: string;
+  parentRef?: string;
+};
+
 describe("chat ref registry", () => {
   test("uses short refs for model-facing entity links and resolves them for persistence", () => {
     const registry = createChatRefRegistry();
@@ -66,17 +76,17 @@ describe("chat ref registry", () => {
         "[Doc](#stella-entity=0dc54d0c-10d7-501d-897e-e801dbd0998c:c09ec856-d945-5ecc-82e3-bb5382165f34)",
     });
 
-    expect(
-      registry.hydrateAssistantValueRefs({
-        entityRef: entityId,
-        fields: [{ dependsOnPropertyRef: propertyId }],
-        matterRef: workspaceId,
-        mention:
-          "[Matter](#stella-workspace=0dc54d0c-10d7-501d-897e-e801dbd0998c) " +
-          "[Doc](#stella-entity=0dc54d0c-10d7-501d-897e-e801dbd0998c:c09ec856-d945-5ecc-82e3-bb5382165f34)",
-        parentRef: entityId,
-      }),
-    ).toEqual({
+    const richHydratedInput: HydratedEntityValue = {
+      entityRef: entityId,
+      fields: [{ dependsOnPropertyRef: propertyId }],
+      matterRef: workspaceId,
+      mention:
+        "[Matter](#stella-workspace=0dc54d0c-10d7-501d-897e-e801dbd0998c) " +
+        "[Doc](#stella-entity=0dc54d0c-10d7-501d-897e-e801dbd0998c:c09ec856-d945-5ecc-82e3-bb5382165f34)",
+      parentRef: entityId,
+    };
+
+    expect(registry.hydrateAssistantValueRefs(richHydratedInput)).toEqual({
       entityRef,
       fields: [{ dependsOnPropertyRef: propertyRef }],
       matterRef,
@@ -90,22 +100,22 @@ describe("chat ref registry", () => {
       workspaceId: secondWorkspaceId,
     });
 
-    expect(
-      registry.hydrateAssistantValueRefs({
-        entityRefs: [entityId, secondEntityId],
-        matterRefs: [workspaceId, secondWorkspaceId],
-      }),
-    ).toEqual({
+    const multiEntityInput: HydratedEntityValue = {
+      entityRefs: [entityId, secondEntityId],
+      matterRefs: [workspaceId, secondWorkspaceId],
+    };
+
+    expect(registry.hydrateAssistantValueRefs(multiEntityInput)).toEqual({
       entityRefs: [entityRef, secondEntityRef],
       matterRefs: [matterRef, secondMatterRef],
     });
 
-    expect(
-      registry.hydrateAssistantValueRefs({
-        entityRefs: [secondEntityId],
-        matterRefs: [workspaceId, secondWorkspaceId],
-      }),
-    ).toEqual({
+    const ambiguousEntityInput: HydratedEntityValue = {
+      entityRefs: [secondEntityId],
+      matterRefs: [workspaceId, secondWorkspaceId],
+    };
+
+    expect(registry.hydrateAssistantValueRefs(ambiguousEntityInput)).toEqual({
       entityRefs: [secondEntityRef],
       matterRefs: [matterRef, secondMatterRef],
     });

@@ -13,6 +13,7 @@ import { useTranslations } from "use-intl";
 
 import type {
   AskUserInput,
+  AskUserOutput,
   ChatUITools,
 } from "@/components/chat/chat-ui-tools";
 import { EntityLink } from "@/components/chat/entity-link";
@@ -21,7 +22,7 @@ type AskUserPart = ToolUIPart<Pick<ChatUITools, "ask-user">>;
 
 type AskUserCardProps = {
   part: AskUserPart;
-  onSubmit: (text: string) => void;
+  onSubmit: (toolCallId: string, output: AskUserOutput) => void;
   workspaceId?: string | undefined;
 };
 
@@ -39,9 +40,9 @@ export const AskUserCard = ({
     }),
     [workspaceId],
   );
-  const isLoading =
-    part.state === "input-streaming" || part.state === "input-available";
-  const isDone = part.state === "output-available";
+  const answeredOutput =
+    part.state === "output-available" ? part.output : null;
+  const isLoading = part.state === "input-streaming";
 
   // Input is only fully available after input-streaming.
   // During streaming it's a DeepPartial; treat as null.
@@ -84,6 +85,7 @@ export const AskUserCard = ({
 
   const [customMode, setCustomMode] = useState<Record<number, boolean>>({});
   const [submitted, setSubmitted] = useState(false);
+  const isDone = answeredOutput !== null || submitted;
 
   const setAnswer = useCallback(
     (idx: number, value: string) =>
@@ -106,13 +108,15 @@ export const AskUserCard = ({
     }
     setSubmitted(true);
 
-    const lines = input.questions.map((q, i) => {
-      const answer = answers[i] ?? "";
-      return `${q.question}: ${answer || "(no answer)"}`;
-    });
+    const output: AskUserOutput = {
+      answers: input.questions.map((q, i) => ({
+        question: q.question,
+        answer: answers[i] ?? "",
+      })),
+    };
 
-    onSubmit(lines.join("\n\n"));
-  }, [input, answers, submitted, onSubmit]);
+    onSubmit(part.toolCallId, output);
+  }, [input, answers, submitted, onSubmit, part.toolCallId]);
 
   if (!input) {
     return (
@@ -132,7 +136,7 @@ export const AskUserCard = ({
     <div
       className={cn(
         "my-1 rounded-lg border text-sm",
-        isDone || submitted
+        isDone
           ? "bg-muted/40 border-transparent"
           : "border-border bg-muted/30",
       )}
@@ -141,7 +145,7 @@ export const AskUserCard = ({
       <div className="flex items-center gap-2 px-3 py-2">
         <HelpCircleIcon className="text-muted-foreground size-4 shrink-0" />
         <span className="font-medium">{t("chat.tool.ask-user")}</span>
-        {(isDone || submitted) && (
+        {isDone && (
           <CheckIcon className="ms-auto size-3.5 shrink-0 text-green-600 dark:text-green-400" />
         )}
       </div>
@@ -163,7 +167,7 @@ export const AskUserCard = ({
               {i + 1}. {q.question}
             </p>
 
-            {!submitted && q.options && !customMode[i] && (
+            {!isDone && q.options && !customMode[i] && (
               <div className="flex flex-wrap gap-1.5">
                 {q.options.map((opt) => (
                   <button
@@ -192,7 +196,7 @@ export const AskUserCard = ({
               </div>
             )}
 
-            {!submitted && (!q.options || customMode[i]) && (
+            {!isDone && (!q.options || customMode[i]) && (
               <div className="flex gap-1.5">
                 <input
                   className="bg-background focus-visible:ring-ring flex-1 rounded-md border px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-none"
@@ -213,9 +217,11 @@ export const AskUserCard = ({
               </div>
             )}
 
-            {submitted && (
+            {isDone && (
               <p className="text-muted-foreground text-xs">
-                {answers[i] || "(no answer)"}
+                {answeredOutput?.answers[i]?.answer ||
+                  answers[i] ||
+                  t("chat.askUser.noAnswer")}
               </p>
             )}
           </div>
@@ -223,7 +229,7 @@ export const AskUserCard = ({
       </div>
 
       {/* Submit */}
-      {!submitted && !isLoading && (
+      {!isDone && !isLoading && (
         <div className="border-border/50 border-t px-3 py-2">
           <button
             className="bg-foreground text-background focus-visible:ring-ring rounded-md px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-1"

@@ -258,6 +258,20 @@ export const ChatMentionList = forwardRef<
         return true;
       }
 
+      if (
+        event.key === "Tab" &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        activeItems.length > 0
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        selectItem(safeIndex);
+        return true;
+      }
+
       // ArrowRight on a workspace item drills down
       if (event.key === "ArrowRight" && !drillDown) {
         // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment

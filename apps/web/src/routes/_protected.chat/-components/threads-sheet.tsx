@@ -9,69 +9,22 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@stll/ui/components/sheet";
+import { toastManager } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useMatch, useNavigate } from "@tanstack/react-router";
 import { MessageSquareIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import {
-  chatKeys,
-  groupedChatThreadsOptions,
-} from "@/routes/_protected.chat/-queries";
-
-type GroupedChatThreads = {
-  global: {
-    createdAt: Date;
-    id: string;
-    title: string;
-    updatedAt: Date;
-  }[];
-  workspaces: {
-    threads: {
-      createdAt: Date;
-      id: string;
-      title: string;
-      updatedAt: Date;
-    }[];
-    workspaceId: string;
-    workspaceName: string;
-  }[];
-};
-
-type ThreadLinkTarget =
-  | {
-      params: { threadId: string };
-      to: "/chat/$threadId";
-    }
-  | {
-      params: {
-        threadId: string;
-        workspaceId: string;
-      };
-      to: "/chat/workspaces/$workspaceId/$threadId";
-    };
-
-const getThreadLinkTarget = (threadRef: ChatThreadRef): ThreadLinkTarget =>
-  threadRef.scope === "global"
-    ? {
-        to: "/chat/$threadId",
-        params: { threadId: threadRef.threadId },
-      }
-    : {
-        to: "/chat/workspaces/$workspaceId/$threadId",
-        params: {
-          threadId: threadRef.threadId,
-          workspaceId: threadRef.workspaceId,
-        },
-      };
+import { toAPIError } from "@/lib/errors";
+import type { SafeId } from "@/lib/safe-id";
+import { toSafeId } from "@/lib/safe-id";
+import { groupedChatThreadsOptions } from "@/routes/_protected.chat/-queries";
 
 export const ThreadsSheet = () => {
   const t = useTranslations();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
 
   const globalThreadMatch = useMatch({
@@ -98,59 +51,6 @@ export const ThreadsSheet = () => {
 
   const { data } = useQuery(groupedChatThreadsOptions());
 
-  const handleDelete = async (threadRef: ChatThreadRef) => {
-    await api.chat.threads({ threadId: threadRef.threadId }).delete({
-      query:
-        threadRef.scope === "workspace"
-          ? { workspaceId: threadRef.workspaceId }
-          : {},
-    });
-
-    queryClient.setQueryData(
-      groupedChatThreadsOptions().queryKey,
-      (previous: GroupedChatThreads | undefined) => {
-        if (!previous) {
-          return previous;
-        }
-
-        if (threadRef.scope === "global") {
-          return {
-            ...previous,
-            global: previous.global.filter(
-              (thread) => thread.id !== threadRef.threadId,
-            ),
-          };
-        }
-
-        return {
-          ...previous,
-          workspaces: previous.workspaces
-            .map((workspace) => {
-              if (workspace.workspaceId !== threadRef.workspaceId) {
-                return workspace;
-              }
-
-              return {
-                ...workspace,
-                threads: workspace.threads.filter(
-                  (thread) => thread.id !== threadRef.threadId,
-                ),
-              };
-            })
-            .filter((workspace) => workspace.threads.length > 0),
-        };
-      },
-    );
-
-    queryClient.removeQueries({
-      queryKey: chatKeys.thread(threadRef),
-    });
-
-    if (isSameThread(activeThreadRef, threadRef)) {
-      await navigate({ to: "/chat" });
-    }
-  };
-
   return (
     <Sheet onOpenChange={setIsOpen} open={isOpen}>
       <SheetTrigger
@@ -171,11 +71,11 @@ export const ThreadsSheet = () => {
               activeThreadRef={activeThreadRef}
               emptyLabel={t("chat.noThreads")}
               heading={t("navigation.chat")}
-              onDelete={handleDelete}
               onOpenChange={setIsOpen}
+              scope="global"
               threads={(data?.global ?? []).map((thread) => ({
                 createdAt: thread.createdAt,
-                ref: { scope: "global", threadId: thread.id } as const,
+                id: thread.id,
                 title: thread.title,
               }))}
             />
@@ -184,17 +84,14 @@ export const ThreadsSheet = () => {
                 activeThreadRef={activeThreadRef}
                 heading={workspace.workspaceName}
                 key={workspace.workspaceId}
-                onDelete={handleDelete}
                 onOpenChange={setIsOpen}
+                scope="workspace"
                 threads={workspace.threads.map((thread) => ({
                   createdAt: thread.createdAt,
-                  ref: {
-                    scope: "workspace",
-                    threadId: thread.id,
-                    workspaceId: workspace.workspaceId,
-                  } as const,
+                  id: thread.id,
                   title: thread.title,
                 }))}
+                workspaceId={workspace.workspaceId}
               />
             ))}
           </div>
@@ -204,25 +101,106 @@ export const ThreadsSheet = () => {
   );
 };
 
-type ThreadGroupProps = {
+type DeleteThreadButtonProps = {
+  activeThreadRef: ChatThreadRef | null;
+  threadRef: ChatThreadRef;
+};
+
+const DeleteThreadButton = ({
+  activeThreadRef,
+  threadRef,
+}: DeleteThreadButtonProps) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
+  const deleteThread = useMutation({
+    mutationFn: async ({
+      threadId,
+      workspaceId,
+    }: {
+      threadId: string;
+      workspaceId: SafeId<"workspace"> | undefined;
+    }) => {
+      const response = await api.chat.threads({ threadId }).delete(
+        {},
+        {
+          query: workspaceId ? { workspaceId } : {},
+        },
+      );
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: groupedChatThreadsOptions().queryKey,
+      });
+    },
+    onError: () => {
+      toastManager.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+    },
+    onSuccess: async (_data, variables) => {
+      if (activeThreadRef?.threadId === variables.threadId) {
+        await navigate({ to: "/chat" });
+      }
+    },
+  });
+
+  return (
+    <Button
+      className="me-1 opacity-0 group-hover:opacity-100"
+      disabled={deleteThread.isPending}
+      onClick={() =>
+        deleteThread.mutate({
+          threadId: threadRef.threadId,
+          workspaceId:
+            threadRef.scope === "workspace"
+              ? toSafeId<"workspace">(threadRef.workspaceId)
+              : undefined,
+        })
+      }
+      size="icon-sm"
+      variant="ghost"
+    >
+      <TrashIcon />
+    </Button>
+  );
+};
+
+type ThreadGroupBaseProps = {
   activeThreadRef: ChatThreadRef | null;
   emptyLabel?: string | undefined;
   heading: string;
-  onDelete: (threadRef: ChatThreadRef) => Promise<void>;
   onOpenChange: (open: boolean) => void;
   threads: {
     createdAt: string | Date;
-    ref: ChatThreadRef;
+    id: string;
     title: string;
   }[];
 };
+
+type ThreadGroupProps =
+  | (ThreadGroupBaseProps & {
+      scope: "global";
+      workspaceId?: never;
+    })
+  | (ThreadGroupBaseProps & {
+      scope: "workspace";
+      workspaceId: string;
+    });
 
 const ThreadGroup = ({
   activeThreadRef,
   emptyLabel,
   heading,
-  onDelete,
+  workspaceId,
   onOpenChange,
+  scope,
   threads,
 }: ThreadGroupProps) => {
   if (threads.length === 0) {
@@ -248,23 +226,42 @@ const ThreadGroup = ({
         {heading}
       </p>
       {threads.map((thread) => {
-        const target = getThreadLinkTarget(thread.ref);
-
+        const threadRef: ChatThreadRef =
+          scope === "workspace"
+            ? {
+                scope,
+                threadId: thread.id,
+                workspaceId,
+              }
+            : {
+                scope,
+                threadId: thread.id,
+              };
         return (
           <div
             className={cn(
               "group flex items-center gap-1 rounded-lg transition-colors",
-              isSameThread(activeThreadRef, thread.ref)
+              activeThreadRef?.threadId === threadRef.threadId
                 ? "bg-muted"
                 : "hover:bg-muted",
             )}
-            key={`${thread.ref.scope}-${thread.ref.threadId}`}
+            key={threadRef.threadId}
           >
             <Link
               className="flex flex-1 flex-col gap-0.5 overflow-hidden px-3 py-2 text-start"
               onClick={() => onOpenChange(false)}
-              params={target.params}
-              to={target.to}
+              {...(threadRef.scope === "global"
+                ? {
+                    to: "/chat/$threadId",
+                    params: { threadId: threadRef.threadId },
+                  }
+                : {
+                    to: "/chat/workspaces/$workspaceId/$threadId",
+                    params: {
+                      threadId: threadRef.threadId,
+                      workspaceId: threadRef.workspaceId,
+                    },
+                  })}
             >
               <span className="truncate text-sm font-medium">
                 {thread.title}
@@ -273,41 +270,13 @@ const ThreadGroup = ({
                 {new Date(thread.createdAt).toLocaleDateString()}
               </span>
             </Link>
-            <Button
-              aria-label={`${heading}-${thread.title}`}
-              className="me-1 opacity-0 group-hover:opacity-100"
-              onClick={() => {
-                void (async () => await onDelete(thread.ref))();
-              }}
-              size="icon-sm"
-              variant="ghost"
-            >
-              <TrashIcon />
-            </Button>
+            <DeleteThreadButton
+              activeThreadRef={activeThreadRef}
+              threadRef={threadRef}
+            />
           </div>
         );
       })}
     </div>
   );
-};
-
-const isSameThread = (
-  left: ChatThreadRef | null,
-  right: ChatThreadRef,
-): boolean => {
-  if (!left) {
-    return false;
-  }
-
-  if (left.scope !== right.scope || left.threadId !== right.threadId) {
-    return false;
-  }
-
-  if (left.scope === "global" && right.scope === "global") {
-    return true;
-  }
-
-  return left.scope === "workspace" && right.scope === "workspace"
-    ? left.workspaceId === right.workspaceId
-    : false;
 };

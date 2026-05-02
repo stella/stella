@@ -120,6 +120,7 @@ const FileChatOverlayInner = ({
     autoApprovedTools,
     handleApprove,
     handleDeny,
+    handleAskUserSubmit,
     handleAlwaysAllow,
     streamdownComponents,
     approvalPendingMessageId,
@@ -196,9 +197,7 @@ const FileChatOverlayInner = ({
               handleDeny={handleDeny}
               isGenerating={isGenerating}
               messages={messages}
-              onAskUserSubmit={async (text) => {
-                await sendMessage({ text });
-              }}
+              onAskUserSubmit={handleAskUserSubmit}
               showThinkingIndicator
               showToolCalls={showToolCalls}
               streamdownComponents={streamdownComponents}

@@ -4,6 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
   DefaultChatTransport,
   lastAssistantMessageIsCompleteWithApprovalResponses,
+  lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
 import { panic } from "better-result";
 import { v7 as uuidv7 } from "uuid";
@@ -180,6 +181,14 @@ const buildSendRequestBody = ({
   return body;
 };
 
+const shouldSendAutomaticallyAfterToolResponse = ({
+  messages,
+}: {
+  messages: PersistedChatMessage[];
+}) =>
+  lastAssistantMessageIsCompleteWithApprovalResponses({ messages }) ||
+  lastAssistantMessageIsCompleteWithToolCalls({ messages });
+
 export type ChatThreadFetched = {
   chat: Chat<PersistedChatMessage>;
   /**
@@ -219,8 +228,7 @@ export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
             }),
           }),
         }),
-        sendAutomaticallyWhen:
-          lastAssistantMessageIsCompleteWithApprovalResponses,
+        sendAutomaticallyWhen: shouldSendAutomaticallyAfterToolResponse,
       });
 
       return { chat, contextMatterIds };

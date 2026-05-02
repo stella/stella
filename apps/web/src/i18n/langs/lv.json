@@ -305,10 +305,13 @@
     "askUser": {
       "custom": "Rakstīt savu",
       "default": "Noklusējuma",
+      "noAnswer": "Nav atbildes",
       "placeholder": "Jūsu atbilde",
       "submit": "Iesniegt atbildes"
     },
     "attachFile": "Pievienot failu",
+    "attachedImage": "Pievienots attēls",
+    "attachment": "Pielikums",
     "caseLawGreeting": "Uzdod jautājumus par šo lēmumu — pilns teksts ir pieejams šeit.",
     "chatAbout": "Ievietot AI čatā",
     "contextPlaceholder": "Tērzēt par {context}",
@@ -373,17 +376,21 @@
     "thinking": "Strādāju ar kontekstu",
     "threads": "Sarunas",
     "tool": {
-      "ask-user": "Asking for clarification",
-      "create-document": "Izveidot dokumentu",
-      "describe-stella-function": "Inspecting stella function",
-      "execute-typescript": "Running TypeScript",
-      "load-skill": "Loading skill",
-      "read-contact": "Reading contact",
-      "read-skill-resource": "Reading skill resource",
-      "searchCaseLaw": "Meklē tiesu praksē",
-      "update-entity-fields": "Atjaunināt lauku"
+      "ask-user": "Precizējuma pieprasīšana",
+      "create-document": "Dokumenta izveide",
+      "describe-stella-function": "stella funkcijas pārbaude",
+      "execute-typescript": "TypeScript izpilde",
+      "load-skill": "Prasmes ielāde",
+      "read-contact": "Kontaktpersonas lasīšana",
+      "read-content-across-matters": "Satura lasīšana vairākās lietās",
+      "read-skill-resource": "Prasmes resursa lasīšana",
+      "search-across-matters": "Meklēšana vairākās lietās",
+      "unknown": "Rīka izmantošana",
+      "update-entity-fields": "Metadatu atjaunināšana"
     },
     "toolCall": {
+      "characterCount": "{count, plural, zero {# rakstzīmju} one {# rakstzīme} other {# rakstzīmes}}",
+      "field": "Lauks",
       "input": "Ievade",
       "output": "Izvade",
       "sourceCode": "Pirmkods"
