@@ -9,6 +9,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { Separator } from "@stll/ui/components/separator";
+import { cn } from "@stll/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowDownIcon,
@@ -23,6 +24,7 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
 import { usePermissions } from "@/hooks/use-permissions";
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";
 import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
@@ -67,7 +69,12 @@ export const MattersToolbar = ({
   const update = useConfigStore((s) => s.updateMatters);
 
   return (
-    <div className="flex items-center gap-1 border-b px-2 py-1">
+    <div
+      className={cn(
+        "flex items-center gap-1 border-b px-2",
+        TOOLBAR_ROW_HEIGHT,
+      )}
+    >
       <Input
         className="w-64 max-w-[40%]"
         onChange={(e) => onSearchChange(e.currentTarget.value)}
