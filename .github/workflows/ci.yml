@@ -61,22 +61,62 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check changed file scope
+        id: changed-files
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "package_checks_required=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          base_ref="origin/${{ github.base_ref || 'main' }}"
+          mapfile -t changed_files < <(git diff --name-only "$base_ref"...HEAD)
+
+          if (( ${#changed_files[@]} == 0 )); then
+            echo "package_checks_required=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          package_checks_required=false
+          for file in "${changed_files[@]}"; do
+            case "$file" in
+              .github/*|.provenance.yml|provenance/*)
+                ;;
+              *)
+                package_checks_required=true
+                break
+                ;;
+            esac
+          done
+
+          printf 'Changed files:\n'
+          printf ' - %s\n' "${changed_files[@]}"
+          echo "package_checks_required=$package_checks_required" >> "$GITHUB_OUTPUT"
+
+          if [[ "$package_checks_required" != "true" ]]; then
+            echo "::notice::Only workflow/provenance files changed; skipping package CI checks."
+          fi
+
       - name: Setup Bun
+        if: steps.changed-files.outputs.package_checks_required == 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
 
       - name: Turbo remote cache
+        if: steps.changed-files.outputs.package_checks_required == 'true'
         uses: rharkor/caching-for-turbo@56219402aacc0d06b650d898c222996dbc1191ec # v2.3.14
         with:
           max-age: 7d
 
       - name: Install dependencies
+        if: steps.changed-files.outputs.package_checks_required == 'true'
         run: bun ci
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Prepare environment
+        if: steps.changed-files.outputs.package_checks_required == 'true'
         run: |
           cd ./apps/api
           mv .env.example .env
@@ -84,6 +124,7 @@ jobs:
           mv .env.example .env
 
       - name: Compute affected flag
+        if: steps.changed-files.outputs.package_checks_required == 'true'
         id: affected
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
@@ -94,18 +135,23 @@ jobs:
           fi
 
       - name: Check i18n sync
+        if: steps.changed-files.outputs.package_checks_required == 'true'
         run: bun run i18n:check
 
       - name: Lint
+        if: steps.changed-files.outputs.package_checks_required == 'true'
         run: bun run lint -- ${{ steps.affected.outputs.flag }}
 
       - name: Format
+        if: steps.changed-files.outputs.package_checks_required == 'true'
         run: bun run format -- ${{ steps.affected.outputs.flag }}
 
       - name: Typecheck
+        if: steps.changed-files.outputs.package_checks_required == 'true'
         run: bun run typecheck -- ${{ steps.affected.outputs.flag }}
 
       - name: Test
+        if: steps.changed-files.outputs.package_checks_required == 'true'
         run: bun run test -- --concurrency=2 ${{ steps.affected.outputs.flag }}
 
   # Aggregation job for branch protection. The ruleset requires

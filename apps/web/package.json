@@ -96,7 +96,7 @@
     "@types/babel__core": "^7.20.5",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
-    "@vitejs/plugin-react": "^6.0.0",
+    "@vitejs/plugin-react": "catalog:",
     "babel-plugin-react-compiler": "^1.0.0",
     "elysia": "catalog:",
     "react-grab": "0.1.32",

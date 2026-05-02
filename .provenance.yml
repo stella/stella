@@ -11,3 +11,7 @@ projects:
     path: .
     ecosystems:
       - javascript
+  - id: desktop-tauri
+    path: apps/desktop/src-tauri
+    ecosystems:
+      - rust

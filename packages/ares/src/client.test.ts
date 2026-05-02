@@ -3,10 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { lookupByIco, searchByName } from "./client.js";
 import { AresValidationError } from "./errors.js";
 
+const SKIP_LIVE = process.env["SMOKE_TEST"] !== "1";
+
 // These tests hit the real ARES API. They serve as integration tests
 // and also document the expected response shape for known subjects.
-
-describe("lookupByIco", () => {
+describe.skipIf(SKIP_LIVE)("lookupByIco live", () => {
   test("returns full company data for a known IČO", async () => {
     const result = await lookupByIco("27082440"); // Alza.cz a.s.
 
@@ -44,15 +45,17 @@ describe("lookupByIco", () => {
     expect(result).toBeNull();
   });
 
-  test("throws AresValidationError for invalid IČO", async () => {
-    expect(lookupByIco("12345678")).rejects.toBeInstanceOf(AresValidationError);
-  });
-
   test("handles IČO with leading zeros (ČEZ)", async () => {
     const result = await lookupByIco("00027383");
 
     expect(result).not.toBeNull();
     expect(result?.name).toBeTruthy();
+  });
+});
+
+describe("lookupByIco validation", () => {
+  test("throws AresValidationError for invalid IČO", async () => {
+    expect(lookupByIco("12345678")).rejects.toBeInstanceOf(AresValidationError);
   });
 
   test("rejects short IČO without leading zeros", async () => {
@@ -60,7 +63,7 @@ describe("lookupByIco", () => {
   });
 });
 
-describe("searchByName", () => {
+describe.skipIf(SKIP_LIVE)("searchByName live", () => {
   test("finds companies by name", async () => {
     const results = await searchByName("Alza.cz");
 
@@ -79,7 +82,9 @@ describe("searchByName", () => {
     const results = await searchByName("Alza.cz", { limit: 3 });
     expect(results.length).toBeLessThanOrEqual(3);
   });
+});
 
+describe("searchByName validation", () => {
   test("throws AresValidationError for empty name", async () => {
     expect(searchByName("")).rejects.toBeInstanceOf(AresValidationError);
     expect(searchByName("   ")).rejects.toBeInstanceOf(AresValidationError);
