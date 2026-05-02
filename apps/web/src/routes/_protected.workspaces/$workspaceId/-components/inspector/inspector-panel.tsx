@@ -1560,7 +1560,7 @@ const VerticalTab = ({
           <button
             ref={tabRef}
             className={cn(
-              "group/tab relative flex w-full items-center justify-center border-b transition-colors",
+              "group/tab relative flex min-h-8 w-full items-center justify-center border-b transition-colors",
               "text-muted-foreground hover:bg-accent hover:text-foreground",
               TOOLBAR_ROW_HEIGHT,
               active &&
