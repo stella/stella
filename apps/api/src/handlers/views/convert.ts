@@ -36,6 +36,15 @@ const convertView = createSafeHandler(
     params: { viewId },
     body: { targetType },
   }) {
+    if (targetType === "overview") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Cannot convert to overview",
+        }),
+      );
+    }
+
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.workspaceViews.findFirst({

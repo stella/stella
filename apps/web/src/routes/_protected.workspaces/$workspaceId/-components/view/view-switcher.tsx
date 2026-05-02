@@ -159,6 +159,10 @@ export const ViewSwitcher = ({
   const { data: views } = useSuspenseQuery(viewsOptions(workspaceId));
   const createView = useCreateView(workspaceId);
   const reorderViews = useReorderViews(workspaceId);
+  const hasOverviewView = views.some((view) => view.layout.type === "overview");
+  const createLayoutOptions = hasOverviewView
+    ? LAYOUT_OPTIONS.filter((layoutType) => layoutType !== "overview")
+    : LAYOUT_OPTIONS;
 
   const handleReorder = (draggedId: string, targetId: string) => {
     const ids = views.map((v) => v.id);
@@ -223,7 +227,7 @@ export const ViewSwitcher = ({
             <PlusIcon />
           </MenuTrigger>
           <MenuPopup>
-            {LAYOUT_OPTIONS.map((layoutType) => {
+            {createLayoutOptions.map((layoutType) => {
               const Icon = layoutIcons[layoutType];
               return (
                 <MenuItem
@@ -400,7 +404,7 @@ const ViewTab = ({
       {isActive && (canUpdateView || canCreateView || canDeleteView) && (
         <ViewTabMenu
           canDelete={canDelete}
-          className="absolute end-0 top-1/2 -translate-y-1/2"
+          className="absolute inset-e-0 top-1/2 -translate-y-1/2"
           onRename={() => {
             setIsRenaming(true);
             setRenameValue(name);
@@ -488,7 +492,7 @@ const ViewTabMenu = ({
             {t("common.rename")}
           </MenuItem>
         )}
-        {canCreateView && (
+        {canCreateView && layout.type !== "overview" && (
           <MenuItem onClick={handleDuplicate}>
             <CopyIcon />
             {t("common.duplicate")}
@@ -501,7 +505,9 @@ const ViewTabMenu = ({
               {t("common.convertTo")}
             </MenuSubTrigger>
             <MenuSubPopup>
-              {LAYOUT_OPTIONS.filter((l) => l !== layout.type).map((l) => {
+              {LAYOUT_OPTIONS.filter(
+                (l) => l !== layout.type && l !== "overview",
+              ).map((l) => {
                 const LayoutIcon = layoutIcons[l];
                 return (
                   <MenuItem

@@ -41,10 +41,22 @@ const createView = createSafeHandler(
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
         const existing = await tx
-          .select({ id: workspaceViews.id })
+          .select({ id: workspaceViews.id, layout: workspaceViews.layout })
           .from(workspaceViews)
           .where(eq(workspaceViews.workspaceId, workspaceId))
           .for("update");
+
+        const hasOverviewView = existing.some(
+          (view) => parseViewLayout(view.layout).type === "overview",
+        );
+
+        if (layout.type === "overview" && hasOverviewView) {
+          return {
+            ok: false as const,
+            status: 400 as const,
+            message: "Overview view already exists",
+          };
+        }
 
         if (existing.length >= LIMITS.viewsCount) {
           return {
