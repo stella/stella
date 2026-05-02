@@ -20,7 +20,7 @@ import {
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
-import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
@@ -31,6 +31,7 @@ import {
 } from "@/api/lib/desktop-edit-sessions";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { getS3 } from "@/api/lib/s3";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -499,7 +500,7 @@ export const finalizeDesktopEditSessionHandler = async ({
         fieldId: result.fieldId,
         mimeType: DOCX_MIME_TYPE,
         organizationId: authorizedSession.value.organizationId,
-        userId: toSafeId<"user">(authorizedSession.value.userId),
+        userId: brandPersistedUserId(authorizedSession.value.userId),
         workspaceId: authorizedSession.value.workspaceId,
       }).catch((error: unknown) => {
         captureError(error, {
@@ -512,6 +513,7 @@ export const finalizeDesktopEditSessionHandler = async ({
       computeVersionDiffStats({
         versionId: result.versionId,
         entityId: result.entityId,
+        scopedDb: authorizedSession.value.scopedDb,
         workspaceId: authorizedSession.value.workspaceId,
         organizationId: authorizedSession.value.organizationId,
       }).catch((error: unknown) => {

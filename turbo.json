@@ -1,6 +1,6 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "globalDependencies": ["oxlint.config.mjs", ".oxfmtrc.json"],
+  "globalDependencies": ["oxlint.config.ts", ".oxfmtrc.json"],
   "tasks": {
     "transit": {
       "dependsOn": ["^transit"]

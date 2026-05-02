@@ -4,16 +4,12 @@ import core from "./node_modules/ultracite/config/oxlint/core/index.mjs";
 import react from "./node_modules/ultracite/config/oxlint/react/index.mjs";
 
 // All workspaces run oxlint from the repo root via:
-//   cd ../.. && oxlint -c oxlint.config.mjs --type-aware <workspace-dir>
+//   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
 // Override paths are therefore relative to the repo root.
 
 export default defineConfig({
-  ...core,
-  plugins: [...core.plugins, ...react.plugins],
+  extends: [core, react],
   rules: {
-    ...core.rules,
-    ...react.rules,
-
     // Override ultracite defaults for Stella
     "no-console": "warn",
     "no-shadow": "error",
@@ -388,6 +384,16 @@ export default defineConfig({
       rules: { "no-physical-properties/no-physical-properties": "off" },
     },
     {
+      files: [
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/**",
+      ],
+      rules: {
+        "unicorn/prefer-dom-node-remove": "off",
+        "unicorn/prefer-dom-node-append": "off",
+        "unicorn/prefer-modern-dom-apis": "off",
+      },
+    },
+    {
       files: ["apps/web/src/routes/**/*.{ts,tsx}"],
       rules: {
         "@tanstack/router/create-route-property-order": "error",
@@ -418,6 +424,33 @@ export default defineConfig({
         ],
         "security-guards/no-raw-filename-write": "error",
       },
+    },
+    {
+      files: ["apps/api/src/**"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              {
+                name: "@/api/lib/branded-types",
+                importNames: ["toSafeId"],
+                message:
+                  "Only approved boundary modules and tests may brand raw IDs with toSafeId.",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      files: [
+        "apps/api/src/lib/auth.ts",
+        "apps/api/src/lib/search/**",
+        "apps/api/src/lib/safe-id-boundaries.ts",
+        "apps/api/src/types.ts",
+      ],
+      rules: { "no-restricted-imports": "off" },
     },
     {
       // YARA's compile/scan returns loosely-typed RuleMatch; the local
@@ -649,10 +682,47 @@ export default defineConfig({
                 message:
                   "Use 'createSafeHandler' or 'createSafeRootHandler' instead.",
               },
+              {
+                name: "@/api/lib/branded-types",
+                importNames: ["toSafeId"],
+                message:
+                  "Handlers must receive SafeId from macros (workspaceAccessMacro, authMacro) or actor session validation, not construct it from raw strings.",
+              },
+              {
+                name: "@/api/db",
+                importNames: ["createScopedDb"],
+                message:
+                  "Handlers must not construct scoped DB instances from the root db module. Use ctx.scopedDb or createRootScopedDb from lib/root-scoped-db.ts.",
+              },
+              {
+                name: "@/api/db",
+                importNames: ["createSafeDb"],
+                message:
+                  "Handlers must not construct safe DB instances from the root db module. Use ctx.safeDb instead.",
+              },
+              {
+                name: "@/api/db",
+                importNames: ["db"],
+                message:
+                  "Handlers must not import the root db. Use ctx.scopedDb, or move owner-level DB access into a narrow lib helper.",
+              },
+              {
+                name: "@/api/db/root",
+                message:
+                  "Handlers must not import the root db module. Use ctx.scopedDb, or move owner-level DB access into a narrow lib helper.",
+              },
             ],
           },
         ],
       },
+    },
+    {
+      files: [
+        "apps/api/src/tests/**",
+        "apps/api/**/*.{test,spec}.{ts,tsx,js,jsx}",
+        "apps/api/**/__tests__/**/*.{ts,tsx,js,jsx}",
+      ],
+      rules: { "no-restricted-imports": "off" },
     },
     {
       files: [
@@ -690,6 +760,7 @@ export default defineConfig({
         "no-untyped-updates/no-untyped-updates": "off",
         "unicorn/prefer-modern-dom-apis": "off",
         "unicorn/prefer-dom-node-remove": "off",
+        "unicorn/prefer-dom-node-append": "off",
       },
     },
     {

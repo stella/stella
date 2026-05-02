@@ -15,7 +15,7 @@
 //   .delete("/", rawHandler, { permissions: ... })
 //
 // Protocol, public, streaming, and dev-only routes should disable this rule in
-// oxlint.config.mjs with a short justification.
+// oxlint.config.ts with a short justification.
 
 const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
 

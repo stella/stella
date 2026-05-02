@@ -1,5 +1,5 @@
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
 
 export const USER_FILE_URL_PREFIX = "stella://file::" as const;
 
@@ -20,7 +20,7 @@ export const parseUserFileId = (url: string): SafeId<"userFile"> | null => {
   }
 
   const id = url.slice(USER_FILE_URL_PREFIX.length);
-  return id.length > 0 ? toSafeId<"userFile">(id) : null;
+  return id.length > 0 ? brandPersistedUserFileId(id) : null;
 };
 
 export const isUserFileUrl = (url: string): url is UserFileUrl =>

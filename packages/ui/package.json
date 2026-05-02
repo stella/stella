@@ -13,8 +13,8 @@
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typecheck": "tsgo --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware packages/ui",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware --fix packages/ui",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware packages/ui",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/ui",
     "format": "oxfmt ."
   },
   "dependencies": {

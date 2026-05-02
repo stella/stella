@@ -1,7 +1,7 @@
 import { diffArrays } from "diff";
 import { and, desc, eq, lt } from "drizzle-orm";
 
-import { db } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db";
 import { entityVersions } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { tokenize } from "@/api/handlers/docx/diff-paragraphs";
@@ -23,40 +23,46 @@ const WORD_RE = /[\p{L}\p{N}_]+/u;
 export const computeVersionDiffStats = async ({
   versionId,
   entityId,
+  scopedDb,
   workspaceId,
   organizationId,
 }: {
   versionId: SafeId<"entityVersion">;
   entityId: SafeId<"entity">;
+  scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
 }): Promise<void> => {
   // Get the new version's number
-  const newVersion = await db.query.entityVersions.findFirst({
-    where: {
-      id: { eq: versionId },
-      workspaceId: { eq: workspaceId },
-    },
-    columns: { versionNumber: true },
-  });
+  const newVersion = await scopedDb((tx) =>
+    tx.query.entityVersions.findFirst({
+      where: {
+        id: { eq: versionId },
+        workspaceId: { eq: workspaceId },
+      },
+      columns: { versionNumber: true },
+    }),
+  );
 
   if (!newVersion || newVersion.versionNumber <= 1) {
     return; // First version, nothing to diff
   }
 
   // Get the previous version
-  const prevVersion = await db
-    .select({ id: entityVersions.id })
-    .from(entityVersions)
-    .where(
-      and(
-        eq(entityVersions.entityId, entityId),
-        eq(entityVersions.workspaceId, workspaceId),
-        lt(entityVersions.versionNumber, newVersion.versionNumber),
-      ),
-    )
-    .orderBy(desc(entityVersions.versionNumber))
-    .limit(1);
+  const prevVersion = await scopedDb((tx) =>
+    tx
+      .select({ id: entityVersions.id })
+      .from(entityVersions)
+      .where(
+        and(
+          eq(entityVersions.entityId, entityId),
+          eq(entityVersions.workspaceId, workspaceId),
+          lt(entityVersions.versionNumber, newVersion.versionNumber),
+        ),
+      )
+      .orderBy(desc(entityVersions.versionNumber))
+      .limit(1),
+  );
 
   const prevVersionId = prevVersion.at(0)?.id;
   if (!prevVersionId) {
@@ -65,14 +71,18 @@ export const computeVersionDiffStats = async ({
 
   // Get DOCX file fields for both versions
   const [newFields, prevFields] = await Promise.all([
-    db.query.fields.findMany({
-      where: { entityVersionId: { eq: versionId } },
-      columns: { content: true },
-    }),
-    db.query.fields.findMany({
-      where: { entityVersionId: { eq: prevVersionId } },
-      columns: { content: true },
-    }),
+    scopedDb((tx) =>
+      tx.query.fields.findMany({
+        where: { entityVersionId: { eq: versionId } },
+        columns: { content: true },
+      }),
+    ),
+    scopedDb((tx) =>
+      tx.query.fields.findMany({
+        where: { entityVersionId: { eq: prevVersionId } },
+        columns: { content: true },
+      }),
+    ),
   ]);
 
   const findDocxFile = (
@@ -144,8 +154,10 @@ export const computeVersionDiffStats = async ({
   }
 
   // Store on the version row
-  await db
-    .update(entityVersions)
-    .set({ diffWordsAdded: wordsAdded, diffWordsRemoved: wordsRemoved })
-    .where(eq(entityVersions.id, versionId));
+  await scopedDb((tx) =>
+    tx
+      .update(entityVersions)
+      .set({ diffWordsAdded: wordsAdded, diffWordsRemoved: wordsRemoved })
+      .where(eq(entityVersions.id, versionId)),
+  );
 };

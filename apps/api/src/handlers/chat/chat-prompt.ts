@@ -33,11 +33,11 @@ import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-regi
 import { readonlyWorkspaceFunctionContracts } from "@/api/handlers/chat/tools/execute/workspace-manifest";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { formatDateTimeInTimeZone } from "@/api/lib/date-format";
 import { unreachable } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
 
 const TITLE_MAX_LENGTH = 80;
 const ACTIVE_DECISION_MAX_CHARS = 12_000;
@@ -546,7 +546,7 @@ const formatMetadataColumnLine = ({
   refRegistry: ChatRefRegistry;
 }) => {
   const optionValues = getPropertyOptionValues(content);
-  const propertyRef = refRegistry.toPropertyRef(toSafeId<"property">(id));
+  const propertyRef = refRegistry.toPropertyRef(brandPersistedPropertyId(id));
   const baseLine = `- ${name} (ref: ${propertyRef}, type: ${content.type})`;
 
   if (!optionValues) {

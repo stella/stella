@@ -73,6 +73,7 @@ describe("search summary chat", () => {
           insertedValues.push(values);
         }),
       })),
+      select: dbSelectMock,
     };
     const { safeDb, scopedDb } = createScopedDbMock(tx);
 
@@ -137,6 +138,7 @@ describe("search summary chat", () => {
           insertedValues.push(values);
         }),
       })),
+      select: dbSelectMock,
     };
     const { safeDb, scopedDb } = createScopedDbMock(tx);
 
@@ -202,6 +204,7 @@ describe("search summary chat", () => {
     const tx = {
       query: { workspaces: {} },
       insert: insertMock,
+      select: dbSelectMock,
     };
     const { safeDb, scopedDb } = createScopedDbMock(tx);
 

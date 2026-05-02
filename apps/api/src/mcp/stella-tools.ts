@@ -4,8 +4,12 @@ import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
-import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  brandPersistedCaseLawDecisionId,
+  brandPersistedContactId,
+  brandPersistedEntityId,
+} from "@/api/lib/safe-id-boundaries";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionUrl,
@@ -473,7 +477,7 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   }
 
   return await invokeAiTool({
-    args: { entityId: toSafeId<"entity">(rawEntityId) },
+    args: { entityId: brandPersistedEntityId(rawEntityId) },
     tool: getOrgTools(context)["read-content-across-matters"],
   });
 };
@@ -611,7 +615,7 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({
   }
 
   const result = await readDecisionHandler(
-    toSafeId<"caseLawDecision">(decisionId),
+    brandPersistedCaseLawDecisionId(decisionId),
     context.scopedDb,
   );
   const resultMessage = getResultMessage(result);
@@ -660,7 +664,7 @@ const handleReadContactTool: McpToolHandler = async ({ args, context }) => {
   }
 
   return await invokeAiTool({
-    args: { contactId: toSafeId<"contact">(rawContactId) },
+    args: { contactId: brandPersistedContactId(rawContactId) },
     tool: getOrgTools(context)["read-contact"],
   });
 };

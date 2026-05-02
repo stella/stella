@@ -8,10 +8,10 @@ import { auditLogs } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { toSafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
 
 const CURSOR_SEPARATOR = "|";
 const UUID_RE =
@@ -34,7 +34,7 @@ const decodeCursor = (
     return null;
   }
 
-  return { createdAt, id: toSafeId<"auditLog">(id) };
+  return { createdAt, id: brandPersistedAuditLogId(id) };
 };
 
 const readAuditLogsQuerySchema = t.Object({

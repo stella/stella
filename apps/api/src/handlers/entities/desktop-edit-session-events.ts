@@ -1,11 +1,8 @@
-import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 
-import { member, user } from "@/api/db/auth-schema";
-import { db } from "@/api/db/root";
-import { desktopEditSessions, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { readDesktopEditSessionEventState } from "@/api/lib/desktop-edit-sessions";
 
 export const desktopEditSessionEventsParamsSchema = t.Object({
   sessionId: tSafeId("desktopEditSession"),
@@ -85,41 +82,13 @@ export const desktopEditSessionEventsHandler = async ({
   // SSE connections are authenticated by session ID + open status only.
   // The token was validated on the initial open_docx call; we don't
   // re-validate here because token rotation would break reconnects.
-  const sessions = await db
-    .select({ id: desktopEditSessions.id })
-    .from(desktopEditSessions)
-    .where(
-      and(
-        eq(desktopEditSessions.id, sessionId),
-        eq(desktopEditSessions.status, "open"),
-      ),
-    )
-    .limit(1);
+  const eventState = await readDesktopEditSessionEventState(sessionId);
 
-  if (!sessions.at(0)) {
+  if (!eventState) {
     return status(404, {
       message: "Desktop edit session not found or closed.",
     });
   }
-
-  // Check for pending takeover request to send immediately on connect
-  const pendingRequest = await db
-    .select({
-      requestedByName: user.name,
-      requestedAt: desktopEditSessions.takeoverRequestedAt,
-    })
-    .from(desktopEditSessions)
-    .innerJoin(workspaces, eq(desktopEditSessions.workspaceId, workspaces.id))
-    .leftJoin(
-      member,
-      and(
-        eq(desktopEditSessions.takeoverRequestedBy, member.userId),
-        eq(member.organizationId, workspaces.organizationId),
-      ),
-    )
-    .leftJoin(user, eq(member.userId, user.id))
-    .where(eq(desktopEditSessions.id, sessionId))
-    .limit(1);
 
   // Declare conn in outer scope so cancel() can reference the exact instance.
   let conn: SessionEventConnection;
@@ -141,7 +110,7 @@ export const desktopEditSessionEventsHandler = async ({
       controller.enqueue(encoder.encode(": connected\n\n"));
 
       // Send any pending takeover request immediately
-      const pending = pendingRequest.at(0);
+      const pending = eventState.pendingRequest;
       if (pending?.requestedAt) {
         controller.enqueue(
           formatSSE({

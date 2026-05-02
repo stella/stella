@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.ts", "i18n-unused.config.js", "oxlint.config.mjs"],
+      "entry": ["scripts/*.ts", "i18n-unused.config.js", "oxlint.config.ts"],
       "ignoreDependencies": [
         "@fontsource-variable/source-serif-4",
         "@tanstack/eslint-plugin-query",
@@ -63,9 +63,6 @@
     },
     "packages/permissions": {
       "entry": ["src/index.ts"]
-    },
-    "packages/rivet": {
-      "entry": ["src/consts.ts", "src/actors/*.ts", "src/types.ts", "src/errors.ts"]
     },
     "packages/scripts": {
       "entry": ["src/i18n-check.ts", "src/i18n-typegen.ts"]

@@ -5,8 +5,8 @@ import { caseLawDecisions, caseLawSearchDocuments } from "@/api/db/schema";
 import { resolveFtsConfig } from "@/api/handlers/case-law/fts-config";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
-import { toSafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 import type { DecisionSection } from "./types";
 
@@ -169,7 +169,7 @@ export const backfillSearchIndex = async (
 
   const indexRow = async (row: { id: string }): Promise<number> => {
     try {
-      await indexDecision(toSafeId<"caseLawDecision">(row.id), scopedDb);
+      await indexDecision(brandPersistedCaseLawDecisionId(row.id), scopedDb);
       return 1;
     } catch (error) {
       captureError(error, { decisionId: row.id, step: "backfillSearchIndex" });

@@ -8,7 +8,6 @@ import type { Static } from "elysia";
 import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
-import { db } from "@/api/db/root";
 import {
   caseLawSearchDocuments,
   chatMessages,
@@ -23,9 +22,15 @@ import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  brandPersistedCaseLawDecisionId,
+  brandPersistedContactId,
+  brandPersistedEntityId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
 import { searchGlobal } from "@/api/lib/search/index-global";
 import {
   buildSearchTsQuery,
@@ -358,6 +363,7 @@ export const summarizeSearchResults = async ({
     filters: body,
     organizationId,
     selectedWorkspaceIds: resolved.ids,
+    scopedDb,
   });
 
   if (!Array.isArray(contextsResult)) {
@@ -504,6 +510,7 @@ export const createSearchSummaryChatThread = async ({
     filters: body,
     organizationId,
     selectedWorkspaceIds: resolved.ids,
+    scopedDb,
   });
 
   if (!Array.isArray(contextsResult)) {
@@ -521,9 +528,9 @@ export const createSearchSummaryChatThread = async ({
   const citedContexts = contextsResult.filter((context) =>
     citedNumberSet.has(context.number),
   );
-  const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
-  const userMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
-  const assistantMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+  const threadId = createSafeId<"chatThread">();
+  const userMessageId = createSafeId<"chatMessage">();
+  const assistantMessageId = createSafeId<"chatMessage">();
   const now = new Date();
   const userText = [
     body.originalQuery ?? body.query,
@@ -594,6 +601,7 @@ const loadSummaryContexts = async ({
   filters,
   organizationId,
   selectedWorkspaceIds,
+  scopedDb,
 }: {
   accessibleWorkspaceIds: SafeId<"workspace">[];
   filters: Pick<
@@ -608,6 +616,7 @@ const loadSummaryContexts = async ({
   >;
   organizationId: SafeId<"organization">;
   selectedWorkspaceIds: readonly SafeId<"workspace">[];
+  scopedDb: ScopedDb;
 }) => {
   const searchResult = await searchGlobal({
     query: filters.query,
@@ -626,6 +635,7 @@ const loadSummaryContexts = async ({
     hits: searchResult.hits,
     organizationId,
     accessibleWorkspaceIds,
+    scopedDb,
   });
 };
 
@@ -706,12 +716,14 @@ type BuildSearchResultContextsOptions = {
   hits: readonly GlobalSearchHit[];
   organizationId: SafeId<"organization">;
   accessibleWorkspaceIds: SafeId<"workspace">[];
+  scopedDb: ScopedDb;
 };
 
 const buildSearchResultContexts = async ({
   hits,
   organizationId,
   accessibleWorkspaceIds,
+  scopedDb,
 }: BuildSearchResultContextsOptions): Promise<SearchResultContext[]> => {
   const contexts: SearchResultContext[] = [];
   let remainingChars = SEARCH_CONTEXT_TOTAL_CHARS;
@@ -726,6 +738,7 @@ const buildSearchResultContexts = async ({
       hit,
       organizationId,
       accessibleWorkspaceIds,
+      scopedDb,
     });
     const clipped = truncate(
       compactContent(content),
@@ -755,73 +768,83 @@ type LoadSearchHitContentOptions = {
   hit: GlobalSearchHit;
   organizationId: SafeId<"organization">;
   accessibleWorkspaceIds: SafeId<"workspace">[];
+  scopedDb: ScopedDb;
 };
 
 const loadSearchHitContent = async ({
   hit,
   organizationId,
   accessibleWorkspaceIds,
+  scopedDb,
 }: LoadSearchHitContentOptions): Promise<string> => {
   if (hit.type === "case-law") {
-    const rows = await db
-      .select({ searchableText: caseLawSearchDocuments.searchableText })
-      .from(caseLawSearchDocuments)
-      .where(
-        eq(
-          caseLawSearchDocuments.decisionId,
-          toSafeId<"caseLawDecision">(hit.decisionId),
-        ),
-      )
-      .limit(1);
+    const rows = await scopedDb((tx) =>
+      tx
+        .select({ searchableText: caseLawSearchDocuments.searchableText })
+        .from(caseLawSearchDocuments)
+        .where(
+          eq(
+            caseLawSearchDocuments.decisionId,
+            brandPersistedCaseLawDecisionId(hit.decisionId),
+          ),
+        )
+        .limit(1),
+    );
     return compactContent(rows.at(0)?.searchableText);
   }
 
   if (hit.type === "contact") {
-    const rows = await db
-      .select({ searchableText: contactSearchDocuments.searchableText })
-      .from(contactSearchDocuments)
-      .where(
-        and(
-          eq(contactSearchDocuments.organizationId, organizationId),
-          eq(
-            contactSearchDocuments.contactId,
-            toSafeId<"contact">(hit.contactId),
+    const rows = await scopedDb((tx) =>
+      tx
+        .select({ searchableText: contactSearchDocuments.searchableText })
+        .from(contactSearchDocuments)
+        .where(
+          and(
+            eq(contactSearchDocuments.organizationId, organizationId),
+            eq(
+              contactSearchDocuments.contactId,
+              brandPersistedContactId(hit.contactId),
+            ),
           ),
-        ),
-      )
-      .limit(1);
+        )
+        .limit(1),
+    );
     return compactContent(rows.at(0)?.searchableText);
   }
 
-  const hitWorkspaceId = toSafeId<"workspace">(hit.workspaceId);
+  const hitWorkspaceId = brandPersistedWorkspaceId(hit.workspaceId);
   if (!accessibleWorkspaceIds.includes(hitWorkspaceId)) {
     return "";
   }
 
   if (hit.type === "matter") {
-    const rows = await db
-      .select({ searchableText: workspaceSearchDocuments.searchableText })
-      .from(workspaceSearchDocuments)
-      .where(
-        and(
-          eq(workspaceSearchDocuments.organizationId, organizationId),
-          eq(workspaceSearchDocuments.workspaceId, hitWorkspaceId),
-        ),
-      )
-      .limit(1);
+    const rows = await scopedDb((tx) =>
+      tx
+        .select({ searchableText: workspaceSearchDocuments.searchableText })
+        .from(workspaceSearchDocuments)
+        .where(
+          and(
+            eq(workspaceSearchDocuments.organizationId, organizationId),
+            eq(workspaceSearchDocuments.workspaceId, hitWorkspaceId),
+          ),
+        )
+        .limit(1),
+    );
     return compactContent(rows.at(0)?.searchableText);
   }
 
-  const rows = await db
-    .select({ searchableText: searchDocuments.searchableText })
-    .from(searchDocuments)
-    .where(
-      and(
-        eq(searchDocuments.organizationId, organizationId),
-        eq(searchDocuments.workspaceId, hitWorkspaceId),
-        eq(searchDocuments.entityId, toSafeId<"entity">(hit.entityId)),
-      ),
-    )
-    .limit(1);
+  const rows = await scopedDb((tx) =>
+    tx
+      .select({ searchableText: searchDocuments.searchableText })
+      .from(searchDocuments)
+      .where(
+        and(
+          eq(searchDocuments.organizationId, organizationId),
+          eq(searchDocuments.workspaceId, hitWorkspaceId),
+          eq(searchDocuments.entityId, brandPersistedEntityId(hit.entityId)),
+        ),
+      )
+      .limit(1),
+  );
   return compactContent(rows.at(0)?.searchableText);
 };

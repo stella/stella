@@ -8,11 +8,11 @@ import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
+import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
 const downloadZipParamsSchema = workspaceParams({
   entityId: tSafeId("entity"),
@@ -93,7 +93,7 @@ const downloadZipHandler = async function* ({
   );
 
   const descendantIds = descendantRows.map(({ id }) =>
-    toSafeId<"entity">(String(id)),
+    brandPersistedEntityId(String(id)),
   );
 
   if (descendantIds.length === 0) {

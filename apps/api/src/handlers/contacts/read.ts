@@ -4,9 +4,9 @@ import { t } from "elysia";
 
 import { contacts, workspaces } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { escapeLike } from "@/api/lib/escape-like";
+import { brandPersistedContactId } from "@/api/lib/safe-id-boundaries";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
@@ -35,7 +35,7 @@ const decodeCursor = (cursor: string): DecodedCursor | null => {
   if (!displayName || !id) {
     return null;
   }
-  return { displayName, id: toSafeId<"contact">(id) };
+  return { displayName, id: brandPersistedContactId(id) };
 };
 
 const encodeCursor = (displayName: string, id: string): string =>

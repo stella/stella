@@ -36,9 +36,9 @@ import { uploadMessageFiles } from "@/api/handlers/chat/upload-files";
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 
 const config = {
   permissions: { chat: ["create"] },
@@ -574,7 +574,7 @@ const insertMessages = async ({
   const insertResult = await safeDb(async (tx) => {
     await tx.insert(chatMessages).values(
       messages.map((persistedMessage) => ({
-        id: toSafeId<"chatMessage">(persistedMessage.id),
+        id: brandPersistedChatMessageId(persistedMessage.id),
         threadId,
         workspaceId,
         userId,
@@ -633,7 +633,7 @@ const persistMessage = async ({
         .where(
           eq(
             chatMessages.id,
-            toSafeId<"chatMessage">(persistencePlan.messageId),
+            brandPersistedChatMessageId(persistencePlan.messageId),
           ),
         );
       await tx
@@ -658,7 +658,7 @@ const persistMessage = async ({
             and(
               eq(
                 chatMessages.id,
-                toSafeId<"chatMessage">(persistencePlan.deleteMessageId),
+                brandPersistedChatMessageId(persistencePlan.deleteMessageId),
               ),
             ),
           ),

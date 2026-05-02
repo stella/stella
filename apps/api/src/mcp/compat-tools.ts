@@ -3,8 +3,8 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { entities, extractedContent, fields } from "@/api/db/schema";
 import { readEntityByIdHandler } from "@/api/handlers/entities/read-by-id";
-import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
@@ -61,7 +61,7 @@ const getFetchableEntityMap = async ({
     return new Map<string, FetchableEntity>();
   }
 
-  const safeEntityIds = entityIds.map((id) => toSafeId<"entity">(id));
+  const safeEntityIds = entityIds.map(brandPersistedEntityId);
 
   const rows = await context.scopedDb((tx) =>
     tx
@@ -425,7 +425,7 @@ const handleCompatFetchTool: McpToolHandler = async ({
   if (typeof rawEntityId !== "string") {
     return rawEntityId;
   }
-  const entityId = toSafeId<"entity">(rawEntityId);
+  const entityId = brandPersistedEntityId(rawEntityId);
 
   const executeReadContentAcrossMatters =
     getOrgTools(context)["read-content-across-matters"].execute;

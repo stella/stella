@@ -5,9 +5,9 @@ ruleset cannot. Each rule encodes an architectural or security invariant of the
 Stella codebase. Open the source file for the full pattern logic and the safe /
 flagged examples it documents.
 
-Rules are wired up in the root `oxlint.config.mjs` and the per-app
-`.oxlintrc.json` files. Most plugins replace older `scripts/lint-*.sh` shell
-checks; the comment in the plugin source notes the predecessor when relevant.
+Rules are wired up in the root `oxlint.config.ts`. Most plugins replace older
+`scripts/lint-*.sh` shell checks; the comment in the plugin source notes the
+predecessor when relevant.
 
 ## Rules
 
@@ -38,9 +38,9 @@ checks; the comment in the plugin source notes the predecessor when relevant.
 
 1. Drop a new `*.ts` file in this directory exporting `{ meta, rules }` shaped
    like the existing plugins.
-2. Register the plugin file in `oxlint.config.mjs` under `jsPlugins`. Then enable
+2. Register the plugin file in `oxlint.config.ts` under `jsPlugins`. Then enable
    the rule(s) using the `<plugin-name>/<rule-name>` form in the `rules` object
-   of `oxlint.config.mjs` or the relevant `.oxlintrc.json`.
+   of `oxlint.config.ts`.
 3. Add a row above describing what it prevents and the required workaround.
 4. The plugin file's leading comment should state the bug class, list the safe
    patterns it allows, and list the patterns it flags. Existing files are good

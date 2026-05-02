@@ -12,8 +12,8 @@
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test src",
     "typecheck": "tsgo --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware packages/money",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware --fix packages/money",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware packages/money",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/money",
     "format": "oxfmt ."
   },
   "devDependencies": {

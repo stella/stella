@@ -12,13 +12,14 @@ import {
 } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
 import { redisConnectionOptions } from "@/api/lib/redis-options";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { getS3 } from "@/api/lib/s3";
 import {
+  brandPersistedEntityId,
+  brandPersistedFieldId,
   brandPersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
@@ -199,8 +200,8 @@ const processPdfDerivativeJob = async ({
     userId: brandPersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
-  const brandedEntityId = toSafeId<"entity">(entityId);
-  const brandedFieldId = toSafeId<"field">(fieldId);
+  const brandedEntityId = brandPersistedEntityId(entityId);
+  const brandedFieldId = brandPersistedFieldId(fieldId);
 
   const row = await scopedDb((tx) =>
     tx.query.fields.findFirst({
@@ -361,7 +362,7 @@ const markPdfDerivativeFailed = async ({
       })
       .where(
         and(
-          eq(fields.id, toSafeId<"field">(fieldId)),
+          eq(fields.id, brandPersistedFieldId(fieldId)),
           eq(fields.workspaceId, branded.workspaceId),
           sql`${fields.content}->>'type' = 'file'`,
           sql`${fields.content}->>'pdfFileId' is null`,

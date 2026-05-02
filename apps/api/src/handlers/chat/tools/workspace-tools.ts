@@ -11,9 +11,12 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { markdownToDocx } from "@/api/handlers/docx/markdown-to-docx";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { captureError } from "@/api/lib/analytics";
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError, unreachable } from "@/api/lib/errors/tagged-errors";
+import {
+  brandPersistedEntityId,
+  brandPersistedPropertyId,
+} from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -175,8 +178,8 @@ export const createWorkspaceTools = ({
           allowedIdsByValue: allowedWorkspaceIdsByValue,
           workspaceId: input.workspaceId,
         });
-        const entityId = toSafeId<"entity">(input.entityId);
-        const propertyId = toSafeId<"property">(input.propertyId);
+        const entityId = brandPersistedEntityId(input.entityId);
+        const propertyId = brandPersistedPropertyId(input.propertyId);
         const { value } = input;
         const property = await scopedDb((tx) =>
           tx.query.properties.findFirst({

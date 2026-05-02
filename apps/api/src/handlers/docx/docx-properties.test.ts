@@ -73,12 +73,20 @@ const extractAcceptedText = (xml: string): string[] => {
       if (n.localName === "del" && n.namespaceURI === W_NS) {
         return;
       }
+      // apply-edits encodes LF as w:br (textWrapping) between w:t shards.
+      if (n.localName === "br" && n.namespaceURI === W_NS) {
+        const breakType = n.getAttributeNS(W_NS, "type");
+        if (!breakType || breakType === "textWrapping") {
+          text += "\n";
+        }
+        return;
+      }
       if (n.localName === "t" && n.namespaceURI === W_NS) {
         text += n.textContent ?? "";
-      } else {
-        for (const c of n.childNodes) {
-          walk(c);
-        }
+        return;
+      }
+      for (const c of n.childNodes) {
+        walk(c);
       }
     };
     walk(el);

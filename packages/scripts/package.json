@@ -12,8 +12,8 @@
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test",
     "typecheck": "tsgo --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware packages/scripts",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware --fix packages/scripts",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware packages/scripts",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/scripts",
     "format": "oxfmt ."
   },
   "devDependencies": {

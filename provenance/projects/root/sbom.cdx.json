@@ -18344,7 +18344,7 @@
         ],
         "occurrences": [
           {
-            "location": "oxlint.config.mjs#1"
+            "location": "oxlint.config.ts#1"
           }
         ]
       },

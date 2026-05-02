@@ -17,6 +17,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
+import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
@@ -239,6 +240,11 @@ export default createSafeHandler(
     computeVersionDiffStats({
       versionId: nextVersionId,
       entityId,
+      scopedDb: createRootScopedDb({
+        organizationId,
+        userId,
+        workspaceIds: [workspaceId],
+      }),
       workspaceId,
       organizationId,
     }).catch((error: unknown) => {

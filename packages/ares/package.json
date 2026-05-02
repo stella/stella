@@ -45,8 +45,8 @@
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "typecheck": "tsgo --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware packages/ares",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware --fix packages/ares",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware packages/ares",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/ares",
     "format": "oxfmt .",
     "prepack": "bun run build"
   },

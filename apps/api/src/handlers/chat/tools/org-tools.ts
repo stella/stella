@@ -5,11 +5,14 @@ import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db";
 import { buildChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  brandPersistedContactId,
+  brandPersistedEntityId,
+} from "@/api/lib/safe-id-boundaries";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 const CONTENT_MAX_CHARS = 8000;
@@ -89,7 +92,7 @@ export const createOrgTools = ({
       }),
     ),
     execute: async (input) => {
-      const entityId = toSafeId<"entity">(input.entityId);
+      const entityId = brandPersistedEntityId(input.entityId);
 
       if (accessibleWorkspaceIds.length === 0) {
         throw new ChatToolError({
@@ -177,7 +180,7 @@ export const createOrgTools = ({
       }),
     ),
     execute: async (input) => {
-      const contactId = toSafeId<"contact">(input.contactId);
+      const contactId = brandPersistedContactId(input.contactId);
 
       const contact = await scopedDb((tx) =>
         tx.query.contacts.findFirst({

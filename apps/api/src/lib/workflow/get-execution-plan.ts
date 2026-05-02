@@ -8,7 +8,7 @@ import type {
   PropertyTool,
 } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
-import { toSafeId } from "@/api/lib/branded-types";
+import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
 import type { PropertyContent } from "@/api/types";
 
 /**
@@ -34,7 +34,7 @@ const needsComputation = (status: PropertyStatus): boolean => {
 
 type DependencySignature = string; // Sorted, joined property IDs
 
-const toPropertyId = (value: string) => toSafeId<"property">(value);
+const toPropertyId = (value: string) => brandPersistedPropertyId(value);
 
 export type BatchPropertyDependency = {
   dependsOnPropertyId: string;

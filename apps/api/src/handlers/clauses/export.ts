@@ -6,9 +6,9 @@ import type { SafeDb } from "@/api/db";
 import { clauses } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
 
 import type {
   ClauseExportItem,
@@ -38,7 +38,7 @@ const exportHandler = async function* ({
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean)
-      .map((id) => toSafeId<"clause">(id));
+      .map(brandPersistedClauseId);
     if (idList.length > 0) {
       conditions.push(inArray(clauses.id, idList));
     }

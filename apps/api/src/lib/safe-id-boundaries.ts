@@ -26,6 +26,42 @@ export const brandPersistedWorkspaceId = (
   workspaceId: string,
 ): SafeId<"workspace"> => toSafeId<"workspace">(workspaceId);
 
+export const brandPersistedEntityId = (entityId: string): SafeId<"entity"> =>
+  toSafeId<"entity">(entityId);
+
+export const brandPersistedFieldId = (fieldId: string): SafeId<"field"> =>
+  toSafeId<"field">(fieldId);
+
+export const brandPersistedPropertyId = (
+  propertyId: string,
+): SafeId<"property"> => toSafeId<"property">(propertyId);
+
+export const brandPersistedUserFileId = (
+  userFileId: string,
+): SafeId<"userFile"> => toSafeId<"userFile">(userFileId);
+
+export const brandPersistedChatThreadId = (
+  chatThreadId: string,
+): SafeId<"chatThread"> => toSafeId<"chatThread">(chatThreadId);
+
+export const brandPersistedChatMessageId = (
+  chatMessageId: string,
+): SafeId<"chatMessage"> => toSafeId<"chatMessage">(chatMessageId);
+
+export const brandPersistedCaseLawDecisionId = (
+  caseLawDecisionId: string,
+): SafeId<"caseLawDecision"> => toSafeId<"caseLawDecision">(caseLawDecisionId);
+
+export const brandPersistedContactId = (contactId: string): SafeId<"contact"> =>
+  toSafeId<"contact">(contactId);
+
+export const brandPersistedAuditLogId = (
+  auditLogId: string,
+): SafeId<"auditLog"> => toSafeId<"auditLog">(auditLogId);
+
+export const brandPersistedClauseId = (clauseId: string): SafeId<"clause"> =>
+  toSafeId<"clause">(clauseId);
+
 export const brandPersistedUserId = (userId: string): SafeId<"user"> =>
   toSafeId<"user">(userId);
 

@@ -1,6 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
+import { member, user } from "@/api/db/auth-schema";
 import { db } from "@/api/db/root";
 import { desktopEditSessions, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -106,5 +107,46 @@ export const authorizeDesktopEditSession = async ({
       userId: session.createdBy,
       workspaceId: session.workspaceId,
     },
+  };
+};
+
+export const readDesktopEditSessionEventState = async (
+  sessionId: SafeId<"desktopEditSession">,
+) => {
+  const sessions = await db
+    .select({ id: desktopEditSessions.id })
+    .from(desktopEditSessions)
+    .where(
+      and(
+        eq(desktopEditSessions.id, sessionId),
+        eq(desktopEditSessions.status, "open"),
+      ),
+    )
+    .limit(1);
+
+  if (!sessions.at(0)) {
+    return null;
+  }
+
+  const pendingRequests = await db
+    .select({
+      requestedByName: user.name,
+      requestedAt: desktopEditSessions.takeoverRequestedAt,
+    })
+    .from(desktopEditSessions)
+    .innerJoin(workspaces, eq(desktopEditSessions.workspaceId, workspaces.id))
+    .leftJoin(
+      member,
+      and(
+        eq(desktopEditSessions.takeoverRequestedBy, member.userId),
+        eq(member.organizationId, workspaces.organizationId),
+      ),
+    )
+    .leftJoin(user, eq(member.userId, user.id))
+    .where(eq(desktopEditSessions.id, sessionId))
+    .limit(1);
+
+  return {
+    pendingRequest: pendingRequests.at(0) ?? null,
   };
 };

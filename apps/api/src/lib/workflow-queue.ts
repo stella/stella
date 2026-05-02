@@ -11,12 +11,13 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
 import { captureError } from "@/api/lib/analytics";
-import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
 import { redisConnectionOptions } from "@/api/lib/redis-options";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
+  brandPersistedEntityId,
   brandPersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
@@ -283,7 +284,7 @@ const processEntityJob = async (data: EntityJobData) => {
     workspaceId,
   });
   const userId = brandPersistedUserId(rawUserId);
-  const brandedEntityId = toSafeId<"entity">(entityId);
+  const brandedEntityId = brandPersistedEntityId(entityId);
 
   const scopedDb = createRootScopedDb({
     organizationId: branded.organizationId,

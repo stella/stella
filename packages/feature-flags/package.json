@@ -10,8 +10,8 @@
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typecheck": "tsgo --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware packages/feature-flags",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs --type-aware --fix packages/feature-flags",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware packages/feature-flags",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/feature-flags",
     "format": "oxfmt ."
   },
   "devDependencies": {

@@ -21,7 +21,10 @@ type Diff = {
   text: string;
 };
 
-const SHORT_NEUTRAL_EQUALITY_RE = /^[\s()[\]{}.,;:/-]{1,3}$/u;
+// Short “glue” between adjacent delete/insert pairs that we may fuse.
+// Restrict to horizontal whitespace only: `\s` matches `\n` and other
+// line/paragraph separators, which must not disappear from insert text.
+const SHORT_NEUTRAL_EQUALITY_RE = /^[\t \u00A0()[\]{}.,;:/-]{1,3}$/u;
 
 // ── Word-level diffing ───────────────────────────────────
 

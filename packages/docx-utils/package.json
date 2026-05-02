@@ -8,7 +8,7 @@
   "scripts": {
     "test": "bun test src",
     "typecheck": "tsc --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.mjs packages/docx-utils",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts packages/docx-utils",
     "format": "oxfmt ."
   },
   "dependencies": {

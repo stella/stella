@@ -24,7 +24,7 @@
 //
 // Skipped names: configurable via the rule's `names` option
 // (defaults below). Skipped contexts: test files / fixtures,
-// configured via .oxlintrc overrides.
+// configured via oxlint.config.ts overrides.
 
 const DEFAULT_NAMES = new Set(["workspaceId", "organizationId", "userId"]);
 

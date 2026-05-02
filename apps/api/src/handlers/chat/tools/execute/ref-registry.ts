@@ -1,8 +1,12 @@
 import { Result } from "better-result";
 
 import type { SafeId } from "@/api/lib/branded-types";
-import { toSafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import {
+  brandPersistedEntityId,
+  brandPersistedPropertyId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
 
 export const CHAT_ENTITY_REF_PREFIX = "#stella-entity-ref=";
 export const CHAT_WORKSPACE_REF_PREFIX = "#stella-workspace-ref=";
@@ -179,15 +183,15 @@ export const createChatRefRegistry = () => {
     const withWorkspaceRefs = text.replaceAll(
       PERSISTED_WORKSPACE_LINK_REGEX,
       (_href, rawWorkspaceId: string) =>
-        `${CHAT_WORKSPACE_REF_PREFIX}${toMatterRef(toSafeId<"workspace">(rawWorkspaceId))}`,
+        `${CHAT_WORKSPACE_REF_PREFIX}${toMatterRef(brandPersistedWorkspaceId(rawWorkspaceId))}`,
     );
 
     return withWorkspaceRefs.replaceAll(
       PERSISTED_ENTITY_LINK_REGEX,
       (_href, rawWorkspaceId: string, rawEntityId: string) =>
         `${CHAT_ENTITY_REF_PREFIX}${toEntityRef({
-          entityId: toSafeId<"entity">(rawEntityId),
-          workspaceId: toSafeId<"workspace">(rawWorkspaceId),
+          entityId: brandPersistedEntityId(rawEntityId),
+          workspaceId: brandPersistedWorkspaceId(rawWorkspaceId),
         })}`,
     );
   };
@@ -228,10 +232,12 @@ export const createChatRefRegistry = () => {
   };
 
   const toHydratedMatterRef = (value: unknown) =>
-    isUuidString(value) ? toMatterRef(toSafeId<"workspace">(value)) : value;
+    isUuidString(value) ? toMatterRef(brandPersistedWorkspaceId(value)) : value;
 
   const toHydratedPropertyRef = (value: unknown) =>
-    isUuidString(value) ? toPropertyRef(toSafeId<"property">(value)) : value;
+    isUuidString(value)
+      ? toPropertyRef(brandPersistedPropertyId(value))
+      : value;
 
   const toHydratedEntityRef = ({
     entityId,
@@ -253,8 +259,8 @@ export const createChatRefRegistry = () => {
     }
 
     return toEntityRef({
-      entityId: toSafeId<"entity">(entityId),
-      workspaceId: toSafeId<"workspace">(workspaceId),
+      entityId: brandPersistedEntityId(entityId),
+      workspaceId: brandPersistedWorkspaceId(workspaceId),
     });
   };
 

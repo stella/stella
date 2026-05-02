@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterAll, describe, expect, mock, test } from "bun:test";
 
 import type {
   FieldContent,
@@ -10,28 +10,18 @@ import type {
   PropertyBatch,
 } from "@/api/lib/workflow/get-execution-plan";
 
-// Stub @/api/db to prevent drizzle(DATABASE_URL) from
-// firing when the module graph pulls in registry/utils.ts.
-// This test only uses pure functions that don't touch db.
-void mock.module("@/api/db", () => ({
-  db: {},
-  // eslint-disable-next-line no-empty-function
-  createScopedDb: () => async () => {},
-}));
-void mock.module("@/api/db/scoped", () => ({
-  // eslint-disable-next-line no-empty-function
-  createScopedDb: () => async () => {},
-}));
-void mock.module("@/api/lib/root-scoped-db", () => ({
-  // eslint-disable-next-line no-empty-function
-  createRootScopedDb: () => async () => {},
-}));
+// Stub registry-only side effects. Avoid mocking `@/api/db`: this test never
+// loads `root.ts`, and Bun's `mock.module` leaks process-wide across files.
 void mock.module("@/api/handlers/registry/utils", () => ({
   // eslint-disable-next-line no-empty-function
   broadcastEvent: () => {},
   // eslint-disable-next-line no-empty-function
   resetActorState: () => {},
 }));
+
+afterAll(() => {
+  mock.restore();
+});
 
 const { evaluateCondition, prepareBatch } =
   await import("@/api/lib/workflow/utils");
