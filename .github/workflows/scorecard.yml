@@ -13,6 +13,10 @@ permissions: read-all
 
 jobs:
   scorecard:
+    # OpenSSF Scorecard publishing is intended for the public repository.
+    # While private, the action cannot access the repository metadata it
+    # needs through GITHUB_TOKEN and fails on push-to-main.
+    if: github.event.repository.visibility == 'public'
     runs-on: ubuntu-latest
     permissions:
       # Required to checkout the repository
