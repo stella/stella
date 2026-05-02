@@ -1,3 +1,5 @@
+import { createElement } from "react";
+
 import MentionExtension from "@tiptap/extension-mention";
 import type { MentionNodeAttrs } from "@tiptap/extension-mention";
 import {
@@ -18,9 +20,6 @@ export type MentionOption = {
 };
 
 export const CustomMention = MentionExtension.extend({
-  addNodeView() {
-    return ReactNodeViewRenderer(MentionNode);
-  },
   parseHTML() {
     return [
       {
@@ -32,6 +31,15 @@ export const CustomMention = MentionExtension.extend({
     return ["mention-component", mergeAttributes(HTMLAttributes)];
   },
 });
+
+export const createCustomMention = (workspaceId: string) =>
+  CustomMention.extend({
+    addNodeView() {
+      return ReactNodeViewRenderer((props) =>
+        createElement(MentionNode, { ...props, workspaceId }),
+      );
+    },
+  });
 
 export const createSuggestion = (
   mentionItems: MentionOption[],

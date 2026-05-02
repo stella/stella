@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { useParams } from "@tanstack/react-router";
 
 import type { WorkspaceJustification } from "@/lib/types";
 import { justificationsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
@@ -34,14 +33,15 @@ export const chunkJustificationEntityIds = (
   return chunks;
 };
 
+type UseSyncJustificationsInput = {
+  workspaceId: string;
+  entityIds: readonly string[];
+};
+
 export const useSyncJustifications = (
-  entityIds: readonly string[],
+  { workspaceId, entityIds }: UseSyncJustificationsInput,
   { enabled = true }: { enabled?: boolean } = {},
 ) => {
-  const workspaceId = useParams({
-    from: "/_protected/workspaces/$workspaceId",
-    select: (params) => params.workspaceId,
-  });
   const syncJustifications = useWorkspaceStore(
     (state) => state.syncJustifications,
   );
@@ -67,14 +67,15 @@ export const useSyncJustifications = (
   }, [data, syncJustifications]);
 };
 
+type UseSyncJustificationChunksInput = {
+  workspaceId: string;
+  entityIdChunks: readonly (readonly string[])[];
+};
+
 export const useSyncJustificationChunks = (
-  entityIdChunks: readonly (readonly string[])[],
+  { workspaceId, entityIdChunks }: UseSyncJustificationChunksInput,
   { enabled = true }: { enabled?: boolean } = {},
 ) => {
-  const workspaceId = useParams({
-    from: "/_protected/workspaces/$workspaceId",
-    select: (params) => params.workspaceId,
-  });
   const syncJustifications = useWorkspaceStore(
     (state) => state.syncJustifications,
   );

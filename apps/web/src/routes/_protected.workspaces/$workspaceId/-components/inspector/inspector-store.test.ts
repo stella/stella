@@ -69,6 +69,37 @@ describe("openChat", () => {
 });
 
 describe("replacePdfFieldId", () => {
+  test("re-opening an existing pdf tab refreshes the file label", () => {
+    useInspectorStore.getState().openPdf({
+      id: "field-1",
+      entityId: "entity-1",
+      label: "Document 4",
+      mimeType: "application/pdf",
+      pdfFileId: "pdf-1",
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+
+    useInspectorStore.getState().openPdf({
+      id: "field-1",
+      entityId: "entity-1",
+      label: "0041_Pleadings_draft.pdf",
+      mimeType: "application/pdf",
+      pdfFileId: "pdf-1",
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+
+    const tab = useInspectorStore
+      .getState()
+      .tabs.find((item) => item.id === "field-1");
+    if (tab?.type !== "pdf") {
+      throw new Error("expected pdf tab");
+    }
+
+    expect(tab.label).toBe("0041_Pleadings_draft.pdf");
+  });
+
   test("preserves the pdf tab render id across version replacement", () => {
     useInspectorStore.getState().openPdf({
       id: "field-old",

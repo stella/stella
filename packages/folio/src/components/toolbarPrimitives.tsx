@@ -113,7 +113,7 @@ export type ToolbarProps = {
   /** Whether to enable keyboard shortcuts (default: true) */
   enableShortcuts?: boolean | undefined;
   /** Ref to the editor container for keyboard events */
-  editorRef?: React.RefObject<HTMLElement> | undefined;
+  editorRef?: React.RefObject<HTMLElement | null> | undefined;
   /** Custom toolbar items to render */
   children?: ReactNode | undefined;
   /** Whether to show font family picker (default: true) */
@@ -259,7 +259,7 @@ export function ToolbarButton({
     <button
       type="button"
       className={cn(
-        "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+        "flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
         "transition-colors duration-100",
         "-webkit-font-smoothing-antialiased",
         "text-[var(--doc-text-muted)] hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)]",

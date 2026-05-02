@@ -18,6 +18,7 @@ import { Suspense, useEffect, useEffectEvent, useMemo, useState } from "react";
 import { cn } from "@stll/ui/lib/utils";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { LoaderCircleIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { PromptBar } from "@/components/ai-suggestions/host";
 import { useChatEditor } from "@/components/chat-editor-provider";
@@ -30,6 +31,7 @@ import { chatThreadOptions } from "@/routes/_protected.chat/-queries";
 
 type ActiveFile = {
   entityId: string;
+  editable?: boolean | undefined;
   fileName: string;
 };
 
@@ -83,6 +85,7 @@ const FileChatOverlayInner = ({
   chatThreadId,
   activeFile,
 }: FileChatOverlayProps) => {
+  const t = useTranslations();
   const userContext = useChatUserContext();
   const getUserContext = useEffectEvent(() => userContext);
   const getActiveFile = useEffectEvent(() => activeFile);
@@ -122,7 +125,28 @@ const FileChatOverlayInner = ({
     approvalPendingMessageId,
   } = useChatSession({ chat, threadRef, workspaceId });
 
-  const editorController = useChatEditor({ threadRef });
+  const filePlaceholder =
+    activeFile === undefined
+      ? undefined
+      : t(
+          activeFile.editable
+            ? "chat.editableFilePlaceholder"
+            : "chat.filePlaceholder",
+          { fileName: activeFile.fileName },
+        );
+  const filePlaceholderAction =
+    activeFile === undefined
+      ? undefined
+      : t(
+          activeFile.editable
+            ? "chat.editableFilePlaceholderAction"
+            : "chat.filePlaceholderAction",
+        );
+
+  const editorController = useChatEditor({
+    placeholder: filePlaceholder,
+    threadRef,
+  });
 
   const [panelOpen, setPanelOpen] = useState(false);
   const hasMessages = messages.length > 0;
@@ -186,6 +210,16 @@ const FileChatOverlayInner = ({
 
       <PromptBar
         editorController={editorController}
+        emptyPlaceholder={
+          activeFile && filePlaceholderAction ? (
+            <span className="text-muted-foreground/70 flex min-w-0 items-center gap-1.5 text-[13px] leading-5">
+              <span className="shrink-0">{filePlaceholderAction}</span>
+              <span className="text-foreground/75 max-w-64 truncate">
+                {activeFile.fileName}
+              </span>
+            </span>
+          ) : undefined
+        }
         layout="floating"
         onStop={() => {
           void stop();

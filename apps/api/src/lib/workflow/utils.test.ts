@@ -298,9 +298,9 @@ describe("prepareBatch", () => {
     expect(result.properties[0]?.id).toBe(propertyId("p1"));
   });
 
-  test("includes non-fresh property regardless of field content", () => {
+  test("includes stale properties regardless of field content", () => {
     const rawBatch = createRawBatch([
-      createBatchProperty("p1", { status: "uninitialized" }),
+      createBatchProperty("p1", { status: "stale" }),
       createBatchProperty("p2", { status: "stale" }),
     ]);
     const fieldContentMap = new Map<string, FieldContent["type"]>([

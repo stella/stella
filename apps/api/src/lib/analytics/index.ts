@@ -19,7 +19,10 @@ export const identify = ({ distinctId, properties }: IdentifyProps) => {
 /**
  * Capture an error for observability.
  *
- * - Dev: full error logged to console for debugging.
+ * - Dev: full error logged to `console.error` *and* appended to
+ *   `apps/api/.dev-logs/errors.jsonl` (with the same `context`
+ *   below) so headless tools can read it without holding the dev
+ *   tty. Both paths are dev-only.
  * - Prod: only the structural error tag (class name) is sent
  *   to the analytics provider. Error messages, causes, and
  *   stack traces are never sent; they may contain privileged
@@ -34,7 +37,7 @@ export const captureError = (
 ) => {
   const tag = errorTag(error);
 
-  logDevError(error);
+  logDevError(error, context);
 
   getAnalytics().capture({
     distinctId: "server",

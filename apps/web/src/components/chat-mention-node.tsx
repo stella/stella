@@ -57,7 +57,12 @@ export const ChatMentionNode = (props: NodeViewProps) => {
     category: ChatReferenceCategory;
     kind: string;
     mimeType: string | null;
+    sourceWorkspaceId: string | null;
   };
+  const sourceWorkspaceId = attrs.sourceWorkspaceId;
+  const sourceWorkspaceColor = sourceWorkspaceId
+    ? getMatterColor(sourceWorkspaceId)
+    : null;
 
   return (
     <NodeViewWrapper className="inline">
@@ -66,7 +71,16 @@ export const ChatMentionNode = (props: NodeViewProps) => {
           "inline-flex max-w-full items-center gap-0.5",
           "bg-accent rounded px-1 py-0.5",
           "text-accent-foreground text-xs font-medium",
+          sourceWorkspaceColor !== null && "border",
         )}
+        style={
+          sourceWorkspaceColor
+            ? {
+                backgroundColor: `color-mix(in srgb, ${sourceWorkspaceColor} 18%, transparent)`,
+                borderColor: `color-mix(in srgb, ${sourceWorkspaceColor} 55%, transparent)`,
+              }
+            : undefined
+        }
       >
         <CategoryIcon
           attrId={attrs.id ?? ""}

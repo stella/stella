@@ -21,6 +21,10 @@ export type PdfTab = {
   /** The property column that was clicked (for showing
    *  the active cell highlight in the PDF). */
   propertyId?: string | undefined;
+  /** File-coupled info lane. `expanded` is used when the file
+   *  itself is already centered in the main view, so the inspector
+   *  tab can dedicate its content to file affordance cards. */
+  metadataLane?: "closed" | "expanded" | undefined;
 };
 
 export type TaskTab = {
@@ -125,6 +129,10 @@ type Actions = {
   clearRenameRequest: () => void;
   clearTaskNewFlag: (taskId: string) => void;
   replacePdfFieldId: (oldFieldId: string, newFieldId: string) => void;
+  setPdfMetadataLane: (
+    tabId: string,
+    metadataLane: PdfTab["metadataLane"],
+  ) => void;
   updateLabel: (tabId: string, label: string) => void;
   updateTaskStatus: (taskId: string, status: string | null) => void;
   /** Set the minimized state directly. */
@@ -151,8 +159,8 @@ export const useInspectorStore = create<State & Actions>()(
           existing.propertyId = tab.propertyId;
           existing.entityId = tab.entityId;
           existing.workspaceId = tab.workspaceId;
-          const isFallbackId = existing.label === existing.id;
-          if (tab.label && (!existing.label || isFallbackId)) {
+          existing.metadataLane = tab.metadataLane;
+          if (tab.label) {
             existing.label = tab.label;
           }
           if (tab.mimeType !== undefined) {
@@ -309,6 +317,14 @@ export const useInspectorStore = create<State & Actions>()(
         }
         if (state.activeId === oldFieldId) {
           state.activeId = newFieldId;
+        }
+      }),
+
+    setPdfMetadataLane: (tabId, metadataLane) =>
+      set((state) => {
+        const tab = state.tabs.find((t) => t.id === tabId);
+        if (tab?.type === "pdf") {
+          tab.metadataLane = metadataLane;
         }
       }),
 

@@ -11,6 +11,27 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { PropertyContent } from "@/api/types";
 
+/**
+ * Whether a property is queued for the workflow to (re)compute it.
+ *
+ * Exhaustive over `PropertyStatus` so adding a future status (e.g.
+ * "computing", "errored") becomes a TS compile error here — the
+ * planner can't silently skip new states and leave callers stuck
+ * on optimistic pending forever.
+ */
+const needsComputation = (status: PropertyStatus): boolean => {
+  switch (status) {
+    case "stale":
+      return true;
+    case "fresh":
+      return false;
+    default: {
+      const exhaustive: never = status;
+      return panic(`Unhandled property status: ${String(exhaustive)}`);
+    }
+  }
+};
+
 type DependencySignature = string; // Sorted, joined property IDs
 
 const toPropertyId = (value: string) => toSafeId<"property">(value);
@@ -174,7 +195,7 @@ export const buildLevelBatches = (
     if (
       property.content.type !== "file" &&
       property.tool.type === "ai-model" &&
-      property.status === "stale"
+      needsComputation(property.status)
     ) {
       signatureToProperties.get(signature)?.push({
         id: property.id,

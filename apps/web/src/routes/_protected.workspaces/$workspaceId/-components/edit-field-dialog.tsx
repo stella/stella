@@ -134,9 +134,9 @@ export const EditFieldDialog = ({
 }: EditFieldDialogProps) => {
   const t = useTranslations();
   const [isOpen, setIsOpen] = useState(false);
-  const isWorkflowRunning = useIsWorkflowRunning();
+  const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
   const upsertField = useUpsertField();
-  const startWorkflow = useStartWorkflow();
+  const startWorkflow = useStartWorkflow(workspaceId);
   const form = useForm({
     defaultValues: getDefaultValues(fieldContent),
     validationLogic: revalidateLogic(),

@@ -62,6 +62,8 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
       if (response.error) {
         throw toAPIError(response.error);
       }
+
+      return response.data;
     },
     onError: (error) => {
       analytics.captureError(error);

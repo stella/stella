@@ -19,7 +19,11 @@ import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 
 import { Button } from "@stll/ui/components/button";
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowUpIcon, Maximize2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -48,6 +52,7 @@ import type { ChatTab } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { InspectorTabHeader } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header";
 import { buildMaximizeTabAction } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/maximize-tab";
+import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
 
 type ChatTabPanelProps = {
   tab: ChatTab;
@@ -80,6 +85,7 @@ export const ChatTabPanel = ({
       ? { decisionId: toSafeId<"caseLawDecision">(tabDecisionId) }
       : undefined,
   );
+  const t = useTranslations();
   // Read live tab state on every send. The Chat instance is created
   // once and cached per `threadRef`, so a plain closure over `tab`
   // would freeze the IDs from the render that built the instance —
@@ -87,6 +93,7 @@ export const ChatTabPanel = ({
   // server. `useEffectEvent` always reads the latest closure values.
   const getContextMatterIds = useEffectEvent(() => tab.contextMatterIds);
   const showToolCalls = useDevStore((s) => s.showToolCalls);
+  const chatContextLabel = useChatContextLabel(tab);
 
   const { setChatContext, updateLabel } = useInspectorStore(
     useShallow((s) => ({
@@ -151,7 +158,10 @@ export const ChatTabPanel = ({
   // attachments come from the same provider as the right-panel
   // chat. Thread ref is shared with `chatThreadOptions` above so
   // drafts persist across tab close/open.
-  const editorController = useChatEditor({ threadRef });
+  const editorController = useChatEditor({
+    placeholder: t("chat.contextPlaceholder", { context: chatContextLabel }),
+    threadRef,
+  });
 
   const stockPrompts = useStockPrompts();
   const handleSelectPrompt = (prompt: ChatPrompt) => {
@@ -259,6 +269,33 @@ export const ChatTabPanel = ({
       />
     </ChatTabPanelChrome>
   );
+};
+
+const useChatContextLabel = (tab: ChatTab) => {
+  const { data } = useQuery(workspacesNavigationOptions);
+  const fallbackLabel = tab.label.trim().length > 0 ? tab.label : "chat";
+
+  return useMemo(() => {
+    const workspaces = data?.workspaces;
+    if (workspaces === undefined || tab.contextMatterIds.length === 0) {
+      return fallbackLabel;
+    }
+
+    const selectedNames = tab.contextMatterIds
+      .map((id) => workspaces.find((workspace) => workspace.id === id)?.name)
+      .filter((name): name is string => name !== undefined);
+
+    const firstName = selectedNames.at(0);
+    if (firstName === undefined) {
+      return fallbackLabel;
+    }
+
+    if (selectedNames.length === 1) {
+      return firstName;
+    }
+
+    return `${firstName} +${String(selectedNames.length - 1)}`;
+  }, [data?.workspaces, fallbackLabel, tab.contextMatterIds]);
 };
 
 type ChatEmptyStateProps = {
@@ -376,8 +413,9 @@ const ChatTabPanelChrome = ({
  * so the user sees the bar in place; the live `PromptBar` slots
  * in once data arrives.
  */
-const PromptBarPlaceholder = () => {
+const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
   const t = useTranslations();
+  const chatContextLabel = useChatContextLabel(tab);
   return (
     <div
       aria-hidden="true"
@@ -385,15 +423,14 @@ const PromptBarPlaceholder = () => {
     >
       <div className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 px-1.5">
         <span className="text-muted-foreground/60 truncate text-[13px] leading-5">
-          {t("chat.placeholder")}
+          {t("chat.contextPlaceholder", { context: chatContextLabel })}
         </span>
       </div>
       <Button
         className="rounded-full opacity-50"
         disabled
-        size="icon-sm"
+        size="icon"
         type="button"
-        variant="ghost"
       >
         <ArrowUpIcon aria-hidden="true" />
       </Button>
@@ -433,7 +470,7 @@ export const ChatTabPanelShell = ({ tab }: { tab: ChatTab }) => {
         </ConversationContent>
       </Conversation>
 
-      <PromptBarPlaceholder />
+      <PromptBarPlaceholder tab={tab} />
     </ChatTabPanelChrome>
   );
 };

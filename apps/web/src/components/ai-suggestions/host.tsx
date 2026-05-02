@@ -15,6 +15,7 @@
 
 import "@/components/chat-editor.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import {
   applySuggestions,
@@ -172,6 +173,7 @@ type FileAIChatHostProps = {
    * identical across surfaces.
    */
   editorController: ChatEditorController;
+  emptyPlaceholder?: ReactNode | undefined;
 };
 
 export function FileAIChatHost(props: FileAIChatHostProps) {
@@ -1031,6 +1033,7 @@ type PromptBarProps = {
    * is just the chrome around them.
    */
   editorController: ChatEditorController;
+  emptyPlaceholder?: ReactNode | undefined;
 };
 
 export function PromptBar(props: PromptBarProps) {
@@ -1044,9 +1047,11 @@ export function PromptBar(props: PromptBarProps) {
     onStop,
     onTogglePanel,
     editorController,
+    emptyPlaceholder,
   } = props;
 
-  const { editor, canSubmit, submit, setSubmitHandler } = editorController;
+  const { editor, canSubmit, isEmpty, submit, setSubmitHandler } =
+    editorController;
 
   const isGenerating = status === "generating";
   const busy = isGenerating || status === "applying";
@@ -1093,7 +1098,12 @@ export function PromptBar(props: PromptBarProps) {
       role="toolbar"
       aria-label="AI prompt"
     >
-      <div className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 px-1.5">
+      <div className="relative flex min-h-8 min-w-0 flex-1 items-center gap-1.5 px-1.5">
+        {isEmpty && emptyPlaceholder !== undefined && (
+          <div className="pointer-events-none absolute inset-x-1.5 top-1/2 z-10 min-w-0 -translate-y-1/2">
+            {emptyPlaceholder}
+          </div>
+        )}
         <EditorContent
           // Height is content-driven: a single line of 13px text
           // is ~20px tall (`leading-5`) and the cell's `min-h-8`
@@ -1102,7 +1112,12 @@ export function PromptBar(props: PromptBarProps) {
           // to `max-h-32` before scrolling, and `min-h-0`
           // overrides the provider's `min-h-10` so it shrinks
           // back as the user deletes content.
-          className="folio-ai-bar-editor text-foreground min-w-0 flex-1 [&_.ProseMirror]:field-sizing-fixed [&_.ProseMirror]:max-h-32 [&_.ProseMirror]:min-h-0 [&_.ProseMirror]:overflow-y-auto [&_.ProseMirror]:py-1.5 [&_.ProseMirror]:text-[13px] [&_.ProseMirror]:leading-5 [&_.ProseMirror]:select-text [&_.ProseMirror]:focus-visible:outline-none [&_.ProseMirror_p]:my-0"
+          className={cn(
+            "folio-ai-bar-editor text-foreground min-w-0 flex-1 [&_.ProseMirror]:field-sizing-fixed [&_.ProseMirror]:max-h-32 [&_.ProseMirror]:min-h-0 [&_.ProseMirror]:overflow-y-auto [&_.ProseMirror]:py-1.5 [&_.ProseMirror]:text-[13px] [&_.ProseMirror]:leading-5 [&_.ProseMirror]:select-text [&_.ProseMirror]:focus-visible:outline-none [&_.ProseMirror_p]:my-0",
+            isEmpty &&
+              emptyPlaceholder !== undefined &&
+              "folio-ai-bar-editor--custom-placeholder",
+          )}
           editor={editor}
         />
       </div>

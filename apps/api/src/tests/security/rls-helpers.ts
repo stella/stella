@@ -412,6 +412,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       name: "Prop A1",
       content: propContent,
       tool: propTool,
+      status: "fresh",
     },
     {
       id: ids.propertyA2,
@@ -419,6 +420,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       name: "Prop A2",
       content: propContent,
       tool: propTool,
+      status: "fresh",
     },
     {
       id: ids.propertyB1,
@@ -426,6 +428,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       name: "Prop B1",
       content: propContent,
       tool: propTool,
+      status: "fresh",
     },
   ]);
 
@@ -572,6 +575,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       name: "Dep A1",
       content: propContent,
       tool: propTool,
+      status: "fresh",
     },
     {
       id: ids.propertyB1dep,
@@ -579,6 +583,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       name: "Dep B1",
       content: propContent,
       tool: propTool,
+      status: "fresh",
     },
   ]);
 

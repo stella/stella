@@ -223,6 +223,9 @@ const createWorkspaces = createSafeRootHandler(
             name: body.filePropertyName,
             content: { type: "file", version: 1 },
             tool: { version: 1, type: "manual-input" },
+            // The system file column is user-managed (uploads), not
+            // computed — fresh from creation.
+            status: "fresh",
             system: true,
             kinds: ["document"],
           },

@@ -55,7 +55,7 @@ export const AppBreadcrumbs = () => {
       [serializeKey(["/workspaces/$workspaceId"])]: (params) => (
         <WorkspaceBreadcrumb {...params} />
       ),
-      [serializeKey(["/workspaces/$workspaceId/$viewId/pdf"])]: () => (
+      [serializeKey(["/workspaces/$workspaceId/$viewId/document"])]: () => (
         <PdfBreadcrumb />
       ),
       [serializeKey(["/todos/"])]: () => (

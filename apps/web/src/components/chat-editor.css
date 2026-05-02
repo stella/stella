@@ -14,6 +14,12 @@
   pointer-events: none;
 }
 
+.folio-ai-bar-editor--custom-placeholder
+  .tiptap
+  p.is-editor-empty:first-child::before {
+  content: "";
+}
+
 /*
  * Selection highlight for the inline AI prompt bar. The bar uses
  * a backdrop-filter on its wrapper, which creates a stacking

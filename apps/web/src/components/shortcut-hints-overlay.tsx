@@ -141,7 +141,7 @@ export function ShortcutHintsOverlay() {
 
 const useShortcutContext = (): ShortcutContext => {
   const pdfMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
+    from: "/_protected/workspaces/$workspaceId/$viewId/document",
     shouldThrow: false,
   });
   const projectMatch = useMatch({

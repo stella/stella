@@ -569,6 +569,7 @@ describe("workspace INSERT — correct scope", () => {
           name: "RLS Positive",
           content: propContent,
           tool: propTool,
+          status: "fresh",
         })
         .returning({ id: properties.id });
       expect(rows).toHaveLength(1);
@@ -1068,6 +1069,7 @@ describe("workspace DELETE — correct scope", () => {
         name: "To Delete",
         content: propContent,
         tool: propTool,
+        status: "fresh",
       });
       const rows = await tx
         .delete(properties)

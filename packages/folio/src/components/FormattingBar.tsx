@@ -9,7 +9,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { ColorPicker } from "@stll/ui/components/color-picker";
 import type { ColorPreset } from "@stll/ui/components/color-picker";
@@ -64,8 +64,14 @@ const DOCUMENT_COLOR_PRESETS: ColorPreset[] = [
 
 export type FormattingBarProps = {
   children?: ReactNode;
+  /** Host controls that should stay in the primary row before text formatting */
+  priorityExtra?: ReactNode;
   /** Extra controls rendered inline in the center column (after formatting buttons) */
   inlineExtra?: ReactNode;
+  /** Display label for the style picker when the backing document is hydrating. */
+  stylePickerLabel?: string | undefined;
+  /** Computed preview style for the hydrating style picker label. */
+  stylePickerLabelStyle?: CSSProperties | undefined;
   inline?: boolean;
 } & ToolbarProps;
 
@@ -91,7 +97,10 @@ export function FormattingBar(props: FormattingBarProps) {
     documentStyles,
     theme,
     onRefocusEditor,
+    priorityExtra,
     inlineExtra,
+    stylePickerLabel,
+    stylePickerLabelStyle,
     inline = false,
   } = props;
 
@@ -196,6 +205,12 @@ export function FormattingBar(props: FormattingBarProps) {
       return;
     }
 
+    const claimShortcut = (event: KeyboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
       const editorContainer = editorRef?.current;
@@ -211,7 +226,7 @@ export function FormattingBar(props: FormattingBarProps) {
 
       // Cmd+Enter — page break
       if (isCtrl && event.key === "Enter") {
-        event.preventDefault();
+        claimShortcut(event);
         handleFormat("insertPageBreak");
         return;
       }
@@ -221,11 +236,11 @@ export function FormattingBar(props: FormattingBarProps) {
         switch (event.key) {
           case "=":
           case "+":
-            event.preventDefault();
+            claimShortcut(event);
             handleFormat("superscript");
             return;
           case "8":
-            event.preventDefault();
+            claimShortcut(event);
             handleBulletList();
             return;
           default:
@@ -239,51 +254,51 @@ export function FormattingBar(props: FormattingBarProps) {
 
       switch (event.key.toLowerCase()) {
         case "b":
-          event.preventDefault();
+          claimShortcut(event);
           handleFormat("bold");
           break;
         case "i":
-          event.preventDefault();
+          claimShortcut(event);
           handleFormat("italic");
           break;
         case "u":
-          event.preventDefault();
+          claimShortcut(event);
           handleFormat("underline");
           break;
         case "k":
-          event.preventDefault();
+          claimShortcut(event);
           handleFormat("insertLink");
           break;
         case "d":
-          event.preventDefault();
+          claimShortcut(event);
           handleFormat("strikethrough");
           break;
         case "l":
-          event.preventDefault();
+          claimShortcut(event);
           handleAlignmentChange("left");
           break;
         case "e":
-          event.preventDefault();
+          claimShortcut(event);
           handleAlignmentChange("center");
           break;
         case "r":
-          event.preventDefault();
+          claimShortcut(event);
           handleAlignmentChange("right");
           break;
         case "j":
-          event.preventDefault();
+          claimShortcut(event);
           handleAlignmentChange("both");
           break;
         case "=":
-          event.preventDefault();
+          claimShortcut(event);
           handleFormat("subscript");
           break;
         case "]":
-          event.preventDefault();
+          claimShortcut(event);
           handleIndent();
           break;
         case "[":
-          event.preventDefault();
+          claimShortcut(event);
           handleOutdent();
           break;
         default:
@@ -291,8 +306,8 @@ export function FormattingBar(props: FormattingBarProps) {
       }
     };
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
   }, [
     enableShortcuts,
     handleFormat,
@@ -419,7 +434,7 @@ export function FormattingBar(props: FormattingBarProps) {
       ref={barRef}
       className={cn(
         !inline &&
-          "flex h-10 w-full items-center gap-0.5 overflow-hidden border-b border-[var(--doc-border)] bg-[var(--doc-page)] px-2 sm:px-4",
+          "flex h-12 w-full items-center gap-0.5 overflow-hidden border-b border-[var(--doc-border)] bg-[var(--doc-page)] px-2 sm:px-4",
         className,
       )}
       style={inline ? { display: "contents", ...style } : style}
@@ -429,10 +444,11 @@ export function FormattingBar(props: FormattingBarProps) {
       onMouseUp={inline ? undefined : handleBarMouseUp}
     >
       {/* Formatting controls */}
-      <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
+      <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain">
         {/* Undo / Redo */}
-        <ToolbarGroup label={t("historyGroup")}>
+        <ToolbarGroup className="gap-0" label={t("historyGroup")}>
           <ToolbarButton
+            className="h-8 w-7 rounded-e-none disabled:opacity-[0.35]"
             onClick={handleUndo}
             disabled={disabled || !canUndo}
             title={t("undoShortcut")}
@@ -441,6 +457,7 @@ export function FormattingBar(props: FormattingBarProps) {
             <Undo2Icon size={ICON_SIZE} />
           </ToolbarButton>
           <ToolbarButton
+            className="h-8 w-7 rounded-s-none disabled:opacity-[0.35]"
             onClick={handleRedo}
             disabled={disabled || !canRedo}
             title={t("redoShortcut")}
@@ -461,8 +478,18 @@ export function FormattingBar(props: FormattingBarProps) {
               styles={documentStyles}
               theme={theme}
               disabled={disabled}
-              width="clamp(76px, 15vw, 140px)"
+              displayLabel={stylePickerLabel}
+              displayLabelStyle={stylePickerLabelStyle}
+              className="shrink-0"
+              width="clamp(112px, 15vw, 140px)"
             />
+            <ToolbarSeparator />
+          </>
+        )}
+
+        {priorityExtra && (
+          <>
+            {priorityExtra}
             <ToolbarSeparator />
           </>
         )}
@@ -511,7 +538,7 @@ export function FormattingBar(props: FormattingBarProps) {
                 render={
                   <button
                     type="button"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--doc-text-muted)] transition-colors duration-100 hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)]"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--doc-text-muted)] transition-colors duration-100 hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)]"
                     aria-label={t("moreFormatting")}
                     title={t("moreFormatting")}
                   />

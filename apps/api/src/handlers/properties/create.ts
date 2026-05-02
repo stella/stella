@@ -197,6 +197,12 @@ const createProperty = createSafeHandler(
           }
         }
 
+        // AI properties need a first computation; manual properties
+        // are ready as soon as the user types a value. Setting the
+        // status explicitly here is what keeps newly-created AI
+        // properties out of the workflow planner's skip-list.
+        const initialStatus = tool.type === "ai-model" ? "stale" : "fresh";
+
         const [inserted] = await tx
           .insert(properties)
           .values({
@@ -204,6 +210,7 @@ const createProperty = createSafeHandler(
             name: body.name,
             content,
             tool,
+            status: initialStatus,
           })
           .returning({ id: properties.id });
 

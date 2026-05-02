@@ -32,6 +32,7 @@ import { useLocale, useTranslations } from "use-intl";
 
 import { UserAvatar } from "@/components/user-avatar";
 import { api } from "@/lib/api";
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -204,7 +205,12 @@ export function VersionsSidebar({
   return (
     <div className="flex h-full flex-col">
       {/* Header + upload */}
-      <div className="flex items-center justify-between border-b px-3 py-2">
+      <div
+        className={cn(
+          "bg-background/80 supports-[backdrop-filter]:bg-background/65 flex shrink-0 items-center justify-between border-b px-3 backdrop-blur",
+          TOOLBAR_ROW_HEIGHT,
+        )}
+      >
         <h3 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
           {t("fileDetail.versionHistory")}
         </h3>
@@ -270,18 +276,52 @@ export function VersionsSidebar({
         <ScrollArea className="max-h-32 shrink-0 border-t">
           <div className="flex flex-col gap-px p-1">
             {olderVersions.map((older) => (
-              <button
-                key={older.id}
-                className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-1.5 rounded-md px-3 py-1.5 text-start text-xs transition-colors"
-                disabled={isComparing}
-                type="button"
-                onClick={() => onCompare(older.id, selectedVersion.id)}
-              >
-                <GitCompareArrowsIcon className="size-3 shrink-0" />
-                {t("fileDetail.changesSince", {
-                  version: `v${older.versionNumber}`,
-                })}
-              </button>
+              <AlertDialog key={older.id}>
+                <AlertDialogTrigger
+                  render={
+                    <button
+                      className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-1.5 rounded-md px-3 py-1.5 text-start text-xs transition-colors disabled:pointer-events-none disabled:opacity-50"
+                      disabled={isComparing}
+                      type="button"
+                    />
+                  }
+                >
+                  <GitCompareArrowsIcon className="size-3 shrink-0" />
+                  {t("fileDetail.changesSince", {
+                    version: `v${older.versionNumber}`,
+                  })}
+                </AlertDialogTrigger>
+                <AlertDialogPopup>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {t("fileDetail.compareAcceptedChangesTitle")}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {t("fileDetail.compareAcceptedChangesDescription", {
+                        baseVersion: `v${older.versionNumber}`,
+                        targetVersion: `v${selectedVersion.versionNumber}`,
+                      })}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogClose render={<Button variant="ghost" />}>
+                      {t("common.cancel")}
+                    </AlertDialogClose>
+                    <AlertDialogClose
+                      render={
+                        <Button
+                          onClick={() =>
+                            onCompare(older.id, selectedVersion.id)
+                          }
+                          variant="default"
+                        />
+                      }
+                    >
+                      {t("fileDetail.showDiff")}
+                    </AlertDialogClose>
+                  </AlertDialogFooter>
+                </AlertDialogPopup>
+              </AlertDialog>
             ))}
           </div>
         </ScrollArea>

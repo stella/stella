@@ -5,7 +5,6 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useParams } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -14,18 +13,18 @@ import type { WorkspaceJustification } from "@/lib/types";
 import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
 type UseCreateBBoxesProps = {
+  workspaceId: string;
   justification: WorkspaceJustification;
 };
 
 const CREATE_BBOXES_MUTATION_KEY = "create-bounding-boxes";
 
-export const useCreateBBoxes = ({ justification }: UseCreateBBoxesProps) => {
+export const useCreateBBoxes = ({
+  workspaceId,
+  justification,
+}: UseCreateBBoxesProps) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const workspaceId = useParams({
-    from: "/_protected/workspaces/$workspaceId",
-    select: (s) => s.workspaceId,
-  });
   const pendingMutationsCount = useIsMutating({
     mutationKey: [CREATE_BBOXES_MUTATION_KEY],
   });

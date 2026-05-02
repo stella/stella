@@ -37,6 +37,8 @@ export type StyleOption = {
 export type StylePickerProps = {
   value?: string | undefined;
   onChange?: ((styleId: string) => void) | undefined;
+  displayLabel?: string | undefined;
+  displayLabelStyle?: React.CSSProperties | undefined;
   styles?: Style[] | undefined;
   theme?: Theme | null | undefined;
   disabled?: boolean | undefined;
@@ -141,6 +143,8 @@ function getItemStyle(style: StyleOption): React.CSSProperties {
 export function StylePicker({
   value,
   onChange,
+  displayLabel,
+  displayLabelStyle,
   styles,
   disabled = false,
   className,
@@ -181,12 +185,23 @@ export function StylePicker({
     >
       <SelectTrigger
         size="sm"
-        className={`h-7 min-h-0 min-w-0 border-transparent bg-transparent text-sm text-[var(--doc-text-muted)] shadow-none hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)] data-[pressed]:bg-[var(--doc-primary-light)] ${className ?? ""}`}
+        className={`h-8 min-h-0 min-w-0 border-transparent bg-transparent text-sm text-[var(--doc-text-muted)] shadow-none hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)] data-[pressed]:bg-[var(--doc-primary-light)] ${className ?? ""}`}
+        data-folio-style-picker=""
         style={{
           width: typeof width === "number" ? `${width}px` : width,
         }}
       >
-        <SelectValue />
+        {displayLabel !== undefined ? (
+          <span
+            className="data-placeholder:text-muted-foreground flex flex-1 items-center gap-2 truncate"
+            data-slot="select-value"
+            style={displayLabelStyle}
+          >
+            {displayLabel}
+          </span>
+        ) : (
+          <SelectValue />
+        )}
       </SelectTrigger>
       <SelectPopup>
         {styleOptions.map((style) => (

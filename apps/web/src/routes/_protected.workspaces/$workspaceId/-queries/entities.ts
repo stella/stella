@@ -210,6 +210,22 @@ export const entitySummariesOptions = (workspaceId: string) =>
     },
   });
 
+export const entitySummariesCountOptions = (workspaceId: string) =>
+  queryOptions({
+    queryKey: entitiesKeys.summariesCount(workspaceId),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .summaries.get({ fetch: { signal } });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data.totalCount;
+    },
+  });
+
 export type WorkspaceFolder = {
   entityId: string;
   name: string;

@@ -41,7 +41,6 @@ import { LIMITS } from "@/api/lib/limits";
 
 const TITLE_MAX_LENGTH = 80;
 const ACTIVE_DECISION_MAX_CHARS = 12_000;
-const UNINITIALIZED_PROPERTY_STATUS = "uninitialized";
 
 type BuildPromptMentionExampleProps = {
   label: string;
@@ -513,8 +512,11 @@ const buildMetadataColumnsSection = ({
   properties: readonly WorkspacePromptProperty[];
   refRegistry: ChatRefRegistry;
 }) => {
+  // Hide properties whose value isn't current — for AI properties
+  // that means waiting for the next workflow run. Manual properties
+  // are always fresh from creation, so they always show through.
   const propertyLines = properties
-    .filter(({ status }) => status !== UNINITIALIZED_PROPERTY_STATUS)
+    .filter(({ status }) => status === "fresh")
     .map((property) =>
       formatMetadataColumnLine({
         property,

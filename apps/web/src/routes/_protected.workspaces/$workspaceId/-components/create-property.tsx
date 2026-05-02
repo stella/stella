@@ -62,11 +62,27 @@ type CreatePropertyProps = {
    *  - `labelled`: full "+ Nový sloupec" pill used in the view
    *    toolbar so the action is discoverable next to the other
    *    chip-shaped controls.
+   *  - `panel`: full-width action used in side panels.
    */
-  triggerVariant?: "icon" | "labelled";
+  triggerVariant?: "icon" | "labelled" | "panel";
+  extractionContext?: {
+    entityId: string;
+    filePropertyId: string | null;
+  };
+  open?: boolean;
+  onCreated?: (result: CreatePropertyResult) => void;
+  onOpenChange?: (open: boolean) => void;
 };
 
 type CreationMode = "ai" | "manual";
+type ExtractionScope = "file" | "matter";
+
+type CreatePropertyResult = {
+  mode: CreationMode;
+  property: WorkspaceProperty;
+  extractionScope?: ExtractionScope;
+  entityId?: string;
+};
 
 type CreatableContentType =
   | "text"
@@ -98,6 +114,25 @@ const isCreationMode = (value: unknown): value is CreationMode =>
   typeof value === "string" &&
   (CREATION_MODES as readonly string[]).includes(value);
 
+const createPropertyContent = (
+  contentType: CreatableContentType,
+  options: WorkspacePropertyOption[],
+): WorkspaceProperty["content"] => {
+  if (contentType === "single-select" || contentType === "multi-select") {
+    return {
+      version: 1,
+      type: contentType,
+      options,
+      fallback: null,
+    };
+  }
+
+  return {
+    version: 1,
+    type: contentType,
+  };
+};
+
 const isAIPreviewable = (entity: WorkspaceEntity): boolean =>
   Object.values(entity.fields).some(
     (f) =>
@@ -105,9 +140,17 @@ const isAIPreviewable = (entity: WorkspaceEntity): boolean =>
       (f.content.mimeType === PDF_MIME_TYPE || f.content.pdfFileId !== null),
   );
 
+const sameStringList = (left: string[], right: string[]) =>
+  left.length === right.length &&
+  left.every((id, index) => id === right[index]);
+
 export const CreateProperty = ({
   workspaceId,
   triggerVariant = "icon",
+  extractionContext,
+  open,
+  onCreated,
+  onOpenChange,
 }: CreatePropertyProps) => {
   const t = useTranslations();
   const isLimitReached = usePropertiesCountLimit(workspaceId);
@@ -115,7 +158,14 @@ export const CreateProperty = ({
   // a close/reopen cycle. Without this, conditionally unmounting the
   // body would drop `isPending` and the user could submit twice.
   const createProperty = useCreateProperty({ workspaceId });
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [uncontrolledDialogOpen, setUncontrolledDialogOpen] = useState(false);
+  const dialogOpen = open ?? uncontrolledDialogOpen;
+  const setDialogOpen = (nextOpen: boolean) => {
+    onOpenChange?.(nextOpen);
+    if (open === undefined) {
+      setUncontrolledDialogOpen(nextOpen);
+    }
+  };
 
   if (isLimitReached) {
     return null;
@@ -123,13 +173,13 @@ export const CreateProperty = ({
 
   return (
     <Dialog
-      onOpenChange={(open) => {
+      onOpenChange={(nextOpen) => {
         // Block closing while a create is in flight so the request
         // can't be orphaned and re-submitted on reopen.
-        if (!open && createProperty.isPending) {
+        if (!nextOpen && createProperty.isPending) {
           return;
         }
-        setDialogOpen(open);
+        setDialogOpen(nextOpen);
       }}
       open={dialogOpen}
     >
@@ -146,6 +196,21 @@ export const CreateProperty = ({
         >
           <PlusIcon className="size-3" />
           {t("workspaces.properties.newColumn")}
+        </DialogTrigger>
+      ) : triggerVariant === "panel" ? (
+        <DialogTrigger
+          render={
+            <Button
+              className="text-muted-foreground hover:text-foreground hover:bg-accent h-full w-full justify-start gap-2 rounded-none border-0 px-3 font-normal before:rounded-none"
+              type="button"
+              variant="ghost"
+            />
+          }
+        >
+          <PlusIcon className="size-4" />
+          <span className="truncate">
+            {t("workspaces.properties.extractEntityType")}
+          </span>
         </DialogTrigger>
       ) : (
         <DialogTrigger
@@ -171,6 +236,8 @@ export const CreateProperty = ({
               createProperty={createProperty}
               onClose={() => setDialogOpen(false)}
               workspaceId={workspaceId}
+              {...(extractionContext ? { extractionContext } : {})}
+              {...(onCreated ? { onCreated } : {})}
             />
           </Suspense>
         )}
@@ -190,22 +257,35 @@ type DialogBodyProps = {
   workspaceId: string;
   onClose: () => void;
   createProperty: ReturnType<typeof useCreateProperty>;
+  extractionContext?: CreatePropertyProps["extractionContext"];
+  onCreated?: (result: CreatePropertyResult) => void;
 };
 
 const CreatePropertyDialogBody = ({
   workspaceId,
   onClose,
   createProperty,
+  extractionContext,
+  onCreated,
 }: DialogBodyProps) => {
   const t = useTranslations();
   const previewProperty = usePreviewProperty();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
-  const activeView = useActiveView();
+  const activeView = useActiveView({ workspaceId });
   const { data: entitiesData } = useSuspenseQuery(
     useEntitiesOptions(activeView),
   );
 
-  const fileProperty = properties.find((p) => p.content.type === "file");
+  const fileProperties = properties.filter((p) => p.content.type === "file");
+  const fileProperty = fileProperties.at(0);
+  const extractionFileProperty =
+    extractionContext?.filePropertyId === null ||
+    extractionContext?.filePropertyId === undefined
+      ? null
+      : (fileProperties.find(
+          (property) => property.id === extractionContext.filePropertyId,
+        ) ?? null);
+  const extractionFilePropertyId = extractionFileProperty?.id;
   const previewableEntities = entitiesData.entities.filter(isAIPreviewable);
   const defaultPreviewEntityId =
     previewableEntities.at(0)?.entityId ??
@@ -213,12 +293,21 @@ const CreatePropertyDialogBody = ({
     null;
 
   const [mode, setMode] = useState<CreationMode>("ai");
+  const [extractionScope, setExtractionScope] = useState<ExtractionScope>(
+    extractionFileProperty ? "file" : "matter",
+  );
   const [contentType, setContentType] = useState<CreatableContentType>("text");
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
-  const [mentions, setMentions] = useState<string[]>(() =>
-    fileProperty ? [fileProperty.id] : [],
-  );
+  const [mentions, setMentions] = useState<string[]>(() => {
+    if (extractionContext) {
+      return extractionFileProperty
+        ? [extractionFileProperty.id]
+        : fileProperties.map((property) => property.id);
+    }
+
+    return fileProperty ? [fileProperty.id] : [];
+  });
   const [promptTouched, setPromptTouched] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [options, setOptions] = useState<WorkspacePropertyOption[]>([]);
@@ -260,6 +349,9 @@ const CreatePropertyDialogBody = ({
     manual: t("workspaces.properties.manualColumn"),
   } satisfies Record<CreationMode, string>;
 
+  const matterFilePropertyIds = fileProperties.map((property) => property.id);
+  const matterFilePropertyIdsKey = matterFilePropertyIds.join(",");
+
   const inputProperties = properties;
   const propertiesById = new Map(inputProperties.map((p) => [p.id, p]));
   const selectedInputs = mentions.flatMap((id) => {
@@ -273,6 +365,35 @@ const CreatePropertyDialogBody = ({
       setPromptTouched(true);
     }
   };
+
+  useEffect(() => {
+    if (!extractionContext) {
+      return;
+    }
+
+    let nextMentions: string[];
+    if (extractionScope === "file") {
+      nextMentions = extractionFilePropertyId ? [extractionFilePropertyId] : [];
+    } else {
+      nextMentions = matterFilePropertyIdsKey
+        .split(",")
+        .filter((id) => id.length > 0);
+    }
+
+    setMentions((prev) =>
+      sameStringList(prev, nextMentions) ? prev : nextMentions,
+    );
+
+    if (!promptTouched) {
+      lastAutoKey.current = null;
+    }
+  }, [
+    extractionContext,
+    extractionScope,
+    extractionFilePropertyId,
+    matterFilePropertyIdsKey,
+    promptTouched,
+  ]);
 
   const promptField: PropertyPromptFieldHandle = {
     name: "prompt",
@@ -288,11 +409,11 @@ const CreatePropertyDialogBody = ({
   const mentionsKey = mentions.join(",");
   useEffect(() => {
     if (!editor || promptTouched || mode !== "ai") {
-      return;
+      return undefined;
     }
     const key = `${name}|${mentionsKey}`;
     if (key === lastAutoKey.current) {
-      return;
+      return undefined;
     }
     lastAutoKey.current = key;
 
@@ -317,12 +438,26 @@ const CreatePropertyDialogBody = ({
     }
     paragraphContent.push({ type: "text", text: "." });
 
-    isAutoFilling.current = true;
-    editor.commands.setContent({
+    const nextContent = {
       type: "doc",
       content: [{ type: "paragraph", content: paragraphContent }],
-    });
-    isAutoFilling.current = false;
+    };
+    let cancelled = false;
+
+    const timeoutId = window.setTimeout(() => {
+      if (cancelled || editor.isDestroyed) {
+        return;
+      }
+
+      isAutoFilling.current = true;
+      editor.commands.setContent(nextContent);
+      isAutoFilling.current = false;
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
   }, [editor, name, mentionsKey, promptTouched, mode, selectedInputs, t]);
 
   // Stale preview: any config change invalidates the displayed result
@@ -343,10 +478,19 @@ const CreatePropertyDialogBody = ({
 
   const resetForm = () => {
     setMode("ai");
+    setExtractionScope(extractionFileProperty ? "file" : "matter");
     setContentType("text");
     setName("");
     setPrompt("");
-    setMentions(fileProperty ? [fileProperty.id] : []);
+    if (extractionContext) {
+      setMentions(
+        extractionFileProperty
+          ? [extractionFileProperty.id]
+          : matterFilePropertyIds,
+      );
+    } else {
+      setMentions(fileProperty ? [fileProperty.id] : []);
+    }
     setPromptTouched(false);
     setSubmitAttempted(false);
     setOptions([]);
@@ -505,8 +649,37 @@ const CreatePropertyDialogBody = ({
         ...(isSelectType && options.length > 0 ? { options } : {}),
       },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
+          const result: CreatePropertyResult = {
+            mode,
+            property: {
+              id: data.id,
+              workspaceId,
+              name: trimmedName,
+              createdAt: new Date(),
+              // Mirrors the server-side initial status: AI properties
+              // need a first workflow run; manual ones are ready.
+              status: mode === "manual" ? "fresh" : "stale",
+              content: createPropertyContent(contentType, options),
+              tool:
+                mode === "manual"
+                  ? { version: 1, type: "manual-input" }
+                  : {
+                      version: 1,
+                      type: "ai-model",
+                      prompt,
+                      dependencies,
+                    },
+            },
+            ...(extractionContext
+              ? {
+                  entityId: extractionContext.entityId,
+                  extractionScope,
+                }
+              : {}),
+          };
           handleOpenChange();
+          onCreated?.(result);
         },
         onError: () => {
           toastManager.add({
@@ -523,9 +696,15 @@ const CreatePropertyDialogBody = ({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{t("workspaces.properties.newColumn")}</DialogTitle>
+        <DialogTitle>
+          {extractionContext
+            ? t("workspaces.properties.extractEntityType")
+            : t("workspaces.properties.newColumn")}
+        </DialogTitle>
         <DialogDescription>
-          {t("workspaces.properties.newColumnDescription")}
+          {extractionContext
+            ? t("workspaces.properties.extractEntityTypeDescription")
+            : t("workspaces.properties.newColumnDescription")}
         </DialogDescription>
       </DialogHeader>
 
@@ -618,6 +797,15 @@ const CreatePropertyDialogBody = ({
 
             {mode === "ai" && (
               <>
+                {extractionContext && (
+                  <ExtractionScopeField
+                    allFileCount={fileProperties.length}
+                    currentFilePropertyName={extractionFileProperty?.name}
+                    onChange={setExtractionScope}
+                    value={extractionScope}
+                  />
+                )}
+
                 <Field>
                   <FieldLabel>{t("workspaces.properties.inputs")}</FieldLabel>
                   <div className="flex flex-wrap gap-1.5">
@@ -757,6 +945,71 @@ const FlowSeparator = () => (
     →
   </span>
 );
+
+type ExtractionScopeFieldProps = {
+  value: ExtractionScope;
+  currentFilePropertyName: string | undefined;
+  allFileCount: number;
+  onChange: (scope: ExtractionScope) => void;
+};
+
+const ExtractionScopeField = ({
+  value,
+  currentFilePropertyName,
+  allFileCount,
+  onChange,
+}: ExtractionScopeFieldProps) => {
+  const t = useTranslations();
+  const options = [
+    {
+      value: "file",
+      label: t("workspaces.properties.scopeFile"),
+      description: currentFilePropertyName
+        ? t("workspaces.properties.scopeFileDescription", {
+            property: currentFilePropertyName,
+          })
+        : t("workspaces.properties.scopeFileUnavailable"),
+      disabled: currentFilePropertyName === undefined,
+    },
+    {
+      value: "matter",
+      label: t("workspaces.properties.scopeMatter"),
+      description: t("workspaces.properties.scopeMatterDescription"),
+      disabled: allFileCount === 0,
+    },
+  ] satisfies {
+    value: ExtractionScope;
+    label: string;
+    description: string;
+    disabled: boolean;
+  }[];
+
+  return (
+    <Field>
+      <FieldLabel>{t("workspaces.properties.extractionScope")}</FieldLabel>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {options.map((option) => (
+          <button
+            aria-pressed={value === option.value}
+            className={cn(
+              "hover:bg-accent rounded-md border p-3 text-start transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+              value === option.value
+                ? "border-foreground/40 bg-accent text-foreground"
+                : "border-border text-muted-foreground",
+            )}
+            disabled={option.disabled}
+            key={option.value}
+            onClick={() => onChange(option.value)}
+            type="button"
+          >
+            <span className="block text-sm font-medium">{option.label}</span>
+            <span className="mt-1 block text-xs">{option.description}</span>
+          </button>
+        ))}
+      </div>
+    </Field>
+  );
+};
 
 type PreviewBlockProps = {
   entityOptions: WorkspaceEntity[];

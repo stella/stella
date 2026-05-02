@@ -92,7 +92,7 @@ export const PageAnonymization = ({
                       sidebar: "anonymize",
                     });
                     await navigate({
-                      to: "/workspaces/$workspaceId/$viewId/pdf",
+                      to: "/workspaces/$workspaceId/$viewId/document",
                       params: {
                         workspaceId: peekNavigation.workspaceId,
                         viewId: peekNavigation.viewId,

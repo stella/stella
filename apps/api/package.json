@@ -22,7 +22,8 @@
     "db:seed-dev": "bun scripts/seed-dev.ts",
     "db:seed-templates": "bun scripts/seed-templates.ts",
     "scheduler": "bun src/scheduler/index.ts",
-    "dev:scheduler": "bun --watch src/scheduler/index.ts"
+    "dev:scheduler": "bun --watch src/scheduler/index.ts",
+    "dev:errors": "tail -F .dev-logs/errors.jsonl"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.71",

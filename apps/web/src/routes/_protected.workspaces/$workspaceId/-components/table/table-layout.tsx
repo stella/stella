@@ -85,7 +85,10 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       data.pages.map((page) => page.entities.map((entity) => entity.entityId)),
     [data.pages],
   );
-  useSyncJustificationChunks(justificationEntityIdChunks);
+  useSyncJustificationChunks({
+    workspaceId,
+    entityIdChunks: justificationEntityIdChunks,
+  });
 
   const columns = useMemo(() => {
     const columnDefs: TableColumnDef[] = [

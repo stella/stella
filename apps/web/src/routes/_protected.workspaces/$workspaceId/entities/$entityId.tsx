@@ -34,7 +34,7 @@ export const Route = createFileRoute(
     }
 
     throw redirect({
-      to: "/workspaces/$workspaceId/$viewId/pdf",
+      to: "/workspaces/$workspaceId/$viewId/document",
       params: { workspaceId: params.workspaceId, viewId: "all" },
       search: {
         entity: params.entityId,

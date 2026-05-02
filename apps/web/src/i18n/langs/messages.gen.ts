@@ -20,10 +20,10 @@ type Messages = {
       "desktopApp": "Desktop app";
       "desktopAppDescription": "Open documents and files directly in stella from your computer.";
       "desktopDownloadMac": "Download for macOS";
-      "desktopDownloadWindows": "Download for Windows";
-      "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments";
       "desktopDownloadOtherMac": "On Windows? Download for Windows";
       "desktopDownloadOtherWeb": "On macOS? Download for macOS";
+      "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments";
+      "desktopDownloadWindows": "Download for Windows";
       "timezone": "Timezone";
       "timezoneDescription": "Used for timestamps in notifications and emails";
       "timezoneSaved": "Timezone updated";
@@ -314,13 +314,18 @@ type Messages = {
     "attachFile": "Attach file";
     "caseLawGreeting": "Ask about this decision — its full text is available here.";
     "chatAbout": "Chat about this";
+    "contextPlaceholder": "Chat about {context}";
     "deleteThread": "Delete conversation";
     "documentView": {
       "original": "Original";
       "simple": "Accepted";
       "trackedChanges": "Tracked changes";
     };
+    "editableFilePlaceholder": "Chat about or edit {fileName}";
+    "editableFilePlaceholderAction": "Chat about or edit";
     "extractingContent": "Extracting content...";
+    "filePlaceholder": "Chat about {fileName}";
+    "filePlaceholderAction": "Chat about";
     "fileTooLarge": "File exceeds {maxSize} limit";
     "greeting": "What would you like to work on?";
     "maxAttachmentsReached": "Maximum {count} files per message";
@@ -754,7 +759,10 @@ type Messages = {
     "changesDetected": "{count, plural, one {# change} other {# changes}}";
     "changesSince": "Changes since {version}";
     "compare": "Compare";
+    "compareAcceptedChangesDescription": "Before comparing, tracked changes in versions {baseVersion} and {targetVersion} will be treated as accepted. The tracked-changes preview will show only the difference between the final text of both documents.";
+    "compareAcceptedChangesTitle": "Compare as final versions";
     "compareTo": "Compare to";
+    "compareVersions": "{targetVersion} vs {baseVersion}";
     "compareWith": "Compare with…";
     "confirmDeleteVersion": "This will permanently delete version {version}. This action cannot be undone.";
     "current": "Current";
@@ -763,6 +771,8 @@ type Messages = {
     "descriptionPlaceholder": "Add a note about this version...";
     "downloadRedline": "Download redline";
     "dropToUploadVersion": "Drop to upload as new version";
+    "editLatestVersionDescription": "This is not the current version. To edit it in the browser, first make it the latest version, then unlock it for editing.";
+    "editLatestVersionTitle": "Make this the latest version to edit";
     "generatingRedline": "Generating redline comparison...";
     "inspectMode": "Inspect";
     "label": "Label";
@@ -779,6 +789,7 @@ type Messages = {
     "removeLabel": "Remove label";
     "selectVersion": "Select a version";
     "setLabel": "Set label";
+    "showDiff": "Show diff";
     "uploadDate": "Upload date";
     "uploadedBy": "Uploaded by";
     "version": "Version";
@@ -834,6 +845,7 @@ type Messages = {
     "doubleClickHeader": "Double-click to add header";
     "editAuthRequired": "Refresh Stella and sign in again before editing this document.";
     "editDownloadFailed": "The document could not be downloaded for editing.";
+    "editFile": "Edit";
     "editLink": "Edit link";
     "editOpenFailed": "The document could not be opened for editing.";
     "editOpenFailedTitle": "Could not open DOCX";
@@ -861,6 +873,7 @@ type Messages = {
       "showReplace": "Replace";
       "wholeWords": "Whole words";
     };
+    "finishEditing": "Finish editing";
     "fontColor": "Font color";
     "fontGroup": "Font";
     "formattingToolbar": "Formatting toolbar";
@@ -879,6 +892,7 @@ type Messages = {
     "listsGroup": "Lists";
     "loadingDocument": "Loading document...";
     "loadingEditor": "Loading editor...";
+    "lockFile": "Lock file";
     "moreFormatting": "More formatting";
     "networkError": "Network error. Please check your internet connection and try again.";
     "nextChange": "Next Change";
@@ -903,6 +917,8 @@ type Messages = {
     "selectAll": "Select all";
     "showDetails": "Show details";
     "somethingWentWrong": "Something went wrong";
+    "synced": "Synced";
+    "syncing": "Syncing";
     "textEditingMenu": "Text editing menu";
     "textFormattingGroup": "Text formatting";
     "toggleTrackChanges": "Toggle Track Changes";
@@ -913,6 +929,8 @@ type Messages = {
     "underlineShortcut": "Underline (Ctrl+U)";
     "undo": "Undo";
     "undoShortcut": "Undo (Ctrl+Z)";
+    "unlockFile": "Unlock file";
+    "unlockForEditing": "Unlock to edit";
     "unsupportedDocxEditDescription": "This DOCX contains structures Folio cannot safely rewrite. To avoid corrupting the file, download it and edit it in Word.";
     "unsupportedDocxEditTitle": "Editing blocked";
   };
@@ -1146,9 +1164,9 @@ type Messages = {
     };
   };
   "selfhost": {
+    "dismissUpdate": "Dismiss update notice";
     "updateAvailable": "stella v{latest} is available. You're running v{installed}.";
     "viewReleaseNotes": "View release notes";
-    "dismissUpdate": "Dismiss update notice";
   };
   "success": {
     "aiConfigDeleted": "AI configuration removed";
@@ -1522,6 +1540,7 @@ type Messages = {
     "pdf": {
       "adjustForDarkMode": "Adjust pages for dark mode";
       "anonymizeSidebar": "Anonymization";
+      "backToPeek": "Back to peek";
       "entitySidebar": "Entity details";
       "evidence": "Justification";
       "goBack": "Go back";
@@ -1562,9 +1581,12 @@ type Messages = {
       "editConditionsDescription": "Set conditions for when this property should be generated.";
       "enterAValue": "Enter a value";
       "error": "Error";
+      "extractEntityType": "Extract entity type";
+      "extractEntityTypeDescription": "Create an AI-extracted table column.";
       "extractionInstruction": "AI instruction";
       "extractionInstructionHelp": "Reruns when source documents or referenced columns change.";
       "extractionInstructionPlaceholder": "Example: Find the agreement termination date. Return only the date.";
+      "extractionScope": "Extraction scope";
       "file": "File";
       "flowExtraction": "AI extraction";
       "flowNoInputs": "no inputs";
@@ -1592,6 +1614,11 @@ type Messages = {
       "previewUnsupported": "Preview unsupported for this document type.";
       "referencesItself": "Property references itself through other properties";
       "resultType": "Result type";
+      "scopeFile": "Current file";
+      "scopeFileDescription": "Use {property} and run this file now.";
+      "scopeFileUnavailable": "No file source is available for this view.";
+      "scopeMatter": "Entire matter";
+      "scopeMatterDescription": "Use all file columns and run the matter.";
       "searchOrAddOptions": "Search or add options";
       "selectColor": "Select color";
       "selectOperator": "Select operator";

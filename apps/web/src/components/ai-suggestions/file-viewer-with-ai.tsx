@@ -22,6 +22,7 @@ import "./file-viewer-with-ai.css";
 
 type ActiveFile = {
   entityId: string;
+  editable?: boolean | undefined;
   fileName: string;
 };
 

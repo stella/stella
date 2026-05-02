@@ -3223,6 +3223,10 @@ export async function seed(organizationId?: string, userId?: string) {
         name: prop.name,
         content: prop.content,
         tool: prop.tool,
+        // Seed AI properties as stale so the workflow planner picks
+        // them up on first run; everything else is user-managed and
+        // fresh from creation.
+        status: prop.tool.type === "ai-model" ? "stale" : "fresh",
         ...(prop.system !== undefined && { system: prop.system }),
         ...(prop.kinds !== undefined && { kinds: prop.kinds }),
       })

@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
 } from "react";
-import type { RefObject } from "react";
 
 import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/external/adapter";
 import {
@@ -16,6 +15,17 @@ import {
 import type { DocxEditorRef } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
 import {
+  Dialog,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/components/dialog";
+import { cn } from "@stll/ui/lib/utils";
+import {
+  keepPreviousData,
   useQuery,
   useQueryClient,
   useSuspenseQuery,
@@ -25,42 +35,40 @@ import {
   createFileRoute,
   stripSearchParams,
 } from "@tanstack/react-router";
-import { PencilIcon, PrinterIcon, UploadIcon } from "lucide-react";
+import { UploadIcon } from "lucide-react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { useTranslations } from "use-intl";
 import "@stll/folio/editor.css";
 import * as v from "valibot";
 
-import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
 import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
 import { toSafeId } from "@/lib/safe-id";
-import type { EntityField, EntityKind } from "@/lib/types";
 import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { shouldUseDocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
+import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import {
   useDocxFitZoom,
   useDocxWheelZoom,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom";
-import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
-import { skipFieldFilter } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-info";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
+import { EntityMetadataPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import PdfViewer, {
   PDFSuspenseFallback,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer";
 import { VersionsSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
-import { PeekPdfControls } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
 import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import {
   entityVersionsKeys,
   entityVersionsOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
 
 const ReadOnlyDocxViewer = lazy(async () => {
@@ -68,10 +76,8 @@ const ReadOnlyDocxViewer = lazy(async () => {
   return { default: m.DocxEditor };
 });
 
-const SCALE_OFFSET_STEP = 0.2;
-
 export const Route = createFileRoute(
-  "/_protected/workspaces/$workspaceId/$viewId/pdf",
+  "/_protected/workspaces/$workspaceId/$viewId/document",
 )({
   component: RouteComponent,
   // v.object: validateSearch receives the full URL search params
@@ -90,7 +96,7 @@ export const Route = createFileRoute(
   search: {
     middlewares: [stripSearchParams({ pdfPage: 1 })],
   },
-  pendingComponent: () => <PDFSuspenseFallback />,
+  pendingComponent: () => <DocxLoadingShell />,
 });
 
 const AnonymizeScrollSync = () => {
@@ -166,9 +172,9 @@ function RouteComponentInner({
 }) {
   const [activeFieldId, setActiveFieldId] = useState(initialFieldId);
   const fieldId = activeFieldId;
-  useSyncJustifications([entityId]);
+  const t = useTranslations();
+  useSyncJustifications({ workspaceId, entityIds: [entityId] });
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
-  const setPdfScaleOffset = useWorkspaceStore((s) => s.setPdfScaleOffset);
   const docxEditorActionsRef = useRef<DocxBrowserEditorActions | null>(null);
   const justificationId = Route.useSearch({
     select: (s) => s.justification,
@@ -187,13 +193,8 @@ function RouteComponentInner({
     (s) => s.setActiveJustification,
   );
   const resetPdfViewerState = useWorkspaceStore((s) => s.resetPdfViewerState);
-  const closeAllInspectorTabs = useInspectorStore((s) => s.closeAll);
+  const openPdf = useInspectorStore((s) => s.openPdf);
   const navigate = Route.useNavigate();
-
-  // Close the sidepeek inspector when the full PDF view mounts
-  useEffect(() => {
-    closeAllInspectorTabs();
-  }, [closeAllInspectorTabs]);
 
   useEffect(() => {
     setActiveFieldId(initialFieldId);
@@ -219,11 +220,20 @@ function RouteComponentInner({
     [resetPdfViewerState, setActiveJustification],
   );
 
+  useEffect(
+    () => () => {
+      useInspectorStore.getState().setPdfMetadataLane(fieldId, "closed");
+    },
+    [fieldId],
+  );
+
   // Compare mode state
   const [compareState, setCompareState] = useState<{
+    baseVersionLabel: string;
     docxBuffer: ArrayBuffer;
     docxBase64: string;
     editsApplied: number;
+    targetVersionLabel: string;
     wordsAdded: number;
     wordsRemoved: number;
     seq: number;
@@ -253,11 +263,25 @@ function RouteComponentInner({
       }
       const { docxBase64, editsApplied, wordsAdded, wordsRemoved } =
         response.data;
+      const baseVersion = versionData?.versions.find(
+        (version) => version.id === baseVersionId,
+      );
+      const targetVersion = versionData?.versions.find(
+        (version) => version.id === targetVersionId,
+      );
       compareSeqRef.current += 1;
       setCompareState({
+        baseVersionLabel:
+          baseVersion === undefined
+            ? t("fileDetail.base")
+            : `v${baseVersion.versionNumber}`,
         docxBuffer: decodeBase64ToArrayBuffer(docxBase64),
         docxBase64,
         editsApplied,
+        targetVersionLabel:
+          targetVersion === undefined
+            ? t("fileDetail.current")
+            : `v${targetVersion.versionNumber}`,
         wordsAdded,
         wordsRemoved,
         seq: compareSeqRef.current,
@@ -267,7 +291,13 @@ function RouteComponentInner({
     }
   };
 
-  const editing = Route.useSearch({ select: (s) => s.editing === true });
+  const [docxUnlocked, setDocxUnlocked] = useState(false);
+  const [docxLatestVersionDialogOpen, setDocxLatestVersionDialogOpen] =
+    useState(false);
+
+  useEffect(() => {
+    setDocxUnlocked(false);
+  }, [fieldId]);
 
   // Find the active file field to determine mimeType and propertyId
   const activeFileField = entity.fields.find((f) => {
@@ -283,6 +313,9 @@ function RouteComponentInner({
     activeFileField?.content.type === "file" ? activeFileField.content : null;
   const activeMimeType =
     activeFileContent?.mimeType ?? activeVersionFile?.mimeType;
+  const activePdfFileId = activeFileContent?.pdfFileId ?? null;
+  const activeFileLabel =
+    activeFileContent?.fileName ?? activeVersionFile?.fileName ?? fieldId;
   const isDocxFile = activeMimeType === DOCX_MIME;
   const usesNativeDocxDisplay = isDocxFile;
   const filePropertyId =
@@ -294,6 +327,39 @@ function RouteComponentInner({
     hasFilePropertyId: filePropertyId !== undefined,
     isComparing,
   });
+  const shouldRenderDocxBrowserShell =
+    isDocxFile &&
+    filePropertyId !== undefined &&
+    !isComparing &&
+    compareState === null;
+  const usesEmbeddedDocxToolbar =
+    shouldRenderDocxBrowserShell && filePropertyId !== undefined;
+
+  useEffect(() => {
+    if (!filePropertyId || activeMimeType === undefined) {
+      return;
+    }
+
+    openPdf({
+      id: fieldId,
+      entityId,
+      label: activeFileLabel,
+      workspaceId,
+      mimeType: activeMimeType,
+      pdfFileId: activePdfFileId,
+      propertyId: filePropertyId,
+      metadataLane: "expanded",
+    });
+  }, [
+    activeFileLabel,
+    activeMimeType,
+    activePdfFileId,
+    entityId,
+    fieldId,
+    filePropertyId,
+    openPdf,
+    workspaceId,
+  ]);
 
   return (
     <div className="bg-secondary relative flex h-full max-h-[calc(100vh-3rem)] flex-1 overflow-hidden border-t">
@@ -310,7 +376,7 @@ function RouteComponentInner({
                 void handleCompare(base, target);
               }}
               onSwitchField={async (fid) => {
-                if (editing) {
+                if (docxUnlocked) {
                   await docxEditorActionsRef.current?.cancel();
                 }
                 setActiveFieldId(fid);
@@ -332,183 +398,175 @@ function RouteComponentInner({
         <PanelSeparator />
 
         {/* Center: DOCX editor, PDF viewer, or redline comparison */}
-        <Panel>
-          {useDocxBrowserEditor && filePropertyId ? (
-            <VersionDropZone
-              disabled={false}
-              entityId={entityId}
-              workspaceId={workspaceId}
-            >
-              {!editing && (
-                <div className="absolute end-2 top-2 z-10">
-                  <Button
-                    onClick={() => {
-                      void navigate({
-                        search: (prev) => ({ ...prev, editing: true }),
-                      });
-                    }}
-                    size="sm"
-                    variant="outline"
-                  >
-                    <PencilIcon />
-                    Edit in browser
-                  </Button>
-                </div>
+        <Panel className="flex min-w-0 flex-col">
+          {!usesEmbeddedDocxToolbar && (
+            <div
+              className={cn(
+                "bg-background/80 supports-[backdrop-filter]:bg-background/65 flex shrink-0 items-center justify-center gap-2 border-b px-4 backdrop-blur",
+                TOOLBAR_ROW_HEIGHT,
               )}
-              <DocxBrowserEditor
-                actionsRef={docxEditorActionsRef}
-                actionBarControls={
-                  <FullViewDocxEditControls
-                    actionsRef={docxEditorActionsRef}
-                    onScaleOffsetChange={setPdfScaleOffset}
-                    scaleOffset={scaleOffset}
-                  />
-                }
-                entityId={entityId}
+            >
+              <PdfViewerControls
+                currentPage={pageNumber}
                 fieldId={fieldId}
-                isEditing={editing}
-                onClose={() => {
-                  void navigate({
-                    search: (prev) => ({ ...prev, editing: undefined }),
-                  });
-                }}
-                onPreviewDoubleClick={() => {
-                  void navigate({
-                    search: (prev) => ({ ...prev, editing: true }),
-                  });
-                }}
-                onSaved={(savedFieldId) => {
-                  setActiveFieldId(savedFieldId);
-                  void navigate({
-                    replace: true,
-                    search: (prev) => ({
-                      ...prev,
-                      editing: undefined,
-                      field: savedFieldId,
-                      pdfPage: undefined,
-                    }),
-                  });
-                }}
-                propertyId={filePropertyId}
-                scaleOffset={scaleOffset}
                 workspaceId={workspaceId}
               />
-            </VersionDropZone>
-          ) : (
-            <VersionDropZone
-              disabled={!!compareState}
-              entityId={entityId}
-              workspaceId={workspaceId}
-            >
-              {compareState ? (
-                <RedlineOverlay
-                  compareState={compareState}
+            </div>
+          )}
+          <div className="relative min-h-0 flex-1">
+            {shouldRenderDocxBrowserShell && filePropertyId ? (
+              <VersionDropZone
+                disabled={false}
+                entityId={entityId}
+                workspaceId={workspaceId}
+              >
+                <DocxBrowserEditor
+                  actionsRef={docxEditorActionsRef}
+                  actionBarControls={
+                    <PdfViewerControls
+                      currentPage={pageNumber}
+                      fieldId={fieldId}
+                      onPrint={() => {
+                        docxEditorActionsRef.current?.print();
+                      }}
+                      variant="inline"
+                      workspaceId={workspaceId}
+                    />
+                  }
+                  canUnlock={useDocxBrowserEditor}
+                  entityId={entityId}
+                  fieldId={fieldId}
+                  isEditing={false}
+                  onBlockedUnlock={() => {
+                    setDocxLatestVersionDialogOpen(true);
+                  }}
+                  onClose={() => {
+                    setDocxUnlocked(false);
+                    void navigate({
+                      search: (prev) => ({ ...prev, editing: undefined }),
+                    });
+                  }}
+                  onSaved={(savedFieldId) => {
+                    setDocxUnlocked(false);
+                    setActiveFieldId(savedFieldId);
+                    void navigate({
+                      replace: true,
+                      search: (prev) => ({
+                        ...prev,
+                        editing: undefined,
+                        field: savedFieldId,
+                        pdfPage: undefined,
+                      }),
+                    });
+                  }}
+                  onUnlockedChange={setDocxUnlocked}
+                  propertyId={filePropertyId}
                   scaleOffset={scaleOffset}
-                  onClose={() => setCompareState(null)}
+                  workspaceId={workspaceId}
                 />
-              ) : usesNativeDocxDisplay ? (
-                <Suspense fallback={<PDFSuspenseFallback />}>
-                  <FullscreenDocxViewer
-                    fieldId={fieldId}
+              </VersionDropZone>
+            ) : (
+              <VersionDropZone
+                disabled={!!compareState}
+                entityId={entityId}
+                workspaceId={workspaceId}
+              >
+                {compareState ? (
+                  <RedlineOverlay
+                    compareState={compareState}
                     scaleOffset={scaleOffset}
+                    onClose={() => setCompareState(null)}
+                  />
+                ) : usesNativeDocxDisplay ? (
+                  <Suspense
+                    fallback={<DocxLoadingShell scaleOffset={scaleOffset} />}
+                  >
+                    <FullscreenDocxViewer
+                      fieldId={fieldId}
+                      scaleOffset={scaleOffset}
+                      workspaceId={workspaceId}
+                    />
+                  </Suspense>
+                ) : (
+                  <PDFProvider
+                    key={fieldId}
+                    fieldId={fieldId}
+                    initialScaleOffset={scaleOffset}
+                    startPage={pageNumber}
+                    fallback={{ suspense: <PDFSuspenseFallback /> }}
+                  >
+                    <AnonymizeScrollSync />
+                    <PdfViewer />
+                  </PDFProvider>
+                )}
+              </VersionDropZone>
+            )}
+          </div>
+        </Panel>
+        {filePropertyId ? (
+          <>
+            <PanelSeparator className="md:hidden" />
+            <Panel
+              className="min-w-0 md:hidden"
+              defaultSize="18rem"
+              minSize="14rem"
+            >
+              <div className="bg-background h-full overflow-y-auto">
+                <Suspense fallback={null}>
+                  <EntityMetadataPanel
+                    activeJustificationFieldId={justificationId ?? null}
+                    currentFilePropertyId={filePropertyId}
+                    entityId={entityId}
+                    fileFieldId={fieldId}
+                    onAiFieldClick={({ fieldId: nextFieldId }) => {
+                      void navigate({
+                        replace: true,
+                        search: (prev) => ({
+                          ...prev,
+                          justification: nextFieldId,
+                          justificationPage: 1,
+                        }),
+                      });
+                    }}
                     workspaceId={workspaceId}
                   />
                 </Suspense>
-              ) : (
-                <PDFProvider
-                  key={fieldId}
-                  fieldId={fieldId}
-                  initialScaleOffset={scaleOffset}
-                  startPage={pageNumber}
-                  fallback={{ suspense: <PDFSuspenseFallback /> }}
-                >
-                  <AnonymizeScrollSync />
-                  <PdfViewer />
-                </PDFProvider>
-              )}
-            </VersionDropZone>
-          )}
-        </Panel>
-
-        {/* Right panel: entity metadata */}
-        <PanelSeparator />
-        <Panel defaultSize="14rem" maxSize="18rem" minSize="10rem">
-          <div className="bg-background h-full overflow-y-auto">
-            <FieldInfoList entity={entity} workspaceId={workspaceId} />
-          </div>
-        </Panel>
+              </div>
+            </Panel>
+          </>
+        ) : null}
       </Group>
+      <Dialog
+        onOpenChange={setDocxLatestVersionDialogOpen}
+        open={docxLatestVersionDialogOpen}
+      >
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>{t("fileDetail.editLatestVersionTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("fileDetail.editLatestVersionDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>
+              {t("common.close")}
+            </DialogClose>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
     </div>
   );
 }
 
-type FieldInfoListProps = {
-  workspaceId: string;
-  entity: {
-    kind: EntityKind;
-    entityId: string;
-    fields: EntityField[];
-  };
-};
-
-const FieldInfoList = ({ workspaceId, entity }: FieldInfoListProps) => {
-  const t = useTranslations();
-  const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
-
-  // Sort by property order so fields don't jump around after edits
-  // (the API returns fields in non-deterministic order).
-  const propertyIndex = new Map(properties.map((p, i) => [p.id, i]));
-  const visibleFields = entity.fields
-    .filter((field) => !skipFieldFilter(field.content))
-    .toSorted(
-      (a, b) =>
-        (propertyIndex.get(a.propertyId) ?? Infinity) -
-        (propertyIndex.get(b.propertyId) ?? Infinity),
-    );
-
-  if (visibleFields.length === 0) {
-    return (
-      <div className="text-muted-foreground mt-3 px-3 text-center text-sm font-medium">
-        {t("workspaces.noFieldsToView")}
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-px p-2">
-      {visibleFields.map((field) => {
-        const property = properties.find((p) => p.id === field.propertyId);
-        if (!property) {
-          return null;
-        }
-        return (
-          <div
-            className="flex flex-col gap-1 rounded-md px-2 py-2"
-            key={field.id + field.propertyId}
-          >
-            <span className="text-muted-foreground text-xs font-medium">
-              {property.name}
-            </span>
-            <EditableField
-              content={field.content}
-              entityKind={entity.kind}
-              entityId={entity.entityId}
-              property={property}
-              propertyId={field.propertyId}
-              readonly={property.tool.type === "ai-model"}
-              workspaceId={workspaceId}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
 // -- Shared panel separator --
 
-const PanelSeparator = () => (
-  <Separator className="group data-[separator=active]:bg-border data-[separator=hover]:bg-border flex w-1 shrink-0 cursor-col-resize items-center justify-center">
+const PanelSeparator = ({ className }: { className?: string | undefined }) => (
+  <Separator
+    className={cn(
+      "group data-[separator=active]:bg-border data-[separator=hover]:bg-border flex w-1 shrink-0 cursor-col-resize items-center justify-center",
+      className,
+    )}
+  >
     <div className="bg-border h-8 w-0.5 rounded-full group-data-[separator=active]:hidden group-data-[separator=hover]:hidden" />
   </Separator>
 );
@@ -557,59 +615,6 @@ const VersionListConnected = ({
   );
 };
 
-type FullViewDocxEditControlsProps = {
-  actionsRef: RefObject<DocxBrowserEditorActions | null>;
-  scaleOffset: number;
-  onScaleOffsetChange: (scaleOffset: number) => void;
-};
-
-const FullViewDocxEditControls = ({
-  actionsRef,
-  scaleOffset,
-  onScaleOffsetChange,
-}: FullViewDocxEditControlsProps) => {
-  const t = useTranslations();
-  const updateScale = (offset: number) => {
-    onScaleOffsetChange(Math.round(offset * 10) / 10);
-  };
-
-  return (
-    <>
-      <div className="flex items-center rounded-md border p-0.5">
-        <PeekPdfControls
-          canResetZoom={scaleOffset !== 0}
-          onResetZoom={() => updateScale(0)}
-          onZoomIn={
-            scaleOffset >= 2
-              ? undefined
-              : () => updateScale(scaleOffset + SCALE_OFFSET_STEP)
-          }
-          onZoomOut={
-            scaleOffset <= -0.8
-              ? undefined
-              : () => updateScale(scaleOffset - SCALE_OFFSET_STEP)
-          }
-          scaleOffset={scaleOffset}
-        />
-      </div>
-      <Tooltip
-        content={t("common.print")}
-        render={
-          <Button
-            onClick={() => {
-              actionsRef.current?.print();
-            }}
-            size="icon-xs"
-            variant="ghost"
-          >
-            <PrinterIcon className="size-3.5" />
-          </Button>
-        }
-      />
-    </>
-  );
-};
-
 // -- Fullscreen DOCX viewer (read-only Folio) --
 
 const FullscreenDocxViewer = ({
@@ -621,13 +626,23 @@ const FullscreenDocxViewer = ({
   fieldId: string;
   scaleOffset: number;
 }) => {
-  const { data: file } = useSuspenseQuery(
-    fileOptions({ workspaceId, fieldId, purpose: "native-display" }),
-  );
+  const fileQuery = useQuery({
+    ...fileOptions({ workspaceId, fieldId, purpose: "native-display" }),
+    placeholderData: keepPreviousData,
+  });
+
+  if (fileQuery.error) {
+    throw fileQuery.error;
+  }
+
+  if (!fileQuery.data) {
+    return <DocxLoadingShell scaleOffset={scaleOffset} />;
+  }
 
   return (
     <ReadOnlyDocxDocumentViewer
-      documentBuffer={file.buffer}
+      documentBuffer={fileQuery.data.buffer}
+      mode="viewing"
       scaleOffset={scaleOffset}
     />
   );
@@ -635,9 +650,11 @@ const FullscreenDocxViewer = ({
 
 const ReadOnlyDocxDocumentViewer = ({
   documentBuffer,
+  mode,
   scaleOffset,
 }: {
   documentBuffer: ArrayBuffer;
+  mode: "suggesting" | "viewing";
   scaleOffset: number;
 }) => {
   const editorRef = useRef<DocxEditorRef>(null);
@@ -657,6 +674,8 @@ const ReadOnlyDocxDocumentViewer = ({
         autoOpenReviewSidebar={false}
         documentBuffer={documentBuffer}
         initialZoom={targetZoom}
+        mode={mode}
+        preserveDocumentWhileLoading
         readOnly
         showToolbar={false}
         showZoomControl={false}
@@ -672,9 +691,11 @@ const DOCX_MIME =
 
 type RedlineOverlayProps = {
   compareState: {
+    baseVersionLabel: string;
     docxBuffer: ArrayBuffer;
     docxBase64: string;
     editsApplied: number;
+    targetVersionLabel: string;
     wordsAdded: number;
     wordsRemoved: number;
     seq: number;
@@ -693,6 +714,12 @@ const RedlineOverlay = ({
   return (
     <div className="flex h-full flex-col">
       <div className="bg-muted/30 flex min-w-0 items-center gap-2 border-b px-4 py-1.5">
+        <span className="text-foreground shrink-0 text-sm font-semibold tabular-nums">
+          {t("fileDetail.compareVersions", {
+            baseVersion: compareState.baseVersionLabel,
+            targetVersion: compareState.targetVersionLabel,
+          })}
+        </span>
         <span className="text-muted-foreground min-w-0 truncate text-xs">
           {t("fileDetail.redlinePreview")}
         </span>
@@ -733,10 +760,11 @@ const RedlineOverlay = ({
         </div>
       </div>
       <div className="bg-muted min-h-0 flex-1 overflow-auto">
-        <Suspense fallback={<PDFSuspenseFallback />}>
+        <Suspense fallback={<DocxLoadingShell scaleOffset={scaleOffset} />}>
           <ReadOnlyDocxDocumentViewer
             key={`redline-${String(compareState.seq)}`}
             documentBuffer={compareState.docxBuffer}
+            mode="suggesting"
             scaleOffset={scaleOffset}
           />
         </Suspense>

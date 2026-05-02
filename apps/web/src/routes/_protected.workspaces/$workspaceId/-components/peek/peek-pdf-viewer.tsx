@@ -146,7 +146,8 @@ const PeekPdfViewerContent = ({
     >
       <PDFViewport
         buffer={file.buffer}
-        className="bg-muted relative space-y-2 px-2 pt-2"
+        className="document-preview-surface h-full"
+        contentClassName="relative space-y-2 px-2 pt-2"
         fileId={file.fileId}
         invertColors={isImageOrigin ? false : undefined}
         scaleOffset={scaleOffset}

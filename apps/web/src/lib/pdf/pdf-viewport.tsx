@@ -44,6 +44,7 @@ type PDFViewportProps = {
   scaleOffset?: number | undefined;
   invertColors?: boolean | undefined;
   className?: string | undefined;
+  contentClassName?: string | undefined;
   renderPage: (props: PDFPageProps) => ReactNode;
 };
 
@@ -52,6 +53,13 @@ type PDFViewerContentProps = Omit<
   "fallback" | "fileId" | "password" | "buffer"
 > & {
   document: PDFDocument;
+};
+
+type PDFViewportStyle = CSSProperties & {
+  "--pdf-page-filter": string;
+  "--scale-factor": number;
+  "--scale-round-x": string;
+  "--scale-round-y": string;
 };
 
 export const PDFViewport = ({
@@ -101,6 +109,7 @@ const PDFViewerContent = ({
   scaleOffset = 0,
   invertColors,
   className,
+  contentClassName,
   renderPage,
 }: PDFViewerContentProps) => {
   const { resolvedTheme } = useTheme();
@@ -111,6 +120,12 @@ const PDFViewerContent = ({
 
   const effectiveScale = scale + scaleOffset;
   const pageIds = pages.keys().toArray();
+  const viewportStyle: PDFViewportStyle = {
+    "--pdf-page-filter": shouldInvert ? "invert(1) hue-rotate(180deg)" : "none",
+    "--scale-factor": effectiveScale,
+    "--scale-round-x": `${roundY}px`,
+    "--scale-round-y": `${roundY}px`,
+  };
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -149,32 +164,24 @@ const PDFViewerContent = ({
 
   return (
     <ScrollArea>
-      <div
-        ref={containerRef}
-        className={className}
-        style={
-          {
-            "--scale-factor": effectiveScale,
-            "--scale-round-x": `${roundY}px`,
-            "--scale-round-y": `${roundY}px`,
-            ...(shouldInvert && {
-              filter: "invert(1) hue-rotate(180deg)",
-            }),
-            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-          } as CSSProperties
-        }
-      >
-        {pageIds.map((pageId) => {
-          const label = attachmentLabels.get(pageId);
+      <div className={className}>
+        <div
+          ref={containerRef}
+          className={contentClassName}
+          style={viewportStyle}
+        >
+          {pageIds.map((pageId) => {
+            const label = attachmentLabels.get(pageId);
 
-          return (
-            <div key={pageId}>
-              {label && <PDFBanner label={label} />}
-              {renderPage({ pageId })}
-            </div>
-          );
-        })}
-        <div className="h-px" />
+            return (
+              <div key={pageId}>
+                {label && <PDFBanner label={label} />}
+                {renderPage({ pageId })}
+              </div>
+            );
+          })}
+          <div className="h-px" />
+        </div>
       </div>
     </ScrollArea>
   );

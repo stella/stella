@@ -15,8 +15,11 @@ import { PageAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-
 import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
 
-const routeApi = getRouteApi("/_protected/workspaces/$workspaceId/$viewId/pdf");
+const routeApi = getRouteApi(
+  "/_protected/workspaces/$workspaceId/$viewId/document",
+);
 
 const FullscreenPdfViewer = () => {
   const workspaceId = routeApi.useParams({
@@ -49,7 +52,7 @@ const FullscreenPdfViewer = () => {
   });
 
   const navigate = useNavigate({
-    from: "/workspaces/$workspaceId/$viewId/pdf",
+    from: "/workspaces/$workspaceId/$viewId/document",
   });
 
   const handlePageChanged = useCallback(
@@ -75,7 +78,8 @@ const FullscreenPdfViewer = () => {
       <CreatingBBoxes />
       <PDFViewport
         buffer={file.buffer}
-        className="relative mt-2 h-full space-y-2 px-2"
+        className="document-preview-surface h-full"
+        contentClassName="relative mt-2 space-y-2 px-2"
         fileId={file.fileId}
         invertColors={isImageOrigin ? false : undefined}
         onPageChanged={handlePageChanged}

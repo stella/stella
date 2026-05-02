@@ -93,6 +93,29 @@ const createT = (doc: slimdom.Document, text: string): slimdom.Element => {
   return t;
 };
 
+const createTextWrappingBreak = (doc: slimdom.Document): slimdom.Element => {
+  const br = doc.createElementNS(W_NS, "w:br");
+  br.setAttributeNS(W_NS, "w:type", "textWrapping");
+  return br;
+};
+
+const appendTextWithLineBreaks = (
+  doc: slimdom.Document,
+  run: slimdom.Element,
+  text: string,
+  createTextElement: (doc: slimdom.Document, text: string) => slimdom.Element,
+) => {
+  const parts = text.split("\n");
+  for (const [index, part] of parts.entries()) {
+    if (index > 0) {
+      run.append(createTextWrappingBreak(doc));
+    }
+    if (part.length > 0) {
+      run.append(createTextElement(doc, part));
+    }
+  }
+};
+
 const createRun = (
   doc: slimdom.Document,
   text: string,
@@ -102,7 +125,7 @@ const createRun = (
   if (rPr) {
     r.append(rPr);
   }
-  r.append(createT(doc, text));
+  appendTextWithLineBreaks(doc, r, text, createT);
   return r;
 };
 
@@ -125,7 +148,7 @@ const createDelRun = (
   if (rPr) {
     r.append(rPr);
   }
-  r.append(createDelText(doc, text));
+  appendTextWithLineBreaks(doc, r, text, createDelText);
   return r;
 };
 

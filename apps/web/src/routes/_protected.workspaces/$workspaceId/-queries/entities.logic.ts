@@ -91,6 +91,10 @@ export const entitiesKeys = {
     ...entitiesKeys.all(workspaceId),
     "summaries",
   ],
+  summariesCount: (workspaceId: string) => [
+    ...entitiesKeys.summaries(workspaceId),
+    "count",
+  ],
 };
 
 export const visibleEntityFieldIds = ({

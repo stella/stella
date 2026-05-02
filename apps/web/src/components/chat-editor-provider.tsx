@@ -357,12 +357,18 @@ export const useChatEditorManager = () => {
 
 export const useChatEditor = ({
   onDraftStart,
+  placeholder,
   threadRef,
 }: {
   onDraftStart?: (() => void) | undefined;
+  placeholder?: string | undefined;
   threadRef: ChatThreadRef;
 }): ChatEditorController => {
   const t = useTranslations();
+  const defaultPlaceholder = t("chat.placeholder");
+  const resolvedPlaceholder = placeholder ?? defaultPlaceholder;
+  const placeholderRef = useRef(resolvedPlaceholder);
+  placeholderRef.current = resolvedPlaceholder;
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const submitHandlerRef = useRef<(() => Promise<void>) | null>(null);
@@ -425,21 +431,28 @@ export const useChatEditor = ({
           page: 1,
         }),
       );
+      const sourceWorkspaceId =
+        threadRef.scope === "workspace" &&
+        threadRef.workspaceId === workspace.id
+          ? undefined
+          : workspace.id;
 
       return data.entities.map((entity): ChatMentionOption => {
         const file = getFirstFile(entity);
-
-        return {
+        const option: ChatMentionOption = {
           id: entity.entityId,
           label: getEntityName(entity),
           category: "entity",
           kind: entity.kind,
           mimeType: file?.mimeType ?? null,
-          sourceWorkspaceId: workspace.id,
         };
+        if (sourceWorkspaceId !== undefined) {
+          option.sourceWorkspaceId = sourceWorkspaceId;
+        }
+        return option;
       });
     },
-    [queryClient],
+    [queryClient, threadRef],
   );
 
   const handleEditorUpdate = useEffectEvent((nextEditor: Editor) => {
@@ -500,7 +513,7 @@ export const useChatEditor = ({
         },
       }),
       Placeholder.configure({
-        placeholder: t("chat.placeholder"),
+        placeholder: () => placeholderRef.current,
       }),
       History,
       ChatMention.configure({

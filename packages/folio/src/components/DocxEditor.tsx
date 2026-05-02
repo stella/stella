@@ -23,6 +23,7 @@ import {
 } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
+import { Button } from "@stll/ui/components/button";
 import {
   Menu,
   MenuCheckboxItem,
@@ -328,6 +329,8 @@ export type DocxEditorProps = {
   placeholder?: ReactNode;
   /** Loading indicator */
   loadingIndicator?: ReactNode;
+  /** Keep the current parsed document visible while a new buffer is loading. */
+  preserveDocumentWhileLoading?: boolean;
   /** Initial scroll offset for the editor's document scroll container. */
   initialScrollTop?: number;
   /** Callback when the editor's document scroll container scrolls. */
@@ -600,6 +603,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       style,
       placeholder,
       loadingIndicator,
+      preserveDocumentWhileLoading = false,
       initialScrollTop,
       onScrollTopChange,
       showOutline: showOutlineProp = false,
@@ -2350,70 +2354,72 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           }
         }
 
+        const commandState = view.state;
+
         // Handle simple toggle actions
         if (action === "bold") {
-          toggleBold(view.state, view.dispatch);
+          toggleBold(commandState, view.dispatch);
           return;
         }
         if (action === "italic") {
-          toggleItalic(view.state, view.dispatch);
+          toggleItalic(commandState, view.dispatch);
           return;
         }
         if (action === "underline") {
-          toggleUnderline(view.state, view.dispatch);
+          toggleUnderline(commandState, view.dispatch);
           return;
         }
         if (action === "strikethrough") {
-          toggleStrike(view.state, view.dispatch);
+          toggleStrike(commandState, view.dispatch);
           return;
         }
         if (action === "superscript") {
-          toggleSuperscript(view.state, view.dispatch);
+          toggleSuperscript(commandState, view.dispatch);
           return;
         }
         if (action === "subscript") {
-          toggleSubscript(view.state, view.dispatch);
+          toggleSubscript(commandState, view.dispatch);
           return;
         }
         if (action === "bulletList") {
-          toggleBulletList(view.state, view.dispatch);
+          toggleBulletList(commandState, view.dispatch);
           return;
         }
         if (action === "numberedList") {
-          toggleNumberedList(view.state, view.dispatch);
+          toggleNumberedList(commandState, view.dispatch);
           return;
         }
         if (action === "indent") {
           // Try list indent first, then paragraph indent
-          if (!increaseListLevel(view.state, view.dispatch)) {
-            increaseIndent()(view.state, view.dispatch);
+          if (!increaseListLevel(commandState, view.dispatch)) {
+            increaseIndent()(commandState, view.dispatch);
           }
           return;
         }
         if (action === "outdent") {
           // Try list outdent first, then paragraph outdent
-          if (!decreaseListLevel(view.state, view.dispatch)) {
-            decreaseIndent()(view.state, view.dispatch);
+          if (!decreaseListLevel(commandState, view.dispatch)) {
+            decreaseIndent()(commandState, view.dispatch);
           }
           return;
         }
         if (action === "clearFormatting") {
-          clearFormatting(view.state, view.dispatch);
+          clearFormatting(commandState, view.dispatch);
           return;
         }
         if (action === "setRtl") {
-          setRtl(view.state, view.dispatch);
+          setRtl(commandState, view.dispatch);
           return;
         }
         if (action === "setLtr") {
-          setLtr(view.state, view.dispatch);
+          setLtr(commandState, view.dispatch);
           return;
         }
         if (action === "insertLink") {
           // Get the selected text for the hyperlink dialog
-          const selectedText = getSelectedText(view.state);
+          const selectedText = getSelectedText(commandState);
           // Check if we're editing an existing link
-          const existingLink = getHyperlinkAttrs(view.state);
+          const existingLink = getHyperlinkAttrs(commandState);
           if (existingLink) {
             const editData: import("./dialogs/HyperlinkDialog").HyperlinkData =
               {
@@ -2434,21 +2440,21 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         if (typeof action === "object") {
           switch (action.type) {
             case "alignment":
-              setAlignment(action.value)(view.state, view.dispatch);
+              setAlignment(action.value)(commandState, view.dispatch);
               break;
             case "textColor": {
               // action.value can be a ColorValue object or a string like "#FF0000"
               const colorVal = action.value;
               if (typeof colorVal === "string") {
                 setTextColor({ rgb: colorVal.replace("#", "") })(
-                  view.state,
+                  commandState,
                   view.dispatch,
                 );
               } else if (colorVal.auto) {
                 // "Automatic" — remove text color
-                clearTextColor(view.state, view.dispatch);
+                clearTextColor(commandState, view.dispatch);
               } else {
-                setTextColor(colorVal)(view.state, view.dispatch);
+                setTextColor(colorVal)(commandState, view.dispatch);
               }
               break;
             }
@@ -2458,7 +2464,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                 ? mapHexToHighlightName(action.value)
                 : "";
               setHighlight(highlightName || action.value)(
-                view.state,
+                commandState,
                 view.dispatch,
               );
               break;
@@ -2466,15 +2472,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             case "fontSize":
               // Convert points to half-points (OOXML uses half-points for font sizes)
               setFontSize(pointsToHalfPoints(action.value))(
-                view.state,
+                commandState,
                 view.dispatch,
               );
               break;
             case "fontFamily":
-              setFontFamily(action.value)(view.state, view.dispatch);
+              setFontFamily(action.value)(commandState, view.dispatch);
               break;
             case "lineSpacing":
-              setLineSpacing(action.value)(view.state, view.dispatch);
+              setLineSpacing(action.value)(commandState, view.dispatch);
               break;
             case "applyStyle": {
               // Resolve style to get its formatting properties
@@ -2495,10 +2501,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                 if (resolved.runFormatting) {
                   styleAttrs.runFormatting = resolved.runFormatting;
                 }
-                applyStyle(action.value, styleAttrs)(view.state, view.dispatch);
+                applyStyle(action.value, styleAttrs)(
+                  commandState,
+                  view.dispatch,
+                );
               } else {
                 // No styles available, just set the styleId
-                applyStyle(action.value)(view.state, view.dispatch);
+                applyStyle(action.value)(commandState, view.dispatch);
               }
               break;
             }
@@ -3033,7 +3042,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     };
 
     // Render loading state
-    if (state.documentLoad.status === "loading") {
+    if (
+      state.documentLoad.status === "loading" &&
+      (!preserveDocumentWhileLoading || !history.state)
+    ) {
       return (
         <div
           className={`folio-root folio-editor folio-editor-loading ${className}`}
@@ -3116,30 +3128,31 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       }
     };
 
-    const toolbarInlineExtra = (
-      <>
-        <ToolbarSeparator />
-        <button
-          type="button"
+    const toolbarPriorityExtra = (
+      <div className="flex shrink-0 items-center gap-1">
+        <Button
           onClick={toggleTrackChanges}
           onMouseDown={(e) => e.preventDefault()}
           disabled={readOnly}
           aria-pressed={trackChangesOn}
           aria-label={t("toggleTrackChanges")}
-          className={`flex h-8 w-[110px] items-center gap-1.5 rounded-md border px-2.5 text-xs transition-colors duration-100 disabled:cursor-not-allowed disabled:border-transparent disabled:text-[var(--doc-text-subtle)] disabled:opacity-[0.16] disabled:hover:bg-transparent disabled:hover:text-[var(--doc-text-subtle)] ${
+          className={`h-8 min-w-[140px] justify-start gap-1.5 rounded-md px-2 text-xs text-[var(--doc-text-muted)] shadow-none disabled:text-[var(--doc-text-subtle)] disabled:opacity-[0.35] ${
             trackChangesOn
               ? "border-[var(--doc-primary)] bg-[var(--doc-primary-light)] text-[var(--doc-text)] shadow-[0_0_0_1px_var(--doc-primary)]"
               : "border-transparent text-[var(--doc-text-muted)] hover:border-[var(--doc-border)] hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)]"
           }`}
+          size="xs"
+          title={t("toggleTrackChanges")}
+          variant="ghost"
         >
-          <PenLineIcon size={14} />
-          <span>{trackChangesOn ? t("trackingOn") : t("trackingOff")}</span>
-        </button>
-        <ToolbarSeparator />
+          <PenLineIcon className="size-3.5" />
+          <span className="truncate whitespace-nowrap">
+            {trackChangesOn ? t("trackingOn") : t("trackingOff")}
+          </span>
+        </Button>
         <StSelect
           value={displayMode}
           onValueChange={(val) => setDisplayMode(val as DisplayMode)}
-          disabled={readOnly}
           items={[
             { value: "all-markup", label: "All Markup" },
             { value: "simple-markup", label: "Simple" },
@@ -3149,7 +3162,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         >
           <StSelectTrigger
             size="sm"
-            className="h-8 min-h-0 w-[130px] min-w-0 border-transparent bg-transparent text-xs text-[var(--doc-text-muted)] shadow-none hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)] data-[pressed]:bg-[var(--doc-primary-light)]"
+            className="h-8 min-h-0 w-[132px] min-w-0 shrink-0 border-transparent bg-transparent text-xs text-[var(--doc-text-muted)] shadow-none hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)] data-[pressed]:bg-[var(--doc-primary-light)]"
           >
             <EyeIcon size={14} className="shrink-0" />
             <StSelectValue />
@@ -3164,6 +3177,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             ))}
           </StSelectPopup>
         </StSelect>
+      </div>
+    );
+
+    const toolbarInlineExtra = (
+      <>
         <Menu>
           <MenuTrigger
             type="button"
@@ -3386,11 +3404,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                       showZoomControl={showZoomControl}
                       zoom={state.zoom}
                       onZoomChange={handleZoomChange}
+                      editorRef={editorContentRef}
                       onRefocusEditor={focusActiveEditor}
                       onImageWrapType={handleImageWrapType}
                       onImageTransform={handleImageTransform}
                       onOpenImageProperties={handleOpenImageProperties}
                       onTableAction={handleTableAction}
+                      priorityExtra={toolbarPriorityExtra}
                       inlineExtra={toolbarInlineExtra}
                       {...(history.state?.package.styles?.styles
                         ? {

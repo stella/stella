@@ -165,7 +165,23 @@ const pUuid = <T extends SafeIdType>() =>
     .$defaultFn(createSafeId<T>)
     .$type<SafeId<T>>();
 
-export const PROPERTY_STATUSES = ["uninitialized", "stale", "fresh"] as const;
+/**
+ * Property computation lifecycle. Two states only — there is no
+ * "uninitialized" limbo that the workflow planner could silently
+ * skip:
+ *  - "stale" : value needs (re)computation; queued for the next
+ *              workflow run. AI properties land here at creation
+ *              and any time their inputs change.
+ *  - "fresh" : value is current. Manual properties land here at
+ *              creation; AI properties move here after a workflow
+ *              run completes.
+ *
+ * Callers must pick a status explicitly when inserting (the schema
+ * column has no default), so a future fourth state cannot be
+ * introduced and silently default new rows into a planner-skipped
+ * limbo.
+ */
+export const PROPERTY_STATUSES = ["stale", "fresh"] as const;
 export type PropertyStatus = (typeof PROPERTY_STATUSES)[number];
 
 export const ENTITY_KINDS = [
@@ -633,10 +649,7 @@ export const properties = p.pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: p.varchar({ length: 256 }).notNull(),
-    status: p
-      .text("status", { enum: PROPERTY_STATUSES })
-      .notNull()
-      .default("uninitialized"),
+    status: p.text("status", { enum: PROPERTY_STATUSES }).notNull(),
     content: jsonb().$type<PropertyContent>().notNull(),
     tool: jsonb().$type<PropertyTool>().notNull(),
     system: p.boolean().notNull().default(false),

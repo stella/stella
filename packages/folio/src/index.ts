@@ -5,6 +5,10 @@ export {
   type EditorMode,
 } from "./components/DocxEditor";
 export {
+  FormattingBar,
+  type FormattingBarProps,
+} from "./components/FormattingBar";
+export {
   createEmptyDocument,
   type CreateEmptyDocumentOptions,
 } from "./core/utils/createDocument";

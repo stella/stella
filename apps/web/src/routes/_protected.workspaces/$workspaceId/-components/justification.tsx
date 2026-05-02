@@ -12,10 +12,14 @@ import { useCreateBBoxes } from "@/routes/_protected.workspaces/$workspaceId/-ho
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 type JustificationProps = {
+  workspaceId: string;
   justification: WorkspaceJustification;
 };
 
-export const Justification = ({ justification }: JustificationProps) => (
+export const Justification = ({
+  workspaceId,
+  justification,
+}: JustificationProps) => (
   <div>
     {
       renderJustificationContent({
@@ -26,6 +30,7 @@ export const Justification = ({ justification }: JustificationProps) => (
             justification={justification}
             key={key}
             pageNumber={pageNumber}
+            workspaceId={workspaceId}
           >
             {children}
           </Citation>
@@ -36,12 +41,14 @@ export const Justification = ({ justification }: JustificationProps) => (
 );
 
 type CitationProps = {
+  workspaceId: string;
   justification: WorkspaceJustification;
   pageNumber: number;
   fileFieldId: string;
 };
 
 const Citation = ({
+  workspaceId,
   justification,
   pageNumber,
   fileFieldId,
@@ -56,9 +63,10 @@ const Citation = ({
     justification?.id === currentJustification?.id &&
     pageNumber === currentJustification?.pageNumber;
   const navigate = useNavigate({
-    from: "/workspaces/$workspaceId/$viewId/pdf",
+    from: "/workspaces/$workspaceId/$viewId/document",
   });
   const createBoundingBoxes = useCreateBBoxes({
+    workspaceId,
     justification,
   });
   const [pages, setScrollTo] = usePDFStore(

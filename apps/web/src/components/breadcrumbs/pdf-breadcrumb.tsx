@@ -1,36 +1,35 @@
 import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams, useSearch } from "@tanstack/react-router";
+import { Link, useMatch } from "@tanstack/react-router";
 
 import { fileMetadataOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 
 export const PdfBreadcrumb = () => {
-  const workspaceId = useParams({
-    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-    select: (params) => params.workspaceId,
+  const pdfMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/$viewId/document",
+    shouldThrow: false,
   });
-  const viewId = useParams({
-    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-    select: (params) => params.viewId,
-  });
-  const fieldId = useSearch({
-    select: (search) => search.field ?? "",
-    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-  });
-  const currentSearch = useSearch({
-    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-    select: ({ entity, field, justification, justificationPage, pdfPage }) => ({
-      entity,
-      field,
-      justification,
-      justificationPage,
-      pdfPage,
-    }),
-  });
+
+  const { workspaceId = "", viewId = "" } = pdfMatch?.params ?? {};
+  const { entity, field, justification, justificationPage, pdfPage } =
+    pdfMatch?.search ?? {};
+  const fieldId = field ?? "";
+  const currentSearch = {
+    entity,
+    field,
+    justification,
+    justificationPage,
+    pdfPage,
+  };
   const { data: fileName } = useQuery({
     ...fileMetadataOptions({ workspaceId, fieldId }),
+    enabled: pdfMatch !== undefined && fieldId.length > 0,
     select: (file) => file.fileName,
   });
+
+  if (!pdfMatch) {
+    return null;
+  }
 
   return (
     <BreadcrumbItem>
@@ -40,7 +39,7 @@ export const PdfBreadcrumb = () => {
         className="hover:text-foreground max-w-64 truncate transition-colors"
         params={{ workspaceId, viewId }}
         search={currentSearch}
-        to="/workspaces/$workspaceId/$viewId/pdf"
+        to="/workspaces/$workspaceId/$viewId/document"
       >
         {fileName ?? fieldId}
       </Link>

@@ -1,20 +1,30 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
+import { useMatch } from "@tanstack/react-router";
 
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 
-const viewRoute = getRouteApi("/_protected/workspaces/$workspaceId/$viewId");
+type UseActiveViewInput = {
+  workspaceId: string;
+  viewId?: string | undefined;
+  page?: number | undefined;
+};
 
-export const useActiveView = () => {
-  const { workspaceId, viewId } = viewRoute.useParams({
-    select: (p) => ({ workspaceId: p.workspaceId, viewId: p.viewId }),
+const DEFAULT_VIEW_PAGE = 1;
+
+export const useActiveView = ({
+  workspaceId,
+  viewId,
+  page,
+}: UseActiveViewInput) => {
+  const viewMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/$viewId",
+    shouldThrow: false,
   });
-  const page = viewRoute.useSearch({
-    select: (s) => s.page ?? 1,
-  });
+  const activeViewId = viewId ?? viewMatch?.params.viewId;
+  const activePage = page ?? viewMatch?.search.page ?? DEFAULT_VIEW_PAGE;
   const { data: activeView } = useSuspenseQuery({
     ...viewsOptions(workspaceId),
-    select: (data) => data.find((v) => v.id === viewId) ?? data.at(0),
+    select: (data) => data.find((v) => v.id === activeViewId) ?? data.at(0),
   });
 
   const { filters, sorts } = activeView?.layout ?? {
@@ -22,5 +32,11 @@ export const useActiveView = () => {
     sorts: [],
   };
 
-  return { workspaceId, viewId, page, filters, sorts };
+  return {
+    workspaceId,
+    viewId: activeViewId,
+    page: activePage,
+    filters,
+    sorts,
+  };
 };

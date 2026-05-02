@@ -233,6 +233,7 @@ describe("workspace INSERT — wrong scope", () => {
             version: 1 as const,
             type: "manual-input" as const,
           },
+          status: "fresh",
         }),
     },
     {

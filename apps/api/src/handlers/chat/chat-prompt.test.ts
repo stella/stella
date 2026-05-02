@@ -90,7 +90,7 @@ describe("chat prompt builders", () => {
           },
           id: "prop_hidden",
           name: "Hidden",
-          status: "uninitialized",
+          status: "stale",
         }),
       ],
       refRegistry,

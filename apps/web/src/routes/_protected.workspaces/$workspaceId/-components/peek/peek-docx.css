@@ -1,5 +1,29 @@
+.document-preview-surface,
 .folio-docx-preview {
-  background-color: var(--muted) !important;
+  --document-preview-page: var(--background);
+  --document-preview-surface: color-mix(
+    in srgb,
+    var(--background) 92%,
+    var(--foreground)
+  );
+
+  background-color: var(--document-preview-surface) !important;
+}
+
+.folio-docx-preview {
+  --doc-bg: var(--document-preview-surface);
+  --doc-bg-subtle: var(--document-preview-surface);
+  --doc-canvas: var(--document-preview-page);
+}
+
+.dark .document-preview-surface,
+.dark .folio-docx-preview {
+  --document-preview-page: var(--color-black);
+  --document-preview-surface: color-mix(
+    in srgb,
+    var(--background) 92%,
+    var(--foreground)
+  );
 }
 
 .folio-docx-preview .paged-editor {
@@ -17,6 +41,7 @@
 }
 
 .folio-docx-preview .layout-page {
+  background: var(--document-preview-page) !important;
   border: 0 !important;
   box-shadow: none !important;
   outline: 0 !important;

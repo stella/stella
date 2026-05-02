@@ -75,7 +75,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const updateProperty = useUpdateProperty();
   const createEntities = useCreateEntities();
   const deleteEntities = useDeleteEntities();
-  const startWorkflow = useStartWorkflow();
+  const startWorkflow = useStartWorkflow(workspaceId);
   const queryClient = useQueryClient();
   const hasAIProperties = properties.some((p) => p.tool.type === "ai-model");
   const [hiddenGroups, setHiddenGroups] = useState(new Set());

@@ -68,7 +68,7 @@ export type WorkspaceProperty = {
   name: string;
   createdAt: Date;
   workspaceId: string;
-  status: "uninitialized" | "stale" | "fresh";
+  status: "stale" | "fresh";
   content:
     | {
         version: 1;

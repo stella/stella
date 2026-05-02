@@ -8,7 +8,7 @@ import {
 import { Button } from "@stll/ui/components/button";
 import { toastManager } from "@stll/ui/components/toast";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
 import { ChevronLeftIcon, ChevronRightIcon, LaptopIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -32,12 +32,14 @@ import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 type EntityFileInfoProps = {
+  workspaceId: string;
   entityId: string;
   fields: EntityField[];
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
 };
 
 export const EntityFileInfo = ({
+  workspaceId,
   entityId,
   fields,
   scrollContainerRef,
@@ -45,11 +47,7 @@ export const EntityFileInfo = ({
   const t = useTranslations();
   const [isOpeningInDesktop, setIsOpeningInDesktop] = useState(false);
   const field = fields.find((f) => f.content.type === "file");
-  const activeView = useActiveView();
-  const workspaceId = useParams({
-    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-    select: (params) => params.workspaceId,
-  });
+  const activeView = useActiveView({ workspaceId });
   const { data: navData } = useSuspenseQuery({
     ...useEntitiesOptions(activeView),
     select: (data) => {
@@ -68,7 +66,7 @@ export const EntityFileInfo = ({
   const nextFile = navData.nextEntity ? getFirstFile(navData.nextEntity) : null;
 
   const navigate = useNavigate({
-    from: "/workspaces/$workspaceId/$viewId/pdf",
+    from: "/workspaces/$workspaceId/$viewId/document",
   });
   const setPdfViewerState = useWorkspaceStore((s) => s.setPdfViewerState);
 
@@ -293,7 +291,10 @@ export const FieldInfo = ({
               <h1 className="text-muted-foreground text-sm font-medium">
                 {t("workspaces.justification")}
               </h1>
-              <Justification justification={justification} />
+              <Justification
+                justification={justification}
+                workspaceId={workspaceId}
+              />
             </div>
           )}
         </div>

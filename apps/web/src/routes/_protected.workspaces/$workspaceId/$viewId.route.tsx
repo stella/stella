@@ -384,7 +384,7 @@ function ViewShell({
 }: ViewShellProps) {
   const navigate = Route.useNavigate();
   const matches = useMatches();
-  const isOnPdfRoute = matches.some((m) => m.fullPath.endsWith("/pdf"));
+  const isOnPdfRoute = matches.some((m) => m.fullPath.endsWith("/document"));
 
   const setPage = (newPage: number) => {
     // eslint-disable-next-line typescript/no-floating-promises

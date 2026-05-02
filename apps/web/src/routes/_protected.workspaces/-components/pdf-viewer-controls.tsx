@@ -1,38 +1,57 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 
 import { Button } from "@stll/ui/components/button";
 import { Separator } from "@stll/ui/components/separator";
+import { toastManager } from "@stll/ui/components/toast";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
-import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  DownloadIcon,
+  PrinterIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import Tooltip from "@/components/tooltip";
+import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
+import { ClientOperationError, toAPIError } from "@/lib/errors";
 import { fileMetadataOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import {
+  fetchPrintPdf,
   PeekPdfControls,
-  PreparedPdfPrintButton,
+  printPdfBuffer,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
+import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 const SCALE_OFFSET_STEP = 0.2;
 
-export const PdfViewerControls = () => {
+type PdfViewerControlsProps = {
+  workspaceId: string;
+  fieldId: string;
+  currentPage: number;
+  variant?: "row" | "inline" | undefined;
+  onPrint?: (() => void) | undefined;
+  printDisabled?: boolean | undefined;
+  extraControls?: ReactNode | undefined;
+};
+
+export const PdfViewerControls = ({
+  workspaceId,
+  fieldId,
+  currentPage,
+  variant = "row",
+  onPrint,
+  printDisabled = false,
+  extraControls,
+}: PdfViewerControlsProps) => {
   const t = useTranslations();
-  const workspaceId = useParams({
-    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-    select: (params) => params.workspaceId,
-  });
-  const { field: fieldId = "", pdfPage: currentPage = 1 } = useSearch({
-    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-    select: (s) => ({ field: s.field, pdfPage: s.pdfPage }),
-  });
-  const editing = useSearch({
-    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-    select: (s) => s.editing === true,
-  });
+  const analytics = useAnalytics();
   const { data: fileMetadata } = useQuery({
     ...fileMetadataOptions({ workspaceId, fieldId }),
     enabled: fieldId.length > 0,
@@ -42,12 +61,14 @@ export const PdfViewerControls = () => {
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
   const setPdfScaleOffset = useWorkspaceStore((s) => s.setPdfScaleOffset);
   const [editingPage, setEditingPage] = useState<number | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const pageInputValue = editingPage ?? currentPage;
   const isDocx =
     fileMetadata?.originalMimeType === DOCX_MIME ||
     fileMetadata?.mimeType === DOCX_MIME;
   const navigate = useNavigate({
-    from: "/workspaces/$workspaceId/$viewId/pdf",
+    from: "/workspaces/$workspaceId/$viewId/document",
   });
 
   const navigateToScale = (offset: number) => {
@@ -65,12 +86,69 @@ export const PdfViewerControls = () => {
     });
   };
 
-  if (editing) {
-    return null;
-  }
+  const handleDownload = async () => {
+    if (!fileMetadata || fieldId.length === 0 || isDownloading) {
+      return;
+    }
 
-  return (
-    <div className="ms-auto flex items-center gap-1">
+    setIsDownloading(true);
+    try {
+      const response = await api
+        .files({ workspaceId })
+        .url({ fieldId })
+        .get({ query: { purpose: "download" } });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      const fileResponse = await fetch(response.data.presignedUrl);
+      if (!fileResponse.ok) {
+        throw new ClientOperationError({
+          action: "downloadFullViewFile",
+          message: "Failed to fetch file from storage",
+        });
+      }
+
+      downloadFile(await fileResponse.blob(), fileMetadata.fileName);
+    } catch (error: unknown) {
+      analytics.captureError(error);
+      toastManager.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handlePrint = async () => {
+    if (fieldId.length === 0 || isPrinting) {
+      return;
+    }
+
+    if (onPrint) {
+      onPrint();
+      return;
+    }
+
+    setIsPrinting(true);
+    try {
+      const data = await fetchPrintPdf({ workspaceId, fieldId });
+      printPdfBuffer(data);
+    } catch (error: unknown) {
+      analytics.captureError(error);
+      toastManager.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
+  const primaryControls = (
+    <div className="flex items-center gap-1">
       <div className="flex items-center rounded-md border p-0.5">
         <PeekPdfControls
           canResetZoom={scaleOffset !== 0}
@@ -88,11 +166,6 @@ export const PdfViewerControls = () => {
           scaleOffset={scaleOffset}
         />
       </div>
-      <PreparedPdfPrintButton
-        disabled={fieldId.length === 0}
-        fieldId={fieldId}
-        workspaceId={workspaceId}
-      />
       {!isDocx && (
         <>
           <Separator className="mx-1 h-4" orientation="vertical" />
@@ -164,6 +237,61 @@ export const PdfViewerControls = () => {
           </div>
         </>
       )}
+    </div>
+  );
+
+  const fileActions = (
+    <div className="flex items-center">
+      <Tooltip
+        content={t("common.download")}
+        render={
+          <Button
+            disabled={!fileMetadata || isDownloading || fieldId.length === 0}
+            onClick={() => {
+              void handleDownload();
+            }}
+            size="icon-xs"
+            variant="ghost"
+          >
+            <DownloadIcon className="size-3.5" />
+          </Button>
+        }
+      />
+      <Tooltip
+        content={t("common.print")}
+        render={
+          <Button
+            disabled={printDisabled || isPrinting || fieldId.length === 0}
+            onClick={() => {
+              void handlePrint();
+            }}
+            size="icon-xs"
+            variant="ghost"
+          >
+            <PrinterIcon className="size-3.5" />
+          </Button>
+        }
+      />
+      {extraControls}
+    </div>
+  );
+
+  if (variant === "inline") {
+    return (
+      <div className="flex min-w-0 items-center gap-1">
+        <Separator className="mx-1 h-4" orientation="vertical" />
+        {primaryControls}
+        <Separator className="mx-1 h-4" orientation="vertical" />
+        {fileActions}
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2">
+      <div />
+      {primaryControls}
+      <div className="flex justify-self-end">{fileActions}</div>
     </div>
   );
 };

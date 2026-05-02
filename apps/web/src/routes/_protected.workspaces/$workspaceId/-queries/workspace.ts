@@ -1,5 +1,5 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import { useParams } from "@tanstack/react-router";
+import { useMatch } from "@tanstack/react-router";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
@@ -51,14 +51,16 @@ export const workflowOptions = ({ key }: { key: WorkflowKey }) =>
     },
   });
 
-export const useIsWorkflowRunning = () => {
-  const workspaceId = useParams({
+export const useIsWorkflowRunning = (inputWorkspaceId?: string) => {
+  const workspaceMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId",
-    select: (s) => s.workspaceId,
+    shouldThrow: false,
   });
+  const workspaceId = inputWorkspaceId ?? workspaceMatch?.params.workspaceId;
 
   const { data } = useQuery({
-    ...workflowOptions({ key: { workspaceId } }),
+    ...workflowOptions({ key: { workspaceId: workspaceId ?? "" } }),
+    enabled: workspaceId !== undefined,
     select: (d) => d.running,
   });
 

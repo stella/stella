@@ -123,7 +123,7 @@ export const RowActions = ({
           sidebar: "versions",
         });
         void navigate({
-          to: "/workspaces/$workspaceId/$viewId/pdf",
+          to: "/workspaces/$workspaceId/$viewId/document",
           params: { workspaceId, viewId: "all" },
           search: {
             entity: entity.entityId,
@@ -616,8 +616,8 @@ const CreateSubfolderMenuItem = ({
 }: CreateSubfolderMenuItemProps) => {
   const t = useTranslations();
   const createEntities = useCreateEntities();
-  const isWorkflowRunning = useIsWorkflowRunning();
-  const isEntitiesLimitReached = useEntitiesCountLimit();
+  const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
+  const isEntitiesLimitReached = useEntitiesCountLimit(workspaceId);
 
   if (isEntitiesLimitReached) {
     return null;

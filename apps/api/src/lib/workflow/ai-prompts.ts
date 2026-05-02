@@ -73,15 +73,22 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
     .map((filename) => `- ${filename.simplified}`)
     .join("\n");
 
+  // Schema is converted to JSON Schema by the Vercel AI SDK
+  // (`valibotSchema(...)` → `@valibot/to-json-schema`). That
+  // converter rejects transformation actions like `v.trim()` —
+  // they have no JSON Schema equivalent — so we keep validation
+  // here strictly to constraints (`v.minLength`, `v.nonEmpty`).
+  // Stripping incidental whitespace, if needed, is a parse-side
+  // concern handled in `normalizeJustification`.
   return v.pipe(
     v.array(
       v.strictObject({
         file: v.string(),
         statements: v.array(
           v.strictObject({
-            text: v.pipe(v.string(), v.trim(), v.minLength(1)),
+            text: v.pipe(v.string(), v.minLength(1)),
             citations: v.pipe(
-              v.array(v.pipe(v.string(), v.trim(), v.minLength(1))),
+              v.array(v.pipe(v.string(), v.minLength(1))),
               v.nonEmpty(),
             ),
           }),

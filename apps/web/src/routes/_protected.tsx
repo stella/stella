@@ -58,7 +58,6 @@ import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-
 import type { InspectorTab } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { MatterMetadataSheet } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
 import { CreateMatterDialog } from "@/routes/_protected.workspaces/-components/create-matter-dialog";
-import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 
 const LazyInspectorPanel = lazy(
@@ -210,11 +209,6 @@ function ProtectedContent({
     from: "/_protected/workspaces/$workspaceId",
     shouldThrow: false,
   });
-  const pdfMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId/pdf",
-    shouldThrow: false,
-  });
-
   const workspaceId = projectMatch?.params.workspaceId;
   const isPinned = workspaceId ? pinnedIds.has(workspaceId) : false;
 
@@ -242,16 +236,11 @@ function ProtectedContent({
     }
     toggleInspector();
   };
-  // Show the chrome inspector button always, unless it would
-  // duplicate the in-pane close (i.e., pane visible). The pane
-  // is "visible" when there are tabs and it isn't minimised; in
-  // that state the rail's Hide button is the close affordance.
-  // Otherwise the chrome button is the entry point — opens a
-  // fresh chat in a workspace, restores a minimised pane, or
-  // (outside a workspace with no tabs) sits inert as a hint that
-  // the inspector exists.
-  const inspectorPaneVisible = inspectorTabsCount > 0 && !inspectorMinimized;
-  const canShowInspectorButton = !inspectorPaneVisible;
+  // Show the chrome inspector button only before the rail exists.
+  // Once tabs exist, the rail remains visible even when the pane
+  // content is minimized, and its top button is the restore/hide
+  // affordance.
+  const canShowInspectorButton = inspectorTabsCount === 0;
   const inspectorButtonTitle =
     inspectorTabsCount === 0
       ? t("inspector.openChat")
@@ -291,6 +280,55 @@ function ProtectedContent({
   const matterColor = workspaceId
     ? (workspace?.color ?? getMatterSwatch(workspaceId))
     : null;
+  const chromeActions = (
+    <div
+      className="ms-auto flex shrink-0 items-center gap-0.5"
+      onContextMenu={handleIconRowContextMenu}
+    >
+      {workspaceId && (
+        <>
+          <Button
+            onClick={() => togglePin(workspaceId)}
+            size="icon-sm"
+            title={isPinned ? t("common.unpin") : t("common.pin")}
+            variant="ghost"
+          >
+            {isPinned ? (
+              <PinOffIcon className="size-4" />
+            ) : (
+              <PinIcon className="size-4" />
+            )}
+          </Button>
+          <Suspense>
+            <MatterMetadataSheet workspaceId={workspaceId} />
+          </Suspense>
+        </>
+      )}
+      {activeDecisionId && (
+        <>
+          <CaseSearchTrigger />
+          <DecisionMetadataSheet decisionId={activeDecisionId} />
+        </>
+      )}
+      {canShowInspectorButton && (
+        <>
+          <Separator className="mx-1 h-4" orientation="vertical" />
+          <Button
+            aria-pressed={
+              inspectorTabsCount > 0 ? !inspectorMinimized : undefined
+            }
+            className="size-7"
+            onClick={handleInspectorButtonClick}
+            size="icon"
+            title={inspectorButtonTitle}
+            variant="ghost"
+          >
+            <PanelRightIcon className="size-4" />
+          </Button>
+        </>
+      )}
+    </div>
+  );
 
   return (
     <SidebarInset className="flex flex-col">
@@ -312,54 +350,7 @@ function ProtectedContent({
           </>
         )}
         <AppBreadcrumbs />
-        {pdfMatch && <PdfViewerControls />}
-        <div
-          className="ms-auto flex shrink-0 items-center gap-0.5"
-          onContextMenu={handleIconRowContextMenu}
-        >
-          {workspaceId && (
-            <>
-              <Button
-                onClick={() => togglePin(workspaceId)}
-                size="icon-sm"
-                title={isPinned ? t("common.unpin") : t("common.pin")}
-                variant="ghost"
-              >
-                {isPinned ? (
-                  <PinOffIcon className="size-4" />
-                ) : (
-                  <PinIcon className="size-4" />
-                )}
-              </Button>
-              <Suspense>
-                <MatterMetadataSheet workspaceId={workspaceId} />
-              </Suspense>
-            </>
-          )}
-          {activeDecisionId && (
-            <>
-              <CaseSearchTrigger />
-              <DecisionMetadataSheet decisionId={activeDecisionId} />
-            </>
-          )}
-          {canShowInspectorButton && (
-            <>
-              <Separator className="mx-1 h-4" orientation="vertical" />
-              <Button
-                aria-pressed={
-                  inspectorTabsCount > 0 ? !inspectorMinimized : undefined
-                }
-                className="size-7"
-                onClick={handleInspectorButtonClick}
-                size="icon"
-                title={inspectorButtonTitle}
-                variant="ghost"
-              >
-                <PanelRightIcon className="size-4" />
-              </Button>
-            </>
-          )}
-        </div>
+        {chromeActions}
         <Menu
           onOpenChange={(nextOpen) => {
             setChatMenuOpen(nextOpen);
@@ -389,6 +380,7 @@ function ProtectedContent({
 const INSPECTOR_PANE_DEFAULT_WIDTH = 512;
 const INSPECTOR_PANE_MIN_WIDTH = 320;
 const INSPECTOR_PANE_MAX_WIDTH = 800;
+const INSPECTOR_RAIL_WIDTH = 40;
 
 /**
  * Workspace inspector pane — file viewers + chat tabs. Mounted at
@@ -409,7 +401,7 @@ function WorkspaceInspectorSidePanel() {
   const tabs = useInspectorStore((s) => s.tabs);
   const activeId = useInspectorStore((s) => s.activeId);
   const minimized = useInspectorStore((s) => s.minimized);
-  const visible = tabs.length > 0 && !minimized;
+  const visible = tabs.length > 0;
 
   // Pin the inspector's "current matter" to the ACTIVE TAB's
   // origin so documents and started chats keep showing the
@@ -479,25 +471,27 @@ function WorkspaceInspectorSidePanel() {
     return null;
   }
 
-  const widthPx = `${width}px`;
+  const widthPx = `${minimized ? INSPECTOR_RAIL_WIDTH : width}px`;
 
   return (
     <div
       className="text-sidebar-foreground hidden md:block"
       data-side="right"
-      data-state="expanded"
+      data-state={minimized ? "collapsed" : "expanded"}
     >
       <div className="relative bg-transparent" style={{ width: widthPx }} />
       <div
         className="fixed inset-y-0 right-0 z-10 hidden h-svh md:flex"
         style={{ width: widthPx }}
       >
-        <div
-          className="hover:bg-border active:bg-border absolute inset-y-0 -left-px z-20 flex w-1 cursor-col-resize items-center justify-center border-l"
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-        />
+        {!minimized && (
+          <div
+            className="hover:bg-border active:bg-border absolute inset-y-0 -left-px z-20 flex w-1 cursor-col-resize items-center justify-center border-l"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+          />
+        )}
         <div className="bg-sidebar flex h-full w-full flex-col">
           <Suspense>
             <LazyInspectorPanel workspaceId={activeWorkspaceId ?? undefined} />

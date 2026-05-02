@@ -12,6 +12,7 @@ import type { PropsWithChildren } from "react";
 import type { DocxCompatibility } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { Skeleton } from "@stll/ui/components/skeleton";
 import { toast, toastManager } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import {
@@ -27,12 +28,12 @@ import {
   ChevronRightIcon,
   FileTextIcon,
   LoaderCircleIcon,
+  LockOpenIcon,
   Maximize2Icon,
   MessageSquareIcon,
+  Minimize2Icon,
   MessageSquarePlusIcon,
   PanelRightIcon,
-  PencilIcon,
-  PrinterIcon,
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -57,6 +58,7 @@ import {
   ChatTabPanel,
   ChatTabPanelShell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel";
+import { EntityMetadataPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type {
   InspectorTab,
@@ -73,7 +75,6 @@ import { PeekJustification } from "@/routes/_protected.workspaces/$workspaceId/-
 import {
   PeekPdfControls,
   PeekPdfViewer,
-  PeekPrintButton,
   PeekSuspenseFallback,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
 import { TaskDetailPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel";
@@ -109,6 +110,15 @@ const MIN_OFFSET = -0.8;
 const MAX_OFFSET = 2;
 const PINCH_ZOOM_SENSITIVITY = 0.005;
 
+const hasInAppHistoryEntry = (): boolean => {
+  const state: unknown = window.history.state;
+  if (typeof state !== "object" || state === null) {
+    return false;
+  }
+  const idx: unknown = Reflect.get(state, "idx");
+  return typeof idx === "number" && idx > 0;
+};
+
 export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const t = useTranslations();
   const canUpdateEntity = usePermissions({ entity: ["update"] });
@@ -121,8 +131,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const setActive = useInspectorStore((s) => s.setActive);
   const closeTab = useInspectorStore((s) => s.closeTab);
   const closeAll = useInspectorStore((s) => s.closeAll);
+  const minimized = useInspectorStore((s) => s.minimized);
   const setMinimized = useInspectorStore((s) => s.setMinimized);
   const openChat = useInspectorStore((s) => s.openChat);
+  const openPdf = useInspectorStore((s) => s.openPdf);
   // The inspector pane mounts under non-workspace routes too
   // (e.g. /chat for a global chat tab). All callers below use
   // absolute `to:` paths, so we don't need a `from` template —
@@ -165,13 +177,22 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   });
   const peekPdfViewId = viewMatch?.params.viewId ?? "all";
 
+  // Detect when the inspector is mounted on the full-folio PDF
+  // route so the metadata persona can drive the route's
+  // `?justification=` (which controls bboxes on the route's PDF
+  // viewer) instead of touching the inspector tab.
+  const pdfRouteMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/$viewId/document",
+    shouldThrow: false,
+  });
+  const pdfRouteJustification = pdfRouteMatch?.search.justification ?? null;
+
   const activeTab = tabs.find((tab) => tab.id === activeId);
 
   // -- PDF zoom --
   const [scaleOffsets, setScaleOffsets] = useState<Map<string, number>>(
     () => new Map(),
   );
-
   const handleZoom = useCallback((tabId: string, direction: "in" | "out") => {
     setScaleOffsets((prev) => {
       const current = prev.get(tabId) ?? 0;
@@ -206,7 +227,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     null,
   );
   const docxActionsRef = useRef(new Map<string, DocxBrowserEditorActions>());
-  const docxPrintActionsRef = useRef(new Map<string, () => void>());
   const [docxScrollTopByTab, setDocxScrollTopByTab] = useState<
     Map<string, number>
   >(() => new Map());
@@ -286,7 +306,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     flashDocxEditTimerRef.current = setTimeout(() => {
       setFlashingDocxEditTabId(null);
       flashDocxEditTimerRef.current = null;
-    }, 900);
+    }, 2200);
   }, []);
 
   useEffect(
@@ -368,6 +388,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     const previousPdfViewer = {
       ...useWorkspaceStore.getState().pdfViewer,
     };
+    const previousMetadataLane = activeTab.metadataLane ?? "closed";
     try {
       const openAnonymizeSidebar =
         getCachedAnonymization(activeTab.id) !== undefined;
@@ -378,7 +399,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         sidebar: openAnonymizeSidebar ? "anonymize" : "entity",
       });
       await navigate({
-        to: "/workspaces/$workspaceId/$viewId/pdf",
+        to: "/workspaces/$workspaceId/$viewId/document",
         params: { workspaceId: activeTab.workspaceId, viewId: "all" },
         search: {
           entity: activeTab.entityId,
@@ -387,13 +408,37 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           justificationPage: undefined,
         },
       });
+      // Switch the surviving tab into "metadata-only" persona only
+      // after full-view navigation succeeds; otherwise side peek stays
+      // visually intact on rejected or aborted transitions.
+      useInspectorStore.getState().setPdfMetadataLane(activeTab.id, "expanded");
     } catch (error) {
       setPdfViewerState(previousPdfViewer);
+      useInspectorStore
+        .getState()
+        .setPdfMetadataLane(activeTab.id, previousMetadataLane);
       throw error;
-    } finally {
-      closeAll();
     }
-  }, [activeTab, closeAll, navigate, setPdfViewerState]);
+  }, [activeTab, navigate, setPdfViewerState]);
+
+  const handleMinimizeFromFullView = useCallback(
+    (tab: PdfTab) => {
+      // Drop back to side-peek persona and return to the screen
+      // where the file was maximized from. Full-view internal file
+      // switches use replace navigation, so browser back lands on
+      // the original table/overview/filesystem context.
+      useInspectorStore.getState().setPdfMetadataLane(tab.id, "closed");
+      if (hasInAppHistoryEntry()) {
+        window.history.back();
+        return;
+      }
+      void navigate({
+        to: "/workspaces/$workspaceId/$viewId",
+        params: { workspaceId: tab.workspaceId, viewId: "all" },
+      });
+    },
+    [navigate],
+  );
 
   // Keep at most MAX_MOUNTED_PDFS viewers mounted to limit memory.
   // The active tab is always mounted; the rest are the most recently
@@ -504,9 +549,9 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 
   return (
     <div className="bg-background flex h-full border-s shadow-lg">
-      {/* Vertical tab bar — top houses the "hide pane" button
+      {/* Vertical tab bar — top houses the pane toggle button
           (replaces the chrome topbar PanelRightIcon while the
-          pane is open); the middle scrolls the open tabs; the
+          rail is mounted); the middle scrolls the open tabs; the
           bottom hosts the new-chat affordance. All affordances
           stay inside the rail so the active tab content keeps
           the full vertical space to the right of the rail. */}
@@ -519,12 +564,18 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             )}
           >
             <Tooltip
-              content={t("inspector.hidePane")}
+              content={
+                minimized ? t("inspector.showPane") : t("inspector.hidePane")
+              }
               render={
                 <button
-                  aria-label={t("inspector.hidePane")}
+                  aria-label={
+                    minimized
+                      ? t("inspector.showPane")
+                      : t("inspector.hidePane")
+                  }
                   className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-7 items-center justify-center rounded-md transition-colors"
-                  onClick={() => setMinimized(true)}
+                  onClick={() => setMinimized(!minimized)}
                   type="button"
                 />
               }
@@ -549,7 +600,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 <VerticalTab
                   active={tab.id === activeId}
                   key={tab.id}
-                  onActivate={() => setActive(tab.id)}
+                  onActivate={() => {
+                    setActive(tab.id);
+                    setMinimized(false);
+                  }}
                   onClose={() => {
                     handleCloseTab(tab.id);
                   }}
@@ -590,14 +644,16 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       )}
 
       {/* Task content */}
-      {activeTab?.type === "task" && workspaceId !== undefined && (
-        <TaskDetailPanel taskId={activeTab.id} workspaceId={workspaceId} />
-      )}
+      {!minimized &&
+        activeTab?.type === "task" &&
+        workspaceId !== undefined && (
+          <TaskDetailPanel taskId={activeTab.id} workspaceId={workspaceId} />
+        )}
 
       {/* Chat content — sidepeek chat tab. Mounts FileAIChatHost in
           standalone layout so the bar + thread fill the panel
           instead of overlaying a file viewer. */}
-      {activeTab?.type === "chat" && (
+      {!minimized && activeTab?.type === "chat" && (
         // Local Suspense boundary so the chat-thread fetch (cold
         // cache: a brand-new chat tab) doesn't bubble up to the
         // workspace route's pending component. The fallback is a
@@ -619,6 +675,9 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
          Keeping inactive viewers mounted avoids the blink on tab switch
          (no unmount → Suspense fallback → remount cycle). */}
       {pdfTabs.map((tab) => {
+        if (minimized) {
+          return null;
+        }
         const isActive = tab.id === activeId;
         if (!mountedPdfIds.has(tab.id)) {
           return null;
@@ -636,6 +695,107 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           tab.propertyId !== undefined &&
           !isEditingNativeDocx;
         const isPromptingDocxUnlock = flashingDocxEditTabId === tab.id;
+        const metadataLane = tab.metadataLane ?? "closed";
+        const isMetadataLaneExpanded = metadataLane === "expanded";
+
+        // "Expanded" persona: the route already renders the file in
+        // its main content (full folio), so the inspector tab drops
+        // the file chrome (zoom, file viewer) and
+        // shows itself as a metadata panel — same tab state, different
+        // rendering.
+        if (isMetadataLaneExpanded) {
+          return (
+            <div
+              className={cn(
+                "bg-background flex flex-1 flex-col overflow-hidden",
+                !isActive && "hidden",
+              )}
+              key={tab.renderId ?? tab.id}
+            >
+              <div
+                className={cn(
+                  "flex shrink-0 items-center justify-between border-b px-3",
+                  TOOLBAR_ROW_HEIGHT,
+                )}
+              >
+                <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+                  <span className="text-foreground text-xs font-medium">
+                    {t("common.metadata")}
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="text-muted-foreground/50 text-xs"
+                  >
+                    ·
+                  </span>
+                  <span
+                    className="text-muted-foreground truncate text-xs"
+                    title={tab.label}
+                  >
+                    {stripExtension(tab.label)}
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-center gap-1 ps-4">
+                  <Tooltip
+                    content={t("workspaces.pdf.backToPeek")}
+                    render={
+                      <Button
+                        onClick={() => {
+                          handleMinimizeFromFullView(tab);
+                        }}
+                        size="icon-xs"
+                        variant="ghost"
+                      >
+                        <Minimize2Icon className="size-3.5" />
+                      </Button>
+                    }
+                  />
+                  <Button
+                    onClick={() => handleCloseTab(tab.id)}
+                    size="icon-xs"
+                    variant="ghost"
+                  >
+                    <XIcon className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col">
+                <Suspense fallback={<MetadataPanelSkeleton />}>
+                  <EntityMetadataPanel
+                    activeJustificationFieldId={pdfRouteJustification}
+                    currentFilePropertyId={tab.propertyId ?? null}
+                    entityId={tab.entityId}
+                    fileFieldId={tab.id}
+                    onAiFieldClick={({ fieldId, propertyId }) => {
+                      // Keep the inspector tab in sync so peek-back
+                      // lands on the same selection.
+                      openPdf({
+                        ...tab,
+                        justificationFieldId: fieldId,
+                        propertyId,
+                      });
+                      void navigate({
+                        to: "/workspaces/$workspaceId/$viewId/document",
+                        params: {
+                          workspaceId: tab.workspaceId,
+                          viewId: peekPdfViewId,
+                        },
+                        replace: true,
+                        search: (prev) => ({
+                          ...prev,
+                          justification: fieldId,
+                          justificationPage: 1,
+                        }),
+                      });
+                    }}
+                    workspaceId={tab.workspaceId}
+                  />
+                </Suspense>
+              </div>
+            </div>
+          );
+        }
+
         const promptDocxUnlock = () => {
           const compatibility = docxCompatibilityByTab.get(tab.id);
           const blockReason = getDocxEditBlockReason({
@@ -670,20 +830,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 scaleOffset={scaleOffsets.get(tab.id) ?? 0}
               />
             </div>
-            <Tooltip
-              content={t("common.print")}
-              render={
-                <Button
-                  onClick={() => {
-                    docxActionsRef.current.get(tab.id)?.print();
-                  }}
-                  size="icon-xs"
-                  variant="ghost"
-                >
-                  <PrinterIcon className="size-3.5" />
-                </Button>
-              }
-            />
             <Button
               onClick={() => {
                 docxActionsRef.current.get(tab.id)?.finalize();
@@ -698,7 +844,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           <>
             {canUnlockNativeDocx && (
               <Tooltip
-                content={t("common.edit")}
+                content={t("folio.editFile")}
                 render={
                   <Button
                     className={cn(
@@ -712,10 +858,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                     size={isPromptingDocxUnlock ? "sm" : "icon-xs"}
                     variant="ghost"
                   >
-                    <PencilIcon className="size-3.5" />
+                    <LockOpenIcon className="size-3.5" />
                     {isPromptingDocxUnlock && (
                       <span className="whitespace-nowrap">
-                        {t("workspaces.pdf.unlock")}
+                        {t("folio.editFile")}
                       </span>
                     )}
                   </Button>
@@ -731,28 +877,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 scaleOffset={scaleOffsets.get(tab.id) ?? 0}
               />
             </div>
-            {isNativeDocxDisplay ? (
-              <Tooltip
-                content={t("common.print")}
-                render={
-                  <Button
-                    onClick={() => {
-                      if (tab.propertyId !== undefined) {
-                        docxActionsRef.current.get(tab.id)?.print();
-                        return;
-                      }
-                      docxPrintActionsRef.current.get(tab.id)?.();
-                    }}
-                    size="icon-xs"
-                    variant="ghost"
-                  >
-                    <PrinterIcon className="size-3.5" />
-                  </Button>
-                }
-              />
-            ) : (
-              <PeekPrintButton />
-            )}
             <Tooltip
               content={t("workspaces.pdf.openFullView")}
               render={
@@ -823,7 +947,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           });
         };
 
-        const viewerContent = (
+        const viewerPane = (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {!isNativeDocxDisplay && tab.justificationFieldId && (
               <Suspense
@@ -870,7 +994,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   });
                 }}
                 onError={handleViewerError}
-                onPreviewDoubleClick={promptDocxUnlock}
                 onReadonlyEditAttempt={promptDocxUnlock}
                 onSaved={(fieldId) => {
                   if (fieldId !== tab.id) {
@@ -910,7 +1033,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 errorFallback={viewerErrorFallback}
                 fieldId={tab.id}
                 filePurpose={isNativeDocxDisplay ? "native-display" : "display"}
-                docxPrintActionsRef={docxPrintActionsRef}
                 mimeType={tab.mimeType ?? undefined}
                 onDocxScrollTopChange={handleDocxScrollTopChange}
                 onError={handleViewerError}
@@ -920,6 +1042,12 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 workspaceId={tab.workspaceId}
               />
             )}
+          </div>
+        );
+
+        const viewerContent = (
+          <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+            {viewerPane}
           </div>
         );
 
@@ -1038,6 +1166,21 @@ const MeasuredPdfProvider = ({
     </div>
   );
 };
+
+// ── Metadata panel skeleton ───────────────────────
+
+const MetadataPanelSkeleton = () => (
+  <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex flex-col gap-px p-2">
+      {[0, 1, 2, 3].map((i) => (
+        <div className="flex flex-col gap-1.5 px-2 py-2" key={i}>
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-4 w-full" />
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 // ── Error fallback ────────────────────────────────
 

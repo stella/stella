@@ -1,5 +1,4 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useParams } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -10,13 +9,9 @@ import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-quer
  * Returns a function that starts an AI extraction workflow via REST.
  * Replaces the old `useWorkflowActor().startWorkflow()` Rivet call.
  */
-export const useStartWorkflow = () => {
+export const useStartWorkflow = (workspaceId: string) => {
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const workspaceId = useParams({
-    from: "/_protected/workspaces/$workspaceId",
-    select: (s) => s.workspaceId,
-  });
 
   return async (args?: { entityIds?: string[]; entityIdsOrder?: string[] }) => {
     try {

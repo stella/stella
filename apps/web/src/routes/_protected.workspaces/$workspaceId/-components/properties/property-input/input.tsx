@@ -18,8 +18,8 @@ import { useTranslations } from "use-intl";
 
 import { PropertyFormField } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/form";
 import {
+  createCustomMention,
   createSuggestion,
-  CustomMention,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/custom-mention";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
@@ -84,7 +84,7 @@ export const PropertyPromptInput = ({
         placeholder: t("workspaces.properties.setPromptPlaceholder"),
         showOnlyWhenEditable: false,
       }),
-      CustomMention.configure({
+      createCustomMention(workspaceId).configure({
         suggestion: createSuggestion(suggestionOptions),
         deleteTriggerWithBackspace: true,
       }),

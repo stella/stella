@@ -61,8 +61,8 @@ export const AddEntityMenu = ({
   showTaskOption = true,
 }: AddEntityMenuProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const isWorkflowRunning = useIsWorkflowRunning();
-  const isEntitiesLimitReached = useEntitiesCountLimit();
+  const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
+  const isEntitiesLimitReached = useEntitiesCountLimit(workspaceId);
   const [isUploadPending, createFileEntities] =
     useCreateFileEntities(workspaceId);
   const { data: hasFileProperties } = useSuspenseQuery({

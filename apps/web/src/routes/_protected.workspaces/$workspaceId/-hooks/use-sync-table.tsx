@@ -31,7 +31,8 @@ export const useSyncTable = (activeView: UseSyncTableProps) => {
     () => chunkJustificationEntityIds(entityIds),
     [entityIds],
   );
-  useSyncJustificationChunks(justificationEntityIdChunks, {
-    enabled: syncJustifications,
-  });
+  useSyncJustificationChunks(
+    { workspaceId, entityIdChunks: justificationEntityIdChunks },
+    { enabled: syncJustifications },
+  );
 };

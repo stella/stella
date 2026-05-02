@@ -59,6 +59,7 @@ export const PDFPage = ({ pageId, renderOverlay, fallback }: PDFPageProps) => {
       style={
         {
           "--total-scale-factor": "var(--scale-factor)",
+          backgroundColor: "var(--document-preview-page, var(--background))",
           width: `round(down, var(--total-scale-factor) * ${page?.originalWidth ?? 0}px, var(--scale-round-x))`,
           height: `round(down, var(--total-scale-factor) * ${page?.originalHeight ?? 0}px, var(--scale-round-y))`,
           // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
@@ -120,6 +121,7 @@ const PDFPageContent = ({ pageId, renderPromise }: PDFPageContentProps) => {
           };
         }}
         className="size-full overflow-hidden"
+        style={{ filter: "var(--pdf-page-filter, none)" }}
       />
       <div
         ref={(el) => {

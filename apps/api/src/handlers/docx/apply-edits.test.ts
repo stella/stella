@@ -222,4 +222,42 @@ describe("applyEdits", () => {
     expect(result).toContain("w:i");
     expect(result).toContain(" world");
   });
+
+  test("inserted newlines become OOXML line breaks", () => {
+    const xml = WRAP(P("Hello"));
+    const edits: DocxEdit[] = [
+      {
+        kind: "insert",
+        paragraphIndex: 0,
+        charOffset: 5,
+        text: "\nworld",
+      },
+    ];
+
+    nextId = 1;
+    const result = applyEdits(xml, edits, AUTHOR, idGen);
+
+    expect(result).toContain('<w:br w:type="textWrapping"/>');
+    expect(result).toContain("world");
+    expect(result).not.toContain(">\nworld<");
+  });
+
+  test("deleted newlines become OOXML line breaks", () => {
+    const xml = WRAP(P("Hello\nworld"));
+    const edits: DocxEdit[] = [
+      {
+        kind: "delete",
+        paragraphIndex: 0,
+        charOffset: 5,
+        length: 6,
+      },
+    ];
+
+    nextId = 1;
+    const result = applyEdits(xml, edits, AUTHOR, idGen);
+
+    expect(result).toContain('<w:br w:type="textWrapping"/>');
+    expect(result).toContain("world");
+    expect(result).not.toContain(">\nworld<");
+  });
 });

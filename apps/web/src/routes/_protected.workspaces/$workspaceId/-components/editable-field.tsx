@@ -197,7 +197,7 @@ const InlineEditor = ({
 }: InlineEditorProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const startWorkflow = useStartWorkflow();
+  const startWorkflow = useStartWorkflow(workspaceId);
 
   const upsertField = useMutation({
     mutationFn: async (newContent: EditableFieldContent) => {

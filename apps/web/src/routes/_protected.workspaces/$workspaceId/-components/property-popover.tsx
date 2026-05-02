@@ -191,9 +191,9 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
   const { workspaceId, id, name, content } = property;
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
-  const isWorkflowRunning = useIsWorkflowRunning();
+  const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
   const updateProperty = useUpdateProperty();
-  const startWorkflow = useStartWorkflow();
+  const startWorkflow = useStartWorkflow(workspaceId);
   const form = useForm({
     defaultValues: getDefaultValues(property),
     validationLogic: revalidateLogic(),
