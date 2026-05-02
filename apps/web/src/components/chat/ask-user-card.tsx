@@ -40,8 +40,7 @@ export const AskUserCard = ({
     }),
     [workspaceId],
   );
-  const answeredOutput =
-    part.state === "output-available" ? part.output : null;
+  const answeredOutput = part.state === "output-available" ? part.output : null;
   const isLoading = part.state === "input-streaming";
 
   // Input is only fully available after input-streaming.
@@ -136,9 +135,7 @@ export const AskUserCard = ({
     <div
       className={cn(
         "my-1 rounded-lg border text-sm",
-        isDone
-          ? "bg-muted/40 border-transparent"
-          : "border-border bg-muted/30",
+        isDone ? "bg-muted/40 border-transparent" : "border-border bg-muted/30",
       )}
     >
       {/* Header */}

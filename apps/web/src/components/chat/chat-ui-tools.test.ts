@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  getChatToolTitleKey,
-} from "@/components/chat/chat-ui-tools";
+import { getChatToolTitleKey } from "@/components/chat/chat-ui-tools";
 
 describe("chat tool titles", () => {
   test("maps current cross-matter tools to translation keys", () => {

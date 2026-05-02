@@ -18,9 +18,7 @@ const userId = toSafeId<"user">("22222222-2222-4222-8222-222222222222");
 const workspaceId = toSafeId<"workspace">(
   "33333333-3333-4333-8333-333333333333",
 );
-const entityId = toSafeId<"entity">(
-  "44444444-4444-4444-8444-444444444444",
-);
+const entityId = toSafeId<"entity">("44444444-4444-4444-8444-444444444444");
 
 const unusedScopedDb: ScopedDb = async () => {
   throw new Error("This test only constructs tool schemas.");

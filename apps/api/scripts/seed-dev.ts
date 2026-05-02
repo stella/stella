@@ -32,6 +32,7 @@ import {
   fields,
   invoices,
   properties,
+  propertyDependencies,
   rateEntries,
   rateTables,
   timeEntries,
@@ -3058,6 +3059,14 @@ export async function seed(organizationId?: string, userId?: string) {
     await db
       .delete(chatThreads)
       .where(sql`${chatThreads.workspaceId} IN ${allSeedWorkspaceIds}`);
+    // property_dependencies.depends_on_property_id uses ON DELETE RESTRICT,
+    // which blocks the workspace cascade from removing properties. Clear
+    // dependencies first so the cascade can complete.
+    await db
+      .delete(propertyDependencies)
+      .where(
+        sql`${propertyDependencies.workspaceId} IN ${allSeedWorkspaceIds}`,
+      );
     await db
       .delete(workspaces)
       .where(sql`${workspaces.id} IN ${allSeedWorkspaceIds}`);
@@ -3065,6 +3074,27 @@ export async function seed(organizationId?: string, userId?: string) {
   if (allSeedContactIds.length > 0) {
     // Delete any workspaces referencing seed contacts (including
     // manually-created ones) to avoid FK constraint violations.
+    const clientWorkspaces = await db.query.workspaces.findMany({
+      where: { clientId: { in: allSeedContactIds } },
+      columns: { id: true },
+    });
+    const clientWorkspaceIds = clientWorkspaces.map((w) => w.id);
+    if (clientWorkspaceIds.length > 0) {
+      // chat_messages.workspace_id and chat_threads.workspace_id are
+      // ON DELETE RESTRICT, same as property_dependencies; clear them
+      // before the workspace delete cascades.
+      await db
+        .delete(chatMessages)
+        .where(sql`${chatMessages.workspaceId} IN ${clientWorkspaceIds}`);
+      await db
+        .delete(chatThreads)
+        .where(sql`${chatThreads.workspaceId} IN ${clientWorkspaceIds}`);
+      await db
+        .delete(propertyDependencies)
+        .where(
+          sql`${propertyDependencies.workspaceId} IN ${clientWorkspaceIds}`,
+        );
+    }
     await db
       .delete(workspaces)
       .where(sql`${workspaces.clientId} IN ${allSeedContactIds}`);
