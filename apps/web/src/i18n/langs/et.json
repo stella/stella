@@ -484,6 +484,7 @@
     "cancel": "Tühista",
     "caseLaw": "Kohtupraktika",
     "category": "Kategooria",
+    "changeColor": "Muuda värvi",
     "clauses": "Klauslid",
     "close": "Sulge",
     "closeAll": "Sulge kõik",
@@ -1464,7 +1465,6 @@
     },
     "justification": "Põhjendus:",
     "kanban": {
-      "changeColor": "Muuda värvi",
       "deleteAll": "Kustuta kõik",
       "deleteAllConfirm": "Kustutada kõik {count} elementi veerus „{column}\"?",
       "hideColumn": "Peida veerg",
@@ -1637,6 +1637,8 @@
       "unsupported": "Toetamata"
     },
     "reference": "Viitenumber",
+    "referenceConventionHint": "Organisatsiooni vorming: {example}",
+    "referenceFormatWarning": "Ei vasta organisatsiooni vormingule.",
     "referencePlaceholder": "nt 2024/001",
     "referenceTaken": "See viitenumber on juba kasutusel",
     "sections": {

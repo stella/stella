@@ -106,7 +106,7 @@ import {
 import type { Role } from "@/lib/auth";
 import { getInitials } from "@/lib/get-initials";
 import { HOTKEYS, NAV_KEY } from "@/lib/hotkeys";
-import { getMatterSwatch } from "@/lib/matter-colors";
+import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { knowledgeSections } from "@/routes/_protected.knowledge/index";
@@ -167,7 +167,7 @@ const MatterIcon = ({ id, color }: Pick<MatterIdentity, "id" | "color">) => (
   <LayersIcon
     className="size-4 shrink-0"
     style={{
-      color: color ? `var(${color})` : `var(${getMatterSwatch(id)})`,
+      color: resolveMatterColor(id, color),
     }}
   />
 );
@@ -715,7 +715,7 @@ const MatterItem = ({
                 <div
                   className="max-w-48 border-s-2 px-2 py-1.5"
                   style={{
-                    borderColor: `var(${ws.color || getMatterSwatch(ws.id)})`,
+                    borderColor: resolveMatterColor(ws.id, ws.color),
                   }}
                 >
                   <div className="truncate text-xs font-medium">{ws.name}</div>

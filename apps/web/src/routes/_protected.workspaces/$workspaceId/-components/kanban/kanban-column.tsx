@@ -400,7 +400,7 @@ export const KanbanColumn = ({
                 <Popover modal>
                   <PopoverTrigger render={<MenuItem closeOnClick={false} />}>
                     <PaletteIcon />
-                    {t("workspaces.kanban.changeColor")}
+                    {t("common.changeColor")}
                   </PopoverTrigger>
                   <PopoverPopup
                     className="*:data-[slot=popover-viewport]:p-1!"

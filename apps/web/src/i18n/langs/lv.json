@@ -484,6 +484,7 @@
     "cancel": "Atcelt",
     "caseLaw": "Tiesu prakse",
     "category": "Kategorija",
+    "changeColor": "Mainīt krāsu",
     "clauses": "Klauzulas",
     "close": "Aizvērt",
     "closeAll": "Aizvērt visu",
@@ -1464,7 +1465,6 @@
     },
     "justification": "Pamatojums:",
     "kanban": {
-      "changeColor": "Mainīt krāsu",
       "deleteAll": "Dzēst visus",
       "deleteAllConfirm": "Dzēst visus {count} vienumus slejā \"{column}\"?",
       "hideColumn": "Paslēpt sleju",
@@ -1637,6 +1637,8 @@
       "unsupported": "Netiek atbalstīts"
     },
     "reference": "Atsauces numurs",
+    "referenceConventionHint": "Organizācijas formāts: {example}",
+    "referenceFormatWarning": "Neatbilst organizācijas formātam.",
     "referencePlaceholder": "piem. 2024/001",
     "referenceTaken": "Šis atsauces numurs jau tiek izmantots",
     "sections": {

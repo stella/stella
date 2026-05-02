@@ -484,6 +484,7 @@
     "cancel": "Mégse",
     "caseLaw": "Joggyakorlat",
     "category": "Kategória",
+    "changeColor": "Szín módosítása",
     "clauses": "Záradékok",
     "close": "Bezárás",
     "closeAll": "Összes bezárása",
@@ -1464,7 +1465,6 @@
     },
     "justification": "Indoklás:",
     "kanban": {
-      "changeColor": "Szín módosítása",
       "deleteAll": "Összes törlése",
       "deleteAllConfirm": "Törli az összes {count} elemet a(z) „{column}” oszlopban?",
       "hideColumn": "Oszlop elrejtése",
@@ -1637,6 +1637,8 @@
       "unsupported": "Nem támogatott"
     },
     "reference": "Hivatkozási szám",
+    "referenceConventionHint": "Szervezeti formátum: {example}",
+    "referenceFormatWarning": "Nem egyezik a szervezeti formátummal.",
     "referencePlaceholder": "pl. 2024/001",
     "referenceTaken": "Ez a hivatkozási szám már használatban van",
     "sections": {

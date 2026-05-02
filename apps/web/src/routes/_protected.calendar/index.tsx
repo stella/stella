@@ -18,6 +18,7 @@ import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useLocale, useTranslations } from "use-intl";
 
+import { resolveMatterColor } from "@/lib/matter-colors";
 import type { SafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
 import type { CalendarDay } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils";
@@ -325,7 +326,7 @@ function CrossWorkspaceCalendar() {
                   className="size-2.5 shrink-0 rounded-full"
                   style={{
                     backgroundColor: ws.color
-                      ? `var(${ws.color})`
+                      ? resolveMatterColor(ws.id, ws.color)
                       : "var(--color-muted-foreground)",
                   }}
                 />

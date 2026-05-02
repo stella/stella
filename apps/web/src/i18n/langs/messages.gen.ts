@@ -487,6 +487,7 @@ type Messages = {
     "cancel": "Cancel";
     "caseLaw": "Case Law";
     "category": "Category";
+    "changeColor": "Change color";
     "clauses": "Clauses";
     "close": "Close";
     "closeAll": "Close all";
@@ -1467,7 +1468,6 @@ type Messages = {
     };
     "justification": "Justification:";
     "kanban": {
-      "changeColor": "Change color";
       "deleteAll": "Delete all";
       "deleteAllConfirm": "Delete all {count} items in \"{column}\"?";
       "hideColumn": "Hide column";
@@ -1640,6 +1640,8 @@ type Messages = {
       "unsupported": "Unsupported";
     };
     "reference": "Reference number";
+    "referenceConventionHint": "Organization format: {example}";
+    "referenceFormatWarning": "Doesn't match the organization format.";
     "referencePlaceholder": "e.g. 2024/001";
     "referenceTaken": "This reference number is already in use";
     "sections": {

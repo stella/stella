@@ -37,7 +37,7 @@ import * as v from "valibot";
 
 import { UserIdentity } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";
-import { getMatterSwatch } from "@/lib/matter-colors";
+import { resolveMatterColor } from "@/lib/matter-colors";
 import {
   useDeleteContact,
   useUpdateContact,
@@ -1551,9 +1551,7 @@ const MatterIcon = ({
 }: {
   matter: { id: string; color: string | null };
 }) => {
-  const activeColor = matter.color
-    ? `var(${matter.color})`
-    : `var(${getMatterSwatch(matter.id)})`;
+  const activeColor = resolveMatterColor(matter.id, matter.color);
 
   return (
     <LayersIcon className="size-4 shrink-0" style={{ color: activeColor }} />

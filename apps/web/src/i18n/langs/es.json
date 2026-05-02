@@ -484,6 +484,7 @@
     "cancel": "Cancelar",
     "caseLaw": "Jurisprudencia",
     "category": "Categoría",
+    "changeColor": "Cambiar color",
     "clauses": "Cláusulas",
     "close": "Cerrar",
     "closeAll": "Cerrar todo",
@@ -1464,7 +1465,6 @@
     },
     "justification": "Justificación:",
     "kanban": {
-      "changeColor": "Cambiar color",
       "deleteAll": "Eliminar todo",
       "deleteAllConfirm": "¿Eliminar los {count} elementos de \"{column}\"?",
       "hideColumn": "Ocultar columna",
@@ -1637,6 +1637,8 @@
       "unsupported": "No compatible"
     },
     "reference": "Número de referencia",
+    "referenceConventionHint": "Formato de la organización: {example}",
+    "referenceFormatWarning": "No coincide con el formato de la organización.",
     "referencePlaceholder": "p. ej. 2024/001",
     "referenceTaken": "Este número de referencia ya está en uso",
     "sections": {

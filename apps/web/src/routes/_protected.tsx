@@ -47,7 +47,7 @@ import {
 } from "@/components/sidebar";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { HOTKEYS } from "@/lib/hotkeys";
-import { getMatterSwatch } from "@/lib/matter-colors";
+import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { prefetchNonCriticalQuery } from "@/lib/react-query";
 import { roleOptions } from "@/routes/-queries";
@@ -278,7 +278,7 @@ function ProtectedContent({
     enabled: !!workspaceId,
   });
   const matterColor = workspaceId
-    ? (workspace?.color ?? getMatterSwatch(workspaceId))
+    ? resolveMatterColor(workspaceId, workspace?.color ?? null)
     : null;
   const chromeActions = (
     <div
@@ -338,7 +338,7 @@ function ProtectedContent({
         style={
           matterColor
             ? {
-                backgroundColor: `color-mix(in srgb, var(${matterColor}) 2%, transparent)`,
+                backgroundColor: `color-mix(in srgb, ${matterColor} 2%, transparent)`,
               }
             : undefined
         }

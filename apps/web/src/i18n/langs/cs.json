@@ -484,6 +484,7 @@
     "cancel": "Zrušit",
     "caseLaw": "Judikatura",
     "category": "Kategorie",
+    "changeColor": "Změnit barvu",
     "clauses": "Klauzule",
     "close": "Zavřít",
     "closeAll": "Zavřít vše",
@@ -1464,7 +1465,6 @@
     },
     "justification": "Odůvodnění:",
     "kanban": {
-      "changeColor": "Změnit barvu",
       "deleteAll": "Smazat vše",
       "deleteAllConfirm": "Smazat všechny {count} položky ve sloupci „{column}“?",
       "hideColumn": "Skrýt sloupec",
@@ -1637,6 +1637,8 @@
       "unsupported": "Nepodporováno"
     },
     "reference": "Referenční číslo",
+    "referenceConventionHint": "Formát organizace: {example}",
+    "referenceFormatWarning": "Neodpovídá formátu organizace.",
     "referencePlaceholder": "např. 2024/001",
     "referenceTaken": "Toto referenční číslo je již použito",
     "sections": {

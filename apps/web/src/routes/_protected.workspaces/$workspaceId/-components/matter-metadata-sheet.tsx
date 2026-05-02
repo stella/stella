@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { MatterNumberHint } from "@/components/matter-number-hint";
 import { usePermissions } from "@/hooks/use-permissions";
 import { APIError } from "@/lib/errors";
 import { InfoSoudSection } from "@/routes/_protected.workspaces/$workspaceId/-components/infosoud-section";
@@ -93,10 +94,11 @@ export const MatterMetadataSheet = ({
             return;
           }
 
-          toastManager.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+          const message =
+            APIError.is(error) && error.status < 500
+              ? error.message
+              : t("errors.actionFailed");
+          toastManager.add({ title: message, type: "error" });
         },
       },
     );
@@ -175,11 +177,11 @@ export const MatterMetadataSheet = ({
                 placeholder={t("workspaces.referencePlaceholder")}
                 value={referenceValue}
               />
-              {referenceError && (
-                <p className="text-destructive mt-1 text-xs">
-                  {referenceError}
-                </p>
-              )}
+              <MatterNumberHint
+                error={referenceError}
+                value={referenceValue}
+                variant="inline"
+              />
             </section>
 
             <Separator />

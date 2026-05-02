@@ -484,6 +484,7 @@
     "cancel": "Atšaukti",
     "caseLaw": "Teismų praktika",
     "category": "Kategorija",
+    "changeColor": "Pakeisti spalvą",
     "clauses": "Sąlygos",
     "close": "Uždaryti",
     "closeAll": "Uždaryti viską",
@@ -1464,7 +1465,6 @@
     },
     "justification": "Pagrindimas:",
     "kanban": {
-      "changeColor": "Pakeisti spalvą",
       "deleteAll": "Ištrinti visus",
       "deleteAllConfirm": "Ištrinti visus {count} elementus stulpelyje \"{column}\"?",
       "hideColumn": "Slėpti stulpelį",
@@ -1637,6 +1637,8 @@
       "unsupported": "Nepalaikoma"
     },
     "reference": "Nuorodos numeris",
+    "referenceConventionHint": "Organizacijos formatas: {example}",
+    "referenceFormatWarning": "Neatitinka organizacijos formato.",
     "referencePlaceholder": "pvz. 2024/001",
     "referenceTaken": "Šis nuorodos numeris jau naudojamas",
     "sections": {

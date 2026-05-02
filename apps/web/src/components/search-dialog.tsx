@@ -37,7 +37,7 @@ import { useLocale, useTranslations } from "use-intl";
 
 import { UserAvatar } from "@/components/user-avatar";
 import type { TranslationKey } from "@/i18n/types";
-import { getMatterSwatch } from "@/lib/matter-colors";
+import { resolveMatterColor } from "@/lib/matter-colors";
 import {
   presetUpdatedFrom,
   searchFacetOptions,
@@ -1528,9 +1528,7 @@ const SearchHitIcon = ({ hit }: { hit: GlobalSearchHit }) => {
   const Icon = KIND_ICONS[hit.type] ?? FileTextIcon;
 
   if (hit.type === "matter") {
-    const color = hit.color
-      ? `var(${hit.color})`
-      : `var(${getMatterSwatch(hit.workspaceId)})`;
+    const color = resolveMatterColor(hit.workspaceId, hit.color);
     return <Icon className="mt-0.5 size-4 shrink-0" style={{ color }} />;
   }
 
