@@ -161,3 +161,25 @@ STELLA_API_HOST_PORT=8080 docker compose --env-file apps/api/.env -f docker-comp
 - Redis-compatible service (Redis or Valkey)
 - S3-compatible object storage (AWS S3, MinIO, Cloudflare R2)
 - 2 GB RAM minimum
+
+## Stay informed about updates
+
+stella publishes a [GitHub Release](https://github.com/stella/stella/releases)
+for every version. Three ways to keep up with it:
+
+- **GitHub Releases** — click *Watch → Custom → Releases* on the repo to get
+  emailed when a new version ships.
+- **RSS / Atom feed** — subscribe to
+  [`https://github.com/stella/stella/releases.atom`](https://github.com/stella/stella/releases.atom)
+  in your reader of choice, or wire it into your release tooling.
+  Registry watchers like [Diun](https://crazymax.dev/diun/) can also
+  monitor the published image at `ghcr.io/stella/stella-api`.
+- **In-app banner** — when you set `VITE_SELFHOST="true"` in
+  `apps/web/.env` and rebuild the SPA, stella checks the GitHub Releases
+  API once a day and surfaces newer versions to logged-in users with a
+  one-click link to the release notes. Off by default; the public
+  hosted app on stll.app does not enable it.
+
+For security-relevant fixes, watch
+[Security Advisories](https://github.com/stella/stella/security/advisories)
+on the repo.

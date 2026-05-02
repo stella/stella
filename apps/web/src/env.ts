@@ -37,6 +37,12 @@ export const env = createEnv({
       v.pipe(v.string(), v.parseBoolean()),
       "false",
     ),
+    // Set to "true" only on self-hosted instances. Enables the
+    // in-app "update available" banner that polls the public GitHub
+    // Releases API and surfaces newer versions to the operator.
+    // Off by default so the hosted SaaS, where customers don't
+    // upgrade themselves, never shows it.
+    VITE_SELFHOST: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
     VITE_FEATURE_CHAT: featureFlagSchema,
     VITE_FEATURE_BILLING: featureFlagSchema,
     VITE_FEATURE_KNOWLEDGE_TEMPLATES: featureFlagSchema,

@@ -37,6 +37,7 @@ import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { DefaultPendingComponent } from "@/components/route-components";
+import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
 import { ShortcutHintsOverlay } from "@/components/shortcut-hints-overlay";
 import {
   SidebarInset,
@@ -293,6 +294,7 @@ function ProtectedContent({
 
   return (
     <SidebarInset className="flex flex-col">
+      <SelfhostUpdateBanner />
       <header
         className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4"
         style={

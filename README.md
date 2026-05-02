@@ -14,6 +14,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/stella/stella/releases"><img src="https://img.shields.io/github/v/release/stella/stella?include_prereleases&label=release" alt="Latest release" /></a>
   <a href="https://github.com/stella/stella/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License" /></a>
   <a href="https://stll.app"><img src="https://img.shields.io/badge/cloud-stll.app-black" alt="Stella Cloud" /></a>
   <a href="https://github.com/stella/stella/issues"><img src="https://img.shields.io/github/issues/stella/stella" alt="Issues" /></a>

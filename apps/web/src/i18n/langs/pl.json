@@ -1142,6 +1142,11 @@
       "year": "Ostatni rok"
     }
   },
+  "selfhost": {
+    "dismissUpdate": "Dismiss update notice",
+    "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
+    "viewReleaseNotes": "View release notes"
+  },
   "success": {
     "aiConfigDeleted": "Konfiguracja AI usunięta",
     "aiConfigUpdated": "Konfiguracja AI zaktualizowana",

@@ -1145,6 +1145,11 @@ type Messages = {
       "year": "Last year";
     };
   };
+  "selfhost": {
+    "updateAvailable": "stella v{latest} is available. You're running v{installed}.";
+    "viewReleaseNotes": "View release notes";
+    "dismissUpdate": "Dismiss update notice";
+  };
   "success": {
     "aiConfigDeleted": "AI configuration removed";
     "aiConfigUpdated": "AI configuration updated";
