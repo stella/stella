@@ -10,12 +10,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  provenance-token:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      token: ${{ steps.app-token.outputs.token }}
+    steps:
+      - name: Mint App token
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.PROVENANCE_APP_ID }}
+          private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
   provenance-update:
+    needs: provenance-token
     permissions:
       contents: write
       pull-requests: write
     uses: stella/.github/.github/workflows/provenance-update.yml@cbcba03b6492bbc8a29da0bf2416b01431c4d90a
-    secrets: inherit
+    secrets:
+      auth_token: ${{ needs.provenance-token.outputs.token }}
     with:
       install-command: bun install --frozen-lockfile
       provenance-version: v0.1.3
