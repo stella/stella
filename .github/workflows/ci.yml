@@ -144,7 +144,11 @@ jobs:
 
       - name: Format
         if: steps.changed-files.outputs.package_checks_required == 'true'
-        run: bun run format -- ${{ steps.affected.outputs.flag }}
+        # Call turbo directly: the `format:check` script already
+        # contains `-- --check`, so appending `--affected` via
+        # `bun run` would land it after turbo's `--` and forward it
+        # to oxfmt instead of filtering packages.
+        run: bun --bun turbo run format ${{ steps.affected.outputs.flag }} -- --check
 
       - name: Typecheck
         if: steps.changed-files.outputs.package_checks_required == 'true'
