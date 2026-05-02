@@ -14,6 +14,13 @@
     },
     "settings": {
       "description": "Gestione las preferencias de su cuenta",
+      "desktopApp": "Desktop app",
+      "desktopAppDescription": "Open documents and files directly in stella from your computer.",
+      "desktopDownloadMac": "Download for macOS",
+      "desktopDownloadOtherMac": "On Windows? Download for Windows",
+      "desktopDownloadOtherWeb": "On macOS? Download for macOS",
+      "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments",
+      "desktopDownloadWindows": "Download for Windows",
       "timezone": "Zona horaria",
       "timezoneDescription": "Se utiliza para las marcas de tiempo en notificaciones y correos electrónicos",
       "timezoneSaved": "Zona horaria actualizada"

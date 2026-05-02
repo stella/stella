@@ -17,6 +17,13 @@ type Messages = {
     };
     "settings": {
       "description": "Manage your account preferences";
+      "desktopApp": "Desktop app";
+      "desktopAppDescription": "Open documents and files directly in stella from your computer.";
+      "desktopDownloadMac": "Download for macOS";
+      "desktopDownloadWindows": "Download for Windows";
+      "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments";
+      "desktopDownloadOtherMac": "On Windows? Download for Windows";
+      "desktopDownloadOtherWeb": "On macOS? Download for macOS";
       "timezone": "Timezone";
       "timezoneDescription": "Used for timestamps in notifications and emails";
       "timezoneSaved": "Timezone updated";

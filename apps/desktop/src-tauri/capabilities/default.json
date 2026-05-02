@@ -12,6 +12,8 @@
     "notification:allow-is-permission-granted",
     "opener:default",
     "clipboard-manager:allow-write-text",
-    "deep-link:default"
+    "deep-link:default",
+    "updater:default",
+    "process:default"
   ]
 }

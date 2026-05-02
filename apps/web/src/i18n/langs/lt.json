@@ -14,6 +14,13 @@
     },
     "settings": {
       "description": "Tvarkykite savo paskyros nuostatas",
+      "desktopApp": "Desktop app",
+      "desktopAppDescription": "Open documents and files directly in stella from your computer.",
+      "desktopDownloadMac": "Download for macOS",
+      "desktopDownloadOtherMac": "On Windows? Download for Windows",
+      "desktopDownloadOtherWeb": "On macOS? Download for macOS",
+      "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments",
+      "desktopDownloadWindows": "Download for Windows",
       "timezone": "Laiko juosta",
       "timezoneDescription": "Naudojama laiko žymoms pranešimuose ir el. laiškuose",
       "timezoneSaved": "Laiko juosta atnaujinta"

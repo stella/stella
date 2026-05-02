@@ -41,6 +41,8 @@ tauri-plugin-clipboard-manager = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
+tauri-plugin-process = "2"
+tauri-plugin-updater = "2"
 axum = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "6"

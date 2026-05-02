@@ -30,8 +30,7 @@
       "icons/icon.icns"
     ],
     "macOS": {
-      "minimumSystemVersion": "10.15",
-      "signingIdentity": "Stella Dev"
+      "minimumSystemVersion": "10.15"
     }
   },
   "plugins": {
@@ -39,6 +38,12 @@
       "desktop": {
         "schemes": ["stella"]
       }
+    },
+    "updater": {
+      "endpoints": [
+        "https://github.com/stella/stella/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENFMTlDRDhGMTRDQjg0RkMKUldUOGhNc1VqODBaem4zNmNFVVJlT3VSOVh2RlRKanBKVGIrRS8xNWt4aGt4VkduWmdDL1MwdHkK"
     }
   }
 }

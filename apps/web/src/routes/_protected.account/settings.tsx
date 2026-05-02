@@ -27,6 +27,7 @@ import { toAuthClientError } from "@/lib/errors";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 import type { CommonTimezone } from "@/lib/timezones";
 import { sessionOptions } from "@/routes/-queries";
+import { DesktopDownloadSection } from "@/routes/_protected.account/-desktop-download-section";
 import { SessionsSection } from "@/routes/_protected.account/-sessions-section";
 
 export const Route = createFileRoute("/_protected/account/settings")({
@@ -109,6 +110,7 @@ function Settings() {
           </div>
         </FramePanel>
       </Frame>
+      <DesktopDownloadSection />
       <SessionsSection />
     </div>
   );

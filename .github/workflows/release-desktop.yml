@@ -1,0 +1,334 @@
+name: Release Desktop App
+
+# Build, sign, and publish the Tauri desktop app for each release tag.
+# Runs after release.yml succeeds so the GitHub Release object already
+# exists; this workflow only adds desktop installers + the updater
+# manifest to it. Skipped automatically when nothing in apps/desktop
+# (or its bundled shared packages) changed since the previous tag, so
+# backend-only releases don't churn a 30 MB redownload.
+#
+# Builds Windows + macOS in parallel. Windows uses Azure Trusted
+# Signing; macOS uses a Developer ID Application cert + App Store
+# Connect API key for notarization.
+
+on:
+  workflow_run:
+    workflows: ["Release Artifacts"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: "Existing release tag, e.g. v0.0.1"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-desktop-${{ github.event.workflow_run.head_branch || inputs.release_ref }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    # The workflow_run trigger fires on success or failure; gate on
+    # success and resolve the tag the upstream run was building.
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && (startsWith(github.event.workflow_run.head_branch, 'v') || github.event.workflow_run.event == 'workflow_dispatch')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      release_ref: ${{ steps.ref.outputs.value }}
+      app_version: ${{ steps.ref.outputs.version }}
+      should_build: ${{ steps.diff.outputs.should_build }}
+    steps:
+      - name: Resolve release ref
+        id: ref
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RELEASE_INPUT: ${{ inputs.release_ref }}
+          UPSTREAM_EVENT: ${{ github.event.workflow_run.event }}
+          UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          if [[ -n "$RELEASE_INPUT" ]]; then
+            REF="$RELEASE_INPUT"
+          elif [[ "$HEAD_BRANCH" == v* ]]; then
+            REF="$HEAD_BRANCH"
+          elif [[ "$UPSTREAM_EVENT" == "workflow_dispatch" ]]; then
+            manifest_artifact=$(
+              gh api "repos/${{ github.repository }}/actions/runs/$UPSTREAM_RUN_ID/artifacts" \
+                --jq '.artifacts[].name | select(startswith("release-manifest-v"))' \
+                | head -n 1
+            )
+            REF="${manifest_artifact#release-manifest-}"
+          else
+            REF="$HEAD_BRANCH"
+          fi
+
+          if [[ ! "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::Expected a release tag like v1.2.3 or v1.2.3-rc.1; got '$REF'"
+            exit 1
+          fi
+          echo "value=$REF" >> "$GITHUB_OUTPUT"
+          echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ steps.ref.outputs.value }}
+          fetch-depth: 0
+
+      - name: Decide whether desktop changed since previous tag
+        id: diff
+        env:
+          CURRENT_TAG: ${{ steps.ref.outputs.value }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Stable releases are canonical: always build so latest.json
+          # is fresh and stable-channel users always get an upgrade
+          # path. The skip optimization only applies to prereleases,
+          # where rapid iteration on backend-only changes shouldn't
+          # churn desktop redownloads. This also avoids a subtle bug
+          # where the rc->stable promotion points the stable tag at
+          # the same commit as the rc and the diff comes up empty.
+          if [[ "$CURRENT_TAG" != *-* ]]; then
+            echo "Stable release ($CURRENT_TAG); always building desktop."
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # For prereleases, find the most recent prerelease tag that
+          # actually shipped desktop artifacts (i.e. has latest.json on
+          # its GitHub Release). If none, build. This pins the diff
+          # window to the last release a desktop client would have
+          # received, instead of any tag that happens to exist.
+          previous=""
+          while IFS= read -r tag; do
+            [[ -z "$tag" || "$tag" == "$CURRENT_TAG" ]] && continue
+            [[ "$tag" != *-* ]] && continue
+            if gh release view "$tag" --json assets \
+                --jq '.assets[].name' 2>/dev/null \
+                | grep -qx 'latest.json'; then
+              previous="$tag"
+              break
+            fi
+          done < <(git tag --sort=-creatordate --list 'v*')
+          if [[ -z "$previous" ]]; then
+            echo "No previous prerelease with desktop artifacts; will build."
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Comparing $previous..$CURRENT_TAG for desktop-relevant changes"
+          # Paths that justify a desktop rebuild. apps/web is included
+          # because the Tauri build embeds the web bundle. VERSION is
+          # intentionally excluded — every tag exists because VERSION
+          # bumped, so including it would defeat the skip entirely.
+          changed=$(git diff --name-only "$previous" "$CURRENT_TAG" -- \
+            apps/desktop/ \
+            apps/web/ \
+            packages/folio/ \
+            packages/ui/ \
+            || true)
+          if [[ -n "$changed" ]]; then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No desktop-relevant changes; skipping desktop build."
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: resolve
+    if: ${{ needs.resolve.outputs.should_build == 'true' }}
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos
+            runner: macos-14
+            target: universal-apple-darwin
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ needs.resolve.outputs.release_ref }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun ci
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b # stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - name: Stamp release version into tauri.conf.json + Cargo.toml
+        shell: bash
+        env:
+          VERSION: ${{ needs.resolve.outputs.app_version }}
+        run: |
+          # tauri.conf.json: replace `"version": "..."` on a single line.
+          node -e "
+            const fs = require('fs');
+            const path = 'apps/desktop/src-tauri/tauri.conf.json';
+            const conf = JSON.parse(fs.readFileSync(path, 'utf8'));
+            conf.version = process.env.VERSION;
+            fs.writeFileSync(path, JSON.stringify(conf, null, 2) + '\n');
+          "
+          # Cargo.toml: replace the package version line in-place.
+          node -e "
+            const fs = require('fs');
+            const path = 'apps/desktop/src-tauri/Cargo.toml';
+            const toml = fs.readFileSync(path, 'utf8');
+            const out = toml.replace(/^version = \"[^\"]+\"/m, 'version = \"' + process.env.VERSION + '\"');
+            fs.writeFileSync(path, out);
+          "
+
+      # ─── Windows: Azure Trusted Signing ────────────────────
+      - name: Build (Windows, unsigned)
+        if: matrix.os == 'windows'
+        working-directory: apps/desktop
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: bun run build -- --target ${{ matrix.target }} --bundles msi,nsis,updater
+
+      - name: Sign Windows installers via Azure Trusted Signing
+        if: matrix.os == 'windows'
+        uses: azure/trusted-signing-action@5dc2f74e4ca38d1e3abee5b53cab17d35aafa0d2 # v0.5.9
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
+          files-folder: apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle
+          files-folder-filter: msi,exe
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Re-sign updater zip for Tauri after binary signing
+        if: matrix.os == 'windows'
+        working-directory: apps/desktop
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        # Tauri's bundler signs the update package alongside the binary.
+        # Azure resigns the binary (changing its hash), so the .sig that
+        # the bundler produced is no longer valid. Run the signer over
+        # the resigned installer to refresh its .sig file.
+        run: |
+          bundle_dir="src-tauri/target/${{ matrix.target }}/release/bundle"
+          for installer in "$bundle_dir"/msi/*.msi "$bundle_dir"/nsis/*-setup.exe; do
+            [[ -f "$installer" ]] || continue
+            zip="$installer.zip"
+            (cd "$(dirname "$installer")" && bun x @tauri-apps/cli signer sign "$(basename "$installer")")
+            (cd "$(dirname "$zip")" && bun x @tauri-apps/cli signer sign "$(basename "$zip")") 2>/dev/null || true
+          done
+
+      # ─── macOS: Developer ID + App Store Connect notarization ─
+      - name: Add macOS Rust targets (universal binary)
+        if: matrix.os == 'macos'
+        run: |
+          rustup target add aarch64-apple-darwin
+          rustup target add x86_64-apple-darwin
+
+      - name: Import Apple Developer ID certificate into temporary keychain
+        if: matrix.os == 'macos'
+        uses: apple-actions/import-codesign-certs@8f3fb608891dd2244cdab3d69cd68c0d37a7fe93 # v5
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+
+      - name: Build, sign, and notarize (macOS)
+        if: matrix.os == 'macos'
+        working-directory: apps/desktop
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Tauri's bundler uses notarytool with API-key auth when
+          # APPLE_API_ISSUER + APPLE_API_KEY + APPLE_API_KEY_PATH are
+          # all set. The key file must be on disk; decode the base64
+          # secret into runner.temp so it's auto-cleaned up.
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api.p8
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
+          bun run build -- --target ${{ matrix.target }} --bundles dmg,updater
+
+      - name: Rename artifacts to stable, version-less filenames
+        # Tauri produces version-stamped names like
+        # `Stella_0.0.1_x64-setup.exe`. We collapse them into stable
+        # names so the in-app "Download" buttons can use deep links
+        # like `https://github.com/<repo>/releases/latest/download/
+        # Stella-windows-x64-setup.exe` regardless of the release
+        # version. The .sig files for updater archives keep their
+        # ordering so latest.json continues to find them.
+        shell: bash
+        run: bash scripts/rename-desktop-artifacts.sh "apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
+
+      - name: Upload installers to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+        shell: bash
+        run: |
+          bundle_dir="apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
+          mapfile -t artifacts < <(find "$bundle_dir" -type f -name 'Stella-*')
+          if [[ ${#artifacts[@]} -eq 0 ]]; then
+            echo "::error::No desktop artifacts found under $bundle_dir"
+            exit 1
+          fi
+          printf '  uploading %s\n' "${artifacts[@]}"
+          gh release upload "$RELEASE_REF" "${artifacts[@]}" --clobber
+
+  manifest:
+    # Build the Tauri updater manifest (latest.json) referencing the
+    # signed artifacts on the GitHub Release. Runs once after every
+    # platform finishes so a partial matrix doesn't ship a manifest
+    # that promises an installer that doesn't exist.
+    needs: [resolve, build]
+    if: ${{ needs.resolve.outputs.should_build == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ needs.resolve.outputs.release_ref }}
+
+      - name: Build and upload latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          APP_VERSION: ${{ needs.resolve.outputs.app_version }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: bash scripts/build-updater-manifest.sh > latest.json && gh release upload "$RELEASE_REF" latest.json --clobber

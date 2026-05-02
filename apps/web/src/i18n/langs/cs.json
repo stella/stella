@@ -14,6 +14,13 @@
     },
     "settings": {
       "description": "Spravujte své předvolby účtu",
+      "desktopApp": "Desktop app",
+      "desktopAppDescription": "Open documents and files directly in stella from your computer.",
+      "desktopDownloadMac": "Download for macOS",
+      "desktopDownloadOtherMac": "On Windows? Download for Windows",
+      "desktopDownloadOtherWeb": "On macOS? Download for macOS",
+      "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments",
+      "desktopDownloadWindows": "Download for Windows",
       "timezone": "Časové pásmo",
       "timezoneDescription": "Používá se pro časová razítka v oznámeních a e-mailech",
       "timezoneSaved": "Časové pásmo aktualizováno"

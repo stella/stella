@@ -8,10 +8,12 @@ mod session_store;
 mod sse;
 mod tray;
 mod types;
+mod updater;
 
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
 use tauri_plugin_autostart::MacosLauncher;
+use tauri_plugin_notification::NotificationExt;
 use tokio::sync::Mutex;
 use tracing_subscriber::EnvFilter;
 
@@ -41,6 +43,8 @@ pub fn run() {
     .plugin(tauri_plugin_deep_link::init())
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_opener::init())
+    .plugin(tauri_plugin_process::init())
+    .plugin(tauri_plugin_updater::Builder::new().build())
     .manage::<AppState>(Arc::clone(&manager))
     .setup(move |app| {
       let handle = app.handle().clone();
@@ -105,9 +109,21 @@ pub fn run() {
               tray::MenuAction::OpenPreferences(tab) => {
                 ensure_main_window(&handle, tab);
               }
-              tray::MenuAction::CheckForUpdates => {
-                // No-op: updater deferred
-              }
+              tray::MenuAction::CheckForUpdates => match updater::run_check(&handle).await {
+                updater::CheckOutcome::UpToDate => {
+                  if let Err(err) = handle
+                    .notification()
+                    .builder()
+                    .title("Stella is up to date")
+                    .show()
+                  {
+                    tracing::warn!(error = %err, "up-to-date notification failed");
+                  }
+                }
+                updater::CheckOutcome::Failed(msg) => {
+                  tracing::warn!(error = %msg, "tray-triggered updater check failed");
+                }
+              },
               tray::MenuAction::OpenEditRoot => {
                 let mgr = manager.lock().await;
                 mgr.open_edit_root().await;
@@ -176,6 +192,9 @@ pub fn run() {
           tracing::info!("auto-start enabled on first launch");
         }
       }
+
+      // Check for updates in the background after launch settles.
+      updater::schedule_startup_check(handle.clone());
 
       // Hide dock icon on macOS (tray-only app)
       #[cfg(target_os = "macos")]
