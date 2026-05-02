@@ -2,6 +2,7 @@ import { useCallback, useEffect } from "react";
 
 import { toastManager } from "@stll/ui/components/toast";
 import { useHotkey } from "@tanstack/react-hotkeys";
+import type { QueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,
   Navigate,
@@ -13,7 +14,7 @@ import {
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { APIError } from "@/lib/errors";
+import { APIError, toAPIError } from "@/lib/errors";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import {
@@ -47,41 +48,35 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     }
     return <Navigate replace to="/workspaces" />;
   },
-  onError: (error) => {
-    if (error instanceof APIError && error.status === 404) {
-      const t = getTranslator();
-      toastManager.add({
-        title: t("errors.matterNotFound"),
-        type: "error",
-      });
-      throw redirect({ to: "/workspaces" });
-    }
-  },
   loader: async ({ context, params, cause }) => {
     const wsId = params.workspaceId;
     const qc = context.queryClient;
 
-    void prefetchNonCriticalQuery(
-      qc,
-      workflowOptions({ key: { workspaceId: wsId } }),
-      (error: unknown) => {
-        getAnalytics().captureError(error);
-      },
-    );
-
     // Only block on workspace name (breadcrumb). Everything else
     // is prefetched — components use useSuspenseQuery which resolves
     // from cache or shows granular loading states.
-    const [workspace] = await Promise.all([
-      ensureCriticalQueryData(qc, workspaceOptions(wsId)),
-      cause === "enter"
-        ? api.workspaces({ workspaceId: wsId }).active.post()
-        : Promise.resolve(),
-    ]);
+    const workspace = await loadWorkspaceOrRedirect(qc, wsId);
 
     const onPrefetchError = (error: unknown) => {
       getAnalytics().captureError(error);
     };
+    if (cause === "enter") {
+      void api
+        .workspaces({ workspaceId: wsId })
+        .active.post()
+        .then((response) => {
+          if (response.error) {
+            onPrefetchError(toAPIError(response.error));
+          }
+        })
+        .catch(onPrefetchError);
+    }
+
+    void prefetchNonCriticalQuery(
+      qc,
+      workflowOptions({ key: { workspaceId: wsId } }),
+      onPrefetchError,
+    );
     void prefetchNonCriticalQuery(qc, viewsOptions(wsId), onPrefetchError);
     void prefetchNonCriticalQuery(qc, overviewOptions(wsId), onPrefetchError);
     void prefetchNonCriticalQuery(qc, propertiesOptions(wsId), onPrefetchError);
@@ -98,6 +93,29 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     ],
   }),
 });
+
+const loadWorkspaceOrRedirect = async (
+  queryClient: QueryClient,
+  workspaceId: string,
+) => {
+  try {
+    return await ensureCriticalQueryData(
+      queryClient,
+      workspaceOptions(workspaceId),
+    );
+  } catch (error) {
+    if (APIError.is(error) && error.status === 404) {
+      const t = getTranslator();
+      toastManager.add({
+        title: t("errors.matterNotFound"),
+        type: "error",
+      });
+      throw redirect({ to: "/workspaces", replace: true });
+    }
+
+    throw error;
+  }
+};
 
 function RouteComponent() {
   const workspaceId = Route.useParams({

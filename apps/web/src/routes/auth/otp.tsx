@@ -15,7 +15,7 @@ import {
 } from "@stll/ui/components/input-otp";
 import { toastManager } from "@stll/ui/components/toast";
 import { useMutation } from "@tanstack/react-query";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -54,7 +54,7 @@ function OTP() {
     select: (s) => ({ email: s.email, redirectTo: s.redirectTo }),
   });
   const analytics = useAnalytics();
-  const navigate = Route.useNavigate();
+  const navigate = useNavigate();
   const [otp, setOtp] = useState("");
   const invalidateSession = useInvalidateSession();
   const isOtpComplete = otp.length === OTP_LENGTH;

@@ -120,7 +120,7 @@ const completeOrganizationFlow = async ({
 }: {
   invalidateSession: ReturnType<typeof useInvalidateSession>;
   isOauthPostLogin: boolean;
-  navigate: ReturnType<typeof Route.useNavigate>;
+  navigate: ReturnType<typeof useNavigate>;
   redirectTo: string;
   status: "created" | "selected";
 }) => {
@@ -154,7 +154,7 @@ const OrganizationList = ({
   const t = useTranslations();
   const redirectTo = Route.useSearch({ select: (s) => s.redirectTo });
   const analytics = useAnalytics();
-  const navigate = Route.useNavigate();
+  const navigate = useNavigate();
   const invalidateSession = useInvalidateSession();
 
   const { isPending: isSelectPending, mutate: selectOrg } = useMutation({
@@ -248,7 +248,7 @@ const CreateOrganizationForm = ({
   const t = useTranslations();
   const redirectTo = Route.useSearch({ select: (s) => s.redirectTo });
   const analytics = useAnalytics();
-  const navigate = Route.useNavigate();
+  const navigate = useNavigate();
   const invalidateSession = useInvalidateSession();
 
   const form = useForm({
