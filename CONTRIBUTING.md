@@ -4,6 +4,9 @@ Thank you for considering a contribution to Stella. Whether you are
 reporting a bug, suggesting a feature, improving documentation, or
 writing code, your help is welcome.
 
+Please join our [Discord](https://discord.gg/8dZjmVFjTK) to discuss
+and coordinate development.
+
 ## Getting Started
 
 1. Fork the repository and clone your fork.
