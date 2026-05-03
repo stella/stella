@@ -301,6 +301,7 @@ describe("workspace INSERT — wrong scope", () => {
             version: 1,
             blocks: [
               {
+                kind: "pdf-bates" as const,
                 fileFieldId: ids.fieldB1,
                 statements: [
                   {
@@ -650,6 +651,7 @@ describe("workspace UPDATE — wrong scope", () => {
               version: 1,
               blocks: [
                 {
+                  kind: "pdf-bates" as const,
                   fileFieldId: ids.fieldB1,
                   statements: [
                     {

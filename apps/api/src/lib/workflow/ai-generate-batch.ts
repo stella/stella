@@ -10,11 +10,13 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import {
   buildBatchSchema,
+  buildDocxBlocksMessage,
   buildPromptsMessage,
   buildTextInputsMessage,
   WORKFLOW_SYSTEM_PROMPT,
 } from "@/api/lib/workflow/ai-prompts";
 import type { Answer } from "@/api/lib/workflow/ai-prompts";
+import type { PreparedInputFile } from "@/api/lib/workflow/generate-batch";
 import type { TextInput } from "@/api/lib/workflow/generate-batch-shared";
 import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import type {
@@ -22,13 +24,8 @@ import type {
   JustificationFilenames,
 } from "@/api/lib/workflow/parse-justifications";
 
-type WorkflowFile = {
-  content: ArrayBuffer | Uint8Array;
-  mimeType: string;
-};
-
 type GenerateWorkflowDataProps = {
-  files: WorkflowFile[];
+  files: PreparedInputFile[];
   properties: BatchProperty[];
   filenames: JustificationFilenames;
   textInputs: TextInput[];
@@ -62,10 +59,22 @@ export const generateWorkflowData = async ({
   const messageContent: (FilePart | TextPart)[] = [];
 
   for (const file of files) {
+    if (file.kind === "pdf") {
+      messageContent.push({
+        type: "file",
+        data: file.content,
+        mediaType: file.mimeType,
+      });
+      continue;
+    }
+    // DOCX: serialise folio blocks inline. The model cites block
+    // ids back in `justification.citations` instead of bates stamps.
     messageContent.push({
-      type: "file",
-      data: file.content,
-      mediaType: file.mimeType,
+      type: "text",
+      text: buildDocxBlocksMessage({
+        simplifiedName: file.simplifiedName,
+        blocks: file.blocks,
+      }),
     });
   }
 

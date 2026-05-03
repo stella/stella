@@ -40,6 +40,7 @@ import {
   useDocxWheelZoom,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { PageAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-anonymization";
 import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
 
@@ -436,6 +437,25 @@ const PeekDocxViewer = ({
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const targetZoom = useDocxFitZoom(containerRef, scaleOffset);
+  const pendingBlockScroll = useInspectorStore((s) => s.pendingBlockScroll);
+  const clearPendingBlockScroll = useInspectorStore(
+    (s) => s.clearPendingBlockScroll,
+  );
+
+  // Consume the workspace store's one-shot block scroll request when
+  // it targets this DOCX field. Fires on every change while the
+  // editor is mounted, so opening a file via a citation chip and
+  // clicking another chip both work — the editor is the canonical
+  // owner of the scroll, the store just signals "go to this block".
+  useEffect(() => {
+    if (pendingBlockScroll === null || pendingBlockScroll.tabId !== fieldId) {
+      return;
+    }
+    const ok = editorRef.current?.scrollToBlock(pendingBlockScroll.blockId);
+    if (ok !== undefined) {
+      clearPendingBlockScroll();
+    }
+  }, [clearPendingBlockScroll, fieldId, pendingBlockScroll]);
 
   // Sync scaleOffset from inspector +/- buttons to Folio zoom
   useLayoutEffect(() => {

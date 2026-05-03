@@ -247,6 +247,7 @@ describe("workspace UPDATE — correct scope", () => {
               version: 1,
               blocks: [
                 {
+                  kind: "pdf-bates" as const,
                   fileFieldId: ids.fieldA1,
                   statements: [
                     {
@@ -671,6 +672,7 @@ describe("workspace INSERT — correct scope", () => {
             version: 1,
             blocks: [
               {
+                kind: "pdf-bates" as const,
                 fileFieldId: ids.fieldA1,
                 statements: [
                   {

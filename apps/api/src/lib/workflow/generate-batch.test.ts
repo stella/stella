@@ -15,11 +15,13 @@ const fieldId = (value: string) => toSafeId<"field">(value);
 describe("justifications", () => {
   const filenames: JustificationFilenames = [
     {
+      kind: "pdf-bates",
       original: "filename-a",
       simplified: "F0",
       fileFieldId: fieldId("file-field-0"),
     },
     {
+      kind: "pdf-bates",
       original: "filename-b",
       simplified: "F1",
       fileFieldId: fieldId("file-field-1"),
@@ -58,6 +60,7 @@ describe("justifications", () => {
         version: 1,
         blocks: [
           {
+            kind: "pdf-bates",
             fileFieldId: fieldId("file-field-0"),
             statements: [
               {
@@ -70,6 +73,7 @@ describe("justifications", () => {
             ],
           },
           {
+            kind: "pdf-bates",
             fileFieldId: fieldId("file-field-1"),
             statements: [
               {
@@ -106,6 +110,7 @@ describe("justifications", () => {
 
     expect(result?.content.blocks).toEqual([
       {
+        kind: "pdf-bates",
         fileFieldId: fieldId("file-field-0"),
         statements: [
           {

@@ -1,13 +1,30 @@
 import { Result } from "better-result";
 
-import type { JustificationContent } from "@/api/db/schema";
+import type {
+  DocxFolioJustificationBlock,
+  JustificationBlock,
+  JustificationContent,
+  PdfBatesJustificationBlock,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
-export type JustificationFilenames = {
+export type JustificationFilename = {
   original: string;
   simplified: string;
   fileFieldId: SafeId<"field">;
-}[];
+} & (
+  | { kind: "pdf-bates" }
+  | {
+      kind: "docx-folio";
+      /** Block text keyed by id — used both as the allow-list for
+       *  AI citations AND to embed the quoted text in the saved
+       *  justification so the frontend can render it without
+       *  re-fetching/re-parsing the DOCX. */
+      blocksById: ReadonlyMap<string, string>;
+    }
+);
+
+export type JustificationFilenames = JustificationFilename[];
 
 export type AIJustificationOutput = {
   file: string;
@@ -27,7 +44,7 @@ type ParsedJustification = {
   fileFieldIds: SafeId<"field">[];
 };
 
-const parseCitation = (citation: string, file: string) => {
+const parseBatesCitation = (citation: string, file: string) => {
   const trimmed = citation.trim();
   const prefix = `${file}-`;
 
@@ -45,11 +62,87 @@ const parseCitation = (citation: string, file: string) => {
   return { bates: trimmed, pageNumber };
 };
 
+const buildPdfBlock = (
+  file: Extract<JustificationFilename, { kind: "pdf-bates" }>,
+  rawStatements: AIJustificationOutput[number]["statements"],
+): PdfBatesJustificationBlock | null => {
+  const statements: PdfBatesJustificationBlock["statements"] = [];
+
+  for (const statement of rawStatements) {
+    const text = statement.text.trim();
+    if (text.length === 0) {
+      continue;
+    }
+
+    const citations = statement.citations
+      .map((citation) => parseBatesCitation(citation, file.simplified))
+      .filter((citation) => citation !== null);
+
+    if (citations.length === 0) {
+      continue;
+    }
+
+    statements.push({ text, citations });
+  }
+
+  if (statements.length === 0) {
+    return null;
+  }
+
+  return { kind: "pdf-bates", fileFieldId: file.fileFieldId, statements };
+};
+
+const buildDocxBlock = (
+  file: Extract<JustificationFilename, { kind: "docx-folio" }>,
+  rawStatements: AIJustificationOutput[number]["statements"],
+): DocxFolioJustificationBlock | null => {
+  const statements: DocxFolioJustificationBlock["statements"] = [];
+
+  for (const statement of rawStatements) {
+    const text = statement.text.trim();
+    if (text.length === 0) {
+      continue;
+    }
+
+    // Citations on a DOCX file are folio block IDs (e.g. "b-0010").
+    // Drop ids we don't recognise (hallucinated) and dedupe; embed
+    // the literal block text alongside each id so the frontend can
+    // render the quote without a round-trip to the document.
+    const seen = new Set<string>();
+    const citations: DocxFolioJustificationBlock["statements"][number]["citations"] =
+      [];
+    for (const raw of statement.citations) {
+      const blockId = raw.trim();
+      if (seen.has(blockId)) {
+        continue;
+      }
+      const blockText = file.blocksById.get(blockId);
+      if (blockText === undefined) {
+        continue;
+      }
+      seen.add(blockId);
+      citations.push({ blockId, text: blockText });
+    }
+
+    if (citations.length === 0) {
+      continue;
+    }
+
+    statements.push({ text, citations });
+  }
+
+  if (statements.length === 0) {
+    return null;
+  }
+
+  return { kind: "docx-folio", fileFieldId: file.fileFieldId, statements };
+};
+
 export const normalizeJustification = ({
   justification,
   filenames,
 }: NormalizeJustificationProps): Result<ParsedJustification | null, never> => {
-  const blocks: JustificationContent["blocks"] = [];
+  const blocks: JustificationBlock[] = [];
   const fileFieldIdSet = new Set<SafeId<"field">>();
 
   for (const block of justification) {
@@ -61,32 +154,17 @@ export const normalizeJustification = ({
       continue;
     }
 
-    const statements: JustificationContent["blocks"][number]["statements"] = [];
+    const built =
+      file.kind === "pdf-bates"
+        ? buildPdfBlock(file, block.statements)
+        : buildDocxBlock(file, block.statements);
 
-    for (const statement of block.statements) {
-      const text = statement.text.trim();
-
-      if (text.length === 0) {
-        continue;
-      }
-
-      const citations = statement.citations
-        .map((citation) => parseCitation(citation, file.simplified))
-        .filter((citation) => citation !== null);
-
-      if (citations.length === 0) {
-        continue;
-      }
-
-      statements.push({ text, citations });
-    }
-
-    if (statements.length === 0) {
+    if (built === null) {
       continue;
     }
 
     fileFieldIdSet.add(file.fileFieldId);
-    blocks.push({ fileFieldId: file.fileFieldId, statements });
+    blocks.push(built);
   }
 
   if (blocks.length === 0) {

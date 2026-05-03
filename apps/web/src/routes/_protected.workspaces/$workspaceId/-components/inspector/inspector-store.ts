@@ -112,6 +112,15 @@ type State = {
    * open tabs.
    */
   minimized: boolean;
+  /**
+   * One-shot scroll target for the active DOCX folio editor. Set
+   * by `openCitation` when a citation chip is clicked; the editor
+   * reads it on mount/update, calls `scrollToBlock`, and clears it
+   * via `clearPendingBlockScroll`. Decouples the click handler
+   * from the editor lifecycle (the editor may not be mounted yet
+   * if the user just opened the file via the citation).
+   */
+  pendingBlockScroll: { tabId: string; blockId: string } | null;
 };
 
 type Actions = {
@@ -184,6 +193,10 @@ type Actions = {
   setMinimized: (minimized: boolean) => void;
   /** Flip the minimized state (right-side button toggle). */
   toggleMinimized: () => void;
+  /** Queue a folio scroll for the active DOCX editor of `tabId`.
+   *  Cleared after the editor consumes it. */
+  requestBlockScroll: (tabId: string, blockId: string) => void;
+  clearPendingBlockScroll: () => void;
 };
 
 export const useInspectorStore = create<State & Actions>()(
@@ -193,6 +206,7 @@ export const useInspectorStore = create<State & Actions>()(
     activationSeq: 0,
     pendingRenameTabId: null,
     minimized: false,
+    pendingBlockScroll: null,
 
     openPdf: (tab) =>
       set((state) => {
@@ -500,6 +514,16 @@ export const useInspectorStore = create<State & Actions>()(
     toggleMinimized: () =>
       set((state) => {
         state.minimized = !state.minimized;
+      }),
+
+    requestBlockScroll: (tabId, blockId) =>
+      set((state) => {
+        state.pendingBlockScroll = { tabId, blockId };
+      }),
+
+    clearPendingBlockScroll: () =>
+      set((state) => {
+        state.pendingBlockScroll = null;
       }),
   })),
 );

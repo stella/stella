@@ -39,6 +39,12 @@ export const extractJustificationContent = (
   const textParts: string[] = [];
 
   for (const block of justification.blocks) {
+    // bbox generation only applies to PDF citations. DOCX blocks
+    // ship folio block IDs and are rendered by the editor, not the
+    // PDF preview — skip them here.
+    if (block.kind !== "pdf-bates") {
+      continue;
+    }
     for (const statement of block.statements) {
       const text = statement.text.trim();
       if (text.length > 0) {
