@@ -36,16 +36,16 @@ Full-text search, versioning and granular access control included.
 built for due diligence, discovery and research.
 
 **Research.** Find relevant laws, cases or doctrinal materials, with a database of
-legal sources, premium reading experience and connection to AI.
+legal sources, premium reading experience. Coming soon.
 
 **Anonymization.** Remove personally identifiable information from documents and data
-before they are sent to AI or shared with external parties.
+before they are sent to AI. Coming soon.
 
 ## Quickstart
 
 ### stella Cloud
 
-Hosted stella available at [stll.app](https://stll.app).
+Hosted stella preview is available at [my.stll.app](https://my.stll.app).
 
 ### Self-hosting
 

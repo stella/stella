@@ -15,7 +15,7 @@ stella is built for firms that need control. Matters, documents, and search are 
 ## Start here
 
 - [Website](https://stll.app): Product overview and pricing.
-- [Application](https://app.stll.app): Start using stella in the cloud.
+- [Application](https://my.stll.app): Start using stella in the cloud.
 - [Contact](mailto:contact@stll.app): Deployment, pilots, and general questions.
 
 ## Open source

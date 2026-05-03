@@ -5,9 +5,9 @@ export const primaryCapabilities = [
       "Extract key fields from large document sets into a table you can sort, filter, and review.",
   },
   {
-    title: "Template drafting",
+    title: "First-class .docx support",
     description:
-      "Turn structured inputs into a clean first draft without rebuilding the document each time.",
+      "Open and edit Word documents in the browser or via the stella desktop app, with AI support along the way.",
   },
   {
     title: "Grounded research",
@@ -23,11 +23,11 @@ export const controlCapabilities = [
   },
   {
     title: "Anonymize sensitive text",
-    body: "Prepare material for AI workflows without exposing names, entities, or identifying details.",
+    body: "Prepare material for AI workflows without exposing names, entities, or identifying details. Coming soon.",
   },
   {
-    title: "Keep keys under your control",
-    body: "Use BYOK or external key management when your security model requires tighter control over encryption.",
+    title: "Use your AI provider key",
+    body: "Connect your own AI provider key when using AI features.",
   },
   {
     title: "Self-host or managed cloud",

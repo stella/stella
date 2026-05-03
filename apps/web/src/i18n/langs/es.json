@@ -46,6 +46,8 @@
     "warm": "Cálido"
   },
   "auth": {
+    "betaNoticeBody": "Como precaución durante la beta, no subas datos sensibles, privilegiados, personales, irremplazables o críticos para producción. Cloud es un servicio de demostración.",
+    "betaNoticeTitle": "Beta",
     "chooseOrganization": "Seleccione en qué organización desea trabajar",
     "codeSentAgain": "Hemos enviado un código nuevo.",
     "continueWithEmail": "Continuar",

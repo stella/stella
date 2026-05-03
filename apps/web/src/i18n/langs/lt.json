@@ -46,6 +46,8 @@
     "warm": "Šilti"
   },
   "auth": {
+    "betaNoticeBody": "Atsargumo sumetimais beta laikotarpiu neįkelkite jautrių, privilegijuotų, asmens duomenų, nepakeičiamų ar gamybai kritinių duomenų. Cloud yra demonstracinė paslauga.",
+    "betaNoticeTitle": "Beta",
     "chooseOrganization": "Pasirinkite organizaciją, kurioje norite dirbti",
     "codeSentAgain": "Išsiuntėme naują kodą.",
     "continueWithEmail": "Tęsti",

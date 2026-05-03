@@ -46,6 +46,8 @@
     "warm": "Soe"
   },
   "auth": {
+    "betaNoticeBody": "Ettevaatusabinõuna ärge laadige beetaperioodil üles tundlikke, privilegeeritud, isikuandmeid sisaldavaid, asendamatuid ega tootmiskriitilisi andmeid. Cloud on demoteenus.",
+    "betaNoticeTitle": "Beeta",
     "chooseOrganization": "Valige organisatsioon, milles soovite töötada",
     "codeSentAgain": "Saatsime uue koodi.",
     "continueWithEmail": "Jätka",

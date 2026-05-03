@@ -46,6 +46,8 @@
     "warm": "Warm"
   },
   "auth": {
+    "betaNoticeBody": "As a precaution during beta, do not upload sensitive, privileged, personal, irreplaceable, or production-critical data. Cloud is a demo service.",
+    "betaNoticeTitle": "Beta",
     "chooseOrganization": "Choose which organization to work in",
     "codeSentAgain": "We sent a new code.",
     "continueWithEmail": "Continue",
