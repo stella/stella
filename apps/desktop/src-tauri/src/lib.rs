@@ -109,21 +109,23 @@ pub fn run() {
               tray::MenuAction::OpenPreferences(tab) => {
                 ensure_main_window(&handle, tab);
               }
-              tray::MenuAction::CheckForUpdates => match updater::run_check(&handle).await {
-                updater::CheckOutcome::UpToDate => {
-                  if let Err(err) = handle
-                    .notification()
-                    .builder()
-                    .title("Stella is up to date")
-                    .show()
-                  {
-                    tracing::warn!(error = %err, "up-to-date notification failed");
+              tray::MenuAction::CheckForUpdates => {
+                match updater::run_check(&handle).await {
+                  updater::CheckOutcome::UpToDate => {
+                    if let Err(err) = handle
+                      .notification()
+                      .builder()
+                      .title("Stella is up to date")
+                      .show()
+                    {
+                      tracing::warn!(error = %err, "up-to-date notification failed");
+                    }
+                  }
+                  updater::CheckOutcome::Failed(msg) => {
+                    tracing::warn!(error = %msg, "tray-triggered updater check failed");
                   }
                 }
-                updater::CheckOutcome::Failed(msg) => {
-                  tracing::warn!(error = %msg, "tray-triggered updater check failed");
-                }
-              },
+              }
               tray::MenuAction::OpenEditRoot => {
                 let mgr = manager.lock().await;
                 mgr.open_edit_root().await;
