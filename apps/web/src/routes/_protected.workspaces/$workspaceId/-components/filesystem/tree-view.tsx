@@ -789,33 +789,6 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         </div>
       </div>
       <div
-        className="text-muted-foreground grid w-full items-center gap-x-4 border-b px-2 pb-1 text-xs font-medium"
-        style={{ gridTemplateColumns: gridTemplate }}
-      >
-        <ColumnHeaderCell
-          activeSort={primarySort}
-          currentWidth={columnWidths[NAME_COL_ID]}
-          label={t("common.name")}
-          onResize={(width) => setColumnWidth(NAME_COL_ID, width)}
-          onSort={handleSortColumn}
-          propertyId={getInternalPropertyId("name")}
-        />
-        {extraColumns.map((col) => (
-          <ColumnHeaderCell
-            activeSort={primarySort}
-            align="end"
-            currentWidth={columnWidths[col.id] ?? DEFAULT_EXTRA_WIDTH_PX}
-            key={col.id}
-            label={col.label}
-            onHide={() => handleHideColumn(col.id)}
-            onResize={(width) => setColumnWidth(col.id, width)}
-            onSort={handleSortColumn}
-            propertyId={col.id}
-          />
-        ))}
-        <span />
-      </div>
-      <div
         className={cn(
           "text-muted-foreground mt-1 flex items-center gap-2 rounded border border-dashed px-3 py-1.5 text-xs transition-colors",
           isDragActive ? "visible" : "hidden",
@@ -829,59 +802,88 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         {t("workspaces.filesystem.moveToRoot")}
       </div>
       <div className="mt-1 min-h-0 flex-1 overflow-auto" ref={rowsViewportRef}>
-        <div
-          className="relative"
-          style={{ height: rowVirtualizer.getTotalSize() }}
-        >
-          {virtualRows.map((virtualRow) => {
-            const row = flattenedRows.at(virtualRow.index);
-            if (!row) {
-              return null;
-            }
+        <div className="w-max min-w-full">
+          <div
+            className="text-muted-foreground bg-background sticky top-0 z-10 grid w-full items-center gap-x-4 border-b px-2 pb-1 text-xs font-medium"
+            style={{ gridTemplateColumns: gridTemplate }}
+          >
+            <ColumnHeaderCell
+              activeSort={primarySort}
+              currentWidth={columnWidths[NAME_COL_ID]}
+              label={t("common.name")}
+              onResize={(width) => setColumnWidth(NAME_COL_ID, width)}
+              onSort={handleSortColumn}
+              propertyId={getInternalPropertyId("name")}
+            />
+            {extraColumns.map((col) => (
+              <ColumnHeaderCell
+                activeSort={primarySort}
+                align="end"
+                currentWidth={columnWidths[col.id] ?? DEFAULT_EXTRA_WIDTH_PX}
+                key={col.id}
+                label={col.label}
+                onHide={() => handleHideColumn(col.id)}
+                onResize={(width) => setColumnWidth(col.id, width)}
+                onSort={handleSortColumn}
+                propertyId={col.id}
+              />
+            ))}
+            <span />
+          </div>
+          <div
+            className="relative mt-1"
+            style={{ height: rowVirtualizer.getTotalSize() }}
+          >
+            {virtualRows.map((virtualRow) => {
+              const row = flattenedRows.at(virtualRow.index);
+              if (!row) {
+                return null;
+              }
 
-            return (
-              <div
-                className="absolute inset-x-0 top-0 w-full"
-                data-index={virtualRow.index}
-                key={row.node.entityId}
-                style={{
-                  height: virtualRow.size,
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-              >
-                <FilesystemRow
-                  ancestorIds={row.ancestorIds}
-                  currentFolderId={currentFolderId}
-                  depth={row.depth}
-                  editingEntityId={editingEntityId}
-                  expandedIds={expandedIds}
-                  extraColumns={extraColumns}
-                  getSelectedDragItems={getSelectedDragItems}
-                  getSelectedEntities={getSelectedEntities}
-                  gridTemplate={gridTemplate}
-                  guideDepths={row.guideDepths}
-                  isLast={row.isLast}
-                  node={row.node}
-                  onNavigateToFolder={(folderId) => {
-                    void navigateToFolder(folderId);
+              return (
+                <div
+                  className="absolute inset-x-0 top-0 w-full"
+                  data-index={virtualRow.index}
+                  key={row.node.entityId}
+                  style={{
+                    height: virtualRow.size,
+                    transform: `translateY(${virtualRow.start}px)`,
                   }}
-                  onRename={(entityId, newName) => {
-                    renameEntity.mutate({
-                      workspaceId,
-                      entityId,
-                      name: newName,
-                    });
-                  }}
-                  onSelect={handleSelect}
-                  onStartEditing={setEditingEntityId}
-                  onSubfolderCreated={handleSubfolderCreated}
-                  onToggleFolder={toggleFolder}
-                  selectedIds={selectedIds}
-                  workspaceId={workspaceId}
-                />
-              </div>
-            );
-          })}
+                >
+                  <FilesystemRow
+                    ancestorIds={row.ancestorIds}
+                    currentFolderId={currentFolderId}
+                    depth={row.depth}
+                    editingEntityId={editingEntityId}
+                    expandedIds={expandedIds}
+                    extraColumns={extraColumns}
+                    getSelectedDragItems={getSelectedDragItems}
+                    getSelectedEntities={getSelectedEntities}
+                    gridTemplate={gridTemplate}
+                    guideDepths={row.guideDepths}
+                    isLast={row.isLast}
+                    node={row.node}
+                    onNavigateToFolder={(folderId) => {
+                      void navigateToFolder(folderId);
+                    }}
+                    onRename={(entityId, newName) => {
+                      renameEntity.mutate({
+                        workspaceId,
+                        entityId,
+                        name: newName,
+                      });
+                    }}
+                    onSelect={handleSelect}
+                    onStartEditing={setEditingEntityId}
+                    onSubfolderCreated={handleSubfolderCreated}
+                    onToggleFolder={toggleFolder}
+                    selectedIds={selectedIds}
+                    workspaceId={workspaceId}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
       <div className="mt-2 shrink-0 px-2">
