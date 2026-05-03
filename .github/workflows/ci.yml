@@ -158,12 +158,72 @@ jobs:
         if: steps.changed-files.outputs.package_checks_required == 'true'
         run: bun run test -- --concurrency=2 ${{ steps.affected.outputs.flag }}
 
+  # Astro landing build. The existing ci-checks job runs lint,
+  # typecheck, and test, but no `astro build`, so plugin/runtime
+  # incompatibilities surface only at deploy time. Catch those
+  # here on every PR that could plausibly affect the landing
+  # output.
+  landing-build:
+    needs: trust-check
+    if: >-
+      needs.trust-check.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Check whether landing-affecting paths changed
+        id: changed
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base_ref="origin/${{ github.base_ref || 'main' }}"
+          mapfile -t changed_files < <(git diff --name-only "$base_ref"...HEAD)
+          run=false
+          for file in "${changed_files[@]}"; do
+            case "$file" in
+              apps/landing/*|packages/*|bun.lock|package.json|.github/workflows/ci.yml)
+                run=true
+                break
+                ;;
+            esac
+          done
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          if [[ "$run" != "true" ]]; then
+            echo "::notice::No landing-affecting paths changed; skipping landing build."
+          fi
+
+      - name: Setup Bun
+        if: steps.changed.outputs.run == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        if: steps.changed.outputs.run == 'true'
+        run: bun ci
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Build landing
+        if: steps.changed.outputs.run == 'true'
+        run: bun --filter @stll/landing build
+
   # Aggregation job for branch protection. The ruleset requires
   # this check to pass, which ensures untrusted PRs cannot be
   # merged without CI and trusted PRs must pass all checks.
   ci-result:
     if: always()
-    needs: [trust-check, ci-checks]
+    needs: [trust-check, ci-checks, landing-build]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -172,6 +232,7 @@ jobs:
         run: |
           TRUSTED="${{ needs.trust-check.outputs.trusted }}"
           CI_RESULT="${{ needs.ci-checks.result }}"
+          LANDING_RESULT="${{ needs.landing-build.result }}"
           TRUST_RESULT="${{ needs.trust-check.result }}"
           EVENT="${{ github.event_name }}"
 
@@ -185,7 +246,8 @@ jobs:
           fi
 
           if [[ "$EVENT" == "workflow_dispatch" ]]; then
-            if [[ "$CI_RESULT" == "failure" || "$CI_RESULT" == "cancelled" ]]; then
+            if [[ "$CI_RESULT" == "failure" || "$CI_RESULT" == "cancelled" \
+                  || "$LANDING_RESULT" == "failure" || "$LANDING_RESULT" == "cancelled" ]]; then
               echo "::error::CI checks failed."
               exit 1
             fi
@@ -199,12 +261,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$CI_RESULT" == "cancelled" ]]; then
+          if [[ "$CI_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$CI_RESULT" == "failure" ]]; then
+          if [[ "$CI_RESULT" == "failure" || "$LANDING_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi
