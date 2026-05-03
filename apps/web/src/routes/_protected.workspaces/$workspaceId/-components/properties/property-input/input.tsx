@@ -210,10 +210,16 @@ export const PropertyPromptInput = ({
     <div className="group w-full gap-1">
       <PropertyFormField className="w-full p-0" name={field.name}>
         {variant === "minimal" ? (
-          <EditorContent editor={editor} />
+          <EditorContent
+            className="w-full [&_.ProseMirror]:w-full"
+            editor={editor}
+          />
         ) : (
           <ScrollArea className="h-32 overflow-y-auto">
-            <EditorContent editor={editor} />
+            <EditorContent
+              className="w-full [&_.ProseMirror]:w-full"
+              editor={editor}
+            />
           </ScrollArea>
         )}
         <FieldError />

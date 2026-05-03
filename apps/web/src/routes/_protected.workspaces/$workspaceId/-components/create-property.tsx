@@ -893,6 +893,7 @@ const ComposerCard = ({
         chipDefs={chipDefs}
         contentType={contentType}
         onContentTypeChange={onContentTypeChange}
+        showSeparator
         typeChanged={typeChanged}
       />
 
@@ -946,6 +947,7 @@ type TypeChipsRowProps = {
   chipDefs: ReturnType<typeof useChipDefinitions>;
   contentType: CreatableContentType;
   onContentTypeChange: (next: CreatableContentType) => void;
+  showSeparator?: boolean;
   typeChanged: boolean;
 };
 
@@ -953,12 +955,18 @@ const TypeChipsRow = ({
   chipDefs,
   contentType,
   onContentTypeChange,
+  showSeparator = false,
   typeChanged,
 }: TypeChipsRowProps) => {
   const t = useTranslations();
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-1 overflow-x-auto border-t pt-2 [scrollbar-width:none]">
+      <div
+        className={cn(
+          "flex items-center gap-1 overflow-x-auto [scrollbar-width:none]",
+          showSeparator && "border-t pt-2",
+        )}
+      >
         <span className="text-muted-foreground/72 shrink-0 px-1.5 text-[11px] font-medium">
           {t("workspaces.properties.returnsLabel")}
         </span>
