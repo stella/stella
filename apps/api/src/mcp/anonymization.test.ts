@@ -3,8 +3,8 @@ import { describe, expect, mock, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { AnonymizeTextFieldsDependencies } from "@/api/mcp/anonymization";
-import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization";
+import type { AnonymizeTextFieldsDependencies } from "@/api/mcp/anonymization-core";
+import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
 import { buildFieldMarkers } from "@/api/mcp/field-markers";
 
 const dictionaries = {
