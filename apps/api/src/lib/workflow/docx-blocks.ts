@@ -32,17 +32,27 @@ const elementsByLocalName = (
     .getElementsByTagNameNS(W_NS, localName)
     .filter((node): node is slimdom.Element => node.nodeType === 1);
 
+const MC_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+
 // Subtrees we never descend into when collecting paragraph text.
 //
-//   - `moveFrom`, `del`: tracked-change DELETIONS; the "final" view
-//     of the document excludes them, so include only the resulting
-//     text (`moveTo`, `ins` are visited normally as children of the
-//     paragraph).
-//   - `fallback`: the legacy branch of `w:alternateContent`. The
-//     preferred branch lives in a sibling `w:choice`; visiting both
-//     would emit the same text twice for compatibility-wrapped
-//     content (e.g. drawings).
-const SKIP_SUBTREE_LOCAL_NAMES = new Set(["moveFrom", "del", "fallback"]);
+//   - `w:moveFrom`, `w:del`: tracked-change DELETIONS; the "final"
+//     view of the document excludes them, so include only the
+//     resulting text (`w:moveTo`, `w:ins` are visited normally as
+//     children of the paragraph).
+//   - `mc:Fallback`: the legacy branch of `mc:AlternateContent`.
+//     The preferred branch lives in a sibling `mc:Choice`; visiting
+//     both would emit the same text twice for compatibility-wrapped
+//     content (e.g. drawings with a fallback shape).
+const isSkippableSubtree = (element: slimdom.Element): boolean => {
+  if (element.namespaceURI === W_NS) {
+    return element.localName === "moveFrom" || element.localName === "del";
+  }
+  if (element.namespaceURI === MC_NS) {
+    return element.localName === "Fallback";
+  }
+  return false;
+};
 
 const collectText = (paragraph: slimdom.Element): string => {
   const parts: string[] = [];
@@ -51,10 +61,7 @@ const collectText = (paragraph: slimdom.Element): string => {
     if (!(node instanceof slimdom.Element)) {
       return;
     }
-    if (
-      node.namespaceURI === W_NS &&
-      SKIP_SUBTREE_LOCAL_NAMES.has(node.localName)
-    ) {
+    if (isSkippableSubtree(node)) {
       return;
     }
 
