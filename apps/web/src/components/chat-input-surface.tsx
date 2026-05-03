@@ -5,6 +5,7 @@ import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 import { EditorContent } from "@tiptap/react";
 import { ArrowUpIcon, PaperclipIcon, SquareIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import type {
   ChatEditorController,
@@ -37,6 +38,7 @@ export const ChatInputSurface = ({
   isGenerating = false,
   onStop,
 }: ChatInputSurfaceProps) => {
+  const t = useTranslations();
   const {
     attachments,
     canSubmit,
@@ -48,6 +50,7 @@ export const ChatInputSurface = ({
     handleDrop,
     handleFileInputChange,
     handlePaste,
+    isEmpty,
     openFilePicker,
     removeFile,
     setSubmitHandler,
@@ -97,11 +100,19 @@ export const ChatInputSurface = ({
     >
       <ChatDraftAttachmentChips files={attachments} onRemove={removeFile} />
       <div
-        className="chat-editor px-3 pt-2 pb-1"
+        className="chat-editor relative px-3 pt-2 pb-1"
         onKeyDown={(event) => event.stopPropagation()}
         role="presentation"
       >
         <EditorContent editor={editor} />
+        {isEmpty && attachments.length === 0 && (
+          <span
+            aria-hidden="true"
+            className="text-muted-foreground/64 pointer-events-none absolute start-3 top-2 text-sm"
+          >
+            {t("chat.placeholder")}
+          </span>
+        )}
       </div>
       <div className="flex items-center gap-0.5 px-1.5 pb-1.5">
         <Button
@@ -132,18 +143,13 @@ export const ChatInputSurface = ({
           </Button>
         ) : (
           <Button
-            className={cn(
-              "ms-auto shrink-0 transition-colors",
-              canSubmit &&
-                !disabled &&
-                "bg-foreground text-background hover:bg-foreground/90",
-            )}
+            className="bg-foreground text-background hover:bg-foreground/90 ms-auto shrink-0"
             disabled={disabled || !canSubmit}
             onClick={() => {
               void submitDraft();
             }}
             size="icon-sm"
-            variant={canSubmit && !disabled ? "default" : "ghost"}
+            variant="default"
           >
             <ArrowUpIcon className="size-3.5" />
           </Button>
