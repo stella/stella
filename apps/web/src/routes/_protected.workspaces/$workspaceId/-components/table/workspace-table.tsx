@@ -11,7 +11,12 @@ import { cn } from "@stll/ui/lib/utils";
 import { flexRender } from "@tanstack/react-table";
 import type { Table as ReactTable, Row } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronRightIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
+import {
+  ChevronRightIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  PlusIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { renderDragPreview } from "@/components/drag-preview";
@@ -24,6 +29,7 @@ import {
   TableRow,
 } from "@/components/table";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
+import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -44,6 +50,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const selectColId = getInternalColId("select");
+const addPropertyColId = getInternalColId("add-property");
 const TABLE_ROW_ESTIMATE_PX = 41;
 const TABLE_ROW_OVERSCAN = 16;
 
@@ -66,6 +73,11 @@ export const WorkspaceTable = ({
   const tableWrapperRef = useRef<HTMLDivElement>(null);
   const lastSelectedIndex = useRef<number | null>(null);
   const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
+  // Single shared dialog so the "+" header AND every body cell of
+  // the add-property column open the same composer instead of each
+  // mounting its own.
+  const [addColumnOpen, setAddColumnOpen] = useState(false);
+  const openAddColumn = useCallback(() => setAddColumnOpen(true), []);
 
   const renameEntity = useRenameEntity();
 
@@ -175,10 +187,14 @@ export const WorkspaceTable = ({
   return (
     <div className="relative h-full flex-1 overflow-auto" ref={tableWrapperRef}>
       <Table
-        className="[&_td]:border-border [&_th]:border-border table-fixed border-separate border-spacing-0 [&_td:has([data-slot=select-trigger])]:min-w-40 [&_tfoot_td]:border-t [&_th]:border-b [&_tr]:border-none [&_tr:not(:nth-last-child(2))_td]:border-b"
+        className="[&_td]:border-border [&_th]:border-border [&:has([data-add-cell]:hover)_[data-add-col]]:bg-muted! [&:has([data-add-cell]:hover)_td:not([data-add-col]),&:has([data-add-cell]:hover)_th:not([data-add-col])]:bg-background! table-fixed border-separate border-spacing-0 [&_td:has([data-slot=select-trigger])]:min-w-40 [&_tfoot_td]:border-t [&_th]:border-b [&_tr]:border-none [&_tr:not(:nth-last-child(2))_td]:border-b"
         style={{
-          minWidth: tableWidth,
-          width: "100%",
+          // Render at natural column-sum width. With `table-fixed`,
+          // forcing `width: 100%` stretched the <table> past the
+          // last column, leaving an empty band of "table" beyond
+          // the "+" header. The wrapper's overflow handles scroll
+          // when columns exceed the viewport.
+          width: tableWidth,
         }}
       >
         <colgroup>
@@ -189,38 +205,54 @@ export const WorkspaceTable = ({
         <TableHeader className="bg-background sticky top-0 z-30 border-b">
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <TableHead
-                  className={cn(
-                    "group/table-head bg-background hover:bg-background relative h-10 border-t px-0",
-                    header.column.getIsResizing() &&
-                      "after:bg-info after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-50 after:w-px",
-                  )}
-                  colSpan={header.colSpan}
-                  key={header.id}
-                  style={{
-                    ...getPinningStyles(header.column),
-                  }}
-                >
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(
+              {headerGroup.headers.map((header) => {
+                const isAddPropertyHeader =
+                  header.column.id === addPropertyColId;
+                return (
+                  <TableHead
+                    className={cn(
+                      "group/table-head bg-background hover:bg-background relative h-10 border-t px-0",
+                      header.column.getIsResizing() &&
+                        "after:bg-info after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-50 after:w-px",
+                    )}
+                    colSpan={header.colSpan}
+                    {...(isAddPropertyHeader ? { "data-add-col": "" } : {})}
+                    key={header.id}
+                    style={{
+                      ...getPinningStyles(header.column),
+                    }}
+                  >
+                    {header.isPlaceholder ? null : isAddPropertyHeader ? (
+                      <button
+                        aria-label={t("workspaces.properties.newColumn")}
+                        className="text-muted-foreground hover:text-foreground flex h-full w-full items-center justify-center transition-colors"
+                        data-add-cell
+                        onClick={openAddColumn}
+                        title={t("workspaces.properties.newColumn")}
+                        type="button"
+                      >
+                        <PlusIcon className="size-4" />
+                      </button>
+                    ) : (
+                      flexRender(
                         header.column.columnDef.header,
                         header.getContext(),
-                      )}
-                  {header.column.getCanResize() && (
-                    <button
-                      className="user-select-none absolute top-0 -right-2 z-30 hidden h-full w-4 cursor-col-resize touch-none py-1 group-hover/table-head:flex"
-                      onDoubleClick={() => header.column.resetSize()}
-                      onMouseDown={header.getResizeHandler()}
-                      onTouchStart={header.getResizeHandler()}
-                      type="button"
-                    >
-                      <span className="bg-primary/25 mr-auto h-full w-1 rounded" />
-                    </button>
-                  )}
-                </TableHead>
-              ))}
+                      )
+                    )}
+                    {header.column.getCanResize() && (
+                      <button
+                        className="user-select-none absolute top-0 -right-2 z-30 hidden h-full w-4 cursor-col-resize touch-none py-1 group-hover/table-head:flex"
+                        onDoubleClick={() => header.column.resetSize()}
+                        onMouseDown={header.getResizeHandler()}
+                        onTouchStart={header.getResizeHandler()}
+                        type="button"
+                      >
+                        <span className="bg-primary/25 mr-auto h-full w-1 rounded" />
+                      </button>
+                    )}
+                  </TableHead>
+                );
+              })}
             </TableRow>
           ))}
         </TableHeader>
@@ -247,6 +279,7 @@ export const WorkspaceTable = ({
                 index={virtualRow.index}
                 key={row.id}
                 lastSelectedIndex={lastSelectedIndex}
+                onAddColumn={openAddColumn}
                 onRename={(entityId, newName) => {
                   renameEntity.mutate({
                     workspaceId,
@@ -278,6 +311,12 @@ export const WorkspaceTable = ({
           />
         </TableBody>
       </Table>
+      <CreateProperty
+        onOpenChange={setAddColumnOpen}
+        open={addColumnOpen}
+        triggerVariant="none"
+        workspaceId={workspaceId}
+      />
     </div>
   );
 };
@@ -294,6 +333,7 @@ type DraggableRowProps = {
   activeTaskId: string | null;
   editingEntityId: string | null;
   lastSelectedIndex: React.RefObject<number | null>;
+  onAddColumn: () => void;
   onRename: (entityId: string, newName: string) => void;
   onStartEditing: (entityId: string) => void;
   onStopEditing: () => void;
@@ -309,6 +349,7 @@ const DraggableRow = ({
   activeTaskId,
   editingEntityId,
   lastSelectedIndex,
+  onAddColumn,
   onRename,
   onStartEditing,
   onStopEditing,
@@ -499,30 +540,59 @@ const DraggableRow = ({
       onContextMenu={handleContextMenu}
       ref={rowRef}
     >
-      {visibleCells.map((cell) => (
-        <TableCell
-          className={cn(
-            "relative",
-            cell.column.id === selectColId && "min-w-12 shrink-0",
-            cell.column.columnDef.meta?.muted && "text-muted-foreground",
-            cell.column.getIsResizing() &&
-              "after:bg-info after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-50 after:w-px",
-          )}
-          data-state={cell.row.getIsSelected() ? "selected" : undefined}
-          key={cell.id}
-          style={{
-            ...getPinningStyles(cell.column),
-          }}
-        >
-          {cell.column.id === selectColId ? (
-            selectCellWithActions
-          ) : (
-            <span className="flex w-full min-w-0 items-center gap-1.5">
-              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-            </span>
-          )}
-        </TableCell>
-      ))}
+      {visibleCells.map((cell) => {
+        const isAddPropertyCell = cell.column.id === addPropertyColId;
+        return (
+          <TableCell
+            className={cn(
+              "relative",
+              cell.column.id === selectColId && "min-w-12 shrink-0",
+              cell.column.columnDef.meta?.muted && "text-muted-foreground",
+              cell.column.getIsResizing() &&
+                "after:bg-info after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-50 after:w-px",
+              // The "+" column has no per-row data; rendering its
+              // body cells with the table's standard border made
+              // them look clickable. Strip the border + background
+              // so the column visually disappears below the header
+              // and only the header itself reads as the action.
+              isAddPropertyCell &&
+                "border-e-0! border-b-0! bg-transparent! p-0",
+            )}
+            {...(isAddPropertyCell ? { "data-add-col": "" } : {})}
+            data-state={cell.row.getIsSelected() ? "selected" : undefined}
+            key={cell.id}
+            style={{
+              ...getPinningStyles(cell.column),
+            }}
+          >
+            {cell.column.id === selectColId ? (
+              selectCellWithActions
+            ) : isAddPropertyCell ? (
+              // Transparent click target so the entire "+" column —
+              // header AND every body cell — opens the same dialog.
+              // No visible affordance: the column is intentionally
+              // blank below the header so users still read the
+              // header as the trigger.
+              <button
+                aria-hidden
+                // The column-wide highlight is driven by the
+                // table-level `:has([data-add-cell]:hover)` rule
+                // above, so this button just needs to be a click
+                // surface; no per-element hover bg.
+                className="absolute inset-0 cursor-pointer"
+                data-add-cell
+                onClick={onAddColumn}
+                tabIndex={-1}
+                type="button"
+              />
+            ) : (
+              <span className="flex w-full min-w-0 items-center gap-1.5">
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </span>
+            )}
+          </TableCell>
+        );
+      })}
     </TableRow>
   );
 };
