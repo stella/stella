@@ -1,6 +1,6 @@
 ## stella desktop
 
-Electrobun companion app for managed DOCX editing from stella.
+Tauri 2 companion app for managed DOCX editing from stella.
 
 ### Local development
 
@@ -25,21 +25,22 @@ Packaged builds should set these environment variables before building:
 
 - `STELLA_DESKTOP_ALLOWED_ORIGINS`
   - Comma-separated exact web origins allowed to call the privileged localhost bridge
-  - Example: `https://app.stll.app,https://staging.stll.app`
+  - Example: `https://my.stll.app`
   - Keep this explicit; the default loopback-only allowlist is intentional
 - `STELLA_DESKTOP_BRIDGE_PORT`
   - Optional override for the localhost bridge port during development
 - `STELLA_DESKTOP_VIEW_PORT`
   - Optional override for the desktop Vite dev server during development
 - `STELLA_DESKTOP_RELEASE_BASE_URL`
-  - Base URL hosting Electrobun release metadata and update artifacts
+  - Base URL hosting Tauri release metadata and update artifacts (the
+    channel-rooted directory containing `latest.json`)
   - Required to enable update checks in packaged builds
 
 Example:
 
 ```bash
-export STELLA_DESKTOP_ALLOWED_ORIGINS="https://app.stll.app,https://staging.stll.app"
-export STELLA_DESKTOP_RELEASE_BASE_URL="https://downloads.stll.app/desktop"
+export STELLA_DESKTOP_ALLOWED_ORIGINS="https://my.stll.app"
+export STELLA_DESKTOP_RELEASE_BASE_URL="https://downloads.stll.app/desktop/prod"
 bun --cwd apps/desktop run build
 ```
 
