@@ -8,6 +8,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const anonymizeTextFieldsMock = mock();
+const loadAnonymizationGazetteerEntriesMock = mock();
 const captureErrorMock = mock();
 const identifyMock = mock();
 const analyticsCaptureMock = mock();
@@ -52,6 +53,10 @@ void mock.module("@/api/lib/analytics", () => ({
 
 void mock.module("@/api/mcp/anonymization", () => ({
   anonymizeTextFields: anonymizeTextFieldsMock,
+}));
+
+void mock.module("@/api/lib/anonymization-blacklist", () => ({
+  loadAnonymizationGazetteerEntries: loadAnonymizationGazetteerEntriesMock,
 }));
 
 void mock.module("@/api/handlers/chat/tools/org-tools", () => ({
@@ -208,6 +213,8 @@ const createContext = ({
 describe("OpenAI-compatible MCP tools", () => {
   beforeEach(() => {
     anonymizeTextFieldsMock.mockReset();
+    loadAnonymizationGazetteerEntriesMock.mockReset();
+    loadAnonymizationGazetteerEntriesMock.mockResolvedValue([]);
     captureErrorMock.mockReset();
     identifyMock.mockReset();
     searchAcrossMattersExecute.mockReset();
@@ -792,10 +799,12 @@ describe("OpenAI-compatible MCP tools", () => {
     const anonymizeInput = anonymizeTextFieldsMock.mock.calls.at(-1)?.[0];
     expect(anonymizeInput).toMatchObject({
       fields: ["John Smith SPA"],
+      gazetteerEntries: [],
       organizationId: toSafeId<"organization">("org_1"),
       workspaceId: "ws_1",
     });
     expect(anonymizeInput?.scopedDb).toBeTypeOf("function");
+    expect(loadAnonymizationGazetteerEntriesMock).toHaveBeenCalledTimes(1);
   });
 
   test("search preserves empty anonymized output instead of leaking the original title", async () => {

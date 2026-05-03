@@ -225,6 +225,22 @@ const sendMessage = createSafeRootHandler(
       storedMessages: thread.data.messages,
     });
 
+    const messageWindow = latestMessagePlan.messages.slice(-MESSAGE_WINDOW);
+    const chatContext = yield* Result.await(
+      prepareChatContext({
+        activeDecision: body.activeDecision,
+        activeFile: body.activeFile,
+        contextMatterIds: effectiveContextMatterIds,
+        messageWindow,
+        refuseNonPlainTextFiles: thirdPartyBoundary.type === "anonymized",
+        safeDb,
+        userContext: body.userContext,
+        userId: user.id,
+        workspaceId,
+        refRegistry,
+      }),
+    );
+
     // Widen the thread's data scope BEFORE persisting the message so
     // any workspace IDs the user just embedded (entity mentions,
     // workspace mentions) are recorded on the thread row. Without
@@ -256,22 +272,6 @@ const sendMessage = createSafeRootHandler(
         userId: user.id,
         workspaceId,
         persistencePlan: latestMessagePlan.persistencePlan,
-      }),
-    );
-
-    const messageWindow = latestMessagePlan.messages.slice(-MESSAGE_WINDOW);
-    const chatContext = yield* Result.await(
-      prepareChatContext({
-        activeDecision: body.activeDecision,
-        activeFile: body.activeFile,
-        contextMatterIds: effectiveContextMatterIds,
-        messageWindow,
-        refuseNonPlainTextFiles: thirdPartyBoundary.type === "anonymized",
-        safeDb,
-        userContext: body.userContext,
-        userId: user.id,
-        workspaceId,
-        refRegistry,
       }),
     );
 

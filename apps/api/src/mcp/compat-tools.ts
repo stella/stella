@@ -3,6 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { entities, extractedContent, fields } from "@/api/db/schema";
 import { readEntityByIdHandler } from "@/api/handlers/entities/read-by-id";
+import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
@@ -113,11 +114,21 @@ const anonymizeCompatSearchResults = async ({
 }: {
   context: McpRequestContext;
   results: CompatSearchResult[];
-}) =>
-  await Promise.all(
+}) => {
+  if (results.length === 0) {
+    return [];
+  }
+
+  const gazetteerEntries = await loadAnonymizationGazetteerEntries({
+    organizationId: context.organizationId,
+    scopedDb: context.scopedDb,
+  });
+
+  return await Promise.all(
     results.map(async ({ workspaceId, ...result }) => {
       const anonymized = await anonymizeTextFields({
         fields: [result.title],
+        gazetteerEntries,
         organizationId: context.organizationId,
         scopedDb: context.scopedDb,
         workspaceId,
@@ -134,6 +145,7 @@ const anonymizeCompatSearchResults = async ({
       };
     }),
   );
+};
 
 const anonymizeCompatFetchPayload = async ({
   context,
