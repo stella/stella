@@ -78,22 +78,35 @@ content_workspace_ids AS (
   FROM thread_workspace_refs twr
   WHERE EXISTS (SELECT 1 FROM workspaces w WHERE w.id = twr.workspace_id)
   GROUP BY twr.thread_id
-)
-UPDATE chat_threads ct
-  SET data_workspace_ids = (
-    SELECT ARRAY(
-      SELECT DISTINCT unnest(
-        CASE
-          WHEN ct.workspace_id IS NOT NULL THEN ARRAY[ct.workspace_id]::uuid[]
-          ELSE '{}'::uuid[]
-        END || COALESCE(cwi.workspace_ids, '{}'::uuid[])
+),
+thread_final_scope AS (
+  -- Compute the final union per thread up-front. Doing this
+  -- here keeps the UPDATE's FROM clause flat — Postgres rejects
+  -- references to the UPDATE target's alias from inside a JOIN
+  -- ON clause, so we cannot `LEFT JOIN content_workspace_ids
+  -- cwi ON cwi.thread_id = ct.id` directly off the target.
+  SELECT
+    ct.id AS thread_id,
+    (
+      SELECT ARRAY(
+        SELECT DISTINCT unnest(
+          CASE
+            WHEN ct.workspace_id IS NOT NULL
+              THEN ARRAY[ct.workspace_id]::uuid[]
+            ELSE '{}'::uuid[]
+          END || COALESCE(cwi.workspace_ids, '{}'::uuid[])
+        )
       )
-    )
-  )
-  FROM (SELECT 1) AS dummy
+    ) AS workspace_ids
+  FROM chat_threads ct
   LEFT JOIN content_workspace_ids cwi ON cwi.thread_id = ct.id
   WHERE cardinality(ct.data_workspace_ids) = 0
-    AND (ct.workspace_id IS NOT NULL OR cwi.thread_id IS NOT NULL);
+    AND (ct.workspace_id IS NOT NULL OR cwi.thread_id IS NOT NULL)
+)
+UPDATE chat_threads
+  SET data_workspace_ids = tfs.workspace_ids
+  FROM thread_final_scope tfs
+  WHERE chat_threads.id = tfs.thread_id;
 
 -- The new RLS predicate is added by drizzle from the updated
 -- `chatThreadPolicies` / `chatMessagePolicies` definitions; see
