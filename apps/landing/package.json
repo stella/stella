@@ -18,13 +18,13 @@
     "@astrojs/sitemap": "^3.7.2",
     "@stll/ui": "workspace:*",
     "@tailwindcss/vite": "catalog:",
-    "astro": "^6.1.9",
+    "astro": "^6.1.10",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "tailwindcss": "catalog:"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.4",
+    "@astrojs/check": "^0.9.9",
     "@resvg/resvg-js": "^2.6.2",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",

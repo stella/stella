@@ -14,10 +14,10 @@
   },
   "dependencies": {
     "@astrojs/starlight": "^0.38.4",
-    "astro": "^6.1.9"
+    "astro": "^6.1.10"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.4",
+    "@astrojs/check": "^0.9.9",
     "typescript": "catalog:"
   }
 }
