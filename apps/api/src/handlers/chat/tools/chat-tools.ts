@@ -4,6 +4,7 @@ import {
   APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME,
   createActiveDocxEditTool,
 } from "@/api/handlers/chat/tools/active-docx-edit-tool";
+import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { createChatExecutionTools } from "@/api/handlers/chat/tools/execute/chat-execution-tools";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
@@ -28,7 +29,11 @@ type GetChatToolsProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  accessibleWorkspaceIds: SafeId<"workspace">[];
+  // Use `resolveToolWorkspaceIds` to construct this — that helper is
+  // the only path that intersects pinned IDs with the currently
+  // accessible set, preventing stale stored pins from widening tool
+  // authorization.
+  toolWorkspaceIds: AuthorizedToolWorkspaceIds;
   refRegistry: ChatRefRegistry;
   workspaceId: SafeId<"workspace"> | null;
   /**
@@ -50,18 +55,18 @@ export const getChatTools = ({
   scopedDb,
   organizationId,
   userId,
-  accessibleWorkspaceIds,
+  toolWorkspaceIds,
   refRegistry,
   workspaceId,
   hasActiveFileChat,
 }: GetChatToolsProps): Partial<ChatTools> => {
   const orgTools = createOrgTools({
-    accessibleWorkspaceIds,
+    accessibleWorkspaceIds: toolWorkspaceIds,
     organizationId,
     scopedDb,
   });
   const executionTools = createChatExecutionTools({
-    accessibleWorkspaceIds,
+    accessibleWorkspaceIds: toolWorkspaceIds,
     organizationId,
     refRegistry,
     safeDb,
@@ -84,7 +89,7 @@ export const getChatTools = ({
   }
 
   const workspaceTools = createWorkspaceTools({
-    allowedWorkspaceIds: accessibleWorkspaceIds,
+    allowedWorkspaceIds: toolWorkspaceIds,
     organizationId,
     refRegistry,
     userId,

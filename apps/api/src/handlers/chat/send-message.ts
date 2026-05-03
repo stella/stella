@@ -19,6 +19,11 @@ import {
   validateMessage,
 } from "@/api/handlers/chat/chat-schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
+import {
+  expandThreadDataScope,
+  extractAssistantWorkspaceIds,
+  extractMentionWorkspaceIds,
+} from "@/api/handlers/chat/data-scope";
 import { ChatError } from "@/api/handlers/chat/errors";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import {
@@ -26,6 +31,10 @@ import {
   planMessagePersistence,
 } from "@/api/handlers/chat/persist-message";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
+import {
+  intersectAccessibleWorkspaceIds,
+  resolveToolWorkspaceIds,
+} from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type {
@@ -105,7 +114,12 @@ const sendMessage = createSafeRootHandler(
       safeDb,
       scopedDb,
       userId: user.id,
-      accessibleWorkspaceIds,
+      // Schema validation runs against the user's full accessible
+      // set; per-tool scope checks happen at execute time below.
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds,
+      }),
       workspaceId,
       hasActiveFileChat: true,
     });
@@ -134,38 +148,33 @@ const sendMessage = createSafeRootHandler(
     // For an existing thread, accept a non-empty body update as
     // "user changed scope, persist it"; an omitted/empty body keeps
     // the stored value so re-sends from cached transports don't
-    // silently widen access. The effective set used for the rest
-    // of the request is whatever ends up persisted.
-    let effectiveContextMatterIds = thread.data.contextMatterIds;
+    // silently widen access. Persisted pins are always intersected
+    // with the currently accessible set so a revoked workspace
+    // cannot be re-authorized through a stale stored pin.
+    const storedPinsThisRequest =
+      thread.type === "existing" && body.contextMatterIds !== undefined
+        ? requestedContextMatterIds
+        : thread.data.contextMatterIds;
+    const effectiveContextMatterIds = intersectAccessibleWorkspaceIds({
+      pinnedIds: storedPinsThisRequest,
+      accessibleWorkspaceIds,
+    });
     if (
       thread.type === "existing" &&
-      body.contextMatterIds !== undefined &&
       !contextMatterIdsEqual(
         thread.data.contextMatterIds,
-        requestedContextMatterIds,
+        effectiveContextMatterIds,
       )
     ) {
       yield* Result.await(
         safeDb((tx) =>
           tx
             .update(chatThreads)
-            .set({ contextMatterIds: requestedContextMatterIds })
+            .set({ contextMatterIds: effectiveContextMatterIds })
             .where(eq(chatThreads.id, body.threadId)),
         ),
       );
-      effectiveContextMatterIds = requestedContextMatterIds;
     }
-
-    // Narrow tool authorization to the pinned matters when the
-    // user has set a non-empty scope; otherwise tools see every
-    // accessible matter so the AI can discover relevant ones via
-    // the readonly stella API. The narrowed list is always a
-    // subset of `accessibleWorkspaceIds` (validated above), so
-    // this never widens authorization.
-    const toolWorkspaceIds =
-      effectiveContextMatterIds.length > 0
-        ? effectiveContextMatterIds
-        : accessibleWorkspaceIds;
 
     // Streaming tools mirror the surface the user is on: only the
     // file-overlay client knows how to satisfy
@@ -180,7 +189,10 @@ const sendMessage = createSafeRootHandler(
       safeDb,
       scopedDb,
       userId: user.id,
-      accessibleWorkspaceIds: toolWorkspaceIds,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: effectiveContextMatterIds,
+        accessibleWorkspaceIds,
+      }),
       workspaceId,
       hasActiveFileChat: body.activeFile !== undefined,
     });
@@ -204,6 +216,24 @@ const sendMessage = createSafeRootHandler(
       message: parsedMessage.message,
       storedMessages: thread.data.messages,
     });
+
+    // Widen the thread's data scope BEFORE persisting the message so
+    // any workspace IDs the user just embedded (entity mentions,
+    // workspace mentions) are recorded on the thread row. Without
+    // this, a global thread with workspace mentions would remain
+    // visible to the user even after they lose access to those
+    // workspaces.
+    const userMessageWorkspaceIds = extractMentionWorkspaceIds(
+      parsedMessage.mentions,
+    );
+    const dataScopeAfterUserMessage = yield* Result.await(
+      expandThreadDataScope({
+        currentDataWorkspaceIds: thread.data.dataWorkspaceIds,
+        newWorkspaceIds: userMessageWorkspaceIds,
+        safeDb,
+        threadId: body.threadId,
+      }),
+    );
 
     yield* Result.await(
       persistMessage({
@@ -252,6 +282,25 @@ const sendMessage = createSafeRootHandler(
                 message: resolvedResponseMessage,
               });
 
+              // Widen the thread's data scope to cover any
+              // workspace-scoped content the assistant just
+              // emitted (source-document parts from search and
+              // workspace tools). Run before persistMessage so the
+              // recorded scope already includes the workspaces
+              // when the message lands in chat_messages.
+              const assistantWorkspaceIds = extractAssistantWorkspaceIds(
+                resolvedResponseMessage.parts,
+              );
+              const expandResult = await expandThreadDataScope({
+                currentDataWorkspaceIds: dataScopeAfterUserMessage,
+                newWorkspaceIds: assistantWorkspaceIds,
+                safeDb,
+                threadId: body.threadId,
+              });
+              if (Result.isError(expandResult)) {
+                captureError(expandResult.error, { threadId: body.threadId });
+              }
+
               const persistResult = await persistMessage({
                 persistencePlan,
                 safeDb,
@@ -290,6 +339,7 @@ export default sendMessage;
 type ThreadRecord = {
   id: SafeId<"chatThread">;
   contextMatterIds: SafeId<"workspace">[];
+  dataWorkspaceIds: SafeId<"workspace">[];
   messages: {
     id: SafeId<"chatMessage">;
     role: ChatMessage["role"];
@@ -343,6 +393,7 @@ const loadThread = async ({
             id: true,
             workspaceId: true,
             contextMatterIds: true,
+            dataWorkspaceIds: true,
           },
           with: {
             messages: {
@@ -373,10 +424,15 @@ const loadThread = async ({
         data: {
           id: thread.id,
           contextMatterIds: thread.contextMatterIds,
+          dataWorkspaceIds: thread.dataWorkspaceIds,
           messages: thread.messages,
         },
       });
     }
+
+    const initialDataWorkspaceIds: SafeId<"workspace">[] = workspaceId
+      ? [workspaceId]
+      : [];
 
     yield* Result.await(
       safeDb((tx) =>
@@ -386,6 +442,12 @@ const loadThread = async ({
           userId,
           workspaceId,
           contextMatterIds: initialContextMatterIds,
+          // Workspace-scoped chats embed at minimum their own
+          // workspace's content. Global chats start with no
+          // embedded workspace data; subsequent messages widen
+          // this set via expandThreadDataScope when they reference
+          // workspace assets (mentions, source-document parts).
+          dataWorkspaceIds: initialDataWorkspaceIds,
         }),
       ),
     );
@@ -395,6 +457,7 @@ const loadThread = async ({
       data: {
         id: threadId,
         contextMatterIds: initialContextMatterIds,
+        dataWorkspaceIds: initialDataWorkspaceIds,
         messages: [],
       },
     });

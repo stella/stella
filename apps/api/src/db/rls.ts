@@ -32,9 +32,38 @@ const userCheck = sql`user_id =
     '${sql.raw(SETTING_USER_ID)}', true
   ))`;
 
-const chatScopeCheck = sql`(
+// `data_workspace_ids` records every workspace whose content is
+// embedded in the thread (citations, document excerpts, etc.). The
+// empty default means "no workspace data embedded" — true global
+// chats. Any non-empty value must be a subset of the session's
+// accessible workspaces, which prevents a stored search-summary
+// thread from outliving the user's access to a contributing matter.
+const chatThreadDataScopeCheck = sql`(
+  cardinality(data_workspace_ids) = 0
+  OR data_workspace_ids <@ ${wsIdsArray}
+)`;
+
+const chatThreadScopeCheck = sql`(
   ${userCheck} AND
-  (workspace_id IS NULL OR ${workspaceCheck})
+  (workspace_id IS NULL OR ${workspaceCheck}) AND
+  ${chatThreadDataScopeCheck}
+)`;
+
+// Messages inherit the data scope from their owning thread. RLS on
+// `chat_messages` joins `chat_threads` so a leaked global thread
+// row cannot expose its messages even if the thread row itself
+// somehow becomes readable.
+const chatMessageScopeCheck = sql`(
+  ${userCheck} AND
+  (workspace_id IS NULL OR ${workspaceCheck}) AND
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = chat_messages.thread_id
+      AND (
+        cardinality(ct.data_workspace_ids) = 0
+        OR ct.data_workspace_ids <@ ${wsIdsArray}
+      )
+  )
 )`;
 
 export const wsPolicies = () => [
@@ -106,25 +135,48 @@ export const userPolicies = () => [
   }),
 ];
 
-export const chatPolicies = () => [
-  p.pgPolicy("chat_select", {
+export const chatThreadPolicies = () => [
+  p.pgPolicy("chat_thread_select", {
     for: "select",
     to: stella,
-    using: chatScopeCheck,
+    using: chatThreadScopeCheck,
   }),
-  p.pgPolicy("chat_insert", {
+  p.pgPolicy("chat_thread_insert", {
     for: "insert",
     to: stella,
-    withCheck: chatScopeCheck,
+    withCheck: chatThreadScopeCheck,
   }),
-  p.pgPolicy("chat_update", {
+  p.pgPolicy("chat_thread_update", {
     for: "update",
     to: stella,
-    using: chatScopeCheck,
+    using: chatThreadScopeCheck,
   }),
-  p.pgPolicy("chat_delete", {
+  p.pgPolicy("chat_thread_delete", {
     for: "delete",
     to: stella,
-    using: chatScopeCheck,
+    using: chatThreadScopeCheck,
+  }),
+];
+
+export const chatMessagePolicies = () => [
+  p.pgPolicy("chat_message_select", {
+    for: "select",
+    to: stella,
+    using: chatMessageScopeCheck,
+  }),
+  p.pgPolicy("chat_message_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatMessageScopeCheck,
+  }),
+  p.pgPolicy("chat_message_update", {
+    for: "update",
+    to: stella,
+    using: chatMessageScopeCheck,
+  }),
+  p.pgPolicy("chat_message_delete", {
+    for: "delete",
+    to: stella,
+    using: chatMessageScopeCheck,
   }),
 ];
