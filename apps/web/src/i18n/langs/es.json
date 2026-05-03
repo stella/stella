@@ -13,6 +13,13 @@
       "unknownDevice": "Dispositivo desconocido"
     }
   },
+  "ai": {
+    "keyRequired": {
+      "cta": "Open AI settings",
+      "description": "This instance has no platform AI keys provisioned. Add your own API key to start using AI features.",
+      "title": "AI key required"
+    }
+  },
   "anonymize": {
     "addEntity": "Añadir entidad",
     "checkAnonymization": "Check anonymisation",

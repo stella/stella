@@ -47,6 +47,16 @@ const envApi = createEnv({
     ANTHROPIC_API_KEY: v.optional(v.string()),
     GOOGLE_AI_API_KEY_EU: v.optional(v.string()),
     GOOGLE_AI_API_KEY_CH: v.optional(v.string()),
+    /**
+     * Force orgs to supply their own AI key (BYOK) even if the
+     * instance has provisioned provider keys. Useful for shared
+     * deployments without metering where the operator wants
+     * costs to land on each org's own provider account.
+     */
+    REQUIRE_PERSONAL_AI_KEY: v.optional(
+      v.pipe(v.string(), v.parseBoolean()),
+      "false",
+    ),
     REDIS_URL: v.pipe(v.string(), v.url()),
     USE_MOCK_AI: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
     BETTER_AUTH_SECRET: v.pipe(v.string(), v.minLength(32)),

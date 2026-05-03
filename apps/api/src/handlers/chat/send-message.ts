@@ -33,6 +33,7 @@ import type {
   ChatMessageContent,
 } from "@/api/handlers/chat/types";
 import { uploadMessageFiles } from "@/api/handlers/chat/upload-files";
+import { requireAIAvailable } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -59,6 +60,8 @@ const sendMessage = createSafeRootHandler(
     session,
     user,
   }) {
+    yield* requireAIAvailable(orgAIConfig);
+
     const accessibleWorkspaceIds = activeWorkspaceIds;
     /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope validates against accessibleWorkspaceIds */
     const scope = yield* resolveChatScope({

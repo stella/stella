@@ -24,9 +24,10 @@ import { createOpenAI, openai } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { wrapLanguageModel } from "ai";
 import type { LanguageModel } from "ai";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { env } from "@/api/env";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 // -- Types ------------------------------------------------------
 
@@ -150,6 +151,48 @@ const resolveProvider = (): AIProvider => {
       "provide at least one API key: " +
       "GOOGLE_GENERATIVE_AI_API_KEY, OPENROUTER_API_KEY, " +
       "OPENAI_API_KEY, or ANTHROPIC_API_KEY.",
+  );
+};
+
+/**
+ * Whether the instance can serve AI to an org that has not set
+ * BYOK. False when REQUIRE_PERSONAL_AI_KEY forces BYOK or when
+ * no provider keys are provisioned.
+ *
+ * Used by /ai-config to tell the frontend whether AI features
+ * are usable without the org first supplying their own key.
+ */
+export const hasInstanceProvider = (): boolean => {
+  if (env.REQUIRE_PERSONAL_AI_KEY) {
+    return false;
+  }
+  return !!(
+    env.AI_PROVIDER ||
+    env.OPENROUTER_API_KEY ||
+    env.GOOGLE_GENERATIVE_AI_API_KEY ||
+    env.OPENAI_API_KEY ||
+    env.ANTHROPIC_API_KEY
+  );
+};
+
+/**
+ * Backend gate matching the frontend RequireAIKey component.
+ * Yield from a Result.gen handler to short-circuit AI requests
+ * with 403 when the org has no BYOK and the instance has no
+ * provisioned (or BYOK-only) provider.
+ */
+export const requireAIAvailable = (
+  orgConfig: OrgAIConfig | null,
+): Result<void, HandlerError> => {
+  if (orgConfig || hasInstanceProvider()) {
+    return Result.ok(undefined);
+  }
+  return Result.err(
+    new HandlerError({
+      status: 403,
+      message:
+        "AI is not available. Configure an AI key in organization settings.",
+    }),
   );
 };
 

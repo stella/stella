@@ -17,6 +17,7 @@ import {
   getModelForRole,
   getModelInfoForRole,
   getTemperatureForRole,
+  requireAIAvailable,
 } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
@@ -162,6 +163,8 @@ const organizeSuggestionsHandler = async function* ({
   orgAIConfig,
   body,
 }: OrganizeSuggestionsHandlerProps) {
+  yield* requireAIAvailable(orgAIConfig);
+
   const contexts = yield* Result.await(
     loadSummaryContexts({ safeDb, workspaceId, organizationId, body }),
   );
