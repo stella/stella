@@ -11,19 +11,40 @@ const selfHostingDocsUrl =
 
 <Base>
   <!-- Brand accent line -->
-  <div class="h-0.5" style="background: linear-gradient(to right, var(--auth-gradient-end), transparent 70%)" data-no-transition></div>
+  <div
+    class="h-0.5"
+    style="background: linear-gradient(to right, var(--auth-gradient-end), transparent 70%)"
+    data-no-transition
+  >
+  </div>
 
   <main>
     <!-- ——— Hero ——— -->
     <section class="relative flex min-h-dvh flex-col overflow-hidden">
       <div class="absolute inset-0 overflow-hidden" id="gradient-bg">
-        <div id="gradient-light" class="absolute inset-0 dark:opacity-0 transition-opacity duration-500"></div>
-        <div id="gradient-dark" class="absolute inset-0 opacity-0 dark:opacity-100 transition-opacity duration-500"></div>
+        <div
+          id="gradient-light"
+          class="absolute inset-0 dark:opacity-0 transition-opacity duration-500"
+        >
+        </div>
+        <div
+          id="gradient-dark"
+          class="absolute inset-0 opacity-0 dark:opacity-100 transition-opacity duration-500"
+        >
+        </div>
       </div>
-      <nav class="relative z-10 mx-auto flex w-full max-w-300 items-center justify-between px-6 py-5">
+      <nav
+        class="relative z-10 mx-auto flex w-full max-w-300 items-center justify-between px-6 py-5"
+      >
         <div class="flex items-center gap-3">
-          <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
-          <span class="border-border text-muted-foreground rounded-sm border px-1.5 py-0.5 text-[0.625rem] font-medium tracking-[0.1em] uppercase">
+          <img
+            src="/images/stella-logo.svg"
+            alt="stella"
+            class="h-6 dark:invert"
+          />
+          <span
+            class="border-border text-muted-foreground rounded-sm border px-1.5 py-0.5 text-[0.625rem] font-medium tracking-[0.1em] uppercase"
+          >
             Beta
           </span>
         </div>
@@ -32,7 +53,9 @@ const selfHostingDocsUrl =
         </div>
       </nav>
 
-      <div class="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-16">
+      <div
+        class="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-16"
+      >
         <div
           class="mb-8 inline-flex items-center gap-3 rounded-full px-4 py-2"
           style="background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border)"
@@ -40,16 +63,23 @@ const selfHostingDocsUrl =
           <span
             class="hero-beta-dot h-2.5 w-2.5 rounded-full"
             style="background: var(--success)"
-            aria-hidden="true"
-          ></span>
-          <span class="text-xs font-semibold uppercase tracking-[0.18em]" style="color: var(--foreground)">
+            aria-hidden="true"></span>
+          <span
+            class="text-xs font-semibold uppercase tracking-[0.18em]"
+            style="color: var(--foreground)"
+          >
             Now in beta
           </span>
         </div>
-        <h1 class="max-w-3xl text-center font-display text-5xl font-medium leading-[1.08] sm:text-6xl lg:text-7xl">
+        <h1
+          class="max-w-3xl text-center font-display text-5xl font-medium leading-[1.08] sm:text-6xl lg:text-7xl"
+        >
           Legal workspace.<br />Open source.
         </h1>
-        <p class="mt-6 max-w-lg text-center text-lg leading-[1.7]" style="color: var(--muted-foreground)">
+        <p
+          class="mt-6 max-w-lg text-center text-lg leading-[1.7]"
+          style="color: var(--muted-foreground)"
+        >
           Documents, matters, review, and research in one place.
           <br />
           Free to use, open to inspect, yours to keep.
@@ -66,7 +96,8 @@ const selfHostingDocsUrl =
       <div
         class="pointer-events-none absolute inset-x-0 bottom-0 h-1/3"
         style="background: linear-gradient(to bottom, transparent, var(--background))"
-      ></div>
+      >
+      </div>
     </section>
 
     <!-- ——— Product ——— -->
@@ -78,87 +109,143 @@ const selfHostingDocsUrl =
     <section class="px-6 py-16 lg:py-20">
       <div class="mx-auto max-w-300">
         <div class="mx-auto max-w-4xl text-center">
-          <p class="text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Built to last</p>
-          <h2 class="mt-3 font-display text-4xl font-medium leading-[1.1] sm:text-5xl lg:text-6xl">
+          <p
+            class="text-xs font-medium uppercase tracking-[0.2em]"
+            style="color: var(--muted-foreground)"
+          >
+            Built to last
+          </p>
+          <h2
+            class="mt-3 font-display text-4xl font-medium leading-[1.1] sm:text-5xl lg:text-6xl"
+          >
             Ready for you.
             <br />
             And your agents.
             <br />
             And whatever comes next.
           </h2>
-          <p class="mx-auto mt-5 max-w-3xl text-base leading-[1.9] sm:text-lg" style="color: var(--muted-foreground)">
-            Documents, matters, and search are free in the beta preview. AI features are available with your own provider key.
+          <p
+            class="mx-auto mt-5 max-w-3xl text-base leading-[1.9] sm:text-lg"
+            style="color: var(--muted-foreground)"
+          >
+            Documents, matters, and search are free in the beta preview. AI
+            features are available with your own provider key.
           </p>
         </div>
 
         <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {controlCapabilities.slice(0, 3).map((card) => (
-            <div class="rounded-[1.45rem] p-6" style="background: var(--card); border: 1px solid var(--border)">
-              <h3 class="font-display text-lg font-medium tracking-tight">{card.title}</h3>
-              <p class="mt-2 text-sm leading-[1.8]" style="color: var(--muted-foreground)">
-                {card.body}
-              </p>
-            </div>
-          ))}
+          {
+            controlCapabilities.slice(0, 3).map((card) => (
+              <div
+                class="rounded-[1.45rem] p-6"
+                style="background: var(--card); border: 1px solid var(--border)"
+              >
+                <h3 class="font-display text-lg font-medium tracking-tight">
+                  {card.title}
+                </h3>
+                <p
+                  class="mt-2 text-sm leading-[1.8]"
+                  style="color: var(--muted-foreground)"
+                >
+                  {card.body}
+                </p>
+              </div>
+            ))
+          }
         </div>
-
       </div>
     </section>
 
     <!-- ——— Usage options ——— -->
     <section class="px-6 py-16 lg:py-20">
       <div class="mx-auto max-w-300">
-        <p class="mb-3 text-center text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Usage options</p>
-        <h2 class="mb-10 text-center font-display text-4xl font-medium leading-[1.1] sm:text-5xl lg:text-6xl">
+        <p
+          class="mb-3 text-center text-xs font-medium uppercase tracking-[0.2em]"
+          style="color: var(--muted-foreground)"
+        >
+          Usage options
+        </p>
+        <h2
+          class="mb-10 text-center font-display text-4xl font-medium leading-[1.1] sm:text-5xl lg:text-6xl"
+        >
           Choose how to run stella.
         </h2>
-        <p class="mx-auto mb-10 max-w-2xl text-center text-base leading-[1.8] sm:text-lg" style="color: var(--muted-foreground)">
+        <p
+          class="mx-auto mb-10 max-w-2xl text-center text-base leading-[1.8] sm:text-lg"
+          style="color: var(--muted-foreground)"
+        >
           No lock-in, no per-seat licensing, no hidden pricing.
         </p>
         <div class="mx-auto grid max-w-3xl grid-cols-1 gap-6 md:grid-cols-2">
-          {[
-            {
-              name: "Self-host",
-              cta: "Read docs",
-              external: true,
-              href: selfHostingDocsUrl,
-              price: "Free",
-              note: "",
-              features: ["Run on your infrastructure", "Full source access", "AGPL\u20113.0 license", "Currently in beta demo"],
-            },
-            {
-              name: "Cloud preview",
-              cta: "Try it out now",
-              href: appUrl,
-              note: "",
-              price: "Free",
-              features: ["Use hosted architecture", "Currently in beta preview", "BYOK only"],
-            },
-          ].map((tier) => (
-            <div
-              class="pricing-card group flex flex-col rounded-2xl p-8 transition-[background-color,border-color,box-shadow] duration-200"
-              style="background: var(--card); border: 1px solid var(--border); color: inherit"
-            >
-              <p class="min-h-5 text-sm italic" style="color: var(--muted-foreground)">
-                {tier.note ?? ""}
-              </p>
-              <p class="text-xs font-medium uppercase tracking-[0.15em]" style="color: var(--muted-foreground)">{tier.name}</p>
-              <p class="tabular-nums mt-2 font-display text-3xl font-medium">{tier.price}</p>
-              <div class="my-6 h-px" style="background: var(--border)"></div>
-              <div class="flex-1 space-y-1.5 text-sm leading-[1.7]" style="color: var(--muted-foreground)">
-                {tier.features.map((f) => <p set:html={f} />)}
-              </div>
-              <a
-                href={tier.href}
-                class="mt-8 inline-flex h-9 items-center self-start rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
-                rel={tier.external ? "noopener noreferrer" : undefined}
-                style="background: var(--primary); color: var(--primary-foreground)"
-                target={tier.external ? "_blank" : undefined}
+          {
+            [
+              {
+                name: "Self-host",
+                cta: "Read docs",
+                external: true,
+                href: selfHostingDocsUrl,
+                price: "Free",
+                note: "",
+                features: [
+                  "Run on your infrastructure",
+                  "Full source access",
+                  "AGPL\u20113.0 license",
+                  "Currently in beta demo",
+                ],
+              },
+              {
+                name: "Cloud preview",
+                cta: "Try it out now",
+                href: appUrl,
+                note: "",
+                price: "Free",
+                features: [
+                  "Use hosted architecture",
+                  "Currently in beta preview",
+                  "BYOK only",
+                ],
+              },
+            ].map((tier) => (
+              <div
+                class="pricing-card group flex flex-col rounded-2xl p-8 transition-[background-color,border-color,box-shadow] duration-200"
+                style="background: var(--card); border: 1px solid var(--border); color: inherit"
               >
-                {tier.cta}
-              </a>
-            </div>
-          ))}
+                <p
+                  class="min-h-5 text-sm italic"
+                  style="color: var(--muted-foreground)"
+                >
+                  {tier.note ?? ""}
+                </p>
+                <p
+                  class="text-xs font-medium uppercase tracking-[0.15em]"
+                  style="color: var(--muted-foreground)"
+                >
+                  {tier.name}
+                </p>
+                <p class="tabular-nums mt-2 font-display text-3xl font-medium">
+                  {tier.price}
+                </p>
+                <div class="my-6 h-px" style="background: var(--border)" />
+                <div
+                  class="flex-1 space-y-1.5 text-sm leading-[1.7]"
+                  style="color: var(--muted-foreground)"
+                >
+                  {tier.features.map((f) => (
+                    <p set:html={f} />
+                  ))}
+                </div>
+                <a
+                  href={tier.href}
+                  class="mt-8 inline-flex h-9 items-center self-start rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
+                  rel={tier.external ? "noopener noreferrer" : undefined}
+                  style="background: var(--primary); color: var(--primary-foreground)"
+                  target={tier.external ? "_blank" : undefined}
+                >
+                  {tier.cta}
+                </a>
+              </div>
+            ))
+          }
         </div>
       </div>
     </section>
@@ -202,62 +289,91 @@ const selfHostingDocsUrl =
           class="pointer-events-none absolute inset-0 bg-cover bg-center opacity-100 dark:opacity-28"
           style="background-image: url('/images/gradient-hero.png')"
           aria-hidden="true"
-        ></div>
+        >
+        </div>
         <div
           class="pointer-events-none absolute inset-0 dark:hidden"
           style="background:
             linear-gradient(180deg, rgba(255,255,255,0.2), rgba(255,255,255,0.34))"
           aria-hidden="true"
-        ></div>
+        >
+        </div>
         <div
           class="pointer-events-none absolute inset-0 hidden dark:block"
           style="background:
             linear-gradient(180deg, color-mix(in srgb, var(--card) 74%, transparent), color-mix(in srgb, var(--card) 88%, transparent));
             backdrop-filter: blur(2px)"
           aria-hidden="true"
-        ></div>
+        >
+        </div>
 
         <div class="relative z-10">
-        <div class="max-w-3xl">
-          <h2 class="font-display text-3xl font-medium leading-tight sm:text-4xl">
-            Start with a single click.
-            <br />
-            Bring us in when you need rollout help.
-          </h2>
-        </div>
-
-        <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-          <a
-            href={appUrl}
-            class="inline-flex h-11 items-center justify-center rounded-[0.85rem] px-5 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
-            style="background: var(--primary); color: var(--primary-foreground)"
+          <div class="max-w-3xl">
+            <h2
+              class="font-display text-3xl font-medium leading-tight sm:text-4xl"
             >
-            Start free
-          </a>
-          <a
-            href="mailto:contact@stll.app?subject=stella%20walkthrough"
-            class="inline-flex h-11 items-center justify-center rounded-[0.85rem] px-5 text-sm font-medium transition-colors whitespace-nowrap"
-            style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
-          >
-            Talk to us
-          </a>
-        </div>
+              Start with a single click.
+              <br />
+              Bring us in when you need rollout help.
+            </h2>
+          </div>
+
+          <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+            <a
+              href={appUrl}
+              class="inline-flex h-11 items-center justify-center rounded-[0.85rem] px-5 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
+              style="background: var(--primary); color: var(--primary-foreground)"
+            >
+              Start free
+            </a>
+            <a
+              href="mailto:contact@stll.app?subject=stella%20walkthrough"
+              class="inline-flex h-11 items-center justify-center rounded-[0.85rem] px-5 text-sm font-medium transition-colors whitespace-nowrap"
+              style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
+            >
+              Talk to us
+            </a>
+          </div>
         </div>
       </div>
     </section>
   </main>
 
   <!-- ——— Footer ——— -->
-  <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
+  <footer
+    class="relative px-6 py-12"
+    style="border-top: 1px solid var(--border)"
+  >
     <div class="mx-auto max-w-300">
       <div class="flex flex-col items-center justify-between gap-6 sm:flex-row">
-        <nav class="flex items-center gap-4 text-sm" style="color: var(--muted-foreground)" aria-label="Footer">
-          <a href="https://github.com/stella/stella" class="transition-opacity hover:opacity-70" target="_blank" rel="noopener noreferrer">GitHub</a>
-          <a href="https://discord.gg/8dZjmVFjTK" class="transition-opacity hover:opacity-70" target="_blank" rel="noopener noreferrer">Discord</a>
-          <a href="/security" class="transition-opacity hover:opacity-70">Security</a>
+        <nav
+          class="flex items-center gap-4 text-sm"
+          style="color: var(--muted-foreground)"
+          aria-label="Footer"
+        >
+          <a
+            href="https://github.com/stella/stella"
+            class="transition-opacity hover:opacity-70"
+            target="_blank"
+            rel="noopener noreferrer">GitHub</a
+          >
+          <a
+            href="https://discord.gg/8dZjmVFjTK"
+            class="transition-opacity hover:opacity-70"
+            target="_blank"
+            rel="noopener noreferrer">Discord</a
+          >
+          <a href="/security" class="transition-opacity hover:opacity-70"
+            >Security</a
+          >
           <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
-          <a href="/imprint" class="transition-opacity hover:opacity-70">Imprint</a>
-          <a href="mailto:contact@stll.app" class="transition-opacity hover:opacity-70">Contact</a>
+          <a href="/imprint" class="transition-opacity hover:opacity-70"
+            >Imprint</a
+          >
+          <a
+            href="mailto:contact@stll.app"
+            class="transition-opacity hover:opacity-70">Contact</a
+          >
         </nav>
         <div class="flex items-center gap-4" aria-label="Social">
           <a
@@ -268,7 +384,11 @@ const selfHostingDocsUrl =
             rel="noopener noreferrer"
             aria-label="GitHub"
           >
-            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 .5C5.648.5.5 5.648.5 12a11.5 11.5 0 008.073 10.95c.59.11.805-.257.805-.57 0-.281-.01-1.024-.016-2.01-3.282.713-3.975-1.582-3.975-1.582-.536-1.362-1.31-1.725-1.31-1.725-1.072-.733.081-.718.081-.718 1.186.083 1.81 1.218 1.81 1.218 1.054 1.806 2.766 1.284 3.44.982.107-.764.413-1.285.752-1.58-2.62-.298-5.377-1.31-5.377-5.829 0-1.287.46-2.34 1.216-3.166-.122-.298-.527-1.5.116-3.126 0 0 .992-.317 3.25 1.209A11.33 11.33 0 0112 6.227c1.02.005 2.047.138 3.007.404 2.257-1.526 3.247-1.209 3.247-1.209.645 1.626.24 2.828.118 3.126.759.826 1.214 1.879 1.214 3.166 0 4.53-2.76 5.527-5.387 5.819.424.365.801 1.084.801 2.185 0 1.577-.014 2.85-.014 3.238 0 .316.212.686.81.569A11.502 11.502 0 0023.5 12C23.5 5.648 18.352.5 12 .5z"/></svg>
+            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
+              ><path
+                d="M12 .5C5.648.5.5 5.648.5 12a11.5 11.5 0 008.073 10.95c.59.11.805-.257.805-.57 0-.281-.01-1.024-.016-2.01-3.282.713-3.975-1.582-3.975-1.582-.536-1.362-1.31-1.725-1.31-1.725-1.072-.733.081-.718.081-.718 1.186.083 1.81 1.218 1.81 1.218 1.054 1.806 2.766 1.284 3.44.982.107-.764.413-1.285.752-1.58-2.62-.298-5.377-1.31-5.377-5.829 0-1.287.46-2.34 1.216-3.166-.122-.298-.527-1.5.116-3.126 0 0 .992-.317 3.25 1.209A11.33 11.33 0 0112 6.227c1.02.005 2.047.138 3.007.404 2.257-1.526 3.247-1.209 3.247-1.209.645 1.626.24 2.828.118 3.126.759.826 1.214 1.879 1.214 3.166 0 4.53-2.76 5.527-5.387 5.819.424.365.801 1.084.801 2.185 0 1.577-.014 2.85-.014 3.238 0 .316.212.686.81.569A11.502 11.502 0 0023.5 12C23.5 5.648 18.352.5 12 .5z"
+              ></path></svg
+            >
           </a>
           <a
             href="https://discord.gg/8dZjmVFjTK"
@@ -278,7 +398,17 @@ const selfHostingDocsUrl =
             rel="noopener noreferrer"
             aria-label="Discord"
           >
-            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20.317 4.369A19.79 19.79 0 0016.558 3a14.27 14.27 0 00-.642 1.318 18.27 18.27 0 00-5.487 0A12.84 12.84 0 009.781 3 19.74 19.74 0 006.02 4.371C2.09 10.215 1.022 15.913 1.556 21.53a19.94 19.94 0 006.073 3.066 14.7 14.7 0 001.3-2.114 12.85 12.85 0 01-2.045-.98c.171-.126.34-.258.5-.392a14.18 14.18 0 0012.231 0c.163.135.331.267.502.392-.654.388-1.34.717-2.05.982a14.55 14.55 0 001.3 2.113 19.92 19.92 0 006.077-3.066c.625-6.51-1.072-12.157-4.487-17.162zM8.677 18.06c-1.21 0-2.207-1.108-2.207-2.471 0-1.364.97-2.477 2.207-2.477 1.236 0 2.227 1.113 2.207 2.477 0 1.363-.98 2.471-2.207 2.471zm6.646 0c-1.21 0-2.207-1.108-2.207-2.471 0-1.364.97-2.477 2.207-2.477 1.236 0 2.227 1.113 2.207 2.477 0 1.363-.97 2.471-2.207 2.471z"/></svg>
+            <svg
+              class="h-4"
+              fill="currentColor"
+              viewBox="0 0 126.644 96"
+              aria-hidden="true"
+              ><path
+                xmlns="http://www.w3.org/2000/svg"
+                id="Discord-Symbol-White"
+                d="M81.15,0c-1.2376,2.1973-2.3489,4.4704-3.3591,6.794-9.5975-1.4396-19.3718-1.4396-28.9945,0-.985-2.3236-2.1216-4.5967-3.3591-6.794-9.0166,1.5407-17.8059,4.2431-26.1405,8.0568C2.779,32.5304-1.6914,56.3725.5312,79.8863c9.6732,7.1476,20.5083,12.603,32.0505,16.0884,2.6014-3.4854,4.8998-7.1981,6.8698-11.0623-3.738-1.3891-7.3497-3.1318-10.8098-5.1523.9092-.6567,1.7932-1.3386,2.6519-1.9953,20.281,9.547,43.7696,9.547,64.0758,0,.8587.7072,1.7427,1.3891,2.6519,1.9953-3.4601,2.0457-7.0718,3.7632-10.835,5.1776,1.97,3.8642,4.2683,7.5769,6.8698,11.0623,11.5419-3.4854,22.3769-8.9156,32.0509-16.0631,2.626-27.2771-4.496-50.9172-18.817-71.8548C98.9811,4.2684,90.1918,1.5659,81.1752.0505l-.0252-.0505ZM42.2802,65.4144c-6.2383,0-11.4159-5.6575-11.4159-12.6535s4.9755-12.6788,11.3907-12.6788,11.5169,5.708,11.4159,12.6788c-.101,6.9708-5.026,12.6535-11.3907,12.6535ZM84.3576,65.4144c-6.2637,0-11.3907-5.6575-11.3907-12.6535s4.9755-12.6788,11.3907-12.6788,11.4917,5.708,11.3906,12.6788c-.101,6.9708-5.026,12.6535-11.3906,12.6535Z"
+              ></path></svg
+            >
           </a>
           <a
             href="https://x.com/stll_app"
@@ -288,7 +418,11 @@ const selfHostingDocsUrl =
             rel="noopener noreferrer"
             aria-label="X"
           >
-            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
+              ><path
+                d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+              ></path></svg
+            >
           </a>
           <a
             href="https://www.linkedin.com/company/stella-app"
@@ -298,18 +432,28 @@ const selfHostingDocsUrl =
             rel="noopener noreferrer"
             aria-label="LinkedIn"
           >
-            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
+              ><path
+                d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"
+              ></path></svg
+            >
           </a>
         </div>
       </div>
-      <p class="mt-6 text-center text-sm sm:text-left" style="color: var(--muted-foreground)">
-        <a href="/imprint" class="transition-opacity hover:opacity-70">stella labs, s.r.o.</a>
+      <p
+        class="mt-6 text-center text-sm sm:text-left"
+        style="color: var(--muted-foreground)"
+      >
+        <a href="/imprint" class="transition-opacity hover:opacity-70"
+          >stella labs, s.r.o.</a
+        >
       </p>
     </div>
     <div
       class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
       style="background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--auth-gradient-end) 42%, transparent))"
-         ></div>
+    >
+    </div>
   </footer>
 
   <style>
@@ -332,7 +476,9 @@ const selfHostingDocsUrl =
       }
     }
 
-    .pricing-card { cursor: default; }
+    .pricing-card {
+      cursor: default;
+    }
   </style>
 
   <script>
@@ -354,8 +500,11 @@ const selfHostingDocsUrl =
       // (glow layer + sharp layer); we animate only the sharp layer.
       const groups = container.querySelectorAll<SVGGElement>("svg g");
       const group = groups[groups.length - 1] ?? null;
-      const rects = group ? [...group.querySelectorAll<SVGRectElement>("rect")] : [];
-      const filterId = group?.getAttribute("filter")?.match(/url\(#([^)]+)\)/)?.[1] ?? "";
+      const rects = group
+        ? [...group.querySelectorAll<SVGRectElement>("rect")]
+        : [];
+      const filterId =
+        group?.getAttribute("filter")?.match(/url\(#([^)]+)\)/)?.[1] ?? "";
       const n = rects.length;
       if (n === 0) return;
 
@@ -366,7 +515,10 @@ const selfHostingDocsUrl =
         if (!grad) return 0.5;
         let max = 0;
         for (const stop of grad.querySelectorAll("stop")) {
-          max = Math.max(max, parseFloat(stop.getAttribute("stop-opacity") ?? "0"));
+          max = Math.max(
+            max,
+            parseFloat(stop.getAttribute("stop-opacity") ?? "0"),
+          );
         }
         return max;
       });
@@ -383,8 +535,10 @@ const selfHostingDocsUrl =
 
         const t = (performance.now() - startTime) / 1000;
 
-        const peak1 = 0.3 + Math.sin(t * 0.04) * 0.25 + Math.sin(t * 0.067) * 0.1;
-        const peak2 = 0.7 + Math.sin(t * 0.053 + 2) * 0.2 + Math.cos(t * 0.037) * 0.15;
+        const peak1 =
+          0.3 + Math.sin(t * 0.04) * 0.25 + Math.sin(t * 0.067) * 0.1;
+        const peak2 =
+          0.7 + Math.sin(t * 0.053 + 2) * 0.2 + Math.cos(t * 0.037) * 0.15;
         const w1 = 0.18 + Math.sin(t * 0.03) * 0.06;
         const w2 = 0.15 + Math.cos(t * 0.045) * 0.05;
         const hueShift = Math.sin(t * 0.06) * 6.5 - 1.5;
