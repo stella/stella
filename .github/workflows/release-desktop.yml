@@ -40,6 +40,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       release_ref: ${{ steps.ref.outputs.value }}
+      release_sha: ${{ steps.ref.outputs.sha }}
       app_version: ${{ steps.ref.outputs.version }}
       should_build: ${{ steps.diff.outputs.should_build }}
     steps:
@@ -47,6 +48,7 @@ jobs:
         id: ref
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           RELEASE_INPUT: ${{ inputs.release_ref }}
           UPSTREAM_EVENT: ${{ github.event.workflow_run.event }}
@@ -58,7 +60,7 @@ jobs:
             REF="$HEAD_BRANCH"
           elif [[ "$UPSTREAM_EVENT" == "workflow_dispatch" ]]; then
             manifest_artifact=$(
-              gh api "repos/${{ github.repository }}/actions/runs/$UPSTREAM_RUN_ID/artifacts" \
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$UPSTREAM_RUN_ID/artifacts" \
                 --jq '.artifacts[].name | select(startswith("release-manifest-v"))' \
                 | head -n 1
             )
@@ -71,13 +73,50 @@ jobs:
             echo "::error::Expected a release tag like v1.2.3 or v1.2.3-rc.1; got '$REF'"
             exit 1
           fi
+
+          # Refuse to proceed if a branch with the same name as the
+          # tag exists. Bare-ref checkouts would otherwise be
+          # ambiguous, and this workflow holds Tauri/Apple/Azure
+          # signing secrets — checking out attacker-controlled
+          # branch code under a release-tag name would mint
+          # officially-signed installers.
+          if gh api "repos/${GITHUB_REPOSITORY}/branches/${REF}" --silent 2>/dev/null; then
+            echo "::error::A branch named '$REF' exists alongside the tag; refusing to build to avoid ref ambiguity"
+            exit 1
+          fi
+
+          # Resolve the tag to a concrete commit SHA. Every
+          # downstream checkout is pinned to this SHA so the build
+          # cannot be swapped out by a same-named branch later in
+          # the workflow.
+          tag_ref_json=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${REF}" 2>/dev/null) || {
+            echo "::error::Tag $REF does not exist in ${GITHUB_REPOSITORY}"
+            exit 1
+          }
+          tag_object_type=$(echo "$tag_ref_json" | jq -r '.object.type')
+          tag_object_sha=$(echo "$tag_ref_json" | jq -r '.object.sha')
+          if [[ "$tag_object_type" == "tag" ]]; then
+            # Annotated tag — dereference to the underlying commit.
+            RELEASE_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object_sha}" --jq '.object.sha')
+          else
+            RELEASE_SHA="$tag_object_sha"
+          fi
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not resolve tag $REF to a commit SHA (got '$RELEASE_SHA')"
+            exit 1
+          fi
+
           echo "value=$REF" >> "$GITHUB_OUTPUT"
+          echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
           echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ steps.ref.outputs.value }}
+          # Pin to the resolved commit SHA to eliminate tag/branch
+          # ref ambiguity. The tag name is preserved in
+          # `steps.ref.outputs.value` for filenames/release lookups.
+          ref: ${{ steps.ref.outputs.sha }}
           fetch-depth: 0
 
       - name: Decide whether desktop changed since previous tag
@@ -159,7 +198,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ needs.resolve.outputs.release_ref }}
+          # Pinned to the SHA resolved by the resolve job; never to
+          # the bare tag name. See resolve job for rationale.
+          ref: ${{ needs.resolve.outputs.release_sha }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -322,7 +363,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ needs.resolve.outputs.release_ref }}
+          # Pinned to the SHA resolved by the resolve job; never to
+          # the bare tag name. See resolve job for rationale.
+          ref: ${{ needs.resolve.outputs.release_sha }}
 
       - name: Build and upload latest.json
         env:
