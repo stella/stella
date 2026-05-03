@@ -224,9 +224,15 @@ const sendMessage = createSafeRootHandler(
     // this, a global thread with workspace mentions would remain
     // visible to the user even after they lose access to those
     // workspaces.
+    //
+    // Intersect with `accessibleWorkspaceIds` first: an unknown ID
+    // (model hallucination, copy-pasted UUID from elsewhere) added
+    // to `data_workspace_ids` would fail the RLS subset check on
+    // every subsequent message persist, silently breaking the
+    // thread.
     const userMessageWorkspaceIds = extractMentionWorkspaceIds(
       parsedMessage.mentions,
-    );
+    ).filter((id) => accessibleSet.has(id));
     const dataScopeAfterUserMessage = yield* Result.await(
       expandThreadDataScope({
         currentDataWorkspaceIds: thread.data.dataWorkspaceIds,
@@ -297,9 +303,14 @@ const sendMessage = createSafeRootHandler(
               // leave the new content readable after the user
               // loses access to those workspaces — the same
               // class of leak this whole change exists to close.
+              // Intersect with `accessibleWorkspaceIds` so a
+              // hallucinated or stale UUID from the model never
+              // lands in `data_workspace_ids`. An out-of-set ID
+              // would fail the RLS subset check on every later
+              // persist, silently breaking the thread.
               const assistantWorkspaceIds = extractAssistantWorkspaceIds(
                 resolvedResponseMessage.parts,
-              );
+              ).filter((id) => accessibleSet.has(id));
               const expandResult = await expandThreadDataScope({
                 currentDataWorkspaceIds: dataScopeAfterUserMessage,
                 newWorkspaceIds: assistantWorkspaceIds,

@@ -51,25 +51,45 @@ WITH thread_workspace_refs AS (
   UNION
 
   -- Entity-mention HTML inside text parts carries the workspace
-  -- in `data-source-workspace-id="<uuid>"`; workspace mentions
-  -- carry the workspace ID directly in `data-id="<uuid>"`. Both
-  -- are matched by extracting any UUID-shaped substring from the
-  -- text and validating against the workspaces table below. This
-  -- avoids regex lookbehind (not portable) and tolerates either
-  -- attribute order.
+  -- in the `data-source-workspace-id` attribute. Match the
+  -- attribute name explicitly so unrelated UUID-looking strings
+  -- pasted into chat text (other workspace IDs, ticket IDs, etc.)
+  -- do not get treated as embedded workspace data — that would
+  -- incorrectly widen the thread's data scope and lock the
+  -- thread's owner out under the new RLS subset check.
   SELECT
     cm.thread_id,
-    uuid_match.uuid_text::uuid AS workspace_id
+    (rm.captures[1])::uuid AS workspace_id
   FROM chat_messages cm,
        LATERAL jsonb_array_elements(cm.content->'data') AS part,
        LATERAL regexp_matches(
          coalesce(part->>'text', ''),
-         '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
+         'data-source-workspace-id="([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"',
          'g'
-       ) AS rm(captures),
-       LATERAL (SELECT rm.captures[1]) AS uuid_match(uuid_text)
+       ) AS rm(captures)
   WHERE part->>'type' = 'text'
     AND part->>'text' IS NOT NULL
+
+  UNION
+
+  -- Workspace mentions carry the workspace ID directly in the
+  -- `data-id` attribute, paired with `data-category="workspace"`.
+  -- Postgres regex lacks lookbehind, so both attribute orders
+  -- are matched as separate alternatives — only one capture
+  -- group will be non-null per match, so coalesce to pick it up.
+  SELECT
+    cm.thread_id,
+    (COALESCE(rm.captures[1], rm.captures[2]))::uuid AS workspace_id
+  FROM chat_messages cm,
+       LATERAL jsonb_array_elements(cm.content->'data') AS part,
+       LATERAL regexp_matches(
+         coalesce(part->>'text', ''),
+         'data-category="workspace"[^>]*data-id="([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"|data-id="([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"[^>]*data-category="workspace"',
+         'g'
+       ) AS rm(captures)
+  WHERE part->>'type' = 'text'
+    AND part->>'text' IS NOT NULL
+    AND COALESCE(rm.captures[1], rm.captures[2]) IS NOT NULL
 ),
 content_workspace_ids AS (
   SELECT
