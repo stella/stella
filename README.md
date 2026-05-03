@@ -142,3 +142,4 @@ Licensed under the AGPL v3. See [LICENSE](LICENSE) for details.
 - [Stella Desktop App](/apps/desktop/README.md)
 - [Stella Landing Site](/apps/landing/README.md)
 - [Stella API](/apps/api/README.md)
+
