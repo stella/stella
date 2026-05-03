@@ -14,6 +14,30 @@ import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-black
 import type { SafeId } from "@/api/lib/branded-types";
 import { buildFieldMarkers } from "@/api/mcp/field-markers";
 
+type AnonymizeTextFieldsInput = {
+  fields: string[];
+  gazetteerEntries?: GazetteerEntry[] | undefined;
+  organizationId: SafeId<"organization">;
+  scopedDb: ScopedDb;
+  workspaceId: string;
+};
+
+export type AnonymizeTextFieldsDependencies = {
+  createPipelineContext: typeof createPipelineContext;
+  loadAnonymizationGazetteerEntries: typeof loadAnonymizationGazetteerEntries;
+  loadNameDictionaries: typeof loadNameDictionaries;
+  redactText: typeof redactText;
+  runPipeline: typeof runPipeline;
+};
+
+const anonymizeTextFieldsDependencies: AnonymizeTextFieldsDependencies = {
+  createPipelineContext,
+  loadAnonymizationGazetteerEntries,
+  loadNameDictionaries,
+  redactText,
+  runPipeline,
+};
+
 const buildPipelineConfig = ({
   gazetteerEntries,
   workspaceId,
@@ -80,12 +104,25 @@ export const anonymizeTextFields = async ({
   organizationId,
   scopedDb,
   workspaceId,
-}: {
-  fields: string[];
-  gazetteerEntries?: GazetteerEntry[] | undefined;
-  organizationId: SafeId<"organization">;
-  scopedDb: ScopedDb;
-  workspaceId: string;
+}: AnonymizeTextFieldsInput) =>
+  await anonymizeTextFieldsWithDependencies({
+    dependencies: anonymizeTextFieldsDependencies,
+    fields,
+    gazetteerEntries,
+    organizationId,
+    scopedDb,
+    workspaceId,
+  });
+
+export const anonymizeTextFieldsWithDependencies = async ({
+  dependencies,
+  fields,
+  gazetteerEntries,
+  organizationId,
+  scopedDb,
+  workspaceId,
+}: AnonymizeTextFieldsInput & {
+  dependencies: AnonymizeTextFieldsDependencies;
 }) => {
   if (fields.every((field) => field.length === 0)) {
     return {
@@ -94,7 +131,7 @@ export const anonymizeTextFields = async ({
     };
   }
 
-  const context = createPipelineContext();
+  const context = dependencies.createPipelineContext();
   const markers = buildFieldMarkers({
     fieldCount: fields.length,
     fields,
@@ -105,13 +142,13 @@ export const anonymizeTextFields = async ({
 
   const entries =
     gazetteerEntries ??
-    (await loadAnonymizationGazetteerEntries({
+    (await dependencies.loadAnonymizationGazetteerEntries({
       organizationId,
       scopedDb,
     }));
-  const dictionaries = await loadNameDictionaries();
+  const dictionaries = await dependencies.loadNameDictionaries();
 
-  const entities = await runPipeline({
+  const entities = await dependencies.runPipeline({
     fullText: combinedText,
     config: {
       ...buildPipelineConfig({ gazetteerEntries: entries, workspaceId }),
@@ -120,7 +157,7 @@ export const anonymizeTextFields = async ({
     gazetteerEntries: entries,
     context,
   });
-  const result = redactText(
+  const result = dependencies.redactText(
     combinedText,
     entities,
     DEFAULT_OPERATOR_CONFIG,

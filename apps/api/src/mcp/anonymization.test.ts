@@ -1,41 +1,20 @@
+import { createPipelineContext } from "@stll/anonymize-wasm";
 import { describe, expect, mock, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { AnonymizeTextFieldsDependencies } from "@/api/mcp/anonymization";
+import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization";
 import { buildFieldMarkers } from "@/api/mcp/field-markers";
 
 const dictionaries = {
-  femaleNames: new Set(["Alice"]),
-  maleNames: new Set(["Bob"]),
-  surnames: new Set(["Novak"]),
-};
-const loadNameDictionariesMock = mock(async () => dictionaries);
-let capturedDictionaries: unknown;
-const runPipelineMock = mock(
-  async ({ config }: { config: { dictionaries?: unknown } }) => {
-    capturedDictionaries = config.dictionaries;
-    return [];
+  firstNames: {
+    en: ["Alice"],
   },
-);
-
-void mock.module("@stll/anonymize-data", () => ({
-  loadNameDictionaries: loadNameDictionariesMock,
-}));
-
-void mock.module("@stll/anonymize-wasm", () => ({
-  createPipelineContext: () => ({}),
-  DEFAULT_ENTITY_LABELS: ["PERSON"],
-  DEFAULT_OPERATOR_CONFIG: {},
-  redactText: (fullText: string) => ({
-    entityCount: 0,
-    redactedText: fullText,
-  }),
-  runPipeline: runPipelineMock,
-}));
-
-void mock.module("@/api/lib/anonymization-blacklist", () => ({
-  loadAnonymizationGazetteerEntries: async () => [],
-}));
+  surnames: {
+    en: ["Novak"],
+  },
+};
 
 describe("anonymizeTextFields", () => {
   test("regenerates markers when crafted content contains a candidate delimiter", async () => {
@@ -69,13 +48,32 @@ describe("anonymizeTextFields", () => {
   });
 
   test("injects name dictionaries into the API anonymization pipeline", async () => {
-    const { anonymizeTextFields } = await import("@/api/mcp/anonymization");
+    let capturedDictionaries: unknown;
+    const loadNameDictionariesMock: AnonymizeTextFieldsDependencies["loadNameDictionaries"] =
+      mock(async () => dictionaries);
+    const runPipelineMock: AnonymizeTextFieldsDependencies["runPipeline"] =
+      mock(async ({ config }) => {
+        capturedDictionaries = config.dictionaries;
+        return [];
+      });
+    const dependencies = {
+      createPipelineContext,
+      loadAnonymizationGazetteerEntries: async () => [],
+      loadNameDictionaries: loadNameDictionariesMock,
+      redactText: (fullText: string) => ({
+        entityCount: 0,
+        operatorMap: new Map(),
+        redactionMap: new Map(),
+        redactedText: fullText,
+      }),
+      runPipeline: runPipelineMock,
+    } satisfies AnonymizeTextFieldsDependencies;
     const scopedDb: ScopedDb = async () => {
       throw new Error("Expected gazetteer loader mock to avoid DB access");
     };
-    capturedDictionaries = undefined;
 
-    await anonymizeTextFields({
+    await anonymizeTextFieldsWithDependencies({
+      dependencies,
       fields: ["Alice Novak"],
       organizationId: toSafeId<"organization">("org_test"),
       scopedDb,
