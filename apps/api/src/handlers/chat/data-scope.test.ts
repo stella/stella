@@ -108,10 +108,52 @@ describe("extractAssistantWorkspaceIds", () => {
     );
   });
 
-  test("non-source parts are ignored", () => {
+  test("text parts without stella refs are ignored", () => {
     const parts = [
-      { type: "text" as const, text: "hello" },
+      { type: "text" as const, text: "Just a normal reply, no refs." },
       { type: "data-stella-mentions" as const, data: { mentions: [] } },
+    ];
+    expect(extractAssistantWorkspaceIds(parts)).toEqual([]);
+  });
+
+  test("regression: assistant text refs widen the data scope", () => {
+    // Resolved by `resolveAssistantTextRefs` after the stream
+    // finishes; the workspace ID then needs to be added to
+    // `data_workspace_ids` so the persisted reply doesn't
+    // outlive the user's access to that workspace.
+    const parts = [
+      {
+        type: "text" as const,
+        text: `See [matter](#stella-workspace=${wsA}) and the related document at #stella-entity=${wsB}:abc.`,
+      },
+    ];
+    expect(new Set(extractAssistantWorkspaceIds(parts))).toEqual(
+      new Set([wsA, wsB]),
+    );
+  });
+
+  test("text and source-document parts are unioned", () => {
+    const parts = [
+      {
+        type: "data-stella-source-document" as const,
+        data: { workspaceId: wsA },
+      },
+      {
+        type: "text" as const,
+        text: `more context #stella-workspace=${wsB}`,
+      },
+    ];
+    expect(new Set(extractAssistantWorkspaceIds(parts))).toEqual(
+      new Set([wsA, wsB]),
+    );
+  });
+
+  test("malformed UUIDs in text refs are ignored", () => {
+    const parts = [
+      {
+        type: "text" as const,
+        text: "garbage #stella-workspace=not-a-uuid and #stella-entity=zz:yy",
+      },
     ];
     expect(extractAssistantWorkspaceIds(parts)).toEqual([]);
   });

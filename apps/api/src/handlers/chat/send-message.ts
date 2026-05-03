@@ -46,7 +46,8 @@ import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { PG_ERROR } from "@/api/lib/pg-error";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 
 const config = {
@@ -383,7 +384,7 @@ const loadThread = async ({
   userId,
   workspaceId,
 }: LoadThreadProps): Promise<
-  Result<LoadThreadResult, HandlerError<400> | SafeDbError>
+  Result<LoadThreadResult, HandlerError<400 | 404> | SafeDbError>
 > =>
   await Result.gen(async function* () {
     // Look the thread up by id+user only. Filtering by workspaceId
@@ -443,23 +444,42 @@ const loadThread = async ({
       ? [workspaceId]
       : [];
 
-    yield* Result.await(
-      safeDb((tx) =>
-        tx.insert(chatThreads).values({
-          id: threadId,
-          title,
-          userId,
-          workspaceId,
-          contextMatterIds: initialContextMatterIds,
-          // Workspace-scoped chats embed at minimum their own
-          // workspace's content. Global chats start with no
-          // embedded workspace data; subsequent messages widen
-          // this set via expandThreadDataScope when they reference
-          // workspace assets (mentions, source-document parts).
-          dataWorkspaceIds: initialDataWorkspaceIds,
-        }),
-      ),
+    // The findFirst above runs under RLS, so a thread that exists
+    // but is no longer visible (data_workspace_ids ⊄ session) looks
+    // missing. Falling straight through to insert would collide on
+    // the primary key and surface as a 500. Translate that specific
+    // case to a 404 so the client gets a stable answer; matching the
+    // "not found" status that get-messages returns for the same
+    // shape avoids leaking thread existence to a revoked user.
+    const insertResult = await safeDb((tx) =>
+      tx.insert(chatThreads).values({
+        id: threadId,
+        title,
+        userId,
+        workspaceId,
+        contextMatterIds: initialContextMatterIds,
+        // Workspace-scoped chats embed at minimum their own
+        // workspace's content. Global chats start with no
+        // embedded workspace data; subsequent messages widen
+        // this set via expandThreadDataScope when they reference
+        // workspace assets (mentions, source-document parts).
+        dataWorkspaceIds: initialDataWorkspaceIds,
+      }),
     );
+    if (Result.isError(insertResult)) {
+      if (
+        DatabaseError.is(insertResult.error) &&
+        insertResult.error.code === PG_ERROR.UNIQUE_VIOLATION
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            message: "Chat thread not found",
+          }),
+        );
+      }
+      return Result.err(insertResult.error);
+    }
 
     return Result.ok<LoadThreadResult>({
       type: "created",

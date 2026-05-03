@@ -12,24 +12,32 @@
 ALTER TABLE chat_threads
   ADD COLUMN IF NOT EXISTS data_workspace_ids uuid[] NOT NULL DEFAULT '{}';
 
--- Workspace-scoped threads: their data scope is exactly that
--- workspace. This keeps existing matter chats accessible after the
--- new RLS predicate kicks in.
-UPDATE chat_threads
-  SET data_workspace_ids = ARRAY[workspace_id]::uuid[]
-  WHERE workspace_id IS NOT NULL
-    AND cardinality(data_workspace_ids) = 0;
-
--- Global threads: derive the data scope from every workspace-
--- bearing carrier we know about — `data-stella-source-document`
--- parts (search summaries, document references) and entity-
--- mention or workspace-mention HTML inside text parts. UUID-
--- shaped strings extracted from text are then intersected with
--- the workspaces table so noise (any UUID-looking substring) is
--- dropped. True conversational global chats have no such carriers
--- and keep the empty default ('{}'), which the new RLS predicate
--- treats as "no embedded workspace data" and therefore unrestricted
--- by workspace.
+-- Backfill `data_workspace_ids` for every existing chat thread as
+-- the union of:
+--   (a) the thread's own `workspace_id` (if non-null) — keeps
+--       workspace-scoped chats accessible after the new RLS
+--       predicate kicks in.
+--   (b) every workspace whose content is embedded in any of the
+--       thread's messages — `data-stella-source-document` parts
+--       (search summaries, document references) and any UUID
+--       extracted from text-part HTML (covers
+--       `data-source-workspace-id` on entity mentions and
+--       `data-id` on workspace mentions). Extracted UUIDs are
+--       intersected with the `workspaces` table so noise is
+--       dropped.
+--
+-- This is a single union so a workspace-scoped thread that
+-- embedded another workspace's content (e.g., the user attached
+-- an entity from matter B inside a chat in matter A) is recorded
+-- as `[A, B]` rather than just `[A]`. Without this, the new RLS
+-- predicate would still treat the thread as accessible after
+-- access to B is revoked, leaving the historical leakage path
+-- open for pre-migration data.
+--
+-- True conversational global chats with no embedded workspace
+-- carriers keep the empty default ('{}'), which the new RLS
+-- predicate treats as "no embedded workspace data" and therefore
+-- unrestricted by workspace.
 WITH thread_workspace_refs AS (
   -- Source-document parts carry the workspace ID directly.
   SELECT
@@ -62,23 +70,30 @@ WITH thread_workspace_refs AS (
        LATERAL (SELECT rm.captures[1]) AS uuid_match(uuid_text)
   WHERE part->>'type' = 'text'
     AND part->>'text' IS NOT NULL
+),
+content_workspace_ids AS (
+  SELECT
+    twr.thread_id,
+    ARRAY_AGG(DISTINCT twr.workspace_id) AS workspace_ids
+  FROM thread_workspace_refs twr
+  WHERE EXISTS (SELECT 1 FROM workspaces w WHERE w.id = twr.workspace_id)
+  GROUP BY twr.thread_id
 )
 UPDATE chat_threads ct
-  SET data_workspace_ids = derived.workspace_ids
-  FROM (
-    SELECT
-      twr.thread_id,
-      ARRAY_AGG(DISTINCT twr.workspace_id) AS workspace_ids
-    FROM thread_workspace_refs twr
-    -- Drop UUIDs that aren't actually workspaces in this DB.
-    WHERE EXISTS (
-      SELECT 1 FROM workspaces w WHERE w.id = twr.workspace_id
+  SET data_workspace_ids = (
+    SELECT ARRAY(
+      SELECT DISTINCT unnest(
+        CASE
+          WHEN ct.workspace_id IS NOT NULL THEN ARRAY[ct.workspace_id]::uuid[]
+          ELSE '{}'::uuid[]
+        END || COALESCE(cwi.workspace_ids, '{}'::uuid[])
+      )
     )
-    GROUP BY twr.thread_id
-  ) AS derived
-  WHERE ct.id = derived.thread_id
-    AND ct.workspace_id IS NULL
-    AND cardinality(ct.data_workspace_ids) = 0;
+  )
+  FROM (SELECT 1) AS dummy
+  LEFT JOIN content_workspace_ids cwi ON cwi.thread_id = ct.id
+  WHERE cardinality(ct.data_workspace_ids) = 0
+    AND (ct.workspace_id IS NOT NULL OR cwi.thread_id IS NOT NULL);
 
 -- The new RLS predicate is added by drizzle from the updated
 -- `chatThreadPolicies` / `chatMessagePolicies` definitions; see

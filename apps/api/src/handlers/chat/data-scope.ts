@@ -29,10 +29,20 @@ export const extractMentionWorkspaceIds = (
 };
 
 // Walks an assistant message's parts for workspace-scoped data
-// embedded by tools (search hits, document references, etc.). Today
-// the only persisted carrier is `data-stella-source-document`; new
-// workspace-scoped part types must be added here so a thread that
-// embeds them widens its data scope correctly.
+// embedded by the model. Today there are two carriers:
+//
+//   1. `data-stella-source-document` parts emitted by search /
+//      workspace tools — workspace ID lives in `data.workspaceId`.
+//   2. Resolved `#stella-workspace=<id>` and
+//      `#stella-entity=<workspace>:<entity>` href fragments inside
+//      assistant text parts (produced by `resolveAssistantTextRefs`
+//      after the stream finishes). Without scanning these, an
+//      assistant reply that links a workspace in plain text would
+//      not widen `chat_threads.data_workspace_ids`, leaving the
+//      stored content readable after access is revoked.
+//
+// New workspace-scoped part types must be added to this dispatcher
+// so a thread that embeds them widens its data scope correctly.
 //
 // Accepts `readonly unknown[]` and narrows per-part so this also
 // handles legacy/migrated message shapes without forcing callers to
@@ -42,9 +52,12 @@ export const extractAssistantWorkspaceIds = (
 ): SafeId<"workspace">[] => {
   const ids = new Set<SafeId<"workspace">>();
   for (const part of parts) {
-    const workspaceId = sourceDocumentWorkspaceId(part);
-    if (workspaceId !== null) {
-      ids.add(workspaceId);
+    const sourceDocId = sourceDocumentWorkspaceId(part);
+    if (sourceDocId !== null) {
+      ids.add(sourceDocId);
+    }
+    for (const textRefId of textRefWorkspaceIds(part)) {
+      ids.add(textRefId);
     }
   }
   return Array.from(ids);
@@ -74,6 +87,33 @@ const sourceDocumentWorkspaceId = (
     return null;
   }
   return brandPersistedWorkspaceId(workspaceId);
+};
+
+// Captures the workspace UUID from `#stella-workspace=<uuid>` and
+// the leading workspace UUID from `#stella-entity=<workspace>:<entity>`.
+// The entity form's second segment (the entity UUID) is intentionally
+// not captured — only the workspace it belongs to gates RLS.
+const STELLA_TEXT_REF_WORKSPACE_REGEX =
+  /#stella-(?:workspace|entity)=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/g;
+
+const textRefWorkspaceIds = (part: unknown): SafeId<"workspace">[] => {
+  if (typeof part !== "object" || part === null) {
+    return [];
+  }
+  if (!("type" in part) || part.type !== "text") {
+    return [];
+  }
+  if (!("text" in part) || typeof part.text !== "string") {
+    return [];
+  }
+  const ids: SafeId<"workspace">[] = [];
+  for (const match of part.text.matchAll(STELLA_TEXT_REF_WORKSPACE_REGEX)) {
+    const captured = match[1];
+    if (captured) {
+      ids.push(brandPersistedWorkspaceId(captured));
+    }
+  }
+  return ids;
 };
 
 type ExpandThreadDataScopeInput = {
