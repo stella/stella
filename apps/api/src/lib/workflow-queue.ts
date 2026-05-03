@@ -106,7 +106,12 @@ const LOCK_DURATION_MS = 5 * 60 * 1000;
 const STALLED_INTERVAL_MS = 30 * 1000;
 const MAX_STALLED_COUNT = 2;
 const JOB_HARD_TIMEOUT_MS = 6 * 60 * 1000;
-const RUNNING_LOCK_TTL_SEC = 15 * 60;
+// Workflow-level Redis lock TTL. Long enough to outlast a single batch
+// even on big workspaces, short enough to self-heal an uncleanly-killed
+// worker without stranding the workspace for hours. The lock is also
+// extended on each entity completion below, so a long-running workflow
+// keeps the TTL fresh regardless of this initial value.
+const RUNNING_LOCK_TTL_SEC = 60 * 60;
 
 /**
  * Check if a workflow is currently running for a workspace.
@@ -273,18 +278,28 @@ export const initWorkflowWorker = () => {
       // Throwing here flips it to "failed" → BullMQ retries (attempts: 2)
       // → finally counts as completed by the failed-handler so the
       // workspace lock can release.
-      await Promise.race([
-        processEntityJob(job.data),
-        new Promise<never>((_resolve, reject) => {
-          setTimeout(() => {
-            reject(
-              new Error(
-                `workflow.job_timeout: entity ${job.data.entityId} exceeded ${JOB_HARD_TIMEOUT_MS}ms`,
-              ),
-            );
-          }, JOB_HARD_TIMEOUT_MS);
-        }),
-      ]);
+      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          processEntityJob(job.data),
+          new Promise<never>((_resolve, reject) => {
+            timeoutHandle = setTimeout(() => {
+              reject(
+                new Error(
+                  `workflow.job_timeout: entity ${job.data.entityId} exceeded ${JOB_HARD_TIMEOUT_MS}ms`,
+                ),
+              );
+            }, JOB_HARD_TIMEOUT_MS);
+          }),
+        ]);
+      } finally {
+        // Clear the timer on the happy path so it doesn't sit in
+        // the event loop for the full timeout window after the job
+        // has already finished.
+        if (timeoutHandle !== undefined) {
+          clearTimeout(timeoutHandle);
+        }
+      }
     },
     {
       connection: workerConnection,
@@ -564,7 +579,21 @@ const onEntityCompleted = async (
 
   if (completed >= total) {
     await finishWorkflow(workspaceId, organizationId, userId);
+    return;
   }
+
+  // Long workflows can outlast the initial TTL on the running lock and
+  // the plan-properties snapshot. Each completed entity refreshes both
+  // back to the full window so progress keeps the lock alive instead
+  // of letting a slow batch fall back to the "freshen everything"
+  // path or admit a parallel run.
+  await Promise.all([
+    redis.expire(workflowKey(workspaceId, "running"), RUNNING_LOCK_TTL_SEC),
+    redis.expire(
+      workflowKey(workspaceId, "plan-properties"),
+      RUNNING_LOCK_TTL_SEC,
+    ),
+  ]);
 };
 
 const finishWorkflow = async (

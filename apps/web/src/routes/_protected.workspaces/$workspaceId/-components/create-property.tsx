@@ -367,13 +367,31 @@ const PropertyComposerBody = ({
           (property) => property.id === extractionContext.filePropertyId,
         ) ?? null);
 
+  // Split the existing dependencies (if editing) into file-typed (which
+  // become chips) and other (which live as @-mentions in the textarea).
+  // Both lists are seeded into state so an unmodified Save round-trips
+  // the same dependency set instead of dropping non-file deps before
+  // the editor gets a chance to fire onUpdate.
+  const initialDependencySplit = (() => {
+    if (!editingProperty || editingTool?.type !== "ai-model") {
+      return { fileIds: [] as string[], otherIds: [] as string[] };
+    }
+    const fileIds = new Set(fileProperties.map((p) => p.id));
+    const inFiles: string[] = [];
+    const inOther: string[] = [];
+    for (const dep of editingTool.dependencies) {
+      if (fileIds.has(dep.dependsOnPropertyId)) {
+        inFiles.push(dep.dependsOnPropertyId);
+      } else {
+        inOther.push(dep.dependsOnPropertyId);
+      }
+    }
+    return { fileIds: inFiles, otherIds: inOther };
+  })();
+
   const initialFileIds = (() => {
     if (editingProperty && editingTool?.type === "ai-model") {
-      // Hydrate file chips from the existing property's dependencies.
-      const fileIds = new Set(fileProperties.map((p) => p.id));
-      return editingTool.dependencies
-        .map((d) => d.dependsOnPropertyId)
-        .filter((id) => fileIds.has(id));
+      return initialDependencySplit.fileIds;
     }
     if (extractionContext) {
       return extractionFileProperty
@@ -383,11 +401,27 @@ const PropertyComposerBody = ({
     return fileProperty ? [fileProperty.id] : [];
   })();
 
+  // Snapshot of the original conditions per dependency. Save preserves
+  // these so editing name/type/prompt doesn't silently strip conditions
+  // configured via the conditions sub-modal. useMemo keeps the map
+  // stable across renders for the handleSubmit dep array.
+  const initialDependencyConditions = useMemo(() => {
+    const map = new Map<string, PropertyDependency["condition"]>();
+    if (editingTool?.type === "ai-model") {
+      for (const dep of editingTool.dependencies) {
+        map.set(dep.dependsOnPropertyId, dep.condition);
+      }
+    }
+    return map;
+  }, [editingTool]);
+
   const [contentType, setContentType] =
     useState<CreatableContentType>(initialContentType);
   const [name, setName] = useState(editingProperty?.name ?? "");
   const [prompt, setPrompt] = useState(initialPromptHtml);
-  const [textareaMentions, setTextareaMentions] = useState<string[]>([]);
+  const [textareaMentions, setTextareaMentions] = useState<string[]>(
+    initialDependencySplit.otherIds,
+  );
   const [selectedFileIds, setSelectedFileIds] =
     useState<string[]>(initialFileIds);
   const [options, setOptions] =
@@ -430,9 +464,11 @@ const PropertyComposerBody = ({
       return;
     }
 
+    // Preserve any per-dependency conditions configured via the
+    // conditions sub-modal. New mentions default to null.
     const dependencies: PropertyDependency[] = dependencyIds.map((id) => ({
       dependsOnPropertyId: id,
-      condition: null,
+      condition: initialDependencyConditions.get(id) ?? null,
     }));
 
     if (isEditMode && editingProperty) {
@@ -533,6 +569,7 @@ const PropertyComposerBody = ({
     editingTool,
     extractionContext,
     fallback,
+    initialDependencyConditions,
     isEditMode,
     onClose,
     onCreated,
