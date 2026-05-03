@@ -62,6 +62,13 @@ export const respondDesktopEditTakeoverHandler = async ({
     });
   }
 
+  if (authorizedSession.status === "permission-revoked") {
+    return status(403, {
+      code: "desktop_edit_session_permission_revoked",
+      message: "Desktop edit permission was revoked.",
+    });
+  }
+
   const txResult = await authorizedSession.value.scopedDb(async (tx) => {
     const sessions = await tx
       .select({

@@ -158,6 +158,28 @@ describe("organization SELECT — wrong scope", () => {
 });
 
 describe("chat SELECT — wrong user or workspace", () => {
+  test("same user in another organization cannot read global chat rows", async () => {
+    const c = await scopedQuery(
+      [ids.wsB1],
+      ids.orgB,
+      (tx) =>
+        tx.$count(chatThreads, eq(chatThreads.id, ids.chatThreadGlobalA1)),
+      ids.userA1,
+    );
+    expect(c).toBe(0);
+  });
+
+  test("same user in another organization cannot read global chat messages", async () => {
+    const c = await scopedQuery(
+      [ids.wsB1],
+      ids.orgB,
+      (tx) =>
+        tx.$count(chatMessages, eq(chatMessages.id, ids.chatMessageGlobalA1)),
+      ids.userA1,
+    );
+    expect(c).toBe(0);
+  });
+
   test("different user in the same workspace sees zero rows", async () => {
     const c = await scopedQuery(
       [ids.wsA1],
@@ -1376,6 +1398,7 @@ describe("chat mutations — wrong user", () => {
         async (tx) => {
           await tx.insert(chatThreads).values({
             id: testId(),
+            organizationId: ids.orgA,
             userId: ids.userB1,
             title: "forbidden",
             workspaceId: ids.wsA1,

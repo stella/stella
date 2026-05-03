@@ -134,6 +134,15 @@ const envApi = createEnv({
   runtimeEnv: process.env,
 });
 
+if (
+  (envApi.MICROSOFT_AUTH_CLIENT_ID || envApi.MICROSOFT_AUTH_CLIENT_SECRET) &&
+  !envApi.MICROSOFT_AUTH_TENANT_ID
+) {
+  throw new Error(
+    "MICROSOFT_AUTH_TENANT_ID is required when Microsoft OAuth is configured.",
+  );
+}
+
 export const env = { ...envBase, ...envApi };
 
 // Prevent accidental mutation of env vars at runtime.

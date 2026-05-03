@@ -22,10 +22,79 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/stella-api
 
 jobs:
+  resolve:
+    name: Resolve trusted release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      release_ref: ${{ steps.release.outputs.ref }}
+      release_sha: ${{ steps.release.outputs.sha }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Resolve release tag
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}
+        run: |
+          release_ref="$RELEASE_INPUT"
+          if [[ ! "$release_ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::Release ref must look like v1.2.3 or v1.2.3-rc.1"
+            exit 1
+          fi
+
+          tag_ref_json=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_ref}" 2>/dev/null) || {
+            echo "::error::Tag ${release_ref} does not exist"
+            exit 1
+          }
+          tag_object_type=$(echo "$tag_ref_json" | jq -r '.object.type')
+          tag_object_sha=$(echo "$tag_ref_json" | jq -r '.object.sha')
+          if [[ "$tag_object_type" == "tag" ]]; then
+            release_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object_sha}" --jq '.object.sha')
+          else
+            release_sha="$tag_object_sha"
+          fi
+          if [[ ! "$release_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not resolve $release_ref to a commit SHA"
+            exit 1
+          fi
+
+          echo "ref=$release_ref" >> "$GITHUB_OUTPUT"
+          echo "sha=$release_sha" >> "$GITHUB_OUTPUT"
+          echo "version=${release_ref#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout resolved commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Verify release source
+        env:
+          RELEASE_REF: ${{ steps.release.outputs.ref }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$RELEASE_SHA" origin/main; then
+            echo "::error::Release tag $RELEASE_REF is not reachable from protected main"
+            exit 1
+          fi
+
+          file_version="$(tr -d '[:space:]' < VERSION)"
+          if [[ "$file_version" != "$VERSION" ]]; then
+            echo "::error::VERSION ($file_version) does not match $RELEASE_REF"
+            exit 1
+          fi
+
   smoke:
     name: Build and smoke test API image
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: resolve
     permissions:
       contents: read
 
@@ -57,17 +126,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.release_ref) || github.ref }}
-
-      - name: Validate release ref
-        env:
-          RELEASE_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}
-        run: |
-          release_ref="$RELEASE_INPUT"
-          if [[ ! "$release_ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
-            echo "::error::Release ref must look like v1.2.3 or v1.2.3-rc.1"
-            exit 1
-          fi
+          ref: ${{ needs.resolve.outputs.release_sha }}
 
       - name: Build smoke image
         run: docker build -f apps/api/Dockerfile -t stella-api:smoke .
@@ -141,30 +200,18 @@ jobs:
     name: Publish API image and manifest
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: smoke
+    needs: [resolve, smoke]
 
     outputs:
       image_digest: ${{ steps.build.outputs.digest }}
-      release_ref: ${{ steps.release.outputs.ref }}
+      release_ref: ${{ needs.resolve.outputs.release_ref }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.release_ref) || github.ref }}
+          ref: ${{ needs.resolve.outputs.release_sha }}
           fetch-depth: 0
-
-      - name: Resolve release
-        id: release
-        env:
-          RELEASE_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}
-        run: |
-          release_ref="$RELEASE_INPUT"
-          if [[ ! "$release_ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
-            echo "::error::Release ref must look like v1.2.3 or v1.2.3-rc.1"
-            exit 1
-          fi
-          echo "ref=$release_ref" >> "$GITHUB_OUTPUT"
 
       - name: Resolve app version (strip leading `v`)
         # The frontend reads `VERSION` literally (`0.0.1-rc.1`) at
@@ -173,7 +220,7 @@ jobs:
         # the two sides won't group together.
         id: app-version
         env:
-          REF: ${{ steps.release.outputs.ref }}
+          REF: ${{ needs.resolve.outputs.release_ref }}
         run: echo "value=${REF#v}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
@@ -192,7 +239,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=${{ steps.release.outputs.ref }}
+            type=raw,value=${{ needs.resolve.outputs.release_ref }}
             type=sha,prefix=sha-
 
       - name: Build and push API image
@@ -226,7 +273,7 @@ jobs:
         env:
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
           IMAGE_NAME: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          RELEASE_REF: ${{ steps.release.outputs.ref }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
         run: |
           bash scripts/create-release-manifest.sh \
             "$RELEASE_REF" \
@@ -237,7 +284,7 @@ jobs:
       - name: Upload manifest artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-manifest-${{ steps.release.outputs.ref }}
+          name: release-manifest-${{ needs.resolve.outputs.release_ref }}
           path: release-manifest.json
           retention-days: 90
 
@@ -252,7 +299,7 @@ jobs:
       - name: Publish GitHub release manifest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_REF: ${{ steps.release.outputs.ref }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
         run: |
           if ! gh release view "$RELEASE_REF" >/dev/null 2>&1; then
             prerelease_args=()
@@ -275,12 +322,31 @@ jobs:
     # ("no hyphen") rather than a deny-list against `-rc.`, so future
     # prerelease conventions (-rc1, -beta.N, -alpha) cannot reach
     # production by accident if the upstream validation regex changes.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: publish
     if: ${{ !contains(needs.publish.outputs.release_ref, '-') }}
-    uses: stella/private-workflows/.github/workflows/promote-release.yml@main
-    with:
-      release_ref: ${{ needs.publish.outputs.release_ref }}
-      image_digest: ${{ needs.publish.outputs.image_digest }}
-    secrets:
-      STELLA_RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
-      STELLA_RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+    permissions:
+      contents: read
+    steps:
+      - name: Mint App token for the infra repo
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.STELLA_RELEASE_APP_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: stella-infra
+
+      - name: Dispatch promote-release.yml
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_REF: ${{ needs.publish.outputs.release_ref }}
+          IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}
+        run: |
+          gh workflow run promote-release.yml \
+            --repo "${{ github.repository_owner }}/stella-infra" \
+            --field release_ref="$RELEASE_REF" \
+            --field image_digest="$IMAGE_DIGEST" \
+            --field run_migrations=true \
+            --field frontend=true

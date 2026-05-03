@@ -1,9 +1,14 @@
+import { roles } from "@stll/permissions";
 import { and, eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 import { member, user } from "@/api/db/auth-schema";
 import { db } from "@/api/db/root";
-import { desktopEditSessions, workspaces } from "@/api/db/schema";
+import {
+  desktopEditSessions,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -29,6 +34,9 @@ type DesktopEditSessionAuthorizationResult =
     }
   | {
       status: "token-mismatch";
+    }
+  | {
+      status: "permission-revoked";
     };
 
 /** Session tokens expire after 24 hours. Each checkpoint extends by this amount. */
@@ -51,6 +59,33 @@ export const createDesktopEditSessionToken = () =>
 export const hashDesktopEditSessionToken = (sessionToken: string) =>
   new Bun.CryptoHasher("sha256").update(sessionToken).digest("hex");
 
+type DesktopEditRole = keyof typeof roles;
+
+const ADMIN_BYPASS_ROLES = new Set<DesktopEditRole>(["owner", "admin"]);
+
+const isDesktopEditRole = (role: string): role is DesktopEditRole =>
+  role in roles;
+
+export const canUseDesktopEditSession = ({
+  organizationRole,
+  workspaceMemberId,
+}: {
+  organizationRole: string | null;
+  workspaceMemberId: string | null;
+}) => {
+  if (!organizationRole || !isDesktopEditRole(organizationRole)) {
+    return false;
+  }
+
+  const hasEntityUpdate = roles[organizationRole].authorize({
+    entity: ["update"],
+  }).success;
+  const hasWorkspaceAccess =
+    ADMIN_BYPASS_ROLES.has(organizationRole) || workspaceMemberId !== null;
+
+  return hasEntityUpdate && hasWorkspaceAccess;
+};
+
 export const authorizeDesktopEditSession = async ({
   sessionId,
   sessionToken,
@@ -65,13 +100,29 @@ export const authorizeDesktopEditSession = async ({
       createdBy: desktopEditSessions.createdBy,
       fileName: desktopEditSessions.fileName,
       organizationId: workspaces.organizationId,
+      organizationRole: member.role,
       sessionStatus: desktopEditSessions.status,
       sessionTokenHash: desktopEditSessions.sessionTokenHash,
       tokenExpiresAt: desktopEditSessions.tokenExpiresAt,
+      workspaceMemberId: workspaceMembers.id,
       workspaceId: desktopEditSessions.workspaceId,
     })
     .from(desktopEditSessions)
     .innerJoin(workspaces, eq(desktopEditSessions.workspaceId, workspaces.id))
+    .leftJoin(
+      member,
+      and(
+        eq(member.userId, desktopEditSessions.createdBy),
+        eq(member.organizationId, workspaces.organizationId),
+      ),
+    )
+    .leftJoin(
+      workspaceMembers,
+      and(
+        eq(workspaceMembers.userId, desktopEditSessions.createdBy),
+        eq(workspaceMembers.workspaceId, desktopEditSessions.workspaceId),
+      ),
+    )
     .where(eq(desktopEditSessions.id, sessionId))
     .limit(1);
 
@@ -91,6 +142,17 @@ export const authorizeDesktopEditSession = async ({
   if (session.tokenExpiresAt < new Date()) {
     return {
       status: "token-expired",
+    };
+  }
+
+  if (
+    !canUseDesktopEditSession({
+      organizationRole: session.organizationRole,
+      workspaceMemberId: session.workspaceMemberId,
+    })
+  ) {
+    return {
+      status: "permission-revoked",
     };
   }
 
@@ -114,8 +176,26 @@ export const readDesktopEditSessionEventState = async (
   sessionId: SafeId<"desktopEditSession">,
 ) => {
   const sessions = await db
-    .select({ id: desktopEditSessions.id })
+    .select({
+      organizationRole: member.role,
+      workspaceMemberId: workspaceMembers.id,
+    })
     .from(desktopEditSessions)
+    .innerJoin(workspaces, eq(desktopEditSessions.workspaceId, workspaces.id))
+    .leftJoin(
+      member,
+      and(
+        eq(member.userId, desktopEditSessions.createdBy),
+        eq(member.organizationId, workspaces.organizationId),
+      ),
+    )
+    .leftJoin(
+      workspaceMembers,
+      and(
+        eq(workspaceMembers.userId, desktopEditSessions.createdBy),
+        eq(workspaceMembers.workspaceId, desktopEditSessions.workspaceId),
+      ),
+    )
     .where(
       and(
         eq(desktopEditSessions.id, sessionId),
@@ -124,7 +204,14 @@ export const readDesktopEditSessionEventState = async (
     )
     .limit(1);
 
-  if (!sessions.at(0)) {
+  const session = sessions.at(0);
+  if (
+    !session ||
+    !canUseDesktopEditSession({
+      organizationRole: session.organizationRole,
+      workspaceMemberId: session.workspaceMemberId,
+    })
+  ) {
     return null;
   }
 
@@ -146,7 +233,9 @@ export const readDesktopEditSessionEventState = async (
     .where(eq(desktopEditSessions.id, sessionId))
     .limit(1);
 
+  const pendingRequest = pendingRequests.at(0);
+
   return {
-    pendingRequest: pendingRequests.at(0) ?? null,
+    pendingRequest: pendingRequest ?? null,
   };
 };

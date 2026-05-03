@@ -58,6 +58,7 @@
         "@opentelemetry/sdk-logs": "^0.215.0",
         "@react-email/render": "^2.0.7",
         "@sinclair/typebox": "^0.34.49",
+        "@stll/anonymize-data": "catalog:",
         "@stll/anonymize-wasm": "catalog:",
         "@stll/ares": "workspace:*",
         "@stll/case-law": "workspace:*",

@@ -45,6 +45,7 @@ const chatThreadDataScopeCheck = sql`(
 
 const chatThreadScopeCheck = sql`(
   ${userCheck} AND
+  ${organizationCheck} AND
   (workspace_id IS NULL OR ${workspaceCheck}) AND
   ${chatThreadDataScopeCheck}
 )`;
@@ -59,6 +60,9 @@ const chatMessageScopeCheck = sql`(
   EXISTS (
     SELECT 1 FROM chat_threads ct
     WHERE ct.id = chat_messages.thread_id
+      AND ct.organization_id = (SELECT current_setting(
+        '${sql.raw(SETTING_ORGANIZATION_ID)}', true
+      ))
       AND (
         cardinality(ct.data_workspace_ids) = 0
         OR ct.data_workspace_ids <@ ${wsIdsArray}

@@ -1,3 +1,4 @@
+import { loadNameDictionaries } from "@stll/anonymize-data";
 import {
   createPipelineContext,
   DEFAULT_ENTITY_LABELS,
@@ -108,10 +109,14 @@ export const anonymizeTextFields = async ({
       organizationId,
       scopedDb,
     }));
+  const dictionaries = await loadNameDictionaries();
 
   const entities = await runPipeline({
     fullText: combinedText,
-    config: buildPipelineConfig({ gazetteerEntries: entries, workspaceId }),
+    config: {
+      ...buildPipelineConfig({ gazetteerEntries: entries, workspaceId }),
+      dictionaries,
+    },
     gazetteerEntries: entries,
     context,
   });
