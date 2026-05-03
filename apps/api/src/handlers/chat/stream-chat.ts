@@ -11,6 +11,7 @@ import { panic, Result } from "better-result";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { getUserFileIdFromPart } from "@/api/handlers/chat/attachment-validation";
+import { repairActiveDocxEditToolCall } from "@/api/handlers/chat/tools/active-docx-edit-tool-repair";
 import type { ChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type { ChatMessage } from "@/api/handlers/chat/types";
@@ -43,7 +44,7 @@ type StreamChatProps = {
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
   system: string;
   threadId: SafeId<"chatThread">;
-  tools: ChatTools;
+  tools: Partial<ChatTools>;
 };
 
 export const streamChat = async ({
@@ -74,6 +75,8 @@ export const streamChat = async ({
         temperature: getTemperatureForRole("chat"),
         system,
         tools,
+        experimental_repairToolCall: async ({ toolCall }) =>
+          await Promise.resolve(repairActiveDocxEditToolCall(toolCall)),
         providerOptions: {
           openai: {
             promptCacheKey,

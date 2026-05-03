@@ -3,11 +3,14 @@
  * reach — :has() selectors and content rendered outside JSX.
  */
 
-/* Suppress the editor caret while the AI prompt input has focus, so
- * the user only sees one blinking cursor. Scoped to the wrapper so
- * unrelated contenteditable elements elsewhere on the page are
- * unaffected. */
-[data-file-viewer-ai]:has([data-folio-ai-bar-focus="true"])
-  [contenteditable="true"] {
+/* Suppress the *underlying file editor's* caret while the AI prompt
+ * input has focus, so the user only sees one blinking cursor. Scoped
+ * to the wrapper so unrelated contenteditable elements elsewhere on
+ * the page are unaffected. The PromptBar is rendered with
+ * role="toolbar" and itself contains a TipTap contenteditable — we
+ * must NOT hide that caret, only ones outside the toolbar (the Folio
+ * editor mounted as a sibling). */
+[data-file-viewer-ai]:has([role="toolbar"]:focus-within)
+  [contenteditable="true"]:not([role="toolbar"] [contenteditable="true"]) {
   caret-color: transparent;
 }

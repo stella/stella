@@ -9,7 +9,11 @@ import {
 import { panic } from "better-result";
 import { v7 as uuidv7 } from "uuid";
 
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type {
+  ChatUITools,
+  PersistedChatMessage,
+} from "@/components/chat/chat-ui-tools";
+import { hasApprovedActiveDocxEditAwaitingClientOutput } from "@/components/chat/chat-ui-tools";
 import { env } from "@/env";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -20,6 +24,17 @@ import { toSafeId } from "@/lib/safe-id";
 import type { ChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 
 type ActiveFileContext = {
+  docxEditSnapshot?:
+    | {
+        blocks: {
+          displayLabel?: string | undefined;
+          id: string;
+          kind: "heading" | "listItem" | "paragraph";
+          text: string;
+        }[];
+        canApplyEdits?: boolean | undefined;
+      }
+    | undefined;
   entityId: string;
   fileName: string;
 };
@@ -31,6 +46,15 @@ type ActiveDecisionContext = {
 type ChatThreadKey = ChatThreadRef;
 
 type GroupedChatThreads = Awaited<ReturnType<typeof fetchGroupedChatThreads>>;
+
+const APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME = "apply-active-docx-edits";
+const CHAT_TRANSPORT_VERSION = 2;
+
+export type ApplyActiveDocxEditsInput =
+  ChatUITools[typeof APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME]["input"];
+
+export type ApplyActiveDocxEditsOutput =
+  ChatUITools[typeof APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME]["output"];
 
 type ChatThreadOptionsContext = {
   allowMissingThread?: boolean | undefined;
@@ -45,16 +69,38 @@ type ChatThreadOptionsContext = {
    */
   getContextMatterIds?: (() => string[]) | undefined;
   getUserContext?: (() => ChatUserContext) | undefined;
+  handleActiveDocxEditToolCall?:
+    | ((
+        input: ApplyActiveDocxEditsInput,
+      ) => ApplyActiveDocxEditsOutput | Promise<ApplyActiveDocxEditsOutput>)
+    | undefined;
 };
 
 type ChatThreadQueryKey = ChatThreadRef & {
   allowMissingThread?: boolean | undefined;
+  contextKind?: ChatRuntimeContextKind | undefined;
 };
 
 type ChatThreadOptionsInput = QueryOptionsInput<
   ChatThreadKey,
   ChatThreadOptionsContext
 >;
+
+type ChatRuntimeContextKind = "active-docx-edit" | "active-file" | "plain";
+
+const getChatRuntimeContextKind = (
+  context: ChatThreadOptionsContext | undefined,
+): ChatRuntimeContextKind => {
+  if (context?.handleActiveDocxEditToolCall) {
+    return "active-docx-edit";
+  }
+
+  if (context?.getActiveFile) {
+    return "active-file";
+  }
+
+  return "plain";
+};
 
 export const chatKeys = {
   all: ["chat"],
@@ -67,6 +113,8 @@ export const chatKeys = {
           key.scope,
           key.threadId,
           key.allowMissingThread ?? false,
+          key.contextKind ?? "plain",
+          CHAT_TRANSPORT_VERSION,
         ]
       : [
           ...chatKeys.all,
@@ -75,6 +123,8 @@ export const chatKeys = {
           key.workspaceId,
           key.threadId,
           key.allowMissingThread ?? false,
+          key.contextKind ?? "plain",
+          CHAT_TRANSPORT_VERSION,
         ],
 };
 
@@ -186,8 +236,9 @@ const shouldSendAutomaticallyAfterToolResponse = ({
 }: {
   messages: PersistedChatMessage[];
 }) =>
-  lastAssistantMessageIsCompleteWithApprovalResponses({ messages }) ||
-  lastAssistantMessageIsCompleteWithToolCalls({ messages });
+  !hasApprovedActiveDocxEditAwaitingClientOutput({ messages }) &&
+  (lastAssistantMessageIsCompleteWithApprovalResponses({ messages }) ||
+    lastAssistantMessageIsCompleteWithToolCalls({ messages }));
 
 export type ChatThreadFetched = {
   chat: Chat<PersistedChatMessage>;
@@ -208,6 +259,7 @@ export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
     queryKey: chatKeys.thread({
       ...key,
       allowMissingThread: context?.allowMissingThread,
+      contextKind: getChatRuntimeContextKind(context),
     }),
     queryFn: async (): Promise<ChatThreadFetched> => {
       const { messages, contextMatterIds } = await fetchThreadMessages(key, {

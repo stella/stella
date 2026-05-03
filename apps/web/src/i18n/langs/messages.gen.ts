@@ -285,6 +285,12 @@ type Messages = {
       "toastDescription": "Full-page chat lands with persisted threads.";
       "toastTitle": "Full view not yet available";
     };
+    "applyMode": {
+      "description": "Word stores who made each change. We'll remember your choice.";
+      "direct": "No, apply directly";
+      "title": "Apply edits with tracked changes?";
+      "tracked": "Yes, tracked";
+    };
     "approval": {
       "allow": "Allow";
       "alwaysAllow": "Always allow in this thread";
@@ -313,6 +319,7 @@ type Messages = {
     };
     "editableFilePlaceholder": "Chat about or edit {fileName}";
     "editableFilePlaceholderAction": "Chat about or edit";
+    "editorLoading": "Loading editor…";
     "extractingContent": "Extracting content...";
     "filePlaceholder": "Chat about {fileName}";
     "filePlaceholderAction": "Chat about";
@@ -366,9 +373,18 @@ type Messages = {
     "thinking": "Working with context";
     "threads": "Conversations";
     "tool": {
+      "apply-active-docx-edits": "Applying DOCX edits";
       "ask-user": "Asking for clarification";
       "create-document": "Creating document";
       "describe-stella-function": "Inspecting stella function";
+      "docxCommentSummary": "Add a comment to {blockId}";
+      "docxDeleteSummary": "Delete {blockId}";
+      "docxEditMore": "{count, plural, one {# more edit} other {# more edits}}";
+      "docxEditSummary": "{count, plural, one {# proposed edit} other {# proposed edits}}";
+      "docxInsertAfterSummary": "Insert text after {blockId}";
+      "docxInsertBeforeSummary": "Insert text before {blockId}";
+      "docxReplaceBlockSummary": "Replace {blockId}";
+      "docxReplaceSummary": "Replace “{find}” with “{replace}”";
       "execute-typescript": "Running TypeScript";
       "load-skill": "Loading skill";
       "read-contact": "Reading contact";
@@ -694,6 +710,48 @@ type Messages = {
       "person": "Person";
     };
   };
+  "docxReview": {
+    "accept": "Accept";
+    "acceptAll": "Accept all";
+    "allFilter": "All";
+    "applyAs": "as";
+    "applyDirect": "Direct";
+    "applyMode": "Apply as:";
+    "applyTracked": "Tracked changes";
+    "areaUnspecified": "Unspecified";
+    "byArea": "By area";
+    "bySeverity": "By severity";
+    "dismiss": "Hide review panel";
+    "empty": "No suggestions match the current filter.";
+    "groupBy": "Group by";
+    "hiddenCount": "{count} hidden";
+    "hideAccepted": "Hide accepted suggestions";
+    "identityAria": "Tracked-change identity for {name}";
+    "identitySaved": "Identity saved";
+    "progressAria": "{reviewed} of {total} reviewed";
+    "reject": "Reject";
+    "rejectAll": "Reject all";
+    "revert": "Revert";
+    "reviewed": "reviewed";
+    "saveIdentity": "Save";
+    "savingIdentity": "Saving…";
+    "severityHigh": "High";
+    "severityLow": "Low";
+    "severityMedium": "Medium";
+    "severityUnspecified": "Unspecified";
+    "showHidden": "Show all";
+    "skipped": "Could not apply: {reason}";
+    "statusAccepted": "Accepted";
+    "statusApplying": "Applying change…";
+    "statusRejected": "Rejected";
+    "statusSkipped": "Skipped";
+    "subtitle": "{pending} of {total} pending";
+    "title": "AI suggestions";
+    "wordName": "Word author name";
+    "wordNamePlaceholder": "How tracked changes will sign";
+    "wordShortcut": "Initials";
+    "wordShortcutPlaceholder": "e.g. JK";
+  };
   "errors": {
     "actionFailed": "Action failed";
     "failedToAcceptInvitation": "Failed to accept invitation";
@@ -769,6 +827,7 @@ type Messages = {
     "editLatestVersionDescription": "This is not the current version. To edit it in the browser, first make it the latest version, then unlock it for editing.";
     "editLatestVersionTitle": "Make this the latest version to edit";
     "generatingRedline": "Generating redline comparison...";
+    "hideVersionList": "Hide version history";
     "inspectMode": "Inspect";
     "label": "Label";
     "labelPresets": {
@@ -785,11 +844,14 @@ type Messages = {
     "selectVersion": "Select a version";
     "setLabel": "Set label";
     "showDiff": "Show diff";
+    "showVersionList": "Show version history";
     "uploadDate": "Upload date";
+    "uploadNewVersion": "Upload new version";
     "uploadedBy": "Uploaded by";
     "version": "Version";
     "versionHistory": "Version history";
     "viewVersionHistory": "Show details & history";
+    "viewing": "Viewing";
     "wordsAdded": "words added";
     "wordsRemoved": "words removed";
   };
@@ -930,6 +992,10 @@ type Messages = {
     "unsupportedDocxEditTitle": "Editing blocked";
   };
   "inspector": {
+    "facet": {
+      "preview": "Preview";
+      "previewInFullViewToast": "Preview is the main view here. Click the minimize button to see it alongside metadata.";
+    };
     "hidePane": "Hide pane";
     "matterPicker": {
       "allMatters": "All matters";
@@ -940,6 +1006,17 @@ type Messages = {
       "noResults": "No matter matches “{query}”.";
       "searchPlaceholder": "Search matters or clients…";
       "title": "Matter context";
+    };
+    "metadata": {
+      "addFileField": "Add field";
+      "author": "Author";
+      "documentInfoHeading": "Document info";
+      "fileSpecificHeading": "File-specific fields";
+      "fileSpecificHint": "Add fields that only live on this file and don't appear in the table.";
+      "matterColumnsHeading": "Matter columns";
+      "updatedAt": "Updated";
+      "version": "Version";
+      "versionCurrent": "v{version} (current)";
     };
     "openChat": "Open chat";
     "showPane": "Show pane";
@@ -1185,6 +1262,9 @@ type Messages = {
       "desktopDownloadOtherMac": "On Windows? Download for Windows";
       "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments";
       "desktopDownloadWindows": "Download for Windows";
+      "preferredName": "Preferred name";
+      "preferredNameDescription": "Used as the author for DOCX tracked changes and comments.";
+      "preferredNamePlaceholder": "Your name";
       "profile": "Profile";
       "profileDescription": "Manage your personal preferences";
       "sessions": "Sessions";
@@ -1192,6 +1272,10 @@ type Messages = {
       "timezoneDescription": "Used for timestamps in notifications and emails";
       "timezoneSaved": "Timezone updated";
       "title": "Account";
+      "wordEditIdentitySaved": "Word edit identity updated";
+      "wordEditShortcut": "Word edit shortcut";
+      "wordEditShortcutDescription": "Short tag for your initials on Word edits.";
+      "wordEditShortcutPlaceholder": "e.g. JK";
     };
     "organization": {
       "activeMembers": "Active members";
@@ -1585,6 +1669,7 @@ type Messages = {
       "backToPeek": "Back to peek";
       "entitySidebar": "Entity details";
       "evidence": "Justification";
+      "fullView": "Full view";
       "goBack": "Go back";
       "incorrectPassword": "Incorrect password. Please try again.";
       "nextPage": "Next page";

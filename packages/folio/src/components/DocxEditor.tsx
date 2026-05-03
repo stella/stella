@@ -56,6 +56,16 @@ import { Selection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
+import {
+  applyFolioAIEditOperations,
+  createFolioAIEditSnapshot,
+} from "../core/ai-edits";
+import type {
+  FolioAIEditApplyMode,
+  FolioAIEditApplyResult,
+  FolioAIEditOperation,
+  FolioAIEditSnapshot,
+} from "../core/ai-edits";
 import type { DocxCompatibility } from "../core/docx/compatibility";
 import { repackDocx } from "../core/docx/rezip";
 import { attemptSelectiveSave } from "../core/docx/selectiveSave";
@@ -126,6 +136,9 @@ import type { SelectionState, TableContextInfo } from "../core/prosemirror";
 import {
   acceptChange,
   rejectChange,
+  acceptAIEditRevision,
+  rejectAIEditRevision,
+  findAIEditRevisionRange,
   findChangeAtPosition,
   findNextChange,
   findPreviousChange,
@@ -317,7 +330,7 @@ export type DocxEditorProps = {
   initialZoom?: number;
   /** Whether the editor is read-only. When true, hides toolbar and rulers */
   readOnly?: boolean;
-  /** Whether tracked changes should auto-open the review sidebar (default: true) */
+  /** Whether comments/tracked changes should auto-open the review sidebar (default: true) */
   autoOpenReviewSidebar?: boolean;
   /** Custom toolbar actions */
   toolbarExtra?: ReactNode;
@@ -395,6 +408,56 @@ export type DocxEditorRef = {
   loadDocument: (doc: Document) => void;
   /** Load a DOCX buffer programmatically (ArrayBuffer, Uint8Array, Blob, or File) */
   loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
+  /** Create the block snapshot that an external AI editor should reference. */
+  createAIEditSnapshot: () => FolioAIEditSnapshot | null;
+  /** Apply AI-authored operations against a previously created block snapshot. */
+  applyAIEditOperations: (options: {
+    snapshot: FolioAIEditSnapshot;
+    operations: FolioAIEditOperation[];
+    mode?: FolioAIEditApplyMode;
+    author?: string;
+  }) => FolioAIEditApplyResult;
+  /**
+   * Accept the tracked-change marks belonging to a previously
+   * applied AI edit. Pass a single id for inserts/standalone
+   * deletions, or the full id list (`applied.revisionIds`) for a
+   * replace, which has separate ids for its deletion and insertion
+   * sides. No-op when none of the ids match anything in the doc.
+   * Returns whether a matching range was found.
+   */
+  acceptAIEditOperation: (revisionIds: number | readonly number[]) => boolean;
+  /**
+   * Reject the tracked-change marks belonging to a previously
+   * applied AI edit. Same id semantics as `acceptAIEditOperation`.
+   */
+  rejectAIEditOperation: (revisionIds: number | readonly number[]) => boolean;
+  /**
+   * Scroll the editor viewport so the tracked-change marks
+   * belonging to the given `revisionIds` come into view, and select
+   * them. No-op when none of the revisions are present.
+   */
+  scrollToAIEditOperation: (revisionIds: number | readonly number[]) => boolean;
+  /**
+   * Scroll the editor viewport so the AI edit block (by snapshot
+   * `blockId`) comes into view, and place the selection inside it.
+   * Used by the review panel to navigate to a still-pending
+   * suggestion (no `revisionId` yet because the user hasn't
+   * accepted). Returns false when the block can't be resolved on
+   * the live document (e.g. it was edited away).
+   */
+  /**
+   * Scroll the editor viewport so the block referenced by
+   * `blockId` is in view. If `snapshot` is supplied, ids are
+   * resolved against it — this is how the review panel's
+   * pending-suggestion navigation works, because block ids are
+   * sequential and a freshly recomputed snapshot would re-number
+   * blocks after any structural accept (insertAfterBlock /
+   * deleteBlock), making `b-0007` point to a different block than
+   * the AI intended. Without the argument, falls back to a
+   * fresh-from-live-doc snapshot (used by debug surfaces and
+   * tests).
+   */
+  scrollToBlock: (blockId: string, snapshot?: FolioAIEditSnapshot) => boolean;
 };
 
 /**
@@ -825,10 +888,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         setComments(bodyComments);
         setVisibleCommentAuthors(null);
         setActiveCommentId(null);
-        setShowCommentsSidebar(true);
+        if (autoOpenReviewSidebar) {
+          setShowCommentsSidebar(true);
+        }
         commentsLoadedRef.current = true;
       }
-    }, [history.state]);
+    }, [autoOpenReviewSidebar, history.state]);
 
     const commentAuthors = useMemo(() => {
       const seen = new Set<string>();
@@ -2987,8 +3052,128 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         print: handleDirectPrint,
         loadDocument: loadParsedDocument,
         loadDocumentBuffer: loadBuffer,
+        createAIEditSnapshot: () => {
+          const view = pagedEditorRef.current?.getView();
+          return view ? createFolioAIEditSnapshot(view.state.doc) : null;
+        },
+        applyAIEditOperations: ({
+          snapshot,
+          operations,
+          mode = "tracked-changes",
+          author: operationAuthor = author,
+        }) => {
+          const view = pagedEditorRef.current?.getView();
+          if (!view) {
+            return {
+              applied: [],
+              skipped: operations.map((operation) => ({
+                id: operation.id,
+                reason: "unsupportedBlock",
+              })),
+            };
+          }
+
+          const createdComments: Comment[] = [];
+          const result = applyFolioAIEditOperations({
+            view,
+            snapshot,
+            operations,
+            mode,
+            author: operationAuthor,
+            createCommentId: (text) => {
+              const comment = createComment(text, operationAuthor);
+              createdComments.push(comment);
+              return comment.id;
+            },
+          });
+
+          if (createdComments.length > 0) {
+            updateComments((currentComments) => [
+              ...currentComments,
+              ...createdComments,
+            ]);
+          }
+
+          return result;
+        },
+        acceptAIEditOperation: (revisionId) => {
+          const view = pagedEditorRef.current?.getView();
+          if (!view) {
+            return false;
+          }
+          return acceptAIEditRevision(revisionId)(view.state, view.dispatch);
+        },
+        rejectAIEditOperation: (revisionId) => {
+          const view = pagedEditorRef.current?.getView();
+          if (!view) {
+            return false;
+          }
+          return rejectAIEditRevision(revisionId)(view.state, view.dispatch);
+        },
+        scrollToAIEditOperation: (revisionId) => {
+          const view = pagedEditorRef.current?.getView();
+          if (!view) {
+            return false;
+          }
+          const range = findAIEditRevisionRange(view.state, revisionId);
+          if (!range) {
+            return false;
+          }
+          // `TextSelection.between` clamps to the nearest valid
+          // inline position; `create` throws "endpoint not pointing
+          // into a node with inline content" when from/to land on a
+          // block boundary, which is exactly what happens for marks
+          // that wrap an entire paragraph.
+          const $from = view.state.doc.resolve(range.from);
+          const $to = view.state.doc.resolve(range.to);
+          view.dispatch(
+            view.state.tr.setSelection(TextSelection.between($from, $to)),
+          );
+          requestAnimationFrame(() => {
+            pagedEditorRef.current?.scrollToPosition(range.from);
+          });
+          return true;
+        },
+        scrollToBlock: (blockId, snapshot) => {
+          const view = pagedEditorRef.current?.getView();
+          if (!view) {
+            return false;
+          }
+          // Prefer the caller's snapshot (the one the AI saw when
+          // it generated the suggestion); only fall back to a
+          // fresh recompute when the caller didn't pass one. A
+          // recomputed snapshot re-numbers blocks after any
+          // structural accept, so `b-0007` would point to a
+          // different paragraph than the panel's pending
+          // suggestion is referencing.
+          const resolvedSnapshot =
+            snapshot ?? createFolioAIEditSnapshot(view.state.doc);
+          const anchor = resolvedSnapshot.anchors[blockId];
+          if (!anchor) {
+            return false;
+          }
+          const docSize = view.state.doc.content.size;
+          // Clamp because a block range generated from the snapshot
+          // can include a position one past the doc end (e.g.
+          // trailing paragraph) that PM rejects when used directly
+          // for a TextSelection. Use `between` over `create` so a
+          // block-boundary `from` doesn't trip "endpoint not
+          // pointing into a node with inline content".
+          const from = Math.min(anchor.from, docSize);
+          const to = Math.min(anchor.to, docSize);
+          const $from = view.state.doc.resolve(from);
+          const $to = view.state.doc.resolve(to);
+          view.dispatch(
+            view.state.tr.setSelection(TextSelection.between($from, $to)),
+          );
+          requestAnimationFrame(() => {
+            pagedEditorRef.current?.scrollToPosition(from);
+          });
+          return true;
+        },
       }),
       [
+        author,
         buildCurrentDocument,
         scrollPageInfo,
         handleSave,
@@ -2996,6 +3181,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         handleDirectPrint,
         loadParsedDocument,
         loadBuffer,
+        updateComments,
       ],
     );
 

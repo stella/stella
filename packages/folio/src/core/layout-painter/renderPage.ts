@@ -1938,6 +1938,56 @@ function repopulatePageContent(
 }
 
 /**
+ * Find the page shell whose layout fragments cover (or are nearest
+ * before) a given ProseMirror position. Returns null if the
+ * container has no virtualization state — callers should fall back
+ * to the cheaper run-level DOM query in that case.
+ *
+ * Uses the layout-side Page records (always present even when a
+ * page's content hasn't rendered yet under virtualization), so the
+ * caller can scroll to the correct page shell and let the
+ * IntersectionObserver populate it on demand. This avoids the
+ * "many clicks to arrive" failure mode where a per-run DOM query
+ * only finds runs in the currently-rendered buffer and steps the
+ * viewport one buffer at a time.
+ */
+export function findPageShellForPmPos(
+  container: HTMLElement,
+  pmPos: number,
+): { element: HTMLElement; isExact: boolean } | null {
+  const pc = container as PageContainer;
+  const dataMap = pc.__pageRenderState?.pageDataMap;
+  if (!dataMap || dataMap.size === 0) {
+    return null;
+  }
+  let bestStartShell: HTMLElement | null = null;
+  let bestStart = Number.NEGATIVE_INFINITY;
+  for (const [shell, entry] of dataMap) {
+    let pageStart = Number.POSITIVE_INFINITY;
+    let pageEnd = Number.NEGATIVE_INFINITY;
+    for (const fragment of entry.page.fragments) {
+      if (fragment.pmStart !== undefined && fragment.pmStart < pageStart) {
+        pageStart = fragment.pmStart;
+      }
+      if (fragment.pmEnd !== undefined && fragment.pmEnd > pageEnd) {
+        pageEnd = fragment.pmEnd;
+      }
+    }
+    if (pageStart === Number.POSITIVE_INFINITY) {
+      continue;
+    }
+    if (pageStart <= pmPos && pmPos <= pageEnd) {
+      return { element: shell, isExact: true };
+    }
+    if (pageStart <= pmPos && pageStart > bestStart) {
+      bestStart = pageStart;
+      bestStartShell = shell;
+    }
+  }
+  return bestStartShell ? { element: bestStartShell, isExact: false } : null;
+}
+
+/**
  * Clear a page shell's content (keep shell dimensions for scroll).
  */
 function depopulatePageShell(

@@ -124,11 +124,11 @@ export const readFileHandler = async ({
     };
   }
 
-  if (!content.pdfFileId && content.mimeType !== PDF_MIME_TYPE) {
-    if (!isNativelyRenderableMimeType(content.mimeType)) {
-      return status(400);
-    }
-
+  // Natively-renderable types (DOCX) serve their original bytes
+  // for display — the frontend renders them via Folio, never via
+  // Gotenberg. PDFs serve themselves. Anything else needs a
+  // PDF derivative on the field.
+  if (isNativelyRenderableMimeType(content.mimeType)) {
     return {
       fileId: content.id,
       mimeType: content.mimeType,
@@ -146,6 +146,10 @@ export const readFileHandler = async ({
       ),
       stampable: false,
     };
+  }
+
+  if (!content.pdfFileId && content.mimeType !== PDF_MIME_TYPE) {
+    return status(400);
   }
 
   const displayFileId = content.pdfFileId ?? content.id;

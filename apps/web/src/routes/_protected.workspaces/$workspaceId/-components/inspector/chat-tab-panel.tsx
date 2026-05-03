@@ -25,7 +25,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowUpIcon, Maximize2Icon } from "lucide-react";
+import { ArrowUpIcon, Maximize2Icon, SquarePenIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
@@ -102,8 +102,9 @@ export const ChatTabPanel = ({
   const showToolCalls = useDevStore((s) => s.showToolCalls);
   const chatContextLabel = useChatContextLabel(tab);
 
-  const { setChatContext, updateLabel } = useInspectorStore(
+  const { openChat, setChatContext, updateLabel } = useInspectorStore(
     useShallow((s) => ({
+      openChat: s.openChat,
       setChatContext: s.setChatContext,
       updateLabel: s.updateLabel,
     })),
@@ -216,6 +217,15 @@ export const ChatTabPanel = ({
       onClose={onClose}
       onLabelContextMenu={onLabelContextMenu}
       onMoveToMain={moveToMain}
+      onNewThread={() =>
+        openChat({
+          workspaceId: tabWorkspaceId,
+          contextMatterIds: tab.contextMatterIds,
+          ...(tab.activeDecisionId
+            ? { activeDecisionId: tab.activeDecisionId }
+            : {}),
+        })
+      }
       onSetContext={(next) => setChatContext(tab.id, next)}
       onStartRename={startRename}
       rename={{
@@ -339,6 +349,7 @@ type ChatTabPanelChromeProps = {
     onCancel: () => void;
   };
   onMoveToMain?: (() => void) | undefined;
+  onNewThread?: (() => void) | undefined;
   onSetContext: (matterIds: string[]) => void;
   matterColor?: string | null | undefined;
   children: React.ReactNode;
@@ -361,6 +372,7 @@ const ChatTabPanelChrome = ({
   onStartRename,
   rename,
   onMoveToMain,
+  onNewThread,
   onSetContext,
   matterColor,
   children,
@@ -368,6 +380,16 @@ const ChatTabPanelChrome = ({
   const t = useTranslations();
   const actions = (
     <>
+      {onNewThread && (
+        <Tooltip
+          content={t("chat.newChat")}
+          render={
+            <Button onClick={onNewThread} size="icon-xs" variant="ghost">
+              <SquarePenIcon className="size-3.5" />
+            </Button>
+          }
+        />
+      )}
       {onMoveToMain && (
         <Tooltip
           content={t("chat.moveToMain")}
@@ -470,6 +492,7 @@ export const ChatTabPanelShell = ({
       onClose={noop}
       onLabelContextMenu={noop}
       onMoveToMain={noop}
+      onNewThread={noop}
       onSetContext={noop}
       onStartRename={noop}
       rename={{

@@ -1,5 +1,6 @@
 import { toastManager } from "@stll/ui/components/toast";
 
+import { isEntityActiveInMainRoute } from "@/components/chat/entity-route-detect";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -26,6 +27,8 @@ const openDisplayableFile = ({
   label: string;
   workspaceId: string;
 }) => {
+  const sameAsMainRoute = isEntityActiveInMainRoute(entityId, workspaceId);
+
   for (const field of fields) {
     if (field.content.type !== "file" || !isFileDisplayable(field.content)) {
       continue;
@@ -39,6 +42,11 @@ const openDisplayableFile = ({
       pdfFileId: field.content.pdfFileId,
       propertyId: field.propertyId,
       workspaceId,
+      // The file is already in the main view; don't compete with
+      // it — open the inspector to its metadata view so the
+      // mention click reveals fields/properties instead of
+      // re-rendering the same document.
+      ...(sameAsMainRoute ? { metadataLane: "expanded" as const } : {}),
     });
     return true;
   }

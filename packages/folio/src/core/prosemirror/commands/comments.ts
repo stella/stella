@@ -65,11 +65,18 @@ export function removeCommentMark(commentId: number): Command {
  * Resolve a tracked change: accept or reject.
  * - Accept: keep insertions (remove mark), delete deletions (remove text)
  * - Reject: keep deletions (remove mark), delete insertions (remove text)
+ *
+ * Pass `revisionId` to scope the operation to one specific
+ * revision — otherwise overlapping marks for other revisions get
+ * processed too, silently consuming pending work. Without an id
+ * the operation matches every insertion/deletion mark in the
+ * range (the bulk accept-all/reject-all path).
  */
 function resolveChange(
   from: number,
   to: number,
   mode: "accept" | "reject",
+  revisionIds?: readonly number[],
 ): Command {
   return (state, dispatch) => {
     const insertionType = state.schema.marks["insertion"];
@@ -78,10 +85,14 @@ function resolveChange(
       return false;
     }
 
-    // "keep" mark type: remove the mark but keep the text
-    // "remove" mark type: remove both the mark and the text
     const keepType = mode === "accept" ? insertionType : deletionType;
     const removeType = mode === "accept" ? deletionType : insertionType;
+    const revisionSet =
+      revisionIds === undefined ? null : new Set<number>(revisionIds);
+    const matchesRevision = (mark: { attrs: Record<string, unknown> }) =>
+      revisionSet === null ||
+      (typeof mark.attrs["revisionId"] === "number" &&
+        revisionSet.has(mark.attrs["revisionId"]));
 
     if (dispatch) {
       const tr = state.tr;
@@ -95,12 +106,17 @@ function resolveChange(
         const rangeFrom = Math.max(from, pos);
         const rangeTo = Math.min(to, nodeEnd);
 
-        if (removeType && node.marks.some((m) => m.type === removeType)) {
+        if (
+          removeType &&
+          node.marks.some((m) => m.type === removeType && matchesRevision(m))
+        ) {
           deleteRanges.push({ from: rangeFrom, to: rangeTo });
         }
 
-        if (keepType && node.marks.some((m) => m.type === keepType)) {
-          tr.removeMark(rangeFrom, rangeTo, keepType);
+        for (const mark of node.marks) {
+          if (keepType && mark.type === keepType && matchesRevision(mark)) {
+            tr.removeMark(rangeFrom, rangeTo, mark);
+          }
         }
       });
 
@@ -148,6 +164,96 @@ export function acceptAllChanges(): Command {
 export function rejectAllChanges(): Command {
   return (state, dispatch) =>
     rejectChange(0, state.doc.content.size)(state, dispatch);
+}
+
+/**
+ * Find the document range covered by all insertion/deletion marks
+ * carrying any of the given AI-edit `revisionIds`. Returns null when
+ * none of those marks are present (already accepted/rejected, or
+ * never existed). A replace operation typically passes two ids (one
+ * for its deletion side, one for its insertion side); inserts and
+ * standalone deletions pass a single id.
+ */
+export function findAIEditRevisionRange(
+  state: EditorState,
+  revisionIds: number | readonly number[],
+): { from: number; to: number } | null {
+  const insertionType = state.schema.marks["insertion"];
+  const deletionType = state.schema.marks["deletion"];
+  if (!insertionType && !deletionType) {
+    return null;
+  }
+  const idSet = new Set<number>(
+    typeof revisionIds === "number" ? [revisionIds] : revisionIds,
+  );
+
+  let rangeFrom: number | null = null;
+  let rangeTo: number | null = null;
+
+  state.doc.descendants((node, pos) => {
+    if (!node.isText) {
+      return;
+    }
+    for (const mark of node.marks) {
+      if (
+        (mark.type === insertionType || mark.type === deletionType) &&
+        typeof mark.attrs["revisionId"] === "number" &&
+        idSet.has(mark.attrs["revisionId"])
+      ) {
+        const start = pos;
+        const end = pos + node.nodeSize;
+        if (rangeFrom === null || start < rangeFrom) {
+          rangeFrom = start;
+        }
+        if (rangeTo === null || end > rangeTo) {
+          rangeTo = end;
+        }
+        break;
+      }
+    }
+    return undefined;
+  });
+
+  if (rangeFrom === null || rangeTo === null) {
+    return null;
+  }
+  return { from: rangeFrom, to: rangeTo };
+}
+
+/**
+ * Accept the tracked-change marks belonging to an AI-edit operation.
+ * Pass a single revisionId for inserts/standalone deletions, or the
+ * full id list for a replace (one id per side). Returns false when
+ * none of the ids match anything in the doc.
+ */
+export function acceptAIEditRevision(
+  revisionIds: number | readonly number[],
+): Command {
+  return (state, dispatch) => {
+    const range = findAIEditRevisionRange(state, revisionIds);
+    if (!range) {
+      return false;
+    }
+    const ids = typeof revisionIds === "number" ? [revisionIds] : revisionIds;
+    return resolveChange(range.from, range.to, "accept", ids)(state, dispatch);
+  };
+}
+
+/**
+ * Reject the tracked-change marks belonging to an AI-edit operation.
+ * See {@link acceptAIEditRevision} for the id semantics.
+ */
+export function rejectAIEditRevision(
+  revisionIds: number | readonly number[],
+): Command {
+  return (state, dispatch) => {
+    const range = findAIEditRevisionRange(state, revisionIds);
+    if (!range) {
+      return false;
+    }
+    const ids = typeof revisionIds === "number" ? [revisionIds] : revisionIds;
+    return resolveChange(range.from, range.to, "reject", ids)(state, dispatch);
+  };
 }
 
 type ChangeRange = {

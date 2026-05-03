@@ -396,12 +396,14 @@ export const createWorkspaceTools = ({
 
     "create-document": tool({
       description:
-        "Create a new DOCX document in the matter from " +
-        "markdown content. Write the document body as " +
-        "markdown; it is converted to a styled DOCX file " +
-        "and stored in the matter. On success, copy the " +
-        "`mention` field exactly when naming the created " +
-        "document in a user-facing answer.",
+        "Create a brand-new simple DOCX document in the matter from " +
+        "markdown content. Write the document body as markdown; it is " +
+        "converted to a styled DOCX file and stored in the matter. This " +
+        "does not edit, convert, clone, or preserve formatting from an " +
+        "existing DOCX. Never use it when the user asks to edit, rewrite, " +
+        "save, update, or make a new version of an already-open document. " +
+        "On success, copy the `mention` field exactly when naming the " +
+        "created document in a user-facing answer.",
       needsApproval: true,
       inputSchema: valibotSchema(
         v.strictObject({

@@ -2,7 +2,6 @@ import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
-import JSZip from "jszip";
 
 import {
   desktopEditSessions,
@@ -13,6 +12,7 @@ import {
 } from "@/api/db/schema";
 import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
 import { findDocxFieldForProperty } from "@/api/handlers/entities/desktop-edit-session-utils";
+import { validateDocxBuffer } from "@/api/handlers/entities/validate-docx-buffer";
 import {
   buildVersionStamp,
   cloneFieldsForRevision,
@@ -47,49 +47,6 @@ export const finalizeDesktopEditSessionBodySchema = t.Object({
 type FinalizeDesktopEditSessionHandlerProps = {
   body: Static<typeof finalizeDesktopEditSessionBodySchema>;
   sessionId: SafeId<"desktopEditSession">;
-};
-
-/**
- * Validate that a buffer is a structurally valid DOCX file.
- * Checks that the ZIP archive can be parsed, that it contains
- * the required `word/document.xml` entry, and that the XML
- * has well-formed root and paragraph elements.
- */
-const validateDocxBuffer = async (
-  buffer: ArrayBuffer,
-): Promise<{ valid: true } | { valid: false; error: string }> => {
-  try {
-    const zip = await JSZip.loadAsync(buffer);
-
-    const documentXml = zip.file("word/document.xml");
-    if (!documentXml) {
-      return { valid: false, error: "Missing word/document.xml" };
-    }
-
-    const xml = await documentXml.async("text");
-    if (!xml.includes("<w:document") || !xml.includes("</w:document>")) {
-      return {
-        valid: false,
-        error: "Malformed document.xml: missing root element",
-      };
-    }
-
-    const openTags = (xml.match(/<w:p[\s>]/g) ?? []).length;
-    const closeTags = (xml.match(/<\/w:p>/g) ?? []).length;
-    if (openTags !== closeTags) {
-      return {
-        valid: false,
-        error: `Unbalanced paragraph tags: ${openTags} open, ${closeTags} close`,
-      };
-    }
-
-    return { valid: true };
-  } catch (error) {
-    return {
-      valid: false,
-      error: `Invalid DOCX: ${error instanceof Error ? error.message : "unknown error"}`,
-    };
-  }
 };
 
 export const finalizeDesktopEditSessionHandler = async ({

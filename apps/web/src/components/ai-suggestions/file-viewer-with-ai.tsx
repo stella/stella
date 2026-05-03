@@ -13,8 +13,9 @@
  * cards).
  */
 
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 
+import type { DocxEditorRef } from "@stll/folio";
 import { cn } from "@stll/ui/lib/utils";
 
 import { FileChatOverlay } from "./file-chat-overlay";
@@ -47,6 +48,12 @@ type FileViewerWithAIProps = {
   activeFile?: ActiveFile | undefined;
   /** Optional class name applied to the wrapper. */
   className?: string;
+  /** Live Folio editor ref used by the overlay's DOCX edit tool. */
+  docxEditorRef?: RefObject<DocxEditorRef | null> | undefined;
+  /** Whether the current DOCX session may accept AI edit operations. */
+  docxEditable?: boolean | undefined;
+  /** Request editable DOCX mode before applying a confirmed AI edit. */
+  requestDocxEditMode?: (() => boolean | Promise<boolean>) | undefined;
   /** The actual file viewer component. */
   children: ReactNode;
 };
@@ -56,6 +63,9 @@ export function FileViewerWithAI({
   chatThreadId,
   activeFile,
   className,
+  docxEditable,
+  docxEditorRef,
+  requestDocxEditMode,
   children,
 }: FileViewerWithAIProps) {
   return (
@@ -67,6 +77,9 @@ export function FileViewerWithAI({
       <FileChatOverlay
         activeFile={activeFile}
         chatThreadId={chatThreadId}
+        docxEditable={docxEditable}
+        docxEditorRef={docxEditorRef}
+        requestDocxEditMode={requestDocxEditMode}
         workspaceId={workspaceId}
       />
     </div>

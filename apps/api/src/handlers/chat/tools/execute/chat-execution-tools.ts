@@ -7,7 +7,10 @@ import * as v from "valibot";
 import type { SafeDb } from "@/api/db";
 import { createReadonlyOrgFunctionRegistry } from "@/api/handlers/chat/tools/execute/org-function-registry";
 import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/org-manifest";
-import { findReadonlyFunctionManifestEntry } from "@/api/handlers/chat/tools/execute/readonly-manifest";
+import {
+  buildReadonlyFunctionManifest,
+  findReadonlyFunctionManifestEntry,
+} from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import type { ReadonlyFunctionContract } from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { DEFAULT_SANDBOX_LIMITS } from "@/api/handlers/chat/tools/execute/sandbox/limits";
@@ -104,21 +107,40 @@ export const createChatExecutionTools = ({
   return {
     "describe-stella-function": tool({
       description:
-        "Return the full JSON Schema details for one readonly " +
-        "`stella` function available inside `execute-typescript`. Use this " +
-        "only as a fallback when the typed `stella` declarations " +
-        "in the system prompt are not enough and you need the " +
-        "exact schema for a specific function.",
+        "Discover the readonly `stella` API available inside " +
+        "`execute-typescript`. Call with no input to list every " +
+        "available function name + one-line description. Call " +
+        "with `{name}` to fetch one function's full JSON Schema " +
+        "(input, output, types). The catalog is NOT pre-loaded in " +
+        "the system prompt — call this whenever you need to " +
+        "compose a `stella.*` query.",
       inputSchema: valibotSchema(
         v.strictObject({
-          name: v.pipe(
-            v.string(),
-            v.description("Readonly `stella` function name to inspect."),
+          name: v.optional(
+            v.pipe(
+              v.string(),
+              v.description(
+                "Readonly `stella` function name to inspect. " +
+                  "Omit to list all available functions.",
+              ),
+            ),
           ),
         }),
       ),
       // eslint-disable-next-line require-await
       execute: async ({ name }) => {
+        if (name === undefined) {
+          const manifest = buildReadonlyFunctionManifest(
+            readonlyFunctionContracts,
+          ).unwrap();
+          return {
+            functions: manifest.map((entry) => ({
+              name: entry.name,
+              description: entry.description,
+            })),
+          };
+        }
+
         const manifestEntry = findReadonlyFunctionManifestEntry({
           contracts: readonlyFunctionContracts,
           name,
@@ -138,29 +160,22 @@ export const createChatExecutionTools = ({
 
     "execute-typescript": tool({
       description:
-        "Execute a TypeScript program inside a sandboxed " +
-        "QuickJS runtime. The program runs as the body of an " +
-        "async function: write top-level statements and `return` " +
-        "the value you want back. The only side-effect available " +
-        "is `stella.<functionName>(input)`, which calls a " +
-        "readonly function. The typed readonly `stella` declarations " +
-        "are already in the system prompt; use `describe-stella-function` " +
-        "only as a fallback to inspect one function's full JSON Schema " +
-        "details. `stella.list*` functions accept optional `limit` and " +
-        "numeric `offset` pagination inputs; omit `limit` unless you need " +
-        "a smaller page, and never exceed 500. `stella.get*` functions " +
-        "require explicit refs and return full results without pagination. " +
-        `Detail reads accept up to ${LIMITS.chatExecuteDetailIdsMax.toLocaleString()} refs; ` +
-        `content reads accept up to ${LIMITS.chatExecuteContentIdsMax.toLocaleString()} entity refs. When you need ` +
-        "multiple independent reads, use `Promise.all()` to fetch them in " +
-        "parallel instead of awaiting them one by one. " +
-        "`console.log` is a no-op; only the value you `return` comes " +
-        "back as the tool output. There is no `fetch`, `process`, " +
-        "`require`, filesystem, or network access. " +
-        `Code length is limited to ${LIMITS.chatRunCodeMaxLength.toLocaleString()} characters. ` +
-        `Execution is bounded to ${DEFAULT_SANDBOX_LIMITS.maxDurationMs.toLocaleString()}ms, ` +
-        `${DEFAULT_SANDBOX_LIMITS.maxHostCalls.toLocaleString()} host calls, and ` +
-        `${(DEFAULT_SANDBOX_LIMITS.maxReturnBytes / 1024).toLocaleString()} KiB of returned data.`,
+        "Escape hatch for arbitrary readonly queries the focused " +
+        "tools can't express (cross-matter search, joins, " +
+        "aggregations). Runs a TypeScript program inside a " +
+        "sandboxed QuickJS runtime; the program is the body of an " +
+        "async function — write top-level statements and `return` " +
+        "the value you want back. The only side-effect is " +
+        "`stella.<functionName>(input)`. The function catalog is " +
+        "NOT in the system prompt — call `describe-stella-function` " +
+        "(no input) to list available functions, then with `{name}` " +
+        "for one function's full schema. `console.log` is a no-op; " +
+        "only the returned value comes back. No `fetch`, `process`, " +
+        "`require`, filesystem, or network access. Limits: code " +
+        `≤${LIMITS.chatRunCodeMaxLength.toLocaleString()} chars, ` +
+        `≤${DEFAULT_SANDBOX_LIMITS.maxDurationMs.toLocaleString()}ms, ` +
+        `≤${DEFAULT_SANDBOX_LIMITS.maxHostCalls.toLocaleString()} host calls, ` +
+        `≤${(DEFAULT_SANDBOX_LIMITS.maxReturnBytes / 1024).toLocaleString()} KiB returned.`,
       inputSchema: valibotSchema(
         v.strictObject({
           code: v.pipe(

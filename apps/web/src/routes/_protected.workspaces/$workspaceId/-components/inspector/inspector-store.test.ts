@@ -100,6 +100,65 @@ describe("replacePdfFieldId", () => {
     expect(tab.label).toBe("0041_Pleadings_draft.pdf");
   });
 
+  test("openPdf with a different fieldId for the same entity keeps a single tab", () => {
+    useInspectorStore.getState().openPdf({
+      id: "field-v1",
+      entityId: "entity-1",
+      label: "Contract.docx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+
+    useInspectorStore.getState().openPdf({
+      id: "field-v2",
+      entityId: "entity-1",
+      label: "Contract.docx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+
+    const pdfTabs = useInspectorStore
+      .getState()
+      .tabs.filter((t) => t.type === "pdf");
+    expect(pdfTabs).toHaveLength(1);
+    expect(pdfTabs[0]?.id).toBe("field-v2");
+    expect(useInspectorStore.getState().activeId).toBe("field-v2");
+  });
+
+  test("openPdfForEntity drops a stale tab whose id collides with the new field", () => {
+    useInspectorStore.getState().openPdf({
+      id: "field-shared",
+      entityId: "entity-A",
+      label: "A.docx",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      propertyId: "property-A",
+      workspaceId: "workspace-1",
+    });
+
+    useInspectorStore.getState().openPdfForEntity({
+      id: "field-shared",
+      entityId: "entity-B",
+      label: "B.docx",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      propertyId: "property-B",
+      workspaceId: "workspace-1",
+    });
+
+    const pdfTabs = useInspectorStore
+      .getState()
+      .tabs.filter((t) => t.type === "pdf");
+    expect(pdfTabs).toHaveLength(1);
+    expect(pdfTabs[0]?.entityId).toBe("entity-B");
+  });
+
   test("preserves the pdf tab render id across version replacement", () => {
     useInspectorStore.getState().openPdf({
       id: "field-old",

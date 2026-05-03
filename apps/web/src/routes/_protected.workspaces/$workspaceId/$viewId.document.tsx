@@ -36,7 +36,6 @@ import {
   stripSearchParams,
 } from "@tanstack/react-router";
 import { UploadIcon } from "lucide-react";
-import { Group, Panel, Separator } from "react-resizable-panels";
 import { useTranslations } from "use-intl";
 import "@stll/folio/editor.css";
 import * as v from "valibot";
@@ -55,12 +54,10 @@ import {
   useDocxWheelZoom,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
-import { EntityMetadataPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import PdfViewer, {
   PDFSuspenseFallback,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer";
-import { VersionsSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import {
@@ -182,6 +179,13 @@ function RouteComponentInner({
   const justificationPage = Route.useSearch({
     select: (s) => s.justificationPage,
   });
+  // `editing=true` in the URL means the user landed here from a
+  // sidepeek that was already unlocked for editing. Honoring it
+  // drops them straight back into the edit session instead of
+  // making them click Edit again on the now-fullscreen view.
+  const initialEditing = Route.useSearch({
+    select: (s) => s.editing ?? false,
+  });
   const pageNumber = Route.useSearch({ select: (s) => s.pdfPage ?? 1 });
   const { data: entity } = useSuspenseQuery(
     entityOptions(workspaceId, entityId),
@@ -193,7 +197,7 @@ function RouteComponentInner({
     (s) => s.setActiveJustification,
   );
   const resetPdfViewerState = useWorkspaceStore((s) => s.resetPdfViewerState);
-  const openPdf = useInspectorStore((s) => s.openPdf);
+  const openPdfForEntity = useInspectorStore((s) => s.openPdfForEntity);
   const navigate = Route.useNavigate();
 
   useEffect(() => {
@@ -238,60 +242,8 @@ function RouteComponentInner({
     wordsRemoved: number;
     seq: number;
   } | null>(null);
-  const [isComparing, setIsComparing] = useState(false);
-  const compareSeqRef = useRef(0);
-
-  const handleCompare = async (
-    baseVersionId: string,
-    targetVersionId: string,
-  ) => {
-    setIsComparing(true);
-    try {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .entity({ entityId: toSafeId<"entity">(entityId) })
-        .compare.post(
-          {
-            baseVersionId: toSafeId<"entityVersion">(baseVersionId),
-            targetVersionId: toSafeId<"entityVersion">(targetVersionId),
-            entityId: toSafeId<"entity">(entityId),
-          },
-          { fetch: { signal: AbortSignal.timeout(30_000) } },
-        );
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      const { docxBase64, editsApplied, wordsAdded, wordsRemoved } =
-        response.data;
-      const baseVersion = versionData?.versions.find(
-        (version) => version.id === baseVersionId,
-      );
-      const targetVersion = versionData?.versions.find(
-        (version) => version.id === targetVersionId,
-      );
-      compareSeqRef.current += 1;
-      setCompareState({
-        baseVersionLabel:
-          baseVersion === undefined
-            ? t("fileDetail.base")
-            : `v${baseVersion.versionNumber}`,
-        docxBuffer: decodeBase64ToArrayBuffer(docxBase64),
-        docxBase64,
-        editsApplied,
-        targetVersionLabel:
-          targetVersion === undefined
-            ? t("fileDetail.current")
-            : `v${targetVersion.versionNumber}`,
-        wordsAdded,
-        wordsRemoved,
-        seq: compareSeqRef.current,
-      });
-    } finally {
-      setIsComparing(false);
-    }
-  };
-
-  const [docxUnlocked, setDocxUnlocked] = useState(false);
+  const [isComparing] = useState(false);
+  const [, setDocxUnlocked] = useState(false);
   const [docxLatestVersionDialogOpen, setDocxLatestVersionDialogOpen] =
     useState(false);
 
@@ -320,9 +272,7 @@ function RouteComponentInner({
   const usesNativeDocxDisplay = isDocxFile;
   const filePropertyId =
     activeFileField?.propertyId ?? activeVersionFile?.propertyId;
-  const isCurrentVersionFile = activeFileField !== undefined;
   const useDocxBrowserEditor = shouldUseDocxBrowserEditor({
-    isCurrentVersionFile,
     isDocxFile,
     hasFilePropertyId: filePropertyId !== undefined,
     isComparing,
@@ -340,7 +290,7 @@ function RouteComponentInner({
       return;
     }
 
-    openPdf({
+    openPdfForEntity({
       id: fieldId,
       entityId,
       label: activeFileLabel,
@@ -357,48 +307,22 @@ function RouteComponentInner({
     entityId,
     fieldId,
     filePropertyId,
-    openPdf,
+    openPdfForEntity,
     workspaceId,
   ]);
 
   return (
     <div className="bg-secondary relative flex h-full max-h-[calc(100vh-3rem)] flex-1 overflow-hidden border-t">
-      <Group orientation="horizontal">
-        {/* Left panel: version history list */}
-        <Panel defaultSize="12rem" maxSize="16rem" minSize="9rem">
-          <div className="bg-background h-full overflow-y-auto">
-            <VersionListConnected
-              currentFieldId={fieldId}
-              entityId={entityId}
-              isComparing={isComparing}
-              onClearCompare={() => setCompareState(null)}
-              onCompare={(base, target) => {
-                void handleCompare(base, target);
-              }}
-              onSwitchField={async (fid) => {
-                if (docxUnlocked) {
-                  await docxEditorActionsRef.current?.cancel();
-                }
-                setActiveFieldId(fid);
-                setCompareState(null);
-                void navigate({
-                  replace: true,
-                  search: (prev) => ({
-                    ...prev,
-                    editing: undefined,
-                    field: fid,
-                    pdfPage: undefined,
-                  }),
-                });
-              }}
-              workspaceId={workspaceId}
-            />
-          </div>
-        </Panel>
-        <PanelSeparator />
+      <div className="flex h-full w-full min-w-0">
+        {/*
+         * The version history, metadata, and AI-suggestions surfaces
+         * have moved into the right inspector tab as facets — the
+         * inspector tab IS the workbench for the open document. The
+         * main view here is just the document.
+         */}
 
         {/* Center: DOCX editor, PDF viewer, or redline comparison */}
-        <Panel className="flex min-w-0 flex-col">
+        <section className="flex h-full min-w-0 flex-1 flex-col">
           {!usesEmbeddedDocxToolbar && (
             <div
               className={cn(
@@ -436,7 +360,7 @@ function RouteComponentInner({
                   canUnlock={useDocxBrowserEditor}
                   entityId={entityId}
                   fieldId={fieldId}
-                  isEditing={false}
+                  isEditing={initialEditing}
                   onBlockedUnlock={() => {
                     setDocxLatestVersionDialogOpen(true);
                   }}
@@ -502,40 +426,8 @@ function RouteComponentInner({
               </VersionDropZone>
             )}
           </div>
-        </Panel>
-        {filePropertyId ? (
-          <>
-            <PanelSeparator className="md:hidden" />
-            <Panel
-              className="min-w-0 md:hidden"
-              defaultSize="18rem"
-              minSize="14rem"
-            >
-              <div className="bg-background h-full overflow-y-auto">
-                <Suspense fallback={null}>
-                  <EntityMetadataPanel
-                    activeJustificationFieldId={justificationId ?? null}
-                    currentFilePropertyId={filePropertyId}
-                    entityId={entityId}
-                    fileFieldId={fieldId}
-                    onAiFieldClick={({ fieldId: nextFieldId }) => {
-                      void navigate({
-                        replace: true,
-                        search: (prev) => ({
-                          ...prev,
-                          justification: nextFieldId,
-                          justificationPage: 1,
-                        }),
-                      });
-                    }}
-                    workspaceId={workspaceId}
-                  />
-                </Suspense>
-              </div>
-            </Panel>
-          </>
-        ) : null}
-      </Group>
+        </section>
+      </div>
       <Dialog
         onOpenChange={setDocxLatestVersionDialogOpen}
         open={docxLatestVersionDialogOpen}
@@ -557,63 +449,6 @@ function RouteComponentInner({
     </div>
   );
 }
-
-// -- Shared panel separator --
-
-const PanelSeparator = ({ className }: { className?: string | undefined }) => (
-  <Separator
-    className={cn(
-      "group data-[separator=active]:bg-border data-[separator=hover]:bg-border flex w-1 shrink-0 cursor-col-resize items-center justify-center",
-      className,
-    )}
-  >
-    <div className="bg-border h-8 w-0.5 rounded-full group-data-[separator=active]:hidden group-data-[separator=hover]:hidden" />
-  </Separator>
-);
-
-// -- Version list (left panel, connected to route) --
-
-type VersionListConnectedProps = {
-  workspaceId: string;
-  entityId: string;
-  currentFieldId: string;
-  onCompare: (baseVersionId: string, targetVersionId: string) => void;
-  onClearCompare: () => void;
-  onSwitchField: (fieldId: string) => Promise<void> | void;
-  isComparing: boolean;
-};
-
-const VersionListConnected = ({
-  workspaceId,
-  entityId,
-  currentFieldId,
-  onCompare,
-  onClearCompare,
-  onSwitchField,
-  isComparing,
-}: VersionListConnectedProps) => {
-  const { data } = useQuery(entityVersionsOptions({ workspaceId, entityId }));
-
-  if (!data) {
-    return null;
-  }
-
-  return (
-    <VersionsSidebar
-      currentFieldId={currentFieldId}
-      currentVersionId={data.currentVersionId}
-      entityId={entityId}
-      isComparing={isComparing}
-      versions={data.versions}
-      workspaceId={workspaceId}
-      onClearCompare={onClearCompare}
-      onCompare={onCompare}
-      onSwitchVersion={async (fid) => {
-        await onSwitchField(fid);
-      }}
-    />
-  );
-};
 
 // -- Fullscreen DOCX viewer (read-only Folio) --
 
@@ -847,7 +682,7 @@ const VersionDropZone = ({
   }, [disabled, entityId, queryClient, workspaceId]);
 
   return (
-    <div className="relative flex h-full flex-col" ref={dropRef}>
+    <div className="relative flex h-full w-full min-w-0 flex-col" ref={dropRef}>
       {children}
       {isDropTarget && (
         <div className="border-foreground/20 bg-foreground/5 pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-lg border-2 border-dashed">

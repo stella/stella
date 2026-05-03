@@ -469,6 +469,7 @@ const PeekDocxViewer = ({
     <div ref={containerRef} className="h-full overflow-auto">
       <DocxEditor
         ref={editorRef}
+        autoOpenReviewSidebar={false}
         className="folio-docx-preview folio-peek h-full"
         documentBuffer={buffer}
         initialZoom={targetZoom}

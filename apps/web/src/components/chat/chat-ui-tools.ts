@@ -12,14 +12,22 @@ export type { ChatMessage, ChatPart, ChatUITools } from "@stll/api/types";
 export type PersistedChatMessage = ChatMessage;
 export type SharedChatUITools = Pick<ChatUITools, "ask-user">;
 export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
-export type ApprovalToolName = "create-document" | "update-entity-fields";
+export type ApprovalToolName =
+  | "apply-active-docx-edits"
+  | "create-document"
+  | "update-entity-fields";
 export type ApprovalToolPart = Extract<
   ChatPart,
   { type: `tool-${ApprovalToolName}` }
 >;
+export type ActiveDocxEditApprovalPart = Extract<
+  ChatPart,
+  { type: "tool-apply-active-docx-edits" }
+>;
 export type AskUserInput = SharedChatUITools["ask-user"]["input"];
 
 const CHAT_TOOL_TITLE_KEYS = {
+  "apply-active-docx-edits": "chat.tool.apply-active-docx-edits",
   "ask-user": "chat.tool.ask-user",
   "create-document": "chat.tool.create-document",
   "describe-stella-function": "chat.tool.describe-stella-function",
@@ -59,5 +67,32 @@ export const isApprovalPart = (part: ChatPart): part is ApprovalToolPart => {
   }
 
   const toolName = getToolName(part);
-  return toolName === "create-document" || toolName === "update-entity-fields";
+  return (
+    toolName === "apply-active-docx-edits" ||
+    toolName === "create-document" ||
+    toolName === "update-entity-fields"
+  );
+};
+
+export const isApprovedActiveDocxEditPart = (
+  part: ChatPart,
+): part is ActiveDocxEditApprovalPart & {
+  approval: { approved: true; id: string };
+  state: "approval-responded";
+} =>
+  part.type === "tool-apply-active-docx-edits" &&
+  part.state === "approval-responded" &&
+  part.approval.approved;
+
+export const hasApprovedActiveDocxEditAwaitingClientOutput = ({
+  messages,
+}: {
+  messages: PersistedChatMessage[];
+}) => {
+  const message = messages.at(-1);
+  if (!message || message.role !== "assistant") {
+    return false;
+  }
+
+  return message.parts.some(isApprovedActiveDocxEditPart);
 };

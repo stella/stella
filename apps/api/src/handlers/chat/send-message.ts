@@ -95,6 +95,10 @@ const sendMessage = createSafeRootHandler(
     // then rebuild the tools with the narrowed `effective` set
     // before streaming. This lets the picker's scope actually
     // govern tool authorization rather than just being persisted.
+    // Validation tools must include every tool that COULD have
+    // been called in this thread's history, otherwise valibot
+    // rejects past tool messages. Use the broadest set (always
+    // include the active-DOCX-edit tool).
     const validationTools = getChatTools({
       organizationId: session.activeOrganizationId,
       refRegistry,
@@ -103,6 +107,7 @@ const sendMessage = createSafeRootHandler(
       userId: user.id,
       accessibleWorkspaceIds,
       workspaceId,
+      hasActiveFileChat: true,
     });
 
     const validatedMessage = yield* Result.await(
@@ -162,6 +167,13 @@ const sendMessage = createSafeRootHandler(
         ? effectiveContextMatterIds
         : accessibleWorkspaceIds;
 
+    // Streaming tools mirror the surface the user is on: only the
+    // file-overlay client knows how to satisfy
+    // apply-active-docx-edits (it queues into the review store and
+    // sends the output back via addToolOutput). On the standalone
+    // / global chat surface there's no client executor, so we
+    // omit it — otherwise the model can call it and the request
+    // hangs forever waiting for a response.
     const chatTools = getChatTools({
       organizationId: session.activeOrganizationId,
       refRegistry,
@@ -170,6 +182,7 @@ const sendMessage = createSafeRootHandler(
       userId: user.id,
       accessibleWorkspaceIds: toolWorkspaceIds,
       workspaceId,
+      hasActiveFileChat: body.activeFile !== undefined,
     });
 
     const uploadedMessage = yield* Result.await(

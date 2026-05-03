@@ -1,10 +1,18 @@
+import type { PropsWithChildren } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useTranslations } from "use-intl";
+import {
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import { PlusIcon } from "lucide-react";
+import { useLocale, useTranslations } from "use-intl";
 
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityField, EntityKind, WorkspaceProperty } from "@/lib/types";
 import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
@@ -13,6 +21,7 @@ import {
   entitiesKeys,
   entityOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { entityVersionsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
@@ -91,10 +100,17 @@ const EntityMetadataContent = ({
   entity,
 }: EntityMetadataContentProps) => {
   const t = useTranslations();
+  const locale = useLocale();
   const queryClient = useQueryClient();
   const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
   const sawWorkflowRunning = useRef(false);
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
+  // Version metadata renders in shared chrome (sidepeek + fullscreen);
+  // use a non-suspending query so a cache miss does not collapse the
+  // surrounding layout.
+  const { data: versionsData } = useQuery(
+    entityVersionsOptions({ workspaceId, entityId: entity.entityId }),
+  );
   const [optimisticProperties, setOptimisticProperties] = useState<
     WorkspaceProperty[]
   >([]);
@@ -213,17 +229,56 @@ const EntityMetadataContent = ({
     />
   );
 
+  // Resolve the current version (if loaded) for the Document info section.
+  // We never block render on this — the section just shows a muted dash
+  // until the versions query resolves.
+  const currentVersion =
+    versionsData?.versions.find(
+      (v) => v.id === versionsData.currentVersionId,
+    ) ?? null;
+  const authorLabel = currentVersion?.author?.name ?? null;
+  const versionLabel = currentVersion
+    ? t("inspector.metadata.versionCurrent", {
+        version: String(currentVersion.versionNumber),
+      })
+    : null;
+  const updatedAtIso = currentVersion?.createdAt ?? null;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto">
+        <SectionHeading>
+          {t("inspector.metadata.documentInfoHeading")}
+        </SectionHeading>
+        <div className="flex flex-col gap-px px-2 pb-2">
+          <ReadOnlyRow
+            label={t("inspector.metadata.author")}
+            value={authorLabel}
+          />
+          <ReadOnlyRow
+            label={t("inspector.metadata.version")}
+            value={versionLabel}
+          />
+          {updatedAtIso !== null && (
+            <ReadOnlyRow
+              label={t("inspector.metadata.updatedAt")}
+              title={formatFullTimestamp(updatedAtIso, locale)}
+              value={formatRelativeTime(updatedAtIso, locale)}
+            />
+          )}
+        </div>
+
+        <SectionHeading>
+          {t("inspector.metadata.matterColumnsHeading")}
+        </SectionHeading>
         {visibleFields.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 px-6 py-10 text-center">
+          <div className="flex flex-col items-center justify-center gap-2 px-6 py-6 text-center">
             <span className="text-muted-foreground text-sm">
               {t("workspaces.noFieldsToView")}
             </span>
           </div>
         ) : (
-          <div className="flex flex-col gap-px p-2">
+          <div className="flex flex-col gap-px p-2 pt-0">
             {visibleFields.map((field) => {
               const property = visibleProperties.find(
                 (p) => p.id === field.propertyId,
@@ -313,6 +368,26 @@ const EntityMetadataContent = ({
             })}
           </div>
         )}
+
+        {/* TODO: requires per-entity property schema work */}
+        <SectionHeading>
+          {t("inspector.metadata.fileSpecificHeading")}
+        </SectionHeading>
+        <div className="flex flex-col gap-2 px-2 pb-3">
+          <p className="text-muted-foreground px-2 text-xs">
+            {t("inspector.metadata.fileSpecificHint")}
+          </p>
+          <Button
+            className="self-start"
+            disabled
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            <PlusIcon />
+            {t("inspector.metadata.addFileField")}
+          </Button>
+        </div>
       </div>
       <div className={cn("flex shrink-0 border-t", TOOLBAR_ROW_HEIGHT)}>
         {extractionAction}
@@ -320,3 +395,24 @@ const EntityMetadataContent = ({
     </div>
   );
 };
+
+const SectionHeading = ({ children }: PropsWithChildren) => (
+  <div className="text-muted-foreground px-4 pt-3 pb-1 text-[10px] font-medium tracking-wide uppercase">
+    {children}
+  </div>
+);
+
+type ReadOnlyRowProps = {
+  label: string;
+  value: string | null;
+  title?: string;
+};
+
+const ReadOnlyRow = ({ label, value, title }: ReadOnlyRowProps) => (
+  <div className="flex flex-col gap-1 rounded-md px-2 py-2">
+    <span className="text-muted-foreground text-xs font-medium">{label}</span>
+    <span className="text-foreground text-sm" title={title}>
+      {value ?? <span className="text-muted-foreground">—</span>}
+    </span>
+  </div>
+);

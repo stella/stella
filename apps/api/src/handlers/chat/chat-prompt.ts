@@ -12,8 +12,6 @@ import { count, eq } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { caseLawDecisions, entities, workspaces } from "@/api/db/schema";
-import type { PropertyStatus } from "@/api/db/schema";
-import type { PropertyContent } from "@/api/db/schema-validators";
 import { formatDecisionForPrompt } from "@/api/handlers/case-law/analysis/prompts/base";
 import { parseDocumentAst } from "@/api/handlers/case-law/document-ast";
 import type {
@@ -22,25 +20,24 @@ import type {
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
-import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/org-manifest";
-import { buildReadonlyFunctionTypeDeclarations } from "@/api/handlers/chat/tools/execute/readonly-manifest";
-import type { ReadonlyFunctionContract } from "@/api/handlers/chat/tools/execute/readonly-manifest";
-import {
-  CHAT_ENTITY_REF_PREFIX,
-  CHAT_WORKSPACE_REF_PREFIX,
-} from "@/api/handlers/chat/tools/execute/ref-registry";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
-import { readonlyWorkspaceFunctionContracts } from "@/api/handlers/chat/tools/execute/workspace-manifest";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { formatDateTimeInTimeZone } from "@/api/lib/date-format";
-import { unreachable } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
-import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
 
 const TITLE_MAX_LENGTH = 80;
 const ACTIVE_DECISION_MAX_CHARS = 12_000;
+const ACTIVE_DOCX_EDIT_BLOCK_TEXT_MAX_CHARS = 1200;
+/**
+ * Cap on the number of editable DOCX blocks embedded in a single
+ * system prompt. Each block is already truncated individually, but
+ * an uncapped count on a 200-page contract still blows the
+ * context window and the wallet. 600 blocks at the per-block
+ * truncation gives roughly 700KB worst-case, well under the
+ * model's window; tune down if we ship larger documents.
+ */
+const ACTIVE_DOCX_EDIT_BLOCKS_MAX_COUNT = 600;
 
 type BuildPromptMentionExampleProps = {
   label: string;
@@ -55,62 +52,9 @@ const buildPromptMentionExample = ({
 }: BuildPromptMentionExampleProps) => `[${label}](${prefix}${id})`;
 
 const CORE_RULE_SECTIONS = [
-  "You are an AI feature inside a legal workspace product named " +
-    "Stella. You retrieve documents, draft text, and answer " +
-    "questions on behalf of the user. Stella is the product the " +
-    "user works *in*; you are the AI *within* it — not a persona " +
-    "called Stella.",
-  "CRITICAL: Never guess, infer, or fabricate document " +
-    "content. Always retrieve real data through the " +
-    "`execute-typescript` tool and the typed readonly `stella` " +
-    "API before answering. If a tool call fails, report the " +
-    "error honestly.",
-  "IDENTITY: Do not introduce yourself, name yourself, or refer " +
-    "to yourself with a persona. Never write greetings like " +
-    "'Hi, I am Stella' or 'I'm your AI assistant' — the user " +
-    "knows what they opened. Skip the preamble and answer " +
-    "directly. When drafting documents, emails, or letters, " +
-    "sign using the user's registered name (provided below); " +
-    "the user is the author. Never present yourself as an " +
-    "entity with opinions, feelings, or independent judgment.",
-  "PLANNING: For complex or ambiguous tasks (drafting " +
-    "documents, multi-step workflows), call ask-user to " +
-    "gather requirements BEFORE acting. Wait for the " +
-    "user's response, then synthesize a plan and execute.",
-  "Never expose internal IDs to the user in plain text. " +
-    "Tool outputs include short refs so you can create links. " +
-    "When a tool output includes a `mention` field, copy that exact " +
-    "`mention` markdown whenever you name that object in a user-facing " +
-    "answer. Do not rewrite it as plain text. " +
-    "When mentioning a matter, document, folder, task, case-law " +
-    "decision, or other Stella object, show only the human label " +
-    "and encode the ref in a markdown link.",
-  `When citing documents and matters, use markdown links:
-${buildPromptMentionExample({
-  label: "Document Name",
-  prefix: CHAT_ENTITY_REF_PREFIX,
-  id: "ent_1",
-})}
-${buildPromptMentionExample({
-  label: "Matter Name",
-  prefix: CHAT_WORKSPACE_REF_PREFIX,
-  id: "mat_1",
-})}
-For folders and tasks, use the same entity link format:
-${buildPromptMentionExample({
-  label: "Folder Name",
-  prefix: CHAT_ENTITY_REF_PREFIX,
-  id: "ent_2",
-})}
-Do not write forms like "Document Name (ent_1)" or expose refs/UUIDs in parentheses.
-When citing case-law decisions, use markdown links like:
-${buildPromptMentionExample({
-  label: "20 Cdo 470/2017",
-  prefix: CHAT_REFERENCE_HREF_PREFIXES.decision,
-  id: "CASE_LAW_DECISION_ID",
-})}
-If you only know the case number and not the decision ID, still link it as:
-[20 Cdo 470/2017](#stella-decision=20%20Cdo%20470%2F2017)`,
+  "You are an AI feature inside Stella, a legal workspace product. You retrieve documents, draft text, and answer questions on behalf of the user. Skip greetings and persona — answer directly. For complex or ambiguous tasks (drafting documents, multi-step workflows), call `ask-user` to gather requirements BEFORE acting.",
+  "TRUTHFULNESS: Never guess, infer, or fabricate document content; retrieve real data through tools before answering. Only claim that an action happened (a document was edited, a field updated, a file created) when the corresponding tool returned a successful result for THAT specific action. If the tool returned skipped operations, returned nothing applied, or errored, say so plainly and tell the user what's needed to make it work. Never paper over a failed or partial action.",
+  'USER-FACING LANGUAGE: Talk to the user in their domain (legal work), not in ours. Never expose internal or implementation names — words like "Folio", "ProseMirror", "blockId", "snapshot", "metadata column", "property of type file", "schema", "ref", "entity id", "workspace id", or any tool name belong to the system, not the user. Refer to documents, matters, and folders by their human names. Always reply in the user\'s language (mirror whatever language they wrote their last message in). Tool outputs include `mention` markdown strings — copy those verbatim when naming objects in user-facing text instead of rewriting refs in parentheses.',
 ] as const;
 
 export type UserContext = IncomingUserContext;
@@ -163,12 +107,6 @@ export const buildChatSystemPromptParts = async ({
   await Result.gen(async function* () {
     if (workspaceId === null) {
       const prompt = buildGlobalPromptParts({
-        readonlyStellaApi: buildReadonlyStellaApi({
-          contracts: [
-            ...readonlyOrgFunctionContracts,
-            ...readonlyWorkspaceFunctionContracts,
-          ],
-        }),
         skillMetadata: getChatSkillMetadata(),
         userContext: userContext ?? null,
       });
@@ -335,30 +273,24 @@ export const extractTitle = (parts: ChatMessage["parts"]) => {
 };
 
 type BuildGlobalPromptProps = {
-  readonlyStellaApi: string;
   skillMetadata?: readonly SkillMetadata[] | undefined;
   userContext: UserContext | null;
 };
 
 export const buildGlobalPrompt = ({
-  readonlyStellaApi,
   skillMetadata = getChatSkillMetadata(),
   userContext,
 }: BuildGlobalPromptProps) =>
   buildGlobalPromptParts({
-    readonlyStellaApi,
     skillMetadata,
     userContext,
   }).fullPrompt;
 
 export const buildGlobalPromptParts = ({
-  readonlyStellaApi,
   skillMetadata = getChatSkillMetadata(),
   userContext,
 }: BuildGlobalPromptProps): ChatPromptParts =>
   buildPromptParts({
-    cacheStableContextSections:
-      buildCacheStableReadonlyToolSections(readonlyStellaApi),
     requestContextSections: [],
     skillMetadata,
     userContext,
@@ -388,14 +320,7 @@ const buildWorkspacePromptPartsFromDb = async ({
     return Result.ok(
       buildWorkspacePromptParts({
         entityCount: workspacePromptData.entityCount,
-        properties: workspacePromptData.properties,
         refRegistry,
-        readonlyStellaApi: buildReadonlyStellaApi({
-          contracts: [
-            ...readonlyOrgFunctionContracts,
-            ...readonlyWorkspaceFunctionContracts,
-          ],
-        }),
         skillMetadata: getChatSkillMetadata(),
         userContext,
         workspaceId,
@@ -404,16 +329,8 @@ const buildWorkspacePromptPartsFromDb = async ({
     );
   });
 
-export type WorkspacePromptProperty = {
-  content: PropertyContent;
-  id: string;
-  name: string;
-  status: PropertyStatus;
-};
-
 type WorkspacePromptData = {
   entityCount: number;
-  properties: WorkspacePromptProperty[];
   workspaceName: string;
 };
 
@@ -429,29 +346,17 @@ const loadWorkspacePromptData = async ({
   Result<WorkspacePromptData, SafeDbError>
 > =>
   await Result.gen(async function* () {
-    const [workspaceRows, properties] = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await Promise.all([
-            tx
-              .select({
-                entityCount: count(entities.id),
-                workspaceName: workspaces.name,
-              })
-              .from(workspaces)
-              .leftJoin(entities, eq(entities.workspaceId, workspaces.id))
-              .where(eq(workspaces.id, workspaceId))
-              .groupBy(workspaces.id, workspaces.name),
-            tx.query.properties.findMany({
-              where: { workspaceId: { eq: workspaceId } },
-              columns: {
-                id: true,
-                name: true,
-                status: true,
-                content: true,
-              },
-            }),
-          ]),
+    const workspaceRows = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            entityCount: count(entities.id),
+            workspaceName: workspaces.name,
+          })
+          .from(workspaces)
+          .leftJoin(entities, eq(entities.workspaceId, workspaces.id))
+          .where(eq(workspaces.id, workspaceId))
+          .groupBy(workspaces.id, workspaces.name),
       ),
     );
 
@@ -462,14 +367,12 @@ const loadWorkspacePromptData = async ({
 
     return Result.ok({
       entityCount: workspaceRow.entityCount,
-      properties,
       workspaceName: workspaceRow.workspaceName,
     });
   });
 
 type BuildWorkspaceContextSectionsProps = {
   entityCount: number;
-  properties: WorkspacePromptProperty[];
   refRegistry: ChatRefRegistry;
   workspaceId: SafeId<"workspace">;
   workspaceName: string;
@@ -477,106 +380,19 @@ type BuildWorkspaceContextSectionsProps = {
 
 const buildWorkspaceContextSections = ({
   entityCount,
-  properties,
   refRegistry,
   workspaceId,
   workspaceName,
 }: BuildWorkspaceContextSectionsProps): string[] => {
   const matterRef = refRegistry.toMatterRef(workspaceId);
-  const sections = [
-    `Connected to matter "${workspaceName}".`,
-    "SCOPE: Matter-scoped `stella` functions require explicit " +
-      "`matterRefs` inputs. In this matter, default to " +
-      `\`matterRefs: ["${matterRef}"]\` unless the user asks to work across matters.`,
-    [
-      `Current matter ref: ${matterRef} (pass as matterRefs: ["${matterRef}"]).`,
-      `The matter contains ${entityCount.toLocaleString()} entities.`,
-    ].join("\n"),
-  ];
-
-  const metadataColumnsSection = buildMetadataColumnsSection({
-    properties,
-    refRegistry,
-  });
-  if (metadataColumnsSection) {
-    sections.push(metadataColumnsSection);
-  }
-
-  return sections;
-};
-
-const buildMetadataColumnsSection = ({
-  properties,
-  refRegistry,
-}: {
-  properties: readonly WorkspacePromptProperty[];
-  refRegistry: ChatRefRegistry;
-}) => {
-  // Hide properties whose value isn't current — for AI properties
-  // that means waiting for the next workflow run. Manual properties
-  // are always fresh from creation, so they always show through.
-  const propertyLines = properties
-    .filter(({ status }) => status === "fresh")
-    .map((property) =>
-      formatMetadataColumnLine({
-        property,
-        refRegistry,
-      }),
-    );
-
-  if (propertyLines.length === 0) {
-    return null;
-  }
-
   return [
-    "Available metadata columns:",
-    propertyLines.join("\n"),
-    "",
-    "Modify metadata with update-entity-fields; " +
-      "create DOCX documents with create-document. " +
-      "Both require user approval.",
-  ].join("\n");
-};
-
-const formatMetadataColumnLine = ({
-  property: { content, id, name },
-  refRegistry,
-}: {
-  property: WorkspacePromptProperty;
-  refRegistry: ChatRefRegistry;
-}) => {
-  const optionValues = getPropertyOptionValues(content);
-  const propertyRef = refRegistry.toPropertyRef(brandPersistedPropertyId(id));
-  const baseLine = `- ${name} (ref: ${propertyRef}, type: ${content.type})`;
-
-  if (!optionValues) {
-    return baseLine;
-  }
-
-  return `${baseLine} [options: ${optionValues}]`;
-};
-
-const getPropertyOptionValues = (content: PropertyContent) => {
-  switch (content.type) {
-    case "single-select":
-    case "multi-select":
-      return content.options.map(({ value }) => value).join(", ");
-    case "date":
-    case "file":
-    case "int":
-    case "text":
-      return null;
-    default: {
-      return unreachable("Unknown property type");
-    }
-  }
+    `Connected to matter "${workspaceName}" (matter ref: ${matterRef}, ${entityCount.toLocaleString()} entities). Default any matter-scoped reads to this matter unless the user asks otherwise. Property and entity refs are NOT pre-listed — discover them via tools when needed.`,
+  ];
 };
 
 type BuildWorkspacePromptTextProps = {
   entityCount: number;
-  properties: WorkspacePromptProperty[];
   refRegistry: ChatRefRegistry;
-  readonlyStellaApi: string;
   skillMetadata?: readonly SkillMetadata[] | undefined;
   userContext: UserContext | null;
   workspaceId: SafeId<"workspace">;
@@ -585,9 +401,7 @@ type BuildWorkspacePromptTextProps = {
 
 export const buildWorkspacePromptText = ({
   entityCount,
-  properties,
   refRegistry,
-  readonlyStellaApi,
   skillMetadata = getChatSkillMetadata(),
   userContext,
   workspaceId,
@@ -595,9 +409,7 @@ export const buildWorkspacePromptText = ({
 }: BuildWorkspacePromptTextProps) =>
   buildWorkspacePromptParts({
     entityCount,
-    properties,
     refRegistry,
-    readonlyStellaApi,
     skillMetadata,
     userContext,
     workspaceId,
@@ -606,20 +418,15 @@ export const buildWorkspacePromptText = ({
 
 export const buildWorkspacePromptParts = ({
   entityCount,
-  properties,
   refRegistry,
-  readonlyStellaApi,
   skillMetadata = getChatSkillMetadata(),
   userContext,
   workspaceId,
   workspaceName,
 }: BuildWorkspacePromptTextProps): ChatPromptParts =>
   buildPromptParts({
-    cacheStableContextSections:
-      buildCacheStableReadonlyToolSections(readonlyStellaApi),
     requestContextSections: buildWorkspaceContextSections({
       entityCount,
-      properties,
       refRegistry,
       workspaceId,
       workspaceName,
@@ -652,9 +459,75 @@ const buildActiveFilePrompt = ({
   return [
     `ACTIVE FILE: The user is viewing "${safeName}" (entity ref ${entityRef}) in the inspector sidebar.`,
     `DEFAULT SCOPE: While an active file is set, treat it as the sole subject of any open-ended question ("what's going on", "summarize this", "what does it say", "explain", and similar). Read its contents with \`stella.getMatterEntityContents\` using \`matterRefs: ["${matterRef}"]\` and \`entityRefs: ["${entityRef}"]\`, and answer ONLY from that file.`,
+    "`create-document` creates a separate new DOCX from markdown. Do NOT use it to edit, rewrite, replace, save, or make a new version of the active file. If live DOCX editing is available below, use `apply-active-docx-edits`; otherwise explain that the document must be opened for editing first. Never create a substitute document.",
+    buildActiveDocxEditPrompt(activeFile),
     `Do NOT call matter-wide retrieval (\`stella.searchEntities\`, \`stella.listEntities\`, or \`stella.getMatterEntities\`) for these open-ended questions — the user does not want answers synthesised from other files in the matter. The chat history is always available; reference earlier turns directly without re-fetching.`,
     `Widen the scope to the rest of the matter ONLY when the user explicitly asks (e.g., "compare with the other contracts", "search across the matter", or names another document). When that happens, the matter-wide retrieval functions above are allowed again; scope them to \`matterRefs: ["${matterRef}"]\` as usual.`,
-  ].join("\n");
+  ]
+    .filter((section) => section.length > 0)
+    .join("\n");
+};
+
+const buildActiveDocxEditPrompt = (activeFile: IncomingActiveFile) => {
+  const snapshot = activeFile.docxEditSnapshot;
+  if (!snapshot) {
+    return [
+      "ACTIVE DOCX EDITING: The editor is briefly initialising and you don't have block ids yet to target with `apply-active-docx-edits`. Reply with EXACTLY ONE short sentence (in the user's language) asking them to retry in a moment — the editor is loading. Do NOT add a second sentence, do NOT offer alternatives, do NOT ask the user to specify focus, do NOT lecture about modes. Do not claim you changed anything. Do not invent block ids. Do not call `execute-typescript`, `stella.getMatterEntityContents`, or `create-document` to satisfy edit requests.",
+    ].join("\n");
+  }
+
+  const truncatedBlockCount = Math.max(
+    0,
+    snapshot.blocks.length - ACTIVE_DOCX_EDIT_BLOCKS_MAX_COUNT,
+  );
+  const blocks = snapshot.blocks
+    .slice(0, ACTIVE_DOCX_EDIT_BLOCKS_MAX_COUNT)
+    .map((block) => {
+      const promptBlock: {
+        blockId: string;
+        kind: typeof block.kind;
+        label?: string;
+        text: string;
+      } = {
+        blockId: block.id,
+        kind: block.kind,
+        text: sanitizePromptValue({
+          maxLength: ACTIVE_DOCX_EDIT_BLOCK_TEXT_MAX_CHARS,
+          text: block.text,
+        }),
+      };
+
+      if (block.displayLabel) {
+        promptBlock.label = block.displayLabel;
+      }
+
+      return promptBlock;
+    });
+
+  const truncationNotice =
+    truncatedBlockCount > 0
+      ? `NOTE: This document is large; only the first ${String(ACTIVE_DOCX_EDIT_BLOCKS_MAX_COUNT)} blocks (of ${String(snapshot.blocks.length)}) are listed below. Operations targeting blocks past that cutoff cannot be referenced by id and will be skipped.`
+      : null;
+
+  return [
+    "ACTIVE DOCX EDITING: The open document is available for in-place editing. Whether or not the editor is currently unlocked is irrelevant to your decision to call the tool — the user's accept click in the review panel handles unlocking.",
+    'TOOL CALL IS MANDATORY when the user asks — in any language — to change, edit, replace, rewrite, fix, correct, review, redline, proofread, revise, or otherwise modify this document, or confirms an earlier proposal ("yes do it", "go ahead"). You MUST call `apply-active-docx-edits` before claiming any work. Do not refuse because the document might be read-only — your job is to propose; the user applies.',
+    'FORBIDDEN: Any reply that asserts work has been done, prepared, queued, suggested, drafted, or "is ready for review" — in any phrasing — without `apply-active-docx-edits` being called in the same turn is a TRUTHFULNESS violation. Examples of forbidden lies: "I prepared N suggestions", "the changes are ready in the panel", "formatting unification is ready", "draft is queued", "review is prepared". If you cannot produce any operations (nothing to fix, or the request is outside the tool\'s capability), say so plainly and DO NOT pretend otherwise.',
+    'TOOL CAPABILITY (and its limits): `apply-active-docx-edits` operates on TEXT CONTENT inside paragraphs, headings, and list items only. It can replace, insert, delete, or comment on text. It CANNOT change visual formatting — fonts, bold/italic/underline, font size, colour, indents, alignment, margins, line spacing, list bullet style, paragraph styles (Heading 1 etc.), tabs, or page layout. If the user asks for formatting changes ("zformátuj", "format", "unify formatting", "make headings bigger", "bold the parties"), tell them honestly that the AI tool only edits text content; suggest they use the document\'s own formatting controls. Do NOT pretend you queued formatting changes — there is no operation type for that.',
+    'FIELD CODES: A block whose text shows odd gaps — e.g. "článku ." (with a stray space + period), "přílohu č. .", "Strana of", "Datum: ." — has a Word field code (cross-reference, page number, date, sequence number) the user must edit IN WORD. The rendered number/text is generated from the field; it is not literal block text and `replaceInBlock` cannot fill it in. Skip those blocks: tell the user honestly that AI cannot edit cross-reference / field codes (they should refresh fields in Word with Ctrl+A then F9), and propose only the edits that target real block text. NEVER queue an op whose `find` contains a gap that\'s really a field code.',
+    "Do not call `execute-typescript`, `stella.getMatterEntityContents`, or `create-document` to satisfy active DOCX edit requests; `apply-active-docx-edits` is the only tool that can propose changes to the open document.",
+    'CASCADING CHANGES: Before proposing any edit, scan the document for places that REFER TO or DEPEND ON the value being changed and include the dependent fixes in the SAME tool call. Examples: (a) the user changes a price — every restatement of that number in words, in totals, in instalment schedules, in deposit/balance lines, in penalty caps that reference it, must be updated together; (b) the user changes a party name — every occurrence (signature block, header, cross-reference list, defined-terms section) must follow; (c) the user changes a date — derived deadlines, anniversaries, and statute references that depend on it must follow; (d) the user changes a clause number — every cross-reference ("as set out in Article X") must follow. If the right cascade is genuinely ambiguous (e.g. user lowers the total but the document splits it into deposit + arrears and you cannot tell which side absorbs the delta), call `ask-user` ONCE with the specific cascade question before producing any operations. Don\'t propose half a change.',
+    "Use the block ids below for tool operations. Prefer `replaceInBlock` with an exact `find` string for localized edits. Use `replaceBlock` only when the whole paragraph/list item should change.",
+    'Tool input example: {"operations":[{"type":"replaceInBlock","blockId":"b-0010","find":"David Cuketa","replace":"Jiří Novotný","severity":"low","area":"Names"}]}. Operations must be objects, not strings. Use `blockId`, not `id`.',
+    'ALWAYS set `severity` and `area` on each operation. `severity`: "low" for typos / spelling / minor style, "medium" for routine wording or terminology fixes, "high" for substantive changes (numbers, dates, parties, legal effect). `area`: a short topic label that groups related ops, e.g. "Spelling", "Penalty", "Payment Terms", "Names", "Cross-references". The review panel sorts and groups by these — empty severity/area collapses everything into one undifferentiated bucket and is bad UX.',
+    'After the tool returns, reply with ONE short sentence (in the user\'s language) covering the count and the high-level goal — e.g. "13 spelling and typo fixes are ready to review in the panel." Do NOT enumerate the operations, do NOT list block ids or before/after pairs in your reply — the panel already shows every suggestion with its full context. Repeating them is noise. NEVER claim the document was changed; only ids that appear in `applied` represent actual document changes (rare with this tool). Never paraphrase a `queued` result as a completed change.',
+    truncationNotice,
+    ["Editable DOCX blocks:", "```json", JSON.stringify(blocks), "```"].join(
+      "\n",
+    ),
+  ]
+    .filter((line): line is string => line !== null)
+    .join("\n");
 };
 
 type BuildActiveDecisionPromptProps = {
@@ -766,39 +639,17 @@ const appendActiveDecisionPromptIfExists = async ({
     );
   });
 
-type BuildReadonlyStellaApiProps = {
-  contracts: readonly ReadonlyFunctionContract[];
-};
-
-const buildReadonlyStellaApi = ({
-  contracts,
-}: BuildReadonlyStellaApiProps): string =>
-  buildReadonlyFunctionTypeDeclarations(contracts).match({
-    err: (error) => panic(error.message),
-    ok: (value) => value,
-  });
-
-const buildCacheStableReadonlyToolSections = (
-  readonlyStellaApi: string,
-): string[] => [
-  "Use `execute-typescript` for readonly retrieval. The readonly " +
-    "`stella` API available inside `execute-typescript` is typed below.",
-  "The readonly `stella` API uses matter naming. Matter-scoped " +
-    "functions require explicit `matterRefs` inputs.",
-  "`stella.list*` functions accept optional `limit` and numeric " +
-    "`offset` pagination inputs. Omit `limit` unless you need a smaller " +
-    "page; the server defaults it and caps it at 500.",
-  "`stella.get*` functions require explicit refs and return full " +
-    `results without pagination. Detail reads accept up to ${LIMITS.chatExecuteDetailIdsMax} refs; ` +
-    `content reads accept up to ${LIMITS.chatExecuteContentIdsMax} entity refs.`,
-  "Prefer one batched `get*` call over many small calls when you " +
-    "already know the matter or entity refs you need.",
-  "Use `describe-stella-function` only as a fallback if you " +
-    "need the full JSON Schema details for one function.",
-  "Inside `execute-typescript`, `console.log` is a no-op: " +
-    "only the value your program `return`s comes back.",
-  ["Readonly `stella` API:", "```ts", readonlyStellaApi, "```"].join("\n"),
-];
+/**
+ * One short hint pointing the model at lazy discovery instead of
+ * dumping the full readonly `stella` API into every prompt. The
+ * model can call `describe-stella-function` (no input) for the
+ * function catalog and `describe-stella-function({name})` for one
+ * function's full JSON Schema. Saves ~9k chars per turn versus
+ * preloading the typed declarations; round-trips only when the
+ * focused tools don't fit.
+ */
+const READONLY_DISCOVERY_HINT =
+  "For arbitrary readonly queries that the focused tools can't express, use `execute-typescript`. The `stella.*` function catalog is NOT pre-listed in this prompt — call `describe-stella-function` (no input) to list available function names + descriptions, then `describe-stella-function({name})` for one function's full schema. Prefer focused tools whenever one fits.";
 
 type AppendActiveFilePromptIfEntityExistsProps = {
   activeFile: IncomingActiveFile;
@@ -824,14 +675,12 @@ export const appendActiveFilePromptIfEntityExists = ({
     : prompt;
 
 type BuildPromptProps = {
-  cacheStableContextSections: string[];
   requestContextSections: string[];
   skillMetadata: readonly SkillMetadata[];
   userContext: UserContext | null;
 };
 
 const buildPromptParts = ({
-  cacheStableContextSections,
   requestContextSections,
   skillMetadata,
   userContext,
@@ -839,7 +688,7 @@ const buildPromptParts = ({
   const cacheStablePrefix = joinPromptSections([
     ...CORE_RULE_SECTIONS,
     buildSkillCatalogSection(skillMetadata),
-    ...cacheStableContextSections,
+    READONLY_DISCOVERY_HINT,
   ]);
   const sections = [cacheStablePrefix, ...requestContextSections];
   const userContextBlock = buildUserContextBlock(userContext);
@@ -884,6 +733,14 @@ export const buildUserContextBlock = (userContext: UserContext | null) => {
   }
 
   const lines = [`User registered as: ${userContext.userName}`];
+
+  if (userContext.wordEditAuthorName) {
+    lines.push(`DOCX edit author: ${userContext.wordEditAuthorName}`);
+  }
+
+  if (userContext.wordEditShortcut) {
+    lines.push(`DOCX edit shortcut: ${userContext.wordEditShortcut}`);
+  }
 
   if (userContext.timezone) {
     lines.push(

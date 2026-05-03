@@ -202,45 +202,35 @@ export function VersionsSidebar({
     }
   };
 
+  // Render oldest → newest top-to-bottom so the timeline reads
+  // naturally (v1 at the top, latest at the bottom). The upload
+  // sits in the same bottom-row slot as "Extract entity type" on
+  // the metadata facet so the two facets share the same footer
+  // pattern.
+  const orderedVersions = [...versions].toSorted(
+    (a, b) => a.versionNumber - b.versionNumber,
+  );
+
   return (
     <div className="flex h-full flex-col">
-      {/* Header + upload */}
-      <div
-        className={cn(
-          "bg-background/80 supports-[backdrop-filter]:bg-background/65 flex shrink-0 items-center justify-between border-b px-3 backdrop-blur",
-          TOOLBAR_ROW_HEIGHT,
-        )}
-      >
-        <h3 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-          {t("fileDetail.versionHistory")}
-        </h3>
-        <input
-          ref={fileInputRef}
-          accept=".docx,.pdf,.doc"
-          className="hidden"
-          type="file"
-          onChange={(e) => {
-            const file = e.target.files?.item(0);
-            if (file) {
-              void handleUploadVersion(file);
-            }
-            e.target.value = "";
-          }}
-        />
-        <Button
-          disabled={isUploading}
-          onClick={() => fileInputRef.current?.click()}
-          size="xs"
-          variant="ghost"
-        >
-          <PlusIcon className="size-3" />
-        </Button>
-      </div>
+      <input
+        ref={fileInputRef}
+        accept=".docx,.pdf,.doc"
+        className="hidden"
+        type="file"
+        onChange={(e) => {
+          const file = e.target.files?.item(0);
+          if (file) {
+            void handleUploadVersion(file);
+          }
+          e.target.value = "";
+        }}
+      />
 
       {/* Version list */}
       <ScrollArea className="flex-1">
         <div className="flex flex-col gap-px p-1">
-          {versions.map((version, idx) => (
+          {orderedVersions.map((version, idx) => (
             <VersionItem
               key={version.id}
               canDelete={versions.length > 1}
@@ -248,11 +238,12 @@ export function VersionsSidebar({
               currentVersionId={currentVersionId}
               hideDiffStats={isComparing}
               locale={locale}
-              prevVersion={versions[idx - 1]}
+              prevVersion={orderedVersions[idx - 1]}
               showPhaseDivider={
                 idx > 0 &&
-                version.label !== versions[idx - 1]?.label &&
-                (version.label !== null || versions[idx - 1]?.label !== null)
+                version.label !== orderedVersions[idx - 1]?.label &&
+                (version.label !== null ||
+                  orderedVersions[idx - 1]?.label !== null)
               }
               version={version}
               onDelete={handleDeleteVersion}
@@ -278,6 +269,7 @@ export function VersionsSidebar({
             {olderVersions.map((older) => (
               <AlertDialog key={older.id}>
                 <AlertDialogTrigger
+                  nativeButton
                   render={
                     <button
                       className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-1.5 rounded-md px-3 py-1.5 text-start text-xs transition-colors disabled:pointer-events-none disabled:opacity-50"
@@ -326,6 +318,26 @@ export function VersionsSidebar({
           </div>
         </ScrollArea>
       )}
+
+      {/* Footer row — mirrors the Metadata facet's "Extract
+       *  entity type" trigger so both facets share one bottom-row
+       *  pattern: full-width ghost button, leading icon, label.
+       *  `flex-1` is mandatory; without it the Button base's
+       *  `inline-flex shrink-0` keeps the click target at content
+       *  width, so hovering the empty right portion of the row
+       *  doesn't register. */}
+      <div className={cn("flex shrink-0 border-t", TOOLBAR_ROW_HEIGHT)}>
+        <Button
+          className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full w-full flex-1 justify-start gap-2 rounded-none border-0 px-3 font-normal before:rounded-none"
+          disabled={isUploading}
+          onClick={() => fileInputRef.current?.click()}
+          type="button"
+          variant="ghost"
+        >
+          <PlusIcon className="size-4" />
+          <span className="truncate">{t("fileDetail.uploadNewVersion")}</span>
+        </Button>
+      </div>
     </div>
   );
 }
@@ -400,8 +412,14 @@ function VersionItem({
       {showPhaseDivider && <div className="border-border my-1 border-t" />}
       <button
         className={cn(
-          "flex w-full flex-col gap-1.5 rounded-md px-3 py-2 text-start transition-colors",
-          isSelected ? "bg-accent text-accent-foreground" : "hover:bg-muted/50",
+          "relative flex w-full flex-col gap-1.5 rounded-md px-3 py-2 text-start transition-colors",
+          // The selected version gets a stronger fill + an accent
+          // bar on the leading edge so the active row stays
+          // unmistakable even when scrolled. The bar uses a logical
+          // start position so RTL keeps it on the leading side.
+          isSelected
+            ? "bg-accent text-accent-foreground ring-primary/40 ring-1"
+            : "hover:bg-muted/50",
         )}
         type="button"
         onClick={() => {
@@ -411,6 +429,12 @@ function VersionItem({
         }}
         onContextMenu={handleContextMenu}
       >
+        {isSelected && (
+          <span
+            aria-hidden="true"
+            className="bg-primary absolute inset-y-1 start-0 w-0.5 rounded-full"
+          />
+        )}
         {/* Row 1: version number + badges */}
         <div className="flex items-center gap-1.5">
           <span className="text-sm font-medium">v{version.versionNumber}</span>
@@ -418,6 +442,11 @@ function VersionItem({
             <span className="bg-primary/10 text-primary flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
               <CheckIcon className="size-2.5" />
               {t("fileDetail.current")}
+            </span>
+          )}
+          {isSelected && !isCurrent && (
+            <span className="bg-primary text-primary-foreground flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+              {t("fileDetail.viewing")}
             </span>
           )}
           {hasDiff && (

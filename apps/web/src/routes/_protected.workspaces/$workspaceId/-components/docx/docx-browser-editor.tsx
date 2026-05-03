@@ -37,6 +37,8 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 import "@stll/folio/editor.css";
+import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
+import type { ActiveDocxRegistrationToken } from "@/components/ai-suggestions/active-docx-store";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StatusMessage } from "@/components/route-components";
@@ -100,6 +102,17 @@ type DocxBrowserEditorProps = DocxBrowserEditorBaseProps;
 export type DocxBrowserEditorActions = {
   cancel: () => Promise<void>;
   finalize: () => void;
+  /**
+   * Force-checkpoint any pending in-flight edits to the server,
+   * bypassing the debounce. Call this before navigating away from
+   * the editor (e.g. the sidepeek → full view handoff) so the
+   * next mount of the same edit session downloads the user's
+   * latest changes instead of an older snapshot. Resolves once
+   * the checkpoint round-trip completes; rejects only on
+   * unexpected errors (network failures are surfaced through the
+   * autosave status).
+   */
+  flushPendingChanges: () => Promise<void>;
   print: () => void;
   unlock: () => void;
 };
@@ -268,6 +281,45 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     });
   }, [t]);
 
+  const requestEditMode = useCallback(async () => {
+    if (state.status === "editing") {
+      return true;
+    }
+
+    const blockReason = getDocxEditBlockReason({
+      canSafelyEdit: compatibility?.canSafelyEdit,
+    });
+    if (blockReason === "pendingCompatibility") {
+      reportPendingCompatibility();
+      return false;
+    }
+
+    if (blockReason === "unsafe") {
+      reportUnsupportedEditAttempt();
+      return false;
+    }
+
+    if (previewFile === null || state.status !== "idle" || didOpenRef.current) {
+      return false;
+    }
+
+    didOpenRef.current = true;
+    errorToastShownRef.current = false;
+    const opened = await open();
+    if (!opened) {
+      didOpenRef.current = false;
+    }
+
+    return opened;
+  }, [
+    compatibility?.canSafelyEdit,
+    open,
+    previewFile,
+    reportPendingCompatibility,
+    reportUnsupportedEditAttempt,
+    state.status,
+  ]);
+
   // Auto-open when this component is used as a direct editor, or when the
   // preview is explicitly unlocked from the shell toolbar.
   useEffect(() => {
@@ -333,6 +385,38 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     onUnlockedChange?.(isUnlocked);
   }, [isUnlocked, onUnlockedChange]);
 
+  // Publish the editor handles to the active-DOCX registry so the
+  // inspector's Suggestions facet can apply AI edits without
+  // needing to reach into this component's tree. Capture the token
+  // returned by `registerEditor` and pass it back to
+  // `unregisterEditor` so a fast remount overlap (instance A
+  // unmounts AFTER instance B has already registered) doesn't
+  // delete B's slot.
+  const tokenRef = useRef<ActiveDocxRegistrationToken | null>(null);
+  useEffect(() => {
+    const token = useActiveDocxStore.getState().registerEditor(entityId, {
+      editorRef,
+      requestEditMode,
+      editable: isUnlocked,
+    });
+    tokenRef.current = token;
+    return () => {
+      useActiveDocxStore.getState().unregisterEditor(entityId, token);
+      if (tokenRef.current === token) {
+        tokenRef.current = null;
+      }
+    };
+    // requestEditMode is wrapped in useCallback above; safe in deps.
+  }, [entityId, requestEditMode]);
+
+  useEffect(() => {
+    const token = tokenRef.current;
+    if (token === null) {
+      return;
+    }
+    useActiveDocxStore.getState().updateEditable(entityId, isUnlocked, token);
+  }, [entityId, isUnlocked]);
+
   useEffect(() => {
     if (!isUnlocked) {
       wasUnlockedRef.current = false;
@@ -380,6 +464,26 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       setAutosaveStatus("pending");
     })();
   }, [saveCheckpoint]);
+
+  // Awaitable variant of `saveChangeCheckpoint` for callers that
+  // need to wait for the round-trip before navigating (e.g. the
+  // sidepeek → full view handoff). Cancels the queued debounced
+  // checkpoint so we don't fire it twice.
+  const flushPendingChanges = useCallback(async () => {
+    const ref = editorRef.current;
+    if (!ref) {
+      return;
+    }
+    clearQueuedChangeCheckpoint();
+    setAutosaveStatus("syncing");
+    const buffer = await ref.save({ selective: true });
+    if (!buffer) {
+      setAutosaveStatus("pending");
+      return;
+    }
+    const saved = await saveCheckpoint(buffer);
+    setAutosaveStatus(saved ? "synced" : "pending");
+  }, [clearQueuedChangeCheckpoint, saveCheckpoint]);
 
   // Cmd+S / Ctrl+S checkpoints only while the document is actively editable.
   useEffect(() => {
@@ -614,10 +718,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           void handleFinalize();
         }
       },
+      flushPendingChanges,
       print: () => {
         editorRef.current?.print();
       },
-      unlock: handleUnlock,
+      unlock: () => {
+        void requestEditMode();
+      },
     };
 
     if (actionsRef) {
@@ -639,9 +746,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     actionsKey,
     actionsMapRef,
     actionsRef,
+    flushPendingChanges,
     handleCancel,
     handleFinalize,
-    handleUnlock,
+    requestEditMode,
     state.status,
   ]);
 
@@ -759,7 +867,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           </Button>
         }
         className="h-full w-full"
-        description={t(editSessionErrorDescriptionKey(state.reason))}
+        description={
+          state.detail ?? t(editSessionErrorDescriptionKey(state.reason))
+        }
         status="error"
         title={t("folio.editSaveFailedTitle")}
       />
@@ -783,10 +893,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const previewIdentity = previewFile.fileId;
 
   return (
-    <div ref={containerRef} className="flex h-full flex-col">
+    <div ref={containerRef} className="flex h-full w-full min-w-0 flex-col">
       {/* Folio editor with AI overlay */}
       <div
-        className="flex-1 overflow-hidden"
+        className="min-w-0 flex-1 overflow-hidden"
         onDoubleClickCapture={isUnlocked ? undefined : handleLockedEditAttempt}
       >
         <FileViewerWithAI
@@ -797,6 +907,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             fileName: previewFile.fileName,
           }}
           chatThreadId={fieldId}
+          docxEditable={isUnlocked}
+          docxEditorRef={editorRef}
+          requestDocxEditMode={requestEditMode}
           workspaceId={workspaceId}
         >
           <Suspense
@@ -815,6 +928,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             <DocxEditor
               key={`docx-${previewIdentity}`}
               ref={editorRef}
+              autoOpenReviewSidebar={false}
               className="folio-docx-preview folio-peek h-full"
               documentBuffer={editorBuffer}
               initialZoom={targetZoom}

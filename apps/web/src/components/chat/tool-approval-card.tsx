@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { getChatToolTitleKey } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
@@ -20,6 +21,7 @@ import type {
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import type { WorkspaceProperty } from "@/lib/types";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
   emptyColor,
   resolveOptionColor,
@@ -33,6 +35,7 @@ const DOCX_MIME =
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
 type CreateDocumentInput = ChatUITools["create-document"]["input"];
 type CreateDocumentOutput = ChatUITools["create-document"]["output"];
+type ActiveDocxEditInput = ChatUITools["apply-active-docx-edits"]["input"];
 
 /** Guess a mime type from a file name extension. */
 const mimeFromName = (name: string): string => {
@@ -81,6 +84,20 @@ const getApprovalId = (part: ApprovalToolPart): string | null => {
       return part.approval?.id ?? null;
     default:
       return null;
+  }
+};
+
+const getApprovalToolName = (part: ApprovalToolPart): ApprovalToolName => {
+  switch (part.type) {
+    case "tool-apply-active-docx-edits":
+      return "apply-active-docx-edits";
+    case "tool-create-document":
+      return "create-document";
+    case "tool-update-entity-fields":
+      return "update-entity-fields";
+    default:
+      part satisfies never;
+      throw new Error("Unsupported approval tool");
   }
 };
 
@@ -232,14 +249,86 @@ const CreateSummary = ({ input, output }: CreateSummaryProps) => {
   );
 };
 
+// -- Active DOCX edit summary --
+
+type ActiveDocxEditSummaryProps = {
+  input: ActiveDocxEditInput;
+};
+
+const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
+  const t = useTranslations("chat.tool");
+  const previewOperations = input.operations.slice(0, 3);
+  const hiddenCount = input.operations.length - previewOperations.length;
+
+  const renderOperationSummary = (
+    operation: ActiveDocxEditInput["operations"][number],
+  ) => {
+    switch (operation.type) {
+      case "replaceInBlock":
+        return t("docxReplaceSummary", {
+          find: operation.find,
+          replace: operation.replace,
+        });
+      case "replaceBlock":
+        return t("docxReplaceBlockSummary", {
+          blockId: operation.blockId,
+        });
+      case "insertAfterBlock":
+        return t("docxInsertAfterSummary", {
+          blockId: operation.blockId,
+        });
+      case "insertBeforeBlock":
+        return t("docxInsertBeforeSummary", {
+          blockId: operation.blockId,
+        });
+      case "deleteBlock":
+        return t("docxDeleteSummary", {
+          blockId: operation.blockId,
+        });
+      case "commentOnBlock":
+        return t("docxCommentSummary", {
+          blockId: operation.blockId,
+        });
+      default:
+        operation satisfies never;
+        throw new Error("Unsupported DOCX edit operation");
+    }
+  };
+
+  return (
+    <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2 text-xs">
+      <div className="text-muted-foreground">
+        {t("docxEditSummary", { count: input.operations.length })}
+      </div>
+      {previewOperations.map((operation, index) => (
+        <div
+          className="text-foreground/90 truncate"
+          key={`${operation.blockId}-${operation.type}-${index}`}
+        >
+          {renderOperationSummary(operation)}
+        </div>
+      ))}
+      {hiddenCount > 0 && (
+        <div className="text-muted-foreground">
+          {t("docxEditMore", { count: hiddenCount })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // -- Main card --
 
 type ToolApprovalCardProps = {
   part: ApprovalToolPart;
-  onApprove: (id: string) => void | PromiseLike<void>;
+  onApprove: (
+    id: string,
+    toolName: ApprovalToolName,
+  ) => void | PromiseLike<void>;
   onDeny: (id: string) => void | PromiseLike<void>;
   onAlwaysAllow: (toolName: ApprovalToolName) => void;
   autoApprovedTools: ReadonlySet<ApprovalToolName>;
+  blockedApprovalTools?: ReadonlySet<ApprovalToolName> | undefined;
   workspaceId?: string | undefined;
 };
 
@@ -249,14 +338,13 @@ export const ToolApprovalCard = ({
   onDeny,
   onAlwaysAllow,
   autoApprovedTools,
+  blockedApprovalTools,
   workspaceId,
 }: ToolApprovalCardProps) => {
   const t = useTranslations();
-  const name: ApprovalToolName =
-    part.type === "tool-create-document"
-      ? "create-document"
-      : "update-entity-fields";
+  const name = getApprovalToolName(part);
   const autoApproveRef = useRef(false);
+  const autoDenyRef = useRef(false);
   const [responded, setResponded] = useState(false);
 
   const isApprovalRequested = part.state === "approval-requested";
@@ -265,13 +353,39 @@ export const ToolApprovalCard = ({
   const isDenied = part.state === "output-denied";
   const isProcessing =
     isApprovalResponded || (responded && isApprovalRequested);
+  const isBlocked = blockedApprovalTools?.has(name) ?? false;
+  const canAlwaysAllow = name !== "apply-active-docx-edits";
+  /**
+   * DOCX edit batches always go to the side review panel — never
+   * gated by a chat-level Allow/Deny. The card collapses to a
+   * compact status and auto-approves once so the queueing
+   * handler can register the suggestions.
+   */
+  const isDocxEditBatch = name === "apply-active-docx-edits";
 
-  // Auto-approve if the tool is in the always-allow set
+  useEffect(() => {
+    if (!isApprovalRequested || !isBlocked || autoDenyRef.current) {
+      return;
+    }
+    const id = getApprovalId(part);
+    if (!id) {
+      return;
+    }
+    autoDenyRef.current = true;
+    setResponded(true);
+    onDeny(id);
+  }, [isApprovalRequested, isBlocked, part, onDeny]);
+
+  // Auto-approve if the tool is in the always-allow set, OR if
+  // this is a DOCX edit batch (review happens per item in the side
+  // panel; the chat-level gate would just be friction).
   useEffect(() => {
     if (
       !isApprovalRequested ||
-      !autoApprovedTools.has(name) ||
-      autoApproveRef.current
+      isBlocked ||
+      autoApproveRef.current ||
+      (!isDocxEditBatch && !canAlwaysAllow) ||
+      (!isDocxEditBatch && !autoApprovedTools.has(name))
     ) {
       return;
     }
@@ -281,21 +395,82 @@ export const ToolApprovalCard = ({
     }
     autoApproveRef.current = true;
     setResponded(true);
-    onApprove(id);
-  }, [isApprovalRequested, autoApprovedTools, name, part, onApprove]);
+    onApprove(id, name);
+  }, [
+    isApprovalRequested,
+    isBlocked,
+    canAlwaysAllow,
+    autoApprovedTools,
+    isDocxEditBatch,
+    name,
+    part,
+    onApprove,
+  ]);
 
   const label = t(getChatToolTitleKey(name));
 
   const approvalId = isApprovalRequested ? getApprovalId(part) : null;
 
+  // Clicking a DOCX-edit-batch card jumps the user to the review
+  // facet for the entity those edits target. The output's `queued`
+  // ids are the same client-side suggestion ids the review store
+  // keys its session entries by, so we look up the entity by
+  // matching any of them.
+  const queuedIds: string[] | null =
+    isDocxEditBatch &&
+    part.type === "tool-apply-active-docx-edits" &&
+    part.state === "output-available" &&
+    part.output.queued !== undefined
+      ? part.output.queued.map((q) => q.id)
+      : null;
+  const handleOpenReviewPanel =
+    queuedIds !== null && queuedIds.length > 0
+      ? () => {
+          const opIds = new Set(queuedIds);
+          const sessions = useReviewStore.getState().sessions;
+          const entityIdMatch = Object.entries(sessions).find(([, items]) =>
+            items.some((item) => opIds.has(item.id)),
+          )?.[0];
+          if (!entityIdMatch) {
+            return;
+          }
+          const inspector = useInspectorStore.getState();
+          const tab = inspector.tabs.find(
+            (candidate) =>
+              candidate.type === "pdf" && candidate.entityId === entityIdMatch,
+          );
+          if (!tab) {
+            return;
+          }
+          inspector.setActive(tab.id);
+          inspector.setPdfFacet(tab.id, "suggestions", { pulse: true });
+        }
+      : null;
+
   return (
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- conditional role/handlers are paired below; the linter can't see they're always set together
     <div
       className={cn(
         "my-1 rounded-lg border text-sm",
         isApprovalRequested && !isProcessing
           ? "border-border bg-muted/30"
           : "bg-muted/40 border-transparent",
+        handleOpenReviewPanel &&
+          "hover:bg-muted/50 cursor-pointer transition-colors",
       )}
+      onClick={handleOpenReviewPanel ?? undefined}
+      onKeyDown={
+        handleOpenReviewPanel
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                handleOpenReviewPanel();
+              }
+            }
+          : undefined
+      }
+      role={handleOpenReviewPanel ? "button" : undefined}
+      tabIndex={handleOpenReviewPanel ? 0 : undefined}
     >
       {/* Header: icon + label + status */}
       <div className="flex items-center gap-2 px-3 py-2">
@@ -326,16 +501,21 @@ export const ToolApprovalCard = ({
             output={part.state === "output-available" ? part.output : undefined}
           />
         )}
+      {part.type === "tool-apply-active-docx-edits" &&
+        part.state !== "input-streaming" &&
+        part.input !== undefined && (
+          <ActiveDocxEditSummary input={part.input} />
+        )}
 
-      {/* Actions */}
-      {approvalId && !isProcessing && (
+      {/* Actions — hidden for DOCX edit batches (reviewed in the side panel). */}
+      {approvalId && !isProcessing && !isBlocked && !isDocxEditBatch && (
         <div className="border-border/50 flex items-center gap-2 border-t px-3 py-2 text-xs">
           <button
             autoFocus
             className="bg-foreground text-background focus-visible:ring-ring rounded-md px-2.5 py-1 font-medium transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-1"
             onClick={() => {
               setResponded(true);
-              onApprove(approvalId);
+              onApprove(approvalId, name);
             }}
             type="button"
           >
@@ -351,17 +531,19 @@ export const ToolApprovalCard = ({
           >
             {t("chat.approval.deny")}
           </button>
-          <button
-            className="text-muted-foreground ms-auto underline-offset-2 hover:underline"
-            onClick={() => {
-              setResponded(true);
-              onAlwaysAllow(name);
-              onApprove(approvalId);
-            }}
-            type="button"
-          >
-            {t("chat.approval.alwaysAllow")}
-          </button>
+          {canAlwaysAllow && (
+            <button
+              className="text-muted-foreground ms-auto underline-offset-2 hover:underline"
+              onClick={() => {
+                setResponded(true);
+                onAlwaysAllow(name);
+                onApprove(approvalId, name);
+              }}
+              type="button"
+            >
+              {t("chat.approval.alwaysAllow")}
+            </button>
+          )}
         </div>
       )}
     </div>

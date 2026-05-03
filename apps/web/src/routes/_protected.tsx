@@ -99,7 +99,9 @@ export const Route = createFileRoute("/_protected")({
         name: context.user.name || undefined,
         email: context.user.email,
         image: context.user.image,
+        preferredName: context.user.preferredName,
         timezoneId: context.user.timezoneId,
+        wordEditShortcut: context.user.wordEditShortcut,
       },
     };
   },
@@ -399,7 +401,11 @@ function WorkspaceInspectorSidePanel() {
   const tabs = useInspectorStore((s) => s.tabs);
   const activeId = useInspectorStore((s) => s.activeId);
   const minimized = useInspectorStore((s) => s.minimized);
-  const visible = tabs.length > 0;
+  // The inspector rail is always mounted — even with zero tabs it
+  // shows the toggle + new-chat affordances so the user has a
+  // consistent right-side anchor point. The pane *content* area is
+  // hidden when there are no tabs or when the user has minimized.
+  const showPaneContent = tabs.length > 0 && !minimized;
 
   // Pin the inspector's "current matter" to the ACTIVE TAB's
   // origin so documents and started chats keep showing the
@@ -465,24 +471,22 @@ function WorkspaceInspectorSidePanel() {
     isDragging.current = false;
   };
 
-  if (!visible) {
-    return null;
-  }
-
-  const widthPx = `${minimized ? INSPECTOR_RAIL_WIDTH : width}px`;
+  // Rail is always shown; only when there are real tabs and the
+  // user hasn't minimized do we widen to the full pane width.
+  const widthPx = `${showPaneContent ? width : INSPECTOR_RAIL_WIDTH}px`;
 
   return (
     <div
       className="text-sidebar-foreground hidden md:block"
       data-side="right"
-      data-state={minimized ? "collapsed" : "expanded"}
+      data-state={showPaneContent ? "expanded" : "collapsed"}
     >
-      <div className="relative bg-transparent" style={{ width: widthPx }} />
+      <div className="bg-sidebar relative" style={{ width: widthPx }} />
       <div
         className="fixed inset-y-0 right-0 z-10 hidden h-svh md:flex"
         style={{ width: widthPx }}
       >
-        {!minimized && (
+        {showPaneContent && (
           <div
             className="hover:bg-border active:bg-border absolute inset-y-0 -left-px z-20 flex w-1 cursor-col-resize items-center justify-center border-l"
             onPointerDown={handlePointerDown}
