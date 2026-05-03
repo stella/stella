@@ -45,3 +45,6 @@ package-lock.json
 # Dev-only error sink — written by `logDevError`; never created
 # in prod. Tail it with `bun run dev:errors`.
 /.dev-logs/
+
+# Local AI devtools capture dir (generations.json). Dev-only.
+/.devtools/

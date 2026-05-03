@@ -1,70 +1,60 @@
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@stll/ui/components/button";
 import {
-  Combobox,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxPopup,
-  ComboboxStatus,
-} from "@stll/ui/components/combobox";
-import {
   Dialog,
   DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPanel,
   DialogPopup,
-  DialogTitle,
   DialogTrigger,
 } from "@stll/ui/components/dialog";
-import { Field, FieldDescription, FieldLabel } from "@stll/ui/components/field";
 import { Input } from "@stll/ui/components/input";
 import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/components/select";
+  Popover,
+  PopoverClose,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stll/ui/components/popover";
 import { Skeleton } from "@stll/ui/components/skeleton";
-import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
 import { toastManager } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
-import {
-  keepPreviousData,
-  useQuery,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
-import { LoaderIcon, PlusIcon, SearchIcon, SparklesIcon } from "lucide-react";
-import { useDebouncedCallback } from "use-debounce";
+import {
+  AlertTriangleIcon,
+  AlignLeftIcon,
+  ArrowUpRightIcon,
+  AtSignIcon,
+  CalendarIcon,
+  CircleDotIcon,
+  CommandIcon,
+  CornerDownLeftIcon,
+  FileTextIcon,
+  HashIcon,
+  Loader2Icon,
+  PlusIcon,
+  TagsIcon,
+  WandSparklesIcon,
+  XIcon,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { CHAT_MENTION_ENTITY_RESULT_LIMIT } from "@/components/chat-mention-helpers";
 import type {
   PropertyDependency,
-  WorkspaceEntity,
   WorkspaceProperty,
   WorkspacePropertyOption,
 } from "@/lib/types";
-import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
-import type { PropertyPromptFieldHandle } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
+import { InlineOptionEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/inline-option-editor";
 import { PropertyPromptInput } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
-import { SelectOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/select-options";
-import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
-import { useActiveView } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-active-view";
+import type { PropertyPromptFieldHandle } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
 import { usePropertiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
+import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import {
   useCreateProperty,
-  usePreviewProperty,
+  useSuggestPrompt,
+  useUpdateProperty,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
-import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 type CreatePropertyProps = {
   workspaceId: string;
@@ -77,25 +67,25 @@ type CreatePropertyProps = {
    *    toolbar so the action is discoverable next to the other
    *    chip-shaped controls.
    *  - `panel`: full-width action used in side panels.
+   *  - `none`: no built-in trigger. The caller controls `open` /
+   *    `onOpenChange` and renders its own trigger (used by the
+   *    column popover's "Edit column…" item).
    */
-  triggerVariant?: "icon" | "labelled" | "panel";
+  triggerVariant?: "icon" | "labelled" | "panel" | "none";
   extractionContext?: {
     entityId: string;
     filePropertyId: string | null;
   };
+  /**
+   * When set, the dialog opens in edit mode for the given property —
+   * prefills name/type/prompt/options/fallback, and saves via the
+   * update endpoint instead of create. Type changes are allowed but
+   * warn the user that existing data will be cleared.
+   */
+  propertyId?: string;
   open?: boolean;
   onCreated?: (result: CreatePropertyResult) => void;
   onOpenChange?: (open: boolean) => void;
-};
-
-type CreationMode = "ai" | "manual";
-type ExtractionScope = "file" | "matter";
-
-type CreatePropertyResult = {
-  mode: CreationMode;
-  property: WorkspaceProperty;
-  extractionScope?: ExtractionScope;
-  entityId?: string;
 };
 
 type CreatableContentType =
@@ -105,66 +95,100 @@ type CreatableContentType =
   | "date"
   | "int";
 
-const CREATION_MODES = [
-  "ai",
-  "manual",
-] as const satisfies readonly CreationMode[];
+type CreatePropertyResult = {
+  property: WorkspaceProperty;
+  entityId?: string;
+};
 
-const PROPERTY_TYPES = [
-  "text",
-  "single-select",
-  "multi-select",
-  "date",
-  "int",
-] as const satisfies readonly CreatableContentType[];
+const isCreatableContentType = (t: string): t is CreatableContentType =>
+  t === "text" ||
+  t === "single-select" ||
+  t === "multi-select" ||
+  t === "date" ||
+  t === "int";
 
-const isCreatableContentType = (
-  value: unknown,
-): value is CreatableContentType =>
-  typeof value === "string" &&
-  (PROPERTY_TYPES as readonly string[]).includes(value);
+const useChipDefinitions = (): readonly {
+  type: CreatableContentType;
+  icon: LucideIcon;
+  label: string;
+}[] => {
+  const t = useTranslations();
+  return [
+    {
+      type: "text",
+      icon: AlignLeftIcon,
+      label: t("workspaces.properties.chipText"),
+    },
+    {
+      type: "int",
+      icon: HashIcon,
+      label: t("workspaces.properties.chipNumber"),
+    },
+    {
+      type: "date",
+      icon: CalendarIcon,
+      label: t("workspaces.properties.chipDate"),
+    },
+    {
+      type: "single-select",
+      icon: CircleDotIcon,
+      label: t("workspaces.properties.chipSingle"),
+    },
+    {
+      type: "multi-select",
+      icon: TagsIcon,
+      label: t("workspaces.properties.chipMulti"),
+    },
+  ];
+};
 
-const isCreationMode = (value: unknown): value is CreationMode =>
-  typeof value === "string" &&
-  (CREATION_MODES as readonly string[]).includes(value);
+const useSuggestionTexts = (): readonly string[] => {
+  const t = useTranslations();
+  return [
+    t("workspaces.properties.suggestionGoverningLaw"),
+    t("workspaces.properties.suggestionParties"),
+    t("workspaces.properties.suggestionEffectiveDate"),
+  ];
+};
 
-const createPropertyContent = (
+const buildContent = (
   contentType: CreatableContentType,
   options: WorkspacePropertyOption[],
+  fallback: string | null,
 ): WorkspaceProperty["content"] => {
   if (contentType === "single-select" || contentType === "multi-select") {
     return {
       version: 1,
       type: contentType,
       options,
-      fallback: null,
+      fallback,
     };
   }
-
-  return {
-    version: 1,
-    type: contentType,
-  };
+  return { version: 1, type: contentType };
 };
 
-const sameStringList = (left: string[], right: string[]) =>
-  left.length === right.length &&
-  left.every((id, index) => id === right[index]);
+const promptFromHtml = (html: string): string =>
+  // Strip HTML tags to get a quick "is the prompt empty" check.
+  // eslint-disable-next-line sonarjs/slow-regex
+  html.replace(/<[^>]+>/g, "").trim();
 
 export const CreateProperty = ({
   workspaceId,
   triggerVariant = "icon",
   extractionContext,
+  propertyId,
   open,
   onCreated,
   onOpenChange,
 }: CreatePropertyProps) => {
   const t = useTranslations();
   const isLimitReached = usePropertiesCountLimit(workspaceId);
-  // Lifted out of the dialog body so the in-flight mutation survives
-  // a close/reopen cycle. Without this, conditionally unmounting the
-  // body would drop `isPending` and the user could submit twice.
+  const isEditMode = propertyId !== undefined;
+  // Both mutations are lifted out of the dialog body so an in-flight
+  // request survives a close/reopen cycle. Whichever one applies is
+  // chosen inside the body based on edit mode.
   const createProperty = useCreateProperty({ workspaceId });
+  const updateProperty = useUpdateProperty();
   const [uncontrolledDialogOpen, setUncontrolledDialogOpen] = useState(false);
   const dialogOpen = open ?? uncontrolledDialogOpen;
   const setDialogOpen = (nextOpen: boolean) => {
@@ -174,16 +198,21 @@ export const CreateProperty = ({
     }
   };
 
-  if (isLimitReached) {
+  // The "+ create" trigger variants vanish once the workspace hits the
+  // property limit. Edit mode (no built-in trigger) always renders so
+  // existing columns can still be opened.
+  if (isLimitReached && !isEditMode) {
     return null;
   }
+
+  const isPending = createProperty.isPending || updateProperty.isPending;
 
   return (
     <Dialog
       onOpenChange={(nextOpen) => {
-        // Block closing while a create is in flight so the request
+        // Block closing while a mutation is in flight so the request
         // can't be orphaned and re-submitted on reopen.
-        if (!nextOpen && createProperty.isPending) {
+        if (!nextOpen && isPending) {
           return;
         }
         setDialogOpen(nextOpen);
@@ -219,7 +248,7 @@ export const CreateProperty = ({
             {t("workspaces.properties.extractEntityType")}
           </span>
         </DialogTrigger>
-      ) : (
+      ) : triggerVariant === "icon" ? (
         <DialogTrigger
           render={
             <Button
@@ -234,16 +263,18 @@ export const CreateProperty = ({
         >
           <PlusIcon />
         </DialogTrigger>
-      )}
+      ) : null}
 
-      <DialogPopup className="sm:max-w-3xl">
+      <DialogPopup className="sm:max-w-[600px]">
         {dialogOpen && (
           <Suspense fallback={<DialogLoading />}>
-            <CreatePropertyDialogBody
+            <PropertyComposerBody
               createProperty={createProperty}
               onClose={() => setDialogOpen(false)}
+              updateProperty={updateProperty}
               workspaceId={workspaceId}
               {...(extractionContext ? { extractionContext } : {})}
+              {...(propertyId !== undefined ? { propertyId } : {})}
               {...(onCreated ? { onCreated } : {})}
             />
           </Suspense>
@@ -254,33 +285,79 @@ export const CreateProperty = ({
 };
 
 const DialogLoading = () => (
-  <DialogPanel className="space-y-4 p-4">
-    <Skeleton className="h-8 w-1/3" />
+  <div className="space-y-4 p-5">
+    <Skeleton className="h-6 w-1/3" />
     <Skeleton className="h-32 w-full" />
-  </DialogPanel>
+  </div>
 );
 
 type DialogBodyProps = {
   workspaceId: string;
   onClose: () => void;
   createProperty: ReturnType<typeof useCreateProperty>;
+  updateProperty: ReturnType<typeof useUpdateProperty>;
   extractionContext?: CreatePropertyProps["extractionContext"];
+  propertyId?: string;
   onCreated?: (result: CreatePropertyResult) => void;
 };
 
-const CreatePropertyDialogBody = ({
+const PropertyComposerBody = ({
   workspaceId,
   onClose,
   createProperty,
+  updateProperty,
   extractionContext,
+  propertyId,
   onCreated,
 }: DialogBodyProps) => {
   const t = useTranslations();
-  const previewProperty = usePreviewProperty();
+  const suggestPrompt = useSuggestPrompt();
+  const startWorkflow = useStartWorkflow(workspaceId);
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
-  const activeView = useActiveView({ workspaceId });
 
-  const fileProperties = properties.filter((p) => p.content.type === "file");
+  const editingProperty =
+    propertyId === undefined
+      ? null
+      : (properties.find((p) => p.id === propertyId) ?? null);
+  const isEditMode = propertyId !== undefined;
+  // If the property vanished between trigger and render (deleted from
+  // another tab), close instead of crashing on a missing record. The
+  // null-render guard happens after all hooks have run so the order
+  // stays stable.
+  const missingForEdit = isEditMode && !editingProperty;
+  useEffect(() => {
+    if (missingForEdit) {
+      onClose();
+    }
+  }, [missingForEdit, onClose]);
+
+  const editingTool = editingProperty?.tool;
+  const isManualEdit =
+    editingTool !== undefined && editingTool.type === "manual-input";
+  const showAiSections = !isManualEdit;
+  const initialContentType: CreatableContentType =
+    editingProperty && isCreatableContentType(editingProperty.content.type)
+      ? editingProperty.content.type
+      : "text";
+  const initialPromptHtml =
+    editingTool && editingTool.type === "ai-model" ? editingTool.prompt : "";
+  const initialOptions: WorkspacePropertyOption[] =
+    editingProperty &&
+    (editingProperty.content.type === "single-select" ||
+      editingProperty.content.type === "multi-select")
+      ? (editingProperty.content.options ?? [])
+      : [];
+  const initialFallback: string | null =
+    editingProperty &&
+    (editingProperty.content.type === "single-select" ||
+      editingProperty.content.type === "multi-select")
+      ? (editingProperty.content.fallback ?? null)
+      : null;
+
+  const fileProperties = useMemo(
+    () => properties.filter((p) => p.content.type === "file"),
+    [properties],
+  );
   const fileProperty = fileProperties.at(0);
   const extractionFileProperty =
     extractionContext?.filePropertyId === null ||
@@ -289,355 +366,146 @@ const CreatePropertyDialogBody = ({
       : (fileProperties.find(
           (property) => property.id === extractionContext.filePropertyId,
         ) ?? null);
-  const extractionFilePropertyId = extractionFileProperty?.id;
 
-  const [mode, setMode] = useState<CreationMode>("ai");
-  const [extractionScope, setExtractionScope] = useState<ExtractionScope>(
-    extractionFileProperty ? "file" : "matter",
-  );
-  const [contentType, setContentType] = useState<CreatableContentType>("text");
-  const [name, setName] = useState("");
-  const [prompt, setPrompt] = useState("");
-  const [mentions, setMentions] = useState<string[]>(() => {
+  // Split the existing dependencies (if editing) into file-typed (which
+  // become chips) and other (which live as @-mentions in the textarea).
+  // Both lists are seeded into state so an unmodified Save round-trips
+  // the same dependency set instead of dropping non-file deps before
+  // the editor gets a chance to fire onUpdate.
+  const initialDependencySplit = (() => {
+    if (!editingProperty || editingTool?.type !== "ai-model") {
+      return { fileIds: [] as string[], otherIds: [] as string[] };
+    }
+    const fileIds = new Set(fileProperties.map((p) => p.id));
+    const inFiles: string[] = [];
+    const inOther: string[] = [];
+    for (const dep of editingTool.dependencies) {
+      if (fileIds.has(dep.dependsOnPropertyId)) {
+        inFiles.push(dep.dependsOnPropertyId);
+      } else {
+        inOther.push(dep.dependsOnPropertyId);
+      }
+    }
+    return { fileIds: inFiles, otherIds: inOther };
+  })();
+
+  const initialFileIds = (() => {
+    if (editingProperty && editingTool?.type === "ai-model") {
+      return initialDependencySplit.fileIds;
+    }
     if (extractionContext) {
       return extractionFileProperty
         ? [extractionFileProperty.id]
-        : fileProperties.map((property) => property.id);
+        : fileProperties.map((p) => p.id);
     }
-
     return fileProperty ? [fileProperty.id] : [];
-  });
-  const [promptTouched, setPromptTouched] = useState(false);
-  const [submitAttempted, setSubmitAttempted] = useState(false);
-  const [options, setOptions] = useState<WorkspacePropertyOption[]>([]);
-  const [previewState, setPreviewState] = useState<
-    "idle" | "loading" | "ready" | "error"
-  >("idle");
-  const [previewValue, setPreviewValue] = useState<string | null>(null);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const [previewEntity, setPreviewEntity] = useState<WorkspaceEntity | null>(
-    null,
-  );
+  })();
 
-  // Editor lives in state (not ref) so that auto-prompt useEffect
-  // re-fires once Tiptap calls `onEditorReady` after mount. A ref
-  // wouldn't trigger the dependency change.
+  // Snapshot of the original conditions per dependency. Save preserves
+  // these so editing name/type/prompt doesn't silently strip conditions
+  // configured via the conditions sub-modal. useMemo keeps the map
+  // stable across renders for the handleSubmit dep array.
+  const initialDependencyConditions = useMemo(() => {
+    const map = new Map<string, PropertyDependency["condition"]>();
+    if (editingTool?.type === "ai-model") {
+      for (const dep of editingTool.dependencies) {
+        map.set(dep.dependsOnPropertyId, dep.condition);
+      }
+    }
+    return map;
+  }, [editingTool]);
+
+  const [contentType, setContentType] =
+    useState<CreatableContentType>(initialContentType);
+  const [name, setName] = useState(editingProperty?.name ?? "");
+  const [prompt, setPrompt] = useState(initialPromptHtml);
+  const [textareaMentions, setTextareaMentions] = useState<string[]>(
+    initialDependencySplit.otherIds,
+  );
+  const [selectedFileIds, setSelectedFileIds] =
+    useState<string[]>(initialFileIds);
+  const [options, setOptions] =
+    useState<WorkspacePropertyOption[]>(initialOptions);
+  const [fallback, setFallback] = useState<string | null>(initialFallback);
   const [editor, setEditor] = useState<Editor | null>(null);
-  const isAutoFilling = useRef(false);
-  const lastAutoKey = useRef<string | null>(null);
-  // Each preview request gets a monotonic id; callbacks ignore the
-  // result if a newer request has been made or the user changed the
-  // configuration in flight (the stale-reset effect bumps this too).
-  const previewRequestId = useRef(0);
 
-  const handlePreviewEntityChange = useCallback(
-    (entity: WorkspaceEntity | null) => {
-      setPreviewEntity(entity);
-    },
-    [],
+  const trimmedName = name.trim();
+  const promptText = promptFromHtml(prompt);
+  const dependencyIds = useMemo(
+    () => [...new Set([...selectedFileIds, ...textareaMentions])],
+    [selectedFileIds, textareaMentions],
   );
+  const needsOptions =
+    contentType === "single-select" || contentType === "multi-select";
+  const hasValidOptions = !needsOptions || options.length > 0;
+  const typeChanged = isEditMode && contentType !== initialContentType;
+  const isMutationPending =
+    createProperty.isPending || updateProperty.isPending;
 
-  const propertyTypeLabels = {
-    text: t("workspaces.properties.text"),
-    "single-select": t("workspaces.properties.singleSelect"),
-    "multi-select": t("workspaces.properties.multiSelect"),
-    date: t("workspaces.properties.date"),
-    int: t("workspaces.properties.int"),
-  } satisfies Record<(typeof PROPERTY_TYPES)[number], string>;
-
-  const modeLabels = {
-    ai: t("workspaces.properties.aiExtraction"),
-    manual: t("workspaces.properties.manualColumn"),
-  } satisfies Record<CreationMode, string>;
-
-  const matterFilePropertyIds = fileProperties.map((property) => property.id);
-  const matterFilePropertyIdsKey = matterFilePropertyIds.join(",");
-
-  const inputProperties = properties;
-  const propertiesById = new Map(inputProperties.map((p) => [p.id, p]));
-  const selectedInputs = mentions.flatMap((id) => {
-    const p = propertiesById.get(id);
-    return p ? [p] : [];
-  });
-
-  const handlePromptChange = (next: string) => {
-    setPrompt(next);
-    if (!isAutoFilling.current) {
-      setPromptTouched(true);
-    }
-  };
-
-  useEffect(() => {
-    if (!extractionContext) {
-      return;
-    }
-
-    let nextMentions: string[];
-    if (extractionScope === "file") {
-      nextMentions = extractionFilePropertyId ? [extractionFilePropertyId] : [];
-    } else {
-      nextMentions = matterFilePropertyIdsKey
-        .split(",")
-        .filter((id) => id.length > 0);
-    }
-
-    setMentions((prev) =>
-      sameStringList(prev, nextMentions) ? prev : nextMentions,
-    );
-
-    if (!promptTouched) {
-      lastAutoKey.current = null;
-    }
-  }, [
-    extractionContext,
-    extractionScope,
-    extractionFilePropertyId,
-    matterFilePropertyIdsKey,
-    promptTouched,
-  ]);
+  // Manual properties skip the prompt + dependency requirements; the
+  // user fills values by hand. Select-type rules still apply.
+  const aiRequirementsMet =
+    !showAiSections || (promptText.length > 0 && dependencyIds.length > 0);
+  const canSubmit =
+    trimmedName.length > 0 &&
+    aiRequirementsMet &&
+    hasValidOptions &&
+    !isMutationPending;
 
   const promptField: PropertyPromptFieldHandle = {
     name: "prompt",
     state: { value: prompt },
-    handleChange: handlePromptChange,
+    handleChange: setPrompt,
     handleBlur: () => undefined,
   };
 
-  // Auto-prompt: while !touched, regenerate when name or mentions change.
-  // The lastAutoKey ref makes re-runs cheap, so listing every input value
-  // would be redundant. Keep deps narrow: name + mentions are the only
-  // user-driven triggers; mode/promptTouched/editor identity gate inside.
-  const mentionsKey = mentions.join(",");
-  useEffect(() => {
-    if (!editor || promptTouched || mode !== "ai") {
-      return undefined;
-    }
-    const key = `${name}|${mentionsKey}`;
-    if (key === lastAutoKey.current) {
-      return undefined;
-    }
-    lastAutoKey.current = key;
-
-    const namePart = name.trim() || t("workspaces.properties.unnamedColumn");
-
-    const paragraphContent: object[] = [
-      {
-        type: "text",
-        text: t("workspaces.properties.defaultPromptPrefix", {
-          propertyName: namePart,
-        }),
-      },
-    ];
-    for (const [i, p] of selectedInputs.entries()) {
-      if (i > 0) {
-        paragraphContent.push({ type: "text", text: ", " });
-      }
-      paragraphContent.push({
-        type: "mention",
-        attrs: { id: p.id, label: p.name },
-      });
-    }
-    paragraphContent.push({ type: "text", text: "." });
-
-    const nextContent = {
-      type: "doc",
-      content: [{ type: "paragraph", content: paragraphContent }],
-    };
-    let cancelled = false;
-
-    const timeoutId = window.setTimeout(() => {
-      if (cancelled || editor.isDestroyed) {
-        return;
-      }
-
-      isAutoFilling.current = true;
-      editor.commands.setContent(nextContent);
-      isAutoFilling.current = false;
-    }, 0);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-    };
-  }, [editor, name, mentionsKey, promptTouched, mode, selectedInputs, t]);
-
-  // Stale preview: any config change invalidates the displayed result
-  // (and any in-flight request) so users don't confuse it with the
-  // current settings.
-  useEffect(() => {
-    previewRequestId.current += 1;
-    setPreviewState("idle");
-    setPreviewValue(null);
-    setPreviewError(null);
-  }, [prompt, contentType, mentionsKey, options, previewEntity]);
-
-  const trimmedName = name.trim();
-  const hasMentions = mentions.length > 0;
-  const aiReady = prompt.length > 0 && hasMentions;
-  const canSubmit = trimmedName.length > 0 && (mode === "manual" || aiReady);
-  const showMentionsError = mode === "ai" && submitAttempted && !hasMentions;
-
-  const resetForm = () => {
-    setMode("ai");
-    setExtractionScope(extractionFileProperty ? "file" : "matter");
-    setContentType("text");
-    setName("");
-    setPrompt("");
-    if (extractionContext) {
-      setMentions(
-        extractionFileProperty
-          ? [extractionFileProperty.id]
-          : matterFilePropertyIds,
-      );
-    } else {
-      setMentions(fileProperty ? [fileProperty.id] : []);
-    }
-    setPromptTouched(false);
-    setSubmitAttempted(false);
-    setOptions([]);
-    setPreviewState("idle");
-    setPreviewValue(null);
-    setPreviewEntity(null);
-    lastAutoKey.current = null;
-  };
-
-  const pushOption = (option: WorkspacePropertyOption) => {
-    setOptions((prev) => [...prev, option]);
-  };
-  const removeOptionAt = (index: number) => {
-    setOptions((prev) => prev.filter((_, i) => i !== index));
-  };
-  const replaceOptionAt = (index: number, option: WorkspacePropertyOption) => {
-    setOptions((prev) => prev.map((o, i) => (i === index ? option : o)));
-  };
-
-  const handleOpenChange = () => {
-    onClose();
-    resetForm();
-  };
-
-  const toggleInput = (property: WorkspaceProperty) => {
-    // While the prompt is untouched, just nudge `mentions` — the
-    // auto-prompt effect re-renders the whole sentence with the
-    // updated input list. This avoids any direct editor mutation
-    // (which would otherwise trip `promptTouched`).
-    if (!promptTouched) {
-      setMentions((prev) =>
-        prev.includes(property.id)
-          ? prev.filter((id) => id !== property.id)
-          : [...prev, property.id],
-      );
-      return;
-    }
-
-    if (!editor) {
-      return;
-    }
-    const isSelected = mentions.includes(property.id);
-
-    if (isSelected) {
-      const ranges: [number, number][] = [];
-      editor.state.doc.descendants((node, pos) => {
-        if (
-          node.type.name === "mention" &&
-          (node.attrs as { id?: string }).id === property.id
-        ) {
-          ranges.push([pos, pos + node.nodeSize]);
-        }
-      });
-      if (ranges.length === 0) {
-        return;
-      }
-      let tr = editor.state.tr;
-      for (const [from, to] of ranges.toReversed()) {
-        tr = tr.delete(from, to);
-      }
-      editor.view.dispatch(tr);
-      return;
-    }
-
-    editor
-      .chain()
-      .focus("end")
-      .insertContent({
-        type: "mention",
-        attrs: { id: property.id, label: property.name },
-      })
-      .insertContent(" ")
-      .run();
-  };
-
-  const runPreview = () => {
-    if (!previewEntity) {
-      return;
-    }
-    previewRequestId.current += 1;
-    const requestId = previewRequestId.current;
-    setPreviewState("loading");
-    setPreviewValue(null);
-    setPreviewError(null);
-
-    const isCurrent = () => requestId === previewRequestId.current;
-
-    previewProperty.mutate(
-      {
-        workspaceId,
-        prompt,
-        contentType,
-        entityId: previewEntity.entityId,
-        ...((contentType === "single-select" ||
-          contentType === "multi-select") &&
-        options.length > 0
-          ? { options }
-          : {}),
-        ...(mentions.length > 0
-          ? {
-              dependencies: mentions.map((id) => ({
-                dependsOnPropertyId: id,
-              })),
-            }
-          : {}),
-      },
-      {
-        onSuccess: (data) => {
-          if (!isCurrent()) {
-            return;
-          }
-          if (data.status === "ready") {
-            setPreviewValue(formatPreviewContent(data.content));
-            setPreviewState("ready");
-            return;
-          }
-          if (data.status === "unsupported") {
-            setPreviewError(t("workspaces.properties.previewUnsupported"));
-          } else if (data.status === "skipped") {
-            setPreviewError(t("workspaces.properties.previewSkipped"));
-          } else {
-            setPreviewError(t("workspaces.properties.previewEmpty"));
-          }
-          setPreviewState("error");
-        },
-        onError: () => {
-          if (!isCurrent()) {
-            return;
-          }
-          setPreviewError(t("errors.actionFailed"));
-          setPreviewState("error");
-        },
-      },
-    );
-  };
-
-  const handleCreate = () => {
-    setSubmitAttempted(true);
+  const handleSubmit = useCallback(() => {
     if (!canSubmit) {
       return;
     }
 
-    const dependencies: PropertyDependency[] =
-      mode === "ai"
-        ? mentions.map((id) => ({ dependsOnPropertyId: id, condition: null }))
-        : [];
+    // Preserve any per-dependency conditions configured via the
+    // conditions sub-modal. New mentions default to null.
+    const dependencies: PropertyDependency[] = dependencyIds.map((id) => ({
+      dependsOnPropertyId: id,
+      condition: initialDependencyConditions.get(id) ?? null,
+    }));
+
+    if (isEditMode && editingProperty) {
+      const nextContent = buildContent(contentType, options, fallback);
+      const nextTool: WorkspaceProperty["tool"] =
+        editingTool?.type === "manual-input"
+          ? { version: 1, type: "manual-input" }
+          : { version: 1, type: "ai-model", prompt, dependencies };
+
+      updateProperty.mutate(
+        {
+          workspaceId,
+          propertyId: editingProperty.id,
+          name: trimmedName,
+          content: nextContent,
+          tool: nextTool,
+        },
+        {
+          onSuccess: () => {
+            // AI properties need a re-extraction after any edit since
+            // the prompt, type, options, or dependencies may have
+            // changed; manual properties don't have a workflow.
+            if (nextTool.type === "ai-model") {
+              void startWorkflow();
+            }
+            onClose();
+          },
+          onError: () => {
+            toastManager.add({
+              title: t("errors.actionFailed"),
+              type: "error",
+            });
+          },
+        },
+      );
+      return;
+    }
 
     const isSelectType =
       contentType === "single-select" || contentType === "multi-select";
@@ -646,41 +514,42 @@ const CreatePropertyDialogBody = ({
       {
         name: trimmedName,
         contentType,
-        toolType: mode === "manual" ? "manual-input" : "ai-model",
-        ...(mode === "ai" ? { prompt, dependencies } : {}),
-        ...(isSelectType && options.length > 0 ? { options } : {}),
+        toolType: "ai-model",
+        prompt,
+        dependencies,
+        ...(isSelectType && options.length > 0 ? { options, fallback } : {}),
       },
       {
         onSuccess: (data) => {
           const result: CreatePropertyResult = {
-            mode,
             property: {
               id: data.id,
               workspaceId,
               name: trimmedName,
               createdAt: new Date(),
-              // Mirrors the server-side initial status: AI properties
-              // need a first workflow run; manual ones are ready.
-              status: mode === "manual" ? "fresh" : "stale",
-              content: createPropertyContent(contentType, options),
-              tool:
-                mode === "manual"
-                  ? { version: 1, type: "manual-input" }
-                  : {
-                      version: 1,
-                      type: "ai-model",
-                      prompt,
-                      dependencies,
-                    },
+              status: "stale",
+              content: buildContent(contentType, options, fallback),
+              tool: {
+                version: 1,
+                type: "ai-model",
+                prompt,
+                dependencies,
+              },
             },
             ...(extractionContext
-              ? {
-                  entityId: extractionContext.entityId,
-                  extractionScope,
-                }
+              ? { entityId: extractionContext.entityId }
               : {}),
           };
-          handleOpenChange();
+          // Trigger the AI extraction so the new column starts populating
+          // immediately. Scope to the originating entity when the dialog
+          // was opened from the inspector with a file source; otherwise
+          // run the whole matter.
+          const workflowArgs =
+            extractionContext && extractionContext.filePropertyId !== null
+              ? { entityIds: [extractionContext.entityId] }
+              : undefined;
+          void startWorkflow(workflowArgs);
+          onClose();
           onCreated?.(result);
         },
         onError: () => {
@@ -691,524 +560,544 @@ const CreatePropertyDialogBody = ({
         },
       },
     );
+  }, [
+    canSubmit,
+    contentType,
+    createProperty,
+    dependencyIds,
+    editingProperty,
+    editingTool,
+    extractionContext,
+    fallback,
+    initialDependencyConditions,
+    isEditMode,
+    onClose,
+    onCreated,
+    options,
+    prompt,
+    startWorkflow,
+    t,
+    trimmedName,
+    updateProperty,
+    workspaceId,
+  ]);
+
+  const handleAutoPrompt = useCallback(() => {
+    if (trimmedName.length === 0 || suggestPrompt.isPending) {
+      return;
+    }
+    suggestPrompt.mutate(
+      {
+        workspaceId,
+        name: trimmedName,
+        contentType,
+        ...(needsOptions && options.length > 0
+          ? { options: options.map((o) => ({ value: o.value })) }
+          : {}),
+        // Send the current prompt's plain text so the LLM refines instead
+        // of overwriting whatever the user already typed.
+        ...(promptText.length > 0 ? { currentPrompt: promptText } : {}),
+      },
+      {
+        onSuccess: ({ prompt: suggested }) => {
+          if (!editor || editor.isDestroyed) {
+            setPrompt(suggested);
+            return;
+          }
+          editor.commands.setContent({
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: suggested }],
+              },
+            ],
+          });
+        },
+        onError: () => {
+          toastManager.add({
+            title: t("workspaces.properties.autoPromptFailed"),
+            type: "error",
+          });
+        },
+      },
+    );
+  }, [
+    contentType,
+    editor,
+    needsOptions,
+    options,
+    promptText,
+    suggestPrompt,
+    t,
+    trimmedName,
+    workspaceId,
+  ]);
+
+  const applySuggestion = (text: string) => {
+    if (!editor || editor.isDestroyed) {
+      setPrompt(text);
+      return;
+    }
+    editor.commands.setContent({
+      type: "doc",
+      content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+    });
+    editor.commands.focus("end");
   };
 
-  const outputLabel = trimmedName || t("workspaces.properties.unnamedColumn");
+  // Drop the fallback selection if its target option was renamed/removed,
+  // or if the user switched away from a select content type. The backend
+  // rejects mismatched fallbacks; clearing here keeps the UI honest.
+  useEffect(() => {
+    if (
+      fallback !== null &&
+      (!needsOptions || !options.some((o) => o.value === fallback))
+    ) {
+      setFallback(null);
+    }
+  }, [fallback, needsOptions, options]);
+
+  // Keep the auto-included file chips in sync if the underlying
+  // properties list changes (e.g., a file property is created from
+  // another tab while the dialog is open).
+  useEffect(() => {
+    setSelectedFileIds((prev) => {
+      const validIds = new Set(fileProperties.map((p) => p.id));
+      const filtered = prev.filter((id) => validIds.has(id));
+      return filtered.length === prev.length ? prev : filtered;
+    });
+  }, [fileProperties]);
+
+  const availableFileToAdd = fileProperties.filter(
+    (p) => !selectedFileIds.includes(p.id),
+  );
+
+  const pushOption = (option: WorkspacePropertyOption) =>
+    setOptions((prev) => [...prev, option]);
+  const removeOptionAt = (index: number) =>
+    setOptions((prev) => prev.filter((_, i) => i !== index));
+  const replaceOptionAt = (index: number, option: WorkspacePropertyOption) =>
+    setOptions((prev) => prev.map((o, i) => (i === index ? option : o)));
+
+  if (missingForEdit) {
+    return null;
+  }
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle>
-          {extractionContext
-            ? t("workspaces.properties.extractEntityType")
-            : t("workspaces.properties.newColumn")}
-        </DialogTitle>
-        <DialogDescription>
-          {extractionContext
-            ? t("workspaces.properties.extractEntityTypeDescription")
-            : t("workspaces.properties.newColumnDescription")}
-        </DialogDescription>
-      </DialogHeader>
+      <header className="flex items-center gap-2 px-5 pt-4 pb-3">
+        <h2 className="flex-1 text-[15px] leading-none font-medium">
+          {isEditMode
+            ? t("workspaces.properties.editColumn")
+            : t("workspaces.properties.composerTitle")}
+        </h2>
+      </header>
 
-      <DialogPanel className="space-y-4">
-        <Tabs
-          onValueChange={(value) => {
-            if (isCreationMode(value)) {
-              setMode(value);
-              setSubmitAttempted(false);
-            }
-          }}
-          value={mode}
-        >
-          <TabsList className="w-full">
-            {CREATION_MODES.map((value) => (
-              <TabsTab key={value} value={value}>
-                {modeLabels[value]}
-              </TabsTab>
-            ))}
-          </TabsList>
-        </Tabs>
-
-        <div className="space-y-4">
-          <div className="space-y-4">
-            <Field>
-              <FieldLabel>{t("common.name")}</FieldLabel>
-              <Input
-                autoComplete="off"
-                autoFocus
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && canSubmit) {
-                    handleCreate();
-                  }
-                }}
-                placeholder={t("workspaces.properties.newColumnName")}
-                value={name}
-              />
-            </Field>
-
-            <Field>
-              <FieldLabel>{t("workspaces.properties.resultType")}</FieldLabel>
-              <Select
-                onValueChange={(value) => {
-                  if (isCreatableContentType(value)) {
-                    setContentType(value);
-                  }
-                }}
-                value={contentType}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPopup alignItemWithTrigger={false}>
-                  {PROPERTY_TYPES.map((type) => (
-                    <SelectItem
-                      key={type}
-                      label={propertyTypeLabels[type]}
-                      value={type}
-                    >
-                      <PropertyIcon
-                        className="text-muted-foreground"
-                        type={type}
-                      />
-                      <span>{propertyTypeLabels[type]}</span>
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            </Field>
-
-            {(contentType === "single-select" ||
-              contentType === "multi-select") && (
-              <Field>
-                <FieldLabel>
-                  {t("workspaces.properties.optionsLabel")}
-                </FieldLabel>
-                <SelectOptions
-                  fieldName="options"
-                  options={options}
-                  pushValue={pushOption}
-                  removeValue={removeOptionAt}
-                  replaceValue={replaceOptionAt}
-                />
-                <FieldDescription>
-                  {t("workspaces.properties.optionsHelp")}
-                </FieldDescription>
-              </Field>
-            )}
-
-            {mode === "ai" && (
-              <>
-                {extractionContext && (
-                  <ExtractionScopeField
-                    allFileCount={fileProperties.length}
-                    currentFilePropertyName={extractionFileProperty?.name}
-                    onChange={setExtractionScope}
-                    value={extractionScope}
-                  />
-                )}
-
-                <Field>
-                  <FieldLabel>{t("workspaces.properties.inputs")}</FieldLabel>
-                  <div className="flex flex-wrap gap-1.5">
-                    {inputProperties.map((property) => {
-                      const selected = mentions.includes(property.id);
-                      return (
-                        <button
-                          aria-pressed={selected}
-                          className={cn(
-                            "hover:bg-accent flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
-                            selected
-                              ? "bg-accent border-foreground/40 text-foreground"
-                              : "text-muted-foreground border-border",
-                          )}
-                          key={property.id}
-                          onClick={() => toggleInput(property)}
-                          type="button"
-                        >
-                          <PropertyIcon
-                            className="size-3.5"
-                            type={property.content.type}
-                          />
-                          <span className="truncate">{property.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <FieldDescription>
-                    {t("workspaces.properties.inputsHelp")}
-                  </FieldDescription>
-                </Field>
-
-                <Field>
-                  <FieldLabel>
-                    {t("workspaces.properties.extractionInstruction")}
-                  </FieldLabel>
-                  <PropertyPromptInput
-                    autoPopulateOnEmpty={false}
-                    field={promptField}
-                    onEditorReady={setEditor}
-                    onMentionsChange={setMentions}
-                    propertyId=""
-                    propertyName={trimmedName}
-                    workspaceId={workspaceId}
-                  />
-                  {showMentionsError ? (
-                    <p className="text-destructive-foreground text-xs">
-                      {t("workspaces.properties.addInputProperty")}
-                    </p>
-                  ) : (
-                    <FieldDescription>
-                      {t("workspaces.properties.extractionInstructionHelp")}
-                    </FieldDescription>
-                  )}
-                </Field>
-
-                <DependencyFlow
-                  inputs={selectedInputs}
-                  outputContentType={contentType}
-                  outputLabel={outputLabel}
-                />
-              </>
-            )}
-          </div>
-
-          {mode === "ai" && (
-            <PreviewBlock
-              activeView={activeView}
-              isReady={canSubmit}
-              onEntityChange={handlePreviewEntityChange}
-              onRun={runPreview}
-              previewEntity={previewEntity}
-              previewError={previewError}
-              previewState={previewState}
-              previewValue={previewValue}
-            />
-          )}
+      <div className="flex flex-col gap-3.5 px-5 pt-1 pb-4">
+        <div className="bg-muted/24 flex items-center rounded-[9px] border px-1 py-0.5">
+          <Input
+            autoComplete="off"
+            autoFocus
+            className="border-0 bg-transparent text-sm font-medium shadow-none placeholder:text-[var(--muted-foreground)] focus-visible:ring-0 focus-visible:outline-none"
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSubmit) {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
+            placeholder={t("workspaces.properties.untitledColumn")}
+            value={name}
+          />
         </div>
-      </DialogPanel>
 
-      <DialogFooter>
-        <DialogClose render={<Button variant="ghost" />}>
+        {showAiSections ? (
+          <ComposerCard
+            autoPromptDisabled={
+              trimmedName.length === 0 || suggestPrompt.isPending
+            }
+            autoPromptPending={suggestPrompt.isPending}
+            contentType={contentType}
+            editorReady={setEditor}
+            fileChips={selectedFileIds.map(
+              (id) =>
+                fileProperties.find((p) => p.id === id) ?? {
+                  id,
+                  name: id,
+                },
+            )}
+            onAutoPrompt={handleAutoPrompt}
+            onContentTypeChange={setContentType}
+            onMentionsChange={setTextareaMentions}
+            onRemoveFile={(id) =>
+              setSelectedFileIds((prev) => prev.filter((p) => p !== id))
+            }
+            onSubmit={handleSubmit}
+            promptField={promptField}
+            propertyName={trimmedName}
+            typeChanged={typeChanged}
+            {...(availableFileToAdd.length > 0
+              ? {
+                  addFile: (id: string) =>
+                    setSelectedFileIds((prev) => [...prev, id]),
+                  availableFiles: availableFileToAdd,
+                }
+              : {})}
+            {...(propertyId !== undefined ? { propertyId } : {})}
+            workspaceId={workspaceId}
+          />
+        ) : (
+          <ManualTypeRow
+            contentType={contentType}
+            onContentTypeChange={setContentType}
+            typeChanged={typeChanged}
+          />
+        )}
+
+        {needsOptions && (
+          <InlineOptionEditor
+            fallback={fallback}
+            onFallbackChange={setFallback}
+            options={options}
+            pushOption={pushOption}
+            removeOptionAt={removeOptionAt}
+            replaceOptionAt={replaceOptionAt}
+            type={contentType}
+          />
+        )}
+
+        {showAiSections && !isEditMode && (
+          <SuggestionsList onPick={applySuggestion} />
+        )}
+      </div>
+
+      <div className="bg-muted/64 flex items-center gap-2 border-t px-5 py-3">
+        <span className="text-muted-foreground/72 inline-flex items-center gap-1 text-xs">
+          <CommandIcon className="size-3" />
+          <span aria-hidden>+</span>
+          <CornerDownLeftIcon className="size-3" />
+          <span>
+            {isEditMode
+              ? t("workspaces.properties.saveChanges")
+              : t("workspaces.properties.cmdEnterToCreate")}
+          </span>
+        </span>
+        <div className="flex-1" />
+        <DialogClose render={<Button size="sm" variant="ghost" />}>
           {t("common.cancel")}
         </DialogClose>
         <Button
-          disabled={createProperty.isPending || trimmedName.length === 0}
-          loading={createProperty.isPending}
-          onClick={handleCreate}
+          disabled={!canSubmit}
+          loading={isMutationPending}
+          onClick={handleSubmit}
+          size="sm"
         >
-          {t("workspaces.properties.createColumn")}
+          {isEditMode
+            ? t("workspaces.properties.saveChanges")
+            : t("workspaces.properties.createColumn")}
         </Button>
-      </DialogFooter>
+      </div>
     </>
   );
 };
 
-type DependencyFlowProps = {
-  inputs: WorkspaceProperty[];
-  outputContentType: CreatableContentType;
-  outputLabel: string;
+type FileChip = { id: string; name: string };
+
+type ComposerCardProps = {
+  workspaceId: string;
+  propertyId?: string;
+  propertyName: string;
+  promptField: PropertyPromptFieldHandle;
+  onMentionsChange: (mentions: string[]) => void;
+  editorReady: (editor: Editor) => void;
+  onSubmit: () => void;
+  contentType: CreatableContentType;
+  onContentTypeChange: (next: CreatableContentType) => void;
+  fileChips: FileChip[];
+  onRemoveFile: (id: string) => void;
+  availableFiles?: FileChip[];
+  addFile?: (id: string) => void;
+  onAutoPrompt: () => void;
+  autoPromptDisabled: boolean;
+  autoPromptPending: boolean;
+  typeChanged: boolean;
 };
 
-const DependencyFlow = ({
-  inputs,
-  outputContentType,
-  outputLabel,
-}: DependencyFlowProps) => {
+const ComposerCard = ({
+  workspaceId,
+  propertyId,
+  propertyName,
+  promptField,
+  onMentionsChange,
+  editorReady,
+  onSubmit,
+  contentType,
+  onContentTypeChange,
+  fileChips,
+  onRemoveFile,
+  availableFiles,
+  addFile,
+  onAutoPrompt,
+  autoPromptDisabled,
+  autoPromptPending,
+  typeChanged,
+}: ComposerCardProps) => {
   const t = useTranslations();
+  const chipDefs = useChipDefinitions();
 
   return (
-    <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-      {inputs.length === 0 ? (
-        <span className="italic">
-          {t("workspaces.properties.flowNoInputs")}
+    <div className="bg-card ring-foreground/2 flex flex-col gap-2.5 rounded-[10px] border border-[var(--input)] p-3 ring-4">
+      <ReadingFromRow
+        fileChips={fileChips}
+        onRemoveFile={onRemoveFile}
+        {...(addFile !== undefined && availableFiles !== undefined
+          ? { addFile, availableFiles }
+          : {})}
+      />
+
+      <PropertyPromptInput
+        // The composer keeps the prompt empty on first render so the
+        // user can focus the name input without the editor seeding
+        // "Najdi informace…" and stealing focus. The Auto-prompt button
+        // covers the seeding flow on demand.
+        autoPopulateOnEmpty={false}
+        field={promptField}
+        onEditorReady={editorReady}
+        onMentionsChange={onMentionsChange}
+        onSubmit={onSubmit}
+        placeholder={t("workspaces.properties.extractionPlaceholder")}
+        propertyId={propertyId ?? ""}
+        propertyName={propertyName}
+        variant="minimal"
+        workspaceId={workspaceId}
+      />
+
+      <TypeChipsRow
+        chipDefs={chipDefs}
+        contentType={contentType}
+        onContentTypeChange={onContentTypeChange}
+        typeChanged={typeChanged}
+      />
+
+      <div className="flex items-center gap-1.5">
+        <button
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 rounded-[7px] border border-dashed px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={autoPromptDisabled}
+          onClick={onAutoPrompt}
+          type="button"
+        >
+          {autoPromptPending ? (
+            <Loader2Icon aria-hidden className="size-2.5 animate-spin" />
+          ) : (
+            <WandSparklesIcon className="size-2.5" />
+          )}
+          {t("workspaces.properties.autoPrompt")}
+        </button>
+        <span className="text-muted-foreground/72 text-[11px]">
+          {t("workspaces.properties.autoPromptHelp")}
         </span>
-      ) : (
-        inputs.map((p, i) => (
-          <span className="flex items-center gap-1" key={p.id}>
-            <PropertyIcon className="size-3.5" type={p.content.type} />
-            <span className="text-foreground">{p.name}</span>
-            {i < inputs.length - 1 && <span className="ms-1">·</span>}
-          </span>
-        ))
-      )}
-      <FlowSeparator />
-      <SparklesIcon className="size-3.5" />
-      <span>{t("workspaces.properties.flowExtraction")}</span>
-      <FlowSeparator />
-      <PropertyIcon className="size-3.5" type={outputContentType} />
-      <span className="text-foreground truncate">{outputLabel}</span>
+      </div>
     </div>
   );
 };
 
-const FlowSeparator = () => (
-  <span aria-hidden className="text-muted-foreground/50">
-    →
+type ManualTypeRowProps = {
+  contentType: CreatableContentType;
+  onContentTypeChange: (next: CreatableContentType) => void;
+  typeChanged: boolean;
+};
+
+const ManualTypeRow = ({
+  contentType,
+  onContentTypeChange,
+  typeChanged,
+}: ManualTypeRowProps) => {
+  const chipDefs = useChipDefinitions();
+  return (
+    <div className="bg-card ring-foreground/2 flex flex-col gap-2 rounded-[10px] border border-[var(--input)] p-3 ring-4">
+      <TypeChipsRow
+        chipDefs={chipDefs}
+        contentType={contentType}
+        onContentTypeChange={onContentTypeChange}
+        typeChanged={typeChanged}
+      />
+    </div>
+  );
+};
+
+type TypeChipsRowProps = {
+  chipDefs: ReturnType<typeof useChipDefinitions>;
+  contentType: CreatableContentType;
+  onContentTypeChange: (next: CreatableContentType) => void;
+  typeChanged: boolean;
+};
+
+const TypeChipsRow = ({
+  chipDefs,
+  contentType,
+  onContentTypeChange,
+  typeChanged,
+}: TypeChipsRowProps) => {
+  const t = useTranslations();
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1 overflow-x-auto border-t pt-2 [scrollbar-width:none]">
+        <span className="text-muted-foreground/72 shrink-0 px-1.5 text-[11px] font-medium">
+          {t("workspaces.properties.returnsLabel")}
+        </span>
+        {chipDefs.map(({ type, icon: Icon, label }) => {
+          const active = contentType === type;
+          return (
+            <button
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-[6px] border px-2 py-1 text-xs font-medium transition-colors",
+                active
+                  ? "bg-foreground/8 text-foreground border-transparent"
+                  : "text-muted-foreground hover:text-foreground border-border",
+              )}
+              key={type}
+              onClick={() => onContentTypeChange(type)}
+              type="button"
+            >
+              <Icon className="size-2.5" />
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      {typeChanged && (
+        <p className="inline-flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+          <AlertTriangleIcon className="size-3 shrink-0" />
+          {t("workspaces.properties.typeChangeWarning")}
+        </p>
+      )}
+    </div>
+  );
+};
+
+type ReadingFromRowProps = {
+  fileChips: FileChip[];
+  onRemoveFile: (id: string) => void;
+  availableFiles?: FileChip[];
+  addFile?: (id: string) => void;
+};
+
+const ReadingFromRow = ({
+  fileChips,
+  onRemoveFile,
+  availableFiles,
+  addFile,
+}: ReadingFromRowProps) => {
+  const t = useTranslations();
+  const canAdd =
+    addFile !== undefined &&
+    availableFiles !== undefined &&
+    availableFiles.length > 0;
+
+  return (
+    <div className="text-muted-foreground flex items-center gap-1.5 text-[11.5px]">
+      <span className="inline-flex items-center gap-1">
+        <AtSignIcon className="size-2.5" />
+        {t("workspaces.properties.readingFrom")}
+      </span>
+      {fileChips.map((chip) => (
+        <ReadingChip
+          key={chip.id}
+          label={chip.name || t("workspaces.properties.documentsLabel")}
+          {...(fileChips.length > 1
+            ? { onRemove: () => onRemoveFile(chip.id) }
+            : {})}
+        />
+      ))}
+      {canAdd && (
+        <Popover>
+          <PopoverTrigger
+            render={
+              <Button
+                className="text-muted-foreground/72 hover:text-foreground gap-0.5 px-1 text-[11.5px]"
+                size="xs"
+                type="button"
+                variant="ghost"
+              />
+            }
+          >
+            <PlusIcon className="size-2.5" />
+            {t("workspaces.properties.addReadingSource")}
+          </PopoverTrigger>
+          <PopoverPopup className="*:data-[slot=popover-viewport]:p-1!">
+            <div className="flex w-48 flex-col gap-0.5">
+              {availableFiles.map((file) => (
+                <PopoverClose
+                  key={file.id}
+                  render={
+                    <Button
+                      className="justify-start gap-2"
+                      onClick={() => addFile(file.id)}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    />
+                  }
+                >
+                  <FileTextIcon className="text-muted-foreground size-3" />
+                  <span className="truncate">{file.name}</span>
+                </PopoverClose>
+              ))}
+            </div>
+          </PopoverPopup>
+        </Popover>
+      )}
+    </div>
+  );
+};
+
+type ReadingChipProps = {
+  label: string;
+  onRemove?: () => void;
+};
+
+const ReadingChip = ({ label, onRemove }: ReadingChipProps) => (
+  <span className="bg-muted/64 group inline-flex h-6 items-center gap-1 rounded-md px-2 text-[11.5px]">
+    <FileTextIcon className="size-3" />
+    {label}
+    {onRemove && (
+      <button
+        aria-label="Remove"
+        className="text-muted-foreground/64 hover:text-foreground ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100"
+        onClick={onRemove}
+        type="button"
+      >
+        <XIcon className="size-2.5" />
+      </button>
+    )}
   </span>
 );
 
-type ExtractionScopeFieldProps = {
-  value: ExtractionScope;
-  currentFilePropertyName: string | undefined;
-  allFileCount: number;
-  onChange: (scope: ExtractionScope) => void;
+type SuggestionsListProps = {
+  onPick: (text: string) => void;
 };
 
-const ExtractionScopeField = ({
-  value,
-  currentFilePropertyName,
-  allFileCount,
-  onChange,
-}: ExtractionScopeFieldProps) => {
+const SuggestionsList = ({ onPick }: SuggestionsListProps) => {
   const t = useTranslations();
-  const options = [
-    {
-      value: "file",
-      label: t("workspaces.properties.scopeFile"),
-      description: currentFilePropertyName
-        ? t("workspaces.properties.scopeFileDescription", {
-            property: currentFilePropertyName,
-          })
-        : t("workspaces.properties.scopeFileUnavailable"),
-      disabled: currentFilePropertyName === undefined,
-    },
-    {
-      value: "matter",
-      label: t("workspaces.properties.scopeMatter"),
-      description: t("workspaces.properties.scopeMatterDescription"),
-      disabled: allFileCount === 0,
-    },
-  ] satisfies {
-    value: ExtractionScope;
-    label: string;
-    description: string;
-    disabled: boolean;
-  }[];
-
+  const suggestions = useSuggestionTexts();
   return (
-    <Field>
-      <FieldLabel>{t("workspaces.properties.extractionScope")}</FieldLabel>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {options.map((option) => (
-          <button
-            aria-pressed={value === option.value}
-            className={cn(
-              "hover:bg-accent rounded-md border p-3 text-start transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-              value === option.value
-                ? "border-foreground/40 bg-accent text-foreground"
-                : "border-border text-muted-foreground",
-            )}
-            disabled={option.disabled}
-            key={option.value}
-            onClick={() => onChange(option.value)}
-            type="button"
-          >
-            <span className="block text-sm font-medium">{option.label}</span>
-            <span className="mt-1 block text-xs">{option.description}</span>
-          </button>
-        ))}
+    <div className="flex flex-col gap-1.5">
+      <div className="text-muted-foreground/72 px-0.5 text-[11px] font-medium tracking-[0.08em] uppercase">
+        {t("workspaces.properties.suggestionsLabel")}
       </div>
-    </Field>
-  );
-};
-
-type PreviewBlockProps = {
-  activeView: ReturnType<typeof useActiveView>;
-  isReady: boolean;
-  onEntityChange: (entity: WorkspaceEntity | null) => void;
-  onRun: () => void;
-  previewEntity: WorkspaceEntity | null;
-  previewState: "idle" | "loading" | "ready" | "error";
-  previewValue: string | null;
-  previewError: string | null;
-};
-
-const PreviewBlock = ({
-  activeView,
-  isReady,
-  onEntityChange,
-  onRun,
-  previewEntity,
-  previewState,
-  previewValue,
-  previewError,
-}: PreviewBlockProps) => {
-  const t = useTranslations();
-  const hasEntity = previewEntity !== null;
-
-  return (
-    <div className="bg-muted/40 space-y-2 rounded-lg border p-3 text-sm">
-      <div className="flex items-center gap-2">
-        <PreviewEntityCombobox
-          activeView={activeView}
-          onEntityChange={onEntityChange}
-          previewEntity={previewEntity}
-        />
-        <Button
-          disabled={!isReady || !hasEntity || previewState === "loading"}
-          loading={previewState === "loading"}
-          onClick={onRun}
-          size="sm"
-          variant="outline"
+      {suggestions.map((text) => (
+        <button
+          className="hover:bg-muted/40 flex items-center gap-2 rounded-lg border px-2.5 py-2 text-start text-[13px] transition-colors"
+          key={text}
+          onClick={() => onPick(text)}
+          type="button"
         >
-          <SparklesIcon />
-          {t("common.preview")}
-        </Button>
-      </div>
-
-      {previewState === "ready" && previewValue !== null && (
-        <div className="bg-background rounded-md border p-2">
-          <div className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
-            {t("workspaces.properties.flowOutput")}
-          </div>
-          <div className="text-foreground mt-0.5 text-sm wrap-break-word">
-            {previewValue}
-          </div>
-        </div>
-      )}
-
-      {previewState === "error" && previewError !== null && (
-        <p className="text-destructive-foreground text-xs">{previewError}</p>
-      )}
+          <WandSparklesIcon className="text-muted-foreground/72 size-3 shrink-0" />
+          <span className="flex-1">{text}</span>
+          <ArrowUpRightIcon className="text-muted-foreground/72 size-3 shrink-0" />
+        </button>
+      ))}
     </div>
   );
-};
-
-type PreviewEntityComboboxProps = {
-  activeView: ReturnType<typeof useActiveView>;
-  onEntityChange: (entity: WorkspaceEntity | null) => void;
-  previewEntity: WorkspaceEntity | null;
-};
-
-const PreviewEntityCombobox = ({
-  activeView,
-  onEntityChange,
-  previewEntity,
-}: PreviewEntityComboboxProps) => {
-  const t = useTranslations();
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-
-  const debouncedSetQuery = useDebouncedCallback(
-    (value: string) => setDebouncedQuery(value),
-    150,
-  );
-
-  const search = debouncedQuery.trim();
-  const previewEntitiesOptions = entitiesOptions({
-    workspaceId: activeView.workspaceId,
-    filters: activeView.filters,
-    sorts: activeView.sorts,
-    page: 1,
-    pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
-    fieldMode: "visible",
-    previewableForAi: true,
-    ...(search && { search }),
-  });
-  const { data, isError, isFetching } = useQuery({
-    ...previewEntitiesOptions,
-    placeholderData: keepPreviousData,
-  });
-
-  const entityOptions = data?.entities ?? [];
-  const fallbackLabel = t("workspaces.defaultName");
-
-  return (
-    <Combobox
-      itemToStringLabel={(entity) =>
-        getPreviewEntityLabel(entity, fallbackLabel)
-      }
-      onInputValueChange={(inputValue) => {
-        setQuery(inputValue);
-        debouncedSetQuery(inputValue);
-      }}
-      onValueChange={(entity) => {
-        onEntityChange(entity);
-        setQuery("");
-        setDebouncedQuery("");
-      }}
-      value={previewEntity}
-    >
-      <ComboboxInput
-        className="flex-1"
-        placeholder={t("common.search")}
-        showClear
-        size="sm"
-        startAddon={<SearchIcon />}
-        value={query}
-      />
-      <ComboboxPopup>
-        {isFetching && (
-          <ComboboxStatus className="flex items-center gap-2">
-            <LoaderIcon className="size-3.5 animate-spin" />
-            <span>{t("common.loading")}</span>
-          </ComboboxStatus>
-        )}
-        {isError && !isFetching && (
-          <ComboboxStatus className="text-destructive-foreground">
-            {t("errors.actionFailed")}
-          </ComboboxStatus>
-        )}
-        <ComboboxList>
-          {entityOptions.map((entity) => {
-            const file = getFirstFile(entity);
-            const label = getPreviewEntityLabel(entity, fallbackLabel);
-
-            return (
-              <ComboboxItem key={entity.entityId} value={entity}>
-                <div className="flex min-w-0 items-center gap-2">
-                  <EntityKindIcon
-                    className="text-muted-foreground size-3.5 shrink-0"
-                    kind={entity.kind}
-                    mimeType={file?.mimeType ?? null}
-                  />
-                  <span className="truncate">{label}</span>
-                </div>
-              </ComboboxItem>
-            );
-          })}
-        </ComboboxList>
-        {!isFetching && !isError && entityOptions.length === 0 && (
-          <ComboboxEmpty>
-            {t("workspaces.properties.noFirstDocument")}
-          </ComboboxEmpty>
-        )}
-      </ComboboxPopup>
-    </Combobox>
-  );
-};
-
-const getPreviewEntityLabel = (
-  entity: WorkspaceEntity,
-  fallbackLabel: string,
-) => {
-  const file = getFirstFile(entity);
-
-  return entity.name ?? file?.fileName ?? fallbackLabel;
-};
-
-type PreviewContent =
-  | { type: "text"; value: string }
-  | { type: "single-select"; value: string | null }
-  | { type: "multi-select"; value: string[] }
-  | { type: "date"; value: string | null }
-  | { type: "int"; value: number; currency: string | null };
-
-const formatPreviewContent = (content: PreviewContent): string => {
-  if (content.type === "text") {
-    return content.value;
-  }
-  if (content.type === "single-select") {
-    return content.value ?? "—";
-  }
-  if (content.type === "multi-select") {
-    return content.value.length > 0 ? content.value.join(", ") : "—";
-  }
-  if (content.type === "date") {
-    return content.value ?? "—";
-  }
-  return content.currency
-    ? `${content.value} ${content.currency}`
-    : String(content.value);
 };

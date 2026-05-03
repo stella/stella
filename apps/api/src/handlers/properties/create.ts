@@ -49,6 +49,9 @@ const createPropertyBodySchema = t.Object({
     ),
   ),
   options: t.Optional(t.Array(selectOptionSchema)),
+  // Used for select types only. `null` means "Keep empty" when the AI can't
+  // match any option; a string must equal one of the supplied option values.
+  fallback: t.Optional(t.Nullable(t.String({ minLength: 1, maxLength: 1000 }))),
 });
 
 // Re-validate options through the strict content schema before insert.
@@ -127,11 +130,23 @@ const createProperty = createSafeHandler(
             }),
           );
         }
+        const fallback = body.fallback ?? null;
+        if (
+          fallback !== null &&
+          !rawOptions.some((o) => o.value === fallback)
+        ) {
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Fallback must match one of the supplied options",
+            }),
+          );
+        }
         content = {
           version: 1,
           type: body.contentType,
           options: rawOptions,
-          fallback: null,
+          fallback,
         };
         tool = defaultTool();
         break;

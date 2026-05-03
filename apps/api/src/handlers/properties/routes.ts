@@ -4,6 +4,7 @@ import createProperty from "@/api/handlers/properties/create";
 import deleteProperty from "@/api/handlers/properties/delete-by-id";
 import previewProperty from "@/api/handlers/properties/preview";
 import readProperties from "@/api/handlers/properties/read";
+import suggestPromptProperty from "@/api/handlers/properties/suggest-prompt";
 import updateProperty from "@/api/handlers/properties/update-by-id";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
@@ -23,6 +24,9 @@ export const propertiesRoute = new Elysia({
   })
   .post("/preview", previewProperty.handler, {
     body: previewProperty.config.body,
+  })
+  .post("/suggest-prompt", suggestPromptProperty.handler, {
+    body: suggestPromptProperty.config.body,
   })
   .get("/", readProperties.handler)
   .group("/property/:propertyId", (app) =>

@@ -67,6 +67,20 @@ const authCookiePrefix = env.isDev
  * Throws an APIError if the value is present and not a
  * recognised IANA timezone.
  */
+const ensureDisplayName = <T extends Record<string, unknown>>(user: T): T => {
+  const name = typeof user["name"] === "string" ? user["name"].trim() : "";
+  if (name.length > 0) {
+    return user;
+  }
+  const email = typeof user["email"] === "string" ? user["email"] : "";
+  const localPart = email.split("@").at(0)?.trim() ?? "";
+  const fallback = localPart.length > 0 ? localPart : email;
+  if (fallback.length === 0) {
+    return user;
+  }
+  return { ...user, name: fallback };
+};
+
 const validateTimezoneId = (timezoneId: unknown): void => {
   if (typeof timezoneId === "string" && timezoneId !== "UTC") {
     try {
@@ -190,14 +204,20 @@ const createAuth = () => {
           // eslint-disable-next-line require-await -- async required by better-auth hook type
           before: async (user) => {
             validateTimezoneId(user["timezoneId"]);
-            return { data: user };
+            // Email-OTP and some social providers leave `name` blank.
+            // The `notNull` schema constraint allows empty strings, which
+            // surfaces as a blank "Author" everywhere the user is shown.
+            // Default to the email local-part so the column is never empty.
+            const data = ensureDisplayName(user);
+            return { data };
           },
         },
         update: {
           // eslint-disable-next-line require-await -- async required by better-auth hook type
           before: async (user) => {
             validateTimezoneId(user["timezoneId"]);
-            return { data: user };
+            const data = ensureDisplayName(user);
+            return { data };
           },
         },
       },

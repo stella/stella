@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { Queue, Worker } from "bullmq";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import Redis from "ioredis";
 
 import { isMockAI } from "@/api/consts";
@@ -18,6 +18,7 @@ import { redisConnectionOptions } from "@/api/lib/redis-options";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
   brandPersistedEntityId,
+  brandPersistedPropertyId,
   brandPersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
@@ -75,10 +76,63 @@ const getQueue = (): Queue => {
     defaultJobOptions: {
       removeOnComplete: 100,
       removeOnFail: 500,
+      // Retry once with backoff so a single transient failure (network
+      // blip, AI provider 5xx) doesn't leave the cell empty. Stays low
+      // enough that genuine logic errors surface quickly.
+      attempts: 2,
+      backoff: { type: "exponential", delay: 5000 },
     },
   });
   return queue;
 };
+
+// Self-heal levers. Tuned conservatively so the happy path is never
+// disrupted, but a stuck job/worker can't block the workspace.
+//
+// LOCK_DURATION_MS: how long a worker holds a job's lock before BullMQ
+// considers it stalled (worker auto-extends every half this window).
+// AI extraction can take a few minutes per entity; 5 minutes covers
+// the slowest legitimate case with headroom.
+//
+// STALLED_INTERVAL_MS: how often BullMQ scans for stalled jobs.
+//
+// MAX_STALLED_COUNT: a job that stalls this many times moves to
+// failed (and then retries via `attempts`).
+//
+// computeJobTimeoutMs: process-level ceiling per entity job, scaled
+// with the execution plan's depth. A flat 6-minute cap would
+// deterministically abort entities with several slow dependency
+// levels even when each batch stays within its own AI timeout.
+const LOCK_DURATION_MS = 5 * 60 * 1000;
+const STALLED_INTERVAL_MS = 30 * 1000;
+const MAX_STALLED_COUNT = 2;
+
+// Per-batch AI timeout. The same constant feeds into both the AI SDK
+// abort signal in `processOneBatch` and the per-job timeout below so
+// changes stay coupled.
+const BATCH_AI_TIMEOUT_MS = 120 * 1000;
+// Floor for the per-job hard timeout — even a single-level plan gets
+// a generous window for setup, network blips, and the post-AI DB
+// writes.
+const JOB_TIMEOUT_FLOOR_MS = 6 * 60 * 1000;
+// Each dependency level runs sequentially and may itself contain
+// multiple batches sharing the per-batch timeout. The 1.5× factor
+// accommodates one retry within a batch plus DB write overhead.
+const JOB_TIMEOUT_PER_LEVEL_MS = Math.ceil(BATCH_AI_TIMEOUT_MS * 1.5);
+
+const computeJobTimeoutMs = (executionPlan: ExecutionLevel[]): number => {
+  const levels = executionPlan.length;
+  return Math.max(
+    JOB_TIMEOUT_FLOOR_MS,
+    levels * JOB_TIMEOUT_PER_LEVEL_MS + JOB_TIMEOUT_FLOOR_MS,
+  );
+};
+// Workflow-level Redis lock TTL. Long enough to outlast a single batch
+// even on big workspaces, short enough to self-heal an uncleanly-killed
+// worker without stranding the workspace for hours. The lock is also
+// extended on each entity completion below, so a long-running workflow
+// keeps the TTL fresh regardless of this initial value.
+const RUNNING_LOCK_TTL_SEC = 60 * 60;
 
 /**
  * Check if a workflow is currently running for a workspace.
@@ -116,13 +170,14 @@ export const startWorkflow = async ({
 }: StartWorkflowArgs): Promise<StartWorkflowResult> => {
   const redis = getRedis();
 
-  // Check if already running (atomic check-and-set).
-  // 2-hour TTL self-heals if the process crashes before finishWorkflow.
+  // Check if already running (atomic check-and-set). The TTL is the
+  // safety net for an uncleanly-killed worker; tuned tight enough that
+  // a recovered workspace doesn't sit blocked for hours.
   const wasSet = await redis.set(
     workflowKey(workspaceId, "running"),
     "1",
     "EX",
-    7200,
+    RUNNING_LOCK_TTL_SEC,
     "NX",
   );
   if (!wasSet) {
@@ -180,6 +235,20 @@ export const startWorkflow = async ({
     );
     await redis.set(workflowKey(workspaceId, "completed"), "0");
 
+    // Snapshot the property IDs in this workflow's plan so finishWorkflow
+    // can freshen only the ones it actually processed. Without this,
+    // properties created mid-workflow get marked fresh without ever
+    // running, leaving cells permanently empty.
+    const planPropertyIds = executionPlan.flatMap((level) =>
+      level.flatMap((batch) => batch.properties.map((p) => p.id)),
+    );
+    await redis.set(
+      workflowKey(workspaceId, "plan-properties"),
+      JSON.stringify(planPropertyIds),
+      "EX",
+      RUNNING_LOCK_TTL_SEC,
+    );
+
     // Broadcast running status
     broadcastWorkflowStatus(workspaceId, true);
 
@@ -224,11 +293,48 @@ export const initWorkflowWorker = () => {
   const worker = new Worker<EntityJobData>(
     QUEUE_NAME,
     async (job) => {
-      await processEntityJob(job.data);
+      // Hard process-level timeout. A hung AI provider, a runaway
+      // batch, or a broken external call would otherwise keep the
+      // job "active" indefinitely and block follow-up workflow runs.
+      //
+      // We pipe an AbortSignal through `processEntityJob` so the
+      // timeout actually CANCELS the in-flight work (the AI SDK call
+      // honours the signal). Without that, a `Promise.race`-style
+      // wrapper would only reject the wrapper while the original
+      // attempt kept running — racing the BullMQ retry and double-
+      // incrementing the workflow completion counter.
+      const controller = new AbortController();
+      // Per-job timeout scales with the execution plan: each
+      // dependency level runs sequentially and inherits the per-batch
+      // AI timeout. A fixed 6-min ceiling would deterministically
+      // abort entities with several slow levels even when each
+      // individual batch stays within budget.
+      const jobTimeoutMs = computeJobTimeoutMs(job.data.executionPlan);
+      const timeoutHandle = setTimeout(() => {
+        controller.abort(
+          new Error(
+            `workflow.job_timeout: entity ${job.data.entityId} exceeded ${jobTimeoutMs}ms`,
+          ),
+        );
+      }, jobTimeoutMs);
+      try {
+        await processEntityJob(job.data, controller.signal);
+        // If the signal aborted between the last awaited call and
+        // here, surface it so BullMQ marks the attempt failed
+        // rather than counting it as completed.
+        controller.signal.throwIfAborted();
+      } finally {
+        clearTimeout(timeoutHandle);
+      }
     },
     {
       connection: workerConnection,
       concurrency: MAX_CONCURRENT_ENTITIES,
+      // Lock-extension lets BullMQ's stalled-job detector evict a
+      // crashed worker's jobs back onto the queue.
+      lockDuration: LOCK_DURATION_MS,
+      stalledInterval: STALLED_INTERVAL_MS,
+      maxStalledCount: MAX_STALLED_COUNT,
     },
   );
 
@@ -240,10 +346,21 @@ export const initWorkflowWorker = () => {
     logger.error("workflow.entity_failed", {
       workspaceId: data.workspaceId,
       entityId: data.entityId,
+      attemptsMade: String(job.attemptsMade),
       error: String(error),
     });
 
-    // Still increment completed counter so workflow can finish
+    // With `attempts: 2` enabled on the queue, the failed event fires
+    // for transient first-attempt failures too. Only count the entity
+    // as completed once BullMQ has exhausted its retries — otherwise
+    // `completed >= total` can flip to true mid-run and finalize the
+    // workflow while jobs are still queued for retry.
+    const totalAttempts = job.opts.attempts ?? 1;
+    const isFinalAttempt = job.attemptsMade >= totalAttempts;
+    if (!isFinalAttempt) {
+      return;
+    }
+
     const branded = brandValidatedWorkflowActorKey({
       organizationId: data.organizationId,
       workspaceId: data.workspaceId,
@@ -268,7 +385,7 @@ export const initWorkflowWorker = () => {
 
 // ── Entity processing ──────────────────────────────────
 
-const processEntityJob = async (data: EntityJobData) => {
+const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
   const {
     workspaceId,
     organizationId,
@@ -293,6 +410,10 @@ const processEntityJob = async (data: EntityJobData) => {
   });
 
   for (let level = 0; level < executionPlan.length; level++) {
+    // Honour the worker-level timeout. Throwing here ensures we don't
+    // start a new batch (or call onEntityCompleted) after the abort.
+    signal.throwIfAborted();
+
     const batches = executionPlan[level];
     if (!batches || batches.length === 0) {
       continue;
@@ -311,10 +432,16 @@ const processEntityJob = async (data: EntityJobData) => {
             level,
             scopedDb,
             requestId,
+            signal,
           }),
       ),
     );
   }
+
+  // Final checkpoint — if abort fired between the last batch and
+  // here, skip the broadcast + completion increment so the retry
+  // owns the finalization.
+  signal.throwIfAborted();
 
   // Broadcast entity invalidation so frontend refetches
   broadcastInvalidation(branded.workspaceId, ["entities", branded.workspaceId]);
@@ -330,6 +457,7 @@ type ProcessOneBatchArgs = {
   level: number;
   scopedDb: ScopedDb;
   requestId: string;
+  signal: AbortSignal;
 };
 
 const processOneBatch = async ({
@@ -340,7 +468,9 @@ const processOneBatch = async ({
   level,
   scopedDb,
   requestId,
+  signal,
 }: ProcessOneBatchArgs) => {
+  signal.throwIfAborted();
   const entityRow = await scopedDb((tx) =>
     tx.query.entities.findFirst({
       columns: { currentVersionId: true },
@@ -396,9 +526,15 @@ const processOneBatch = async ({
   const orgAIConfig = await loadOrgAIConfig(organizationId);
   const generateFn = isMockAI() ? generateBatchMock : generateBatch;
 
-  // generateBatch returns a Result<T, E> directly
+  // generateBatch returns a Result<T, E> directly. The combined
+  // signal aborts when EITHER the per-batch AI timeout fires OR the
+  // worker-level per-job timeout does, so the AI SDK actually cancels
+  // the in-flight request.
   const batchResult = await generateFn({
-    abortSignal: AbortSignal.timeout(120_000),
+    abortSignal: AbortSignal.any([
+      AbortSignal.timeout(BATCH_AI_TIMEOUT_MS),
+      signal,
+    ]),
     batch,
     entityVersionId,
     organizationId,
@@ -499,7 +635,21 @@ const onEntityCompleted = async (
 
   if (completed >= total) {
     await finishWorkflow(workspaceId, organizationId, userId);
+    return;
   }
+
+  // Long workflows can outlast the initial TTL on the running lock and
+  // the plan-properties snapshot. Each completed entity refreshes both
+  // back to the full window so progress keeps the lock alive instead
+  // of letting a slow batch fall back to the "freshen everything"
+  // path or admit a parallel run.
+  await Promise.all([
+    redis.expire(workflowKey(workspaceId, "running"), RUNNING_LOCK_TTL_SEC),
+    redis.expire(
+      workflowKey(workspaceId, "plan-properties"),
+      RUNNING_LOCK_TTL_SEC,
+    ),
+  ]);
 };
 
 const finishWorkflow = async (
@@ -508,20 +658,51 @@ const finishWorkflow = async (
   userId: SafeId<"user">,
 ) => {
   const redis = getRedis();
+  const scopedDb = createRootScopedDb({
+    organizationId,
+    userId,
+    workspaceIds: [workspaceId],
+  });
 
+  // Freshen only the properties that were part of this workflow's plan.
+  // Properties created mid-workflow are not in the snapshot — they stay
+  // stale and trigger an automatic follow-up run below.
+  let processedIds: SafeId<"property">[] = [];
   try {
-    const scopedDb = createRootScopedDb({
-      organizationId,
-      userId,
-      workspaceIds: [workspaceId],
-    });
-
-    await scopedDb((tx) =>
-      tx
-        .update(properties)
-        .set({ status: "fresh" })
-        .where(eq(properties.workspaceId, workspaceId)),
+    const planRaw = await redis.get(
+      workflowKey(workspaceId, "plan-properties"),
     );
+    if (planRaw !== null) {
+      const parsed: unknown = JSON.parse(planRaw);
+      if (Array.isArray(parsed)) {
+        processedIds = parsed
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => brandPersistedPropertyId(value));
+      }
+    }
+
+    if (processedIds.length > 0) {
+      await scopedDb((tx) =>
+        tx
+          .update(properties)
+          .set({ status: "fresh" })
+          .where(
+            and(
+              eq(properties.workspaceId, workspaceId),
+              inArray(properties.id, processedIds),
+            ),
+          ),
+      );
+    } else {
+      // Backwards-compat: pre-snapshot workflows had no plan recorded.
+      // Behave as before so they still finalize.
+      await scopedDb((tx) =>
+        tx
+          .update(properties)
+          .set({ status: "fresh" })
+          .where(eq(properties.workspaceId, workspaceId)),
+      );
+    }
   } catch (error: unknown) {
     captureError(error, { workspaceId });
   }
@@ -531,11 +712,45 @@ const finishWorkflow = async (
     workflowKey(workspaceId, "running"),
     workflowKey(workspaceId, "total"),
     workflowKey(workspaceId, "completed"),
+    workflowKey(workspaceId, "plan-properties"),
   );
 
   // Broadcast completion
   broadcastWorkflowStatus(workspaceId, false);
   broadcastInvalidation(workspaceId, ["properties", workspaceId]);
+
+  // Catch up on any AI-model properties created mid-workflow. They
+  // were left stale by the partial freshen above; kick off a follow-up
+  // run so their cells get populated without the user having to nudge.
+  // The filter on `tool.type === 'ai-model'` is critical: manual
+  // properties may legitimately sit at status "stale" (e.g. after a
+  // type edit) and the planner intentionally skips them, so an
+  // unfiltered query would loop forever firing no-op workflows.
+  try {
+    const stragglers = await scopedDb((tx) =>
+      tx
+        .select({ id: properties.id })
+        .from(properties)
+        .where(
+          and(
+            eq(properties.workspaceId, workspaceId),
+            eq(properties.status, "stale"),
+            sql`${properties.tool}->>'type' = 'ai-model'`,
+          ),
+        )
+        .limit(1),
+    );
+    if (stragglers.length > 0) {
+      void startWorkflow({
+        workspaceId,
+        organizationId,
+        userId,
+        scopedDb,
+      }).catch((error: unknown) => captureError(error, { workspaceId }));
+    }
+  } catch (error: unknown) {
+    captureError(error, { workspaceId });
+  }
 };
 
 // ── Helpers ────────────────────────────────────────────

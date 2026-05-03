@@ -234,9 +234,18 @@ const queryEntitiesGenerator = async function* ({
           currentVersionId: entities.currentVersionId,
           createdAt: entities.createdAt,
           updatedAt: entities.updatedAt,
-          createdByName: user.name,
+          // Author display falls back to email when the user hasn't set
+          // a display name (Better Auth's notNull `name` allows empty
+          // strings, so passwordless email signups land with `name=''`).
+          // Without this coalesce the Author column renders blank for
+          // those users.
+          createdByName: sql<
+            string | null
+          >`coalesce(nullif(trim(${user.name}), ''), ${user.email})`,
           createdByImage: user.image,
-          lastEditedByName: lastEditor.name,
+          lastEditedByName: sql<
+            string | null
+          >`coalesce(nullif(trim(${lastEditor.name}), ''), ${lastEditor.email})`,
           lastEditedByImage: lastEditor.image,
           status: entities.status,
           priority: entities.priority,
