@@ -1,0 +1,18 @@
+-- No-op migration.
+--
+-- The companion code change reshapes the TypeScript
+-- `JustificationContent` type (apps/api/src/db/schema.ts) into a
+-- discriminated union: `pdf-bates` (the existing PDF citation
+-- shape) and `docx-folio` (new — carries `blockId` + literal
+-- block text per citation).
+--
+-- The change lives entirely inside the `properties.content` /
+-- `entity_versions` JSONB columns, so no DDL is required:
+--   * existing rows continue to validate as `pdf-bates` blocks
+--     once the discriminator is back-filled in code
+--     (parse-justifications.ts handles both shapes).
+--   * new DOCX-extracted rows write the `docx-folio` shape.
+--
+-- A stub file is committed instead of skipping the migration so
+-- `scripts/check-migrations.sh` doesn't flag the schema-file
+-- change as missing migration coverage.
