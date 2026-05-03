@@ -16,6 +16,7 @@
   "scripts": {
     "build": "turbo build",
     "dev": "bun packages/scripts/src/dev-runner.ts dev",
+    "dev:ai-tools": "bun --cwd apps/api dev:ai-tools",
     "dev:all": "turbo dev",
     "dev:api": "bun packages/scripts/src/dev-runner.ts dev:api",
     "dev:desktop": "bun packages/scripts/src/dev-runner.ts dev:desktop",

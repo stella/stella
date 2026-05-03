@@ -17,10 +17,12 @@
  */
 
 import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
+import { devToolsMiddleware } from "@ai-sdk/devtools";
 import { createGoogleGenerativeAI, google } from "@ai-sdk/google";
 import { createVertex } from "@ai-sdk/google-vertex";
 import { createOpenAI, openai } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { wrapLanguageModel } from "ai";
 import type { LanguageModel } from "ai";
 import { panic } from "better-result";
 
@@ -123,7 +125,8 @@ export const getTemperatureForRole = (role: ModelRole): number =>
 
 // -- Provider resolution ----------------------------------------
 
-type ModelFactory = (modelId: string) => LanguageModel;
+type WrappableLanguageModel = Parameters<typeof wrapLanguageModel>[0]["model"];
+type ModelFactory = (modelId: string) => WrappableLanguageModel;
 
 const resolveProvider = (): AIProvider => {
   if (env.AI_PROVIDER) {
@@ -364,6 +367,18 @@ const MODEL_OVERRIDES = {
   pdf: env.AI_MODEL_PDF,
 } satisfies Record<ModelRole, string | undefined>;
 
+const isAIDevToolsEnabled = (): boolean => env.AI_DEVTOOLS_ENABLED;
+
+const withLocalAIDevTools = (model: WrappableLanguageModel): LanguageModel => {
+  if (!isAIDevToolsEnabled()) {
+    return model;
+  }
+  return wrapLanguageModel({
+    model,
+    middleware: devToolsMiddleware(),
+  });
+};
+
 // -- Public API -------------------------------------------------
 
 /** Regional instance factory cache (non-BYOK). */
@@ -408,7 +423,7 @@ export const getModelForRole = (
     if (shouldOverride) {
       const factory = getCachedFactory(orgConfig);
       const modelId = DEFAULT_MODELS[orgConfig.provider][role];
-      return factory(modelId);
+      return withLocalAIDevTools(factory(modelId));
     }
 
     // Region-only path: org has a region booster but this
@@ -418,14 +433,14 @@ export const getModelForRole = (
       const factory = getRegionalInstanceFactory(orgConfig.region);
       const modelId =
         MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[getActiveProvider()][role];
-      return factory(modelId);
+      return withLocalAIDevTools(factory(modelId));
     }
   }
 
   // Default instance path.
   const modelId =
     MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[getActiveProvider()][role];
-  return getInstanceFactory()(modelId);
+  return withLocalAIDevTools(getInstanceFactory()(modelId));
 };
 
 export const getModelInfoForRole = (
@@ -463,7 +478,7 @@ export const getModelById = (
   orgConfig?: OrgAIConfig | null,
 ): LanguageModel => {
   if (orgConfig) {
-    return getCachedFactory(orgConfig)(modelId);
+    return withLocalAIDevTools(getCachedFactory(orgConfig)(modelId));
   }
-  return getInstanceFactory()(modelId);
+  return withLocalAIDevTools(getInstanceFactory()(modelId));
 };
