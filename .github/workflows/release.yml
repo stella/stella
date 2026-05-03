@@ -62,9 +62,11 @@ jobs:
             exit 1
           fi
 
-          echo "ref=$release_ref" >> "$GITHUB_OUTPUT"
-          echo "sha=$release_sha" >> "$GITHUB_OUTPUT"
-          echo "version=${release_ref#v}" >> "$GITHUB_OUTPUT"
+          {
+            echo "ref=$release_ref"
+            echo "sha=$release_sha"
+            echo "version=${release_ref#v}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Checkout resolved commit
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -323,7 +325,7 @@ jobs:
     # prerelease conventions (-rc1, -beta.N, -alpha) cannot reach
     # production by accident if the upstream validation regex changes.
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 30
     needs: publish
     if: ${{ !contains(needs.publish.outputs.release_ref, '-') }}
     permissions:
@@ -338,15 +340,57 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: stella-infra
 
-      - name: Dispatch promote-release.yml
+      - name: Dispatch and watch promote-release.yml
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_REF: ${{ needs.publish.outputs.release_ref }}
           IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}
+          INFRA_REPO: ${{ github.repository_owner }}/stella-infra
         run: |
-          gh workflow run promote-release.yml \
-            --repo "${{ github.repository_owner }}/stella-infra" \
-            --field release_ref="$RELEASE_REF" \
-            --field image_digest="$IMAGE_DIGEST" \
-            --field run_migrations=true \
-            --field frontend=true
+          dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          dispatch_output="$(
+            gh workflow run promote-release.yml \
+              --repo "$INFRA_REPO" \
+              --field release_ref="$RELEASE_REF" \
+              --field image_digest="$IMAGE_DIGEST" \
+              --field run_migrations=true \
+              --field frontend=true 2>&1
+          )"
+          printf '%s\n' "$dispatch_output"
+
+          run_id="$(
+            printf '%s\n' "$dispatch_output" \
+              | sed -nE 's#.*https://github.com/[^/]+/[^/]+/actions/runs/([0-9]+).*#\1#p' \
+              | head -n 1
+          )"
+
+          for _ in {1..30}; do
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+
+            run_id="$(
+              gh run list \
+                --repo "$INFRA_REPO" \
+                --workflow promote-release.yml \
+                --event workflow_dispatch \
+                --json databaseId,createdAt \
+                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | .databaseId" \
+                --limit 10 \
+                | head -n 1
+            )"
+
+            if [[ -z "$run_id" ]]; then
+              sleep 2
+            fi
+          done
+
+          if [[ -z "$run_id" ]]; then
+            echo "Could not find the dispatched promotion workflow run." >&2
+            exit 1
+          fi
+
+          gh run watch "$run_id" \
+            --repo "$INFRA_REPO" \
+            --compact \
+            --exit-status
