@@ -288,6 +288,14 @@ const sendMessage = createSafeRootHandler(
               // workspace tools). Run before persistMessage so the
               // recorded scope already includes the workspaces
               // when the message lands in chat_messages.
+              //
+              // If expansion fails (transient DB error, etc.),
+              // SKIP the message persist. Storing workspace-
+              // scoped content in chat_messages while the owning
+              // thread's data_workspace_ids stays stale would
+              // leave the new content readable after the user
+              // loses access to those workspaces — the same
+              // class of leak this whole change exists to close.
               const assistantWorkspaceIds = extractAssistantWorkspaceIds(
                 resolvedResponseMessage.parts,
               );
@@ -299,6 +307,7 @@ const sendMessage = createSafeRootHandler(
               });
               if (Result.isError(expandResult)) {
                 captureError(expandResult.error, { threadId: body.threadId });
+                return;
               }
 
               const persistResult = await persistMessage({

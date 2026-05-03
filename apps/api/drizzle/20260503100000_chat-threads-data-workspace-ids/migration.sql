@@ -20,23 +20,61 @@ UPDATE chat_threads
   WHERE workspace_id IS NOT NULL
     AND cardinality(data_workspace_ids) = 0;
 
--- Global threads: derive the data scope from any embedded
--- search-summary citation parts. True conversational global chats
--- have no such parts and keep the empty default ('{}'), which the
--- new RLS predicate treats as "no embedded workspace data" and
--- therefore unrestricted by workspace.
+-- Global threads: derive the data scope from every workspace-
+-- bearing carrier we know about — `data-stella-source-document`
+-- parts (search summaries, document references) and entity-
+-- mention or workspace-mention HTML inside text parts. UUID-
+-- shaped strings extracted from text are then intersected with
+-- the workspaces table so noise (any UUID-looking substring) is
+-- dropped. True conversational global chats have no such carriers
+-- and keep the empty default ('{}'), which the new RLS predicate
+-- treats as "no embedded workspace data" and therefore unrestricted
+-- by workspace.
+WITH thread_workspace_refs AS (
+  -- Source-document parts carry the workspace ID directly.
+  SELECT
+    cm.thread_id,
+    (part->'data'->>'workspaceId')::uuid AS workspace_id
+  FROM chat_messages cm,
+       LATERAL jsonb_array_elements(cm.content->'data') AS part
+  WHERE part->>'type' = 'data-stella-source-document'
+    AND part->'data'->>'workspaceId' ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+  UNION
+
+  -- Entity-mention HTML inside text parts carries the workspace
+  -- in `data-source-workspace-id="<uuid>"`; workspace mentions
+  -- carry the workspace ID directly in `data-id="<uuid>"`. Both
+  -- are matched by extracting any UUID-shaped substring from the
+  -- text and validating against the workspaces table below. This
+  -- avoids regex lookbehind (not portable) and tolerates either
+  -- attribute order.
+  SELECT
+    cm.thread_id,
+    uuid_match.uuid_text::uuid AS workspace_id
+  FROM chat_messages cm,
+       LATERAL jsonb_array_elements(cm.content->'data') AS part,
+       LATERAL regexp_matches(
+         coalesce(part->>'text', ''),
+         '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
+         'g'
+       ) AS rm(captures),
+       LATERAL (SELECT rm.captures[1]) AS uuid_match(uuid_text)
+  WHERE part->>'type' = 'text'
+    AND part->>'text' IS NOT NULL
+)
 UPDATE chat_threads ct
   SET data_workspace_ids = derived.workspace_ids
   FROM (
     SELECT
-      cm.thread_id,
-      ARRAY_AGG(DISTINCT (part->'data'->>'workspaceId')::uuid)
-        AS workspace_ids
-    FROM chat_messages cm,
-         LATERAL jsonb_array_elements(cm.content->'data') AS part
-    WHERE part->>'type' = 'data-stella-source-document'
-      AND part->'data'->>'workspaceId' IS NOT NULL
-    GROUP BY cm.thread_id
+      twr.thread_id,
+      ARRAY_AGG(DISTINCT twr.workspace_id) AS workspace_ids
+    FROM thread_workspace_refs twr
+    -- Drop UUIDs that aren't actually workspaces in this DB.
+    WHERE EXISTS (
+      SELECT 1 FROM workspaces w WHERE w.id = twr.workspace_id
+    )
+    GROUP BY twr.thread_id
   ) AS derived
   WHERE ct.id = derived.thread_id
     AND ct.workspace_id IS NULL
