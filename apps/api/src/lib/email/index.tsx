@@ -24,6 +24,9 @@ const resolveTransport = (): EmailTransport => {
         ...(env.SES_SECRET_ACCESS_KEY && {
           secretAccessKey: env.SES_SECRET_ACCESS_KEY,
         }),
+        ...(env.SES_CONFIGURATION_SET && {
+          configurationSetName: env.SES_CONFIGURATION_SET,
+        }),
       });
     case "smtp":
       return createSMTPTransport({
@@ -66,15 +69,18 @@ export const sendOTPEmail = async ({
   type,
   lang,
 }: SendOTPEmailProps) => {
-  const html = await render(
-    <BetterAuthOTP.Email lang={lang} otp={otp} type={type} />,
-  );
+  const node = <BetterAuthOTP.Email lang={lang} otp={otp} type={type} />;
+  const [html, text] = await Promise.all([
+    render(node),
+    render(node, { plainText: true }),
+  ]);
 
   await getTransport().send({
     from: env.TRANSACTIONAL_EMAIL_FROM,
     to: email,
     subject: BetterAuthOTP.subject(lang),
     html,
+    text,
   });
 };
 
@@ -95,21 +101,26 @@ export const sendNewDeviceLoginEmail = async ({
   sessionsUrl,
   lang,
 }: SendNewDeviceLoginEmailProps) => {
-  const html = await render(
+  const node = (
     <NewDeviceLogin.Email
       device={device}
       ipAddress={ipAddress}
       lang={lang}
       sessionsUrl={sessionsUrl}
       time={time}
-    />,
+    />
   );
+  const [html, text] = await Promise.all([
+    render(node),
+    render(node, { plainText: true }),
+  ]);
 
   await getTransport().send({
     from: env.TRANSACTIONAL_EMAIL_FROM,
     to: email,
     subject: NewDeviceLogin.subject(lang),
     html,
+    text,
   });
 };
 
@@ -128,14 +139,18 @@ export const sendOrganizationInvitation = async ({
   organizationName,
   lang,
 }: SendOrganizationInvitationProps) => {
-  const html = await render(
+  const node = (
     <OrganizationInvitation.Email
       invitedByUsername={invitedByUsername}
       inviteLink={inviteLink}
       lang={lang}
       organizationName={organizationName}
-    />,
+    />
   );
+  const [html, text] = await Promise.all([
+    render(node),
+    render(node, { plainText: true }),
+  ]);
 
   await getTransport().send({
     from: env.TRANSACTIONAL_EMAIL_FROM,
@@ -144,5 +159,6 @@ export const sendOrganizationInvitation = async ({
       organizationName,
     }),
     html,
+    text,
   });
 };

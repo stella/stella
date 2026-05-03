@@ -85,6 +85,7 @@ const envApi = createEnv({
     SES_REGION: v.optional(v.string()),
     SES_ACCESS_KEY_ID: v.optional(v.string()),
     SES_SECRET_ACCESS_KEY: v.optional(v.string()),
+    SES_CONFIGURATION_SET: v.optional(v.string()),
     SMTP_HOST: v.optional(v.string()),
     SMTP_PORT: v.optional(
       v.pipe(
