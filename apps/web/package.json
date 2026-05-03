@@ -75,7 +75,7 @@
     "immer": "^11.1.4",
     "lucide-react": "catalog:",
     "pdfjs-dist": "^5.6.205",
-    "posthog-js": "^1.372.1",
+    "posthog-js": "^1.372.3",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "react-resizable-panels": "^4.10.0",
