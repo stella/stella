@@ -31,6 +31,9 @@
     ],
     "macOS": {
       "minimumSystemVersion": "10.15"
+    },
+    "windows": {
+      "signCommand": "trusted-signing-cli -e %AZURE_ENDPOINT% -a %AZURE_CODE_SIGNING_ACCOUNT% -c %AZURE_CERT_PROFILE% -d \"Stella desktop\" %1"
     }
   },
   "plugins": {
