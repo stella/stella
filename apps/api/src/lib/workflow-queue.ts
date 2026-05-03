@@ -273,32 +273,31 @@ export const initWorkflowWorker = () => {
     QUEUE_NAME,
     async (job) => {
       // Hard process-level timeout. A hung AI provider, a runaway
-      // batch, or a broken external call would otherwise keep the job
-      // "active" indefinitely and block follow-up workflow runs.
-      // Throwing here flips it to "failed" → BullMQ retries (attempts: 2)
-      // → finally counts as completed by the failed-handler so the
-      // workspace lock can release.
-      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+      // batch, or a broken external call would otherwise keep the
+      // job "active" indefinitely and block follow-up workflow runs.
+      //
+      // We pipe an AbortSignal through `processEntityJob` so the
+      // timeout actually CANCELS the in-flight work (the AI SDK call
+      // honours the signal). Without that, a `Promise.race`-style
+      // wrapper would only reject the wrapper while the original
+      // attempt kept running — racing the BullMQ retry and double-
+      // incrementing the workflow completion counter.
+      const controller = new AbortController();
+      const timeoutHandle = setTimeout(() => {
+        controller.abort(
+          new Error(
+            `workflow.job_timeout: entity ${job.data.entityId} exceeded ${JOB_HARD_TIMEOUT_MS}ms`,
+          ),
+        );
+      }, JOB_HARD_TIMEOUT_MS);
       try {
-        await Promise.race([
-          processEntityJob(job.data),
-          new Promise<never>((_resolve, reject) => {
-            timeoutHandle = setTimeout(() => {
-              reject(
-                new Error(
-                  `workflow.job_timeout: entity ${job.data.entityId} exceeded ${JOB_HARD_TIMEOUT_MS}ms`,
-                ),
-              );
-            }, JOB_HARD_TIMEOUT_MS);
-          }),
-        ]);
+        await processEntityJob(job.data, controller.signal);
+        // If the signal aborted between the last awaited call and
+        // here, surface it so BullMQ marks the attempt failed
+        // rather than counting it as completed.
+        controller.signal.throwIfAborted();
       } finally {
-        // Clear the timer on the happy path so it doesn't sit in
-        // the event loop for the full timeout window after the job
-        // has already finished.
-        if (timeoutHandle !== undefined) {
-          clearTimeout(timeoutHandle);
-        }
+        clearTimeout(timeoutHandle);
       }
     },
     {
@@ -359,7 +358,7 @@ export const initWorkflowWorker = () => {
 
 // ── Entity processing ──────────────────────────────────
 
-const processEntityJob = async (data: EntityJobData) => {
+const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
   const {
     workspaceId,
     organizationId,
@@ -384,6 +383,10 @@ const processEntityJob = async (data: EntityJobData) => {
   });
 
   for (let level = 0; level < executionPlan.length; level++) {
+    // Honour the worker-level timeout. Throwing here ensures we don't
+    // start a new batch (or call onEntityCompleted) after the abort.
+    signal.throwIfAborted();
+
     const batches = executionPlan[level];
     if (!batches || batches.length === 0) {
       continue;
@@ -402,10 +405,16 @@ const processEntityJob = async (data: EntityJobData) => {
             level,
             scopedDb,
             requestId,
+            signal,
           }),
       ),
     );
   }
+
+  // Final checkpoint — if abort fired between the last batch and
+  // here, skip the broadcast + completion increment so the retry
+  // owns the finalization.
+  signal.throwIfAborted();
 
   // Broadcast entity invalidation so frontend refetches
   broadcastInvalidation(branded.workspaceId, ["entities", branded.workspaceId]);
@@ -421,6 +430,7 @@ type ProcessOneBatchArgs = {
   level: number;
   scopedDb: ScopedDb;
   requestId: string;
+  signal: AbortSignal;
 };
 
 const processOneBatch = async ({
@@ -431,7 +441,9 @@ const processOneBatch = async ({
   level,
   scopedDb,
   requestId,
+  signal,
 }: ProcessOneBatchArgs) => {
+  signal.throwIfAborted();
   const entityRow = await scopedDb((tx) =>
     tx.query.entities.findFirst({
       columns: { currentVersionId: true },
@@ -487,9 +499,12 @@ const processOneBatch = async ({
   const orgAIConfig = await loadOrgAIConfig(organizationId);
   const generateFn = isMockAI() ? generateBatchMock : generateBatch;
 
-  // generateBatch returns a Result<T, E> directly
+  // generateBatch returns a Result<T, E> directly. The combined
+  // signal aborts when EITHER the per-batch 2-min timeout fires OR
+  // the worker-level hard timeout (JOB_HARD_TIMEOUT_MS) does, so the
+  // AI SDK actually cancels the in-flight request.
   const batchResult = await generateFn({
-    abortSignal: AbortSignal.timeout(120_000),
+    abortSignal: AbortSignal.any([AbortSignal.timeout(120_000), signal]),
     batch,
     entityVersionId,
     organizationId,
