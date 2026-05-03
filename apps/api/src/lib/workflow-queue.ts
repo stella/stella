@@ -18,6 +18,7 @@ import { redisConnectionOptions } from "@/api/lib/redis-options";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
   brandPersistedEntityId,
+  brandPersistedPropertyId,
   brandPersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
@@ -75,10 +76,37 @@ const getQueue = (): Queue => {
     defaultJobOptions: {
       removeOnComplete: 100,
       removeOnFail: 500,
+      // Retry once with backoff so a single transient failure (network
+      // blip, AI provider 5xx) doesn't leave the cell empty. Stays low
+      // enough that genuine logic errors surface quickly.
+      attempts: 2,
+      backoff: { type: "exponential", delay: 5000 },
     },
   });
   return queue;
 };
+
+// Self-heal levers. Tuned conservatively so the happy path is never
+// disrupted, but a stuck job/worker can't block the workspace.
+//
+// LOCK_DURATION_MS: how long a worker holds a job's lock before BullMQ
+// considers it stalled (worker auto-extends every half this window).
+// AI extraction can take a few minutes per entity; 5 minutes covers
+// the slowest legitimate case with headroom.
+//
+// STALLED_INTERVAL_MS: how often BullMQ scans for stalled jobs.
+//
+// MAX_STALLED_COUNT: a job that stalls this many times moves to
+// failed (and then retries via `attempts`).
+//
+// JOB_HARD_TIMEOUT_MS: process-level wrapper so a hung AI call can't
+// keep a job "active" forever. Slightly longer than LOCK_DURATION_MS
+// to let BullMQ's stalled detection fire first when applicable.
+const LOCK_DURATION_MS = 5 * 60 * 1000;
+const STALLED_INTERVAL_MS = 30 * 1000;
+const MAX_STALLED_COUNT = 2;
+const JOB_HARD_TIMEOUT_MS = 6 * 60 * 1000;
+const RUNNING_LOCK_TTL_SEC = 15 * 60;
 
 /**
  * Check if a workflow is currently running for a workspace.
@@ -116,13 +144,14 @@ export const startWorkflow = async ({
 }: StartWorkflowArgs): Promise<StartWorkflowResult> => {
   const redis = getRedis();
 
-  // Check if already running (atomic check-and-set).
-  // 2-hour TTL self-heals if the process crashes before finishWorkflow.
+  // Check if already running (atomic check-and-set). The TTL is the
+  // safety net for an uncleanly-killed worker; tuned tight enough that
+  // a recovered workspace doesn't sit blocked for hours.
   const wasSet = await redis.set(
     workflowKey(workspaceId, "running"),
     "1",
     "EX",
-    7200,
+    RUNNING_LOCK_TTL_SEC,
     "NX",
   );
   if (!wasSet) {
@@ -180,6 +209,20 @@ export const startWorkflow = async ({
     );
     await redis.set(workflowKey(workspaceId, "completed"), "0");
 
+    // Snapshot the property IDs in this workflow's plan so finishWorkflow
+    // can freshen only the ones it actually processed. Without this,
+    // properties created mid-workflow get marked fresh without ever
+    // running, leaving cells permanently empty.
+    const planPropertyIds = executionPlan.flatMap((level) =>
+      level.flatMap((batch) => batch.properties.map((p) => p.id)),
+    );
+    await redis.set(
+      workflowKey(workspaceId, "plan-properties"),
+      JSON.stringify(planPropertyIds),
+      "EX",
+      RUNNING_LOCK_TTL_SEC,
+    );
+
     // Broadcast running status
     broadcastWorkflowStatus(workspaceId, true);
 
@@ -224,11 +267,33 @@ export const initWorkflowWorker = () => {
   const worker = new Worker<EntityJobData>(
     QUEUE_NAME,
     async (job) => {
-      await processEntityJob(job.data);
+      // Hard process-level timeout. A hung AI provider, a runaway
+      // batch, or a broken external call would otherwise keep the job
+      // "active" indefinitely and block follow-up workflow runs.
+      // Throwing here flips it to "failed" → BullMQ retries (attempts: 2)
+      // → finally counts as completed by the failed-handler so the
+      // workspace lock can release.
+      await Promise.race([
+        processEntityJob(job.data),
+        new Promise<never>((_resolve, reject) => {
+          setTimeout(() => {
+            reject(
+              new Error(
+                `workflow.job_timeout: entity ${job.data.entityId} exceeded ${JOB_HARD_TIMEOUT_MS}ms`,
+              ),
+            );
+          }, JOB_HARD_TIMEOUT_MS);
+        }),
+      ]);
     },
     {
       connection: workerConnection,
       concurrency: MAX_CONCURRENT_ENTITIES,
+      // Lock-extension lets BullMQ's stalled-job detector evict a
+      // crashed worker's jobs back onto the queue.
+      lockDuration: LOCK_DURATION_MS,
+      stalledInterval: STALLED_INTERVAL_MS,
+      maxStalledCount: MAX_STALLED_COUNT,
     },
   );
 
@@ -508,20 +573,51 @@ const finishWorkflow = async (
   userId: SafeId<"user">,
 ) => {
   const redis = getRedis();
+  const scopedDb = createRootScopedDb({
+    organizationId,
+    userId,
+    workspaceIds: [workspaceId],
+  });
 
+  // Freshen only the properties that were part of this workflow's plan.
+  // Properties created mid-workflow are not in the snapshot — they stay
+  // stale and trigger an automatic follow-up run below.
+  let processedIds: SafeId<"property">[] = [];
   try {
-    const scopedDb = createRootScopedDb({
-      organizationId,
-      userId,
-      workspaceIds: [workspaceId],
-    });
-
-    await scopedDb((tx) =>
-      tx
-        .update(properties)
-        .set({ status: "fresh" })
-        .where(eq(properties.workspaceId, workspaceId)),
+    const planRaw = await redis.get(
+      workflowKey(workspaceId, "plan-properties"),
     );
+    if (planRaw !== null) {
+      const parsed: unknown = JSON.parse(planRaw);
+      if (Array.isArray(parsed)) {
+        processedIds = parsed
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => brandPersistedPropertyId(value));
+      }
+    }
+
+    if (processedIds.length > 0) {
+      await scopedDb((tx) =>
+        tx
+          .update(properties)
+          .set({ status: "fresh" })
+          .where(
+            and(
+              eq(properties.workspaceId, workspaceId),
+              inArray(properties.id, processedIds),
+            ),
+          ),
+      );
+    } else {
+      // Backwards-compat: pre-snapshot workflows had no plan recorded.
+      // Behave as before so they still finalize.
+      await scopedDb((tx) =>
+        tx
+          .update(properties)
+          .set({ status: "fresh" })
+          .where(eq(properties.workspaceId, workspaceId)),
+      );
+    }
   } catch (error: unknown) {
     captureError(error, { workspaceId });
   }
@@ -531,11 +627,40 @@ const finishWorkflow = async (
     workflowKey(workspaceId, "running"),
     workflowKey(workspaceId, "total"),
     workflowKey(workspaceId, "completed"),
+    workflowKey(workspaceId, "plan-properties"),
   );
 
   // Broadcast completion
   broadcastWorkflowStatus(workspaceId, false);
   broadcastInvalidation(workspaceId, ["properties", workspaceId]);
+
+  // Catch up on any properties created mid-workflow. They were left
+  // stale by the partial freshen above; kick off a follow-up run so
+  // their cells get populated without the user having to nudge again.
+  try {
+    const stragglers = await scopedDb((tx) =>
+      tx
+        .select({ id: properties.id })
+        .from(properties)
+        .where(
+          and(
+            eq(properties.workspaceId, workspaceId),
+            eq(properties.status, "stale"),
+          ),
+        )
+        .limit(1),
+    );
+    if (stragglers.length > 0) {
+      void startWorkflow({
+        workspaceId,
+        organizationId,
+        userId,
+        scopedDb,
+      }).catch((error: unknown) => captureError(error, { workspaceId }));
+    }
+  } catch (error: unknown) {
+    captureError(error, { workspaceId });
+  }
 };
 
 // ── Helpers ────────────────────────────────────────────
