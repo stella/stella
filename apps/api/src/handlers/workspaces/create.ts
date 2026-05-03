@@ -37,9 +37,12 @@ import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
 
 const config = {
   permissions: { workspace: ["create"] },
+  // A request without `clientId` creates a personal matter (visible
+  // only to the creator). With `clientId`, it's a normal client
+  // matter and `memberUserIds` may add additional members.
   body: t.Object({
     id: tSafeId("workspace"),
-    clientId: tSafeId("contact"),
+    clientId: t.Optional(tSafeId("contact")),
     memberUserIds: t.Optional(
       t.Array(t.String({ maxLength: 128 }), {
         maxItems: LIMITS.workspaceMembersCount - 1,
@@ -56,10 +59,13 @@ const createWorkspaces = createSafeRootHandler(
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
         const organizationId = session.activeOrganizationId;
+        // Personal matters (no clientId) always have exactly one
+        // member: the creator. Additional members can only be
+        // attached via promotion through the update endpoint.
         const requestedMemberUserIds =
-          body.memberUserIds === undefined
-            ? []
-            : Array.from(new Set(body.memberUserIds));
+          body.clientId !== undefined && body.memberUserIds !== undefined
+            ? Array.from(new Set(body.memberUserIds))
+            : [];
 
         const orgFilter = eq(workspaces.organizationId, organizationId);
 
@@ -82,18 +88,20 @@ const createWorkspaces = createSafeRootHandler(
                 matterNumberPadding: true,
               },
             }),
-            tx
-              .select({ id: contacts.id })
-              .from(contacts)
-              .where(
-                and(
-                  eq(contacts.id, body.clientId),
-                  eq(contacts.organizationId, organizationId),
-                ),
-              )
-              .for("update")
-              .limit(1)
-              .then((rows) => rows.at(0) ?? null),
+            body.clientId !== undefined
+              ? tx
+                  .select({ id: contacts.id })
+                  .from(contacts)
+                  .where(
+                    and(
+                      eq(contacts.id, body.clientId),
+                      eq(contacts.organizationId, organizationId),
+                    ),
+                  )
+                  .for("update")
+                  .limit(1)
+                  .then((rows) => rows.at(0) ?? null)
+              : Promise.resolve(null),
             requestedMemberUserIds.length > 0
               ? tx
                   .select({ userId: member.userId })
@@ -110,7 +118,7 @@ const createWorkspaces = createSafeRootHandler(
 
         const activeCount = countResult.at(0)?.total ?? 0;
 
-        if (!client) {
+        if (body.clientId !== undefined && !client) {
           return {
             ok: false as const,
             status: 404 as const,
@@ -128,7 +136,8 @@ const createWorkspaces = createSafeRootHandler(
 
         // Membership verified above — brand each requested user ID.
         // Combined with the session user.id, this gives a typed list
-        // of org-validated members for the insert below.
+        // of org-validated members for the insert below. Personal
+        // matters always have exactly one member: the creator.
         const workspaceMemberUserIds = Array.from(
           new Set([
             user.id,
@@ -188,7 +197,7 @@ const createWorkspaces = createSafeRootHandler(
         await tx.insert(workspaces).values({
           id: body.id,
           organizationId,
-          clientId: body.clientId,
+          clientId: body.clientId ?? null,
           name: newName,
           reference,
         });
@@ -248,7 +257,7 @@ const createWorkspaces = createSafeRootHandler(
                 new: {
                   name: newName,
                   reference,
-                  clientId: body.clientId,
+                  clientId: body.clientId ?? null,
                   memberCount: workspaceMemberUserIds.length,
                 },
               },

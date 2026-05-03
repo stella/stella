@@ -179,7 +179,19 @@ export const WorkspaceBreadcrumb = ({
       </BreadcrumbItem>
       <BreadcrumbSeparator className="shrink-0" />
     </>
-  ) : null;
+  ) : (
+    <>
+      <BreadcrumbItem className="min-w-8 shrink">
+        <span
+          className="text-muted-foreground min-w-0 truncate"
+          title={t("workspaces.parties.personalLabel")}
+        >
+          {t("workspaces.parties.personalLabel")}
+        </span>
+      </BreadcrumbItem>
+      <BreadcrumbSeparator className="shrink-0" />
+    </>
+  );
 
   const referenceSegment = isEditingRef ? (
     <Input

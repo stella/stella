@@ -157,6 +157,7 @@ const MattersContentView = ({
   groups,
   focusIndex,
 }: MattersContentViewProps) => {
+  const t = useTranslations();
   const gridRef = useRef<HTMLDivElement>(null);
   const viewMode = useConfigStore((s) => s.matters.viewMode);
   const collapsedGroups = useConfigStore(
@@ -182,13 +183,10 @@ const MattersContentView = ({
             return (
               <Fragment key={group.groupId}>
                 <ClientGroupHeader
-                  clientId={group.clientId}
-                  clientName={group.clientName}
                   collapsed={collapsed}
-                  groupId={group.groupId}
-                  matterCount={group.workspaces.length}
+                  group={group}
                   onToggle={() => toggleGroupCollapsed(group.groupId)}
-                  responsibleAttorneyName={group.responsibleAttorneyName}
+                  personalLabel={t("workspaces.parties.personalLabel")}
                 />
                 {!collapsed &&
                   group.workspaces.map((workspace, i) => (

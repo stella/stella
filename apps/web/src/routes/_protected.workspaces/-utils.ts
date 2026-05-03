@@ -3,13 +3,16 @@ import type {
   Workspace,
   WorkspaceGroup,
 } from "@/routes/_protected.workspaces/-types";
+import { PERSONAL_GROUP_ID } from "@/routes/_protected.workspaces/-types";
 
 export const getUniqueClientsFromWorkspace = (
   workspaces: readonly Workspace[],
 ): { id: string; displayName: string }[] => {
   const map = new Map<string, { id: string; displayName: string }>();
   for (const ws of workspaces) {
-    map.set(ws.client.id, ws.client);
+    if (ws.client) {
+      map.set(ws.client.id, ws.client);
+    }
   }
   return Array.from(map.values()).toSorted((a, b) =>
     a.displayName.localeCompare(b.displayName),
@@ -19,29 +22,50 @@ export const getUniqueClientsFromWorkspace = (
 export const groupByClient = (
   workspaces: readonly Workspace[],
 ): WorkspaceGroup[] => {
-  const groups = new Map<string, WorkspaceGroup>();
+  const clientGroups = new Map<
+    string,
+    Extract<WorkspaceGroup, { type: "client" }>
+  >();
+  const personalWorkspaces: Workspace[] = [];
 
   for (const ws of workspaces) {
     const { client } = ws;
+    if (!client) {
+      personalWorkspaces.push(ws);
+      continue;
+    }
     const key = client.id;
-    let group = groups.get(key);
+    let group = clientGroups.get(key);
     if (!group) {
       group = {
+        type: "client",
         groupId: key,
         clientId: key,
         clientName: client.displayName,
         responsibleAttorneyName: client.responsibleAttorneyName,
         workspaces: [],
       };
-      groups.set(key, group);
+      clientGroups.set(key, group);
     }
     group.workspaces.push(ws);
   }
 
-  const result = [...groups.values()];
-  result.sort((a, b) => a.clientName.localeCompare(b.clientName));
+  const sortedClientGroups = [...clientGroups.values()].toSorted((a, b) =>
+    a.clientName.localeCompare(b.clientName),
+  );
 
-  return result;
+  if (personalWorkspaces.length === 0) {
+    return sortedClientGroups;
+  }
+
+  return [
+    {
+      type: "personal",
+      groupId: PERSONAL_GROUP_ID,
+      workspaces: personalWorkspaces,
+    },
+    ...sortedClientGroups,
+  ];
 };
 
 export const compareWorkspacesByKey = (

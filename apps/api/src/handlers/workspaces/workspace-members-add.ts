@@ -46,6 +46,34 @@ const addWorkspaceMember = createSafeHandler(
       );
     }
 
+    // Personal matters (clientId IS NULL) are creator-only by
+    // contract. The frontend hides the "add member" affordance,
+    // but enforce it here too so the endpoint cannot be used to
+    // bypass that gate (defense in depth, SOC 2).
+    const workspace = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.workspaces.findFirst({
+          where: { id: { eq: workspaceId } },
+          columns: { clientId: true },
+        }),
+      ),
+    );
+
+    if (!workspace) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Workspace not found" }),
+      );
+    }
+
+    if (workspace.clientId === null) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Assign a client before adding members",
+        }),
+      );
+    }
+
     const txResult = await safeDb(async (tx) => {
       // Lock rows then count to serialize concurrent adds.
       // PG rejects FOR UPDATE with aggregate functions, so

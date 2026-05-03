@@ -13,7 +13,7 @@ import {
   organization,
 } from "better-auth/plugins";
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull, or } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 
@@ -588,10 +588,33 @@ export const resolveAccessibleWorkspaces = async (
   memberRole: MemberRole,
 ): Promise<AccessibleWorkspace[]> => {
   if (ADMIN_BYPASS_ROLES.includes(memberRole)) {
-    const accessibleWorkspaces = await db.query.workspaces.findMany({
-      where: { organizationId: { eq: organizationId } },
-      columns: { id: true, status: true },
-    });
+    // Admins see every client matter in the org, plus any personal
+    // matter (clientId IS NULL) they themselves are a member of.
+    // Without this gate, an org owner could open another user's
+    // personal scratchpad by URL — violates the "creator-only"
+    // contract enforced for personal matters.
+    const accessibleWorkspaces = await db
+      .select({
+        id: workspaces.id,
+        status: workspaces.status,
+      })
+      .from(workspaces)
+      .leftJoin(
+        workspaceMembers,
+        and(
+          eq(workspaceMembers.workspaceId, workspaces.id),
+          eq(workspaceMembers.userId, userId),
+        ),
+      )
+      .where(
+        and(
+          eq(workspaces.organizationId, organizationId),
+          or(
+            isNotNull(workspaces.clientId),
+            eq(workspaceMembers.userId, userId),
+          ),
+        ),
+      );
 
     return accessibleWorkspaces.map((workspace) => ({
       id: toSafeId<"workspace">(workspace.id),

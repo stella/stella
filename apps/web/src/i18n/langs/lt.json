@@ -1466,6 +1466,10 @@
     "archiveMatter": "Archyvuoti",
     "archived": "Archyvuota",
     "archivedBadge": "Archived",
+    "create": {
+      "ownerTypeToggle": "Bylos tipas",
+      "personalDescription": "Asmeninės bylos yra privačios ir nereikalauja kliento. Galite jas vėliau paaukštinti, kad pasidalintumėte su komanda."
+    },
     "createNewWorkspace": "Sukurti naują bylą",
     "defaultName": "Be pavadinimo",
     "deleteItem": "Ištrinti elementą",
@@ -1650,6 +1654,10 @@
       "upcomingTasks": "Būsima agenda",
       "uploaded": "įkėlė"
     },
+    "ownerType": {
+      "client": "Klientas",
+      "personal": "Asmeninė"
+    },
     "parties": {
       "addParty": "Pridėti šalį",
       "changeClient": "Keisti klientą",
@@ -1667,6 +1675,11 @@
         "third_party": "Trečioji šalis",
         "witness": "Liudytojas"
       },
+      "personalDescription": "Asmeninės bylos yra privačios. Paaukštinkite į klientinę, kad pasidalintumėte su komanda.",
+      "personalLabel": "Asmeninė",
+      "promoteCta": "Paaukštinti į klientinę",
+      "promoteDescription": "Susiekite klientą, kad pasidalintumėte byla su komanda. Tai negrįžtama — paaukštintos bylos negali tapti asmeninėmis.",
+      "promotedSuccess": "Byla paaukštinta",
       "removeClient": "Pašalinti klientą",
       "removeParty": "Pašalinti šalį",
       "removePartyConfirm": "Ar tikrai norite pašalinti šią šalį iš bylos?",

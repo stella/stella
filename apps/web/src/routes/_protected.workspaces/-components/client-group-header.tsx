@@ -2,26 +2,23 @@ import { cn } from "@stll/ui/lib/utils";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronRightIcon } from "lucide-react";
 
+import type { WorkspaceGroup } from "@/routes/_protected.workspaces/-types";
+
 type ClientGroupHeaderProps = {
-  groupId: string;
-  clientId: string;
-  clientName: string;
-  responsibleAttorneyName: string | null;
-  matterCount: number;
+  group: WorkspaceGroup;
+  personalLabel: string;
   collapsed: boolean;
   onToggle: () => void;
 };
 
 export const ClientGroupHeader = ({
-  groupId,
-  clientId,
-  clientName,
-  responsibleAttorneyName,
-  matterCount,
+  group,
+  personalLabel,
   collapsed,
   onToggle,
 }: ClientGroupHeaderProps) => {
   const navigate = useNavigate();
+  const matterCount = group.workspaces.length;
 
   return (
     <button
@@ -31,7 +28,7 @@ export const ClientGroupHeader = ({
         "bg-background/95 border-b backdrop-blur-sm",
         "pt-4 pb-2 text-start first:pt-0",
       )}
-      data-group-id={groupId}
+      data-group-id={group.groupId}
       onClick={onToggle}
       type="button"
     >
@@ -42,30 +39,34 @@ export const ClientGroupHeader = ({
         )}
       />
       <h3 className="text-sm font-semibold">
-        <span
-          className="hover:underline"
-          onClick={(e) => {
-            e.stopPropagation();
-            void navigate({
-              to: "/contacts/$contactId",
-              params: { contactId: clientId },
-            });
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
+        {group.type === "personal" ? (
+          <span>{personalLabel}</span>
+        ) : (
+          <span
+            className="hover:underline"
+            onClick={(e) => {
               e.stopPropagation();
               void navigate({
                 to: "/contacts/$contactId",
-                params: { contactId: clientId },
+                params: { contactId: group.clientId },
               });
-            }
-          }}
-          // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
-          role="link"
-          tabIndex={0}
-        >
-          {clientName}
-        </span>
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.stopPropagation();
+                void navigate({
+                  to: "/contacts/$contactId",
+                  params: { contactId: group.clientId },
+                });
+              }
+            }}
+            // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
+            role="link"
+            tabIndex={0}
+          >
+            {group.clientName}
+          </span>
+        )}
       </h3>
       <span
         className={cn(
@@ -75,11 +76,11 @@ export const ClientGroupHeader = ({
       >
         {matterCount}
       </span>
-      {responsibleAttorneyName && (
+      {group.type === "client" && group.responsibleAttorneyName && (
         <>
           <span className="text-muted-foreground/50">·</span>
           <span className="text-muted-foreground text-xs">
-            {responsibleAttorneyName}
+            {group.responsibleAttorneyName}
           </span>
         </>
       )}

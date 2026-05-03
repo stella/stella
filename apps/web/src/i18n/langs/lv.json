@@ -1466,6 +1466,10 @@
     "archiveMatter": "Arhivēt",
     "archived": "Arhivēts",
     "archivedBadge": "Archived",
+    "create": {
+      "ownerTypeToggle": "Lietas veids",
+      "personalDescription": "Personīgās lietas ir privātas un nav nepieciešams klients. Vēlāk tās var paaugstināt, lai dalītos ar komandu."
+    },
     "createNewWorkspace": "Izveidot jaunu lietu",
     "defaultName": "Bez nosaukuma",
     "deleteItem": "Dzēst vienību",
@@ -1650,6 +1654,10 @@
       "upcomingTasks": "Gaidāmā agenda",
       "uploaded": "augšupielādēja"
     },
+    "ownerType": {
+      "client": "Klients",
+      "personal": "Personīga"
+    },
     "parties": {
       "addParty": "Pievienot pusi",
       "changeClient": "Mainīt klientu",
@@ -1667,6 +1675,11 @@
         "third_party": "Trešā puse",
         "witness": "Liecinieks"
       },
+      "personalDescription": "Personīgās lietas ir tikai jums. Paaugstiniet klientam, lai dalītos ar komandu.",
+      "personalLabel": "Personīga",
+      "promoteCta": "Paaugstināt klientam",
+      "promoteDescription": "Pievienojiet klientu, lai dalītos ar šo lietu komandai. Tas ir neatgriezeniski — paaugstinātās lietas nevar atgriezties personīgās.",
+      "promotedSuccess": "Lieta paaugstināta",
       "removeClient": "Noņemt klientu",
       "removeParty": "Noņemt pusi",
       "removePartyConfirm": "Vai tiešām vēlaties noņemt šo pusi no lietas?",

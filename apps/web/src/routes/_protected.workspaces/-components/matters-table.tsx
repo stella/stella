@@ -10,6 +10,7 @@ import {
 import { cn } from "@stll/ui/lib/utils";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
 import { useI18nStore } from "@/i18n/i18n-store";
@@ -136,11 +137,21 @@ const NameCell = ({ workspace }: CellProps) => (
   </div>
 );
 
-const ClientCell = ({ workspace }: CellProps) => (
-  <span className="text-muted-foreground">
-    {workspace.client?.displayName ?? "—"}
-  </span>
-);
+const ClientCell = ({ workspace }: CellProps) => {
+  const t = useTranslations();
+  if (!workspace.client) {
+    return (
+      <span className="text-muted-foreground italic">
+        {t("workspaces.parties.personalLabel")}
+      </span>
+    );
+  }
+  return (
+    <span className="text-muted-foreground">
+      {workspace.client.displayName}
+    </span>
+  );
+};
 
 const ReferenceCell = ({ workspace }: CellProps) => (
   <span className="text-muted-foreground font-mono">
@@ -256,6 +267,7 @@ const MattersTableGroup = ({
   collapsed,
   onToggle,
 }: MattersTableGroupProps) => {
+  const t = useTranslations();
   const firstWs = group.workspaces.at(0);
 
   if (!firstWs) {
@@ -275,14 +287,18 @@ const MattersTableGroup = ({
                 !collapsed && "rotate-90",
               )}
             />
-            <Link
-              className="hover:underline"
-              onClick={(e) => e.stopPropagation()}
-              params={{ contactId: group.clientId }}
-              to="/contacts/$contactId"
-            >
-              {group.clientName}
-            </Link>
+            {group.type === "personal" ? (
+              <span>{t("workspaces.parties.personalLabel")}</span>
+            ) : (
+              <Link
+                className="hover:underline"
+                onClick={(e) => e.stopPropagation()}
+                params={{ contactId: group.clientId }}
+                to="/contacts/$contactId"
+              >
+                {group.clientName}
+              </Link>
+            )}
             <span
               className={cn(
                 "bg-muted rounded-full px-1.5 py-0.5",

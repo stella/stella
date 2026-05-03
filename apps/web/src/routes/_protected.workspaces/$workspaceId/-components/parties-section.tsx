@@ -26,9 +26,9 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { panic } from "better-result";
 import {
   BuildingIcon,
+  LockIcon,
   PlusIcon,
   TrashIcon,
   UserIcon,
@@ -120,7 +120,25 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
     );
   };
 
-  const client = workspace.client ?? panic("Workspace has no client");
+  const { client } = workspace;
+  if (!client) {
+    return (
+      <div className="flex flex-1 flex-col gap-6 overflow-auto p-4">
+        <section className="bg-muted/30 flex flex-col gap-3 rounded-md border p-4">
+          <div className="flex items-center gap-2">
+            <LockIcon className="text-muted-foreground size-4" />
+            <h3 className="text-sm font-medium">
+              {t("workspaces.parties.personalLabel")}
+            </h3>
+          </div>
+          <p className="text-muted-foreground text-sm">
+            {t("workspaces.parties.personalDescription")}
+          </p>
+          <PromoteDialog workspaceId={workspaceId} />
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-6 overflow-auto p-4">
@@ -177,6 +195,156 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
         )}
       </section>
     </div>
+  );
+};
+
+type PromoteDialogProps = {
+  workspaceId: string;
+};
+
+const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const updateWorkspace = useUpdateWorkspace();
+  const createContact = useCreateContact();
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<{
+    id: string;
+    displayName: string;
+  } | null>(null);
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setSelectedContact(null);
+  };
+
+  const handleCreateContact = (
+    name: string,
+    type: "person" | "organization",
+  ) => {
+    const id = toSafeId<"contact">(crypto.randomUUID());
+    createContact.mutate(
+      { id, type, displayName: name },
+      {
+        onSuccess: () => {
+          // eslint-disable-next-line typescript/no-floating-promises
+          queryClient.invalidateQueries({
+            queryKey: contactsKeys.all,
+          });
+          setSelectedContact({ id, displayName: name });
+        },
+        onError: () => {
+          toastManager.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
+
+  const handleSubmit = () => {
+    if (!selectedContact) {
+      return;
+    }
+
+    updateWorkspace.mutate(
+      {
+        workspaceId,
+        promote: { clientId: selectedContact.id },
+      },
+      {
+        onSuccess: () => {
+          toastManager.add({
+            title: t("workspaces.parties.promotedSuccess"),
+            type: "success",
+          });
+          // eslint-disable-next-line typescript/no-floating-promises
+          queryClient.invalidateQueries({
+            queryKey: workspacesKeys.byId(workspaceId),
+          });
+          // eslint-disable-next-line typescript/no-floating-promises
+          queryClient.invalidateQueries({
+            queryKey: workspacesKeys.all,
+          });
+          handleClose();
+        },
+        onError: () => {
+          toastManager.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        },
+      },
+    );
+  };
+
+  return (
+    <Dialog
+      onOpenChange={(open) => {
+        if (!open) {
+          handleClose();
+          return;
+        }
+        setIsOpen(true);
+      }}
+      open={isOpen}
+    >
+      <DialogTrigger render={<Button size="sm" variant="outline" />}>
+        {t("workspaces.parties.promoteCta")}
+      </DialogTrigger>
+      <DialogPopup>
+        <DialogHeader>
+          <DialogTitle>{t("workspaces.parties.promoteCta")}</DialogTitle>
+          <DialogDescription>
+            {t("workspaces.parties.promoteDescription")}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogPanel className="flex flex-col gap-4">
+          <div>
+            <span className="mb-1.5 block text-sm font-medium">
+              {t("workspaces.parties.client")}
+            </span>
+            {selectedContact ? (
+              <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                <span>{selectedContact.displayName}</span>
+                <Button
+                  className="ms-auto"
+                  onClick={() => setSelectedContact(null)}
+                  size="icon-xs"
+                  variant="ghost"
+                >
+                  <XIcon className="size-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <ContactPicker
+                autoFocus
+                onCreate={handleCreateContact}
+                onSelect={(contact) =>
+                  setSelectedContact({
+                    id: contact.id,
+                    displayName: contact.displayName,
+                  })
+                }
+              />
+            )}
+          </div>
+        </DialogPanel>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>
+            {t("common.cancel")}
+          </DialogClose>
+          <Button
+            disabled={!selectedContact}
+            loading={updateWorkspace.isPending}
+            onClick={handleSubmit}
+          >
+            {t("workspaces.parties.promoteCta")}
+          </Button>
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
   );
 };
 

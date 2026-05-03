@@ -11,7 +11,10 @@ import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 const DEFAULT_FILE_PROPERTY_NAME = "Documents";
 
 type CreateWorkspaceVars = {
-  clientId: string;
+  // Omit `clientId` to create a personal matter (visible only to
+  // the creator). With `clientId`, `memberUserIds` may add other
+  // members; for personal matters that field is ignored.
+  clientId?: string;
   memberUserIds?: string[];
   name: string;
 };
@@ -26,10 +29,12 @@ export const useCreateWorkspace = () => {
       const response = await api.workspaces.put({
         queryKey: workspacesKeys.all,
         id: toSafeId<"workspace">(id),
-        clientId: toSafeId<"contact">(vars.clientId),
-        ...(vars.memberUserIds && vars.memberUserIds.length > 0
-          ? { memberUserIds: vars.memberUserIds }
-          : {}),
+        ...(vars.clientId !== undefined && {
+          clientId: toSafeId<"contact">(vars.clientId),
+          ...(vars.memberUserIds && vars.memberUserIds.length > 0
+            ? { memberUserIds: vars.memberUserIds }
+            : {}),
+        }),
         name: vars.name,
         filePropertyName: DEFAULT_FILE_PROPERTY_NAME,
       });
@@ -62,6 +67,10 @@ type UpdateWorkspaceVars = {
   clientId?: string;
   reference?: string;
   color?: string | null;
+  promote?: {
+    clientId: string;
+    memberUserIds?: string[];
+  };
 };
 
 export const useUpdateWorkspace = () => {
@@ -69,13 +78,21 @@ export const useUpdateWorkspace = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateWorkspaceVars) => {
-      const { clientId, ...restBody } = body;
+      const { clientId, promote, ...restBody } = body;
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .post({
           ...restBody,
           ...(clientId !== undefined && {
             clientId: toSafeId<"contact">(clientId),
+          }),
+          ...(promote !== undefined && {
+            promote: {
+              clientId: toSafeId<"contact">(promote.clientId),
+              ...(promote.memberUserIds && promote.memberUserIds.length > 0
+                ? { memberUserIds: promote.memberUserIds }
+                : {}),
+            },
           }),
           queryKey: workspacesKeys.all,
         });

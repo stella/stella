@@ -22,13 +22,22 @@ export type MattersColumnId =
   | "lastActivityAt"
   | "createdAt";
 
-export type WorkspaceGroup = {
-  groupId: string;
-  clientId: string;
-  clientName: string;
-  responsibleAttorneyName: string | null;
-  workspaces: Workspace[];
-};
+export const PERSONAL_GROUP_ID = "personal";
+
+export type WorkspaceGroup =
+  | {
+      type: "client";
+      groupId: string;
+      clientId: string;
+      clientName: string;
+      responsibleAttorneyName: string | null;
+      workspaces: Workspace[];
+    }
+  | {
+      type: "personal";
+      groupId: typeof PERSONAL_GROUP_ID;
+      workspaces: Workspace[];
+    };
 
 export const ALL_COLUMNS = [
   "client",
