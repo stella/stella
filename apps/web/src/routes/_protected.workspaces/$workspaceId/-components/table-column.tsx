@@ -151,7 +151,7 @@ const WithOpenEntityButton = ({
   return (
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
     <div
-      className="w-full cursor-pointer text-start"
+      className="w-full min-w-0 cursor-pointer text-start"
       onClick={() =>
         openPdf({
           id: fieldId,

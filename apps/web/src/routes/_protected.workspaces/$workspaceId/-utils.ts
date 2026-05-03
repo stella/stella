@@ -38,6 +38,7 @@ export const getInternalPropertyId = (
 export const getPinningStyles = <T = WorkspaceEntity>(
   column: Column<T>,
 ): CSSProperties => {
+  const width = column.getSize();
   const canPin = column.getCanPin();
 
   // The add-property column is sticky on the right so the "+"
@@ -45,15 +46,15 @@ export const getPinningStyles = <T = WorkspaceEntity>(
   if (column.id === getInternalColId("add-property")) {
     return {
       boxShadow: "2px 0 0px 0px var(--color-border) inset",
+      minWidth: width,
       position: "sticky",
       right: 0,
-      width: column.getSize(),
       zIndex: 2,
     };
   }
 
   if (!canPin) {
-    return {};
+    return { width };
   }
 
   const isPinned = column.getIsPinned() === "left";
@@ -67,7 +68,7 @@ export const getPinningStyles = <T = WorkspaceEntity>(
       : undefined,
     left: isPinned ? `${column.getStart("left")}px` : undefined,
     position: isPinned ? "sticky" : undefined,
-    width: column.getSize(),
+    width,
     zIndex: isPinned ? (isSelectColumn ? 3 : 2) : undefined,
   };
 };

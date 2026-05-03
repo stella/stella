@@ -25,7 +25,7 @@ export const BottomRow = ({
   return (
     <TableRow className="bg-muted/40 hover:bg-muted sticky bottom-0 z-10 transition-colors [&_td]:sticky [&_td]:border-e-0 [&_td]:border-t-2">
       <TableCell
-        className="relative z-10 p-0"
+        className="relative z-10 min-w-12 shrink-0 p-0"
         style={{
           left: table.getColumn(selectColId)?.getStart("left"),
         }}
@@ -34,7 +34,7 @@ export const BottomRow = ({
           onFolderCreated={onFolderCreated}
           render={
             <Button
-              className="absolute inset-0 z-10 flex size-auto! rounded-none bg-transparent"
+              className="absolute inset-0 z-10 flex size-auto! min-w-12 shrink-0 rounded-none bg-transparent"
               size="icon"
               type="button"
               variant="ghost"

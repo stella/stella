@@ -147,7 +147,9 @@ export const WorkspaceTable = ({
   const paddingTop = virtualRows.at(0)?.start ?? 0;
   const paddingBottom =
     rowVirtualizer.getTotalSize() - (virtualRows.at(-1)?.end ?? 0);
-  const visibleColumnCount = table.getVisibleLeafColumns().length;
+  const visibleColumns = table.getVisibleLeafColumns();
+  const visibleColumnCount = visibleColumns.length;
+  const tableWidth = table.getTotalSize();
 
   useEffect(() => {
     const element = tableWrapperRef.current;
@@ -173,18 +175,27 @@ export const WorkspaceTable = ({
   return (
     <div className="relative h-full flex-1 overflow-auto" ref={tableWrapperRef}>
       <Table
-        className="[&_td]:border-border [&_th]:border-border table-auto border-separate border-spacing-0 [&_tfoot_td]:border-t [&_th]:border-b [&_tr]:border-none [&_tr:not(:nth-last-child(2))_td]:border-b"
+        className="[&_td]:border-border [&_th]:border-border table-fixed border-separate border-spacing-0 [&_td:has([data-slot=select-trigger])]:min-w-40 [&_tfoot_td]:border-t [&_th]:border-b [&_tr]:border-none [&_tr:not(:nth-last-child(2))_td]:border-b"
         style={{
+          minWidth: tableWidth,
           width: "100%",
-          minWidth: table.getTotalSize(),
         }}
       >
-        <TableHeader className="bg-background sticky top-0 z-10 border-b">
+        <colgroup>
+          {visibleColumns.map((column) => (
+            <col key={column.id} style={{ width: column.getSize() }} />
+          ))}
+        </colgroup>
+        <TableHeader className="bg-background sticky top-0 z-30 border-b">
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id}>
               {headerGroup.headers.map((header) => (
                 <TableHead
-                  className="group/table-head bg-background hover:bg-background relative h-10 border-t px-0"
+                  className={cn(
+                    "group/table-head bg-background hover:bg-background relative h-10 border-t px-0",
+                    header.column.getIsResizing() &&
+                      "after:bg-info after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-50 after:w-px",
+                  )}
                   colSpan={header.colSpan}
                   key={header.id}
                   style={{
@@ -199,7 +210,7 @@ export const WorkspaceTable = ({
                       )}
                   {header.column.getCanResize() && (
                     <button
-                      className="user-select-none absolute top-0 -right-2 z-10 hidden h-full w-4 cursor-col-resize touch-none py-1 group-hover/table-head:flex"
+                      className="user-select-none absolute top-0 -right-2 z-30 hidden h-full w-4 cursor-col-resize touch-none py-1 group-hover/table-head:flex"
                       onDoubleClick={() => header.column.resetSize()}
                       onMouseDown={header.getResizeHandler()}
                       onTouchStart={header.getResizeHandler()}
@@ -207,14 +218,6 @@ export const WorkspaceTable = ({
                     >
                       <span className="bg-primary/25 mr-auto h-full w-1 rounded" />
                     </button>
-                  )}
-                  {header.column.getIsResizing() && (
-                    <div
-                      className="bg-info absolute top-0 right-0 z-10 w-px"
-                      style={{
-                        height: `${tableWrapperRef.current?.clientHeight ?? 0}px`,
-                      }}
-                    />
                   )}
                 </TableHead>
               ))}
@@ -499,7 +502,11 @@ const DraggableRow = ({
       {visibleCells.map((cell) => (
         <TableCell
           className={cn(
+            "relative",
+            cell.column.id === selectColId && "min-w-12 shrink-0",
             cell.column.columnDef.meta?.muted && "text-muted-foreground",
+            cell.column.getIsResizing() &&
+              "after:bg-info after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-50 after:w-px",
           )}
           data-state={cell.row.getIsSelected() ? "selected" : undefined}
           key={cell.id}
@@ -510,7 +517,7 @@ const DraggableRow = ({
           {cell.column.id === selectColId ? (
             selectCellWithActions
           ) : (
-            <span className="flex items-center gap-1.5">
+            <span className="flex w-full min-w-0 items-center gap-1.5">
               {flexRender(cell.column.columnDef.cell, cell.getContext())}
             </span>
           )}
@@ -568,13 +575,13 @@ const SelectRowContent = ({
   };
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center">
-      <span className="absolute inset-0 flex items-center justify-center text-xs tabular-nums transition-opacity group-hover/row:opacity-0 group-data-[state=selected]/row:opacity-0">
+    <div className="absolute inset-0 flex min-w-12 shrink-0 items-center justify-center">
+      <span className="absolute inset-0 flex min-w-12 shrink-0 items-center justify-center text-xs tabular-nums transition-opacity group-hover/row:opacity-0 group-data-[state=selected]/row:opacity-0">
         {label}
       </span>
       <Checkbox
         checked={row.getIsSelected()}
-        className="pointer-events-none absolute opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-data-[state=selected]/row:pointer-events-auto group-data-[state=selected]/row:opacity-100"
+        className="pointer-events-none absolute shrink-0 opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-data-[state=selected]/row:pointer-events-auto group-data-[state=selected]/row:opacity-100"
         indeterminate={someSelected}
         onCheckedChange={handleChange}
         tabIndex={row.getIsSelected() ? 0 : -1}

@@ -36,6 +36,7 @@ import {
 
 const selectColId = getInternalColId("select");
 const addPropertyColId = getInternalColId("add-property");
+const DEFAULT_COLUMN_MIN_SIZE = 64;
 
 type TableLayoutProps = {
   workspaceId: string;
@@ -109,6 +110,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
         enableResizing: false,
         enableSorting: false,
         enableHiding: false,
+        minSize: 48,
         size: 48,
       },
     ];
@@ -174,6 +176,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       enablePinning: false,
       enableSorting: false,
       enableHiding: false,
+      minSize: 48,
       size: 48,
     });
 
@@ -184,6 +187,9 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     columnResizeMode: "onChange",
     data: treeData,
     columns,
+    defaultColumn: {
+      minSize: DEFAULT_COLUMN_MIN_SIZE,
+    },
     getCoreRowModel: getCoreRowModel(),
     manualSorting: true,
     enableSortingRemoval: false,

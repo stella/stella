@@ -29,8 +29,8 @@ export const CellResult = ({ field, property }: CellResultProps) => {
 
   if (type === "pending") {
     return (
-      <div className="grid grid-cols-[1fr_auto] items-center justify-between gap-1.5">
-        <span>{t("workspaces.fields.calculating")}</span>
+      <div className="grid min-w-0 grid-cols-[1fr_auto] items-center justify-between gap-1.5">
+        <span className="truncate">{t("workspaces.fields.calculating")}</span>
         <span className="bg-muted-foreground size-2 shrink-0 animate-pulse rounded-full" />
       </div>
     );
@@ -38,7 +38,7 @@ export const CellResult = ({ field, property }: CellResultProps) => {
 
   if (type === "error") {
     return (
-      <span className="text-destructive italic">
+      <span className="text-destructive block truncate italic">
         {t("workspaces.fields.errored")}
       </span>
     );
@@ -46,7 +46,7 @@ export const CellResult = ({ field, property }: CellResultProps) => {
 
   if (type === "unsupported") {
     return (
-      <span className="text-muted-foreground italic">
+      <span className="text-muted-foreground block truncate italic">
         {t("workspaces.fields.formatNotSupported")}
       </span>
     );
@@ -73,7 +73,7 @@ export const CellResult = ({ field, property }: CellResultProps) => {
 
   if (type === "multi-select") {
     return field.content.value.length > 0 ? (
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex min-w-0 flex-wrap gap-1.5">
         {field.content.value.map((value) => (
           <SelectResult key={value} property={property} value={value} />
         ))}
@@ -110,7 +110,7 @@ export const CellResult = ({ field, property }: CellResultProps) => {
     );
   }
 
-  return <div className="whitespace-break-spaces">{field.content.value}</div>;
+  return <div className="line-clamp-2">{field.content.value}</div>;
 };
 
 type FileCellProps = {
@@ -143,7 +143,7 @@ const FileCell = ({
         content={fileName}
         render={
           <button
-            className="bg-muted grid max-w-max cursor-pointer grid-cols-[1rem_auto] items-center gap-1 rounded px-1 py-0.5"
+            className="bg-muted grid max-w-full cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5"
             onClick={() =>
               openPdf({
                 id: fieldId,
@@ -169,7 +169,7 @@ const FileCell = ({
     <Tooltip
       content={fileName}
       render={
-        <span className="bg-muted grid max-w-max grid-cols-[1rem_auto] items-center gap-1 rounded px-1 py-0.5 opacity-60" />
+        <span className="bg-muted grid max-w-full grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 opacity-60" />
       }
     >
       <DocumentIcon className="size-3.5 shrink-0" mimeType={mimeType} />
@@ -215,14 +215,14 @@ const SelectResult = ({ value, property }: SelectResultProps) => {
 
   return (
     <span
-      className="flex w-max items-center gap-x-1 rounded px-1 py-0.25 font-medium"
+      className="flex max-w-full items-center gap-x-1 rounded px-1 py-0.25 font-medium"
       style={{
         backgroundColor: color?.background,
         color: color?.foreground,
       }}
     >
       {!value && <SquareMinusIcon className="size-4" />}
-      {value ?? t("common.empty")}
+      <span className="truncate">{value ?? t("common.empty")}</span>
     </span>
   );
 };

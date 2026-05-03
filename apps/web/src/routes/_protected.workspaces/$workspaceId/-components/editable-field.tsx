@@ -129,9 +129,7 @@ const ReadOnlyValue = ({
   }
 
   if (content.type === "text") {
-    return (
-      <span className="text-sm whitespace-break-spaces">{content.value}</span>
-    );
+    return <span className="line-clamp-2 text-sm">{content.value}</span>;
   }
 
   if (content.type === "date") {
@@ -321,7 +319,7 @@ const InlineTextEditor = ({
   if (!editing) {
     return (
       <button
-        className="hover:bg-muted w-full rounded px-2 py-1 text-start text-sm transition-colors"
+        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm transition-colors"
         onClick={() => {
           setDraft(value);
           setEditing(true);
@@ -336,7 +334,7 @@ const InlineTextEditor = ({
   return (
     <textarea
       autoFocus
-      className="border-input bg-background focus:ring-ring w-full resize-none rounded-md border px-2 py-1 text-sm outline-none focus:ring-1"
+      className="border-input bg-background focus:ring-ring w-full min-w-0 resize-none rounded-md border px-2 py-1 text-sm outline-none focus:ring-1"
       onBlur={() => {
         const trimmed = draft.trim();
         if (trimmed !== value) {
