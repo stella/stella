@@ -36,6 +36,7 @@ import {
 const selectColId = getInternalColId("select");
 const addPropertyColId = getInternalColId("add-property");
 const DEFAULT_COLUMN_MIN_SIZE = 64;
+const ADD_PROPERTY_COLUMN_SIZE = 40;
 
 type TableLayoutProps = {
   workspaceId: string;
@@ -168,8 +169,8 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       enablePinning: false,
       enableSorting: false,
       enableHiding: false,
-      minSize: 48,
-      size: 48,
+      minSize: ADD_PROPERTY_COLUMN_SIZE,
+      size: ADD_PROPERTY_COLUMN_SIZE,
     });
 
     return columnDefs;
