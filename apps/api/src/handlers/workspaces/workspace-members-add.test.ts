@@ -36,6 +36,14 @@ const createContext = ({
       "ws_test123" as SafeId<"workspace">,
   }) as Parameters<typeof addWorkspaceMember.handler>[0];
 
+const workspaceSelect = (rows: { clientId: string | null }[]) => ({
+  from: () => ({
+    where: () => ({
+      for: async () => rows,
+    }),
+  }),
+});
+
 describe("addWorkspaceMember", () => {
   test("rejects adding a member to a personal matter", async () => {
     const { safeDb, scopedDb } = createScopedDbMock({
@@ -43,10 +51,8 @@ describe("addWorkspaceMember", () => {
         member: {
           findFirst: async () => ({ id: "member_existing" }),
         },
-        workspaces: {
-          findFirst: async () => ({ clientId: null }),
-        },
       },
+      select: () => workspaceSelect([{ clientId: null }]),
     });
 
     const result = await addWorkspaceMember.handler(
@@ -69,10 +75,8 @@ describe("addWorkspaceMember", () => {
         member: {
           findFirst: async () => ({ id: "member_existing" }),
         },
-        workspaces: {
-          findFirst: async () => null,
-        },
       },
+      select: () => workspaceSelect([]),
     });
 
     const result = await addWorkspaceMember.handler(
