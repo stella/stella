@@ -10,6 +10,12 @@ export type EmailMessage = {
   to: string;
   subject: string;
   html: string;
+  /**
+   * Plain-text alternative. Required: HTML-only mail is a known
+   * spam signal at Gmail and Outlook, and accessibility tooling
+   * (screen readers, text-only clients) needs the text part.
+   */
+  text: string;
 };
 
 export type EmailTransport = {
