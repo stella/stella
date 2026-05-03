@@ -46,8 +46,8 @@ import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import Tooltip from "@/components/tooltip";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
-import { useStockPrompts } from "@/lib/prompts/stock";
 import type { ChatPrompt } from "@/lib/prompts/types";
+import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { toSafeId } from "@/lib/safe-id";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
@@ -180,7 +180,7 @@ export const ChatTabPanel = ({
     threadRef,
   });
 
-  const stockPrompts = useStockPrompts();
+  const stockPrompts = useSavedPrompts();
   const handleSelectPrompt = (prompt: ChatPrompt) => {
     const editor = editorController.editor;
     if (!editor) {
@@ -501,7 +501,7 @@ export const ChatTabPanelShell = ({
   tab: ChatTab;
   matterColor?: string | null | undefined;
 }) => {
-  const stockPrompts = useStockPrompts();
+  const stockPrompts = useSavedPrompts();
   return (
     <ChatTabPanelChrome
       anonymized={false}

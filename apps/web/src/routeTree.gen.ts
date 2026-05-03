@@ -29,6 +29,7 @@ import { Route as ProtectedContactsIndexRouteImport } from './routes/_protected.
 import { Route as ProtectedChatIndexRouteImport } from './routes/_protected.chat/index'
 import { Route as AuthAcceptInvitationInvitationIdRouteImport } from './routes/auth/accept-invitation.$invitationId'
 import { Route as ProtectedKnowledgeTemplatesRouteImport } from './routes/_protected.knowledge/templates'
+import { Route as ProtectedKnowledgeSkillsRouteImport } from './routes/_protected.knowledge/skills'
 import { Route as ProtectedKnowledgeClausesRouteImport } from './routes/_protected.knowledge/clauses'
 import { Route as ProtectedContactsContactIdRouteImport } from './routes/_protected.contacts/$contactId'
 import { Route as ProtectedChatNewRouteImport } from './routes/_protected.chat/new'
@@ -156,6 +157,12 @@ const ProtectedKnowledgeTemplatesRoute =
   ProtectedKnowledgeTemplatesRouteImport.update({
     id: '/templates',
     path: '/templates',
+    getParentRoute: () => ProtectedKnowledgeRouteRoute,
+  } as any)
+const ProtectedKnowledgeSkillsRoute =
+  ProtectedKnowledgeSkillsRouteImport.update({
+    id: '/skills',
+    path: '/skills',
     getParentRoute: () => ProtectedKnowledgeRouteRoute,
   } as any)
 const ProtectedKnowledgeClausesRoute =
@@ -332,6 +339,7 @@ export interface FileRoutesByFullPath {
   '/chat/new': typeof ProtectedChatNewRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
+  '/knowledge/skills': typeof ProtectedKnowledgeSkillsRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
   '/chat/': typeof ProtectedChatIndexRoute
@@ -372,6 +380,7 @@ export interface FileRoutesByTo {
   '/chat/new': typeof ProtectedChatNewRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
+  '/knowledge/skills': typeof ProtectedKnowledgeSkillsRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
   '/chat': typeof ProtectedChatIndexRoute
@@ -420,6 +429,7 @@ export interface FileRoutesById {
   '/_protected/chat/new': typeof ProtectedChatNewRoute
   '/_protected/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/_protected/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
+  '/_protected/knowledge/skills': typeof ProtectedKnowledgeSkillsRoute
   '/_protected/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
   '/_protected/chat/': typeof ProtectedChatIndexRoute
@@ -469,6 +479,7 @@ export interface FileRouteTypes {
     | '/chat/new'
     | '/contacts/$contactId'
     | '/knowledge/clauses'
+    | '/knowledge/skills'
     | '/knowledge/templates'
     | '/auth/accept-invitation/$invitationId'
     | '/chat/'
@@ -509,6 +520,7 @@ export interface FileRouteTypes {
     | '/chat/new'
     | '/contacts/$contactId'
     | '/knowledge/clauses'
+    | '/knowledge/skills'
     | '/knowledge/templates'
     | '/auth/accept-invitation/$invitationId'
     | '/chat'
@@ -556,6 +568,7 @@ export interface FileRouteTypes {
     | '/_protected/chat/new'
     | '/_protected/contacts/$contactId'
     | '/_protected/knowledge/clauses'
+    | '/_protected/knowledge/skills'
     | '/_protected/knowledge/templates'
     | '/auth/accept-invitation/$invitationId'
     | '/_protected/chat/'
@@ -734,6 +747,13 @@ declare module '@tanstack/react-router' {
       path: '/templates'
       fullPath: '/knowledge/templates'
       preLoaderRoute: typeof ProtectedKnowledgeTemplatesRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    }
+    '/_protected/knowledge/skills': {
+      id: '/_protected/knowledge/skills'
+      path: '/skills'
+      fullPath: '/knowledge/skills'
+      preLoaderRoute: typeof ProtectedKnowledgeSkillsRouteImport
       parentRoute: typeof ProtectedKnowledgeRouteRoute
     }
     '/_protected/knowledge/clauses': {
@@ -980,6 +1000,7 @@ const ProtectedKnowledgeCaseRouteRouteWithChildren =
 interface ProtectedKnowledgeRouteRouteChildren {
   ProtectedKnowledgeCaseRouteRoute: typeof ProtectedKnowledgeCaseRouteRouteWithChildren
   ProtectedKnowledgeClausesRoute: typeof ProtectedKnowledgeClausesRoute
+  ProtectedKnowledgeSkillsRoute: typeof ProtectedKnowledgeSkillsRoute
   ProtectedKnowledgeTemplatesRoute: typeof ProtectedKnowledgeTemplatesRoute
   ProtectedKnowledgeIndexRoute: typeof ProtectedKnowledgeIndexRoute
 }
@@ -989,6 +1010,7 @@ const ProtectedKnowledgeRouteRouteChildren: ProtectedKnowledgeRouteRouteChildren
     ProtectedKnowledgeCaseRouteRoute:
       ProtectedKnowledgeCaseRouteRouteWithChildren,
     ProtectedKnowledgeClausesRoute: ProtectedKnowledgeClausesRoute,
+    ProtectedKnowledgeSkillsRoute: ProtectedKnowledgeSkillsRoute,
     ProtectedKnowledgeTemplatesRoute: ProtectedKnowledgeTemplatesRoute,
     ProtectedKnowledgeIndexRoute: ProtectedKnowledgeIndexRoute,
   }

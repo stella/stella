@@ -354,6 +354,7 @@
     "placeholder": "Que souhaitez-vous savoir ?",
     "prompts": {
       "noResults": "Aucun prompt correspondant",
+      "noShortcuts": "No shortcuts yet. Add some in Knowledge → Skills.",
       "scope": {
         "private": "Vos prompts",
         "stock": "Intégrés",
@@ -1053,6 +1054,38 @@
         "description": "Modèles de documents avec espaces réservés",
         "title": "Modèles"
       }
+    },
+    "skills": {
+      "addShortcut": "Ajouter un raccourci",
+      "defaultBadge": "Par défaut",
+      "deleteConfirmDescription": "Ce raccourci sera supprimé définitivement.",
+      "deleteConfirmTitle": "Supprimer le raccourci ?",
+      "deleteShortcut": "Supprimer le raccourci",
+      "editShortcut": "Modifier le raccourci",
+      "emptyState": "Aucun raccourci pour l'instant. Ajoutez-en un pour commencer.",
+      "errors": {
+        "commandConflict": "Un raccourci avec cette commande existe déjà",
+        "commandInvalid": "Utilisez uniquement des minuscules, chiffres, tirets et tirets bas",
+        "commandReserved": "\"/{command}\" est une commande réservée"
+      },
+      "form": {
+        "command": "Commande",
+        "commandHint": "Minuscules, chiffres, tirets et tirets bas uniquement",
+        "commandPlaceholder": "ex. résumer",
+        "commandPrefix": "/",
+        "description": "Description",
+        "descriptionPlaceholder": "Courte description affichée dans le sélecteur",
+        "name": "Nom",
+        "namePlaceholder": "ex. Résumer le document",
+        "prompt": "Invite",
+        "promptPlaceholder": "Le texte inséré dans le compositeur de chat lors de l'utilisation de ce raccourci",
+        "scope": "Visibilité",
+        "scopePrivate": "Moi uniquement",
+        "scopeTeam": "Tous dans l'organisation"
+      },
+      "privateSection": "Mes raccourcis",
+      "shadowed": "Masqué par un raccourci d'équipe",
+      "teamSection": "Raccourcis d'équipe"
     }
   },
   "navigation": {

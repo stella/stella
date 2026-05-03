@@ -354,6 +354,7 @@
     "placeholder": "Ko vēlaties uzzināt?",
     "prompts": {
       "noResults": "Nav atbilstošu uzvedņu",
+      "noShortcuts": "No shortcuts yet. Add some in Knowledge → Skills.",
       "scope": {
         "private": "Jūsu uzvednes",
         "stock": "Iebūvētas",
@@ -1053,6 +1054,38 @@
         "description": "Dokumentu veidnes ar vietturiem",
         "title": "Veidnes"
       }
+    },
+    "skills": {
+      "addShortcut": "Pievienot saīsni",
+      "defaultBadge": "Noklusējuma",
+      "deleteConfirmDescription": "Šī saīsne tiks neatgriezeniski dzēsta.",
+      "deleteConfirmTitle": "Dzēst saīsni?",
+      "deleteShortcut": "Dzēst saīsni",
+      "editShortcut": "Rediģēt saīsni",
+      "emptyState": "Vēl nav saīšņu. Pievienojiet pirmo.",
+      "errors": {
+        "commandConflict": "Saīsne ar šo komandu jau pastāv",
+        "commandInvalid": "Izmantojiet tikai mazos burtus, ciparus, defises un pasvītrojumus",
+        "commandReserved": "\"/{command}\" ir rezervēta komanda"
+      },
+      "form": {
+        "command": "Komanda",
+        "commandHint": "Tikai mazie burti, cipari, defises un pasvītrojumi",
+        "commandPlaceholder": "piem. kopsavilkums",
+        "commandPrefix": "/",
+        "description": "Apraksts",
+        "descriptionPlaceholder": "Īss apraksts atlasītājā",
+        "name": "Nosaukums",
+        "namePlaceholder": "piem. Dokumenta kopsavilkums",
+        "prompt": "Uzvedne",
+        "promptPlaceholder": "Teksts, kas tiek ievietots tērzēšanas redaktorā, izmantojot šo saīsni",
+        "scope": "Redzamība",
+        "scopePrivate": "Tikai es",
+        "scopeTeam": "Visi organizācijā"
+      },
+      "privateSection": "Manas saīsnes",
+      "shadowed": "Pārklāts ar komandas saīsni",
+      "teamSection": "Komandas saīsnes"
     }
   },
   "navigation": {

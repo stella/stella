@@ -37,6 +37,7 @@ export type SafeIdType =
   | "organization"
   | "organizationSettings"
   | "property"
+  | "promptShortcut"
   | "propertyDependency"
   | "rateEntry"
   | "rateTable"

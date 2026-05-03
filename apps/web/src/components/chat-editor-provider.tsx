@@ -10,7 +10,7 @@ import {
 } from "react";
 import type React from "react";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
 import Document from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";
@@ -48,8 +48,8 @@ import {
 } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
-import { useStockPrompts } from "@/lib/prompts/stock";
 import type { WorkspaceEntity } from "@/lib/types";
+import { shortcutsOptions } from "@/routes/_protected.knowledge/-queries";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 
@@ -579,9 +579,19 @@ export const useChatEditor = ({
     }
   });
 
-  const stockPrompts = useStockPrompts();
-  const promptsRef = useRef(stockPrompts);
-  promptsRef.current = stockPrompts;
+  const { data: shortcuts = [] } = useQuery(shortcutsOptions());
+  const allPrompts = useMemo(
+    () =>
+      shortcuts.map((s) => ({
+        id: s.id,
+        scope: s.scope,
+        name: s.name,
+        body: s.prompt,
+      })),
+    [shortcuts],
+  );
+  const promptsRef = useRef(allPrompts);
+  promptsRef.current = allPrompts;
 
   const editor = useEditor({
     autofocus: false,

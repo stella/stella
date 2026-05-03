@@ -354,6 +354,7 @@
     "placeholder": "What would you like to know?",
     "prompts": {
       "noResults": "No matching prompts",
+      "noShortcuts": "No shortcuts yet. Add some in Knowledge → Skills.",
       "scope": {
         "private": "Your prompts",
         "stock": "Built-in",
@@ -1053,6 +1054,38 @@
         "description": "Document templates with placeholders",
         "title": "Templates"
       }
+    },
+    "skills": {
+      "addShortcut": "Add shortcut",
+      "defaultBadge": "Default",
+      "deleteConfirmDescription": "This shortcut will be permanently removed.",
+      "deleteConfirmTitle": "Delete shortcut?",
+      "deleteShortcut": "Delete shortcut",
+      "editShortcut": "Edit shortcut",
+      "emptyState": "No shortcuts yet. Add one to get started.",
+      "errors": {
+        "commandConflict": "A shortcut with this command already exists",
+        "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores",
+        "commandReserved": "\"/{command}\" is a reserved command"
+      },
+      "form": {
+        "command": "Command",
+        "commandHint": "Lowercase letters, digits, hyphens and underscores only",
+        "commandPlaceholder": "e.g. summarize",
+        "commandPrefix": "/",
+        "description": "Description",
+        "descriptionPlaceholder": "Short description shown in the picker",
+        "name": "Name",
+        "namePlaceholder": "e.g. Summarise document",
+        "prompt": "Prompt",
+        "promptPlaceholder": "The text inserted into the chat composer when this shortcut is used",
+        "scope": "Visibility",
+        "scopePrivate": "Only me",
+        "scopeTeam": "Everyone in the organisation"
+      },
+      "privateSection": "Your shortcuts",
+      "shadowed": "Shadowed by team shortcut",
+      "teamSection": "Team shortcuts"
     }
   },
   "navigation": {

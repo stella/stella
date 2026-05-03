@@ -354,6 +354,7 @@
     "placeholder": "Mit szeretne tudni?",
     "prompts": {
       "noResults": "Nincs egyező prompt",
+      "noShortcuts": "No shortcuts yet. Add some in Knowledge → Skills.",
       "scope": {
         "private": "Saját promptok",
         "stock": "Beépített",
@@ -1053,6 +1054,38 @@
         "description": "Dokumentumsablonok helyőrzőkkel",
         "title": "Sablonok"
       }
+    },
+    "skills": {
+      "addShortcut": "Parancsikon hozzáadása",
+      "defaultBadge": "Alapértelmezett",
+      "deleteConfirmDescription": "Ez a parancsikon véglegesen törlésre kerül.",
+      "deleteConfirmTitle": "Parancsikon törlése?",
+      "deleteShortcut": "Parancsikon törlése",
+      "editShortcut": "Parancsikon szerkesztése",
+      "emptyState": "Még nincsenek parancsikonok. Adjon hozzá egyet.",
+      "errors": {
+        "commandConflict": "Ezzel a paranccsal már létezik egy parancsikon",
+        "commandInvalid": "Csak kisbetűket, számokat, kötőjeleket és aláhúzásokat használjon",
+        "commandReserved": "\"/{command}\" egy fenntartott parancs"
+      },
+      "form": {
+        "command": "Parancs",
+        "commandHint": "Csak kisbetűk, számok, kötőjelek és aláhúzások",
+        "commandPlaceholder": "pl. összefoglalás",
+        "commandPrefix": "/",
+        "description": "Leírás",
+        "descriptionPlaceholder": "Rövid leírás a kiválasztóban",
+        "name": "Név",
+        "namePlaceholder": "pl. Dokumentum összefoglalása",
+        "prompt": "Prompt",
+        "promptPlaceholder": "A szöveg, amely be lesz illesztve a csevegő szerkesztőbe",
+        "scope": "Láthatóság",
+        "scopePrivate": "Csak én",
+        "scopeTeam": "Mindenki a szervezetben"
+      },
+      "privateSection": "Saját parancsikonok",
+      "shadowed": "Csapat parancsikon takarja",
+      "teamSection": "Csapat parancsikonok"
     }
   },
   "navigation": {

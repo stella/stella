@@ -11,12 +11,12 @@ export const Route = createFileRoute("/_protected/knowledge/")({
 type KnowledgeSection = {
   key: "caseLaw" | "skills" | "connectors";
   icon: LucideIcon;
-  to?: "/knowledge/case";
+  to?: "/knowledge/case" | "/knowledge/skills";
 };
 
 export const knowledgeSections: readonly KnowledgeSection[] = [
   { key: "caseLaw", icon: LandmarkIcon, to: "/knowledge/case" },
-  { key: "skills", icon: LightbulbIcon },
+  { key: "skills", icon: LightbulbIcon, to: "/knowledge/skills" },
   { key: "connectors", icon: PlugIcon },
 ];
 

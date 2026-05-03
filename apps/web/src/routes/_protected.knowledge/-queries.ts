@@ -9,6 +9,10 @@ import { toSafeId } from "@/lib/safe-id";
 // ── Key factory ─────────────────────────────────────
 
 export const knowledgeKeys = {
+  shortcuts: {
+    all: ["shortcuts"] as const,
+    list: () => [...knowledgeKeys.shortcuts.all, "list"] as const,
+  },
   templates: {
     all: ["templates"] as const,
     list: (categoryId?: string | null) =>
@@ -206,6 +210,21 @@ export const clausesOptions = (params: {
         throw toAPIError(response.error);
       }
 
+      return response.data;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// ── Shortcuts queries ────────────────────────────────
+
+export const shortcutsOptions = () =>
+  queryOptions({
+    queryKey: knowledgeKeys.shortcuts.list(),
+    queryFn: async ({ signal }) => {
+      const response = await api.shortcuts.get({ fetch: { signal } });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
       return response.data;
     },
     staleTime: STALE_TIME.FIVE.MINUTES,

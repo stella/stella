@@ -354,6 +354,7 @@
     "placeholder": "Was möchten Sie wissen?",
     "prompts": {
       "noResults": "Keine passenden Prompts",
+      "noShortcuts": "No shortcuts yet. Add some in Knowledge → Skills.",
       "scope": {
         "private": "Eigene Prompts",
         "stock": "Vorgegeben",
@@ -1053,6 +1054,38 @@
         "description": "Dokumentvorlagen mit Platzhaltern",
         "title": "Vorlagen"
       }
+    },
+    "skills": {
+      "addShortcut": "Kürzel hinzufügen",
+      "defaultBadge": "Standard",
+      "deleteConfirmDescription": "Dieses Kürzel wird dauerhaft entfernt.",
+      "deleteConfirmTitle": "Kürzel löschen?",
+      "deleteShortcut": "Kürzel löschen",
+      "editShortcut": "Kürzel bearbeiten",
+      "emptyState": "Noch keine Kürzel. Fügen Sie eines hinzu.",
+      "errors": {
+        "commandConflict": "Ein Kürzel mit diesem Befehl existiert bereits",
+        "commandInvalid": "Nur Kleinbuchstaben, Ziffern, Bindestriche und Unterstriche verwenden",
+        "commandReserved": "\"/{command}\" ist ein reservierter Befehl"
+      },
+      "form": {
+        "command": "Befehl",
+        "commandHint": "Nur Kleinbuchstaben, Ziffern, Bindestriche und Unterstriche",
+        "commandPlaceholder": "z.B. zusammenfassen",
+        "commandPrefix": "/",
+        "description": "Beschreibung",
+        "descriptionPlaceholder": "Kurze Beschreibung im Auswahlmenü",
+        "name": "Name",
+        "namePlaceholder": "z.B. Dokument zusammenfassen",
+        "prompt": "Prompt",
+        "promptPlaceholder": "Der Text, der in das Chat-Eingabefeld eingefügt wird",
+        "scope": "Sichtbarkeit",
+        "scopePrivate": "Nur ich",
+        "scopeTeam": "Alle in der Organisation"
+      },
+      "privateSection": "Meine Kürzel",
+      "shadowed": "Vom Team-Kürzel überschattet",
+      "teamSection": "Team-Kürzel"
     }
   },
   "navigation": {

@@ -29,6 +29,7 @@ export const statements = {
   chat: ["create", "delete"],
   organizationSettings: ["update"],
   auditLog: ["read"],
+  promptShortcut: ["create", "update", "delete"],
 } as const;
 
 type PermissionMap = {
@@ -64,6 +65,7 @@ const memberAc = ac.newRole({
   chat: ["create", "delete"],
   organizationSettings: [],
   auditLog: [],
+  promptShortcut: ["create", "update", "delete"],
 });
 
 export const roles = {
@@ -88,6 +90,7 @@ export const roles = {
     chat: ["create", "delete"],
     organizationSettings: ["update"],
     auditLog: ["read"],
+    promptShortcut: ["create", "update", "delete"],
   }),
   admin: ac.newRole({
     organization: ["update"],
@@ -110,6 +113,7 @@ export const roles = {
     chat: ["create", "delete"],
     organizationSettings: ["update"],
     auditLog: ["read"],
+    promptShortcut: ["create", "update", "delete"],
   }),
   member: memberAc,
   intern: ac.newRole({
@@ -133,6 +137,7 @@ export const roles = {
     chat: ["create", "delete"],
     organizationSettings: [],
     auditLog: [],
+    promptShortcut: [],
   }),
   external: ac.newRole({
     organization: [],
@@ -155,5 +160,6 @@ export const roles = {
     chat: [],
     organizationSettings: [],
     auditLog: [],
+    promptShortcut: [],
   }),
 };

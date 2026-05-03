@@ -13,6 +13,7 @@ import {
   chatThreadPolicies,
   organizationCheck,
   orgPolicies,
+  promptShortcutPolicies,
   stella,
   userPolicies,
   workspaceIdCheck,
@@ -2362,6 +2363,57 @@ export const workspaceViews = p.pgTable(
       .index("workspace_views_workspace_position_idx")
       .on(table.workspaceId, table.position),
     ...wsPolicies(),
+  ],
+);
+
+// -- Prompt Shortcuts --
+
+export const PROMPT_SHORTCUT_SCOPES = ["team", "private"] as const;
+export type PromptShortcutScope = (typeof PROMPT_SHORTCUT_SCOPES)[number];
+
+export const RESERVED_SHORTCUT_COMMANDS = ["model", "new"] as const;
+export const SHORTCUT_COMMAND_PATTERN = /^[a-z0-9][a-z0-9_-]{0,48}$/;
+
+export const promptShortcuts = p.pgTable(
+  "prompt_shortcuts",
+  {
+    id: pUuid<"promptShortcut">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    scope: p.text("scope", { enum: PROMPT_SHORTCUT_SCOPES }).notNull(),
+    name: p.varchar({ length: 256 }).notNull(),
+    description: p.text(),
+    command: p.varchar({ length: 50 }).notNull(),
+    prompt: p.text().notNull(),
+    isDefault: p.boolean("is_default").notNull().default(false),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    // Team commands: unique per org
+    p
+      .uniqueIndex("prompt_shortcuts_org_team_command_uidx")
+      .on(table.organizationId, table.command)
+      .where(sql`scope = 'team'`),
+    // Private commands: unique per user
+    p
+      .uniqueIndex("prompt_shortcuts_user_private_command_uidx")
+      .on(table.userId, table.command)
+      .where(sql`scope = 'private'`),
+    p
+      .index("prompt_shortcuts_org_scope_idx")
+      .on(table.organizationId, table.scope),
+    p.index("prompt_shortcuts_user_idx").on(table.userId),
+    ...promptShortcutPolicies(),
   ],
 );
 
