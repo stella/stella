@@ -24,31 +24,23 @@ fn format_session_status(session: &SessionSnapshot) -> String {
     return t("tray.sessionMovedToAnotherDevice").to_string();
   }
   match session.status {
-    crate::types::SessionStatus::Error => {
-      t("tray.sessionNeedsAttention").to_string()
-    }
+    crate::types::SessionStatus::Error => t("tray.sessionNeedsAttention").to_string(),
     crate::types::SessionStatus::Finalizing => {
       t("tray.sessionCreatingRevision").to_string()
     }
-    crate::types::SessionStatus::Opening => {
-      t("tray.sessionOpeningInWord").to_string()
+    crate::types::SessionStatus::Opening => t("tray.sessionOpeningInWord").to_string(),
+    crate::types::SessionStatus::Ready => if session.pending_finalize {
+      t("tray.sessionFinishingEdit")
+    } else {
+      t("tray.sessionEditingLive")
     }
-    crate::types::SessionStatus::Ready => {
-      if session.pending_finalize {
-        t("tray.sessionFinishingEdit")
-      } else {
-        t("tray.sessionEditingLive")
-      }
-      .to_string()
+    .to_string(),
+    crate::types::SessionStatus::Syncing => if session.pending_finalize {
+      t("tray.sessionFinishingEdit")
+    } else {
+      t("tray.sessionSavingDraft")
     }
-    crate::types::SessionStatus::Syncing => {
-      if session.pending_finalize {
-        t("tray.sessionFinishingEdit")
-      } else {
-        t("tray.sessionSavingDraft")
-      }
-      .to_string()
-    }
+    .to_string(),
   }
 }
 
@@ -147,8 +139,7 @@ pub fn build_tray_menu(
   builder = builder.item(&support_menu);
 
   // Active edits submenu
-  let mut edits_builder =
-    SubmenuBuilder::new(app, t("tray.activeEditsSubmenu"));
+  let mut edits_builder = SubmenuBuilder::new(app, t("tray.activeEditsSubmenu"));
   if snapshot.sessions.is_empty() {
     edits_builder = edits_builder.item(
       &MenuItemBuilder::with_id("no-edits", t("tray.noActiveEdits"))
@@ -210,8 +201,7 @@ pub fn build_tray_menu(
   );
   builder = builder.separator();
   builder = builder.item(
-    &MenuItemBuilder::with_id(QUIT_ACTION, t("tray.quitStellaDesktop"))
-      .build(app)?,
+    &MenuItemBuilder::with_id(QUIT_ACTION, t("tray.quitStellaDesktop")).build(app)?,
   );
 
   builder.build()

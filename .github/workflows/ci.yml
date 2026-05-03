@@ -150,6 +150,10 @@ jobs:
         # to oxfmt instead of filtering packages.
         run: bun --bun turbo run format ${{ steps.affected.outputs.flag }} -- --check
 
+      - name: Rust format
+        if: steps.changed-files.outputs.package_checks_required == 'true'
+        run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
+
       - name: Typecheck
         if: steps.changed-files.outputs.package_checks_required == 'true'
         run: bun run typecheck -- ${{ steps.affected.outputs.flag }}

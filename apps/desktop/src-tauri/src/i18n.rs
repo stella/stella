@@ -93,7 +93,9 @@ fn init_with_locale(locale: &str) {
 
 /// Look up a translation key. Falls back to English, then returns the key itself.
 pub fn t(key: &str) -> &str {
-  let tr = TRANSLATIONS.get().expect("i18n not initialized; call i18n::init() first");
+  let tr = TRANSLATIONS
+    .get()
+    .expect("i18n not initialized; call i18n::init() first");
   tr.messages
     .get(key)
     .or_else(|| tr.fallback.get(key))
@@ -141,10 +143,7 @@ fn select_plural_form(count: usize) -> &'static str {
   let tr = TRANSLATIONS.get().expect("i18n not initialized");
 
   // Check if this locale has a "few" branch by testing a known key
-  let has_few = tr
-    .messages
-    .values()
-    .any(|v| v.contains("few {"));
+  let has_few = tr.messages.values().any(|v| v.contains("few {"));
 
   if count == 1 {
     "one"

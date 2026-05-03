@@ -1123,10 +1123,7 @@ impl SessionManager {
           self.show_notification(
             NotifType::SyncIssues,
             crate::i18n::t("notification.finalizeDelayedTitle"),
-            Some(&format!(
-              "{file_name} — {}",
-              crate::i18n::t(body_key)
-            )),
+            Some(&format!("{file_name} — {}", crate::i18n::t(body_key))),
           );
         }
         false
@@ -1437,7 +1434,10 @@ impl SessionManager {
     };
 
     // Don't spawn if already active or session is in error state
-    if session.sse_listener.as_ref().is_some_and(|h| !h.is_finished())
+    if session
+      .sse_listener
+      .as_ref()
+      .is_some_and(|h| !h.is_finished())
       || session.takeover_detected
     {
       return;

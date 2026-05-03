@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use tauri::{AppHandle, async_runtime};
+use tauri::{async_runtime, AppHandle};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::UpdaterExt;
 
@@ -57,7 +57,11 @@ pub async fn run_check(handle: &AppHandle) -> CheckOutcome {
   };
 
   let version = update.version.clone();
-  notify(handle, "Stella update available", &format!("Installing v{version}…"));
+  notify(
+    handle,
+    "Stella update available",
+    &format!("Installing v{version}…"),
+  );
 
   if let Err(err) = update
     .download_and_install(|_chunk, _total| {}, || {})
