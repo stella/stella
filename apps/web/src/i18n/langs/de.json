@@ -46,6 +46,8 @@
     "warm": "Warm"
   },
   "auth": {
+    "betaNoticeBody": "Laden Sie während der Beta vorsichtshalber keine sensiblen, privilegierten, personenbezogenen, unersetzlichen oder produktionskritischen Daten hoch. Cloud ist ein Demodienst.",
+    "betaNoticeTitle": "Beta",
     "chooseOrganization": "Wählen Sie die Organisation, in der Sie arbeiten möchten",
     "codeSentAgain": "Wir haben einen neuen Code gesendet.",
     "continueWithEmail": "Weiter",

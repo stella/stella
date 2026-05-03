@@ -46,6 +46,8 @@
     "warm": "Meleg"
   },
   "auth": {
+    "betaNoticeBody": "Elővigyázatosságból a béta időszakban ne töltsön fel érzékeny, privilegizált, személyes, pótolhatatlan vagy éles működéshez kritikus adatokat. A Cloud bemutató szolgáltatás.",
+    "betaNoticeTitle": "Béta",
     "chooseOrganization": "Válassza ki a szervezetet, amelyben dolgozni szeretne",
     "codeSentAgain": "Új kódot küldtünk.",
     "continueWithEmail": "Tovább",

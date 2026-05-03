@@ -4,6 +4,8 @@ import { useTranslations } from "use-intl";
 import { LanguagePicker } from "@/components/language-picker";
 import { StellaWordmark } from "@/components/stella-wordmark";
 
+const landingUrl = "https://stll.app";
+
 export const Route = createFileRoute("/auth")({
   component: AuthLayout,
 });
@@ -27,7 +29,21 @@ function AuthLayout() {
       `}</style>
       <div className="flex flex-1 flex-col px-8 lg:px-16 xl:px-24">
         <header className="pt-12">
-          <StellaWordmark className="text-foreground h-6 w-auto" />
+          <a
+            aria-label="stella"
+            className="inline-flex transition-opacity hover:opacity-80"
+            href={landingUrl}
+          >
+            <StellaWordmark className="text-foreground h-6 w-auto" />
+          </a>
+          <div className="border-border bg-card/80 mt-8 max-w-2xl rounded-lg border p-4">
+            <p className="text-foreground text-sm font-medium">
+              {t("auth.betaNoticeTitle")}
+            </p>
+            <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+              {t("auth.betaNoticeBody")}
+            </p>
+          </div>
         </header>
         <div className="flex flex-1 flex-col items-center min-[70rem]:flex-row min-[70rem]:items-baseline">
           <div className="hidden flex-1 pt-[18vh] min-[70rem]:block">

@@ -46,6 +46,8 @@
     "warm": "Silts"
   },
   "auth": {
+    "betaNoticeBody": "Piesardzības nolūkos beta periodā neaugšupielādējiet sensitīvus, priviliģētus, personas datus, neaizstājamus vai ražošanai kritiskus datus. Cloud ir demonstrācijas pakalpojums.",
+    "betaNoticeTitle": "Beta",
     "chooseOrganization": "Izvēlieties organizāciju, kurā strādāt",
     "codeSentAgain": "Nosūtījām jaunu kodu.",
     "continueWithEmail": "Turpināt",

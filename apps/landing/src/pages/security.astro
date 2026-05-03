@@ -5,7 +5,7 @@ import ThemeToggle from "../components/ThemeToggle.astro";
 
 <Base title="Security — stella" description="How stella protects your data. Security controls, data handling, and compliance.">
   <div class="flex min-h-dvh flex-col">
-    <nav class="mx-auto flex w-full max-w-[1200px] items-center justify-between px-6 py-5">
+    <nav class="mx-auto flex w-full max-w-300 items-center justify-between px-6 py-5">
       <a href="/">
         <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
       </a>
@@ -24,7 +24,7 @@ import ThemeToggle from "../components/ThemeToggle.astro";
     <main class="flex-1">
       <!-- ——— Hero ——— -->
       <section class="px-6 pt-16 pb-8 lg:pt-24 lg:pb-10">
-        <div class="mx-auto max-w-[1200px]">
+        <div class="mx-auto max-w-300">
           <div class="max-w-4xl">
             <h1 class="font-display text-4xl font-medium tracking-tight sm:text-5xl">
               Security at stella
@@ -34,13 +34,28 @@ import ThemeToggle from "../components/ThemeToggle.astro";
               everything else is built on. Our architecture enforces least
               privilege, workspace isolation, and encryption at every layer.
             </p>
+            <div
+              class="mt-8 rounded-2xl p-6"
+              style="background: var(--card); border: 1px solid var(--border)"
+            >
+              <p class="font-display text-xl font-medium tracking-tight">
+                We are currently in beta.
+              </p>
+              <p class="mt-2 text-sm leading-[1.7]" style="color: var(--muted-foreground)">
+                Please treat the beta preview accordingly while we harden the
+                product, documentation, and operational controls. Stable v1 will
+                be announced in the future. Do not upload sensitive, privileged,
+                personal, irreplaceable, or production-critical data. The
+                service is offered as a demo.
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
       <!-- ——— Principles ——— -->
       <section class="px-6 py-10 lg:py-12">
-        <div class="mx-auto max-w-[1200px]">
+        <div class="mx-auto max-w-300">
           <h2 class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Principles</h2>
           <div class="grid grid-cols-1 gap-5 md:grid-cols-3">
             {[
@@ -59,7 +74,7 @@ import ThemeToggle from "../components/ThemeToggle.astro";
 
       <!-- ——— Controls ——— -->
       <section class="px-6 py-10 lg:py-12">
-        <div class="mx-auto max-w-[1200px]">
+        <div class="mx-auto max-w-300">
           <h2 class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Controls</h2>
           <div class="grid grid-cols-1 gap-x-8 gap-y-10 md:grid-cols-2 lg:grid-cols-3">
             {[
@@ -124,7 +139,7 @@ import ThemeToggle from "../components/ThemeToggle.astro";
 
       <!-- ——— Subprocessors ——— -->
       <section class="px-6 py-10 lg:py-12">
-        <div class="mx-auto max-w-[1200px]">
+        <div class="mx-auto max-w-300">
           <h2 class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Subprocessors</h2>
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
@@ -137,9 +152,8 @@ import ThemeToggle from "../components/ThemeToggle.astro";
               </thead>
               <tbody style="color: var(--muted-foreground)">
                 {[
-                  { provider: "Amazon Web Services", purpose: "Cloud infrastructure, S3 storage", region: "Customer-selected" },
+                  { provider: "Amazon Web Services", purpose: "Cloud infrastructure, RDS PostgreSQL, S3 storage", region: "Customer-selected" },
                   { provider: "Google Cloud", purpose: "AI model inference (Gemini)", region: "Customer-selected" },
-                  { provider: "PostgreSQL (self-managed)", purpose: "Primary database", region: "Customer-selected" },
                   { provider: "PostHog", purpose: "Product analytics", region: "EU" },
                 ].map((row) => (
                   <tr style="border-bottom: 1px solid var(--border)">
@@ -156,13 +170,11 @@ import ThemeToggle from "../components/ThemeToggle.astro";
 
       <!-- ——— Resources ——— -->
       <section class="px-6 py-10 lg:py-12">
-        <div class="mx-auto max-w-[1200px]">
+        <div class="mx-auto max-w-300">
           <h2 class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Resources</h2>
-          <div class="grid grid-cols-1 gap-5 md:grid-cols-3">
+          <div class="grid max-w-sm grid-cols-1 gap-5">
             {[
-              { title: "Data Processing Agreement", body: "GDPR&#8209;compliant DPA for your records." },
-              { title: "Architecture overview", body: "Data flow diagram and infrastructure summary." },
-              { title: "Compliance scan report", body: "Latest Prowler scan against SOC&#8209;2 and ISO&#8209;27001 benchmarks." },
+              { title: "Prowler scan report", body: "Latest Prowler scan against SOC&#8209;2 and ISO&#8209;27001 benchmarks." },
             ].map((item) => (
               <a
                 href={`mailto:security@stll.app?subject=${encodeURIComponent(`Request: ${item.title}`)}`}
@@ -182,9 +194,11 @@ import ThemeToggle from "../components/ThemeToggle.astro";
         </div>
       </section>
 
-      <!-- ——— FAQ ——— -->
+      <!--
+        Once infra stabilises be more detailed.
+
       <section class="px-6 py-10 lg:py-12">
-        <div class="mx-auto max-w-[1200px]">
+        <div class="mx-auto max-w-300">
           <h2 class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">FAQ</h2>
           <div class="max-w-4xl space-y-8">
             {[
@@ -202,11 +216,12 @@ import ThemeToggle from "../components/ThemeToggle.astro";
           </div>
         </div>
       </section>
+      -->
     </main>
 
     <!-- ——— Footer ——— -->
     <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
-      <div class="mx-auto max-w-[1200px] text-center">
+      <div class="mx-auto max-w-300 text-center">
         <p class="text-sm" style="color: var(--muted-foreground)">
           <a href="/imprint" class="transition-opacity hover:opacity-70">stella labs, s.r.o.</a>
           <span aria-hidden="true"> · </span>
@@ -219,18 +234,6 @@ import ThemeToggle from "../components/ThemeToggle.astro";
       ></div>
     </footer>
   </div>
-
-  <script is:inline type="application/ld+json" set:html={JSON.stringify({
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "mainEntity": [
-      { "@type": "Question", "name": "Is customer data used to train AI models?", "acceptedAnswer": { "@type": "Answer", "text": "No. Customer data is never used for model training. AI queries are scoped to the workspace and processed in real time without retention by the model provider." }},
-      { "@type": "Question", "name": "Where is data stored?", "acceptedAnswer": { "@type": "Answer", "text": "You choose the region. Our managed cloud supports EU, US, and Swiss deployments. Self-hosted runs wherever you choose." }},
-      { "@type": "Question", "name": "Do you support SSO?", "acceptedAnswer": { "@type": "Answer", "text": "SSO via Google Workspace and Microsoft Entra is available as an enterprise add-on. SAML support is on the roadmap." }},
-      { "@type": "Question", "name": "Can I export all my data?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Full data export is available at any time in standard formats. There are no contractual or technical barriers to leaving." }},
-      { "@type": "Question", "name": "How do I report a vulnerability?", "acceptedAnswer": { "@type": "Answer", "text": "Email security@stll.app with details. We follow responsible disclosure practices and will acknowledge within 48 hours." }},
-    ],
-  })} />
 
   <style>
     .resource-card { cursor: pointer; }

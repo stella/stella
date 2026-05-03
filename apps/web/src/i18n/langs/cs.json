@@ -46,6 +46,8 @@
     "warm": "Teplé"
   },
   "auth": {
+    "betaNoticeBody": "Jako preventivní opatření během bety nenahrávejte citlivá, privilegovaná, osobní, nenahraditelná ani produkčně kritická data. Cloud je demonstrační služba.",
+    "betaNoticeTitle": "Beta",
     "chooseOrganization": "Vyberte organizaci, ve které chcete pracovat",
     "codeSentAgain": "Poslali jsme nový kód.",
     "continueWithEmail": "Pokračovat",

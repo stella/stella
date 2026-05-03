@@ -3,11 +3,15 @@ import Base from "../layouts/Base.astro";
 import ThemeToggle from "../components/ThemeToggle.astro";
 import ProductShowcase from "../components/react/ProductShowcase";
 import { controlCapabilities } from "../data/capabilities";
+
+const appUrl = "https://my.stll.app";
+const selfHostingDocsUrl =
+  "https://github.com/stella/stella/blob/main/apps/docs/src/content/docs/guides/self-hosting.md";
 ---
 
 <Base>
   <!-- Brand accent line -->
-  <div class="h-[2px]" style="background: linear-gradient(to right, var(--auth-gradient-end), transparent 70%)" data-no-transition></div>
+  <div class="h-0.5" style="background: linear-gradient(to right, var(--auth-gradient-end), transparent 70%)" data-no-transition></div>
 
   <main>
     <!-- ——— Hero ——— -->
@@ -16,7 +20,7 @@ import { controlCapabilities } from "../data/capabilities";
         <div id="gradient-light" class="absolute inset-0 dark:opacity-0 transition-opacity duration-500"></div>
         <div id="gradient-dark" class="absolute inset-0 opacity-0 dark:opacity-100 transition-opacity duration-500"></div>
       </div>
-      <nav class="relative z-10 mx-auto flex w-full max-w-[1200px] items-center justify-between px-6 py-5">
+      <nav class="relative z-10 mx-auto flex w-full max-w-300 items-center justify-between px-6 py-5">
         <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
         <div class="flex items-center gap-4">
           <ThemeToggle />
@@ -45,12 +49,13 @@ import { controlCapabilities } from "../data/capabilities";
           <br />
           Free to use, open to inspect, yours to keep.
         </p>
-        <span
-          class="mt-8 inline-flex h-9 cursor-default items-center rounded-[0.625rem] px-4 text-sm font-medium opacity-60 whitespace-nowrap"
+        <a
+          href={appUrl}
+          class="mt-8 inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
           style="background: var(--primary); color: var(--primary-foreground)"
         >
-          Coming soon
-        </span>
+          Start free
+        </a>
       </div>
 
       <div
@@ -61,12 +66,12 @@ import { controlCapabilities } from "../data/capabilities";
 
     <!-- ——— Product ——— -->
     <section class="-mt-24 relative z-10 px-6 pb-16">
-      <div class="mx-auto max-w-[1200px]">
+      <div class="mx-auto max-w-300">
         <ProductShowcase />
       </div>
     </section>
     <section class="px-6 py-16 lg:py-20">
-      <div class="mx-auto max-w-[1200px]">
+      <div class="mx-auto max-w-300">
         <div class="mx-auto max-w-4xl text-center">
           <p class="text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Built to last</p>
           <h2 class="mt-3 font-display text-4xl font-medium leading-[1.1] sm:text-5xl lg:text-6xl">
@@ -77,15 +82,8 @@ import { controlCapabilities } from "../data/capabilities";
             And whatever comes next.
           </h2>
           <p class="mx-auto mt-5 max-w-3xl text-base leading-[1.9] sm:text-lg" style="color: var(--muted-foreground)">
-            Documents, matters, and search are free. AI-powered review, drafting, and research stay grounded in your workspace and trusted sources.
+            Documents, matters, and search are free in the beta preview. AI features are available with your own provider key.
           </p>
-          <a
-            href="/docs"
-            class="mt-4 inline-flex text-sm font-medium transition-opacity hover:opacity-70"
-            style="color: var(--muted-foreground)"
-          >
-            Docs &rarr;
-          </a>
         </div>
 
         <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -102,12 +100,12 @@ import { controlCapabilities } from "../data/capabilities";
       </div>
     </section>
 
-    <!-- ——— Pricing ——— -->
+    <!-- ——— Usage options ——— -->
     <section class="px-6 py-16 lg:py-20">
-      <div class="mx-auto max-w-[1200px]">
-        <p class="mb-3 text-center text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Pricing</p>
+      <div class="mx-auto max-w-300">
+        <p class="mb-3 text-center text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Usage options</p>
         <h2 class="mb-10 text-center font-display text-4xl font-medium leading-[1.1] sm:text-5xl lg:text-6xl">
-          Simple, transparent.
+          Choose how to run stella.
         </h2>
         <p class="mx-auto mb-10 max-w-2xl text-center text-base leading-[1.8] sm:text-lg" style="color: var(--muted-foreground)">
           No lock-in, no per-seat licensing, no hidden pricing.
@@ -115,43 +113,56 @@ import { controlCapabilities } from "../data/capabilities";
         <div class="mx-auto grid max-w-3xl grid-cols-1 gap-6 md:grid-cols-2">
           {[
             {
-              name: "Standard",
+              name: "Self-host",
+              cta: "Read docs",
+              external: true,
+              href: selfHostingDocsUrl,
               price: "Free",
-              cta: "Coming soon",
-              features: ["Unlimited users", "Document management", "Matters\u00A0&\u00A0search", "Self\u2011hosting", "Community support"],
+              note: "",
+              features: ["Run on your infrastructure", "Full source access", "AGPL\u20113.0 license", "Currently in beta demo"],
             },
             {
-              name: "Pro",
-              price: "Usage\u2011based",
-              cta: "Coming soon",
-              features: ["Everything in Standard", "AI review\u00A0&\u00A0research", "Automated drafting", "Priority support"],
+              name: "Cloud preview",
+              cta: "Try it out now",
+              href: appUrl,
+              note: "",
+              price: "Free",
+              features: ["Use hosted architecture", "Currently in beta preview", "BYOK only"],
             },
           ].map((tier) => (
             <div
               class="pricing-card group flex flex-col rounded-2xl p-8 transition-[background-color,border-color,box-shadow] duration-200"
               style="background: var(--card); border: 1px solid var(--border); color: inherit"
             >
+              <p class="min-h-5 text-sm italic" style="color: var(--muted-foreground)">
+                {tier.note ?? ""}
+              </p>
               <p class="text-xs font-medium uppercase tracking-[0.15em]" style="color: var(--muted-foreground)">{tier.name}</p>
               <p class="tabular-nums mt-2 font-display text-3xl font-medium">{tier.price}</p>
               <div class="my-6 h-px" style="background: var(--border)"></div>
               <div class="flex-1 space-y-1.5 text-sm leading-[1.7]" style="color: var(--muted-foreground)">
                 {tier.features.map((f) => <p set:html={f} />)}
               </div>
-              <span
-                class="mt-8 inline-flex h-9 cursor-default items-center self-start rounded-[0.625rem] px-4 text-sm font-medium opacity-60 whitespace-nowrap"
+              <a
+                href={tier.href}
+                class="mt-8 inline-flex h-9 items-center self-start rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
+                rel={tier.external ? "noopener noreferrer" : undefined}
                 style="background: var(--primary); color: var(--primary-foreground)"
+                target={tier.external ? "_blank" : undefined}
               >
                 {tier.cta}
-              </span>
+              </a>
             </div>
           ))}
         </div>
       </div>
     </section>
 
-    <!-- ——— Trust ——— -->
+    <!--
+      Removing the design scaffold until everything for the beta preview.
+
     <section class="px-6 py-16 lg:py-20">
-      <div class="mx-auto max-w-[1200px]">
+      <div class="mx-auto max-w-300">
         <div class="grid grid-cols-1 gap-10 text-center md:grid-cols-3 md:gap-8">
           {[
             { label: "Deployment", title: "Self-host or managed cloud", body: "Choose the operating model that fits your firm. Move data on your timetable, not ours.", href: "mailto:contact@stll.app?subject=stella%20deployment", linkText: "Talk deployment \u2192" },
@@ -174,11 +185,12 @@ import { controlCapabilities } from "../data/capabilities";
         </div>
       </div>
     </section>
+    -->
 
     <!-- ——— Final CTA ——— -->
     <section class="px-6 pb-20 lg:pb-24">
       <div
-        class="relative mx-auto max-w-[1200px] overflow-hidden rounded-[2rem] p-8 sm:p-10 lg:p-12"
+        class="relative mx-auto max-w-300 overflow-hidden rounded-[2rem] p-8 sm:p-10 lg:p-12"
         style="background: var(--card); border: 1px solid var(--border)"
       >
         <div
@@ -210,12 +222,13 @@ import { controlCapabilities } from "../data/capabilities";
         </div>
 
         <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-          <span
-            class="inline-flex h-11 cursor-default items-center justify-center rounded-[0.85rem] px-5 text-sm font-medium opacity-60 whitespace-nowrap"
+          <a
+            href={appUrl}
+            class="inline-flex h-11 items-center justify-center rounded-[0.85rem] px-5 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
             style="background: var(--primary); color: var(--primary-foreground)"
             >
-            Coming soon
-          </span>
+            Start free
+          </a>
           <a
             href="mailto:contact@stll.app?subject=stella%20walkthrough"
             class="inline-flex h-11 items-center justify-center rounded-[0.85rem] px-5 text-sm font-medium transition-colors whitespace-nowrap"
@@ -231,10 +244,9 @@ import { controlCapabilities } from "../data/capabilities";
 
   <!-- ——— Footer ——— -->
   <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
-    <div class="mx-auto max-w-[1200px]">
+    <div class="mx-auto max-w-300">
       <div class="flex flex-col items-center justify-between gap-6 sm:flex-row">
         <nav class="flex items-center gap-4 text-sm" style="color: var(--muted-foreground)" aria-label="Footer">
-          <a href="/docs" class="transition-opacity hover:opacity-70">Docs</a>
           <a href="https://github.com/stella/stella" class="transition-opacity hover:opacity-70" target="_blank" rel="noopener noreferrer">GitHub</a>
           <a href="/security" class="transition-opacity hover:opacity-70">Security</a>
           <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
