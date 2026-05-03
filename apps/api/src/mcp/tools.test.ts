@@ -45,6 +45,57 @@ const searchDecisionsHandlerMock = mock();
 const readDecisionHandlerMock = mock();
 const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/, "");
 
+type AnonymizationBlacklistEntryInput = {
+  canonical: string;
+  enabled?: boolean | undefined;
+  label: string;
+  variants?: string[] | undefined;
+};
+
+const normalizeAnonymizationBlacklistEntryMock = ({
+  canonical,
+  enabled,
+  label,
+  variants,
+}: AnonymizationBlacklistEntryInput) => ({
+  canonical: canonical.trim(),
+  enabled: enabled ?? true,
+  label: label.trim(),
+  variants: [...new Set((variants ?? []).map((value) => value.trim()))].filter(
+    (value) => value.length > 0,
+  ),
+});
+
+const normalizeAnonymizationBlacklistEntriesMock = (
+  entries: AnonymizationBlacklistEntryInput[],
+) => {
+  const seenCanonical = new Set<string>();
+  const normalized = [];
+
+  for (const entry of entries) {
+    const next = normalizeAnonymizationBlacklistEntryMock(entry);
+    if (next.canonical.length === 0 || next.label.length === 0) {
+      return Result.err({
+        status: 400,
+        message: "Anonymization blacklist terms cannot be blank",
+      });
+    }
+
+    const canonicalKey = next.canonical.toLocaleLowerCase();
+    if (seenCanonical.has(canonicalKey)) {
+      return Result.err({
+        status: 400,
+        message: "Duplicate anonymization blacklist term",
+      });
+    }
+
+    seenCanonical.add(canonicalKey);
+    normalized.push(next);
+  }
+
+  return Result.ok(normalized);
+};
+
 void mock.module("@/api/lib/analytics", () => ({
   captureError: captureErrorMock,
   getAnalytics: getAnalyticsMock,
@@ -57,6 +108,10 @@ void mock.module("@/api/mcp/anonymization", () => ({
 
 void mock.module("@/api/lib/anonymization-blacklist", () => ({
   loadAnonymizationGazetteerEntries: loadAnonymizationGazetteerEntriesMock,
+  normalizeAnonymizationBlacklistEntries:
+    normalizeAnonymizationBlacklistEntriesMock,
+  normalizeAnonymizationBlacklistEntry:
+    normalizeAnonymizationBlacklistEntryMock,
 }));
 
 void mock.module("@/api/handlers/chat/tools/org-tools", () => ({
