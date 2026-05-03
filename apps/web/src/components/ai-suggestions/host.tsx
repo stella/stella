@@ -15,7 +15,7 @@
 
 import "@/components/chat-editor.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 import {
   applySuggestions,
@@ -1066,6 +1066,60 @@ type PromptBarProps = {
   sendDisabledReason?: "editor-loading" | undefined;
 };
 
+/**
+ * Styled placeholder label rendered in the prompt bar when the editor
+ * is empty. Shared between the live `PromptBar` (via `emptyPlaceholder`)
+ * and the loading `PromptBarPlaceholder` shell so both surfaces are
+ * pixel-identical and can never drift.
+ */
+export function PromptBarPlaceholderContent({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <span className="text-muted-foreground/60 truncate text-[13px] leading-5">
+      {children}
+    </span>
+  );
+}
+
+type PromptBarShellProps = {
+  layout: FileAIChatLayout;
+  children: ReactNode;
+} & Omit<ComponentProps<"div">, "children">;
+
+/**
+ * Shared outer shell for the glass prompt bar. Both the live
+ * `PromptBar` and the loading `PromptBarPlaceholder` (in the
+ * inspector) render through this so they can never drift apart.
+ */
+export function PromptBarShell({
+  layout,
+  children,
+  className,
+  ...rest
+}: PromptBarShellProps) {
+  return (
+    <div
+      {...rest}
+      className={cn(
+        "group/bar bg-background/75 relative flex items-end gap-1 rounded-2xl border backdrop-blur-xl backdrop-saturate-150 transition-[box-shadow,border-color]",
+        "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
+        "after:pointer-events-none after:absolute after:-inset-4 after:-z-10 after:rounded-2xl after:bg-[radial-gradient(ellipse_at_center,var(--background)_0%,transparent_70%)] after:opacity-50",
+        "focus-within:border-foreground/30",
+        "w-[min(560px,calc(100%-2rem))] py-1 ps-1.5 pe-1",
+        layout === "floating"
+          ? "absolute start-1/2 bottom-8 z-50 -translate-x-1/2"
+          : "relative mb-8 shrink-0 self-center",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function PromptBar(props: PromptBarProps) {
   const {
     layout,
@@ -1141,14 +1195,10 @@ export function PromptBar(props: PromptBarProps) {
   }, [setSubmitHandler, submitDraft]);
 
   return (
-    <div
+    <PromptBarShell
+      aria-busy={busy}
+      aria-label="AI prompt"
       className={cn(
-        // ── Shared bar look — IDENTICAL in floating and standalone.
-        "group/bar bg-background/75 relative flex items-end gap-1 rounded-2xl border backdrop-blur-xl backdrop-saturate-150 transition-[box-shadow,border-color]",
-        "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
-        "after:pointer-events-none after:absolute after:-inset-4 after:-z-10 after:rounded-2xl after:bg-[radial-gradient(ellipse_at_center,var(--background)_0%,transparent_70%)] after:opacity-50",
-        "focus-within:border-foreground/30",
-        "w-[min(560px,calc(100%-2rem))] py-1 ps-1.5 pe-1",
         // While the model is generating or applying, signal the
         // wait clearly: a soft primary ring + the inline spinner
         // overlay below. Without this the bar looks identical to
@@ -1159,14 +1209,9 @@ export function PromptBar(props: PromptBarProps) {
         // than the busy state because it's transient and meant to
         // catch the eye, not communicate ongoing work.
         attention && "border-primary ring-primary/40 ring-4",
-        // ── Layout-specific positioning ONLY.
-        layout === "floating"
-          ? "absolute start-1/2 bottom-8 z-50 -translate-x-1/2"
-          : "relative mb-8 shrink-0 self-center",
       )}
+      layout={layout}
       role="toolbar"
-      aria-label="AI prompt"
-      aria-busy={busy}
     >
       <div className="relative flex min-h-8 min-w-0 flex-1 items-center gap-1.5 px-1.5">
         {isEmpty && busy && (
@@ -1191,7 +1236,7 @@ export function PromptBar(props: PromptBarProps) {
           !busy &&
           !isSendBlocked &&
           emptyPlaceholder !== undefined && (
-            <div className="pointer-events-none absolute inset-x-1.5 top-1/2 z-10 min-w-0 -translate-y-1/2">
+            <div className="pointer-events-none absolute inset-0 z-10 flex min-w-0 items-center px-1.5">
               {emptyPlaceholder}
             </div>
           )}
@@ -1298,7 +1343,7 @@ export function PromptBar(props: PromptBarProps) {
           </TooltipPopup>
         </Tooltip>
       )}
-    </div>
+    </PromptBarShell>
   );
 }
 

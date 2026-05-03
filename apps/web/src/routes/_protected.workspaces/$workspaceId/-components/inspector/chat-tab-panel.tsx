@@ -34,7 +34,11 @@ import {
   ConversationContent,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
-import { PromptBar } from "@/components/ai-suggestions/host";
+import {
+  PromptBar,
+  PromptBarPlaceholderContent,
+  PromptBarShell,
+} from "@/components/ai-suggestions/host";
 import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
@@ -272,6 +276,11 @@ export const ChatTabPanel = ({
 
       <PromptBar
         editorController={editorController}
+        emptyPlaceholder={
+          <PromptBarPlaceholderContent>
+            {t("chat.contextPlaceholder", { context: chatContextLabel })}
+          </PromptBarPlaceholderContent>
+        }
         layout="standalone"
         onStop={() => {
           void stop();
@@ -464,24 +473,16 @@ const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
   const t = useTranslations();
   const chatContextLabel = useChatContextLabel(tab);
   return (
-    <div
-      aria-hidden="true"
-      className="group/bar bg-background/75 relative mb-8 flex w-[min(560px,calc(100%-2rem))] shrink-0 items-end gap-1 self-center rounded-2xl border py-1 ps-1.5 pe-1 backdrop-blur-xl backdrop-saturate-150"
-    >
-      <div className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 px-1.5">
-        <span className="text-muted-foreground/60 truncate text-[13px] leading-5">
+    <PromptBarShell aria-hidden="true" layout="standalone">
+      <div className="flex min-h-8 min-w-0 flex-1 items-center px-1.5">
+        <PromptBarPlaceholderContent>
           {t("chat.contextPlaceholder", { context: chatContextLabel })}
-        </span>
+        </PromptBarPlaceholderContent>
       </div>
-      <Button
-        className="rounded-full opacity-50"
-        disabled
-        size="icon"
-        type="button"
-      >
+      <Button className="rounded-full" disabled size="icon" type="button">
         <ArrowUpIcon aria-hidden="true" />
       </Button>
-    </div>
+    </PromptBarShell>
   );
 };
 

@@ -6,13 +6,9 @@
   margin: 0;
 }
 
-.chat-editor .tiptap p.is-editor-empty:first-child::before {
-  color: color-mix(in srgb, var(--color-muted-foreground) 64%, transparent);
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-}
+/* Placeholder is rendered as a React element in ChatInputSurface,
+ * keyed off the stable isEmpty state rather than TipTap's own
+ * is-editor-empty class (which can flicker during initialisation). */
 
 .folio-ai-bar-editor--custom-placeholder
   .tiptap
