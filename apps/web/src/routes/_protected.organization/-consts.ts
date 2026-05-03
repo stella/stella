@@ -5,12 +5,34 @@ type Translator = ReturnType<typeof getTranslator>;
 
 export const managementRoles: readonly Role[] = ["owner", "admin"];
 
-export const getRoles = (t: Translator): { label: string; value: Role }[] => [
-  { label: t("organization.roles.owner"), value: "owner" },
-  { label: t("organization.roles.admin"), value: "admin" },
-  { label: t("organization.roles.member"), value: "member" },
-  { label: t("organization.roles.intern"), value: "intern" },
-  { label: t("organization.roles.external"), value: "external" },
+export const getRoles = (
+  t: Translator,
+): { label: string; value: Role; description: string }[] => [
+  {
+    label: t("organization.roles.owner"),
+    value: "owner",
+    description: t("organization.roles.descriptions.owner"),
+  },
+  {
+    label: t("organization.roles.admin"),
+    value: "admin",
+    description: t("organization.roles.descriptions.admin"),
+  },
+  {
+    label: t("organization.roles.member"),
+    value: "member",
+    description: t("organization.roles.descriptions.member"),
+  },
+  {
+    label: t("organization.roles.intern"),
+    value: "intern",
+    description: t("organization.roles.descriptions.intern"),
+  },
+  {
+    label: t("organization.roles.external"),
+    value: "external",
+    description: t("organization.roles.descriptions.external"),
+  },
 ];
 
 export const rolePriority = {

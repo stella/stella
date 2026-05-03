@@ -88,7 +88,7 @@ export const InviteMemberDialog = ({
   const form = useForm({
     defaultValues,
     validators: { onDynamic: inviteSchema },
-    onSubmit: async ({ value }) => {
+    onSubmit: async ({ value, formApi }) => {
       const parseResult = v.safeParse(inviteSchema, value);
       if (!parseResult.success) {
         return;
@@ -104,6 +104,13 @@ export const InviteMemberDialog = ({
       );
 
       if (Result.isError(inviteResult)) {
+        const message =
+          inviteResult.error instanceof Error
+            ? inviteResult.error.message
+            : t("errors.actionFailed");
+        formApi.setErrorMap({
+          onSubmit: { fields: { email: message } },
+        });
         return;
       }
 

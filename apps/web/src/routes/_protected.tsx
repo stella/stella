@@ -17,7 +17,7 @@ import {
 } from "@stll/ui/components/menu";
 import { Separator } from "@stll/ui/components/separator";
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
   Outlet,
@@ -108,8 +108,6 @@ export const Route = createFileRoute("/_protected")({
 });
 
 function ProtectedComponent() {
-  const { data: role } = useSuspenseQuery(roleOptions);
-
   const workspaceMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId",
     shouldThrow: false,
@@ -177,7 +175,7 @@ function ProtectedComponent() {
       <ChatMentionProviders>
         <ChatEditorProvider>
           <GlobalChatMentionRegistration />
-          <AppSidebar role={role} />
+          <AppSidebar />
           <CreateMatterDialog />
           <ProtectedContent decisionId={activeDecisionId} />
           <WorkspaceInspectorSidePanel />

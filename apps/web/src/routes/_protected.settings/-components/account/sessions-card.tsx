@@ -43,7 +43,7 @@ import {
 
 const MISSING_VALUE = "-";
 
-export const SessionsSection = () => {
+export const SessionsCard = () => {
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
   const [{ data: sessions }, { data: currentSession }] = useSuspenseQueries({
@@ -54,16 +54,12 @@ export const SessionsSection = () => {
   const hasOtherSessions = sessions.some((s) => s.id !== currentSessionId);
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-medium">{t("common.sessions")}</h3>
-          <p className="text-muted-foreground text-xs">
-            {t("account.sessions.description")}
-          </p>
+    <div className="flex flex-col gap-4">
+      {hasOtherSessions && (
+        <div className="flex justify-end">
+          <RevokeAllDialog />
         </div>
-        {hasOtherSessions && <RevokeAllDialog />}
-      </div>
+      )}
       <Frame>
         <Table>
           <TableHeader>
@@ -122,7 +118,7 @@ export const SessionsSection = () => {
           </TableBody>
         </Table>
       </Frame>
-    </section>
+    </div>
   );
 };
 

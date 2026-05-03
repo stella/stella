@@ -15,19 +15,6 @@ type Messages = {
       "revokeOtherSessionsConfirm": "This will end all sessions except your current one.";
       "unknownDevice": "Unknown device";
     };
-    "settings": {
-      "description": "Manage your account preferences";
-      "desktopApp": "Desktop app";
-      "desktopAppDescription": "Open documents and files directly in stella from your computer.";
-      "desktopDownloadMac": "Download for macOS";
-      "desktopDownloadOtherMac": "On Windows? Download for Windows";
-      "desktopDownloadOtherWeb": "On macOS? Download for macOS";
-      "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments";
-      "desktopDownloadWindows": "Download for Windows";
-      "timezone": "Timezone";
-      "timezoneDescription": "Used for timestamps in notifications and emails";
-      "timezoneSaved": "Timezone updated";
-    };
   };
   "anonymize": {
     "addEntity": "Add entity";
@@ -1119,13 +1106,23 @@ type Messages = {
     "members": {
       "changeRole": "Change role";
       "changeRoleDescription": "Update the role for {email}";
+      "confirmRoleChangeDescription": "{email}'s role will change from {oldRole} to {newRole}.";
+      "confirmRoleChangeTitle": "Change role";
       "joined": "Joined";
       "noMembersFound": "No members found";
       "removeMember": "Remove member";
+      "typeEmailToConfirm": "Type {email} to confirm";
       "updateRole": "Update role";
     };
     "roles": {
       "admin": "Admin";
+      "descriptions": {
+        "admin": "Manages members, invitations, and organization settings.";
+        "external": "External collaborator. Read-only access to shared matters.";
+        "intern": "Read-only on matters. Can log time and expenses on assigned work.";
+        "member": "Works in matters: clients, files, tasks, billable time.";
+        "owner": "Full control. Can delete the organization and transfer ownership.";
+      };
       "external": "External";
       "intern": "Intern";
       "member": "Member";
@@ -1178,6 +1175,41 @@ type Messages = {
     "dismissUpdate": "Dismiss update notice";
     "updateAvailable": "stella v{latest} is available. You're running v{installed}.";
     "viewReleaseNotes": "View release notes";
+  };
+  "settings": {
+    "account": {
+      "desktop": "Desktop";
+      "desktopAppDescription": "Open documents and files directly in stella from your computer.";
+      "desktopDescription": "Install Stella on your computer";
+      "desktopDownloadMac": "Download for macOS";
+      "desktopDownloadOtherMac": "On Windows? Download for Windows";
+      "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments";
+      "desktopDownloadWindows": "Download for Windows";
+      "profile": "Profile";
+      "profileDescription": "Manage your personal preferences";
+      "sessions": "Sessions";
+      "timezone": "Timezone";
+      "timezoneDescription": "Used for timestamps in notifications and emails";
+      "timezoneSaved": "Timezone updated";
+      "title": "Account";
+    };
+    "organization": {
+      "activeMembers": "Active members";
+      "ai": "AI configuration";
+      "aiDescription": "Bring your own API key or configure data sovereignty region";
+      "matterNumbering": "Matter numbering";
+      "matterNumberingDescription": "Configure how new matter reference numbers are generated";
+      "membersDescription": "Manage who has access to this organization and any pending invitations";
+      "pendingInvitations": "Pending invitations";
+      "profile": "Profile";
+      "profileDescription": "Update organization name";
+      "renameAction": "Rename";
+      "renameDescription": "Members will see the new name immediately.";
+      "renameTitle": "Rename organization";
+      "renameTypeToConfirm": "Type the new name to confirm: {name}";
+      "title": "Organization";
+    };
+    "title": "Settings";
   };
   "success": {
     "aiConfigDeleted": "AI configuration removed";

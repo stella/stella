@@ -29,7 +29,7 @@ export const DownloadStep = ({ onNext, onSkip }: DownloadStepProps) => {
         {t("onboarding.desktopTitle")}
       </h1>
       <p className="text-muted-foreground mt-2 text-sm">
-        {t("account.settings.desktopAppDescription")}
+        {t("settings.account.desktopAppDescription")}
       </p>
 
       <div className="mt-8 flex flex-col gap-3">
@@ -37,10 +37,10 @@ export const DownloadStep = ({ onNext, onSkip }: DownloadStepProps) => {
           <>
             <a className={primaryClass} href={MACOS_DMG_URL}>
               <AppleIcon />
-              {t("account.settings.desktopDownloadMac")}
+              {t("settings.account.desktopDownloadMac")}
             </a>
             <a className={secondaryClass} href={WINDOWS_EXE_URL}>
-              {t("account.settings.desktopDownloadOtherMac")}
+              {t("settings.account.desktopDownloadOtherMac")}
             </a>
           </>
         )}
@@ -48,10 +48,10 @@ export const DownloadStep = ({ onNext, onSkip }: DownloadStepProps) => {
           <>
             <a className={primaryClass} href={WINDOWS_EXE_URL}>
               <MonitorDownIcon />
-              {t("account.settings.desktopDownloadWindows")}
+              {t("settings.account.desktopDownloadWindows")}
             </a>
             <a className={secondaryClass} href={WINDOWS_MSI_URL}>
-              {t("account.settings.desktopDownloadOtherWindows")}
+              {t("settings.account.desktopDownloadOtherWindows")}
             </a>
           </>
         )}
@@ -59,14 +59,14 @@ export const DownloadStep = ({ onNext, onSkip }: DownloadStepProps) => {
           <>
             <a className={primaryClass} href={WINDOWS_EXE_URL}>
               <MonitorDownIcon />
-              {t("account.settings.desktopDownloadWindows")}
+              {t("settings.account.desktopDownloadWindows")}
             </a>
             <a
               className={cn(buttonVariants({ variant: "outline" }), "w-full")}
               href={MACOS_DMG_URL}
             >
               <AppleIcon />
-              {t("account.settings.desktopDownloadMac")}
+              {t("settings.account.desktopDownloadMac")}
             </a>
           </>
         )}

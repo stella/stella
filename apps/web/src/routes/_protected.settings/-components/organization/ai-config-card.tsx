@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { Field, FieldLabel } from "@stll/ui/components/field";
+import { Frame, FramePanel } from "@stll/ui/components/frame";
 import { Input } from "@stll/ui/components/input";
 import {
   Select,
@@ -51,7 +52,7 @@ const isProvider = (v: string): v is ProviderValue => PROVIDER_VALUES.has(v);
 const isRegion = (v: string): v is RegionValue => REGION_VALUES.has(v);
 const isRole = (v: string): v is RoleValue => ROLE_VALUES.has(v);
 
-export const AIConfigSection = () => {
+export const AIConfigCard = () => {
   const t = useTranslations("organization");
   const tCommon = useTranslations("common");
   const tSuccess = useTranslations("success");
@@ -165,15 +166,20 @@ export const AIConfigSection = () => {
   });
 
   return (
-    <section className="bg-card flex flex-col gap-3 rounded-lg border p-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <h3 className="text-sm font-medium">{t("aiConfig.title")}</h3>
-          <p className="text-muted-foreground text-xs">
-            {t("aiConfig.description")}
-          </p>
-        </div>
-        {config?.configured && (
+    <div className="flex flex-col gap-4">
+      {config?.configured && (
+        <div className="flex items-center justify-between gap-2">
+          <div className="bg-muted flex items-center gap-2 rounded border px-3 py-2">
+            <span className="text-muted-foreground text-xs">
+              {t("aiConfig.active")}:
+            </span>
+            <span className="text-xs font-medium">
+              {t(`aiConfig.providers.${config.provider}`)}
+            </span>
+            <span className="text-muted-foreground font-mono text-xs">
+              {config.apiKeyMasked}
+            </span>
+          </div>
           <Button
             loading={deleteMutation.isPending}
             onClick={() => deleteMutation.mutate()}
@@ -182,134 +188,126 @@ export const AIConfigSection = () => {
           >
             <Trash2Icon className="size-4" />
           </Button>
-        )}
-      </div>
-
-      {config?.configured && (
-        <div className="bg-muted flex items-center gap-2 rounded border px-3 py-2">
-          <span className="text-muted-foreground text-xs">
-            {t("aiConfig.active")}:
-          </span>
-          <span className="text-xs font-medium">
-            {t(`aiConfig.providers.${config.provider}`)}
-          </span>
-          <span className="text-muted-foreground font-mono text-xs">
-            {config.apiKeyMasked}
-          </span>
         </div>
       )}
+      <Frame>
+        <FramePanel>
+          <div className="flex flex-col gap-3 p-1">
+            <Field>
+              <FieldLabel>{t("aiConfig.provider")}</FieldLabel>
+              <Select
+                onValueChange={(val) => {
+                  if (val && isProvider(val)) {
+                    setProvider(val);
+                    if (!REGIONAL_PROVIDERS.has(val)) {
+                      setRegion("global");
+                    }
+                  }
+                }}
+                value={provider}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectPopup alignItemWithTrigger={false}>
+                  {PROVIDER_KEYS.map((key) => (
+                    <SelectItem key={key} value={key}>
+                      {t(`aiConfig.providers.${key}`)}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            </Field>
 
-      <div className="flex flex-col gap-3">
-        <Field>
-          <FieldLabel>{t("aiConfig.provider")}</FieldLabel>
-          <Select
-            onValueChange={(val) => {
-              if (val && isProvider(val)) {
-                setProvider(val);
-                if (!REGIONAL_PROVIDERS.has(val)) {
-                  setRegion("global");
+            <Field>
+              <FieldLabel>{t("aiConfig.apiKey")}</FieldLabel>
+              <Input
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder={
+                  config?.configured
+                    ? t("aiConfig.apiKeyUpdatePlaceholder")
+                    : t("aiConfig.apiKeyPlaceholder")
                 }
-              }
-            }}
-            value={provider}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectPopup alignItemWithTrigger={false}>
-              {PROVIDER_KEYS.map((key) => (
-                <SelectItem key={key} value={key}>
-                  {t(`aiConfig.providers.${key}`)}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
-        </Field>
+                type="password"
+                value={apiKey}
+              />
+            </Field>
 
-        <Field>
-          <FieldLabel>{t("aiConfig.apiKey")}</FieldLabel>
-          <Input
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder={
-              config?.configured
-                ? t("aiConfig.apiKeyUpdatePlaceholder")
-                : t("aiConfig.apiKeyPlaceholder")
-            }
-            type="password"
-            value={apiKey}
-          />
-        </Field>
-
-        {provider === "openai_compatible" && (
-          <Field>
-            <FieldLabel>{t("aiConfig.baseUrl")}</FieldLabel>
-            <Input
-              onChange={(e) => setBaseURL(e.target.value)}
-              placeholder="https://api.example.com/v1"
-              value={baseURL}
-            />
-          </Field>
-        )}
-
-        <Field>
-          <FieldLabel>{t("aiConfig.dataRegion")}</FieldLabel>
-          <Select
-            disabled={!REGIONAL_PROVIDERS.has(provider)}
-            onValueChange={(val) => {
-              if (val && isRegion(val)) {
-                setRegion(val);
-              }
-            }}
-            value={region}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectPopup alignItemWithTrigger={false}>
-              {REGION_KEYS.map((key) => (
-                <SelectItem key={key} value={key}>
-                  {t(`aiConfig.regions.${key}`)}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
-          <p className="text-muted-foreground text-xs">
-            {REGIONAL_PROVIDERS.has(provider)
-              ? t("aiConfig.dataRegionDescription")
-              : t("aiConfig.dataRegionUnsupported")}
-          </p>
-        </Field>
-
-        <Field>
-          <FieldLabel>{t("aiConfig.overrideRoles")}</FieldLabel>
-          <p className="text-muted-foreground text-xs">
-            {t("aiConfig.overrideRolesDescription")}
-          </p>
-          <div className="mt-1 flex flex-wrap gap-3">
-            {ROLE_KEYS.map((key) => (
-              <label className="flex items-center gap-1.5 text-sm" key={key}>
-                <Checkbox
-                  checked={overrideRoles.includes(key)}
-                  onCheckedChange={() => toggleRole(key)}
+            {provider === "openai_compatible" && (
+              <Field>
+                <FieldLabel>{t("aiConfig.baseUrl")}</FieldLabel>
+                <Input
+                  onChange={(e) => setBaseURL(e.target.value)}
+                  placeholder="https://api.example.com/v1"
+                  value={baseURL}
                 />
-                {t(`aiConfig.roles.${key}`)}
-              </label>
-            ))}
-          </div>
-        </Field>
+              </Field>
+            )}
 
-        <Button
-          className="self-start"
-          disabled={!config?.configured && !apiKey}
-          loading={saveMutation.isPending}
-          onClick={() => saveMutation.mutate()}
-          size="sm"
-        >
-          {config?.configured
-            ? tCommon("saveChanges")
-            : t("aiConfig.configure")}
-        </Button>
-      </div>
-    </section>
+            <Field>
+              <FieldLabel>{t("aiConfig.dataRegion")}</FieldLabel>
+              <Select
+                disabled={!REGIONAL_PROVIDERS.has(provider)}
+                onValueChange={(val) => {
+                  if (val && isRegion(val)) {
+                    setRegion(val);
+                  }
+                }}
+                value={region}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectPopup alignItemWithTrigger={false}>
+                  {REGION_KEYS.map((key) => (
+                    <SelectItem key={key} value={key}>
+                      {t(`aiConfig.regions.${key}`)}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+              <p className="text-muted-foreground text-xs">
+                {REGIONAL_PROVIDERS.has(provider)
+                  ? t("aiConfig.dataRegionDescription")
+                  : t("aiConfig.dataRegionUnsupported")}
+              </p>
+            </Field>
+
+            <Field>
+              <FieldLabel>{t("aiConfig.overrideRoles")}</FieldLabel>
+              <p className="text-muted-foreground text-xs">
+                {t("aiConfig.overrideRolesDescription")}
+              </p>
+              <div className="mt-1 flex flex-wrap gap-3">
+                {ROLE_KEYS.map((key) => (
+                  <label
+                    className="flex items-center gap-1.5 text-sm"
+                    key={key}
+                  >
+                    <Checkbox
+                      checked={overrideRoles.includes(key)}
+                      onCheckedChange={() => toggleRole(key)}
+                    />
+                    {t(`aiConfig.roles.${key}`)}
+                  </label>
+                ))}
+              </div>
+            </Field>
+
+            <Button
+              className="self-start"
+              disabled={!config?.configured && !apiKey}
+              loading={saveMutation.isPending}
+              onClick={() => saveMutation.mutate()}
+              size="sm"
+            >
+              {config?.configured
+                ? tCommon("saveChanges")
+                : t("aiConfig.configure")}
+            </Button>
+          </div>
+        </FramePanel>
+      </Frame>
+    </div>
   );
 };

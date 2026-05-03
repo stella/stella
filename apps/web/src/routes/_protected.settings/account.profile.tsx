@@ -27,11 +27,11 @@ import { toAuthClientError } from "@/lib/errors";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 import type { CommonTimezone } from "@/lib/timezones";
 import { sessionOptions } from "@/routes/-queries";
-import { DesktopDownloadSection } from "@/routes/_protected.account/-desktop-download-section";
-import { SessionsSection } from "@/routes/_protected.account/-sessions-section";
+import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
-export const Route = createFileRoute("/_protected/account/settings")({
-  component: Settings,
+export const Route = createFileRoute("/_protected/settings/account/profile")({
+  component: ProfilePage,
 });
 
 function isCommonTimezone(tz: string): tz is CommonTimezone {
@@ -39,7 +39,7 @@ function isCommonTimezone(tz: string): tz is CommonTimezone {
   return timezones.includes(tz);
 }
 
-function Settings() {
+function ProfilePage() {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const { data: session } = useSuspenseQuery(sessionOptions);
@@ -55,7 +55,7 @@ function Settings() {
     },
     onSuccess: async () => {
       toastManager.add({
-        title: t("account.settings.timezoneSaved"),
+        title: t("settings.account.timezoneSaved"),
         type: "success",
       });
       await queryClient.invalidateQueries({
@@ -71,30 +71,31 @@ function Settings() {
   });
 
   return (
-    <div className="flex max-w-4xl flex-col gap-4">
+    <>
+      <SettingsPageHeader
+        description={t("settings.account.profileDescription")}
+        title={t("settings.account.profile")}
+      />
       <Frame>
         <FrameHeader>
-          <FrameTitle>{t("common.settings")}</FrameTitle>
+          <FrameTitle>{t("settings.account.timezone")}</FrameTitle>
           <FrameDescription>
-            {t("account.settings.description")}
+            {t("settings.account.timezoneDescription")}
           </FrameDescription>
         </FrameHeader>
         <FramePanel>
           <div className="flex flex-col gap-2 p-4">
-            <Label htmlFor="timezone-select">
-              {t("account.settings.timezone")}
+            <Label className="sr-only" htmlFor="timezone-select">
+              {t("settings.account.timezone")}
             </Label>
-            <p className="text-muted-foreground text-sm">
-              {t("account.settings.timezoneDescription")}
-            </p>
             <Select
               disabled={updateTimezone.isPending}
-              value={currentTz}
               onValueChange={(tz) => {
                 if (tz) {
                   updateTimezone.mutate(tz);
                 }
               }}
+              value={currentTz}
             >
               <SelectTrigger className="w-72" id="timezone-select">
                 <SelectValue />
@@ -110,8 +111,23 @@ function Settings() {
           </div>
         </FramePanel>
       </Frame>
-      <DesktopDownloadSection />
-      <SessionsSection />
-    </div>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
+          {t("settings.account.sessions")}
+        </h2>
+        <SessionsCard />
+      </section>
+
+      {/* TODO: danger zone (follow-up PR). Both surfaces are
+          designed but their backends aren't built yet, so they
+          ship together rather than as fake placeholders.
+          - Export my data: async job (gather user data → ZIP →
+            S3 → emailed download link). Needs a job runner first.
+          - Delete account: OTP-verified flow (POST
+            /me/delete/send-otp + POST /me/delete/verify); must
+            reject sole-org-owners, revoke all sessions, call
+            auth.api.deleteUser, redirect to /auth. */}
+    </>
   );
 }

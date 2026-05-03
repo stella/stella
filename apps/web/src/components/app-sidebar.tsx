@@ -57,7 +57,6 @@ import {
   LayersIcon,
   Loader2Icon,
   LogOutIcon,
-  MailIcon,
   MessageSquareIcon,
   MonitorIcon,
   MoonIcon,
@@ -103,14 +102,12 @@ import {
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
-import type { Role } from "@/lib/auth";
 import { getInitials } from "@/lib/get-initials";
 import { HOTKEYS, NAV_KEY } from "@/lib/hotkeys";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { knowledgeSections } from "@/routes/_protected.knowledge/index";
-import { managementRoles } from "@/routes/_protected.organization/-consts";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
 import {
   useStartTimer,
@@ -474,9 +471,7 @@ const NavBadge = ({ digit }: { digit: number }) => (
   </SidebarMenuBadge>
 );
 
-type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
-  role: Role;
-};
+type AppSidebarProps = React.ComponentProps<typeof Sidebar>;
 
 type MatterItemProps = {
   workspace: MatterIdentity & {
@@ -844,7 +839,7 @@ const SidebarContextArea = ({
 
 const routeApi = getRouteApi("/_protected");
 
-export function AppSidebar({ role, ...props }: AppSidebarProps) {
+export function AppSidebar(props: AppSidebarProps) {
   const signOut = useSignOut();
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -1026,6 +1021,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
     /* 3: workspaces */ FixedNavTarget,
     /* 4: knowledge */ FixedNavTarget,
     /* 5: time tracking */ FixedNavTarget,
+    /* 6: contacts */ FixedNavTarget,
   ] = [
     {
       action: () => setSearchOpen(true),
@@ -1105,6 +1101,20 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
             },
           }
         : {},
+    },
+    {
+      action: () => {
+        void navigate({ to: "/contacts" });
+      },
+      contextMenu: {
+        primaryAction: {
+          label: t("navigation.contacts"),
+          icon: <UsersIcon />,
+          onClick: () => {
+            void navigate({ to: "/contacts" });
+          },
+        },
+      },
     },
   ];
 
@@ -1280,6 +1290,17 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                 ) : null}
               </SidebarMenuItem>
             </NavContextMenu>
+            <NavContextMenu config={fixedNavTargets[5].contextMenu}>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip={t("navigation.contacts")}>
+                  <Link activeProps={{ "data-active": true }} to="/contacts">
+                    <UsersIcon />
+                    <span>{t("navigation.contacts")}</span>
+                  </Link>
+                </SidebarMenuButton>
+                {showNavBadges && <NavBadge digit={6} />}
+              </SidebarMenuItem>
+            </NavContextMenu>
           </SidebarMenu>
         </SidebarGroup>
 
@@ -1300,7 +1321,7 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                     <MatterItem
                       isPinned
                       key={ws.id}
-                      navBadge={showNavBadges && i < 3 ? 6 + i : undefined}
+                      navBadge={showNavBadges && i < 3 ? 7 + i : undefined}
                       onDelete={handleDeleteWorkspace}
                       onReorder={reorderPinned}
                       onTogglePin={togglePin}
@@ -1387,50 +1408,15 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                     <MenuSeparator />
                   </>
                 )}
-                {managementRoles.includes(role) && (
-                  <>
-                    <MenuItem
-                      onClick={() => {
-                        void navigate({
-                          to: "/organization/settings",
-                        });
-                      }}
-                    >
-                      <Settings2Icon />
-                      {t("organization.settings")}
-                    </MenuItem>
-                    <MenuItem
-                      onClick={() => {
-                        void navigate({
-                          to: "/organization/members",
-                        });
-                      }}
-                    >
-                      <UsersIcon />
-                      {t("navigation.members")}
-                    </MenuItem>
-                    <MenuItem
-                      onClick={() => {
-                        void navigate({
-                          to: "/organization/invitations",
-                        });
-                      }}
-                    >
-                      <MailIcon />
-                      {t("navigation.invitations")}
-                    </MenuItem>
-                    <MenuSeparator />
-                  </>
-                )}
                 <MenuItem
                   onClick={() => {
                     void navigate({
-                      to: "/contacts",
+                      to: "/settings",
                     });
                   }}
                 >
-                  <UsersIcon />
-                  {t("navigation.contacts")}
+                  <Settings2Icon />
+                  {t("settings.title")}
                 </MenuItem>
                 <MenuSeparator />
                 <MenuSub>
@@ -1498,16 +1484,6 @@ export function AppSidebar({ role, ...props }: AppSidebarProps) {
                     </MenuRadioGroup>
                   </MenuSubPopup>
                 </MenuSub>
-                <MenuItem
-                  onClick={() => {
-                    void navigate({
-                      to: "/account/settings",
-                    });
-                  }}
-                >
-                  <Settings2Icon />
-                  {t("common.settings")}
-                </MenuItem>
                 {isDev && <DevSidebarGroup />}
                 <MenuSeparator />
                 <MenuItem

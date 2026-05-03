@@ -11,19 +11,6 @@
       "revokeOtherSessions": "Wyloguj inne urządzenia",
       "revokeOtherSessionsConfirm": "Spowoduje to zakończenie wszystkich sesji z wyjątkiem bieżącej.",
       "unknownDevice": "Nieznane urządzenie"
-    },
-    "settings": {
-      "description": "Zarządzaj preferencjami konta",
-      "desktopApp": "Aplikacja desktopowa",
-      "desktopAppDescription": "Otwieraj dokumenty i pliki bezpośrednio w stelli ze swojego komputera.",
-      "desktopDownloadMac": "Pobierz dla macOS",
-      "desktopDownloadOtherMac": "Na Windows? Pobierz dla Windows",
-      "desktopDownloadOtherWeb": "Na macOS? Pobierz dla macOS",
-      "desktopDownloadOtherWindows": "Lub pobierz instalator .msi dla wdrożeń zarządzanych przez IT",
-      "desktopDownloadWindows": "Pobierz dla Windows",
-      "timezone": "Strefa czasowa",
-      "timezoneDescription": "Używana do znaczników czasu w powiadomieniach i e-mailach",
-      "timezoneSaved": "Strefa czasowa zaktualizowana"
     }
   },
   "anonymize": {
@@ -1116,13 +1103,23 @@
     "members": {
       "changeRole": "Zmień rolę",
       "changeRoleDescription": "Zaktualizuj rolę dla {email}",
+      "confirmRoleChangeDescription": "{email}'s role will change from {oldRole} to {newRole}.",
+      "confirmRoleChangeTitle": "Change role",
       "joined": "Dołączył/a",
       "noMembersFound": "Nie znaleziono członków",
       "removeMember": "Usuń członka",
+      "typeEmailToConfirm": "Type {email} to confirm",
       "updateRole": "Zaktualizuj rolę"
     },
     "roles": {
       "admin": "Administrator",
+      "descriptions": {
+        "admin": "Manages members, invitations, and organization settings.",
+        "external": "External collaborator. Read-only access to shared matters.",
+        "intern": "Read-only on matters. Can log time and expenses on assigned work.",
+        "member": "Works in matters: clients, files, tasks, billable time.",
+        "owner": "Full control. Can delete the organization and transfer ownership."
+      },
       "external": "Zewnętrzny",
       "intern": "Praktykant",
       "member": "Członek",
@@ -1175,6 +1172,41 @@
     "dismissUpdate": "Dismiss update notice",
     "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
+  },
+  "settings": {
+    "account": {
+      "desktop": "Desktop",
+      "desktopAppDescription": "Open documents and files directly in stella from your computer.",
+      "desktopDescription": "Install Stella on your computer",
+      "desktopDownloadMac": "Download for macOS",
+      "desktopDownloadOtherMac": "On Windows? Download for Windows",
+      "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments",
+      "desktopDownloadWindows": "Download for Windows",
+      "profile": "Profile",
+      "profileDescription": "Manage your personal preferences",
+      "sessions": "Sessions",
+      "timezone": "Timezone",
+      "timezoneDescription": "Used for timestamps in notifications and emails",
+      "timezoneSaved": "Timezone updated",
+      "title": "Account"
+    },
+    "organization": {
+      "activeMembers": "Active members",
+      "ai": "AI configuration",
+      "aiDescription": "Bring your own API key or configure data sovereignty region",
+      "matterNumbering": "Matter numbering",
+      "matterNumberingDescription": "Configure how new matter reference numbers are generated",
+      "membersDescription": "Manage who has access to this organization",
+      "pendingInvitations": "Pending invitations",
+      "profile": "Profile",
+      "profileDescription": "Update name and slug",
+      "renameAction": "Rename",
+      "renameDescription": "Members will see the new name immediately.",
+      "renameTitle": "Rename organization",
+      "renameTypeToConfirm": "Type the new name to confirm: {name}",
+      "title": "Organization"
+    },
+    "title": "Settings"
   },
   "success": {
     "aiConfigDeleted": "Konfiguracja AI usunięta",

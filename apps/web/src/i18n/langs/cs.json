@@ -11,19 +11,6 @@
       "revokeOtherSessions": "Odhlásit ostatní zařízení",
       "revokeOtherSessionsConfirm": "Tímto ukončíte všechna sezení kromě aktuálního.",
       "unknownDevice": "Neznámé zařízení"
-    },
-    "settings": {
-      "description": "Spravujte své předvolby účtu",
-      "desktopApp": "Aplikace pro počítač",
-      "desktopAppDescription": "Otevírejte dokumenty a soubory přímo ve stelle ze svého počítače.",
-      "desktopDownloadMac": "Stáhnout pro macOS",
-      "desktopDownloadOtherMac": "Máte Windows? Stáhnout pro Windows",
-      "desktopDownloadOtherWeb": "Máte macOS? Stáhnout pro macOS",
-      "desktopDownloadOtherWindows": "Nebo si stáhněte .msi instalátor pro IT-spravované nasazení",
-      "desktopDownloadWindows": "Stáhnout pro Windows",
-      "timezone": "Časové pásmo",
-      "timezoneDescription": "Používá se pro časová razítka v oznámeních a e-mailech",
-      "timezoneSaved": "Časové pásmo aktualizováno"
     }
   },
   "anonymize": {
@@ -1044,38 +1031,38 @@
   },
   "organization": {
     "aiConfig": {
-      "active": "Active",
-      "apiKey": "API key",
-      "apiKeyPlaceholder": "Enter your API key",
-      "apiKeyUpdatePlaceholder": "Enter new key to update",
-      "baseUrl": "Base URL",
-      "configure": "Configure",
-      "dataRegion": "Data region",
-      "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.",
-      "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).",
-      "description": "Bring your own API key or configure data sovereignty region.",
-      "overrideRoles": "Override roles",
-      "overrideRolesDescription": "Select which AI roles use your key. Unselected roles use the platform default.",
-      "provider": "Provider",
+      "active": "Aktivní",
+      "apiKey": "API klíč",
+      "apiKeyPlaceholder": "Zadejte svůj API klíč",
+      "apiKeyUpdatePlaceholder": "Zadejte nový klíč pro aktualizaci",
+      "baseUrl": "Základní URL",
+      "configure": "Konfigurovat",
+      "dataRegion": "Region dat",
+      "dataRegionDescription": "Volání AI poteče přes vybraný region kvůli suverenitě dat.",
+      "dataRegionUnsupported": "Regionální směrování je dostupné jen pro Google AI (Vertex AI).",
+      "description": "Připojte vlastní API klíč nebo zvolte region pro suverenitu dat.",
+      "overrideRoles": "Přepsat role",
+      "overrideRolesDescription": "Vyberte, které AI role použijí váš klíč. Nevybrané role poběží na výchozím klíči platformy.",
+      "provider": "Poskytovatel",
       "providers": {
         "anthropic": "Anthropic",
         "google": "Google AI",
         "openai": "OpenAI",
-        "openai_compatible": "OpenAI-compatible",
+        "openai_compatible": "OpenAI-kompatibilní",
         "openrouter": "OpenRouter"
       },
       "regions": {
-        "ch": "Switzerland (europe-west6)",
+        "ch": "Švýcarsko (europe-west6)",
         "eu": "EU (europe-west4)",
-        "global": "Global"
+        "global": "Globální"
       },
       "roles": {
-        "chat": "Chat (conversation)",
-        "fast": "Fast (classification)",
-        "pdf": "PDF (documents)",
-        "reasoning": "Reasoning (analysis)"
+        "chat": "Chat (konverzace)",
+        "fast": "Rychlé (klasifikace)",
+        "pdf": "PDF (dokumenty)",
+        "reasoning": "Uvažování (analýza)"
       },
-      "title": "AI configuration"
+      "title": "Konfigurace AI"
     },
     "invitations": {
       "cancelInvitation": "Zrušit pozvánku",
@@ -1116,13 +1103,23 @@
     "members": {
       "changeRole": "Změnit roli",
       "changeRoleDescription": "Aktualizovat roli pro {email}",
+      "confirmRoleChangeDescription": "Role uživatele {email} se změní z {oldRole} na {newRole}.",
+      "confirmRoleChangeTitle": "Změnit roli",
       "joined": "Připojil/a se",
       "noMembersFound": "Nebyli nalezeni žádní členové",
       "removeMember": "Odebrat člena",
+      "typeEmailToConfirm": "Pro potvrzení napište {email}",
       "updateRole": "Aktualizovat roli"
     },
     "roles": {
       "admin": "Administrátor",
+      "descriptions": {
+        "admin": "Spravuje členy, pozvánky a nastavení organizace.",
+        "external": "Externí spolupracovník. Pouze čtení na sdílených spisech.",
+        "intern": "Pouze čtení na spisech. Eviduje čas a výdaje na své práci.",
+        "member": "Pracuje na spisech: klienti, soubory, úkoly, čas.",
+        "owner": "Plná kontrola. Může smazat organizaci a převést vlastnictví."
+      },
       "external": "Externí",
       "intern": "Stážista",
       "member": "Člen",
@@ -1175,6 +1172,41 @@
     "dismissUpdate": "Dismiss update notice",
     "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
+  },
+  "settings": {
+    "account": {
+      "desktop": "Aplikace pro počítač",
+      "desktopAppDescription": "Otevírejte dokumenty a soubory přímo ve stella z vašeho počítače.",
+      "desktopDescription": "Nainstalujte si Stella na svůj počítač",
+      "desktopDownloadMac": "Download for macOS",
+      "desktopDownloadOtherMac": "On Windows? Download for Windows",
+      "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments",
+      "desktopDownloadWindows": "Download for Windows",
+      "profile": "Profil",
+      "profileDescription": "Spravujte své osobní předvolby",
+      "sessions": "Relace",
+      "timezone": "Timezone",
+      "timezoneDescription": "Used for timestamps in notifications and emails",
+      "timezoneSaved": "Timezone updated",
+      "title": "Účet"
+    },
+    "organization": {
+      "activeMembers": "Aktivní členové",
+      "ai": "Nastavení AI",
+      "aiDescription": "Připojte vlastní API klíč nebo zvolte region pro suverenitu dat",
+      "matterNumbering": "Číslování spisů",
+      "matterNumberingDescription": "Nastavte, jak se generují referenční čísla nových spisů",
+      "membersDescription": "Spravujte, kdo má přístup k této organizaci, a čekající pozvánky",
+      "pendingInvitations": "Čekající pozvánky",
+      "profile": "Profil",
+      "profileDescription": "Upravte název organizace",
+      "renameAction": "Rename",
+      "renameDescription": "Members will see the new name immediately.",
+      "renameTitle": "Rename organization",
+      "renameTypeToConfirm": "Type the new name to confirm: {name}",
+      "title": "Organizace"
+    },
+    "title": "Nastavení"
   },
   "success": {
     "aiConfigDeleted": "AI configuration removed",

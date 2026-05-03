@@ -92,35 +92,35 @@ export const AppBreadcrumbs = () => {
       [serializeKey(["/knowledge/case/$decisionId"])]: (params) => (
         <CaseLawBreadcrumb {...params} />
       ),
-      [serializeKey(["/organization"])]: () => (
-        <BreadcrumbItem>{t("common.organization")}</BreadcrumbItem>
+      [serializeKey(["/settings"])]: () => (
+        <BreadcrumbLink to="/settings">{t("settings.title")}</BreadcrumbLink>
       ),
-      [serializeKey(["/organization/members"])]: () => (
-        <BreadcrumbLink to="/organization/members">
+      [serializeKey(["/settings/account/profile"])]: () => (
+        <BreadcrumbLink to="/settings/account/profile">
+          {t("settings.account.profile")}
+        </BreadcrumbLink>
+      ),
+      [serializeKey(["/settings/account/desktop"])]: () => (
+        <BreadcrumbLink to="/settings/account/desktop">
+          {t("settings.account.desktop")}
+        </BreadcrumbLink>
+      ),
+      [serializeKey(["/settings/organization"])]: () => (
+        <BreadcrumbItem>{t("settings.organization.title")}</BreadcrumbItem>
+      ),
+      [serializeKey(["/settings/organization/members"])]: () => (
+        <BreadcrumbLink to="/settings/organization/members">
           {t("navigation.members")}
         </BreadcrumbLink>
       ),
-      [serializeKey(["/organization/invitations"])]: () => (
-        <BreadcrumbLink to="/organization/invitations">
-          {t("navigation.invitations")}
+      [serializeKey(["/settings/organization/matter-numbering"])]: () => (
+        <BreadcrumbLink to="/settings/organization/matter-numbering">
+          {t("settings.organization.matterNumbering")}
         </BreadcrumbLink>
       ),
-      [serializeKey(["/organization/settings"])]: () => (
-        <BreadcrumbLink to="/organization/settings">
-          {t("organization.settings")}
-        </BreadcrumbLink>
-      ),
-      [serializeKey(["/account"])]: () => (
-        <BreadcrumbItem>{t("navigation.account")}</BreadcrumbItem>
-      ),
-      [serializeKey(["/account/sessions"])]: () => (
-        <BreadcrumbLink to="/account/sessions">
-          {t("common.sessions")}
-        </BreadcrumbLink>
-      ),
-      [serializeKey(["/account/settings"])]: () => (
-        <BreadcrumbLink to="/account/settings">
-          {t("common.settings")}
+      [serializeKey(["/settings/organization/ai"])]: () => (
+        <BreadcrumbLink to="/settings/organization/ai">
+          {t("settings.organization.ai")}
         </BreadcrumbLink>
       ),
       [serializeKey(["/chat"])]: () => (

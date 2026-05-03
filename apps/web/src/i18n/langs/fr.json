@@ -11,19 +11,6 @@
       "revokeOtherSessions": "Déconnecter les autres appareils",
       "revokeOtherSessionsConfirm": "Toutes les sessions seront fermées, sauf la session en cours.",
       "unknownDevice": "Appareil inconnu"
-    },
-    "settings": {
-      "description": "Gérez les préférences de votre compte",
-      "desktopApp": "Application bureau",
-      "desktopAppDescription": "Ouvrez documents et fichiers directement dans stella depuis votre ordinateur.",
-      "desktopDownloadMac": "Télécharger pour macOS",
-      "desktopDownloadOtherMac": "Sous Windows ? Télécharger pour Windows",
-      "desktopDownloadOtherWeb": "Sous macOS ? Télécharger pour macOS",
-      "desktopDownloadOtherWindows": "Ou obtenez l'installateur .msi pour les déploiements gérés par l'IT",
-      "desktopDownloadWindows": "Télécharger pour Windows",
-      "timezone": "Fuseau horaire",
-      "timezoneDescription": "Utilisé pour les horodatages dans les notifications et les e-mails",
-      "timezoneSaved": "Fuseau horaire mis à jour"
     }
   },
   "anonymize": {
@@ -1116,13 +1103,23 @@
     "members": {
       "changeRole": "Modifier le rôle",
       "changeRoleDescription": "Modifier le rôle de {email}",
+      "confirmRoleChangeDescription": "{email}'s role will change from {oldRole} to {newRole}.",
+      "confirmRoleChangeTitle": "Change role",
       "joined": "Membre depuis",
       "noMembersFound": "Aucun membre trouvé",
       "removeMember": "Retirer le membre",
+      "typeEmailToConfirm": "Type {email} to confirm",
       "updateRole": "Mettre à jour le rôle"
     },
     "roles": {
       "admin": "Administrateur",
+      "descriptions": {
+        "admin": "Manages members, invitations, and organization settings.",
+        "external": "External collaborator. Read-only access to shared matters.",
+        "intern": "Read-only on matters. Can log time and expenses on assigned work.",
+        "member": "Works in matters: clients, files, tasks, billable time.",
+        "owner": "Full control. Can delete the organization and transfer ownership."
+      },
       "external": "Externe",
       "intern": "Stagiaire",
       "member": "Membre",
@@ -1175,6 +1172,41 @@
     "dismissUpdate": "Dismiss update notice",
     "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
+  },
+  "settings": {
+    "account": {
+      "desktop": "Desktop",
+      "desktopAppDescription": "Open documents and files directly in stella from your computer.",
+      "desktopDescription": "Install Stella on your computer",
+      "desktopDownloadMac": "Download for macOS",
+      "desktopDownloadOtherMac": "On Windows? Download for Windows",
+      "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments",
+      "desktopDownloadWindows": "Download for Windows",
+      "profile": "Profile",
+      "profileDescription": "Manage your personal preferences",
+      "sessions": "Sessions",
+      "timezone": "Timezone",
+      "timezoneDescription": "Used for timestamps in notifications and emails",
+      "timezoneSaved": "Timezone updated",
+      "title": "Account"
+    },
+    "organization": {
+      "activeMembers": "Active members",
+      "ai": "AI configuration",
+      "aiDescription": "Bring your own API key or configure data sovereignty region",
+      "matterNumbering": "Matter numbering",
+      "matterNumberingDescription": "Configure how new matter reference numbers are generated",
+      "membersDescription": "Manage who has access to this organization",
+      "pendingInvitations": "Pending invitations",
+      "profile": "Profile",
+      "profileDescription": "Update name and slug",
+      "renameAction": "Rename",
+      "renameDescription": "Members will see the new name immediately.",
+      "renameTitle": "Rename organization",
+      "renameTypeToConfirm": "Type the new name to confirm: {name}",
+      "title": "Organization"
+    },
+    "title": "Settings"
   },
   "success": {
     "aiConfigDeleted": "AI configuration removed",

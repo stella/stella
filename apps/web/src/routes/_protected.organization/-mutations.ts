@@ -50,7 +50,6 @@ type InviteMemberVars = {
 };
 
 export const useInviteMember = () => {
-  const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
@@ -63,10 +62,6 @@ export const useInviteMember = () => {
       });
 
       if (result.error) {
-        toastManager.add({
-          title: result.error.message ?? t("errors.actionFailed"),
-          type: "error",
-        });
         throw toAuthClientError(result.error);
       }
 

@@ -12,12 +12,16 @@ import { useTranslations } from "use-intl";
 
 import { InviteMemberDialog } from "@/routes/_protected.organization/-components/invite-member-dialog";
 
-const organizationRoute = getRouteApi("/_protected/organization");
+const settingsOrgParentRoute = getRouteApi("/_protected/settings/organization");
+const membersRoute = getRouteApi("/_protected/settings/organization/members");
 
 export const OrganizationListToolbar = () => {
   const t = useTranslations();
-  const q = organizationRoute.useSearch({ select: (s) => s.q });
-  const navigate = organizationRoute.useNavigate();
+  // Search lives on the parent route so it survives sub-tab swaps;
+  // navigate must target the leaf so we don't pull the user up to
+  // the parent (which has no index and would render blank).
+  const q = settingsOrgParentRoute.useSearch({ select: (s) => s.q });
+  const navigate = membersRoute.useNavigate();
   const [localQuery, setLocalQuery] = useState(() => q ?? "");
 
   useEffect(() => {
@@ -27,13 +31,14 @@ export const OrganizationListToolbar = () => {
   const updateSearch = useDebouncedCallback((value: string) => {
     // eslint-disable-next-line typescript/no-floating-promises
     navigate({
+      to: "/settings/organization/members",
       search: (prev) => ({ ...prev, q: value || undefined }),
     });
   }, 300);
 
   return (
-    <div className="flex items-center gap-2">
-      <InputGroup className="me-auto max-w-sm flex-1">
+    <div className="border-border/60 flex items-center gap-2 border-b px-2 py-2">
+      <InputGroup className="max-w-sm flex-1">
         <InputGroupInput
           onChange={(e) => {
             const val = e.target.value;
