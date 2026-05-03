@@ -545,12 +545,28 @@ export const createSearchSummaryChatThread = async ({
     contexts: citedContexts,
   });
 
+  // Derive the embedded data scope from the actual cited and
+  // ranked context. The AI summary draws from every context, not
+  // only those it explicitly cited, so include all of them. Org-
+  // scoped hit types (case-law, contact) have no workspaceId and
+  // are correctly excluded — RLS for those is enforced elsewhere.
+  const dataWorkspaceIds = uniqueWorkspaceIds(
+    contextsResult
+      .map((context) => extractHitWorkspaceId(context.hit))
+      .filter((id): id is SafeId<"workspace"> => id !== null),
+  );
+
   const insertResult = await safeDb(async (tx) => {
     await tx.insert(chatThreads).values({
       id: threadId,
       title: body.title,
       userId,
+      // Search summaries can span multiple workspaces, so the
+      // thread's own workspaceId stays null. Tenant gating happens
+      // via dataWorkspaceIds — the row is invisible (RLS) the
+      // moment the user loses access to any contributing matter.
       workspaceId: null,
+      dataWorkspaceIds,
       createdAt: now,
       updatedAt: now,
     });
@@ -687,6 +703,19 @@ const buildChatSummaryText = ({
 
   return [`## ${title}`, summary, "### Sources", ...sourceLines].join("\n\n");
 };
+
+const extractHitWorkspaceId = (
+  hit: GlobalSearchHit,
+): SafeId<"workspace"> | null => {
+  if (hit.type === "case-law" || hit.type === "contact") {
+    return null;
+  }
+  return brandPersistedWorkspaceId(hit.workspaceId);
+};
+
+const uniqueWorkspaceIds = (
+  ids: readonly SafeId<"workspace">[],
+): SafeId<"workspace">[] => Array.from(new Set(ids));
 
 const toChatSourceParts = (context: SearchResultContext) => {
   const hit = context.hit;

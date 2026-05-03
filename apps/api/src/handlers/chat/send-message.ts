@@ -19,6 +19,11 @@ import {
   validateMessage,
 } from "@/api/handlers/chat/chat-schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
+import {
+  expandThreadDataScope,
+  extractAssistantWorkspaceIds,
+  extractMentionWorkspaceIds,
+} from "@/api/handlers/chat/data-scope";
 import { ChatError } from "@/api/handlers/chat/errors";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import {
@@ -26,6 +31,10 @@ import {
   planMessagePersistence,
 } from "@/api/handlers/chat/persist-message";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
+import {
+  intersectAccessibleWorkspaceIds,
+  resolveToolWorkspaceIds,
+} from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type {
@@ -37,7 +46,8 @@ import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { PG_ERROR } from "@/api/lib/pg-error";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 
 const config = {
@@ -105,7 +115,12 @@ const sendMessage = createSafeRootHandler(
       safeDb,
       scopedDb,
       userId: user.id,
-      accessibleWorkspaceIds,
+      // Schema validation runs against the user's full accessible
+      // set; per-tool scope checks happen at execute time below.
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds,
+      }),
       workspaceId,
       hasActiveFileChat: true,
     });
@@ -134,38 +149,33 @@ const sendMessage = createSafeRootHandler(
     // For an existing thread, accept a non-empty body update as
     // "user changed scope, persist it"; an omitted/empty body keeps
     // the stored value so re-sends from cached transports don't
-    // silently widen access. The effective set used for the rest
-    // of the request is whatever ends up persisted.
-    let effectiveContextMatterIds = thread.data.contextMatterIds;
+    // silently widen access. Persisted pins are always intersected
+    // with the currently accessible set so a revoked workspace
+    // cannot be re-authorized through a stale stored pin.
+    const storedPinsThisRequest =
+      thread.type === "existing" && body.contextMatterIds !== undefined
+        ? requestedContextMatterIds
+        : thread.data.contextMatterIds;
+    const effectiveContextMatterIds = intersectAccessibleWorkspaceIds({
+      pinnedIds: storedPinsThisRequest,
+      accessibleWorkspaceIds,
+    });
     if (
       thread.type === "existing" &&
-      body.contextMatterIds !== undefined &&
       !contextMatterIdsEqual(
         thread.data.contextMatterIds,
-        requestedContextMatterIds,
+        effectiveContextMatterIds,
       )
     ) {
       yield* Result.await(
         safeDb((tx) =>
           tx
             .update(chatThreads)
-            .set({ contextMatterIds: requestedContextMatterIds })
+            .set({ contextMatterIds: effectiveContextMatterIds })
             .where(eq(chatThreads.id, body.threadId)),
         ),
       );
-      effectiveContextMatterIds = requestedContextMatterIds;
     }
-
-    // Narrow tool authorization to the pinned matters when the
-    // user has set a non-empty scope; otherwise tools see every
-    // accessible matter so the AI can discover relevant ones via
-    // the readonly stella API. The narrowed list is always a
-    // subset of `accessibleWorkspaceIds` (validated above), so
-    // this never widens authorization.
-    const toolWorkspaceIds =
-      effectiveContextMatterIds.length > 0
-        ? effectiveContextMatterIds
-        : accessibleWorkspaceIds;
 
     // Streaming tools mirror the surface the user is on: only the
     // file-overlay client knows how to satisfy
@@ -180,7 +190,10 @@ const sendMessage = createSafeRootHandler(
       safeDb,
       scopedDb,
       userId: user.id,
-      accessibleWorkspaceIds: toolWorkspaceIds,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: effectiveContextMatterIds,
+        accessibleWorkspaceIds,
+      }),
       workspaceId,
       hasActiveFileChat: body.activeFile !== undefined,
     });
@@ -204,6 +217,30 @@ const sendMessage = createSafeRootHandler(
       message: parsedMessage.message,
       storedMessages: thread.data.messages,
     });
+
+    // Widen the thread's data scope BEFORE persisting the message so
+    // any workspace IDs the user just embedded (entity mentions,
+    // workspace mentions) are recorded on the thread row. Without
+    // this, a global thread with workspace mentions would remain
+    // visible to the user even after they lose access to those
+    // workspaces.
+    //
+    // Intersect with `accessibleWorkspaceIds` first: an unknown ID
+    // (model hallucination, copy-pasted UUID from elsewhere) added
+    // to `data_workspace_ids` would fail the RLS subset check on
+    // every subsequent message persist, silently breaking the
+    // thread.
+    const userMessageWorkspaceIds = extractMentionWorkspaceIds(
+      parsedMessage.mentions,
+    ).filter((id) => accessibleSet.has(id));
+    const dataScopeAfterUserMessage = yield* Result.await(
+      expandThreadDataScope({
+        currentDataWorkspaceIds: thread.data.dataWorkspaceIds,
+        newWorkspaceIds: userMessageWorkspaceIds,
+        safeDb,
+        threadId: body.threadId,
+      }),
+    );
 
     yield* Result.await(
       persistMessage({
@@ -252,6 +289,52 @@ const sendMessage = createSafeRootHandler(
                 message: resolvedResponseMessage,
               });
 
+              // Skip scope expansion when the assistant message
+              // will not be persisted (aborted stream, planner
+              // returned `none`). Widening `data_workspace_ids`
+              // for transient parts that never land in
+              // `chat_messages` could make the thread unreadable
+              // after future access changes even though no
+              // corresponding content was saved.
+              if (persistencePlan.type === "none") {
+                return;
+              }
+
+              // Widen the thread's data scope to cover any
+              // workspace-scoped content the assistant just
+              // emitted (source-document parts from search and
+              // workspace tools). Run before persistMessage so
+              // the recorded scope already includes the
+              // workspaces when the message lands in
+              // `chat_messages`.
+              //
+              // If expansion fails (transient DB error, etc.),
+              // SKIP the message persist. Storing workspace-
+              // scoped content in `chat_messages` while the
+              // owning thread's `data_workspace_ids` stays stale
+              // would leave the new content readable after the
+              // user loses access to those workspaces — the same
+              // class of leak this whole change exists to close.
+              //
+              // Intersect with `accessibleWorkspaceIds` so a
+              // hallucinated or stale UUID from the model never
+              // lands in `data_workspace_ids`. An out-of-set ID
+              // would fail the RLS subset check on every later
+              // persist, silently breaking the thread.
+              const assistantWorkspaceIds = extractAssistantWorkspaceIds(
+                resolvedResponseMessage.parts,
+              ).filter((id) => accessibleSet.has(id));
+              const expandResult = await expandThreadDataScope({
+                currentDataWorkspaceIds: dataScopeAfterUserMessage,
+                newWorkspaceIds: assistantWorkspaceIds,
+                safeDb,
+                threadId: body.threadId,
+              });
+              if (Result.isError(expandResult)) {
+                captureError(expandResult.error, { threadId: body.threadId });
+                return;
+              }
+
               const persistResult = await persistMessage({
                 persistencePlan,
                 safeDb,
@@ -290,6 +373,7 @@ export default sendMessage;
 type ThreadRecord = {
   id: SafeId<"chatThread">;
   contextMatterIds: SafeId<"workspace">[];
+  dataWorkspaceIds: SafeId<"workspace">[];
   messages: {
     id: SafeId<"chatMessage">;
     role: ChatMessage["role"];
@@ -324,7 +408,7 @@ const loadThread = async ({
   userId,
   workspaceId,
 }: LoadThreadProps): Promise<
-  Result<LoadThreadResult, HandlerError<400> | SafeDbError>
+  Result<LoadThreadResult, HandlerError<400 | 404> | SafeDbError>
 > =>
   await Result.gen(async function* () {
     // Look the thread up by id+user only. Filtering by workspaceId
@@ -332,8 +416,16 @@ const loadThread = async ({
     // workspaceId=X but requested as global would look "missing"
     // and the insert below would then collide on the PK. We want a
     // clear 400 instead of a constraint violation 500.
-    const thread = yield* Result.await(
-      safeDb((tx) =>
+    type ExistingThreadRow = {
+      id: SafeId<"chatThread">;
+      workspaceId: SafeId<"workspace"> | null;
+      contextMatterIds: SafeId<"workspace">[];
+      dataWorkspaceIds: SafeId<"workspace">[];
+      messages: ThreadRecord["messages"];
+    };
+
+    const lookup = async () =>
+      await safeDb((tx) =>
         tx.query.chatThreads.findFirst({
           where: {
             id: { eq: threadId },
@@ -343,6 +435,7 @@ const loadThread = async ({
             id: true,
             workspaceId: true,
             contextMatterIds: true,
+            dataWorkspaceIds: true,
           },
           with: {
             messages: {
@@ -355,11 +448,12 @@ const loadThread = async ({
             },
           },
         }),
-      ),
-    );
+      );
 
-    if (thread) {
-      const persistedWorkspaceId = thread.workspaceId ?? null;
+    const buildExisting = (
+      existing: ExistingThreadRow,
+    ): Result<LoadThreadResult, HandlerError<400>> => {
+      const persistedWorkspaceId = existing.workspaceId ?? null;
       if (persistedWorkspaceId !== workspaceId) {
         return Result.err(
           new HandlerError({
@@ -371,30 +465,77 @@ const loadThread = async ({
       return Result.ok<LoadThreadResult>({
         type: "existing",
         data: {
-          id: thread.id,
-          contextMatterIds: thread.contextMatterIds,
-          messages: thread.messages,
+          id: existing.id,
+          contextMatterIds: existing.contextMatterIds,
+          dataWorkspaceIds: existing.dataWorkspaceIds,
+          messages: existing.messages,
         },
       });
+    };
+
+    const thread = yield* Result.await(lookup());
+    if (thread) {
+      return buildExisting(thread);
     }
 
-    yield* Result.await(
-      safeDb((tx) =>
-        tx.insert(chatThreads).values({
-          id: threadId,
-          title,
-          userId,
-          workspaceId,
-          contextMatterIds: initialContextMatterIds,
-        }),
-      ),
+    const initialDataWorkspaceIds: SafeId<"workspace">[] = workspaceId
+      ? [workspaceId]
+      : [];
+
+    const insertResult = await safeDb((tx) =>
+      tx.insert(chatThreads).values({
+        id: threadId,
+        title,
+        userId,
+        workspaceId,
+        contextMatterIds: initialContextMatterIds,
+        // Workspace-scoped chats embed at minimum their own
+        // workspace's content. Global chats start with no
+        // embedded workspace data; subsequent messages widen
+        // this set via expandThreadDataScope when they reference
+        // workspace assets (mentions, source-document parts).
+        dataWorkspaceIds: initialDataWorkspaceIds,
+      }),
     );
+    if (Result.isError(insertResult)) {
+      if (
+        !DatabaseError.is(insertResult.error) ||
+        insertResult.error.code !== PG_ERROR.UNIQUE_VIOLATION
+      ) {
+        return Result.err(insertResult.error);
+      }
+      // Two interleaved cases collide on the primary key here:
+      //
+      //   (a) Race: two concurrent send-message calls with the
+      //       same new threadId — one insert wins, the other
+      //       sees the winner's row and should treat it as
+      //       existing.
+      //   (b) Hidden thread: the row exists but is invisible
+      //       under the new RLS predicate (data_workspace_ids ⊄
+      //       session), so the initial findFirst returned null.
+      //       Returning 404 matches what get-messages already
+      //       returns for the same shape and avoids leaking
+      //       thread existence to a revoked user.
+      //
+      // Re-run the lookup under current RLS to disambiguate.
+      const recovered = yield* Result.await(lookup());
+      if (recovered) {
+        return buildExisting(recovered);
+      }
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Chat thread not found",
+        }),
+      );
+    }
 
     return Result.ok<LoadThreadResult>({
       type: "created",
       data: {
         id: threadId,
         contextMatterIds: initialContextMatterIds,
+        dataWorkspaceIds: initialDataWorkspaceIds,
         messages: [],
       },
     });

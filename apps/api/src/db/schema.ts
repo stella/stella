@@ -9,7 +9,8 @@ import { customType } from "drizzle-orm/pg-core";
 import { organization, user } from "@/api/db/auth-schema";
 import { jsonb } from "@/api/db/columns";
 import {
-  chatPolicies,
+  chatMessagePolicies,
+  chatThreadPolicies,
   organizationCheck,
   orgPolicies,
   stella,
@@ -2171,6 +2172,18 @@ export const chatThreads = p.pgTable(
       .array()
       .notNull()
       .default([]),
+    /**
+     * Workspaces whose content (citations, document excerpts) is
+     * embedded in this thread. Empty means "no workspace data
+     * embedded" (true global chat). Any non-empty value gates RLS
+     * reads: the user's session workspace IDs must be a superset.
+     * Used by search-summary chats so the stored summary cannot
+     * outlive the user's access to a contributing matter.
+     */
+    dataWorkspaceIds: safeWorkspaceId("data_workspace_ids")
+      .array()
+      .notNull()
+      .default([]),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p
       .timestamp("updated_at")
@@ -2183,7 +2196,7 @@ export const chatThreads = p.pgTable(
       .index("chat_threads_workspace_user_idx")
       .on(table.workspaceId, table.userId),
     p.index("chat_threads_user_updated_idx").on(table.userId, table.updatedAt),
-    ...chatPolicies(),
+    ...chatThreadPolicies(),
   ],
 );
 
@@ -2217,7 +2230,7 @@ export const chatMessages = p.pgTable(
     p
       .index("chat_messages_user_workspace_created_idx")
       .on(table.userId, table.workspaceId, table.createdAt),
-    ...chatPolicies(),
+    ...chatMessagePolicies(),
   ],
 );
 
