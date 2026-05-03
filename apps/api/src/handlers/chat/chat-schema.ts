@@ -67,6 +67,7 @@ export const activeDecisionSchema = t.Object({
 export const sendMessageBodySchema = t.Object({
   threadId: tSafeId("chatThread"),
   workspaceId: t.Optional(tSafeId("workspace")),
+  anonymized: t.Optional(t.Boolean()),
   /**
    * Matters the chat draws context from. Empty (or omitted) means
    * "no matters pinned" — the AI discovers matters lazily via the

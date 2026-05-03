@@ -4,6 +4,7 @@ import type { AnyPgTable } from "drizzle-orm/pg-core";
 import { member, organization, user } from "@/api/db/auth-schema";
 import { stella } from "@/api/db/rls";
 import {
+  anonymizationBlacklistEntries,
   billingCodes,
   caseLawDecisions,
   caseLawMatterLinks,
@@ -151,6 +152,8 @@ export const createTestIds = () => ({
   clauseVersionB: id<"clauseVersion">(),
   orgSettingsA: id<"organizationSettings">(),
   orgSettingsB: id<"organizationSettings">(),
+  anonymizationBlacklistEntryA: id<"anonymizationBlacklistEntry">(),
+  anonymizationBlacklistEntryB: id<"anonymizationBlacklistEntry">(),
   matterCounterA: id<"matterCounter">(),
   matterCounterB: id<"matterCounter">(),
 });
@@ -198,6 +201,7 @@ export const orgScopedTables = [
   clauseCategories,
   clauses,
   organizationSettings,
+  anonymizationBlacklistEntries,
   matterCounters,
   contactRelationships,
   templateVersions,
@@ -531,6 +535,27 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
   await db.insert(organizationSettings).values([
     { id: ids.orgSettingsA, organizationId: ids.orgA },
     { id: ids.orgSettingsB, organizationId: ids.orgB },
+  ]);
+
+  await db.insert(anonymizationBlacklistEntries).values([
+    {
+      id: ids.anonymizationBlacklistEntryA,
+      organizationId: ids.orgA,
+      label: "organization",
+      canonical: "Acme A",
+      variants: [],
+      createdBy: ids.userA1,
+      updatedBy: ids.userA1,
+    },
+    {
+      id: ids.anonymizationBlacklistEntryB,
+      organizationId: ids.orgB,
+      label: "organization",
+      canonical: "Acme B",
+      variants: [],
+      createdBy: ids.userB1,
+      updatedBy: ids.userB1,
+    },
   ]);
 
   await db.insert(matterCounters).values([

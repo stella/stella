@@ -35,6 +35,7 @@ import {
   intersectAccessibleWorkspaceIds,
   resolveToolWorkspaceIds,
 } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type {
@@ -197,6 +198,11 @@ const sendMessage = createSafeRootHandler(
       workspaceId,
       hasActiveFileChat: body.activeFile !== undefined,
     });
+    const thirdPartyBoundary = createChatThirdPartyBoundary({
+      anonymized: body.anonymized ?? false,
+      organizationId: session.activeOrganizationId,
+      scopedDb,
+    });
 
     const uploadedMessage = yield* Result.await(
       uploadMessageFilesWithRollback({
@@ -259,6 +265,7 @@ const sendMessage = createSafeRootHandler(
         activeFile: body.activeFile,
         contextMatterIds: effectiveContextMatterIds,
         messageWindow,
+        refuseNonPlainTextFiles: thirdPartyBoundary.type === "anonymized",
         safeDb,
         userContext: body.userContext,
         userId: user.id,
@@ -351,6 +358,7 @@ const sendMessage = createSafeRootHandler(
             promptCacheKey: chatContext.promptCacheKey,
             resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
             resolveAssistantValueRefs: refRegistry.resolveAssistantValueRefs,
+            thirdPartyBoundary,
             threadId: body.threadId,
             tools: chatTools,
             system: chatContext.system,
@@ -590,6 +598,7 @@ type PrepareChatContextProps = {
   contextMatterIds: SafeId<"workspace">[];
   messageWindow: ChatMessage[];
   refRegistry: ReturnType<typeof createChatRefRegistry>;
+  refuseNonPlainTextFiles: boolean;
   safeDb: SafeDb;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
@@ -611,6 +620,7 @@ const prepareChatContext = async ({
   contextMatterIds,
   messageWindow,
   refRegistry,
+  refuseNonPlainTextFiles,
   safeDb,
   userContext,
   userId,
@@ -629,6 +639,7 @@ const prepareChatContext = async ({
       }),
       hydrateMessages({
         messages: messageWindow,
+        refuseNonPlainTextFiles,
         safeDb,
         userId,
       }),

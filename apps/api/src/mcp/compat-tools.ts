@@ -108,14 +108,18 @@ const getFetchableEntityMap = async ({
 };
 
 const anonymizeCompatSearchResults = async ({
+  context,
   results,
 }: {
+  context: McpRequestContext;
   results: CompatSearchResult[];
 }) =>
   await Promise.all(
     results.map(async ({ workspaceId, ...result }) => {
       const anonymized = await anonymizeTextFields({
         fields: [result.title],
+        organizationId: context.organizationId,
+        scopedDb: context.scopedDb,
         workspaceId,
       });
 
@@ -132,16 +136,20 @@ const anonymizeCompatSearchResults = async ({
   );
 
 const anonymizeCompatFetchPayload = async ({
+  context,
   text,
   title,
   workspaceId,
 }: {
+  context: McpRequestContext;
   text: string;
   title: string;
   workspaceId: string;
 }) => {
   const anonymized = await anonymizeTextFields({
     fields: [title, text],
+    organizationId: context.organizationId,
+    scopedDb: context.scopedDb,
     workspaceId,
   });
 
@@ -404,8 +412,13 @@ const handleCompatSearchTool: McpToolHandler = async ({
   }).slice(0, limit);
 
   if (mode === "anonymized") {
+    // MCP access is for authorized Stella users only. In anonymized
+    // mode we still search raw, non-anonymized indexed text so
+    // retrieval quality stays useful, then anonymize all returned
+    // corpus text before it leaves Stella for the AI client.
     return textResult({
       results: await anonymizeCompatSearchResults({
+        context,
         results: limitedResults,
       }),
     });
@@ -487,7 +500,11 @@ const handleCompatFetchTool: McpToolHandler = async ({
   }
 
   if (mode === "anonymized") {
+    // Same boundary as anonymized search: the user may fetch a raw
+    // document internally, but the AI client receives only the
+    // anonymized title/body generated below.
     const anonymized = await anonymizeCompatFetchPayload({
+      context,
       text: fetchPayload.text,
       title: fetchPayload.title,
       workspaceId: fetchPayload.workspaceId,

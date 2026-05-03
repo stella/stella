@@ -1,11 +1,15 @@
 import type { InferUIMessageChunk } from "ai";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import { toUserFileUrl } from "@/api/handlers/user-files/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import { resolveRefsInTextStream } from "./stream-chat";
+import { hydrateMessages, resolveRefsInTextStream } from "./stream-chat";
 
 const collectChunks = async (
   stream: ReadableStream<InferUIMessageChunk<ChatMessage>>,
@@ -170,5 +174,64 @@ describe("chat stream refs", () => {
         success: true,
       },
     });
+  });
+});
+
+describe("chat message hydration", () => {
+  test("refuses stored DOCX attachments for anonymized third-party sends", async () => {
+    const userFileId = toSafeId<"userFile">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const threadId = toSafeId<"chatThread">(
+      "22222222-2222-4222-8222-222222222222",
+    );
+    const userId = toSafeId<"user">("33333333-3333-4333-8333-333333333333");
+    const { safeDb } = createScopedDbMock({
+      query: {
+        userFiles: {
+          findMany: async () => [
+            {
+              id: userFileId,
+              userId,
+              threadId,
+              fileName: "draft.docx",
+              mimeType: DOCX_MIME_TYPE,
+              s3Key: "user/file",
+            },
+          ],
+        },
+      },
+    });
+
+    const result = await hydrateMessages({
+      messages: [
+        {
+          id: "msg_1",
+          role: "user",
+          parts: [
+            {
+              type: "file",
+              filename: "draft.docx",
+              mediaType: DOCX_MIME_TYPE,
+              url: toUserFileUrl(userFileId),
+            },
+          ],
+        },
+      ],
+      refuseNonPlainTextFiles: true,
+      safeDb,
+      userId,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("Expected DOCX hydration refusal");
+    }
+
+    if (!("status" in result.error)) {
+      throw result.error;
+    }
+
+    expect(result.error.status).toBe(422);
   });
 });

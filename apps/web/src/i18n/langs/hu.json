@@ -288,6 +288,9 @@
       "title": "Apply edits with tracked changes?",
       "tracked": "Yes, tracked"
     },
+    "anonymizedMode": "Anonimizált AI mód",
+    "anonymizedModeDisabled": "Az anonimizált AI mód ki van kapcsolva",
+    "anonymizedModeEnabled": "Az anonimizált AI mód be van kapcsolva",
     "approval": {
       "allow": "Engedélyezés",
       "alwaysAllow": "Mindig engedélyezze ebben a szálban",

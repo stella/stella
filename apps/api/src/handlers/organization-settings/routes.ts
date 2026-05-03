@@ -4,8 +4,10 @@ import deleteAIConfig from "@/api/handlers/organization-settings/delete-ai-confi
 import previewOrganizationSettings from "@/api/handlers/organization-settings/preview";
 import readOrganizationSettings from "@/api/handlers/organization-settings/read";
 import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
+import readAnonymizationBlacklist from "@/api/handlers/organization-settings/read-anonymization-blacklist";
 import updateOrganizationSettings from "@/api/handlers/organization-settings/update";
 import updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
+import updateAnonymizationBlacklist from "@/api/handlers/organization-settings/update-anonymization-blacklist";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 export const organizationSettingsRoute = new Elysia({
@@ -27,4 +29,8 @@ export const organizationSettingsRoute = new Elysia({
   .post("/ai-config", updateAIConfig.handler, {
     body: updateAIConfig.config.body,
   })
-  .delete("/ai-config", deleteAIConfig.handler);
+  .delete("/ai-config", deleteAIConfig.handler)
+  .get("/anonymization-blacklist", readAnonymizationBlacklist.handler)
+  .put("/anonymization-blacklist", updateAnonymizationBlacklist.handler, {
+    body: updateAnonymizationBlacklist.config.body,
+  });

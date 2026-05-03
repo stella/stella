@@ -288,6 +288,9 @@
       "title": "Apply edits with tracked changes?",
       "tracked": "Yes, tracked"
     },
+    "anonymizedMode": "Anonüümitud AI režiim",
+    "anonymizedModeDisabled": "Anonüümitud AI režiim on väljas",
+    "anonymizedModeEnabled": "Anonüümitud AI režiim on sees",
     "approval": {
       "allow": "Luba",
       "alwaysAllow": "Luba alati",

@@ -288,6 +288,9 @@
       "title": "Použít úpravy se sledováním změn?",
       "tracked": "Ano, se sledováním"
     },
+    "anonymizedMode": "Anonymizovaný režim AI",
+    "anonymizedModeDisabled": "Anonymizovaný režim AI je vypnutý",
+    "anonymizedModeEnabled": "Anonymizovaný režim AI je zapnutý",
     "approval": {
       "allow": "Povolit",
       "alwaysAllow": "Vždy povolit v tomto vlákně",

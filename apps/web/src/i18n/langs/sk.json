@@ -288,6 +288,9 @@
       "title": "Apply edits with tracked changes?",
       "tracked": "Yes, tracked"
     },
+    "anonymizedMode": "Anonymizovaný režim AI",
+    "anonymizedModeDisabled": "Anonymizovaný režim AI je vypnutý",
+    "anonymizedModeEnabled": "Anonymizovaný režim AI je zapnutý",
     "approval": {
       "allow": "Povoliť",
       "alwaysAllow": "Vždy povoliť v tomto vlákne",

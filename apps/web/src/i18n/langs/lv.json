@@ -288,6 +288,9 @@
       "title": "Apply edits with tracked changes?",
       "tracked": "Yes, tracked"
     },
+    "anonymizedMode": "Anonimizēts AI režīms",
+    "anonymizedModeDisabled": "Anonimizēts AI režīms ir izslēgts",
+    "anonymizedModeEnabled": "Anonimizēts AI režīms ir ieslēgts",
     "approval": {
       "allow": "Atļaut",
       "alwaysAllow": "Vienmēr atļaut",

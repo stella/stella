@@ -18,6 +18,7 @@ import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import Tooltip from "@/components/tooltip";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
+import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
@@ -58,7 +59,9 @@ export const ChatThreadPage = ({
   const [seededForThreadId, setSeededForThreadId] = useState<string | null>(
     null,
   );
+  const [anonymized, setAnonymized] = useState(false);
   const getContextMatterIds = useEffectEvent(() => contextMatterIds ?? []);
+  const getAnonymized = useEffectEvent(() => anonymized);
 
   const { data } = useSuspenseQuery(
     chatThreadOptions({
@@ -71,6 +74,7 @@ export const ChatThreadPage = ({
         allowMissingThread: true,
         getUserContext,
         getContextMatterIds,
+        getAnonymized,
       },
     }),
   );
@@ -166,6 +170,7 @@ export const ChatThreadPage = ({
           )}
         </div>
         <div className="flex items-center gap-1">
+          <ChatAnonymizedToggle enabled={anonymized} onChange={setAnonymized} />
           <Tooltip
             content={t("chat.moveToSide")}
             render={

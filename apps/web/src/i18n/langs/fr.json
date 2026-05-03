@@ -288,6 +288,9 @@
       "title": "Apply edits with tracked changes?",
       "tracked": "Yes, tracked"
     },
+    "anonymizedMode": "Mode IA anonymisé",
+    "anonymizedModeDisabled": "Le mode IA anonymisé est désactivé",
+    "anonymizedModeEnabled": "Le mode IA anonymisé est activé",
     "approval": {
       "allow": "Autoriser",
       "alwaysAllow": "Toujours autoriser",

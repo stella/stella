@@ -789,10 +789,13 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       ],
     });
-    expect(anonymizeTextFieldsMock).toHaveBeenCalledWith({
+    const anonymizeInput = anonymizeTextFieldsMock.mock.calls.at(-1)?.[0];
+    expect(anonymizeInput).toMatchObject({
       fields: ["John Smith SPA"],
+      organizationId: toSafeId<"organization">("org_1"),
       workspaceId: "ws_1",
     });
+    expect(anonymizeInput?.scopedDb).toBeTypeOf("function");
   });
 
   test("search preserves empty anonymized output instead of leaking the original title", async () => {

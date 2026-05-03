@@ -288,6 +288,9 @@
       "title": "Apply edits with tracked changes?",
       "tracked": "Yes, tracked"
     },
+    "anonymizedMode": "Anonimizuotas DI režimas",
+    "anonymizedModeDisabled": "Anonimizuotas DI režimas išjungtas",
+    "anonymizedModeEnabled": "Anonimizuotas DI režimas įjungtas",
     "approval": {
       "allow": "Leisti",
       "alwaysAllow": "Visada leisti",

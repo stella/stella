@@ -8,17 +8,24 @@ import {
 import type { GazetteerEntry, PipelineConfig } from "@stll/anonymize-wasm";
 import { panic } from "better-result";
 
+import type { ScopedDb } from "@/api/db";
+import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
+import type { SafeId } from "@/api/lib/branded-types";
 import { buildFieldMarkers } from "@/api/mcp/field-markers";
 
-const EMPTY_GAZETTEER_ENTRIES: GazetteerEntry[] = [];
-
-const buildPipelineConfig = (workspaceId: string): PipelineConfig => ({
+const buildPipelineConfig = ({
+  gazetteerEntries,
+  workspaceId,
+}: {
+  gazetteerEntries: GazetteerEntry[];
+  workspaceId: string;
+}): PipelineConfig => ({
   threshold: 0.4,
   enableTriggerPhrases: true,
   enableRegex: true,
   enableNameCorpus: true,
   enableDenyList: false,
-  enableGazetteer: false,
+  enableGazetteer: gazetteerEntries.length > 0,
   enableNer: false,
   enableConfidenceBoost: false,
   enableCoreference: true,
@@ -68,9 +75,13 @@ const splitRedactedFields = ({
 
 export const anonymizeTextFields = async ({
   fields,
+  organizationId,
+  scopedDb,
   workspaceId,
 }: {
   fields: string[];
+  organizationId: SafeId<"organization">;
+  scopedDb: ScopedDb;
   workspaceId: string;
 }) => {
   if (fields.every((field) => field.length === 0)) {
@@ -89,10 +100,15 @@ export const anonymizeTextFields = async ({
     .map((field, index) => `${markers[index]}${field}`)
     .join("");
 
+  const gazetteerEntries = await loadAnonymizationGazetteerEntries({
+    organizationId,
+    scopedDb,
+  });
+
   const entities = await runPipeline({
     fullText: combinedText,
-    config: buildPipelineConfig(workspaceId),
-    gazetteerEntries: EMPTY_GAZETTEER_ENTRIES,
+    config: buildPipelineConfig({ gazetteerEntries, workspaceId }),
+    gazetteerEntries,
     context,
   });
   const result = redactText(

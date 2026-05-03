@@ -288,6 +288,9 @@
       "title": "Apply edits with tracked changes?",
       "tracked": "Yes, tracked"
     },
+    "anonymizedMode": "Anonymisierter KI-Modus",
+    "anonymizedModeDisabled": "Anonymisierter KI-Modus ist aus",
+    "anonymizedModeEnabled": "Anonymisierter KI-Modus ist an",
     "approval": {
       "allow": "Erlauben",
       "alwaysAllow": "Immer in diesem Thread erlauben",

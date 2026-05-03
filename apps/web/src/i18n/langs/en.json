@@ -288,6 +288,9 @@
       "title": "Apply edits with tracked changes?",
       "tracked": "Yes, tracked"
     },
+    "anonymizedMode": "Anonymized AI mode",
+    "anonymizedModeDisabled": "Anonymized AI mode is off",
+    "anonymizedModeEnabled": "Anonymized AI mode is on",
     "approval": {
       "allow": "Allow",
       "alwaysAllow": "Always allow in this thread",
