@@ -1,7 +1,6 @@
 import { valibotSchema } from "@ai-sdk/valibot";
 import type { SkillMetadata } from "@stll/skills";
 import { listSkillResources, loadSkill, readSkillResource } from "@stll/skills";
-// oxlint-disable-next-line no-restricted-imports
 import { tool } from "ai";
 import * as v from "valibot";
 

@@ -1,5 +1,4 @@
 import { valibotSchema } from "@ai-sdk/valibot";
-// oxlint-disable-next-line no-restricted-imports
 import { tool } from "ai";
 import * as v from "valibot";
 
