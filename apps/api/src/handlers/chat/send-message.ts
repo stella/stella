@@ -392,8 +392,16 @@ const loadThread = async ({
     // workspaceId=X but requested as global would look "missing"
     // and the insert below would then collide on the PK. We want a
     // clear 400 instead of a constraint violation 500.
-    const thread = yield* Result.await(
-      safeDb((tx) =>
+    type ExistingThreadRow = {
+      id: SafeId<"chatThread">;
+      workspaceId: SafeId<"workspace"> | null;
+      contextMatterIds: SafeId<"workspace">[];
+      dataWorkspaceIds: SafeId<"workspace">[];
+      messages: ThreadRecord["messages"];
+    };
+
+    const lookup = async () =>
+      await safeDb((tx) =>
         tx.query.chatThreads.findFirst({
           where: {
             id: { eq: threadId },
@@ -416,11 +424,12 @@ const loadThread = async ({
             },
           },
         }),
-      ),
-    );
+      );
 
-    if (thread) {
-      const persistedWorkspaceId = thread.workspaceId ?? null;
+    const buildExisting = (
+      existing: ExistingThreadRow,
+    ): Result<LoadThreadResult, HandlerError<400>> => {
+      const persistedWorkspaceId = existing.workspaceId ?? null;
       if (persistedWorkspaceId !== workspaceId) {
         return Result.err(
           new HandlerError({
@@ -432,25 +441,23 @@ const loadThread = async ({
       return Result.ok<LoadThreadResult>({
         type: "existing",
         data: {
-          id: thread.id,
-          contextMatterIds: thread.contextMatterIds,
-          dataWorkspaceIds: thread.dataWorkspaceIds,
-          messages: thread.messages,
+          id: existing.id,
+          contextMatterIds: existing.contextMatterIds,
+          dataWorkspaceIds: existing.dataWorkspaceIds,
+          messages: existing.messages,
         },
       });
+    };
+
+    const thread = yield* Result.await(lookup());
+    if (thread) {
+      return buildExisting(thread);
     }
 
     const initialDataWorkspaceIds: SafeId<"workspace">[] = workspaceId
       ? [workspaceId]
       : [];
 
-    // The findFirst above runs under RLS, so a thread that exists
-    // but is no longer visible (data_workspace_ids ⊄ session) looks
-    // missing. Falling straight through to insert would collide on
-    // the primary key and surface as a 500. Translate that specific
-    // case to a 404 so the client gets a stable answer; matching the
-    // "not found" status that get-messages returns for the same
-    // shape avoids leaking thread existence to a revoked user.
     const insertResult = await safeDb((tx) =>
       tx.insert(chatThreads).values({
         id: threadId,
@@ -468,17 +475,35 @@ const loadThread = async ({
     );
     if (Result.isError(insertResult)) {
       if (
-        DatabaseError.is(insertResult.error) &&
-        insertResult.error.code === PG_ERROR.UNIQUE_VIOLATION
+        !DatabaseError.is(insertResult.error) ||
+        insertResult.error.code !== PG_ERROR.UNIQUE_VIOLATION
       ) {
-        return Result.err(
-          new HandlerError({
-            status: 404,
-            message: "Chat thread not found",
-          }),
-        );
+        return Result.err(insertResult.error);
       }
-      return Result.err(insertResult.error);
+      // Two interleaved cases collide on the primary key here:
+      //
+      //   (a) Race: two concurrent send-message calls with the
+      //       same new threadId — one insert wins, the other
+      //       sees the winner's row and should treat it as
+      //       existing.
+      //   (b) Hidden thread: the row exists but is invisible
+      //       under the new RLS predicate (data_workspace_ids ⊄
+      //       session), so the initial findFirst returned null.
+      //       Returning 404 matches what get-messages already
+      //       returns for the same shape and avoids leaking
+      //       thread existence to a revoked user.
+      //
+      // Re-run the lookup under current RLS to disambiguate.
+      const recovered = yield* Result.await(lookup());
+      if (recovered) {
+        return buildExisting(recovered);
+      }
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Chat thread not found",
+        }),
+      );
     }
 
     return Result.ok<LoadThreadResult>({
