@@ -120,7 +120,6 @@ Project: root
 - marked 17.0.5 — MIT
 - marked 18.0.2 — MIT
 - nodemailer 8.0.6 — MIT-0
-- oxlint 1.61.0 — MIT
 - pdfjs-dist 5.6.205 — Apache-2.0
 - posthog-js 1.372.1 — SEE LICENSE IN LICENSE
 - posthog-node 5.30.4 — MIT

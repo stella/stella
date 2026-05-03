@@ -5,15 +5,19 @@
     {
       "id": "root",
       "path": ".",
-      "ecosystems": ["javascript"],
+      "ecosystems": [
+        "javascript"
+      ],
       "sbom": "projects/root/sbom.cdx.json",
       "notice": "projects/root/THIRD-PARTY-NOTICES.txt",
-      "dependencies_with_licenses": 141
+      "dependencies_with_licenses": 140
     },
     {
       "id": "desktop-tauri",
       "path": "apps/desktop/src-tauri",
-      "ecosystems": ["rust"],
+      "ecosystems": [
+        "rust"
+      ],
       "sbom": "projects/desktop-tauri/sbom.cdx.json",
       "notice": "projects/desktop-tauri/THIRD-PARTY-NOTICES.txt",
       "dependencies_with_licenses": 657
