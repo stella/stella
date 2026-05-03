@@ -267,6 +267,312 @@ jobs:
           fi
           gh release upload "$RELEASE_REF" release-manifest.json --clobber
 
+  # Decide whether the desktop matrix needs to run for this tag.
+  # The desktop binary only changes when its own source, the
+  # bundled webview, the icons, or workspace UI deps change.
+  # If only the API or web app moved, in-flight desktop installs
+  # see the new web app on next reload — no rebuild, no update
+  # prompt, no SmartScreen reputation churn.
+  detect-desktop-changes:
+    name: Check if desktop changed since previous tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      should-build: ${{ steps.check.outputs.should-build }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.release_ref) || github.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Compute should-build
+        id: check
+        env:
+          RELEASE_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}
+        run: |
+          # Find the previous tag that matches the same release pattern
+          # we publish (v*). If there is no previous tag (very first
+          # release), build unconditionally — nothing to diff against.
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "${RELEASE_INPUT}^" 2>/dev/null || true)
+          if [[ -z "$prev" ]]; then
+            echo "::notice::No previous v* tag — building desktop unconditionally."
+            echo "should-build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Comparing $prev..$RELEASE_INPUT"
+          mapfile -t changed < <(git diff --name-only "$prev" "$RELEASE_INPUT")
+          should=false
+          for f in "${changed[@]}"; do
+            case "$f" in
+              apps/desktop/*|packages/ui/*|bun.lock)
+                should=true
+                break
+                ;;
+            esac
+          done
+          if [[ "$should" == "true" ]]; then
+            echo "::notice::Desktop-affecting paths changed; building."
+          else
+            echo "::notice::No desktop-affecting paths changed; skipping desktop build."
+          fi
+          echo "should-build=$should" >> "$GITHUB_OUTPUT"
+
+  build-desktop:
+    name: Build desktop (${{ matrix.label }})
+    needs: detect-desktop-changes
+    if: needs.detect-desktop-changes.outputs.should-build == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macos-aarch64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+            updater_target: darwin-aarch64
+            artifact_glob: |
+              apps/desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app.tar.gz
+              apps/desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
+              apps/desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+          - label: macos-x86_64
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+            updater_target: darwin-x86_64
+            artifact_glob: |
+              apps/desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app.tar.gz
+              apps/desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
+              apps/desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+          - label: windows-x86_64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            updater_target: windows-x86_64
+            artifact_glob: |
+              apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+              apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.nsis.zip
+              apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.nsis.zip.sig
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.release_ref) || github.ref }}
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        env:
+          RELEASE_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}
+        run: |
+          ref="$RELEASE_INPUT"
+          if [[ ! "$ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::Release ref must look like v1.2.3 or v1.2.3-rc.1"
+            exit 1
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "app=${ref#v}" >> "$GITHUB_OUTPUT"
+
+      # Tauri reads the version from tauri.conf.json. Override it
+      # at build time so the bundle filename and the embedded
+      # version both match the git tag, regardless of whether the
+      # tracked file was bumped in the same commit as the tag.
+      - name: Pin Tauri version to release tag
+        shell: bash
+        env:
+          APP_VERSION: ${{ steps.version.outputs.app }}
+        run: |
+          conf=apps/desktop/src-tauri/tauri.conf.json
+          tmp="$conf.tmp"
+          jq --arg v "$APP_VERSION" '.version = $v' "$conf" > "$tmp"
+          mv "$tmp" "$conf"
+          echo "version pinned to $APP_VERSION:"
+          jq '.version' "$conf"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b # stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build artifacts
+        uses: swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: ${{ matrix.target }}
+
+      - name: Install Bun deps
+        run: bun ci
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Install trusted-signing-cli (Windows only)
+        if: matrix.label == 'windows-x86_64'
+        shell: bash
+        run: cargo install trusted-signing-cli --version 0.10.0 --locked
+
+      - name: Build & sign desktop bundle
+        uses: tauri-apps/tauri-action@2cf3866d18b1bbf9a9c10d20ad7c46a06c5a23d3 # v0.5.22
+        env:
+          # Tauri updater signing — used for every platform.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS code signing + notarization. tauri-action picks
+          # these up automatically and notarizes via App Store
+          # Connect API.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          # Azure Trusted Signing — consumed by trusted-signing-cli
+          # invoked from tauri.conf.json bundle.windows.signCommand.
+          # The OAuth triple goes in env; the endpoint/account/profile
+          # IDs are interpolated into the signCommand string.
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
+          AZURE_CODE_SIGNING_ACCOUNT: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
+          AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
+        with:
+          projectPath: apps/desktop
+          args: --target ${{ matrix.target }}
+
+      - name: Upload bundle artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-${{ matrix.label }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-desktop:
+    name: Publish desktop bundles + update manifest
+    needs: build-desktop
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Resolve release version
+        id: version
+        env:
+          RELEASE_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}
+        run: |
+          ref="$RELEASE_INPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "app=${ref#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download matrix artifacts
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          path: artifacts
+          pattern: desktop-*
+          merge-multiple: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@a89a83ec143615402a01f672b6e172b7b1875000 # v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEPLOY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Sync bundles to S3
+        env:
+          BUCKET: ${{ vars.DOWNLOADS_BUCKET }}
+          APP_VERSION: ${{ steps.version.outputs.app }}
+        run: |
+          # Upload every artifact under its platform-specific
+          # directory so latest.json can point at stable URLs.
+          # `find -print0 | while IFS= read` handles filenames
+          # with spaces (Tauri productName "stella desktop").
+          for dir in artifacts/desktop-*; do
+            platform="${dir##*/desktop-}"
+            find "$dir" -type f -print0 | while IFS= read -r -d '' f; do
+              key="desktop/prod/$APP_VERSION/$platform/$(basename "$f")"
+              echo "Uploading s3://$BUCKET/$key"
+              aws s3 cp --no-progress "$f" "s3://$BUCKET/$key"
+            done
+          done
+
+      - name: Build update manifest (latest.json)
+        env:
+          APP_VERSION: ${{ steps.version.outputs.app }}
+        run: |
+          # Tauri's updater format: a single global latest.json
+          # listing per-platform url + signature. The signature
+          # is read from the .sig file Tauri produced alongside
+          # each bundle. Each row is "updater_target|matrix_dir|extension".
+          pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          rows=$(cat <<'ROWS'
+          darwin-aarch64|macos-aarch64|app.tar.gz
+          darwin-x86_64|macos-x86_64|app.tar.gz
+          windows-x86_64|windows-x86_64|nsis.zip
+          ROWS
+          )
+
+          platforms_json="{}"
+          while IFS='|' read -r plat matrix_dir ext; do
+            plat=$(echo "$plat" | xargs)
+            matrix_dir=$(echo "$matrix_dir" | xargs)
+            ext=$(echo "$ext" | xargs)
+            [[ -z "$plat" ]] && continue
+            dir="artifacts/desktop-$matrix_dir"
+            sig_file=$(find "$dir" -name "*.${ext}.sig" | head -n1)
+            asset_file=$(find "$dir" -name "*.${ext}" -not -name "*.sig" | head -n1)
+            if [[ -z "$sig_file" || -z "$asset_file" ]]; then
+              echo "::error::missing updater asset for $plat (looked for *.${ext} + *.${ext}.sig in $dir)"
+              exit 1
+            fi
+            sig=$(cat "$sig_file")
+            asset_basename=$(basename "$asset_file")
+            url="https://downloads.stll.app/desktop/prod/$APP_VERSION/$matrix_dir/$(printf %s "$asset_basename" | jq -sRr @uri)"
+            platforms_json=$(jq --arg p "$plat" --arg s "$sig" --arg u "$url" '.[$p] = {signature: $s, url: $u}' <<< "$platforms_json")
+          done <<< "$rows"
+
+          jq -n \
+            --arg version "v$APP_VERSION" \
+            --arg pub_date "$pub_date" \
+            --argjson platforms "$platforms_json" \
+            '{version: $version, notes: "", pub_date: $pub_date, platforms: $platforms}' \
+            > latest.json
+          echo "--- latest.json ---"
+          cat latest.json
+
+      - name: Upload latest.json to S3
+        env:
+          BUCKET: ${{ vars.DOWNLOADS_BUCKET }}
+        run: |
+          aws s3 cp --no-progress \
+            --content-type application/json \
+            --cache-control "public, max-age=60, must-revalidate" \
+            latest.json \
+            "s3://$BUCKET/desktop/prod/latest.json"
+
+      - name: Invalidate CloudFront for the manifest
+        env:
+          DIST_ID: ${{ vars.DOWNLOADS_DIST_ID }}
+        run: |
+          # Only invalidate latest.json — binaries are versioned
+          # under /<version>/ paths and never overwritten, so they
+          # never need invalidation.
+          aws cloudfront create-invalidation \
+            --distribution-id "$DIST_ID" \
+            --paths "/desktop/prod/latest.json" \
+            --no-cli-pager > /dev/null
+          echo "Invalidated /desktop/prod/latest.json"
+
   promote:
     # Auto-promote stable releases (vX.Y.Z) to production. Any tag
     # carrying a prerelease label (vX.Y.Z-anything) publishes the
