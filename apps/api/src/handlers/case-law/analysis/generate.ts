@@ -32,7 +32,12 @@ import type { ScopedDb } from "@/api/db";
 // eslint-disable-next-line no-restricted-imports
 import { db as rootDb } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
-import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
+import {
+  getModelForRole,
+  getModelInfoForRole,
+  getTemperatureForRole,
+} from "@/api/lib/ai-models";
+import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -74,6 +79,12 @@ const createAnalysisHeading = ({
 /**
  * Run the AI generation in the background. Updates the DB
  * when done; clears the sentinel on failure.
+ *
+ * `orgAIConfig` is captured from the request scope and threaded
+ * through here so BYOK orgs route this fire-and-forget call to
+ * their own provider key. Snapshot semantics are intentional: a
+ * config change made during the in-flight generation does not
+ * retarget mid-run.
  */
 const runGeneration = async (
   decisionId: SafeId<"caseLawDecision">,
@@ -84,6 +95,7 @@ const runGeneration = async (
     language: string;
     decisionType: string | null;
   },
+  orgAIConfig: OrgAIConfig | null,
 ) => {
   const systemPrompt = getSystemPrompt(decision.language);
   const decisionText = formatDecisionForPrompt(ast.blocks);
@@ -94,13 +106,8 @@ Type: ${decision.decisionType ?? "unknown"}
 
 ${decisionText}`;
 
-  const model = getModelForRole("fast");
-  const modelId =
-    typeof model === "string"
-      ? model
-      : "modelId" in model
-        ? model.modelId
-        : "unknown";
+  const model = getModelForRole("fast", orgAIConfig);
+  const { modelId } = getModelInfoForRole("fast", orgAIConfig);
   const aiAnalytics = createAIAnalyticsCallbacks({
     feature: "case-law.analysis",
     properties: {
@@ -188,6 +195,7 @@ ${decisionText}`;
 export const generateAnalysis = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
+  orgAIConfig: OrgAIConfig | null,
 ): Promise<{
   status: "done" | "error" | "generating";
   analysis?: PersistedDecisionAnalysis;
@@ -263,7 +271,7 @@ export const generateAnalysis = async (
   }
 
   // Fire-and-forget generation
-  void runGeneration(decisionId, ast, decision);
+  void runGeneration(decisionId, ast, decision, orgAIConfig);
 
   return { status: "generating" };
 };
