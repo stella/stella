@@ -320,10 +320,21 @@ export const initWorkflowWorker = () => {
     logger.error("workflow.entity_failed", {
       workspaceId: data.workspaceId,
       entityId: data.entityId,
+      attemptsMade: String(job.attemptsMade),
       error: String(error),
     });
 
-    // Still increment completed counter so workflow can finish
+    // With `attempts: 2` enabled on the queue, the failed event fires
+    // for transient first-attempt failures too. Only count the entity
+    // as completed once BullMQ has exhausted its retries — otherwise
+    // `completed >= total` can flip to true mid-run and finalize the
+    // workflow while jobs are still queued for retry.
+    const totalAttempts = job.opts.attempts ?? 1;
+    const isFinalAttempt = job.attemptsMade >= totalAttempts;
+    if (!isFinalAttempt) {
+      return;
+    }
+
     const branded = brandValidatedWorkflowActorKey({
       organizationId: data.organizationId,
       workspaceId: data.workspaceId,

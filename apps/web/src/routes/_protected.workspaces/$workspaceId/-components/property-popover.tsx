@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@stll/ui/components/button";
 import { Popover, PopoverPopup } from "@stll/ui/components/popover";
@@ -34,20 +34,43 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
   const updateProperty = useUpdateProperty();
   const startWorkflow = useStartWorkflow(workspaceId);
 
-  const dependencies =
+  // The composer's CreatableContentType union excludes "file" by
+  // design — file columns are created by upload, not by user choice,
+  // and the composer has no UI for them. Hiding the entry here keeps
+  // a save from silently rewriting the file column as text/manual.
+  const canEditViaComposer = property.content.type !== "file";
+
+  // Local optimistic copy of the dependencies. The conditions sub-modal
+  // can fire several edits in quick succession; rebuilding from
+  // `property.tool.dependencies` each time would clobber an in-flight
+  // change with the snapshot from the previous render. We keep the
+  // local copy authoritative while a mutation is pending and only
+  // re-sync from the prop when it settles.
+  const initialDeps =
     property.tool.type === "ai-model" ? property.tool.dependencies : [];
+  const [localDeps, setLocalDeps] = useState<PropertyDependency[]>(initialDeps);
+  const isUpdatePending = updateProperty.isPending;
+
+  useEffect(() => {
+    if (isUpdatePending) {
+      return;
+    }
+    if (property.tool.type !== "ai-model") {
+      setLocalDeps([]);
+      return;
+    }
+    setLocalDeps(property.tool.dependencies);
+  }, [property, isUpdatePending]);
 
   // Conditions are editable from the popover without opening the full
   // composer: replaceValue swaps a dependency in place and we save by
-  // round-tripping the whole property through updateProperty. Keeps the
-  // condition sub-modal self-contained.
+  // round-tripping the whole property through updateProperty.
   const replaceDependency = (index: number, next: PropertyDependency) => {
     if (property.tool.type !== "ai-model") {
       return;
     }
-    const nextDependencies = property.tool.dependencies.map((d, i) =>
-      i === index ? next : d,
-    );
+    const nextDependencies = localDeps.map((d, i) => (i === index ? next : d));
+    setLocalDeps(nextDependencies);
     updateProperty.mutate(
       {
         workspaceId,
@@ -83,21 +106,25 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
           className="min-w-64 overflow-clip *:data-[slot=popover-viewport]:p-0!"
         >
           <div className="bg-popover flex flex-col">
-            <div className="flex flex-col p-1">
-              <Button
-                className="justify-start gap-1.5"
-                onClick={() => {
-                  setIsOpen(false);
-                  setEditorOpen(true);
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                <PencilLineIcon />
-                {t("workspaces.properties.editColumn")}
-              </Button>
-            </div>
-            <Separator />
+            {canEditViaComposer && (
+              <>
+                <div className="flex flex-col p-1">
+                  <Button
+                    className="justify-start gap-1.5"
+                    onClick={() => {
+                      setIsOpen(false);
+                      setEditorOpen(true);
+                    }}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    <PencilLineIcon />
+                    {t("workspaces.properties.editColumn")}
+                  </Button>
+                </div>
+                <Separator />
+              </>
+            )}
             <SortProperty
               column={header.column}
               sortHint={toSortHint(property.content.type)}
@@ -105,7 +132,7 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
             <Separator />
             <div className="flex flex-col p-1">
               <PropertyConditions
-                dependencies={dependencies}
+                dependencies={localDeps}
                 replaceValue={replaceDependency}
                 workspaceId={workspaceId}
               />
