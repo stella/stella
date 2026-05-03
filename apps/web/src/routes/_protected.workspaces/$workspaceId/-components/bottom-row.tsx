@@ -32,6 +32,7 @@ export const BottomRow = ({
       >
         <AddEntityMenu
           onFolderCreated={onFolderCreated}
+          uploadOnly
           render={
             <Button
               className="absolute inset-0 z-10 flex size-auto! min-w-12 shrink-0 rounded-none bg-transparent"
@@ -53,6 +54,7 @@ export const BottomRow = ({
       >
         <AddEntityMenu
           onFolderCreated={onFolderCreated}
+          uploadOnly
           render={
             <button
               className="absolute inset-0 cursor-pointer text-start"
@@ -69,6 +71,7 @@ export const BottomRow = ({
       >
         <AddEntityMenu
           onFolderCreated={onFolderCreated}
+          uploadOnly
           render={
             <button className="absolute inset-0 cursor-pointer" type="button" />
           }

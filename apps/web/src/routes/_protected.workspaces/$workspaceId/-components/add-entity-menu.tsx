@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import React, { useRef } from "react";
 
 import { Button } from "@stll/ui/components/button";
 import {
@@ -48,6 +48,13 @@ type AddEntityMenuProps = {
    * action whose result the user can't see in place.
    */
   showTaskOption?: boolean | undefined;
+  /**
+   * Skip the menu entirely: clicking the trigger opens the file
+   * picker. Used by the table's bottom-row "+" so a single click
+   * goes straight to upload without intermediate New-task / New-
+   * folder choices the user doesn't want here.
+   */
+  uploadOnly?: boolean | undefined;
 };
 
 export const AddEntityMenu = ({
@@ -59,6 +66,7 @@ export const AddEntityMenu = ({
   onOpenChange,
   anchor,
   showTaskOption = true,
+  uploadOnly = false,
 }: AddEntityMenuProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
@@ -129,6 +137,40 @@ export const AddEntityMenu = ({
     });
     useInspectorStore.getState().openTask(entityId, "", true);
   };
+
+  const handleUploadClick = () => {
+    if (isUploadDisabled) {
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
+  if (uploadOnly && hasFileProperties) {
+    const trigger = render ?? (
+      <Button size="xs" variant="ghost">
+        <PlusIcon />
+        {t("common.uploadFiles")}
+      </Button>
+    );
+    return (
+      <>
+        {React.cloneElement(trigger, { onClick: handleUploadClick })}
+        <input
+          className="sr-only"
+          multiple
+          onChange={(e) => {
+            const files = [...(e.currentTarget.files ?? [])];
+            if (files.length > 0) {
+              createFileEntities(files);
+            }
+            e.target.value = "";
+          }}
+          ref={fileInputRef}
+          type="file"
+        />
+      </>
+    );
+  }
 
   return (
     <>

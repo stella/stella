@@ -48,3 +48,4 @@ package-lock.json
 
 # Local AI devtools capture dir (generations.json). Dev-only.
 /.devtools/
+.devtools

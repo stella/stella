@@ -16,15 +16,28 @@ import { toastManager } from "@stll/ui/components/toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   DatabaseIcon,
+  ExternalLinkIcon,
   PlayIcon,
   RotateCcwIcon,
+  SparklesIcon,
   Trash2Icon,
   WrenchIcon,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
+import { env } from "@/env";
 import { api } from "@/lib/api";
 import { useDevStore } from "@/lib/dev-store";
+
+// Build the AI SDK DevTools URL from VITE_API_URL's host so it
+// follows the same per-worktree port offset, then swap in the
+// devtools port (default 4983, override with VITE_AI_SDK_DEVTOOLS_PORT).
+const aiSdkDevtoolsUrl = (() => {
+  const apiUrl = new URL(env.VITE_API_URL);
+  apiUrl.port = String(env.VITE_AI_SDK_DEVTOOLS_PORT);
+  apiUrl.pathname = "/";
+  return apiUrl.toString();
+})();
 
 /**
  * Models available in the dev model selector.
@@ -290,6 +303,25 @@ export const DevSidebarGroup = () => {
         >
           <WrenchIcon />
           UI playground
+        </MenuItem>
+        <MenuItem
+          disabled={!env.VITE_AI_DEVTOOLS_ENABLED}
+          onClick={() => {
+            // Dev-runner only spawns the devtools CLI when
+            // AI_DEVTOOLS_ENABLED=true in apps/api/.env, so the
+            // disabled state mirrors that gate.
+            window.open(aiSdkDevtoolsUrl, "_blank", "noopener,noreferrer");
+          }}
+        >
+          <SparklesIcon />
+          AI SDK Devtools
+          {env.VITE_AI_DEVTOOLS_ENABLED ? (
+            <ExternalLinkIcon className="ms-auto size-3 opacity-60" />
+          ) : (
+            <span className="ms-auto text-[0.625rem] opacity-60">
+              Set AI_DEVTOOLS_ENABLED
+            </span>
+          )}
         </MenuItem>
       </MenuSubPopup>
     </MenuSub>

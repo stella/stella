@@ -311,7 +311,7 @@ function ProtectedContent({
         </>
       )}
       {canShowInspectorButton && (
-        <>
+        <div className="contents md:hidden">
           <Separator className="mx-1 h-4" orientation="vertical" />
           <Button
             aria-pressed={
@@ -325,7 +325,7 @@ function ProtectedContent({
           >
             <PanelRightIcon className="size-4" />
           </Button>
-        </>
+        </div>
       )}
     </div>
   );

@@ -48,6 +48,7 @@ import {
   visibleEntityFieldIds,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks";
 import { getInternalPropertyId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 type KanbanViewProps = {
@@ -190,12 +191,17 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           type: "error",
         });
       }
-      return response.data;
+      return { taskId };
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: entitiesKeys.all(workspaceId),
-      });
+    onSuccess: async ({ taskId }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: taskKeys.detail(workspaceId, taskId),
+        }),
+      ]);
     },
   });
 

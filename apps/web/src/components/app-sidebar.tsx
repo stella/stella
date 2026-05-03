@@ -12,13 +12,6 @@ import {
   AvatarImage,
 } from "@stll/ui/components/avatar";
 import { Button } from "@stll/ui/components/button";
-import {
-  Combobox,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxPopup,
-} from "@stll/ui/components/combobox";
 import { Input } from "@stll/ui/components/input";
 import {
   Menu,
@@ -34,11 +27,6 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/components/menu";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
 import { toastManager } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import {
@@ -51,11 +39,9 @@ import { getRouteApi, Link, useMatch } from "@tanstack/react-router";
 import {
   BookOpenIcon,
   ChevronsUpDownIcon,
-  ClockIcon,
   EllipsisVerticalIcon,
   GlobeIcon,
   LayersIcon,
-  Loader2Icon,
   LogOutIcon,
   MessageSquareIcon,
   MonitorIcon,
@@ -63,11 +49,9 @@ import {
   PanelLeftIcon,
   PinIcon,
   PinOffIcon,
-  PlayIcon,
   PlusIcon,
   SearchIcon,
   Settings2Icon,
-  SquareIcon,
   SunIcon,
   UsersIcon,
 } from "lucide-react";
@@ -110,15 +94,6 @@ import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { knowledgeSections } from "@/routes/_protected.knowledge/index";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
 import {
-  useStartTimer,
-  useStopTimer,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
-import { entitySummariesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import {
-  activeTimerOptions,
-  timeEntriesKeys,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
-import {
   AddMemberDialog,
   MatterMenuItems,
 } from "@/routes/_protected.workspaces/-components/matter-context-menu";
@@ -139,16 +114,6 @@ const HOLD_DELAY_MS = 500;
 // TODO: Persist pinned workspaces on the backend (user
 // preference or a `pinned` flag on the workspace member).
 
-const formatTimer = (seconds: number) => {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) {
-    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  }
-  return `${m}:${String(s).padStart(2, "0")}`;
-};
-
 /**
  * Minimum shape required to identify and render a matter.
  * Any component or function that represents a matter must
@@ -168,212 +133,6 @@ const MatterIcon = ({ id, color }: Pick<MatterIdentity, "id" | "color">) => (
     }}
   />
 );
-
-type SidebarTimerPopoverProps = {
-  workspaceId: string;
-};
-
-type SidebarTimerBadgeProps = {
-  workspaceId: string;
-};
-
-const SidebarTimerBadge = ({ workspaceId }: SidebarTimerBadgeProps) => {
-  const t = useTranslations();
-  const queryClient = useQueryClient();
-  const stopTimer = useStopTimer();
-  const { data: activeTimer } = useQuery({
-    ...activeTimerOptions(workspaceId),
-  });
-  const [timerSeconds, setTimerSeconds] = useState(0);
-
-  useEffect(() => {
-    if (!activeTimer?.timerStartedAt) {
-      setTimerSeconds(0);
-      return undefined;
-    }
-
-    const startMs = new Date(activeTimer.timerStartedAt).getTime();
-    const tick = () => {
-      const elapsed = Math.floor((Date.now() - startMs) / 1000);
-      setTimerSeconds(elapsed);
-    };
-
-    tick();
-    const interval = setInterval(tick, 1000);
-
-    return () => clearInterval(interval);
-  }, [activeTimer?.timerStartedAt]);
-
-  if (activeTimer) {
-    return (
-      <SidebarMenuBadge>
-        <span className="flex items-center gap-1.5 text-xs tabular-nums">
-          <span className="size-1.5 animate-pulse rounded-full bg-green-500" />
-          {formatTimer(timerSeconds)}
-          <Button
-            aria-label={t("billing.stopTimer")}
-            className="text-muted-foreground size-5"
-            disabled={stopTimer.isPending}
-            onClick={() => {
-              stopTimer.mutate(
-                {
-                  workspaceId,
-                },
-                {
-                  onSuccess: () => {
-                    // eslint-disable-next-line typescript/no-floating-promises
-                    queryClient.invalidateQueries({
-                      queryKey: timeEntriesKeys.all(workspaceId),
-                    });
-                    // eslint-disable-next-line typescript/no-floating-promises
-                    queryClient.invalidateQueries({
-                      queryKey: timeEntriesKeys.activeTimer(workspaceId),
-                    });
-                  },
-                  onError: () => {
-                    toastManager.add({
-                      title: t("billing.failedToStopTimer"),
-                      type: "error",
-                    });
-                  },
-                },
-              );
-            }}
-            size="icon"
-            variant="ghost"
-          >
-            <SquareIcon className="size-3 fill-current" />
-          </Button>
-        </span>
-      </SidebarMenuBadge>
-    );
-  }
-
-  return (
-    <SidebarMenuBadge>
-      <SidebarTimerPopover workspaceId={workspaceId} />
-    </SidebarMenuBadge>
-  );
-};
-
-const SidebarTimerPopover = ({ workspaceId }: SidebarTimerPopoverProps) => {
-  const t = useTranslations();
-  const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [selectedMatterId, setSelectedMatterId] = useState("");
-  const startTimer = useStartTimer();
-
-  const { data: matters, isPending: entitiesLoading } = useQuery({
-    ...entitySummariesOptions(workspaceId),
-    enabled: open,
-  });
-
-  const handleStart = () => {
-    if (!selectedMatterId) {
-      toastManager.add({
-        title: t("billing.matterRequired"),
-        type: "error",
-      });
-      return;
-    }
-
-    startTimer.mutate(
-      {
-        workspaceId,
-        matterId: selectedMatterId,
-        timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        // TODO(phase-2): resolve rate from user/matter settings
-        rateAtEntry: 0,
-        currency: "USD",
-      },
-      {
-        onSuccess: () => {
-          setOpen(false);
-          setSelectedMatterId("");
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
-            queryKey: timeEntriesKeys.all(workspaceId),
-          });
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
-            queryKey: timeEntriesKeys.activeTimer(workspaceId),
-          });
-        },
-        onError: () => {
-          toastManager.add({
-            title: t("billing.failedToStartTimer"),
-            type: "error",
-          });
-        },
-      },
-    );
-  };
-
-  return (
-    <Popover
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
-        if (!nextOpen) {
-          setSelectedMatterId("");
-        }
-      }}
-      open={open}
-    >
-      <PopoverTrigger
-        render={
-          <Button
-            aria-label={t("billing.startTimer")}
-            className="size-5"
-            size="icon"
-            title={t("billing.startTimer")}
-            variant="ghost"
-          />
-        }
-      >
-        <PlayIcon className="size-3" />
-      </PopoverTrigger>
-      <PopoverPopup align="start" className="w-64" side="right" sideOffset={8}>
-        <div className="flex flex-col gap-3">
-          <p className="text-muted-foreground text-xs">
-            {t("billing.selectMatterToStart")}
-          </p>
-          {entitiesLoading && (
-            <div className="text-muted-foreground flex items-center gap-2 py-2 text-xs">
-              <Loader2Icon className="size-3 animate-spin" />
-              {t("billing.loading")}
-            </div>
-          )}
-          <Combobox
-            onValueChange={(val) => {
-              if (val) {
-                setSelectedMatterId(val);
-              }
-            }}
-            value={selectedMatterId || null}
-          >
-            <ComboboxInput placeholder={t("billing.selectMatter")} size="sm" />
-            <ComboboxPopup>
-              <ComboboxList>
-                {matters?.map((matter) => (
-                  <ComboboxItem key={matter.id} value={matter.id}>
-                    {matter.name ?? t("workspaces.defaultName")}
-                  </ComboboxItem>
-                ))}
-              </ComboboxList>
-            </ComboboxPopup>
-          </Combobox>
-          <Button
-            disabled={!selectedMatterId || startTimer.isPending}
-            onClick={handleStart}
-            size="sm"
-          >
-            {t("billing.startTimer")}
-          </Button>
-        </div>
-      </PopoverPopup>
-    </Popover>
-  );
-};
 
 type ContextAction = {
   label: string;
@@ -872,13 +631,10 @@ export function AppSidebar(props: AppSidebarProps) {
   const displayName = user.name ?? user.email;
   const orgName = organization?.name;
 
-  // Active timer: try to detect current workspace
   const workspaceMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId",
     shouldThrow: false,
   });
-  const currentWorkspaceId =
-    workspaceMatch?.params.workspaceId ?? workspaces?.at(0)?.id;
 
   const handleCreateWorkspace = () => {
     if (!canCreateMatter) {
@@ -933,14 +689,6 @@ export function AppSidebar(props: AppSidebarProps) {
     handleCreateWorkspace();
   });
 
-  useHotkey(HOTKEYS.TOGGLE_TIME_TRACKING, () => {
-    if (currentWorkspaceId) {
-      void navigate({
-        to: `/workspaces/${currentWorkspaceId}/timesheets`,
-      });
-    }
-  });
-
   const pinned = useMemo(() => {
     if (!workspaces) {
       return [];
@@ -966,13 +714,6 @@ export function AppSidebar(props: AppSidebarProps) {
       )
       .slice(0, RECENTS_LIMIT);
   }, [workspaces, pinnedIds]);
-
-  const comingSoon = () => {
-    toastManager.add({
-      title: t("common.comingSoon"),
-      type: "foreground",
-    });
-  };
 
   // Hold-to-reveal nav badges (Control on Mac, Alt on Win/Linux)
   const isNavKeyHeld = useKeyHold(NAV_KEY);
@@ -1020,8 +761,7 @@ export function AppSidebar(props: AppSidebarProps) {
     /* 2: chat */ FixedNavTarget,
     /* 3: workspaces */ FixedNavTarget,
     /* 4: knowledge */ FixedNavTarget,
-    /* 5: time tracking */ FixedNavTarget,
-    /* 6: contacts */ FixedNavTarget,
+    /* 5: contacts */ FixedNavTarget,
   ] = [
     {
       action: () => setSearchOpen(true),
@@ -1077,30 +817,6 @@ export function AppSidebar(props: AppSidebarProps) {
             };
           }),
       },
-    },
-    {
-      action: () => {
-        if (currentWorkspaceId) {
-          void navigate({
-            to: "/workspaces/$workspaceId/timesheets",
-            params: { workspaceId: currentWorkspaceId },
-          });
-        }
-      },
-      contextMenu: currentWorkspaceId
-        ? {
-            primaryAction: {
-              label: t("navigation.timeTracking"),
-              icon: <ClockIcon />,
-              onClick: () => {
-                void navigate({
-                  to: "/workspaces/$workspaceId/timesheets",
-                  params: { workspaceId: currentWorkspaceId },
-                });
-              },
-            },
-          }
-        : {},
     },
     {
       action: () => {
@@ -1259,46 +975,13 @@ export function AppSidebar(props: AppSidebarProps) {
             </NavContextMenu>
             <NavContextMenu config={fixedNavTargets[4].contextMenu}>
               <SidebarMenuItem>
-                {currentWorkspaceId ? (
-                  <SidebarMenuButton
-                    asChild
-                    tooltip={t("navigation.timeTracking")}
-                  >
-                    <Link
-                      params={{
-                        workspaceId: currentWorkspaceId,
-                      }}
-                      to="/workspaces/$workspaceId/timesheets"
-                    >
-                      <ClockIcon />
-                      <span>{t("navigation.timeTracking")}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                ) : (
-                  <SidebarMenuButton
-                    onClick={comingSoon}
-                    tooltip={t("navigation.timeTracking")}
-                  >
-                    <ClockIcon />
-                    <span>{t("navigation.timeTracking")}</span>
-                  </SidebarMenuButton>
-                )}
-                {showNavBadges ? (
-                  <NavBadge digit={5} />
-                ) : currentWorkspaceId ? (
-                  <SidebarTimerBadge workspaceId={currentWorkspaceId} />
-                ) : null}
-              </SidebarMenuItem>
-            </NavContextMenu>
-            <NavContextMenu config={fixedNavTargets[5].contextMenu}>
-              <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip={t("navigation.contacts")}>
                   <Link activeProps={{ "data-active": true }} to="/contacts">
                     <UsersIcon />
                     <span>{t("navigation.contacts")}</span>
                   </Link>
                 </SidebarMenuButton>
-                {showNavBadges && <NavBadge digit={6} />}
+                {showNavBadges && <NavBadge digit={5} />}
               </SidebarMenuItem>
             </NavContextMenu>
           </SidebarMenu>

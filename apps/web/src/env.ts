@@ -32,6 +32,21 @@ export const env = createEnv({
       ),
       "45901",
     ),
+    VITE_AI_SDK_DEVTOOLS_PORT: v.optional(
+      v.pipe(
+        v.string(),
+        v.digits(),
+        v.transform(Number),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(65_535),
+      ),
+      "4983",
+    ),
+    VITE_AI_DEVTOOLS_ENABLED: v.optional(
+      v.pipe(v.string(), v.parseBoolean()),
+      "false",
+    ),
     VITE_AUTH_GOOGLE: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
     VITE_AUTH_MICROSOFT: v.optional(
       v.pipe(v.string(), v.parseBoolean()),
