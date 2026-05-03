@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { toastManager } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -10,7 +9,6 @@ import type { EntityField, EntityKind, WorkspaceProperty } from "@/lib/types";
 import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { PeekJustification } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-justification";
-import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import {
   entitiesKeys,
   entityOptions,
@@ -94,7 +92,6 @@ const EntityMetadataContent = ({
 }: EntityMetadataContentProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const startWorkflow = useStartWorkflow(workspaceId);
   const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
   const sawWorkflowRunning = useRef(false);
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
@@ -185,12 +182,8 @@ const EntityMetadataContent = ({
     );
 
   const handleExtractionCreated = ({
-    mode,
-    extractionScope,
     property,
   }: {
-    mode: "ai" | "manual";
-    extractionScope?: "file" | "matter";
     property: WorkspaceProperty;
   }) => {
     setOptimisticProperties((prev) => {
@@ -201,26 +194,11 @@ const EntityMetadataContent = ({
       return [...prev, property];
     });
 
-    if (mode !== "ai") {
-      return;
-    }
-
-    const workflowArgs =
-      extractionScope === "file" ? { entityIds: [entity.entityId] } : undefined;
-
+    // The dialog now triggers the workflow itself (entity-scoped when a
+    // file source is set, whole-matter otherwise). Refresh the entity
+    // fields so the optimistic row swaps to a real pending field as soon
+    // as the workflow query reports `running`.
     refreshEntityFields();
-
-    void startWorkflow(workflowArgs).then((result) => {
-      if (result === undefined) {
-        toastManager.add({
-          title: t("errors.actionFailed"),
-          type: "error",
-        });
-        return;
-      }
-
-      refreshEntityFields();
-    });
   };
 
   const extractionAction = (

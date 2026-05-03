@@ -56,6 +56,16 @@ type PropertyPromptInputProps = {
   dependenciesField?: React.ReactElement;
   onEditorReady?: (editor: Editor) => void;
   autoPopulateOnEmpty?: boolean;
+  /**
+   * - `filled` (default): muted background, padded box, fixed scroll height.
+   *   Used inside form fields where the input needs its own visual frame.
+   * - `minimal`: transparent, borderless, content-driven height. Used when
+   *   the editor is embedded inside a larger composer card that already
+   *   provides the frame.
+   */
+  variant?: "filled" | "minimal";
+  placeholder?: string;
+  onSubmit?: () => void;
 };
 
 export const PropertyPromptInput = ({
@@ -67,6 +77,9 @@ export const PropertyPromptInput = ({
   dependenciesField,
   onEditorReady,
   autoPopulateOnEmpty = true,
+  variant = "filled",
+  placeholder,
+  onSubmit,
 }: PropertyPromptInputProps) => {
   const t = useTranslations();
   const didAutoPopulate = useRef(false);
@@ -81,7 +94,8 @@ export const PropertyPromptInput = ({
       Paragraph,
       Text,
       Placeholder.configure({
-        placeholder: t("workspaces.properties.setPromptPlaceholder"),
+        placeholder:
+          placeholder ?? t("workspaces.properties.setPromptPlaceholder"),
         showOnlyWhenEditable: false,
       }),
       createCustomMention(workspaceId).configure({
@@ -99,9 +113,40 @@ export const PropertyPromptInput = ({
     onBlur: field.handleBlur,
     editorProps: {
       attributes: {
-        class: cn(
-          "bg-muted placeholder:text-muted-foreground/64 min-h-32 w-full rounded-md p-2 text-sm focus-visible:outline-none",
-        ),
+        class:
+          variant === "minimal"
+            ? cn(
+                "placeholder:text-muted-foreground/64 min-h-15 w-full text-sm leading-[1.55] focus-visible:outline-none",
+              )
+            : cn(
+                "bg-muted placeholder:text-muted-foreground/64 min-h-32 w-full rounded-md p-2 text-sm focus-visible:outline-none",
+              ),
+      },
+      handleKeyDown: (_view, event) => {
+        if (
+          onSubmit &&
+          (event.metaKey || event.ctrlKey) &&
+          event.key === "Enter"
+        ) {
+          event.preventDefault();
+          onSubmit();
+          return true;
+        }
+        // ProseMirror's basic select-all keymap isn't bundled with the
+        // bare Document/Paragraph/Text setup we use here, so Cmd/Ctrl+A
+        // would otherwise fall through to the browser and select the
+        // surrounding dialog instead of the editor's contents.
+        if (
+          (event.metaKey || event.ctrlKey) &&
+          !event.shiftKey &&
+          !event.altKey &&
+          (event.key === "a" || event.key === "A")
+        ) {
+          event.preventDefault();
+          editor?.commands.selectAll();
+          return true;
+        }
+        return false;
       },
     },
   });
@@ -164,9 +209,13 @@ export const PropertyPromptInput = ({
   return (
     <div className="group w-full gap-1">
       <PropertyFormField className="w-full p-0" name={field.name}>
-        <ScrollArea className="h-32 overflow-y-auto">
+        {variant === "minimal" ? (
           <EditorContent editor={editor} />
-        </ScrollArea>
+        ) : (
+          <ScrollArea className="h-32 overflow-y-auto">
+            <EditorContent editor={editor} />
+          </ScrollArea>
+        )}
         <FieldError />
       </PropertyFormField>
       {dependenciesField}

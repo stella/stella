@@ -24,6 +24,7 @@ type CreatePropertyVars = {
   prompt?: string;
   dependencies?: CreatePropertyDependency[];
   options?: WorkspacePropertyOption[];
+  fallback?: string | null;
 };
 
 export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
@@ -37,6 +38,7 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
       prompt,
       dependencies,
       options,
+      fallback,
     }: CreatePropertyVars) => {
       const response = await api
         .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -57,6 +59,7 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
               }
             : {}),
           ...(options && options.length > 0 ? { options } : {}),
+          ...(fallback !== undefined ? { fallback } : {}),
         });
 
       if (response.error) {
@@ -157,6 +160,50 @@ export const usePreviewProperty = () => {
                   ),
                 })),
               }
+            : {}),
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+};
+
+type SuggestPromptVars = {
+  workspaceId: string;
+  name: string;
+  contentType: "text" | "single-select" | "multi-select" | "date" | "int";
+  options?: { value: string }[];
+  currentPrompt?: string;
+};
+
+export const useSuggestPrompt = () => {
+  const analytics = useAnalytics();
+
+  return useMutation({
+    mutationFn: async ({
+      workspaceId,
+      name,
+      contentType,
+      options,
+      currentPrompt,
+    }: SuggestPromptVars) => {
+      const response = await api
+        .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        ["suggest-prompt"].post({
+          name,
+          contentType,
+          ...(options && options.length > 0
+            ? { options: options.map((o) => ({ value: o.value })) }
+            : {}),
+          ...(currentPrompt && currentPrompt.length > 0
+            ? { currentPrompt }
             : {}),
         });
 
