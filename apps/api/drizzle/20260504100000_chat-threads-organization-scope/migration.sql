@@ -21,6 +21,18 @@ SET organization_id = COALESCE(
 )
 WHERE organization_id IS NULL;
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM chat_threads
+    WHERE organization_id IS NULL
+  ) THEN
+    RAISE EXCEPTION
+      'chat_threads.organization_id backfill failed for rows without workspace or organization membership; assign or remove those rows before applying this migration';
+  END IF;
+END $$;
+
 ALTER TABLE chat_threads
   ALTER COLUMN organization_id SET NOT NULL,
   ADD CONSTRAINT chat_threads_organization_id_organization_id_fk
