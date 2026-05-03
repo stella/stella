@@ -194,8 +194,12 @@ const hasVisibleContent = (
 type ChatThreadMessagesProps = {
   approvalPendingMessageId: string | null;
   autoApprovedTools: ReadonlySet<ApprovalToolName>;
+  blockedApprovalTools?: ReadonlySet<ApprovalToolName> | undefined;
   handleAlwaysAllow: (toolName: ApprovalToolName) => void;
-  handleApprove: (id: string) => void | PromiseLike<void>;
+  handleApprove: (
+    id: string,
+    toolName: ApprovalToolName,
+  ) => void | PromiseLike<void>;
   handleDeny: (id: string) => void | PromiseLike<void>;
   isGenerating?: boolean | undefined;
   messages: PersistedChatMessage[];
@@ -214,6 +218,7 @@ type ChatThreadMessagesProps = {
 export const ChatThreadMessages = ({
   approvalPendingMessageId,
   autoApprovedTools,
+  blockedApprovalTools,
   handleAlwaysAllow,
   handleApprove,
   handleDeny,
@@ -269,6 +274,7 @@ export const ChatThreadMessages = ({
                   return (
                     <ToolApprovalCard
                       autoApprovedTools={autoApprovedTools}
+                      blockedApprovalTools={blockedApprovalTools}
                       key={part.toolCallId}
                       onAlwaysAllow={handleAlwaysAllow}
                       onApprove={handleApprove}

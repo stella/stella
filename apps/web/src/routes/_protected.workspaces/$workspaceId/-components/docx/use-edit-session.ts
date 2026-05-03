@@ -12,6 +12,7 @@ import { useDebouncedCallback } from "use-debounce";
 
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
+import { userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { filesKeys } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -33,6 +34,7 @@ type EditSessionState =
       status: "error";
       reason: EditSessionErrorReason;
       source: EditSessionErrorSource;
+      detail?: string | undefined;
     };
 
 export type EditSessionErrorReason =
@@ -123,6 +125,7 @@ export const useEditSession = ({
     sessionId: string;
     sessionToken: string;
   } | null>(null);
+  const checkpointQueueRef = useRef(Promise.resolve());
   const releaseContextRef = useRef({ workspaceId, entityId, propertyId });
   const isMountedRef = useRef(true);
 
@@ -156,14 +159,15 @@ export const useEditSession = ({
 
     if (response.error) {
       if (!isMountedRef.current) {
-        return;
+        return false;
       }
       setState({
+        detail: userErrorMessage(response.error, "Failed to open DOCX."),
         status: "error",
         reason: getEditSessionErrorReason(response.error),
         source: "open",
       });
-      return;
+      return false;
     }
 
     const { sessionId, sessionToken, downloadUrl, fileName } = response.data;
@@ -171,7 +175,7 @@ export const useEditSession = ({
     if (!isMountedRef.current) {
       sessionRef.current = null;
       await releaseEditSession(releaseContext);
-      return;
+      return false;
     }
 
     const fileResponse = await fetch(downloadUrl, {
@@ -183,14 +187,14 @@ export const useEditSession = ({
         await releaseEditSession(releaseContext);
       }
       if (!isMountedRef.current) {
-        return;
+        return false;
       }
       setState({
         status: "error",
         reason: "downloadFailed",
         source: "download",
       });
-      return;
+      return false;
     }
 
     const downloadedBuffer = await fileResponse.arrayBuffer();
@@ -199,7 +203,7 @@ export const useEditSession = ({
         sessionRef.current = null;
         await releaseEditSession(releaseContext);
       }
-      return;
+      return false;
     }
 
     setState({
@@ -215,9 +219,10 @@ export const useEditSession = ({
     await queryClient.invalidateQueries({
       queryKey: entitiesKeys.all(workspaceId),
     });
+    return true;
   };
 
-  const saveCheckpoint = async (docxBuffer: ArrayBuffer) => {
+  const saveCheckpointNow = async (docxBuffer: ArrayBuffer) => {
     const session = sessionRef.current;
     if (!session) {
       return false;
@@ -242,6 +247,7 @@ export const useEditSession = ({
           status: "error",
           reason: "takenOver",
           source: "checkpoint",
+          detail: userErrorMessage(response.error, "Failed to save DOCX."),
         });
       }
       return false;
@@ -256,6 +262,17 @@ export const useEditSession = ({
     }
     setIsDirty(false);
     return true;
+  };
+
+  const saveCheckpoint = async (docxBuffer: ArrayBuffer) => {
+    const checkpoint = checkpointQueueRef.current.then(
+      async () => await saveCheckpointNow(docxBuffer),
+    );
+    checkpointQueueRef.current = checkpoint.then(
+      () => undefined,
+      () => undefined,
+    );
+    return await checkpoint;
   };
 
   const debouncedCheckpoint = useDebouncedCallback((buffer: ArrayBuffer) => {
@@ -313,6 +330,7 @@ export const useEditSession = ({
 
     if (response.error) {
       setState({
+        detail: userErrorMessage(response.error, "Failed to save DOCX."),
         status: "error",
         reason: getEditSessionErrorReason(response.error),
         source: "finalize",

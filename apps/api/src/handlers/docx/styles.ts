@@ -16,6 +16,7 @@ import type { IStylesOptions } from "docx";
 const FONT = "Arial";
 const FONT_SIZE_PT = 10;
 const FONT_SIZE = FONT_SIZE_PT * 2; // half-points
+const TITLE_SIZE = 14 * 2;
 const BODY_AFTER_PT = 6;
 const BODY_AFTER = BODY_AFTER_PT * 20; // twips
 
@@ -38,6 +39,17 @@ export const stylesConfig: IStylesOptions = {
   },
   paragraphStyles: [
     {
+      id: "TitleNoSubheading",
+      name: "Title (No Subheading)",
+      basedOn: "Normal",
+      next: "A0",
+      run: { font: FONT, size: TITLE_SIZE, bold: true },
+      paragraph: {
+        alignment: AlignmentType.CENTER,
+        spacing: { after: BODY_AFTER * 2 },
+      },
+    },
+    {
       id: "A0",
       name: "A0",
       basedOn: "Normal",
@@ -56,6 +68,65 @@ export const stylesConfig: IStylesOptions = {
       run: { font: FONT, size: FONT_SIZE },
       paragraph: {
         indent: { left: INDENT_STEP },
+      },
+    },
+    {
+      id: "A1stLevelNumbering",
+      name: "A_1st Level Numbering",
+      basedOn: "A0",
+      next: "A1",
+      run: { font: FONT, size: FONT_SIZE, bold: true },
+      paragraph: {
+        alignment: AlignmentType.JUSTIFIED,
+        spacing: { before: BODY_AFTER, after: BODY_AFTER },
+      },
+    },
+    {
+      id: "A2ndLevelNumbering",
+      name: "A_2nd Level Numbering",
+      basedOn: "A1",
+      next: "A1",
+      run: { font: FONT, size: FONT_SIZE, bold: true },
+      paragraph: {
+        alignment: AlignmentType.JUSTIFIED,
+        indent: { left: INDENT_STEP },
+        spacing: { before: BODY_AFTER, after: BODY_AFTER },
+      },
+    },
+    {
+      id: "A3rdLevelNumbering",
+      name: "A_3rd Level Numbering",
+      basedOn: "A1",
+      next: "A1",
+      run: { font: FONT, size: FONT_SIZE },
+      paragraph: {
+        alignment: AlignmentType.JUSTIFIED,
+        indent: { left: INDENT_STEP * 2 },
+        spacing: { after: BODY_AFTER },
+      },
+    },
+    {
+      id: "A4thLevelNumbering",
+      name: "A_4th Level Numbering",
+      basedOn: "A1",
+      next: "A1",
+      run: { font: FONT, size: FONT_SIZE },
+      paragraph: {
+        alignment: AlignmentType.JUSTIFIED,
+        indent: { left: INDENT_STEP * 3 },
+        spacing: { after: BODY_AFTER },
+      },
+    },
+    {
+      id: "A5thLevelNumbering",
+      name: "A_5th Level Numbering",
+      basedOn: "A1",
+      next: "A1",
+      run: { font: FONT, size: FONT_SIZE },
+      paragraph: {
+        alignment: AlignmentType.JUSTIFIED,
+        indent: { left: INDENT_STEP * 4 },
+        spacing: { after: BODY_AFTER },
       },
     },
     {

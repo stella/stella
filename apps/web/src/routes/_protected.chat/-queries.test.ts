@@ -1,6 +1,27 @@
 import { describe, expect, test } from "bun:test";
 
-import { matchesChatThreadAcrossScopes } from "@/routes/_protected.chat/-queries";
+import {
+  chatKeys,
+  matchesChatThreadAcrossScopes,
+} from "@/routes/_protected.chat/-queries";
+
+describe("chatKeys", () => {
+  test("separates plain chat transports from active DOCX edit transports", () => {
+    const base = {
+      allowMissingThread: true,
+      scope: "workspace",
+      threadId: "thread-A",
+      workspaceId: "ws-1",
+    } as const;
+
+    expect(chatKeys.thread(base)).toEqual(
+      chatKeys.thread({ ...base, contextKind: "plain" }),
+    );
+    expect(chatKeys.thread({ ...base, contextKind: "plain" })).not.toEqual(
+      chatKeys.thread({ ...base, contextKind: "active-docx-edit" }),
+    );
+  });
+});
 
 describe("matchesChatThreadAcrossScopes", () => {
   const threadId = "thread-A";

@@ -282,6 +282,12 @@
       "toastDescription": "Celostránkový chat bude k dispozici s perzistentními vlákny.",
       "toastTitle": "Celý pohled zatím není dostupný"
     },
+    "applyMode": {
+      "description": "Word ukládá, kdo provedl každou změnu. Vaši volbu si zapamatujeme.",
+      "direct": "Ne, použít přímo",
+      "title": "Použít úpravy se sledováním změn?",
+      "tracked": "Ano, se sledováním"
+    },
     "approval": {
       "allow": "Povolit",
       "alwaysAllow": "Vždy povolit v tomto vlákně",
@@ -310,6 +316,7 @@
     },
     "editableFilePlaceholder": "Chatovat nebo upravit {fileName}",
     "editableFilePlaceholderAction": "Chatovat nebo upravit",
+    "editorLoading": "Načítám editor…",
     "extractingContent": "Extrahování obsahu...",
     "filePlaceholder": "Chatovat o {fileName}",
     "filePlaceholderAction": "Chatovat o",
@@ -363,9 +370,18 @@
     "thinking": "Pracuji s kontextem",
     "threads": "Konverzace",
     "tool": {
+      "apply-active-docx-edits": "Používám úpravy DOCX",
       "ask-user": "Žádost o upřesnění",
       "create-document": "Vytváření dokumentu",
       "describe-stella-function": "Kontrola funkce stella",
+      "docxCommentSummary": "Přidat komentář k {blockId}",
+      "docxDeleteSummary": "Smazat {blockId}",
+      "docxEditMore": "{count, plural, one {# další úprava} few {# další úpravy} other {# dalších úprav}}",
+      "docxEditSummary": "{count, plural, one {# navržená úprava} few {# navržené úpravy} other {# navržených úprav}}",
+      "docxInsertAfterSummary": "Vložit text za {blockId}",
+      "docxInsertBeforeSummary": "Vložit text před {blockId}",
+      "docxReplaceBlockSummary": "Nahradit {blockId}",
+      "docxReplaceSummary": "Nahradit „{find}“ za „{replace}“",
       "execute-typescript": "Spouštění TypeScriptu",
       "load-skill": "Načítání dovednosti",
       "read-contact": "Čtení kontaktu",
@@ -691,6 +707,48 @@
       "person": "Osoba"
     }
   },
+  "docxReview": {
+    "accept": "Přijmout",
+    "acceptAll": "Přijmout vše",
+    "allFilter": "Vše",
+    "applyAs": "jako",
+    "applyDirect": "Napevno",
+    "applyMode": "Aplikovat jako:",
+    "applyTracked": "Sledované změny",
+    "areaUnspecified": "Nezařazeno",
+    "byArea": "Podle oblasti",
+    "bySeverity": "Podle závažnosti",
+    "dismiss": "Skrýt panel revize",
+    "empty": "Žádné návrhy neodpovídají filtru.",
+    "groupBy": "Seskupit",
+    "hiddenCount": "{count} skrytých",
+    "hideAccepted": "Skrýt přijaté návrhy",
+    "identityAria": "Identita pro sledované změny ({name})",
+    "identitySaved": "Identita uložena",
+    "progressAria": "{reviewed} z {total} projito",
+    "reject": "Odmítnout",
+    "rejectAll": "Odmítnout vše",
+    "revert": "Vrátit zpět",
+    "reviewed": "projito",
+    "saveIdentity": "Uložit",
+    "savingIdentity": "Ukládám…",
+    "severityHigh": "Vysoká",
+    "severityLow": "Nízká",
+    "severityMedium": "Střední",
+    "severityUnspecified": "Bez závažnosti",
+    "showHidden": "Zobrazit vše",
+    "skipped": "Nelze použít: {reason}",
+    "statusAccepted": "Přijato",
+    "statusApplying": "Aplikuji změnu…",
+    "statusRejected": "Odmítnuto",
+    "statusSkipped": "Přeskočeno",
+    "subtitle": "{pending} čeká z {total}",
+    "title": "Návrhy AI",
+    "wordName": "Sledované změny — jméno autora",
+    "wordNamePlaceholder": "Jak se podepíše ve změnách",
+    "wordShortcut": "Iniciály",
+    "wordShortcutPlaceholder": "např. JK"
+  },
   "errors": {
     "actionFailed": "Akce se nezdařila",
     "failedToAcceptInvitation": "Nepodařilo se přijmout pozvánku",
@@ -766,6 +824,7 @@
     "editLatestVersionDescription": "Tato verze není aktuální. Pokud ji chcete upravovat v prohlížeči, nejdřív z ní vytvořte nejnovější verzi a potom ji odemkněte pro úpravy.",
     "editLatestVersionTitle": "Pro úpravy je potřeba nejnovější verze",
     "generatingRedline": "Generating redline comparison...",
+    "hideVersionList": "Skrýt historii verzí",
     "inspectMode": "Inspect",
     "label": "Označení",
     "labelPresets": {
@@ -782,11 +841,14 @@
     "selectVersion": "Select a version",
     "setLabel": "Nastavit označení",
     "showDiff": "Zobrazit rozdíl",
+    "showVersionList": "Zobrazit historii verzí",
     "uploadDate": "Upload date",
+    "uploadNewVersion": "Nahrát novou verzi",
     "uploadedBy": "Uploaded by",
     "version": "Version",
     "versionHistory": "Historie verzí",
     "viewVersionHistory": "Zobrazit detail a historii",
+    "viewing": "Zobrazeno",
     "wordsAdded": "slov přidáno",
     "wordsRemoved": "slov odebráno"
   },
@@ -927,6 +989,10 @@
     "unsupportedDocxEditTitle": "Úpravy zablokovány"
   },
   "inspector": {
+    "facet": {
+      "preview": "Náhled",
+      "previewInFullViewToast": "Náhled je zde hlavní zobrazení. Klikni na tlačítko minimalizace pro zobrazení vedle metadat."
+    },
     "hidePane": "Skrýt panel",
     "matterPicker": {
       "allMatters": "Všechny spisy",
@@ -937,6 +1003,17 @@
       "noResults": "Žádný spis neodpovídá „{query}“.",
       "searchPlaceholder": "Hledat spisy nebo klienty…",
       "title": "Kontext spisů"
+    },
+    "metadata": {
+      "addFileField": "Přidat pole",
+      "author": "Autor",
+      "documentInfoHeading": "Informace o dokumentu",
+      "fileSpecificHeading": "Pole specifická pro soubor",
+      "fileSpecificHint": "Přidejte pole, která existují jen na tomto souboru a v tabulce se neobjevují.",
+      "matterColumnsHeading": "Sloupce spisu",
+      "updatedAt": "Aktualizováno",
+      "version": "Verze",
+      "versionCurrent": "v{version} (aktuální)"
     },
     "openChat": "Otevřít chat",
     "showPane": "Zobrazit panel"
@@ -1182,13 +1259,20 @@
       "desktopDownloadOtherMac": "On Windows? Download for Windows",
       "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments",
       "desktopDownloadWindows": "Download for Windows",
+      "preferredName": "Preferred name",
+      "preferredNameDescription": "Used as the author for DOCX tracked changes and comments.",
+      "preferredNamePlaceholder": "Your name",
       "profile": "Profil",
       "profileDescription": "Spravujte své osobní předvolby",
       "sessions": "Relace",
       "timezone": "Timezone",
       "timezoneDescription": "Used for timestamps in notifications and emails",
       "timezoneSaved": "Timezone updated",
-      "title": "Účet"
+      "title": "Účet",
+      "wordEditIdentitySaved": "Word edit identity updated",
+      "wordEditShortcut": "Word edit shortcut",
+      "wordEditShortcutDescription": "Short tag for your initials on Word edits.",
+      "wordEditShortcutPlaceholder": "e.g. JK"
     },
     "organization": {
       "activeMembers": "Aktivní členové",
@@ -1582,6 +1666,7 @@
       "backToPeek": "Zpět do náhledu",
       "entitySidebar": "Entity details",
       "evidence": "Zdůvodnění",
+      "fullView": "Plný náhled",
       "goBack": "Zpět",
       "incorrectPassword": "Nesprávné heslo. Zkuste to znovu.",
       "nextPage": "Další strana",

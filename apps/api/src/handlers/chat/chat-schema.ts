@@ -34,11 +34,30 @@ export const userContextSchema = t.Object({
   userName: t.String(),
   locale: t.String(),
   timezone: t.String(),
+  wordEditAuthorName: t.Optional(t.String()),
+  wordEditShortcut: t.Optional(t.String()),
 });
 
 export const activeFileSchema = t.Object({
   entityId: tSafeId("entity"),
   fileName: t.String(),
+  docxEditSnapshot: t.Optional(
+    t.Object({
+      canApplyEdits: t.Optional(t.Boolean()),
+      blocks: t.Array(
+        t.Object({
+          id: t.String(),
+          kind: t.Union([
+            t.Literal("heading"),
+            t.Literal("listItem"),
+            t.Literal("paragraph"),
+          ]),
+          text: t.String(),
+          displayLabel: t.Optional(t.String()),
+        }),
+      ),
+    }),
+  ),
 });
 
 export const activeDecisionSchema = t.Object({
@@ -72,7 +91,7 @@ type ValidateMessageInput = {
   message: RawIncomingMessage;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
-  tools: ChatTools;
+  tools: Partial<ChatTools>;
   userId: SafeId<"user">;
 };
 

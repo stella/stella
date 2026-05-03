@@ -31,6 +31,7 @@ import { Route as AuthAcceptInvitationInvitationIdRouteImport } from './routes/a
 import { Route as ProtectedKnowledgeTemplatesRouteImport } from './routes/_protected.knowledge/templates'
 import { Route as ProtectedKnowledgeClausesRouteImport } from './routes/_protected.knowledge/clauses'
 import { Route as ProtectedContactsContactIdRouteImport } from './routes/_protected.contacts/$contactId'
+import { Route as ProtectedChatNewRouteImport } from './routes/_protected.chat/new'
 import { Route as ProtectedChatThreadIdRouteImport } from './routes/_protected.chat/$threadId'
 import { Route as ProtectedWorkspacesWorkspaceIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/route'
 import { Route as ProtectedSettingsOrganizationRouteRouteImport } from './routes/_protected.settings/organization.route'
@@ -52,6 +53,7 @@ import { Route as ProtectedWorkspacesWorkspaceIdViewIdIndexRouteImport } from '.
 import { Route as ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices/$invoiceId'
 import { Route as ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRouteImport } from './routes/_protected.workspaces/$workspaceId/entities/$entityId'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdDocumentRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.document'
+import { Route as ProtectedChatWorkspacesWorkspaceIdNewRouteImport } from './routes/_protected.chat/workspaces/$workspaceId/new'
 import { Route as ProtectedChatWorkspacesWorkspaceIdThreadIdRouteImport } from './routes/_protected.chat/workspaces/$workspaceId/$threadId'
 
 const DevRoute = DevRouteImport.update({
@@ -168,6 +170,11 @@ const ProtectedContactsContactIdRoute =
     path: '/contacts/$contactId',
     getParentRoute: () => ProtectedRoute,
   } as any)
+const ProtectedChatNewRoute = ProtectedChatNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => ProtectedChatRouteRoute,
+} as any)
 const ProtectedChatThreadIdRoute = ProtectedChatThreadIdRouteImport.update({
   id: '/$threadId',
   path: '/$threadId',
@@ -293,6 +300,12 @@ const ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute =
     path: '/document',
     getParentRoute: () => ProtectedWorkspacesWorkspaceIdViewIdRouteRoute,
   } as any)
+const ProtectedChatWorkspacesWorkspaceIdNewRoute =
+  ProtectedChatWorkspacesWorkspaceIdNewRouteImport.update({
+    id: '/workspaces/$workspaceId/new',
+    path: '/workspaces/$workspaceId/new',
+    getParentRoute: () => ProtectedChatRouteRoute,
+  } as any)
 const ProtectedChatWorkspacesWorkspaceIdThreadIdRoute =
   ProtectedChatWorkspacesWorkspaceIdThreadIdRouteImport.update({
     id: '/workspaces/$workspaceId/$threadId',
@@ -316,6 +329,7 @@ export interface FileRoutesByFullPath {
   '/settings/organization': typeof ProtectedSettingsOrganizationRouteRouteWithChildren
   '/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
+  '/chat/new': typeof ProtectedChatNewRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
@@ -340,6 +354,7 @@ export interface FileRoutesByFullPath {
   '/settings/organization/': typeof ProtectedSettingsOrganizationIndexRoute
   '/workspaces/$workspaceId/': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
   '/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
+  '/chat/workspaces/$workspaceId/new': typeof ProtectedChatWorkspacesWorkspaceIdNewRoute
   '/workspaces/$workspaceId/$viewId/document': typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute
   '/workspaces/$workspaceId/entities/$entityId': typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute
   '/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
@@ -354,6 +369,7 @@ export interface FileRoutesByTo {
   '/auth/otp': typeof AuthOtpRoute
   '/auth': typeof AuthIndexRoute
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
+  '/chat/new': typeof ProtectedChatNewRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
@@ -377,6 +393,7 @@ export interface FileRoutesByTo {
   '/settings/organization': typeof ProtectedSettingsOrganizationIndexRoute
   '/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
   '/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
+  '/chat/workspaces/$workspaceId/new': typeof ProtectedChatWorkspacesWorkspaceIdNewRoute
   '/workspaces/$workspaceId/$viewId/document': typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute
   '/workspaces/$workspaceId/entities/$entityId': typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute
   '/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
@@ -400,6 +417,7 @@ export interface FileRoutesById {
   '/_protected/settings/organization': typeof ProtectedSettingsOrganizationRouteRouteWithChildren
   '/_protected/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
   '/_protected/chat/$threadId': typeof ProtectedChatThreadIdRoute
+  '/_protected/chat/new': typeof ProtectedChatNewRoute
   '/_protected/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/_protected/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/_protected/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
@@ -424,6 +442,7 @@ export interface FileRoutesById {
   '/_protected/settings/organization/': typeof ProtectedSettingsOrganizationIndexRoute
   '/_protected/workspaces/$workspaceId/': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
   '/_protected/chat/workspaces/$workspaceId/$threadId': typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
+  '/_protected/chat/workspaces/$workspaceId/new': typeof ProtectedChatWorkspacesWorkspaceIdNewRoute
   '/_protected/workspaces/$workspaceId/$viewId/document': typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute
   '/_protected/workspaces/$workspaceId/entities/$entityId': typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute
   '/_protected/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
@@ -447,6 +466,7 @@ export interface FileRouteTypes {
     | '/settings/organization'
     | '/workspaces/$workspaceId'
     | '/chat/$threadId'
+    | '/chat/new'
     | '/contacts/$contactId'
     | '/knowledge/clauses'
     | '/knowledge/templates'
@@ -471,6 +491,7 @@ export interface FileRouteTypes {
     | '/settings/organization/'
     | '/workspaces/$workspaceId/'
     | '/chat/workspaces/$workspaceId/$threadId'
+    | '/chat/workspaces/$workspaceId/new'
     | '/workspaces/$workspaceId/$viewId/document'
     | '/workspaces/$workspaceId/entities/$entityId'
     | '/workspaces/$workspaceId/invoices/$invoiceId'
@@ -485,6 +506,7 @@ export interface FileRouteTypes {
     | '/auth/otp'
     | '/auth'
     | '/chat/$threadId'
+    | '/chat/new'
     | '/contacts/$contactId'
     | '/knowledge/clauses'
     | '/knowledge/templates'
@@ -508,6 +530,7 @@ export interface FileRouteTypes {
     | '/settings/organization'
     | '/workspaces/$workspaceId'
     | '/chat/workspaces/$workspaceId/$threadId'
+    | '/chat/workspaces/$workspaceId/new'
     | '/workspaces/$workspaceId/$viewId/document'
     | '/workspaces/$workspaceId/entities/$entityId'
     | '/workspaces/$workspaceId/invoices/$invoiceId'
@@ -530,6 +553,7 @@ export interface FileRouteTypes {
     | '/_protected/settings/organization'
     | '/_protected/workspaces/$workspaceId'
     | '/_protected/chat/$threadId'
+    | '/_protected/chat/new'
     | '/_protected/contacts/$contactId'
     | '/_protected/knowledge/clauses'
     | '/_protected/knowledge/templates'
@@ -554,6 +578,7 @@ export interface FileRouteTypes {
     | '/_protected/settings/organization/'
     | '/_protected/workspaces/$workspaceId/'
     | '/_protected/chat/workspaces/$workspaceId/$threadId'
+    | '/_protected/chat/workspaces/$workspaceId/new'
     | '/_protected/workspaces/$workspaceId/$viewId/document'
     | '/_protected/workspaces/$workspaceId/entities/$entityId'
     | '/_protected/workspaces/$workspaceId/invoices/$invoiceId'
@@ -725,6 +750,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedContactsContactIdRouteImport
       parentRoute: typeof ProtectedRoute
     }
+    '/_protected/chat/new': {
+      id: '/_protected/chat/new'
+      path: '/new'
+      fullPath: '/chat/new'
+      preLoaderRoute: typeof ProtectedChatNewRouteImport
+      parentRoute: typeof ProtectedChatRouteRoute
+    }
     '/_protected/chat/$threadId': {
       id: '/_protected/chat/$threadId'
       path: '/$threadId'
@@ -872,6 +904,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRouteImport
       parentRoute: typeof ProtectedWorkspacesWorkspaceIdViewIdRouteRoute
     }
+    '/_protected/chat/workspaces/$workspaceId/new': {
+      id: '/_protected/chat/workspaces/$workspaceId/new'
+      path: '/workspaces/$workspaceId/new'
+      fullPath: '/chat/workspaces/$workspaceId/new'
+      preLoaderRoute: typeof ProtectedChatWorkspacesWorkspaceIdNewRouteImport
+      parentRoute: typeof ProtectedChatRouteRoute
+    }
     '/_protected/chat/workspaces/$workspaceId/$threadId': {
       id: '/_protected/chat/workspaces/$workspaceId/$threadId'
       path: '/workspaces/$workspaceId/$threadId'
@@ -902,15 +941,20 @@ const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
 
 interface ProtectedChatRouteRouteChildren {
   ProtectedChatThreadIdRoute: typeof ProtectedChatThreadIdRoute
+  ProtectedChatNewRoute: typeof ProtectedChatNewRoute
   ProtectedChatIndexRoute: typeof ProtectedChatIndexRoute
   ProtectedChatWorkspacesWorkspaceIdThreadIdRoute: typeof ProtectedChatWorkspacesWorkspaceIdThreadIdRoute
+  ProtectedChatWorkspacesWorkspaceIdNewRoute: typeof ProtectedChatWorkspacesWorkspaceIdNewRoute
 }
 
 const ProtectedChatRouteRouteChildren: ProtectedChatRouteRouteChildren = {
   ProtectedChatThreadIdRoute: ProtectedChatThreadIdRoute,
+  ProtectedChatNewRoute: ProtectedChatNewRoute,
   ProtectedChatIndexRoute: ProtectedChatIndexRoute,
   ProtectedChatWorkspacesWorkspaceIdThreadIdRoute:
     ProtectedChatWorkspacesWorkspaceIdThreadIdRoute,
+  ProtectedChatWorkspacesWorkspaceIdNewRoute:
+    ProtectedChatWorkspacesWorkspaceIdNewRoute,
 }
 
 const ProtectedChatRouteRouteWithChildren =

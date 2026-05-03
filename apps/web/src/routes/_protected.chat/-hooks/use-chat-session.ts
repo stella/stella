@@ -53,7 +53,8 @@ export const useChatSession = ({
   );
 
   const handleApprove = useCallback(
-    (id: string) => addToolApprovalResponse({ id, approved: true }),
+    (id: string, _toolName?: ApprovalToolName) =>
+      addToolApprovalResponse({ id, approved: true }),
     [addToolApprovalResponse],
   );
   const handleDeny = useCallback(
@@ -104,6 +105,7 @@ export const useChatSession = ({
     handleDeny,
     handleAskUserSubmit,
     handleAlwaysAllow,
+    addToolOutput,
     streamdownComponents,
     approvalPendingMessageId,
   };

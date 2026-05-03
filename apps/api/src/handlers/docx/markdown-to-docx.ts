@@ -53,6 +53,11 @@ type InlineFormat = {
   italics?: boolean;
 };
 
+type TextRunOptions = InlineFormat & {
+  font?: string;
+  style?: string;
+};
+
 type KnownTokenType = MarkedToken["type"];
 
 const hasTokenType = <TType extends KnownTokenType>(
@@ -99,6 +104,22 @@ const isTableToken = (token: Token): token is Tokens.Table =>
 const isCodeToken = (token: Token): token is Tokens.Code =>
   hasTokenType(token, "code") && typeof token.text === "string";
 
+const createTextRuns = (text: string, options: TextRunOptions = {}) => {
+  const lines = text.split("\n");
+  const runs: TextRun[] = [];
+
+  for (const [index, line] of lines.entries()) {
+    if (index > 0) {
+      runs.push(new TextRun({ break: 1 }));
+    }
+    if (line.length > 0) {
+      runs.push(new TextRun({ text: line, ...options }));
+    }
+  }
+
+  return runs;
+};
+
 /**
  * Parse inline tokens (bold, italic, code, links, text) into
  * an array of TextRun elements. The `format` parameter carries
@@ -134,8 +155,7 @@ const parseInlineTokens = (
 
     if (isCodespanToken(token)) {
       runs.push(
-        new TextRun({
-          text: token.text,
+        ...createTextRuns(token.text, {
           font: "Courier New",
           ...format,
         }),
@@ -145,8 +165,7 @@ const parseInlineTokens = (
 
     if (isLinkToken(token)) {
       runs.push(
-        new TextRun({
-          text: token.text,
+        ...createTextRuns(token.text, {
           style: "Hyperlink",
           ...format,
         }),
@@ -155,17 +174,12 @@ const parseInlineTokens = (
     }
 
     if (isTextToken(token)) {
-      runs.push(
-        new TextRun({
-          text: token.text,
-          ...format,
-        }),
-      );
+      runs.push(...createTextRuns(token.text, format));
       continue;
     }
 
     if ("text" in token && typeof token.text === "string") {
-      runs.push(new TextRun({ text: token.text, ...format }));
+      runs.push(...createTextRuns(token.text, format));
     }
   }
 

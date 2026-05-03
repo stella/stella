@@ -25,6 +25,28 @@ export type PdfTab = {
    *  itself is already centered in the main view, so the inspector
    *  tab can dedicate its content to file affordance cards. */
   metadataLane?: "closed" | "expanded" | undefined;
+  /**
+   * Active sub-view inside the tab. The inspector tab is a facet
+   * workbench: file preview, metadata fields, version history,
+   * and AI suggestions for the document live as switchable
+   * sub-views. Default behaviour:
+   *   - sidepeek mode (`metadataLane !== "expanded"`): defaults to
+   *     `"preview"` on first render so the user lands on the PDF/
+   *     DOCX they just opened.
+   *   - fullscreen mode (`metadataLane === "expanded"`): defaults
+   *     to `"metadata"` because the main view is already the
+   *     preview; `"preview"` is hidden from the facet bar there.
+   * Auto-flips to `"suggestions"` when the AI queues edits;
+   * remembered across switches so the user keeps their place.
+   */
+  facet?: "preview" | "metadata" | "versions" | "suggestions" | undefined;
+  /**
+   * Monotonic counter bumped whenever the facet auto-switches
+   * (e.g. AI queued new suggestions). The facet bar reads this to
+   * play a one-shot teaching pulse on the active chip so the user
+   * learns where the new content landed.
+   */
+  facetPulseSeq?: number | undefined;
 };
 
 export type TaskTab = {
@@ -94,6 +116,18 @@ type State = {
 
 type Actions = {
   openPdf: (tab: Omit<PdfTab, "type">) => void;
+  /**
+   * Open or update the inspector tab pinned to a given entity. If a
+   * PdfTab for this entity already exists, its `id` (the file
+   * field) and content fields are swapped in place — the user sees
+   * one continuous tab even when paging through the file's
+   * versions. If no such tab exists, behaves like `openPdf` and
+   * creates one. The canonical entrypoint for "show this file in
+   * the inspector"; routes that surface different versions of the
+   * same file (the document route, the version facet) call this so
+   * version switches don't multiply tabs.
+   */
+  openPdfForEntity: (tab: Omit<PdfTab, "type">) => void;
   openTask: (taskId: string, label?: string, isNew?: boolean) => void;
   /**
    * Open a chat tab. Without args, creates a new (local-only) chat
@@ -133,6 +167,17 @@ type Actions = {
     tabId: string,
     metadataLane: PdfTab["metadataLane"],
   ) => void;
+  /**
+   * Set the active facet for a fullscreen-bound file tab. Pass
+   * `pulse: true` when the change is programmatic (e.g. AI just
+   * queued suggestions) so the facet bar plays its teaching pulse;
+   * leave it false for plain user clicks.
+   */
+  setPdfFacet: (
+    tabId: string,
+    facet: NonNullable<PdfTab["facet"]>,
+    options?: { pulse?: boolean },
+  ) => void;
   updateLabel: (tabId: string, label: string) => void;
   updateTaskStatus: (taskId: string, status: string | null) => void;
   /** Set the minimized state directly. */
@@ -151,23 +196,56 @@ export const useInspectorStore = create<State & Actions>()(
 
     openPdf: (tab) =>
       set((state) => {
-        const existing = state.tabs.find((t) => t.id === tab.id);
-        if (!existing) {
+        // One inspector tab per file. Match by entity (canonical:
+        // any version of the same file) or by id (e.g. a tab the
+        // caller already knows). When a match is found we update
+        // it in place and drop any other pdf tab that would now
+        // collide on entityId or id, so the tab list never holds
+        // duplicates that would alias to the same React key.
+        const matchIndex = state.tabs.findIndex(
+          (t) =>
+            t.type === "pdf" &&
+            (t.entityId === tab.entityId || t.id === tab.id),
+        );
+        if (matchIndex === -1) {
           state.tabs.push({ type: "pdf", renderId: uuidv7(), ...tab });
-        } else if (existing.type === "pdf") {
-          existing.justificationFieldId = tab.justificationFieldId;
-          existing.propertyId = tab.propertyId;
-          existing.entityId = tab.entityId;
-          existing.workspaceId = tab.workspaceId;
-          existing.metadataLane = tab.metadataLane;
-          if (tab.label) {
-            existing.label = tab.label;
-          }
-          if (tab.mimeType !== undefined) {
-            existing.mimeType = tab.mimeType;
-          }
-          if (tab.pdfFileId !== undefined) {
-            existing.pdfFileId = tab.pdfFileId;
+        } else {
+          const existing = state.tabs[matchIndex];
+          if (existing && existing.type === "pdf") {
+            const previousId = existing.id;
+            const idChanged = previousId !== tab.id;
+            existing.id = tab.id;
+            existing.entityId = tab.entityId;
+            existing.workspaceId = tab.workspaceId;
+            existing.justificationFieldId = tab.justificationFieldId;
+            existing.propertyId = tab.propertyId;
+            existing.metadataLane = tab.metadataLane;
+            if (tab.label) {
+              existing.label = tab.label;
+            }
+            if (tab.mimeType !== undefined) {
+              existing.mimeType = tab.mimeType;
+            }
+            if (tab.pdfFileId !== undefined) {
+              existing.pdfFileId = tab.pdfFileId;
+            }
+            // Bump the render id only when the underlying field
+            // changed (version switch); a no-op re-open of the same
+            // field shouldn't remount the viewer subtree.
+            if (idChanged) {
+              existing.renderId = uuidv7();
+            }
+            state.tabs = state.tabs.filter(
+              (t, i) =>
+                i === matchIndex ||
+                !(
+                  t.type === "pdf" &&
+                  (t.entityId === tab.entityId || t.id === tab.id)
+                ),
+            );
+            if (state.activeId === previousId) {
+              state.activeId = tab.id;
+            }
           }
         }
         state.activeId = tab.id;
@@ -175,6 +253,58 @@ export const useInspectorStore = create<State & Actions>()(
         // Opening a tab while the inspector is collapsed should
         // bring it back into view; otherwise the user's click
         // appears to do nothing.
+        state.minimized = false;
+      }),
+
+    openPdfForEntity: (tab) =>
+      set((state) => {
+        // Same single-tab-per-file invariant as openPdf, but
+        // entity-first: callers (versions facet) hand us a fieldId
+        // for a different version of the same file and expect the
+        // existing tab to swap in place. Always bumps renderId so
+        // the viewer subtree picks up the new buffer.
+        const matchIndex = state.tabs.findIndex(
+          (t) =>
+            t.type === "pdf" &&
+            (t.entityId === tab.entityId || t.id === tab.id),
+        );
+        if (matchIndex === -1) {
+          state.tabs.push({ type: "pdf", renderId: uuidv7(), ...tab });
+          state.activeId = tab.id;
+        } else {
+          const existing = state.tabs[matchIndex];
+          if (existing && existing.type === "pdf") {
+            const previousId = existing.id;
+            existing.id = tab.id;
+            existing.entityId = tab.entityId;
+            existing.workspaceId = tab.workspaceId;
+            existing.justificationFieldId = tab.justificationFieldId;
+            existing.propertyId = tab.propertyId;
+            existing.metadataLane = tab.metadataLane;
+            if (tab.label) {
+              existing.label = tab.label;
+            }
+            if (tab.mimeType !== undefined) {
+              existing.mimeType = tab.mimeType;
+            }
+            if (tab.pdfFileId !== undefined) {
+              existing.pdfFileId = tab.pdfFileId;
+            }
+            existing.renderId = uuidv7();
+            state.tabs = state.tabs.filter(
+              (t, i) =>
+                i === matchIndex ||
+                !(
+                  t.type === "pdf" &&
+                  (t.entityId === tab.entityId || t.id === tab.id)
+                ),
+            );
+            if (state.activeId === previousId) {
+              state.activeId = tab.id;
+            }
+          }
+        }
+        state.activationSeq += 1;
         state.minimized = false;
       }),
 
@@ -325,6 +455,22 @@ export const useInspectorStore = create<State & Actions>()(
         const tab = state.tabs.find((t) => t.id === tabId);
         if (tab?.type === "pdf") {
           tab.metadataLane = metadataLane;
+        }
+      }),
+
+    setPdfFacet: (tabId, facet, options) =>
+      set((state) => {
+        const tab = state.tabs.find((t) => t.id === tabId);
+        if (tab?.type !== "pdf") {
+          return;
+        }
+        tab.facet = facet;
+        if (options?.pulse) {
+          tab.facetPulseSeq = (tab.facetPulseSeq ?? 0) + 1;
+          // A programmatic switch (AI queued new suggestions) is
+          // also a signal the user should see — un-minimize the
+          // inspector so the pulse isn't hidden behind the rail.
+          state.minimized = false;
         }
       }),
 

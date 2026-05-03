@@ -125,6 +125,9 @@ export {
   rejectChange,
   acceptAllChanges,
   rejectAllChanges,
+  acceptAIEditRevision,
+  rejectAIEditRevision,
+  findAIEditRevisionRange,
   findNextChange,
   findPreviousChange,
 } from "./comments";

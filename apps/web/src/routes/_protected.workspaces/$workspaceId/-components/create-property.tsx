@@ -237,7 +237,7 @@ export const CreateProperty = ({
         <DialogTrigger
           render={
             <Button
-              className="text-muted-foreground hover:text-foreground hover:bg-accent h-full w-full justify-start gap-2 rounded-none border-0 px-3 font-normal before:rounded-none"
+              className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full w-full flex-1 justify-start gap-2 rounded-none border-0 px-3 font-normal before:rounded-none"
               type="button"
               variant="ghost"
             />

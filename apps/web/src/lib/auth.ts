@@ -41,7 +41,9 @@ const authClientPlugins = [
   organizationClient({ ac, roles }),
   inferAdditionalFields({
     user: {
+      preferredName: { type: "string", required: false },
       timezoneId: { type: "string" },
+      wordEditShortcut: { type: "string", required: false },
     },
   }),
   defineBetterAuthClientPlugin(oauthProviderClient()),

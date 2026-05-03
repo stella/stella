@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import { markdownToDocx } from "./markdown-to-docx";
+import { DEFAULT_STYLE_MAPPING } from "./style-guide";
 
 const TEMPLATE_PATH = new URL("fixtures/test-template.docx", import.meta.url)
   .pathname;
@@ -79,6 +80,18 @@ describe("markdownToDocx", () => {
     expect(docXml).toContain("A3rdLevelNumbering");
   });
 
+  test("fallback styles define every default style mapping target", async () => {
+    const buffer = await markdownToDocx(SAMPLE_MARKDOWN);
+    const zip = await JSZip.loadAsync(buffer);
+
+    const stylesXml = await zip.file("word/styles.xml")?.async("string");
+    expect(stylesXml).toBeDefined();
+
+    for (const styleId of new Set(Object.values(DEFAULT_STYLE_MAPPING))) {
+      expect(stylesXml).toContain(`w:styleId="${styleId}"`);
+    }
+  });
+
   test("bullets use text prefix, not numbering", async () => {
     const buffer = await markdownToDocx(SAMPLE_MARKDOWN);
     const zip = await JSZip.loadAsync(buffer);
@@ -103,6 +116,15 @@ describe("markdownToDocx", () => {
     const docXml = await zip.file("word/document.xml")?.async("string");
     expect(docXml).toContain("TitleNoSubheading");
     expect(docXml).toContain("Just a Title");
+  });
+
+  test("preserves soft line breaks inside markdown paragraphs", async () => {
+    const buffer = await markdownToDocx("Seller\nrepresented by Jane Doe");
+    const zip = await JSZip.loadAsync(buffer);
+
+    const docXml = await zip.file("word/document.xml")?.async("string");
+    expect(docXml).toBeDefined();
+    expect(docXml).toContain("<w:br");
   });
 
   test("with template: injects all custom styles", async () => {

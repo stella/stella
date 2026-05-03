@@ -134,16 +134,30 @@ export const ChatThreadPage = ({
     <div className="flex w-full max-w-2xl flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between gap-2 px-4 py-2">
         <div className="flex min-w-0 items-center gap-2">
-          <Link
-            className={buttonVariants({
-              variant: "ghost",
-              size: "sm",
-            })}
-            to="/chat"
-          >
-            <PlusIcon />
-            {t("chat.newChat")}
-          </Link>
+          {threadRef.scope === "workspace" ? (
+            <Link
+              className={buttonVariants({
+                variant: "ghost",
+                size: "sm",
+              })}
+              params={{ workspaceId: threadRef.workspaceId }}
+              to="/chat/workspaces/$workspaceId/new"
+            >
+              <PlusIcon />
+              {t("chat.newChat")}
+            </Link>
+          ) : (
+            <Link
+              className={buttonVariants({
+                variant: "ghost",
+                size: "sm",
+              })}
+              to="/chat/new"
+            >
+              <PlusIcon />
+              {t("chat.newChat")}
+            </Link>
+          )}
           {contextMatterIds !== null && (
             <ChatMatterPicker
               matterIds={contextMatterIds}
@@ -186,6 +200,7 @@ export const ChatThreadPage = ({
 
       <div className="p-4">
         <ChatInputSurface
+          autoFocus
           controller={controller}
           isGenerating={isGenerating}
           onStop={() => {

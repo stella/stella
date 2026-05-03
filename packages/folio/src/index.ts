@@ -36,6 +36,27 @@ export {
   type ApplyResult,
 } from "./core/ai-suggestions/apply";
 export {
+  applyFolioAIEditOperations,
+  createFolioAIEditSnapshot,
+  diffWordSegments,
+  hashFolioAIBlockText,
+  normalizeFolioAIBlockText,
+  type WordDiffSegment,
+  type FolioAIBlock,
+  type FolioAIBlockAnchor,
+  type FolioAIBlockKind,
+  type FolioAIComment,
+  type FolioAIEditAppliedOperation,
+  type FolioAIEditApplyMode,
+  type FolioAIEditApplyResult,
+  type FolioAIEditOperation,
+  type FolioAIEditReviewMeta,
+  type FolioAIEditSeverity,
+  type FolioAIEditSkipReason,
+  type FolioAIEditSkippedOperation,
+  type FolioAIEditSnapshot,
+} from "./core/ai-edits";
+export {
   resolveSuggestionAnchor,
   isSuggestionStale,
   type ResolvedAnchor,

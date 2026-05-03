@@ -94,7 +94,10 @@ import {
 // Layout painter
 import { LayoutPainter } from "../core/layout-painter";
 import type { BlockLookup } from "../core/layout-painter";
-import { renderPages } from "../core/layout-painter/renderPage";
+import {
+  findPageShellForPmPos,
+  renderPages,
+} from "../core/layout-painter/renderPage";
 import type {
   RenderPageOptions,
   HeaderFooterContent,
@@ -3157,18 +3160,110 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       [],
     );
 
-    /** Scroll visible pages to a ProseMirror position */
+    /** Scroll visible pages to a ProseMirror position. */
     const scrollToPositionImpl = useCallback((pmPos: number) => {
       const pageContainer = pagesContainerRef.current;
       if (!pageContainer) {
         return;
       }
-      const targetEl = pageContainer.querySelector(
+      // Phase 1: locate the target via per-run DOM if it's already
+      // rendered, otherwise via the page shell (always present
+      // under virtualization). The shell-based path was added to
+      // fix the "many clicks to arrive" bug — a per-run query on a
+      // virtualized doc only sees runs in the currently-rendered
+      // buffer, so each click stepped one buffer-width forward
+      // instead of jumping straight to the target.
+      const exact: HTMLElement | null = pageContainer.querySelector(
         `[data-pm-start="${pmPos}"]`,
       );
-      if (targetEl) {
-        targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (exact) {
+        exact.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
       }
+
+      // Walk all currently-rendered runs to see if pmPos falls
+      // inside one of them (block-node positions never match
+      // exactly but usually live inside a known run).
+      let runMatch: HTMLElement | null = null;
+      for (const el of pageContainer.querySelectorAll<HTMLElement>(
+        "[data-pm-start]",
+      )) {
+        const start = Number(el.dataset["pmStart"]);
+        if (Number.isNaN(start)) {
+          continue;
+        }
+        const endAttr = el.dataset["pmEnd"];
+        const end = endAttr === undefined ? start : Number(endAttr);
+        if (start <= pmPos && pmPos <= end) {
+          runMatch = el;
+          break;
+        }
+      }
+      if (runMatch) {
+        runMatch.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+
+      // Target lives outside the rendered buffer. Scroll to its
+      // page shell (which exists with correct dimensions even when
+      // empty), then refine to the exact run once the
+      // IntersectionObserver populates the page content.
+      //
+      // TODO: when the AI review session opens, pre-warm the page
+      // shells that contain pending suggestions (one-shot
+      // populate of ~30 pages instead of 200). Lets this scroll
+      // become single-phase again — no rAF refine — and makes
+      // navigation feel instant for long documents.
+      const shellHit = findPageShellForPmPos(pageContainer, pmPos);
+      if (!shellHit) {
+        return;
+      }
+      const { element: shell } = shellHit;
+      shell.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      let attempts = 0;
+      const refine = () => {
+        attempts++;
+        const exactInShell = shell.querySelector<HTMLElement>(
+          `[data-pm-start="${pmPos}"]`,
+        );
+        if (exactInShell) {
+          exactInShell.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+        let bestEl: HTMLElement | null = null;
+        let bestStart = Number.NEGATIVE_INFINITY;
+        for (const el of shell.querySelectorAll<HTMLElement>(
+          "[data-pm-start]",
+        )) {
+          const start = Number(el.dataset["pmStart"]);
+          if (Number.isNaN(start)) {
+            continue;
+          }
+          const endAttr = el.dataset["pmEnd"];
+          const end = endAttr === undefined ? start : Number(endAttr);
+          if (start <= pmPos && pmPos <= end) {
+            bestEl = el;
+            break;
+          }
+          if (start <= pmPos && start > bestStart) {
+            bestStart = start;
+            bestEl = el;
+          }
+        }
+        if (bestEl) {
+          bestEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+        // IntersectionObserver populates on the next tick; give it
+        // a few frames before giving up. ~20 frames covers slow
+        // initial paint on long pages without spinning indefinitely
+        // if the page genuinely has no run at this position.
+        if (attempts < 20) {
+          requestAnimationFrame(refine);
+        }
+      };
+      requestAnimationFrame(refine);
     }, []);
 
     const focusHiddenEditor = useCallback(() => {

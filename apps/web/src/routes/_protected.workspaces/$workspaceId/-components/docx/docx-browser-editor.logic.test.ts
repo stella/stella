@@ -190,10 +190,9 @@ describe("DOCX unsupported edit guard", () => {
 });
 
 describe("DOCX browser editor route selection", () => {
-  test("keeps the shared DOCX browser editor mounted outside edit mode", () => {
+  test("uses the DOCX browser editor for any DOCX with a file property", () => {
     expect(
       shouldUseDocxBrowserEditor({
-        isCurrentVersionFile: true,
         isDocxFile: true,
         hasFilePropertyId: true,
         isComparing: false,
@@ -201,21 +200,29 @@ describe("DOCX browser editor route selection", () => {
     ).toBe(true);
   });
 
-  test("does not use the editable DOCX browser for old versions or comparisons", () => {
+  test("falls back when comparing — redline overlay is bbox-driven", () => {
     expect(
       shouldUseDocxBrowserEditor({
-        isCurrentVersionFile: false,
         isDocxFile: true,
+        hasFilePropertyId: true,
+        isComparing: true,
+      }),
+    ).toBe(false);
+  });
+
+  test("falls back for non-DOCX or files without a file property", () => {
+    expect(
+      shouldUseDocxBrowserEditor({
+        isDocxFile: false,
         hasFilePropertyId: true,
         isComparing: false,
       }),
     ).toBe(false);
     expect(
       shouldUseDocxBrowserEditor({
-        isCurrentVersionFile: true,
         isDocxFile: true,
-        hasFilePropertyId: true,
-        isComparing: true,
+        hasFilePropertyId: false,
+        isComparing: false,
       }),
     ).toBe(false);
   });

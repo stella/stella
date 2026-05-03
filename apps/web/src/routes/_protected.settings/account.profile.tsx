@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+
+import { Button } from "@stll/ui/components/button";
 import {
   Frame,
   FrameDescription,
@@ -5,6 +8,7 @@ import {
   FramePanel,
   FrameTitle,
 } from "@stll/ui/components/frame";
+import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import {
   Select,
@@ -45,6 +49,17 @@ function ProfilePage() {
   const { data: session } = useSuspenseQuery(sessionOptions);
   const storedTz = session?.user.timezoneId ?? "UTC";
   const currentTz = isCommonTimezone(storedTz) ? storedTz : "UTC";
+  const [preferredName, setPreferredName] = useState(
+    () => session?.user.preferredName ?? "",
+  );
+  const [wordEditShortcut, setWordEditShortcut] = useState(
+    () => session?.user.wordEditShortcut ?? "",
+  );
+
+  useEffect(() => {
+    setPreferredName(session?.user.preferredName ?? "");
+    setWordEditShortcut(session?.user.wordEditShortcut ?? "");
+  }, [session?.user.preferredName, session?.user.wordEditShortcut]);
 
   const updateTimezone = useMutation({
     mutationFn: async (timezoneId: string) => {
@@ -56,6 +71,33 @@ function ProfilePage() {
     onSuccess: async () => {
       toastManager.add({
         title: t("settings.account.timezoneSaved"),
+        type: "success",
+      });
+      await queryClient.invalidateQueries({
+        queryKey: sessionOptions.queryKey,
+      });
+    },
+    onError: () => {
+      toastManager.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+    },
+  });
+
+  const updateWordEditIdentity = useMutation({
+    mutationFn: async () => {
+      const { error } = await authClient.updateUser({
+        preferredName: preferredName.trim(),
+        wordEditShortcut: wordEditShortcut.trim(),
+      });
+      if (error) {
+        throw toAuthClientError(error);
+      }
+    },
+    onSuccess: async () => {
+      toastManager.add({
+        title: t("settings.account.wordEditIdentitySaved"),
         type: "success",
       });
       await queryClient.invalidateQueries({
@@ -109,6 +151,51 @@ function ProfilePage() {
               </SelectPopup>
             </Select>
           </div>
+          <form
+            className="border-border flex flex-col gap-4 border-t p-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              updateWordEditIdentity.mutate();
+            }}
+          >
+            <div className="flex max-w-lg flex-col gap-2">
+              <Label htmlFor="preferred-name-input">
+                {t("settings.account.preferredName")}
+              </Label>
+              <p className="text-muted-foreground text-sm">
+                {t("settings.account.preferredNameDescription")}
+              </p>
+              <Input
+                id="preferred-name-input"
+                maxLength={120}
+                placeholder={t("settings.account.preferredNamePlaceholder")}
+                value={preferredName}
+                onChange={(event) => setPreferredName(event.target.value)}
+              />
+            </div>
+            <div className="flex max-w-xs flex-col gap-2">
+              <Label htmlFor="word-edit-shortcut-input">
+                {t("settings.account.wordEditShortcut")}
+              </Label>
+              <p className="text-muted-foreground text-sm">
+                {t("settings.account.wordEditShortcutDescription")}
+              </p>
+              <Input
+                id="word-edit-shortcut-input"
+                maxLength={16}
+                placeholder={t("settings.account.wordEditShortcutPlaceholder")}
+                value={wordEditShortcut}
+                onChange={(event) => setWordEditShortcut(event.target.value)}
+              />
+            </div>
+            <Button
+              className="w-fit"
+              disabled={updateWordEditIdentity.isPending}
+              type="submit"
+            >
+              {t("common.save")}
+            </Button>
+          </form>
         </FramePanel>
       </Frame>
 

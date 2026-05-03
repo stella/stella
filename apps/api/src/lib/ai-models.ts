@@ -53,15 +53,15 @@ export type AIProvider =
 const DEFAULT_MODELS = {
   google: {
     fast: "gemini-3.1-flash-lite-preview",
-    chat: "gemini-3-flash-preview",
+    chat: "gemini-3.1-flash-lite-preview",
     reasoning: "gemini-3.1-pro-preview",
-    pdf: "gemini-3-flash-preview",
+    pdf: "gemini-3.1-flash-lite-preview",
   },
   openrouter: {
     fast: "google/gemini-3.1-flash-lite-preview",
-    chat: "google/gemini-3-flash-preview",
+    chat: "google/gemini-3.1-flash-lite-preview",
     reasoning: "google/gemini-3.1-pro-preview",
-    pdf: "google/gemini-3-flash-preview",
+    pdf: "google/gemini-3.1-flash-lite-preview",
   },
   openai: {
     fast: "gpt-5.4-nano",
@@ -104,18 +104,18 @@ export const supportsRegion = (provider: AIProvider): boolean =>
 /**
  * Sampling temperature per logical role.
  *
- * Legal work prioritizes determinism over creativity:
- *   fast/reasoning/pdf — extractive or analytical, set to 0
- *     so the same input yields the same output
- *   chat — conversational with tool use; 0.3 keeps responses
- *     grounded but not robotic
+ * Legal work prioritizes determinism over creativity. Every role
+ * is pinned to 0 so the same input yields the same output —
+ * critical for tool-call paths where stray sampling becomes
+ * malformed structured output (HTML inside a plain-text edit
+ * payload, fabricated field names, etc.).
  *
  * Provider defaults (1.0 for OpenAI/Anthropic) are too high
  * for our use cases.
  */
 const TEMPERATURE_PER_ROLE = {
   fast: 0,
-  chat: 0.3,
+  chat: 0,
   reasoning: 0,
   pdf: 0,
 } as const satisfies Record<ModelRole, number>;

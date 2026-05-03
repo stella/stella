@@ -2,6 +2,7 @@ import type React from "react";
 import { Children } from "react";
 
 import { cn } from "@stll/ui/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   FileTextIcon,
@@ -20,6 +21,7 @@ import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME } from "@/lib/consts";
 import { getMatterColor } from "@/lib/matter-colors";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 const DECISION_HASH_PREFIX = "#stella-decision=";
 const ENTITY_REF_HASH_PREFIX = "#stella-entity-ref=";
@@ -109,8 +111,57 @@ const getEntityDisplayLabel = (label: React.ReactNode): React.ReactNode => {
   return stripDocumentExtension(text);
 };
 
-const EntityChipIcon = ({ label }: { label: React.ReactNode }) => {
+/**
+ * Read an entity's first file-field mime type from React Query
+ * cache. The mention link already carries the entity ref, so we
+ * never need the AI to encode the file extension in the visible
+ * label — the right icon comes from the resolved entity itself.
+ */
+const useResolvedEntityMime = ({
+  workspaceId,
+  entityId,
+}: {
+  workspaceId: string | undefined;
+  entityId: string | undefined;
+}): string | null => {
+  // staleTime: Infinity — first render fires one fetch per entity
+  // ref; subsequent renders (and the click handler) hit the same
+  // cache entry. Keeps mention rendering cheap even with many
+  // mentions in a thread.
+  const { data } = useQuery({
+    ...(workspaceId && entityId
+      ? entityOptions(workspaceId, entityId)
+      : { queryKey: ["mention-entity-disabled"] as const }),
+    enabled: workspaceId !== undefined && entityId !== undefined,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  if (!data?.fields) {
+    return null;
+  }
+  for (const field of data.fields) {
+    if (field.content.type === "file" && field.content.mimeType.length > 0) {
+      return field.content.mimeType;
+    }
+  }
+  return null;
+};
+
+const EntityChipIcon = ({
+  label,
+  workspaceId,
+  entityId,
+}: {
+  label: React.ReactNode;
+  workspaceId?: string | undefined;
+  entityId?: string | undefined;
+}) => {
+  const resolvedMime = useResolvedEntityMime({ workspaceId, entityId });
   const text = getPlainText(label);
+
+  if (resolvedMime) {
+    return <DocumentIcon className="size-3 shrink-0" mimeType={resolvedMime} />;
+  }
+
   if (!text) {
     return <FileTextIcon className="size-3 shrink-0" />;
   }
@@ -176,8 +227,23 @@ const MentionChip = ({
     href.startsWith(WORKSPACE_REF_HASH_PREFIX)
   ) {
     const isEntity = href.startsWith(ENTITY_REF_HASH_PREFIX);
+    const rawId = isEntity
+      ? href.slice(ENTITY_REF_HASH_PREFIX.length)
+      : href.slice(WORKSPACE_REF_HASH_PREFIX.length);
+    const separator = rawId.indexOf(":");
+    const refWorkspaceId =
+      isEntity && separator !== -1 ? rawId.slice(0, separator) : workspaceId;
+    const refEntityId = isEntity
+      ? separator !== -1
+        ? rawId.slice(separator + 1)
+        : rawId
+      : undefined;
     const icon = isEntity ? (
-      <EntityChipIcon label={label} />
+      <EntityChipIcon
+        entityId={refEntityId}
+        label={label}
+        workspaceId={refWorkspaceId}
+      />
     ) : (
       <LayersIcon className="size-3 shrink-0" />
     );
@@ -206,7 +272,11 @@ const MentionChip = ({
   const textLabel = typeof label === "string" ? label : "Reference";
   const icon =
     category === "entity" ? (
-      <EntityChipIcon label={label} />
+      <EntityChipIcon
+        entityId={id}
+        label={label}
+        workspaceId={mentionWorkspaceId}
+      />
     ) : (
       (() => {
         const Icon = CATEGORY_ICON[category];

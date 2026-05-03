@@ -47,9 +47,12 @@ import {
   ArrowUpIcon,
   CheckIcon,
   ChevronDownIcon,
+  LoaderCircleIcon,
   SquareIcon,
+  SquarePenIcon,
 } from "lucide-react";
 import type { EditorView } from "prosemirror-view";
+import { useTranslations } from "use-intl";
 
 import {
   Message,
@@ -303,8 +306,15 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
 
   // ---- decoration push (DOCX only) ----------------------------------------
 
+  // The decoration plugin has at most one writer at a time. The
+  // active-docx-edit flow (apply-active-docx-edits tool → review
+  // store) pushes its own suggestion list from `DocxBrowserEditor`;
+  // dispatching an empty list here would race with that and clear
+  // its decorations. Skip when we have nothing to add — the review
+  // store path handles the cleared/transitioning case via its
+  // own effect.
   useEffect(() => {
-    if (!editorView) {
+    if (!editorView || allSuggestions.length === 0) {
       return;
     }
     const meta = setAISuggestionsMeta(allSuggestions);
@@ -1006,6 +1016,8 @@ type PromptBarProps = {
   layout: FileAIChatLayout;
   status: FileAIChatStatus;
   onSubmit: (input: { prompt: string }) => void;
+  onNewThread?: (() => void) | undefined;
+  newThreadLabel?: string | undefined;
   /**
    * Optional cancel callback. When provided AND `status` is
    * `"generating"`, the send button morphs into a stop button
@@ -1034,6 +1046,24 @@ type PromptBarProps = {
    */
   editorController: ChatEditorController;
   emptyPlaceholder?: ReactNode | undefined;
+  /**
+   * Monotonic counter from the review store. When it increments
+   * the bar plays a one-shot glow — fired by the inspector when
+   * the user clicks the AI-suggestions chip, so the producing
+   * surface (this bar) lights up briefly to confirm the panel is
+   * fed from this chat.
+   */
+  attentionPulseSeq?: number | undefined;
+  /**
+   * Whether the bar is allowed to send. False when we know the
+   * downstream tool can't be honoured — currently set by the
+   * file-chat overlay while the Folio PM view hasn't initialised
+   * (no snapshot to attach to apply-active-docx-edits). The send
+   * button is disabled and a "Loading editor…" hint replaces the
+   * empty-state placeholder so the user doesn't fire a message
+   * into a dead context.
+   */
+  sendDisabledReason?: "editor-loading" | undefined;
 };
 
 export function PromptBar(props: PromptBarProps) {
@@ -1045,11 +1075,16 @@ export function PromptBar(props: PromptBarProps) {
     showThreadToggle,
     onSubmit,
     onStop,
+    onNewThread,
+    newThreadLabel,
     onTogglePanel,
     editorController,
     emptyPlaceholder,
+    attentionPulseSeq,
+    sendDisabledReason,
   } = props;
 
+  const t = useTranslations();
   const { editor, canSubmit, isEmpty, submit, setSubmitHandler } =
     editorController;
 
@@ -1059,17 +1094,41 @@ export function PromptBar(props: PromptBarProps) {
   // streaming, so users don't have to hunt a separate floating
   // control (and the bar stays the single point of intent).
   const showStop = isGenerating && onStop !== undefined;
+  const isSendBlocked = sendDisabledReason !== undefined;
+
+  // Glow on attention pulse — kicked from the inspector when the
+  // user clicks the AI-suggestions chip so they see the bar light
+  // up and connect "the suggestions came from this chat". One-shot
+  // 1.4s ring; restart when the seq advances.
+  const [attention, setAttention] = useState(false);
+  const lastAttentionSeq = useRef(attentionPulseSeq);
+  useEffect(() => {
+    if (
+      attentionPulseSeq === undefined ||
+      attentionPulseSeq === lastAttentionSeq.current
+    ) {
+      return undefined;
+    }
+    lastAttentionSeq.current = attentionPulseSeq;
+    setAttention(true);
+    const timer = window.setTimeout(() => {
+      setAttention(false);
+    }, 1400);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [attentionPulseSeq]);
 
   // Wrap controller.submit so the host's `onSubmit` is the only
   // outbound channel; the editor's draft (HTML) becomes the prompt.
   const submitDraft = useCallback(async () => {
-    if (busy) {
+    if (busy || isSendBlocked) {
       return;
     }
     await submit((draft) => {
       onSubmit({ prompt: draft.html });
     });
-  }, [busy, onSubmit, submit]);
+  }, [busy, isSendBlocked, onSubmit, submit]);
 
   // Register Enter handler — TipTap's keymap delegates Enter to
   // the `setSubmitHandler` registered here. Without this, Enter
@@ -1085,11 +1144,21 @@ export function PromptBar(props: PromptBarProps) {
     <div
       className={cn(
         // ── Shared bar look — IDENTICAL in floating and standalone.
-        "group/bar bg-background/75 flex items-end gap-1 rounded-2xl border backdrop-blur-xl backdrop-saturate-150 transition-shadow",
+        "group/bar bg-background/75 relative flex items-end gap-1 rounded-2xl border backdrop-blur-xl backdrop-saturate-150 transition-[box-shadow,border-color]",
         "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
         "after:pointer-events-none after:absolute after:-inset-4 after:-z-10 after:rounded-2xl after:bg-[radial-gradient(ellipse_at_center,var(--background)_0%,transparent_70%)] after:opacity-50",
         "focus-within:border-foreground/30",
         "w-[min(560px,calc(100%-2rem))] py-1 ps-1.5 pe-1",
+        // While the model is generating or applying, signal the
+        // wait clearly: a soft primary ring + the inline spinner
+        // overlay below. Without this the bar looks identical to
+        // its idle state and users don't know we're working.
+        busy && "border-primary/40 ring-primary/25 ring-2",
+        // Attention pulse — kicked by the inspector chip click to
+        // close the panel→producer loop visually. Stronger ring
+        // than the busy state because it's transient and meant to
+        // catch the eye, not communicate ongoing work.
+        attention && "border-primary ring-primary/40 ring-4",
         // ── Layout-specific positioning ONLY.
         layout === "floating"
           ? "absolute start-1/2 bottom-8 z-50 -translate-x-1/2"
@@ -1097,13 +1166,35 @@ export function PromptBar(props: PromptBarProps) {
       )}
       role="toolbar"
       aria-label="AI prompt"
+      aria-busy={busy}
     >
       <div className="relative flex min-h-8 min-w-0 flex-1 items-center gap-1.5 px-1.5">
-        {isEmpty && emptyPlaceholder !== undefined && (
-          <div className="pointer-events-none absolute inset-x-1.5 top-1/2 z-10 min-w-0 -translate-y-1/2">
-            {emptyPlaceholder}
+        {isEmpty && busy && (
+          <div className="text-muted-foreground pointer-events-none absolute inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2 text-[13px]">
+            <LoaderCircleIcon
+              aria-hidden="true"
+              className="size-3.5 shrink-0 animate-spin"
+            />
+            <span className="truncate">{t("chat.thinking")}</span>
           </div>
         )}
+        {isEmpty && !busy && isSendBlocked && (
+          <div className="text-muted-foreground pointer-events-none absolute inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2 text-[13px]">
+            <LoaderCircleIcon
+              aria-hidden="true"
+              className="size-3.5 shrink-0 animate-spin"
+            />
+            <span className="truncate">{t("chat.editorLoading")}</span>
+          </div>
+        )}
+        {isEmpty &&
+          !busy &&
+          !isSendBlocked &&
+          emptyPlaceholder !== undefined && (
+            <div className="pointer-events-none absolute inset-x-1.5 top-1/2 z-10 min-w-0 -translate-y-1/2">
+              {emptyPlaceholder}
+            </div>
+          )}
         <EditorContent
           // Height is content-driven: a single line of 13px text
           // is ~20px tall (`leading-5`) and the cell's `min-h-8`
@@ -1122,13 +1213,34 @@ export function PromptBar(props: PromptBarProps) {
         />
       </div>
 
+      {onNewThread && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                aria-label={newThreadLabel}
+                className="rounded-full"
+                disabled={busy}
+                onClick={onNewThread}
+                size="icon-sm"
+                type="button"
+                variant="ghost"
+              >
+                <SquarePenIcon aria-hidden="true" className="size-3.5" />
+              </Button>
+            }
+          />
+          <TooltipPopup side="top">{newThreadLabel}</TooltipPopup>
+        </Tooltip>
+      )}
+
       <Tooltip>
         <TooltipTrigger
           render={
             <Button
               aria-label={showStop ? "Stop response" : "Send prompt"}
               className="rounded-full"
-              disabled={showStop ? false : busy || !canSubmit}
+              disabled={showStop ? false : busy || !canSubmit || isSendBlocked}
               onClick={() => {
                 if (showStop) {
                   onStop?.();
@@ -1215,6 +1327,7 @@ type ThreadPanelProps = {
 };
 
 function ThreadPanel(props: ThreadPanelProps) {
+  const t = useTranslations();
   const {
     layout,
     messages,
@@ -1312,8 +1425,12 @@ function ThreadPanel(props: ThreadPanelProps) {
             "min-h-0 flex-1",
       )}
     >
-      {/* Top-edge resize strip — floating only. In standalone the
-          parent (sidepeek tab) decides the height. */}
+      {/* Top-edge resize handle — floating only. Sits a few px
+       *  ABOVE the card's top border so it reads as a separate
+       *  affordance, not as part of the card chrome. Same idiom
+       *  the table uses for column-resize: thin pill that's
+       *  visible at rest, brightens to primary on hover/drag.
+       *  Double-click resets to default height. */}
       {isFloating && (
         <div
           role="separator"
@@ -1321,12 +1438,9 @@ function ThreadPanel(props: ThreadPanelProps) {
           aria-label="Resize thread"
           onPointerDown={handleResizeStart}
           onDoubleClick={() => onResize(null)}
-          className="hover:bg-border/40 group absolute inset-x-0 top-0 z-20 flex h-1.5 cursor-ns-resize items-center justify-center transition-colors"
+          className="group absolute inset-x-0 -top-3 z-20 flex h-3 cursor-ns-resize touch-none items-center justify-center select-none"
         >
-          <span
-            className="bg-border h-0.5 w-8 rounded-full opacity-50 transition-opacity group-hover:opacity-100"
-            aria-hidden="true"
-          />
+          <div className="bg-muted-foreground/50 group-hover:bg-primary h-1 w-12 rounded-full transition-colors" />
         </div>
       )}
 
@@ -1336,10 +1450,10 @@ function ThreadPanel(props: ThreadPanelProps) {
           className="border-border/40 bg-background/85 flex flex-col gap-1.5 border-b px-3 py-2 backdrop-blur-md"
         >
           <span className="text-[12px] font-medium">
-            Apply edits with tracked changes?
+            {t("chat.applyMode.title")}
           </span>
           <span className="text-muted-foreground text-[11px]">
-            Word stores who made each change. We'll remember your choice.
+            {t("chat.applyMode.description")}
           </span>
           <div className="mt-0.5 flex items-center gap-1.5">
             <Button
@@ -1348,7 +1462,7 @@ function ThreadPanel(props: ThreadPanelProps) {
               className="rounded-md"
               onClick={() => onResolveFirstAccept("tracked-changes")}
             >
-              Yes, tracked
+              {t("chat.applyMode.tracked")}
             </Button>
             <Button
               type="button"
@@ -1357,7 +1471,7 @@ function ThreadPanel(props: ThreadPanelProps) {
               className="rounded-md"
               onClick={() => onResolveFirstAccept("direct")}
             >
-              No, apply directly
+              {t("chat.applyMode.direct")}
             </Button>
           </div>
         </div>

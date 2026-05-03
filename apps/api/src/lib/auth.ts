@@ -51,6 +51,8 @@ const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
 
 const VERIFY_EMAIL_PATH = "/email-otp/verify-email";
+const PREFERRED_NAME_MAX_LENGTH = 120;
+const WORD_EDIT_SHORTCUT_MAX_LENGTH = 16;
 
 /** Session lifetime in seconds (7 days). */
 const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
@@ -93,6 +95,62 @@ const validateTimezoneId = (timezoneId: unknown): void => {
   }
 };
 
+const normalizeOptionalPreference = (
+  value: unknown,
+  {
+    fieldName,
+    maxLength,
+  }: {
+    fieldName: string;
+    maxLength: number;
+  },
+): string | null | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw new APIError("BAD_REQUEST", {
+      message: `${fieldName} must be a string`,
+    });
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length > maxLength) {
+    throw new APIError("BAD_REQUEST", {
+      message: `${fieldName} is too long`,
+    });
+  }
+
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const normalizeUserPreferences = <TUser extends Record<string, unknown>>(
+  user: TUser,
+) => {
+  const preferredName = normalizeOptionalPreference(user["preferredName"], {
+    fieldName: "Preferred name",
+    maxLength: PREFERRED_NAME_MAX_LENGTH,
+  });
+  const wordEditShortcut = normalizeOptionalPreference(
+    user["wordEditShortcut"],
+    {
+      fieldName: "Word edit shortcut",
+      maxLength: WORD_EDIT_SHORTCUT_MAX_LENGTH,
+    },
+  );
+
+  return {
+    ...user,
+    ...(preferredName !== undefined ? { preferredName } : {}),
+    ...(wordEditShortcut !== undefined ? { wordEditShortcut } : {}),
+  };
+};
+
 const getSessionActiveOrganizationId = (
   session: unknown,
 ): string | undefined => {
@@ -132,6 +190,14 @@ const createAuth = () => {
           type: "string",
           required: false,
           defaultValue: "UTC",
+        },
+        preferredName: {
+          type: "string",
+          required: false,
+        },
+        wordEditShortcut: {
+          type: "string",
+          required: false,
         },
       },
     },
@@ -208,7 +274,9 @@ const createAuth = () => {
             // The `notNull` schema constraint allows empty strings, which
             // surfaces as a blank "Author" everywhere the user is shown.
             // Default to the email local-part so the column is never empty.
-            const data = ensureDisplayName(user);
+            // Then trim `preferredName` / `wordEditShortcut` (Word author /
+            // initials prefs) before persisting.
+            const data = normalizeUserPreferences(ensureDisplayName(user));
             return { data };
           },
         },
@@ -216,7 +284,7 @@ const createAuth = () => {
           // eslint-disable-next-line require-await -- async required by better-auth hook type
           before: async (user) => {
             validateTimezoneId(user["timezoneId"]);
-            const data = ensureDisplayName(user);
+            const data = normalizeUserPreferences(ensureDisplayName(user));
             return { data };
           },
         },
