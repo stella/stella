@@ -21,11 +21,13 @@ import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME } from "@/lib/consts";
 import { getMatterColor } from "@/lib/matter-colors";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 const DECISION_HASH_PREFIX = "#stella-decision=";
 const ENTITY_REF_HASH_PREFIX = "#stella-entity-ref=";
 const WORKSPACE_REF_HASH_PREFIX = "#stella-workspace-ref=";
+const FOLIO_BLOCK_PREFIX = "folio:";
 
 const CATEGORY_ICON: Record<
   Exclude<MentionCategory, "entity">,
@@ -366,6 +368,15 @@ export const StreamdownMentionLink = ({
     return <span {...props}>{children}</span>;
   }
 
+  if (href.startsWith(FOLIO_BLOCK_PREFIX)) {
+    const blockId = href.slice(FOLIO_BLOCK_PREFIX.length);
+    return (
+      <FolioBlockChip blockId={blockId} interactive={interactive}>
+        {children}
+      </FolioBlockChip>
+    );
+  }
+
   const mentionChip =
     href.startsWith(DECISION_HASH_PREFIX) ||
     href.startsWith(ENTITY_REF_HASH_PREFIX) ||
@@ -396,4 +407,73 @@ export const StreamdownMentionLink = ({
       {children}
     </a>
   );
+};
+
+type FolioBlockChipProps = {
+  blockId: string;
+  interactive: boolean;
+  children: React.ReactNode;
+};
+
+/**
+ * Click-to-scroll chip for an inline `folio:b-NNNN` citation. The
+ * AI emits these in plain answers about an open DOCX; clicking finds
+ * the most recently active DOCX inspector tab and queues a
+ * `scrollToBlock` on it. Stays as inert text when no DOCX is open.
+ */
+const FolioBlockChip = ({
+  blockId,
+  interactive,
+  children,
+}: FolioBlockChipProps) => {
+  // Resolve via the inspector store at click time so the chip stays
+  // valid even after the user switches DOCX tabs.
+  const handleClick = () => {
+    const state = useInspectorStore.getState();
+    const docxTabId = pickActiveDocxTabId(state);
+    if (docxTabId === null) {
+      return;
+    }
+    state.requestBlockScroll(docxTabId, blockId);
+  };
+
+  if (!interactive) {
+    return <span className={CHIP_CLASS_NAME}>{children}</span>;
+  }
+
+  return (
+    <button
+      className={cn(
+        CHIP_CLASS_NAME,
+        "hover:bg-accent/80 cursor-pointer transition-colors",
+      )}
+      data-block-id={blockId}
+      onClick={handleClick}
+      type="button"
+    >
+      <FileTextIcon className="size-3 shrink-0" />
+      <MentionChipLabel>{children}</MentionChipLabel>
+    </button>
+  );
+};
+
+const pickActiveDocxTabId = (
+  state: ReturnType<typeof useInspectorStore.getState>,
+): string | null => {
+  const active = state.tabs.find(
+    (tab) =>
+      tab.id === state.activeId &&
+      tab.type === "pdf" &&
+      tab.mimeType === DOCX_MIME,
+  );
+  if (active) {
+    return active.id;
+  }
+  // Fall back to the first DOCX tab if the chat tab itself is
+  // active. Citations should still work when the user is reading
+  // chat alongside the document.
+  const fallback = state.tabs.find(
+    (tab) => tab.type === "pdf" && tab.mimeType === DOCX_MIME,
+  );
+  return fallback ? fallback.id : null;
 };
