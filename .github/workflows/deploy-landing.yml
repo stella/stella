@@ -1,0 +1,30 @@
+name: Deploy Landing
+
+# Triggers the landing site deploy on every main merge that
+# touches the landing app or shared deps. Implementation lives in
+# a private reusable workflow so this file stays free of bucket
+# names, distribution IDs, role ARNs, and region strings.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/landing/**"
+      - "packages/**"
+      - "bun.lock"
+      - ".github/workflows/deploy-landing.yml"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    # Belt-and-suspenders: the trigger above already restricts to
+    # main, but a manual dispatch via API can pass a feature ref;
+    # the reusable workflow refuses non-main refs as well.
+    if: github.ref == 'refs/heads/main'
+    uses: stella/private-workflows/.github/workflows/deploy-landing.yml@main
+    secrets:
+      AWS_ROLE_ARN_DEPLOY: ${{ secrets.AWS_ROLE_ARN_DEPLOY }}
