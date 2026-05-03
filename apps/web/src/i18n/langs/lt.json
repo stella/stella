@@ -291,6 +291,9 @@
       "toastDescription": "Full-page chat lands with persisted threads.",
       "toastTitle": "Full view not yet available"
     },
+    "anonymizedMode": "Anonimizuotas DI režimas",
+    "anonymizedModeDisabled": "Anonimizuotas DI režimas išjungtas",
+    "anonymizedModeEnabled": "Anonimizuotas DI režimas įjungtas",
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",
       "direct": "No, apply directly",

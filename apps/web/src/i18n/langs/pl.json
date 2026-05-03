@@ -291,6 +291,9 @@
       "toastDescription": "Pełnoekranowy czat zostanie udostępniony wraz z zapisanymi wątkami.",
       "toastTitle": "Pełny widok niedostępny"
     },
+    "anonymizedMode": "Zanonimizowany tryb AI",
+    "anonymizedModeDisabled": "Zanonimizowany tryb AI jest wyłączony",
+    "anonymizedModeEnabled": "Zanonimizowany tryb AI jest włączony",
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",
       "direct": "No, apply directly",

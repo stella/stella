@@ -78,6 +78,10 @@ export const LIMITS = {
   chatExecuteContentIdsMax: 20,
   /** Max DOCX size for stamp injection (bytes). */
   docxStampMaxBytes: 50 * 1024 * 1024,
+  /** Max org-wide custom blacklist terms for anonymization. */
+  anonymizationBlacklistEntriesPerOrganization: 1000,
+  /** Max variants per org-wide custom blacklist term. */
+  anonymizationBlacklistVariantsPerEntry: 20,
 } as const;
 
 const CHAT_CONTEXT_FILE_MAX_MEGABYTES = 10;

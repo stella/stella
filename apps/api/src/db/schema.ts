@@ -1614,6 +1614,41 @@ export const organizationSettings = p.pgTable(
   () => [...orgPolicies()],
 );
 
+export const anonymizationBlacklistEntries = p.pgTable(
+  "anonymization_blacklist_entries",
+  {
+    id: pUuid<"anonymizationBlacklistEntry">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    label: p.varchar({ length: 64 }).notNull(),
+    canonical: p.varchar({ length: 512 }).notNull(),
+    variants: jsonb().$type<string[]>().notNull().default([]),
+    enabled: p.boolean().notNull().default(true),
+    createdBy: p
+      .text("created_by")
+      .references(() => user.id, { onDelete: "set null" }),
+    updatedBy: p
+      .text("updated_by")
+      .references(() => user.id, { onDelete: "set null" }),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p
+      .index("anonymization_blacklist_entries_org_enabled_idx")
+      .on(table.organizationId, table.enabled),
+    p
+      .uniqueIndex("anonymization_blacklist_entries_org_canonical_uidx")
+      .on(table.organizationId, sql`lower(${table.canonical})`),
+    ...orgPolicies(),
+  ],
+);
+
 export const clauseCategories = p.pgTable(
   "clause_categories",
   {
@@ -2330,6 +2365,7 @@ export const relations = defineRelations(
     matterCounters,
     documentCounters,
     organizationSettings,
+    anonymizationBlacklistEntries,
     clauseCategories,
     clauses,
     clauseVariants,
@@ -2762,6 +2798,7 @@ export const relations = defineRelations(
     matterCounters: {},
     documentCounters: {},
     organizationSettings: {},
+    anonymizationBlacklistEntries: {},
     clauseCategories: {
       parent: r.one.clauseCategories({
         from: r.clauseCategories.parentId,

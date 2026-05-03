@@ -1,9 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import {
+  buildSendRequestBody,
   chatKeys,
   matchesChatThreadAcrossScopes,
 } from "@/routes/_protected.chat/-queries";
+
+const createMessage = (): PersistedChatMessage => ({
+  id: "message-A",
+  role: "user",
+  parts: [{ type: "text", text: "Hello" }],
+});
 
 describe("chatKeys", () => {
   test("separates plain chat transports from active DOCX edit transports", () => {
@@ -27,32 +35,33 @@ describe("matchesChatThreadAcrossScopes", () => {
   const threadId = "thread-A";
 
   test("matches the global scope's key for the same thread", () => {
-    const key = ["chat", "thread", "global", threadId, false] as const;
+    const key = chatKeys.thread({ scope: "global", threadId });
     expect(matchesChatThreadAcrossScopes(key, threadId)).toBe(true);
   });
 
   test("matches the workspace scope's key for the same thread", () => {
-    const key = [
-      "chat",
-      "thread",
-      "workspace",
-      "ws-1",
+    const key = chatKeys.thread({
+      scope: "workspace",
+      workspaceId: "ws-1",
       threadId,
-      false,
-    ] as const;
+    });
     expect(matchesChatThreadAcrossScopes(key, threadId)).toBe(true);
   });
 
   test("rejects keys for other threads", () => {
     expect(
       matchesChatThreadAcrossScopes(
-        ["chat", "thread", "global", "thread-B", false],
+        chatKeys.thread({ scope: "global", threadId: "thread-B" }),
         threadId,
       ),
     ).toBe(false);
     expect(
       matchesChatThreadAcrossScopes(
-        ["chat", "thread", "workspace", "ws-1", "thread-B", false],
+        chatKeys.thread({
+          scope: "workspace",
+          workspaceId: "ws-1",
+          threadId: "thread-B",
+        }),
         threadId,
       ),
     ).toBe(false);
@@ -77,5 +86,20 @@ describe("matchesChatThreadAcrossScopes", () => {
         threadId,
       ),
     ).toBe(false);
+  });
+});
+
+describe("buildSendRequestBody", () => {
+  test("includes anonymized mode when the chat surface enables it", () => {
+    expect(
+      buildSendRequestBody({
+        context: { getAnonymized: () => true },
+        key: { scope: "global", threadId: "thread-A" },
+        messages: [createMessage()],
+      }),
+    ).toMatchObject({
+      anonymized: true,
+      threadId: "thread-A",
+    });
   });
 });

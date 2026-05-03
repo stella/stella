@@ -316,6 +316,9 @@ type Messages = {
     };
     "attachFile": "Attach file";
     "attachedImage": "Attached image";
+    "anonymizedMode": "Anonymized AI mode";
+    "anonymizedModeDisabled": "Anonymized AI mode is off";
+    "anonymizedModeEnabled": "Anonymized AI mode is on";
     "attachment": "Attachment";
     "caseLawGreeting": "Ask about this decision — its full text is available here.";
     "chatAbout": "Chat about this";

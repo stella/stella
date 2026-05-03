@@ -68,6 +68,7 @@ type ChatThreadOptionsContext = {
    * next send carries the latest set.
    */
   getContextMatterIds?: (() => string[]) | undefined;
+  getAnonymized?: (() => boolean) | undefined;
   getUserContext?: (() => ChatUserContext) | undefined;
   handleActiveDocxEditToolCall?:
     | ((
@@ -177,7 +178,7 @@ const fetchGroupedChatThreads = async () => {
 
 const getChatApiPath = () => `${env.VITE_API_URL}/v1/chat`;
 
-const buildSendRequestBody = ({
+export const buildSendRequestBody = ({
   context,
   key,
   messages,
@@ -194,6 +195,7 @@ const buildSendRequestBody = ({
   const body: {
     activeDecision?: ActiveDecisionContext | undefined;
     activeFile?: ActiveFileContext | undefined;
+    anonymized?: boolean | undefined;
     contextMatterIds?: string[] | undefined;
     message: PersistedChatMessage;
     threadId: string;
@@ -226,6 +228,11 @@ const buildSendRequestBody = ({
   const contextMatterIds = context?.getContextMatterIds?.();
   if (contextMatterIds !== undefined) {
     body.contextMatterIds = contextMatterIds;
+  }
+
+  const anonymized = context?.getAnonymized?.();
+  if (anonymized !== undefined) {
+    body.anonymized = anonymized;
   }
 
   return body;

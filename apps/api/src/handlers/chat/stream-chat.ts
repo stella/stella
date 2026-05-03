@@ -10,7 +10,16 @@ import type { InferUIMessageChunk, UIMessageStreamOnFinishCallback } from "ai";
 import { panic, Result } from "better-result";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
-import { getUserFileIdFromPart } from "@/api/handlers/chat/attachment-validation";
+import {
+  getUserFileIdFromPart,
+  TEXT_PLAIN_MIME_TYPE,
+} from "@/api/handlers/chat/attachment-validation";
+import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
+import {
+  prepareMessagesForThirdParty,
+  prepareTextForThirdParty,
+  prepareToolsForThirdParty,
+} from "@/api/handlers/chat/third-party-boundary";
 import { repairActiveDocxEditToolCall } from "@/api/handlers/chat/tools/active-docx-edit-tool-repair";
 import type { ChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
@@ -20,6 +29,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const MAX_TOOL_STEPS = 8;
 
@@ -43,6 +53,7 @@ type StreamChatProps = {
   resolveAssistantTextRefs?: ((text: string) => string) | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
   system: string;
+  thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
   tools: Partial<ChatTools>;
 };
@@ -56,13 +67,55 @@ export const streamChat = async ({
   resolveAssistantTextRefs,
   resolveAssistantValueRefs,
   system,
+  thirdPartyBoundary,
   threadId,
   tools,
 }: StreamChatProps) => {
-  const modelMessages = await convertToModelMessages(messages);
+  const [preparedMessages, preparedSystem] = await Promise.all([
+    prepareMessagesForThirdParty({
+      boundary: thirdPartyBoundary,
+      messages,
+    }),
+    prepareTextForThirdParty({
+      boundary: thirdPartyBoundary,
+      text: system,
+    }),
+  ]);
+
+  if (Result.isError(preparedMessages)) {
+    return new Response(
+      JSON.stringify({
+        message: preparedMessages.error.message,
+        type: "third_party_boundary_refusal",
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+        status: preparedMessages.error.status,
+      },
+    );
+  }
+
+  if (Result.isError(preparedSystem)) {
+    return new Response(
+      JSON.stringify({
+        message: preparedSystem.error.message,
+        type: "third_party_boundary_refusal",
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+        status: preparedSystem.error.status,
+      },
+    );
+  }
+
+  const modelMessages = await convertToModelMessages(preparedMessages.value);
+  const modelTools = prepareToolsForThirdParty({
+    boundary: thirdPartyBoundary,
+    tools,
+  });
   const stream = createUIMessageStream<ChatMessage>({
     generateId: () => Bun.randomUUIDv7(),
-    originalMessages: messages,
+    originalMessages: preparedMessages.value,
     onFinish,
     onError: (error) => {
       captureError(error, { threadId });
@@ -73,8 +126,8 @@ export const streamChat = async ({
         abortSignal,
         model: getModelForRole("chat", orgAIConfig),
         temperature: getTemperatureForRole("chat"),
-        system,
-        tools,
+        system: preparedSystem.value,
+        tools: modelTools,
         experimental_repairToolCall: async ({ toolCall }) =>
           await Promise.resolve(repairActiveDocxEditToolCall(toolCall)),
         providerOptions: {
@@ -191,12 +244,14 @@ export const resolveRefsInTextStream = (
 
 type HydrateMessagesProps = {
   messages: ChatMessage[];
+  refuseNonPlainTextFiles?: boolean | undefined;
   safeDb: SafeDb;
   userId: SafeId<"user">;
 };
 
 export const hydrateMessages = async ({
   messages,
+  refuseNonPlainTextFiles = false,
   safeDb,
   userId,
 }: HydrateMessagesProps) =>
@@ -227,6 +282,16 @@ export const hydrateMessages = async ({
         const file = userFilesById.get(fileIdResult.value);
         if (!file) {
           panic("Persisted chat file reference missing user_files row");
+        }
+
+        if (refuseNonPlainTextFiles && file.mimeType !== TEXT_PLAIN_MIME_TYPE) {
+          return Result.err(
+            new HandlerError({
+              status: 422,
+              message:
+                "Cannot send this attachment to the AI in anonymized mode because Stella cannot extract and anonymize it safely.",
+            }),
+          );
         }
 
         const hydratedPart = yield* Result.await(

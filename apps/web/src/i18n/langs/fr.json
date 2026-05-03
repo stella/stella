@@ -291,6 +291,9 @@
       "toastDescription": "Full-page chat lands with persisted threads.",
       "toastTitle": "Full view not yet available"
     },
+    "anonymizedMode": "Mode IA anonymisé",
+    "anonymizedModeDisabled": "Le mode IA anonymisé est désactivé",
+    "anonymizedModeEnabled": "Le mode IA anonymisé est activé",
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",
       "direct": "No, apply directly",

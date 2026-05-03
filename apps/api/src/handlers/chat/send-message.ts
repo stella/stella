@@ -31,6 +31,7 @@ import {
   planMessagePersistence,
 } from "@/api/handlers/chat/persist-message";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
+import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   intersectAccessibleWorkspaceIds,
   resolveToolWorkspaceIds,
@@ -200,6 +201,12 @@ const sendMessage = createSafeRootHandler(
       workspaceId,
       hasActiveFileChat: body.activeFile !== undefined,
     });
+    const thirdPartyBoundary = createChatThirdPartyBoundary({
+      anonymized: body.anonymized ?? false,
+      anonymizationScopeId: workspaceId ?? body.threadId,
+      organizationId: session.activeOrganizationId,
+      scopedDb,
+    });
 
     const uploadedMessage = yield* Result.await(
       uploadMessageFilesWithRollback({
@@ -220,6 +227,22 @@ const sendMessage = createSafeRootHandler(
       message: parsedMessage.message,
       storedMessages: thread.data.messages,
     });
+
+    const messageWindow = latestMessagePlan.messages.slice(-MESSAGE_WINDOW);
+    const chatContext = yield* Result.await(
+      prepareChatContext({
+        activeDecision: body.activeDecision,
+        activeFile: body.activeFile,
+        contextMatterIds: effectiveContextMatterIds,
+        messageWindow,
+        refuseNonPlainTextFiles: thirdPartyBoundary.type === "anonymized",
+        safeDb,
+        userContext: body.userContext,
+        userId: user.id,
+        workspaceId,
+        refRegistry,
+      }),
+    );
 
     // Widen the thread's data scope BEFORE persisting the message so
     // any workspace IDs the user just embedded (entity mentions,
@@ -252,21 +275,6 @@ const sendMessage = createSafeRootHandler(
         userId: user.id,
         workspaceId,
         persistencePlan: latestMessagePlan.persistencePlan,
-      }),
-    );
-
-    const messageWindow = latestMessagePlan.messages.slice(-MESSAGE_WINDOW);
-    const chatContext = yield* Result.await(
-      prepareChatContext({
-        activeDecision: body.activeDecision,
-        activeFile: body.activeFile,
-        contextMatterIds: effectiveContextMatterIds,
-        messageWindow,
-        safeDb,
-        userContext: body.userContext,
-        userId: user.id,
-        workspaceId,
-        refRegistry,
       }),
     );
 
@@ -354,6 +362,7 @@ const sendMessage = createSafeRootHandler(
             promptCacheKey: chatContext.promptCacheKey,
             resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
             resolveAssistantValueRefs: refRegistry.resolveAssistantValueRefs,
+            thirdPartyBoundary,
             threadId: body.threadId,
             tools: chatTools,
             system: chatContext.system,
@@ -593,6 +602,7 @@ type PrepareChatContextProps = {
   contextMatterIds: SafeId<"workspace">[];
   messageWindow: ChatMessage[];
   refRegistry: ReturnType<typeof createChatRefRegistry>;
+  refuseNonPlainTextFiles: boolean;
   safeDb: SafeDb;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
@@ -614,6 +624,7 @@ const prepareChatContext = async ({
   contextMatterIds,
   messageWindow,
   refRegistry,
+  refuseNonPlainTextFiles,
   safeDb,
   userContext,
   userId,
@@ -632,6 +643,7 @@ const prepareChatContext = async ({
       }),
       hydrateMessages({
         messages: messageWindow,
+        refuseNonPlainTextFiles,
         safeDb,
         userId,
       }),

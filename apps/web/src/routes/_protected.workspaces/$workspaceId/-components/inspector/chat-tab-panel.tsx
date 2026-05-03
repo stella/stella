@@ -45,6 +45,7 @@ import { useDevStore } from "@/lib/dev-store";
 import { useStockPrompts } from "@/lib/prompts/stock";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { toSafeId } from "@/lib/safe-id";
+import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { chatThreadOptions } from "@/routes/_protected.chat/-queries";
@@ -99,6 +100,8 @@ export const ChatTabPanel = ({
   // picker updates would land in the store but never reach the
   // server. `useEffectEvent` always reads the latest closure values.
   const getContextMatterIds = useEffectEvent(() => tab.contextMatterIds);
+  const [anonymized, setAnonymized] = useState(false);
+  const getAnonymized = useEffectEvent(() => anonymized);
   const showToolCalls = useDevStore((s) => s.showToolCalls);
   const chatContextLabel = useChatContextLabel(tab);
 
@@ -144,6 +147,7 @@ export const ChatTabPanel = ({
         getUserContext,
         getActiveDecision,
         getContextMatterIds,
+        getAnonymized,
       },
     }),
   );
@@ -217,6 +221,7 @@ export const ChatTabPanel = ({
       onClose={onClose}
       onLabelContextMenu={onLabelContextMenu}
       onMoveToMain={moveToMain}
+      anonymized={anonymized}
       onNewThread={() =>
         openChat({
           workspaceId: tabWorkspaceId,
@@ -226,6 +231,7 @@ export const ChatTabPanel = ({
             : {}),
         })
       }
+      onSetAnonymized={setAnonymized}
       onSetContext={(next) => setChatContext(tab.id, next)}
       onStartRename={startRename}
       rename={{
@@ -337,6 +343,7 @@ const noop = () => {
 };
 
 type ChatTabPanelChromeProps = {
+  anonymized: boolean;
   tab: ChatTab;
   onClose: () => void;
   onLabelContextMenu: (event: MouseEvent<HTMLElement>) => void;
@@ -350,6 +357,7 @@ type ChatTabPanelChromeProps = {
   };
   onMoveToMain?: (() => void) | undefined;
   onNewThread?: (() => void) | undefined;
+  onSetAnonymized: (enabled: boolean) => void;
   onSetContext: (matterIds: string[]) => void;
   matterColor?: string | null | undefined;
   children: React.ReactNode;
@@ -366,6 +374,7 @@ type ChatTabPanelChromeProps = {
  * placeholder bar shape).
  */
 const ChatTabPanelChrome = ({
+  anonymized,
   tab,
   onClose,
   onLabelContextMenu,
@@ -373,6 +382,7 @@ const ChatTabPanelChrome = ({
   rename,
   onMoveToMain,
   onNewThread,
+  onSetAnonymized,
   onSetContext,
   matterColor,
   children,
@@ -390,6 +400,11 @@ const ChatTabPanelChrome = ({
           }
         />
       )}
+      <ChatAnonymizedToggle
+        enabled={anonymized}
+        onChange={onSetAnonymized}
+        size="icon-xs"
+      />
       {onMoveToMain && (
         <Tooltip
           content={t("chat.moveToMain")}
@@ -488,11 +503,13 @@ export const ChatTabPanelShell = ({
   const stockPrompts = useStockPrompts();
   return (
     <ChatTabPanelChrome
+      anonymized={false}
       matterColor={matterColor}
       onClose={noop}
       onLabelContextMenu={noop}
       onMoveToMain={noop}
       onNewThread={noop}
+      onSetAnonymized={noop}
       onSetContext={noop}
       onStartRename={noop}
       rename={{
