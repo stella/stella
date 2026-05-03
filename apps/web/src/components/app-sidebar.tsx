@@ -1004,7 +1004,7 @@ export function AppSidebar(props: AppSidebarProps) {
                     <MatterItem
                       isPinned
                       key={ws.id}
-                      navBadge={showNavBadges && i < 3 ? 7 + i : undefined}
+                      navBadge={showNavBadges && i < 3 ? 6 + i : undefined}
                       onDelete={handleDeleteWorkspace}
                       onReorder={reorderPinned}
                       onTogglePin={togglePin}

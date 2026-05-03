@@ -313,11 +313,28 @@ describe("requiredPortsForMode", () => {
     const ports = portsForOffset(5);
 
     expect(requiredPortsForMode("dev:web", ports)).toEqual([3005]);
-    expect(requiredPortsForMode("dev:api", ports)).toEqual([3006, 4988]);
-    expect(requiredPortsForMode("dev", ports)).toEqual([3006, 4988, 3005]);
+    expect(requiredPortsForMode("dev:api", ports)).toEqual([3006]);
+    expect(requiredPortsForMode("dev", ports)).toEqual([3006, 3005]);
     expect(requiredPortsForMode("dev:desktop", ports)).toEqual([
-      3006, 4988, 3005, 5182, 45_906,
+      3006, 3005, 5182, 45_906,
     ]);
+  });
+
+  test("reserves the AI SDK devtools port only when the flag is on", () => {
+    const ports = portsForOffset(5);
+
+    expect(
+      requiredPortsForMode("dev:api", ports, { aiDevtoolsEnabled: false }),
+    ).toEqual([3006]);
+    expect(
+      requiredPortsForMode("dev:api", ports, { aiDevtoolsEnabled: true }),
+    ).toEqual([3006, 4988]);
+    expect(
+      requiredPortsForMode("dev", ports, { aiDevtoolsEnabled: true }),
+    ).toEqual([3006, 4988, 3005]);
+    expect(
+      requiredPortsForMode("dev:web", ports, { aiDevtoolsEnabled: true }),
+    ).toEqual([3005]);
   });
 });
 

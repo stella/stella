@@ -359,11 +359,18 @@ export const portsForOffset = (offset: number): DevPorts => ({
 export const requiredPortsForMode = (
   mode: DevMode,
   ports: DevPorts,
+  options: { aiDevtoolsEnabled?: boolean } = {},
 ): number[] => {
   const requiredPorts: number[] = [];
 
   if (modeIncludesApi(mode)) {
-    requiredPorts.push(ports.api, ports.aiSdkDevtools);
+    requiredPorts.push(ports.api);
+    // Reserve the AI SDK Devtools port only when the runner will
+    // actually spawn the CLI; otherwise an unrelated process holding
+    // 4983 (or its offset twin) would force a needless offset shift.
+    if (options.aiDevtoolsEnabled) {
+      requiredPorts.push(ports.aiSdkDevtools);
+    }
   }
 
   if (modeIncludesWeb(mode)) {
@@ -758,11 +765,13 @@ const ensureDockerServices = async ({
 };
 
 export const findFirstAvailableOffset = async ({
+  aiDevtoolsEnabled = false,
   checkReusableApiPort = isHealthyApiPort,
   checkPortAvailability = checkPortAvailabilityOnHosts,
   mode,
   startOffset,
 }: {
+  aiDevtoolsEnabled?: boolean;
   checkReusableApiPort?: CheckReusableApiPort;
   checkPortAvailability?: (port: number) => Promise<boolean>;
   mode: DevMode;
@@ -775,7 +784,7 @@ export const findFirstAvailableOffset = async ({
   ) {
     const ports = portsForOffset(offset);
     const availability = await Promise.all(
-      requiredPortsForMode(mode, ports).map(
+      requiredPortsForMode(mode, ports, { aiDevtoolsEnabled }).map(
         async (port) => await checkPortAvailability(port),
       ),
     );
@@ -1252,12 +1261,14 @@ const buildPreparationSteps = ({
 };
 
 const buildPersistentSteps = ({
+  aiDevtoolsEnabled,
   infraOffset,
   infraPorts,
   mode,
   ports,
   rootDir,
 }: {
+  aiDevtoolsEnabled: boolean;
   infraOffset: number;
   infraPorts: InfraPorts;
   mode: DevMode;
@@ -1281,11 +1292,6 @@ const buildPersistentSteps = ({
     infraOffset,
     infraPorts,
     ports,
-  });
-  const aiDevtoolsEnabled = readEnvFlag({
-    envFilePath: pathResolve(rootDir, "apps/api/.env"),
-    key: "AI_DEVTOOLS_ENABLED",
-    processEnv: process.env,
   });
   const webEnv = createWebEnv({
     aiDevtoolsEnabled,
@@ -1601,7 +1607,13 @@ const main = async () => {
         : undefined),
     worktreeName: basename(gitContext.currentRoot),
   });
+  const aiDevtoolsEnabled = readEnvFlag({
+    envFilePath: pathResolve(gitContext.currentRoot, "apps/api/.env"),
+    key: "AI_DEVTOOLS_ENABLED",
+    processEnv: process.env,
+  });
   const resolvedOffset = await findFirstAvailableOffset({
+    aiDevtoolsEnabled,
     mode: parsedArgs.mode,
     startOffset: initialOffset.offset,
   });
@@ -1620,6 +1632,7 @@ const main = async () => {
     skipInstall: parsedArgs.skipInstall,
   });
   const persistentSteps = buildPersistentSteps({
+    aiDevtoolsEnabled,
     infraOffset,
     infraPorts,
     mode: parsedArgs.mode,
