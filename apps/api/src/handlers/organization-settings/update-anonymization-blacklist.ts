@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
@@ -61,22 +61,23 @@ const updateAnonymizationBlacklist = createSafeRootHandler(
           entries.value.map((entry) => entry.canonical.toLocaleLowerCase()),
         );
 
-        for (const existing of existingRows) {
-          if (
-            incomingCanonicalKeys.has(existing.canonical.toLocaleLowerCase())
-          ) {
-            continue;
-          }
+        const idsToDelete = existingRows
+          .filter(
+            (row) =>
+              !incomingCanonicalKeys.has(row.canonical.toLocaleLowerCase()),
+          )
+          .map((row) => row.id);
 
+        if (idsToDelete.length > 0) {
           await tx
             .delete(anonymizationBlacklistEntries)
             .where(
               and(
-                eq(anonymizationBlacklistEntries.id, existing.id),
                 eq(
                   anonymizationBlacklistEntries.organizationId,
                   session.activeOrganizationId,
                 ),
+                inArray(anonymizationBlacklistEntries.id, idsToDelete),
               ),
             );
         }

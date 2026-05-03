@@ -71,10 +71,16 @@ export const streamChat = async ({
   threadId,
   tools,
 }: StreamChatProps) => {
-  const preparedMessages = await prepareMessagesForThirdParty({
-    boundary: thirdPartyBoundary,
-    messages,
-  });
+  const [preparedMessages, preparedSystem] = await Promise.all([
+    prepareMessagesForThirdParty({
+      boundary: thirdPartyBoundary,
+      messages,
+    }),
+    prepareTextForThirdParty({
+      boundary: thirdPartyBoundary,
+      text: system,
+    }),
+  ]);
 
   if (Result.isError(preparedMessages)) {
     return new Response(
@@ -88,11 +94,6 @@ export const streamChat = async ({
       },
     );
   }
-
-  const preparedSystem = await prepareTextForThirdParty({
-    boundary: thirdPartyBoundary,
-    text: system,
-  });
 
   if (Result.isError(preparedSystem)) {
     return new Response(

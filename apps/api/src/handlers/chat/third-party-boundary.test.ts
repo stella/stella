@@ -171,8 +171,9 @@ describe("chat third-party anonymization boundary", () => {
     const tools = {
       read_secret: {
         execute: async () => ({
-          documentId: "doc_Secret_Jan_Novák",
-          ids: ["person_Secret"],
+          documentId: "doc_123",
+          ids: ["person_456"],
+          nationalId: "Secret-123",
           text: "Secret notes for Jan Novák",
         }),
       },
@@ -190,8 +191,9 @@ describe("chat third-party anonymization boundary", () => {
       | undefined;
 
     expect(await executable?.execute?.()).toEqual({
-      documentId: "doc_Secret_Jan_Novák",
-      ids: ["person_Secret"],
+      documentId: "doc_123",
+      ids: ["person_456"],
+      nationalId: "[CUSTOM_1]-123",
       text: "[CUSTOM_1] notes for [PERSON_1]",
     });
   });

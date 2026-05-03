@@ -53,6 +53,11 @@ export const createChatThirdPartyBoundary = ({
 
 type BoundaryRefusal = HandlerError<422 | 500>;
 
+type TextReplacement = {
+  text: string;
+  apply: (value: string) => void;
+};
+
 export const prepareTextForThirdParty = async ({
   boundary,
   text,
@@ -89,13 +94,71 @@ export const prepareTextForThirdParty = async ({
   return Result.ok(anonymized.value.fields.at(0) ?? "");
 };
 
-const anonymizePlainTextFile = async ({
+const prepareTextBatchForThirdParty = async ({
   boundary,
-  part,
+  replacements,
 }: {
-  boundary: ChatThirdPartyBoundary;
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
+  replacements: TextReplacement[];
+}): Promise<Result<void, BoundaryRefusal>> => {
+  const fields = replacements.map((replacement) => replacement.text);
+  if (fields.every((field) => field.length === 0)) {
+    return Result.ok(undefined);
+  }
+
+  const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
+  const anonymized = await Result.tryPromise({
+    try: async () =>
+      await anonymizeFields({
+        fields,
+        gazetteerEntries: await boundary.gazetteerEntries,
+        organizationId: boundary.organizationId,
+        scopedDb: boundary.scopedDb,
+        workspaceId: boundary.anonymizationScopeId,
+      }),
+    catch: (cause) =>
+      new HandlerError({
+        status: 500,
+        message: "Failed to anonymize content before sending it to the AI.",
+        cause,
+      }),
+  });
+
+  if (Result.isError(anonymized)) {
+    return Result.err(anonymized.error);
+  }
+
+  for (let index = 0; index < replacements.length; index += 1) {
+    const replacement = replacements[index];
+    if (replacement === undefined) {
+      continue;
+    }
+
+    replacement.apply(anonymized.value.fields.at(index) ?? "");
+  }
+
+  return Result.ok(undefined);
+};
+
+const queueTextReplacement = (
+  replacements: TextReplacement[],
+  text: string,
+  apply: (value: string) => void,
+) => {
+  if (text.length === 0) {
+    return;
+  }
+
+  replacements.push({ text, apply });
+};
+
+const anonymizePlainTextFile = ({
+  part,
+  replacements,
+}: {
   part: FileUIPart;
-}): Promise<Result<FileUIPart, BoundaryRefusal>> => {
+  replacements: TextReplacement[];
+}): Result<FileUIPart, BoundaryRefusal> => {
   if (part.mediaType !== TEXT_PLAIN_MIME_TYPE) {
     return Result.err(
       new HandlerError({
@@ -124,113 +187,94 @@ const anonymizePlainTextFile = async ({
   }
 
   const text = Buffer.from(parsed.value.bytes).toString("utf-8");
-  const anonymizedTextResult = await prepareTextForThirdParty({
-    boundary,
-    text,
-  });
+  let anonymizedText = text;
+  let filename = part.filename;
 
-  if (Result.isError(anonymizedTextResult)) {
-    return Result.err(anonymizedTextResult.error);
-  }
-
-  const filenameResult = part.filename
-    ? await prepareTextForThirdParty({ boundary, text: part.filename })
-    : Result.ok<string | undefined>(undefined);
-
-  if (Result.isError(filenameResult)) {
-    return Result.err(filenameResult.error);
-  }
-
-  return Result.ok({
+  const prepared: FileUIPart = {
     ...part,
-    ...(filenameResult.value ? { filename: filenameResult.value } : {}),
+    ...(filename ? { filename } : {}),
     mediaType: TEXT_PLAIN_MIME_TYPE,
-    url: toDataUrl(
-      Buffer.from(anonymizedTextResult.value, "utf-8"),
+    url: toDataUrl(Buffer.from(anonymizedText, "utf-8"), TEXT_PLAIN_MIME_TYPE),
+  };
+
+  queueTextReplacement(replacements, text, (value) => {
+    anonymizedText = value;
+    prepared.url = toDataUrl(
+      Buffer.from(anonymizedText, "utf-8"),
       TEXT_PLAIN_MIME_TYPE,
-    ),
+    );
   });
+
+  if (filename) {
+    queueTextReplacement(replacements, filename, (value) => {
+      filename = value;
+      prepared.filename = filename;
+    });
+  }
+
+  return Result.ok(prepared);
 };
 
-const preparePartForThirdParty = async ({
+const preparePartForThirdParty = ({
   boundary,
   part,
+  replacements,
 }: {
   boundary: ChatThirdPartyBoundary;
   part: ChatMessage["parts"][number];
-}): Promise<Result<ChatMessage["parts"][number], BoundaryRefusal>> => {
+  replacements: TextReplacement[];
+}): Result<ChatMessage["parts"][number], BoundaryRefusal> => {
   if (boundary.type === "raw") {
     return Result.ok(part);
   }
 
   if (part.type === "text" || part.type === "reasoning") {
-    const text = await prepareTextForThirdParty({ boundary, text: part.text });
-
-    if (Result.isError(text)) {
-      return Result.err(text.error);
-    }
-
-    return Result.ok({
-      ...part,
-      text: text.value,
+    const prepared = { ...part };
+    queueTextReplacement(replacements, part.text, (value) => {
+      prepared.text = value;
     });
+    return Result.ok(prepared);
   }
 
   if (isFileUIPart(part)) {
-    return await anonymizePlainTextFile({ boundary, part });
+    return anonymizePlainTextFile({ part, replacements });
   }
 
   if (isToolUIPart(part)) {
-    return await anonymizeToolPart({ boundary, part });
+    return anonymizeToolPart({ part, replacements });
   }
 
   if (part.type === "source-document") {
-    const title = await prepareTextForThirdParty({
-      boundary,
-      text: part.title,
+    const prepared = { ...part };
+    queueTextReplacement(replacements, part.title, (value) => {
+      prepared.title = value;
     });
-
-    if (Result.isError(title)) {
-      return Result.err(title.error);
+    if (part.filename) {
+      queueTextReplacement(replacements, part.filename, (value) => {
+        prepared.filename = value;
+      });
     }
-
-    const filename = part.filename
-      ? await prepareTextForThirdParty({
-          boundary,
-          text: part.filename,
-        })
-      : Result.ok<string | undefined>(undefined);
-
-    if (Result.isError(filename)) {
-      return Result.err(filename.error);
-    }
-
-    return Result.ok({
-      ...part,
-      title: title.value,
-      ...(filename.value ? { filename: filename.value } : {}),
-    });
+    return Result.ok(prepared);
   }
 
   if (part.type === "source-url" && part.title) {
-    const title = await prepareTextForThirdParty({
-      boundary,
-      text: part.title,
+    const prepared = { ...part };
+    queueTextReplacement(replacements, part.title, (value) => {
+      prepared.title = value;
     });
-
-    if (Result.isError(title)) {
-      return Result.err(title.error);
-    }
-
-    return Result.ok({
-      ...part,
-      title: title.value,
-    });
+    return Result.ok(prepared);
   }
 
   if ("data" in part) {
-    const data = await anonymizeUnknownStrings({
-      boundary,
+    const preparedPart: Omit<typeof part, "data"> & { data: unknown } = {
+      ...part,
+      data: part.data,
+    };
+    const data = anonymizeUnknownStrings({
+      apply: (value) => {
+        preparedPart.data = value;
+      },
+      replacements,
       value: part.data,
     });
 
@@ -238,13 +282,10 @@ const preparePartForThirdParty = async ({
       return Result.err(data.error);
     }
 
-    const preparedPart = {
-      ...part,
-      data: data.value,
-    };
+    preparedPart.data = data.value;
 
-    // SAFETY: data part discriminators and IDs are preserved. The recursive
-    // anonymizer only replaces nested string values in the existing data shape.
+    // SAFETY: data part discriminators are preserved. Nested provider-visible
+    // text values are written back after the request-level batch anonymization.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return Result.ok(preparedPart as ChatMessage["parts"][number]);
   }
@@ -265,31 +306,61 @@ export const prepareMessagesForThirdParty = async ({
 
   return await Result.gen(async function* () {
     const prepared: ChatMessage[] = [];
+    const replacements: TextReplacement[] = [];
 
     for (const message of messages) {
       const parts: ChatMessage["parts"] = [];
 
       for (const part of message.parts) {
         parts.push(
-          yield* Result.await(preparePartForThirdParty({ boundary, part })),
+          yield* preparePartForThirdParty({ boundary, part, replacements }),
         );
       }
 
       prepared.push({ ...message, parts });
     }
 
+    yield* Result.await(
+      prepareTextBatchForThirdParty({ boundary, replacements }),
+    );
+
     return Result.ok(prepared);
   });
 };
 
-const shouldPreserveStructuredString = (key: string): boolean => {
+const TECHNICAL_IDENTIFIER_KEYS = new Set([
+  "callId",
+  "documentId",
+  "entityId",
+  "fileId",
+  "id",
+  "ids",
+  "messageId",
+  "organizationId",
+  "threadId",
+  "toolCallId",
+  "userId",
+  "uuid",
+  "uuids",
+  "workspaceId",
+]);
+
+const TECHNICAL_IDENTIFIER_PATTERN =
+  /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[a-z][a-z0-9]*_[A-Za-z0-9-]+)$/i;
+
+const shouldPreserveStructuredString = (
+  key: string,
+  value: string,
+): boolean => {
+  if (!TECHNICAL_IDENTIFIER_PATTERN.test(value)) {
+    return false;
+  }
+
   const normalized = key.toLocaleLowerCase();
 
   return (
-    normalized === "id" ||
-    normalized === "ids" ||
-    normalized === "uuid" ||
-    normalized === "uuids" ||
+    TECHNICAL_IDENTIFIER_KEYS.has(key) ||
+    TECHNICAL_IDENTIFIER_KEYS.has(normalized) ||
     normalized.endsWith("_id") ||
     normalized.endsWith("_ids") ||
     normalized.endsWith("_uuid") ||
@@ -305,37 +376,42 @@ const shouldPreserveStructuredString = (key: string): boolean => {
   );
 };
 
-const anonymizeUnknownStrings = async ({
-  boundary,
+const anonymizeUnknownStrings = ({
+  apply,
   key,
+  replacements,
   value,
 }: {
-  boundary: ChatThirdPartyBoundary;
+  apply?: ((value: unknown) => void) | undefined;
   key?: string | undefined;
+  replacements: TextReplacement[];
   value: unknown;
-}): Promise<Result<unknown, BoundaryRefusal>> => {
-  if (boundary.type === "raw") {
-    return Result.ok(value);
-  }
-
+}): Result<unknown, BoundaryRefusal> => {
   if (typeof value === "string") {
-    if (key && shouldPreserveStructuredString(key)) {
+    if (key && shouldPreserveStructuredString(key, value)) {
       return Result.ok(value);
     }
 
-    return await prepareTextForThirdParty({ boundary, text: value });
+    let prepared = value;
+    queueTextReplacement(replacements, value, (next) => {
+      prepared = next;
+      apply?.(prepared);
+    });
+
+    return Result.ok(prepared);
   }
 
   if (Array.isArray(value)) {
-    return await Result.gen(async function* () {
+    return Result.gen(function* () {
       const output: unknown[] = [];
 
-      for (const item of value) {
-        output.push(
-          yield* Result.await(
-            anonymizeUnknownStrings({ boundary, key, value: item }),
-          ),
-        );
+      for (let index = 0; index < value.length; index += 1) {
+        const item: unknown = value.at(index);
+        output[index] = yield* anonymizeUnknownStrings({
+          key,
+          replacements,
+          value: item,
+        });
       }
 
       return Result.ok(output);
@@ -346,87 +422,92 @@ const anonymizeUnknownStrings = async ({
     return Result.ok(value);
   }
 
-  return await Result.gen(async function* () {
-    const entries: [string, unknown][] = [];
+  return Result.gen(function* () {
+    const output = {};
 
     for (const [nestedKey, nestedValue] of Object.entries(value)) {
-      entries.push([
-        nestedKey,
-        yield* Result.await(
-          anonymizeUnknownStrings({
-            boundary,
-            key: nestedKey,
-            value: nestedValue,
-          }),
-        ),
-      ]);
+      const nestedPrepared = yield* anonymizeUnknownStrings({
+        apply: (next) => {
+          Object.assign(output, { [nestedKey]: next });
+        },
+        key: nestedKey,
+        replacements,
+        value: nestedValue,
+      });
+      Object.assign(output, { [nestedKey]: nestedPrepared });
     }
 
-    return Result.ok(Object.fromEntries(entries));
+    return Result.ok(output);
   });
 };
 
 type ToolLikePart = Extract<ChatMessage["parts"][number], { state: string }>;
+type MutableToolLikePart = ToolLikePart & {
+  approval?: unknown;
+  errorText?: string | undefined;
+  input?: unknown;
+  output?: unknown;
+  title?: string | undefined;
+};
 
-const anonymizeToolPart = async ({
-  boundary,
+const anonymizeToolPart = ({
   part,
+  replacements,
 }: {
-  boundary: ChatThirdPartyBoundary;
   part: ToolLikePart;
-}): Promise<Result<ToolLikePart, BoundaryRefusal>> =>
-  await Result.gen(async function* () {
-    const input =
-      "input" in part
-        ? yield* Result.await(
-            anonymizeUnknownStrings({ boundary, value: part.input }),
-          )
-        : undefined;
+  replacements: TextReplacement[];
+}): Result<ToolLikePart, BoundaryRefusal> =>
+  Result.gen(function* () {
+    const prepared: MutableToolLikePart = { ...part };
 
-    const output =
-      "output" in part
-        ? yield* Result.await(
-            anonymizeUnknownStrings({ boundary, value: part.output }),
-          )
-        : undefined;
+    if ("input" in part) {
+      const input = yield* anonymizeUnknownStrings({
+        apply: (value) => {
+          prepared.input = value;
+        },
+        replacements,
+        value: part.input,
+      });
+      prepared.input = input;
+    }
 
-    const errorText =
-      "errorText" in part && part.errorText
-        ? yield* Result.await(
-            prepareTextForThirdParty({ boundary, text: part.errorText }),
-          )
-        : undefined;
+    if ("output" in part) {
+      const output = yield* anonymizeUnknownStrings({
+        apply: (value) => {
+          prepared.output = value;
+        },
+        replacements,
+        value: part.output,
+      });
+      prepared.output = output;
+    }
 
-    const title =
-      "title" in part && part.title
-        ? yield* Result.await(
-            prepareTextForThirdParty({ boundary, text: part.title }),
-          )
-        : undefined;
+    const errorText = "errorText" in part ? part.errorText : undefined;
+    if (errorText) {
+      queueTextReplacement(replacements, errorText, (value) => {
+        prepared.errorText = value;
+      });
+    }
 
-    const approvalReason =
+    const title = "title" in part ? part.title : undefined;
+    if (title) {
+      queueTextReplacement(replacements, title, (value) => {
+        prepared.title = value;
+      });
+    }
+
+    const approval =
       "approval" in part &&
       part.approval !== undefined &&
       "reason" in part.approval &&
       part.approval.reason
-        ? yield* Result.await(
-            prepareTextForThirdParty({
-              boundary,
-              text: part.approval.reason,
-            }),
-          )
+        ? part.approval
         : undefined;
-
-    const prepared = {
-      ...part,
-      ...("input" in part ? { input } : {}),
-      ...("output" in part ? { output } : {}),
-      ...(errorText ? { errorText } : {}),
-      ...(title ? { title } : {}),
-      ...(approvalReason && "approval" in part
-        ? { approval: { ...part.approval, reason: approvalReason } }
-        : {}),
-    };
+    if (approval?.reason) {
+      queueTextReplacement(replacements, approval.reason, (value) => {
+        prepared.approval = { ...approval, reason: value };
+      });
+    }
 
     // SAFETY: the tool UI part discriminator fields are preserved. We only
     // anonymize provider-visible text nested in input/output/error/title fields.
@@ -458,16 +539,30 @@ export const prepareToolsForThirdParty = <TTools extends ToolSet>({
     wrapped[key] = {
       ...current,
       execute: async (...args: Parameters<typeof execute>) => {
-        const anonymizedOutput = await anonymizeUnknownStrings({
-          boundary,
-          value: await execute(...args),
+        const replacements: TextReplacement[] = [];
+        let outputValue: unknown = await execute(...args);
+        const anonymizedOutput = anonymizeUnknownStrings({
+          apply: (value) => {
+            outputValue = value;
+          },
+          replacements,
+          value: outputValue,
         });
 
         if (Result.isError(anonymizedOutput)) {
           throw anonymizedOutput.error;
         }
 
-        return anonymizedOutput.value;
+        outputValue = anonymizedOutput.value;
+        const anonymizedBatch = await prepareTextBatchForThirdParty({
+          boundary,
+          replacements,
+        });
+        if (Result.isError(anonymizedBatch)) {
+          throw anonymizedBatch.error;
+        }
+
+        return outputValue;
       },
     };
   }
