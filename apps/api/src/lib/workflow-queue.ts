@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { Queue, Worker } from "bullmq";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import Redis from "ioredis";
 
 import { isMockAI } from "@/api/consts";
@@ -99,13 +99,34 @@ const getQueue = (): Queue => {
 // MAX_STALLED_COUNT: a job that stalls this many times moves to
 // failed (and then retries via `attempts`).
 //
-// JOB_HARD_TIMEOUT_MS: process-level wrapper so a hung AI call can't
-// keep a job "active" forever. Slightly longer than LOCK_DURATION_MS
-// to let BullMQ's stalled detection fire first when applicable.
+// computeJobTimeoutMs: process-level ceiling per entity job, scaled
+// with the execution plan's depth. A flat 6-minute cap would
+// deterministically abort entities with several slow dependency
+// levels even when each batch stays within its own AI timeout.
 const LOCK_DURATION_MS = 5 * 60 * 1000;
 const STALLED_INTERVAL_MS = 30 * 1000;
 const MAX_STALLED_COUNT = 2;
-const JOB_HARD_TIMEOUT_MS = 6 * 60 * 1000;
+
+// Per-batch AI timeout. The same constant feeds into both the AI SDK
+// abort signal in `processOneBatch` and the per-job timeout below so
+// changes stay coupled.
+const BATCH_AI_TIMEOUT_MS = 120 * 1000;
+// Floor for the per-job hard timeout — even a single-level plan gets
+// a generous window for setup, network blips, and the post-AI DB
+// writes.
+const JOB_TIMEOUT_FLOOR_MS = 6 * 60 * 1000;
+// Each dependency level runs sequentially and may itself contain
+// multiple batches sharing the per-batch timeout. The 1.5× factor
+// accommodates one retry within a batch plus DB write overhead.
+const JOB_TIMEOUT_PER_LEVEL_MS = Math.ceil(BATCH_AI_TIMEOUT_MS * 1.5);
+
+const computeJobTimeoutMs = (executionPlan: ExecutionLevel[]): number => {
+  const levels = executionPlan.length;
+  return Math.max(
+    JOB_TIMEOUT_FLOOR_MS,
+    levels * JOB_TIMEOUT_PER_LEVEL_MS + JOB_TIMEOUT_FLOOR_MS,
+  );
+};
 // Workflow-level Redis lock TTL. Long enough to outlast a single batch
 // even on big workspaces, short enough to self-heal an uncleanly-killed
 // worker without stranding the workspace for hours. The lock is also
@@ -283,13 +304,19 @@ export const initWorkflowWorker = () => {
       // attempt kept running — racing the BullMQ retry and double-
       // incrementing the workflow completion counter.
       const controller = new AbortController();
+      // Per-job timeout scales with the execution plan: each
+      // dependency level runs sequentially and inherits the per-batch
+      // AI timeout. A fixed 6-min ceiling would deterministically
+      // abort entities with several slow levels even when each
+      // individual batch stays within budget.
+      const jobTimeoutMs = computeJobTimeoutMs(job.data.executionPlan);
       const timeoutHandle = setTimeout(() => {
         controller.abort(
           new Error(
-            `workflow.job_timeout: entity ${job.data.entityId} exceeded ${JOB_HARD_TIMEOUT_MS}ms`,
+            `workflow.job_timeout: entity ${job.data.entityId} exceeded ${jobTimeoutMs}ms`,
           ),
         );
-      }, JOB_HARD_TIMEOUT_MS);
+      }, jobTimeoutMs);
       try {
         await processEntityJob(job.data, controller.signal);
         // If the signal aborted between the last awaited call and
@@ -500,11 +527,14 @@ const processOneBatch = async ({
   const generateFn = isMockAI() ? generateBatchMock : generateBatch;
 
   // generateBatch returns a Result<T, E> directly. The combined
-  // signal aborts when EITHER the per-batch 2-min timeout fires OR
-  // the worker-level hard timeout (JOB_HARD_TIMEOUT_MS) does, so the
-  // AI SDK actually cancels the in-flight request.
+  // signal aborts when EITHER the per-batch AI timeout fires OR the
+  // worker-level per-job timeout does, so the AI SDK actually cancels
+  // the in-flight request.
   const batchResult = await generateFn({
-    abortSignal: AbortSignal.any([AbortSignal.timeout(120_000), signal]),
+    abortSignal: AbortSignal.any([
+      AbortSignal.timeout(BATCH_AI_TIMEOUT_MS),
+      signal,
+    ]),
     batch,
     entityVersionId,
     organizationId,
@@ -689,9 +719,13 @@ const finishWorkflow = async (
   broadcastWorkflowStatus(workspaceId, false);
   broadcastInvalidation(workspaceId, ["properties", workspaceId]);
 
-  // Catch up on any properties created mid-workflow. They were left
-  // stale by the partial freshen above; kick off a follow-up run so
-  // their cells get populated without the user having to nudge again.
+  // Catch up on any AI-model properties created mid-workflow. They
+  // were left stale by the partial freshen above; kick off a follow-up
+  // run so their cells get populated without the user having to nudge.
+  // The filter on `tool.type === 'ai-model'` is critical: manual
+  // properties may legitimately sit at status "stale" (e.g. after a
+  // type edit) and the planner intentionally skips them, so an
+  // unfiltered query would loop forever firing no-op workflows.
   try {
     const stragglers = await scopedDb((tx) =>
       tx
@@ -701,6 +735,7 @@ const finishWorkflow = async (
           and(
             eq(properties.workspaceId, workspaceId),
             eq(properties.status, "stale"),
+            sql`${properties.tool}->>'type' = 'ai-model'`,
           ),
         )
         .limit(1),

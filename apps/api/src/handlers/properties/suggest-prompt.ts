@@ -58,7 +58,7 @@ document. Rules:
   - single-select → ask the AI to choose exactly one of the listed options.
   - multi-select → ask for all matching options from the list.
 - Reference the document implicitly when natural ("from the contract").
-- Stay under 200 characters.`;
+- Stay under 280 characters.`;
 
 const buildUserMessage = ({
   name,
