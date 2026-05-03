@@ -31,37 +31,6 @@ export type DocxFolioCitation = {
 
 export type Citation = PdfBatesCitation | DocxFolioCitation;
 
-/**
- * Inline marker the AI emits inside chat messages to cite a folio
- * block: `[[b-NNNN]]`. The fileFieldId is implied by the active
- * file context (chat is scoped to one DOCX at a time today). When
- * we ship multi-file chat, switch to `[[fileFieldId:b-NNNN]]` and
- * resolve the prefix here.
- */
-const DOCX_BLOCK_MARKER_REGEX = /\[\[(b-\d{4,})\]\]/g;
-
-export type DocxBlockMarkerMatch = {
-  blockId: string;
-  start: number;
-  end: number;
-};
-
-export const findDocxBlockMarkers = (text: string): DocxBlockMarkerMatch[] => {
-  const matches: DocxBlockMarkerMatch[] = [];
-  for (const match of text.matchAll(DOCX_BLOCK_MARKER_REGEX)) {
-    const blockId = match[1];
-    if (!blockId) {
-      continue;
-    }
-    matches.push({
-      blockId,
-      start: match.index,
-      end: match.index + match[0].length,
-    });
-  }
-  return matches;
-};
-
 // Walk a justification content and yield every Citation in document
 // order. `JustificationContent` already groups by `fileFieldId`, so
 // we only flatten statements + cites.

@@ -32,23 +32,53 @@ const elementsByLocalName = (
     .getElementsByTagNameNS(W_NS, localName)
     .filter((node): node is slimdom.Element => node.nodeType === 1);
 
+// Subtrees we never descend into when collecting paragraph text.
+//
+//   - `moveFrom`, `del`: tracked-change DELETIONS; the "final" view
+//     of the document excludes them, so include only the resulting
+//     text (`moveTo`, `ins` are visited normally as children of the
+//     paragraph).
+//   - `fallback`: the legacy branch of `w:alternateContent`. The
+//     preferred branch lives in a sibling `w:choice`; visiting both
+//     would emit the same text twice for compatibility-wrapped
+//     content (e.g. drawings).
+const SKIP_SUBTREE_LOCAL_NAMES = new Set(["moveFrom", "del", "fallback"]);
+
 const collectText = (paragraph: slimdom.Element): string => {
   const parts: string[] = [];
 
-  for (const node of paragraph.getElementsByTagNameNS(W_NS, "*")) {
-    if (node.localName === "t") {
-      parts.push(node.textContent ?? "");
-      continue;
+  const walk = (node: slimdom.Node) => {
+    if (!(node instanceof slimdom.Element)) {
+      return;
     }
-    if (node.localName === "tab") {
-      parts.push("\t");
-      continue;
+    if (
+      node.namespaceURI === W_NS &&
+      SKIP_SUBTREE_LOCAL_NAMES.has(node.localName)
+    ) {
+      return;
     }
-    if (node.localName === "br") {
-      parts.push("\n");
-    }
-  }
 
+    if (node.namespaceURI === W_NS) {
+      if (node.localName === "t") {
+        parts.push(node.textContent ?? "");
+        return;
+      }
+      if (node.localName === "tab") {
+        parts.push("\t");
+        return;
+      }
+      if (node.localName === "br") {
+        parts.push("\n");
+        return;
+      }
+    }
+
+    for (const child of node.childNodes) {
+      walk(child);
+    }
+  };
+
+  walk(paragraph);
   return parts.join("");
 };
 
