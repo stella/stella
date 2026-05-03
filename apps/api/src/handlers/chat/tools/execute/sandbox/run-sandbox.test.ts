@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, setDefaultTimeout } from "bun:test";
 import * as v from "valibot";
 
 import { createToolFunction } from "@/api/handlers/chat/tools/execute/execute-tool-function";
@@ -8,6 +8,9 @@ import type {
   SandboxFunctionRegistry,
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import { runSandbox as runSandboxInternal } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
+
+// Sandbox runs spin up isolated V8 contexts; raise the bun-test ceiling so CI runner load doesn't flake. Product code enforces its own smaller deadlines.
+setDefaultTimeout(15_000);
 
 type RunTestSandboxProps = Omit<RunSandboxInput, "concurrencyKey"> & {
   concurrencyKey?: string;
