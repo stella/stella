@@ -217,7 +217,10 @@ export const startWorkflow = async ({
       return { status: "skipped" };
     }
 
-    // Get all non-folder entities
+    // AI extraction reads `fields` on entity versions (files, manual cells,
+    // etc.). Only document rows have that data model; tasks, folders, links,
+    // and messages must not be enqueued or the worker would fail on missing
+    // inputs (e.g. no Documents field on a task).
     const entityRows = await scopedDb((tx) =>
       tx
         .select({ id: entities.id, kind: entities.kind })
@@ -225,14 +228,14 @@ export const startWorkflow = async ({
         .where(eq(entities.workspaceId, workspaceId)),
     );
 
-    const nonFolderIds = new Set(
-      entityRows.filter((e) => e.kind !== "folder").map((e) => e.id),
+    const documentEntityIds = new Set(
+      entityRows.filter((e) => e.kind === "document").map((e) => e.id),
     );
 
     const targetIds =
       inputEntityIds && inputEntityIds.length > 0
-        ? inputEntityIds.filter((id) => nonFolderIds.has(id))
-        : [...nonFolderIds];
+        ? inputEntityIds.filter((id) => documentEntityIds.has(id))
+        : [...documentEntityIds];
 
     // Prioritize entities from entityIdsOrder first
     const targetSet = new Set(targetIds);
