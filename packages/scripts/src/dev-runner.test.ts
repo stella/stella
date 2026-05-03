@@ -313,10 +313,10 @@ describe("requiredPortsForMode", () => {
     const ports = portsForOffset(5);
 
     expect(requiredPortsForMode("dev:web", ports)).toEqual([3005]);
-    expect(requiredPortsForMode("dev:api", ports)).toEqual([3006]);
-    expect(requiredPortsForMode("dev", ports)).toEqual([3006, 3005]);
+    expect(requiredPortsForMode("dev:api", ports)).toEqual([3006, 4988]);
+    expect(requiredPortsForMode("dev", ports)).toEqual([3006, 4988, 3005]);
     expect(requiredPortsForMode("dev:desktop", ports)).toEqual([
-      3006, 3005, 5182, 45_906,
+      3006, 4988, 3005, 5182, 45_906,
     ]);
   });
 });

@@ -145,6 +145,22 @@ export const AddEntityMenu = ({
     fileInputRef.current?.click();
   };
 
+  const fileInput = hasFileProperties ? (
+    <input
+      className="sr-only"
+      multiple
+      onChange={(e) => {
+        const files = [...(e.currentTarget.files ?? [])];
+        if (files.length > 0) {
+          createFileEntities(files);
+        }
+        e.target.value = "";
+      }}
+      ref={fileInputRef}
+      type="file"
+    />
+  ) : null;
+
   if (uploadOnly && hasFileProperties) {
     const trigger = render ?? (
       <Button size="xs" variant="ghost">
@@ -155,19 +171,7 @@ export const AddEntityMenu = ({
     return (
       <>
         {React.cloneElement(trigger, { onClick: handleUploadClick })}
-        <input
-          className="sr-only"
-          multiple
-          onChange={(e) => {
-            const files = [...(e.currentTarget.files ?? [])];
-            if (files.length > 0) {
-              createFileEntities(files);
-            }
-            e.target.value = "";
-          }}
-          ref={fileInputRef}
-          type="file"
-        />
+        {fileInput}
       </>
     );
   }
@@ -190,12 +194,7 @@ export const AddEntityMenu = ({
         <MenuPopup anchor={anchor ?? undefined}>
           {hasFileProperties && (
             <>
-              <MenuItem
-                disabled={isUploadDisabled}
-                onClick={() => {
-                  fileInputRef.current?.click();
-                }}
-              >
+              <MenuItem disabled={isUploadDisabled} onClick={handleUploadClick}>
                 <UploadIcon />
                 {t("common.uploadFiles")}
               </MenuItem>
@@ -221,21 +220,7 @@ export const AddEntityMenu = ({
           </MenuItem>
         </MenuPopup>
       </Menu>
-      {hasFileProperties && (
-        <input
-          className="sr-only"
-          multiple
-          onChange={(e) => {
-            const files = [...(e.currentTarget.files ?? [])];
-            if (files.length > 0) {
-              createFileEntities(files);
-            }
-            e.target.value = "";
-          }}
-          ref={fileInputRef}
-          type="file"
-        />
-      )}
+      {fileInput}
     </>
   );
 };

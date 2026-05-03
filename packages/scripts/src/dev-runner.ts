@@ -963,8 +963,25 @@ const readEnvFlag = ({
     if (withoutExport.slice(0, eqIndex).trim() !== key) {
       continue;
     }
-    const value = withoutExport
-      .slice(eqIndex + 1)
+    const rawValue = withoutExport.slice(eqIndex + 1).trimStart();
+    // Strip trailing comments. A `#` inside double quotes is part of
+    // the value, so only honor `#` once the opening quote has closed
+    // (or when no quotes were used at all).
+    const isQuoted = rawValue.startsWith('"');
+    let endIndex = rawValue.length;
+    if (isQuoted) {
+      const closingQuote = rawValue.indexOf('"', 1);
+      if (closingQuote !== -1) {
+        endIndex = closingQuote + 1;
+      }
+    } else {
+      const hashIndex = rawValue.indexOf("#");
+      if (hashIndex !== -1) {
+        endIndex = hashIndex;
+      }
+    }
+    const value = rawValue
+      .slice(0, endIndex)
       .trim()
       .replace(/^"|"$/gu, "")
       .toLowerCase();
