@@ -256,6 +256,10 @@ export const uploadFileEntitiesBatched = async (
         toastManager.add({
           title: labels.renamed(renamedCount),
           type: "info",
+          // Informational only — no action required from the
+          // user, so dismiss after the default toast lifetime
+          // instead of sticking on screen until manually closed.
+          timeout: 5000,
         });
       }
 

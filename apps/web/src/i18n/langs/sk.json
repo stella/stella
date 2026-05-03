@@ -333,6 +333,7 @@
     "filePlaceholder": "Chatovať o {fileName}",
     "filePlaceholderAction": "Chatovať o",
     "fileTooLarge": "Súbor prekračuje limit {maxSize}",
+    "folioCitationFallback": "str. {n}",
     "greeting": "Na čom chcete pracovať?",
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mention": {

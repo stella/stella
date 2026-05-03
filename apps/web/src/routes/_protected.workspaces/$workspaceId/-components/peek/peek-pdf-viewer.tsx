@@ -457,6 +457,22 @@ const PeekDocxViewer = ({
     }
   }, [clearPendingBlockScroll, fieldId, pendingBlockScroll]);
 
+  // Window-level fallback: citation chips also dispatch a window
+  // event for surfaces (e.g. the file-chat-overlay editor) that
+  // aren't tracked in the inspector store. The peek viewer reacts
+  // too, so a chip click reaches whichever DOCX editor is mounted
+  // — overlay or inspector.
+  useEffect(() => {
+    const handler = (event: CustomEvent<{ blockId: string }>) => {
+      if (!event.detail.blockId) {
+        return;
+      }
+      editorRef.current?.scrollToBlock(event.detail.blockId);
+    };
+    window.addEventListener("folio:scroll-to-block", handler);
+    return () => window.removeEventListener("folio:scroll-to-block", handler);
+  }, []);
+
   // Sync scaleOffset from inspector +/- buttons to Folio zoom
   useLayoutEffect(() => {
     editorRef.current?.setZoom(targetZoom);

@@ -333,6 +333,7 @@
     "filePlaceholder": "Kalbėtis apie {fileName}",
     "filePlaceholderAction": "Kalbėtis apie",
     "fileTooLarge": "Failas viršija {maxSize} limitą",
+    "folioCitationFallback": "p. {n}",
     "greeting": "Prie ko norėtumėte dirbti?",
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mention": {

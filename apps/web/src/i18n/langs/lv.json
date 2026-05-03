@@ -333,6 +333,7 @@
     "filePlaceholder": "Tērzēt par {fileName}",
     "filePlaceholderAction": "Tērzēt par",
     "fileTooLarge": "Fails pārsniedz {maxSize} ierobežojumu",
+    "folioCitationFallback": "lpp. {n}",
     "greeting": "Pie kā vēlaties strādāt?",
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mention": {

@@ -359,6 +359,20 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   }, [targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);
 
+  // Listen for citation-chip clicks broadcast by the chat overlay.
+  // The peek viewer has its own listener; this one covers the
+  // editing-mode editor where the inspector path doesn't apply.
+  useEffect(() => {
+    const handler = (event: CustomEvent<{ blockId: string }>) => {
+      if (!event.detail.blockId) {
+        return;
+      }
+      editorRef.current?.scrollToBlock(event.detail.blockId);
+    };
+    window.addEventListener("folio:scroll-to-block", handler);
+    return () => window.removeEventListener("folio:scroll-to-block", handler);
+  }, []);
+
   useEffect(() => {
     if (
       state.status !== "error" ||

@@ -11,6 +11,7 @@ import {
   LayersIcon,
   ListTodoIcon,
 } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import type { MentionCategory } from "@/components/chat/chat-mention-href";
@@ -27,7 +28,34 @@ import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-quer
 const DECISION_HASH_PREFIX = "#stella-decision=";
 const ENTITY_REF_HASH_PREFIX = "#stella-entity-ref=";
 const WORKSPACE_REF_HASH_PREFIX = "#stella-workspace-ref=";
-const FOLIO_BLOCK_PREFIX = "folio:";
+// Hash fragment, NOT a `folio:` scheme. Streamdown runs
+// rehype-sanitize over rendered links; only its protocol
+// whitelist (http/https/mailto/tel) survives. Custom schemes
+// get their href stripped, after which rehype-harden appends
+// " [blocked]". Hash-only hrefs are treated as relative and
+// pass through untouched, matching how `#stella-entity-ref=`
+// and friends already work.
+const FOLIO_BLOCK_PREFIX = "#folio:";
+
+/**
+ * Public window event broadcast when a `#folio:` citation chip
+ * is clicked. Both the peek DOCX viewer (inspector) and the file
+ * chat overlay editor listen for this; whichever has the live
+ * editor mounted scrolls. Augmenting `WindowEventMap` lets
+ * listeners receive a strongly-typed event without an `as` cast.
+ */
+export const FOLIO_SCROLL_EVENT = "folio:scroll-to-block";
+
+export type FolioScrollEventDetail = { blockId: string };
+
+declare global {
+  // Global augmentation requires an interface — `type` doesn't merge
+  // with the lib.dom WindowEventMap declaration.
+  // eslint-disable-next-line typescript-eslint/consistent-type-definitions
+  interface WindowEventMap {
+    "folio:scroll-to-block": CustomEvent<FolioScrollEventDetail>;
+  }
+}
 
 const CATEGORY_ICON: Record<
   Exclude<MentionCategory, "entity">,
@@ -416,29 +444,47 @@ type FolioBlockChipProps = {
 };
 
 /**
- * Click-to-scroll chip for an inline `folio:b-NNNN` citation. The
- * AI emits these in plain answers about an open DOCX; clicking finds
- * the most recently active DOCX inspector tab and queues a
- * `scrollToBlock` on it. Stays as inert text when no DOCX is open.
+ * Click-to-scroll chip for an inline `#folio:b-NNNN` citation. The
+ * AI emits these in plain answers about an open DOCX. Two delivery
+ * paths cover both rendering surfaces:
+ *
+ *  - **Inspector tab DOCX** — queue a `pendingBlockScroll` in the
+ *    inspector store; `PeekDocxViewer` consumes it on its next
+ *    effect tick and calls `scrollToBlock` on its editor ref.
+ *  - **File-chat-overlay DOCX** — the overlay's editor isn't an
+ *    inspector tab, so we ALSO dispatch a window CustomEvent that
+ *    any folio editor listens for and reacts to when mounted.
+ *
+ * Belt-and-braces — whichever surface owns the DOCX picks up the
+ * citation; the other ignores it.
  */
 const FolioBlockChip = ({
   blockId,
   interactive,
   children,
 }: FolioBlockChipProps) => {
-  // Resolve via the inspector store at click time so the chip stays
-  // valid even after the user switches DOCX tabs.
   const handleClick = () => {
     const state = useInspectorStore.getState();
     const docxTabId = pickActiveDocxTabId(state);
-    if (docxTabId === null) {
-      return;
+    if (docxTabId !== null) {
+      state.requestBlockScroll(docxTabId, blockId);
     }
-    state.requestBlockScroll(docxTabId, blockId);
+    // Always also broadcast — the overlay editor isn't tracked in
+    // the inspector store, so the store path alone is a no-op
+    // there.
+    window.dispatchEvent(
+      new CustomEvent(FOLIO_SCROLL_EVENT, { detail: { blockId } }),
+    );
   };
 
+  // Models occasionally emit a degenerate citation where the link
+  // text is the bare URL (`[#folio:b-0064](#folio:b-0064)`) or is
+  // empty. Surface a clean fallback label so the chip never shows
+  // the raw scheme — it's an internal protocol, not user copy.
+  const displayedChildren = useFolioChipChildren(children, blockId);
+
   if (!interactive) {
-    return <span className={CHIP_CLASS_NAME}>{children}</span>;
+    return <span className={CHIP_CLASS_NAME}>{displayedChildren}</span>;
   }
 
   return (
@@ -452,9 +498,43 @@ const FolioBlockChip = ({
       type="button"
     >
       <FileTextIcon className="size-3 shrink-0" />
-      <MentionChipLabel>{children}</MentionChipLabel>
+      <MentionChipLabel>{displayedChildren}</MentionChipLabel>
     </button>
   );
+};
+
+const useFolioChipChildren = (
+  children: React.ReactNode,
+  blockId: string,
+): React.ReactNode => {
+  const t = useTranslations();
+  const text = collectChipText(children).trim();
+  if (text.length === 0 || text.toLowerCase().startsWith("#folio:")) {
+    // Strip the `b-` prefix and any leading zeros so the fallback
+    // reads as a clean ordinal — e.g. `b-0064` → `64` → "str. 64".
+    const numeric = blockId.replace(/^b-0*/, "") || blockId;
+    return t("chat.folioCitationFallback", { n: numeric });
+  }
+  return children;
+};
+
+const collectChipText = (node: React.ReactNode): string => {
+  if (node === null || node === undefined || node === false) {
+    return "";
+  }
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (Array.isArray(node)) {
+    return node.map(collectChipText).join("");
+  }
+  return Children.toArray(node)
+    .map((child) =>
+      typeof child === "string" || typeof child === "number"
+        ? String(child)
+        : "",
+    )
+    .join("");
 };
 
 const pickActiveDocxTabId = (

@@ -333,6 +333,7 @@
     "filePlaceholder": "Chatovat o {fileName}",
     "filePlaceholderAction": "Chatovat o",
     "fileTooLarge": "Soubor překračuje limit {maxSize}",
+    "folioCitationFallback": "str. {n}",
     "greeting": "Na čem chcete pracovat?",
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mention": {
@@ -1731,8 +1732,8 @@
       "editConditionsDescription": "Nastavte podmínky, za kterých se má tato vlastnost generovat.",
       "enterAValue": "Zadejte hodnotu",
       "error": "Chyba",
-      "extractEntityType": "Extrahovat typ entity",
-      "extractEntityTypeDescription": "Vytvořte tabulkový sloupec vyplňovaný AI.",
+      "extractEntityType": "Vytěžit informaci",
+      "extractEntityTypeDescription": "Sloupec doplňovaný AI.",
       "extractionInstruction": "Instrukce pro AI",
       "extractionInstructionHelp": "Spustí se znovu, když se změní zdrojové dokumenty nebo odkazované sloupce.",
       "extractionInstructionPlaceholder": "Příklad: Najdi datum ukončení smlouvy. Vrať pouze datum.",

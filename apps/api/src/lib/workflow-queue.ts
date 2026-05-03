@@ -186,7 +186,27 @@ export const startWorkflow = async ({
 
   try {
     const executionPlanData = await getExecutionPlanData(workspaceId, scopedDb);
-    const executionPlan = getPropertyExecutionPlan(executionPlanData);
+
+    // Property-status freshness is an optimization for full-workspace
+    // runs ("nothing changed, skip"). When the caller passes explicit
+    // `entityIds` they're saying "I just created these rows, please
+    // backfill them" — every AI property is dirty for those rows even
+    // if the property itself is otherwise "fresh" (its existing rows
+    // are computed). Force the planner to include all AI properties
+    // by overriding their status to "stale"; the per-entity targeting
+    // below still scopes the actual computation to the new rows.
+    const planInput =
+      inputEntityIds && inputEntityIds.length > 0
+        ? {
+            ...executionPlanData,
+            properties: executionPlanData.properties.map((p) => ({
+              ...p,
+              status: "stale" as const,
+            })),
+          }
+        : executionPlanData;
+
+    const executionPlan = getPropertyExecutionPlan(planInput);
 
     const hasWork = executionPlan.some((level) =>
       level.some((batch) => batch.properties.length > 0),

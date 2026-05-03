@@ -253,7 +253,7 @@ export const CreateProperty = ({
           render={
             <Button
               aria-label={t("workspaces.properties.newColumn")}
-              className="text-muted-foreground hover:bg-accent h-full! w-full rounded-none"
+              className="text-muted-foreground hover:bg-accent h-full! min-w-10 rounded-none"
               size="icon"
               title={t("workspaces.properties.newColumn")}
               type="button"

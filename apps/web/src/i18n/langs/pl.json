@@ -333,6 +333,7 @@
     "filePlaceholder": "Czat o {fileName}",
     "filePlaceholderAction": "Czat o",
     "fileTooLarge": "Plik przekracza limit {maxSize}",
+    "folioCitationFallback": "s. {n}",
     "greeting": "Nad czym chcesz pracować?",
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mention": {
