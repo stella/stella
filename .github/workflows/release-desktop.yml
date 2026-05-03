@@ -245,12 +245,31 @@ jobs:
           "
 
       # ─── Windows: Azure Trusted Signing ────────────────────
-      - name: Build (Windows, unsigned)
+      # trusted-signing-cli is invoked by Tauri's bundler via
+      # bundle.windows.signCommand for every artifact (inner exe,
+      # installer, updater archive contents) so the .nsis.zip /
+      # .msi.zip the updater downloads wrap signed binaries. The
+      # post-build Azure step below stays as a safety net for any
+      # loose artifact the bundler doesn't run signCommand against.
+      - name: Install trusted-signing-cli (Windows only)
+        if: matrix.os == 'windows'
+        shell: bash
+        run: cargo install trusted-signing-cli --version 0.10.0 --locked
+
+      - name: Build (Windows)
         if: matrix.os == 'windows'
         working-directory: apps/desktop
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # OAuth triple consumed by trusted-signing-cli (invoked
+          # via tauri.conf.json bundle.windows.signCommand).
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
+          AZURE_CODE_SIGNING_ACCOUNT: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
+          AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
         run: bun run build -- --target ${{ matrix.target }} --bundles msi,nsis,updater
 
       - name: Sign Windows installers via Azure Trusted Signing
@@ -375,3 +394,28 @@ jobs:
           REPO: ${{ github.repository }}
         shell: bash
         run: bash scripts/build-updater-manifest.sh > latest.json && gh release upload "$RELEASE_REF" latest.json --clobber
+
+      # Mirror the manifest to the downloads CDN so the in-app
+      # updater (which polls a stable URL on a domain we control)
+      # finds the new release. Binaries themselves stay on the
+      # GitHub Release; the manifest references them by URL there.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@a89a83ec143615402a01f672b6e172b7b1875000 # v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEPLOY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Mirror latest.json to downloads CDN
+        env:
+          BUCKET: ${{ vars.DOWNLOADS_BUCKET }}
+          DIST_ID: ${{ vars.DOWNLOADS_DIST_ID }}
+        run: |
+          aws s3 cp --no-progress \
+            --content-type application/json \
+            --cache-control "public, max-age=60, must-revalidate" \
+            latest.json \
+            "s3://$BUCKET/desktop/prod/latest.json"
+          aws cloudfront create-invalidation \
+            --distribution-id "$DIST_ID" \
+            --paths "/desktop/prod/latest.json" \
+            --no-cli-pager > /dev/null
