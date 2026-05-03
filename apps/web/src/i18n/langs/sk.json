@@ -282,15 +282,15 @@
       "toastDescription": "Full-page chat lands with persisted threads.",
       "toastTitle": "Full view not yet available"
     },
+    "anonymizedMode": "Anonymizovaný režim AI",
+    "anonymizedModeDisabled": "Anonymizovaný režim AI je vypnutý",
+    "anonymizedModeEnabled": "Anonymizovaný režim AI je zapnutý",
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",
       "direct": "No, apply directly",
       "title": "Apply edits with tracked changes?",
       "tracked": "Yes, tracked"
     },
-    "anonymizedMode": "Anonymizovaný režim AI",
-    "anonymizedModeDisabled": "Anonymizovaný režim AI je vypnutý",
-    "anonymizedModeEnabled": "Anonymizovaný režim AI je zapnutý",
     "approval": {
       "allow": "Povoliť",
       "alwaysAllow": "Vždy povoliť v tomto vlákne",

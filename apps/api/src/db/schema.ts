@@ -1644,7 +1644,7 @@ export const anonymizationBlacklistEntries = p.pgTable(
       .on(table.organizationId, table.enabled),
     p
       .uniqueIndex("anonymization_blacklist_entries_org_canonical_uidx")
-      .on(table.organizationId, table.canonical),
+      .on(table.organizationId, sql`lower(${table.canonical})`),
     ...orgPolicies(),
   ],
 );

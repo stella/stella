@@ -282,15 +282,15 @@
       "toastDescription": "Full-page chat lands with persisted threads.",
       "toastTitle": "Full view not yet available"
     },
+    "anonymizedMode": "Anonymized AI mode",
+    "anonymizedModeDisabled": "Anonymized AI mode is off",
+    "anonymizedModeEnabled": "Anonymized AI mode is on",
     "applyMode": {
       "description": "Word stores who made each change. We'll remember your choice.",
       "direct": "No, apply directly",
       "title": "Apply edits with tracked changes?",
       "tracked": "Yes, tracked"
     },
-    "anonymizedMode": "Anonymized AI mode",
-    "anonymizedModeDisabled": "Anonymized AI mode is off",
-    "anonymizedModeEnabled": "Anonymized AI mode is on",
     "approval": {
       "allow": "Allow",
       "alwaysAllow": "Always allow in this thread",

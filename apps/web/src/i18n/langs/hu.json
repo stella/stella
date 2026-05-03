@@ -282,15 +282,15 @@
       "toastDescription": "Full-page chat lands with persisted threads.",
       "toastTitle": "Full view not yet available"
     },
+    "anonymizedMode": "Anonimizált AI mód",
+    "anonymizedModeDisabled": "Az anonimizált AI mód ki van kapcsolva",
+    "anonymizedModeEnabled": "Az anonimizált AI mód be van kapcsolva",
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",
       "direct": "No, apply directly",
       "title": "Apply edits with tracked changes?",
       "tracked": "Yes, tracked"
     },
-    "anonymizedMode": "Anonimizált AI mód",
-    "anonymizedModeDisabled": "Az anonimizált AI mód ki van kapcsolva",
-    "anonymizedModeEnabled": "Az anonimizált AI mód be van kapcsolva",
     "approval": {
       "allow": "Engedélyezés",
       "alwaysAllow": "Mindig engedélyezze ebben a szálban",

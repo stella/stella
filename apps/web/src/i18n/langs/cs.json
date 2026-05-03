@@ -282,15 +282,15 @@
       "toastDescription": "Celostránkový chat bude k dispozici s perzistentními vlákny.",
       "toastTitle": "Celý pohled zatím není dostupný"
     },
+    "anonymizedMode": "Anonymizovaný režim AI",
+    "anonymizedModeDisabled": "Anonymizovaný režim AI je vypnutý",
+    "anonymizedModeEnabled": "Anonymizovaný režim AI je zapnutý",
     "applyMode": {
       "description": "Word ukládá, kdo provedl každou změnu. Vaši volbu si zapamatujeme.",
       "direct": "Ne, použít přímo",
       "title": "Použít úpravy se sledováním změn?",
       "tracked": "Ano, se sledováním"
     },
-    "anonymizedMode": "Anonymizovaný režim AI",
-    "anonymizedModeDisabled": "Anonymizovaný režim AI je vypnutý",
-    "anonymizedModeEnabled": "Anonymizovaný režim AI je zapnutý",
     "approval": {
       "allow": "Povolit",
       "alwaysAllow": "Vždy povolit v tomto vlákně",

@@ -282,15 +282,15 @@
       "toastDescription": "Full-page chat lands with persisted threads.",
       "toastTitle": "Full view not yet available"
     },
+    "anonymizedMode": "Anonüümitud AI režiim",
+    "anonymizedModeDisabled": "Anonüümitud AI režiim on väljas",
+    "anonymizedModeEnabled": "Anonüümitud AI režiim on sees",
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",
       "direct": "No, apply directly",
       "title": "Apply edits with tracked changes?",
       "tracked": "Yes, tracked"
     },
-    "anonymizedMode": "Anonüümitud AI režiim",
-    "anonymizedModeDisabled": "Anonüümitud AI režiim on väljas",
-    "anonymizedModeEnabled": "Anonüümitud AI režiim on sees",
     "approval": {
       "allow": "Luba",
       "alwaysAllow": "Luba alati",

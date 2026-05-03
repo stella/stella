@@ -15,7 +15,7 @@ ALTER TABLE "anonymization_blacklist_entries" ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
 CREATE INDEX "anonymization_blacklist_entries_org_enabled_idx" ON "anonymization_blacklist_entries" ("organization_id","enabled");
 --> statement-breakpoint
-CREATE UNIQUE INDEX "anonymization_blacklist_entries_org_canonical_uidx" ON "anonymization_blacklist_entries" ("organization_id","canonical");
+CREATE UNIQUE INDEX "anonymization_blacklist_entries_org_canonical_uidx" ON "anonymization_blacklist_entries" ("organization_id",lower("canonical"));
 --> statement-breakpoint
 ALTER TABLE "anonymization_blacklist_entries" ADD CONSTRAINT "anonymization_blacklist_entries_organization_id_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;
 --> statement-breakpoint

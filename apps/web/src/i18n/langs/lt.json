@@ -282,15 +282,15 @@
       "toastDescription": "Full-page chat lands with persisted threads.",
       "toastTitle": "Full view not yet available"
     },
+    "anonymizedMode": "Anonimizuotas DI režimas",
+    "anonymizedModeDisabled": "Anonimizuotas DI režimas išjungtas",
+    "anonymizedModeEnabled": "Anonimizuotas DI režimas įjungtas",
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",
       "direct": "No, apply directly",
       "title": "Apply edits with tracked changes?",
       "tracked": "Yes, tracked"
     },
-    "anonymizedMode": "Anonimizuotas DI režimas",
-    "anonymizedModeDisabled": "Anonimizuotas DI režimas išjungtas",
-    "anonymizedModeEnabled": "Anonimizuotas DI režimas įjungtas",
     "approval": {
       "allow": "Leisti",
       "alwaysAllow": "Visada leisti",

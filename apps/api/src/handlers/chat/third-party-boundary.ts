@@ -18,6 +18,7 @@ export type ChatThirdPartyBoundary =
   | { type: "raw" }
   | {
       anonymizeFields?: typeof anonymizeTextFields | undefined;
+      anonymizationScopeId: string;
       gazetteerEntries: ReturnType<typeof loadAnonymizationGazetteerEntries>;
       organizationId: SafeId<"organization">;
       scopedDb: ScopedDb;
@@ -27,11 +28,13 @@ export type ChatThirdPartyBoundary =
 export const createChatThirdPartyBoundary = ({
   anonymized,
   anonymizeFields,
+  anonymizationScopeId,
   organizationId,
   scopedDb,
 }: {
   anonymized: boolean;
   anonymizeFields?: typeof anonymizeTextFields | undefined;
+  anonymizationScopeId: string;
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
 }): ChatThirdPartyBoundary =>
@@ -39,6 +42,7 @@ export const createChatThirdPartyBoundary = ({
     ? {
         type: "anonymized",
         anonymizeFields,
+        anonymizationScopeId,
         gazetteerEntries: anonymizeFields
           ? Promise.resolve([])
           : loadAnonymizationGazetteerEntries({ organizationId, scopedDb }),
@@ -68,7 +72,7 @@ export const prepareTextForThirdParty = async ({
         gazetteerEntries: await boundary.gazetteerEntries,
         organizationId: boundary.organizationId,
         scopedDb: boundary.scopedDb,
-        workspaceId: boundary.organizationId,
+        workspaceId: boundary.anonymizationScopeId,
       }),
     catch: (cause) =>
       new HandlerError({

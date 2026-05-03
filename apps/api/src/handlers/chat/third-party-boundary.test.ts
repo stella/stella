@@ -33,6 +33,7 @@ const createBoundary = () => {
   return createChatThirdPartyBoundary({
     anonymized: true,
     anonymizeFields: anonymizeTextFieldsMock,
+    anonymizationScopeId: "workspace-A",
     organizationId: toSafeId<"organization">(
       "11111111-1111-4111-8111-111111111111",
     ),

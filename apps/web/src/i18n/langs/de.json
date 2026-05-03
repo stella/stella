@@ -282,15 +282,15 @@
       "toastDescription": "Full-page chat lands with persisted threads.",
       "toastTitle": "Full view not yet available"
     },
+    "anonymizedMode": "Anonymisierter KI-Modus",
+    "anonymizedModeDisabled": "Anonymisierter KI-Modus ist aus",
+    "anonymizedModeEnabled": "Anonymisierter KI-Modus ist an",
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",
       "direct": "No, apply directly",
       "title": "Apply edits with tracked changes?",
       "tracked": "Yes, tracked"
     },
-    "anonymizedMode": "Anonymisierter KI-Modus",
-    "anonymizedModeDisabled": "Anonymisierter KI-Modus ist aus",
-    "anonymizedModeEnabled": "Anonymisierter KI-Modus ist an",
     "approval": {
       "allow": "Erlauben",
       "alwaysAllow": "Immer in diesem Thread erlauben",

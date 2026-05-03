@@ -31,11 +31,11 @@ import {
   planMessagePersistence,
 } from "@/api/handlers/chat/persist-message";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
+import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   intersectAccessibleWorkspaceIds,
   resolveToolWorkspaceIds,
 } from "@/api/handlers/chat/tools/authorized-workspace-ids";
-import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type {
@@ -200,6 +200,7 @@ const sendMessage = createSafeRootHandler(
     });
     const thirdPartyBoundary = createChatThirdPartyBoundary({
       anonymized: body.anonymized ?? false,
+      anonymizationScopeId: workspaceId ?? body.threadId,
       organizationId: session.activeOrganizationId,
       scopedDb,
     });

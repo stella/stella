@@ -282,15 +282,15 @@
       "toastDescription": "Full-page chat lands with persisted threads.",
       "toastTitle": "Full view not yet available"
     },
+    "anonymizedMode": "Anonimizēts AI režīms",
+    "anonymizedModeDisabled": "Anonimizēts AI režīms ir izslēgts",
+    "anonymizedModeEnabled": "Anonimizēts AI režīms ir ieslēgts",
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",
       "direct": "No, apply directly",
       "title": "Apply edits with tracked changes?",
       "tracked": "Yes, tracked"
     },
-    "anonymizedMode": "Anonimizēts AI režīms",
-    "anonymizedModeDisabled": "Anonimizēts AI režīms ir izslēgts",
-    "anonymizedModeEnabled": "Anonimizēts AI režīms ir ieslēgts",
     "approval": {
       "allow": "Atļaut",
       "alwaysAllow": "Vienmēr atļaut",
