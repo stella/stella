@@ -16,6 +16,13 @@ type Messages = {
       "unknownDevice": "Unknown device";
     };
   };
+  "ai": {
+    "keyRequired": {
+      "title": "AI key required";
+      "description": "This instance has no platform AI keys provisioned. Add your own API key to start using AI features.";
+      "cta": "Open AI settings";
+    };
+  };
   "anonymize": {
     "addEntity": "Add entity";
     "checkAnonymization": "Check anonymization";

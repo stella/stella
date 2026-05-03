@@ -18,7 +18,11 @@ import {
 } from "@/api/db/schema";
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
+import {
+  getModelForRole,
+  getTemperatureForRole,
+  requireAIAvailable,
+} from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -280,6 +284,11 @@ export const refineSearchQuery = async ({
 }: SearchAIContext & {
   body: RefineSearchBody;
 }) => {
+  const gate = requireAIAvailable(orgAIConfig);
+  if (gate.isErr()) {
+    return status(403, { message: gate.error.message });
+  }
+
   const aiAnalytics = createAIAnalyticsCallbacks({
     feature: "search.refine",
     properties: { organization_id: organizationId },
@@ -348,6 +357,11 @@ export const summarizeSearchResults = async ({
 }: SearchSummaryContext & {
   body: SummarizeSearchBody;
 }) => {
+  const gate = requireAIAvailable(orgAIConfig);
+  if (gate.isErr()) {
+    return status(403, { message: gate.error.message });
+  }
+
   const resolved = await resolveSelectedWorkspaceIds({
     scopedDb,
     organizationId,

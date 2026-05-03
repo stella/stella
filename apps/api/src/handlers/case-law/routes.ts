@@ -18,6 +18,7 @@ import {
 } from "@/api/handlers/case-law/matter-links/create";
 import { deleteMatterLinkHandler } from "@/api/handlers/case-law/matter-links/delete";
 import { listMatterLinksHandler } from "@/api/handlers/case-law/matter-links/list";
+import { requireAIAvailable } from "@/api/lib/ai-models";
 import {
   createSafeHandler,
   createSafeRootHandler,
@@ -85,6 +86,8 @@ const generateDecisionAnalysis = createSafeRootHandler(
     params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
   } satisfies HandlerConfig,
   async function* ({ params: { decisionId }, scopedDb, orgAIConfig }) {
+    yield* requireAIAvailable(orgAIConfig);
+
     const response = yield* Result.await(
       Result.tryPromise(
         async () => await generateAnalysis(decisionId, scopedDb, orgAIConfig),

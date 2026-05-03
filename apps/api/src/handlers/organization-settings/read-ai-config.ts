@@ -1,12 +1,21 @@
 import { Result } from "better-result";
 
 import { decryptAIConfig, maskApiKey } from "@/api/lib/ai-config-crypto";
+import { hasInstanceProvider } from "@/api/lib/ai-models";
 import type { AIProvider, DataRegion, ModelRole } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
-type AIConfigResult =
+type AIConfigResult = {
+  /**
+   * Whether the backend has any platform-provisioned AI keys
+   * (env-configured fallback). When false and `configured` is
+   * also false, the org must supply their own key before AI
+   * features will work.
+   */
+  instanceProvisioned: boolean;
+} & (
   | { configured: false }
   | {
       configured: true;
@@ -15,7 +24,8 @@ type AIConfigResult =
       baseURL: string | null;
       overrideRoles: ModelRole[];
       region: DataRegion;
-    };
+    }
+);
 
 const config = {
   permissions: { organizationSettings: ["update"] },
@@ -47,8 +57,12 @@ const readAIConfig = createSafeRootHandler(
 
     const ciphertext = row?.aiConfigEncrypted;
     const iv = row?.aiConfigIv;
+    const instanceProvisioned = hasInstanceProvider();
 
-    let result: AIConfigResult = { configured: false };
+    let result: AIConfigResult = {
+      configured: false,
+      instanceProvisioned,
+    };
 
     if (ciphertext && iv) {
       const decryptResult = await Result.tryPromise({
@@ -68,6 +82,7 @@ const readAIConfig = createSafeRootHandler(
           baseURL: aiConfig.baseURL ?? null,
           overrideRoles: aiConfig.overrideRoles ?? [],
           region: aiConfig.region ?? "global",
+          instanceProvisioned,
         };
       }
     }
