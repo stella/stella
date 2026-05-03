@@ -158,6 +158,61 @@ describe("extractAssistantWorkspaceIds", () => {
     expect(extractAssistantWorkspaceIds(parts)).toEqual([]);
   });
 
+  test("regression: tool output parts with matterRef widen the data scope", () => {
+    // Tool outputs persist UUIDs in `matterRef` / `workspaceId`
+    // fields after `resolveAssistantValueRefs` rehydrates them
+    // from the in-memory `mat_N` ref shorthand. Without scanning
+    // these, a thread that only contains tool output (no
+    // source-document parts and no text refs) would keep an
+    // empty data scope and leak after revocation.
+    const parts = [
+      {
+        type: "tool-listMatters-output" as const,
+        toolCallId: "call_1",
+        state: "output-available" as const,
+        output: {
+          items: [
+            { matterRef: wsA, name: "Matter A" },
+            { matterRef: wsB, name: "Matter B" },
+          ],
+          nextOffset: null,
+          hasMore: false,
+        },
+      },
+    ];
+    expect(new Set(extractAssistantWorkspaceIds(parts))).toEqual(
+      new Set([wsA, wsB]),
+    );
+  });
+
+  test("regression: deeply nested workspaceId fields are picked up", () => {
+    const parts = [
+      {
+        type: "tool-getProperty-output" as const,
+        output: {
+          property: {
+            id: "prop_1",
+            owner: { workspaceId: wsA },
+          },
+        },
+      },
+    ];
+    expect(extractAssistantWorkspaceIds(parts)).toEqual([wsA]);
+  });
+
+  test("non-UUID matterRef values are ignored (e.g. unresolved ref shorthand)", () => {
+    // If a tool output ever lands with the in-memory shorthand
+    // (mat_1) instead of a UUID, the structural walker must not
+    // brand it as a workspace ID and must not crash.
+    const parts = [
+      {
+        type: "tool-listMatters-output" as const,
+        output: { items: [{ matterRef: "mat_1" }] },
+      },
+    ];
+    expect(extractAssistantWorkspaceIds(parts)).toEqual([]);
+  });
+
   test("source-document with empty workspaceId contributes nothing", () => {
     const parts = [
       {

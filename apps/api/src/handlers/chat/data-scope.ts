@@ -29,20 +29,20 @@ export const extractMentionWorkspaceIds = (
 };
 
 // Walks an assistant message's parts for workspace-scoped data
-// embedded by the model. Today there are two carriers:
+// embedded by the model. Two complementary carriers are scanned:
 //
-//   1. `data-stella-source-document` parts emitted by search /
-//      workspace tools — workspace ID lives in `data.workspaceId`.
-//   2. Resolved `#stella-workspace=<id>` and
-//      `#stella-entity=<workspace>:<entity>` href fragments inside
-//      assistant text parts (produced by `resolveAssistantTextRefs`
-//      after the stream finishes). Without scanning these, an
-//      assistant reply that links a workspace in plain text would
-//      not widen `chat_threads.data_workspace_ids`, leaving the
-//      stored content readable after access is revoked.
-//
-// New workspace-scoped part types must be added to this dispatcher
-// so a thread that embeds them widens its data scope correctly.
+//   1. **Structural fields** — any property at any depth named
+//      `workspaceId` or `matterRef` whose value is a UUID string.
+//      Covers `data-stella-source-document` parts
+//      (`data.workspaceId`), tool output parts that include
+//      `matterRef` / `workspaceId` (search hits, file lookups,
+//      property/entity records), and any future part shape that
+//      reuses these conventional field names.
+//   2. **Resolved text refs** — `#stella-workspace=<uuid>` and
+//      `#stella-entity=<workspace>:<entity>` produced by
+//      `resolveAssistantTextRefs` after the stream finishes.
+//      Without these, an assistant reply that links a workspace in
+//      plain text would not widen `chat_threads.data_workspace_ids`.
 //
 // Accepts `readonly unknown[]` and narrows per-part so this also
 // handles legacy/migrated message shapes without forcing callers to
@@ -52,41 +52,44 @@ export const extractAssistantWorkspaceIds = (
 ): SafeId<"workspace">[] => {
   const ids = new Set<SafeId<"workspace">>();
   for (const part of parts) {
-    const sourceDocId = sourceDocumentWorkspaceId(part);
-    if (sourceDocId !== null) {
-      ids.add(sourceDocId);
-    }
-    for (const textRefId of textRefWorkspaceIds(part)) {
-      ids.add(textRefId);
-    }
+    collectStructuralWorkspaceIds(part, ids);
+    collectTextRefWorkspaceIds(part, ids);
   }
   return Array.from(ids);
 };
 
-const sourceDocumentWorkspaceId = (
-  part: unknown,
-): SafeId<"workspace"> | null => {
-  if (typeof part !== "object" || part === null) {
-    return null;
+// Conventional field names across tool inputs/outputs that carry
+// a workspace ID. Adding a new field name here is the one place to
+// extend coverage when a new tool output shape ships.
+const WORKSPACE_KEY_FIELDS = new Set(["workspaceId", "matterRef"]);
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const collectStructuralWorkspaceIds = (
+  value: unknown,
+  ids: Set<SafeId<"workspace">>,
+): void => {
+  if (typeof value !== "object" || value === null) {
+    return;
   }
-  if (!("type" in part) || part.type !== "data-stella-source-document") {
-    return null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectStructuralWorkspaceIds(item, ids);
+    }
+    return;
   }
-  if (
-    !("data" in part) ||
-    typeof part.data !== "object" ||
-    part.data === null
-  ) {
-    return null;
+  for (const [key, child] of Object.entries(value)) {
+    if (
+      WORKSPACE_KEY_FIELDS.has(key) &&
+      typeof child === "string" &&
+      UUID_REGEX.test(child)
+    ) {
+      ids.add(brandPersistedWorkspaceId(child));
+      continue;
+    }
+    collectStructuralWorkspaceIds(child, ids);
   }
-  if (!("workspaceId" in part.data)) {
-    return null;
-  }
-  const workspaceId = part.data.workspaceId;
-  if (typeof workspaceId !== "string" || workspaceId.length === 0) {
-    return null;
-  }
-  return brandPersistedWorkspaceId(workspaceId);
 };
 
 // Captures the workspace UUID from `#stella-workspace=<uuid>` and
@@ -96,24 +99,25 @@ const sourceDocumentWorkspaceId = (
 const STELLA_TEXT_REF_WORKSPACE_REGEX =
   /#stella-(?:workspace|entity)=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/g;
 
-const textRefWorkspaceIds = (part: unknown): SafeId<"workspace">[] => {
+const collectTextRefWorkspaceIds = (
+  part: unknown,
+  ids: Set<SafeId<"workspace">>,
+): void => {
   if (typeof part !== "object" || part === null) {
-    return [];
+    return;
   }
   if (!("type" in part) || part.type !== "text") {
-    return [];
+    return;
   }
   if (!("text" in part) || typeof part.text !== "string") {
-    return [];
+    return;
   }
-  const ids: SafeId<"workspace">[] = [];
   for (const match of part.text.matchAll(STELLA_TEXT_REF_WORKSPACE_REGEX)) {
     const captured = match[1];
     if (captured) {
-      ids.push(brandPersistedWorkspaceId(captured));
+      ids.add(brandPersistedWorkspaceId(captured));
     }
   }
-  return ids;
 };
 
 type ExpandThreadDataScopeInput = {
