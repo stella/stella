@@ -189,17 +189,28 @@ export const WorkspaceTable = ({
       <Table
         className="[&_td]:border-border [&_th]:border-border [&:has([data-add-cell]:hover)_[data-add-col]]:bg-muted! [&:has([data-add-cell]:hover)_td:not([data-add-col]),&:has([data-add-cell]:hover)_th:not([data-add-col])]:bg-background! table-fixed border-separate border-spacing-0 [&_td:has([data-slot=select-trigger])]:min-w-40 [&_tfoot_td]:border-t [&_th]:border-b [&_tr]:border-none [&_tr:not(:nth-last-child(2))_td]:border-b"
         style={{
-          // Render at natural column-sum width. With `table-fixed`,
-          // forcing `width: 100%` stretched the <table> past the
-          // last column, leaving an empty band of "table" beyond
-          // the "+" header. The wrapper's overflow handles scroll
-          // when columns exceed the viewport.
-          width: tableWidth,
+          // Fill the wrapper when columns are narrower than it
+          // (so the "+" column extends to the right edge), but
+          // keep the natural column-sum as a min so wide tables
+          // can still scroll horizontally.
+          minWidth: tableWidth,
+          width: "100%",
         }}
       >
         <colgroup>
           {visibleColumns.map((column) => (
-            <col key={column.id} style={{ width: column.getSize() }} />
+            <col
+              key={column.id}
+              // Skip the explicit width on the "+" column so the
+              // browser hands it the remainder of the table's
+              // width — under `table-fixed` an unsized <col>
+              // grows into the leftover space, which gives the
+              // user a full-bleed click target instead of the
+              // hard-coded 48px button + empty band.
+              {...(column.id === addPropertyColId
+                ? {}
+                : { style: { width: column.getSize() } })}
+            />
           ))}
         </colgroup>
         <TableHeader className="bg-background sticky top-0 z-30 border-b">
