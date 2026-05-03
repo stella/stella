@@ -157,22 +157,53 @@ const resolveProvider = (): AIProvider => {
 /**
  * Whether the instance can serve AI to an org that has not set
  * BYOK. False when REQUIRE_PERSONAL_AI_KEY forces BYOK or when
- * no provider keys are provisioned.
+ * no provider has the credentials it needs to run.
  *
- * Used by /ai-config to tell the frontend whether AI features
- * are usable without the org first supplying their own key.
+ * AI_PROVIDER alone is not enough: an explicit provider must be
+ * paired with the matching key (e.g. AI_PROVIDER=openai requires
+ * OPENAI_API_KEY) or the model factory will fail at runtime.
  */
 export const hasInstanceProvider = (): boolean => {
   if (env.REQUIRE_PERSONAL_AI_KEY) {
     return false;
   }
-  return !!(
-    env.AI_PROVIDER ||
+  // Mock provider stands in for any real key.
+  if (env.USE_MOCK_AI) {
+    return true;
+  }
+  // Auto-detect path: any single provider key is enough.
+  const hasAnyKey = !!(
     env.OPENROUTER_API_KEY ||
     env.GOOGLE_GENERATIVE_AI_API_KEY ||
+    env.GOOGLE_AI_API_KEY_EU ||
+    env.GOOGLE_AI_API_KEY_CH ||
     env.OPENAI_API_KEY ||
     env.ANTHROPIC_API_KEY
   );
+  if (!env.AI_PROVIDER) {
+    return hasAnyKey;
+  }
+  // Explicit provider: each provider has its own credential
+  // requirement. Mirror resolveProvider's expectations so the
+  // gate matches what the model factory would actually accept.
+  switch (env.AI_PROVIDER) {
+    case "openrouter":
+      return !!env.OPENROUTER_API_KEY;
+    case "google":
+      return !!(
+        env.GOOGLE_GENERATIVE_AI_API_KEY ||
+        env.GOOGLE_AI_API_KEY_EU ||
+        env.GOOGLE_AI_API_KEY_CH
+      );
+    case "openai":
+      return !!env.OPENAI_API_KEY;
+    case "anthropic":
+      return !!env.ANTHROPIC_API_KEY;
+    case "openai_compatible":
+      return !!(env.OPENAI_API_KEY && env.AI_PROVIDER_BASE_URL);
+    default:
+      return false;
+  }
 };
 
 /**

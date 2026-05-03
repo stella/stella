@@ -36,7 +36,6 @@ import {
   getModelForRole,
   getModelInfoForRole,
   getTemperatureForRole,
-  requireAIAvailable,
 } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
@@ -202,11 +201,6 @@ export const generateAnalysis = async (
   analysis?: PersistedDecisionAnalysis;
   error?: string;
 }> => {
-  const gate = requireAIAvailable(orgAIConfig);
-  if (gate.isErr()) {
-    return { status: "error", error: gate.error.message };
-  }
-
   const decision = await scopedDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
       where: { id: { eq: decisionId } },

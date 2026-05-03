@@ -5,20 +5,24 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { aiConfigOptions } from "@/routes/_protected.organization/-ai-config-queries";
+import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-config-queries";
 
 /**
  * Whether AI features are available right now: either the org has
- * BYOK or the instance has provisioned keys. Returns true while
- * the config query is pending so callers don't flash gates on
- * first render.
+ * BYOK or the instance has provisioned keys. Optimistic while the
+ * query is in-flight so callers don't flash gates on first render;
+ * a query failure is treated as unavailable so the UI matches what
+ * the backend will accept.
  */
 export function useAIAvailable(): boolean {
-  const { data, isPending } = useQuery(aiConfigOptions);
-  if (isPending || !data) {
+  const { data, isPending, isError } = useQuery(aiAvailabilityOptions);
+  if (isPending) {
     return true;
   }
-  return data.configured || data.instanceProvisioned;
+  if (isError || data === undefined) {
+    return false;
+  }
+  return data.available;
 }
 
 /**
@@ -28,13 +32,13 @@ export function useAIAvailable(): boolean {
  */
 export function RequireAIKey({ children }: PropsWithChildren) {
   const t = useTranslations();
-  const { data, isPending } = useQuery(aiConfigOptions);
+  const { data, isPending, isError } = useQuery(aiAvailabilityOptions);
 
-  if (isPending || !data) {
+  if (isPending) {
     return <>{children}</>;
   }
 
-  if (data.configured || data.instanceProvisioned) {
+  if (!isError && data?.available) {
     return <>{children}</>;
   }
 
