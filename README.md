@@ -10,7 +10,8 @@
   <a href="https://stll.app">Website</a> &middot;
   <a href="MANIFESTO.md">Manifesto</a> &middot;
   <a href="https://github.com/stella/stella/issues">Issues</a> &middot;
-  <a href="CONTRIBUTING.md">Contributing</a>
+  <a href="CONTRIBUTING.md">Contributing</a> &middot;
+  <a href="https://discord.gg/8dZjmVFjTK">Discord</a>
 </p>
 
 <p align="center">
@@ -18,6 +19,7 @@
   <a href="https://github.com/stella/stella/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License" /></a>
   <a href="https://stll.app"><img src="https://img.shields.io/badge/cloud-stll.app-black" alt="Stella Cloud" /></a>
   <a href="https://github.com/stella/stella/issues"><img src="https://img.shields.io/github/issues/stella/stella" alt="Issues" /></a>
+  <a href="https://discord.gg/8dZjmVFjTK"><img src="https://img.shields.io/badge/discord-join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
 ---
