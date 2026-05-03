@@ -1,8 +1,8 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { toastManager } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useLocale, useTranslations } from "use-intl";
@@ -12,26 +12,18 @@ import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { useUpsertField } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import {
-  useCreateEntities,
-  useUpsertField,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
-import {
-  entitiesKeys,
-  useEntitiesOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+  calendarTasksKeys,
+  calendarTasksOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/calendar-tasks";
+import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 import { CalendarDayCell } from "./calendar-day-cell";
-import type { CalendarEntry } from "./calendar-day-cell";
-import {
-  KIND_DOT_COLORS,
-  TASK_STATUS_DOT_COLORS,
-} from "./calendar-entity-chip";
+import { TASK_STATUS_DOT_COLORS } from "./calendar-entity-chip";
 import { CalendarHeader } from "./calendar-header";
 import {
-  appendToMapArray,
   formatMonthYearLabel,
-  getEntityDate,
   getMonthDays,
   getWeekDays,
   getWeekdayLabels,
@@ -39,6 +31,10 @@ import {
   isTaskDateProperty,
   TASK_DATE_IDS,
 } from "./calendar-utils";
+import {
+  getCalendarVisibleRange,
+  groupCalendarTasksByDate,
+} from "./calendar-view.logic";
 import { CalendarWeekHeader } from "./calendar-week-header";
 import type { YearDot } from "./calendar-year-grid";
 import { CalendarYearGrid } from "./calendar-year-grid";
@@ -54,96 +50,75 @@ const toAllDayAgendaDateTime = (date: string): string =>
 export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   const t = useTranslations();
   const locale = useLocale();
-  const weekdayLabels = useMemo(() => getWeekdayLabels(locale), [locale]);
+  const queryClient = useQueryClient();
+  const weekdayLabels = getWeekdayLabels(locale);
   const { filters, sorts } = view.layout;
   const { datePropertyId, endDatePropertyId, additionalDatePropertyIds, mode } =
     view.layout;
   const upsertField = useUpsertField();
-  const createEntities = useCreateEntities();
+  const invalidateCalendarTasks = async () => {
+    await queryClient.invalidateQueries({
+      queryKey: calendarTasksKeys.all(workspaceId),
+    });
+  };
 
   const isEditable =
     !!datePropertyId && !isInternalDateProperty(datePropertyId);
 
-  const handleCreate = useCallback(
-    async (date: string, kind: EntityKind) => {
-      if (!isEditable) {
-        return;
-      }
+  const handleCreate = async (date: string, kind: EntityKind) => {
+    if (!isEditable || kind !== "task") {
+      return;
+    }
 
-      if (kind === "task") {
-        // Use the dedicated tasks endpoint so status/priority
-        // are set correctly (the generic createEntities handler
-        // does not set task defaults).
-        const dueDate = datePropertyId === TASK_DATE_IDS[0] ? date : undefined;
-        const startAt =
-          datePropertyId === TASK_DATE_IDS[1]
-            ? toAllDayAgendaDateTime(date)
-            : undefined;
-        const response = await api.tasks({ workspaceId }).put({
-          queryKey: entitiesKeys.all(workspaceId),
-          name: t("tasks.untitled"),
-          ...(dueDate && { dueDate }),
-          ...(startAt && { allDay: true, startAt }),
-        });
+    // Use the dedicated tasks endpoint so status/priority
+    // are set correctly (the generic createEntities handler
+    // does not set task defaults).
+    const dueDate = datePropertyId === TASK_DATE_IDS[0] ? date : undefined;
+    const startAt =
+      datePropertyId === TASK_DATE_IDS[1]
+        ? toAllDayAgendaDateTime(date)
+        : undefined;
+    const response = await api.tasks({ workspaceId }).put({
+      queryKey: entitiesKeys.all(workspaceId),
+      name: t("tasks.untitled"),
+      ...(dueDate && { dueDate }),
+      ...(startAt && { allDay: true, startAt }),
+    });
 
-        const entityId = response.data?.entityId;
-        if (response.error || !entityId) {
-          toastManager.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
-          return;
-        }
+    const entityId = response.data?.entityId;
+    if (response.error || !entityId) {
+      toastManager.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+      return;
+    }
 
-        // Set custom date property if not using built-in due date
-        if (!isTaskDateProperty(datePropertyId)) {
-          upsertField.mutate({
-            workspaceId,
-            propertyId: datePropertyId,
-            entityId,
-            content: {
-              type: "date",
-              version: 1,
-              value: date,
-            },
-          });
-        }
-
-        useInspectorStore.getState().openTask(entityId, "", true);
-        return;
-      }
-
-      // Non-task entities use the generic creation handler
-      createEntities.mutate(
+    // Set custom date property if not using built-in due date
+    if (!isTaskDateProperty(datePropertyId)) {
+      upsertField.mutate(
         {
-          type: "manual-input",
           workspaceId,
-          kind,
-          name: t("workspaces.newDocument"),
+          propertyId: datePropertyId,
+          entityId,
+          content: {
+            type: "date",
+            version: 1,
+            value: date,
+          },
         },
         {
-          onSuccess: (data) => {
-            if (data.entityId === undefined) {
-              return;
-            }
-            if (!isTaskDateProperty(datePropertyId)) {
-              upsertField.mutate({
-                workspaceId,
-                propertyId: datePropertyId,
-                entityId: data.entityId,
-                content: {
-                  type: "date",
-                  version: 1,
-                  value: date,
-                },
-              });
-            }
+          onSuccess: () => {
+            void invalidateCalendarTasks();
           },
         },
       );
-    },
-    [isEditable, createEntities, workspaceId, datePropertyId, upsertField, t],
-  );
+    } else {
+      await invalidateCalendarTasks();
+    }
+
+    useInspectorStore.getState().openTask(entityId, "", true);
+  };
 
   // Current viewport date (month/week navigation state)
   const [viewDate, setViewDate] = useState(() => new Date());
@@ -151,85 +126,47 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   const year = viewDate.getUTCFullYear();
   const month = viewDate.getUTCMonth();
 
-  const days = useMemo(
-    () =>
-      mode === "month"
-        ? getMonthDays(year, month)
-        : mode === "week"
-          ? getWeekDays(viewDate)
-          : [],
-    [mode, year, month, viewDate],
-  );
+  const days =
+    mode === "month"
+      ? getMonthDays(year, month)
+      : mode === "week"
+        ? getWeekDays(viewDate)
+        : [];
 
-  // Fetch all entities (calendar doesn't paginate; uses
-  // filters from the view)
-  const { data: entityData } = useSuspenseQuery(
-    useEntitiesOptions({
+  // All date property IDs to show on the calendar
+  const allDatePropertyIds = [datePropertyId];
+  if (additionalDatePropertyIds) {
+    for (const id of additionalDatePropertyIds) {
+      if (!allDatePropertyIds.includes(id)) {
+        allDatePropertyIds.push(id);
+      }
+    }
+  }
+
+  const visibleRange = getCalendarVisibleRange({ days, mode, month, year });
+
+  const { data: calendarTasks = [] } = useQuery({
+    ...calendarTasksOptions({
       workspaceId,
       filters,
       sorts,
-      page: 1,
+      dateFrom: visibleRange.dateFrom,
+      dateTo: visibleRange.dateTo,
+      datePropertyIds: allDatePropertyIds,
+      endDatePropertyId,
     }),
-  );
+    throwOnError: true,
+  });
 
-  // All date property IDs to show on the calendar
-  const allDatePropertyIds = useMemo(() => {
-    const ids = [datePropertyId];
-    if (additionalDatePropertyIds) {
-      for (const id of additionalDatePropertyIds) {
-        if (!ids.includes(id)) {
-          ids.push(id);
-        }
-      }
-    }
-    return ids;
-  }, [datePropertyId, additionalDatePropertyIds]);
-
-  // Group entities by date across all configured date properties
-  const entitiesByDate = useMemo(() => {
-    const map = new Map<string, CalendarEntry[]>();
-
-    const calendarEntities = entityData.entities.filter(
-      (e) => e.kind === "task",
-    );
-
-    for (const entity of calendarEntities) {
-      for (const propId of allDatePropertyIds) {
-        const startDate = getEntityDate(entity, propId);
-        if (!startDate) {
-          continue;
-        }
-
-        // Only apply end-date spanning for the primary
-        // date property (multi-day range)
-        const endDate =
-          propId === datePropertyId && endDatePropertyId
-            ? getEntityDate(entity, endDatePropertyId)
-            : null;
-
-        if (endDate && endDate > startDate) {
-          const current = new Date(`${startDate}T00:00:00Z`);
-          const end = new Date(`${endDate}T00:00:00Z`);
-          while (current <= end) {
-            const iso = current.toISOString().slice(0, 10);
-            appendToMapArray(map, iso, { entity, propertyId: propId });
-            current.setUTCDate(current.getUTCDate() + 1);
-          }
-        } else {
-          appendToMapArray(map, startDate, { entity, propertyId: propId });
-        }
-      }
-    }
-
-    return map;
-  }, [
-    entityData.entities,
-    allDatePropertyIds,
+  // Group tasks by date across all configured date properties
+  const entitiesByDate = groupCalendarTasksByDate({
+    tasks: calendarTasks,
+    datePropertyIds: allDatePropertyIds,
     datePropertyId,
     endDatePropertyId,
-  ]);
+  });
 
-  const navigatePrev = useCallback(() => {
+  const navigatePrev = () => {
     setViewDate((d) => {
       const next = new Date(d);
       if (mode === "year") {
@@ -241,9 +178,9 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       }
       return next;
     });
-  }, [mode]);
+  };
 
-  const navigateNext = useCallback(() => {
+  const navigateNext = () => {
     setViewDate((d) => {
       const next = new Date(d);
       if (mode === "year") {
@@ -255,11 +192,11 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       }
       return next;
     });
-  }, [mode]);
+  };
 
-  const navigateToday = useCallback(() => {
+  const navigateToday = () => {
     setViewDate(new Date());
-  }, []);
+  };
 
   const wheelDirection = useRef(0);
   const flushWheel = useDebouncedCallback(() => {
@@ -270,57 +207,60 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     }
     wheelDirection.current = 0;
   }, 120);
-  const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
-      wheelDirection.current += e.deltaY;
-      flushWheel();
-    },
-    [flushWheel],
-  );
+  const handleWheel = (e: React.WheelEvent) => {
+    wheelDirection.current += e.deltaY;
+    flushWheel();
+  };
 
-  const handleDrop = useCallback(
-    (date: string, entityId: string, kind: string) => {
-      if (!isEditable) {
-        return;
-      }
-      if (datePropertyId === TASK_DATE_IDS[0] && kind === "task") {
-        api
-          .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .patch({
-            taskId: toSafeId<"entity">(entityId),
-            queryKey: entitiesKeys.all(workspaceId),
-            dueDate: date,
-          })
-          .catch(() => {
-            // non-critical
-          });
-      } else if (datePropertyId === TASK_DATE_IDS[1] && kind === "task") {
-        api
-          .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .patch({
-            taskId: toSafeId<"entity">(entityId),
-            queryKey: entitiesKeys.all(workspaceId),
-            allDay: true,
-            startAt: toAllDayAgendaDateTime(date),
-          })
-          .catch(() => {
-            // non-critical
-          });
-      } else if (isTaskDateProperty(datePropertyId)) {
-        // Future-proofing for any new built-in task date pseudo-property.
-        if (kind !== "task") {
-          toastManager.add({
-            title: t("workspaces.views.calendar.dueDateTaskOnly"),
-            type: "foreground",
-          });
-        } else {
-          toastManager.add({
-            title: t("workspaces.views.calendar.noDates"),
-            type: "foreground",
-          });
-        }
+  const handleDrop = (date: string, entityId: string, kind: string) => {
+    if (!isEditable) {
+      return;
+    }
+    if (datePropertyId === TASK_DATE_IDS[0] && kind === "task") {
+      api
+        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .patch({
+          taskId: toSafeId<"entity">(entityId),
+          queryKey: entitiesKeys.all(workspaceId),
+          dueDate: date,
+        })
+        .then(() => {
+          void invalidateCalendarTasks();
+        })
+        .catch(() => {
+          // non-critical
+        });
+    } else if (datePropertyId === TASK_DATE_IDS[1] && kind === "task") {
+      api
+        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .patch({
+          taskId: toSafeId<"entity">(entityId),
+          queryKey: entitiesKeys.all(workspaceId),
+          allDay: true,
+          startAt: toAllDayAgendaDateTime(date),
+        })
+        .then(() => {
+          void invalidateCalendarTasks();
+        })
+        .catch(() => {
+          // non-critical
+        });
+    } else if (isTaskDateProperty(datePropertyId)) {
+      // Future-proofing for any new built-in task date pseudo-property.
+      if (kind !== "task") {
+        toastManager.add({
+          title: t("workspaces.views.calendar.dueDateTaskOnly"),
+          type: "foreground",
+        });
       } else {
-        upsertField.mutate({
+        toastManager.add({
+          title: t("workspaces.views.calendar.noDates"),
+          type: "foreground",
+        });
+      }
+    } else {
+      upsertField.mutate(
+        {
           workspaceId,
           propertyId: datePropertyId,
           entityId,
@@ -329,33 +269,30 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             version: 1,
             value: date,
           },
-        });
-      }
-    },
-    [isEditable, datePropertyId, workspaceId, upsertField, t],
-  );
+        },
+        {
+          onSuccess: () => {
+            void invalidateCalendarTasks();
+          },
+        },
+      );
+    }
+  };
 
   // Build dots for year view
-  const yearDots = useMemo<YearDot[]>(() => {
-    if (mode !== "year") {
-      return [];
-    }
-    const dots: YearDot[] = [];
+  const yearDots: YearDot[] = [];
+  if (mode === "year") {
     for (const [date, entries] of entitiesByDate) {
       for (const { entity } of entries) {
-        dots.push({
+        yearDots.push({
           date,
-          color:
-            entity.kind === "task" && entity.status
-              ? (TASK_STATUS_DOT_COLORS[entity.status] ?? "var(--option-gray)")
-              : (KIND_DOT_COLORS[entity.kind] ??
-                KIND_DOT_COLORS["document"] ??
-                "var(--option-gray)"),
+          color: entity.status
+            ? (TASK_STATUS_DOT_COLORS[entity.status] ?? "var(--option-gray)")
+            : "var(--option-gray)",
         });
       }
     }
-    return dots;
-  }, [mode, entitiesByDate]);
+  }
 
   if (!datePropertyId) {
     return (
@@ -427,7 +364,6 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                 onDrop={(entityId, kind) =>
                   handleDrop(day.date, entityId, kind)
                 }
-                workspaceId={workspaceId}
               />
             ))}
           </div>

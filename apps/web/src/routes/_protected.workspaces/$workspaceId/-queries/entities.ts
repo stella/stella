@@ -17,12 +17,14 @@ import {
 import type {
   EntitiesPageKey,
   EntitiesWindowKey,
+  KanbanGroupKey,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
 
 export { entitiesKeys, visibleEntityFieldIds };
 
 type EntitiesOptionsInput = QueryOptionsInput<EntitiesPageKey>;
 type EntitiesWindowOptionsInput = QueryOptionsInput<EntitiesWindowKey>;
+type KanbanGroupOptionsInput = QueryOptionsInput<KanbanGroupKey>;
 
 type RawWorkspaceEntity = Omit<
   WorkspaceEntity,
@@ -100,6 +102,7 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
             filters: key.filters,
             sorts: key.sorts,
             page: key.page,
+            ...(key.search !== undefined && { search: key.search }),
             fieldMode,
             fieldIds:
               fieldMode === "visible"
@@ -107,6 +110,7 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
                     toSafeId<"property">(fieldId),
                   )
                 : [],
+            previewableForAi: key.previewableForAi ?? false,
             // TODO: replace this load-everything pageSize with
             // virtualised rendering + cursor pagination. Tracked
             // alongside the matching limits.ts TODO.
@@ -165,11 +169,58 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
 
+export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
+  infiniteQueryOptions({
+    queryKey: entitiesKeys.kanbanGroup(key),
+    queryFn: async ({ signal, pageParam }) => {
+      const fieldMode = key.fieldMode ?? "full";
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
+        ["kanban-group"].post(
+          {
+            filters: key.filters,
+            sorts: key.sorts,
+            limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
+            fieldMode,
+            fieldIds:
+              fieldMode === "visible"
+                ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
+                    toSafeId<"property">(fieldId),
+                  )
+                : [],
+            groupByPropertyId:
+              key.groupByPropertyId === "_status" ||
+              key.groupByPropertyId === "_kind"
+                ? key.groupByPropertyId
+                : toSafeId<"property">(key.groupByPropertyId),
+            groupValue: key.groupValue,
+            ...(pageParam !== undefined && { cursor: pageParam }),
+          },
+          { fetch: { signal } },
+        );
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      const { entities: rawEntities, ...rest } = response.data;
+      const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
+
+      return { ...rest, entities };
+    },
+    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  });
+
 // Defers the key so useSuspenseInfiniteQuery keeps showing stale
 // data instead of triggering the suspense boundary when filters or
 // sorts change.
 export const useEntitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
   entitiesWindowOptions(useDeferredValue(key));
+
+export const useKanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
+  kanbanGroupOptions(useDeferredValue(key));
 
 // Defers the key so useSuspenseQuery keeps showing stale
 // data instead of triggering the suspense boundary when

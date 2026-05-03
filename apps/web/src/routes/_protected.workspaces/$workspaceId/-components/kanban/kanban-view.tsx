@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
 import { autoScrollForExternal } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/external";
@@ -11,6 +11,7 @@ import type { OptionColor } from "@stll/api/types";
 import { toastManager } from "@stll/ui/components/toast";
 import {
   useMutation,
+  useInfiniteQuery,
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
@@ -20,12 +21,7 @@ import { useTranslations } from "use-intl";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
-import type {
-  EntityKind,
-  WorkspaceEntity,
-  WorkspaceProperty,
-  WorkspaceView,
-} from "@/lib/types";
+import type { EntityKind, WorkspaceProperty, WorkspaceView } from "@/lib/types";
 // -- Auto-scrolling board container with forgiving column drop --
 import { COLUMN_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
@@ -34,31 +30,25 @@ import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import {
   getKanbanGroupingPropertyId,
   resolveKanbanGrouping,
-  selectKanbanEntitiesForGrouping,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { resolveOptionColor } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import {
   uploadFileEntitiesBatched,
   useBatchUploadLabels,
 } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
-import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import {
   useCreateEntities,
-  useDeleteEntities,
   useRenameEntity,
   useUpsertField,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { useUpdateProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
 import {
   entitiesKeys,
-  useEntitiesOptions,
+  useKanbanGroupOptions,
   visibleEntityFieldIds,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-import {
-  getFieldValue,
-  getInternalPropertyId,
-} from "@/routes/_protected.workspaces/$workspaceId/-utils";
+import { getInternalPropertyId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 type KanbanViewProps = {
   view: WorkspaceView;
@@ -74,10 +64,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const renameEntity = useRenameEntity();
   const updateProperty = useUpdateProperty();
   const createEntities = useCreateEntities();
-  const deleteEntities = useDeleteEntities();
-  const startWorkflow = useStartWorkflow(workspaceId);
   const queryClient = useQueryClient();
-  const hasAIProperties = properties.some((p) => p.tool.type === "ai-model");
   const [hiddenGroups, setHiddenGroups] = useState(new Set());
   const [localColumnOrder, setLocalColumnOrder] = useState<string[]>([]);
 
@@ -181,22 +168,6 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
   const { filters, sorts } = view.layout;
 
-  const { data: entityData } = useSuspenseQuery(
-    useEntitiesOptions({
-      workspaceId,
-      filters,
-      sorts,
-      page: 1,
-      fieldMode: "visible",
-      fieldIds,
-    }),
-  );
-
-  const entities = useMemo(
-    () => selectKanbanEntitiesForGrouping(entityData.entities, grouping),
-    [entityData.entities, grouping],
-  );
-
   // Mutation for changing task status via kanban drag-drop
   const updateTaskStatus = useMutation({
     mutationFn: async ({
@@ -239,6 +210,19 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     );
   }
 
+  if (
+    grouping.type === "built-in" &&
+    groupByPropertyId !== getInternalPropertyId("kind")
+  ) {
+    return (
+      <EmptyState
+        hint={t("workspaces.kanban.usePropertyHint")}
+        icon={KanbanIcon}
+        message={t("workspaces.kanban.selectPropertyHint")}
+      />
+    );
+  }
+
   // -- Unified grouping: resolve options, then render one board --
 
   const statusLabels: Record<string, string> = isStatusGrouping
@@ -250,27 +234,26 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         ]),
       )
     : {};
+  const entityKindLabels = {
+    document: t("search.kinds.document"),
+    folder: t("search.kinds.folder"),
+    task: t("search.kinds.task"),
+    message: t("search.kinds.message"),
+    link: t("search.kinds.link"),
+  };
 
   const options: GroupOption[] = isStatusGrouping
     ? getStatusGroupOptions(statusLabels)
     : isBuiltInGrouping
-      ? getBuiltInGroupOptions(
-          entities,
-          groupByPropertyId,
-          t("workspaces.kanban.unknown"),
-        )
+      ? getBuiltInGroupOptions({
+          labels: entityKindLabels,
+          mode: groupByPropertyId,
+        })
       : groupByProperty && isGroupableProperty(groupByProperty)
         ? getGroupOptions(groupByProperty)
         : [];
 
-  const groups = isStatusGrouping
-    ? groupEntitiesByStatus(entities, options, t("common.uncategorized"))
-    : groupEntities(
-        entities,
-        groupByPropertyId,
-        options,
-        t("common.uncategorized"),
-      );
+  const groups = getEntityGroups(options, t("common.uncategorized"));
 
   const handleDrop = (targetValue: string | null, entityId: string) => {
     if (isStatusGrouping && targetValue !== null) {
@@ -298,14 +281,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       },
       {
         onSuccess: () => {
-          if (!hasAIProperties) {
-            return;
-          }
-          const entity = entities.find((e) => e.entityId === entityId);
-          if (entity?.kind === "folder") {
-            return;
-          }
-          void startWorkflow({ entityIds: [entityId] });
+          void queryClient.invalidateQueries({
+            queryKey: entitiesKeys.all(workspaceId),
+          });
         },
       },
     );
@@ -395,23 +373,6 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           content: { ...groupByProperty.content, options: updatedOptions },
           tool: groupByProperty.tool,
         });
-
-        const affected = entities.filter((e) => {
-          const val = getFieldValue(e.fields[groupByPropertyId]);
-          return val === oldValue;
-        });
-        for (const entity of affected) {
-          upsertField.mutate({
-            workspaceId,
-            propertyId: groupByPropertyId,
-            entityId: entity.entityId,
-            content: {
-              version: 1 as const,
-              type: "single-select" as const,
-              value: newValue,
-            },
-          });
-        }
       }
     : null;
 
@@ -421,10 +382,6 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       next.add(value);
       return next;
     });
-  };
-
-  const handleDeleteAll = (entityIds: string[]) => {
-    deleteEntities.mutate({ workspaceId, entityIds });
   };
 
   const handleRenameEntity = (entityId: string, newName: string) => {
@@ -514,21 +471,18 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       {visibleGroups.map((group) => {
         const { value } = group;
         return (
-          <KanbanColumn
+          <KanbanGroupColumn
             cardFields={cardFields}
             color={group.color}
             colorBg={group.colorBg}
             columnValue={value}
-            entities={group.entities}
+            fieldIds={fieldIds}
+            filters={filters}
+            groupByPropertyId={groupByPropertyId}
             key={value ?? "__uncategorized__"}
             onChangeColor={
               value !== null && handleChangeColor
                 ? (c) => handleChangeColor(value, c)
-                : undefined
-            }
-            onDeleteAll={
-              value !== null
-                ? () => handleDeleteAll(group.entities.map((e) => e.entityId))
                 : undefined
             }
             onCreate={(kind) => {
@@ -553,6 +507,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
             onReorderColumn={handleReorderColumn}
             optionColor={group.optionColor}
             properties={properties}
+            sorts={sorts}
             taskOnly={isStatusGrouping}
             title={group.label}
             workspaceId={workspaceId}
@@ -560,6 +515,59 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         );
       })}
     </KanbanBoard>
+  );
+};
+
+type KanbanGroupColumnProps = Omit<
+  ComponentProps<typeof KanbanColumn>,
+  "entities"
+> & {
+  workspaceId: string;
+  filters: WorkspaceView["layout"]["filters"];
+  sorts: WorkspaceView["layout"]["sorts"];
+  fieldIds: string[];
+  groupByPropertyId: string;
+};
+
+const KANBAN_GROUP_PAGE_SIZE = 200;
+
+const KanbanGroupColumn = ({
+  workspaceId,
+  filters,
+  sorts,
+  fieldIds,
+  groupByPropertyId,
+  columnValue,
+  ...props
+}: KanbanGroupColumnProps) => {
+  const query = useInfiniteQuery(
+    useKanbanGroupOptions({
+      workspaceId,
+      filters,
+      sorts,
+      limit: KANBAN_GROUP_PAGE_SIZE,
+      fieldMode: "visible",
+      fieldIds,
+      groupByPropertyId,
+      groupValue: columnValue,
+    }),
+  );
+  const entities = query.data?.pages.flatMap((page) => page.entities) ?? [];
+
+  return (
+    <KanbanColumn
+      {...props}
+      columnValue={columnValue}
+      entities={entities}
+      hasMore={query.hasNextPage}
+      isLoadingMore={query.isFetchingNextPage}
+      onLoadMore={() => {
+        if (query.hasNextPage && !query.isFetchingNextPage) {
+          void query.fetchNextPage();
+        }
+      }}
+      workspaceId={workspaceId}
+    />
   );
 };
 
@@ -647,7 +655,8 @@ const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
 // -- Helpers --
 
 const isGroupableProperty = (property: WorkspaceProperty) =>
-  property.content.type === "single-select";
+  property.content.type === "single-select" ||
+  property.content.type === "multi-select";
 
 type GroupOption = {
   value: string;
@@ -680,52 +689,20 @@ type EntityGroup = {
   color?: string | undefined;
   colorBg?: string | undefined;
   optionColor?: OptionColor | undefined;
-  entities: WorkspaceEntity[];
 };
 
-const groupEntities = (
-  entities: WorkspaceEntity[],
-  propertyId: string,
+const getEntityGroups = (
   options: GroupOption[],
   uncategorizedLabel: string,
 ): EntityGroup[] => {
-  const grouped = new Map<string | null, WorkspaceEntity[]>();
-
-  for (const opt of options) {
-    grouped.set(opt.value, []);
-  }
-  grouped.set(null, []);
-
-  for (const entity of entities) {
-    const value = getFieldValue(entity.fields[propertyId]);
-    const normalizedValue = value === "" || value === null ? null : value;
-
-    const bucket = grouped.get(normalizedValue);
-    if (bucket) {
-      bucket.push(entity);
-    } else {
-      grouped.get(null)?.push(entity);
-    }
-  }
-
   const result: EntityGroup[] = options.map((opt) => ({
     value: opt.value,
     label: opt.label,
     color: opt.color,
     colorBg: opt.colorBg,
     optionColor: opt.optionColor,
-    entities: grouped.get(opt.value) ?? [],
   }));
-
-  const uncategorized = grouped.get(null) ?? [];
-  if (uncategorized.length > 0) {
-    result.push({
-      value: null,
-      label: uncategorizedLabel,
-      entities: uncategorized,
-    });
-  }
-
+  result.push({ value: null, label: uncategorizedLabel });
   return result;
 };
 
@@ -764,69 +741,29 @@ const getStatusGroupOptions = (labels: Record<string, string>): GroupOption[] =>
     };
   });
 
-/** Group entities by status, pre-seeding all status columns. */
-const groupEntitiesByStatus = (
-  entities: WorkspaceEntity[],
-  options: GroupOption[],
-  uncategorizedLabel: string,
-): EntityGroup[] => {
-  const grouped = new Map<string | null, WorkspaceEntity[]>();
-  for (const opt of options) {
-    grouped.set(opt.value, []);
-  }
-  grouped.set(null, []);
+type EntityKindLabels = Record<
+  "document" | "folder" | "task" | "message" | "link",
+  string
+>;
 
-  for (const entity of entities) {
-    const key = entity.status ?? "open";
-    const bucket = grouped.get(key);
-    if (bucket) {
-      bucket.push(entity);
-    } else {
-      grouped.get(null)?.push(entity);
-    }
-  }
+const getEntityKindGroupOptions = (labels: EntityKindLabels): GroupOption[] => [
+  { value: "document", label: labels.document },
+  { value: "folder", label: labels.folder },
+  { value: "task", label: labels.task },
+  { value: "message", label: labels.message },
+  { value: "link", label: labels.link },
+];
 
-  const result: EntityGroup[] = options.map((opt) => ({
-    value: opt.value,
-    label: opt.label,
-    color: opt.color,
-    colorBg: opt.colorBg,
-    optionColor: opt.optionColor,
-    entities: grouped.get(opt.value) ?? [],
-  }));
-
-  const uncategorized = grouped.get(null) ?? [];
-  if (uncategorized.length > 0) {
-    result.push({
-      value: null,
-      label: uncategorizedLabel,
-      entities: uncategorized,
-    });
-  }
-
-  return result;
+type BuiltInGroupOptionsParams = {
+  labels: EntityKindLabels;
+  mode: string;
 };
 
-/** Build GroupOption[] for read-only built-in groupings (kind, created-by). */
-const getBuiltInGroupOptions = (
-  entities: WorkspaceEntity[],
-  mode: string,
-  unknownLabel: string,
-): GroupOption[] => {
-  const seen = new Set<string>();
-  for (const entity of entities) {
-    const key =
-      mode === getInternalPropertyId("kind")
-        ? entity.kind
-        : (entity.createdBy ?? "");
-    seen.add(key);
-  }
-
-  return [...seen].map((key) => ({
-    value: key,
-    label:
-      mode === getInternalPropertyId("kind")
-        ? key.charAt(0).toUpperCase() + key.slice(1)
-        : key || unknownLabel,
-  }));
-};
+/** Build GroupOption[] for read-only built-in groupings. */
+const getBuiltInGroupOptions = ({
+  labels,
+  mode,
+}: BuiltInGroupOptionsParams): GroupOption[] =>
+  mode === getInternalPropertyId("kind")
+    ? getEntityKindGroupOptions(labels)
+    : [];

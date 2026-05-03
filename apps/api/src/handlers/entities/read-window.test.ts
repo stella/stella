@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import readEntities from "./read";
+import readKanbanGroup from "./read-kanban-group";
 import readEntitiesWindow from "./read-window";
 
 const workspaceId = toSafeId<"workspace">("ws_entity_window");
@@ -60,6 +61,7 @@ const createContext = ({
 }: {
   body:
     | Parameters<typeof readEntitiesWindow.handler>[0]["body"]
+    | Parameters<typeof readKanbanGroup.handler>[0]["body"]
     | Parameters<typeof readEntities.handler>[0]["body"];
   safeDb: Parameters<typeof readEntitiesWindow.handler>[0]["safeDb"];
 }): Parameters<typeof readEntitiesWindow.handler>[0] =>
@@ -158,5 +160,32 @@ describe("entity read handlers", () => {
 
     expect(result.entities).toHaveLength(3);
     expect(result.totalCount).toBe(3);
+  });
+
+  test("kanban group query paginates one group window", async () => {
+    const result = await readKanbanGroup.handler(
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- read and kanban handlers use the same safe handler context shape for this handler-level test
+      createContext({
+        body: {
+          limit: 2,
+          filters: [],
+          sorts: [],
+          fieldMode: "visible",
+          fieldIds: [],
+          groupByPropertyId: "_status",
+          groupValue: "open",
+        },
+        safeDb: createSafeDb({ includeCount: false }),
+      }) as Parameters<typeof readKanbanGroup.handler>[0],
+    );
+
+    expect("entities" in result).toBe(true);
+    if (!("entities" in result)) {
+      return;
+    }
+
+    expect(result.entities).toHaveLength(2);
+    expect(result.limit).toBe(2);
+    expect(result.nextCursor).toEqual(expect.any(String));
   });
 });

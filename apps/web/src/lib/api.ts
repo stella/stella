@@ -5,6 +5,7 @@ import { posthog } from "posthog-js";
 import { env } from "@/env";
 
 const eden = treaty<API>(env.VITE_API_URL, {
+  parseDate: false,
   fetch: {
     credentials: "include",
   },

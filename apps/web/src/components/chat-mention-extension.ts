@@ -122,6 +122,7 @@ export const createChatSuggestion = (
   searchItems: (query: string) => Promise<ChatMentionOption[]>,
   loadWorkspaceEntities: (
     workspace: ChatMentionOption,
+    query: string,
   ) => Promise<ChatMentionOption[]>,
 ): Omit<SuggestionOptions<ChatMentionOption, MentionNodeAttrs>, "editor"> => ({
   allowSpaces: true,

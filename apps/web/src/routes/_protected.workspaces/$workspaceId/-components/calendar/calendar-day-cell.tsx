@@ -11,8 +11,9 @@ import { cn } from "@stll/ui/lib/utils";
 import { PlusIcon, SquareCheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { EntityKind, WorkspaceEntity } from "@/lib/types";
+import type { EntityKind } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
+import type { CalendarTask } from "@/routes/_protected.workspaces/$workspaceId/-queries/calendar-tasks";
 
 import { CalendarEntityChip } from "./calendar-entity-chip";
 import type { CalendarDay } from "./calendar-utils";
@@ -20,7 +21,7 @@ import { CurrentTimeIndicator } from "./current-time-indicator";
 
 /** An entity placed on a specific date by a specific property. */
 export type CalendarEntry = {
-  entity: WorkspaceEntity;
+  entity: CalendarTask;
   /** Which date property placed this entity on this date. */
   propertyId: string;
 };
@@ -31,7 +32,6 @@ const MAX_VISIBLE_WEEK = 20;
 type CalendarDayCellProps = {
   day: CalendarDay;
   entries: CalendarEntry[];
-  workspaceId: string;
   mode: "month" | "week";
   isEditable: boolean;
   onDrop: (entityId: string, kind: string) => void;
@@ -41,7 +41,6 @@ type CalendarDayCellProps = {
 export const CalendarDayCell = ({
   day,
   entries,
-  workspaceId,
   mode,
   isEditable,
   onDrop,
@@ -164,8 +163,7 @@ export const CalendarDayCell = ({
           <CalendarEntityChip
             entity={entity}
             isEditable={isEditable}
-            key={`${entity.entityId}-${propertyId}`}
-            workspaceId={workspaceId}
+            key={`${entity.taskId}-${propertyId}`}
           />
         ))}
       </div>

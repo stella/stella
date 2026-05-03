@@ -27,7 +27,6 @@ import { Route as ProtectedSettingsIndexRouteImport } from './routes/_protected.
 import { Route as ProtectedKnowledgeIndexRouteImport } from './routes/_protected.knowledge/index'
 import { Route as ProtectedContactsIndexRouteImport } from './routes/_protected.contacts/index'
 import { Route as ProtectedChatIndexRouteImport } from './routes/_protected.chat/index'
-import { Route as ProtectedCalendarIndexRouteImport } from './routes/_protected.calendar/index'
 import { Route as AuthAcceptInvitationInvitationIdRouteImport } from './routes/auth/accept-invitation.$invitationId'
 import { Route as ProtectedKnowledgeTemplatesRouteImport } from './routes/_protected.knowledge/templates'
 import { Route as ProtectedKnowledgeClausesRouteImport } from './routes/_protected.knowledge/clauses'
@@ -144,11 +143,6 @@ const ProtectedChatIndexRoute = ProtectedChatIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => ProtectedChatRouteRoute,
-} as any)
-const ProtectedCalendarIndexRoute = ProtectedCalendarIndexRouteImport.update({
-  id: '/calendar/',
-  path: '/calendar/',
-  getParentRoute: () => ProtectedRoute,
 } as any)
 const AuthAcceptInvitationInvitationIdRoute =
   AuthAcceptInvitationInvitationIdRouteImport.update({
@@ -326,7 +320,6 @@ export interface FileRoutesByFullPath {
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
-  '/calendar/': typeof ProtectedCalendarIndexRoute
   '/chat/': typeof ProtectedChatIndexRoute
   '/contacts/': typeof ProtectedContactsIndexRoute
   '/knowledge/': typeof ProtectedKnowledgeIndexRoute
@@ -365,7 +358,6 @@ export interface FileRoutesByTo {
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
-  '/calendar': typeof ProtectedCalendarIndexRoute
   '/chat': typeof ProtectedChatIndexRoute
   '/contacts': typeof ProtectedContactsIndexRoute
   '/knowledge': typeof ProtectedKnowledgeIndexRoute
@@ -412,7 +404,6 @@ export interface FileRoutesById {
   '/_protected/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/_protected/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
-  '/_protected/calendar/': typeof ProtectedCalendarIndexRoute
   '/_protected/chat/': typeof ProtectedChatIndexRoute
   '/_protected/contacts/': typeof ProtectedContactsIndexRoute
   '/_protected/knowledge/': typeof ProtectedKnowledgeIndexRoute
@@ -460,7 +451,6 @@ export interface FileRouteTypes {
     | '/knowledge/clauses'
     | '/knowledge/templates'
     | '/auth/accept-invitation/$invitationId'
-    | '/calendar/'
     | '/chat/'
     | '/contacts/'
     | '/knowledge/'
@@ -499,7 +489,6 @@ export interface FileRouteTypes {
     | '/knowledge/clauses'
     | '/knowledge/templates'
     | '/auth/accept-invitation/$invitationId'
-    | '/calendar'
     | '/chat'
     | '/contacts'
     | '/knowledge'
@@ -545,7 +534,6 @@ export interface FileRouteTypes {
     | '/_protected/knowledge/clauses'
     | '/_protected/knowledge/templates'
     | '/auth/accept-invitation/$invitationId'
-    | '/_protected/calendar/'
     | '/_protected/chat/'
     | '/_protected/contacts/'
     | '/_protected/knowledge/'
@@ -708,13 +696,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/chat/'
       preLoaderRoute: typeof ProtectedChatIndexRouteImport
       parentRoute: typeof ProtectedChatRouteRoute
-    }
-    '/_protected/calendar/': {
-      id: '/_protected/calendar/'
-      path: '/calendar'
-      fullPath: '/calendar/'
-      preLoaderRoute: typeof ProtectedCalendarIndexRouteImport
-      parentRoute: typeof ProtectedRoute
     }
     '/auth/accept-invitation/$invitationId': {
       id: '/auth/accept-invitation/$invitationId'
@@ -1086,7 +1067,6 @@ interface ProtectedRouteChildren {
   ProtectedSettingsRouteRoute: typeof ProtectedSettingsRouteRouteWithChildren
   ProtectedWorkspacesWorkspaceIdRouteRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
   ProtectedContactsContactIdRoute: typeof ProtectedContactsContactIdRoute
-  ProtectedCalendarIndexRoute: typeof ProtectedCalendarIndexRoute
   ProtectedContactsIndexRoute: typeof ProtectedContactsIndexRoute
   ProtectedTodosIndexRoute: typeof ProtectedTodosIndexRoute
   ProtectedWorkspacesIndexRoute: typeof ProtectedWorkspacesIndexRoute
@@ -1099,7 +1079,6 @@ const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedWorkspacesWorkspaceIdRouteRoute:
     ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren,
   ProtectedContactsContactIdRoute: ProtectedContactsContactIdRoute,
-  ProtectedCalendarIndexRoute: ProtectedCalendarIndexRoute,
   ProtectedContactsIndexRoute: ProtectedContactsIndexRoute,
   ProtectedTodosIndexRoute: ProtectedTodosIndexRoute,
   ProtectedWorkspacesIndexRoute: ProtectedWorkspacesIndexRoute,

@@ -15,6 +15,7 @@ const readEntitiesBodySchema = t.Object({
   filters: t.Optional(t.Array(tViewFilterConditionSchema)),
   sorts: t.Optional(t.Array(tViewSortSchema)),
   page: t.Optional(t.Integer({ minimum: 1 })),
+  search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
   pageSize: t.Optional(
     t.Integer({
       minimum: 1,
@@ -27,6 +28,7 @@ const readEntitiesBodySchema = t.Object({
       maxItems: LIMITS.propertiesCount,
     }),
   ),
+  previewableForAi: t.Optional(t.Boolean()),
 });
 
 const config = {
@@ -47,11 +49,13 @@ const readEntities = createSafeHandler(
         currentOrganizationId: session.activeOrganizationId,
         filters: body.filters ?? [],
         sorts: body.sorts ?? [],
+        ...(body.search !== undefined && { search: body.search }),
         offset: (page - 1) * pageSize,
         limit: pageSize,
         fieldMode: body.fieldMode ?? "full",
         fieldIds: body.fieldIds ?? [],
         excludedKinds: [],
+        previewableForAi: body.previewableForAi ?? false,
         includeTotalCount: true,
       }),
     );

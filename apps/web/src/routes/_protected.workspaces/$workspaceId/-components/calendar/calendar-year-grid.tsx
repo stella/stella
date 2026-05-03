@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { cn } from "@stll/ui/lib/utils";
 import { useLocale } from "use-intl";
 
@@ -37,24 +35,15 @@ export const CalendarYearGrid = ({
 }: CalendarYearGridProps) => {
   const locale = useLocale();
 
-  const monthLabels = useMemo(
-    () => getMonthLabels(locale, year, "long"),
-    [locale, year],
-  );
+  const monthLabels = getMonthLabels(locale, year, "long");
 
-  const weekdayLabels = useMemo(
-    () => getWeekdayLabels(locale, "narrow"),
-    [locale],
-  );
+  const weekdayLabels = getWeekdayLabels(locale, "narrow");
 
   // Index dots by date for O(1) lookup
-  const dotsByDate = useMemo(() => {
-    const map = new Map<string, YearDot[]>();
-    for (const dot of dots) {
-      appendToMapArray(map, dot.date, dot);
-    }
-    return map;
-  }, [dots]);
+  const dotsByDate = new Map<string, YearDot[]>();
+  for (const dot of dots) {
+    appendToMapArray(dotsByDate, dot.date, dot);
+  }
 
   const now = new Date();
   const currentMonth = now.getUTCFullYear() === year ? now.getUTCMonth() : -1;
@@ -100,7 +89,7 @@ const MiniMonth = ({
   dotsByDate,
   onClick,
 }: MiniMonthProps) => {
-  const days = useMemo(() => getMonthDays(year, month), [year, month]);
+  const days = getMonthDays(year, month);
 
   return (
     <button

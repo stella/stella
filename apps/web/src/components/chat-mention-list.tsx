@@ -2,6 +2,7 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -127,9 +128,10 @@ export const ChatMentionList = forwardRef<
   SuggestionProps<ChatMentionOption> & {
     loadWorkspaceEntities: (
       workspace: ChatMentionOption,
+      query: string,
     ) => Promise<ChatMentionOption[]>;
   }
->(({ items, command, decorationNode, loadWorkspaceEntities }, ref) => {
+>(({ items, command, clientRect, loadWorkspaceEntities, query }, ref) => {
   const t = useTranslations();
   const categoryLabel = useCategoryLabel();
   const [isOpen, setIsOpen] = useState(true);
@@ -139,6 +141,25 @@ export const ChatMentionList = forwardRef<
   const [entitiesLoading, setEntitiesLoading] = useState(false);
   const [entitiesError, setEntitiesError] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const lastClientRectRef = useRef<DOMRect | null>(null);
+  const latestClientRect = clientRect?.() ?? null;
+  if (latestClientRect) {
+    lastClientRectRef.current = latestClientRect;
+  }
+  const anchor = useMemo(
+    () => ({
+      getBoundingClientRect: () => {
+        const nextClientRect = clientRect?.() ?? null;
+        if (nextClientRect) {
+          lastClientRectRef.current = nextClientRect;
+          return nextClientRect;
+        }
+
+        return lastClientRectRef.current ?? new DOMRect();
+      },
+    }),
+    [clientRect],
+  );
 
   const activeItems = drillDown ? drillDownItems : items;
   const safeIndex = Math.min(
@@ -158,14 +179,17 @@ export const ChatMentionList = forwardRef<
     setEntitiesLoading(true);
     setEntitiesError(false);
 
-    void loadWorkspaceEntities({
-      id: drillDown.workspaceId,
-      label: drillDown.name,
-      category: "workspace",
-      kind: "workspace",
-      mimeType: null,
-      sourceViewId: drillDown.viewId,
-    })
+    void loadWorkspaceEntities(
+      {
+        id: drillDown.workspaceId,
+        label: drillDown.name,
+        category: "workspace",
+        kind: "workspace",
+        mimeType: null,
+        sourceViewId: drillDown.viewId,
+      },
+      query,
+    )
       .then((nextItems) => {
         if (cancelled) {
           return;
@@ -187,7 +211,7 @@ export const ChatMentionList = forwardRef<
     return () => {
       cancelled = true;
     };
-  }, [drillDown, loadWorkspaceEntities]);
+  }, [drillDown, loadWorkspaceEntities, query]);
 
   // Scroll the selected item into view on index change
   useEffect(() => {
@@ -295,11 +319,15 @@ export const ChatMentionList = forwardRef<
   const groups = groupByCategory(activeItems);
   const hasMultipleCategories = groups.length > 1;
 
+  if (!lastClientRectRef.current) {
+    return null;
+  }
+
   return (
     <Popover modal={true} onOpenChange={setIsOpen} open={isOpen}>
       <PopoverPopup
         align="start"
-        anchor={decorationNode}
+        anchor={anchor}
         className="w-96 max-w-[min(24rem,calc(100vw-2rem))] *:data-[slot=popover-positioner]:transition-none! *:data-[slot=popover-viewport]:p-1!"
         initialFocus={false}
         side="top"

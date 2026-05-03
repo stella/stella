@@ -1,6 +1,15 @@
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@stll/ui/components/button";
+import {
+  Combobox,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+  ComboboxStatus,
+} from "@stll/ui/components/combobox";
 import {
   Dialog,
   DialogClose,
@@ -25,12 +34,17 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
 import { toastManager } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useQuery,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
-import { PlusIcon, SparklesIcon } from "lucide-react";
+import { LoaderIcon, PlusIcon, SearchIcon, SparklesIcon } from "lucide-react";
+import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import { PDF_MIME_TYPE } from "@/consts";
+import { CHAT_MENTION_ENTITY_RESULT_LIMIT } from "@/components/chat-mention-helpers";
 import type {
   PropertyDependency,
   WorkspaceEntity,
@@ -38,8 +52,8 @@ import type {
   WorkspacePropertyOption,
 } from "@/lib/types";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
-import { PropertyPromptInput } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
 import type { PropertyPromptFieldHandle } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
+import { PropertyPromptInput } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
 import { SelectOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/select-options";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { useActiveView } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-active-view";
@@ -48,7 +62,7 @@ import {
   useCreateProperty,
   usePreviewProperty,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
-import { useEntitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
@@ -132,13 +146,6 @@ const createPropertyContent = (
     type: contentType,
   };
 };
-
-const isAIPreviewable = (entity: WorkspaceEntity): boolean =>
-  Object.values(entity.fields).some(
-    (f) =>
-      f.content.type === "file" &&
-      (f.content.mimeType === PDF_MIME_TYPE || f.content.pdfFileId !== null),
-  );
 
 const sameStringList = (left: string[], right: string[]) =>
   left.length === right.length &&
@@ -272,9 +279,6 @@ const CreatePropertyDialogBody = ({
   const previewProperty = usePreviewProperty();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const activeView = useActiveView({ workspaceId });
-  const { data: entitiesData } = useSuspenseQuery(
-    useEntitiesOptions(activeView),
-  );
 
   const fileProperties = properties.filter((p) => p.content.type === "file");
   const fileProperty = fileProperties.at(0);
@@ -286,11 +290,6 @@ const CreatePropertyDialogBody = ({
           (property) => property.id === extractionContext.filePropertyId,
         ) ?? null);
   const extractionFilePropertyId = extractionFileProperty?.id;
-  const previewableEntities = entitiesData.entities.filter(isAIPreviewable);
-  const defaultPreviewEntityId =
-    previewableEntities.at(0)?.entityId ??
-    entitiesData.entities.at(0)?.entityId ??
-    null;
 
   const [mode, setMode] = useState<CreationMode>("ai");
   const [extractionScope, setExtractionScope] = useState<ExtractionScope>(
@@ -316,14 +315,9 @@ const CreatePropertyDialogBody = ({
   >("idle");
   const [previewValue, setPreviewValue] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [previewEntityId, setPreviewEntityId] = useState(
-    defaultPreviewEntityId,
+  const [previewEntity, setPreviewEntity] = useState<WorkspaceEntity | null>(
+    null,
   );
-
-  const previewEntity = previewEntityId
-    ? (entitiesData.entities.find((e) => e.entityId === previewEntityId) ??
-      null)
-    : null;
 
   // Editor lives in state (not ref) so that auto-prompt useEffect
   // re-fires once Tiptap calls `onEditorReady` after mount. A ref
@@ -335,6 +329,13 @@ const CreatePropertyDialogBody = ({
   // result if a newer request has been made or the user changed the
   // configuration in flight (the stale-reset effect bumps this too).
   const previewRequestId = useRef(0);
+
+  const handlePreviewEntityChange = useCallback(
+    (entity: WorkspaceEntity | null) => {
+      setPreviewEntity(entity);
+    },
+    [],
+  );
 
   const propertyTypeLabels = {
     text: t("workspaces.properties.text"),
@@ -468,7 +469,7 @@ const CreatePropertyDialogBody = ({
     setPreviewState("idle");
     setPreviewValue(null);
     setPreviewError(null);
-  }, [prompt, contentType, mentionsKey, options, previewEntityId]);
+  }, [prompt, contentType, mentionsKey, options, previewEntity]);
 
   const trimmedName = name.trim();
   const hasMentions = mentions.length > 0;
@@ -496,6 +497,7 @@ const CreatePropertyDialogBody = ({
     setOptions([]);
     setPreviewState("idle");
     setPreviewValue(null);
+    setPreviewEntity(null);
     lastAutoKey.current = null;
   };
 
@@ -873,11 +875,11 @@ const CreatePropertyDialogBody = ({
 
           {mode === "ai" && (
             <PreviewBlock
-              entityOptions={previewableEntities}
+              activeView={activeView}
               isReady={canSubmit}
-              onEntityChange={setPreviewEntityId}
+              onEntityChange={handlePreviewEntityChange}
               onRun={runPreview}
-              previewEntityId={previewEntityId}
+              previewEntity={previewEntity}
               previewError={previewError}
               previewState={previewState}
               previewValue={previewValue}
@@ -1012,75 +1014,37 @@ const ExtractionScopeField = ({
 };
 
 type PreviewBlockProps = {
-  entityOptions: WorkspaceEntity[];
+  activeView: ReturnType<typeof useActiveView>;
   isReady: boolean;
-  onEntityChange: (entityId: string) => void;
+  onEntityChange: (entity: WorkspaceEntity | null) => void;
   onRun: () => void;
-  previewEntityId: string | null;
+  previewEntity: WorkspaceEntity | null;
   previewState: "idle" | "loading" | "ready" | "error";
   previewValue: string | null;
   previewError: string | null;
 };
 
 const PreviewBlock = ({
-  entityOptions,
+  activeView,
   isReady,
   onEntityChange,
   onRun,
-  previewEntityId,
+  previewEntity,
   previewState,
   previewValue,
   previewError,
 }: PreviewBlockProps) => {
   const t = useTranslations();
-  // Require the selected entity to still be in the options list — if
-  // the active view changed and the selection no longer resolves,
-  // disable Preview rather than firing a request that no-ops.
-  const hasEntity =
-    previewEntityId !== null &&
-    entityOptions.some((e) => e.entityId === previewEntityId);
+  const hasEntity = previewEntity !== null;
 
   return (
     <div className="bg-muted/40 space-y-2 rounded-lg border p-3 text-sm">
       <div className="flex items-center gap-2">
-        {hasEntity ? (
-          <Select
-            onValueChange={(value) => {
-              if (typeof value === "string") {
-                onEntityChange(value);
-              }
-            }}
-            value={previewEntityId}
-          >
-            <SelectTrigger className="flex-1" size="sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectPopup alignItemWithTrigger={false}>
-              {entityOptions.map((entity) => {
-                const file = getFirstFile(entity);
-                const label = entity.name ?? file?.fileName ?? "Untitled";
-                return (
-                  <SelectItem
-                    key={entity.entityId}
-                    label={label}
-                    value={entity.entityId}
-                  >
-                    <EntityKindIcon
-                      className="text-muted-foreground size-3.5 shrink-0"
-                      kind={entity.kind}
-                      mimeType={file?.mimeType ?? null}
-                    />
-                    <span className="truncate">{label}</span>
-                  </SelectItem>
-                );
-              })}
-            </SelectPopup>
-          </Select>
-        ) : (
-          <div className="text-muted-foreground flex-1 text-xs">
-            {t("workspaces.properties.noFirstDocument")}
-          </div>
-        )}
+        <PreviewEntityCombobox
+          activeView={activeView}
+          onEntityChange={onEntityChange}
+          previewEntity={previewEntity}
+        />
         <Button
           disabled={!isReady || !hasEntity || previewState === "loading"}
           loading={previewState === "loading"}
@@ -1098,7 +1062,7 @@ const PreviewBlock = ({
           <div className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
             {t("workspaces.properties.flowOutput")}
           </div>
-          <div className="text-foreground mt-0.5 text-sm break-words">
+          <div className="text-foreground mt-0.5 text-sm wrap-break-word">
             {previewValue}
           </div>
         </div>
@@ -1109,6 +1073,119 @@ const PreviewBlock = ({
       )}
     </div>
   );
+};
+
+type PreviewEntityComboboxProps = {
+  activeView: ReturnType<typeof useActiveView>;
+  onEntityChange: (entity: WorkspaceEntity | null) => void;
+  previewEntity: WorkspaceEntity | null;
+};
+
+const PreviewEntityCombobox = ({
+  activeView,
+  onEntityChange,
+  previewEntity,
+}: PreviewEntityComboboxProps) => {
+  const t = useTranslations();
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  const debouncedSetQuery = useDebouncedCallback(
+    (value: string) => setDebouncedQuery(value),
+    150,
+  );
+
+  const search = debouncedQuery.trim();
+  const previewEntitiesOptions = entitiesOptions({
+    workspaceId: activeView.workspaceId,
+    filters: activeView.filters,
+    sorts: activeView.sorts,
+    page: 1,
+    pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
+    fieldMode: "visible",
+    previewableForAi: true,
+    ...(search && { search }),
+  });
+  const { data, isError, isFetching } = useQuery({
+    ...previewEntitiesOptions,
+    placeholderData: keepPreviousData,
+  });
+
+  const entityOptions = data?.entities ?? [];
+  const fallbackLabel = t("workspaces.defaultName");
+
+  return (
+    <Combobox
+      itemToStringLabel={(entity) =>
+        getPreviewEntityLabel(entity, fallbackLabel)
+      }
+      onInputValueChange={(inputValue) => {
+        setQuery(inputValue);
+        debouncedSetQuery(inputValue);
+      }}
+      onValueChange={(entity) => {
+        onEntityChange(entity);
+        setQuery("");
+        setDebouncedQuery("");
+      }}
+      value={previewEntity}
+    >
+      <ComboboxInput
+        className="flex-1"
+        placeholder={t("common.search")}
+        showClear
+        size="sm"
+        startAddon={<SearchIcon />}
+        value={query}
+      />
+      <ComboboxPopup>
+        {isFetching && (
+          <ComboboxStatus className="flex items-center gap-2">
+            <LoaderIcon className="size-3.5 animate-spin" />
+            <span>{t("common.loading")}</span>
+          </ComboboxStatus>
+        )}
+        {isError && !isFetching && (
+          <ComboboxStatus className="text-destructive-foreground">
+            {t("errors.actionFailed")}
+          </ComboboxStatus>
+        )}
+        <ComboboxList>
+          {entityOptions.map((entity) => {
+            const file = getFirstFile(entity);
+            const label = getPreviewEntityLabel(entity, fallbackLabel);
+
+            return (
+              <ComboboxItem key={entity.entityId} value={entity}>
+                <div className="flex min-w-0 items-center gap-2">
+                  <EntityKindIcon
+                    className="text-muted-foreground size-3.5 shrink-0"
+                    kind={entity.kind}
+                    mimeType={file?.mimeType ?? null}
+                  />
+                  <span className="truncate">{label}</span>
+                </div>
+              </ComboboxItem>
+            );
+          })}
+        </ComboboxList>
+        {!isFetching && !isError && entityOptions.length === 0 && (
+          <ComboboxEmpty>
+            {t("workspaces.properties.noFirstDocument")}
+          </ComboboxEmpty>
+        )}
+      </ComboboxPopup>
+    </Combobox>
+  );
+};
+
+const getPreviewEntityLabel = (
+  entity: WorkspaceEntity,
+  fallbackLabel: string,
+) => {
+  const file = getFirstFile(entity);
+
+  return entity.name ?? file?.fileName ?? fallbackLabel;
 };
 
 type PreviewContent =

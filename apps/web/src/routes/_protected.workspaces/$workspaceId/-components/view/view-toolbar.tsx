@@ -527,7 +527,7 @@ const CalendarDatePropertyControl = ({
 
   return (
     <span className="flex items-center gap-1 text-xs">
-      <span className="text-muted-foreground">
+      <span className="text-muted-foreground shrink-0">
         {t("workspaces.views.calendar.showBy")}
       </span>
       <Select

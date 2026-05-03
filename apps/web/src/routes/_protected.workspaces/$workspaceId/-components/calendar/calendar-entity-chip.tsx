@@ -13,23 +13,10 @@ import { useLocale, useTranslations } from "use-intl";
 
 import type { DragPreviewData } from "@/components/drag-preview";
 import { renderDragPreview } from "@/components/drag-preview";
-import type { WorkspaceEntity } from "@/lib/types";
-import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
-import {
-  getEntityName,
-  getFirstFile,
-} from "@/routes/_protected.workspaces/$workspaceId/-utils";
-
-const KIND_COLORS: Record<string, string> = {
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  document: "border-s-blue-400 dark:border-s-blue-600",
-  folder: "border-s-neutral-400 dark:border-s-neutral-500",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
-  message: "border-s-green-400 dark:border-s-green-600",
-};
+import type { CalendarTask } from "@/routes/_protected.workspaces/$workspaceId/-queries/calendar-tasks";
 
 const TASK_STATUS_BORDER_COLORS: Record<string, string> = {
   open: "border-s-muted-foreground",
@@ -42,13 +29,6 @@ const TASK_STATUS_BORDER_COLORS: Record<string, string> = {
   cancelled: "border-s-red-400 dark:border-s-red-300",
 };
 
-/** CSS color values for year-view dots — reference semantic option tokens. */
-export const KIND_DOT_COLORS: Record<string, string> = {
-  document: "var(--option-blue)",
-  folder: "var(--option-gray)",
-  message: "var(--option-green)",
-};
-
 export const TASK_STATUS_DOT_COLORS: Record<string, string> = {
   open: "var(--option-gray)",
   in_progress: "var(--option-blue)",
@@ -58,26 +38,22 @@ export const TASK_STATUS_DOT_COLORS: Record<string, string> = {
 };
 
 type CalendarEntityChipProps = {
-  entity: WorkspaceEntity;
-  workspaceId: string;
+  entity: CalendarTask;
   isEditable: boolean;
 };
 
 export const CalendarEntityChip = ({
   entity,
   isEditable,
-  workspaceId,
 }: CalendarEntityChipProps) => {
   const t = useTranslations();
   const locale = useLocale();
-  const name = getEntityName(entity);
-  const openPdf = useInspectorStore((s) => s.openPdf);
+  const name = entity.name || t("tasks.untitled");
   const openTask = useInspectorStore((s) => s.openTask);
-  const file = getFirstFile(entity);
 
   const dragRef = useRef<HTMLButtonElement>(null);
 
-  useInspectorFlash(entity.entityId, dragRef);
+  useInspectorFlash(entity.taskId, dragRef);
 
   useEffect(() => {
     const el = dragRef.current;
@@ -88,10 +64,10 @@ export const CalendarEntityChip = ({
       element: el,
       getInitialData: () => ({
         type: ENTITY_DRAG_TYPE,
-        entityId: entity.entityId,
+        entityId: entity.taskId,
         name,
-        kind: entity.kind,
-        mimeType: file?.mimeType ?? null,
+        kind: "task",
+        mimeType: null,
       }),
       onGenerateDragPreview: ({ nativeSetDragImage }) => {
         setCustomNativeDragPreview({
@@ -100,32 +76,18 @@ export const CalendarEntityChip = ({
           render: ({ container }) => {
             const data: DragPreviewData = {
               name,
-              kind: entity.kind,
-              mimeType: file?.mimeType ?? null,
+              kind: "task",
+              mimeType: null,
             };
             renderDragPreview(container, data);
           },
         });
       },
     });
-  }, [entity.entityId, entity.kind, isEditable, name, file?.mimeType]);
+  }, [entity.taskId, isEditable, name]);
 
   const handleClick = () => {
-    if (entity.kind === "task") {
-      openTask(entity.entityId, name);
-      return;
-    }
-    if (file) {
-      openPdf({
-        id: file.fieldId,
-        entityId: entity.entityId,
-        label: name,
-        mimeType: file.mimeType,
-        pdfFileId: file.pdfFileId,
-        propertyId: file.propertyId,
-        workspaceId,
-      });
-    }
+    openTask(entity.taskId, name);
   };
 
   const createdLabel = new Date(entity.createdAt).toLocaleDateString(locale, {
@@ -141,23 +103,16 @@ export const CalendarEntityChip = ({
         "hover:bg-accent text-start text-xs",
         "truncate",
         isEditable && "cursor-grab active:cursor-grabbing",
-        entity.kind === "task" && entity.status
+        entity.status
           ? (TASK_STATUS_BORDER_COLORS[entity.status] ??
               "border-s-muted-foreground")
-          : KIND_COLORS[entity.kind],
+          : "border-s-muted-foreground",
       )}
       onClick={handleClick}
       type="button"
     >
       <span className="flex min-w-0 items-center gap-1">
         <span className="truncate">{name}</span>
-        {entity.activeEditBy && (
-          <ActiveEditBadge
-            className="shrink-0"
-            image={entity.activeEditBy.image}
-            name={entity.activeEditBy.name}
-          />
-        )}
       </span>
     </button>
   );

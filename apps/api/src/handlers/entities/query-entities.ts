@@ -1,5 +1,6 @@
 import { Result, panic } from "better-result";
 import { and, count, eq, inArray, notInArray, or, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { SafeDb, Transaction } from "@/api/db";
@@ -9,6 +10,7 @@ import {
   entities,
   entityVersions,
   fields,
+  searchDocuments,
 } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -25,6 +27,7 @@ import {
   buildSortExpressions,
 } from "@/api/lib/entity-filters";
 import type { ViewFilterCondition, ViewSort } from "@/api/lib/views-schema";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export type QueryEntitiesFieldMode = "full" | "visible";
 
@@ -78,11 +81,14 @@ type QueryEntitiesProps = {
   currentOrganizationId: SafeId<"organization">;
   filters: ViewFilterCondition[];
   sorts: ViewSort[];
+  search?: string | undefined;
   offset: number;
   limit: number;
   fieldMode: QueryEntitiesFieldMode;
   fieldIds: SafeId<"property">[];
   excludedKinds?: EntityKind[];
+  previewableForAi?: boolean;
+  extraConditions?: SQL[];
   includeTotalCount: boolean;
 };
 
@@ -105,23 +111,40 @@ const queryEntitiesGenerator = async function* ({
   currentOrganizationId,
   filters,
   sorts,
+  search,
   offset,
   limit,
   fieldMode,
   fieldIds,
   excludedKinds = [],
+  previewableForAi = false,
+  extraConditions = [],
   includeTotalCount,
 }: QueryEntitiesProps) {
   const workspaceCondition = eq(entities.workspaceId, workspaceId);
   const filterConditions = buildFilterConditions(filters);
+  const searchConditions = buildSearchConditions({
+    search,
+    organizationId: currentOrganizationId,
+    workspaceId,
+  });
   const kindConditions =
     excludedKinds.length > 0 ? [notInArray(entities.kind, excludedKinds)] : [];
+  const previewableConditions = previewableForAi
+    ? [buildAIPreviewableEntityCondition()]
+    : [];
   const whereClause = and(
     workspaceCondition,
     ...filterConditions,
+    ...searchConditions,
     ...kindConditions,
+    ...previewableConditions,
+    ...extraConditions,
   );
-  const sortExpressions = buildSortExpressions(sorts);
+  const sortExpressions = [
+    ...buildSearchSortExpressions(search),
+    ...buildSortExpressions(sorts),
+  ];
 
   const countRowsPromise = includeTotalCount
     ? safeDb((tx) =>
@@ -405,6 +428,69 @@ const queryEntitiesGenerator = async function* ({
     totalCount,
   });
 };
+
+const buildSearchConditions = ({
+  search,
+  organizationId,
+  workspaceId,
+}: {
+  search?: string | undefined;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+}): SQL[] => {
+  const trimmed = search?.trim() ?? "";
+  if (!trimmed) {
+    return [];
+  }
+
+  return [
+    sql`EXISTS (
+      SELECT 1 FROM ${searchDocuments} sd
+      WHERE sd.entity_id = ${entities.id}
+        AND sd.organization_id = ${organizationId}
+        AND sd.workspace_id = ${workspaceId}
+        AND sd.title ILIKE ${`%${trimmed}%`}
+    )`,
+  ];
+};
+
+const buildSearchSortExpressions = (search: string | undefined): SQL[] => {
+  const trimmed = search?.trim() ?? "";
+  if (!trimmed) {
+    return [];
+  }
+
+  const titleExpr = sql`(
+    SELECT sd.title
+    FROM ${searchDocuments} sd
+    WHERE sd.entity_id = ${entities.id}
+    LIMIT 1
+  )`;
+  const normalizedTitle = sql`lower(${titleExpr})`;
+  const normalizedSearch = trimmed.toLowerCase();
+
+  return [
+    sql`CASE
+      WHEN ${normalizedTitle} = ${normalizedSearch} THEN 0
+      WHEN ${normalizedTitle} LIKE ${`${normalizedSearch}%`} THEN 1
+      WHEN ${normalizedTitle} LIKE ${`%${normalizedSearch}%`} THEN 2
+      ELSE 3
+    END ASC`,
+    sql`strpos(${normalizedTitle}, ${normalizedSearch}) ASC`,
+    sql`length(${titleExpr}) ASC`,
+  ];
+};
+
+const buildAIPreviewableEntityCondition = (): SQL => sql`EXISTS (
+    SELECT 1
+    FROM ${fields}
+    WHERE ${fields.entityVersionId} = ${entities.currentVersionId}
+      AND ${fields.content}->>'type' = 'file'
+      AND (
+        ${fields.content}->>'mimeType' = ${PDF_MIME_TYPE}
+        OR ${fields.content}->>'pdfFileId' IS NOT NULL
+      )
+  )`;
 
 export const queryEntities = async (props: QueryEntitiesProps) =>
   await Result.gen(() => queryEntitiesGenerator(props));

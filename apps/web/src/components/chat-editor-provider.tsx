@@ -11,6 +11,7 @@ import {
 import type React from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
+import type { QueryKey } from "@tanstack/react-query";
 import Document from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";
 import History from "@tiptap/extension-history";
@@ -21,6 +22,7 @@ import type { EditorState, Plugin, PluginKey } from "@tiptap/pm/state";
 import type { Editor, JSONContent } from "@tiptap/react";
 import { useEditor } from "@tiptap/react";
 import { panic, Result } from "better-result";
+import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import {
@@ -28,7 +30,12 @@ import {
   createChatSuggestion,
 } from "@/components/chat-mention-extension";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
-import { getMentionViewScope } from "@/components/chat-mention-helpers";
+import {
+  buildEntityMentionOption,
+  CHAT_MENTION_ENTITY_RESULT_LIMIT,
+  CHAT_MENTION_SEARCH_DEBOUNCE_MS,
+  getMentionViewScope,
+} from "@/components/chat-mention-helpers";
 import {
   createPromptSlashSuggestion,
   PromptSlash,
@@ -42,12 +49,9 @@ import {
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { useStockPrompts } from "@/lib/prompts/stock";
+import type { WorkspaceEntity } from "@/lib/types";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
-import {
-  getEntityName,
-  getFirstFile,
-} from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const CHAT_FILES_PER_MESSAGE = 5;
 const CHAT_MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -74,6 +78,10 @@ export const CHAT_FILE_INPUT_ACCEPT =
   ".png,.jpg,.jpeg,.webp,.gif,.pdf,.docx,.txt,.csv,.md";
 const EMPTY_ATTACHMENTS: ChatDraftAttachment[] = [];
 const EMPTY_CHAT_DRAFT_DOC = createEmptyChatDraftDoc();
+
+type EntityMentionPage = {
+  entities: WorkspaceEntity[];
+};
 
 type ChatDraftAttachmentBase = {
   file: File;
@@ -396,6 +404,10 @@ export const useChatEditor = ({
   );
   const attachmentsRef = useRef(attachments);
   attachmentsRef.current = attachments;
+  const pendingWorkspaceEntitySearchRef = useRef<{
+    queryKey: QueryKey | null;
+    resolve: (items: ChatMentionOption[]) => void;
+  } | null>(null);
 
   const markDraftStarted = useCallback(() => {
     if (draftStartedThreadKeyRef.current === threadKey) {
@@ -406,8 +418,8 @@ export const useChatEditor = ({
     onDraftStart?.();
   }, [onDraftStart, threadKey]);
 
-  const loadWorkspaceEntities = useCallback(
-    async (workspace: ChatMentionOption) => {
+  const fetchWorkspaceEntities = useCallback(
+    async (workspace: ChatMentionOption, query: string) => {
       if (!workspace.sourceViewId) {
         return [];
       }
@@ -423,36 +435,128 @@ export const useChatEditor = ({
       }
 
       const { filters, sorts } = getMentionViewScope(activeView.layout);
-      const data = await queryClient.ensureQueryData(
-        entitiesOptions({
-          workspaceId: workspace.id,
-          filters,
-          sorts,
-          page: 1,
-        }),
-      );
+      const search = query.trim();
+      const options = entitiesOptions({
+        workspaceId: workspace.id,
+        filters,
+        sorts,
+        ...(search && { search }),
+        page: 1,
+        pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
+      });
+      if (pendingWorkspaceEntitySearchRef.current) {
+        pendingWorkspaceEntitySearchRef.current.queryKey = options.queryKey;
+      }
+      const data = await queryClient.fetchQuery(options);
       const sourceWorkspaceId =
         threadRef.scope === "workspace" &&
         threadRef.workspaceId === workspace.id
           ? undefined
           : workspace.id;
 
-      return data.entities.map((entity): ChatMentionOption => {
-        const file = getFirstFile(entity);
-        const option: ChatMentionOption = {
-          id: entity.entityId,
-          label: getEntityName(entity),
-          category: "entity",
-          kind: entity.kind,
-          mimeType: file?.mimeType ?? null,
-        };
-        if (sourceWorkspaceId !== undefined) {
-          option.sourceWorkspaceId = sourceWorkspaceId;
-        }
-        return option;
-      });
+      return data.entities.map((entity) =>
+        buildEntityMentionOption({ entity, sourceWorkspaceId }),
+      );
     },
     [queryClient, threadRef],
+  );
+  const debouncedFetchWorkspaceEntities = useDebouncedCallback(
+    async ({
+      query,
+      resolve,
+      workspace,
+    }: {
+      query: string;
+      resolve: (items: ChatMentionOption[]) => void;
+      workspace: ChatMentionOption;
+    }) => {
+      try {
+        const items = await fetchWorkspaceEntities(workspace, query);
+        if (pendingWorkspaceEntitySearchRef.current?.resolve !== resolve) {
+          return;
+        }
+
+        pendingWorkspaceEntitySearchRef.current = null;
+        resolve(items);
+      } catch {
+        if (pendingWorkspaceEntitySearchRef.current?.resolve !== resolve) {
+          return;
+        }
+
+        pendingWorkspaceEntitySearchRef.current = null;
+        resolve([]);
+      }
+    },
+    CHAT_MENTION_SEARCH_DEBOUNCE_MS,
+  );
+  const loadWorkspaceEntities = useCallback(
+    async (workspace: ChatMentionOption, query: string) => {
+      const previous = pendingWorkspaceEntitySearchRef.current;
+      if (previous) {
+        debouncedFetchWorkspaceEntities.cancel();
+        pendingWorkspaceEntitySearchRef.current = null;
+        if (previous.queryKey) {
+          await queryClient.cancelQueries({
+            exact: true,
+            queryKey: previous.queryKey,
+          });
+        }
+      }
+
+      if (!workspace.sourceViewId) {
+        return [];
+      }
+
+      const views = await queryClient.ensureQueryData(
+        viewsOptions(workspace.id),
+      );
+      const activeView =
+        views.find((view) => view.id === workspace.sourceViewId) ?? null;
+
+      if (!activeView) {
+        return [];
+      }
+
+      const { filters, sorts } = getMentionViewScope(activeView.layout);
+      const search = query.trim();
+      const options = entitiesOptions({
+        workspaceId: workspace.id,
+        filters,
+        sorts,
+        ...(search && { search }),
+        page: 1,
+        pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
+      });
+      const cachedData = queryClient.getQueryData<EntityMentionPage>(
+        options.queryKey,
+      );
+      if (cachedData) {
+        const sourceWorkspaceId =
+          threadRef.scope === "workspace" &&
+          threadRef.workspaceId === workspace.id
+            ? undefined
+            : workspace.id;
+
+        return cachedData.entities.map((entity) =>
+          buildEntityMentionOption({ entity, sourceWorkspaceId }),
+        );
+      }
+
+      return await new Promise<ChatMentionOption[]>((resolve) => {
+        pendingWorkspaceEntitySearchRef.current = { queryKey: null, resolve };
+        void debouncedFetchWorkspaceEntities({ query, resolve, workspace });
+      });
+    },
+    [debouncedFetchWorkspaceEntities, queryClient, threadRef],
+  );
+
+  useEffect(
+    () => () => {
+      debouncedFetchWorkspaceEntities.cancel();
+      pendingWorkspaceEntitySearchRef.current?.resolve([]);
+      pendingWorkspaceEntitySearchRef.current = null;
+    },
+    [debouncedFetchWorkspaceEntities],
   );
 
   const handleEditorUpdate = useEffectEvent((nextEditor: Editor) => {

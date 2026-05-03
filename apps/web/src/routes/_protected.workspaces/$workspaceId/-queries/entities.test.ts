@@ -77,6 +77,76 @@ describe("entity query field selection", () => {
     });
   });
 
+  test("keeps search in the page cache identity", () => {
+    const searchKey = entitiesKeys.page({
+      workspaceId: "workspace-1",
+      filters: [],
+      sorts: [],
+      page: 1,
+      search: " closing binder ",
+    });
+    const emptyKey = entitiesKeys.page({
+      workspaceId: "workspace-1",
+      filters: [],
+      sorts: [],
+      page: 1,
+    });
+
+    expect(searchKey).not.toEqual(emptyKey);
+    expect(searchKey.at(-1)).toMatchObject({
+      search: "closing binder",
+    });
+    expect(emptyKey.at(-1)).not.toHaveProperty("search");
+  });
+
+  test("keeps the AI-previewable flag in the page cache identity", () => {
+    const previewKey = entitiesKeys.page({
+      workspaceId: "workspace-1",
+      filters: [],
+      sorts: [],
+      page: 1,
+      pageSize: 50,
+      fieldMode: "visible",
+      previewableForAi: true,
+    });
+    const regularKey = entitiesKeys.page({
+      workspaceId: "workspace-1",
+      filters: [],
+      sorts: [],
+      page: 1,
+      pageSize: 50,
+      fieldMode: "visible",
+    });
+
+    expect(previewKey).not.toEqual(regularKey);
+    expect(previewKey.at(-1)).toMatchObject({
+      previewableForAi: true,
+    });
+    expect(regularKey.at(-1)).toMatchObject({
+      previewableForAi: false,
+    });
+  });
+
+  test("keeps extra caller fields out of the page cache identity", () => {
+    const cleanKey = entitiesKeys.page({
+      workspaceId: "workspace-1",
+      filters: [],
+      sorts: [],
+      page: 1,
+      search: "nda",
+    });
+    const noisyInput = {
+      workspaceId: "workspace-1",
+      filters: [],
+      sorts: [],
+      page: 1,
+      search: "nda",
+      cursor: "cursor-that-must-not-leak",
+    };
+
+    expect(entitiesKeys.page(noisyInput)).toEqual(cleanKey);
+  });
+
   test("keeps cursor state out of the window cache identity", () => {
     expect(
       entitiesKeys.window({
@@ -101,5 +171,35 @@ describe("entity query field selection", () => {
         excludedKinds: ["folder", "task"],
       },
     ]);
+  });
+
+  test("keeps kanban group value in the cache identity", () => {
+    const openKey = entitiesKeys.kanbanGroup({
+      workspaceId: "workspace-1",
+      filters: [],
+      sorts: [],
+      limit: 200,
+      fieldMode: "visible",
+      fieldIds: ["status", "due", "status"],
+      groupByPropertyId: "_status",
+      groupValue: "open",
+    });
+    const doneKey = entitiesKeys.kanbanGroup({
+      workspaceId: "workspace-1",
+      filters: [],
+      sorts: [],
+      limit: 200,
+      fieldMode: "visible",
+      fieldIds: ["status", "due", "status"],
+      groupByPropertyId: "_status",
+      groupValue: "done",
+    });
+
+    expect(openKey).not.toEqual(doneKey);
+    expect(openKey.at(-1)).toMatchObject({
+      fieldIds: ["due", "status"],
+      groupByPropertyId: "_status",
+      groupValue: "open",
+    });
   });
 });

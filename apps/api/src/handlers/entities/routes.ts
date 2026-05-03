@@ -16,6 +16,7 @@ import openDesktopEditSession from "@/api/handlers/entities/open-desktop-edit-se
 import organizeSuggestions from "@/api/handlers/entities/organize-suggestions";
 import readEntities from "@/api/handlers/entities/read";
 import readEntityById from "@/api/handlers/entities/read-by-id";
+import readKanbanGroup from "@/api/handlers/entities/read-kanban-group";
 import readEntitySummaries from "@/api/handlers/entities/read-summaries";
 import readVersionById from "@/api/handlers/entities/read-version-by-id";
 import readVersions from "@/api/handlers/entities/read-versions";
@@ -87,6 +88,9 @@ export const entitiesRoute = new Elysia({
   })
   .post("/query-window", readEntitiesWindow.handler, {
     body: readEntitiesWindow.config.body,
+  })
+  .post("/kanban-group", readKanbanGroup.handler, {
+    body: readKanbanGroup.config.body,
   })
   .post("/organize-suggestions", organizeSuggestions.handler, {
     body: organizeSuggestions.config.body,

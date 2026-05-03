@@ -145,8 +145,7 @@ export const Route = createFileRoute(
         : [];
     const shouldLoadVisibleFields =
       activeView.layout.type === "filesystem" ||
-      activeView.layout.type === "table" ||
-      activeView.layout.type === "kanban";
+      activeView.layout.type === "table";
     const fieldIds = shouldLoadVisibleFields
       ? visibleEntityFieldIds({
           hiddenProperties: activeView.layout.hiddenProperties,
@@ -168,6 +167,14 @@ export const Route = createFileRoute(
           fieldIds,
         }),
       );
+      return;
+    }
+
+    if (activeView.layout.type === "calendar") {
+      return;
+    }
+
+    if (activeView.layout.type === "kanban") {
       return;
     }
 
@@ -247,7 +254,7 @@ type EntityViewContentProps = ViewContentProps & {
 };
 
 type VisibleFieldsView = WorkspaceView & {
-  layout: Extract<WorkspaceView["layout"], { type: "filesystem" | "kanban" }>;
+  layout: Extract<WorkspaceView["layout"], { type: "filesystem" }>;
 };
 
 function OverviewViewContent({ activeView, workspaceId }: ViewContentProps) {
@@ -273,6 +280,10 @@ function EntityViewContent({
     return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
   }
 
+  if (activeView.layout.type === "calendar") {
+    return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
+  }
+
   return (
     <FullEntityViewContent
       activeView={activeView}
@@ -284,8 +295,7 @@ function EntityViewContent({
 
 const hasVisibleFieldsLayout = (
   view: WorkspaceView,
-): view is VisibleFieldsView =>
-  view.layout.type === "filesystem" || view.layout.type === "kanban";
+): view is VisibleFieldsView => view.layout.type === "filesystem";
 
 function VisibleFieldEntityViewContent({
   activeView,
@@ -293,19 +303,9 @@ function VisibleFieldEntityViewContent({
   workspaceId,
 }: EntityViewContentProps & { activeView: VisibleFieldsView }) {
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
-  const requiredPropertyIds =
-    activeView.layout.type === "kanban"
-      ? [
-          resolveKanbanGroupBy(
-            activeView.layout.groupByPropertyId ?? "",
-            properties,
-          ),
-        ]
-      : [];
   const fieldIds = visibleEntityFieldIds({
     hiddenProperties: activeView.layout.hiddenProperties,
     properties,
-    requiredPropertyIds,
   });
 
   useSyncTable({

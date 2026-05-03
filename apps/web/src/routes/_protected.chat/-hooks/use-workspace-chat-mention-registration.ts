@@ -1,60 +1,150 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryKey } from "@tanstack/react-query";
+import { useDebouncedCallback } from "use-debounce";
 
 import { useChatEditorExtensions } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
-import { getMentionViewScope } from "@/components/chat-mention-helpers";
+import {
+  buildEntityMentionOption,
+  CHAT_MENTION_ENTITY_RESULT_LIMIT,
+  CHAT_MENTION_SEARCH_DEBOUNCE_MS,
+  getMentionViewScope,
+} from "@/components/chat-mention-helpers";
+import type { WorkspaceEntity } from "@/lib/types";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
-import {
-  getEntityName,
-  getFirstFile,
-} from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const getWorkspaceMentionExtensionId = (workspaceId: string) =>
   `workspace-chat:entity-mentions:${workspaceId}`;
+
+type EntityMentionPage = {
+  entities: WorkspaceEntity[];
+};
+
+const toEntityMentionOptions = (data: EntityMentionPage) =>
+  data.entities.map((entity) => buildEntityMentionOption({ entity }));
+
 export const useWorkspaceChatMentionRegistration = (
   workspaceId: string,
   viewId?: string,
 ) => {
   const { registerExtension } = useChatEditorExtensions();
+  const queryClient = useQueryClient();
+  const pendingSearchRef = useRef<{
+    queryKey: QueryKey | null;
+    resolve: (items: ChatMentionOption[]) => void;
+  } | null>(null);
   const { data: activeView } = useQuery({
     ...viewsOptions(workspaceId),
     select: (data) =>
       data.find((view) => view.id === viewId) ?? data.at(0) ?? null,
   });
-  const { filters, sorts } = getMentionViewScope(activeView?.layout);
-  const { data } = useQuery({
-    ...entitiesOptions({
-      workspaceId,
-      filters,
-      sorts,
-      page: 1,
-    }),
-  });
+  const { filters, sorts } = useMemo(
+    () => getMentionViewScope(activeView?.layout),
+    [activeView?.layout],
+  );
+  const createSearchOptions = useCallback(
+    (query: string) => {
+      const search = query.trim();
+      return entitiesOptions({
+        workspaceId,
+        filters,
+        sorts,
+        ...(search && { search }),
+        page: 1,
+        pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
+      });
+    },
+    [filters, sorts, workspaceId],
+  );
+  const searchEntities = useCallback(
+    async (query: string) => {
+      const options = createSearchOptions(query);
+      if (pendingSearchRef.current) {
+        pendingSearchRef.current.queryKey = options.queryKey;
+      }
+      const data = await queryClient.fetchQuery(options);
+
+      return toEntityMentionOptions(data);
+    },
+    [createSearchOptions, queryClient],
+  );
+  const debouncedSearchEntities = useDebouncedCallback(
+    async ({
+      query,
+      resolve,
+    }: {
+      query: string;
+      resolve: (items: ChatMentionOption[]) => void;
+    }) => {
+      try {
+        const items = await searchEntities(query);
+        if (pendingSearchRef.current?.resolve !== resolve) {
+          return;
+        }
+
+        pendingSearchRef.current = null;
+        resolve(items);
+      } catch {
+        if (pendingSearchRef.current?.resolve !== resolve) {
+          return;
+        }
+
+        pendingSearchRef.current = null;
+        resolve([]);
+      }
+    },
+    CHAT_MENTION_SEARCH_DEBOUNCE_MS,
+  );
+  const searchMentionItems = useCallback(
+    async (query: string) => {
+      const previous = pendingSearchRef.current;
+      if (previous) {
+        debouncedSearchEntities.cancel();
+        pendingSearchRef.current = null;
+        if (previous.queryKey) {
+          await queryClient.cancelQueries({
+            exact: true,
+            queryKey: previous.queryKey,
+          });
+        }
+      }
+
+      const options = createSearchOptions(query);
+      const cachedData = queryClient.getQueryData<EntityMentionPage>(
+        options.queryKey,
+      );
+      if (cachedData) {
+        return toEntityMentionOptions(cachedData);
+      }
+
+      return await new Promise<ChatMentionOption[]>((resolve) => {
+        pendingSearchRef.current = { queryKey: null, resolve };
+        void debouncedSearchEntities({ query, resolve });
+      });
+    },
+    [createSearchOptions, debouncedSearchEntities, queryClient],
+  );
+
+  useEffect(
+    () => () => {
+      debouncedSearchEntities.cancel();
+      pendingSearchRef.current?.resolve([]);
+      pendingSearchRef.current = null;
+    },
+    [debouncedSearchEntities],
+  );
 
   useEffect(() => {
-    const mentionItems: ChatMentionOption[] = (data?.entities ?? []).map(
-      (entity) => {
-        const file = getFirstFile(entity);
-
-        return {
-          id: entity.entityId,
-          label: getEntityName(entity),
-          category: "entity",
-          kind: entity.kind,
-          mimeType: file?.mimeType ?? null,
-        };
-      },
-    );
-
     const extensionId = getWorkspaceMentionExtensionId(workspaceId);
     const unregister = registerExtension(extensionId, {
       mentionSources: [
         {
           id: extensionId,
-          getItems: () => mentionItems,
+          getItems: () => [],
+          searchItems: searchMentionItems,
         },
       ],
     });
@@ -62,5 +152,5 @@ export const useWorkspaceChatMentionRegistration = (
     return () => {
       unregister();
     };
-  }, [data?.entities, registerExtension, workspaceId]);
+  }, [registerExtension, searchMentionItems, workspaceId]);
 };

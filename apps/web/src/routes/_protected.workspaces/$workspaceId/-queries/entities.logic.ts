@@ -16,14 +16,21 @@ export type EntitiesPageKey = {
   filters: ViewFilterCondition[];
   sorts: ViewSort[];
   page: number;
+  search?: string;
   pageSize?: number;
   fieldMode?: EntitiesFieldMode;
   fieldIds?: string[];
+  previewableForAi?: boolean;
 };
 
 export type EntitiesWindowKey = Omit<EntitiesPageKey, "page" | "pageSize"> & {
   limit?: number;
   excludedKinds?: EntityKind[];
+};
+
+export type KanbanGroupKey = Omit<EntitiesWindowKey, "excludedKinds"> & {
+  groupByPropertyId: string;
+  groupValue: string | null;
 };
 
 export const DEFAULT_ENTITY_VIEW_PAGE_SIZE = 10_000;
@@ -41,9 +48,11 @@ export const entitiesKeys = {
     filters,
     sorts,
     page,
+    search,
     pageSize,
     fieldMode,
     fieldIds,
+    previewableForAi,
   }: EntitiesPageKey) => {
     const normalizedFieldMode = fieldMode ?? "full";
     return [
@@ -52,12 +61,14 @@ export const entitiesKeys = {
         filters,
         sorts,
         page,
+        ...(search?.trim() && { search: search.trim() }),
         pageSize: pageSize ?? DEFAULT_ENTITY_VIEW_PAGE_SIZE,
         fieldMode: normalizedFieldMode,
         fieldIds:
           normalizedFieldMode === "visible"
             ? normalizeVisibleFieldIds(fieldIds)
             : [],
+        previewableForAi: previewableForAi ?? false,
       },
     ];
   },
@@ -84,6 +95,34 @@ export const entitiesKeys = {
             ? normalizeVisibleFieldIds(fieldIds)
             : [],
         excludedKinds: excludedKinds?.toSorted() ?? [],
+      },
+    ];
+  },
+  kanbanGroup: ({
+    workspaceId,
+    filters,
+    sorts,
+    limit,
+    fieldMode,
+    fieldIds,
+    groupByPropertyId,
+    groupValue,
+  }: KanbanGroupKey) => {
+    const normalizedFieldMode = fieldMode ?? "full";
+    return [
+      ...entitiesKeys.all(workspaceId),
+      "kanban-group",
+      {
+        filters,
+        sorts,
+        limit: limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
+        fieldMode: normalizedFieldMode,
+        fieldIds:
+          normalizedFieldMode === "visible"
+            ? normalizeVisibleFieldIds(fieldIds)
+            : [],
+        groupByPropertyId,
+        groupValue,
       },
     ];
   },

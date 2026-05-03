@@ -2,6 +2,7 @@ import Elysia from "elysia";
 
 import addAssignee from "@/api/handlers/tasks/assignees-add";
 import removeAssignee from "@/api/handlers/tasks/assignees-remove";
+import calendarTasks from "@/api/handlers/tasks/calendar";
 import createTask from "@/api/handlers/tasks/create";
 import createEntityLink from "@/api/handlers/tasks/entity-links-create";
 import deleteEntityLink from "@/api/handlers/tasks/entity-links-delete";
@@ -27,6 +28,9 @@ export const tasksRoute = new Elysia({
   .patch("/", updateTask.handler, {
     invalidateQuery: true,
     body: updateTask.config.body,
+  })
+  .post("/calendar", calendarTasks.handler, {
+    body: calendarTasks.config.body,
   })
   .get("/:taskId", readTaskById.handler, {
     params: readTaskById.config.params,

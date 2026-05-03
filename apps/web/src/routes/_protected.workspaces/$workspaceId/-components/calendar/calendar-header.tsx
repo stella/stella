@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { Button } from "@stll/ui/components/button";
 import {
   Popover,
@@ -33,10 +31,7 @@ export const CalendarHeader = ({
   const t = useTranslations();
   const locale = useLocale();
 
-  const monthPickerMonths = useMemo(
-    () => getMonthLabels(locale, year, "short"),
-    [locale, year],
-  );
+  const monthPickerMonths = getMonthLabels(locale, year, "short");
 
   return (
     <div className="flex min-w-0 items-center gap-2 px-4 py-2">

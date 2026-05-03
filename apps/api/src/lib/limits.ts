@@ -9,6 +9,7 @@ export const LIMITS = {
   entitiesPageSizeMax: 10_000,
   entitiesWindowSizeDefault: 200,
   entitiesWindowSizeMax: 500,
+  calendarTasksMax: 200,
   entitySummariesPageSize: 200,
   viewsCount: 20,
   templatesCount: 50,

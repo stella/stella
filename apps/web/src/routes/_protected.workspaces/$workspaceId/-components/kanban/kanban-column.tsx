@@ -91,6 +91,9 @@ type KanbanColumnProps = {
   onHideColumn?: (() => void) | undefined;
   onCreate?: ((kind: EntityKind) => void) | undefined;
   onDeleteAll?: (() => void) | undefined;
+  hasMore?: boolean | undefined;
+  isLoadingMore?: boolean | undefined;
+  onLoadMore?: (() => void) | undefined;
   onReorderColumn?:
     | ((sourceValue: string, targetValue: string, edge: Edge | null) => void)
     | undefined;
@@ -116,6 +119,9 @@ export const KanbanColumn = ({
   onHideColumn,
   onCreate,
   onDeleteAll,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
   onReorderColumn,
   taskOnly,
 }: KanbanColumnProps) => {
@@ -157,6 +163,17 @@ export const KanbanColumn = ({
     overscan: KANBAN_CARD_OVERSCAN,
   });
   const virtualCards = cardVirtualizer.getVirtualItems();
+  const lastVirtualCard = virtualCards.at(-1);
+
+  useEffect(() => {
+    if (!hasMore || isLoadingMore || !onLoadMore || !lastVirtualCard) {
+      return;
+    }
+
+    if (lastVirtualCard.index >= entities.length - KANBAN_CARD_OVERSCAN) {
+      onLoadMore();
+    }
+  }, [entities.length, hasMore, isLoadingMore, lastVirtualCard, onLoadMore]);
 
   const isDraggable = columnValue !== null && onReorderColumn !== undefined;
 
