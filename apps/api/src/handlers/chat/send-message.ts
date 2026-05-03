@@ -289,20 +289,33 @@ const sendMessage = createSafeRootHandler(
                 message: resolvedResponseMessage,
               });
 
+              // Skip scope expansion when the assistant message
+              // will not be persisted (aborted stream, planner
+              // returned `none`). Widening `data_workspace_ids`
+              // for transient parts that never land in
+              // `chat_messages` could make the thread unreadable
+              // after future access changes even though no
+              // corresponding content was saved.
+              if (persistencePlan.type === "none") {
+                return;
+              }
+
               // Widen the thread's data scope to cover any
               // workspace-scoped content the assistant just
               // emitted (source-document parts from search and
-              // workspace tools). Run before persistMessage so the
-              // recorded scope already includes the workspaces
-              // when the message lands in chat_messages.
+              // workspace tools). Run before persistMessage so
+              // the recorded scope already includes the
+              // workspaces when the message lands in
+              // `chat_messages`.
               //
               // If expansion fails (transient DB error, etc.),
               // SKIP the message persist. Storing workspace-
-              // scoped content in chat_messages while the owning
-              // thread's data_workspace_ids stays stale would
-              // leave the new content readable after the user
-              // loses access to those workspaces — the same
+              // scoped content in `chat_messages` while the
+              // owning thread's `data_workspace_ids` stays stale
+              // would leave the new content readable after the
+              // user loses access to those workspaces — the same
               // class of leak this whole change exists to close.
+              //
               // Intersect with `accessibleWorkspaceIds` so a
               // hallucinated or stale UUID from the model never
               // lands in `data_workspace_ids`. An out-of-set ID
