@@ -333,6 +333,7 @@
     "filePlaceholder": "Csevegés erről: {fileName}",
     "filePlaceholderAction": "Csevegés erről:",
     "fileTooLarge": "A fájl meghaladja a {maxSize} korlátot",
+    "folioCitationFallback": "o. {n}",
     "greeting": "Min szeretne dolgozni?",
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mention": {

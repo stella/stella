@@ -2,7 +2,11 @@ import { PDF } from "@libpdf/core";
 import { Result, TaggedError } from "better-result";
 
 import type { ScopedDb } from "@/api/db";
-import type { JustificationContent } from "@/api/db/schema";
+import type {
+  DocxFolioJustificationBlock,
+  JustificationBlock,
+  JustificationContent,
+} from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { createFileKey } from "@/api/handlers/files/utils";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
@@ -32,6 +36,15 @@ class JustificationTextError extends TaggedError("JustificationTextError")<{
   message: string;
 }>() {}
 
+// Narrows a `JustificationBlock` to `DocxFolioJustificationBlock`. A
+// missing `kind` (legacy rows from before the discriminator landed)
+// means pdf-bates by definition, so this guard returns false for
+// undefined too — and the caller continues processing the block.
+const isDocxFolioBlock = (
+  block: JustificationBlock,
+): block is DocxFolioJustificationBlock =>
+  (block as { kind?: unknown }).kind === "docx-folio";
+
 export const extractJustificationContent = (
   justification: JustificationContent,
 ) => {
@@ -39,6 +52,18 @@ export const extractJustificationContent = (
   const textParts: string[] = [];
 
   for (const block of justification.blocks) {
+    // bbox generation only applies to PDF citations. DOCX blocks
+    // ship folio block IDs and are rendered by the editor, not the
+    // PDF preview — skip them here.
+    //
+    // Backward-compat: rows persisted before the discriminator
+    // landed have no `kind` field (the old `JustificationContent`
+    // shape was `{ fileFieldId, statements }`). Treat a missing
+    // `kind` as `pdf-bates` so historical PDF justifications still
+    // produce bounding boxes.
+    if (isDocxFolioBlock(block)) {
+      continue;
+    }
     for (const statement of block.statements) {
       const text = statement.text.trim();
       if (text.length > 0) {
@@ -46,6 +71,8 @@ export const extractJustificationContent = (
       }
 
       for (const citation of statement.citations) {
+        // Pre-discriminator citations are always pdf-bates shape;
+        // narrowing to PdfBates above guarantees `pageNumber`.
         pageNumbers.add(citation.pageNumber);
       }
     }

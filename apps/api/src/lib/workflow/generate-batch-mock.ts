@@ -84,6 +84,7 @@ export const generateBatchMock = async ({
 
     const filenames: JustificationFilenames = resolvedFiles.map(
       (file, index) => ({
+        kind: "pdf-bates" as const,
         original: file.fileId,
         simplified: `F${index}`,
         fileFieldId: file.fileFieldId,

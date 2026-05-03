@@ -333,6 +333,7 @@
     "filePlaceholder": "Discuter de {fileName}",
     "filePlaceholderAction": "Discuter de",
     "fileTooLarge": "Le fichier dépasse la limite de {maxSize}",
+    "folioCitationFallback": "p. {n}",
     "greeting": "Sur quoi souhaitez-vous travailler ?",
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
     "mention": {

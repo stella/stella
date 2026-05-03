@@ -359,6 +359,20 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   }, [targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);
 
+  // Listen for citation-chip clicks broadcast by the chat overlay.
+  // The peek viewer has its own listener; this one covers the
+  // editing-mode editor where the inspector path doesn't apply.
+  useEffect(() => {
+    const handler = (event: CustomEvent<{ blockId: string }>) => {
+      if (!event.detail.blockId) {
+        return;
+      }
+      editorRef.current?.scrollToBlock(event.detail.blockId);
+    };
+    window.addEventListener("folio:scroll-to-block", handler);
+    return () => window.removeEventListener("folio:scroll-to-block", handler);
+  }, []);
+
   useEffect(() => {
     if (
       state.status !== "error" ||
@@ -406,7 +420,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         tokenRef.current = null;
       }
     };
-    // requestEditMode is wrapped in useCallback above; safe in deps.
+    // `isUnlocked` is intentionally NOT in deps: this effect owns
+    // the register/unregister lifecycle, and the next effect below
+    // propagates lock-state changes via `updateEditable`. Including
+    // it here would tear down + re-create the registration on every
+    // toggle, invalidating the token contract documented above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entityId, requestEditMode]);
 
   useEffect(() => {

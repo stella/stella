@@ -333,6 +333,7 @@
     "filePlaceholder": "Chat about {fileName}",
     "filePlaceholderAction": "Chat about",
     "fileTooLarge": "File exceeds {maxSize} limit",
+    "folioCitationFallback": "p. {n}",
     "greeting": "What would you like to work on?",
     "maxAttachmentsReached": "Maximum {count} files per message",
     "mention": {

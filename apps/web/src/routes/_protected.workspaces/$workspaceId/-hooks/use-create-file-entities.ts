@@ -14,6 +14,7 @@ import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
+import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import {
   propertiesKeys,
@@ -255,6 +256,10 @@ export const uploadFileEntitiesBatched = async (
         toastManager.add({
           title: labels.renamed(renamedCount),
           type: "info",
+          // Informational only — no action required from the
+          // user, so dismiss after the default toast lifetime
+          // instead of sticking on screen until manually closed.
+          timeout: 5000,
         });
       }
 
@@ -271,6 +276,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
   const queryClient = useQueryClient();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const analytics = useAnalytics();
+  const startWorkflow = useStartWorkflow(workspaceId);
 
   const { isPending, mutate } = useMutation({
     mutationFn: async (files: File[]) => {
@@ -288,13 +294,24 @@ export const useCreateFileEntities = (workspaceId: string) => {
         propertyId = response.data.id;
       }
 
-      await uploadFileEntitiesBatched({
+      const uploaded = await uploadFileEntitiesBatched({
         files,
         workspaceId,
         propertyId,
         labels,
         onError: (error) => analytics.captureError(error),
       });
+
+      // Backfill AI extraction columns on the newly-uploaded entities.
+      // Without this they sit blank until something else triggers a
+      // workflow run; the user expects values to populate as soon as
+      // the file lands. Scope to the new entities so unrelated rows
+      // aren't recomputed. A workspace with no AI properties safely
+      // no-ops (startWorkflow returns `skipped`).
+      const newEntityIds = uploaded.map((result) => result.entityId);
+      if (newEntityIds.length > 0) {
+        void startWorkflow({ entityIds: newEntityIds });
+      }
     },
     onError: (error) => {
       analytics.captureError(error);

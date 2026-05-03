@@ -1,4 +1,5 @@
 import { PDF, rgb, Standard14Font, StandardFonts } from "@libpdf/core";
+import type { FolioAIBlock } from "@stll/folio/server";
 import { Result } from "better-result";
 
 import { createFileKey } from "@/api/handlers/files/utils";
@@ -8,6 +9,7 @@ import { Unreachable } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
 import { validateAIOutput } from "@/api/lib/workflow/ai-validators";
+import { extractFolioBlocksFromDocxBuffer } from "@/api/lib/workflow/docx-blocks";
 import {
   fetchInputFieldsForBatch,
   prepareBatchInput,
@@ -21,15 +23,18 @@ import type {
 } from "@/api/lib/workflow/generate-batch-shared";
 import { normalizeJustification } from "@/api/lib/workflow/parse-justifications";
 import type { JustificationFilenames } from "@/api/lib/workflow/parse-justifications";
-import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 /**
- * A file is AI-supported if it is a non-encrypted PDF, or
- * if it has a converted PDF (pdfFile) available.
+ * A file is AI-supported when it can be sent to the model in some
+ * form: a non-encrypted PDF, a file that's already been converted
+ * to PDF (`pdfFileId`), or a DOCX whose folio blocks we serialise
+ * into the prompt directly.
  */
 const isAISupportedFile = (file: ResolvedFile): boolean =>
   (file.mimeType === PDF_MIME_TYPE && !file.encrypted) ||
-  file.pdfFileId !== null;
+  file.pdfFileId !== null ||
+  file.mimeType === DOCX_MIME_TYPE;
 
 const addBatesNumbers = async (
   pdfBuffer: ArrayBuffer,
@@ -77,7 +82,8 @@ const addBatesNumbers = async (
   return await pdfDocument.save();
 };
 
-type FileWithContent = {
+export type PreparedPdfFile = {
+  kind: "pdf";
   fileFieldId: SafeId<"field">;
   fileId: string;
   content: Uint8Array;
@@ -85,29 +91,61 @@ type FileWithContent = {
   simplifiedName: string;
 };
 
+export type PreparedDocxFile = {
+  kind: "docx";
+  fileFieldId: SafeId<"field">;
+  fileId: string;
+  blocks: FolioAIBlock[];
+  simplifiedName: string;
+};
+
+export type PreparedInputFile = PreparedPdfFile | PreparedDocxFile;
+
 const fetchAndPrepareFiles = async (
   resolvedFiles: ResolvedFile[],
   organizationId: SafeId<"organization">,
   workspaceId: SafeId<"workspace">,
-): Promise<FileWithContent[]> =>
+): Promise<PreparedInputFile[]> =>
   await Promise.all(
-    resolvedFiles.map(async (meta, index) => {
-      // Prefer the converted PDF; fall back to source if
-      // the source is already a PDF.
-      const pdfFileId = meta.pdfFileId ?? meta.fileId;
+    resolvedFiles.map(async (meta, index): Promise<PreparedInputFile> => {
+      const simplifiedName = `F${index}`;
 
+      // DOCX without a converted PDF: parse to folio blocks and let
+      // the AI cite block IDs directly. Falling through to the PDF
+      // path when `pdfFileId` exists keeps existing converted-DOCX
+      // matters on the bates-citation flow they're already indexed
+      // against.
+      if (meta.mimeType === DOCX_MIME_TYPE && meta.pdfFileId === null) {
+        const fileKey = createFileKey({
+          organizationId,
+          workspaceId,
+          fileId: meta.fileId,
+          mimeType: DOCX_MIME_TYPE,
+        });
+        const docxBuffer = await getS3().file(fileKey).arrayBuffer();
+        const blocks = await extractFolioBlocksFromDocxBuffer(docxBuffer);
+        return {
+          kind: "docx",
+          fileFieldId: meta.fileFieldId,
+          fileId: meta.fileId,
+          blocks,
+          simplifiedName,
+        };
+      }
+
+      // PDF or PDF-converted file. Prefer the converted PDF; fall
+      // back to source if the source is already a PDF.
+      const pdfFileId = meta.pdfFileId ?? meta.fileId;
       const fileKey = createFileKey({
         organizationId,
         workspaceId,
         fileId: pdfFileId,
         mimeType: PDF_MIME_TYPE,
       });
-
-      const simplifiedName = `F${index}`;
       const fileBuffer = await getS3().file(fileKey).arrayBuffer();
       const preparedPdf = await addBatesNumbers(fileBuffer, simplifiedName);
-
       return {
+        kind: "pdf",
         fileFieldId: meta.fileFieldId,
         fileId: meta.fileId,
         content: preparedPdf,
@@ -116,6 +154,27 @@ const fetchAndPrepareFiles = async (
       };
     }),
   );
+
+const buildJustificationFilenames = (
+  files: PreparedInputFile[],
+): JustificationFilenames =>
+  files.map((file) => {
+    if (file.kind === "pdf") {
+      return {
+        kind: "pdf-bates",
+        original: file.fileId,
+        simplified: file.simplifiedName,
+        fileFieldId: file.fileFieldId,
+      };
+    }
+    return {
+      kind: "docx-folio",
+      original: file.fileId,
+      simplified: file.simplifiedName,
+      fileFieldId: file.fileFieldId,
+      blocksById: new Map(file.blocks.map((block) => [block.id, block.text])),
+    };
+  });
 
 export const generateBatch = async ({
   abortSignal,
@@ -163,11 +222,7 @@ export const generateBatch = async ({
       workspaceId,
     );
 
-    const filenames: JustificationFilenames = preparedFiles.map((file) => ({
-      original: file.fileId,
-      simplified: file.simplifiedName,
-      fileFieldId: file.fileFieldId,
-    }));
+    const filenames = buildJustificationFilenames(preparedFiles);
 
     const output = yield* Result.await(
       generateWorkflowData({

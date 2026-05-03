@@ -636,6 +636,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
         version: 1,
         blocks: [
           {
+            kind: "pdf-bates" as const,
             fileFieldId: ids.fieldA1,
             statements: [
               {
@@ -655,6 +656,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
         version: 1,
         blocks: [
           {
+            kind: "pdf-bates" as const,
             fileFieldId: ids.fieldB1,
             statements: [
               {

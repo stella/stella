@@ -333,6 +333,7 @@
     "filePlaceholder": "Vestle teemal {fileName}",
     "filePlaceholderAction": "Vestle teemal",
     "fileTooLarge": "Fail ületab {maxSize} piirangu",
+    "folioCitationFallback": "lk {n}",
     "greeting": "Millega soovite tegeleda?",
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mention": {

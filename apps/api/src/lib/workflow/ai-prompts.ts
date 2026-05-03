@@ -1,3 +1,4 @@
+import type { FolioAIBlock } from "@stll/folio/server";
 import * as v from "valibot";
 
 import { Unreachable } from "@/api/lib/errors/tagged-errors";
@@ -15,9 +16,10 @@ export const WORKFLOW_SYSTEM_PROMPT =
   "of the attached files and answers multiple prompts at once. " +
   "Return an object whose keys are exactly the provided " +
   "propertyIds and values contain the answer and justification " +
-  "for each propertyId. Reference pages using the Bates numbers " +
-  "shown in all four corners of each page " +
-  "(format: F0-0001, F1-0001, etc.).";
+  "for each propertyId. The justification schema for the current " +
+  "batch tells you exactly how to cite each source.";
+
+const ACTIVE_DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS = 1500;
 
 // --------------- Schema context ---------------
 
@@ -69,9 +71,43 @@ export type Answer =
   | { amount: number; currency: string | null };
 
 const createJustificationSchema = (filenames: JustificationFilenames) => {
+  const hasPdf = filenames.some((file) => file.kind === "pdf-bates");
+  const hasDocx = filenames.some((file) => file.kind === "docx-folio");
+
   const filenamesList = filenames
-    .map((filename) => `- ${filename.simplified}`)
+    .map((filename) => {
+      if (filename.kind === "pdf-bates") {
+        return `- ${filename.simplified} (PDF — cite Bates stamps from the page corners, e.g. ${filename.simplified}-0002)`;
+      }
+      return `- ${filename.simplified} (DOCX — cite folio blockIds from the JSON list, e.g. b-0010)`;
+    })
     .join("\n");
+
+  const citationGuide: string[] = [];
+  if (hasPdf) {
+    citationGuide.push(
+      "PDF files: each citation is the full Bates stamp shown on " +
+        "the page (e.g., F0-0002).",
+    );
+  }
+  if (hasDocx) {
+    citationGuide.push(
+      "DOCX files: each citation is a folio blockId taken verbatim " +
+        'from that file\'s JSON block list (e.g., "b-0010").',
+    );
+  }
+  if (hasPdf && hasDocx) {
+    citationGuide.push(
+      "Match the citation format to the source file's type — never " +
+        "mix Bates stamps with blockIds inside one statement.",
+    );
+  }
+
+  const exampleFile = filenames[0];
+  const exampleCitation =
+    exampleFile?.kind === "docx-folio"
+      ? "b-0010"
+      : `${exampleFile?.simplified ?? "F0"}-0002`;
 
   // Schema is converted to JSON Schema by the Vercel AI SDK
   // (`valibotSchema(...)` → `@valibot/to-json-schema`). That
@@ -102,19 +138,18 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
         'Create one array item per source file with "file" equal to ' +
           "the exact filename attached with the file in the message.",
         `Filenames:\n${filenamesList}`,
-        "For each statement, write concise supporting text in " +
-          '"text" and put the Bates stamps that support it in ' +
-          '"citations".',
-        "Citations must be full Bates stamps exactly as shown on " +
-          "the page, for example F0-0002. Do not include markup, " +
-          "HTML, Markdown, or narrative outside the object.",
+        'For each statement, write concise supporting text in "text" ' +
+          'and the matching citations in "citations".',
+        ...citationGuide,
+        "Do not include markup, HTML, Markdown, or narrative outside " +
+          "the object.",
         `Example: ${JSON.stringify([
           {
-            file: filenames[0]?.simplified ?? "F0",
+            file: exampleFile?.simplified ?? "F0",
             statements: [
               {
                 text: "The document identifies the contracting party.",
-                citations: [`${filenames[0]?.simplified ?? "F0"}-0002`],
+                citations: [exampleCitation],
               },
             ],
           },
@@ -222,6 +257,48 @@ export const buildBatchSchema = (
 };
 
 // --------------- User message templates ---------------
+
+type DocxBlocksMessageProps = {
+  simplifiedName: string;
+  blocks: readonly FolioAIBlock[];
+};
+
+const truncateBlockText = (text: string): string => {
+  if (text.length <= ACTIVE_DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS) {
+    return text;
+  }
+  return `${text.slice(0, ACTIVE_DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS - 1)}…`;
+};
+
+export const buildDocxBlocksMessage = ({
+  simplifiedName,
+  blocks,
+}: DocxBlocksMessageProps): string => {
+  const promptBlocks = blocks.map((block) => {
+    const out: {
+      blockId: string;
+      kind: typeof block.kind;
+      text: string;
+      label?: string;
+    } = {
+      blockId: block.id,
+      kind: block.kind,
+      text: truncateBlockText(block.text),
+    };
+    if (block.displayLabel) {
+      out.label = block.displayLabel;
+    }
+    return out;
+  });
+
+  return [
+    `DOCX file ${simplifiedName} — folio block list. Cite blocks by ` +
+      `their "blockId" in any justification that references this file.`,
+    "```json",
+    JSON.stringify(promptBlocks),
+    "```",
+  ].join("\n");
+};
 
 export const buildTextInputsMessage = (textInputs: readonly TextInput[]) => {
   const list = textInputs

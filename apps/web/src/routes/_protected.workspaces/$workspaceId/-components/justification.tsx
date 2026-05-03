@@ -1,13 +1,13 @@
-import type { PropsWithChildren } from "react";
-
 import { cn } from "@stll/ui/lib/utils";
 import { useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
 import { useShallow } from "zustand/react/shallow";
 
+import type { Citation } from "@/lib/citations";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { renderJustificationContent } from "@/lib/render-justification-content";
 import type { WorkspaceJustification } from "@/lib/types";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { useCreateBBoxes } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
@@ -24,44 +24,39 @@ export const Justification = ({
     {
       renderJustificationContent({
         content: justification.content,
-        renderCitation: ({ children, fileFieldId, key, pageNumber }) => (
-          <Citation
-            fileFieldId={fileFieldId}
-            justification={justification}
-            key={key}
-            pageNumber={pageNumber}
-            workspaceId={workspaceId}
-          >
-            {children}
-          </Citation>
-        ),
+        renderCitation: ({ citation, key }) => {
+          if (citation.kind === "pdf-bates") {
+            return (
+              <PdfChip
+                citation={citation}
+                justification={justification}
+                key={key}
+                workspaceId={workspaceId}
+              />
+            );
+          }
+          return <DocxQuote citation={citation} key={key} />;
+        },
       }).nodes
     }
   </div>
 );
 
-type CitationProps = {
+type PdfChipProps = {
   workspaceId: string;
   justification: WorkspaceJustification;
-  pageNumber: number;
-  fileFieldId: string;
+  citation: Extract<Citation, { kind: "pdf-bates" }>;
 };
 
-const Citation = ({
-  workspaceId,
-  justification,
-  pageNumber,
-  fileFieldId,
-  children,
-}: PropsWithChildren<CitationProps>) => {
+const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
   const currentJustification = useWorkspaceStore((s) => s.activeJustification);
   const setActiveJustification = useWorkspaceStore(
     (s) => s.setActiveJustification,
   );
 
   const isActive =
-    justification?.id === currentJustification?.id &&
-    pageNumber === currentJustification?.pageNumber;
+    justification.id === currentJustification?.id &&
+    citation.pageNumber === currentJustification.pageNumber;
   const navigate = useNavigate({
     from: "/workspaces/$workspaceId/$viewId/document",
   });
@@ -85,7 +80,7 @@ const Citation = ({
           createBoundingBoxes();
           setActiveJustification({
             id: justification.id,
-            pageNumber,
+            pageNumber: citation.pageNumber,
           });
 
           const boundingBoxes = useWorkspaceStore
@@ -94,7 +89,7 @@ const Citation = ({
               (j) => j.id === justification.id,
             )?.boundingBoxes;
           const pageIds = [...pages.keys()];
-          const pageId = pageIds[pageNumber - 1];
+          const pageId = pageIds[citation.pageNumber - 1];
 
           if (pageId !== undefined) {
             setScrollTo({
@@ -108,10 +103,10 @@ const Citation = ({
             replace: true,
             search: (prev) =>
               produce(prev, (s) => {
-                s.field = fileFieldId;
+                s.field = citation.fileFieldId;
                 s.justification = justification.id;
-                s.justificationPage = pageNumber;
-                s.pdfPage = pageNumber;
+                s.justificationPage = citation.pageNumber;
+                s.pdfPage = citation.pageNumber;
               }),
           });
         })();
@@ -121,7 +116,27 @@ const Citation = ({
       }}
       type="button"
     >
-      {children}
+      {citation.pageNumber}
+    </button>
+  );
+};
+
+type DocxQuoteProps = {
+  citation: Extract<Citation, { kind: "docx-folio" }>;
+};
+
+const DocxQuote = ({ citation }: DocxQuoteProps) => {
+  const requestBlockScroll = useInspectorStore((s) => s.requestBlockScroll);
+  return (
+    <button
+      className={cn(
+        "border-muted-foreground/24 hover:border-foreground/40 hover:bg-muted/40 my-1 block w-full border-s-2 ps-3 text-start text-sm italic transition-colors",
+      )}
+      data-block-id={citation.blockId}
+      onClick={() => requestBlockScroll(citation.fileFieldId, citation.blockId)}
+      type="button"
+    >
+      {citation.text}
     </button>
   );
 };

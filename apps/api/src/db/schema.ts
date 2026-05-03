@@ -56,18 +56,42 @@ export type LinkMetadata = {
   sourceType?: string;
 };
 
-export type JustificationContent = {
-  version: 1;
-  blocks: {
-    fileFieldId: SafeId<"field">;
-    statements: {
-      text: string;
-      citations: {
-        bates: string;
-        pageNumber: number;
-      }[];
+export type PdfBatesJustificationBlock = {
+  kind: "pdf-bates";
+  fileFieldId: SafeId<"field">;
+  statements: {
+    text: string;
+    citations: {
+      bates: string;
+      pageNumber: number;
     }[];
   }[];
+};
+
+export type DocxFolioJustificationBlock = {
+  kind: "docx-folio";
+  fileFieldId: SafeId<"field">;
+  statements: {
+    text: string;
+    /** Each cite carries the block's literal text captured at
+     *  extraction time so the cell-click peek can render the quoted
+     *  source without re-parsing the DOCX or fetching anything else.
+     *  `blockId` lets a folio editor (Phase 2b) scroll to the same
+     *  paragraph the chat editor would. */
+    citations: {
+      blockId: string;
+      text: string;
+    }[];
+  }[];
+};
+
+export type JustificationBlock =
+  | PdfBatesJustificationBlock
+  | DocxFolioJustificationBlock;
+
+export type JustificationContent = {
+  version: 1;
+  blocks: JustificationBlock[];
 };
 
 export type AgendaItemKind =

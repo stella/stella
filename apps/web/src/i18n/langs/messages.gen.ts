@@ -18,9 +18,9 @@ type Messages = {
   };
   "ai": {
     "keyRequired": {
-      "title": "AI key required";
-      "description": "This instance has no platform AI keys provisioned. Add your own API key to start using AI features.";
       "cta": "Open AI settings";
+      "description": "This instance has no platform AI keys provisioned. Add your own API key to start using AI features.";
+      "title": "AI key required";
     };
   };
   "anonymize": {
@@ -294,6 +294,10 @@ type Messages = {
       "toastDescription": "Full-page chat lands with persisted threads.";
       "toastTitle": "Full view not yet available";
     };
+    "folioCitationFallback": "p. {n}";
+    "anonymizedMode": "Anonymized AI mode";
+    "anonymizedModeDisabled": "Anonymized AI mode is off";
+    "anonymizedModeEnabled": "Anonymized AI mode is on";
     "applyMode": {
       "description": "Word stores who made each change. We'll remember your choice.";
       "direct": "No, apply directly";
@@ -316,9 +320,6 @@ type Messages = {
     };
     "attachFile": "Attach file";
     "attachedImage": "Attached image";
-    "anonymizedMode": "Anonymized AI mode";
-    "anonymizedModeDisabled": "Anonymized AI mode is off";
-    "anonymizedModeEnabled": "Anonymized AI mode is on";
     "attachment": "Attachment";
     "caseLawGreeting": "Ask about this decision — its full text is available here.";
     "chatAbout": "Chat about this";

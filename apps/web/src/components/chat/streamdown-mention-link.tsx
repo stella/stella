@@ -11,6 +11,7 @@ import {
   LayersIcon,
   ListTodoIcon,
 } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import type { MentionCategory } from "@/components/chat/chat-mention-href";
@@ -21,11 +22,40 @@ import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME } from "@/lib/consts";
 import { getMatterColor } from "@/lib/matter-colors";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 const DECISION_HASH_PREFIX = "#stella-decision=";
 const ENTITY_REF_HASH_PREFIX = "#stella-entity-ref=";
 const WORKSPACE_REF_HASH_PREFIX = "#stella-workspace-ref=";
+// Hash fragment, NOT a `folio:` scheme. Streamdown runs
+// rehype-sanitize over rendered links; only its protocol
+// whitelist (http/https/mailto/tel) survives. Custom schemes
+// get their href stripped, after which rehype-harden appends
+// " [blocked]". Hash-only hrefs are treated as relative and
+// pass through untouched, matching how `#stella-entity-ref=`
+// and friends already work.
+const FOLIO_BLOCK_PREFIX = "#folio:";
+
+/**
+ * Public window event broadcast when a `#folio:` citation chip
+ * is clicked. Both the peek DOCX viewer (inspector) and the file
+ * chat overlay editor listen for this; whichever has the live
+ * editor mounted scrolls. Augmenting `WindowEventMap` lets
+ * listeners receive a strongly-typed event without an `as` cast.
+ */
+export const FOLIO_SCROLL_EVENT = "folio:scroll-to-block";
+
+export type FolioScrollEventDetail = { blockId: string };
+
+declare global {
+  // Global augmentation requires an interface — `type` doesn't merge
+  // with the lib.dom WindowEventMap declaration.
+  // eslint-disable-next-line typescript-eslint/consistent-type-definitions
+  interface WindowEventMap {
+    "folio:scroll-to-block": CustomEvent<FolioScrollEventDetail>;
+  }
+}
 
 const CATEGORY_ICON: Record<
   Exclude<MentionCategory, "entity">,
@@ -366,6 +396,15 @@ export const StreamdownMentionLink = ({
     return <span {...props}>{children}</span>;
   }
 
+  if (href.startsWith(FOLIO_BLOCK_PREFIX)) {
+    const blockId = href.slice(FOLIO_BLOCK_PREFIX.length);
+    return (
+      <FolioBlockChip blockId={blockId} interactive={interactive}>
+        {children}
+      </FolioBlockChip>
+    );
+  }
+
   const mentionChip =
     href.startsWith(DECISION_HASH_PREFIX) ||
     href.startsWith(ENTITY_REF_HASH_PREFIX) ||
@@ -396,4 +435,125 @@ export const StreamdownMentionLink = ({
       {children}
     </a>
   );
+};
+
+type FolioBlockChipProps = {
+  blockId: string;
+  interactive: boolean;
+  children: React.ReactNode;
+};
+
+/**
+ * Click-to-scroll chip for an inline `#folio:b-NNNN` citation. The
+ * AI emits these in plain answers about an open DOCX. Two delivery
+ * paths cover both rendering surfaces:
+ *
+ *  - **Inspector tab DOCX** — queue a `pendingBlockScroll` in the
+ *    inspector store; `PeekDocxViewer` consumes it on its next
+ *    effect tick and calls `scrollToBlock` on its editor ref.
+ *  - **File-chat-overlay DOCX** — the overlay's editor isn't an
+ *    inspector tab, so we ALSO dispatch a window CustomEvent that
+ *    any folio editor listens for and reacts to when mounted.
+ *
+ * Belt-and-braces — whichever surface owns the DOCX picks up the
+ * citation; the other ignores it.
+ */
+const FolioBlockChip = ({
+  blockId,
+  interactive,
+  children,
+}: FolioBlockChipProps) => {
+  const handleClick = () => {
+    const state = useInspectorStore.getState();
+    const docxTabId = pickActiveDocxTabId(state);
+    if (docxTabId !== null) {
+      state.requestBlockScroll(docxTabId, blockId);
+    }
+    // Always also broadcast — the overlay editor isn't tracked in
+    // the inspector store, so the store path alone is a no-op
+    // there.
+    window.dispatchEvent(
+      new CustomEvent(FOLIO_SCROLL_EVENT, { detail: { blockId } }),
+    );
+  };
+
+  // Models occasionally emit a degenerate citation where the link
+  // text is the bare URL (`[#folio:b-0064](#folio:b-0064)`) or is
+  // empty. Surface a clean fallback label so the chip never shows
+  // the raw scheme — it's an internal protocol, not user copy.
+  const displayedChildren = useFolioChipChildren(children, blockId);
+
+  if (!interactive) {
+    return <span className={CHIP_CLASS_NAME}>{displayedChildren}</span>;
+  }
+
+  return (
+    <button
+      className={cn(
+        CHIP_CLASS_NAME,
+        "hover:bg-accent/80 cursor-pointer transition-colors",
+      )}
+      data-block-id={blockId}
+      onClick={handleClick}
+      type="button"
+    >
+      <FileTextIcon className="size-3 shrink-0" />
+      <MentionChipLabel>{displayedChildren}</MentionChipLabel>
+    </button>
+  );
+};
+
+const useFolioChipChildren = (
+  children: React.ReactNode,
+  blockId: string,
+): React.ReactNode => {
+  const t = useTranslations();
+  const text = collectChipText(children).trim();
+  if (text.length === 0 || text.toLowerCase().startsWith("#folio:")) {
+    // Strip the `b-` prefix and any leading zeros so the fallback
+    // reads as a clean ordinal — e.g. `b-0064` → `64` → "str. 64".
+    const numeric = blockId.replace(/^b-0*/, "") || blockId;
+    return t("chat.folioCitationFallback", { n: numeric });
+  }
+  return children;
+};
+
+const collectChipText = (node: React.ReactNode): string => {
+  if (node === null || node === undefined || node === false) {
+    return "";
+  }
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (Array.isArray(node)) {
+    return node.map(collectChipText).join("");
+  }
+  return Children.toArray(node)
+    .map((child) =>
+      typeof child === "string" || typeof child === "number"
+        ? String(child)
+        : "",
+    )
+    .join("");
+};
+
+const pickActiveDocxTabId = (
+  state: ReturnType<typeof useInspectorStore.getState>,
+): string | null => {
+  const active = state.tabs.find(
+    (tab) =>
+      tab.id === state.activeId &&
+      tab.type === "pdf" &&
+      tab.mimeType === DOCX_MIME,
+  );
+  if (active) {
+    return active.id;
+  }
+  // Fall back to the first DOCX tab if the chat tab itself is
+  // active. Citations should still work when the user is reading
+  // chat alongside the document.
+  const fallback = state.tabs.find(
+    (tab) => tab.type === "pdf" && tab.mimeType === DOCX_MIME,
+  );
+  return fallback ? fallback.id : null;
 };

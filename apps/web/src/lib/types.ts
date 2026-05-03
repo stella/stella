@@ -243,18 +243,41 @@ export type PersonMention = {
   hideAvatar?: boolean;
 };
 
-export type JustificationContent = {
-  version: 1;
-  blocks: {
-    fileFieldId: string;
-    statements: {
-      text: string;
-      citations: {
-        bates: string;
-        pageNumber: number;
-      }[];
+export type PdfBatesJustificationBlock = {
+  kind: "pdf-bates";
+  fileFieldId: string;
+  statements: {
+    text: string;
+    citations: {
+      bates: string;
+      pageNumber: number;
     }[];
   }[];
+};
+
+export type DocxFolioJustificationBlock = {
+  kind: "docx-folio";
+  fileFieldId: string;
+  statements: {
+    text: string;
+    /** Each cite carries the block's literal text captured at
+     *  extraction time so the cell-click peek can render the quoted
+     *  source without re-fetching anything. `blockId` matches the
+     *  folio editor's block IDs (Phase 2b: scroll-to-block). */
+    citations: {
+      blockId: string;
+      text: string;
+    }[];
+  }[];
+};
+
+export type JustificationBlock =
+  | PdfBatesJustificationBlock
+  | DocxFolioJustificationBlock;
+
+export type JustificationContent = {
+  version: 1;
+  blocks: JustificationBlock[];
 };
 
 export type WorkspaceJustification = {
