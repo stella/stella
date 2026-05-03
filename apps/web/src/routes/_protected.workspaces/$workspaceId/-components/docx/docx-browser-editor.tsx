@@ -420,7 +420,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         tokenRef.current = null;
       }
     };
-    // requestEditMode is wrapped in useCallback above; safe in deps.
+    // `isUnlocked` is intentionally NOT in deps: this effect owns
+    // the register/unregister lifecycle, and the next effect below
+    // propagates lock-state changes via `updateEditable`. Including
+    // it here would tear down + re-create the registration on every
+    // toggle, invalidating the token contract documented above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entityId, requestEditMode]);
 
   useEffect(() => {
