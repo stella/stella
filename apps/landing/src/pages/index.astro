@@ -21,7 +21,12 @@ const selfHostingDocsUrl =
         <div id="gradient-dark" class="absolute inset-0 opacity-0 dark:opacity-100 transition-opacity duration-500"></div>
       </div>
       <nav class="relative z-10 mx-auto flex w-full max-w-300 items-center justify-between px-6 py-5">
-        <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
+        <div class="flex items-center gap-3">
+          <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
+          <span class="border-border text-muted-foreground rounded-sm border px-1.5 py-0.5 text-[0.625rem] font-medium tracking-[0.1em] uppercase">
+            Beta
+          </span>
+        </div>
         <div class="flex items-center gap-4">
           <ThemeToggle />
         </div>

@@ -29,20 +29,17 @@ function AuthLayout() {
       `}</style>
       <div className="flex flex-1 flex-col px-8 lg:px-16 xl:px-24">
         <header className="pt-12">
-          <a
-            aria-label="stella"
-            className="inline-flex transition-opacity hover:opacity-80"
-            href={landingUrl}
-          >
-            <StellaWordmark className="text-foreground h-6 w-auto" />
-          </a>
-          <div className="border-border bg-card/80 mt-8 max-w-2xl rounded-lg border p-4">
-            <p className="text-foreground text-sm font-medium">
-              {t("auth.betaNoticeTitle")}
-            </p>
-            <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-              {t("auth.betaNoticeBody")}
-            </p>
+          <div className="flex items-center gap-3">
+            <a
+              aria-label="stella"
+              className="inline-flex transition-opacity hover:opacity-80"
+              href={landingUrl}
+            >
+              <StellaWordmark className="text-foreground h-6 w-auto" />
+            </a>
+            <span className="border-border text-muted-foreground rounded-sm border px-1.5 py-0.5 text-[0.625rem] font-medium tracking-[0.1em] uppercase">
+              Beta
+            </span>
           </div>
         </header>
         <div className="flex flex-1 flex-col items-center min-[70rem]:flex-row min-[70rem]:items-baseline">

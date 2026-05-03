@@ -656,18 +656,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               <ClockIcon className="me-1.5 inline size-3.5" />
               {t("workspaces.overview.timeAndTeam")}
             </h2>
-            <Button
-              className="h-7 text-xs"
-              onClick={() => {
-                // eslint-disable-next-line typescript/no-floating-promises
-                navigate({
-                  to: "/workspaces/$workspaceId/timesheets",
-                  params: { workspaceId },
-                });
-              }}
-              size="sm"
-              variant="ghost"
-            >
+            <Button className="h-7 text-xs" disabled size="sm" variant="ghost">
               <PlusIcon className="size-3" />
               {t("common.logTime")}
             </Button>

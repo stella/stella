@@ -9,7 +9,6 @@ export const HOTKEYS = {
   TOGGLE_CHAT: "Mod+J",
   NEW_CHAT: "Mod+Shift+J",
   NEW_MATTER: "Mod+Shift+E",
-  TOGGLE_TIME_TRACKING: "Mod+Shift+H",
   SELECT_ALL: "Mod+A",
 } as const satisfies Record<string, Hotkey>;
 
@@ -49,11 +48,6 @@ export const SHORTCUT_HINT_GROUPS = [
         hotkey: HOTKEYS.NEW_MATTER,
         labelKey: "navigation.newMatter",
         contexts: ["global", "workspace"],
-      },
-      {
-        hotkey: HOTKEYS.TOGGLE_TIME_TRACKING,
-        labelKey: "navigation.timeTracking",
-        contexts: ["global"],
       },
     ],
   },

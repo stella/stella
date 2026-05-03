@@ -152,12 +152,14 @@ describe("resolveOffset", () => {
 describe("portsForOffset", () => {
   test("keeps the API, web, and desktop ports in sync", () => {
     expect(portsForOffset(0)).toEqual({
+      aiSdkDevtools: 4983,
       api: 3001,
       desktopBridge: 45_901,
       desktopView: 5177,
       web: 3000,
     });
     expect(portsForOffset(24)).toEqual({
+      aiSdkDevtools: 5007,
       api: 3025,
       desktopBridge: 45_925,
       desktopView: 5201,
@@ -316,6 +318,23 @@ describe("requiredPortsForMode", () => {
     expect(requiredPortsForMode("dev:desktop", ports)).toEqual([
       3006, 3005, 5182, 45_906,
     ]);
+  });
+
+  test("reserves the AI SDK devtools port only when the flag is on", () => {
+    const ports = portsForOffset(5);
+
+    expect(
+      requiredPortsForMode("dev:api", ports, { aiDevtoolsEnabled: false }),
+    ).toEqual([3006]);
+    expect(
+      requiredPortsForMode("dev:api", ports, { aiDevtoolsEnabled: true }),
+    ).toEqual([3006, 4988]);
+    expect(
+      requiredPortsForMode("dev", ports, { aiDevtoolsEnabled: true }),
+    ).toEqual([3006, 4988, 3005]);
+    expect(
+      requiredPortsForMode("dev:web", ports, { aiDevtoolsEnabled: true }),
+    ).toEqual([3005]);
   });
 });
 
@@ -510,6 +529,7 @@ describe("dev env factories", () => {
       infraOffset: 0,
       infraPorts: infraPortsForOffset(0),
       ports: {
+        aiSdkDevtools: 5083,
         api: 3101,
         desktopBridge: 45_999,
         desktopView: 5199,
@@ -536,6 +556,7 @@ describe("dev env factories", () => {
         infraOffset: 10,
         infraPorts: infraPortsForOffset(10),
         ports: {
+          aiSdkDevtools: 5083,
           api: 3101,
           desktopBridge: 45_999,
           desktopView: 5199,
@@ -553,8 +574,10 @@ describe("dev env factories", () => {
   test("threads computed ports into the web env", () => {
     expect(
       createWebEnv({
+        aiDevtoolsEnabled: false,
         baseEnv: { KEEP_ME: "1" },
         ports: {
+          aiSdkDevtools: 5083,
           api: 3101,
           desktopBridge: 45_999,
           desktopView: 5199,
@@ -565,9 +588,24 @@ describe("dev env factories", () => {
       KEEP_ME: "1",
       STELLA_API_PORT: "3101",
       STELLA_WEB_PORT: "3100",
+      VITE_AI_DEVTOOLS_ENABLED: "false",
+      VITE_AI_SDK_DEVTOOLS_PORT: "5083",
       VITE_API_URL: "http://localhost:3101",
       VITE_DESKTOP_BRIDGE_PORT: "45999",
     });
+    expect(
+      createWebEnv({
+        aiDevtoolsEnabled: true,
+        baseEnv: {},
+        ports: {
+          aiSdkDevtools: 5083,
+          api: 3101,
+          desktopBridge: 45_999,
+          desktopView: 5199,
+          web: 3100,
+        },
+      }),
+    ).toMatchObject({ VITE_AI_DEVTOOLS_ENABLED: "true" });
   });
 
   test("threads computed ports into the desktop env", () => {
@@ -575,6 +613,7 @@ describe("dev env factories", () => {
       createDesktopEnv({
         baseEnv: { KEEP_ME: "1" },
         ports: {
+          aiSdkDevtools: 5083,
           api: 3101,
           desktopBridge: 45_999,
           desktopView: 5199,

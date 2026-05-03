@@ -28,6 +28,7 @@ const ENV_FILE_SPECS = [
 ] as const;
 const PORT_PROBE_HOSTS = ["127.0.0.1", "0.0.0.0"] as const;
 const DEFAULT_PORTS = {
+  aiSdkDevtools: 4983,
   api: 3001,
   desktopBridge: 45_901,
   desktopView: 5177,
@@ -98,6 +99,7 @@ export type ResolvedOffset = {
 };
 
 export type DevPorts = {
+  aiSdkDevtools: number;
   api: number;
   desktopBridge: number;
   desktopView: number;
@@ -347,6 +349,7 @@ const dockerProjectName = (infraOffset: number) =>
     : `${SHARED_DOCKER_PROJECT_BASE}-${String(infraOffset)}`;
 
 export const portsForOffset = (offset: number): DevPorts => ({
+  aiSdkDevtools: DEFAULT_PORTS.aiSdkDevtools + offset,
   api: DEFAULT_PORTS.api + offset,
   desktopBridge: DEFAULT_PORTS.desktopBridge + offset,
   desktopView: DEFAULT_PORTS.desktopView + offset,
@@ -356,11 +359,18 @@ export const portsForOffset = (offset: number): DevPorts => ({
 export const requiredPortsForMode = (
   mode: DevMode,
   ports: DevPorts,
+  options: { aiDevtoolsEnabled?: boolean } = {},
 ): number[] => {
   const requiredPorts: number[] = [];
 
   if (modeIncludesApi(mode)) {
     requiredPorts.push(ports.api);
+    // Reserve the AI SDK Devtools port only when the runner will
+    // actually spawn the CLI; otherwise an unrelated process holding
+    // 4983 (or its offset twin) would force a needless offset shift.
+    if (options.aiDevtoolsEnabled) {
+      requiredPorts.push(ports.aiSdkDevtools);
+    }
   }
 
   if (modeIncludesWeb(mode)) {
@@ -755,11 +765,13 @@ const ensureDockerServices = async ({
 };
 
 export const findFirstAvailableOffset = async ({
+  aiDevtoolsEnabled = false,
   checkReusableApiPort = isHealthyApiPort,
   checkPortAvailability = checkPortAvailabilityOnHosts,
   mode,
   startOffset,
 }: {
+  aiDevtoolsEnabled?: boolean;
   checkReusableApiPort?: CheckReusableApiPort;
   checkPortAvailability?: (port: number) => Promise<boolean>;
   mode: DevMode;
@@ -772,7 +784,7 @@ export const findFirstAvailableOffset = async ({
   ) {
     const ports = portsForOffset(offset);
     const availability = await Promise.all(
-      requiredPortsForMode(mode, ports).map(
+      requiredPortsForMode(mode, ports, { aiDevtoolsEnabled }).map(
         async (port) => await checkPortAvailability(port),
       ),
     );
@@ -858,6 +870,7 @@ export const createApiEnv = ({
   ports: DevPorts;
 }) => ({
   ...baseEnv,
+  AI_SDK_DEVTOOLS_PORT: String(ports.aiSdkDevtools),
   BETTER_AUTH_COOKIE_PREFIX: `stella-dev-${String(ports.api)}`,
   BETTER_AUTH_URL: apiUrlForPort(ports.api),
   FRONTEND_URL: webUrlForPort(ports.web),
@@ -873,15 +886,19 @@ export const createApiEnv = ({
 });
 
 export const createWebEnv = ({
+  aiDevtoolsEnabled,
   baseEnv,
   ports,
 }: {
+  aiDevtoolsEnabled: boolean;
   baseEnv: NodeJS.ProcessEnv;
   ports: DevPorts;
 }) => ({
   ...baseEnv,
   STELLA_API_PORT: String(ports.api),
   STELLA_WEB_PORT: String(ports.web),
+  VITE_AI_DEVTOOLS_ENABLED: aiDevtoolsEnabled ? "true" : "false",
+  VITE_AI_SDK_DEVTOOLS_PORT: String(ports.aiSdkDevtools),
   VITE_API_URL: apiUrlForPort(ports.api),
   VITE_DESKTOP_BRIDGE_PORT: String(ports.desktopBridge),
 });
@@ -914,6 +931,73 @@ const decodeOutput = (value: Uint8Array) =>
   new TextDecoder().decode(value).trim();
 
 const resolveEnv = (env: NodeJS.ProcessEnv | undefined) => env ?? process.env;
+
+const TRUTHY_ENV_VALUES: ReadonlySet<string> = new Set([
+  "1",
+  "true",
+  "yes",
+  "on",
+]);
+
+const readEnvFlag = ({
+  envFilePath,
+  key,
+  processEnv,
+}: {
+  envFilePath: string;
+  key: string;
+  processEnv: NodeJS.ProcessEnv;
+}): boolean => {
+  const raw = processEnv[key];
+  if (raw !== undefined) {
+    return TRUTHY_ENV_VALUES.has(
+      raw.trim().toLowerCase().replace(/^"|"$/gu, ""),
+    );
+  }
+  if (!existsSync(envFilePath)) {
+    return false;
+  }
+  for (const line of readFileSync(envFilePath, "utf-8").split(/\r?\n/u)) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0 || trimmed.startsWith("#")) {
+      continue;
+    }
+    const withoutExport = trimmed.startsWith("export ")
+      ? trimmed.slice("export ".length)
+      : trimmed;
+    const eqIndex = withoutExport.indexOf("=");
+    if (eqIndex === -1) {
+      continue;
+    }
+    if (withoutExport.slice(0, eqIndex).trim() !== key) {
+      continue;
+    }
+    const rawValue = withoutExport.slice(eqIndex + 1).trimStart();
+    // Strip trailing comments. A `#` inside double quotes is part of
+    // the value, so only honor `#` once the opening quote has closed
+    // (or when no quotes were used at all).
+    const isQuoted = rawValue.startsWith('"');
+    let endIndex = rawValue.length;
+    if (isQuoted) {
+      const closingQuote = rawValue.indexOf('"', 1);
+      if (closingQuote !== -1) {
+        endIndex = closingQuote + 1;
+      }
+    } else {
+      const hashIndex = rawValue.indexOf("#");
+      if (hashIndex !== -1) {
+        endIndex = hashIndex;
+      }
+    }
+    const value = rawValue
+      .slice(0, endIndex)
+      .trim()
+      .replace(/^"|"$/gu, "")
+      .toLowerCase();
+    return TRUTHY_ENV_VALUES.has(value);
+  }
+  return false;
+};
 
 const stripAppEnvKeys = ({
   baseEnv,
@@ -1177,12 +1261,14 @@ const buildPreparationSteps = ({
 };
 
 const buildPersistentSteps = ({
+  aiDevtoolsEnabled,
   infraOffset,
   infraPorts,
   mode,
   ports,
   rootDir,
 }: {
+  aiDevtoolsEnabled: boolean;
   infraOffset: number;
   infraPorts: InfraPorts;
   mode: DevMode;
@@ -1208,6 +1294,7 @@ const buildPersistentSteps = ({
     ports,
   });
   const webEnv = createWebEnv({
+    aiDevtoolsEnabled,
     baseEnv: webBaseEnv,
     ports,
   });
@@ -1225,6 +1312,19 @@ const buildPersistentSteps = ({
       env: apiEnv,
       label: "API server",
     });
+    // AI SDK DevTools UI: only useful alongside the API and only
+    // when the API is set to publish traces (AI_DEVTOOLS_ENABLED=true
+    // in apps/api/.env). Honors the worktree's port offset so
+    // multiple worktrees can run side-by-side without colliding on
+    // 4983.
+    if (aiDevtoolsEnabled) {
+      secondary.push({
+        cmd: [resolveCommandPath("bun"), "run", "dev:ai-tools"],
+        cwd: pathResolve(rootDir, "apps/api"),
+        env: apiEnv,
+        label: "AI SDK Devtools",
+      });
+    }
   }
 
   if (modeIncludesWeb(mode)) {
@@ -1391,6 +1491,9 @@ const printSummary = ({
   }
   if (modeIncludesApi(mode)) {
     console.log(`  api: ${apiUrlForPort(ports.api)}`);
+    console.log(
+      `  ai sdk devtools: http://localhost:${String(ports.aiSdkDevtools)}`,
+    );
     console.log(`  postgres: localhost:${String(infraPorts.postgres)}`);
     console.log(`  valkey: localhost:${String(infraPorts.valkey)}`);
     console.log(`  minio: localhost:${String(infraPorts.minio)}`);
@@ -1504,7 +1607,13 @@ const main = async () => {
         : undefined),
     worktreeName: basename(gitContext.currentRoot),
   });
+  const aiDevtoolsEnabled = readEnvFlag({
+    envFilePath: pathResolve(gitContext.currentRoot, "apps/api/.env"),
+    key: "AI_DEVTOOLS_ENABLED",
+    processEnv: process.env,
+  });
   const resolvedOffset = await findFirstAvailableOffset({
+    aiDevtoolsEnabled,
     mode: parsedArgs.mode,
     startOffset: initialOffset.offset,
   });
@@ -1523,6 +1632,7 @@ const main = async () => {
     skipInstall: parsedArgs.skipInstall,
   });
   const persistentSteps = buildPersistentSteps({
+    aiDevtoolsEnabled,
     infraOffset,
     infraPorts,
     mode: parsedArgs.mode,
