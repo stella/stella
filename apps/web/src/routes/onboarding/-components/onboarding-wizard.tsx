@@ -16,9 +16,10 @@ import { SidebarPreview } from "@/routes/onboarding/-components/sidebar-preview"
 import type { Phase } from "@/routes/onboarding/-components/steps/creating-step";
 import { CreatingStep } from "@/routes/onboarding/-components/steps/creating-step";
 import { DmsStep } from "@/routes/onboarding/-components/steps/dms-step";
+import { DownloadStep } from "@/routes/onboarding/-components/steps/download-step";
 import { InviteStep } from "@/routes/onboarding/-components/steps/invite-step";
 import { OrganizationStep } from "@/routes/onboarding/-components/steps/organization-step";
-type Step = "organization" | "dms" | "invite" | "creating";
+type Step = "organization" | "dms" | "invite" | "download" | "creating";
 
 type WizardData = {
   orgName: string;
@@ -27,12 +28,13 @@ type WizardData = {
   emails: string[];
 };
 
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 4;
 
 const STEP_TO_PROGRESS = {
   organization: 0,
   dms: 1,
   invite: 2,
+  download: 3,
 } as const satisfies Record<Exclude<Step, "creating">, number>;
 
 export const OnboardingWizard = () => {
@@ -255,29 +257,53 @@ export const OnboardingWizard = () => {
       );
     }
 
-    // step === "invite"
+    if (step === "invite") {
+      return (
+        <OnboardingLayout
+          currentStep={STEP_TO_PROGRESS.invite}
+          onBack={() => setStep("dms")}
+          preview={preview}
+          totalSteps={TOTAL_STEPS}
+        >
+          <InviteStep
+            onEmailCountChange={setPreviewEmailCount}
+            userEmail={userEmail}
+            onNext={({ emails }) => {
+              setData((d) => ({ ...d, emails }));
+              if (emails.length === 0) {
+                analytics.capture("onboarding_skipped_invite");
+              } else {
+                analytics.capture("onboarding_step_completed", {
+                  step: "invite",
+                });
+              }
+              setStep("download");
+            }}
+          />
+        </OnboardingLayout>
+      );
+    }
+
+    // step === "download"
     return (
       <OnboardingLayout
-        currentStep={STEP_TO_PROGRESS.invite}
-        onBack={() => setStep("dms")}
+        currentStep={STEP_TO_PROGRESS.download}
+        onBack={() => setStep("invite")}
         preview={preview}
         totalSteps={TOTAL_STEPS}
       >
-        <InviteStep
-          onEmailCountChange={setPreviewEmailCount}
-          userEmail={userEmail}
-          onNext={({ emails }) => {
-            const finalData = { ...data, emails };
-            setData(finalData);
-            if (emails.length === 0) {
-              analytics.capture("onboarding_skipped_invite");
-            } else {
-              analytics.capture("onboarding_step_completed", {
-                step: "invite",
-              });
-            }
+        <DownloadStep
+          onNext={() => {
+            analytics.capture("onboarding_step_completed", {
+              step: "download",
+            });
             // eslint-disable-next-line typescript/no-floating-promises
-            executeSetup(finalData);
+            executeSetup(data);
+          }}
+          onSkip={() => {
+            analytics.capture("onboarding_skipped_download");
+            // eslint-disable-next-line typescript/no-floating-promises
+            executeSetup(data);
           }}
         />
       </OnboardingLayout>

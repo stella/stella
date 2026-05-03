@@ -54,6 +54,14 @@ export const env = createEnv({
     VITE_FEATURE_DESKTOP_EDITING: featureFlagSchema,
     VITE_FEEDBACK_EMAIL_TO: v.optional(v.pipe(v.string(), v.email())),
     VITE_TERMS_URL: v.optional(linkUrlSchema, "/terms"),
+    // Base URL the desktop-app download buttons point at. Defaults
+    // to upstream GitHub releases; self-hosters who mirror the
+    // binaries can point this at their own host (filenames are
+    // kept identical).
+    VITE_DESKTOP_RELEASES_BASE_URL: v.optional(
+      v.pipe(v.string(), v.url()),
+      "https://github.com/stella/stella/releases/latest/download",
+    ),
   },
 
   runtimeEnv: import.meta.env,

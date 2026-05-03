@@ -10,31 +10,16 @@ import { cn } from "@stll/ui/lib/utils";
 import { AppleIcon, MonitorDownIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-const RELEASES_BASE =
-  "https://github.com/stella/stella/releases/latest/download";
-const WINDOWS_EXE_URL = `${RELEASES_BASE}/Stella-windows-x64-setup.exe`;
-const WINDOWS_MSI_URL = `${RELEASES_BASE}/Stella-windows-x64.msi`;
-const MACOS_DMG_URL = `${RELEASES_BASE}/Stella-macos-universal.dmg`;
-
-type Platform = "mac" | "windows" | "other";
-
-const detectPlatform = (): Platform => {
-  if (typeof navigator === "undefined") {
-    return "other";
-  }
-  const ua = navigator.userAgent.toLowerCase();
-  if (ua.includes("mac")) {
-    return "mac";
-  }
-  if (ua.includes("win")) {
-    return "windows";
-  }
-  return "other";
-};
+import {
+  detectDesktopPlatform,
+  MACOS_DMG_URL,
+  WINDOWS_EXE_URL,
+  WINDOWS_MSI_URL,
+} from "@/lib/desktop-downloads";
 
 export const DesktopDownloadSection = () => {
   const t = useTranslations();
-  const platform = detectPlatform();
+  const platform = detectDesktopPlatform();
 
   const primaryClass = cn(buttonVariants({ size: "lg" }), "w-fit");
   const secondaryClass =

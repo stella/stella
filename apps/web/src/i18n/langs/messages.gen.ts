@@ -1017,6 +1017,8 @@ type Messages = {
       "org": "Creating your team...";
     };
     "creatingTrust": "Your data is encrypted at rest and in transit.";
+    "desktopHint": "You can also do this later from your account settings.";
+    "desktopTitle": "Get the desktop app";
     "dmsConfirmFresh": "No problem; you can create your first matter anytime.";
     "dmsConfirmMigration": "Good to know. We'll reach out about {dms} migration options.";
     "dmsNoCommitment": "No commitment required. You can start fresh and import later.";
@@ -1036,6 +1038,7 @@ type Messages = {
     "orgTitle": "Name your team";
     "skipStep": "Skip this step";
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}";
+    "stepDesktop": "Desktop";
     "stepDocuments": "Documents";
     "stepOrganization": "Team";
     "stepTeam": "Invite";

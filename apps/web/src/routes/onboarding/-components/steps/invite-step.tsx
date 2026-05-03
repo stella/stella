@@ -240,7 +240,7 @@ export const InviteStep = ({
           }}
           type="button"
         >
-          {t("onboarding.getStarted")}
+          {t("common.next")}
         </Button>
       </div>
     </>
