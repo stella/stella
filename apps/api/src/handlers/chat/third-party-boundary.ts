@@ -3,18 +3,22 @@ import { isFileUIPart, isToolUIPart } from "ai";
 import { Result } from "better-result";
 
 import type { ScopedDb } from "@/api/db";
-import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
+import {
+  CHAT_MAX_FILE_BYTES,
+  TEXT_PLAIN_MIME_TYPE,
+} from "@/api/handlers/chat/attachment-validation";
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
 import type { SafeId } from "@/api/lib/branded-types";
 import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 
 export type ChatThirdPartyBoundary =
   | { type: "raw" }
   | {
       anonymizeFields?: typeof anonymizeTextFields | undefined;
+      gazetteerEntries: ReturnType<typeof loadAnonymizationGazetteerEntries>;
       organizationId: SafeId<"organization">;
       scopedDb: ScopedDb;
       type: "anonymized";
@@ -32,7 +36,15 @@ export const createChatThirdPartyBoundary = ({
   scopedDb: ScopedDb;
 }): ChatThirdPartyBoundary =>
   anonymized
-    ? { type: "anonymized", anonymizeFields, organizationId, scopedDb }
+    ? {
+        type: "anonymized",
+        anonymizeFields,
+        gazetteerEntries: anonymizeFields
+          ? Promise.resolve([])
+          : loadAnonymizationGazetteerEntries({ organizationId, scopedDb }),
+        organizationId,
+        scopedDb,
+      }
     : { type: "raw" };
 
 type BoundaryRefusal = HandlerError<422 | 500>;
@@ -53,6 +65,7 @@ export const prepareTextForThirdParty = async ({
     try: async () =>
       await anonymizeFields({
         fields: [text],
+        gazetteerEntries: await boundary.gazetteerEntries,
         organizationId: boundary.organizationId,
         scopedDb: boundary.scopedDb,
         workspaceId: boundary.organizationId,
@@ -91,7 +104,7 @@ const anonymizePlainTextFile = async ({
 
   const parsed = parseDataUrl({
     expectedMimeType: TEXT_PLAIN_MIME_TYPE,
-    maxBytes: LIMITS.chatContextFileMaxChars * 4,
+    maxBytes: CHAT_MAX_FILE_BYTES,
     url: part.url,
   });
 
@@ -265,11 +278,36 @@ export const prepareMessagesForThirdParty = async ({
   });
 };
 
+const shouldPreserveStructuredString = (key: string): boolean => {
+  const normalized = key.toLocaleLowerCase();
+
+  return (
+    normalized === "id" ||
+    normalized === "ids" ||
+    normalized === "uuid" ||
+    normalized === "uuids" ||
+    normalized.endsWith("_id") ||
+    normalized.endsWith("_ids") ||
+    normalized.endsWith("_uuid") ||
+    normalized.endsWith("_uuids") ||
+    key.endsWith("Id") ||
+    key.endsWith("Ids") ||
+    key.endsWith("ID") ||
+    key.endsWith("IDs") ||
+    key.endsWith("Uuid") ||
+    key.endsWith("Uuids") ||
+    key.endsWith("UUID") ||
+    key.endsWith("UUIDs")
+  );
+};
+
 const anonymizeUnknownStrings = async ({
   boundary,
+  key,
   value,
 }: {
   boundary: ChatThirdPartyBoundary;
+  key?: string | undefined;
   value: unknown;
 }): Promise<Result<unknown, BoundaryRefusal>> => {
   if (boundary.type === "raw") {
@@ -277,6 +315,10 @@ const anonymizeUnknownStrings = async ({
   }
 
   if (typeof value === "string") {
+    if (key && shouldPreserveStructuredString(key)) {
+      return Result.ok(value);
+    }
+
     return await prepareTextForThirdParty({ boundary, text: value });
   }
 
@@ -287,7 +329,7 @@ const anonymizeUnknownStrings = async ({
       for (const item of value) {
         output.push(
           yield* Result.await(
-            anonymizeUnknownStrings({ boundary, value: item }),
+            anonymizeUnknownStrings({ boundary, key, value: item }),
           ),
         );
       }
@@ -303,12 +345,13 @@ const anonymizeUnknownStrings = async ({
   return await Result.gen(async function* () {
     const entries: [string, unknown][] = [];
 
-    for (const [key, nestedValue] of Object.entries(value)) {
+    for (const [nestedKey, nestedValue] of Object.entries(value)) {
       entries.push([
-        key,
+        nestedKey,
         yield* Result.await(
           anonymizeUnknownStrings({
             boundary,
+            key: nestedKey,
             value: nestedValue,
           }),
         ),

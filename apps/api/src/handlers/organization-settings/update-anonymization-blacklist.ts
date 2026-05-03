@@ -1,14 +1,12 @@
 import { Result } from "better-result";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
-import type { AnonymizationBlacklistEntryInput } from "@/api/lib/anonymization-blacklist";
-import { normalizeAnonymizationBlacklistEntry } from "@/api/lib/anonymization-blacklist";
+import { normalizeAnonymizationBlacklistEntries } from "@/api/lib/anonymization-blacklist";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const blacklistEntrySchema = t.Object({
@@ -33,42 +31,22 @@ const config = {
   body: updateAnonymizationBlacklistBodySchema,
 } satisfies HandlerConfig;
 
-const normalizeEntries = (entries: AnonymizationBlacklistEntryInput[]) => {
-  const seenCanonical = new Set<string>();
-  const normalized = [];
-
-  for (const entry of entries) {
-    const next = normalizeAnonymizationBlacklistEntry(entry);
-    const canonicalKey = next.canonical.toLocaleLowerCase();
-
-    if (seenCanonical.has(canonicalKey)) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Duplicate anonymization blacklist term",
-        }),
-      );
-    }
-
-    seenCanonical.add(canonicalKey);
-    normalized.push(next);
-  }
-
-  return Result.ok(normalized);
-};
-
 const updateAnonymizationBlacklist = createSafeRootHandler(
   config,
   async function* ({ body, safeDb, session, user }) {
-    const entries = normalizeEntries(body.entries);
+    const entries = normalizeAnonymizationBlacklistEntries(body.entries);
     if (Result.isError(entries)) {
       return Result.err(entries.error);
     }
 
     yield* Result.await(
       safeDb(async (tx) => {
-        await tx
-          .delete(anonymizationBlacklistEntries)
+        const existingRows = await tx
+          .select({
+            canonical: anonymizationBlacklistEntries.canonical,
+            id: anonymizationBlacklistEntries.id,
+          })
+          .from(anonymizationBlacklistEntries)
           .where(
             eq(
               anonymizationBlacklistEntries.organizationId,
@@ -76,12 +54,68 @@ const updateAnonymizationBlacklist = createSafeRootHandler(
             ),
           );
 
+        const existingByCanonical = new Map(
+          existingRows.map((row) => [row.canonical.toLocaleLowerCase(), row]),
+        );
+        const incomingCanonicalKeys = new Set(
+          entries.value.map((entry) => entry.canonical.toLocaleLowerCase()),
+        );
+
+        for (const existing of existingRows) {
+          if (
+            incomingCanonicalKeys.has(existing.canonical.toLocaleLowerCase())
+          ) {
+            continue;
+          }
+
+          await tx
+            .delete(anonymizationBlacklistEntries)
+            .where(
+              and(
+                eq(anonymizationBlacklistEntries.id, existing.id),
+                eq(
+                  anonymizationBlacklistEntries.organizationId,
+                  session.activeOrganizationId,
+                ),
+              ),
+            );
+        }
+
         if (entries.value.length === 0) {
           return;
         }
 
-        await tx.insert(anonymizationBlacklistEntries).values(
-          entries.value.map((entry) => ({
+        const now = new Date();
+
+        for (const entry of entries.value) {
+          const existing = existingByCanonical.get(
+            entry.canonical.toLocaleLowerCase(),
+          );
+
+          if (existing) {
+            await tx
+              .update(anonymizationBlacklistEntries)
+              .set({
+                label: entry.label,
+                canonical: entry.canonical,
+                variants: entry.variants,
+                enabled: entry.enabled,
+                updatedBy: user.id,
+                updatedAt: now,
+              })
+              .where(
+                and(
+                  eq(anonymizationBlacklistEntries.id, existing.id),
+                  eq(
+                    anonymizationBlacklistEntries.organizationId,
+                    session.activeOrganizationId,
+                  ),
+                ),
+              );
+            continue;
+          }
+
+          await tx.insert(anonymizationBlacklistEntries).values({
             id: createSafeId<"anonymizationBlacklistEntry">(),
             organizationId: session.activeOrganizationId,
             label: entry.label,
@@ -90,8 +124,8 @@ const updateAnonymizationBlacklist = createSafeRootHandler(
             enabled: entry.enabled,
             createdBy: user.id,
             updatedBy: user.id,
-          })),
-        );
+          });
+        }
       }),
     );
 

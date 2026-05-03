@@ -75,11 +75,13 @@ const splitRedactedFields = ({
 
 export const anonymizeTextFields = async ({
   fields,
+  gazetteerEntries,
   organizationId,
   scopedDb,
   workspaceId,
 }: {
   fields: string[];
+  gazetteerEntries?: GazetteerEntry[] | undefined;
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
   workspaceId: string;
@@ -100,15 +102,17 @@ export const anonymizeTextFields = async ({
     .map((field, index) => `${markers[index]}${field}`)
     .join("");
 
-  const gazetteerEntries = await loadAnonymizationGazetteerEntries({
-    organizationId,
-    scopedDb,
-  });
+  const entries =
+    gazetteerEntries ??
+    (await loadAnonymizationGazetteerEntries({
+      organizationId,
+      scopedDb,
+    }));
 
   const entities = await runPipeline({
     fullText: combinedText,
-    config: buildPipelineConfig({ gazetteerEntries, workspaceId }),
-    gazetteerEntries,
+    config: buildPipelineConfig({ gazetteerEntries: entries, workspaceId }),
+    gazetteerEntries: entries,
     context,
   });
   const result = redactText(

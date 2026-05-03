@@ -168,8 +168,12 @@ describe("chat third-party anonymization boundary", () => {
   test("returns anonymized live tool output values", async () => {
     const boundary = createBoundary();
     const tools = {
-      "read-secret": {
-        execute: async () => ({ text: "Secret notes for Jan Novák" }),
+      read_secret: {
+        execute: async () => ({
+          documentId: "doc_Secret_Jan_Novák",
+          ids: ["person_Secret"],
+          text: "Secret notes for Jan Novák",
+        }),
       },
     };
     const prepared = prepareToolsForThirdParty({
@@ -180,11 +184,13 @@ describe("chat third-party anonymization boundary", () => {
     });
     // SAFETY: the test fixture above defines this execute signature.
     // eslint-disable-next-line typescript/no-unsafe-type-assertion
-    const executable = prepared["read-secret"] as
+    const executable = prepared["read_secret"] as
       | { execute?: (() => Promise<unknown>) | undefined }
       | undefined;
 
     expect(await executable?.execute?.()).toEqual({
+      documentId: "doc_Secret_Jan_Novák",
+      ids: ["person_Secret"],
       text: "[CUSTOM_1] notes for [PERSON_1]",
     });
   });
