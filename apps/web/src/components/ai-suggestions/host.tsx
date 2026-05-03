@@ -1236,7 +1236,7 @@ export function PromptBar(props: PromptBarProps) {
           !busy &&
           !isSendBlocked &&
           emptyPlaceholder !== undefined && (
-            <div className="pointer-events-none absolute inset-x-1.5 top-1/2 z-10 min-w-0 -translate-y-1/2">
+            <div className="pointer-events-none absolute inset-0 z-10 flex items-center px-1.5">
               {emptyPlaceholder}
             </div>
           )}

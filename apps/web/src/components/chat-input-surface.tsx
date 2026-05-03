@@ -143,7 +143,10 @@ export const ChatInputSurface = ({
           </Button>
         ) : (
           <Button
-            className="bg-foreground text-background hover:bg-foreground/90 ms-auto shrink-0"
+            className={cn(
+              "bg-foreground text-background hover:bg-foreground/90 ms-auto shrink-0",
+              (disabled || !canSubmit) && "opacity-50",
+            )}
             disabled={disabled || !canSubmit}
             onClick={() => {
               void submitDraft();
