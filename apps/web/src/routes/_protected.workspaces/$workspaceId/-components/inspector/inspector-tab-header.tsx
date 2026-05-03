@@ -72,6 +72,13 @@ type InspectorTabHeaderProps = {
    * "open in big view", …). Rendered before the universal close.
    */
   actions?: ReactNode;
+  /**
+   * Resolved matter colour (hex or `var(--option-*)`). When set,
+   * tints the header background with the same `color-mix(... 2%)`
+   * formula the matter breadcrumb uses, so the inspector reads as
+   * a continuation of the matter chrome.
+   */
+  matterColor?: string | null | undefined;
   onClose: () => void;
 };
 
@@ -82,9 +89,19 @@ export const InspectorTabHeader = ({
   rename,
   matter,
   actions,
+  matterColor,
   onClose,
 }: InspectorTabHeaderProps) => (
-  <div className="flex h-12 shrink-0 items-center justify-between border-b px-3">
+  <div
+    className="flex h-12 shrink-0 items-center justify-between border-b px-3"
+    style={
+      matterColor
+        ? {
+            backgroundColor: `color-mix(in srgb, ${matterColor} 2%, transparent)`,
+          }
+        : undefined
+    }
+  >
     <div className="flex min-w-0 items-center gap-2 overflow-hidden">
       {rename?.active ? (
         <InlineEdit

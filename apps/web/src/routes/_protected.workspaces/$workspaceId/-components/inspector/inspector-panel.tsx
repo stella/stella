@@ -44,6 +44,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { resolveMatterColor } from "@/lib/matter-colors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
@@ -170,6 +171,14 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         : null,
     [workspace?.name, workspace?.color, navigate, workspaceId],
   );
+  // Resolve the matter's icon colour once so every tab header can
+  // tint with the same `color-mix(... 2%)` formula the matter
+  // breadcrumb uses — the inspector reads as a continuation of
+  // the matter chrome, not a separate surface.
+  const matterColor =
+    workspaceId !== undefined
+      ? resolveMatterColor(workspaceId, workspace?.color ?? null)
+      : null;
 
   const viewMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId/$viewId",
@@ -662,8 +671,13 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         // shape — so the user sees the expected interface
         // immediately and the data hydrates a frame later, no
         // spinner.
-        <Suspense fallback={<ChatTabPanelShell tab={activeTab} />}>
+        <Suspense
+          fallback={
+            <ChatTabPanelShell matterColor={matterColor} tab={activeTab} />
+          }
+        >
           <ChatTabPanel
+            matterColor={matterColor}
             onClose={() => handleCloseTab(activeTab.id)}
             onLabelContextMenu={ribbonContextMenu.openAt}
             tab={activeTab}
@@ -910,6 +924,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 />
               ) : undefined
             }
+            matterColor={matterColor}
             onClose={() => handleCloseTab(tab.id)}
             onLabelContextMenu={ribbonContextMenu.openAt}
             onStartRename={() => startRename(tab)}
