@@ -45,10 +45,11 @@ jobs:
       release_sha: ${{ steps.ref.outputs.sha }}
       app_version: ${{ steps.ref.outputs.version }}
       should_build: ${{ steps.diff.outputs.should_build }}
-      # Empty for stable releases (`v0.0.2`), `rc` for prereleases
-      # (`v0.0.2-rc.1`). Used to route the updater manifest to a
-      # channel-specific S3 path so an rc never overwrites the
-      # production manifest.
+      # Channel directory name (`prod`, `rc`, `beta`, `alpha`)
+      # derived from the tag suffix by scripts/release-channel.sh.
+      # Used to route the updater manifest to a channel-specific
+      # S3 path and to pin the in-binary updater endpoint, so an rc
+      # build never polls or overwrites the production manifest.
       channel: ${{ steps.ref.outputs.channel }}
     steps:
       # Lightweight first-pass checkout of the workflow's own ref
@@ -334,17 +335,20 @@ jobs:
           Write-Host "Using $($st.FullName)"
           "SIGNTOOL_PATH=$($st.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      # Tauri spawns bundle.windows.signCommand directly (no shell),
-      # so %VAR%-style env interpolation isn't applied — placeholders
-      # arrive at trusted-signing-cli as literal strings and the auth
-      # call fails. Substitute the values at build time so the spawned
-      # process gets the real endpoint/account/profile.
+      # Tauri spawns bundle.windows.signCommand directly via
+      # Command::new (no shell), so %VAR%-style env interpolation
+      # isn't applied — placeholders arrive at trusted-signing-cli
+      # as literal strings and the auth call fails. Substitute the
+      # values at build time so the spawned process gets the real
+      # endpoint/account/profile.
       #
-      # The description (-d) must be a single token: Tauri parses
-      # signCommand with shlex::split and forwards each token verbatim
-      # to Command::new — embedded \" survives as literal quotes and
-      # signtool then treats `"Stella` and `desktop"` as two separate
-      # file paths, failing with `File not found: desktop"`.
+      # Shape mirrors Yaak's proven Trusted Signing config: single-
+      # token args only, %1 placeholder, and no `-d` description.
+      # trusted-signing-cli doesn't require -d; including a multi-
+      # word value invites shell-quoting failures because Tauri
+      # parses signCommand with shlex::split and forwards each
+      # token verbatim — embedded \" survives literally and signtool
+      # then treats the second word as a separate file path.
       - name: Inline Azure values into bundle.windows.signCommand
         if: matrix.os == 'windows'
         shell: bash
@@ -354,7 +358,7 @@ jobs:
           AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
         run: |
           conf=apps/desktop/src-tauri/tauri.conf.json
-          cmd="trusted-signing-cli -e $AZURE_ENDPOINT -a $AZURE_CODE_SIGNING_ACCOUNT -c $AZURE_CERT_PROFILE -d Stella %1"
+          cmd="trusted-signing-cli -e $AZURE_ENDPOINT -a $AZURE_CODE_SIGNING_ACCOUNT -c $AZURE_CERT_PROFILE %1"
           jq --arg c "$cmd" '.bundle.windows.signCommand = $c' "$conf" > "$conf.tmp"
           mv "$conf.tmp" "$conf"
 
