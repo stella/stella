@@ -15,20 +15,3 @@
   p.is-editor-empty:first-child::before {
   content: "";
 }
-
-/*
- * Selection highlight for the inline AI prompt bar. The bar uses
- * a backdrop-filter on its wrapper, which creates a stacking
- * context where the browser's default ::selection paint sometimes
- * ends up suppressed on WebKit. The blanket selector below covers
- * the prose container, every descendant text node, and the
- * placeholder, with `!important` so utility classes can't out-cascade
- * the rule on the element itself.
- */
-.folio-ai-bar-editor .ProseMirror::selection,
-.folio-ai-bar-editor .ProseMirror *::selection,
-.folio-ai-bar-editor .ProseMirror::-moz-selection,
-.folio-ai-bar-editor .ProseMirror *::-moz-selection {
-  background-color: rgb(59 130 246 / 0.45) !important;
-  color: inherit !important;
-}

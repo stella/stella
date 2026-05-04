@@ -45,6 +45,12 @@ Small, almost invisible touches. Linear is a good reference.
   continuous, not jarring.
 - When in doubt, simpler is better, or skip it.
 
+## Icon Semantics
+
+- Use the magic wand icon for AI text rewrite/refine/redraft
+  actions, including search query refinement and prompt editing.
+  Do not use generic sparkles for this function.
+
 ## Reduce Visual Noise
 
 - Secondary information (counts, metadata) subtle by default.

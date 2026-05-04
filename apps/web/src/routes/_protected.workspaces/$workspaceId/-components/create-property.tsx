@@ -26,11 +26,8 @@ import {
   AtSignIcon,
   CalendarIcon,
   CircleDotIcon,
-  CommandIcon,
-  CornerDownLeftIcon,
   FileTextIcon,
   HashIcon,
-  Loader2Icon,
   PlusIcon,
   TagsIcon,
   WandSparklesIcon,
@@ -779,7 +776,6 @@ const PropertyComposerBody = ({
             pushOption={pushOption}
             removeOptionAt={removeOptionAt}
             replaceOptionAt={replaceOptionAt}
-            type={contentType}
           />
         )}
 
@@ -788,18 +784,7 @@ const PropertyComposerBody = ({
         )}
       </div>
 
-      <div className="bg-muted/64 flex items-center gap-2 border-t px-5 py-3">
-        <span className="text-muted-foreground/72 inline-flex items-center gap-1 text-xs">
-          <CommandIcon className="size-3" />
-          <span aria-hidden>+</span>
-          <CornerDownLeftIcon className="size-3" />
-          <span>
-            {isEditMode
-              ? t("workspaces.properties.saveChanges")
-              : t("workspaces.properties.cmdEnterToCreate")}
-          </span>
-        </span>
-        <div className="flex-1" />
+      <div className="bg-muted/64 flex items-center justify-end gap-2 border-t px-5 py-3">
         <DialogClose render={<Button size="sm" variant="ghost" />}>
           {t("common.cancel")}
         </DialogClose>
@@ -882,6 +867,12 @@ const ComposerCard = ({
         onEditorReady={editorReady}
         onMentionsChange={onMentionsChange}
         onSubmit={onSubmit}
+        aiEditAction={{
+          disabled: autoPromptDisabled,
+          isPending: autoPromptPending,
+          label: t("ai.editWithAI"),
+          onClick: onAutoPrompt,
+        }}
         placeholder={t("workspaces.properties.extractionPlaceholder")}
         propertyId={propertyId ?? ""}
         propertyName={propertyName}
@@ -896,25 +887,6 @@ const ComposerCard = ({
         showSeparator
         typeChanged={typeChanged}
       />
-
-      <div className="flex items-center gap-1.5">
-        <button
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 rounded-[7px] border border-dashed px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={autoPromptDisabled}
-          onClick={onAutoPrompt}
-          type="button"
-        >
-          {autoPromptPending ? (
-            <Loader2Icon aria-hidden className="size-2.5 animate-spin" />
-          ) : (
-            <WandSparklesIcon className="size-2.5" />
-          )}
-          {t("workspaces.properties.autoPrompt")}
-        </button>
-        <span className="text-muted-foreground/72 text-[11px]">
-          {t("workspaces.properties.autoPromptHelp")}
-        </span>
-      </div>
     </div>
   );
 };

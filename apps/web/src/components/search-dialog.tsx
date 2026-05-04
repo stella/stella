@@ -28,9 +28,9 @@ import {
   LinkIcon,
   LoaderIcon,
   MessageSquareIcon,
-  SparklesIcon,
   SquareCheckIcon,
   UserIcon,
+  WandSparklesIcon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useLocale, useTranslations } from "use-intl";
@@ -680,7 +680,7 @@ export const SearchDialog = ({
               {refineSearchMutation.isPending ? (
                 <LoaderIcon className="size-4 animate-spin" />
               ) : (
-                <SparklesIcon className="size-4" />
+                <WandSparklesIcon className="size-4" />
               )}
             </Button>
             <kbd className="bg-muted text-muted-foreground hidden rounded border px-1.5 py-0.5 text-[0.625rem] sm:inline-flex">
@@ -934,7 +934,7 @@ const SearchSummaryItem = ({
           {isPending ? (
             <LoaderIcon className="size-3.5 animate-spin" />
           ) : (
-            <SparklesIcon className="size-3.5" />
+            <WandSparklesIcon className="size-3.5" />
           )}
         </span>
         <span className="min-w-0 flex-1">
@@ -951,7 +951,7 @@ const SearchSummaryItem = ({
     <div className="border-border bg-background mb-2 w-full rounded-md border px-2.5 py-2.5 text-start shadow-xs">
       <div className="flex w-full items-start gap-3 text-start">
         <span className="bg-background text-foreground mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border">
-          <SparklesIcon className="size-3.5" />
+          <WandSparklesIcon className="size-3.5" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">

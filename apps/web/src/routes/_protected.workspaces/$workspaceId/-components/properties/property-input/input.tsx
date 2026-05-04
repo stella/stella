@@ -1,21 +1,28 @@
 import { useEffect, useRef } from "react";
 import type React from "react";
 
+import { Button } from "@stll/ui/components/button";
 import { FieldError } from "@stll/ui/components/field";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { cn } from "@stll/ui/lib/utils";
 
 import "./tiptap.css";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import Document from "@tiptap/extension-document";
 import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
+import { Loader2Icon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  createPromptEditorDocument,
+  handlePromptEditorSelectAll,
+  PROMPT_EDITOR_SELECTION_CLASS,
+  PromptEditorContent,
+} from "@/components/prompt-editor";
 import { PropertyFormField } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/form";
 import {
   createCustomMention,
@@ -66,6 +73,12 @@ type PropertyPromptInputProps = {
   variant?: "filled" | "minimal";
   placeholder?: string;
   onSubmit?: () => void;
+  aiEditAction?: {
+    disabled: boolean;
+    isPending: boolean;
+    label: string;
+    onClick: () => void;
+  };
 };
 
 export const PropertyPromptInput = ({
@@ -80,6 +93,7 @@ export const PropertyPromptInput = ({
   variant = "filled",
   placeholder,
   onSubmit,
+  aiEditAction,
 }: PropertyPromptInputProps) => {
   const t = useTranslations();
   const didAutoPopulate = useRef(false);
@@ -90,7 +104,7 @@ export const PropertyPromptInput = ({
   const fileProperty = properties.find((p) => p.content.type === "file");
   const editor = useEditor({
     extensions: [
-      Document,
+      createPromptEditorDocument(),
       Paragraph,
       Text,
       Placeholder.configure({
@@ -116,10 +130,14 @@ export const PropertyPromptInput = ({
         class:
           variant === "minimal"
             ? cn(
+                PROMPT_EDITOR_SELECTION_CLASS,
                 "placeholder:text-muted-foreground/64 min-h-15 w-full text-sm leading-[1.55] focus-visible:outline-none",
+                aiEditAction !== undefined && "pe-10",
               )
             : cn(
+                PROMPT_EDITOR_SELECTION_CLASS,
                 "bg-muted placeholder:text-muted-foreground/64 min-h-32 w-full rounded-md p-2 text-sm focus-visible:outline-none",
+                aiEditAction !== undefined && "pe-10",
               ),
       },
       handleKeyDown: (_view, event) => {
@@ -129,21 +147,11 @@ export const PropertyPromptInput = ({
           event.key === "Enter"
         ) {
           event.preventDefault();
+          event.stopPropagation();
           onSubmit();
           return true;
         }
-        // ProseMirror's basic select-all keymap isn't bundled with the
-        // bare Document/Paragraph/Text setup we use here, so Cmd/Ctrl+A
-        // would otherwise fall through to the browser and select the
-        // surrounding dialog instead of the editor's contents.
-        if (
-          (event.metaKey || event.ctrlKey) &&
-          !event.shiftKey &&
-          !event.altKey &&
-          (event.key === "a" || event.key === "A")
-        ) {
-          event.preventDefault();
-          editor?.commands.selectAll();
+        if (handlePromptEditorSelectAll(event, editor)) {
           return true;
         }
         return false;
@@ -209,19 +217,45 @@ export const PropertyPromptInput = ({
   return (
     <div className="group w-full gap-1">
       <PropertyFormField className="w-full p-0" name={field.name}>
-        {variant === "minimal" ? (
-          <EditorContent
-            className="w-full [&_.ProseMirror]:w-full"
-            editor={editor}
-          />
-        ) : (
-          <ScrollArea className="h-32 overflow-y-auto">
-            <EditorContent
+        <div className="relative">
+          {variant === "minimal" ? (
+            <PromptEditorContent
               className="w-full [&_.ProseMirror]:w-full"
               editor={editor}
             />
-          </ScrollArea>
-        )}
+          ) : (
+            <ScrollArea className="h-32 overflow-y-auto">
+              <PromptEditorContent
+                className="w-full [&_.ProseMirror]:w-full"
+                editor={editor}
+              />
+            </ScrollArea>
+          )}
+          {aiEditAction !== undefined && (
+            <Button
+              aria-label={aiEditAction.label}
+              className={cn(
+                "text-muted-foreground hover:text-foreground absolute end-0 top-0 size-7",
+                variant === "filled" && "end-1 top-1",
+              )}
+              disabled={aiEditAction.disabled}
+              onClick={aiEditAction.onClick}
+              onMouseDown={(event) => {
+                event.preventDefault();
+              }}
+              size="icon-sm"
+              title={aiEditAction.label}
+              type="button"
+              variant="ghost"
+            >
+              {aiEditAction.isPending ? (
+                <Loader2Icon aria-hidden className="size-3.5 animate-spin" />
+              ) : (
+                <WandSparklesIcon aria-hidden className="size-3.5" />
+              )}
+            </Button>
+          )}
+        </div>
         <FieldError />
       </PropertyFormField>
       {dependenciesField}
