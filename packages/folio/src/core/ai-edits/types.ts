@@ -1,10 +1,22 @@
 export type FolioAIBlockKind = "heading" | "listItem" | "paragraph";
 
+export type FolioAIBlockPreviewRun = {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+  fontFamily?: string;
+  fontSizePt?: number;
+  color?: string;
+};
+
 export type FolioAIBlock = {
   id: string;
   kind: FolioAIBlockKind;
   text: string;
   displayLabel?: string;
+  previewRuns?: FolioAIBlockPreviewRun[];
 };
 
 export type FolioAIEditSnapshot = {

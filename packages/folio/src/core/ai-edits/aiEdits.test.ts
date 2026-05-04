@@ -51,6 +51,29 @@ const schema = new Schema({
         0,
       ],
     },
+    bold: {
+      toDOM: () => ["strong", 0],
+    },
+    italic: {
+      toDOM: () => ["em", 0],
+    },
+    fontSize: {
+      attrs: {
+        size: { default: 24 },
+      },
+      toDOM: (mark) => [
+        "span",
+        { style: `font-size: ${Number(mark.attrs["size"]) / 2}pt` },
+        0,
+      ],
+    },
+    fontFamily: {
+      attrs: {
+        ascii: { default: null },
+        hAnsi: { default: null },
+      },
+      toDOM: () => ["span", 0],
+    },
   },
 });
 
@@ -169,6 +192,45 @@ describe("Folio AI edit operations", () => {
       },
     ]);
     expect(snapshot.anchors["b-0001"]?.textHash).toMatch(/^h/);
+  });
+
+  test("captures formatted preview runs in the AI-facing block snapshot", () => {
+    const boldType = schema.marks["bold"];
+    const italicType = schema.marks["italic"];
+    const fontSizeType = schema.marks["fontSize"];
+    const fontFamilyType = schema.marks["fontFamily"];
+    if (!boldType || !italicType || !fontSizeType || !fontFamilyType) {
+      throw new Error("schema missing formatting marks");
+    }
+
+    const state = EditorState.create({
+      schema,
+      doc: schema.node("doc", null, [
+        schema.node("paragraph", {}, [
+          schema.text("Plain "),
+          schema.text("Styled", [
+            boldType.create(),
+            italicType.create(),
+            fontSizeType.create({ size: 28 }),
+            fontFamilyType.create({ ascii: "Aptos", hAnsi: "Aptos" }),
+          ]),
+        ]),
+      ]),
+    });
+
+    const snapshot = createFolioAIEditSnapshot(state.doc);
+
+    expect(snapshot.blocks[0]?.text).toBe("Plain Styled");
+    expect(snapshot.blocks[0]?.previewRuns).toEqual([
+      { text: "Plain " },
+      {
+        text: "Styled",
+        bold: true,
+        italic: true,
+        fontFamily: "Aptos",
+        fontSizePt: 14,
+      },
+    ]);
   });
 
   test("applies safe replacements as tracked changes with an attached comment", () => {

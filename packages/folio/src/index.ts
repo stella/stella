@@ -45,6 +45,7 @@ export {
   type FolioAIBlock,
   type FolioAIBlockAnchor,
   type FolioAIBlockKind,
+  type FolioAIBlockPreviewRun,
   type FolioAIComment,
   type FolioAIEditAppliedOperation,
   type FolioAIEditApplyMode,
