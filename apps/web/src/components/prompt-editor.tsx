@@ -3,7 +3,7 @@ import type React from "react";
 
 import { cn } from "@stll/ui/lib/utils";
 import Document from "@tiptap/extension-document";
-import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { EditorState } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { EditorContent } from "@tiptap/react";
@@ -87,18 +87,15 @@ export const selectPromptEditorContents = (editor: Editor | null): boolean => {
     return false;
   }
 
-  const { state, view } = editor;
-  const from = 1;
-  const to = Math.max(from, state.doc.content.size - 1);
-  view.focus();
+  editor.commands.selectAll();
+  const { from, to } = editor.state.selection;
+  editor.view.focus();
 
-  const selection = TextSelection.between(
-    state.doc.resolve(from),
-    state.doc.resolve(to),
-  );
-
-  view.dispatch(state.tr.setSelection(selection).scrollIntoView());
-  queueMicrotask(() => syncNativeSelection(editor, from, to));
+  queueMicrotask(() => {
+    if (!editor.isDestroyed) {
+      syncNativeSelection(editor, from, to);
+    }
+  });
   return true;
 };
 
