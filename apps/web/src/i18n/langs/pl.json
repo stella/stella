@@ -1300,12 +1300,12 @@
   "settings": {
     "account": {
       "desktop": "Desktop",
-      "desktopAppDescription": "Open documents and files directly in stella from your computer.",
+      "desktopAppDescription": "Otwieraj dokumenty i pliki bezpośrednio w stella ze swojego komputera.",
       "desktopDescription": "Install Stella on your computer",
-      "desktopDownloadMac": "Download for macOS",
-      "desktopDownloadOtherMac": "On Windows? Download for Windows",
-      "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments",
-      "desktopDownloadWindows": "Download for Windows",
+      "desktopDownloadMac": "Pobierz dla macOS",
+      "desktopDownloadOtherMac": "Używasz Windowsa? Pobierz dla Windows",
+      "desktopDownloadOtherWindows": "Lub pobierz instalator .msi do wdrożeń zarządzanych przez IT",
+      "desktopDownloadWindows": "Pobierz dla Windows",
       "preferredName": "Preferred name",
       "preferredNameDescription": "Used as the author for DOCX tracked changes and comments.",
       "preferredNamePlaceholder": "Your name",
