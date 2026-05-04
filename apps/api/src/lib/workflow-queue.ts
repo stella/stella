@@ -1,5 +1,6 @@
-import { Result } from "better-result";
+import { matchError, Result } from "better-result";
 import { Queue, Worker } from "bullmq";
+import { sleep } from "bun";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import Redis from "ioredis";
 
@@ -124,6 +125,8 @@ const MAX_STALLED_COUNT = 2;
 // abort signal in `processOneBatch` and the per-job timeout below so
 // changes stay coupled.
 const BATCH_AI_TIMEOUT_MS = 120 * 1000;
+const INTEGRATION_ERROR_RETRY_DELAY_MS = 5 * 1000;
+const INTEGRATION_ERROR_ATTEMPTS = 2;
 // Floor for the per-job hard timeout — even a single-level plan gets
 // a generous window for setup, network blips, and the post-AI DB
 // writes.
@@ -389,11 +392,19 @@ export const initWorkflowWorker = () => {
       organizationId: data.organizationId,
       workspaceId: data.workspaceId,
     });
-    void onEntityCompleted(
-      branded.workspaceId,
-      branded.organizationId,
-      brandPersistedUserId(data.userId),
-    );
+    void (async () => {
+      await markPendingPlannedFieldsErrored(data);
+      await onEntityCompleted(
+        branded.workspaceId,
+        branded.organizationId,
+        brandPersistedUserId(data.userId),
+      );
+    })().catch((completionError: unknown) => {
+      captureError(completionError, {
+        workspaceId: data.workspaceId,
+        entityId: data.entityId,
+      });
+    });
   });
 
   worker.on("error", (error) => {
@@ -408,6 +419,67 @@ export const initWorkflowWorker = () => {
 };
 
 // ── Entity processing ──────────────────────────────────
+
+const getPlanPropertyIds = (
+  executionPlan: ExecutionLevel[],
+): SafeId<"property">[] => {
+  const propertyIds = new Set<SafeId<"property">>();
+
+  for (const level of executionPlan) {
+    for (const batch of level) {
+      for (const property of batch.properties) {
+        propertyIds.add(brandPersistedPropertyId(property.id));
+      }
+    }
+  }
+
+  return [...propertyIds];
+};
+
+const markPendingPlannedFieldsErrored = async (data: EntityJobData) => {
+  const branded = brandValidatedWorkflowActorKey({
+    organizationId: data.organizationId,
+    workspaceId: data.workspaceId,
+  });
+  const entityId = brandPersistedEntityId(data.entityId);
+  const userId = brandPersistedUserId(data.userId);
+  const propertyIds = getPlanPropertyIds(data.executionPlan);
+  if (propertyIds.length === 0) {
+    return;
+  }
+
+  const scopedDb = createRootScopedDb({
+    organizationId: branded.organizationId,
+    userId,
+    workspaceIds: [branded.workspaceId],
+  });
+
+  const entityRow = await scopedDb((tx) =>
+    tx.query.entities.findFirst({
+      where: { id: { eq: entityId } },
+      columns: { currentVersionId: true },
+    }),
+  );
+  if (!entityRow?.currentVersionId) {
+    return;
+  }
+  const entityVersionId = entityRow.currentVersionId;
+
+  await scopedDb((tx) =>
+    tx
+      .update(fields)
+      .set({ content: { type: "error", version: 1 } })
+      .where(
+        and(
+          eq(fields.entityVersionId, entityVersionId),
+          inArray(fields.propertyId, propertyIds),
+          sql`${fields.content}->>'type' = 'pending'`,
+        ),
+      ),
+  );
+
+  broadcastInvalidation(branded.workspaceId, ["entities", branded.workspaceId]);
+};
 
 const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
   const {
@@ -631,23 +703,55 @@ const processOneBatch = async ({
     const orgAIConfig = await loadOrgAIConfig(organizationId);
     const generateFn = isMockAI() ? generateBatchMock : generateBatch;
 
-    // generateBatch returns a Result<T, E> directly. The combined
-    // signal aborts when EITHER the per-batch AI timeout fires OR the
-    // worker-level per-job timeout does, so the AI SDK actually cancels
-    // the in-flight request.
-    const batchResult = await generateFn({
-      abortSignal: AbortSignal.any([
-        AbortSignal.timeout(BATCH_AI_TIMEOUT_MS),
-        signal,
-      ]),
-      batch,
-      entityVersionId,
-      organizationId,
-      workspaceId,
-      scopedDb,
-      orgAIConfig,
-      onPartialAnswer: previewPublisher.publish,
-    });
+    let batchResult: Awaited<ReturnType<typeof generateFn>> | undefined;
+    for (let attempt = 1; attempt <= INTEGRATION_ERROR_ATTEMPTS; attempt++) {
+      // generateBatch returns a Result<T, E> directly. The combined
+      // signal aborts when EITHER the per-batch AI timeout fires OR the
+      // worker-level per-job timeout does, so the AI SDK actually cancels
+      // the in-flight request.
+      batchResult = await generateFn({
+        abortSignal: AbortSignal.any([
+          AbortSignal.timeout(BATCH_AI_TIMEOUT_MS),
+          signal,
+        ]),
+        batch,
+        entityVersionId,
+        organizationId,
+        workspaceId,
+        scopedDb,
+        orgAIConfig,
+        onPartialAnswer: previewPublisher.publish,
+      });
+
+      if (!Result.isError(batchResult)) {
+        break;
+      }
+
+      const retryIntegrationError: boolean = matchError(batchResult.error, {
+        WorkflowIntegrationError: () => true,
+        WorkflowValidationError: () => false,
+      });
+      if (!retryIntegrationError || attempt >= INTEGRATION_ERROR_ATTEMPTS) {
+        break;
+      }
+
+      captureError(batchResult.error, {
+        workspaceId,
+        entityId,
+        batchId: batch.id,
+        level: String(level),
+        requestId,
+        attempt: String(attempt),
+        retry: "true",
+      });
+      signal.throwIfAborted();
+      await sleep(INTEGRATION_ERROR_RETRY_DELAY_MS);
+      signal.throwIfAborted();
+    }
+
+    if (batchResult === undefined) {
+      return;
+    }
 
     if (Result.isError(batchResult)) {
       captureError(batchResult.error, {
