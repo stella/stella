@@ -10,8 +10,34 @@ const WORKSPACE_SSE_EVENT_SOURCE_INIT = {
   withCredentials: true,
 } satisfies EventSourceInit;
 
+type WorkspaceSSEEvent = {
+  type: string;
+  data: unknown;
+};
+
+type UseWorkspaceSSEOptions = {
+  onEvent?: (event: WorkspaceSSEEvent) => void;
+};
+
 const getWorkspaceSSEUrl = (workspaceId: string) =>
   `${env.VITE_API_URL}/v1/workspaces/${workspaceId}/events`;
+
+const parseWorkspaceSSEEvent = (data: string): WorkspaceSSEEvent | null => {
+  const parsed: unknown = JSON.parse(data);
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("type" in parsed) ||
+    typeof parsed.type !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    type: parsed.type,
+    data: "data" in parsed ? parsed.data : undefined,
+  };
+};
 
 /**
  * Subscribe to workspace-scoped SSE events. On receiving an
@@ -21,7 +47,10 @@ const getWorkspaceSSEUrl = (workspaceId: string) =>
  * Auto-reconnects via the native EventSource reconnection
  * behaviour. Cleans up on unmount or when workspaceId changes.
  */
-export const useWorkspaceSSE = (workspaceId: string) => {
+export const useWorkspaceSSE = (
+  workspaceId: string,
+  options: UseWorkspaceSSEOptions = {},
+) => {
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
 
@@ -33,6 +62,9 @@ export const useWorkspaceSSE = (workspaceId: string) => {
   const analyticsRef = useRef(analytics);
   analyticsRef.current = analytics;
 
+  const onEventRef = useRef(options.onEvent);
+  onEventRef.current = options.onEvent;
+
   useEffect(() => {
     const source = new EventSource(
       getWorkspaceSSEUrl(workspaceId),
@@ -41,14 +73,15 @@ export const useWorkspaceSSE = (workspaceId: string) => {
 
     source.addEventListener("message", (event: MessageEvent) => {
       try {
-        const parsed: unknown = JSON.parse(String(event.data));
+        const parsed = parseWorkspaceSSEEvent(String(event.data));
+        if (!parsed) {
+          return;
+        }
+
+        onEventRef.current?.(parsed);
 
         if (
-          typeof parsed === "object" &&
-          parsed !== null &&
-          "type" in parsed &&
           parsed.type === INVALIDATE_QUERY_EVENT_TYPE &&
-          "data" in parsed &&
           Array.isArray(parsed.data)
         ) {
           // eslint-disable-next-line typescript/no-floating-promises

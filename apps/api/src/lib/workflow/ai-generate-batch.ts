@@ -1,5 +1,5 @@
 import { valibotSchema } from "@ai-sdk/valibot";
-import { generateText, Output } from "ai";
+import { Output, streamText } from "ai";
 import type { FilePart, TextPart } from "ai";
 import { Result } from "better-result";
 
@@ -23,6 +23,8 @@ import type {
   AIJustificationOutput,
   JustificationFilenames,
 } from "@/api/lib/workflow/parse-justifications";
+import { consumePartialAnswers } from "@/api/lib/workflow/streaming-answer";
+import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
 
 type GenerateWorkflowDataProps = {
   files: PreparedInputFile[];
@@ -34,6 +36,9 @@ type GenerateWorkflowDataProps = {
   workspaceId: SafeId<"workspace">;
   entityVersionId: string;
   orgAIConfig?: OrgAIConfig | null;
+  onPartialAnswer?:
+    | ((update: PartialAnswerUpdate) => Promise<void> | void)
+    | undefined;
 };
 
 type WorkflowDataOutput = Record<
@@ -51,6 +56,7 @@ export const generateWorkflowData = async ({
   organizationId,
   workspaceId,
   orgAIConfig,
+  onPartialAnswer,
 }: GenerateWorkflowDataProps): Promise<
   Result<WorkflowDataOutput, WorkflowIntegrationError>
 > => {
@@ -106,7 +112,7 @@ export const generateWorkflowData = async ({
 
   return await Result.tryPromise({
     try: async () => {
-      const result = await generateText({
+      const result = streamText({
         model: getModelForRole("pdf", orgAIConfig),
         temperature: getTemperatureForRole("pdf"),
         messages: [{ role: "user", content: messageContent }],
@@ -116,7 +122,20 @@ export const generateWorkflowData = async ({
         ...aiAnalytics.stepCallbacks,
       });
 
-      return result.output;
+      const partialAnswerTask = onPartialAnswer
+        ? consumePartialAnswers({
+            partialOutputs: result.partialOutputStream,
+            propertyIds: properties.map((property) => property.id),
+            onPartialAnswer,
+          }).catch((error: unknown) => {
+            aiAnalytics.captureError(error);
+          })
+        : Promise.resolve();
+
+      const output = await result.output;
+      await partialAnswerTask;
+
+      return output;
     },
     catch: (error) => {
       aiAnalytics.captureError(error);

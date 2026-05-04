@@ -36,9 +36,20 @@ const PropertyCell = ({
   const justification = useWorkspaceStore((s) =>
     s.justifications.find((j) => j.fieldId === field?.id),
   );
+  const extractionPreview = useWorkspaceStore((s) =>
+    fieldContent?.type === "pending"
+      ? s.getExtractionPreview(entity.entityId, property.id)
+      : null,
+  );
 
   if (fieldContent?.type === "pending") {
-    return <CellResult field={field} property={property} />;
+    return (
+      <CellResult
+        extractionPreview={extractionPreview}
+        field={field}
+        property={property}
+      />
+    );
   }
 
   if (property.content.type === "file" || fieldContent?.type === "file") {

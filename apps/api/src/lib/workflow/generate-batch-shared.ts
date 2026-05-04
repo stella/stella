@@ -16,6 +16,7 @@ import type {
   BatchProperty,
   PropertyBatch,
 } from "@/api/lib/workflow/get-execution-plan";
+import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
 import { evaluateCondition } from "@/api/lib/workflow/utils";
 
 // Types shared between mock and real AI implementations
@@ -48,6 +49,9 @@ export type GenerateBatchProps = {
   batch: PropertyBatch;
   entityVersionId: SafeId<"entityVersion">;
   orgAIConfig?: OrgAIConfig | null;
+  onPartialAnswer?:
+    | ((update: PartialAnswerUpdate) => Promise<void> | void)
+    | undefined;
 };
 
 export type GenerateBatchResult = Result<

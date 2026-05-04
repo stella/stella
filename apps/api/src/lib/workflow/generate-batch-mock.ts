@@ -53,6 +53,7 @@ const getValueFromInputFields = (
 export const generateBatchMock = async ({
   batch,
   entityVersionId,
+  onPartialAnswer,
   scopedDb,
 }: GenerateBatchProps): Promise<GenerateBatchResult> =>
   await Result.gen(async function* () {
@@ -113,13 +114,15 @@ export const generateBatchMock = async ({
 
       switch (content.type) {
         case "text": {
+          const value = `${inputFieldValue} + ${faker.lorem.word()}`;
+          await onPartialAnswer?.({ propertyId: property.id, answer: value });
           aiResults.push({
             fieldId,
             propertyId: property.id,
             content: {
               type: "text",
               version: 1,
-              value: `${inputFieldValue} + ${faker.lorem.word()}`,
+              value,
             },
           });
           break;
@@ -128,6 +131,7 @@ export const generateBatchMock = async ({
         case "single-select": {
           const possibleValues = content.options.map((option) => option.value);
           const value = faker.helpers.arrayElement(possibleValues);
+          await onPartialAnswer?.({ propertyId: property.id, answer: value });
           aiResults.push({
             fieldId,
             propertyId: property.id,
@@ -146,6 +150,10 @@ export const generateBatchMock = async ({
             min: 1,
             max: possibleValues.length,
           });
+          await onPartialAnswer?.({
+            propertyId: property.id,
+            answer: value.join(", "),
+          });
 
           aiResults.push({
             fieldId,
@@ -160,14 +168,16 @@ export const generateBatchMock = async ({
         }
 
         case "date": {
+          const value =
+            faker.date.past().toISOString().split("T")[0] ?? "1970-01-01";
+          await onPartialAnswer?.({ propertyId: property.id, answer: value });
           aiResults.push({
             fieldId,
             propertyId: property.id,
             content: {
               type: "date",
               version: 1,
-              value:
-                faker.date.past().toISOString().split("T")[0] ?? "1970-01-01",
+              value,
             },
           });
           break;
@@ -175,14 +185,20 @@ export const generateBatchMock = async ({
 
         case "int": {
           const currencies = ["USD", "EUR", "CZK", null];
+          const value = faker.number.int({ min: 0, max: 1_000_000 });
+          const currency = faker.helpers.arrayElement(currencies);
+          await onPartialAnswer?.({
+            propertyId: property.id,
+            answer: currency ? `${value} ${currency}` : String(value),
+          });
           aiResults.push({
             fieldId,
             propertyId: property.id,
             content: {
               type: "int",
               version: 1,
-              value: faker.number.int({ min: 0, max: 1_000_000 }),
-              currency: faker.helpers.arrayElement(currencies),
+              value,
+              currency,
             },
           });
           break;

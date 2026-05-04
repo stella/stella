@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { toastManager } from "@stll/ui/components/toast";
 import { useHotkey } from "@tanstack/react-hotkeys";
@@ -33,6 +33,41 @@ import {
   overviewOptions,
   workspaceOptions,
 } from "@/routes/_protected.workspaces/-queries";
+
+const EXTRACTION_PREVIEW_EVENT_TYPE = "workflow-extraction-preview";
+const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
+const ENTITIES_QUERY_KEY_PREFIX = "entities";
+const EXTRACTION_PREVIEW_CLIENT_TTL_MS = 5 * 60 * 1000;
+
+type ExtractionPreviewEventData = {
+  entityId: string;
+  propertyId: string;
+  answer: string | null;
+  status: "streaming" | "clear";
+};
+
+const isExtractionPreviewEventData = (
+  data: unknown,
+): data is ExtractionPreviewEventData => {
+  if (typeof data !== "object" || data === null) {
+    return false;
+  }
+  if (
+    !("entityId" in data) ||
+    typeof data.entityId !== "string" ||
+    !("propertyId" in data) ||
+    typeof data.propertyId !== "string" ||
+    !("status" in data) ||
+    (data.status !== "streaming" && data.status !== "clear") ||
+    !("answer" in data)
+  ) {
+    return false;
+  }
+  return typeof data.answer === "string" || data.answer === null;
+};
+
+const extractionPreviewKey = (entityId: string, propertyId: string) =>
+  `${entityId}:${propertyId}`;
 
 export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
   component: RouteComponent,
@@ -121,10 +156,71 @@ function RouteComponent() {
   const workspaceId = Route.useParams({
     select: (p) => p.workspaceId,
   });
+  const previewClearTimersRef = useRef(
+    new Map<string, ReturnType<typeof setTimeout>>(),
+  );
+
+  const handleWorkspaceSSEEvent = useCallback(
+    ({ type, data }: { type: string; data: unknown }) => {
+      const workspaceStore = useWorkspaceStore.getState();
+      if (
+        type === INVALIDATE_QUERY_EVENT_TYPE &&
+        Array.isArray(data) &&
+        data.at(0) === ENTITIES_QUERY_KEY_PREFIX &&
+        data.at(1) === workspaceId
+      ) {
+        for (const timer of previewClearTimersRef.current.values()) {
+          clearTimeout(timer);
+        }
+        previewClearTimersRef.current.clear();
+        workspaceStore.clearExtractionPreviews();
+        return;
+      }
+
+      if (
+        type !== EXTRACTION_PREVIEW_EVENT_TYPE ||
+        !isExtractionPreviewEventData(data)
+      ) {
+        return;
+      }
+
+      if (data.status === "clear" || data.answer === null) {
+        const key = extractionPreviewKey(data.entityId, data.propertyId);
+        const timer = previewClearTimersRef.current.get(key);
+        if (timer !== undefined) {
+          clearTimeout(timer);
+          previewClearTimersRef.current.delete(key);
+        }
+        workspaceStore.clearExtractionPreview(data.entityId, data.propertyId);
+        return;
+      }
+
+      const key = extractionPreviewKey(data.entityId, data.propertyId);
+      const previousTimer = previewClearTimersRef.current.get(key);
+      if (previousTimer !== undefined) {
+        clearTimeout(previousTimer);
+      }
+
+      workspaceStore.setExtractionPreview({
+        entityId: data.entityId,
+        propertyId: data.propertyId,
+        answer: data.answer,
+      });
+
+      const nextTimer = setTimeout(() => {
+        useWorkspaceStore
+          .getState()
+          .clearExtractionPreview(data.entityId, data.propertyId);
+        previewClearTimersRef.current.delete(key);
+      }, EXTRACTION_PREVIEW_CLIENT_TTL_MS);
+      previewClearTimersRef.current.set(key, nextTimer);
+    },
+    [workspaceId],
+  );
 
   // Subscribe to workspace SSE events for real-time query
   // invalidation (replaces the Rivet sync actor for this workspace).
-  useWorkspaceSSE(workspaceId);
+  useWorkspaceSSE(workspaceId, { onEvent: handleWorkspaceSSEEvent });
 
   // Register the matter's entities as `@`-mention sources for any
   // chat editor mounted inside this workspace (right-panel chat,
@@ -143,8 +239,14 @@ function RouteComponent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(
     () => () => {
+      for (const timer of previewClearTimersRef.current.values()) {
+        clearTimeout(timer);
+      }
+      previewClearTimersRef.current.clear();
+
       const workspaceStore = useWorkspaceStore.getState();
       workspaceStore.clearJustifications();
+      workspaceStore.clearExtractionPreviews();
       workspaceStore.setActiveJustification(null);
       workspaceStore.resetPdfViewerState();
     },

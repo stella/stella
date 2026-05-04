@@ -13,11 +13,16 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 
 type CellResultProps = {
+  extractionPreview?: string | null;
   field: WorkspaceField | undefined;
   property: WorkspaceProperty;
 };
 
-export const CellResult = ({ field, property }: CellResultProps) => {
+export const CellResult = ({
+  extractionPreview,
+  field,
+  property,
+}: CellResultProps) => {
   const t = useTranslations();
   const locale = useLocale();
 
@@ -28,9 +33,14 @@ export const CellResult = ({ field, property }: CellResultProps) => {
   const type = field.content.type;
 
   if (type === "pending") {
+    const preview = extractionPreview?.trim();
+    const hasPreview = preview !== undefined && preview.length > 0;
+
     return (
       <div className="grid min-w-0 grid-cols-[1fr_auto] items-center justify-between gap-1.5">
-        <span className="truncate">{t("workspaces.fields.calculating")}</span>
+        <span className={hasPreview ? "line-clamp-2" : "truncate"}>
+          {hasPreview ? preview : t("workspaces.fields.calculating")}
+        </span>
         <span className="bg-muted-foreground size-2 shrink-0 animate-pulse rounded-full" />
       </div>
     );
