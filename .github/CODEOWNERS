@@ -1,9 +1,25 @@
-# Default — all changes require review.
-* @jan-kubica @nnad3N
+# Highest-risk paths — admin review required.
+# All other paths fall back to standard PR review rules.
 
-# CI, workflows, and branch protection — admin only.
-.github/ @jan-kubica
+# CI/CD: anything in here runs with deploy + signing secrets.
+.github/                                @jan-kubica
 
-# Database schema — requires Damian's review.
-apps/api/src/db/schema.ts @nnad3N
-apps/api/src/db/schema-validators.ts @nnad3N
+# Scripts invoked by release CI while secrets are in env.
+scripts/                                @jan-kubica
+
+# Desktop signing surface — build runs with signing keys live.
+apps/desktop/package.json               @jan-kubica
+apps/desktop/src-tauri/Cargo.toml       @jan-kubica
+apps/desktop/src-tauri/build.rs         @jan-kubica
+apps/desktop/src-tauri/tauri.conf.json  @jan-kubica
+
+# Privileged bridge — desktop code with elevated OS access.
+apps/desktop/src-tauri/src/             @jan-kubica
+
+# Workspace dep manifests — poisoning these poisons every build.
+package.json                            @jan-kubica
+bun.lock                                @jan-kubica
+
+# Authentication + session logic.
+apps/api/src/lib/auth.ts                @jan-kubica
+apps/api/src/db/auth-schema.ts          @jan-kubica

@@ -22,10 +22,9 @@ on:
         required: true
         type: string
 
-permissions:
-  actions: read
-  contents: write
-  id-token: write
+# Default-deny at the workflow level; each job uplifts only what it
+# needs. Pattern from lapce/lapce/.github/workflows/release.yml.
+permissions: {}
 
 concurrency:
   group: release-desktop-${{ github.event.workflow_run.head_branch || inputs.release_ref }}
@@ -38,11 +37,19 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && (startsWith(github.event.workflow_run.head_branch, 'v') || github.event.workflow_run.event == 'workflow_dispatch')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      actions: read   # read upstream workflow_run artifacts
+      contents: read  # checkout
     outputs:
       release_ref: ${{ steps.ref.outputs.value }}
       release_sha: ${{ steps.ref.outputs.sha }}
       app_version: ${{ steps.ref.outputs.version }}
       should_build: ${{ steps.diff.outputs.should_build }}
+      # Empty for stable releases (`v0.0.2`), `rc` for prereleases
+      # (`v0.0.2-rc.1`). Used to route the updater manifest to a
+      # channel-specific S3 path so an rc never overwrites the
+      # production manifest.
+      channel: ${{ steps.ref.outputs.channel }}
     steps:
       - name: Resolve release ref
         id: ref
@@ -106,9 +113,23 @@ jobs:
             exit 1
           fi
 
+          # Derive the updater channel from the tag suffix:
+          #   v0.0.2          -> "" (stable channel, default updater feed)
+          #   v0.0.2-rc.1     -> "rc"
+          #   v0.0.2-beta.3   -> "beta"
+          # The S3 mirror keys off this so an rc tag never overwrites
+          # the production manifest at /desktop/prod/latest.json.
+          if [[ "$REF" == *-* ]]; then
+            CHANNEL="${REF#*-}"
+            CHANNEL="${CHANNEL%%.*}"
+          else
+            CHANNEL=""
+          fi
+
           echo "value=$REF" >> "$GITHUB_OUTPUT"
           echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
           echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -183,6 +204,11 @@ jobs:
     name: Build ${{ matrix.os }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    permissions:
+      # contents:write is for the per-platform `gh release upload`
+      # step that pushes the signed installers + .sig files to the
+      # GitHub Release.
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -268,6 +294,23 @@ jobs:
           version: "0.10.0"
           locked: true
 
+      # windows-latest currently resolves to windows-2025, which
+      # ships only newer Windows SDKs. trusted-signing-cli falls
+      # back to a hard-coded SDK path that no longer exists on the
+      # image, exiting silently before any signing happens. Resolve
+      # signtool.exe at runtime and pin SIGNTOOL_PATH for the rest
+      # of the job. Per tauri-apps/tauri#13991.
+      - name: Locate signtool.exe (Windows only)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $st = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*\x64\signtool.exe" |
+                Sort-Object Name -Descending |
+                Select-Object -First 1
+          if (-not $st) { throw "signtool.exe not found under Windows Kits 10 bin" }
+          Write-Host "Using $($st.FullName)"
+          "SIGNTOOL_PATH=$($st.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       # Tauri spawns bundle.windows.signCommand directly (no shell),
       # so %VAR%-style env interpolation isn't applied — placeholders
       # arrive at trusted-signing-cli as literal strings and the auth
@@ -300,7 +343,13 @@ jobs:
           AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
           AZURE_CODE_SIGNING_ACCOUNT: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
           AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
-        run: bun run build -- --target ${{ matrix.target }} --bundles msi,nsis,updater
+        # `--verbose --verbose` surfaces the per-line stdout/stderr
+        # Tauri captures from signCommand but otherwise hides behind
+        # log::debug. Without it, a trusted-signing-cli failure
+        # bubbles up as the opaque "failed to run trusted-signing-cli"
+        # with no SignTool error attached. Per the Tauri maintainer
+        # in tauri-apps/tauri#11778 + tauri-apps/tauri#13991.
+        run: bun run build -- --target ${{ matrix.target }} --bundles msi,nsis,updater --verbose --verbose
 
       - name: Sign Windows installers via Azure Trusted Signing
         if: matrix.os == 'windows'
@@ -363,9 +412,12 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY }}
+        # `--verbose --verbose` surfaces signing/notarization log
+        # lines (Tauri otherwise hides them behind log::debug). Same
+        # rationale as the Windows build step above.
         run: |
           printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
-          bun run build -- --target ${{ matrix.target }} --bundles dmg,updater
+          bun run build -- --target ${{ matrix.target }} --bundles dmg,updater --verbose --verbose
 
       # Tauri 2's bundler notarizes + staples the inner .app but
       # leaves the DMG wrapper unnotarized (tauri-apps/tauri#7533,
@@ -414,7 +466,12 @@ jobs:
         shell: bash
         run: |
           bundle_dir="apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
-          mapfile -t artifacts < <(find "$bundle_dir" -type f -name 'Stella-*')
+          # `mapfile` is bash 4+; macOS runners ship system bash 3.2,
+          # so use a portable while-read loop to populate the array.
+          artifacts=()
+          while IFS= read -r f; do
+            artifacts+=("$f")
+          done < <(find "$bundle_dir" -type f -name 'Stella-*')
           if [[ ${#artifacts[@]} -eq 0 ]]; then
             echo "::error::No desktop artifacts found under $bundle_dir"
             exit 1
@@ -431,6 +488,9 @@ jobs:
     if: ${{ needs.resolve.outputs.should_build == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: write   # upload latest.json to GitHub Release
+      id-token: write   # OIDC for AWS S3 + CloudFront
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -462,13 +522,20 @@ jobs:
         env:
           BUCKET: ${{ vars.DOWNLOADS_BUCKET }}
           DIST_ID: ${{ vars.DOWNLOADS_DIST_ID }}
+          # Empty channel ("") => prod feed at /desktop/prod/.
+          # rc/beta/etc. => /desktop/<channel>/. Stable users on the
+          # default updater feed never see a prerelease manifest.
+          CHANNEL: ${{ needs.resolve.outputs.channel }}
         run: |
+          channel_dir="${CHANNEL:-prod}"
+          key="desktop/$channel_dir/latest.json"
+          echo "Publishing to s3://$BUCKET/$key"
           aws s3 cp --no-progress \
             --content-type application/json \
             --cache-control "public, max-age=60, must-revalidate" \
             latest.json \
-            "s3://$BUCKET/desktop/prod/latest.json"
+            "s3://$BUCKET/$key"
           aws cloudfront create-invalidation \
             --distribution-id "$DIST_ID" \
-            --paths "/desktop/prod/latest.json" \
+            --paths "/$key" \
             --no-cli-pager > /dev/null
