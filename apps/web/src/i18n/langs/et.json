@@ -1540,6 +1540,7 @@
         "authRequiredDescription": "Värskenda stella ja logi enne töölaual redigeerimise kasutamist uuesti sisse.",
         "authRequiredTitle": "Seanss on aegunud",
         "forceRelease": "Sunni vabastamine",
+        "openAction": "Ava töölauarakenduses",
         "openedDescription": "Word avab kohaliku koopia. Redigeerimise lõpus luuakse automaatselt uus versioon.",
         "openedTitle": "Avatud rakenduses stella desktop",
         "opening": "Avamine...",

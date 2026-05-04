@@ -1540,6 +1540,7 @@
         "authRequiredDescription": "Recarga stella y vuelve a iniciar sesión antes de usar la edición de escritorio.",
         "authRequiredTitle": "La sesión caducó",
         "forceRelease": "Forzar liberación",
+        "openAction": "Abrir en la app de escritorio",
         "openedDescription": "Word abre una copia local. Al terminar de editar, se crea una nueva revisión automáticamente.",
         "openedTitle": "Abierto en stella desktop",
         "opening": "Abriendo...",

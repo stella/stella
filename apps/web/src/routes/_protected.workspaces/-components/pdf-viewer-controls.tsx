@@ -36,6 +36,7 @@ type PdfViewerControlsProps = {
   fieldId: string;
   currentPage: number;
   variant?: "row" | "inline" | undefined;
+  showFileActions?: boolean | undefined;
   onPrint?: (() => void) | undefined;
   printDisabled?: boolean | undefined;
   extraControls?: ReactNode | undefined;
@@ -46,6 +47,7 @@ export const PdfViewerControls = ({
   fieldId,
   currentPage,
   variant = "row",
+  showFileActions = true,
   onPrint,
   printDisabled = false,
   extraControls,
@@ -240,49 +242,60 @@ export const PdfViewerControls = ({
     </div>
   );
 
-  const fileActions = (
-    <div className="flex items-center">
-      <Tooltip
-        content={t("common.download")}
-        render={
-          <Button
-            disabled={!fileMetadata || isDownloading || fieldId.length === 0}
-            onClick={() => {
-              void handleDownload();
-            }}
-            size="icon-xs"
-            variant="ghost"
-          >
-            <DownloadIcon className="size-3.5" />
-          </Button>
-        }
-      />
-      <Tooltip
-        content={t("common.print")}
-        render={
-          <Button
-            disabled={printDisabled || isPrinting || fieldId.length === 0}
-            onClick={() => {
-              void handlePrint();
-            }}
-            size="icon-xs"
-            variant="ghost"
-          >
-            <PrinterIcon className="size-3.5" />
-          </Button>
-        }
-      />
-      {extraControls}
-    </div>
-  );
+  const fileActions =
+    showFileActions || extraControls !== undefined ? (
+      <div className="flex items-center">
+        {showFileActions && (
+          <>
+            <Tooltip
+              content={t("common.download")}
+              render={
+                <Button
+                  disabled={
+                    !fileMetadata || isDownloading || fieldId.length === 0
+                  }
+                  onClick={() => {
+                    void handleDownload();
+                  }}
+                  size="icon-xs"
+                  variant="ghost"
+                >
+                  <DownloadIcon className="size-3.5" />
+                </Button>
+              }
+            />
+            <Tooltip
+              content={t("common.print")}
+              render={
+                <Button
+                  disabled={printDisabled || isPrinting || fieldId.length === 0}
+                  onClick={() => {
+                    void handlePrint();
+                  }}
+                  size="icon-xs"
+                  variant="ghost"
+                >
+                  <PrinterIcon className="size-3.5" />
+                </Button>
+              }
+            />
+          </>
+        )}
+        {extraControls}
+      </div>
+    ) : null;
 
   if (variant === "inline") {
     return (
       <div className="flex min-w-0 items-center gap-1">
         <Separator className="mx-1 h-4" orientation="vertical" />
         {primaryControls}
-        <Separator className="mx-1 h-4" orientation="vertical" />
-        {fileActions}
+        {fileActions !== null && (
+          <>
+            <Separator className="mx-1 h-4" orientation="vertical" />
+            {fileActions}
+          </>
+        )}
       </div>
     );
   }

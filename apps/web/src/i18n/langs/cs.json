@@ -1540,6 +1540,7 @@
         "authRequiredDescription": "Před použitím desktopových úprav obnovte stella a znovu se přihlaste.",
         "authRequiredTitle": "Relace vypršela",
         "forceRelease": "Vynutit uvolnění",
+        "openAction": "Otevřít v desktopu",
         "openedDescription": "Word otevře lokální kopii. Po dokončení úprav se automaticky vytvoří nová revize.",
         "openedTitle": "Otevřeno ve stella desktop",
         "opening": "Otevírání...",

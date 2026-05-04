@@ -29,6 +29,7 @@ import {
   FileTextIcon,
   LoaderCircleIcon,
   LockOpenIcon,
+  LaptopIcon,
   Maximize2Icon,
   MessageSquareIcon,
   Minimize2Icon,
@@ -41,10 +42,14 @@ import { useShallow } from "zustand/shallow";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import Tooltip from "@/components/tooltip";
+import { env } from "@/env";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { openDocxInDesktop } from "@/lib/desktop-bridge";
+import { isUnauthorizedError } from "@/lib/errors";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import {
@@ -794,6 +799,14 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         const isPromptingDocxUnlock = flashingDocxEditTabId === tab.id;
         const metadataLane = tab.metadataLane ?? "closed";
         const isMetadataLaneExpanded = metadataLane === "expanded";
+        const desktopOpenButton =
+          isNativeDocxDisplay && tab.propertyId !== undefined ? (
+            <DocxDesktopOpenButton
+              entityId={tab.entityId}
+              propertyId={tab.propertyId}
+              workspaceId={tab.workspaceId}
+            />
+          ) : null;
 
         // "Expanded" persona: the route already renders the file in
         // its main content (full folio), so the inspector tab drops
@@ -817,25 +830,28 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
               />
               <InspectorTabHeader
                 actions={
-                  <Tooltip
-                    content={t("workspaces.pdf.backToPeek")}
-                    render={
-                      <Button
-                        className={cn(
-                          "transition-all",
-                          flashingMinimizeTabId === tab.id &&
-                            "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
-                        )}
-                        onClick={() => {
-                          handleMinimizeFromFullView(tab);
-                        }}
-                        size="icon-xs"
-                        variant="ghost"
-                      >
-                        <Minimize2Icon className="size-3.5" />
-                      </Button>
-                    }
-                  />
+                  <>
+                    {desktopOpenButton}
+                    <Tooltip
+                      content={t("workspaces.pdf.backToPeek")}
+                      render={
+                        <Button
+                          className={cn(
+                            "transition-all",
+                            flashingMinimizeTabId === tab.id &&
+                              "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
+                          )}
+                          onClick={() => {
+                            handleMinimizeFromFullView(tab);
+                          }}
+                          size="icon-xs"
+                          variant="ghost"
+                        >
+                          <Minimize2Icon className="size-3.5" />
+                        </Button>
+                      }
+                    />
+                  </>
                 }
                 label={stripExtension(tab.label)}
                 matter={
@@ -1018,6 +1034,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 
         const fileActions = (
           <>
+            {desktopOpenButton}
             {isPreviewFacet && editToggle}
             {fullViewButton}
           </>
@@ -1373,6 +1390,85 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       })}
       {ribbonContextMenu.element}
     </div>
+  );
+};
+
+const DocxDesktopOpenButton = ({
+  entityId,
+  propertyId,
+  workspaceId,
+}: {
+  entityId: string;
+  propertyId: string;
+  workspaceId: string;
+}) => {
+  const t = useTranslations();
+  const [isOpening, setIsOpening] = useState(false);
+  const label = t("workspaces.files.desktopEdit.openAction");
+
+  const handleOpen = async () => {
+    if (isOpening) {
+      return;
+    }
+
+    setIsOpening(true);
+    try {
+      const linkedAccount = await getFreshLinkedAccount();
+      await openDocxInDesktop({
+        apiBaseUrl: env.VITE_API_URL,
+        entityId,
+        linkedAccount,
+        propertyId,
+        workspaceId,
+      });
+
+      toastManager.add({
+        description: t("workspaces.files.desktopEdit.openedDescription"),
+        title: t("workspaces.files.desktopEdit.openedTitle"),
+        type: "success",
+      });
+    } catch (error) {
+      if (error instanceof Error && isUnauthorizedError(error)) {
+        toastManager.add({
+          description: t(
+            "workspaces.files.desktopEdit.authRequiredDescription",
+          ),
+          title: t("workspaces.files.desktopEdit.authRequiredTitle"),
+          type: "error",
+        });
+        return;
+      }
+
+      getAnalytics().captureError(error);
+      toastManager.add({
+        description: t("workspaces.files.desktopEdit.unavailableDescription"),
+        title: t("workspaces.files.desktopEdit.unavailableTitle"),
+        type: "error",
+      });
+    } finally {
+      setIsOpening(false);
+    }
+  };
+
+  return (
+    <Tooltip
+      content={label}
+      render={
+        <Button
+          aria-label={label}
+          disabled={isOpening}
+          onClick={() => {
+            void handleOpen();
+          }}
+          size="icon-xs"
+          variant="ghost"
+        >
+          <LaptopIcon
+            className={cn("size-3.5", isOpening && "animate-pulse")}
+          />
+        </Button>
+      }
+    />
   );
 };
 

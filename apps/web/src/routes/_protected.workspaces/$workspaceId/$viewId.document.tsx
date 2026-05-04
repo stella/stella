@@ -50,7 +50,6 @@ import {
 } from "@/lib/pdf/pdf-context";
 import { toSafeId } from "@/lib/safe-id";
 import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
-import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { shouldUseDocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import {
@@ -212,7 +211,6 @@ function RouteComponentInner({
   const t = useTranslations();
   useSyncJustifications({ workspaceId, entityIds: [entityId] });
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
-  const docxEditorActionsRef = useRef<DocxBrowserEditorActions | null>(null);
   const justificationId = Route.useSearch({
     select: (s) => s.justification,
   });
@@ -238,6 +236,7 @@ function RouteComponentInner({
   );
   const resetPdfViewerState = useWorkspaceStore((s) => s.resetPdfViewerState);
   const openPdfForEntity = useInspectorStore((s) => s.openPdfForEntity);
+  const currentFileFieldIdsByPropertyRef = useRef(new Map<string, string>());
   const navigate = Route.useNavigate();
 
   useEffect(() => {
@@ -324,6 +323,59 @@ function RouteComponentInner({
     compareState === null;
   const usesEmbeddedDocxToolbar =
     shouldRenderDocxBrowserShell && filePropertyId !== undefined;
+  const latestFileFieldForProperty =
+    filePropertyId !== undefined
+      ? entity.fields.findLast(
+          (field) =>
+            field.propertyId === filePropertyId &&
+            field.content.type === "file",
+        )
+      : undefined;
+
+  useEffect(() => {
+    if (activeFileField === undefined) {
+      return;
+    }
+
+    currentFileFieldIdsByPropertyRef.current.set(
+      activeFileField.propertyId,
+      activeFileField.id,
+    );
+  }, [activeFileField]);
+
+  useEffect(() => {
+    if (
+      latestFileFieldForProperty === undefined ||
+      latestFileFieldForProperty.id === fieldId
+    ) {
+      return;
+    }
+
+    const previousCurrentFieldId = currentFileFieldIdsByPropertyRef.current.get(
+      latestFileFieldForProperty.propertyId,
+    );
+
+    if (previousCurrentFieldId !== fieldId) {
+      return;
+    }
+
+    currentFileFieldIdsByPropertyRef.current.set(
+      latestFileFieldForProperty.propertyId,
+      latestFileFieldForProperty.id,
+    );
+    setActiveFieldId(latestFileFieldForProperty.id);
+    useInspectorStore
+      .getState()
+      .replacePdfFieldId(fieldId, latestFileFieldForProperty.id);
+    void navigate({
+      replace: true,
+      search: (prev) => ({
+        ...prev,
+        field: latestFileFieldForProperty.id,
+        pdfPage: undefined,
+      }),
+    });
+  }, [fieldId, latestFileFieldForProperty, navigate]);
 
   useEffect(() => {
     if (!filePropertyId || activeMimeType === undefined) {
@@ -385,14 +437,11 @@ function RouteComponentInner({
                 workspaceId={workspaceId}
               >
                 <DocxBrowserEditor
-                  actionsRef={docxEditorActionsRef}
                   actionBarControls={
                     <PdfViewerControls
                       currentPage={pageNumber}
                       fieldId={fieldId}
-                      onPrint={() => {
-                        docxEditorActionsRef.current?.print();
-                      }}
+                      showFileActions={false}
                       variant="inline"
                       workspaceId={workspaceId}
                     />
