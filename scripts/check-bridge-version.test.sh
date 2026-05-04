@@ -172,6 +172,23 @@ unbump_version
 git commit -aq -m "bridge + version decrease"
 run_case "bridge + version decreased → 1" 1
 
+# 13. Only a non-version line in types.rs changed (no bump) → FAIL.
+#     types.rs is part of the wire surface (AppSnapshot lives
+#     there); a change to its contents must force a bump just
+#     like the other bridge files.
+setup_repo
+echo "// new struct field" >> apps/desktop/src-tauri/src/types.rs
+git commit -aq -m "types.rs edit, no version bump"
+run_case "types.rs edit, no bump → 1" 1
+
+# 14. types.rs serialized-shape change AND version bumped → OK.
+setup_repo
+sed -i.bak 's|BRIDGE_VERSION: u32 = 1;|BRIDGE_VERSION: u32 = 2;\npub struct Extra {}|' \
+  apps/desktop/src-tauri/src/types.rs
+rm -f apps/desktop/src-tauri/src/types.rs.bak
+git commit -aq -m "types.rs change + bump"
+run_case "types.rs change + bump → 0" 0
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 if [[ "$FAIL" -ne 0 ]]; then

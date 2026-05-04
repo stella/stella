@@ -30,6 +30,7 @@ fi
 bridge_files=(
   apps/desktop/src-tauri/src/bridge.rs
   apps/desktop/src-tauri/src/commands.rs
+  apps/desktop/src-tauri/src/types.rs
   apps/desktop/src/shared/rpc.ts
 )
 
@@ -92,6 +93,7 @@ A change to one of these files implies the bridge protocol that
 the web app talks to has shifted:
   - apps/desktop/src-tauri/src/bridge.rs
   - apps/desktop/src-tauri/src/commands.rs
+  - apps/desktop/src-tauri/src/types.rs
   - apps/desktop/src/shared/rpc.ts
 
 Bump BRIDGE_VERSION in $types_path to a value greater than $old_version
