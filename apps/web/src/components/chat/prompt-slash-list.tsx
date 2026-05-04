@@ -13,7 +13,7 @@ import { useTranslations } from "use-intl";
 
 import type { ChatPrompt, PromptScope } from "@/lib/prompts/types";
 
-const SCOPE_ORDER: PromptScope[] = ["private", "team", "stock"];
+const SCOPE_ORDER: PromptScope[] = ["private", "team"];
 
 const useScopeLabel = () => {
   const t = useTranslations();

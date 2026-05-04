@@ -139,6 +139,55 @@ export const userPolicies = () => [
   }),
 ];
 
+/**
+ * Prompt shortcuts are org-scoped for team shortcuts (all org
+ * members can read them) and user-scoped for private ones.
+ *
+ * SELECT:  org matches AND (team scope OR owned by current user)
+ * INSERT:  org matches AND user_id is the current user
+ * UPDATE/DELETE: org matches AND (team scope OR owned by current user)
+ *   — admin/owner enforcement for team mutations is done at
+ *     handler level, not DB level.
+ */
+const promptShortcutOrgCheck = sql`organization_id = (SELECT current_setting(
+  '${sql.raw(SETTING_ORGANIZATION_ID)}', true
+))`;
+
+const promptShortcutUserCheck = sql`user_id = (SELECT current_setting(
+  '${sql.raw(SETTING_USER_ID)}', true
+))`;
+
+const promptShortcutReadWriteCheck = sql`(
+  ${promptShortcutOrgCheck} AND (scope = 'team' OR ${promptShortcutUserCheck})
+)`;
+
+const promptShortcutInsertCheck = sql`(
+  ${promptShortcutOrgCheck} AND ${promptShortcutUserCheck}
+)`;
+
+export const promptShortcutPolicies = () => [
+  p.pgPolicy("prompt_shortcut_select", {
+    for: "select",
+    to: stella,
+    using: promptShortcutReadWriteCheck,
+  }),
+  p.pgPolicy("prompt_shortcut_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: promptShortcutInsertCheck,
+  }),
+  p.pgPolicy("prompt_shortcut_update", {
+    for: "update",
+    to: stella,
+    using: promptShortcutReadWriteCheck,
+  }),
+  p.pgPolicy("prompt_shortcut_delete", {
+    for: "delete",
+    to: stella,
+    using: promptShortcutReadWriteCheck,
+  }),
+];
+
 export const chatThreadPolicies = () => [
   p.pgPolicy("chat_thread_select", {
     for: "select",

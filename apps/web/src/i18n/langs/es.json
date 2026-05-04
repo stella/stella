@@ -354,6 +354,7 @@
     "placeholder": "¿Qué le gustaría saber?",
     "prompts": {
       "noResults": "Sin prompts coincidentes",
+      "noShortcuts": "Aún no hay atajos. Añade algunos en Conocimiento → Habilidades.",
       "scope": {
         "private": "Tus prompts",
         "stock": "Predefinidos",
@@ -1053,6 +1054,38 @@
         "description": "Plantillas de documentos con marcadores de posición",
         "title": "Plantillas"
       }
+    },
+    "skills": {
+      "addShortcut": "Añadir atajo",
+      "defaultBadge": "Predeterminado",
+      "deleteConfirmDescription": "Este atajo se eliminará permanentemente.",
+      "deleteConfirmTitle": "¿Eliminar atajo?",
+      "deleteShortcut": "Eliminar atajo",
+      "editShortcut": "Editar atajo",
+      "emptyState": "Aún no hay atajos. Añade uno para comenzar.",
+      "errors": {
+        "commandConflict": "Ya existe un atajo con este comando",
+        "commandInvalid": "Usa solo letras minúsculas, dígitos, guiones y guiones bajos",
+        "commandReserved": "\"/{command}\" es un comando reservado"
+      },
+      "form": {
+        "command": "Comando",
+        "commandHint": "Solo letras minúsculas, dígitos, guiones y guiones bajos",
+        "commandPlaceholder": "p. ej. resumir",
+        "commandPrefix": "/",
+        "description": "Descripción",
+        "descriptionPlaceholder": "Descripción breve en el selector",
+        "name": "Nombre",
+        "namePlaceholder": "p. ej. Resumir documento",
+        "prompt": "Prompt",
+        "promptPlaceholder": "El texto que se inserta en el compositor de chat al usar este atajo",
+        "scope": "Visibilidad",
+        "scopePrivate": "Solo yo",
+        "scopeTeam": "Todos en la organización"
+      },
+      "privateSection": "Mis atajos",
+      "shadowed": "Eclipsado por atajo de equipo",
+      "teamSection": "Atajos de equipo"
     }
   },
   "navigation": {

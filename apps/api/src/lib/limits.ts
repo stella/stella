@@ -16,6 +16,7 @@ export const LIMITS = {
   clauseCategoriesCount: 100,
   templateCategoriesCount: 100,
   clausesPerOrganization: 500,
+  shortcutsPerUser: 100,
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
   templateClausesPerTemplate: 50,

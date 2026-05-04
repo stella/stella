@@ -354,6 +354,7 @@
     "placeholder": "Mida soovite teada?",
     "prompts": {
       "noResults": "Sobivaid küsimusi pole",
+      "noShortcuts": "Otseteid pole veel. Lisage neid jaotises Teadmised → Oskused.",
       "scope": {
         "private": "Sinu küsimused",
         "stock": "Sisseehitatud",
@@ -1053,6 +1054,38 @@
         "description": "Dokumendimallid kohatäitjatega",
         "title": "Mallid"
       }
+    },
+    "skills": {
+      "addShortcut": "Lisa otsetee",
+      "defaultBadge": "Vaikimisi",
+      "deleteConfirmDescription": "See otsetee eemaldatakse jäädavalt.",
+      "deleteConfirmTitle": "Kustuta otsetee?",
+      "deleteShortcut": "Kustuta otsetee",
+      "editShortcut": "Muuda otseteed",
+      "emptyState": "Otseteid pole veel. Lisa esimene.",
+      "errors": {
+        "commandConflict": "Selle käsuga otsetee on juba olemas",
+        "commandInvalid": "Kasuta ainult väiketähti, numbreid, sidekriipse ja allkriipse",
+        "commandReserved": "\"/{command}\" on reserveeritud käsk"
+      },
+      "form": {
+        "command": "Käsk",
+        "commandHint": "Ainult väiketähed, numbrid, sidekriipsud ja allkriipsud",
+        "commandPlaceholder": "nt. kokkuvõte",
+        "commandPrefix": "/",
+        "description": "Kirjeldus",
+        "descriptionPlaceholder": "Lühike kirjeldus valijas",
+        "name": "Nimi",
+        "namePlaceholder": "nt. Dokumendi kokkuvõte",
+        "prompt": "Prompt",
+        "promptPlaceholder": "Tekst, mis lisatakse vestluse koostajasse selle otsetee kasutamisel",
+        "scope": "Nähtavus",
+        "scopePrivate": "Ainult mina",
+        "scopeTeam": "Kõik organisatsioonis"
+      },
+      "privateSection": "Minu otseteed",
+      "shadowed": "Varjatud meeskonna otsteega",
+      "teamSection": "Meeskonna otseteed"
     }
   },
   "navigation": {

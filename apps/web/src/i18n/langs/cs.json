@@ -354,6 +354,7 @@
     "placeholder": "Co byste chtěli vědět?",
     "prompts": {
       "noResults": "Žádné odpovídající promty",
+      "noShortcuts": "Zatím žádné zkratky. Přidejte je v části Znalosti → Dovednosti.",
       "scope": {
         "private": "Vaše promty",
         "stock": "Vestavěné",
@@ -1053,6 +1054,38 @@
         "description": "Šablony dokumentů se zástupnými znaky",
         "title": "Šablony"
       }
+    },
+    "skills": {
+      "addShortcut": "Přidat zkratku",
+      "defaultBadge": "Výchozí",
+      "deleteConfirmDescription": "Tato zkratka bude trvale odstraněna.",
+      "deleteConfirmTitle": "Smazat zkratku?",
+      "deleteShortcut": "Smazat zkratku",
+      "editShortcut": "Upravit zkratku",
+      "emptyState": "Žádné zkratky. Přidejte první.",
+      "errors": {
+        "commandConflict": "Zkratka s tímto příkazem již existuje",
+        "commandInvalid": "Používejte pouze malá písmena, číslice, pomlčky a podtržítka",
+        "commandReserved": "\"/{command}\" je rezervovaný příkaz"
+      },
+      "form": {
+        "command": "Příkaz",
+        "commandHint": "Pouze malá písmena, číslice, pomlčky a podtržítka",
+        "commandPlaceholder": "např. shrnout",
+        "commandPrefix": "/",
+        "description": "Popis",
+        "descriptionPlaceholder": "Stručný popis zobrazený ve výběru",
+        "name": "Název",
+        "namePlaceholder": "např. Shrnout dokument",
+        "prompt": "Prompt",
+        "promptPlaceholder": "Text vložený do kompozéru chatu při použití této zkratky",
+        "scope": "Viditelnost",
+        "scopePrivate": "Pouze já",
+        "scopeTeam": "Všichni v organizaci"
+      },
+      "privateSection": "Moje zkratky",
+      "shadowed": "Překryto týmovou zkratkou",
+      "teamSection": "Týmové zkratky"
     }
   },
   "navigation": {

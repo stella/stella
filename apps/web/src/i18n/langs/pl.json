@@ -354,6 +354,7 @@
     "placeholder": "Co chciałbyś wiedzieć?",
     "prompts": {
       "noResults": "Brak pasujących promptów",
+      "noShortcuts": "Brak skrótów. Dodaj je w sekcji Wiedza → Umiejętności.",
       "scope": {
         "private": "Twoje prompty",
         "stock": "Wbudowane",
@@ -1053,6 +1054,38 @@
         "description": "Szablony dokumentów z symbolami zastępczymi",
         "title": "Szablony"
       }
+    },
+    "skills": {
+      "addShortcut": "Dodaj skrót",
+      "defaultBadge": "Domyślny",
+      "deleteConfirmDescription": "Ten skrót zostanie trwale usunięty.",
+      "deleteConfirmTitle": "Usunąć skrót?",
+      "deleteShortcut": "Usuń skrót",
+      "editShortcut": "Edytuj skrót",
+      "emptyState": "Brak skrótów. Dodaj pierwszy.",
+      "errors": {
+        "commandConflict": "Skrót z tą komendą już istnieje",
+        "commandInvalid": "Używaj tylko małych liter, cyfr, myślników i podkreśleń",
+        "commandReserved": "\"/{command}\" jest zarezerwowaną komendą"
+      },
+      "form": {
+        "command": "Komenda",
+        "commandHint": "Tylko małe litery, cyfry, myślniki i podkreślenia",
+        "commandPlaceholder": "np. podsumuj",
+        "commandPrefix": "/",
+        "description": "Opis",
+        "descriptionPlaceholder": "Krótki opis widoczny w selektorze",
+        "name": "Nazwa",
+        "namePlaceholder": "np. Podsumuj dokument",
+        "prompt": "Prompt",
+        "promptPlaceholder": "Tekst wstawiany do kompozytora czatu przy użyciu tego skrótu",
+        "scope": "Widoczność",
+        "scopePrivate": "Tylko ja",
+        "scopeTeam": "Wszyscy w organizacji"
+      },
+      "privateSection": "Moje skróty",
+      "shadowed": "Przysłonięty przez skrót zespołu",
+      "teamSection": "Skróty zespołu"
     }
   },
   "navigation": {

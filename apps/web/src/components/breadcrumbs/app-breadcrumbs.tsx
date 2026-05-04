@@ -84,6 +84,9 @@ export const AppBreadcrumbs = () => {
       [serializeKey(["/contacts/$contactId"])]: (params) => (
         <ContactBreadcrumb {...params} />
       ),
+      [serializeKey(["/knowledge/skills"])]: () => (
+        <BreadcrumbItem>{t("knowledge.sections.skills.title")}</BreadcrumbItem>
+      ),
       [serializeKey(["/knowledge/case/"])]: () => (
         <BreadcrumbLink to="/knowledge/case">
           {t("common.caseLaw")}

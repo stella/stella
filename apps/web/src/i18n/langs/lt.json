@@ -354,6 +354,7 @@
     "placeholder": "Ko norėtumėte paklausti?",
     "prompts": {
       "noResults": "Nėra atitinkančių raginimų",
+      "noShortcuts": "Dar nėra sparčiųjų klavišų. Pridėkite juos dalyje Žinios → Įgūdžiai.",
       "scope": {
         "private": "Jūsų raginimai",
         "stock": "Įmontuoti",
@@ -1053,6 +1054,38 @@
         "description": "Dokumentų šablonai su vietos žymėmis",
         "title": "Šablonai"
       }
+    },
+    "skills": {
+      "addShortcut": "Pridėti spartąjį klavišą",
+      "defaultBadge": "Numatytasis",
+      "deleteConfirmDescription": "Šis spartysis klavišas bus visam laikui pašalintas.",
+      "deleteConfirmTitle": "Ištrinti spartųjį klavišą?",
+      "deleteShortcut": "Ištrinti spartųjį klavišą",
+      "editShortcut": "Redaguoti spartąjį klavišą",
+      "emptyState": "Dar nėra sparčiųjų klavišų. Pridėkite pirmąjį.",
+      "errors": {
+        "commandConflict": "Spartysis klavišas su šia komanda jau egzistuoja",
+        "commandInvalid": "Naudokite tik mažąsias raides, skaičius, brūkšnelius ir pabraukimus",
+        "commandReserved": "\"/{command}\" yra rezervuota komanda"
+      },
+      "form": {
+        "command": "Komanda",
+        "commandHint": "Tik mažosios raidės, skaičiai, brūkšneliai ir pabraukimai",
+        "commandPlaceholder": "pvz. sutraukti",
+        "commandPrefix": "/",
+        "description": "Aprašymas",
+        "descriptionPlaceholder": "Trumpas aprašymas rinkiklyje",
+        "name": "Pavadinimas",
+        "namePlaceholder": "pvz. Dokumento santrauka",
+        "prompt": "Užklausa",
+        "promptPlaceholder": "Tekstas, įterpiamas į pokalbio rengyklę naudojant šį spartąjį klavišą",
+        "scope": "Matomumas",
+        "scopePrivate": "Tik aš",
+        "scopeTeam": "Visi organizacijoje"
+      },
+      "privateSection": "Mano spartieji klavišai",
+      "shadowed": "Dengia komandos spartysis klavišas",
+      "teamSection": "Komandos spartieji klavišai"
     }
   },
   "navigation": {
