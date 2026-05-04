@@ -240,13 +240,18 @@ export const WorkspaceTable = ({
   const paddingTop = virtualRows.at(0)?.start ?? 0;
   const paddingBottom =
     rowVirtualizer.getTotalSize() - (virtualRows.at(-1)?.end ?? 0);
-  const renderColumns = getOrderedColumns({
+  const orderedColumns = getOrderedColumns({
     leftColumns: table.getLeftLeafColumns(),
     centerColumns: table.getCenterLeafColumns(),
     rightColumns: table.getRightLeafColumns(),
   });
-  const visibleColumnCount = renderColumns.length;
-  const tableWidth = renderColumns.reduce(
+  const addPropertyColumn =
+    orderedColumns.find((column) => column.id === addPropertyColId) ?? null;
+  const renderColumns = orderedColumns.filter(
+    (column) => column.id !== addPropertyColId,
+  );
+  const visibleColumnCount = renderColumns.length + (addPropertyColumn ? 1 : 0);
+  const tableWidth = orderedColumns.reduce(
     (sum, column) => sum + column.getSize(),
     0,
   );
@@ -256,6 +261,7 @@ export const WorkspaceTable = ({
     "--workspace-table-columns": getGridTemplateColumns(
       renderColumns,
       trailingFillerWidth,
+      addPropertyColumn ? [addPropertyColumn] : [],
     ),
     minWidth: tableWidth + trailingFillerWidth,
   };
@@ -265,7 +271,7 @@ export const WorkspaceTable = ({
   );
   const handleColumnReorder = useCallback(
     (sourceId: string, targetId: string, edge: ColumnDropEdge) => {
-      const currentVisibleIds = renderColumns.map((column) => column.id);
+      const currentVisibleIds = orderedColumns.map((column) => column.id);
       const reorderedVisibleIds = reorderColumnIds({
         ids: currentVisibleIds,
         sourceId,
@@ -280,7 +286,7 @@ export const WorkspaceTable = ({
 
       table.setColumnOrder([...reorderedVisibleIds, ...hiddenIds]);
     },
-    [renderColumns, table],
+    [orderedColumns, table],
   );
 
   useEffect(() => {
@@ -421,6 +427,19 @@ export const WorkspaceTable = ({
                 className="border-e-0"
                 role="presentation"
               />
+              {addPropertyColumn && (
+                <DraggableHeaderCell
+                  addColumnHovered={isAddColumnHovered}
+                  header={getRequiredHeader(
+                    headerGroup.headers,
+                    addPropertyColumn.id,
+                  )}
+                  index={renderColumns.length}
+                  onAddColumnHoverChange={setIsAddColumnHovered}
+                  onToggleSelectAll={handleToggleSelectAll}
+                  selectAllState={selectAllState}
+                />
+              )}
             </WorkspaceGridRow>
           ))}
         </div>
@@ -430,10 +449,16 @@ export const WorkspaceTable = ({
               <WorkspaceGridFillerCell
                 className="border-b-0"
                 style={{
-                  gridColumn: "1 / -1",
+                  gridColumn: addPropertyColumn ? "1 / -2" : "1 / -1",
                   height: paddingTop,
                 }}
               />
+              {addPropertyColumn && (
+                <AddPropertyRailSpacer
+                  addColumnHovered={isAddColumnHovered}
+                  height={paddingTop}
+                />
+              )}
             </WorkspaceGridRow>
           )}
           {virtualRows.map((virtualRow) => {
@@ -472,6 +497,7 @@ export const WorkspaceTable = ({
                     expandedTableRowEntityId === entityId ? null : entityId,
                   );
                 }}
+                addPropertyColumn={addPropertyColumn}
                 row={row}
                 rowLabel={rowLabels[virtualRow.index] ?? ""}
                 renderColumns={renderColumns}
@@ -486,10 +512,16 @@ export const WorkspaceTable = ({
               <WorkspaceGridFillerCell
                 className="border-b-0"
                 style={{
-                  gridColumn: "1 / -1",
+                  gridColumn: addPropertyColumn ? "1 / -2" : "1 / -1",
                   height: paddingBottom,
                 }}
               />
+              {addPropertyColumn && (
+                <AddPropertyRailSpacer
+                  addColumnHovered={isAddColumnHovered}
+                  height={paddingBottom}
+                />
+              )}
             </WorkspaceGridRow>
           )}
           <BottomRow
@@ -686,6 +718,18 @@ const getOrderedHeaders = (
   return orderedHeaders;
 };
 
+const getRequiredHeader = (
+  headers: Header<TableTreeNode, unknown>[],
+  columnId: string,
+) => {
+  const header = headers.find((candidate) => candidate.column.id === columnId);
+  if (!header) {
+    throw new Error(`Missing header for workspace table column "${columnId}"`);
+  }
+
+  return header;
+};
+
 type SelectAllHeaderProps = {
   state: SelectAllState;
   onToggle: () => void;
@@ -832,6 +876,7 @@ type DraggableRowProps = {
   index: number;
   rowLabel: string;
   renderColumns: Column<TableTreeNode>[];
+  addPropertyColumn: Column<TableTreeNode> | null;
   table: WorkspaceTableType;
   workspaceId: string;
   activeEntityId: string | null;
@@ -855,6 +900,7 @@ const DraggableRow = ({
   index,
   rowLabel,
   renderColumns,
+  addPropertyColumn,
   table,
   workspaceId,
   activeEntityId,
@@ -891,6 +937,11 @@ const DraggableRow = ({
   const isTask = entity.kind === "task";
   const isAddColumnHoverRow = addColumnHoverRowId === row.id;
   const visibleCells = getOrderedCells(row.getVisibleCells(), renderColumns);
+  const addPropertyCell = addPropertyColumn
+    ? row
+        .getVisibleCells()
+        .find((cell) => cell.column.id === addPropertyColumn.id)
+    : undefined;
   const name = getEntityName(entity);
   const file = getFirstFile(entity);
 
@@ -1015,9 +1066,6 @@ const DraggableRow = ({
   if (isFolder && visibleCells.length > 2) {
     const selectCell = visibleCells[0];
     const nameCell = visibleCells[1];
-    const addPropertyCell = visibleCells.find(
-      (cell) => cell.column.id === addPropertyColId,
-    );
     if (!selectCell || !nameCell) {
       return null;
     }
@@ -1069,16 +1117,12 @@ const DraggableRow = ({
           className="cursor-pointer border-e-0"
           data-state={row.getIsSelected() ? "selected" : undefined}
           onClick={() => row.toggleExpanded()}
-          style={{ gridColumn: addPropertyCell ? "3 / -3" : "3 / -1" }}
+          style={{ gridColumn: addPropertyCell ? "3 / -2" : "3 / -1" }}
         />
         <FolderAddPropertyCell
           addColumnHovered={addColumnHovered}
           cell={addPropertyCell}
-          columnIndex={
-            visibleCells.findIndex(
-              (cell) => cell.column.id === addPropertyColId,
-            ) + 1
-          }
+          columnIndex={renderColumns.length + 1}
           onAddColumnHoverChange={onAddColumnHoverChange}
           selected={row.getIsSelected()}
         />
@@ -1111,8 +1155,6 @@ const DraggableRow = ({
             "relative",
             isAddColumnHoverRow && "group-hover/row:bg-background",
             cell.column.id === selectColId && "min-w-12 shrink-0",
-            cell.column.id === addPropertyColId &&
-              "group-hover/row:bg-background border-s border-e-0 p-0",
             cell.column.columnDef.meta?.muted && "text-muted-foreground",
             expanded &&
               "max-h-48 overflow-y-auto whitespace-normal [&_.line-clamp-2]:line-clamp-none [&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal",
@@ -1154,7 +1196,16 @@ const DraggableRow = ({
           )}
         </WorkspaceGridCell>
       ))}
-      <WorkspaceGridFillerCell />
+      <WorkspaceGridFillerCell
+        className={cn(isAddColumnHoverRow && "group-hover/row:bg-background")}
+      />
+      <AddPropertyCell
+        addColumnHovered={addColumnHovered}
+        cell={addPropertyCell}
+        columnIndex={renderColumns.length + 1}
+        onAddColumnHoverChange={onAddColumnHoverChange}
+        selected={row.getIsSelected()}
+      />
     </WorkspaceGridRow>
   );
 };
@@ -1173,31 +1224,68 @@ const FolderAddPropertyCell = ({
   selected,
   addColumnHovered,
   onAddColumnHoverChange,
+}: FolderAddPropertyCellProps) => (
+  <AddPropertyCell
+    addColumnHovered={addColumnHovered}
+    cell={cell}
+    columnIndex={columnIndex}
+    onAddColumnHoverChange={onAddColumnHoverChange}
+    selected={selected}
+  />
+);
+
+const AddPropertyCell = ({
+  cell,
+  columnIndex,
+  selected,
+  addColumnHovered,
+  onAddColumnHoverChange,
 }: FolderAddPropertyCellProps) => {
   if (!cell) {
     return null;
   }
 
   return (
-    <>
-      <WorkspaceGridCell
-        aria-colindex={columnIndex}
-        className={cn("group-hover/row:bg-background border-s border-e-0 p-0")}
-        data-state={selected ? "selected" : undefined}
-        onPointerEnter={() => onAddColumnHoverChange(true)}
-        onPointerDown={() => onAddColumnHoverChange(false)}
-        onPointerLeave={() => onAddColumnHoverChange(false)}
-        style={{
-          ...getGridPinningStyles(cell.column),
-          ...getAddColumnHoverStyles(addColumnHovered),
-        }}
-      >
-        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-      </WorkspaceGridCell>
-      <WorkspaceGridFillerCell />
-    </>
+    <WorkspaceGridCell
+      aria-colindex={columnIndex}
+      className="group-hover/row:bg-background group-data-[state=selected]/row:bg-background group-data-[state=selected]/row:group-hover/row:bg-background border-s p-0"
+      data-state={selected ? "selected" : undefined}
+      onPointerEnter={() => onAddColumnHoverChange(true)}
+      onPointerDown={() => onAddColumnHoverChange(false)}
+      onPointerLeave={() => onAddColumnHoverChange(false)}
+      style={{
+        ...getGridPinningStyles(cell.column),
+        ...getAddColumnHoverStyles(addColumnHovered),
+      }}
+    >
+      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+    </WorkspaceGridCell>
   );
 };
+
+type AddPropertyRailSpacerProps = {
+  addColumnHovered: boolean;
+  height: number;
+};
+
+const AddPropertyRailSpacer = ({
+  addColumnHovered,
+  height,
+}: AddPropertyRailSpacerProps) => (
+  <WorkspaceGridCell
+    aria-hidden="true"
+    className="group-hover/row:bg-background border-s border-b-0 p-0"
+    role="presentation"
+    style={{
+      gridColumn: "-2 / -1",
+      height,
+      position: "sticky",
+      right: 0,
+      zIndex: 2,
+      ...getAddColumnHoverStyles(addColumnHovered),
+    }}
+  />
+);
 
 // -- Select row content --
 

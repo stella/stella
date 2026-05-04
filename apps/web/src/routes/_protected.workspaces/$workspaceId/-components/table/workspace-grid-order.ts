@@ -47,8 +47,13 @@ export const getOrderedCells = <TCell extends CellLike>(
 export const getGridTemplateColumns = (
   columns: readonly ColumnLike[],
   trailingFillerWidth: number,
+  endColumns: readonly ColumnLike[] = [],
 ) =>
-  `${columns.map((column) => `${column.getSize()}px`).join(" ")} ${trailingFillerWidth}px`;
+  [
+    ...columns.map((column) => `${column.getSize()}px`),
+    `${trailingFillerWidth}px`,
+    ...endColumns.map((column) => `${column.getSize()}px`),
+  ].join(" ");
 
 type ReorderColumnIdsOptions = {
   ids: readonly string[];

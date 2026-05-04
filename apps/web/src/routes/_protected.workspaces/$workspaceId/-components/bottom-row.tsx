@@ -11,6 +11,7 @@ import {
 import { getInternalColId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const selectColId = getInternalColId("select");
+const addPropertyColId = getInternalColId("add-property");
 
 type BottomRowProps = {
   workspaceId: string;
@@ -24,6 +25,7 @@ export const BottomRow = ({
   onFolderCreated,
 }: BottomRowProps) => {
   const t = useTranslations();
+  const addPropertyColumn = table.getColumn(addPropertyColId);
 
   return (
     <WorkspaceGridRow className="bg-muted/40 hover:bg-muted sticky bottom-0 z-10 transition-colors">
@@ -72,7 +74,7 @@ export const BottomRow = ({
       </WorkspaceGridCell>
       <WorkspaceGridCell
         className="relative border-e-0 border-t-2 p-0"
-        style={{ gridColumn: "3 / -1" }}
+        style={{ gridColumn: addPropertyColumn ? "3 / -2" : "3 / -1" }}
       >
         <AddEntityMenu
           onFolderCreated={onFolderCreated}
@@ -83,6 +85,14 @@ export const BottomRow = ({
           workspaceId={workspaceId}
         />
       </WorkspaceGridCell>
+      {addPropertyColumn && (
+        <WorkspaceGridCell
+          aria-hidden="true"
+          className="bg-muted/40 sticky end-0 z-10 border-s border-t-2 p-0"
+          role="presentation"
+          style={{ gridColumn: "-2 / -1" }}
+        />
+      )}
     </WorkspaceGridRow>
   );
 };

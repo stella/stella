@@ -69,6 +69,16 @@ describe("workspace grid column ordering", () => {
     );
   });
 
+  test("places the filler before end-pinned utility columns", () => {
+    expect(
+      getGridTemplateColumns(
+        [column("select", 48), column("documents", 240)],
+        120,
+        [column("add-property", 48)],
+      ),
+    ).toBe("48px 240px 120px 48px");
+  });
+
   test("moves a dragged column before the targeted column", () => {
     expect(
       reorderColumnIds({
