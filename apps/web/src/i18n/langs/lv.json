@@ -74,6 +74,7 @@
       "title": "Uzaicinājums organizācijā"
     },
     "lastUsed": "Pēdējoreiz izmantots",
+    "openInProvider": "Atvērt {provider}",
     "orSignInWithEmail": "vai pierakstieties ar e-pastu",
     "organizationNamePlaceholder": "Mana organizācija",
     "rateLimitExceeded": "Pārāk daudz mēģinājumu. Lūdzu, mēģiniet vēlāk.",

@@ -74,6 +74,7 @@
       "title": "Kvietimas į organizaciją"
     },
     "lastUsed": "Paskutinį kartą naudotas",
+    "openInProvider": "Atverti {provider}",
     "orSignInWithEmail": "arba prisijunkite el. paštu",
     "organizationNamePlaceholder": "Mano organizacija",
     "rateLimitExceeded": "Per daug bandymų. Bandykite dar kartą vėliau.",

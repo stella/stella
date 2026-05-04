@@ -77,6 +77,7 @@ type Messages = {
       "title": "Organization invitation";
     };
     "lastUsed": "Last used";
+    "openInProvider": "Open {provider}";
     "orSignInWithEmail": "or sign in with email";
     "organizationNamePlaceholder": "My organization";
     "rateLimitExceeded": "Too many attempts. Please try again later.";
