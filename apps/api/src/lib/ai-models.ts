@@ -506,6 +506,9 @@ export const getModelForRole = (
     // role falls back to instance provider. Route through
     // the regional endpoint.
     if (orgConfig.region && orgConfig.region !== "global") {
+      if (!hasInstanceProvider()) {
+        throw byokRoleNotConfiguredError(role);
+      }
       const factory = getRegionalInstanceFactory(orgConfig.region);
       const modelId =
         MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[getActiveProvider()][role];
@@ -513,11 +516,31 @@ export const getModelForRole = (
     }
   }
 
-  // Default instance path.
+  // Default instance path. requireAIAvailable() gates the entry
+  // point but only checks "any provider available" — it returns
+  // ok if orgConfig is non-null without verifying the org's BYOK
+  // covers the requested role. So when an org has partial BYOK
+  // overrides and the role falls through here on a deployment
+  // with REQUIRE_PERSONAL_AI_KEY=true, getActiveProvider() panics
+  // with a generic error and the user sees a 500. Throw a typed
+  // HandlerError instead so the request boundary returns 403 with
+  // an actionable message.
+  if (!hasInstanceProvider()) {
+    throw byokRoleNotConfiguredError(role);
+  }
   const modelId =
     MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[getActiveProvider()][role];
   return withLocalAIDevTools(getInstanceFactory()(modelId));
 };
+
+const byokRoleNotConfiguredError = (role: ModelRole): HandlerError =>
+  new HandlerError({
+    status: 403,
+    message:
+      `AI is not available for the "${role}" role on this deployment. ` +
+      "Configure an organization-wide AI key (or include this role in " +
+      "the BYOK override list) in organization settings.",
+  });
 
 export const getModelInfoForRole = (
   role: ModelRole,
