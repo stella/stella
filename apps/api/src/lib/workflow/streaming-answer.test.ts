@@ -34,6 +34,11 @@ describe("formatPartialAnswer", () => {
   test("caps long streamed text before publishing it", () => {
     expect(formatPartialAnswer("x".repeat(600))).toHaveLength(500);
   });
+
+  test("does not over-truncate multibyte text below the character cap", () => {
+    const answer = "🙂".repeat(300);
+    expect(formatPartialAnswer(answer)).toBe(answer);
+  });
 });
 
 describe("consumePartialAnswers", () => {

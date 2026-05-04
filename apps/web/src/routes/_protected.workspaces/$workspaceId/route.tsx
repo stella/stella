@@ -35,8 +35,6 @@ import {
 } from "@/routes/_protected.workspaces/-queries";
 
 const EXTRACTION_PREVIEW_EVENT_TYPE = "workflow-extraction-preview";
-const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
-const ENTITIES_QUERY_KEY_PREFIX = "entities";
 const EXTRACTION_PREVIEW_CLIENT_TTL_MS = 5 * 60 * 1000;
 
 type ExtractionPreviewEventData = {
@@ -164,20 +162,6 @@ function RouteComponent() {
     ({ type, data }: { type: string; data: unknown }) => {
       const workspaceStore = useWorkspaceStore.getState();
       if (
-        type === INVALIDATE_QUERY_EVENT_TYPE &&
-        Array.isArray(data) &&
-        data.at(0) === ENTITIES_QUERY_KEY_PREFIX &&
-        data.at(1) === workspaceId
-      ) {
-        for (const timer of previewClearTimersRef.current.values()) {
-          clearTimeout(timer);
-        }
-        previewClearTimersRef.current.clear();
-        workspaceStore.clearExtractionPreviews();
-        return;
-      }
-
-      if (
         type !== EXTRACTION_PREVIEW_EVENT_TYPE ||
         !isExtractionPreviewEventData(data)
       ) {
@@ -215,7 +199,7 @@ function RouteComponent() {
       }, EXTRACTION_PREVIEW_CLIENT_TTL_MS);
       previewClearTimersRef.current.set(key, nextTimer);
     },
-    [workspaceId],
+    [],
   );
 
   // Subscribe to workspace SSE events for real-time query

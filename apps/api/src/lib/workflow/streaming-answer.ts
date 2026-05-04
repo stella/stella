@@ -2,6 +2,9 @@ const MAX_STREAMED_ANSWER_CHARS = 500;
 
 const truncateStreamedAnswer = (value: string): string => {
   const normalized = value.trim();
+  if (normalized.length <= MAX_STREAMED_ANSWER_CHARS) {
+    return normalized;
+  }
   const chars = Array.from(normalized);
   if (chars.length <= MAX_STREAMED_ANSWER_CHARS) {
     return normalized;

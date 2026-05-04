@@ -132,10 +132,11 @@ export const generateWorkflowData = async ({
           })
         : Promise.resolve();
 
-      const output = await result.output;
-      await partialAnswerTask;
-
-      return output;
+      try {
+        return await result.output;
+      } finally {
+        await partialAnswerTask;
+      }
     },
     catch: (error) => {
       aiAnalytics.captureError(error);
