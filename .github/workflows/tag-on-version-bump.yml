@@ -9,6 +9,12 @@ on:
   push:
     branches: [main]
     paths: [VERSION]
+  # Manual recovery path. If the auto-trigger misses a VERSION bump
+  # (e.g. a stuck "merge already in progress" lock causes GitHub to
+  # land a follow-up empty squash commit on top of the real one, so
+  # the path filter doesn't see VERSION change in the delivered
+  # push event), run this workflow against `main` to push the tag.
+  workflow_dispatch:
 
 permissions:
   contents: read
