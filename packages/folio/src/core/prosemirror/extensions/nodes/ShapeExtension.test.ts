@@ -6,6 +6,8 @@ import { describe, expect, test } from "bun:test";
 import {
   parseGradientStops,
   sanitizeColor,
+  sanitizeShapeDimension,
+  sanitizeSvgId,
   sanitizeTransform,
 } from "./ShapeExtension";
 
@@ -83,6 +85,37 @@ describe("ShapeExtension.sanitizeTransform", () => {
     ]) {
       expect(sanitizeTransform(value)).toBeNull();
     }
+  });
+});
+
+describe("ShapeExtension.sanitizeSvgId", () => {
+  test("preserves characters that are safe inside SVG ids and CSS url fragments", () => {
+    expect(sanitizeSvgId("shape_123-main")).toBe("shape_123-main");
+  });
+
+  test("strips characters that could break out of a CSS url fragment", () => {
+    expect(
+      sanitizeSvgId("shape);background:url(javascript:alert(1))"),
+    ).toBe("shapebackgroundurljavascriptalert1");
+  });
+
+  test("rejects nullish and fully stripped values", () => {
+    expect(sanitizeSvgId(null)).toBeNull();
+    expect(sanitizeSvgId(undefined)).toBeNull();
+    expect(sanitizeSvgId(");:()")).toBeNull();
+  });
+});
+
+describe("ShapeExtension.sanitizeShapeDimension", () => {
+  test("preserves valid numeric dimensions including zero", () => {
+    expect(sanitizeShapeDimension(240, 100)).toBe(240);
+    expect(sanitizeShapeDimension(0, 100)).toBe(0);
+  });
+
+  test("falls back for NaN and missing dimensions", () => {
+    expect(sanitizeShapeDimension(Number.NaN, 100)).toBe(100);
+    expect(sanitizeShapeDimension(null, 100)).toBe(100);
+    expect(sanitizeShapeDimension(undefined, 80)).toBe(80);
   });
 });
 

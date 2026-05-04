@@ -155,6 +155,21 @@ function finiteNumber(value: number | null | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+export function sanitizeSvgId(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const sanitized = value.replace(/[^a-zA-Z0-9_-]/g, "");
+  return sanitized.length > 0 ? sanitized : null;
+}
+
+export function sanitizeShapeDimension(
+  value: number | null | undefined,
+  fallback: number,
+): number {
+  return typeof value === "number" && !Number.isNaN(value) ? value : fallback;
+}
+
 function setNum(el: Element, name: string, value: number): void {
   el.setAttribute(name, String(value));
 }
@@ -390,8 +405,8 @@ export const ShapeExtension = createNodeExtension({
     ],
     toDOM(node) {
       const attrs = node.attrs as ShapeAttrs;
-      const w = attrs.width ?? 100;
-      const h = attrs.height ?? 80;
+      const w = sanitizeShapeDimension(attrs.width, 100);
+      const h = sanitizeShapeDimension(attrs.height, 80);
 
       const domAttrs: Record<string, string> = {
         class: "docx-shape",
@@ -529,7 +544,9 @@ export const ShapeExtension = createNodeExtension({
       let gradient: SVGElement | null = null;
       let fillAttr: string;
       if (attrs.fillType === "gradient" && attrs.gradientStops) {
-        const gradId = `grad-${attrs.shapeId || Math.random().toString(36).slice(2, 8)}`;
+        const safeShapeId =
+          sanitizeSvgId(attrs.shapeId) ?? Math.random().toString(36).slice(2, 8);
+        const gradId = `grad-${safeShapeId}`;
         gradient = createGradientElement(gradId, attrs);
         fillAttr = gradient ? `url(#${gradId})` : safeFillColor;
       } else {
