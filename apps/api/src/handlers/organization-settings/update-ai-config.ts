@@ -10,32 +10,55 @@ import {
   maskApiKey,
 } from "@/api/lib/ai-config-crypto";
 import {
+  DEFAULT_MODELS,
   getModelForRole,
   getTemperatureForRole,
+  MODEL_ROLES,
   supportsRegion,
 } from "@/api/lib/ai-models";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
+import type {
+  AIProvider,
+  DataRegion,
+  ModelRole,
+  OrgAIConfig,
+  OrgAIModelSelection,
+  OrgAIProviderConfig,
+} from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { validateSafeBaseURL } from "@/api/lib/safe-base-url";
+
+const BYOK_PROVIDER_VALUES = [
+  "google",
+  "openrouter",
+  "openai",
+  "anthropic",
+] as const satisfies readonly AIProvider[];
+type BYOKProvider = (typeof BYOK_PROVIDER_VALUES)[number];
+
+const providerBody = t.Object({
+  provider: t.UnionEnum(BYOK_PROVIDER_VALUES),
+  apiKey: t.Optional(t.String({ minLength: 1 })),
+  region: t.Optional(t.UnionEnum(["eu", "global", "ch"])),
+});
+
+const modelSelectionBody = t.Object({
+  provider: t.UnionEnum(BYOK_PROVIDER_VALUES),
+  modelId: t.String({ minLength: 1, maxLength: 256 }),
+});
 
 const updateAIConfigBody = t.Object({
-  provider: t.UnionEnum([
-    "google",
-    "openrouter",
-    "openai",
-    "anthropic",
-    "openai_compatible",
-  ]),
-  apiKey: t.Optional(t.String({ minLength: 1 })),
-  baseURL: t.Optional(t.String({ format: "uri" })),
-  overrideRoles: t.Optional(
-    t.Array(t.UnionEnum(["fast", "chat", "reasoning", "pdf"])),
+  providers: t.Array(providerBody, { minItems: 1 }),
+  overrideModels: t.Optional(
+    t.Object({
+      fast: t.Optional(modelSelectionBody),
+      chat: t.Optional(modelSelectionBody),
+      reasoning: t.Optional(modelSelectionBody),
+      pdf: t.Optional(modelSelectionBody),
+    }),
   ),
-  region: t.Optional(t.UnionEnum(["eu", "global", "ch"])),
 });
 
 const config = {
@@ -52,128 +75,74 @@ const config = {
 const updateAIConfig = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, body }) {
-    // Resolve the API key and existing config: use the new
-    // key if provided, otherwise read from storage.
-    let resolvedKey: string | undefined = body.apiKey;
     let existingConfig: OrgAIConfig | undefined;
-
-    if (!resolvedKey) {
-      const row = yield* Result.await(
-        safeDb((tx) =>
-          tx.query.organizationSettings.findFirst({
-            where: {
-              organizationId: {
-                eq: session.activeOrganizationId,
-              },
+    const row = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.organizationSettings.findFirst({
+          where: {
+            organizationId: {
+              eq: session.activeOrganizationId,
             },
-            columns: {
-              aiConfigEncrypted: true,
-              aiConfigIv: true,
-            },
-          }),
-        ),
-      );
+          },
+          columns: {
+            aiConfigEncrypted: true,
+            aiConfigIv: true,
+          },
+        }),
+      ),
+    );
 
-      const ciphertext = row?.aiConfigEncrypted;
-      const iv = row?.aiConfigIv;
+    const ciphertext = row?.aiConfigEncrypted;
+    const iv = row?.aiConfigIv;
+    if (ciphertext && iv) {
+      const decryptResult = await Result.tryPromise({
+        try: async () =>
+          await decryptAIConfig(session.activeOrganizationId, ciphertext, iv),
+        catch: (error: unknown) => error,
+      });
 
-      if (ciphertext && iv) {
-        const decryptResult = await Result.tryPromise({
-          try: async () =>
-            await decryptAIConfig(session.activeOrganizationId, ciphertext, iv),
-          catch: (error: unknown) => error,
-        });
-
-        if (decryptResult.isErr()) {
-          captureError(decryptResult.error);
-          return Result.err(
-            new HandlerError({
-              status: 400,
-              message:
-                "Stored AI config could not be decrypted. " +
-                "Please re-enter your API key.",
-            }),
-          );
-        }
-
+      if (decryptResult.isErr()) {
+        captureError(decryptResult.error);
+        existingConfig = undefined;
+      } else {
         existingConfig = decryptResult.value;
-        resolvedKey = existingConfig.apiKey;
       }
     }
 
-    if (!resolvedKey) {
+    const providerResult = resolveProviderConfigs(
+      body.providers,
+      existingConfig,
+    );
+    if (!providerResult.valid) {
       return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "API key is required for initial setup",
-        }),
+        new HandlerError({ status: 400, message: providerResult.error }),
       );
     }
 
-    // Require a new key when switching providers; the old
-    // provider's key won't authenticate with the new one.
-    if (
-      !body.apiKey &&
-      existingConfig &&
-      existingConfig.provider !== body.provider
-    ) {
+    const modelResult = normalizeOverrideModels(
+      body.overrideModels,
+      providerResult.providers,
+    );
+    if (!modelResult.valid) {
       return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "API key is required when changing provider",
-        }),
+        new HandlerError({ status: 400, message: modelResult.error }),
       );
     }
 
-    // Resolve baseURL: body > existing > reject for
-    // openai_compatible.
-    let resolvedBaseURL = body.baseURL ?? existingConfig?.baseURL;
-    if (body.provider === "openai_compatible" && !resolvedBaseURL) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Base URL is required for OpenAI-compatible provider",
-        }),
-      );
-    }
+    const newKeyProviders = new Set(
+      body.providers
+        .filter((provider) => provider.apiKey)
+        .map((provider) => provider.provider),
+    );
 
-    // SSRF guard: when a baseURL is in play (caller-supplied
-    // or carried over from storage), require HTTPS and reject
-    // private/loopback/link-local hosts before we make any
-    // outbound call with it.
-    if (resolvedBaseURL) {
-      const urlCheck = validateSafeBaseURL(resolvedBaseURL);
-      if (!urlCheck.ok) {
-        return Result.err(
-          new HandlerError({ status: 400, message: urlCheck.error }),
-        );
+    for (const providerConfig of providerResult.providers) {
+      if (!newKeyProviders.has(providerConfig.provider)) {
+        continue;
       }
-      resolvedBaseURL = urlCheck.url;
-    }
 
-    // Reject region + non-regional provider at the boundary.
-    if (
-      body.region &&
-      body.region !== "global" &&
-      !supportsRegion(body.provider)
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message:
-            `Regional routing is not supported for ${body.provider}. ` +
-            "Only Google AI supports EU/CH regional endpoints via Vertex AI.",
-        }),
-      );
-    }
-
-    // Only validate when a new key is provided.
-    if (body.apiKey) {
       const validationResult = await validateProviderKey(
-        body.provider,
-        resolvedKey,
-        resolvedBaseURL,
-        body.region ?? existingConfig?.region,
+        providerConfig,
+        modelResult.overrideModels,
       );
 
       if (!validationResult.valid) {
@@ -187,11 +156,8 @@ const updateAIConfig = createSafeRootHandler(
     }
 
     const orgConfig: OrgAIConfig = {
-      provider: body.provider,
-      apiKey: resolvedKey,
-      baseURL: resolvedBaseURL,
-      overrideRoles: body.overrideRoles ?? existingConfig?.overrideRoles,
-      region: body.region ?? existingConfig?.region,
+      providers: providerResult.providers,
+      overrideModels: modelResult.overrideModels,
     };
 
     const { ciphertext: newCiphertext, iv: newIv } = await encryptAIConfig(
@@ -223,38 +189,168 @@ const updateAIConfig = createSafeRootHandler(
     invalidateOrgAIConfig(session.activeOrganizationId);
 
     return Result.ok({
-      provider: body.provider,
-      apiKeyMasked: maskApiKey(resolvedKey),
-      region: orgConfig.region ?? "global",
+      providers: orgConfig.providers.map((providerConfig) => ({
+        provider: providerConfig.provider,
+        apiKeyMasked: maskApiKey(providerConfig.apiKey),
+        baseURL: providerConfig.baseURL ?? null,
+        region: providerConfig.region ?? "global",
+      })),
+      overrideModels: orgConfig.overrideModels,
     });
   },
 );
 
 type ValidationResult = { valid: true } | { valid: false; error: string };
 
+type ProviderConfigInput = {
+  provider: BYOKProvider;
+  apiKey?: string | undefined;
+  region?: DataRegion | undefined;
+};
+
+type ProviderConfigResult =
+  | {
+      valid: true;
+      providers: (OrgAIProviderConfig & { provider: BYOKProvider })[];
+    }
+  | { valid: false; error: string };
+
+const resolveProviderConfigs = (
+  providers: readonly ProviderConfigInput[],
+  existingConfig: OrgAIConfig | undefined,
+): ProviderConfigResult => {
+  const resolvedProviders: (OrgAIProviderConfig & {
+    provider: BYOKProvider;
+  })[] = [];
+  const seenProviders = new Set<AIProvider>();
+
+  for (const providerInput of providers) {
+    if (seenProviders.has(providerInput.provider)) {
+      return {
+        valid: false,
+        error: `Provider ${providerInput.provider} is configured more than once`,
+      };
+    }
+    seenProviders.add(providerInput.provider);
+
+    const existingProvider = existingConfig?.providers.find(
+      (candidate) => candidate.provider === providerInput.provider,
+    );
+    const apiKey = providerInput.apiKey?.trim() || existingProvider?.apiKey;
+
+    if (!apiKey) {
+      return {
+        valid: false,
+        error: `API key is required for ${providerInput.provider}`,
+      };
+    }
+
+    if (
+      providerInput.region &&
+      providerInput.region !== "global" &&
+      !supportsRegion(providerInput.provider)
+    ) {
+      return {
+        valid: false,
+        error:
+          `Regional routing is not supported for ${providerInput.provider}. ` +
+          "Only Google AI supports EU/CH regional endpoints via Vertex AI.",
+      };
+    }
+
+    resolvedProviders.push({
+      provider: providerInput.provider,
+      apiKey,
+      region: supportsRegion(providerInput.provider)
+        ? (providerInput.region ?? existingProvider?.region ?? "global")
+        : "global",
+    });
+  }
+
+  return { valid: true, providers: resolvedProviders };
+};
+
+type OverrideModelsInput =
+  | Partial<Record<ModelRole, OrgAIModelSelection | undefined>>
+  | undefined;
+
+type OverrideModelsResult =
+  | { valid: true; overrideModels: NonNullable<OrgAIConfig["overrideModels"]> }
+  | { valid: false; error: string };
+
+const normalizeOverrideModels = (
+  overrideModels: OverrideModelsInput,
+  providers: readonly OrgAIProviderConfig[],
+): OverrideModelsResult => {
+  const normalized: Partial<Record<ModelRole, OrgAIModelSelection>> = {};
+  const configuredProviders = new Set(
+    providers.map((providerConfig) => providerConfig.provider),
+  );
+
+  for (const role of MODEL_ROLES) {
+    const selection = overrideModels?.[role];
+    const modelId = selection?.modelId.trim();
+
+    if (!(selection && modelId)) {
+      return {
+        valid: false,
+        error: `Model selection is required for ${role}`,
+      };
+    }
+
+    if (!configuredProviders.has(selection.provider)) {
+      return {
+        valid: false,
+        error: `Model selection for ${role} uses an unconfigured provider`,
+      };
+    }
+
+    normalized[role] = {
+      provider: selection.provider,
+      modelId,
+    };
+  }
+
+  return { valid: true, overrideModels: normalized };
+};
+
+const getValidationRole = (
+  provider: AIProvider,
+  overrideModels: NonNullable<OrgAIConfig["overrideModels"]>,
+): ModelRole =>
+  MODEL_ROLES.find((role) => overrideModels[role]?.provider === provider) ??
+  "fast";
+
 /**
  * Validate a provider API key by making a minimal API call.
  * Uses a tiny prompt to minimize cost.
  */
 const validateProviderKey = async (
-  provider: OrgAIConfig["provider"],
-  apiKey: string,
-  baseURL?: string,
-  region?: OrgAIConfig["region"],
+  providerConfig: OrgAIProviderConfig,
+  overrideModels: NonNullable<OrgAIConfig["overrideModels"]>,
 ): Promise<ValidationResult> => {
+  const role = getValidationRole(providerConfig.provider, overrideModels);
+  const configuredSelection = overrideModels[role];
+  const selection =
+    configuredSelection?.provider === providerConfig.provider
+      ? configuredSelection
+      : {
+          provider: providerConfig.provider,
+          modelId: DEFAULT_MODELS[providerConfig.provider][role],
+        };
   const tempConfig: OrgAIConfig = {
-    provider,
-    apiKey,
-    baseURL,
-    region,
+    providers: [providerConfig],
+    overrideModels: {
+      [role]: selection,
+    },
   };
 
   const result = await Result.tryPromise({
     try: async () => {
-      const model = getModelForRole("fast", tempConfig);
+      const model = getModelForRole(role, tempConfig);
       return await generateText({
         model,
-        temperature: getTemperatureForRole("fast"),
+        temperature: getTemperatureForRole(role),
         prompt: "Say OK",
         maxOutputTokens: 3,
         abortSignal: AbortSignal.timeout(10_000),

@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import { decryptAIConfig, maskApiKey } from "@/api/lib/ai-config-crypto";
 import { hasInstanceProvider } from "@/api/lib/ai-models";
-import type { AIProvider, DataRegion, ModelRole } from "@/api/lib/ai-models";
+import type { DataRegion, OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -19,11 +19,13 @@ type AIConfigResult = {
   | { configured: false }
   | {
       configured: true;
-      provider: AIProvider;
-      apiKeyMasked: string;
-      baseURL: string | null;
-      overrideRoles: ModelRole[];
-      region: DataRegion;
+      providers: {
+        provider: OrgAIConfig["providers"][number]["provider"];
+        apiKeyMasked: string;
+        baseURL: string | null;
+        region: DataRegion;
+      }[];
+      overrideModels: OrgAIConfig["overrideModels"];
     }
 );
 
@@ -77,11 +79,13 @@ const readAIConfig = createSafeRootHandler(
         const aiConfig = decryptResult.value;
         result = {
           configured: true,
-          provider: aiConfig.provider,
-          apiKeyMasked: maskApiKey(aiConfig.apiKey),
-          baseURL: aiConfig.baseURL ?? null,
-          overrideRoles: aiConfig.overrideRoles ?? [],
-          region: aiConfig.region ?? "global",
+          providers: aiConfig.providers.map((providerConfig) => ({
+            provider: providerConfig.provider,
+            apiKeyMasked: maskApiKey(providerConfig.apiKey),
+            baseURL: providerConfig.baseURL ?? null,
+            region: providerConfig.region ?? "global",
+          })),
+          overrideModels: aiConfig.overrideModels,
           instanceProvisioned,
         };
       }

@@ -271,8 +271,12 @@ describe("createAIAnalyticsCallbacks", () => {
       feature: "chat.basic",
       modelRole: "fast",
       orgAIConfig: {
-        apiKey: "org-secret",
-        provider: "openai",
+        providers: [
+          {
+            apiKey: "org-secret",
+            provider: "openai",
+          },
+        ],
       },
       properties: {
         entity_version_id: "ev_secret",
@@ -381,8 +385,12 @@ describe("createAIAnalyticsCallbacks", () => {
       feature: "analysis.basic",
       modelRole: "fast",
       orgAIConfig: {
-        apiKey: "org-secret",
-        provider: "openai",
+        providers: [
+          {
+            apiKey: "org-secret",
+            provider: "openai",
+          },
+        ],
       },
       properties: {
         organization_id: "org_123",

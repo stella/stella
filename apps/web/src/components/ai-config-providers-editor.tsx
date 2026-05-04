@@ -1,0 +1,422 @@
+import { Button } from "@stll/ui/components/button";
+import { Field, FieldDescription, FieldLabel } from "@stll/ui/components/field";
+import { Input } from "@stll/ui/components/input";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/components/select";
+import { PlusIcon, Trash2Icon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
+import {
+  createProviderCredentialDraft,
+  getAvailableProviderKeys,
+  getNextAvailableProvider,
+  isProviderValue,
+  isRegionValue,
+  PROVIDER_KEYS,
+  REGION_KEYS,
+  REGIONAL_PROVIDERS,
+} from "@/components/ai-config-role-models.logic";
+import type {
+  ProviderCredentialDraft,
+  ProviderValue,
+} from "@/components/ai-config-role-models.logic";
+
+const API_KEY_PLACEHOLDER = {
+  google: "AIza...",
+  anthropic: "sk-ant-...",
+  openai: "sk-proj-...",
+  openrouter: "sk-or-v1-...",
+} as const satisfies Record<ProviderValue, string>;
+
+type AIConfigProvidersEditorProps = {
+  compact?: boolean;
+  disabled?: boolean;
+  onProvidersChange: (providers: ProviderCredentialDraft[]) => void;
+  providers: ProviderCredentialDraft[];
+};
+
+export const AIConfigProvidersEditor = ({
+  compact = false,
+  disabled = false,
+  onProvidersChange,
+  providers,
+}: AIConfigProvidersEditorProps) => {
+  const t = useTranslations("organization");
+  const canAddProvider = providers.length < PROVIDER_KEYS.length;
+
+  const updateProvider = (
+    index: number,
+    nextProvider: ProviderCredentialDraft,
+  ) => {
+    onProvidersChange(
+      providers.map((provider, providerIndex) =>
+        providerIndex === index ? nextProvider : provider,
+      ),
+    );
+  };
+
+  const addProvider = () => {
+    const provider = getNextAvailableProvider(providers);
+    if (!provider) {
+      return;
+    }
+    onProvidersChange([...providers, createProviderCredentialDraft(provider)]);
+  };
+
+  const removeProvider = (index: number) => {
+    onProvidersChange(
+      providers.filter((_, providerIndex) => providerIndex !== index),
+    );
+  };
+
+  return (
+    <Field>
+      <div className="flex w-full items-start gap-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <FieldLabel>{t("aiConfig.providersPanel")}</FieldLabel>
+          {!compact && (
+            <FieldDescription>
+              {t("aiConfig.providersDescription")}
+            </FieldDescription>
+          )}
+        </div>
+        <Button
+          disabled={disabled || !canAddProvider}
+          className="ms-auto shrink-0"
+          onClick={addProvider}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <PlusIcon className="size-4" />
+          {t("aiConfig.addProvider")}
+        </Button>
+      </div>
+
+      <div className="w-full overflow-hidden rounded-md border">
+        {providers.map((providerDraft, index) => {
+          const supportsRegionalRouting = REGIONAL_PROVIDERS.has(
+            providerDraft.provider,
+          );
+          const providerOptions = getAvailableProviderKeys({
+            currentProvider: providerDraft.provider,
+            providers,
+          });
+          const savedKey = providerDraft.apiKeyMasked;
+          const hasSavedKey = savedKey !== undefined;
+          const showKeyInput = providerDraft.replacingKey || !hasSavedKey;
+
+          if (compact) {
+            return (
+              <div
+                className="grid gap-2 border-t p-2 first:border-t-0 sm:grid-cols-[minmax(8rem,0.9fr)_minmax(10rem,1fr)_minmax(9rem,1fr)_2.25rem] sm:items-center"
+                key={`${providerDraft.provider}-${index}`}
+              >
+                <Select
+                  disabled={disabled}
+                  onValueChange={(value) => {
+                    if (!isProviderValue(value)) {
+                      return;
+                    }
+
+                    updateProvider(index, {
+                      ...createProviderCredentialDraft(value),
+                      apiKey: "",
+                      apiKeyMasked: undefined,
+                      replacingKey: true,
+                    });
+                  }}
+                  value={providerDraft.provider}
+                >
+                  <SelectTrigger
+                    aria-label={t("aiConfig.provider")}
+                    className="min-w-0"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup alignItemWithTrigger={false}>
+                    {providerOptions.map((provider) => (
+                      <SelectItem key={provider} value={provider}>
+                        {t(`aiConfig.providers.${provider}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+
+                <div className="min-w-0">
+                  {showKeyInput ? (
+                    <Input
+                      aria-label={
+                        hasSavedKey
+                          ? t("aiConfig.newApiKey")
+                          : t("aiConfig.apiKey")
+                      }
+                      autoComplete="off"
+                      disabled={disabled}
+                      onChange={(event) =>
+                        updateProvider(index, {
+                          ...providerDraft,
+                          apiKey: event.target.value,
+                          replacingKey: true,
+                        })
+                      }
+                      placeholder={
+                        hasSavedKey
+                          ? t("aiConfig.newApiKey")
+                          : API_KEY_PLACEHOLDER[providerDraft.provider]
+                      }
+                      type="password"
+                      value={providerDraft.apiKey}
+                    />
+                  ) : (
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="bg-muted text-muted-foreground min-w-0 flex-1 truncate rounded border px-2 py-1 font-mono text-xs">
+                        {t("aiConfig.apiKeySaved", { key: savedKey })}
+                      </span>
+                      <Button
+                        disabled={disabled}
+                        onClick={() =>
+                          updateProvider(index, {
+                            ...providerDraft,
+                            apiKey: "",
+                            replacingKey: true,
+                          })
+                        }
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        {t("aiConfig.replaceKey")}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="min-w-0">
+                  {supportsRegionalRouting && (
+                    <Select
+                      disabled={disabled}
+                      onValueChange={(value) => {
+                        if (isRegionValue(value)) {
+                          updateProvider(index, {
+                            ...providerDraft,
+                            region: value,
+                          });
+                        }
+                      }}
+                      value={providerDraft.region}
+                    >
+                      <SelectTrigger
+                        aria-label={t("aiConfig.dataRegion")}
+                        className="min-w-0"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectPopup alignItemWithTrigger={false}>
+                        {REGION_KEYS.map((region) => (
+                          <SelectItem key={region} value={region}>
+                            {t(`aiConfig.regions.${region}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectPopup>
+                    </Select>
+                  )}
+                </div>
+
+                <Button
+                  aria-label={t("aiConfig.removeProvider")}
+                  disabled={disabled || providers.length === 1}
+                  onClick={() => removeProvider(index)}
+                  size="icon"
+                  type="button"
+                  variant="ghost"
+                >
+                  <Trash2Icon className="size-4" />
+                </Button>
+              </div>
+            );
+          }
+
+          return (
+            <div
+              className={
+                compact
+                  ? "grid gap-2 border-t p-2 first:border-t-0"
+                  : "grid gap-3 border-t p-3 first:border-t-0"
+              }
+              key={`${providerDraft.provider}-${index}`}
+            >
+              <div className="grid gap-2 sm:grid-cols-[minmax(8rem,0.85fr)_minmax(0,1fr)] sm:items-start">
+                <Field className="min-w-0">
+                  <FieldLabel>{t("aiConfig.provider")}</FieldLabel>
+                  <Select
+                    disabled={disabled}
+                    onValueChange={(value) => {
+                      if (!isProviderValue(value)) {
+                        return;
+                      }
+
+                      updateProvider(index, {
+                        ...createProviderCredentialDraft(value),
+                        apiKey: "",
+                        apiKeyMasked: undefined,
+                        replacingKey: true,
+                      });
+                    }}
+                    value={providerDraft.provider}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup alignItemWithTrigger={false}>
+                      {providerOptions.map((provider) => (
+                        <SelectItem key={provider} value={provider}>
+                          {t(`aiConfig.providers.${provider}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                </Field>
+
+                <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:pt-6">
+                  {hasSavedKey && !providerDraft.replacingKey && (
+                    <>
+                      <span className="bg-muted text-muted-foreground min-w-0 truncate rounded border px-2 py-1 font-mono text-xs">
+                        {t("aiConfig.apiKeySaved", {
+                          key: savedKey,
+                        })}
+                      </span>
+                      <Button
+                        disabled={disabled}
+                        onClick={() =>
+                          updateProvider(index, {
+                            ...providerDraft,
+                            apiKey: "",
+                            replacingKey: true,
+                          })
+                        }
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                        className={compact ? "px-2" : undefined}
+                      >
+                        {t("aiConfig.replaceKey")}
+                      </Button>
+                    </>
+                  )}
+
+                  {hasSavedKey && providerDraft.replacingKey && (
+                    <Button
+                      disabled={disabled}
+                      onClick={() =>
+                        updateProvider(index, {
+                          ...providerDraft,
+                          apiKey: "",
+                          replacingKey: false,
+                        })
+                      }
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                      className={compact ? "px-2" : undefined}
+                    >
+                      {t("aiConfig.keepSavedKey")}
+                    </Button>
+                  )}
+
+                  <Button
+                    disabled={disabled || providers.length === 1}
+                    onClick={() => removeProvider(index)}
+                    size="sm"
+                    type="button"
+                    variant="ghost"
+                    className={compact ? "px-2" : undefined}
+                  >
+                    <Trash2Icon className="size-4" />
+                    {compact ? null : t("aiConfig.removeProvider")}
+                  </Button>
+                </div>
+              </div>
+
+              <div
+                className={
+                  compact
+                    ? "grid gap-2 sm:grid-cols-2"
+                    : "grid gap-3 sm:grid-cols-2"
+                }
+              >
+                {showKeyInput && (
+                  <Field>
+                    <FieldLabel>
+                      {hasSavedKey
+                        ? t("aiConfig.newApiKey")
+                        : t("aiConfig.apiKey")}
+                    </FieldLabel>
+                    <Input
+                      autoComplete="off"
+                      disabled={disabled}
+                      onChange={(event) =>
+                        updateProvider(index, {
+                          ...providerDraft,
+                          apiKey: event.target.value,
+                          replacingKey: true,
+                        })
+                      }
+                      placeholder={API_KEY_PLACEHOLDER[providerDraft.provider]}
+                      type="password"
+                      value={providerDraft.apiKey}
+                    />
+                    {hasSavedKey && !compact && (
+                      <p className="text-muted-foreground text-xs">
+                        {t("aiConfig.newApiKeyDescription")}
+                      </p>
+                    )}
+                  </Field>
+                )}
+
+                {supportsRegionalRouting && (
+                  <Field>
+                    <FieldLabel>{t("aiConfig.dataRegion")}</FieldLabel>
+                    <Select
+                      disabled={disabled}
+                      onValueChange={(value) => {
+                        if (isRegionValue(value)) {
+                          updateProvider(index, {
+                            ...providerDraft,
+                            region: value,
+                          });
+                        }
+                      }}
+                      value={providerDraft.region}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectPopup alignItemWithTrigger={false}>
+                        {REGION_KEYS.map((region) => (
+                          <SelectItem key={region} value={region}>
+                            {t(`aiConfig.regions.${region}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectPopup>
+                    </Select>
+                    {!compact && (
+                      <p className="text-muted-foreground text-xs">
+                        {t("aiConfig.dataRegionDescription")}
+                      </p>
+                    )}
+                  </Field>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Field>
+  );
+};

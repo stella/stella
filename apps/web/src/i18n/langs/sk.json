@@ -16,9 +16,9 @@
   "ai": {
     "editWithAI": "Upraviť pomocou AI",
     "keyRequired": {
-      "cta": "Open AI settings",
-      "description": "This instance has no platform AI keys provisioned. Add your own API key to start using AI features.",
-      "title": "AI key required"
+      "cta": "Otvoriť nastavenia AI",
+      "description": "Pridajte prihlasovacie údaje poskytovateľa a začnite používať funkcie AI.",
+      "title": "Pripojiť poskytovateľa AI"
     }
   },
   "anonymize": {
@@ -1154,36 +1154,62 @@
   "organization": {
     "aiConfig": {
       "active": "Active",
+      "addProvider": "Pridať poskytovateľa",
+      "addProviderFirst": "Najprv pridajte poskytovateľa",
       "apiKey": "API key",
+      "apiKeyConfiguredPlaceholder": "Nastavené: {key}. Zadaním nového kľúča ho nahradíte.",
       "apiKeyPlaceholder": "Enter your API key",
+      "apiKeySaved": "Uložený kľúč {key}",
       "apiKeyUpdatePlaceholder": "Enter new key to update",
       "baseUrl": "Base URL",
       "configure": "Configure",
+      "credentialsPanel": "Kľúč",
+      "customModelBadge": "Vlastný · {provider}",
+      "customModelDescription": "Toto ID modelu nie je v katalógu Stella. Vybranému poskytovateľovi sa odošle presne tak, ako je zadané.",
+      "customModelHint": "Žiadna zhoda v katalógu. Zadajte ľubovoľné ID modelu; vlastné ID sa uloží presne tak, ako je napísané.",
       "dataRegion": "Data region",
       "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.",
       "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).",
+      "defaultModel": "Predvolené: {model}",
+      "defaultModelOption": "Predvolené",
       "description": "Bring your own API key or configure data sovereignty region.",
+      "keepSavedKey": "Ponechať uložený kľúč",
+      "modelForRole": "Model pre rolu {role}",
+      "modelIdPlaceholder": "Hľadať modely",
+      "modelRequired": "Povinné",
+      "modelsDescription": "Pre každú kategóriu AI vyberte poskytovateľa a jeden ponúkaný multimodálny model.",
+      "modelsPanel": "Modely",
+      "newApiKey": "Nový API kľúč",
+      "newApiKeyDescription": "Po uložení zmien nahradí uložený kľúč.",
+      "noModelResults": "Žiadne zodpovedajúce ponúkané modely",
       "overrideRoles": "Override roles",
-      "overrideRolesDescription": "Select which AI roles use your key. Unselected roles use the platform default.",
+      "overrideRolesDescription": "Vyberte, ktoré roly používajú tento kľúč, a potom vyberte model pre každú rolu. Nevybrané roly použijú predvolené nastavenie platformy.",
       "provider": "Provider",
+      "providerForRole": "Poskytovateľ pre {role}",
       "providers": {
         "anthropic": "Anthropic",
-        "google": "Google AI",
-        "openai": "OpenAI",
-        "openai_compatible": "OpenAI-compatible",
+        "google": "Google",
+        "openai": "ChatGPT",
         "openrouter": "OpenRouter"
       },
+      "providersDescription": "Pridajte prihlasovacie údaje poskytovateľov, ktoré má Stella používať.",
+      "providersPanel": "Poskytovatelia",
       "regions": {
         "ch": "Switzerland (europe-west6)",
         "eu": "EU (europe-west4)",
         "global": "Global"
       },
+      "removeProvider": "Odstrániť poskytovateľa",
+      "replaceKey": "Nahradiť kľúč",
       "roles": {
         "chat": "Chat (conversation)",
         "fast": "Fast (classification)",
         "pdf": "PDF (documents)",
         "reasoning": "Reasoning (analysis)"
       },
+      "selectAtLeastOneRole": "Vyberte pre tento kľúč aspoň jednu rolu.",
+      "selectModelForEachRole": "Pridajte poskytovateľa a pre každú kategóriu vyberte model.",
+      "selectedProvider": "{provider}",
       "title": "AI configuration"
     },
     "invitations": {

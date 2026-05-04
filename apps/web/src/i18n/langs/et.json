@@ -16,9 +16,9 @@
   "ai": {
     "editWithAI": "Muuda AI-ga",
     "keyRequired": {
-      "cta": "Open AI settings",
-      "description": "This instance has no platform AI keys provisioned. Add your own API key to start using AI features.",
-      "title": "AI key required"
+      "cta": "Ava AI seaded",
+      "description": "Lisa teenusepakkuja pääsuandmed, et hakata AI-funktsioone kasutama.",
+      "title": "Ühenda AI teenusepakkuja"
     }
   },
   "anonymize": {
@@ -1154,36 +1154,62 @@
   "organization": {
     "aiConfig": {
       "active": "Active",
+      "addProvider": "Lisa teenusepakkuja",
+      "addProviderFirst": "Lisa esmalt teenusepakkuja",
       "apiKey": "API key",
+      "apiKeyConfiguredPlaceholder": "Seadistatud: {key}. Sisesta uus võti, et see asendada.",
       "apiKeyPlaceholder": "Enter your API key",
+      "apiKeySaved": "Salvestatud võti {key}",
       "apiKeyUpdatePlaceholder": "Enter new key to update",
       "baseUrl": "Base URL",
       "configure": "Configure",
+      "credentialsPanel": "Võti",
+      "customModelBadge": "Kohandatud · {provider}",
+      "customModelDescription": "Seda mudeli ID-d Stella kataloogis ei ole. See saadetakse valitud teenusepakkujale sisestatud kujul.",
+      "customModelHint": "Kataloogis vastet pole. Sisesta ükskõik milline mudeli ID; kohandatud ID salvestatakse sisestatud kujul.",
       "dataRegion": "Data region",
       "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.",
       "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).",
+      "defaultModel": "Vaikimisi: {model}",
+      "defaultModelOption": "Vaikimisi",
       "description": "Bring your own API key or configure data sovereignty region.",
+      "keepSavedKey": "Hoia salvestatud võti alles",
+      "modelForRole": "Rolli {role} mudel",
+      "modelIdPlaceholder": "Otsi mudeleid",
+      "modelRequired": "Nõutav",
+      "modelsDescription": "Vali iga AI-kategooria jaoks teenusepakkuja ja üks pakutud multimodaalne mudel.",
+      "modelsPanel": "Mudelid",
+      "newApiKey": "Uus API võti",
+      "newApiKeyDescription": "See asendab salvestatud võtme muudatuste salvestamisel.",
+      "noModelResults": "Sobivaid pakutud mudeleid ei leitud",
       "overrideRoles": "Override roles",
-      "overrideRolesDescription": "Select which AI roles use your key. Unselected roles use the platform default.",
+      "overrideRolesDescription": "Vali, millised rollid kasutavad seda võtit, ja seejärel iga rolli mudel. Valimata rollid kasutavad platvormi vaikevalikut.",
       "provider": "Provider",
+      "providerForRole": "{role} teenusepakkuja",
       "providers": {
         "anthropic": "Anthropic",
-        "google": "Google AI",
-        "openai": "OpenAI",
-        "openai_compatible": "OpenAI-compatible",
+        "google": "Google",
+        "openai": "ChatGPT",
         "openrouter": "OpenRouter"
       },
+      "providersDescription": "Lisa nende teenusepakkujate mandaadid, mida Stella peaks kasutama.",
+      "providersPanel": "Teenusepakkujad",
       "regions": {
         "ch": "Switzerland (europe-west6)",
         "eu": "EU (europe-west4)",
         "global": "Global"
       },
+      "removeProvider": "Eemalda teenusepakkuja",
+      "replaceKey": "Asenda võti",
       "roles": {
         "chat": "Chat (conversation)",
         "fast": "Fast (classification)",
         "pdf": "PDF (documents)",
         "reasoning": "Reasoning (analysis)"
       },
+      "selectAtLeastOneRole": "Vali selle võtme jaoks vähemalt üks roll.",
+      "selectModelForEachRole": "Lisa teenusepakkuja ja vali iga kategooria jaoks mudel.",
+      "selectedProvider": "{provider}",
       "title": "AI configuration"
     },
     "invitations": {

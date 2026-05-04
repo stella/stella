@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
-import { isOrgAIConfig, maskApiKey } from "@/api/lib/ai-config-crypto";
+process.env["EMAIL_PROVIDER"] ??= "smtp";
+process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
+process.env["GOTENBERG_URL"] ??= "http://localhost:3003";
+process.env["GOTENBERG_USERNAME"] ??= "gotenberg";
+process.env["REDIS_URL"] ??= "redis://localhost:6379";
+process.env["SMTP_HOST"] ??= "localhost";
+process.env["SMTP_PORT"] ??= "1025";
+
+const { isOrgAIConfig, maskApiKey } =
+  await import("@/api/lib/ai-config-crypto");
 
 describe("maskApiKey", () => {
   test("shows first 8 chars for keys longer than 16 chars", () => {
@@ -36,18 +45,57 @@ describe("isOrgAIConfig", () => {
   test("accepts a valid org AI config", () => {
     expect(
       isOrgAIConfig({
-        provider: "openai",
-        apiKey: "sk-test",
-        overrideRoles: ["chat"],
-        region: "eu",
+        providers: [{ provider: "openai", apiKey: "sk-test" }],
+        overrideModels: {
+          chat: { provider: "openai", modelId: "gpt-5.4" },
+        },
       }),
     ).toBe(true);
   });
 
-  test("rejects configs missing the api key", () => {
+  test("rejects unknown model override roles", () => {
     expect(
       isOrgAIConfig({
-        provider: "openai",
+        providers: [{ provider: "openai", apiKey: "sk-test" }],
+        overrideModels: {
+          unknown: { provider: "openai", modelId: "gpt-5.4" },
+        },
+      }),
+    ).toBe(false);
+  });
+
+  test("rejects configs missing providers", () => {
+    expect(
+      isOrgAIConfig({
+        overrideModels: {
+          chat: { provider: "openai", modelId: "gpt-5.4" },
+        },
+      }),
+    ).toBe(false);
+  });
+
+  test("rejects configs with model selections missing provider context", () => {
+    expect(
+      isOrgAIConfig({
+        providers: [{ provider: "openai", apiKey: "sk-test" }],
+        overrideModels: { chat: "gpt-5.4" },
+      }),
+    ).toBe(false);
+  });
+
+  test("rejects OpenAI-compatible org BYOK configs", () => {
+    expect(
+      isOrgAIConfig({
+        providers: [
+          {
+            provider: "openai_compatible",
+            apiKey: "sk-test",
+            baseURL: "https://api.example.com/v1",
+          },
+        ],
+        overrideModels: {
+          chat: { provider: "openai_compatible", modelId: "default" },
+        },
       }),
     ).toBe(false);
   });

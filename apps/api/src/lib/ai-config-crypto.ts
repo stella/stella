@@ -14,21 +14,38 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 
+const providerSchema = v.picklist([
+  "google",
+  "openrouter",
+  "openai",
+  "anthropic",
+]);
+
+const modelSelectionSchema = v.strictObject({
+  provider: providerSchema,
+  modelId: v.pipe(v.string(), v.minLength(1)),
+});
+
 /** Validate the decrypted JSON matches OrgAIConfig shape. */
 const orgAIConfigSchema = v.strictObject({
-  provider: v.picklist([
-    "google",
-    "openrouter",
-    "openai",
-    "anthropic",
-    "openai_compatible",
-  ]),
-  apiKey: v.pipe(v.string(), v.minLength(1)),
-  baseURL: v.optional(v.pipe(v.string(), v.url())),
-  overrideRoles: v.optional(
-    v.array(v.picklist(["fast", "chat", "reasoning", "pdf"])),
+  providers: v.pipe(
+    v.array(
+      v.strictObject({
+        provider: providerSchema,
+        apiKey: v.pipe(v.string(), v.minLength(1)),
+        region: v.optional(v.picklist(["eu", "global", "ch"])),
+      }),
+    ),
+    v.minLength(1),
   ),
-  region: v.optional(v.picklist(["eu", "global", "ch"])),
+  overrideModels: v.optional(
+    v.strictObject({
+      fast: v.optional(modelSelectionSchema),
+      chat: v.optional(modelSelectionSchema),
+      reasoning: v.optional(modelSelectionSchema),
+      pdf: v.optional(modelSelectionSchema),
+    }),
+  ),
 });
 const parseOrgAIConfig = v.safeParser(orgAIConfigSchema);
 

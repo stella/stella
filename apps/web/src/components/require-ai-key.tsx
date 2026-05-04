@@ -15,54 +15,40 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogPanel,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
-import { Field, FieldLabel } from "@stll/ui/components/field";
-import { Input } from "@stll/ui/components/input";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/components/select";
 import { toastManager } from "@stll/ui/components/toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor";
+import { AIConfigRoleModelPicker } from "@/components/ai-config-role-model-picker";
+import {
+  createProviderCredentialDraft,
+  createDefaultRoleModels,
+  ensureRoleModelsForProviders,
+  getProviderValues,
+  hasUsableProviderDrafts,
+  providerDraftsFromStoredProviders,
+  roleModelsFromOverrideModels,
+  serializeOverrideModels,
+} from "@/components/ai-config-role-models.logic";
+import type {
+  ModelSelection,
+  ProviderCredentialDraft,
+  RoleModelSelections,
+  RoleValue,
+} from "@/components/ai-config-role-models.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import {
   aiAvailabilityOptions,
+  aiConfigOptions,
   aiConfigKeys,
 } from "@/routes/_protected.organization/-ai-config-queries";
-
-const PROVIDER_KEYS = [
-  "google",
-  "openrouter",
-  "openai",
-  "anthropic",
-  "openai_compatible",
-] as const;
-
-const REGION_KEYS = ["global", "eu", "ch"] as const;
-
-type ProviderValue = (typeof PROVIDER_KEYS)[number];
-type RegionValue = (typeof REGION_KEYS)[number];
-
-const REGIONAL_PROVIDERS = new Set<ProviderValue>(["google"]);
-
-const API_KEY_PLACEHOLDER = {
-  google: "AIza...",
-  openrouter: "sk-or-v1-...",
-  openai: "sk-proj-...",
-  anthropic: "sk-ant-...",
-  openai_compatible: "sk-...",
-} as const satisfies Record<ProviderValue, string>;
 
 type AIAvailabilityContextValue = {
   ensureAIAvailable: () => Promise<boolean>;
@@ -204,25 +190,78 @@ export function AIKeyRequiredDialog({
   const tSuccess = useTranslations("success");
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const [provider, setProvider] = useState<ProviderValue>("google");
-  const [apiKey, setApiKey] = useState("");
-  const [baseURL, setBaseURL] = useState("");
-  const [region, setRegion] = useState<RegionValue>("global");
+  const { data: config } = useQuery(aiConfigOptions);
+  const [providers, setProviders] = useState<ProviderCredentialDraft[]>(() => [
+    createProviderCredentialDraft(),
+  ]);
+  const [roleModels, setRoleModels] = useState<RoleModelSelections>(
+    createDefaultRoleModels,
+  );
 
   useEffect(() => {
-    if (!REGIONAL_PROVIDERS.has(provider)) {
-      setRegion("global");
+    if (!open) {
+      return;
     }
-  }, [provider]);
+
+    if (!config?.configured) {
+      const nextProviders = [createProviderCredentialDraft()];
+      setProviders(nextProviders);
+      setRoleModels(createDefaultRoleModels(getProviderValues(nextProviders)));
+      return;
+    }
+
+    const nextProviders = providerDraftsFromStoredProviders(
+      config.providers,
+    ).slice(0, 1);
+    const providerValues = getProviderValues(nextProviders);
+    setProviders(nextProviders);
+    setRoleModels(
+      roleModelsFromOverrideModels({
+        overrideModels: config.overrideModels,
+        providers: providerValues,
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, config?.configured]);
+
+  const updateProviders = (nextProviders: ProviderCredentialDraft[]) => {
+    const providerValues = getProviderValues(nextProviders);
+    setProviders(nextProviders);
+    setRoleModels((prev) =>
+      ensureRoleModelsForProviders({
+        providers: providerValues,
+        roleModels: prev,
+      }),
+    );
+  };
+
+  const setRoleModel = (role: RoleValue, model: ModelSelection | null) => {
+    setRoleModels((prev) => ({
+      ...prev,
+      [role]: model,
+    }));
+  };
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const providerValues = getProviderValues(providers);
+      const overrideModels = serializeOverrideModels({
+        providers: providerValues,
+        roleModels,
+      });
+      if (!overrideModels) {
+        throw new Error(tOrganization("aiConfig.selectModelForEachRole"));
+      }
+
       const response = await api["organization-settings"]["ai-config"].post({
-        provider,
-        apiKey,
-        ...(provider === "openai_compatible" ? { baseURL } : {}),
-        overrideRoles: [],
-        region,
+        providers: providers.map((providerDraft) => ({
+          provider: providerDraft.provider,
+          ...(providerDraft.apiKey.trim()
+            ? { apiKey: providerDraft.apiKey.trim() }
+            : {}),
+          region: providerDraft.region,
+        })),
+        overrideModels,
       });
 
       if (response.error) {
@@ -231,8 +270,8 @@ export function AIKeyRequiredDialog({
 
       return response.data;
     },
-    onSuccess: async () => {
-      setApiKey("");
+    onSuccess: async (data) => {
+      setProviders(providerDraftsFromStoredProviders(data.providers));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: aiConfigKeys.all }),
         queryClient.invalidateQueries({ queryKey: aiConfigKeys.availability }),
@@ -252,95 +291,45 @@ export function AIKeyRequiredDialog({
     },
   });
 
-  const needsBaseURL = provider === "openai_compatible";
-  const canSave: boolean =
-    apiKey.trim().length > 0 && (!needsBaseURL || baseURL.trim().length > 0);
+  const providerValues = getProviderValues(providers);
+  const canSave =
+    hasUsableProviderDrafts(providers) &&
+    serializeOverrideModels({ providers: providerValues, roleModels }) !== null;
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogPopup className="sm:max-w-md">
-        <DialogHeader>
+      <DialogPopup className="max-h-[calc(100dvh-2rem)] overflow-hidden sm:max-w-3xl">
+        <DialogHeader className="p-4 pb-2">
           <DialogTitle>{t("ai.keyRequired.title")}</DialogTitle>
           <DialogDescription>
             {t("ai.keyRequired.description")}
           </DialogDescription>
         </DialogHeader>
-        <DialogPanel className="grid gap-4">
-          <Field>
-            <FieldLabel>{tOrganization("aiConfig.provider")}</FieldLabel>
-            <Select
-              onValueChange={(value) => {
-                if (isProviderValue(value)) {
-                  setProvider(value);
-                }
-              }}
-              value={provider}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup alignItemWithTrigger={false}>
-                {PROVIDER_KEYS.map((key) => (
-                  <SelectItem key={key} value={key}>
-                    {tOrganization(`aiConfig.providers.${key}`)}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-          </Field>
-
-          <Field>
-            <FieldLabel>{tOrganization("aiConfig.apiKey")}</FieldLabel>
-            <Input
-              autoComplete="off"
-              onChange={(event) => setApiKey(event.target.value)}
-              placeholder={API_KEY_PLACEHOLDER[provider]}
-              type="password"
-              value={apiKey}
+        <div className="min-h-0 overflow-x-hidden overflow-y-auto px-4 pb-3">
+          <div className="grid gap-3">
+            <AIConfigProvidersEditor
+              compact
+              disabled={saveMutation.isPending}
+              onProvidersChange={updateProviders}
+              providers={providers}
             />
-          </Field>
 
-          {needsBaseURL && (
-            <Field>
-              <FieldLabel>{tOrganization("aiConfig.baseUrl")}</FieldLabel>
-              <Input
-                onChange={(event) => setBaseURL(event.target.value)}
-                placeholder="https://api.example.com/v1"
-                value={baseURL}
-              />
-            </Field>
-          )}
+            <AIConfigRoleModelPicker
+              compact
+              disabled={saveMutation.isPending}
+              onModelChange={setRoleModel}
+              providers={providerValues}
+              roleModels={roleModels}
+            />
 
-          <Field>
-            <FieldLabel>{tOrganization("aiConfig.dataRegion")}</FieldLabel>
-            <Select
-              disabled={!REGIONAL_PROVIDERS.has(provider)}
-              onValueChange={(value) => {
-                if (isRegionValue(value)) {
-                  setRegion(value);
-                }
-              }}
-              value={region}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup alignItemWithTrigger={false}>
-                {REGION_KEYS.map((key) => (
-                  <SelectItem key={key} value={key}>
-                    {tOrganization(`aiConfig.regions.${key}`)}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-            <p className="text-muted-foreground text-xs">
-              {REGIONAL_PROVIDERS.has(provider)
-                ? tOrganization("aiConfig.dataRegionDescription")
-                : tOrganization("aiConfig.dataRegionUnsupported")}
-            </p>
-          </Field>
-        </DialogPanel>
-        <DialogFooter>
+            {!canSave && (
+              <p className="text-destructive-foreground text-xs">
+                {tOrganization("aiConfig.selectModelForEachRole")}
+              </p>
+            )}
+          </div>
+        </div>
+        <DialogFooter className="px-4 py-3">
           <DialogClose render={<Button variant="ghost" />}>
             {tCommon("cancel")}
           </DialogClose>
@@ -356,9 +345,3 @@ export function AIKeyRequiredDialog({
     </Dialog>
   );
 }
-
-const isProviderValue = (value: string | null): value is ProviderValue =>
-  value !== null && PROVIDER_KEYS.some((key) => key === value);
-
-const isRegionValue = (value: string | null): value is RegionValue =>
-  value !== null && REGION_KEYS.some((key) => key === value);

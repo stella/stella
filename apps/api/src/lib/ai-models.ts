@@ -42,6 +42,13 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
  */
 export type ModelRole = "fast" | "chat" | "reasoning" | "pdf";
 
+export const MODEL_ROLES = [
+  "fast",
+  "chat",
+  "reasoning",
+  "pdf",
+] as const satisfies readonly ModelRole[];
+
 export type AIProvider =
   | "google"
   | "openrouter"
@@ -51,7 +58,7 @@ export type AIProvider =
 
 // -- Default model IDs per provider -----------------------------
 
-const DEFAULT_MODELS = {
+export const DEFAULT_MODELS = {
   google: {
     fast: "gemini-3.1-flash-lite-preview",
     chat: "gemini-3.1-flash-lite-preview",
@@ -351,23 +358,33 @@ const createModelFactory = (
  * per AI call.
  */
 export type OrgAIConfig = {
+  providers: OrgAIProviderConfig[];
+  /**
+   * Per-role model selections. Each role selects a model
+   * through one of the configured org providers.
+   */
+  overrideModels?:
+    | Partial<Record<ModelRole, OrgAIModelSelection | undefined>>
+    | undefined;
+};
+
+export type OrgAIProviderConfig = {
   provider: AIProvider;
   /** Decrypted API key. */
   apiKey: string;
   /** For openai_compatible only. */
   baseURL?: string | undefined;
   /**
-   * Which roles use the org key. Roles not listed fall
-   * back to the instance-level provider. Empty array or
-   * omitted = override all roles.
-   */
-  overrideRoles?: ModelRole[] | undefined;
-  /**
    * Data sovereignty region. When set, AI calls are
    * routed to region-specific endpoints (e.g. Vertex AI
    * europe-west4 for EU).
    */
   region?: DataRegion | undefined;
+};
+
+export type OrgAIModelSelection = {
+  provider: AIProvider;
+  modelId: string;
 };
 
 export type ResolvedModelInfo = {
@@ -389,14 +406,14 @@ export type ResolvedModelInfo = {
 const BYOK_CACHE_MAX = 64;
 const byokCache = new Map<string, ModelFactory>();
 
-const byokCacheKey = (config: OrgAIConfig): string => {
+const byokCacheKey = (config: OrgAIProviderConfig): string => {
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(config.apiKey);
   const hash = hasher.digest("hex").slice(0, 16);
   return `${config.provider}:${hash}:${config.baseURL ?? ""}:${config.region ?? "global"}`;
 };
 
-const getCachedFactory = (config: OrgAIConfig): ModelFactory => {
+const getCachedFactory = (config: OrgAIProviderConfig): ModelFactory => {
   const key = byokCacheKey(config);
   const cached = byokCache.get(key);
   if (cached) {
@@ -457,22 +474,30 @@ const withLocalAIDevTools = (model: WrappableLanguageModel): LanguageModel => {
 
 // -- Public API -------------------------------------------------
 
-/** Regional instance factory cache (non-BYOK). */
-const regionalFactoryCache = new Map<DataRegion, ModelFactory>();
+const getPrimaryOrgProvider = (config: OrgAIConfig): OrgAIProviderConfig =>
+  config.providers.at(0) ?? panic("Org AI config has no configured providers");
 
-const getRegionalInstanceFactory = (region: DataRegion): ModelFactory => {
-  const cached = regionalFactoryCache.get(region);
-  if (cached) {
-    return cached;
+const getOrgProviderConfig = (
+  config: OrgAIConfig,
+  provider: AIProvider,
+): OrgAIProviderConfig =>
+  config.providers.find((candidate) => candidate.provider === provider) ??
+  panic(`Org AI config has no ${provider} provider`);
+
+const getOrgModelSelection = (
+  config: OrgAIConfig,
+  role: ModelRole,
+): OrgAIModelSelection => {
+  const selection = config.overrideModels?.[role];
+  if (selection) {
+    return selection;
   }
-  const factory = createModelFactory(
-    getActiveProvider(),
-    undefined,
-    undefined,
-    region,
-  );
-  regionalFactoryCache.set(region, factory);
-  return factory;
+
+  const primaryProvider = getPrimaryOrgProvider(config).provider;
+  return {
+    provider: primaryProvider,
+    modelId: DEFAULT_MODELS[primaryProvider][role],
+  };
 };
 
 /**
@@ -491,29 +516,13 @@ export const getModelForRole = (
   role: ModelRole,
   orgConfig?: OrgAIConfig | null,
 ): LanguageModel => {
-  // BYOK path: org overrides this role with their own key.
+  // BYOK path: org selects a model for each role through
+  // one of its configured provider credentials.
   if (orgConfig) {
-    const roles = orgConfig.overrideRoles;
-    const shouldOverride = !roles || roles.length === 0 || roles.includes(role);
-
-    if (shouldOverride) {
-      const factory = getCachedFactory(orgConfig);
-      const modelId = DEFAULT_MODELS[orgConfig.provider][role];
-      return withLocalAIDevTools(factory(modelId));
-    }
-
-    // Region-only path: org has a region booster but this
-    // role falls back to instance provider. Route through
-    // the regional endpoint.
-    if (orgConfig.region && orgConfig.region !== "global") {
-      if (!hasInstanceProvider()) {
-        throw byokRoleNotConfiguredError(role);
-      }
-      const factory = getRegionalInstanceFactory(orgConfig.region);
-      const modelId =
-        MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[getActiveProvider()][role];
-      return withLocalAIDevTools(factory(modelId));
-    }
+    const selection = getOrgModelSelection(orgConfig, role);
+    const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
+    const factory = getCachedFactory(providerConfig);
+    return withLocalAIDevTools(factory(selection.modelId));
   }
 
   // Default instance path. requireAIAvailable() gates the entry
@@ -547,17 +556,14 @@ export const getModelInfoForRole = (
   orgConfig?: OrgAIConfig | null,
 ): ResolvedModelInfo => {
   if (orgConfig) {
-    const roles = orgConfig.overrideRoles;
-    const shouldOverride = !roles || roles.length === 0 || roles.includes(role);
-
-    if (shouldOverride) {
-      return {
-        keySource: "byok",
-        provider: orgConfig.provider,
-        modelId: DEFAULT_MODELS[orgConfig.provider][role],
-        region: orgConfig.region,
-      };
-    }
+    const selection = getOrgModelSelection(orgConfig, role);
+    const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
+    return {
+      keySource: "byok",
+      provider: providerConfig.provider,
+      modelId: selection.modelId,
+      region: providerConfig.region,
+    };
   }
 
   const provider = getActiveProvider();
@@ -565,7 +571,6 @@ export const getModelInfoForRole = (
     keySource: "instance",
     provider,
     modelId: MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role],
-    region: orgConfig?.region,
   };
 };
 
@@ -581,7 +586,9 @@ export const getModelById = (
   orgConfig?: OrgAIConfig | null,
 ): LanguageModel => {
   if (orgConfig) {
-    return withLocalAIDevTools(getCachedFactory(orgConfig)(modelId));
+    return withLocalAIDevTools(
+      getCachedFactory(getPrimaryOrgProvider(orgConfig))(modelId),
+    );
   }
   return withLocalAIDevTools(getInstanceFactory()(modelId));
 };
