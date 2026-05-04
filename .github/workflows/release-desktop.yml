@@ -466,13 +466,15 @@ jobs:
         # lines (Tauri otherwise hides them behind log::debug). Same
         # rationale as the Windows build step above.
         #
-        # Do NOT add `updater` to --bundles. In Tauri 2 the .app.tar.gz
-        # updater archive is a side effect of building dmg/app when
-        # bundle.createUpdaterArtifacts is true; explicitly listing
-        # `updater` here silently bypasses that side effect.
+        # `app` produces the .app.tar.gz updater archive; `dmg` is
+        # the human-installable image. Bundling `dmg` alone makes
+        # Tauri warn "no updater-enabled targets were built. Please
+        # enable: app, appimage, msi, nsis" and skip the archive,
+        # which is what broke rc.6/7/8's manifest job. Yaak ships
+        # both for the same reason.
         run: |
           printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
-          bun run build -- --target ${{ matrix.target }} --bundles dmg --verbose --verbose
+          bun run build -- --target ${{ matrix.target }} --bundles app,dmg --verbose --verbose
 
       # Tauri 2's bundler notarizes + staples the inner .app but
       # leaves the DMG wrapper unnotarized (tauri-apps/tauri#7533,

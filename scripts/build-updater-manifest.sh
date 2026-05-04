@@ -37,13 +37,11 @@ find_asset() {
   echo "$assets_json" | jq -r --arg p "$1" '.[] | select(.name | test($p)) | .name' | head -n1
 }
 
-# Prefer the NSIS updater archive on Windows (matches the .exe we
-# market as the primary Windows download). Fall back to MSI's archive
-# if NSIS isn't present in this release for some reason.
-windows_archive=$(find_asset '^Stella-windows-x64-setup\.nsis\.zip$') || true
-if [[ -z "${windows_archive:-}" ]]; then
-  windows_archive=$(find_asset '^Stella-windows-x64\.msi\.zip$') || true
-fi
+# Tauri 2's NSIS updater downloads the .exe directly and verifies it
+# with the .exe.sig — there is no .nsis.zip wrapper. Confirmed against
+# Yaak's live updater manifest, where the Windows entry points at
+# `<basename>-setup.exe`. Point at the .exe we already produce.
+windows_archive=$(find_asset '^Stella-windows-x64-setup\.exe$') || true
 macos_archive=$(find_asset '^Stella-macos-universal\.app\.tar\.gz$') || true
 
 platforms=""
