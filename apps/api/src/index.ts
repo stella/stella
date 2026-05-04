@@ -40,7 +40,7 @@ import { verifyAuthRoute, verifyRoute } from "@/api/handlers/verify/routes";
 import { viewsRoute } from "@/api/handlers/views/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
-import { captureError, getAnalytics } from "@/api/lib/analytics";
+import { captureRequestError, getAnalytics } from "@/api/lib/analytics";
 import { getAuth } from "@/api/lib/auth";
 import { DEV_INSPECTOR_ORIGINS } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
@@ -218,10 +218,13 @@ const api = new Elysia()
       }
     }
 
-    captureError(error, {
-      method: request.method,
-      path,
-      elysiaCode: String(code),
+    captureRequestError(error, {
+      request,
+      context: {
+        route: getRouteName({ path, route }),
+        method: request.method,
+        elysiaCode: String(code),
+      },
     });
 
     // Return a sanitized response for unhandled errors.

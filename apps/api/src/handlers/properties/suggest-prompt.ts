@@ -126,6 +126,8 @@ const suggestPrompt = createSafeHandler(
 
     const aiAnalytics = createAIAnalyticsCallbacks({
       feature: "properties.suggest-prompt",
+      modelRole: "fast",
+      orgAIConfig,
       properties: {
         organization_id: session.activeOrganizationId,
         content_type: body.contentType,

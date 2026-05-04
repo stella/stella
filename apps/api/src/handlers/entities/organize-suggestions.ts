@@ -228,6 +228,8 @@ const organizeSuggestionsHandler = async function* ({
 
   const aiAnalytics = createAIAnalyticsCallbacks({
     feature: "entities.organize-suggestions",
+    modelRole: "fast",
+    orgAIConfig,
     properties: {
       file_count: String(body.files.length),
       organization_id: organizationId,
@@ -658,6 +660,8 @@ const generateMissingSummaries = async ({
 > => {
   const aiAnalytics = createAIAnalyticsCallbacks({
     feature: "entities.version-summary",
+    modelRole: "fast",
+    orgAIConfig,
     properties: {
       file_count: String(contexts.length),
       organization_id: organizationId,

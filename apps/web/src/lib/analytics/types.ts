@@ -1,4 +1,29 @@
+export const WEB_ANALYTICS_EVENTS = {
+  exception: "$exception",
+  identify: "$identify",
+  pageViewed: "page_viewed",
+} as const;
+
+export type WebAnalyticsEvent =
+  (typeof WEB_ANALYTICS_EVENTS)[keyof typeof WEB_ANALYTICS_EVENTS];
+
 export type Analytics = {
-  capture: (event: string, properties?: Record<string, unknown>) => void;
   captureError: (error: unknown) => void;
+  capturePageViewed: (properties: PageViewedProperties) => void;
+  identifyUser: (user: AnalyticsUserIdentity) => void;
+  reset: (options?: AnalyticsResetOptions) => void;
+};
+
+export type AnalyticsResetOptions = {
+  onlyIfIdentified?: boolean;
+};
+
+export type PageViewedProperties = {
+  path: string;
+};
+
+export type AnalyticsUserIdentity = {
+  id: string;
+  email?: string;
+  name?: string;
 };

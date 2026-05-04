@@ -12,7 +12,7 @@ import { status } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { captureError } from "@/api/lib/analytics";
+import { captureRequestError } from "@/api/lib/analytics";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -227,7 +227,6 @@ const logAndCaptureSafeError = ({
   error,
   statusCode,
 }: LogAndCaptureSafeErrorProps) => {
-  const path = new URL(request.url).pathname;
   const reqCtx = getRequestContext(request);
 
   const attributes: Record<string, string | number | boolean> = {
@@ -254,8 +253,11 @@ const logAndCaptureSafeError = ({
 
   logger.error("request.failed", attributes);
 
-  captureError(error, {
-    method: request.method,
-    path,
+  captureRequestError(error, {
+    request,
+    context: {
+      method: request.method,
+      route,
+    },
   });
 };

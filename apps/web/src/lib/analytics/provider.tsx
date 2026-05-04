@@ -1,4 +1,4 @@
-import { createContext, use, useLayoutEffect, useRef } from "react";
+import { createContext, use, useState } from "react";
 import type { PropsWithChildren } from "react";
 
 import { PostHogProvider } from "@posthog/react";
@@ -18,41 +18,42 @@ export const getAnalytics = () => globalAnalytics;
 /**
  * Wraps the app with the configured analytics provider.
  *
- * When PostHog env vars are set, initializes PostHog and
- * wraps children in PostHogProvider (for session recording,
- * heatmaps). When absent, provides a silent no-op.
+ * When PostHog env vars are explicitly set, initializes PostHog for
+ * allowlisted telemetry. Missing env vars provide a silent no-op, so
+ * self-hosted deployments do not phone home unless their operator
+ * configures their own telemetry sink.
  */
-type AnalyticsValue = {
+export type AnalyticsValue = {
   analytics: Analytics;
   client: ReturnType<typeof createPostHogAnalytics>["client"] | null;
 };
 
-export const AnalyticsProvider = ({ children }: PropsWithChildren) => {
-  const valueRef = useRef<AnalyticsValue | null>(null);
+export const createAnalyticsValue = (): AnalyticsValue => {
   const posthogConfig = {
     host: env.VITE_POSTHOG_HOST,
     key: env.VITE_POSTHOG_KEY,
   };
-  if (valueRef.current === null) {
-    const shouldEnablePostHog =
-      hasPostHogConfig(posthogConfig) &&
-      (!import.meta.env.DEV || env.VITE_POSTHOG_LOCAL_DEBUG);
+  const shouldEnablePostHog =
+    hasPostHogConfig(posthogConfig) &&
+    (!import.meta.env.DEV || env.VITE_POSTHOG_LOCAL_DEBUG);
+  const value = shouldEnablePostHog
+    ? createPostHogAnalytics(posthogConfig.key, posthogConfig.host)
+    : { analytics: noopAnalytics, client: null };
 
-    valueRef.current = shouldEnablePostHog
-      ? createPostHogAnalytics(posthogConfig.key, posthogConfig.host)
-      : { analytics: noopAnalytics, client: null };
-  }
-  const value = valueRef.current;
+  globalAnalytics = value.analytics;
 
-  useLayoutEffect(() => {
-    globalAnalytics = value.analytics;
+  return value;
+};
 
-    return () => {
-      if (globalAnalytics === value.analytics) {
-        globalAnalytics = noopAnalytics;
-      }
-    };
-  }, [value.analytics]);
+type AnalyticsProviderProps = PropsWithChildren<{
+  value: AnalyticsValue;
+}>;
+
+export const AnalyticsProvider = ({
+  children,
+  value: providedValue,
+}: AnalyticsProviderProps) => {
+  const [value] = useState(() => providedValue);
 
   if (value.client) {
     return (

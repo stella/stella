@@ -291,6 +291,8 @@ export const refineSearchQuery = async ({
 
   const aiAnalytics = createAIAnalyticsCallbacks({
     feature: "search.refine",
+    modelRole: "fast",
+    orgAIConfig,
     properties: { organization_id: organizationId },
     traceId: Bun.randomUUIDv7(),
   });
@@ -390,6 +392,8 @@ export const summarizeSearchResults = async ({
 
   const aiAnalytics = createAIAnalyticsCallbacks({
     feature: "search.summary",
+    modelRole: "fast",
+    orgAIConfig,
     properties: {
       organization_id: organizationId,
       result_count: String(contextsResult.length),

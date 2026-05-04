@@ -110,6 +110,8 @@ ${decisionText}`;
   const { modelId } = getModelInfoForRole("fast", orgAIConfig);
   const aiAnalytics = createAIAnalyticsCallbacks({
     feature: "case-law.analysis",
+    modelRole: "fast",
+    orgAIConfig,
     properties: {
       decision_id: decisionId,
     },

@@ -25,6 +25,8 @@ export const useSignOut = () => {
         throw toAuthClientError(result.error);
       }
 
+      analytics.reset();
+
       await navigate({
         to: "/auth",
         search: { redirectTo: location.pathname },

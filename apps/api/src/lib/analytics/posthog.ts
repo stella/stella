@@ -1,8 +1,15 @@
 import { PostHog } from "posthog-node";
 
-import type { Analytics } from "@/api/lib/analytics/types";
+import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/types";
+import type {
+  Analytics,
+  ServerAnalyticsCaptureParams,
+} from "@/api/lib/analytics/types";
 
 const APP_VERSION = process.env["STELLA_VERSION"] ?? "dev";
+const ALLOWED_EVENTS = new Set<ServerAnalyticsCaptureParams["event"]>(
+  Object.values(SERVER_ANALYTICS_EVENTS),
+);
 
 export const createPostHogAnalytics = (
   key: string,
@@ -11,12 +18,17 @@ export const createPostHogAnalytics = (
   const client = new PostHog(key, { host });
 
   return {
-    capture: ({ properties, ...rest }) =>
+    capture: ({ event, properties, ...rest }) => {
+      if (!ALLOWED_EVENTS.has(event)) {
+        return;
+      }
+
       client.capture({
+        event,
         ...rest,
         properties: { ...properties, app_version: APP_VERSION },
-      }),
-    identify: (params) => client.identify(params),
+      });
+    },
     // eslint-disable-next-line promise-function-async
     flush: () => client.flush(),
   };

@@ -17,7 +17,10 @@ import {
 import { ThemeProvider } from "@/components/theme-provider";
 import { useI18nStore } from "@/i18n/i18n-store";
 import type Messages from "@/i18n/langs/messages.gen";
-import { AnalyticsProvider } from "@/lib/analytics/provider";
+import {
+  AnalyticsProvider,
+  createAnalyticsValue,
+} from "@/lib/analytics/provider";
 import { STALE_TIME } from "@/lib/consts";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
 import { routeTree } from "@/routeTree.gen";
@@ -50,6 +53,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
 };
 
 export function getRouter() {
+  const analyticsValue = createAnalyticsValue();
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -75,7 +79,7 @@ export function getRouter() {
     defaultPendingMs: 200,
     defaultPendingMinMs: 500,
     Wrap: ({ children }) => (
-      <AnalyticsProvider>
+      <AnalyticsProvider value={analyticsValue}>
         <I18nProvider>
           <HotkeysProvider
             defaultOptions={{
@@ -91,6 +95,12 @@ export function getRouter() {
         </I18nProvider>
       </AnalyticsProvider>
     ),
+  });
+
+  router.subscribe("onResolved", ({ toLocation }) => {
+    analyticsValue.analytics.capturePageViewed({
+      path: toLocation.pathname,
+    });
   });
 
   setupRouterSsrQueryIntegration({

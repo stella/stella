@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { toastManager } from "@stll/ui/components/toast";
 import { useQuery } from "@tanstack/react-query";
@@ -44,7 +44,6 @@ export const OnboardingWizard = () => {
   const invalidateSession = useInvalidateSession();
   const { data: sessionData } = useQuery(sessionOptions);
   const userEmail = sessionData?.user?.email ?? "";
-  const capturedDmsSelectionRef = useRef(false);
   const [step, setStep] = useState<Step>("organization");
   const [data, setData] = useState<WizardData>({
     orgName: "",
@@ -76,13 +75,6 @@ export const OnboardingWizard = () => {
       // Phase 1: Create organization
       setCreatingPhase("org");
       setCreatingProgress(15);
-      if (!capturedDmsSelectionRef.current) {
-        capturedDmsSelectionRef.current = true;
-        analytics.capture("onboarding_dms_selected", {
-          dms: finalData.previousDms,
-        });
-      }
-      analytics.capture("onboarding_started");
       await delay(800);
 
       const { data: orgData, error: createOrgError } =
@@ -164,8 +156,6 @@ export const OnboardingWizard = () => {
         setCreatingPhase("done");
         setCreatingProgress(100);
 
-        analytics.capture("onboarding_completed");
-
         // Minimum display time so the user can read the status
         const elapsed = Date.now() - startTime;
         const minDisplayMs = 4000;
@@ -222,9 +212,6 @@ export const OnboardingWizard = () => {
                 orgSlug: slug,
               }));
               setPreviewOrgName(name);
-              analytics.capture("onboarding_step_completed", {
-                step: "organization",
-              });
               setStep("dms");
             }}
           />
@@ -247,9 +234,6 @@ export const OnboardingWizard = () => {
                 ...d,
                 previousDms: dms,
               }));
-              analytics.capture("onboarding_step_completed", {
-                step: "dms",
-              });
               setStep("invite");
             }}
           />
@@ -270,13 +254,6 @@ export const OnboardingWizard = () => {
             userEmail={userEmail}
             onNext={({ emails }) => {
               setData((d) => ({ ...d, emails }));
-              if (emails.length === 0) {
-                analytics.capture("onboarding_skipped_invite");
-              } else {
-                analytics.capture("onboarding_step_completed", {
-                  step: "invite",
-                });
-              }
               setStep("download");
             }}
           />
@@ -294,14 +271,10 @@ export const OnboardingWizard = () => {
       >
         <DownloadStep
           onNext={() => {
-            analytics.capture("onboarding_step_completed", {
-              step: "download",
-            });
             // eslint-disable-next-line typescript/no-floating-promises
             executeSetup(data);
           }}
           onSkip={() => {
-            analytics.capture("onboarding_skipped_download");
             // eslint-disable-next-line typescript/no-floating-promises
             executeSetup(data);
           }}

@@ -69,6 +69,7 @@ export const classifyWithLLM = async (
 ): Promise<Result<ClassificationResult, WorkflowIntegrationError>> => {
   const aiAnalytics = createAIAnalyticsCallbacks({
     feature: "case-law.polarity",
+    modelRole: "fast",
     properties: {
       language,
     },

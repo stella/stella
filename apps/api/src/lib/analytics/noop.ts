@@ -7,6 +7,5 @@ const asyncNoop = async () => {};
 
 export const noopAnalytics: Analytics = {
   capture: noop,
-  identify: noop,
   flush: asyncNoop,
 };
