@@ -13,7 +13,7 @@ import {
 
 import { getTranslator } from "../i18n/translate";
 import type { SupportedLang } from "../i18n/translate";
-import { ICON_URL, brand, sharedStyles } from "./_shared";
+import { BRAND_FOOTER_TEXT, ICON_URL, brand, sharedStyles } from "./_shared";
 
 const otpTypeKey = {
   "sign-in": "otp.signIn",
@@ -57,7 +57,7 @@ export const Email = ({ otp, type, lang }: Props) => {
           <Text style={sharedStyles.muted}>{tr("otp.expires")}</Text>
           <Hr style={sharedStyles.hr} />
           <Text style={sharedStyles.footer}>{tr("otp.ignore")}</Text>
-          <Text style={sharedStyles.brandFooter}>stella — Legal workspace</Text>
+          <Text style={sharedStyles.brandFooter}>{BRAND_FOOTER_TEXT}</Text>
         </Container>
       </Body>
     </Html>

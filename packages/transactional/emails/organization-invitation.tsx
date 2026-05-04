@@ -14,7 +14,7 @@ import {
 
 import { getTranslator } from "../i18n/translate";
 import type { SupportedLang } from "../i18n/translate";
-import { ICON_URL, brand, sharedStyles } from "./_shared";
+import { BRAND_FOOTER_TEXT, ICON_URL, brand, sharedStyles } from "./_shared";
 
 type Props = {
   inviteLink: string;
@@ -70,7 +70,7 @@ export const Email = ({
           <Text style={sharedStyles.muted}>{t("invitation.expires")}</Text>
           <Hr style={sharedStyles.hr} />
           <Text style={sharedStyles.footer}>{t("invitation.ignore")}</Text>
-          <Text style={sharedStyles.brandFooter}>stella — Legal workspace</Text>
+          <Text style={sharedStyles.brandFooter}>{BRAND_FOOTER_TEXT}</Text>
         </Container>
       </Body>
     </Html>

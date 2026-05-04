@@ -1,6 +1,7 @@
 import type React from "react";
 
 export const ICON_URL = "https://assets.stll.app/email/stella-icon.png";
+export const BRAND_FOOTER_TEXT = "stella | open source legal workspace";
 
 export const brand = {
   blue: "#205ea6",
