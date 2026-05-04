@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 
 import { cn } from "@stll/ui/lib/utils";
 import type { ToolUIPart } from "ai";
@@ -85,12 +86,26 @@ export const AskUserCard = ({
   const [customMode, setCustomMode] = useState<Record<number, boolean>>({});
   const [submitted, setSubmitted] = useState(false);
   const isDone = answeredOutput !== null || submitted;
+  const questionControlRefs = useRef<(HTMLElement | null)[]>([]);
 
   const setAnswer = useCallback(
     (idx: number, value: string) =>
       setAnswers((prev) => ({ ...prev, [idx]: value })),
     [],
   );
+
+  const registerQuestionControl = useCallback(
+    (idx: number) => (node: HTMLElement | null) => {
+      questionControlRefs.current[idx] = node;
+    },
+    [],
+  );
+
+  const focusQuestion = useCallback((idx: number) => {
+    requestAnimationFrame(() => {
+      questionControlRefs.current[idx]?.focus();
+    });
+  }, []);
 
   const toggleCustom = useCallback(
     (idx: number) =>
@@ -101,21 +116,92 @@ export const AskUserCard = ({
     [],
   );
 
+  const submitAnswers = useCallback(
+    (sourceAnswers: Record<number, string>) => {
+      if (!input || submitted) {
+        return;
+      }
+      setSubmitted(true);
+
+      const output: AskUserOutput = {
+        answers: input.questions.map((q, i) => ({
+          question: q.question,
+          answer: sourceAnswers[i] ?? "",
+        })),
+      };
+
+      onSubmit(part.toolCallId, output);
+    },
+    [input, submitted, onSubmit, part.toolCallId],
+  );
+
   const handleSubmit = useCallback(() => {
+    submitAnswers(answers);
+  }, [answers, submitAnswers]);
+
+  const advanceFrom = useCallback(
+    (idx: number, sourceAnswers: Record<number, string> = answers) => {
+      if (!input || submitted) {
+        return;
+      }
+
+      const nextIdx = idx + 1;
+      if (nextIdx < input.questions.length) {
+        focusQuestion(nextIdx);
+        return;
+      }
+
+      submitAnswers(sourceAnswers);
+    },
+    [answers, focusQuestion, input, submitted, submitAnswers],
+  );
+
+  const selectAnswerAndAdvance = useCallback(
+    (idx: number, value: string) => {
+      const nextAnswers = { ...answers, [idx]: value };
+      setAnswers(nextAnswers);
+      advanceFrom(idx, nextAnswers);
+    },
+    [advanceFrom, answers],
+  );
+
+  const handleCustomToggle = useCallback(
+    (idx: number) => {
+      const opening = !customMode[idx];
+      toggleCustom(idx);
+      if (opening) {
+        focusQuestion(idx);
+      }
+    },
+    [customMode, focusQuestion, toggleCustom],
+  );
+
+  const handleAnswerKeyDown = useCallback(
+    (idx: number, event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.nativeEvent.isComposing) {
+        return;
+      }
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+        advanceFrom(idx);
+        return;
+      }
+
+      if (event.key === "Tab" && !event.shiftKey) {
+        event.preventDefault();
+        advanceFrom(idx);
+      }
+    },
+    [advanceFrom],
+  );
+
+  const handleSubmitClick = useCallback(() => {
     if (!input || submitted) {
       return;
     }
-    setSubmitted(true);
-
-    const output: AskUserOutput = {
-      answers: input.questions.map((q, i) => ({
-        question: q.question,
-        answer: answers[i] ?? "",
-      })),
-    };
-
-    onSubmit(part.toolCallId, output);
-  }, [input, answers, submitted, onSubmit, part.toolCallId]);
+    handleSubmit();
+  }, [handleSubmit, input, submitted]);
 
   if (!input) {
     return (
@@ -166,7 +252,7 @@ export const AskUserCard = ({
 
             {!isDone && q.options && !customMode[i] && (
               <div className="flex flex-wrap gap-1.5">
-                {q.options.map((opt) => (
+                {q.options.map((opt, optionIndex) => (
                   <button
                     className={cn(
                       "rounded-md border px-2 py-1 text-xs",
@@ -176,7 +262,10 @@ export const AskUserCard = ({
                         : "hover:bg-muted",
                     )}
                     key={opt}
-                    onClick={() => setAnswer(i, opt)}
+                    onClick={() => selectAnswerAndAdvance(i, opt)}
+                    ref={
+                      optionIndex === 0 ? registerQuestionControl(i) : undefined
+                    }
                     type="button"
                   >
                     {opt}
@@ -184,7 +273,7 @@ export const AskUserCard = ({
                 ))}
                 <button
                   className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors"
-                  onClick={() => toggleCustom(i)}
+                  onClick={() => handleCustomToggle(i)}
                   type="button"
                 >
                   <PencilIcon className="size-2.5" />
@@ -198,14 +287,16 @@ export const AskUserCard = ({
                 <input
                   className="bg-background focus-visible:ring-ring flex-1 rounded-md border px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-none"
                   onChange={(e) => setAnswer(i, e.target.value)}
+                  onKeyDown={(event) => handleAnswerKeyDown(i, event)}
                   placeholder={q.default ?? t("chat.askUser.placeholder")}
+                  ref={registerQuestionControl(i)}
                   type="text"
                   value={answers[i] ?? ""}
                 />
                 {q.options && customMode[i] && (
                   <button
                     className="text-muted-foreground hover:text-foreground text-xs"
-                    onClick={() => toggleCustom(i)}
+                    onClick={() => handleCustomToggle(i)}
                     type="button"
                   >
                     A/B/C
@@ -230,7 +321,7 @@ export const AskUserCard = ({
         <div className="border-border/50 border-t px-3 py-2">
           <button
             className="bg-foreground text-background focus-visible:ring-ring rounded-md px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-1"
-            onClick={handleSubmit}
+            onClick={handleSubmitClick}
             type="button"
           >
             {t("chat.askUser.submit")}
