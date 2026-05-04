@@ -137,6 +137,44 @@ const AnonymizeScrollSync = () => {
   return null;
 };
 
+/** Scrolls the PDF viewer to the cited page when the route's
+ *  `justification`/`justificationPage` search params change. The peek
+ *  flow used to drive scroll directly via PeekJustification, but the
+ *  full-view route only sets `activeJustification` (which controls
+ *  bbox highlighting); without this sync, clicking a metadata row
+ *  highlights the bbox but doesn't move the viewer. */
+const JustificationScrollSync = () => {
+  const justificationId = Route.useSearch({
+    select: (s) => s.justification,
+  });
+  const justificationPage = Route.useSearch({
+    select: (s) => s.justificationPage,
+  });
+  const pages = usePDFStore((s) => s.pages);
+  const setScrollTo = usePDFStore((s) => s.setScrollTo);
+
+  useEffect(() => {
+    if (
+      !justificationId ||
+      justificationPage === undefined ||
+      pages.size === 0
+    ) {
+      return;
+    }
+    const pageIds = [...pages.keys()];
+    const pageId = pageIds[justificationPage - 1];
+    if (pageId === undefined) {
+      return;
+    }
+    setScrollTo({
+      pageId,
+      target: { kind: "justification", id: justificationId },
+    });
+  }, [justificationId, justificationPage, pages, setScrollTo]);
+
+  return null;
+};
+
 function RouteComponent() {
   const workspaceId = Route.useParams({
     select: (p) => p.workspaceId,
@@ -420,6 +458,7 @@ function RouteComponentInner({
                     fallback={{ suspense: <PDFSuspenseFallback /> }}
                   >
                     <AnonymizeScrollSync />
+                    <JustificationScrollSync />
                     <PdfViewer />
                   </PDFProvider>
                 )}

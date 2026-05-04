@@ -976,7 +976,7 @@
     "rejectChange": "Reject Change",
     "removeLink": "Remove link",
     "renderErrorDescription": "Pri vykresľovaní tejto komponenty došlo k chybe. Skúste to znova alebo kontaktujte podporu, ak problém pretrváva.",
-    "saveCheckpointFailedDescription": "The DOCX was created locally, but stella could not upload the checkpoint. Keep the editor open and try saving again.",
+    "saveCheckpointFailedDescription": "The DOCX was created locally, but Stella could not upload the checkpoint. Keep the editor open and try saving again.",
     "saveCheckpointFailedTitle": "Could not upload save",
     "saveEditorUnavailableDescription": "The editor is not ready yet. Wait for the document to finish loading, then try saving again.",
     "saveEditorUnavailableTitle": "Editor not ready",
@@ -1020,11 +1020,8 @@
       "title": "Matter context"
     },
     "metadata": {
-      "addFileField": "Add field",
       "author": "Author",
       "documentInfoHeading": "Document info",
-      "fileSpecificHeading": "File-specific fields",
-      "fileSpecificHint": "Add fields that only live on this file and don't appear in the table.",
       "matterColumnsHeading": "Matter columns",
       "updatedAt": "Updated",
       "version": "Version",
@@ -1294,18 +1291,18 @@
   },
   "selfhost": {
     "dismissUpdate": "Dismiss update notice",
-    "updateAvailable": "Stella v{latest} is available. You're running v{installed}.",
+    "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
   },
   "settings": {
     "account": {
       "desktop": "Desktop",
-      "desktopAppDescription": "Otvárajte dokumenty a súbory priamo v stella z vášho počítača.",
-      "desktopDescription": "Nainštalujte si stella do počítača",
-      "desktopDownloadMac": "Stiahnuť pre macOS",
-      "desktopDownloadOtherMac": "Máte Windows? Stiahnuť pre Windows",
-      "desktopDownloadOtherWindows": "Alebo si stiahnite inštalátor .msi pre IT spravované nasadenia",
-      "desktopDownloadWindows": "Stiahnuť pre Windows",
+      "desktopAppDescription": "Open documents and files directly in stella from your computer.",
+      "desktopDescription": "Install Stella on your computer",
+      "desktopDownloadMac": "Download for macOS",
+      "desktopDownloadOtherMac": "On Windows? Download for Windows",
+      "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments",
+      "desktopDownloadWindows": "Download for Windows",
       "preferredName": "Preferred name",
       "preferredNameDescription": "Used as the author for DOCX tracked changes and comments.",
       "preferredNamePlaceholder": "Your name",
@@ -1551,7 +1548,7 @@
         "takeoverWaiting": "Čakanie na odpoveď",
         "takeoverWaitingDescription": "Žiadame {name} o uvoľnenie zámku...",
         "unavailableDescription": "Pred použitím úprav v desktopovej aplikácii spustite stella desktop a nechajte ho bežať.",
-        "unavailableTitle": "Stella desktop nie je k dispozícii."
+        "unavailableTitle": "stella desktop nie je k dispozícii."
       },
       "downloadAsZip": "Stiahnuť .zip súbor",
       "downloadOriginal": "Pôvodný súbor",
@@ -1797,7 +1794,7 @@
       "keepEmpty": "Ponechať prázdne",
       "manualColumn": "Manuálny stĺpec",
       "multiOptionsFooter": "Options outside this list won't be picked. Stella may match multiple per document.",
-      "multiOptionsHelp": "Stella picks one or more of these per row",
+      "multiOptionsHelp": "stella picks one or more of these per row",
       "multiOptionsTitle": "Multi options",
       "multiSelect": "Viacnásobný výber",
       "nameProperty": "Vlastnosť názvu",
@@ -1829,7 +1826,7 @@
       "selectOperator": "Vyberte operátor",
       "setPromptPlaceholder": "Nastavte prompt na extrakciu informácií",
       "singleOptionsFooter": "Options outside this list won't be picked. Stella picks the single best match per document.",
-      "singleOptionsHelp": "Stella picks exactly one of these per row",
+      "singleOptionsHelp": "stella picks exactly one of these per row",
       "singleOptionsTitle": "Single options",
       "singleSelect": "Jednoduchý výber",
       "sortAscending": "Radiť vzostupne",

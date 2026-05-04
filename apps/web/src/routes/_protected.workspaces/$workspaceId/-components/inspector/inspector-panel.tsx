@@ -905,6 +905,8 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                           replace: true,
                           search: (prev) => ({
                             ...prev,
+                            entity: tab.entityId,
+                            field: tab.id,
                             justification: fieldId,
                             justificationPage: 1,
                           }),
@@ -1245,6 +1247,8 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                         replace: true,
                         search: (prev) => ({
                           ...prev,
+                          entity: tab.entityId,
+                          field: tab.id,
                           justification: fieldId,
                           justificationPage: 1,
                         }),

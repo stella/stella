@@ -1,14 +1,13 @@
 import type { PropsWithChildren } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 import {
   useQuery,
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { PlusIcon } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -16,7 +15,7 @@ import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityField, EntityKind, WorkspaceProperty } from "@/lib/types";
 import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
-import { PeekJustification } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-justification";
+import { Justification } from "@/routes/_protected.workspaces/$workspaceId/-components/justification";
 import {
   entitiesKeys,
   entityOptions,
@@ -307,21 +306,29 @@ const EntityMetadataContent = ({
                 <>
                   <span
                     className={cn(
-                      "text-muted-foreground text-xs font-medium",
+                      "text-muted-foreground/80 inline-flex items-center gap-1 text-[10px] font-medium tracking-wide uppercase",
                       isPending && "opacity-60",
                     )}
                   >
+                    {isAiField && (
+                      <Sparkles
+                        aria-hidden="true"
+                        className="text-primary size-3"
+                      />
+                    )}
                     {property.name}
                   </span>
-                  <EditableField
-                    content={field.content}
-                    entityKind={entity.kind}
-                    entityId={entity.entityId}
-                    property={property}
-                    propertyId={field.propertyId}
-                    readonly={isAiField}
-                    workspaceId={workspaceId}
-                  />
+                  <div className="text-foreground text-sm leading-snug">
+                    <EditableField
+                      content={field.content}
+                      entityKind={entity.kind}
+                      entityId={entity.entityId}
+                      property={property}
+                      propertyId={field.propertyId}
+                      readonly={isAiField}
+                      workspaceId={workspaceId}
+                    />
+                  </div>
                 </>
               );
               if (handleJustifyClick) {
@@ -347,11 +354,16 @@ const EntityMetadataContent = ({
                     {isActive &&
                       activeJustification &&
                       fileFieldId !== null && (
-                        <div className="text-muted-foreground border-t-accent-foreground/10 max-h-48 overflow-y-auto border-t px-2 pt-2 pb-2 text-xs">
-                          <PeekJustification
-                            activeFileFieldId={fileFieldId}
-                            justification={activeJustification}
-                          />
+                        <div className="border-s-primary mx-2 mb-2 max-h-48 overflow-y-auto border-s-2 ps-3">
+                          <div className="text-primary mb-1 text-[10px] font-semibold tracking-wide uppercase">
+                            Justification
+                          </div>
+                          <div className="text-foreground/80 text-xs leading-relaxed break-words">
+                            <Justification
+                              justification={activeJustification}
+                              workspaceId={workspaceId}
+                            />
+                          </div>
                         </div>
                       )}
                   </div>
@@ -368,26 +380,6 @@ const EntityMetadataContent = ({
             })}
           </div>
         )}
-
-        {/* TODO: requires per-entity property schema work */}
-        <SectionHeading>
-          {t("inspector.metadata.fileSpecificHeading")}
-        </SectionHeading>
-        <div className="flex flex-col gap-2 px-2 pb-3">
-          <p className="text-muted-foreground px-2 text-xs">
-            {t("inspector.metadata.fileSpecificHint")}
-          </p>
-          <Button
-            className="self-start"
-            disabled
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            <PlusIcon />
-            {t("inspector.metadata.addFileField")}
-          </Button>
-        </div>
       </div>
       <div className={cn("flex shrink-0 border-t", TOOLBAR_ROW_HEIGHT)}>
         {extractionAction}
@@ -397,7 +389,7 @@ const EntityMetadataContent = ({
 };
 
 const SectionHeading = ({ children }: PropsWithChildren) => (
-  <div className="text-muted-foreground px-4 pt-3 pb-1 text-[10px] font-medium tracking-wide uppercase">
+  <div className="bg-muted/40 text-foreground border-b px-4 py-2 text-sm font-semibold">
     {children}
   </div>
 );
