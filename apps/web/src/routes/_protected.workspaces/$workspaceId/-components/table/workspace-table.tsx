@@ -271,6 +271,29 @@ export const WorkspaceTable = ({
   );
   const handleColumnReorder = useCallback(
     (sourceId: string, targetId: string, edge: ColumnDropEdge) => {
+      const sourceColumn = table.getColumn(sourceId);
+      const targetColumn = table.getColumn(targetId);
+      if (!sourceColumn || !targetColumn) {
+        return;
+      }
+
+      const pinning = getColumnPinningGroup(sourceColumn);
+      if (
+        pinning !== "center" &&
+        pinning === getColumnPinningGroup(targetColumn)
+      ) {
+        table.setColumnPinning((prev) => ({
+          ...prev,
+          [pinning]: reorderColumnIds({
+            ids: prev[pinning] ?? [],
+            sourceId,
+            targetId,
+            edge,
+          }),
+        }));
+        return;
+      }
+
       const currentVisibleIds = orderedColumns.map((column) => column.id);
       const reorderedVisibleIds = reorderColumnIds({
         ids: currentVisibleIds,
@@ -671,7 +694,7 @@ const DraggableHeaderCell = ({
       {canReorderColumn && (
         <div
           aria-hidden="true"
-          className="text-muted-foreground hover:text-foreground border-border/70 bg-background/95 absolute top-1/2 left-2 z-40 flex size-5 -translate-y-1/2 cursor-grab items-center justify-center rounded border opacity-0 shadow-sm transition-opacity group-hover/table-head:opacity-100 active:cursor-grabbing"
+          className="text-muted-foreground hover:text-foreground border-border/70 bg-background absolute top-1/2 left-2 z-40 flex size-5 -translate-y-1/2 cursor-grab items-center justify-center rounded border opacity-0 shadow-sm transition-opacity group-hover/table-head:opacity-100 active:cursor-grabbing"
           data-row-expansion-ignore
           ref={dragHandleRef}
         >
