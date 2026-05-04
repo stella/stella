@@ -1,15 +1,22 @@
 import { cn } from "@stll/ui/lib/utils";
 import { useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
-import { useShallow } from "zustand/react/shallow";
 
 import type { Citation } from "@/lib/citations";
-import { usePDFStore } from "@/lib/pdf/pdf-context";
+import {
+  getPDFPageIdByNumber,
+  useOptionalPDFStore,
+} from "@/lib/pdf/pdf-context";
 import { renderJustificationContent } from "@/lib/render-justification-content";
 import type { WorkspaceJustification } from "@/lib/types";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { useCreateBBoxes } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+
+const CITATION_CHIP_CLASSES =
+  "bg-primary/10 text-primary hover:bg-primary/20 inline-flex items-center align-baseline rounded-md px-1.5 py-0.5 text-[11px] font-medium not-italic transition-colors";
+
+const DOCX_CHIP_PREVIEW_CHARS = 32;
 
 type JustificationProps = {
   workspaceId: string;
@@ -64,15 +71,24 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
     workspaceId,
     justification,
   });
-  const [pages, setScrollTo] = usePDFStore(
-    useShallow((s) => [s.pages, s.setScrollTo]),
+  // The metadata panel can render in a full-view lane that sits
+  // outside the route's PDFProvider; fall back to URL-driven scroll
+  // (handled by JustificationScrollSync inside the route's provider).
+  const pageId = useOptionalPDFStore((s) =>
+    getPDFPageIdByNumber({
+      fieldId: s.fieldId,
+      pages: s.pages,
+      pageNumber: citation.pageNumber,
+    }),
   );
+  const pdfFieldId = useOptionalPDFStore((s) => s.fieldId);
+  const setScrollTo = useOptionalPDFStore((s) => s.setScrollTo);
 
   return (
     <button
       className={cn(
-        "bg-muted hover:bg-accent inline-block rounded px-1.5 py-0.5 text-xs font-medium transition-colors",
-        isActive && "bg-accent hover:bg-accent",
+        CITATION_CHIP_CLASSES,
+        isActive && "bg-primary/25 hover:bg-primary/25",
       )}
       // eslint-disable-next-line typescript/no-misused-promises
       onClick={() => {
@@ -88,10 +104,7 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
             .justifications.find(
               (j) => j.id === justification.id,
             )?.boundingBoxes;
-          const pageIds = [...pages.keys()];
-          const pageId = pageIds[citation.pageNumber - 1];
-
-          if (pageId !== undefined) {
+          if (pdfFieldId === citation.fileFieldId && pageId && setScrollTo) {
             setScrollTo({
               pageId,
               target: boundingBoxes
@@ -116,7 +129,7 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
       }}
       type="button"
     >
-      {citation.pageNumber}
+      p.&nbsp;{citation.pageNumber}
     </button>
   );
 };
@@ -127,16 +140,31 @@ type DocxQuoteProps = {
 
 const DocxQuote = ({ citation }: DocxQuoteProps) => {
   const requestBlockScroll = useInspectorStore((s) => s.requestBlockScroll);
+  const trimmed = citation.text.trim();
+  const preview =
+    trimmed.length > DOCX_CHIP_PREVIEW_CHARS
+      ? `${trimmed.slice(0, DOCX_CHIP_PREVIEW_CHARS).trimEnd()}…`
+      : trimmed || "¶";
   return (
     <button
-      className={cn(
-        "border-muted-foreground/24 hover:border-foreground/40 hover:bg-muted/40 my-1 block w-full border-s-2 ps-3 text-start text-sm italic transition-colors",
-      )}
+      className={cn(CITATION_CHIP_CLASSES, "max-w-[16rem] truncate")}
       data-block-id={citation.blockId}
-      onClick={() => requestBlockScroll(citation.fileFieldId, citation.blockId)}
+      onClick={() => {
+        // Inspector peek path reads `pendingBlockScroll` from the
+        // store; the full-view DocxBrowserEditor listens for the
+        // window event (see docx-browser-editor.tsx). Fire both so
+        // both surfaces respond.
+        requestBlockScroll(citation.fileFieldId, citation.blockId);
+        window.dispatchEvent(
+          new CustomEvent<{ blockId: string }>("folio:scroll-to-block", {
+            detail: { blockId: citation.blockId },
+          }),
+        );
+      }}
+      title={trimmed || undefined}
       type="button"
     >
-      {citation.text}
+      “{preview}”
     </button>
   );
 };

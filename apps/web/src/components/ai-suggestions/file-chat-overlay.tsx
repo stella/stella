@@ -211,6 +211,7 @@ type SnapshotBlock = {
   id: string;
   text: string;
   displayLabel?: string | undefined;
+  previewRuns?: FolioAIEditSnapshot["blocks"][number]["previewRuns"];
 };
 
 type QueueReviewSuggestionsOptions = {
@@ -245,9 +246,10 @@ const PREVIEW_ANCHOR_CHARS = 80;
  */
 const buildPreview = (
   operation: ToolInputOperation,
-  blocksById: Map<string, string>,
+  blocksById: Map<string, SnapshotBlock>,
 ): ReviewSuggestionPreview | null => {
-  const blockText = blocksById.get(operation.blockId) ?? "";
+  const block = blocksById.get(operation.blockId);
+  const blockText = block?.text ?? "";
   switch (operation.type) {
     case "replaceInBlock": {
       const idx = blockText.indexOf(operation.find);
@@ -258,37 +260,69 @@ const buildPreview = (
           before: operation.find,
           after: operation.replace,
           contextAfter: "",
+          ...(block?.previewRuns !== undefined && {
+            sourceRuns: block.previewRuns,
+          }),
         };
       }
+      const contextStart = Math.max(0, idx - PREVIEW_CONTEXT_CHARS);
+      const matchEnd = idx + operation.find.length;
+      const contextEnd = Math.min(
+        blockText.length,
+        matchEnd + PREVIEW_CONTEXT_CHARS,
+      );
       return {
         type: "replaceInBlock",
-        contextBefore: blockText.slice(
-          Math.max(0, idx - PREVIEW_CONTEXT_CHARS),
-          idx,
-        ),
+        contextBefore: blockText.slice(contextStart, idx),
         before: operation.find,
         after: operation.replace,
-        contextAfter: blockText.slice(
-          idx + operation.find.length,
-          idx + operation.find.length + PREVIEW_CONTEXT_CHARS,
-        ),
+        contextAfter: blockText.slice(matchEnd, contextEnd),
+        ...(block?.previewRuns !== undefined && {
+          sourceRuns: block.previewRuns,
+          contextStart,
+          matchStart: idx,
+          matchEnd,
+          contextEnd,
+        }),
       };
     }
     case "replaceBlock":
-      return { type: "replaceBlock", before: blockText, after: operation.text };
+      return {
+        type: "replaceBlock",
+        before: blockText,
+        after: operation.text,
+        ...(block?.previewRuns !== undefined && {
+          sourceRuns: block.previewRuns,
+        }),
+      };
     case "deleteBlock":
-      return { type: "deleteBlock", before: blockText };
+      return {
+        type: "deleteBlock",
+        before: blockText,
+        ...(block?.previewRuns !== undefined && {
+          sourceRuns: block.previewRuns,
+        }),
+      };
     case "insertBeforeBlock":
     case "insertAfterBlock":
       return {
         type: operation.type,
         anchor: blockText.slice(0, PREVIEW_ANCHOR_CHARS),
         after: operation.text,
+        ...(block?.previewRuns !== undefined && {
+          anchorRuns: block.previewRuns,
+          anchorEnd: Math.min(blockText.length, PREVIEW_ANCHOR_CHARS),
+        }),
       };
     case "commentOnBlock":
       return {
         type: "commentOnBlock",
         anchor: operation.quote ?? blockText.slice(0, PREVIEW_ANCHOR_CHARS),
+        ...(operation.quote === undefined &&
+          block?.previewRuns !== undefined && {
+            anchorRuns: block.previewRuns,
+            anchorEnd: Math.min(blockText.length, PREVIEW_ANCHOR_CHARS),
+          }),
       };
     default:
       operation satisfies never;
@@ -308,7 +342,7 @@ const queueReviewSuggestions = ({
   snapshotBlocks,
   snapshot,
 }: QueueReviewSuggestionsOptions) => {
-  const blocksById = new Map(snapshotBlocks.map((b) => [b.id, b.text]));
+  const blocksById = new Map(snapshotBlocks.map((b) => [b.id, b]));
   const labelsById = new Map<string, string>();
   for (const b of snapshotBlocks) {
     if (b.displayLabel !== undefined && b.displayLabel.length > 0) {
@@ -323,7 +357,7 @@ const queueReviewSuggestions = ({
     if (
       (input.type === "replaceInBlock" && input.find === input.replace) ||
       (input.type === "replaceBlock" &&
-        input.text === (blocksById.get(input.blockId) ?? ""))
+        input.text === (blocksById.get(input.blockId)?.text ?? ""))
     ) {
       return [];
     }

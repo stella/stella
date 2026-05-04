@@ -2,9 +2,13 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { PropsWithChildren } from "react";
 
 import { cn } from "@stll/ui/lib/utils";
+import { useMatch, useNavigate } from "@tanstack/react-router";
 
 import type { Citation } from "@/lib/citations";
-import { usePDFStore } from "@/lib/pdf/pdf-context";
+import {
+  getPDFPageIdByNumber,
+  useOptionalPDFStore,
+} from "@/lib/pdf/pdf-context";
 import { renderJustificationContent } from "@/lib/render-justification-content";
 import type { WorkspaceJustification } from "@/lib/types";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -28,9 +32,23 @@ export const PeekJustification = ({
   const setActiveJustification = useWorkspaceStore(
     (s) => s.setActiveJustification,
   );
-  const pages = usePDFStore((s) => s.pages);
-  const setScrollTo = usePDFStore((s) => s.setScrollTo);
+  // PDF store is only mounted when the viewer is in scope (e.g. peek
+  // mode); the metadata panel can also render in a full-view lane
+  // where no peek viewer exists. Fall back to undefined and let the
+  // route URL drive bbox highlighting via setActiveJustification.
+  const pages = useOptionalPDFStore((s) => s.pages);
+  const pdfFieldId = useOptionalPDFStore((s) => s.fieldId);
+  const setScrollTo = useOptionalPDFStore((s) => s.setScrollTo);
   const requestBlockScroll = useInspectorStore((s) => s.requestBlockScroll);
+  // Used to push `justificationPage` into the route's URL so the
+  // document route's JustificationScrollSync can move the viewer.
+  const documentRouteMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/$viewId/document",
+    shouldThrow: false,
+  });
+  const navigateDocumentRoute = useNavigate({
+    from: "/workspaces/$workspaceId/$viewId/document",
+  });
 
   // Keep a ref so the effect and click handler can read the
   // latest pages without depending on the Map reference (which
@@ -38,6 +56,8 @@ export const PeekJustification = ({
   // infinite effect loop).
   const pagesRef = useRef(pages);
   pagesRef.current = pages;
+  const pdfFieldIdRef = useRef(pdfFieldId);
+  pdfFieldIdRef.current = pdfFieldId;
 
   const handleCitationClick = useCallback(
     (citation: Citation) => {
@@ -53,9 +73,24 @@ export const PeekJustification = ({
           id: justification.id,
           pageNumber: citation.pageNumber,
         });
-        const pageIds = [...pagesRef.current.keys()];
-        const pageId = pageIds[citation.pageNumber - 1];
-        if (pageId !== undefined) {
+        if (documentRouteMatch !== undefined) {
+          void navigateDocumentRoute({
+            replace: true,
+            search: {
+              ...documentRouteMatch.search,
+              justificationPage: citation.pageNumber,
+            },
+          });
+        }
+        const pageId =
+          pagesRef.current && pdfFieldIdRef.current
+            ? getPDFPageIdByNumber({
+                fieldId: pdfFieldIdRef.current,
+                pages: pagesRef.current,
+                pageNumber: citation.pageNumber,
+              })
+            : undefined;
+        if (pageId && setScrollTo) {
           setScrollTo({
             pageId,
             target: { kind: "justification", id: justification.id },
@@ -70,7 +105,9 @@ export const PeekJustification = ({
     },
     [
       activeFileFieldId,
+      documentRouteMatch,
       justification.id,
+      navigateDocumentRoute,
       requestBlockScroll,
       setActiveJustification,
       setScrollTo,
@@ -122,9 +159,15 @@ export const PeekJustification = ({
         id: justification.id,
         pageNumber: firstCitation.pageNumber,
       });
-      const pageIds = [...pagesRef.current.keys()];
-      const pageId = pageIds[firstCitation.pageNumber - 1];
-      if (pageId !== undefined) {
+      const pageId =
+        pagesRef.current && pdfFieldIdRef.current
+          ? getPDFPageIdByNumber({
+              fieldId: pdfFieldIdRef.current,
+              pages: pagesRef.current,
+              pageNumber: firstCitation.pageNumber,
+            })
+          : undefined;
+      if (pageId && setScrollTo) {
         setScrollTo({
           pageId,
           target: { kind: "justification", id: justification.id },
@@ -152,6 +195,9 @@ type PeekPdfChipProps = {
   onClick: () => void;
 };
 
+const CITATION_CHIP_CLASSES =
+  "bg-primary/10 text-primary hover:bg-primary/20 inline-flex items-center align-baseline rounded-md px-1.5 py-0.5 text-[11px] font-medium not-italic transition-colors";
+
 const PeekPdfChip = ({
   children,
   onClick,
@@ -159,16 +205,18 @@ const PeekPdfChip = ({
 }: PropsWithChildren<PeekPdfChipProps>) => (
   <button
     className={cn(
-      "bg-muted hover:bg-accent inline-block rounded px-1.5 py-0.5 text-xs font-medium transition-colors",
-      disabled && "opacity-50",
+      CITATION_CHIP_CLASSES,
+      disabled && "cursor-not-allowed opacity-40",
     )}
     disabled={disabled}
     onClick={onClick}
     type="button"
   >
-    {children}
+    p.&nbsp;{children}
   </button>
 );
+
+const DOCX_CHIP_PREVIEW_CHARS = 32;
 
 type PeekDocxQuoteProps = {
   blockId: string;
@@ -182,17 +230,26 @@ const PeekDocxQuote = ({
   text,
   disabled,
   onClick,
-}: PeekDocxQuoteProps) => (
-  <button
-    className={cn(
-      "border-muted-foreground/24 hover:border-foreground/40 hover:bg-muted/40 my-1 block w-full border-s-2 ps-3 text-start text-sm italic transition-colors",
-      disabled && "hover:border-s-muted cursor-not-allowed opacity-50",
-    )}
-    data-block-id={blockId}
-    disabled={disabled}
-    onClick={onClick}
-    type="button"
-  >
-    {text}
-  </button>
-);
+}: PeekDocxQuoteProps) => {
+  const trimmed = text.trim();
+  const preview =
+    trimmed.length > DOCX_CHIP_PREVIEW_CHARS
+      ? `${trimmed.slice(0, DOCX_CHIP_PREVIEW_CHARS).trimEnd()}…`
+      : trimmed || "¶";
+  return (
+    <button
+      className={cn(
+        CITATION_CHIP_CLASSES,
+        "max-w-[16rem] truncate",
+        disabled && "cursor-not-allowed opacity-40",
+      )}
+      data-block-id={blockId}
+      disabled={disabled}
+      onClick={onClick}
+      title={trimmed || undefined}
+      type="button"
+    >
+      “{preview}”
+    </button>
+  );
+};

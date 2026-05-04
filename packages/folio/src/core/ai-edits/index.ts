@@ -10,6 +10,7 @@ export type {
   FolioAIBlock,
   FolioAIBlockAnchor,
   FolioAIBlockKind,
+  FolioAIBlockPreviewRun,
   FolioAIComment,
   FolioAIEditAppliedOperation,
   FolioAIEditApplyMode,

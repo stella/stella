@@ -47,7 +47,11 @@ import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
-import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
+import {
+  PDFProvider,
+  getPDFPageIdByNumber,
+  usePDFStore,
+} from "@/lib/pdf/pdf-context";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { toSafeId } from "@/lib/safe-id";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
@@ -905,6 +909,8 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                           replace: true,
                           search: (prev) => ({
                             ...prev,
+                            entity: tab.entityId,
+                            field: tab.id,
                             justification: fieldId,
                             justificationPage: 1,
                           }),
@@ -1245,6 +1251,8 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                         replace: true,
                         search: (prev) => ({
                           ...prev,
+                          entity: tab.entityId,
+                          field: tab.id,
                           justification: fieldId,
                           justificationPage: 1,
                         }),
@@ -1839,15 +1847,18 @@ const JustificationBar = ({
       return;
     }
 
-    const pageIds = [...pagesRef.current.keys()];
-    const pageId = pageIds[firstBox.pageNumber - 1];
+    const pageId = getPDFPageIdByNumber({
+      fieldId: activeTab.id,
+      pages: pagesRef.current,
+      pageNumber: firstBox.pageNumber,
+    });
     if (pageId && justificationId) {
       setScrollTo({
         pageId,
         target: { kind: "justification", id: justificationId },
       });
     }
-  }, [boundingBoxes, justificationId, isActiveTab, setScrollTo]);
+  }, [activeTab.id, boundingBoxes, justificationId, isActiveTab, setScrollTo]);
 
   // Sync activeJustification before paint so PageCitation can
   // render bboxes without waiting for PeekJustification's effect.

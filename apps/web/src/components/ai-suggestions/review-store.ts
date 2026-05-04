@@ -9,6 +9,7 @@
  */
 
 import type {
+  FolioAIBlockPreviewRun,
   FolioAIEditApplyMode,
   FolioAIEditOperation,
   FolioAIEditSeverity,
@@ -40,19 +41,37 @@ export type ReviewSuggestionPreview =
       before: string;
       after: string;
       contextAfter: string;
+      sourceRuns?: readonly FolioAIBlockPreviewRun[];
+      contextStart?: number;
+      matchStart?: number;
+      matchEnd?: number;
+      contextEnd?: number;
     }
-  | { type: "replaceBlock"; before: string; after: string }
-  | { type: "deleteBlock"; before: string }
+  | {
+      type: "replaceBlock";
+      before: string;
+      after: string;
+      sourceRuns?: readonly FolioAIBlockPreviewRun[];
+    }
+  | {
+      type: "deleteBlock";
+      before: string;
+      sourceRuns?: readonly FolioAIBlockPreviewRun[];
+    }
   | {
       type: "insertBeforeBlock" | "insertAfterBlock";
       /** Short excerpt of the adjacent block to anchor the insertion. */
       anchor: string;
       after: string;
+      anchorRuns?: readonly FolioAIBlockPreviewRun[];
+      anchorEnd?: number;
     }
   | {
       type: "commentOnBlock";
       /** Block excerpt the comment hangs off (or the optional quote). */
       anchor: string;
+      anchorRuns?: readonly FolioAIBlockPreviewRun[];
+      anchorEnd?: number;
     };
 
 export type ReviewSuggestion = {

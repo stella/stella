@@ -1024,11 +1024,8 @@ type Messages = {
       "title": "Matter context";
     };
     "metadata": {
-      "addFileField": "Add field";
       "author": "Author";
       "documentInfoHeading": "Document info";
-      "fileSpecificHeading": "File-specific fields";
-      "fileSpecificHint": "Add fields that only live on this file and don't appear in the table.";
       "matterColumnsHeading": "Matter columns";
       "updatedAt": "Updated";
       "version": "Version";

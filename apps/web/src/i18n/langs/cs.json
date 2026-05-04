@@ -1021,11 +1021,8 @@
       "title": "Kontext spisů"
     },
     "metadata": {
-      "addFileField": "Přidat pole",
       "author": "Autor",
       "documentInfoHeading": "Informace o dokumentu",
-      "fileSpecificHeading": "Pole specifická pro soubor",
-      "fileSpecificHint": "Přidejte pole, která existují jen na tomto souboru a v tabulce se neobjevují.",
       "matterColumnsHeading": "Sloupce spisu",
       "updatedAt": "Aktualizováno",
       "version": "Verze",

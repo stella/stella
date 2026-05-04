@@ -15,5 +15,6 @@ export type {
   FolioAIBlock,
   FolioAIBlockAnchor,
   FolioAIBlockKind,
+  FolioAIBlockPreviewRun,
   FolioAIEditSnapshot,
 } from "./core/ai-edits/types";

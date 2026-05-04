@@ -6,10 +6,10 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import type { RefObject } from "react";
+import type { CSSProperties, RefObject } from "react";
 
 import { diffWordSegments } from "@stll/folio";
-import type { DocxEditorRef } from "@stll/folio";
+import type { DocxEditorRef, FolioAIBlockPreviewRun } from "@stll/folio";
 import { Avatar, AvatarFallback } from "@stll/ui/components/avatar";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
@@ -485,11 +485,11 @@ export const ReviewPanel = ({
          *  reviewer an at-a-glance sense of how far they've gotten;
          *  the dropdown lets them switch axis without burning two
          *  full toggle buttons in a narrow facet panel. */}
-        <div className="flex items-center gap-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="flex max-w-full min-w-36 flex-1 items-center gap-2">
             <div
               aria-hidden="true"
-              className="bg-muted h-1 w-full max-w-[140px] overflow-hidden rounded-full"
+              className="bg-muted h-1 min-w-12 flex-1 overflow-hidden rounded-full"
             >
               <div
                 className="h-full bg-emerald-500 transition-[width] duration-300 ease-out dark:bg-emerald-400"
@@ -513,8 +513,8 @@ export const ReviewPanel = ({
               </span>
             </span>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5 text-xs">
-            <span className="text-muted-foreground">
+          <div className="flex max-w-full min-w-0 items-center gap-1.5 text-xs">
+            <span className="text-muted-foreground shrink-0">
               {t("docxReview.groupBy")}:
             </span>
             <Select
@@ -526,7 +526,7 @@ export const ReviewPanel = ({
               }}
               value={groupAxis}
             >
-              <SelectTrigger className="hover:bg-muted h-7 w-auto min-w-0 gap-1 border-0 bg-transparent px-1.5 text-xs font-medium">
+              <SelectTrigger className="hover:bg-muted h-7 w-44 min-w-0 justify-between gap-1 border-0 bg-transparent px-1.5 text-xs font-medium">
                 <SelectValue />
               </SelectTrigger>
               <SelectPopup>
@@ -539,33 +539,10 @@ export const ReviewPanel = ({
           </div>
         </div>
 
-        {/* Action row — primary Accept-all + text Reject-all + the
-         *  apply-mode dropdown grouped together so the user sees
-         *  the bulk action and how it'll be applied side by side. */}
         {pendingCount > 0 && (
-          <div className="mt-2.5 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Button
-                className="h-8 px-2.5 text-xs"
-                onClick={() => {
-                  void handleBatchAccept();
-                }}
-                size="sm"
-                variant="default"
-              >
-                <CheckIcon className="me-1 size-3.5" />
-                {t("docxReview.acceptAll")}
-              </Button>
-              <button
-                className="text-muted-foreground hover:text-foreground rounded-md px-1.5 py-1 text-xs transition-colors"
-                onClick={handleBatchReject}
-                type="button"
-              >
-                {t("docxReview.rejectAll")}
-              </button>
-            </div>
-            <div className="flex shrink-0 items-center gap-1.5 text-xs">
-              <span className="text-muted-foreground">
+          <div className="mt-2.5">
+            <div className="flex min-w-0 items-center gap-1.5 text-xs">
+              <span className="text-muted-foreground shrink-0">
                 {t("docxReview.applyAs")}
               </span>
               <Select
@@ -576,7 +553,7 @@ export const ReviewPanel = ({
                 }}
                 value={applyMode}
               >
-                <SelectTrigger className="hover:bg-muted h-7 w-auto min-w-0 gap-1 border-0 bg-transparent px-1.5 text-xs font-medium">
+                <SelectTrigger className="hover:bg-muted h-7 w-56 min-w-0 justify-between gap-1 border-0 bg-transparent px-1.5 text-xs font-medium">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectPopup>
@@ -678,6 +655,32 @@ export const ReviewPanel = ({
           ))
         )}
       </div>
+      {pendingCount > 0 && (
+        <footer className="bg-background/95 supports-[backdrop-filter]:bg-background/80 shrink-0 border-t px-3 py-2 backdrop-blur">
+          <div className="flex items-center gap-2">
+            <Button
+              className="h-8 flex-1 px-2.5 text-xs"
+              onClick={() => {
+                void handleBatchAccept();
+              }}
+              size="sm"
+              variant="default"
+            >
+              <CheckIcon className="me-1 size-3.5" />
+              {t("docxReview.acceptAll")}
+            </Button>
+            <Button
+              className="h-8 flex-1 px-2.5 text-xs"
+              onClick={handleBatchReject}
+              size="sm"
+              variant="outline"
+            >
+              <XIcon className="me-1 size-3.5" />
+              {t("docxReview.rejectAll")}
+            </Button>
+          </div>
+        </footer>
+      )}
     </div>
   );
 };
@@ -846,23 +849,120 @@ type RedlinePreviewProps = {
   /** Plain-text summary used as the accessible label. */
   srSummary: string;
   rejected: boolean;
+  compact?: boolean | undefined;
+};
+
+const isFormattedReplaceInBlockPreview = (
+  preview: ReviewSuggestionPreview,
+): preview is Extract<ReviewSuggestionPreview, { type: "replaceInBlock" }> &
+  Required<
+    Pick<
+      Extract<ReviewSuggestionPreview, { type: "replaceInBlock" }>,
+      "contextStart" | "matchStart" | "matchEnd" | "contextEnd" | "sourceRuns"
+    >
+  > =>
+  preview.type === "replaceInBlock" &&
+  preview.sourceRuns !== undefined &&
+  preview.contextStart !== undefined &&
+  preview.matchStart !== undefined &&
+  preview.matchEnd !== undefined &&
+  preview.contextEnd !== undefined;
+
+const slicePreviewRuns = (
+  runs: readonly FolioAIBlockPreviewRun[],
+  start: number,
+  end: number,
+): FolioAIBlockPreviewRun[] => {
+  const sliced: FolioAIBlockPreviewRun[] = [];
+  let cursor = 0;
+  for (const run of runs) {
+    const runStart = cursor;
+    const runEnd = cursor + run.text.length;
+    cursor = runEnd;
+    if (runEnd <= start || runStart >= end) {
+      continue;
+    }
+
+    const text = run.text.slice(
+      Math.max(0, start - runStart),
+      Math.min(run.text.length, end - runStart),
+    );
+    if (text.length === 0) {
+      continue;
+    }
+    sliced.push({ ...run, text });
+  }
+  return sliced;
+};
+
+const previewRunStyle = (
+  run: FolioAIBlockPreviewRun,
+  compact: boolean,
+): CSSProperties => {
+  const style: CSSProperties = {};
+  const fontFamily = cssFontFamily(run.fontFamily);
+  if (fontFamily !== undefined) {
+    style.fontFamily = fontFamily;
+  }
+  if (run.fontSizePt !== undefined) {
+    const maxPt = compact ? 12.5 : 14.5;
+    style.fontSize = `${Math.min(Math.max(run.fontSizePt, 8), maxPt)}pt`;
+  }
+  if (run.color !== undefined) {
+    style.color = run.color;
+  }
+  if (run.bold) {
+    style.fontWeight = 700;
+  }
+  if (run.italic) {
+    style.fontStyle = "italic";
+  }
+  if (run.underline) {
+    style.textDecorationLine = "underline";
+  }
+  if (run.strike) {
+    if (style.textDecorationLine === "underline") {
+      style.textDecorationLine = "underline line-through";
+    } else {
+      style.textDecorationLine = "line-through";
+    }
+  }
+  return style;
+};
+
+const cssFontFamily = (fontFamily: string | undefined): string | undefined => {
+  const first = fontFamily?.split(",").at(0)?.trim().replace(/["']/g, "");
+  if (!first || !/^[\p{L}\p{N} ._-]+$/u.test(first)) {
+    return undefined;
+  }
+
+  if (first.includes(" ")) {
+    return `"${first}", sans-serif`;
+  }
+
+  return `${first}, sans-serif`;
 };
 
 const RedlinePreview = ({
   preview,
   srSummary,
   rejected,
+  compact = false,
 }: RedlinePreviewProps) => {
   const baseCls = cn(
-    "text-foreground text-xs leading-snug break-words",
+    "text-foreground [font-family:Calibri,Arial,sans-serif] break-words",
+    compact
+      ? "line-clamp-1 text-[13.5px] leading-5"
+      : "text-[14.5px] leading-6",
     rejected && "opacity-60",
   );
   const muted = "text-muted-foreground/80";
+  const contextCls = "text-foreground/88";
   // oxlint-disable-next-line no-inline-style-colors/no-inline-style-colors -- emerald not in named-color blacklist
   const insCls =
-    "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1 py-0.5 rounded";
+    "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1 py-0.5 rounded-sm";
   const delCls =
-    "bg-destructive/10 text-destructive line-through decoration-destructive/70 px-1 py-0.5 rounded";
+    "bg-destructive/10 text-destructive line-through decoration-destructive/70 px-1 py-0.5 rounded-sm";
 
   const arrow = (
     <ArrowRightIcon
@@ -870,6 +970,20 @@ const RedlinePreview = ({
       className="text-muted-foreground/70 mx-1 inline size-3.5 align-middle"
     />
   );
+
+  const renderFormattedRuns = (
+    runs: readonly FolioAIBlockPreviewRun[],
+    className?: string,
+  ) =>
+    runs.map((run, index) => (
+      <span
+        className={className}
+        key={`${index}-${run.text}`}
+        style={previewRunStyle(run, compact)}
+      >
+        {run.text}
+      </span>
+    ));
 
   const renderDiff = (before: string, after: string) => {
     const segments = diffWordSegments(before, after);
@@ -901,13 +1015,72 @@ const RedlinePreview = ({
 
   switch (preview.type) {
     case "replaceInBlock":
+      if (isFormattedReplaceInBlockPreview(preview)) {
+        return (
+          <p aria-label={srSummary} className={baseCls}>
+            {renderFormattedRuns(
+              slicePreviewRuns(
+                preview.sourceRuns,
+                preview.contextStart,
+                preview.matchStart,
+              ),
+              contextCls,
+            )}
+            {renderFormattedRuns(
+              slicePreviewRuns(
+                preview.sourceRuns,
+                preview.matchStart,
+                preview.matchEnd,
+              ),
+              delCls,
+            )}
+            {arrow}
+            <span className={insCls}>{preview.after}</span>
+            {renderFormattedRuns(
+              slicePreviewRuns(
+                preview.sourceRuns,
+                preview.matchEnd,
+                preview.contextEnd,
+              ),
+              contextCls,
+            )}
+          </p>
+        );
+      }
+      return (
+        <p aria-label={srSummary} className={baseCls}>
+          {preview.contextBefore && (
+            <span className={contextCls}>{preview.contextBefore}</span>
+          )}
+          {renderDiff(preview.before, preview.after)}
+          {preview.contextAfter && (
+            <span className={contextCls}>{preview.contextAfter}</span>
+          )}
+        </p>
+      );
     case "replaceBlock":
+      if (preview.sourceRuns !== undefined) {
+        return (
+          <p aria-label={srSummary} className={baseCls}>
+            {renderFormattedRuns(preview.sourceRuns, delCls)}
+            {arrow}
+            <span className={insCls}>{preview.after}</span>
+          </p>
+        );
+      }
       return (
         <p aria-label={srSummary} className={baseCls}>
           {renderDiff(preview.before, preview.after)}
         </p>
       );
     case "deleteBlock":
+      if (preview.sourceRuns !== undefined) {
+        return (
+          <p aria-label={srSummary} className={baseCls}>
+            {renderFormattedRuns(preview.sourceRuns, delCls)}
+          </p>
+        );
+      }
       return (
         <p aria-label={srSummary} className={baseCls}>
           <span className={delCls}>{preview.before}</span>
@@ -917,10 +1090,29 @@ const RedlinePreview = ({
     case "insertAfterBlock":
       return (
         <p aria-label={srSummary} className={baseCls}>
+          {preview.anchorRuns !== undefined &&
+            preview.anchorEnd !== undefined && (
+              <>
+                {renderFormattedRuns(
+                  slicePreviewRuns(preview.anchorRuns, 0, preview.anchorEnd),
+                  contextCls,
+                )}
+                {arrow}
+              </>
+            )}
           <span className={insCls}>{preview.after}</span>
         </p>
       );
     case "commentOnBlock":
+      if (preview.anchorRuns !== undefined && preview.anchorEnd !== undefined) {
+        return (
+          <p aria-label={srSummary} className={cn(baseCls, muted)}>
+            {renderFormattedRuns(
+              slicePreviewRuns(preview.anchorRuns, 0, preview.anchorEnd),
+            )}
+          </p>
+        );
+      }
       return (
         <p aria-label={srSummary} className={cn(baseCls, muted)}>
           {preview.anchor}
@@ -956,6 +1148,63 @@ const SuggestionRow = ({
   const tone = severityTone(item.severity);
   const showArea =
     item.area.length > 0 && item.area !== REVIEW_UNSPECIFIED_AREA;
+  const isAccepted = item.status === "accepted";
+
+  if (isResolved) {
+    return (
+      <li
+        className={cn(
+          "group bg-muted/20 hover:bg-muted/30 relative rounded-md border px-2.5 py-2 transition-colors",
+          selected && "ring-ring ring-1",
+          (item.status === "rejected" || item.status === "skipped") &&
+            "opacity-65",
+        )}
+      >
+        <button
+          aria-label={item.summary}
+          className="focus-visible:ring-ring/60 absolute inset-0 rounded-md focus:outline-none focus-visible:ring-2"
+          onClick={onNavigate}
+          type="button"
+        />
+        <div className="pointer-events-none min-w-0 space-y-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              className={cn(
+                "text-muted-foreground flex shrink-0 items-center gap-1 text-[11px]",
+                isAccepted && "text-foreground/60",
+              )}
+            >
+              {item.status === "accepted" && <CheckIcon className="size-3" />}
+              {item.status === "rejected" && <XIcon className="size-3" />}
+              {item.status === "accepted" && t("docxReview.statusAccepted")}
+              {item.status === "rejected" && t("docxReview.statusRejected")}
+              {item.status === "skipped" && t("docxReview.statusSkipped")}
+            </span>
+            <div className="min-w-0 flex-1 opacity-70">
+              <RedlinePreview
+                compact
+                preview={item.preview}
+                rejected={item.status === "rejected"}
+                srSummary={item.summary}
+              />
+            </div>
+          </div>
+          {item.status === "skipped" && item.skipReason && (
+            <p className="text-destructive text-[11px]">
+              {t("docxReview.skipped", { reason: item.skipReason })}
+            </p>
+          )}
+        </div>
+        <button
+          className="text-muted-foreground hover:text-foreground relative mt-1 rounded px-1 py-0.5 text-[11px] transition-colors hover:underline"
+          onClick={onRevert}
+          type="button"
+        >
+          {t("docxReview.revert")}
+        </button>
+      </li>
+    );
+  }
 
   return (
     <li

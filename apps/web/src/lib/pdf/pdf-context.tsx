@@ -1,4 +1,11 @@
-import { createContext, Suspense, use, useEffect, useState } from "react";
+import {
+  createContext,
+  Suspense,
+  use,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { PropsWithChildren } from "react";
 
 import { panic } from "better-result";
@@ -31,7 +38,7 @@ import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { renderPage } from "@/lib/pdf/pdf-renderer";
 import type { PageViewport, PDFPageProxy } from "@/lib/pdf/pdfjs-loader";
 import type { ScrollAnchor } from "@/lib/pdf/utils";
-import { captureScrollAnchor } from "@/lib/pdf/utils";
+import { captureScrollAnchor, getPageId } from "@/lib/pdf/utils";
 
 // ── Types ──────────────────────────────────────────
 
@@ -96,6 +103,21 @@ type PDFActions = {
 };
 
 type PDFStore = PDFState & PDFActions;
+
+type GetPDFPageIdByNumberArgs = {
+  fieldId: string;
+  pages: Map<string, PageInfo>;
+  pageNumber: number;
+};
+
+export const getPDFPageIdByNumber = ({
+  fieldId,
+  pages,
+  pageNumber,
+}: GetPDFPageIdByNumberArgs): string | undefined => {
+  const pageId = getPageId(fieldId, pageNumber);
+  return pages.has(pageId) ? pageId : undefined;
+};
 
 // ── Store factory ──────────────────────────────────
 
@@ -560,6 +582,30 @@ export const usePDFStore = <T,>(selector: (state: PDFStore) => T): T => {
   }
   return useStore(store, selector);
 };
+
+/** Like {@link usePDFStore} but returns `undefined` when rendered
+ *  outside a {@link PDFProvider}. Use when the surrounding context is
+ *  optional (e.g. the metadata panel can render in a full-view lane
+ *  with no peek viewer mounted).
+ *
+ *  Implemented on top of `useSyncExternalStore` directly so we don't
+ *  need a fake `PDFStore` sentinel for `useStore`: when no provider is
+ *  present, both the subscribe and snapshot functions are no-ops that
+ *  yield `undefined`, which is a stable value across renders. */
+export const useOptionalPDFStore = <T,>(
+  selector: (state: PDFStore) => T,
+): T | undefined => {
+  const store = use(PDFStoreContext);
+  const subscribe = store?.subscribe ?? noopSubscribe;
+  const getSnapshot: () => T | undefined = store
+    ? () => selector(store.getState())
+    : returnUndefined;
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+};
+
+const noNoopUnsubscribe = (): void => undefined;
+const noopSubscribe = () => noNoopUnsubscribe;
+const returnUndefined = (): undefined => undefined;
 
 type PDFProviderProps = PropsWithChildren<{
   fieldId: string;

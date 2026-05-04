@@ -20,6 +20,7 @@ const schema = new Schema({
         // sees duplicate IDs.
         paraId: { default: null },
         textId: { default: null },
+        defaultTextFormatting: { default: null },
       },
     },
     text: {},
@@ -50,6 +51,35 @@ const schema = new Schema({
         { "data-comment-id": mark.attrs["commentId"] },
         0,
       ],
+    },
+    bold: {
+      toDOM: () => ["strong", 0],
+    },
+    italic: {
+      toDOM: () => ["em", 0],
+    },
+    fontSize: {
+      attrs: {
+        size: { default: 24 },
+      },
+      toDOM: (mark) => [
+        "span",
+        { style: `font-size: ${Number(mark.attrs["size"]) / 2}pt` },
+        0,
+      ],
+    },
+    fontFamily: {
+      attrs: {
+        ascii: { default: null },
+        hAnsi: { default: null },
+      },
+      toDOM: () => ["span", 0],
+    },
+    underline: {
+      attrs: {
+        style: { default: "single" },
+      },
+      toDOM: () => ["u", 0],
     },
   },
 });
@@ -169,6 +199,75 @@ describe("Folio AI edit operations", () => {
       },
     ]);
     expect(snapshot.anchors["b-0001"]?.textHash).toMatch(/^h/);
+  });
+
+  test("captures formatted preview runs in the AI-facing block snapshot", () => {
+    const boldType = schema.marks["bold"];
+    const italicType = schema.marks["italic"];
+    const fontSizeType = schema.marks["fontSize"];
+    const fontFamilyType = schema.marks["fontFamily"];
+    const underlineType = schema.marks["underline"];
+    if (
+      !boldType ||
+      !italicType ||
+      !fontSizeType ||
+      !fontFamilyType ||
+      !underlineType
+    ) {
+      throw new Error("schema missing formatting marks");
+    }
+
+    const state = EditorState.create({
+      schema,
+      doc: schema.node("doc", null, [
+        schema.node("paragraph", {}, [
+          schema.text("Plain "),
+          schema.text("Styled", [
+            boldType.create(),
+            italicType.create(),
+            underlineType.create({ style: "single" }),
+            fontSizeType.create({ size: 28 }),
+            fontFamilyType.create({ ascii: "Aptos", hAnsi: "Aptos" }),
+          ]),
+          schema.text(" No underline", [
+            underlineType.create({ style: "none" }),
+          ]),
+        ]),
+      ]),
+    });
+
+    const snapshot = createFolioAIEditSnapshot(state.doc);
+
+    expect(snapshot.blocks[0]?.text).toBe("Plain Styled No underline");
+    expect(snapshot.blocks[0]?.previewRuns).toEqual([
+      { text: "Plain " },
+      {
+        text: "Styled",
+        bold: true,
+        italic: true,
+        underline: true,
+        fontFamily: "Aptos",
+        fontSizePt: 14,
+      },
+      { text: " No underline" },
+    ]);
+  });
+
+  test("does not render explicit underline none as a formatted preview run", () => {
+    const state = EditorState.create({
+      schema,
+      doc: schema.node("doc", null, [
+        schema.node(
+          "paragraph",
+          { defaultTextFormatting: { underline: { style: "none" } } },
+          [schema.text("Cleared underline")],
+        ),
+      ]),
+    });
+
+    const snapshot = createFolioAIEditSnapshot(state.doc);
+
+    expect(snapshot.blocks[0]?.previewRuns).toBeUndefined();
   });
 
   test("applies safe replacements as tracked changes with an attached comment", () => {
