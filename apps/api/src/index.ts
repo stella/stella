@@ -56,20 +56,16 @@ import {
   InMemoryRateLimitContext,
   scopedGenerator,
 } from "@/api/lib/rate-limit";
+import { isS3Stale, refreshS3 } from "@/api/lib/s3";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 import { initWorkflowWorker } from "@/api/lib/workflow-queue";
-
-// BullMQ worker for asynchronous file derivatives.
-initFileDerivativeWorker();
-
-// BullMQ workflow worker for AI extraction.
-initWorkflowWorker();
 
 const HEALTH_PATH = "/health";
 const DEFAULT_API_PORT = 3001;
 const SESSION_ID_HEADER = "x-posthog-session-id";
 const SESSION_ID_MAX_LENGTH = 64;
 const SESSION_ID_PATTERN = /^[\w-]+$/;
+const S3_REFRESH_CHECK_INTERVAL_MS = 60_000;
 
 const getApiPort = () => {
   const rawPort = process.env["STELLA_API_PORT"];
@@ -331,5 +327,30 @@ const api = new Elysia()
   );
 
 export default api;
+
+const startS3RefreshLoop = () => {
+  const timer = setInterval(() => {
+    if (!isS3Stale()) {
+      return;
+    }
+
+    refreshS3().catch((error: unknown) => {
+      logger.error("s3.refresh_failed", {
+        "error.type": errorTag(error),
+      });
+    });
+  }, S3_REFRESH_CHECK_INTERVAL_MS);
+
+  timer.unref();
+};
+
+await refreshS3();
+startS3RefreshLoop();
+
+// BullMQ worker for asynchronous file derivatives.
+initFileDerivativeWorker();
+
+// BullMQ workflow worker for AI extraction.
+initWorkflowWorker();
 
 api.listen(getApiPort());
