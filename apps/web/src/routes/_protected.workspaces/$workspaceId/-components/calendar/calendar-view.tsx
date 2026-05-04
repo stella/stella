@@ -1,10 +1,9 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import type { UIEvent } from "react";
 
 import { toastManager } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon } from "lucide-react";
-import { useDebouncedCallback } from "use-debounce";
 import { useLocale, useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
@@ -24,13 +23,13 @@ import { TASK_STATUS_DOT_COLORS } from "./calendar-entity-chip";
 import { CalendarHeader } from "./calendar-header";
 import {
   formatMonthYearLabel,
-  getMonthDays,
   getWeekDays,
   getWeekdayLabels,
   isInternalDateProperty,
   isTaskDateProperty,
   TASK_DATE_IDS,
 } from "./calendar-utils";
+import type { CalendarDay } from "./calendar-utils";
 import {
   getCalendarVisibleRange,
   groupCalendarTasksByDate,
@@ -44,8 +43,138 @@ type CalendarViewProps = {
   workspaceId: string;
 };
 
+type MonthAnchor = {
+  column: number;
+  key: string;
+  label: string;
+  month: number;
+  year: number;
+};
+
+type CalendarWeekRow = {
+  key: string;
+  anchors: MonthAnchor[];
+  days: CalendarDay[];
+};
+
+const MONTH_WINDOW_SIZE = 9;
+const MONTH_WINDOW_SHIFT = 3;
+const MONTH_WINDOW_CENTER = Math.floor(MONTH_WINDOW_SIZE / 2);
+
 const toAllDayAgendaDateTime = (date: string): string =>
   new Date(`${date}T00:00:00.000Z`).toISOString();
+
+const startOfUTCMonth = (date: Date): Date =>
+  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+
+const addUTCMonths = (date: Date, amount: number): Date => {
+  const next = startOfUTCMonth(date);
+  next.setUTCMonth(next.getUTCMonth() + amount);
+  return next;
+};
+
+const getUTCMonthKey = (date: Date): string =>
+  `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+
+const getMonthDistance = (from: Date, to: Date): number =>
+  (to.getUTCFullYear() - from.getUTCFullYear()) * 12 +
+  (to.getUTCMonth() - from.getUTCMonth());
+
+const toUTCDateKey = (date: Date): string =>
+  `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+
+const startOfUTCWeek = (date: Date): Date => {
+  const start = new Date(date);
+  const dayOfWeek = (start.getUTCDay() + 6) % 7;
+  start.setUTCDate(start.getUTCDate() - dayOfWeek);
+  return start;
+};
+
+const addUTCDays = (date: Date, amount: number): Date => {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + amount);
+  return next;
+};
+
+const getContinuousWeekDays = (weekStart: Date): CalendarDay[] => {
+  const today = toUTCDateKey(new Date());
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = addUTCDays(weekStart, index);
+    const key = toUTCDateKey(date);
+    const month = date.getUTCMonth();
+    const startsMonth = date.getUTCDate() === 1;
+    const monthTone = month % 2 === 0 ? "muted" : null;
+
+    return {
+      date: key,
+      isCurrentMonth: true,
+      isToday: key === today,
+      ...(startsMonth && { startsMonth }),
+      ...(monthTone && { monthTone }),
+      isWeekend: index >= 5,
+    };
+  });
+};
+
+const getMonthAnchors = (locale: string, windowStart: Date): MonthAnchor[] =>
+  Array.from({ length: MONTH_WINDOW_SIZE }, (_, index) => {
+    const date = addUTCMonths(windowStart, index);
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+
+    return {
+      column: (date.getUTCDay() + 6) % 7,
+      key: getUTCMonthKey(date),
+      label: formatMonthYearLabel(locale, year, month),
+      month,
+      year,
+    };
+  });
+
+const getMonthWeekRows = (
+  locale: string,
+  windowStart: Date,
+): CalendarWeekRow[] => {
+  const anchors = getMonthAnchors(locale, windowStart);
+  const anchorsByWeek = new Map<string, MonthAnchor[]>();
+
+  for (const anchor of anchors) {
+    const anchorDate = new Date(Date.UTC(anchor.year, anchor.month, 1));
+    const weekKey = toUTCDateKey(startOfUTCWeek(anchorDate));
+    const bucket = anchorsByWeek.get(weekKey);
+    if (bucket) {
+      bucket.push(anchor);
+      continue;
+    }
+
+    anchorsByWeek.set(weekKey, [anchor]);
+  }
+
+  const rows: CalendarWeekRow[] = [];
+  const firstWeekStart = startOfUTCWeek(windowStart);
+  const lastMonth = addUTCMonths(windowStart, MONTH_WINDOW_SIZE - 1);
+  const lastWeekStart = startOfUTCWeek(
+    new Date(
+      Date.UTC(lastMonth.getUTCFullYear(), lastMonth.getUTCMonth() + 1, 0),
+    ),
+  );
+
+  for (
+    let weekStart = firstWeekStart;
+    weekStart <= lastWeekStart;
+    weekStart = addUTCDays(weekStart, 7)
+  ) {
+    const key = toUTCDateKey(weekStart);
+    rows.push({
+      key,
+      anchors: anchorsByWeek.get(key) ?? [],
+      days: getContinuousWeekDays(weekStart),
+    });
+  }
+
+  return rows;
+};
 
 export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   const t = useTranslations();
@@ -122,13 +251,28 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
 
   // Current viewport date (month/week navigation state)
   const [viewDate, setViewDate] = useState(() => new Date());
+  const [monthWindowStart, setMonthWindowStart] = useState(() =>
+    addUTCMonths(new Date(), -MONTH_WINDOW_CENTER),
+  );
+  const monthScrollRef = useRef<HTMLDivElement>(null);
+  const monthAnchorRefs = useRef(new Map<string, HTMLElement>());
+  const latestViewDate = useRef(viewDate);
+  const pendingScrollMonthKey = useRef<string | null>(null);
+  const pendingScrollAdjustment = useRef<{
+    key: string;
+    top: number;
+  } | null>(null);
+  const isShiftingMonthWindow = useRef(false);
 
   const year = viewDate.getUTCFullYear();
   const month = viewDate.getUTCMonth();
+  latestViewDate.current = viewDate;
+  const monthWeeks = getMonthWeekRows(locale, monthWindowStart);
+  const monthAnchors = getMonthAnchors(locale, monthWindowStart);
 
   const days =
     mode === "month"
-      ? getMonthDays(year, month)
+      ? monthWeeks.flatMap((week) => week.days)
       : mode === "week"
         ? getWeekDays(viewDate)
         : [];
@@ -167,12 +311,15 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   });
 
   const navigatePrev = () => {
+    if (mode === "month") {
+      scrollToMonth(addUTCMonths(viewDate, -1));
+      return;
+    }
+
     setViewDate((d) => {
       const next = new Date(d);
       if (mode === "year") {
         next.setUTCFullYear(next.getUTCFullYear() - 1);
-      } else if (mode === "month") {
-        next.setUTCMonth(next.getUTCMonth() - 1);
       } else {
         next.setUTCDate(next.getUTCDate() - 7);
       }
@@ -181,12 +328,15 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   };
 
   const navigateNext = () => {
+    if (mode === "month") {
+      scrollToMonth(addUTCMonths(viewDate, 1));
+      return;
+    }
+
     setViewDate((d) => {
       const next = new Date(d);
       if (mode === "year") {
         next.setUTCFullYear(next.getUTCFullYear() + 1);
-      } else if (mode === "month") {
-        next.setUTCMonth(next.getUTCMonth() + 1);
       } else {
         next.setUTCDate(next.getUTCDate() + 7);
       }
@@ -195,22 +345,147 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   };
 
   const navigateToday = () => {
-    setViewDate(new Date());
+    const today = new Date();
+    if (mode === "month") {
+      scrollToMonth(today);
+      return;
+    }
+
+    setViewDate(today);
   };
 
-  const wheelDirection = useRef(0);
-  const flushWheel = useDebouncedCallback(() => {
-    if (wheelDirection.current < 0) {
-      navigatePrev();
-    } else if (wheelDirection.current > 0) {
-      navigateNext();
+  const getVisibleMonthAnchor = () => {
+    const container = monthScrollRef.current;
+    if (!container) {
+      return null;
     }
-    wheelDirection.current = 0;
-  }, 120);
-  const handleWheel = (e: React.WheelEvent) => {
-    wheelDirection.current += e.deltaY;
-    flushWheel();
+
+    const markerY = container.getBoundingClientRect().top + 48;
+    let visible: { key: string; anchor: MonthAnchor; top: number } | null =
+      null;
+
+    for (const anchor of monthAnchors) {
+      const element = monthAnchorRefs.current.get(anchor.key);
+      if (!element) {
+        continue;
+      }
+
+      const top = element.getBoundingClientRect().top;
+      if (top > markerY) {
+        return visible ?? { key: anchor.key, anchor, top };
+      }
+
+      visible = { key: anchor.key, anchor, top };
+    }
+
+    return visible;
   };
+
+  const updateVisibleMonth = () => {
+    const anchor = getVisibleMonthAnchor();
+    if (!anchor) {
+      return;
+    }
+
+    if (anchor.anchor.year === year && anchor.anchor.month === month) {
+      return;
+    }
+
+    setViewDate(new Date(Date.UTC(anchor.anchor.year, anchor.anchor.month, 1)));
+  };
+
+  const shiftMonthWindow = (amount: number) => {
+    if (isShiftingMonthWindow.current) {
+      return;
+    }
+
+    const anchor = getVisibleMonthAnchor();
+    if (anchor) {
+      pendingScrollAdjustment.current = {
+        key: anchor.key,
+        top: anchor.top,
+      };
+    }
+
+    isShiftingMonthWindow.current = true;
+    setMonthWindowStart((start) => addUTCMonths(start, amount));
+  };
+
+  const handleMonthScroll = (event: UIEvent<HTMLDivElement>) => {
+    updateVisibleMonth();
+
+    const { clientHeight, scrollHeight, scrollTop } = event.currentTarget;
+    if (scrollTop < clientHeight) {
+      shiftMonthWindow(-MONTH_WINDOW_SHIFT);
+      return;
+    }
+
+    if (scrollHeight - scrollTop - clientHeight < clientHeight) {
+      shiftMonthWindow(MONTH_WINDOW_SHIFT);
+    }
+  };
+
+  const scrollToMonth = (date: Date) => {
+    const target = startOfUTCMonth(date);
+    const targetKey = getUTCMonthKey(target);
+    pendingScrollMonthKey.current = targetKey;
+    setViewDate(target);
+
+    setMonthWindowStart((start) => {
+      const distance = getMonthDistance(start, target);
+      if (distance >= 0 && distance < MONTH_WINDOW_SIZE) {
+        return start;
+      }
+
+      return addUTCMonths(target, -MONTH_WINDOW_CENTER);
+    });
+
+    const element = monthAnchorRefs.current.get(targetKey);
+    if (element) {
+      element.scrollIntoView({ block: "start" });
+      pendingScrollMonthKey.current = null;
+    }
+  };
+
+  useLayoutEffect(() => {
+    if (mode !== "month") {
+      return;
+    }
+
+    const key = getUTCMonthKey(startOfUTCMonth(latestViewDate.current));
+    pendingScrollMonthKey.current = key;
+  }, [mode]);
+
+  useLayoutEffect(() => {
+    const container = monthScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const adjustment = pendingScrollAdjustment.current;
+    if (adjustment) {
+      const element = monthAnchorRefs.current.get(adjustment.key);
+      if (element) {
+        container.scrollTop +=
+          element.getBoundingClientRect().top - adjustment.top;
+      }
+      pendingScrollAdjustment.current = null;
+      isShiftingMonthWindow.current = false;
+    }
+
+    const scrollKey = pendingScrollMonthKey.current;
+    if (!scrollKey) {
+      return;
+    }
+
+    const element = monthAnchorRefs.current.get(scrollKey);
+    if (!element) {
+      return;
+    }
+
+    element.scrollIntoView({ block: "start" });
+    pendingScrollMonthKey.current = null;
+  }, [mode, monthWindowStart, viewDate]);
 
   const handleDrop = (date: string, entityId: string, kind: string) => {
     if (!isEditable) {
@@ -314,14 +589,21 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
         : monthLabel;
 
   return (
-    <div className="flex h-full min-w-0 flex-col" onWheel={handleWheel}>
+    <div className="flex h-full min-w-0 flex-col">
       <CalendarHeader
         headerLabel={headerLabel}
         month={month}
         onNavigateNext={navigateNext}
         onNavigatePrev={navigatePrev}
         onNavigateToday={navigateToday}
-        onSetViewDate={setViewDate}
+        onSetViewDate={(date) => {
+          if (mode === "month") {
+            scrollToMonth(date);
+            return;
+          }
+
+          setViewDate(date);
+        }}
         year={year}
       />
 
@@ -336,19 +618,70 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
           }}
           year={year}
         />
+      ) : mode === "month" ? (
+        <>
+          <CalendarWeekHeader weekdayLabels={weekdayLabels} />
+
+          <div
+            className="relative flex-1 overflow-y-auto overscroll-contain"
+            onScroll={handleMonthScroll}
+            ref={monthScrollRef}
+          >
+            <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 text-muted-foreground sticky top-0 z-20 border-b px-4 py-1.5 text-xs font-medium backdrop-blur">
+              {monthLabel}
+            </div>
+
+            {monthWeeks.map((week) => (
+              <div className="contents" key={week.key}>
+                {week.anchors.map((anchor) => (
+                  <div
+                    className="bg-background/70 grid h-6 scroll-mt-7 grid-cols-7 border-b"
+                    key={anchor.key}
+                    ref={(element) => {
+                      if (element) {
+                        monthAnchorRefs.current.set(anchor.key, element);
+                        return;
+                      }
+
+                      monthAnchorRefs.current.delete(anchor.key);
+                    }}
+                  >
+                    <div
+                      className="border-s-foreground/35 text-muted-foreground after:bg-foreground/35 relative flex items-center border-s-2 px-2 text-xs font-medium after:absolute after:-start-0.5 after:-bottom-px after:h-px after:w-0.5"
+                      style={{ gridColumn: `${anchor.column + 1} / 8` }}
+                    >
+                      {anchor.label}
+                    </div>
+                  </div>
+                ))}
+                <div className="grid min-h-[calc((100%_-_1.75rem)/6)] grid-cols-7">
+                  {week.days.map((day) => (
+                    <CalendarDayCell
+                      day={day}
+                      entries={entitiesByDate.get(day.date) ?? []}
+                      isEditable={isEditable}
+                      key={day.date}
+                      mode="month"
+                      onCreate={(kind) => {
+                        handleCreate(day.date, kind).catch(() => {
+                          // Error handled inside handleCreate
+                        });
+                      }}
+                      onDrop={(entityId, kind) =>
+                        handleDrop(day.date, entityId, kind)
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       ) : (
         <>
           <CalendarWeekHeader weekdayLabels={weekdayLabels} />
 
-          {/* Day grid */}
-          <div
-            className={cn(
-              "grid flex-1",
-              mode === "month"
-                ? "grid-cols-7 grid-rows-6"
-                : "grid-cols-7 grid-rows-1",
-            )}
-          >
+          <div className="grid flex-1 grid-cols-7 grid-rows-1">
             {days.map((day) => (
               <CalendarDayCell
                 day={day}
