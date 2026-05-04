@@ -56,20 +56,21 @@ export const ChatInputSurface = ({
     setSubmitHandler,
     submit,
   } = controller;
+  const inputDisabled = disabled || isGenerating;
 
   const submitDraft = useCallback(async () => {
     // While the assistant is streaming we render Stop in place of
     // Send, but Enter still calls submit unless we gate it here.
     // Without this guard, a user pressing Enter during a turn fires
     // an overlapping `sendMessage` and the two responses interleave.
-    if (disabled || isGenerating) {
+    if (inputDisabled) {
       return;
     }
 
     await submit(async (draft) => {
       await onSubmit(draft);
     });
-  }, [disabled, isGenerating, onSubmit, submit]);
+  }, [inputDisabled, onSubmit, submit]);
 
   useEffect(() => {
     setSubmitHandler(submitDraft);
@@ -86,17 +87,25 @@ export const ChatInputSurface = ({
     focus();
   }, [autoFocus, focus]);
 
+  useEffect(() => {
+    editor?.setEditable(!inputDisabled);
+    if (inputDisabled) {
+      editor?.commands.blur();
+    }
+  }, [editor, inputDisabled]);
+
   return (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/no-noninteractive-element-interactions
     <div
       className={cn(
         "bg-background rounded-lg border",
-        "focus-within:border-ring transition-colors",
+        "transition-colors",
+        !inputDisabled && "focus-within:border-ring",
         className,
       )}
-      onDragOver={disabled ? undefined : handleDragOver}
-      onDrop={disabled ? undefined : handleDrop}
-      onPaste={disabled ? undefined : handlePaste}
+      onDragOver={inputDisabled ? undefined : handleDragOver}
+      onDrop={inputDisabled ? undefined : handleDrop}
+      onPaste={inputDisabled ? undefined : handlePaste}
     >
       <ChatDraftAttachmentChips files={attachments} onRemove={removeFile} />
       <div
@@ -104,7 +113,10 @@ export const ChatInputSurface = ({
         onKeyDown={(event) => event.stopPropagation()}
         role="presentation"
       >
-        <EditorContent editor={editor} />
+        <EditorContent
+          className={cn(inputDisabled && "pointer-events-none")}
+          editor={editor}
+        />
         {isEmpty && attachments.length === 0 && (
           <span
             aria-hidden="true"
@@ -116,7 +128,7 @@ export const ChatInputSurface = ({
       </div>
       <div className="flex items-center gap-0.5 px-1.5 pb-1.5">
         <Button
-          disabled={disabled}
+          disabled={inputDisabled}
           onClick={openFilePicker}
           size="icon-sm"
           variant="ghost"
@@ -126,7 +138,7 @@ export const ChatInputSurface = ({
         <input
           accept={fileInputAccept}
           className="hidden"
-          disabled={disabled}
+          disabled={inputDisabled}
           multiple
           onChange={handleFileInputChange}
           ref={fileInputRef}
@@ -145,9 +157,9 @@ export const ChatInputSurface = ({
           <Button
             className={cn(
               "bg-foreground text-background hover:bg-foreground/90 ms-auto shrink-0",
-              (disabled || !canSubmit) && "opacity-50",
+              (inputDisabled || !canSubmit) && "opacity-50",
             )}
-            disabled={disabled || !canSubmit}
+            disabled={inputDisabled || !canSubmit}
             onClick={() => {
               void submitDraft();
             }}

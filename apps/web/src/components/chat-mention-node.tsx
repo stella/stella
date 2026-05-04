@@ -68,7 +68,7 @@ export const ChatMentionNode = (props: NodeViewProps) => {
     <NodeViewWrapper className="inline">
       <span
         className={cn(
-          "inline-flex max-w-full items-center gap-0.5",
+          "inline-flex max-w-full items-center gap-0.5 align-middle",
           "bg-accent rounded px-1 py-0.5",
           "text-accent-foreground text-xs font-medium",
           sourceWorkspaceColor !== null && "border",
