@@ -3,8 +3,16 @@ import { useTranslations } from "use-intl";
 
 import { sanitizeHref } from "@/lib/sanitize-href";
 
+type ProviderName =
+  | "Gmail"
+  | "Outlook"
+  | "iCloud"
+  | "Yahoo"
+  | "Proton Mail"
+  | "Fastmail";
+
 type Provider = {
-  readonly name: string;
+  readonly name: ProviderName;
   readonly url: string;
   readonly domains: readonly string[];
 };
@@ -44,7 +52,7 @@ const PROVIDERS: readonly Provider[] = [
 
 // Most corporate domains run on Workspace or M365, so a generic email
 // from a custom domain gets the two best-guess buttons.
-const isFallbackProvider = (name: string) =>
+const isFallbackProvider = (name: ProviderName) =>
   name === "Gmail" || name === "Outlook";
 
 const getProvidersForEmail = (email: string): readonly Provider[] => {
