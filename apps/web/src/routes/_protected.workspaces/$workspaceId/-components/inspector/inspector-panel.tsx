@@ -1262,7 +1262,41 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 />
               )}
               {sidepeekFacet === "suggestions" && (
-                <SuggestionsFacet entityId={tab.entityId} />
+                <SuggestionsFacet
+                  entityId={tab.entityId}
+                  // Quick fix: sidepeek's DOCX editor unmounts when
+                  // the user switches off Preview, so Accept on a
+                  // suggestion has no live editor to apply against.
+                  // Route to the DOCX main view, where the editor is
+                  // mounted by default and the same `<SuggestionsFacet>`
+                  // (rendered by the fullscreen branch above) reuses
+                  // the registration.
+                  // TODO: replace with an in-app approval flow that
+                  // doesn't need the full editor mounted.
+                  onMissingEditor={() => {
+                    // Pre-select the suggestions facet on the
+                    // inspector store so the document route's
+                    // inspector lands directly on this panel
+                    // instead of the default Preview.
+                    setPdfFacet(tab.id, "suggestions");
+                    // Push a fresh history entry — `replace: true`
+                    // here was a no-op visually (TanStack treated
+                    // the same-href replacement as nothing to do
+                    // and the page didn't actually transition).
+                    void navigate({
+                      to: "/workspaces/$workspaceId/$viewId/document",
+                      params: {
+                        workspaceId: tab.workspaceId,
+                        viewId: peekPdfViewId,
+                      },
+                      search: (prev) => ({
+                        ...prev,
+                        entity: tab.entityId,
+                        field: tab.id,
+                      }),
+                    });
+                  }}
+                />
               )}
             </div>
           );

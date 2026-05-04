@@ -128,6 +128,10 @@ function LoginOrSignup() {
             toastManager.add({
               title: `Dev OTP: ${parsed.output.otp}`,
               type: "info",
+              // Dev-only convenience toast — once the user reads the
+              // code there's nothing left to do with it. Auto-dismiss
+              // so it doesn't pile up across sign-in attempts.
+              timeout: 8000,
             });
           }
         }
