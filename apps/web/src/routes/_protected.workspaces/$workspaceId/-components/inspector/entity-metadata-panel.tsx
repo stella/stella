@@ -356,7 +356,7 @@ const EntityMetadataContent = ({
                       fileFieldId !== null && (
                         <div className="border-s-primary mx-2 mb-2 max-h-48 overflow-y-auto border-s-2 ps-3">
                           <div className="text-primary mb-1 text-[10px] font-semibold tracking-wide uppercase">
-                            Justification
+                            {t("workspaces.justification")}
                           </div>
                           <div className="text-foreground/80 text-xs leading-relaxed break-words">
                             <Justification

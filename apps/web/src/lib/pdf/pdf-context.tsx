@@ -38,7 +38,7 @@ import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { renderPage } from "@/lib/pdf/pdf-renderer";
 import type { PageViewport, PDFPageProxy } from "@/lib/pdf/pdfjs-loader";
 import type { ScrollAnchor } from "@/lib/pdf/utils";
-import { captureScrollAnchor } from "@/lib/pdf/utils";
+import { captureScrollAnchor, getPageId } from "@/lib/pdf/utils";
 
 // ── Types ──────────────────────────────────────────
 
@@ -103,6 +103,21 @@ type PDFActions = {
 };
 
 type PDFStore = PDFState & PDFActions;
+
+type GetPDFPageIdByNumberArgs = {
+  fieldId: string;
+  pages: Map<string, PageInfo>;
+  pageNumber: number;
+};
+
+export const getPDFPageIdByNumber = ({
+  fieldId,
+  pages,
+  pageNumber,
+}: GetPDFPageIdByNumberArgs): string | undefined => {
+  const pageId = getPageId(fieldId, pageNumber);
+  return pages.has(pageId) ? pageId : undefined;
+};
 
 // ── Store factory ──────────────────────────────────
 

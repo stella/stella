@@ -43,7 +43,11 @@ import * as v from "valibot";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
-import { PDFProvider, usePDFStore } from "@/lib/pdf/pdf-context";
+import {
+  PDFProvider,
+  getPDFPageIdByNumber,
+  usePDFStore,
+} from "@/lib/pdf/pdf-context";
 import { toSafeId } from "@/lib/safe-id";
 import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
@@ -99,7 +103,13 @@ export const Route = createFileRoute(
 const AnonymizeScrollSync = () => {
   const pageNumber = Route.useSearch({ select: (s) => s.pdfPage ?? 1 });
   const setScrollTo = usePDFStore((s) => s.setScrollTo);
-  const pages = usePDFStore((s) => s.pages);
+  const pageId = usePDFStore((s) =>
+    getPDFPageIdByNumber({
+      fieldId: s.fieldId,
+      pages: s.pages,
+      pageNumber,
+    }),
+  );
   const pendingAnonymizeEntityId = useWorkspaceStore(
     (s) => s.pdfViewer.pendingAnonymizeEntityId,
   );
@@ -108,13 +118,7 @@ const AnonymizeScrollSync = () => {
   );
 
   useEffect(() => {
-    if (pendingAnonymizeEntityId === null || pages.size === 0) {
-      return;
-    }
-
-    const pageIds = [...pages.keys()];
-    const pageId = pageIds[pageNumber - 1];
-    if (pageId === undefined) {
+    if (pendingAnonymizeEntityId === null || pageId === undefined) {
       return;
     }
 
@@ -127,8 +131,7 @@ const AnonymizeScrollSync = () => {
     });
     setPendingAnonymizeEntityId(null);
   }, [
-    pageNumber,
-    pages,
+    pageId,
     pendingAnonymizeEntityId,
     setPendingAnonymizeEntityId,
     setScrollTo,
@@ -150,27 +153,26 @@ const JustificationScrollSync = () => {
   const justificationPage = Route.useSearch({
     select: (s) => s.justificationPage,
   });
-  const pages = usePDFStore((s) => s.pages);
+  const pageId = usePDFStore((s) =>
+    justificationPage === undefined
+      ? undefined
+      : getPDFPageIdByNumber({
+          fieldId: s.fieldId,
+          pages: s.pages,
+          pageNumber: justificationPage,
+        }),
+  );
   const setScrollTo = usePDFStore((s) => s.setScrollTo);
 
   useEffect(() => {
-    if (
-      !justificationId ||
-      justificationPage === undefined ||
-      pages.size === 0
-    ) {
-      return;
-    }
-    const pageIds = [...pages.keys()];
-    const pageId = pageIds[justificationPage - 1];
-    if (pageId === undefined) {
+    if (!justificationId || pageId === undefined) {
       return;
     }
     setScrollTo({
       pageId,
       target: { kind: "justification", id: justificationId },
     });
-  }, [justificationId, justificationPage, pages, setScrollTo]);
+  }, [justificationId, pageId, setScrollTo]);
 
   return null;
 };

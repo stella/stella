@@ -5,7 +5,10 @@ import { cn } from "@stll/ui/lib/utils";
 import { useNavigate } from "@tanstack/react-router";
 
 import type { Citation } from "@/lib/citations";
-import { useOptionalPDFStore } from "@/lib/pdf/pdf-context";
+import {
+  getPDFPageIdByNumber,
+  useOptionalPDFStore,
+} from "@/lib/pdf/pdf-context";
 import { renderJustificationContent } from "@/lib/render-justification-content";
 import type { WorkspaceJustification } from "@/lib/types";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -34,6 +37,7 @@ export const PeekJustification = ({
   // where no peek viewer exists. Fall back to undefined and let the
   // route URL drive bbox highlighting via setActiveJustification.
   const pages = useOptionalPDFStore((s) => s.pages);
+  const pdfFieldId = useOptionalPDFStore((s) => s.fieldId);
   const setScrollTo = useOptionalPDFStore((s) => s.setScrollTo);
   const requestBlockScroll = useInspectorStore((s) => s.requestBlockScroll);
   // Used to push `justificationPage` into the route's URL so the
@@ -46,6 +50,8 @@ export const PeekJustification = ({
   // infinite effect loop).
   const pagesRef = useRef(pages);
   pagesRef.current = pages;
+  const pdfFieldIdRef = useRef(pdfFieldId);
+  pdfFieldIdRef.current = pdfFieldId;
 
   const handleCitationClick = useCallback(
     (citation: Citation) => {
@@ -63,7 +69,10 @@ export const PeekJustification = ({
         });
         // Update the route's `?justificationPage=` so the document
         // route's JustificationScrollSync drives the full-view PDF.
-        // Falls back to no-op if no router context is available.
+        // SAFETY: PeekJustification renders under multiple workspace
+        // routes. TanStack cannot infer that all current routes accept
+        // this shared search updater, but each caller is in workspace
+        // chrome where preserving existing search params is valid.
         // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
         void navigate({
           replace: true,
@@ -72,15 +81,19 @@ export const PeekJustification = ({
             justificationPage: citation.pageNumber,
           }),
         } as Parameters<typeof navigate>[0]);
-        if (pagesRef.current && setScrollTo) {
-          const pageIds = [...pagesRef.current.keys()];
-          const pageId = pageIds[citation.pageNumber - 1];
-          if (pageId !== undefined) {
-            setScrollTo({
-              pageId,
-              target: { kind: "justification", id: justification.id },
-            });
-          }
+        const pageId =
+          pagesRef.current && pdfFieldIdRef.current
+            ? getPDFPageIdByNumber({
+                fieldId: pdfFieldIdRef.current,
+                pages: pagesRef.current,
+                pageNumber: citation.pageNumber,
+              })
+            : undefined;
+        if (pageId && setScrollTo) {
+          setScrollTo({
+            pageId,
+            target: { kind: "justification", id: justification.id },
+          });
         }
         return;
       }
@@ -144,15 +157,19 @@ export const PeekJustification = ({
         id: justification.id,
         pageNumber: firstCitation.pageNumber,
       });
-      if (pagesRef.current && setScrollTo) {
-        const pageIds = [...pagesRef.current.keys()];
-        const pageId = pageIds[firstCitation.pageNumber - 1];
-        if (pageId !== undefined) {
-          setScrollTo({
-            pageId,
-            target: { kind: "justification", id: justification.id },
-          });
-        }
+      const pageId =
+        pagesRef.current && pdfFieldIdRef.current
+          ? getPDFPageIdByNumber({
+              fieldId: pdfFieldIdRef.current,
+              pages: pagesRef.current,
+              pageNumber: firstCitation.pageNumber,
+            })
+          : undefined;
+      if (pageId && setScrollTo) {
+        setScrollTo({
+          pageId,
+          target: { kind: "justification", id: justification.id },
+        });
       }
       return;
     }

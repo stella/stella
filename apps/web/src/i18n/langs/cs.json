@@ -1291,18 +1291,18 @@
   },
   "selfhost": {
     "dismissUpdate": "Dismiss update notice",
-    "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
+    "updateAvailable": "Stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
   },
   "settings": {
     "account": {
       "desktop": "Aplikace pro počítač",
       "desktopAppDescription": "Otevírejte dokumenty a soubory přímo ve stella z vašeho počítače.",
-      "desktopDescription": "Nainstalujte si Stella na svůj počítač",
-      "desktopDownloadMac": "Download for macOS",
-      "desktopDownloadOtherMac": "On Windows? Download for Windows",
-      "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments",
-      "desktopDownloadWindows": "Download for Windows",
+      "desktopDescription": "Nainstalujte si stella na svůj počítač",
+      "desktopDownloadMac": "Stáhnout pro macOS",
+      "desktopDownloadOtherMac": "Máte Windows? Stáhnout pro Windows",
+      "desktopDownloadOtherWindows": "Nebo si stáhněte instalátor .msi pro IT spravovaná nasazení",
+      "desktopDownloadWindows": "Stáhnout pro Windows",
       "preferredName": "Preferred name",
       "preferredNameDescription": "Used as the author for DOCX tracked changes and comments.",
       "preferredNamePlaceholder": "Your name",
@@ -1548,7 +1548,7 @@
         "takeoverWaiting": "Čekání na odpověď",
         "takeoverWaitingDescription": "Žádáme {name} o uvolnění zámku...",
         "unavailableDescription": "Před použitím desktopových úprav spusťte stella desktop a nechte ho běžet.",
-        "unavailableTitle": "stella desktop není k dispozici."
+        "unavailableTitle": "Stella desktop není k dispozici."
       },
       "downloadAsZip": "Stáhnout .zip soubor",
       "downloadOriginal": "Původní soubor",
@@ -1794,7 +1794,7 @@
       "keepEmpty": "Ponechat prázdné",
       "manualColumn": "Manuální sloupec",
       "multiOptionsFooter": "Možnosti mimo tento seznam nebudou vybrány. Stella může vybrat více možností na dokument.",
-      "multiOptionsHelp": "stella vybere jednu nebo více z těchto pro každý řádek",
+      "multiOptionsHelp": "Stella vybere jednu nebo více z těchto pro každý řádek",
       "multiOptionsTitle": "Více možností",
       "multiSelect": "Vícenásobný výběr",
       "nameProperty": "Vlastnost názvu",
@@ -1826,7 +1826,7 @@
       "selectOperator": "Vyberte operátor",
       "setPromptPlaceholder": "Nastavte prompt pro extrakci informací",
       "singleOptionsFooter": "Možnosti mimo tento seznam nebudou vybrány. Stella vybírá jednu nejlepší shodu na dokument.",
-      "singleOptionsHelp": "stella vybere přesně jednu z těchto pro každý řádek",
+      "singleOptionsHelp": "Stella vybere přesně jednu z těchto pro každý řádek",
       "singleOptionsTitle": "Jednotlivé možnosti",
       "singleSelect": "Jednoduchý výběr",
       "sortAscending": "Řadit vzestupně",

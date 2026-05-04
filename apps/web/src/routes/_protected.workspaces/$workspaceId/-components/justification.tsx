@@ -3,7 +3,10 @@ import { useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
 
 import type { Citation } from "@/lib/citations";
-import { useOptionalPDFStore } from "@/lib/pdf/pdf-context";
+import {
+  getPDFPageIdByNumber,
+  useOptionalPDFStore,
+} from "@/lib/pdf/pdf-context";
 import { renderJustificationContent } from "@/lib/render-justification-content";
 import type { WorkspaceJustification } from "@/lib/types";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -71,7 +74,13 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
   // The metadata panel can render in a full-view lane that sits
   // outside the route's PDFProvider; fall back to URL-driven scroll
   // (handled by JustificationScrollSync inside the route's provider).
-  const pages = useOptionalPDFStore((s) => s.pages);
+  const pageId = useOptionalPDFStore((s) =>
+    getPDFPageIdByNumber({
+      fieldId: s.fieldId,
+      pages: s.pages,
+      pageNumber: citation.pageNumber,
+    }),
+  );
   const setScrollTo = useOptionalPDFStore((s) => s.setScrollTo);
 
   return (
@@ -80,7 +89,6 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
         CITATION_CHIP_CLASSES,
         isActive && "bg-primary/25 hover:bg-primary/25",
       )}
-      // eslint-disable-next-line typescript/no-misused-promises
       // eslint-disable-next-line typescript/no-misused-promises
       onClick={() => {
         void (async () => {
@@ -95,17 +103,13 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
             .justifications.find(
               (j) => j.id === justification.id,
             )?.boundingBoxes;
-          if (pages && setScrollTo) {
-            const pageIds = [...pages.keys()];
-            const pageId = pageIds[citation.pageNumber - 1];
-            if (pageId !== undefined) {
-              setScrollTo({
-                pageId,
-                target: boundingBoxes
-                  ? { kind: "justification", id: justification.id }
-                  : undefined,
-              });
-            }
+          if (pageId && setScrollTo) {
+            setScrollTo({
+              pageId,
+              target: boundingBoxes
+                ? { kind: "justification", id: justification.id }
+                : undefined,
+            });
           }
           await navigate({
             replace: true,
