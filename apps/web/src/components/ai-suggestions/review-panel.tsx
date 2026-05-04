@@ -485,11 +485,11 @@ export const ReviewPanel = ({
          *  reviewer an at-a-glance sense of how far they've gotten;
          *  the dropdown lets them switch axis without burning two
          *  full toggle buttons in a narrow facet panel. */}
-        <div className="flex items-center gap-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="flex max-w-full min-w-36 flex-1 items-center gap-2">
             <div
               aria-hidden="true"
-              className="bg-muted h-1 w-full max-w-[140px] overflow-hidden rounded-full"
+              className="bg-muted h-1 min-w-12 flex-1 overflow-hidden rounded-full"
             >
               <div
                 className="h-full bg-emerald-500 transition-[width] duration-300 ease-out dark:bg-emerald-400"
@@ -513,8 +513,8 @@ export const ReviewPanel = ({
               </span>
             </span>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5 text-xs">
-            <span className="text-muted-foreground">
+          <div className="flex max-w-full min-w-0 items-center gap-1.5 text-xs">
+            <span className="text-muted-foreground shrink-0">
               {t("docxReview.groupBy")}:
             </span>
             <Select
@@ -526,7 +526,7 @@ export const ReviewPanel = ({
               }}
               value={groupAxis}
             >
-              <SelectTrigger className="hover:bg-muted h-7 w-auto min-w-0 gap-1 border-0 bg-transparent px-1.5 text-xs font-medium">
+              <SelectTrigger className="hover:bg-muted h-7 w-44 min-w-0 justify-between gap-1 border-0 bg-transparent px-1.5 text-xs font-medium">
                 <SelectValue />
               </SelectTrigger>
               <SelectPopup>
@@ -543,8 +543,8 @@ export const ReviewPanel = ({
          *  apply-mode dropdown grouped together so the user sees
          *  the bulk action and how it'll be applied side by side. */}
         {pendingCount > 0 && (
-          <div className="mt-2.5 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-2">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
               <Button
                 className="h-8 px-2.5 text-xs"
                 onClick={() => {
@@ -564,8 +564,8 @@ export const ReviewPanel = ({
                 {t("docxReview.rejectAll")}
               </button>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5 text-xs">
-              <span className="text-muted-foreground">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-muted-foreground shrink-0">
                 {t("docxReview.applyAs")}
               </span>
               <Select
@@ -576,7 +576,7 @@ export const ReviewPanel = ({
                 }}
                 value={applyMode}
               >
-                <SelectTrigger className="hover:bg-muted h-7 w-auto min-w-0 gap-1 border-0 bg-transparent px-1.5 text-xs font-medium">
+                <SelectTrigger className="hover:bg-muted h-7 w-40 min-w-0 justify-between gap-1 border-0 bg-transparent px-1.5 text-xs font-medium">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectPopup>
