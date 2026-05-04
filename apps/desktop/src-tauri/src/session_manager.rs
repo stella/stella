@@ -368,6 +368,11 @@ impl SessionManager {
 
     AppSnapshot {
       bridge_port: self.bridge_port,
+      bridge_version: crate::types::BRIDGE_VERSION,
+      capabilities: crate::types::BRIDGE_CAPABILITIES
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect(),
       linked_account: self.linked_account.clone(),
       notification_preferences: self.notification_preferences.clone(),
       running_since: self.running_since.clone(),

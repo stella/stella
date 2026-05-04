@@ -108,10 +108,28 @@ impl Default for DesktopUpdateSnapshot {
   }
 }
 
+/// Monotonic integer the web app uses to feature-detect the
+/// bridge protocol it's talking to. Increment by 1 every time a
+/// new bridge endpoint or backwards-compatible field is added so
+/// the web side can gate features on `snapshot.bridgeVersion >= N`
+/// without coupling to the desktop's literal app version.
+pub const BRIDGE_VERSION: u32 = 1;
+
+/// Feature flags advertised to the web app. Add a string here
+/// whenever a new capability lands on the bridge so the web app
+/// can check for it explicitly (e.g. `caps.includes("docx.v2")`).
+/// Strictly additive — never remove a string once shipped or older
+/// web builds will assume the capability is gone and degrade.
+pub const BRIDGE_CAPABILITIES: &[&str] = &[];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSnapshot {
   pub bridge_port: u16,
+  /// See [`BRIDGE_VERSION`].
+  pub bridge_version: u32,
+  /// See [`BRIDGE_CAPABILITIES`].
+  pub capabilities: Vec<String>,
   pub linked_account: Option<LinkedAccountSnapshot>,
   pub notification_preferences: DesktopNotificationPreferences,
   pub running_since: String,
