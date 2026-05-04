@@ -1,0 +1,107 @@
+name: Synthetic Prod Check
+
+# Runs every 5 minutes against the live app, exercises the user-
+# critical paths, and pings the heartbeat monitor on success. Skips
+# the ping on failure so the monitor times out and pages.
+#
+# Why this exists: a production incident on the user-critical
+# upload + chat path took ~30 minutes to surface — the issue had
+# been latent for weeks but only an actual user retry brought it
+# to attention. A 5-minute synthetic test would have detected it
+# within one cycle.
+#
+# Today (v1) only checks that public endpoints respond correctly.
+# v2 (TODO) authenticates as a synthetic-account user, uploads a
+# small file, sends a chat prompt, deletes the test entity. That
+# requires provisioning a dedicated synthetic-monitor user with
+# scoped permissions and storing its credentials in repo secrets.
+
+on:
+  schedule:
+    # Every 5 minutes. GitHub Actions cron drift can push this
+    # to ~7-8 minutes in practice; the heartbeat monitor's grace
+    # period must accommodate.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: API health
+        id: api_health
+        run: |
+          # Expect a 200 with {"status":"ok","version":"X.Y.Z"}.
+          # Don't assert a specific version — that's fragile during
+          # rollouts. Just assert ok.
+          body=$(curl -fsS -m 10 "https://api.stll.app/health")
+          echo "  body: $body"
+          status=$(printf '%s' "$body" | jq -r '.status')
+          if [[ "$status" != "ok" ]]; then
+            echo "::error::API health status is '$status', expected 'ok'"
+            exit 1
+          fi
+
+      - name: Frontend reachable
+        run: |
+          # SPA shell. Assert 200 and the index.html contains the
+          # SPA bootstrap div (not just any 200 — CloudFront error
+          # pages also return 200 for SPA fallback).
+          body=$(curl -fsS -m 10 "https://my.stll.app/")
+          if ! printf '%s' "$body" | grep -q 'id="app"'; then
+            echo "::error::my.stll.app returned 200 but missing SPA shell"
+            exit 1
+          fi
+
+      - name: API CORS preflight from frontend origin
+        run: |
+          # If CORS misconfigures, every browser request silently
+          # fails with no API log entry. Verify the preflight
+          # explicitly.
+          headers=$(curl -fsSI -m 10 -X OPTIONS \
+            -H "Origin: https://my.stll.app" \
+            -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: content-type,authorization" \
+            "https://api.stll.app/v1/auth/sign-in/email")
+          if ! printf '%s' "$headers" | grep -iq "^access-control-allow-origin: https://my.stll.app"; then
+            echo "::error::CORS preflight missing or wrong allow-origin header"
+            printf '%s\n' "$headers"
+            exit 1
+          fi
+
+      - name: Desktop updater manifest reachable
+        run: |
+          # The desktop app polls this URL for updates. If the
+          # mirror breaks (S3 bucket/CDN policy regression), every
+          # installed user is silently stuck on their version.
+          body=$(curl -fsS -m 10 "https://downloads.stll.app/desktop/prod/latest.json")
+          version=$(printf '%s' "$body" | jq -r '.version // empty')
+          if [[ -z "$version" ]]; then
+            echo "::error::Desktop updater manifest missing .version field"
+            exit 1
+          fi
+
+      - name: Heartbeat to monitoring service
+        # Only on success of every check above. A failure leaves the
+        # heartbeat unsent, the monitor times out, the on-call
+        # gets paged.
+        if: success()
+        env:
+          HEARTBEAT_URL: ${{ secrets.SYNTHETIC_HEARTBEAT_URL }}
+        run: |
+          if [[ -z "$HEARTBEAT_URL" ]]; then
+            echo "::warning::SYNTHETIC_HEARTBEAT_URL secret not set; smoke passed but no heartbeat sent"
+            exit 0
+          fi
+          # Some heartbeat services accept GET (Better Stack,
+          # OpsGenie, healthchecks.io). Use a short timeout so a
+          # slow heartbeat endpoint can't make the smoke job
+          # falsely red.
+          curl -fsS -m 10 "$HEARTBEAT_URL" >/dev/null
+          echo "  Heartbeat sent."
