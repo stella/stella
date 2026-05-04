@@ -10,6 +10,8 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isMemberRole } from "@/api/lib/member-roles";
+import type { MemberRole } from "@/api/lib/member-roles";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
@@ -59,12 +61,7 @@ export const createDesktopEditSessionToken = () =>
 export const hashDesktopEditSessionToken = (sessionToken: string) =>
   new Bun.CryptoHasher("sha256").update(sessionToken).digest("hex");
 
-type DesktopEditRole = keyof typeof roles;
-
-const ADMIN_BYPASS_ROLES = new Set<DesktopEditRole>(["owner", "admin"]);
-
-const isDesktopEditRole = (role: string): role is DesktopEditRole =>
-  role in roles;
+const ADMIN_BYPASS_ROLES = new Set<MemberRole>(["owner", "admin"]);
 
 export const canUseDesktopEditSession = ({
   organizationRole,
@@ -73,7 +70,7 @@ export const canUseDesktopEditSession = ({
   organizationRole: string | null;
   workspaceMemberId: string | null;
 }) => {
-  if (!organizationRole || !isDesktopEditRole(organizationRole)) {
+  if (!organizationRole || !isMemberRole(organizationRole)) {
     return false;
   }
 

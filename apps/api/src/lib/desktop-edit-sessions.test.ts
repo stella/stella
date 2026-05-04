@@ -65,5 +65,12 @@ describe("canUseDesktopEditSession", () => {
         workspaceMemberId: "workspace_member_test",
       }),
     ).toBe(false);
+
+    expect(
+      canUseDesktopEditSession({
+        organizationRole: "toString",
+        workspaceMemberId: "workspace_member_test",
+      }),
+    ).toBe(false);
   });
 });

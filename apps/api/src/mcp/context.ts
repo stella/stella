@@ -6,8 +6,9 @@ import type { SafeDb, ScopedDb } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
 import { db } from "@/api/db/root";
 import { resolveAccessibleWorkspaces } from "@/api/lib/auth";
-import type { MemberRole } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isMemberRole } from "@/api/lib/member-roles";
+import type { MemberRole } from "@/api/lib/member-roles";
 import {
   brandActorSessionIdentity,
   brandPersistedWorkspaceId,
@@ -23,19 +24,6 @@ export type McpRequestContext = {
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
-};
-
-const isMemberRole = (role: string): role is MemberRole => {
-  switch (role) {
-    case "owner":
-    case "admin":
-    case "member":
-    case "intern":
-    case "external":
-      return true;
-    default:
-      return false;
-  }
 };
 
 export const resolveMcpSessionContext = async (

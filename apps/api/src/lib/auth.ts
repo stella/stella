@@ -36,6 +36,8 @@ import {
 } from "@/api/lib/email";
 import { AUTH_RATE_LIMIT_MAX_WINDOW, AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
+import { isMemberRole } from "@/api/lib/member-roles";
+import type { MemberRole } from "@/api/lib/member-roles";
 import { enrichRequestContext } from "@/api/lib/observability/request-context";
 import { parseUserAgent } from "@/api/lib/parse-user-agent";
 import {
@@ -539,9 +541,7 @@ export const getAuth = () => {
   return _auth;
 };
 
-export type MemberRole = keyof typeof roles;
-
-const isMemberRole = (role: string): role is MemberRole => role in roles;
+export type { MemberRole } from "@/api/lib/member-roles";
 
 export const getSessionAndMemberRole = async (
   headers: Headers | Record<string, string>,
