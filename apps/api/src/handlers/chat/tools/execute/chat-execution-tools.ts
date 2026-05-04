@@ -5,6 +5,10 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db";
+import {
+  DESCRIBE_STELLA_FUNCTION_TOOL_DESCRIPTION,
+  EXECUTE_TYPESCRIPT_TOOL_DESCRIPTION,
+} from "@/api/handlers/chat/tools/execute/chat-execution-tool-descriptions";
 import { createReadonlyOrgFunctionRegistry } from "@/api/handlers/chat/tools/execute/org-function-registry";
 import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/org-manifest";
 import {
@@ -15,10 +19,6 @@ import type { ReadonlyFunctionContract } from "@/api/handlers/chat/tools/execute
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { runSandbox } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import type { SandboxFunctionRegistry } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
-import {
-  DESCRIBE_STELLA_FUNCTION_TOOL_DESCRIPTION,
-  EXECUTE_TYPESCRIPT_TOOL_DESCRIPTION,
-} from "@/api/handlers/chat/tools/execute/chat-execution-tool-descriptions";
 import { createReadonlyWorkspaceFunctionRegistry } from "@/api/handlers/chat/tools/execute/workspace-function-registry";
 import { readonlyWorkspaceFunctionContracts } from "@/api/handlers/chat/tools/execute/workspace-manifest";
 import type { SafeId } from "@/api/lib/branded-types";

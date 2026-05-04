@@ -51,7 +51,7 @@ export const ConversationContent = ({
       style={{ scrollbarGutter: "stable both-edges" }}
     >
       <div
-        className={cn("flex flex-col gap-8 p-4", className)}
+        className={cn("flex flex-col gap-8 p-3", className)}
         {...props}
         ref={contentRef}
       >
@@ -174,7 +174,7 @@ export const ConversationDownload = ({
   return (
     <Button
       className={cn(
-        "dark:bg-background dark:hover:bg-muted absolute end-4 top-4 rounded-full",
+        "dark:bg-background dark:hover:bg-muted absolute inset-e-4 top-4 rounded-full",
         className,
       )}
       onClick={handleDownload}

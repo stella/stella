@@ -191,7 +191,7 @@ export const ChatThreadPage = ({
       </div>
 
       <Conversation>
-        <ConversationContent className="gap-4 p-4">
+        <ConversationContent className="gap-3">
           <ChatThreadMessages
             approvalPendingMessageId={approvalPendingMessageId}
             autoApprovedTools={autoApprovedTools}
