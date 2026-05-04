@@ -17,8 +17,8 @@
     "editWithAI": "Edit with AI",
     "keyRequired": {
       "cta": "Open AI settings",
-      "description": "This instance has no platform AI keys provisioned. Add your own API key to start using AI features.",
-      "title": "AI key required"
+      "description": "Add provider credentials to start using AI features.",
+      "title": "Connect AI provider"
     }
   },
   "anonymize": {
@@ -1154,36 +1154,62 @@
   "organization": {
     "aiConfig": {
       "active": "Active",
+      "addProvider": "Add provider",
+      "addProviderFirst": "Add a provider first",
       "apiKey": "API key",
+      "apiKeyConfiguredPlaceholder": "Configured: {key}. Enter a new key to replace it.",
       "apiKeyPlaceholder": "Enter your API key",
+      "apiKeySaved": "Saved key {key}",
       "apiKeyUpdatePlaceholder": "Enter new key to update",
       "baseUrl": "Base URL",
       "configure": "Configure",
+      "credentialsPanel": "Key",
+      "customModelBadge": "Custom · {provider}",
+      "customModelDescription": "This model ID is not in Stella’s catalog. It will be passed to the selected provider as typed.",
+      "customModelHint": "No catalog match. Type any model ID; custom IDs are saved as typed.",
       "dataRegion": "Data region",
       "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.",
       "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).",
+      "defaultModel": "Default: {model}",
+      "defaultModelOption": "Default",
       "description": "Bring your own API key or configure data sovereignty region.",
+      "keepSavedKey": "Keep saved key",
+      "modelForRole": "{role} model",
+      "modelIdPlaceholder": "Search models",
+      "modelRequired": "Required",
+      "modelsDescription": "Choose a provider and one offered multimodal model for each AI category.",
+      "modelsPanel": "Models",
+      "newApiKey": "New API key",
+      "newApiKeyDescription": "This will replace the saved key when you save changes.",
+      "noModelResults": "No matching offered models",
       "overrideRoles": "Override roles",
-      "overrideRolesDescription": "Select which AI roles use your key. Unselected roles use the platform default.",
+      "overrideRolesDescription": "Choose which roles use this key, then choose a model for each role. Unselected roles use the platform default.",
       "provider": "Provider",
+      "providerForRole": "{role} provider",
       "providers": {
         "anthropic": "Anthropic",
-        "google": "Google AI",
-        "openai": "OpenAI",
-        "openai_compatible": "OpenAI-compatible",
+        "google": "Google",
+        "openai": "ChatGPT",
         "openrouter": "OpenRouter"
       },
+      "providersDescription": "Add the provider credentials you want Stella to use.",
+      "providersPanel": "Providers",
       "regions": {
         "ch": "Switzerland (europe-west6)",
         "eu": "EU (europe-west4)",
         "global": "Global"
       },
+      "removeProvider": "Remove provider",
+      "replaceKey": "Replace key",
       "roles": {
         "chat": "Chat (conversation)",
         "fast": "Fast (classification)",
         "pdf": "PDF (documents)",
         "reasoning": "Reasoning (analysis)"
       },
+      "selectAtLeastOneRole": "Select at least one role for this key.",
+      "selectModelForEachRole": "Add a provider and select a model for each category.",
+      "selectedProvider": "{provider}",
       "title": "AI configuration"
     },
     "invitations": {

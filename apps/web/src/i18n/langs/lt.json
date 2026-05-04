@@ -16,9 +16,9 @@
   "ai": {
     "editWithAI": "Redaguoti su DI",
     "keyRequired": {
-      "cta": "Open AI settings",
-      "description": "This instance has no platform AI keys provisioned. Add your own API key to start using AI features.",
-      "title": "AI key required"
+      "cta": "Atidaryti AI nustatymus",
+      "description": "Pridėkite teikėjo prisijungimo duomenis, kad galėtumėte naudoti AI funkcijas.",
+      "title": "Prijungti AI teikėją"
     }
   },
   "anonymize": {
@@ -1154,36 +1154,62 @@
   "organization": {
     "aiConfig": {
       "active": "Active",
+      "addProvider": "Pridėti teikėją",
+      "addProviderFirst": "Pirmiausia pridėkite teikėją",
       "apiKey": "API key",
+      "apiKeyConfiguredPlaceholder": "Sukonfigūruota: {key}. Įveskite naują raktą, kad pakeistumėte.",
       "apiKeyPlaceholder": "Enter your API key",
+      "apiKeySaved": "Išsaugotas raktas {key}",
       "apiKeyUpdatePlaceholder": "Enter new key to update",
       "baseUrl": "Base URL",
       "configure": "Configure",
+      "credentialsPanel": "Raktas",
+      "customModelBadge": "Pasirinktinis · {provider}",
+      "customModelDescription": "Šio modelio ID nėra Stella kataloge. Jis bus perduotas pasirinktam teikėjui taip, kaip įvestas.",
+      "customModelHint": "Kataloge atitikmens nėra. Įveskite bet kokį modelio ID; pasirinktiniai ID išsaugomi taip, kaip įvesti.",
       "dataRegion": "Data region",
       "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.",
       "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).",
+      "defaultModel": "Numatytasis: {model}",
+      "defaultModelOption": "Numatytasis",
       "description": "Bring your own API key or configure data sovereignty region.",
+      "keepSavedKey": "Palikti išsaugotą raktą",
+      "modelForRole": "{role} modelis",
+      "modelIdPlaceholder": "Ieškoti modelių",
+      "modelRequired": "Privaloma",
+      "modelsDescription": "Kiekvienai AI kategorijai pasirinkite teikėją ir vieną siūlomą multimodalinį modelį.",
+      "modelsPanel": "Modeliai",
+      "newApiKey": "Naujas API raktas",
+      "newApiKeyDescription": "Išsaugojus pakeitimus jis pakeis išsaugotą raktą.",
+      "noModelResults": "Nėra atitinkančių siūlomų modelių",
       "overrideRoles": "Override roles",
-      "overrideRolesDescription": "Select which AI roles use your key. Unselected roles use the platform default.",
+      "overrideRolesDescription": "Pasirinkite, kurie vaidmenys naudoja šį raktą, tada kiekvienam vaidmeniui pasirinkite modelį. Nepasirinkti vaidmenys naudoja platformos numatytuosius nustatymus.",
       "provider": "Provider",
+      "providerForRole": "{role} teikėjas",
       "providers": {
         "anthropic": "Anthropic",
-        "google": "Google AI",
-        "openai": "OpenAI",
-        "openai_compatible": "OpenAI-compatible",
+        "google": "Google",
+        "openai": "ChatGPT",
         "openrouter": "OpenRouter"
       },
+      "providersDescription": "Pridėkite teikėjų prisijungimo duomenis, kuriuos Stella turėtų naudoti.",
+      "providersPanel": "Teikėjai",
       "regions": {
         "ch": "Switzerland (europe-west6)",
         "eu": "EU (europe-west4)",
         "global": "Global"
       },
+      "removeProvider": "Pašalinti teikėją",
+      "replaceKey": "Pakeisti raktą",
       "roles": {
         "chat": "Chat (conversation)",
         "fast": "Fast (classification)",
         "pdf": "PDF (documents)",
         "reasoning": "Reasoning (analysis)"
       },
+      "selectAtLeastOneRole": "Pasirinkite bent vieną vaidmenį šiam raktui.",
+      "selectModelForEachRole": "Pridėkite teikėją ir kiekvienai kategorijai pasirinkite modelį.",
+      "selectedProvider": "{provider}",
       "title": "AI configuration"
     },
     "invitations": {

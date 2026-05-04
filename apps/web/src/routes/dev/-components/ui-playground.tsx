@@ -191,6 +191,7 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
+import { AIKeyRequiredDialog } from "@/components/require-ai-key";
 
 type ComboboxOption = {
   id: string;
@@ -256,6 +257,7 @@ export function UiPlayground() {
   const [dateValue, setDateValue] = useState<string | null>("2026-04-27");
   const [colorValue, setColorValue] = useState("blue");
   const [hexColor, setHexColor] = useState("#59A1D4");
+  const [byokDialogOpen, setByokDialogOpen] = useState(false);
   const destructiveConfirmation = useDestructiveActionConfirmation(
     "delete this workspace",
   );
@@ -751,6 +753,23 @@ export function UiPlayground() {
                     </AlertDialogPopup>
                   </AlertDialog>
                 </div>
+              </PlaygroundSection>
+
+              <PlaygroundSection
+                description="Production BYOK setup dialog as shown when AI requires an organization key."
+                title="BYOK dialog"
+              >
+                <Button
+                  className="w-fit"
+                  onClick={() => setByokDialogOpen(true)}
+                  variant="outline"
+                >
+                  Open BYOK dialog
+                </Button>
+                <AIKeyRequiredDialog
+                  onOpenChange={setByokDialogOpen}
+                  open={byokDialogOpen}
+                />
               </PlaygroundSection>
 
               <PlaygroundSection

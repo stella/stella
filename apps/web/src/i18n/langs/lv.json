@@ -16,9 +16,9 @@
   "ai": {
     "editWithAI": "Rediģēt ar AI",
     "keyRequired": {
-      "cta": "Open AI settings",
-      "description": "This instance has no platform AI keys provisioned. Add your own API key to start using AI features.",
-      "title": "AI key required"
+      "cta": "Atvērt AI iestatījumus",
+      "description": "Pievienojiet pakalpojumu sniedzēja piekļuves datus, lai sāktu izmantot AI funkcijas.",
+      "title": "Pievienot AI pakalpojumu sniedzēju"
     }
   },
   "anonymize": {
@@ -1154,36 +1154,62 @@
   "organization": {
     "aiConfig": {
       "active": "Active",
+      "addProvider": "Pievienot pakalpojumu sniedzēju",
+      "addProviderFirst": "Vispirms pievienojiet pakalpojumu sniedzēju",
       "apiKey": "API key",
+      "apiKeyConfiguredPlaceholder": "Konfigurēts: {key}. Ievadiet jaunu atslēgu, lai to aizstātu.",
       "apiKeyPlaceholder": "Enter your API key",
+      "apiKeySaved": "Saglabātā atslēga {key}",
       "apiKeyUpdatePlaceholder": "Enter new key to update",
       "baseUrl": "Base URL",
       "configure": "Configure",
+      "credentialsPanel": "Atslēga",
+      "customModelBadge": "Pielāgots · {provider}",
+      "customModelDescription": "Šis modeļa ID nav Stella katalogā. Tas tiks nosūtīts izvēlētajam pakalpojumu sniedzējam tieši tā, kā ievadīts.",
+      "customModelHint": "Katalogā nav atbilstības. Ievadiet jebkuru modeļa ID; pielāgotie ID tiek saglabāti tieši tā, kā ievadīti.",
       "dataRegion": "Data region",
       "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.",
       "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).",
+      "defaultModel": "Noklusējums: {model}",
+      "defaultModelOption": "Noklusējums",
       "description": "Bring your own API key or configure data sovereignty region.",
+      "keepSavedKey": "Paturēt saglabāto atslēgu",
+      "modelForRole": "{role} modelis",
+      "modelIdPlaceholder": "Meklēt modeļus",
+      "modelRequired": "Obligāts",
+      "modelsDescription": "Katrai AI kategorijai izvēlieties pakalpojumu sniedzēju un vienu piedāvāto multimodālo modeli.",
+      "modelsPanel": "Modeļi",
+      "newApiKey": "Jauna API atslēga",
+      "newApiKeyDescription": "Saglabājot izmaiņas, tā aizstās saglabāto atslēgu.",
+      "noModelResults": "Nav atbilstošu piedāvāto modeļu",
       "overrideRoles": "Override roles",
-      "overrideRolesDescription": "Select which AI roles use your key. Unselected roles use the platform default.",
+      "overrideRolesDescription": "Izvēlieties, kuras lomas izmanto šo atslēgu, un pēc tam izvēlieties modeli katrai lomai. Neatlasītās lomas izmanto platformas noklusējumu.",
       "provider": "Provider",
+      "providerForRole": "{role} pakalpojumu sniedzējs",
       "providers": {
         "anthropic": "Anthropic",
-        "google": "Google AI",
-        "openai": "OpenAI",
-        "openai_compatible": "OpenAI-compatible",
+        "google": "Google",
+        "openai": "ChatGPT",
         "openrouter": "OpenRouter"
       },
+      "providersDescription": "Pievienojiet to pakalpojumu sniedzēju akreditācijas datus, kurus Stella izmantos.",
+      "providersPanel": "Pakalpojumu sniedzēji",
       "regions": {
         "ch": "Switzerland (europe-west6)",
         "eu": "EU (europe-west4)",
         "global": "Global"
       },
+      "removeProvider": "Noņemt pakalpojumu sniedzēju",
+      "replaceKey": "Aizstāt atslēgu",
       "roles": {
         "chat": "Chat (conversation)",
         "fast": "Fast (classification)",
         "pdf": "PDF (documents)",
         "reasoning": "Reasoning (analysis)"
       },
+      "selectAtLeastOneRole": "Atlasiet vismaz vienu lomu šai atslēgai.",
+      "selectModelForEachRole": "Pievienojiet pakalpojumu sniedzēju un izvēlieties modeli katrai kategorijai.",
+      "selectedProvider": "{provider}",
       "title": "AI configuration"
     },
     "invitations": {

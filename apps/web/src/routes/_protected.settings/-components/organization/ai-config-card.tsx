@@ -1,22 +1,31 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { Field, FieldLabel } from "@stll/ui/components/field";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
-import { Input } from "@stll/ui/components/input";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/components/select";
 import { toastManager } from "@stll/ui/components/toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor";
+import { AIConfigRoleModelPicker } from "@/components/ai-config-role-model-picker";
+import {
+  createProviderCredentialDraft,
+  createDefaultRoleModels,
+  ensureRoleModelsForProviders,
+  getProviderValues,
+  hasUsableProviderDrafts,
+  providerDraftsFromStoredProviders,
+  roleModelsFromOverrideModels,
+  serializeOverrideModels,
+  isProviderValue,
+} from "@/components/ai-config-role-models.logic";
+import type {
+  ModelSelection,
+  ProviderCredentialDraft,
+  RoleModelSelections,
+  RoleValue,
+} from "@/components/ai-config-role-models.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
@@ -24,33 +33,6 @@ import {
   aiConfigKeys,
   aiConfigOptions,
 } from "@/routes/_protected.organization/-ai-config-queries";
-
-const PROVIDER_KEYS = [
-  "google",
-  "openrouter",
-  "openai",
-  "anthropic",
-  "openai_compatible",
-] as const;
-
-const REGION_KEYS = ["global", "eu", "ch"] as const;
-
-const ROLE_KEYS = ["fast", "chat", "reasoning", "pdf"] as const;
-
-type ProviderValue = (typeof PROVIDER_KEYS)[number];
-type RegionValue = (typeof REGION_KEYS)[number];
-type RoleValue = (typeof ROLE_KEYS)[number];
-
-const PROVIDER_VALUES = new Set<string>(PROVIDER_KEYS);
-const REGION_VALUES = new Set<string>(REGION_KEYS);
-const ROLE_VALUES = new Set<string>(ROLE_KEYS);
-
-/** Providers that support EU/CH regional routing. */
-const REGIONAL_PROVIDERS = new Set<ProviderValue>(["google"]);
-
-const isProvider = (v: string): v is ProviderValue => PROVIDER_VALUES.has(v);
-const isRegion = (v: string): v is RegionValue => REGION_VALUES.has(v);
-const isRole = (v: string): v is RoleValue => ROLE_VALUES.has(v);
 
 export const AIConfigCard = () => {
   const t = useTranslations("organization");
@@ -61,23 +43,22 @@ export const AIConfigCard = () => {
   const queryClient = useQueryClient();
   const { data: config } = useQuery(aiConfigOptions);
 
-  const initialProvider =
-    config?.configured && isProvider(config.provider)
-      ? config.provider
-      : "google";
-  const initialRegion =
-    config?.configured && isRegion(config.region) ? config.region : "global";
-  const initialRoles = config?.configured
-    ? config.overrideRoles.filter(isRole)
-    : [];
+  const initialProviders =
+    config?.configured && config.providers.length > 0
+      ? providerDraftsFromStoredProviders(config.providers)
+      : [createProviderCredentialDraft()];
+  const initialProviderValues = getProviderValues(initialProviders);
+  const initialRoleModels = config?.configured
+    ? roleModelsFromOverrideModels({
+        overrideModels: config.overrideModels,
+        providers: initialProviderValues,
+      })
+    : createDefaultRoleModels(initialProviderValues);
 
-  const [provider, setProvider] = useState<ProviderValue>(initialProvider);
-  const [apiKey, setApiKey] = useState("");
-  const [baseURL, setBaseURL] = useState(
-    config?.configured ? (config.baseURL ?? "") : "",
-  );
-  const [region, setRegion] = useState<RegionValue>(initialRegion);
-  const [overrideRoles, setOverrideRoles] = useState(initialRoles);
+  const [providers, setProviders] =
+    useState<ProviderCredentialDraft[]>(initialProviders);
+  const [roleModels, setRoleModels] =
+    useState<RoleModelSelections>(initialRoleModels);
 
   // Sync form state when the config query resolves after
   // initial render (useState initializers only run once).
@@ -87,39 +68,64 @@ export const AIConfigCard = () => {
     if (!config?.configured) {
       return;
     }
-    if (isProvider(config.provider)) {
-      setProvider(config.provider);
-    }
-    if (isRegion(config.region)) {
-      setRegion(config.region);
-    }
-    setOverrideRoles(config.overrideRoles.filter(isRole));
-    setBaseURL(config.baseURL ?? "");
+    const nextProviders = providerDraftsFromStoredProviders(config.providers);
+    const providerValues = getProviderValues(nextProviders);
+    setProviders(nextProviders);
+    setRoleModels(
+      roleModelsFromOverrideModels({
+        overrideModels: config.overrideModels,
+        providers: providerValues,
+      }),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config?.configured]);
 
-  const toggleRole = (role: RoleValue) => {
-    setOverrideRoles((prev) =>
-      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role],
+  const updateProviders = (nextProviders: ProviderCredentialDraft[]) => {
+    const providerValues = getProviderValues(nextProviders);
+    setProviders(nextProviders);
+    setRoleModels((prev) =>
+      ensureRoleModelsForProviders({
+        providers: providerValues,
+        roleModels: prev,
+      }),
     );
+  };
+
+  const setRoleModel = (role: RoleValue, model: ModelSelection | null) => {
+    setRoleModels((prev) => ({
+      ...prev,
+      [role]: model,
+    }));
   };
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const providerValues = getProviderValues(providers);
+      const overrideModels = serializeOverrideModels({
+        providers: providerValues,
+        roleModels,
+      });
+      if (!overrideModels) {
+        throw new Error(t("aiConfig.selectModelForEachRole"));
+      }
+
       const response = await api["organization-settings"]["ai-config"].post({
-        provider,
-        ...(apiKey ? { apiKey } : {}),
-        ...(baseURL ? { baseURL } : {}),
-        overrideRoles,
-        region,
+        providers: providers.map((providerDraft) => ({
+          provider: providerDraft.provider,
+          ...(providerDraft.apiKey.trim()
+            ? { apiKey: providerDraft.apiKey.trim() }
+            : {}),
+          region: providerDraft.region,
+        })),
+        overrideModels,
       });
       if (response.error) {
         throw toAPIError(response.error);
       }
       return response.data;
     },
-    onSuccess: async () => {
-      setApiKey("");
+    onSuccess: async (data) => {
+      setProviders(providerDraftsFromStoredProviders(data.providers));
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: aiConfigKeys.all,
@@ -152,7 +158,9 @@ export const AIConfigCard = () => {
       }
     },
     onSuccess: async () => {
-      setApiKey("");
+      const nextProviders = [createProviderCredentialDraft()];
+      setProviders(nextProviders);
+      setRoleModels(createDefaultRoleModels(getProviderValues(nextProviders)));
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: aiConfigKeys.all,
@@ -175,20 +183,34 @@ export const AIConfigCard = () => {
     },
   });
 
+  const providerValues = getProviderValues(providers);
+  const canSave =
+    hasUsableProviderDrafts(providers) &&
+    serializeOverrideModels({ providers: providerValues, roleModels }) !== null;
+
   return (
     <div className="flex flex-col gap-4">
       {config?.configured && (
         <div className="flex items-center justify-between gap-2">
-          <div className="bg-muted flex items-center gap-2 rounded border px-3 py-2">
+          <div className="bg-muted flex flex-wrap items-center gap-2 rounded border px-3 py-2">
             <span className="text-muted-foreground text-xs">
               {t("aiConfig.active")}:
             </span>
-            <span className="text-xs font-medium">
-              {t(`aiConfig.providers.${config.provider}`)}
-            </span>
-            <span className="text-muted-foreground font-mono text-xs">
-              {config.apiKeyMasked}
-            </span>
+            {config.providers.map((providerConfig) => (
+              <span
+                className="text-xs"
+                key={`${providerConfig.provider}-${providerConfig.apiKeyMasked}`}
+              >
+                <span className="font-medium">
+                  {isProviderValue(providerConfig.provider)
+                    ? t(`aiConfig.providers.${providerConfig.provider}`)
+                    : providerConfig.provider}
+                </span>{" "}
+                <span className="text-muted-foreground font-mono">
+                  {providerConfig.apiKeyMasked}
+                </span>
+              </span>
+            ))}
           </div>
           <Button
             loading={deleteMutation.isPending}
@@ -202,122 +224,40 @@ export const AIConfigCard = () => {
       )}
       <Frame>
         <FramePanel>
-          <div className="flex flex-col gap-3 p-1">
-            <Field>
-              <FieldLabel>{t("aiConfig.provider")}</FieldLabel>
-              <Select
-                onValueChange={(val) => {
-                  if (val && isProvider(val)) {
-                    setProvider(val);
-                    if (!REGIONAL_PROVIDERS.has(val)) {
-                      setRegion("global");
-                    }
-                  }
-                }}
-                value={provider}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPopup alignItemWithTrigger={false}>
-                  {PROVIDER_KEYS.map((key) => (
-                    <SelectItem key={key} value={key}>
-                      {t(`aiConfig.providers.${key}`)}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            </Field>
+          <div className="flex flex-col gap-5 p-1">
+            <AIConfigProvidersEditor
+              disabled={saveMutation.isPending}
+              onProvidersChange={updateProviders}
+              providers={providers}
+            />
 
-            <Field>
-              <FieldLabel>{t("aiConfig.apiKey")}</FieldLabel>
-              <Input
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder={
-                  config?.configured
-                    ? t("aiConfig.apiKeyUpdatePlaceholder")
-                    : t("aiConfig.apiKeyPlaceholder")
-                }
-                type="password"
-                value={apiKey}
-              />
-            </Field>
+            <div className="border-t" />
 
-            {provider === "openai_compatible" && (
-              <Field>
-                <FieldLabel>{t("aiConfig.baseUrl")}</FieldLabel>
-                <Input
-                  onChange={(e) => setBaseURL(e.target.value)}
-                  placeholder="https://api.example.com/v1"
-                  value={baseURL}
-                />
-              </Field>
-            )}
-
-            <Field>
-              <FieldLabel>{t("aiConfig.dataRegion")}</FieldLabel>
-              <Select
-                disabled={!REGIONAL_PROVIDERS.has(provider)}
-                onValueChange={(val) => {
-                  if (val && isRegion(val)) {
-                    setRegion(val);
-                  }
-                }}
-                value={region}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPopup alignItemWithTrigger={false}>
-                  {REGION_KEYS.map((key) => (
-                    <SelectItem key={key} value={key}>
-                      {t(`aiConfig.regions.${key}`)}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-              <p className="text-muted-foreground text-xs">
-                {REGIONAL_PROVIDERS.has(provider)
-                  ? t("aiConfig.dataRegionDescription")
-                  : t("aiConfig.dataRegionUnsupported")}
-              </p>
-            </Field>
-
-            <Field>
-              <FieldLabel>{t("aiConfig.overrideRoles")}</FieldLabel>
-              <p className="text-muted-foreground text-xs">
-                {t("aiConfig.overrideRolesDescription")}
-              </p>
-              <div className="mt-1 flex flex-wrap gap-3">
-                {ROLE_KEYS.map((key) => (
-                  <label
-                    className="flex items-center gap-1.5 text-sm"
-                    key={key}
-                  >
-                    <Checkbox
-                      checked={overrideRoles.includes(key)}
-                      onCheckedChange={() => toggleRole(key)}
-                    />
-                    {t(`aiConfig.roles.${key}`)}
-                  </label>
-                ))}
-              </div>
-            </Field>
-
-            <Button
-              className="self-start"
-              disabled={!config?.configured && !apiKey}
-              loading={saveMutation.isPending}
-              onClick={() => saveMutation.mutate()}
-              size="sm"
-            >
-              {config?.configured
-                ? tCommon("saveChanges")
-                : t("aiConfig.configure")}
-            </Button>
+            <AIConfigRoleModelPicker
+              disabled={saveMutation.isPending}
+              onModelChange={setRoleModel}
+              providers={providerValues}
+              roleModels={roleModels}
+            />
           </div>
         </FramePanel>
       </Frame>
+
+      {!canSave && (
+        <p className="text-destructive-foreground text-xs">
+          {t("aiConfig.selectModelForEachRole")}
+        </p>
+      )}
+
+      <Button
+        className="self-start"
+        disabled={!canSave}
+        loading={saveMutation.isPending}
+        onClick={() => saveMutation.mutate()}
+        size="sm"
+      >
+        {config?.configured ? tCommon("saveChanges") : t("aiConfig.configure")}
+      </Button>
     </div>
   );
 };

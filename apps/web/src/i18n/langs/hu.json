@@ -16,9 +16,9 @@
   "ai": {
     "editWithAI": "Szerkesztés AI-val",
     "keyRequired": {
-      "cta": "Open AI settings",
-      "description": "This instance has no platform AI keys provisioned. Add your own API key to start using AI features.",
-      "title": "AI key required"
+      "cta": "AI-beállítások megnyitása",
+      "description": "Adj hozzá szolgáltatói hitelesítési adatokat az AI-funkciók használatához.",
+      "title": "AI-szolgáltató csatlakoztatása"
     }
   },
   "anonymize": {
@@ -1154,36 +1154,62 @@
   "organization": {
     "aiConfig": {
       "active": "Active",
+      "addProvider": "Szolgáltató hozzáadása",
+      "addProviderFirst": "Először adj hozzá szolgáltatót",
       "apiKey": "API key",
+      "apiKeyConfiguredPlaceholder": "Beállítva: {key}. Új kulccsal lecserélheted.",
       "apiKeyPlaceholder": "Enter your API key",
+      "apiKeySaved": "Mentett kulcs {key}",
       "apiKeyUpdatePlaceholder": "Enter new key to update",
       "baseUrl": "Base URL",
       "configure": "Configure",
+      "credentialsPanel": "Kulcs",
+      "customModelBadge": "Egyedi · {provider}",
+      "customModelDescription": "Ez a modellazonosító nincs a Stella katalógusában. A kiválasztott szolgáltatónak pontosan így lesz továbbítva.",
+      "customModelHint": "Nincs katalógustalálat. Írj be bármilyen modellazonosítót; az egyedi azonosítók változatlanul mentésre kerülnek.",
       "dataRegion": "Data region",
       "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.",
       "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).",
+      "defaultModel": "Alapértelmezett: {model}",
+      "defaultModelOption": "Alapértelmezett",
       "description": "Bring your own API key or configure data sovereignty region.",
+      "keepSavedKey": "Mentett kulcs megtartása",
+      "modelForRole": "{role} modellje",
+      "modelIdPlaceholder": "Modellek keresése",
+      "modelRequired": "Kötelező",
+      "modelsDescription": "Válassz szolgáltatót és egy felkínált multimodális modellt minden AI-kategóriához.",
+      "modelsPanel": "Modellek",
+      "newApiKey": "Új API-kulcs",
+      "newApiKeyDescription": "Mentéskor lecseréli a mentett kulcsot.",
+      "noModelResults": "Nincs egyező felkínált modell",
       "overrideRoles": "Override roles",
-      "overrideRolesDescription": "Select which AI roles use your key. Unselected roles use the platform default.",
+      "overrideRolesDescription": "Válaszd ki, mely szerepkörök használják ezt a kulcsot, majd válassz modellt minden szerepkörhöz. A ki nem választott szerepkörök a platform alapértelmezését használják.",
       "provider": "Provider",
+      "providerForRole": "{role} szolgáltatója",
       "providers": {
         "anthropic": "Anthropic",
-        "google": "Google AI",
-        "openai": "OpenAI",
-        "openai_compatible": "OpenAI-compatible",
+        "google": "Google",
+        "openai": "ChatGPT",
         "openrouter": "OpenRouter"
       },
+      "providersDescription": "Add meg azoknak a szolgáltatóknak a hitelesítő adatait, amelyeket Stella használjon.",
+      "providersPanel": "Szolgáltatók",
       "regions": {
         "ch": "Switzerland (europe-west6)",
         "eu": "EU (europe-west4)",
         "global": "Global"
       },
+      "removeProvider": "Szolgáltató eltávolítása",
+      "replaceKey": "Kulcs cseréje",
       "roles": {
         "chat": "Chat (conversation)",
         "fast": "Fast (classification)",
         "pdf": "PDF (documents)",
         "reasoning": "Reasoning (analysis)"
       },
+      "selectAtLeastOneRole": "Válassz legalább egy szerepkört ehhez a kulcshoz.",
+      "selectModelForEachRole": "Adj hozzá szolgáltatót, és válassz modellt minden kategóriához.",
+      "selectedProvider": "{provider}",
       "title": "AI configuration"
     },
     "invitations": {

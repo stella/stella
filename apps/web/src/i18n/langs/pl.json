@@ -16,9 +16,9 @@
   "ai": {
     "editWithAI": "Edytuj z AI",
     "keyRequired": {
-      "cta": "Open AI settings",
-      "description": "This instance has no platform AI keys provisioned. Add your own API key to start using AI features.",
-      "title": "AI key required"
+      "cta": "Otwórz ustawienia AI",
+      "description": "Dodaj dane dostępu dostawcy, aby zacząć używać funkcji AI.",
+      "title": "Połącz dostawcę AI"
     }
   },
   "anonymize": {
@@ -1154,36 +1154,62 @@
   "organization": {
     "aiConfig": {
       "active": "Aktywna",
+      "addProvider": "Dodaj dostawcę",
+      "addProviderFirst": "Najpierw dodaj dostawcę",
       "apiKey": "Klucz API",
+      "apiKeyConfiguredPlaceholder": "Skonfigurowano: {key}. Wpisz nowy klucz, aby go zastąpić.",
       "apiKeyPlaceholder": "Wprowadź klucz API",
+      "apiKeySaved": "Zapisany klucz {key}",
       "apiKeyUpdatePlaceholder": "Wprowadź nowy klucz, aby go zaktualizować",
       "baseUrl": "Bazowy URL",
       "configure": "Skonfiguruj",
+      "credentialsPanel": "Klucz",
+      "customModelBadge": "Niestandardowy · {provider}",
+      "customModelDescription": "Tego identyfikatora modelu nie ma w katalogu Stella. Zostanie przekazany do wybranego dostawcy dokładnie tak, jak wpisano.",
+      "customModelHint": "Brak dopasowania w katalogu. Wpisz dowolny identyfikator modelu; niestandardowe ID są zapisywane bez zmian.",
       "dataRegion": "Region danych",
       "dataRegionDescription": "Kieruje żądania AI przez wybrany region dla zachowania suwerenności danych.",
       "dataRegionUnsupported": "Routing regionalny jest dostępny tylko dla Google AI (Vertex AI).",
+      "defaultModel": "Domyślny: {model}",
+      "defaultModelOption": "Domyślny",
       "description": "Użyj własnego klucza API lub skonfiguruj region suwerenności danych.",
+      "keepSavedKey": "Zachowaj zapisany klucz",
+      "modelForRole": "Model dla roli {role}",
+      "modelIdPlaceholder": "Szukaj modeli",
+      "modelRequired": "Wymagane",
+      "modelsDescription": "Dla każdej kategorii AI wybierz dostawcę i jeden oferowany model multimodalny.",
+      "modelsPanel": "Modele",
+      "newApiKey": "Nowy klucz API",
+      "newApiKeyDescription": "Po zapisaniu zmian zastąpi zapisany klucz.",
+      "noModelResults": "Brak pasujących oferowanych modeli",
       "overrideRoles": "Nadpisz role",
-      "overrideRolesDescription": "Wybierz, które role AI używają Twojego klucza. Niezaznaczone role używają domyślnego klucza platformy.",
+      "overrideRolesDescription": "Wybierz, które role używają tego klucza, a potem wybierz model dla każdej roli. Niezaznaczone role używają domyślnych ustawień platformy.",
       "provider": "Dostawca",
+      "providerForRole": "Dostawca dla {role}",
       "providers": {
         "anthropic": "Anthropic",
-        "google": "Google AI",
-        "openai": "OpenAI",
-        "openai_compatible": "OpenAI-compatible",
+        "google": "Google",
+        "openai": "ChatGPT",
         "openrouter": "OpenRouter"
       },
+      "providersDescription": "Dodaj dane uwierzytelniające dostawców, których Stella ma używać.",
+      "providersPanel": "Dostawcy",
       "regions": {
         "ch": "Switzerland (europe-west6)",
         "eu": "EU (europe-west4)",
         "global": "Global"
       },
+      "removeProvider": "Usuń dostawcę",
+      "replaceKey": "Zastąp klucz",
       "roles": {
         "chat": "Chat (conversation)",
         "fast": "Fast (classification)",
         "pdf": "PDF (documents)",
         "reasoning": "Reasoning (analysis)"
       },
+      "selectAtLeastOneRole": "Wybierz co najmniej jedną rolę dla tego klucza.",
+      "selectModelForEachRole": "Dodaj dostawcę i wybierz model dla każdej kategorii.",
+      "selectedProvider": "{provider}",
       "title": "Konfiguracja AI"
     },
     "invitations": {
