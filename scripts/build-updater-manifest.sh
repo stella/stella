@@ -21,11 +21,17 @@ assets_json="$(gh release view "$RELEASE_REF" --json assets --jq '.assets')"
 
 # Look up the .sig contents for an asset name. Tauri requires the
 # signature to be embedded inline, not a URL.
+#
+# Use the `apiUrl` field (e.g. /repos/<owner>/<repo>/releases/assets/<id>)
+# rather than the public `url` (the browser-download link). For
+# private repos the browser link returns 404 even with a valid token —
+# only the API endpoint with `Accept: application/octet-stream` serves
+# the asset bytes.
 read_sig() {
   local name="$1"
   local sig_name="${name}.sig"
   local found
-  found=$(echo "$assets_json" | jq -r --arg n "$sig_name" '.[] | select(.name == $n) | .url' | head -n1)
+  found=$(echo "$assets_json" | jq -r --arg n "$sig_name" '.[] | select(.name == $n) | .apiUrl' | head -n1)
   if [[ -z "$found" || "$found" == "null" ]]; then
     return 1
   fi
