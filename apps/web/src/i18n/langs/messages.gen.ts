@@ -77,6 +77,7 @@ type Messages = {
       "title": "Organization invitation";
     };
     "lastUsed": "Last used";
+    "openInProvider": "Open {provider}";
     "orSignInWithEmail": "or sign in with email";
     "organizationNamePlaceholder": "My organization";
     "rateLimitExceeded": "Too many attempts. Please try again later.";
@@ -294,7 +295,6 @@ type Messages = {
       "toastDescription": "Full-page chat lands with persisted threads.";
       "toastTitle": "Full view not yet available";
     };
-    "folioCitationFallback": "p. {n}";
     "anonymizedMode": "Anonymized AI mode";
     "anonymizedModeDisabled": "Anonymized AI mode is off";
     "anonymizedModeEnabled": "Anonymized AI mode is on";
@@ -337,6 +337,7 @@ type Messages = {
     "filePlaceholder": "Chat about {fileName}";
     "filePlaceholderAction": "Chat about";
     "fileTooLarge": "File exceeds {maxSize} limit";
+    "folioCitationFallback": "p. {n}";
     "greeting": "What would you like to work on?";
     "maxAttachmentsReached": "Maximum {count} files per message";
     "mention": {

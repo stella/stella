@@ -74,6 +74,7 @@
       "title": "Zaproszenie do organizacji"
     },
     "lastUsed": "Ostatnio użyte",
+    "openInProvider": "Otwórz {provider}",
     "orSignInWithEmail": "lub zaloguj się e-mailem",
     "organizationNamePlaceholder": "Moja organizacja",
     "rateLimitExceeded": "Zbyt wiele prób. Spróbuj ponownie później.",

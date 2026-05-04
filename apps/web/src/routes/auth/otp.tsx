@@ -27,6 +27,8 @@ import { redirectToSchema } from "@/lib/redirect";
 import { emailSchema } from "@/lib/schema";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 
+import { InboxQuickJump } from "./-components/inbox-quick-jump";
+
 const OTP_LENGTH = 6;
 
 const searchSchema = v.strictObject({
@@ -177,6 +179,9 @@ function OTP() {
         >
           {t("common.verify")}
         </Button>
+        <div className="mt-3">
+          <InboxQuickJump email={email} />
+        </div>
         <div className="mt-3 flex flex-col gap-1">
           <Button
             className="h-auto min-h-9 w-full py-2 text-center leading-snug break-words whitespace-normal"

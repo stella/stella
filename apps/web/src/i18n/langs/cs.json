@@ -74,6 +74,7 @@
       "title": "Pozvánka do organizace"
     },
     "lastUsed": "Naposledy použito",
+    "openInProvider": "Otevřít {provider}",
     "orSignInWithEmail": "nebo se přihlaste e-mailem",
     "organizationNamePlaceholder": "Moje organizace",
     "rateLimitExceeded": "Příliš mnoho pokusů. Zkuste to prosím později.",
