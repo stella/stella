@@ -1,8 +1,7 @@
 # Open PR
 
 Prepare the current worktree branch for a pull request: rebase,
-self-review, quality checks, open a draft PR, then run one rabbit
-round.
+self-review, quality checks, and open a draft PR.
 
 ## Instructions
 
@@ -99,32 +98,18 @@ round.
 
    If `--fill` produces a poor title/body, write a proper one
    following Conventional Commits (`feat:`, `fix:`, etc.) with
-   a concise summary and test plan.
+   a very concise summary. Do not add a separate test plan unless
+   the user explicitly asks for one. Do not mention deployment
+   choices or attribute the motivation for the PR to a specific
+   person's feedback, request, or experience.
 
    This repository is public. Never include marketing language,
    internal business context, pricing, competitive analysis,
-   user identities, conversation specifics, or security
-   architecture beyond what the diff shows. Write for the
-   reviewing engineer.
-
-8. **Run one rabbit round**:
-
-   Once the draft PR is open, invoke `/rabbit-round` once.
-
-   Do not assume background scheduling tools exist. Do not create
-   cron jobs, loops, or recurring tasks from this skill. If another
-   round is needed, the user or caller can invoke `/rabbit-round`
-   again later.
-
-   **Pending bots are not clean.** A round where review bot
-   checks are still running or queued (e.g., CodeRabbit,
-   Copilot, Gemini) does **not** count as a clean check.
-   The absence of comments while bots are pending means
-   they haven't responded yet, not that they have nothing
-   to say. Only count a round as clean when all review bot
-   check runs have completed.
-
-   If `/rabbit-round` returns `pending_bots`, `needs_changes`, or
-   `failing_ci`, leave the PR as draft and report the status. If it
-   returns `clean`, `/rabbit-round` will mark a draft PR as ready for
-   review before returning.
+   user identities, conversation specifics, deployment specifics,
+   or security architecture beyond what the diff obviously shows.
+   Do not add details that would help a motivated attacker exploit
+   the code, especially a vulnerable previous version being fixed.
+   Assume the PR may be read by hostile adversaries, not only
+   friendly collaborators. When sensitive context would improve
+   readability, omit it by default; ask the user only if omission
+   would make the PR hard to review.
