@@ -17,10 +17,10 @@
 #   bash scripts/verify-release.sh <tag>
 #     e.g. bash scripts/verify-release.sh v0.0.2
 #
-# Requires `gh`, `jq`, `curl`, `tar`. Optional: `7z` for the Windows
-# inner-binary check (script falls back to a softer signal without
-# it). On macOS, uses `hdiutil` (built-in) only as a fallback if the
-# `.app.tar.gz` updater payload is absent on the release.
+# Requires `gh`, `jq`, `curl`, `tar`, `7z`. Failure to find `7z`
+# fails the script (Windows verification can't be silently skipped
+# in a release gate). On macOS, uses `hdiutil` (built-in) only as a
+# fallback if the `.app.tar.gz` updater payload is absent.
 set -euo pipefail
 
 if [[ $# -ne 1 ]]; then
@@ -34,22 +34,37 @@ channel=$(bash "$script_dir/release-channel.sh" "$tag")
 expected_endpoint="https://downloads.stll.app/desktop/$channel/latest.json"
 expected_version="${tag#v}"
 
+# Set up a single private working dir and the cleanup hook BEFORE
+# we do anything that might exit. Defining `cleanup` after the trap
+# would mean an early-exit between the trap line and the function
+# definition silently leaks the dir + any mounted DMG.
+work=$(mktemp -d)
+mounted_dmg=""
+cleanup() {
+  if [[ -n "$mounted_dmg" ]]; then
+    hdiutil detach "$mounted_dmg" -quiet >/dev/null 2>&1 || true
+  fi
+  rm -rf "$work"
+}
+trap cleanup EXIT
+
+manifest_path="$work/latest.json"
+
 PASS=0
 FAIL=0
 NOTES=()
 
 note_pass() { PASS=$((PASS + 1)); printf '  \xe2\x9c\x93  %s\n' "$1"; }
 note_fail() { FAIL=$((FAIL + 1)); NOTES+=("$1"); printf '  \xe2\x9c\x97  %s\n' "$1"; }
-note_info() { printf '  \xe2\x84\xb9\xef\xb8\x8f  %s\n' "$1"; }
 
 # ── Check 3: CloudFront reachability ───────────────────────────
 echo "Check 3: CloudFront serves $expected_endpoint"
-http_code=$(curl -sSo /tmp/release-verify-cf.json -w '%{http_code}' "$expected_endpoint" || true)
+http_code=$(curl -sSo "$manifest_path" -w '%{http_code}' "$expected_endpoint" || true)
 if [[ "$http_code" != "200" ]]; then
   note_fail "manifest GET returned HTTP $http_code (expected 200)"
 else
   note_pass "manifest GET returned 200"
-  if ! jq -e . /tmp/release-verify-cf.json >/dev/null 2>&1; then
+  if ! jq -e . "$manifest_path" >/dev/null 2>&1; then
     note_fail "manifest body is not valid JSON"
   else
     note_pass "manifest body parses as JSON"
@@ -57,9 +72,9 @@ else
 fi
 
 # ── Check 2: manifest shape ────────────────────────────────────
-if [[ -s /tmp/release-verify-cf.json ]] && jq -e . /tmp/release-verify-cf.json >/dev/null 2>&1; then
+if [[ -s "$manifest_path" ]] && jq -e . "$manifest_path" >/dev/null 2>&1; then
   echo "Check 2: manifest shape"
-  manifest_version=$(jq -r '.version // empty' /tmp/release-verify-cf.json)
+  manifest_version=$(jq -r '.version // empty' "$manifest_path")
   if [[ "$manifest_version" == "$expected_version" ]]; then
     note_pass "manifest .version = $manifest_version"
   else
@@ -67,7 +82,7 @@ if [[ -s /tmp/release-verify-cf.json ]] && jq -e . /tmp/release-verify-cf.json >
   fi
 
   for required in pub_date platforms; do
-    if jq -e ".$required" /tmp/release-verify-cf.json >/dev/null 2>&1; then
+    if jq -e ".$required" "$manifest_path" >/dev/null 2>&1; then
       note_pass "manifest .$required present"
     else
       note_fail "manifest missing .$required"
@@ -82,21 +97,11 @@ if [[ -s /tmp/release-verify-cf.json ]] && jq -e . /tmp/release-verify-cf.json >
     else
       note_pass "platform $platform: url + signature present"
     fi
-  done < <(jq -r '.platforms | to_entries[] | "\(.key)\t\(.value.url // "")\t\(.value.signature // "")"' /tmp/release-verify-cf.json)
+  done < <(jq -r '.platforms | to_entries[] | "\(.key)\t\(.value.url // "")\t\(.value.signature // "")"' "$manifest_path")
 fi
 
 # ── Check 1: binary embeds the channel-correct endpoint ────────
 echo "Check 1: binary embeds $expected_endpoint"
-work=$(mktemp -d)
-trap 'cleanup' EXIT
-
-mounted_dmg=""
-cleanup() {
-  if [[ -n "$mounted_dmg" ]]; then
-    hdiutil detach "$mounted_dmg" -quiet >/dev/null 2>&1 || true
-  fi
-  rm -rf "$work"
-}
 
 # Helper: strings|grep on one file, with a label for the report.
 # The subshell turns pipefail off — grep -q closes the pipe on the
@@ -133,12 +138,18 @@ if gh release download "$tag" --pattern "$mac_payload" --dir "$work" 2>/dev/null
     note_fail "macOS: no .app directory found inside $mac_payload"
   fi
 elif gh release download "$tag" --pattern "Stella-macos-universal.dmg" --dir "$work" 2>/dev/null; then
-  note_info "macOS: .app.tar.gz absent; mounting .dmg as fallback"
-  if mounted_dmg=$(hdiutil attach "$work/Stella-macos-universal.dmg" -nobrowse -noverify -noautoopen -mountrandom /tmp 2>/dev/null | awk '/\/Volumes\// || /\/tmp\// {print $NF; exit}'); then
+  printf '  \xe2\x84\xb9\xef\xb8\x8f  macOS: .app.tar.gz absent; mounting .dmg as fallback\n'
+  # `hdiutil attach` final tab-separated column is the mount path.
+  # Use grep -oE to capture it intact even when the path contains
+  # spaces (productName commonly does, e.g. "/Volumes/stella desktop").
+  # awk '{print $NF}' would split on the space and silently truncate.
+  mounted_dmg=$(hdiutil attach "$work/Stella-macos-universal.dmg" -nobrowse -noverify -noautoopen -mountrandom /tmp 2>/dev/null \
+    | grep -oE '(/Volumes/|/tmp/)[^ ].*$' | tail -n 1 || true)
+  if [[ -n "$mounted_dmg" && -d "$mounted_dmg" ]]; then
     inner=$(find "$mounted_dmg" -maxdepth 4 -path '*/Contents/MacOS/*' -type f | head -n 1)
     check_inner_binary "macOS .dmg" "$inner"
   else
-    note_fail "macOS: failed to mount $work/Stella-macos-universal.dmg"
+    note_fail "macOS: failed to determine mount point for $work/Stella-macos-universal.dmg"
   fi
 else
   note_fail "macOS: neither $mac_payload nor .dmg downloadable from $tag"
@@ -147,9 +158,14 @@ fi
 # --- Windows: extract the NSIS installer with 7z to reach the
 #     inner binary. NSIS LZMA-compresses payloads, so a flat
 #     `strings` on the outer .exe can't see the URL.
-win_exe="Stella-windows-x64-setup.exe"
-if gh release download "$tag" --pattern "$win_exe" --dir "$work" 2>/dev/null; then
-  if command -v 7z >/dev/null 2>&1; then
+#
+# Refuse to skip when 7z is missing — a "skipped" Windows check
+# would silently let a broken Windows build pass the release gate.
+if ! command -v 7z >/dev/null 2>&1; then
+  note_fail "Windows: 7z not installed (install with 'brew install p7zip' or 'apt install p7zip-full')"
+else
+  win_exe="Stella-windows-x64-setup.exe"
+  if gh release download "$tag" --pattern "$win_exe" --dir "$work" 2>/dev/null; then
     win_extract="$work/win-extract"
     mkdir -p "$win_extract"
     if 7z x -y -o"$win_extract" "$work/$win_exe" >/dev/null 2>&1; then
@@ -159,10 +175,8 @@ if gh release download "$tag" --pattern "$win_exe" --dir "$work" 2>/dev/null; th
       note_fail "Windows: 7z failed to extract $win_exe"
     fi
   else
-    note_info "Windows: 7z not installed; skipping inner-binary check (install with 'brew install p7zip')"
+    note_fail "Windows: could not download $win_exe from $tag"
   fi
-else
-  note_fail "Windows: could not download $win_exe from $tag"
 fi
 
 echo ""
