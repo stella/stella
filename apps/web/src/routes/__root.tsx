@@ -12,6 +12,7 @@ import {
   DefaultErrorComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
+import { RouteTelemetry } from "@/lib/analytics/route-telemetry";
 import { ensureCriticalQueryData } from "@/lib/react-query";
 import { sessionOptions } from "@/routes/-queries";
 
@@ -53,6 +54,7 @@ function RootComponent() {
   return (
     <>
       <HeadContent />
+      <RouteTelemetry />
       <div className="flex h-dvh w-full flex-col">
         <Outlet />
         {DevRoot ? (

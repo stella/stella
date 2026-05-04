@@ -23,7 +23,7 @@ import { db } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
-import { captureError, identify } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUuid } from "@/api/lib/custom-schema";
@@ -679,13 +679,6 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
       }
       const activeOrganizationId = toSafeId<"organization">(rawOrgId);
       const userId = toSafeId<"user">(user.id);
-
-      identify({
-        distinctId: userId,
-        properties: {
-          active_organization_id: activeOrganizationId,
-        },
-      });
 
       enrichRequestContext(request, {
         posthogDistinctId: userId,

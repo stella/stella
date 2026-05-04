@@ -7,23 +7,20 @@ import {
 
 const authenticateMcpRequestMock = mock();
 const captureErrorMock = mock();
-const identifyMock = mock();
 const analyticsCaptureMock = mock();
-const analyticsIdentifyMock = mock();
 const analyticsFlushMock = mock(async function flushAnalyticsMock() {
   return;
 });
 const getAnalyticsMock = mock(() => ({
   capture: analyticsCaptureMock,
-  identify: analyticsIdentifyMock,
   flush: analyticsFlushMock,
 }));
 const resolveMcpSessionContextMock = mock();
 
 void mock.module("@/api/lib/analytics", () => ({
   captureError: captureErrorMock,
+  captureRequestError: captureErrorMock,
   getAnalytics: getAnalyticsMock,
-  identify: identifyMock,
 }));
 
 void mock.module("@/api/mcp/auth", () => ({

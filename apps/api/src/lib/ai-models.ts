@@ -371,8 +371,10 @@ export type OrgAIConfig = {
 };
 
 export type ResolvedModelInfo = {
+  keySource: "byok" | "instance";
   provider: AIProvider;
   modelId: string;
+  region?: DataRegion | undefined;
 };
 
 // -- BYOK factory cache -----------------------------------------
@@ -527,16 +529,20 @@ export const getModelInfoForRole = (
 
     if (shouldOverride) {
       return {
+        keySource: "byok",
         provider: orgConfig.provider,
         modelId: DEFAULT_MODELS[orgConfig.provider][role],
+        region: orgConfig.region,
       };
     }
   }
 
   const provider = getActiveProvider();
   return {
+    keySource: "instance",
     provider,
     modelId: MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role],
+    region: orgConfig?.region,
   };
 };
 

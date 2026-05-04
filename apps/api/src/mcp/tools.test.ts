@@ -10,15 +10,12 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 const anonymizeTextFieldsMock = mock();
 const loadAnonymizationGazetteerEntriesMock = mock();
 const captureErrorMock = mock();
-const identifyMock = mock();
 const analyticsCaptureMock = mock();
-const analyticsIdentifyMock = mock();
 const analyticsFlushMock = mock(async function flushAnalyticsMock() {
   return;
 });
 const getAnalyticsMock = mock(() => ({
   capture: analyticsCaptureMock,
-  identify: analyticsIdentifyMock,
   flush: analyticsFlushMock,
 }));
 const searchAcrossMattersExecute = mock();
@@ -98,8 +95,8 @@ const normalizeAnonymizationBlacklistEntriesMock = (
 
 void mock.module("@/api/lib/analytics", () => ({
   captureError: captureErrorMock,
+  captureRequestError: captureErrorMock,
   getAnalytics: getAnalyticsMock,
-  identify: identifyMock,
 }));
 
 void mock.module("@/api/mcp/anonymization", () => ({
@@ -271,7 +268,6 @@ describe("OpenAI-compatible MCP tools", () => {
     loadAnonymizationGazetteerEntriesMock.mockReset();
     loadAnonymizationGazetteerEntriesMock.mockResolvedValue([]);
     captureErrorMock.mockReset();
-    identifyMock.mockReset();
     searchAcrossMattersExecute.mockReset();
     readContentAcrossMattersExecute.mockReset();
     readContactExecute.mockReset();

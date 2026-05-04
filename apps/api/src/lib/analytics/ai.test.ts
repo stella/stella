@@ -5,12 +5,15 @@ import type {
 } from "ai";
 import { describe, expect, test } from "bun:test";
 
+import { SERVER_ANALYTICS_EVENTS } from "./types";
 import type { Analytics } from "./types";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
 process.env["GOTENBERG_URL"] ??= "http://localhost:3003";
 process.env["GOTENBERG_USERNAME"] ??= "gotenberg";
+process.env["OPENAI_API_KEY"] ??= "test-openai-key";
+process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
 
@@ -54,7 +57,6 @@ describe("createAIAnalyticsCallbacks", () => {
         events.push(event);
       },
       flush: async () => void 0,
-      identify: () => void 0,
     };
 
     const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
@@ -186,7 +188,6 @@ describe("createAIAnalyticsCallbacks", () => {
         events.push(event);
       },
       flush: async () => void 0,
-      identify: () => void 0,
     };
 
     const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
@@ -225,7 +226,6 @@ describe("createAIAnalyticsCallbacks", () => {
         events.push(event);
       },
       flush: async () => void 0,
-      identify: () => void 0,
     };
 
     const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
@@ -252,5 +252,161 @@ describe("createAIAnalyticsCallbacks", () => {
 
     expect(events).toHaveLength(1);
     expect(events[0]?.properties).not.toHaveProperty("$ai_input");
+  });
+
+  test("captures basic aggregate generation without prompt or output content", async () => {
+    const aiAnalyticsModule = await loadAIAnalytics();
+
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => void 0,
+    };
+
+    const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
+      analytics,
+      feature: "chat.basic",
+      modelRole: "fast",
+      orgAIConfig: {
+        apiKey: "org-secret",
+        provider: "openai",
+      },
+      properties: {
+        entity_version_id: "ev_secret",
+        organization_id: "org_123",
+        workspace_id: "ws_123",
+      },
+      traceId: "trace_should_not_leave_basic_mode",
+    });
+
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- Synthetic callback event for focused unit coverage
+    callbacks.stepCallbacks.experimental_onStepStart?.({
+      messages: [
+        {
+          content: [{ text: "Privileged client facts", type: "text" }],
+          role: "user",
+        },
+      ],
+      model: { modelId: "runtime-model", provider: "openai.responses" },
+      stepNumber: 0,
+    } as unknown as OnStepStartEvent);
+
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- Synthetic callback event for focused unit coverage
+    callbacks.stepCallbacks.onStepFinish?.({
+      content: [],
+      dynamicToolCalls: [],
+      dynamicToolResults: [],
+      experimental_context: undefined,
+      files: [],
+      finishReason: "stop",
+      functionId: undefined,
+      metadata: undefined,
+      model: { modelId: "runtime-model", provider: "openai.responses" },
+      providerMetadata: undefined,
+      rawFinishReason: "stop",
+      reasoning: [],
+      reasoningText: undefined,
+      request: {},
+      response: {
+        body: undefined,
+        headers: undefined,
+        id: "resp_456",
+        messages: [
+          {
+            content: [{ text: "Sensitive answer", type: "text" }],
+            role: "assistant",
+          },
+        ],
+        modelId: "runtime-model",
+        timestamp: new Date(),
+      },
+      sources: [],
+      staticToolCalls: [],
+      staticToolResults: [],
+      stepNumber: 0,
+      text: "Sensitive answer",
+      toolCalls: [],
+      toolResults: [],
+      usage: {
+        inputTokenDetails: undefined,
+        inputTokens: 1200,
+        outputTokenDetails: undefined,
+        outputTokens: 250,
+        totalTokens: 1450,
+      },
+      warnings: undefined,
+    } as unknown as OnStepFinishEvent);
+
+    expect(events).toHaveLength(1);
+    const event = events.at(0);
+    expect(event?.event).toBe(SERVER_ANALYTICS_EVENTS.aiGenerationCompleted);
+    if (event?.event !== SERVER_ANALYTICS_EVENTS.aiGenerationCompleted) {
+      throw new Error("Expected aggregate AI generation event");
+    }
+    expect(event.distinctId).toBe("server");
+    expect(event.properties).toMatchObject({
+      feature: "chat.basic",
+      input_tokens_bucket: "1k_5k",
+      model: "gpt-5.4-nano",
+      model_key_source: "byok",
+      organization_id: "org_123",
+      output_tokens_bucket: "0_1k",
+      provider: "openai",
+      total_tokens_bucket: "1k_5k",
+      workspace_id: "ws_123",
+    });
+    expect(event.properties).not.toHaveProperty("entity_version_id");
+    expect(JSON.stringify(event.properties)).not.toContain("Privileged");
+    expect(JSON.stringify(event.properties)).not.toContain("Sensitive answer");
+    expect(JSON.stringify(event.properties)).not.toContain("trace_should_not");
+  });
+
+  test("captures basic aggregate failures without raw error messages", async () => {
+    const aiAnalyticsModule = await loadAIAnalytics();
+
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => void 0,
+    };
+
+    const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
+      analytics,
+      feature: "analysis.basic",
+      modelRole: "fast",
+      orgAIConfig: {
+        apiKey: "org-secret",
+        provider: "openai",
+      },
+      properties: {
+        organization_id: "org_123",
+        workspace_id: "ws_123",
+      },
+      traceId: "trace_should_not_leave_basic_mode",
+    });
+
+    callbacks.captureError(new Error("secret client name exceeded rate limit"));
+
+    expect(events).toHaveLength(1);
+    const event = events.at(0);
+    expect(event?.event).toBe(SERVER_ANALYTICS_EVENTS.aiGenerationFailed);
+    if (event?.event !== SERVER_ANALYTICS_EVENTS.aiGenerationFailed) {
+      throw new Error("Expected aggregate AI failure event");
+    }
+    expect(event.properties).toMatchObject({
+      error_type: "Error",
+      failure_reason: "rate_limit",
+      feature: "analysis.basic",
+      organization_id: "org_123",
+      workspace_id: "ws_123",
+    });
+    expect(JSON.stringify(event.properties)).not.toContain("secret client");
+    expect(JSON.stringify(event.properties)).not.toContain("trace_should_not");
   });
 });

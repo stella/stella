@@ -6,12 +6,21 @@ import type {
 } from "ai";
 
 import { env } from "@/api/env";
+import type { ModelRole, OrgAIConfig } from "@/api/lib/ai-models";
+import { getModelInfoForRole } from "@/api/lib/ai-models";
 import { errorTag } from "@/api/lib/errors/utils";
 
 import { getAnalytics } from "./client";
-import type { Analytics } from "./types";
-
-type AnalyticsPrimitive = boolean | number | string;
+import { SERVER_ANALYTICS_EVENTS } from "./types";
+import type {
+  AIFailureReason,
+  Analytics,
+  AnalyticsPrimitive,
+  CountBucket,
+  LatencyBucket,
+  SafeAIAnalyticsMetadata,
+  TokenBucket,
+} from "./types";
 
 type AnalyticsMetadata = Record<string, AnalyticsPrimitive>;
 
@@ -32,14 +41,141 @@ type AIAnalyticsProps = {
   analytics?: Analytics;
   captureContent?: boolean;
   forceEnabled?: boolean;
+  modelRole?: ModelRole;
+  orgAIConfig?: OrgAIConfig | null;
 };
 
 const MAX_STRING_LENGTH = 2000;
 const TRUNCATION_MARKER = " [truncated]";
 const ONE_SECOND_MS = 1000;
-const noop = () => void 0;
+const SERVER_DISTINCT_ID = "server";
 const isLocalPostHogDebugEnabled = (): boolean =>
   env.isDev && env.POSTHOG_LOCAL_DEBUG;
+
+const pickSafeMetadata = (
+  properties: AnalyticsMetadata | undefined,
+): SafeAIAnalyticsMetadata => {
+  if (!properties) {
+    return {};
+  }
+
+  const safeProperties: SafeAIAnalyticsMetadata = {};
+  for (const [key, value] of Object.entries(properties)) {
+    switch (key) {
+      case "content_type":
+        safeProperties.content_type = value;
+        break;
+      case "feature_area":
+        safeProperties.feature_area = value;
+        break;
+      case "file_count":
+        safeProperties.file_count = value;
+        break;
+      case "language":
+        safeProperties.language = value;
+        break;
+      case "organization_id":
+        safeProperties.organization_id = value;
+        break;
+      case "page_number":
+        safeProperties.page_number = value;
+        break;
+      case "property_count":
+        safeProperties.property_count = value;
+        break;
+      case "result_count":
+        safeProperties.result_count = value;
+        break;
+      case "workspace_id":
+        safeProperties.workspace_id = value;
+        break;
+      default:
+        break;
+    }
+  }
+  return safeProperties;
+};
+
+const bucketTokenCount = (tokens: number | undefined): TokenBucket => {
+  if (tokens === undefined || tokens < 1000) {
+    return "0_1k";
+  }
+  if (tokens < 5000) {
+    return "1k_5k";
+  }
+  if (tokens < 20_000) {
+    return "5k_20k";
+  }
+  return "20k_plus";
+};
+
+const bucketLatency = (latencySeconds: number): LatencyBucket => {
+  if (latencySeconds < 2) {
+    return "0_2s";
+  }
+  if (latencySeconds < 10) {
+    return "2_10s";
+  }
+  if (latencySeconds < 30) {
+    return "10_30s";
+  }
+  return "30s_plus";
+};
+
+const bucketCount = (count: number): CountBucket => {
+  if (count === 0) {
+    return "0";
+  }
+  if (count === 1) {
+    return "1";
+  }
+  if (count <= 3) {
+    return "2_3";
+  }
+  return "4_plus";
+};
+
+const classifyFailureReason = (error: unknown): AIFailureReason => {
+  const tag = errorTag(error);
+  if (tag.includes("Validation")) {
+    return "validation";
+  }
+  if (tag.includes("Configuration")) {
+    return "configuration";
+  }
+  if (tag.includes("Timeout") || tag.includes("Abort")) {
+    return "timeout";
+  }
+
+  if (typeof error === "object" && error !== null && "status" in error) {
+    const status = error.status;
+    if (status === 401 || status === 403) {
+      return "auth";
+    }
+    if (status === 408 || status === 504) {
+      return "timeout";
+    }
+    if (status === 429) {
+      return "rate_limit";
+    }
+    if (typeof status === "number" && status >= 500) {
+      return "provider";
+    }
+  }
+
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (message.includes("rate limit") || message.includes("429")) {
+    return "rate_limit";
+  }
+  if (message.includes("timeout") || message.includes("aborted")) {
+    return "timeout";
+  }
+  if (message.includes("api key") || message.includes("unauthorized")) {
+    return "auth";
+  }
+
+  return "unknown";
+};
 
 const truncateString = (value: string): string => {
   if (value.length <= MAX_STRING_LENGTH) {
@@ -190,22 +326,23 @@ export const createAIAnalyticsCallbacks = ({
   forceEnabled = false,
   ...config
 }: AIAnalyticsProps): AIAnalyticsCallbacks => {
-  if (!forceEnabled && !isLocalPostHogDebugEnabled()) {
-    return {
-      stepCallbacks: {},
-      captureError: noop,
-    };
-  }
+  const debugEnabled = forceEnabled || isLocalPostHogDebugEnabled();
+  const captureDebugContent = debugEnabled && captureContent;
 
   const stepState = new Map<number, AnalyticsStepState>();
-  const distinctId = config.distinctId ?? `local-debug:${config.feature}`;
+  const distinctId = debugEnabled
+    ? (config.distinctId ?? `local-debug:${config.feature}`)
+    : SERVER_DISTINCT_ID;
+  const resolvedModelInfo = config.modelRole
+    ? getModelInfoForRole(config.modelRole, config.orgAIConfig)
+    : null;
   let hasCapturedGenerationError = false;
 
   const onStepStart: NonNullable<
     AIAnalyticsStepCallbacks["experimental_onStepStart"]
   > = ({ messages, model, stepNumber }) => {
     stepState.set(stepNumber, {
-      input: captureContent ? serializeMessages(messages) : undefined,
+      input: captureDebugContent ? serializeMessages(messages) : undefined,
       modelId: model.modelId,
       provider: normalizeProvider(model.provider),
       spanId: Bun.randomUUIDv7(),
@@ -230,28 +367,55 @@ export const createAIAnalyticsCallbacks = ({
         startedAt: performance.now(),
       } satisfies AnalyticsStepState);
 
+    const latencySeconds =
+      (performance.now() - currentStep.startedAt) / ONE_SECOND_MS;
+
+    if (!debugEnabled) {
+      analytics.capture({
+        distinctId,
+        event: SERVER_ANALYTICS_EVENTS.aiGenerationCompleted,
+        properties: {
+          ...pickSafeMetadata(config.properties),
+          feature: config.feature,
+          input_tokens_bucket: bucketTokenCount(usage.inputTokens),
+          latency_bucket: bucketLatency(latencySeconds),
+          model: resolvedModelInfo?.modelId ?? currentStep.modelId,
+          model_key_source: resolvedModelInfo?.keySource ?? "unknown",
+          output_tokens_bucket: bucketTokenCount(usage.outputTokens),
+          provider: resolvedModelInfo?.provider ?? currentStep.provider,
+          ...(resolvedModelInfo?.region
+            ? { region: resolvedModelInfo.region }
+            : {}),
+          tool_count_bucket: bucketCount(toolCalls.length),
+          total_tokens_bucket: bucketTokenCount(usage.totalTokens),
+        },
+      });
+
+      stepState.delete(stepNumber);
+      return;
+    }
+
     analytics.capture({
       distinctId,
-      event: "$ai_generation",
+      event: SERVER_ANALYTICS_EVENTS.aiGeneration,
       properties: {
         ...buildBaseProperties({
           config,
-          captureContent,
+          captureContent: captureDebugContent,
           spanId: currentStep.spanId,
         }),
         $ai_input_tokens: usage.inputTokens,
         $ai_output_tokens: usage.outputTokens,
-        $ai_latency:
-          (performance.now() - currentStep.startedAt) / ONE_SECOND_MS,
+        $ai_latency: latencySeconds,
         $ai_model: currentStep.modelId,
         $ai_provider: currentStep.provider,
         ...(toolCalls.length > 0
           ? { $ai_tools: serializeToolNames(toolCalls) }
           : {}),
-        ...(captureContent && currentStep.input
+        ...(captureDebugContent && currentStep.input
           ? { $ai_input: currentStep.input }
           : {}),
-        ...(captureContent
+        ...(captureDebugContent
           ? { $ai_output_choices: serializeMessages(response.messages) }
           : {}),
       },
@@ -263,6 +427,10 @@ export const createAIAnalyticsCallbacks = ({
   const onToolCallFinish: NonNullable<
     AIAnalyticsStepCallbacks["experimental_onToolCallFinish"]
   > = (event) => {
+    if (!debugEnabled) {
+      return;
+    }
+
     const parentStep =
       event.stepNumber === undefined
         ? undefined
@@ -270,7 +438,7 @@ export const createAIAnalyticsCallbacks = ({
 
     analytics.capture({
       distinctId,
-      event: "$ai_span",
+      event: SERVER_ANALYTICS_EVENTS.aiSpan,
       properties: {
         $ai_trace_id: config.traceId,
         ...(config.sessionId ? { $ai_session_id: config.sessionId } : {}),
@@ -278,7 +446,7 @@ export const createAIAnalyticsCallbacks = ({
         $ai_span_name: event.toolCall.toolName,
         ...(parentStep ? { $ai_parent_id: parentStep.spanId } : {}),
         $ai_latency: event.durationMs / ONE_SECOND_MS,
-        ...(captureContent
+        ...(captureDebugContent
           ? {
               $ai_input_state: sanitizeForAIAnalytics({
                 tool: event.toolCall.toolName,
@@ -297,7 +465,7 @@ export const createAIAnalyticsCallbacks = ({
               $ai_is_error: true,
               $ai_error: getErrorPayload({
                 error: event.error,
-                captureContent,
+                captureContent: captureDebugContent,
               }),
             }),
         ...config.properties,
@@ -319,20 +487,50 @@ export const createAIAnalyticsCallbacks = ({
     hasCapturedGenerationError = true;
     const activeStep = [...stepState.values()].at(-1);
 
+    if (!debugEnabled) {
+      analytics.capture({
+        distinctId,
+        event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+        properties: {
+          ...pickSafeMetadata(config.properties),
+          error_type: errorTag(error),
+          failure_reason: classifyFailureReason(error),
+          feature: config.feature,
+          ...(activeStep
+            ? {
+                latency_bucket: bucketLatency(
+                  (performance.now() - activeStep.startedAt) / ONE_SECOND_MS,
+                ),
+                model: resolvedModelInfo?.modelId ?? activeStep.modelId,
+                model_key_source: resolvedModelInfo?.keySource ?? "unknown",
+                provider: resolvedModelInfo?.provider ?? activeStep.provider,
+                ...(resolvedModelInfo?.region
+                  ? { region: resolvedModelInfo.region }
+                  : {}),
+              }
+            : {}),
+        },
+      });
+      return;
+    }
+
     analytics.capture({
       distinctId,
-      event: "$ai_generation",
+      event: SERVER_ANALYTICS_EVENTS.aiGeneration,
       properties: {
         ...buildBaseProperties({
           config,
-          captureContent,
+          captureContent: captureDebugContent,
           spanId: activeStep?.spanId ?? Bun.randomUUIDv7(),
         }),
         $ai_is_error: true,
-        $ai_error: getErrorPayload({ error, captureContent }),
+        $ai_error: getErrorPayload({
+          error,
+          captureContent: captureDebugContent,
+        }),
         ...(activeStep
           ? {
-              ...(captureContent && activeStep.input
+              ...(captureDebugContent && activeStep.input
                 ? { $ai_input: activeStep.input }
                 : {}),
               $ai_latency:

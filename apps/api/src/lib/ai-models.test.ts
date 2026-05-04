@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
+process.env["EMAIL_PROVIDER"] ??= "smtp";
+process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
+process.env["GOTENBERG_URL"] ??= "http://localhost:3003";
+process.env["GOTENBERG_USERNAME"] ??= "gotenberg";
+process.env["REDIS_URL"] ??= "redis://localhost:6379";
+process.env["SMTP_HOST"] ??= "localhost";
+process.env["SMTP_PORT"] ??= "1025";
+
 const { REGIONAL_PROVIDERS, supportsRegion } =
   await import("@/api/lib/ai-models");
 

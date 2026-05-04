@@ -18,9 +18,10 @@ export const getAnalytics = () => globalAnalytics;
 /**
  * Wraps the app with the configured analytics provider.
  *
- * When PostHog env vars are set, initializes PostHog and
- * wraps children in PostHogProvider (for session recording,
- * heatmaps). When absent, provides a silent no-op.
+ * When PostHog env vars are explicitly set, initializes PostHog for
+ * allowlisted telemetry. Missing env vars provide a silent no-op, so
+ * self-hosted deployments do not phone home unless their operator
+ * configures their own telemetry sink.
  */
 type AnalyticsValue = {
   analytics: Analytics;

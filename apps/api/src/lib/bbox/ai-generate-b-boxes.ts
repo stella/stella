@@ -43,6 +43,8 @@ export const generateBBoxData = async ({
 > => {
   const aiAnalytics = createAIAnalyticsCallbacks({
     feature: "bbox.generate",
+    modelRole: "pdf",
+    orgAIConfig: orgAIConfig ?? null,
     properties: {
       justification_id: justificationId,
       organization_id: organizationId,

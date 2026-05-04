@@ -92,6 +92,8 @@ export const generateWorkflowData = async ({
 
   const aiAnalytics = createAIAnalyticsCallbacks({
     feature: "workflow.generate-batch",
+    modelRole: "pdf",
+    orgAIConfig: orgAIConfig ?? null,
     properties: {
       entity_version_id: entityVersionId,
       organization_id: organizationId,
