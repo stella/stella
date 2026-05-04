@@ -13,7 +13,6 @@ process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
 
 const {
-  DEFAULT_MODELS,
   getModelForRole,
   getModelInfoForRole,
   REGIONAL_PROVIDERS,
@@ -69,6 +68,8 @@ describe("BYOK model overrides", () => {
       overrideModels: {
         chat: { provider: "anthropic", modelId: "claude-opus-4-5" },
         fast: { provider: "openai", modelId: "gpt-5.4-nano" },
+        reasoning: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
+        pdf: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
       },
     };
 
@@ -81,23 +82,6 @@ describe("BYOK model overrides", () => {
       keySource: "byok",
       modelId: "gpt-5.4-nano",
       provider: "openai",
-    });
-  });
-
-  test("falls back to the primary provider default when a role has no selection", () => {
-    const orgConfig: OrgAIConfig = {
-      providers: [
-        {
-          apiKey: "sk-org",
-          provider: "anthropic",
-        },
-      ],
-    };
-
-    expect(getModelInfoForRole("fast", orgConfig)).toMatchObject({
-      keySource: "byok",
-      modelId: DEFAULT_MODELS.anthropic.fast,
-      provider: "anthropic",
     });
   });
 
@@ -114,6 +98,18 @@ describe("BYOK model overrides", () => {
         pdf: {
           provider: "google",
           modelId: "gemini-3.1-flash-lite-preview",
+        },
+        chat: {
+          provider: "google",
+          modelId: "gemini-3.1-flash-lite-preview",
+        },
+        fast: {
+          provider: "google",
+          modelId: "gemini-3.1-flash-lite-preview",
+        },
+        reasoning: {
+          provider: "google",
+          modelId: "gemini-3.1-pro-preview",
         },
       },
     };
@@ -157,7 +153,7 @@ describe("BYOK model overrides", () => {
       expect(getModelInfoForRole(role, orgConfig)).toMatchObject({
         keySource: "byok",
         provider: "openrouter",
-        modelId: orgConfig.overrideModels?.[role]?.modelId,
+        modelId: orgConfig.overrideModels[role].modelId,
       });
       expect(() => getModelForRole(role, orgConfig)).not.toThrow();
     }
@@ -172,7 +168,10 @@ describe("BYOK model overrides", () => {
         },
       ],
       overrideModels: {
+        chat: { provider: "openai", modelId: "gpt-5.4-mini" },
+        fast: { provider: "openai", modelId: "gpt-5.4-nano" },
         reasoning: { provider: "openai", modelId: "gpt-5.4-pro" },
+        pdf: { provider: "openai", modelId: "gpt-5.4" },
       },
     };
 

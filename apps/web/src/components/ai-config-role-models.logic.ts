@@ -17,7 +17,6 @@ export type ProviderCredentialDraft = {
   provider: ProviderValue;
   apiKey: string;
   apiKeyMasked?: string | undefined;
-  baseURL: string;
   region: RegionValue;
   replacingKey: boolean;
 };
@@ -36,7 +35,6 @@ export type ModelOption = ModelSelection & {
 export type StoredProviderConfig = {
   provider: string;
   apiKeyMasked?: string | undefined;
-  baseURL?: string | null | undefined;
   region?: string | undefined;
 };
 
@@ -124,7 +122,6 @@ export const createProviderCredentialDraft = (
 ): ProviderCredentialDraft => ({
   provider,
   apiKey: "",
-  baseURL: "",
   region: "global",
   replacingKey: true,
 });
@@ -158,7 +155,6 @@ export const providerDraftsFromStoredProviders = (
       provider,
       apiKey: "",
       apiKeyMasked: providerConfig.apiKeyMasked,
-      baseURL: providerConfig.baseURL ?? "",
       region,
       replacingKey: false,
     });
@@ -326,6 +322,16 @@ export const serializeOverrideModels = ({
         !isKnownModelSelection(selection),
     )
   ) {
+    return null;
+  }
+
+  // Reject orphan providers — every configured provider
+  // must drive at least one role. Mirrors the API check;
+  // gating it here keeps the save button honest.
+  const referencedProviders = new Set(
+    selections.map((selection) => selection.provider),
+  );
+  if (providers.some((provider) => !referencedProviders.has(provider))) {
     return null;
   }
 

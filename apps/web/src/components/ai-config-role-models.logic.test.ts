@@ -50,7 +50,6 @@ describe("BYOK provider and model configuration", () => {
         provider: "google",
         apiKey: "",
         apiKeyMasked: "AIza****",
-        baseURL: "",
         region: "eu",
         replacingKey: false,
       },
@@ -58,7 +57,6 @@ describe("BYOK provider and model configuration", () => {
         provider: "openai",
         apiKey: "",
         apiKeyMasked: "sk-proj****",
-        baseURL: "",
         region: "global",
         replacingKey: false,
       },
@@ -155,6 +153,15 @@ describe("BYOK provider and model configuration", () => {
           ...createDefaultRoleModels(["openai"]),
           pdf: null,
         },
+      }),
+    ).toBeNull();
+  });
+
+  test("blocks serialization when a configured provider is unused", () => {
+    expect(
+      serializeOverrideModels({
+        providers: ["openai", "anthropic"],
+        roleModels: createDefaultRoleModels(["openai"]),
       }),
     ).toBeNull();
   });

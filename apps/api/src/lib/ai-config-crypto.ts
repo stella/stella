@@ -38,14 +38,12 @@ const orgAIConfigSchema = v.strictObject({
     ),
     v.minLength(1),
   ),
-  overrideModels: v.optional(
-    v.strictObject({
-      fast: v.optional(modelSelectionSchema),
-      chat: v.optional(modelSelectionSchema),
-      reasoning: v.optional(modelSelectionSchema),
-      pdf: v.optional(modelSelectionSchema),
-    }),
-  ),
+  overrideModels: v.strictObject({
+    fast: modelSelectionSchema,
+    chat: modelSelectionSchema,
+    reasoning: modelSelectionSchema,
+    pdf: modelSelectionSchema,
+  }),
 });
 const parseOrgAIConfig = v.safeParser(orgAIConfigSchema);
 

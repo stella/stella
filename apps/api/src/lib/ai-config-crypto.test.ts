@@ -42,7 +42,23 @@ describe("maskApiKey", () => {
 });
 
 describe("isOrgAIConfig", () => {
+  const fullOverrideModels = {
+    chat: { provider: "openai", modelId: "gpt-5.4" },
+    fast: { provider: "openai", modelId: "gpt-5.4-nano" },
+    reasoning: { provider: "openai", modelId: "gpt-5.4" },
+    pdf: { provider: "openai", modelId: "gpt-5.4" },
+  };
+
   test("accepts a valid org AI config", () => {
+    expect(
+      isOrgAIConfig({
+        providers: [{ provider: "openai", apiKey: "sk-test" }],
+        overrideModels: fullOverrideModels,
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects configs missing any role in overrideModels", () => {
     expect(
       isOrgAIConfig({
         providers: [{ provider: "openai", apiKey: "sk-test" }],
@@ -50,7 +66,7 @@ describe("isOrgAIConfig", () => {
           chat: { provider: "openai", modelId: "gpt-5.4" },
         },
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   test("rejects unknown model override roles", () => {
@@ -58,6 +74,7 @@ describe("isOrgAIConfig", () => {
       isOrgAIConfig({
         providers: [{ provider: "openai", apiKey: "sk-test" }],
         overrideModels: {
+          ...fullOverrideModels,
           unknown: { provider: "openai", modelId: "gpt-5.4" },
         },
       }),
@@ -67,9 +84,7 @@ describe("isOrgAIConfig", () => {
   test("rejects configs missing providers", () => {
     expect(
       isOrgAIConfig({
-        overrideModels: {
-          chat: { provider: "openai", modelId: "gpt-5.4" },
-        },
+        overrideModels: fullOverrideModels,
       }),
     ).toBe(false);
   });
@@ -78,7 +93,7 @@ describe("isOrgAIConfig", () => {
     expect(
       isOrgAIConfig({
         providers: [{ provider: "openai", apiKey: "sk-test" }],
-        overrideModels: { chat: "gpt-5.4" },
+        overrideModels: { ...fullOverrideModels, chat: "gpt-5.4" },
       }),
     ).toBe(false);
   });
@@ -90,11 +105,13 @@ describe("isOrgAIConfig", () => {
           {
             provider: "openai_compatible",
             apiKey: "sk-test",
-            baseURL: "https://api.example.com/v1",
           },
         ],
         overrideModels: {
           chat: { provider: "openai_compatible", modelId: "default" },
+          fast: { provider: "openai_compatible", modelId: "default" },
+          reasoning: { provider: "openai_compatible", modelId: "default" },
+          pdf: { provider: "openai_compatible", modelId: "default" },
         },
       }),
     ).toBe(false);

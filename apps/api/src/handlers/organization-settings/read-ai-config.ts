@@ -22,7 +22,6 @@ type AIConfigResult = {
       providers: {
         provider: OrgAIConfig["providers"][number]["provider"];
         apiKeyMasked: string;
-        baseURL: string | null;
         region: DataRegion;
       }[];
       overrideModels: OrgAIConfig["overrideModels"];
@@ -82,7 +81,6 @@ const readAIConfig = createSafeRootHandler(
           providers: aiConfig.providers.map((providerConfig) => ({
             provider: providerConfig.provider,
             apiKeyMasked: maskApiKey(providerConfig.apiKey),
-            baseURL: providerConfig.baseURL ?? null,
             region: providerConfig.region ?? "global",
           })),
           overrideModels: aiConfig.overrideModels,

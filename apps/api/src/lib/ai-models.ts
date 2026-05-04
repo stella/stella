@@ -91,6 +91,61 @@ export const DEFAULT_MODELS = {
   },
 } as const satisfies Record<AIProvider, Record<ModelRole, string>>;
 
+/**
+ * BYOK-offered model IDs per provider. Server-side allowlist
+ * mirroring the picker catalog in
+ * apps/web/src/components/ai-config-role-models.logic.ts —
+ * keep the two in sync. The frontend list is not a security
+ * boundary; this is what the API will accept.
+ *
+ * Limited to providers BYOK supports (no openai_compatible).
+ */
+export const BYOK_MODEL_OPTIONS = {
+  google: [
+    "gemini-3-pro-preview",
+    "gemini-3-flash-preview",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+  ],
+  anthropic: [
+    "claude-opus-4-7",
+    "claude-sonnet-4-6",
+    "claude-opus-4-6",
+    "claude-haiku-4-5-20251001",
+  ],
+  openai: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2"],
+  openrouter: [
+    "google/gemini-3-flash-preview",
+    "google/gemini-3.1-pro-preview",
+    "google/gemini-2.5-flash-lite",
+    "anthropic/claude-opus-4.5",
+    "anthropic/claude-sonnet-4.5",
+    "openai/gpt-5.4",
+    "openai/gpt-5.4-mini",
+  ],
+} as const satisfies Record<
+  Exclude<AIProvider, "openai_compatible">,
+  readonly string[]
+>;
+
+export type BYOKProvider = keyof typeof BYOK_MODEL_OPTIONS;
+
+export const isBYOKProvider = (
+  provider: AIProvider,
+): provider is BYOKProvider => provider in BYOK_MODEL_OPTIONS;
+
+export const isAllowedBYOKModel = (
+  provider: AIProvider,
+  modelId: string,
+): boolean => {
+  if (!isBYOKProvider(provider)) {
+    return false;
+  }
+  const allowed: readonly string[] = BYOK_MODEL_OPTIONS[provider];
+  return allowed.includes(modelId);
+};
+
 export type DataRegion = "eu" | "global" | "ch";
 
 /**
@@ -360,20 +415,17 @@ const createModelFactory = (
 export type OrgAIConfig = {
   providers: OrgAIProviderConfig[];
   /**
-   * Per-role model selections. Each role selects a model
-   * through one of the configured org providers.
+   * Per-role model selection. Every role must resolve to a
+   * configured provider; the update endpoint enforces this
+   * and rejects orphan providers (configured but unused).
    */
-  overrideModels?:
-    | Partial<Record<ModelRole, OrgAIModelSelection | undefined>>
-    | undefined;
+  overrideModels: Record<ModelRole, OrgAIModelSelection>;
 };
 
 export type OrgAIProviderConfig = {
   provider: AIProvider;
   /** Decrypted API key. */
   apiKey: string;
-  /** For openai_compatible only. */
-  baseURL?: string | undefined;
   /**
    * Data sovereignty region. When set, AI calls are
    * routed to region-specific endpoints (e.g. Vertex AI
@@ -398,10 +450,10 @@ export type ResolvedModelInfo = {
 
 /**
  * LRU cache for BYOK model factories. Keyed by a stable
- * hash of (provider + apiKey + baseURL + region) so we
- * don't recreate HTTP clients on every call within the
- * same connection. Uses a truncated SHA-256 digest to
- * avoid holding full secrets as map keys.
+ * hash of (provider + apiKey + region) so we don't
+ * recreate HTTP clients on every call within the same
+ * connection. Uses a truncated SHA-256 digest to avoid
+ * holding full secrets as map keys.
  */
 const BYOK_CACHE_MAX = 64;
 const byokCache = new Map<string, ModelFactory>();
@@ -410,7 +462,7 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(config.apiKey);
   const hash = hasher.digest("hex").slice(0, 16);
-  return `${config.provider}:${hash}:${config.baseURL ?? ""}:${config.region ?? "global"}`;
+  return `${config.provider}:${hash}:${config.region ?? "global"}`;
 };
 
 const getCachedFactory = (config: OrgAIProviderConfig): ModelFactory => {
@@ -429,7 +481,7 @@ const getCachedFactory = (config: OrgAIProviderConfig): ModelFactory => {
   const factory = createModelFactory(
     config.provider,
     config.apiKey,
-    config.baseURL,
+    undefined,
     config.region,
   );
   byokCache.set(key, factory);
@@ -484,22 +536,6 @@ const getOrgProviderConfig = (
   config.providers.find((candidate) => candidate.provider === provider) ??
   panic(`Org AI config has no ${provider} provider`);
 
-const getOrgModelSelection = (
-  config: OrgAIConfig,
-  role: ModelRole,
-): OrgAIModelSelection => {
-  const selection = config.overrideModels?.[role];
-  if (selection) {
-    return selection;
-  }
-
-  const primaryProvider = getPrimaryOrgProvider(config).provider;
-  return {
-    provider: primaryProvider,
-    modelId: DEFAULT_MODELS[primaryProvider][role],
-  };
-};
-
 /**
  * Get a model instance for a logical role.
  *
@@ -519,7 +555,7 @@ export const getModelForRole = (
   // BYOK path: org selects a model for each role through
   // one of its configured provider credentials.
   if (orgConfig) {
-    const selection = getOrgModelSelection(orgConfig, role);
+    const selection = orgConfig.overrideModels[role];
     const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
     const factory = getCachedFactory(providerConfig);
     return withLocalAIDevTools(factory(selection.modelId));
@@ -556,7 +592,7 @@ export const getModelInfoForRole = (
   orgConfig?: OrgAIConfig | null,
 ): ResolvedModelInfo => {
   if (orgConfig) {
-    const selection = getOrgModelSelection(orgConfig, role);
+    const selection = orgConfig.overrideModels[role];
     const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
     return {
       keySource: "byok",

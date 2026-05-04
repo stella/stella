@@ -277,6 +277,12 @@ describe("createAIAnalyticsCallbacks", () => {
             provider: "openai",
           },
         ],
+        overrideModels: {
+          chat: { provider: "openai", modelId: "gpt-5.4-mini" },
+          fast: { provider: "openai", modelId: "gpt-5.4-nano" },
+          reasoning: { provider: "openai", modelId: "gpt-5.4" },
+          pdf: { provider: "openai", modelId: "gpt-5.4" },
+        },
       },
       properties: {
         entity_version_id: "ev_secret",
@@ -391,6 +397,12 @@ describe("createAIAnalyticsCallbacks", () => {
             provider: "openai",
           },
         ],
+        overrideModels: {
+          chat: { provider: "openai", modelId: "gpt-5.4-mini" },
+          fast: { provider: "openai", modelId: "gpt-5.4-nano" },
+          reasoning: { provider: "openai", modelId: "gpt-5.4" },
+          pdf: { provider: "openai", modelId: "gpt-5.4" },
+        },
       },
       properties: {
         organization_id: "org_123",

@@ -1,5 +1,5 @@
 import { generateText } from "ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import { organizationSettings } from "@/api/db/schema";
@@ -10,9 +10,9 @@ import {
   maskApiKey,
 } from "@/api/lib/ai-config-crypto";
 import {
-  DEFAULT_MODELS,
   getModelForRole,
   getTemperatureForRole,
+  isAllowedBYOKModel,
   MODEL_ROLES,
   supportsRegion,
 } from "@/api/lib/ai-models";
@@ -51,14 +51,12 @@ const modelSelectionBody = t.Object({
 
 const updateAIConfigBody = t.Object({
   providers: t.Array(providerBody, { minItems: 1 }),
-  overrideModels: t.Optional(
-    t.Object({
-      fast: t.Optional(modelSelectionBody),
-      chat: t.Optional(modelSelectionBody),
-      reasoning: t.Optional(modelSelectionBody),
-      pdf: t.Optional(modelSelectionBody),
-    }),
-  ),
+  overrideModels: t.Object({
+    fast: modelSelectionBody,
+    chat: modelSelectionBody,
+    reasoning: modelSelectionBody,
+    pdf: modelSelectionBody,
+  }),
 });
 
 const config = {
@@ -135,24 +133,34 @@ const updateAIConfig = createSafeRootHandler(
         .map((provider) => provider.provider),
     );
 
-    for (const providerConfig of providerResult.providers) {
-      if (!newKeyProviders.has(providerConfig.provider)) {
-        continue;
-      }
+    const providersToValidate = providerResult.providers.filter(
+      (providerConfig) => newKeyProviders.has(providerConfig.provider),
+    );
 
-      const validationResult = await validateProviderKey(
-        providerConfig,
-        modelResult.overrideModels,
+    const validationResults = await Promise.all(
+      providersToValidate.map(
+        async (providerConfig) =>
+          await validateProviderKey(providerConfig, modelResult.overrideModels),
+      ),
+    );
+
+    const failures = validationResults.flatMap((result, index) => {
+      if (result.valid) {
+        return [];
+      }
+      const providerConfig =
+        providersToValidate[index] ??
+        panic("validation result index out of range");
+      return [`${providerConfig.provider}: ${result.error}`];
+    });
+
+    if (failures.length > 0) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: failures.join("; "),
+        }),
       );
-
-      if (!validationResult.valid) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: validationResult.error,
-          }),
-        );
-      }
     }
 
     const orgConfig: OrgAIConfig = {
@@ -192,7 +200,6 @@ const updateAIConfig = createSafeRootHandler(
       providers: orgConfig.providers.map((providerConfig) => ({
         provider: providerConfig.provider,
         apiKeyMasked: maskApiKey(providerConfig.apiKey),
-        baseURL: providerConfig.baseURL ?? null,
         region: providerConfig.region ?? "global",
       })),
       overrideModels: orgConfig.overrideModels,
@@ -270,79 +277,137 @@ const resolveProviderConfigs = (
   return { valid: true, providers: resolvedProviders };
 };
 
-type OverrideModelsInput =
-  | Partial<Record<ModelRole, OrgAIModelSelection | undefined>>
-  | undefined;
+type OverrideModelsInput = Record<ModelRole, OrgAIModelSelection>;
 
 type OverrideModelsResult =
-  | { valid: true; overrideModels: NonNullable<OrgAIConfig["overrideModels"]> }
+  | { valid: true; overrideModels: Record<ModelRole, OrgAIModelSelection> }
   | { valid: false; error: string };
+
+const normalizeRoleSelection = (
+  role: ModelRole,
+  overrideModels: OverrideModelsInput,
+  configuredProviders: ReadonlySet<AIProvider>,
+):
+  | { valid: true; selection: OrgAIModelSelection }
+  | { valid: false; error: string } => {
+  const selection = overrideModels[role];
+  const modelId = selection.modelId.trim();
+
+  if (!modelId) {
+    return { valid: false, error: `Model selection is required for ${role}` };
+  }
+
+  if (!configuredProviders.has(selection.provider)) {
+    return {
+      valid: false,
+      error: `Model selection for ${role} uses an unconfigured provider`,
+    };
+  }
+
+  if (!isAllowedBYOKModel(selection.provider, modelId)) {
+    return {
+      valid: false,
+      error: `Model "${modelId}" is not offered for ${selection.provider}`,
+    };
+  }
+
+  return {
+    valid: true,
+    selection: { provider: selection.provider, modelId },
+  };
+};
 
 const normalizeOverrideModels = (
   overrideModels: OverrideModelsInput,
   providers: readonly OrgAIProviderConfig[],
 ): OverrideModelsResult => {
-  const normalized: Partial<Record<ModelRole, OrgAIModelSelection>> = {};
   const configuredProviders = new Set(
     providers.map((providerConfig) => providerConfig.provider),
   );
 
-  for (const role of MODEL_ROLES) {
-    const selection = overrideModels?.[role];
-    const modelId = selection?.modelId.trim();
-
-    if (!(selection && modelId)) {
-      return {
-        valid: false,
-        error: `Model selection is required for ${role}`,
-      };
-    }
-
-    if (!configuredProviders.has(selection.provider)) {
-      return {
-        valid: false,
-        error: `Model selection for ${role} uses an unconfigured provider`,
-      };
-    }
-
-    normalized[role] = {
-      provider: selection.provider,
-      modelId,
-    };
+  const chat = normalizeRoleSelection(
+    "chat",
+    overrideModels,
+    configuredProviders,
+  );
+  if (!chat.valid) {
+    return chat;
+  }
+  const fast = normalizeRoleSelection(
+    "fast",
+    overrideModels,
+    configuredProviders,
+  );
+  if (!fast.valid) {
+    return fast;
+  }
+  const reasoning = normalizeRoleSelection(
+    "reasoning",
+    overrideModels,
+    configuredProviders,
+  );
+  if (!reasoning.valid) {
+    return reasoning;
+  }
+  const pdf = normalizeRoleSelection(
+    "pdf",
+    overrideModels,
+    configuredProviders,
+  );
+  if (!pdf.valid) {
+    return pdf;
   }
 
-  return { valid: true, overrideModels: normalized };
+  const referencedProviders = new Set<AIProvider>([
+    chat.selection.provider,
+    fast.selection.provider,
+    reasoning.selection.provider,
+    pdf.selection.provider,
+  ]);
+
+  for (const provider of configuredProviders) {
+    if (!referencedProviders.has(provider)) {
+      return {
+        valid: false,
+        error: `Provider ${provider} is configured but not used by any role`,
+      };
+    }
+  }
+
+  return {
+    valid: true,
+    overrideModels: {
+      chat: chat.selection,
+      fast: fast.selection,
+      reasoning: reasoning.selection,
+      pdf: pdf.selection,
+    },
+  };
 };
 
 const getValidationRole = (
   provider: AIProvider,
-  overrideModels: NonNullable<OrgAIConfig["overrideModels"]>,
+  overrideModels: Record<ModelRole, OrgAIModelSelection>,
 ): ModelRole =>
-  MODEL_ROLES.find((role) => overrideModels[role]?.provider === provider) ??
-  "fast";
+  MODEL_ROLES.find((role) => overrideModels[role].provider === provider) ??
+  panic(
+    `validateProviderKey called for ${provider} but no role is bound to it`,
+  );
 
 /**
  * Validate a provider API key by making a minimal API call.
- * Uses a tiny prompt to minimize cost.
+ * Uses a tiny prompt to minimize cost. Always exercises a
+ * model the user explicitly chose for this provider —
+ * orphan providers are rejected upstream.
  */
 const validateProviderKey = async (
   providerConfig: OrgAIProviderConfig,
-  overrideModels: NonNullable<OrgAIConfig["overrideModels"]>,
+  overrideModels: Record<ModelRole, OrgAIModelSelection>,
 ): Promise<ValidationResult> => {
   const role = getValidationRole(providerConfig.provider, overrideModels);
-  const configuredSelection = overrideModels[role];
-  const selection =
-    configuredSelection?.provider === providerConfig.provider
-      ? configuredSelection
-      : {
-          provider: providerConfig.provider,
-          modelId: DEFAULT_MODELS[providerConfig.provider][role],
-        };
   const tempConfig: OrgAIConfig = {
     providers: [providerConfig],
-    overrideModels: {
-      [role]: selection,
-    },
+    overrideModels,
   };
 
   const result = await Result.tryPromise({
