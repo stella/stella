@@ -103,6 +103,25 @@ describe("validateSafeBaseURL", () => {
     );
   });
 
+  test("rejects IPv6 documentation, benchmarking, and discard ranges", () => {
+    expect(validateSafeBaseURL("https://[2001:db8::1]/v1").ok).toBe(false);
+    expect(validateSafeBaseURL("https://[2001:2::1]/v1").ok).toBe(false);
+    expect(validateSafeBaseURL("https://[100::1]/v1").ok).toBe(false);
+  });
+
+  test("does not over-block IPv6 hextets shorter than four hex digits", () => {
+    // 0fe8::1 normalizes to fe8::1 — outside fe80::/10, must pass.
+    expect(validateSafeBaseURL("https://[fe8::1]/v1").ok).toBe(true);
+    // 00ff::1 normalizes to ff::1 — outside ff00::/8, must pass.
+    expect(validateSafeBaseURL("https://[ff::1]/v1").ok).toBe(true);
+  });
+
+  test("rejects trailing-dot variants of blocked hostnames", () => {
+    expect(validateSafeBaseURL("https://localhost./v1").ok).toBe(false);
+    expect(validateSafeBaseURL("https://service.local./v1").ok).toBe(false);
+    expect(validateSafeBaseURL("https://api.internal./v1").ok).toBe(false);
+  });
+
   test("normalizes the URL on success", () => {
     const result = validateSafeBaseURL("https://API.OpenAI.com/v1");
     if (!result.ok) {

@@ -58,9 +58,12 @@ export const validateSafeBaseURL = (raw: string): SafeBaseURLResult => {
   }
 
   // URL.hostname keeps brackets around IPv6 literals; strip them
-  // so the IPv6 checks below see a bare address.
+  // so the IPv6 checks below see a bare address. For DNS names,
+  // also strip a trailing dot (e.g. `localhost.`) which URL parsing
+  // preserves but resolves identically to the bare name — without
+  // this it bypasses both the exact and suffix denylists.
   const isIPv6Literal = rawHost.startsWith("[") && rawHost.endsWith("]");
-  const host = isIPv6Literal ? rawHost.slice(1, -1) : rawHost;
+  const host = isIPv6Literal ? rawHost.slice(1, -1) : trimTrailingDots(rawHost);
 
   if (BLOCKED_HOST_EXACT.has(host)) {
     return { ok: false, error: "Base URL host is not allowed" };
@@ -88,6 +91,14 @@ export const validateSafeBaseURL = (raw: string): SafeBaseURLResult => {
   }
 
   return { ok: true, url: parsed.toString() };
+};
+
+const trimTrailingDots = (s: string): string => {
+  let end = s.length;
+  while (end > 0 && s[end - 1] === ".") {
+    end -= 1;
+  }
+  return end === s.length ? s : s.slice(0, end);
 };
 
 type IPv4 = readonly [number, number, number, number];
@@ -184,18 +195,33 @@ const isBlockedIPv6 = (host: string): boolean => {
     return true;
   }
 
-  // Link-local fe80::/10 — first 10 bits 1111 1110 10 → starts fe8/fe9/fea/feb.
-  if (/^fe[89ab][0-9a-f]?:/.test(compressed)) {
+  // The first hextet of fe80::/10, fc00::/7, and ff00::/8 is always
+  // ≥ 0x1000, so URL normalization keeps all four hex digits — no
+  // leading-zero forms like `fe8::` to worry about, and matching
+  // shorter prefixes here would over-block legitimate addresses.
+
+  // Link-local fe80::/10 — first hextet 0xfe80–0xfebf.
+  if (/^fe[89ab][0-9a-f]:/.test(compressed)) {
     return true;
   }
 
-  // Unique local fc00::/7 → starts fc/fd.
-  if (/^f[cd][0-9a-f]{0,2}:/.test(compressed)) {
+  // Unique local fc00::/7 — first hextet 0xfc00–0xfdff.
+  if (/^f[cd][0-9a-f]{2}:/.test(compressed)) {
     return true;
   }
 
-  // Multicast ff00::/8.
-  if (/^ff[0-9a-f]{0,2}:/.test(compressed)) {
+  // Multicast ff00::/8 — first hextet 0xff00–0xffff.
+  if (/^ff[0-9a-f]{2}:/.test(compressed)) {
+    return true;
+  }
+
+  // Documentation 2001:db8::/32, benchmarking 2001:2::/48,
+  // discard-only 100::/64 — match the IPv4 reserved-range posture.
+  if (
+    compressed.startsWith("2001:db8:") ||
+    compressed.startsWith("2001:2:") ||
+    compressed.startsWith("100:")
+  ) {
     return true;
   }
 
