@@ -190,9 +190,14 @@ jobs:
           - os: windows
             runner: windows-latest
             target: x86_64-pc-windows-msvc
+            rust_targets: x86_64-pc-windows-msvc
           - os: macos
             runner: macos-14
+            # Tauri builds a universal binary by lipoing the two
+            # native-arch outputs together; rustup needs the two real
+            # archs as targets, not the synthetic "universal" name.
             target: universal-apple-darwin
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
 
     steps:
       - name: Checkout
@@ -216,12 +221,20 @@ jobs:
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable
         with:
           toolchain: stable
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.rust_targets }}
 
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2
         with:
           workspaces: apps/desktop/src-tauri -> target
+
+      # The `bun run build` script in apps/desktop is `cargo tauri
+      # build`, which needs the cargo-tauri subcommand on PATH. Not
+      # in the workspace as an npm dep, install via cargo so the
+      # build invocation works on every runner.
+      - name: Install Tauri CLI
+        shell: bash
+        run: cargo install tauri-cli --version "^2.0.0" --locked
 
       - name: Stamp release version into tauri.conf.json + Cargo.toml
         shell: bash
@@ -311,12 +324,6 @@ jobs:
           done
 
       # ─── macOS: Developer ID + App Store Connect notarization ─
-      - name: Add macOS Rust targets (universal binary)
-        if: matrix.os == 'macos'
-        run: |
-          rustup target add aarch64-apple-darwin
-          rustup target add x86_64-apple-darwin
-
       - name: Import Apple Developer ID certificate into temporary keychain
         if: matrix.os == 'macos'
         uses: apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v5
