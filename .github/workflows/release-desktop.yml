@@ -390,12 +390,16 @@ jobs:
         # in tauri-apps/tauri#11778 + tauri-apps/tauri#13991.
         # NSIS only (no MSI). MSI uses a 4-part 16-bit Windows
         # installer version that can't represent semver prerelease
-        # suffixes — `0.0.2-rc.5` is rejected by the bundler with
-        # "optional pre-release identifier in app version must be
-        # numeric-only and cannot be greater than 65535 for msi
-        # target". NSIS has no such constraint and is what most
+        # suffixes. NSIS has no such constraint and is what most
         # OSS Tauri apps ship (Yaak, etc.).
-        run: bun run build -- --target ${{ matrix.target }} --bundles nsis,updater --verbose --verbose
+        #
+        # Do NOT add `updater` to --bundles. In Tauri 2 the updater
+        # archives are emitted as a side effect of building the
+        # platform installer when bundle.createUpdaterArtifacts is
+        # true; passing the (no-longer-existing) `updater` bundle
+        # name explicitly silently bypasses that side effect, so
+        # only the .exe lands and no .nsis.zip is created.
+        run: bun run build -- --target ${{ matrix.target }} --bundles nsis --verbose --verbose
 
       - name: Sign Windows installers via Azure Trusted Signing
         if: matrix.os == 'windows'
@@ -461,9 +465,14 @@ jobs:
         # `--verbose --verbose` surfaces signing/notarization log
         # lines (Tauri otherwise hides them behind log::debug). Same
         # rationale as the Windows build step above.
+        #
+        # Do NOT add `updater` to --bundles. In Tauri 2 the .app.tar.gz
+        # updater archive is a side effect of building dmg/app when
+        # bundle.createUpdaterArtifacts is true; explicitly listing
+        # `updater` here silently bypasses that side effect.
         run: |
           printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
-          bun run build -- --target ${{ matrix.target }} --bundles dmg,updater --verbose --verbose
+          bun run build -- --target ${{ matrix.target }} --bundles dmg --verbose --verbose
 
       # Tauri 2's bundler notarizes + staples the inner .app but
       # leaves the DMG wrapper unnotarized (tauri-apps/tauri#7533,
