@@ -81,6 +81,7 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
       pageNumber: citation.pageNumber,
     }),
   );
+  const pdfFieldId = useOptionalPDFStore((s) => s.fieldId);
   const setScrollTo = useOptionalPDFStore((s) => s.setScrollTo);
 
   return (
@@ -103,7 +104,7 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
             .justifications.find(
               (j) => j.id === justification.id,
             )?.boundingBoxes;
-          if (pageId && setScrollTo) {
+          if (pdfFieldId === citation.fileFieldId && pageId && setScrollTo) {
             setScrollTo({
               pageId,
               target: boundingBoxes

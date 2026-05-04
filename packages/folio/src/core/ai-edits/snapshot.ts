@@ -181,7 +181,9 @@ const getPreviewRunStyle = (
         style.italic = true;
         break;
       case "underline":
-        style.underline = true;
+        if (isUnderlineEnabled(mark.attrs["style"])) {
+          style.underline = true;
+        }
         break;
       case "strike":
         style.strike = true;
@@ -218,11 +220,29 @@ const getPreviewRunStyle = (
 const getBooleanTextFormatting = (formatting: object): PreviewRunStyle => ({
   ...(Reflect.get(formatting, "bold") === true && { bold: true }),
   ...(Reflect.get(formatting, "italic") === true && { italic: true }),
-  ...(Reflect.get(formatting, "underline") !== undefined && {
+  ...(isUnderlineEnabled(Reflect.get(formatting, "underline")) && {
     underline: true,
   }),
   ...(Reflect.get(formatting, "strike") === true && { strike: true }),
 });
+
+const isUnderlineEnabled = (underline: unknown): boolean => {
+  if (underline === undefined || underline === null || underline === false) {
+    return false;
+  }
+  if (underline === true) {
+    return true;
+  }
+  if (typeof underline === "string") {
+    return underline !== "none";
+  }
+  if (typeof underline !== "object") {
+    return false;
+  }
+
+  const style: unknown = Reflect.get(underline, "style");
+  return style !== "none";
+};
 
 const getFontSizeTextFormatting = (formatting: object): PreviewRunStyle => {
   const fontSize = Number(Reflect.get(formatting, "fontSize"));

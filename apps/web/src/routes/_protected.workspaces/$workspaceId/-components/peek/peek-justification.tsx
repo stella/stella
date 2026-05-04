@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { PropsWithChildren } from "react";
 
 import { cn } from "@stll/ui/lib/utils";
-import { useNavigate } from "@tanstack/react-router";
+import { useMatch, useNavigate } from "@tanstack/react-router";
 
 import type { Citation } from "@/lib/citations";
 import {
@@ -42,7 +42,13 @@ export const PeekJustification = ({
   const requestBlockScroll = useInspectorStore((s) => s.requestBlockScroll);
   // Used to push `justificationPage` into the route's URL so the
   // document route's JustificationScrollSync can move the viewer.
-  const navigate = useNavigate();
+  const documentRouteMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/$viewId/document",
+    shouldThrow: false,
+  });
+  const navigateDocumentRoute = useNavigate({
+    from: "/workspaces/$workspaceId/$viewId/document",
+  });
 
   // Keep a ref so the effect and click handler can read the
   // latest pages without depending on the Map reference (which
@@ -67,20 +73,15 @@ export const PeekJustification = ({
           id: justification.id,
           pageNumber: citation.pageNumber,
         });
-        // Update the route's `?justificationPage=` so the document
-        // route's JustificationScrollSync drives the full-view PDF.
-        // SAFETY: PeekJustification renders under multiple workspace
-        // routes. TanStack cannot infer that all current routes accept
-        // this shared search updater, but each caller is in workspace
-        // chrome where preserving existing search params is valid.
-        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-        void navigate({
-          replace: true,
-          search: (prev) => ({
-            ...prev,
-            justificationPage: citation.pageNumber,
-          }),
-        } as Parameters<typeof navigate>[0]);
+        if (documentRouteMatch !== undefined) {
+          void navigateDocumentRoute({
+            replace: true,
+            search: {
+              ...documentRouteMatch.search,
+              justificationPage: citation.pageNumber,
+            },
+          });
+        }
         const pageId =
           pagesRef.current && pdfFieldIdRef.current
             ? getPDFPageIdByNumber({
@@ -104,8 +105,9 @@ export const PeekJustification = ({
     },
     [
       activeFileFieldId,
+      documentRouteMatch,
       justification.id,
-      navigate,
+      navigateDocumentRoute,
       requestBlockScroll,
       setActiveJustification,
       setScrollTo,

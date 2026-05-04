@@ -20,6 +20,7 @@ const schema = new Schema({
         // sees duplicate IDs.
         paraId: { default: null },
         textId: { default: null },
+        defaultTextFormatting: { default: null },
       },
     },
     text: {},
@@ -73,6 +74,12 @@ const schema = new Schema({
         hAnsi: { default: null },
       },
       toDOM: () => ["span", 0],
+    },
+    underline: {
+      attrs: {
+        style: { default: "single" },
+      },
+      toDOM: () => ["u", 0],
     },
   },
 });
@@ -199,7 +206,14 @@ describe("Folio AI edit operations", () => {
     const italicType = schema.marks["italic"];
     const fontSizeType = schema.marks["fontSize"];
     const fontFamilyType = schema.marks["fontFamily"];
-    if (!boldType || !italicType || !fontSizeType || !fontFamilyType) {
+    const underlineType = schema.marks["underline"];
+    if (
+      !boldType ||
+      !italicType ||
+      !fontSizeType ||
+      !fontFamilyType ||
+      !underlineType
+    ) {
       throw new Error("schema missing formatting marks");
     }
 
@@ -211,8 +225,12 @@ describe("Folio AI edit operations", () => {
           schema.text("Styled", [
             boldType.create(),
             italicType.create(),
+            underlineType.create({ style: "single" }),
             fontSizeType.create({ size: 28 }),
             fontFamilyType.create({ ascii: "Aptos", hAnsi: "Aptos" }),
+          ]),
+          schema.text(" No underline", [
+            underlineType.create({ style: "none" }),
           ]),
         ]),
       ]),
@@ -220,17 +238,36 @@ describe("Folio AI edit operations", () => {
 
     const snapshot = createFolioAIEditSnapshot(state.doc);
 
-    expect(snapshot.blocks[0]?.text).toBe("Plain Styled");
+    expect(snapshot.blocks[0]?.text).toBe("Plain Styled No underline");
     expect(snapshot.blocks[0]?.previewRuns).toEqual([
       { text: "Plain " },
       {
         text: "Styled",
         bold: true,
         italic: true,
+        underline: true,
         fontFamily: "Aptos",
         fontSizePt: 14,
       },
+      { text: " No underline" },
     ]);
+  });
+
+  test("does not render explicit underline none as a formatted preview run", () => {
+    const state = EditorState.create({
+      schema,
+      doc: schema.node("doc", null, [
+        schema.node(
+          "paragraph",
+          { defaultTextFormatting: { underline: { style: "none" } } },
+          [schema.text("Cleared underline")],
+        ),
+      ]),
+    });
+
+    const snapshot = createFolioAIEditSnapshot(state.doc);
+
+    expect(snapshot.blocks[0]?.previewRuns).toBeUndefined();
   });
 
   test("applies safe replacements as tracked changes with an attached comment", () => {
