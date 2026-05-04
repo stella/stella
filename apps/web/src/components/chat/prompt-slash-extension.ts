@@ -14,10 +14,11 @@ type PromptSlashOptions = {
 
 /**
  * `/`-triggered TipTap extension that lets the user pick a saved
- * prompt and drop its body into the composer. Triggers only at
- * the start of an empty paragraph (so a `/` mid-sentence is just
- * a slash). Selection inserts the prompt's `body` as plain text
- * and removes the trigger range.
+ * prompt and drop its body into the composer. Triggers when `/`
+ * is typed at the start of a paragraph or after whitespace, so a
+ * `/` inside a URL (e.g. `https://...`) is just a slash. Selection
+ * inserts the prompt's `body` as plain text and removes the trigger
+ * range.
  */
 export const PromptSlash = Extension.create<PromptSlashOptions>({
   name: PLUGIN_NAME,
@@ -26,7 +27,6 @@ export const PromptSlash = Extension.create<PromptSlashOptions>({
     return {
       suggestion: {
         char: "/",
-        startOfLine: true,
         allowSpaces: false,
         items: () => [],
         command: ({ editor, range, props }) => {
@@ -73,7 +73,6 @@ export const createPromptSlashSuggestion = (
   getPrompts: () => ChatPrompt[],
 ): Omit<SuggestionOptions<ChatPrompt, ChatPrompt>, "editor"> => ({
   char: "/",
-  startOfLine: true,
   allowSpaces: false,
   items: ({ query }) => filterPrompts(getPrompts(), query),
 
