@@ -409,4 +409,51 @@ describe("createAIAnalyticsCallbacks", () => {
     expect(JSON.stringify(event.properties)).not.toContain("secret client");
     expect(JSON.stringify(event.properties)).not.toContain("trace_should_not");
   });
+
+  test("classifies AI SDK statusCode transport failures", async () => {
+    const aiAnalyticsModule = await loadAIAnalytics();
+
+    const cases = [
+      { error: { message: "request failed", statusCode: 401 }, reason: "auth" },
+      {
+        error: { message: "request failed", statusCode: 429 },
+        reason: "rate_limit",
+      },
+      {
+        error: { message: "request failed", statusCode: 504 },
+        reason: "timeout",
+      },
+      {
+        error: { message: "request failed", statusCode: 503 },
+        reason: "provider",
+      },
+      { error: { message: "request failed", status: 403 }, reason: "auth" },
+    ] as const;
+
+    for (const testCase of cases) {
+      const events: Parameters<Analytics["capture"]>[0][] = [];
+
+      const analytics: Analytics = {
+        capture: (event) => {
+          events.push(event);
+        },
+        flush: async () => void 0,
+      };
+
+      const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
+        analytics,
+        feature: "analysis.basic",
+        traceId: "trace_status_code",
+      });
+
+      callbacks.captureError(testCase.error);
+
+      const event = events.at(0);
+      expect(event?.event).toBe(SERVER_ANALYTICS_EVENTS.aiGenerationFailed);
+      if (event?.event !== SERVER_ANALYTICS_EVENTS.aiGenerationFailed) {
+        throw new Error("Expected aggregate AI failure event");
+      }
+      expect(event.properties.failure_reason).toBe(testCase.reason);
+    }
+  });
 });

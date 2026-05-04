@@ -135,6 +135,22 @@ const bucketCount = (count: number): CountBucket => {
   return "4_plus";
 };
 
+const getErrorStatusCode = (error: unknown): number | undefined => {
+  if (typeof error !== "object" || error === null) {
+    return undefined;
+  }
+
+  if ("statusCode" in error && typeof error.statusCode === "number") {
+    return error.statusCode;
+  }
+
+  if ("status" in error && typeof error.status === "number") {
+    return error.status;
+  }
+
+  return undefined;
+};
+
 const classifyFailureReason = (error: unknown): AIFailureReason => {
   const tag = errorTag(error);
   if (tag.includes("Validation")) {
@@ -147,20 +163,18 @@ const classifyFailureReason = (error: unknown): AIFailureReason => {
     return "timeout";
   }
 
-  if (typeof error === "object" && error !== null && "status" in error) {
-    const status = error.status;
-    if (status === 401 || status === 403) {
-      return "auth";
-    }
-    if (status === 408 || status === 504) {
-      return "timeout";
-    }
-    if (status === 429) {
-      return "rate_limit";
-    }
-    if (typeof status === "number" && status >= 500) {
-      return "provider";
-    }
+  const statusCode = getErrorStatusCode(error);
+  if (statusCode === 401 || statusCode === 403) {
+    return "auth";
+  }
+  if (statusCode === 408 || statusCode === 504) {
+    return "timeout";
+  }
+  if (statusCode === 429) {
+    return "rate_limit";
+  }
+  if (statusCode !== undefined && statusCode >= 500) {
+    return "provider";
   }
 
   const message = error instanceof Error ? error.message.toLowerCase() : "";
