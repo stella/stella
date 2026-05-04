@@ -5,10 +5,10 @@
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
-    "build": "cargo tauri build",
+    "build": "tauri build",
     "build:view": "vite build",
     "clean": "git clean -xdf .cache .turbo dist node_modules src-tauri/target",
-    "dev": "cargo tauri dev",
+    "dev": "tauri dev",
     "dev:view": "vite --host 127.0.0.1 --strictPort",
     "format": "oxfmt -c ../../.oxfmtrc.json .",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware apps/desktop",
@@ -26,6 +26,7 @@
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
+    "@tauri-apps/cli": "^2.0.0",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "@vitejs/plugin-react": "catalog:",

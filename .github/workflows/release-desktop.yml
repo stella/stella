@@ -228,14 +228,6 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri -> target
 
-      # The `bun run build` script in apps/desktop is `cargo tauri
-      # build`, which needs the cargo-tauri subcommand on PATH. Not
-      # in the workspace as an npm dep, install via cargo so the
-      # build invocation works on every runner.
-      - name: Install Tauri CLI
-        shell: bash
-        run: cargo install tauri-cli --version "^2.0.0" --locked
-
       - name: Stamp release version into tauri.conf.json + Cargo.toml
         shell: bash
         env:
@@ -265,10 +257,34 @@ jobs:
       # .msi.zip the updater downloads wrap signed binaries. The
       # post-build Azure step below stays as a safety net for any
       # loose artifact the bundler doesn't run signCommand against.
+      # baptiste0928/cargo-install caches ~/.cargo/bin/<binary>
+      # keyed on tool + version + runner image, so subsequent runs
+      # short-circuit the ~5 min source compile.
       - name: Install trusted-signing-cli (Windows only)
         if: matrix.os == 'windows'
+        uses: baptiste0928/cargo-install@916aa2c680eb54f322199a9756e0699f98f10638 # v3.4.0
+        with:
+          crate: trusted-signing-cli
+          version: "0.10.0"
+          locked: true
+
+      # Tauri spawns bundle.windows.signCommand directly (no shell),
+      # so %VAR%-style env interpolation isn't applied — placeholders
+      # arrive at trusted-signing-cli as literal strings and the auth
+      # call fails. Substitute the values at build time so the spawned
+      # process gets the real endpoint/account/profile.
+      - name: Inline Azure values into bundle.windows.signCommand
+        if: matrix.os == 'windows'
         shell: bash
-        run: cargo install trusted-signing-cli --version 0.10.0 --locked
+        env:
+          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
+          AZURE_CODE_SIGNING_ACCOUNT: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
+          AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
+        run: |
+          conf=apps/desktop/src-tauri/tauri.conf.json
+          cmd="trusted-signing-cli -e $AZURE_ENDPOINT -a $AZURE_CODE_SIGNING_ACCOUNT -c $AZURE_CERT_PROFILE -d \"Stella desktop\" %1"
+          jq --arg c "$cmd" '.bundle.windows.signCommand = $c' "$conf" > "$conf.tmp"
+          mv "$conf.tmp" "$conf"
 
       - name: Build (Windows)
         if: matrix.os == 'windows'
@@ -351,21 +367,31 @@ jobs:
           printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
           bun run build -- --target ${{ matrix.target }} --bundles dmg,updater
 
-      # Tauri's bundler staples notarization to the .app inside the
-      # DMG, but not to the DMG itself. Without this step, users on
-      # a cold network on first launch hit a Gatekeeper online
-      # check and may see a "verifying" delay or unsigned warning
-      # if the check fails. Stapling the DMG embeds the notarization
-      # ticket so launch is offline-instant.
-      - name: Staple notarization ticket to DMG
+      # Tauri 2's bundler notarizes + staples the inner .app but
+      # leaves the DMG wrapper unnotarized (tauri-apps/tauri#7533,
+      # PR #15118 still open). Submit the DMG ourselves and staple
+      # the resulting ticket so users on a cold network at first
+      # mount don't hit Apple's online Gatekeeper check.
+      - name: Notarize and staple DMG
         if: matrix.os == 'macos'
         working-directory: apps/desktop
+        env:
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api.p8
         shell: bash
         run: |
+          printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
           bundle_dir="src-tauri/target/${{ matrix.target }}/release/bundle"
           for dmg in "$bundle_dir"/dmg/*.dmg; do
             [[ -f "$dmg" ]] || continue
-            echo "Stapling $dmg"
+            echo "Notarizing $dmg"
+            xcrun notarytool submit "$dmg" \
+              --key      "$APPLE_API_KEY_PATH" \
+              --key-id   "$APPLE_API_KEY_ID" \
+              --issuer   "$APPLE_API_ISSUER" \
+              --wait --timeout 30m
             xcrun stapler staple "$dmg"
             xcrun stapler validate "$dmg"
           done
