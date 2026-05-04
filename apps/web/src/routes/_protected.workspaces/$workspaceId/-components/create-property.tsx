@@ -67,11 +67,13 @@ type CreatePropertyProps = {
    *    toolbar so the action is discoverable next to the other
    *    chip-shaped controls.
    *  - `panel`: full-width action used in side panels.
+   *  - `blank-cell`: invisible full-cell action used in the
+   *    table's trailing add-column track.
    *  - `none`: no built-in trigger. The caller controls `open` /
    *    `onOpenChange` and renders its own trigger (used by the
    *    column popover's "Edit column…" item).
    */
-  triggerVariant?: "icon" | "labelled" | "panel" | "none";
+  triggerVariant?: "icon" | "labelled" | "panel" | "blank-cell" | "none";
   extractionContext?: {
     entityId: string;
     filePropertyId: string | null;
@@ -263,6 +265,20 @@ export const CreateProperty = ({
         >
           <PlusIcon />
         </DialogTrigger>
+      ) : triggerVariant === "blank-cell" ? (
+        <DialogTrigger
+          render={
+            <button
+              aria-label={t("workspaces.properties.newColumn")}
+              className="ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+              onClick={(event) => {
+                event.currentTarget.blur();
+              }}
+              title={t("workspaces.properties.newColumn")}
+              type="button"
+            />
+          }
+        />
       ) : null}
 
       <DialogPopup className="sm:max-w-[600px]">

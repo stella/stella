@@ -47,7 +47,21 @@ const readViews = createSafeHandler(
     // Seed default views on first access (replaces actor onWake).
     if (views.length === 0) {
       const lang = extractLangFromRequest(request);
-      const defaults = getDefaultViews(lang).map((v) => ({
+      const workspaceProperties = yield* Result.await(
+        safeDb((tx) =>
+          tx.query.properties.findMany({
+            where: { workspaceId: { eq: workspaceId } },
+            columns: { id: true, content: true },
+            orderBy: { createdAt: "asc" },
+          }),
+        ),
+      );
+      const filePropertyId = workspaceProperties.find(
+        (property) => property.content.type === "file",
+      )?.id;
+      const defaults = getDefaultViews(lang, {
+        tableColumnPinning: filePropertyId ? [filePropertyId] : [],
+      }).map((v) => ({
         workspaceId,
         name: v.name,
         layout: v.layout,
