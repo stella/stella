@@ -1301,10 +1301,10 @@
     "account": {
       "desktop": "Desktop",
       "desktopAppDescription": "Nyisson meg dokumentumokat és fájlokat közvetlenül a stella-ban a számítógépéről.",
-      "desktopDescription": "Install Stella on your computer",
+      "desktopDescription": "Telepítse a Stellát a számítógépére",
       "desktopDownloadMac": "Letöltés macOS-re",
       "desktopDownloadOtherMac": "Windowst használ? Letöltés Windowsra",
-      "desktopDownloadOtherWindows": "Vagy töltse le a .msi telepítőt IT által felügyelt telepítésekhez",
+      "desktopDownloadOtherWindows": "Vagy töltse le az .msi telepítőt IT által felügyelt telepítésekhez",
       "desktopDownloadWindows": "Letöltés Windowsra",
       "preferredName": "Preferred name",
       "preferredNameDescription": "Used as the author for DOCX tracked changes and comments.",

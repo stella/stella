@@ -1301,7 +1301,7 @@
     "account": {
       "desktop": "Desktop",
       "desktopAppDescription": "Atveriet dokumentus un failus tieši stella no sava datora.",
-      "desktopDescription": "Install Stella on your computer",
+      "desktopDescription": "Instalējiet Stella savā datorā",
       "desktopDownloadMac": "Lejupielādēt operētājsistēmai macOS",
       "desktopDownloadOtherMac": "Izmantojat Windows? Lejupielādēt operētājsistēmai Windows",
       "desktopDownloadOtherWindows": "Vai iegūstiet .msi instalētāju IT pārvaldītām izvietošanām",

@@ -1301,9 +1301,9 @@
     "account": {
       "desktop": "Desktop",
       "desktopAppDescription": "Ouvrez des documents et des fichiers directement dans stella depuis votre ordinateur.",
-      "desktopDescription": "Install Stella on your computer",
+      "desktopDescription": "Installez Stella sur votre ordinateur",
       "desktopDownloadMac": "Télécharger pour macOS",
-      "desktopDownloadOtherMac": "Sur Windows ? Télécharger pour Windows",
+      "desktopDownloadOtherMac": "Sous Windows ? Télécharger pour Windows",
       "desktopDownloadOtherWindows": "Ou obtenez le programme d'installation .msi pour les déploiements gérés par l'IT",
       "desktopDownloadWindows": "Télécharger pour Windows",
       "preferredName": "Preferred name",
