@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 
-import { Checkbox } from "@stll/ui/components/checkbox";
 import {
   useSuspenseInfiniteQuery,
   useSuspenseQuery,
@@ -96,17 +95,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       {
         id: selectColId,
         accessorKey: selectColId,
-        header: (props) => (
-          <div className="flex items-center justify-center">
-            <Checkbox
-              checked={props.table.getIsAllRowsSelected()}
-              indeterminate={props.table.getIsSomeRowsSelected()}
-              onCheckedChange={(checked) =>
-                props.table.toggleAllRowsSelected(checked)
-              }
-            />
-          </div>
-        ),
+        header: () => null,
         enableResizing: false,
         enableSorting: false,
         enableHiding: false,
@@ -172,6 +161,9 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       id: addPropertyColId,
       accessorKey: addPropertyColId,
       header: () => <CreateProperty workspaceId={workspaceId} />,
+      cell: () => (
+        <CreateProperty triggerVariant="blank-cell" workspaceId={workspaceId} />
+      ),
       enableResizing: false,
       enablePinning: false,
       enableSorting: false,

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import type {
+  ColumnOrderState,
   ColumnPinningState,
   ColumnSizingState,
   OnChangeFn,
@@ -18,6 +19,7 @@ import { getInternalColId } from "@/routes/_protected.workspaces/$workspaceId/-u
 
 const EMPTY_ROW_SELECTION: RowSelectionState = {};
 const selectColId = getInternalColId("select");
+const addPropertyColId = getInternalColId("add-property");
 const COLUMN_SIZING_DEBOUNCE_MS = 100;
 
 type UseTableStateProps = {
@@ -73,16 +75,37 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
   };
 
   const columnPinning: ColumnPinningState = {
-    left: [selectColId, ...view.layout.columnPinning],
+    left: [
+      selectColId,
+      ...view.layout.columnPinning.filter((id) => id !== addPropertyColId),
+    ],
   };
 
   const onColumnPinningChange: OnChangeFn<ColumnPinningState> = (updater) => {
     const data =
       typeof updater === "function" ? updater(columnPinning) : updater;
-    const pinned = (data.left ?? []).filter((id) => id !== selectColId);
+    const pinned = (data.left ?? []).filter(
+      (id) => id !== selectColId && id !== addPropertyColId,
+    );
     updateView.mutate({
       viewId,
       layout: { ...view.layout, columnPinning: pinned },
+    });
+  };
+
+  const columnOrder = useMemo<ColumnOrderState>(
+    () => [selectColId, ...view.layout.columnOrder],
+    [view.layout.columnOrder],
+  );
+
+  const onColumnOrderChange: OnChangeFn<ColumnOrderState> = (updater) => {
+    const data = typeof updater === "function" ? updater(columnOrder) : updater;
+    const order = data.filter(
+      (id) => id !== selectColId && id !== addPropertyColId,
+    );
+    updateView.mutate({
+      viewId,
+      layout: { ...view.layout, columnOrder: order },
     });
   };
 
@@ -123,6 +146,7 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
     view,
     state: {
       columnSizing,
+      columnOrder,
       columnPinning,
       columnVisibility,
       sorting,
@@ -130,6 +154,7 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
     },
     listeners: {
       onColumnSizingChange,
+      onColumnOrderChange,
       onColumnPinningChange,
       onColumnVisibilityChange,
       onSortingChange,

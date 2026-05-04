@@ -131,12 +131,44 @@ type DefaultView = {
   position: number;
 };
 
+type GetDefaultViewsOptions = {
+  tableColumnPinning?: string[];
+};
+
+const cloneDefaultLayout = (
+  layout: ViewLayout,
+  options: GetDefaultViewsOptions,
+): ViewLayout => {
+  if (layout.type === "table") {
+    return {
+      ...layout,
+      hiddenProperties: [...layout.hiddenProperties],
+      filters: [...layout.filters],
+      sorts: [...layout.sorts],
+      columnOrder: [...layout.columnOrder],
+      columnPinning: options.tableColumnPinning
+        ? [...options.tableColumnPinning]
+        : [...layout.columnPinning],
+    };
+  }
+
+  return {
+    ...layout,
+    hiddenProperties: [...layout.hiddenProperties],
+    filters: [...layout.filters],
+    sorts: [...layout.sorts],
+  };
+};
+
 /** Get default views with localized names. */
-export const getDefaultViews = (lang: SupportedLang): DefaultView[] => {
+export const getDefaultViews = (
+  lang: SupportedLang,
+  options: GetDefaultViewsOptions = {},
+): DefaultView[] => {
   const names = VIEW_NAMES[lang] ?? VIEW_NAMES.en;
   return DEFAULT_VIEW_TEMPLATES.map((tmpl) => ({
     name: names[tmpl.nameKey],
-    layout: tmpl.layout,
+    layout: cloneDefaultLayout(tmpl.layout, options),
     position: tmpl.position,
   }));
 };

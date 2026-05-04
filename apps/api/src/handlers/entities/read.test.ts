@@ -1,15 +1,12 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { createReadEntitiesHandler } from "@/api/handlers/entities/read";
 import { toSafeId } from "@/api/lib/branded-types";
 
 const queryEntitiesMock = mock();
 
-void mock.module("@/api/handlers/entities/query-entities", () => ({
-  queryEntities: queryEntitiesMock,
-}));
-
-const readEntities = (await import("@/api/handlers/entities/read")).default;
+const readEntities = createReadEntitiesHandler(queryEntitiesMock);
 
 const workspaceId = toSafeId<"workspace">("ws_entity_read");
 const organizationId = toSafeId<"organization">("org_entity_read");
