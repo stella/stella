@@ -75,6 +75,17 @@ export const SuggestionsFacet = ({
   // boolean we can safely depend on.
   const hasOnMissingEditor = onMissingEditor !== undefined;
 
+  // Inspector PDF tabs reuse the same component instance when
+  // the user navigates between entities (the store swaps
+  // `entityId` and content fields in place; see PdfTab docs in
+  // inspector-store.ts). Reset the dispatch latch whenever the
+  // entity changes so a previous entity's "already redirected"
+  // state doesn't suppress the redirect for the new one. Per
+  // Codex review on PR #80.
+  useEffect(() => {
+    hasDispatchedRef.current = false;
+  }, [entityId]);
+
   useEffect(() => {
     if (registration !== undefined) {
       hasDispatchedRef.current = false;
@@ -87,14 +98,14 @@ export const SuggestionsFacet = ({
     if (!dispatch) {
       // No callback (this tab isn't active). Don't latch — when
       // the tab becomes active later, the callback appears and
-      // `hasOnMissingEditor` flipping triggers a re-run below
-      // that picks up the still-missing registration and fires.
+      // `hasOnMissingEditor` flipping triggers a re-run that
+      // picks up the still-missing registration and fires.
       // Per Codex review on PR #80.
       return;
     }
     hasDispatchedRef.current = true;
     dispatch();
-  }, [registration, hasOnMissingEditor]);
+  }, [registration, hasOnMissingEditor, entityId]);
 
   return (
     <ReviewPanel
