@@ -58,9 +58,9 @@ describe("isAllowedBYOKModel", () => {
     expect(isAllowedBYOKModel("anthropic", "claude-opus-4-7")).toBe(true);
     expect(isAllowedBYOKModel("google", "gemini-3-pro-preview")).toBe(true);
     expect(isAllowedBYOKModel("openai", "gpt-5.4")).toBe(true);
-    expect(
-      isAllowedBYOKModel("openrouter", "anthropic/claude-opus-4.5"),
-    ).toBe(true);
+    expect(isAllowedBYOKModel("openrouter", "anthropic/claude-opus-4.5")).toBe(
+      true,
+    );
   });
 
   test("rejects models outside the curated catalog", () => {
