@@ -543,8 +543,8 @@ export const ReviewPanel = ({
          *  apply-mode dropdown grouped together so the user sees
          *  the bulk action and how it'll be applied side by side. */}
         {pendingCount > 0 && (
-          <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-2">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <div className="mt-2.5 flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 className="h-8 px-2.5 text-xs"
                 onClick={() => {
@@ -557,14 +557,14 @@ export const ReviewPanel = ({
                 {t("docxReview.acceptAll")}
               </Button>
               <button
-                className="text-muted-foreground hover:text-foreground rounded-md px-1.5 py-1 text-xs transition-colors"
+                className="text-muted-foreground hover:text-foreground rounded-md px-1.5 py-1 text-xs whitespace-nowrap transition-colors"
                 onClick={handleBatchReject}
                 type="button"
               >
                 {t("docxReview.rejectAll")}
               </button>
             </div>
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
+            <div className="flex min-w-0 items-center gap-1.5 text-xs">
               <span className="text-muted-foreground shrink-0">
                 {t("docxReview.applyAs")}
               </span>
@@ -576,7 +576,7 @@ export const ReviewPanel = ({
                 }}
                 value={applyMode}
               >
-                <SelectTrigger className="hover:bg-muted h-7 w-40 min-w-0 justify-between gap-1 border-0 bg-transparent px-1.5 text-xs font-medium">
+                <SelectTrigger className="hover:bg-muted h-7 w-56 min-w-0 justify-between gap-1 border-0 bg-transparent px-1.5 text-xs font-medium">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectPopup>
