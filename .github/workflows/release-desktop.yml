@@ -339,6 +339,12 @@ jobs:
       # arrive at trusted-signing-cli as literal strings and the auth
       # call fails. Substitute the values at build time so the spawned
       # process gets the real endpoint/account/profile.
+      #
+      # The description (-d) must be a single token: Tauri parses
+      # signCommand with shlex::split and forwards each token verbatim
+      # to Command::new — embedded \" survives as literal quotes and
+      # signtool then treats `"Stella` and `desktop"` as two separate
+      # file paths, failing with `File not found: desktop"`.
       - name: Inline Azure values into bundle.windows.signCommand
         if: matrix.os == 'windows'
         shell: bash
@@ -348,7 +354,7 @@ jobs:
           AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
         run: |
           conf=apps/desktop/src-tauri/tauri.conf.json
-          cmd="trusted-signing-cli -e $AZURE_ENDPOINT -a $AZURE_CODE_SIGNING_ACCOUNT -c $AZURE_CERT_PROFILE -d \"Stella desktop\" %1"
+          cmd="trusted-signing-cli -e $AZURE_ENDPOINT -a $AZURE_CODE_SIGNING_ACCOUNT -c $AZURE_CERT_PROFILE -d Stella %1"
           jq --arg c "$cmd" '.bundle.windows.signCommand = $c' "$conf" > "$conf.tmp"
           mv "$conf.tmp" "$conf"
 

@@ -52,6 +52,22 @@ bump_version() {
   rm -f apps/desktop/src-tauri/src/types.rs.bak
 }
 
+unbump_version() {
+  # Lower the integer to simulate an accidental decrease.
+  sed -i.bak 's/BRIDGE_VERSION: u32 = 1/BRIDGE_VERSION: u32 = 0/' \
+    apps/desktop/src-tauri/src/types.rs
+  rm -f apps/desktop/src-tauri/src/types.rs.bak
+}
+
+reformat_version_line() {
+  # Edit the BRIDGE_VERSION line without changing the integer
+  # (trailing comment). Old line-diff check would treat this as
+  # a valid bump; the strict-increase check must reject it.
+  sed -i.bak 's|BRIDGE_VERSION: u32 = 1;|BRIDGE_VERSION: u32 = 1; // tweak|' \
+    apps/desktop/src-tauri/src/types.rs
+  rm -f apps/desktop/src-tauri/src/types.rs.bak
+}
+
 run_case() {
   local name="$1" expected="$2"
   local out actual
@@ -138,6 +154,23 @@ echo "// new field" >> apps/desktop/src/shared/rpc.ts
 bump_version
 git commit -aq -m "multi-file bridge change + bump"
 run_case "multiple bridge files + version → 0" 0
+
+# 11. bridge.rs changed AND BRIDGE_VERSION line edited but integer
+#     unchanged (e.g. trailing comment) → FAIL. Old line-diff
+#     check would have passed this; strict-increase must reject.
+setup_repo
+echo "// new endpoint" >> apps/desktop/src-tauri/src/bridge.rs
+reformat_version_line
+git commit -aq -m "bridge + comment-only edit on version line"
+run_case "bridge + comment-only version line edit → 1" 1
+
+# 12. bridge.rs changed AND BRIDGE_VERSION decreased → FAIL.
+#     A negative bump is never a valid compatibility signal.
+setup_repo
+echo "// new endpoint" >> apps/desktop/src-tauri/src/bridge.rs
+unbump_version
+git commit -aq -m "bridge + version decrease"
+run_case "bridge + version decreased → 1" 1
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
