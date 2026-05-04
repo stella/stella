@@ -1,6 +1,5 @@
 import { Button, buttonVariants } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
-import { AppleIcon, MonitorDownIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -36,7 +35,6 @@ export const DownloadStep = ({ onNext, onSkip }: DownloadStepProps) => {
         {platform === "mac" && (
           <>
             <a className={primaryClass} href={MACOS_DMG_URL}>
-              <AppleIcon />
               {t("settings.account.desktopDownloadMac")}
             </a>
             <a className={secondaryClass} href={WINDOWS_EXE_URL}>
@@ -47,7 +45,6 @@ export const DownloadStep = ({ onNext, onSkip }: DownloadStepProps) => {
         {platform === "windows" && (
           <>
             <a className={primaryClass} href={WINDOWS_EXE_URL}>
-              <MonitorDownIcon />
               {t("settings.account.desktopDownloadWindows")}
             </a>
             <a className={secondaryClass} href={WINDOWS_MSI_URL}>
@@ -58,14 +55,12 @@ export const DownloadStep = ({ onNext, onSkip }: DownloadStepProps) => {
         {platform === "other" && (
           <>
             <a className={primaryClass} href={WINDOWS_EXE_URL}>
-              <MonitorDownIcon />
               {t("settings.account.desktopDownloadWindows")}
             </a>
             <a
               className={cn(buttonVariants({ variant: "outline" }), "w-full")}
               href={MACOS_DMG_URL}
             >
-              <AppleIcon />
               {t("settings.account.desktopDownloadMac")}
             </a>
           </>
