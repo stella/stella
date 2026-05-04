@@ -25,6 +25,7 @@ type PdfViewerState = {
 type State = {
   pendingBoundingBoxIds: Set<string>;
   justifications: WorkspaceJustification[];
+  extractionPreviews: Map<string, string>;
   activeJustification: ActiveJustification | null;
   pdfPageCount: number;
   pdfViewer: PdfViewerState;
@@ -37,6 +38,14 @@ type Actions = {
   syncJustifications: (justifications: WorkspaceJustification[]) => void;
   clearJustifications: () => void;
   getJustifications: (justificationIds: string[]) => WorkspaceJustification[];
+  getExtractionPreview: (entityId: string, propertyId: string) => string | null;
+  setExtractionPreview: (preview: {
+    entityId: string;
+    propertyId: string;
+    answer: string;
+  }) => void;
+  clearExtractionPreview: (entityId: string, propertyId: string) => void;
+  clearExtractionPreviews: () => void;
   setJustificationBoundingBoxes: (
     justificationId: string,
     boundingesBox: { version: number; boxes: BoundingBox[] },
@@ -67,10 +76,14 @@ const initialPdfViewerState = (): PdfViewerState => ({
   sidebar: "entity",
 });
 
+const extractionPreviewKey = (entityId: string, propertyId: string) =>
+  `${entityId}:${propertyId}`;
+
 export const useWorkspaceStore = create<State & Actions>()(
   immer((set, get) => ({
     pendingBoundingBoxIds: new Set(),
     justifications: [],
+    extractionPreviews: new Map(),
     activeJustification: null,
     pdfPageCount: 0,
     pdfViewer: initialPdfViewerState(),
@@ -119,6 +132,27 @@ export const useWorkspaceStore = create<State & Actions>()(
 
       return justifications;
     },
+    getExtractionPreview: (entityId, propertyId) =>
+      get().extractionPreviews.get(
+        extractionPreviewKey(entityId, propertyId),
+      ) ?? null,
+    setExtractionPreview: ({ entityId, propertyId, answer }) =>
+      set((state) => {
+        state.extractionPreviews.set(
+          extractionPreviewKey(entityId, propertyId),
+          answer,
+        );
+      }),
+    clearExtractionPreview: (entityId, propertyId) =>
+      set((state) => {
+        state.extractionPreviews.delete(
+          extractionPreviewKey(entityId, propertyId),
+        );
+      }),
+    clearExtractionPreviews: () =>
+      set((state) => {
+        state.extractionPreviews = new Map();
+      }),
     setJustificationBoundingBoxes: (justificationId, boundingBoxes) =>
       set((state) => {
         const justification = state.justifications.find(

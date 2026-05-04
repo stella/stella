@@ -34,6 +34,7 @@ import {
   getExecutionPlanData,
   getPropertyExecutionPlan,
 } from "@/api/lib/workflow/get-execution-plan";
+import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
 import { prepareBatch } from "@/api/lib/workflow/utils";
 
 // ── Redis keys ─────────────────────────────────────────
@@ -41,6 +42,17 @@ const WORKFLOW_KEY_PREFIX = "workflow";
 
 const workflowKey = (workspaceId: SafeId<"workspace">, field: string) =>
   `${WORKFLOW_KEY_PREFIX}:${workspaceId}:${field}`;
+
+const EXTRACTION_PREVIEW_EVENT_TYPE = "workflow-extraction-preview";
+const EXTRACTION_PREVIEW_THROTTLE_MS = 500;
+
+type ExtractionPreviewPayload = {
+  entityId: SafeId<"entity">;
+  entityVersionId: SafeId<"entityVersion">;
+  propertyId: SafeId<"property">;
+  answer: string | null;
+  status: "streaming" | "clear";
+};
 
 // ── Queue name ─────────────────────────────────────────
 const QUEUE_NAME = "workflow";
@@ -472,6 +484,79 @@ type ProcessOneBatchArgs = {
   signal: AbortSignal;
 };
 
+type BatchPreviewPublisherArgs = {
+  workspaceId: SafeId<"workspace">;
+  entityId: SafeId<"entity">;
+  entityVersionId: SafeId<"entityVersion">;
+  propertyIds: SafeId<"property">[];
+};
+
+const createBatchPreviewPublisher = ({
+  workspaceId,
+  entityId,
+  entityVersionId,
+  propertyIds,
+}: BatchPreviewPublisherArgs) => {
+  const propertyIdSet = new Set(propertyIds);
+  const lastAnswers = new Map<SafeId<"property">, string>();
+  const lastSentAt = new Map<SafeId<"property">, number>();
+
+  const broadcastPreview = (payload: ExtractionPreviewPayload) => {
+    broadcast(workspaceId, {
+      type: EXTRACTION_PREVIEW_EVENT_TYPE,
+      data: payload,
+    });
+  };
+
+  const publish = (update: PartialAnswerUpdate): void => {
+    const propertyId = brandPersistedPropertyId(update.propertyId);
+    if (!propertyIdSet.has(propertyId)) {
+      return;
+    }
+
+    const answer = update.answer.trim();
+    if (answer.length === 0 || lastAnswers.get(propertyId) === answer) {
+      return;
+    }
+
+    const now = Date.now();
+    const previousSentAt = lastSentAt.get(propertyId);
+    if (
+      previousSentAt !== undefined &&
+      now - previousSentAt < EXTRACTION_PREVIEW_THROTTLE_MS
+    ) {
+      return;
+    }
+
+    lastAnswers.set(propertyId, answer);
+    lastSentAt.set(propertyId, now);
+
+    const payload: ExtractionPreviewPayload = {
+      entityId,
+      entityVersionId,
+      propertyId,
+      answer,
+      status: "streaming",
+    };
+
+    broadcastPreview(payload);
+  };
+
+  const clear = (): void => {
+    for (const propertyId of propertyIds) {
+      broadcastPreview({
+        entityId,
+        entityVersionId,
+        propertyId,
+        answer: null,
+        status: "clear",
+      });
+    }
+  };
+
+  return { clear, publish };
+};
+
 const processOneBatch = async ({
   workspaceId,
   organizationId,
@@ -523,114 +608,128 @@ const processOneBatch = async ({
     return;
   }
 
-  // Set fields to "pending"
-  await setFieldsStatus({
+  const previewPublisher = createBatchPreviewPublisher({
     workspaceId,
+    entityId,
     entityVersionId,
-    batch,
-    contentType: "pending",
-    scopedDb,
+    propertyIds: batch.properties.map((property) => property.id),
   });
 
-  // Broadcast so frontend shows pending state
-  broadcastInvalidation(workspaceId, ["entities", workspaceId]);
-
-  const orgAIConfig = await loadOrgAIConfig(organizationId);
-  const generateFn = isMockAI() ? generateBatchMock : generateBatch;
-
-  // generateBatch returns a Result<T, E> directly. The combined
-  // signal aborts when EITHER the per-batch AI timeout fires OR the
-  // worker-level per-job timeout does, so the AI SDK actually cancels
-  // the in-flight request.
-  const batchResult = await generateFn({
-    abortSignal: AbortSignal.any([
-      AbortSignal.timeout(BATCH_AI_TIMEOUT_MS),
-      signal,
-    ]),
-    batch,
-    entityVersionId,
-    organizationId,
-    workspaceId,
-    scopedDb,
-    orgAIConfig,
-  });
-
-  if (Result.isError(batchResult)) {
-    captureError(batchResult.error, {
-      workspaceId,
-      entityId,
-      batchId: batch.id,
-      level: String(level),
-      requestId,
-    });
-
+  try {
+    // Set fields to "pending"
     await setFieldsStatus({
       workspaceId,
       entityVersionId,
       batch,
-      contentType: "error",
+      contentType: "pending",
       scopedDb,
     });
-    return;
-  }
 
-  const processedFields = batchResult.value;
+    // Broadcast so frontend shows pending state
+    broadcastInvalidation(workspaceId, ["entities", workspaceId]);
 
-  // Write AI results to DB
-  const allPropertyIds = [
-    ...processedFields.aiResults.map((r) => r.propertyId),
-    ...processedFields.unsupportedPropertyIds,
-    ...processedFields.skippedPropertyIds,
-  ];
+    const orgAIConfig = await loadOrgAIConfig(organizationId);
+    const generateFn = isMockAI() ? generateBatchMock : generateBatch;
 
-  await scopedDb(async (tx) => {
-    if (allPropertyIds.length > 0) {
-      await tx
-        .delete(fields)
-        .where(
-          and(
-            eq(fields.entityVersionId, entityVersionId),
-            inArray(fields.propertyId, allPropertyIds),
-          ),
-        );
+    // generateBatch returns a Result<T, E> directly. The combined
+    // signal aborts when EITHER the per-batch AI timeout fires OR the
+    // worker-level per-job timeout does, so the AI SDK actually cancels
+    // the in-flight request.
+    const batchResult = await generateFn({
+      abortSignal: AbortSignal.any([
+        AbortSignal.timeout(BATCH_AI_TIMEOUT_MS),
+        signal,
+      ]),
+      batch,
+      entityVersionId,
+      organizationId,
+      workspaceId,
+      scopedDb,
+      orgAIConfig,
+      onPartialAnswer: previewPublisher.publish,
+    });
+
+    if (Result.isError(batchResult)) {
+      captureError(batchResult.error, {
+        workspaceId,
+        entityId,
+        batchId: batch.id,
+        level: String(level),
+        requestId,
+      });
+
+      await setFieldsStatus({
+        workspaceId,
+        entityVersionId,
+        batch,
+        contentType: "error",
+        scopedDb,
+      });
+      return;
     }
 
-    const fieldValues = [
-      ...processedFields.aiResults.map(({ fieldId, propertyId, content }) => ({
-        id: fieldId,
-        workspaceId,
-        propertyId,
-        entityVersionId,
-        content,
-      })),
-      ...processedFields.unsupportedPropertyIds.map((propertyId) => ({
-        id: createSafeId<"field">(),
-        workspaceId,
-        propertyId,
-        entityVersionId,
-        content: { type: "unsupported" as const, version: 1 as const },
-      })),
+    const processedFields = batchResult.value;
+
+    // Write AI results to DB
+    const allPropertyIds = [
+      ...processedFields.aiResults.map((r) => r.propertyId),
+      ...processedFields.unsupportedPropertyIds,
+      ...processedFields.skippedPropertyIds,
     ];
 
-    if (fieldValues.length > 0) {
-      await tx.insert(fields).values(fieldValues);
-    }
+    await scopedDb(async (tx) => {
+      if (allPropertyIds.length > 0) {
+        await tx
+          .delete(fields)
+          .where(
+            and(
+              eq(fields.entityVersionId, entityVersionId),
+              inArray(fields.propertyId, allPropertyIds),
+            ),
+          );
+      }
 
-    if (processedFields.aiJustifications.length > 0) {
-      await tx.insert(justifications).values(
-        processedFields.aiJustifications.map((j) => ({
-          id: j.justificationId,
+      const fieldValues = [
+        ...processedFields.aiResults.map(
+          ({ fieldId, propertyId, content }) => ({
+            id: fieldId,
+            workspaceId,
+            propertyId,
+            entityVersionId,
+            content,
+          }),
+        ),
+        ...processedFields.unsupportedPropertyIds.map((propertyId) => ({
+          id: createSafeId<"field">(),
           workspaceId,
-          fieldId: j.fieldId,
-          content: j.content,
-          fileFieldIds: j.fileFieldIds,
+          propertyId,
+          entityVersionId,
+          content: { type: "unsupported" as const, version: 1 as const },
         })),
-      );
-    }
-  });
+      ];
 
-  // Broadcast so frontend shows updated fields
-  broadcastInvalidation(workspaceId, ["entities", workspaceId]);
+      if (fieldValues.length > 0) {
+        await tx.insert(fields).values(fieldValues);
+      }
+
+      if (processedFields.aiJustifications.length > 0) {
+        await tx.insert(justifications).values(
+          processedFields.aiJustifications.map((j) => ({
+            id: j.justificationId,
+            workspaceId,
+            fieldId: j.fieldId,
+            content: j.content,
+            fileFieldIds: j.fileFieldIds,
+          })),
+        );
+      }
+    });
+
+    // Broadcast so frontend shows updated fields
+    broadcastInvalidation(workspaceId, ["entities", workspaceId]);
+  } finally {
+    previewPublisher.clear();
+  }
 };
 
 // ── Completion tracking ────────────────────────────────

@@ -184,6 +184,7 @@ export const generateBatch = async ({
   workspaceId,
   scopedDb,
   orgAIConfig,
+  onPartialAnswer,
 }: GenerateBatchProps): Promise<GenerateBatchResult> =>
   await Result.gen(async function* () {
     const inputFields = await fetchInputFieldsForBatch({
@@ -234,6 +235,7 @@ export const generateBatch = async ({
         abortSignal,
         organizationId,
         orgAIConfig: orgAIConfig ?? null,
+        onPartialAnswer,
         workspaceId,
       }),
     );
