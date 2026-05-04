@@ -3,16 +3,19 @@ export const primaryCapabilities = [
     title: "Tabular review",
     description:
       "Extract key fields from large document sets into a table you can sort, filter, and review.",
+    screenshotName: "table-screenshot.png",
   },
   {
     title: "First-class .docx support",
     description:
       "Open and edit Word documents in the browser or via the stella desktop app, with AI support along the way.",
+    screenshotName: "docx-screenshot.png",
   },
   {
     title: "Grounded research",
     description:
       "Search your workspace and trusted sources, with answers tied back to the underlying text.",
+    screenshotName: "search-screenshot.png",
   },
 ] as const;
 
