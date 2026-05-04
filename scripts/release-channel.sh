@@ -24,9 +24,15 @@
 #   v0.0.2-beta.3   -> "beta"
 #   v1.2.3-alpha.7  -> "alpha"
 #
-# Tag must be a valid semver release ref accepted by release.yml
-# (`^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$`); invalid input
-# exits 1 to fail fast in CI.
+# Tag must match the shape accepted by release.yml and
+# release-desktop.yml. The prerelease channel is whitelisted to
+# `rc|beta|alpha` deliberately: a free `[a-z]+` would treat
+# `v1.2.3-prod.1` as a valid prerelease and emit `prod` here,
+# which downstream uses directly as the S3 key — so a mistagged
+# prerelease would overwrite the stable channel's manifest and
+# point production installs at the wrong feed. Adding a new
+# channel means updating this whitelist *and* both workflow
+# regexes.
 set -euo pipefail
 
 if [[ $# -ne 1 ]]; then
@@ -36,7 +42,7 @@ fi
 
 tag="$1"
 
-if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$ ]]; then
   echo "::error::invalid release tag: $tag" >&2
   exit 1
 fi

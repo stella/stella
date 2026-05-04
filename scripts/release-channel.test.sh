@@ -64,6 +64,16 @@ run_case "double dash"          "v0.0.1--rc.1"   1 ""
 run_case "empty"                ""               1 ""
 run_case "whitespace"           " "              1 ""
 
+# -- channel name whitelist: only rc/beta/alpha are valid --
+# A free `[a-z]+` would let `v1.2.3-prod.1` resolve to channel
+# `prod` and silently overwrite the stable manifest in S3.
+run_case "prod-channel mistag"  "v1.2.3-prod.1"  1 ""
+run_case "stable-channel mistag" "v1.2.3-stable.1" 1 ""
+run_case "release-channel mistag" "v1.2.3-release.1" 1 ""
+run_case "latest-channel mistag" "v1.2.3-latest.1" 1 ""
+run_case "dev-channel mistag"   "v1.2.3-dev.1"   1 ""
+run_case "nightly mistag"       "v1.2.3-nightly.1" 1 ""
+
 # -- consistency: same input → same output (idempotent) --
 out1=$(bash "$SCRIPT" "v0.0.2-rc.5")
 out2=$(bash "$SCRIPT" "v0.0.2-rc.5")

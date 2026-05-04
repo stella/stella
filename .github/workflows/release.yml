@@ -44,8 +44,10 @@ jobs:
           # Pattern must stay aligned with scripts/release-channel.sh
           # and .github/workflows/release-desktop.yml — all three gate
           # on the same shape so a tag accepted by one is accepted by
-          # all.
-          if [[ ! "$release_ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+          # all. The prerelease channel is whitelisted to
+          # rc|beta|alpha so a `v1.2.3-prod.1` mistag can't overwrite
+          # the stable manifest in S3.
+          if [[ ! "$release_ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$ ]]; then
             echo "::error::Release ref must look like v1.2.3, v1.2.3-rc.1, v1.2.3-beta.1, or v1.2.3-alpha.1"
             exit 1
           fi
