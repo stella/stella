@@ -650,7 +650,7 @@ const appendActiveDecisionPromptIfExists = async ({
  * focused tools don't fit.
  */
 const READONLY_DISCOVERY_HINT =
-  "For arbitrary readonly queries that the focused tools can't express, use `execute-typescript`. The `stella.*` function catalog is NOT pre-listed in this prompt — call `describe-stella-function` (no input) to list available function names + descriptions, then `describe-stella-function({name})` for one function's full schema. Prefer focused tools whenever one fits.";
+  "For arbitrary readonly queries that the focused tools can't express, use `execute-typescript`. When answering about workspace or organization data, fetch current data inside that tool with `stella.*` calls; never answer counts or exhaustive lists from prior context, visible UI state, examples, or pasted arrays such as `const entities = [...]`. Paginate until `hasMore` is false when the answer requires the complete set. The `stella.*` function catalog is NOT pre-listed in this prompt — call `describe-stella-function` (no input) to list available function names + descriptions, then `describe-stella-function({name})` for one function's full schema. Prefer focused tools whenever one fits.";
 
 type AppendActiveFilePromptIfEntityExistsProps = {
   activeFile: IncomingActiveFile;

@@ -13,9 +13,12 @@ import {
 } from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import type { ReadonlyFunctionContract } from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
-import { DEFAULT_SANDBOX_LIMITS } from "@/api/handlers/chat/tools/execute/sandbox/limits";
 import { runSandbox } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import type { SandboxFunctionRegistry } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
+import {
+  DESCRIBE_STELLA_FUNCTION_TOOL_DESCRIPTION,
+  EXECUTE_TYPESCRIPT_TOOL_DESCRIPTION,
+} from "@/api/handlers/chat/tools/execute/chat-execution-tool-descriptions";
 import { createReadonlyWorkspaceFunctionRegistry } from "@/api/handlers/chat/tools/execute/workspace-function-registry";
 import { readonlyWorkspaceFunctionContracts } from "@/api/handlers/chat/tools/execute/workspace-manifest";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -106,14 +109,7 @@ export const createChatExecutionTools = ({
 
   return {
     "describe-stella-function": tool({
-      description:
-        "Discover the readonly `stella` API available inside " +
-        "`execute-typescript`. Call with no input to list every " +
-        "available function name + one-line description. Call " +
-        "with `{name}` to fetch one function's full JSON Schema " +
-        "(input, output, types). The catalog is NOT pre-loaded in " +
-        "the system prompt — call this whenever you need to " +
-        "compose a `stella.*` query.",
+      description: DESCRIBE_STELLA_FUNCTION_TOOL_DESCRIPTION,
       inputSchema: valibotSchema(
         v.strictObject({
           name: v.optional(
@@ -159,23 +155,7 @@ export const createChatExecutionTools = ({
     }),
 
     "execute-typescript": tool({
-      description:
-        "Escape hatch for arbitrary readonly queries the focused " +
-        "tools can't express (cross-matter search, joins, " +
-        "aggregations). Runs a TypeScript program inside a " +
-        "sandboxed QuickJS runtime; the program is the body of an " +
-        "async function — write top-level statements and `return` " +
-        "the value you want back. The only side-effect is " +
-        "`stella.<functionName>(input)`. The function catalog is " +
-        "NOT in the system prompt — call `describe-stella-function` " +
-        "(no input) to list available functions, then with `{name}` " +
-        "for one function's full schema. `console.log` is a no-op; " +
-        "only the returned value comes back. No `fetch`, `process`, " +
-        "`require`, filesystem, or network access. Limits: code " +
-        `≤${LIMITS.chatRunCodeMaxLength.toLocaleString()} chars, ` +
-        `≤${DEFAULT_SANDBOX_LIMITS.maxDurationMs.toLocaleString()}ms, ` +
-        `≤${DEFAULT_SANDBOX_LIMITS.maxHostCalls.toLocaleString()} host calls, ` +
-        `≤${(DEFAULT_SANDBOX_LIMITS.maxReturnBytes / 1024).toLocaleString()} KiB returned.`,
+      description: EXECUTE_TYPESCRIPT_TOOL_DESCRIPTION,
       inputSchema: valibotSchema(
         v.strictObject({
           code: v.pipe(
