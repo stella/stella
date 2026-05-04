@@ -80,6 +80,7 @@ REDIS_URL="redis://valkey.example.internal:6379"
 S3_ENDPOINT="https://s3.example.com"
 S3_BUCKET="stella"
 S3_REGION="us-east-1"
+S3_CREDENTIALS_PROVIDER="env"
 S3_ACCESS_KEY_ID="..."
 S3_SECRET_ACCESS_KEY="..."
 ```

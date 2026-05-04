@@ -15,6 +15,10 @@ export const envBase = createEnv({
     DATABASE_URL: v.pipe(v.string(), v.url()),
     S3_ENDPOINT: v.string(),
     S3_BUCKET: v.string(),
+    S3_CREDENTIALS_PROVIDER: v.optional(
+      v.picklist(["auto", "env", "aws-runtime", "none"]),
+      "auto",
+    ),
     S3_ACCESS_KEY_ID: v.optional(v.string()),
     S3_SECRET_ACCESS_KEY: v.optional(v.string()),
     S3_REGION: v.string(),
