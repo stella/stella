@@ -5,27 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="alternate icon" href="/favicon.ico" />
-    <!-- Inline blocking script to apply dark mode before first
-         paint. Must NOT be type="module" (deferred) to prevent
-         a white flash. Storage keys duplicated from consts.ts. -->
-    <script>
-      (function () {
-        var t = "stella-ui-theme";
-        var p = "stella-ui-palette";
-        var d =
-          localStorage[t] === "dark" ||
-          (localStorage[t] !== "light" &&
-            matchMedia("(prefers-color-scheme: dark)").matches);
-        var el = document.documentElement;
-        if (d) {
-          el.classList.add("dark");
-          el.style.colorScheme = "dark";
-          el.style.backgroundColor = "#0c0c0d";
-        }
-        var pal = localStorage.getItem(p) || "neutral";
-        if (pal !== "neutral") el.classList.add("palette-" + pal);
-      })();
-    </script>
+    <!-- Synchronous (non-module) script so it runs before the SPA
+         bundle and prevents a white flash for dark-mode users.
+         Lives in /public so the strict frontend CSP doesn't need
+         'unsafe-inline' or a hash. -->
+    <script src="/dark-mode-init.js"></script>
     <script type="module">
       import { getStorageKey } from "/src/consts.ts";
 
