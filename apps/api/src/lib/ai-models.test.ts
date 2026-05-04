@@ -15,6 +15,7 @@ process.env["SMTP_PORT"] ??= "1025";
 const {
   getModelForRole,
   getModelInfoForRole,
+  isAllowedBYOKModel,
   REGIONAL_PROVIDERS,
   supportsRegion,
 } = await import("@/api/lib/ai-models");
@@ -49,6 +50,29 @@ describe("REGIONAL_PROVIDERS", () => {
   test("contains exactly one provider (google)", () => {
     expect(REGIONAL_PROVIDERS.size).toBe(1);
     expect(REGIONAL_PROVIDERS.has("google")).toBe(true);
+  });
+});
+
+describe("isAllowedBYOKModel", () => {
+  test("accepts curated catalog models", () => {
+    expect(isAllowedBYOKModel("anthropic", "claude-opus-4-7")).toBe(true);
+    expect(isAllowedBYOKModel("google", "gemini-3-pro-preview")).toBe(true);
+    expect(isAllowedBYOKModel("openai", "gpt-5.4")).toBe(true);
+    expect(
+      isAllowedBYOKModel("openrouter", "anthropic/claude-opus-4.5"),
+    ).toBe(true);
+  });
+
+  test("rejects models outside the curated catalog", () => {
+    expect(isAllowedBYOKModel("openrouter", "x-ai/grok-4")).toBe(false);
+    expect(isAllowedBYOKModel("anthropic", "claude-2")).toBe(false);
+    expect(isAllowedBYOKModel("google", "gemini-1.5-pro")).toBe(false);
+    expect(isAllowedBYOKModel("openai", "gpt-4o")).toBe(false);
+  });
+
+  test("rejects every model id for openai_compatible", () => {
+    expect(isAllowedBYOKModel("openai_compatible", "default")).toBe(false);
+    expect(isAllowedBYOKModel("openai_compatible", "gpt-5.4")).toBe(false);
   });
 });
 
