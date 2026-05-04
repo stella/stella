@@ -388,7 +388,14 @@ jobs:
         # bubbles up as the opaque "failed to run trusted-signing-cli"
         # with no SignTool error attached. Per the Tauri maintainer
         # in tauri-apps/tauri#11778 + tauri-apps/tauri#13991.
-        run: bun run build -- --target ${{ matrix.target }} --bundles msi,nsis,updater --verbose --verbose
+        # NSIS only (no MSI). MSI uses a 4-part 16-bit Windows
+        # installer version that can't represent semver prerelease
+        # suffixes — `0.0.2-rc.5` is rejected by the bundler with
+        # "optional pre-release identifier in app version must be
+        # numeric-only and cannot be greater than 65535 for msi
+        # target". NSIS has no such constraint and is what most
+        # OSS Tauri apps ship (Yaak, etc.).
+        run: bun run build -- --target ${{ matrix.target }} --bundles nsis,updater --verbose --verbose
 
       - name: Sign Windows installers via Azure Trusted Signing
         if: matrix.os == 'windows'
@@ -401,7 +408,7 @@ jobs:
           trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
           certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
           files-folder: apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle
-          files-folder-filter: msi,exe
+          files-folder-filter: exe
           files-folder-recurse: true
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
