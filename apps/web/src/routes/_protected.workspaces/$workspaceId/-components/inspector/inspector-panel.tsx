@@ -1279,16 +1279,23 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                     // inspector lands directly on this panel
                     // instead of the default Preview.
                     setPdfFacet(tab.id, "suggestions");
-                    // Push a fresh history entry — `replace: true`
-                    // here was a no-op visually (TanStack treated
-                    // the same-href replacement as nothing to do
-                    // and the page didn't actually transition).
+                    // Replace the current history entry rather than
+                    // pushing a new one. This is an automatic,
+                    // user-didn't-click-anything redirect: pushing
+                    // creates a back-button trap (Back returns to
+                    // the previous sidepeek state, which immediately
+                    // remounts SuggestionsFacet without an editor
+                    // and pushes again — bouncing). With `replace`
+                    // the same Back gesture takes the user out of
+                    // the suggestions flow entirely. Per Codex
+                    // review on PR #80.
                     void navigate({
                       to: "/workspaces/$workspaceId/$viewId/document",
                       params: {
                         workspaceId: tab.workspaceId,
                         viewId: peekPdfViewId,
                       },
+                      replace: true,
                       search: (prev) => ({
                         ...prev,
                         entity: tab.entityId,
