@@ -1834,7 +1834,7 @@ async fn handle_filesystem_event(
         state_changed = true;
       }
 
-      if session.checkpoint_in_flight || session.finalize_in_flight {
+      if is_managed && (session.checkpoint_in_flight || session.finalize_in_flight) {
         session.changed_during_remote_save = true;
       }
       ensure_open_poll_loop(session, &manager, session_id);
