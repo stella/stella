@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { parseDocumentAst } from "@stll/case-law/document-ast";
 import { useSuspenseQuery } from "@tanstack/react-query";
@@ -7,6 +7,7 @@ import { Loader2Icon, SparklesIcon } from "lucide-react";
 import * as v from "valibot";
 import { useShallow } from "zustand/react/shallow";
 
+import { useAIKeyGate } from "@/components/require-ai-key";
 import { useCaseSearchStore } from "@/lib/case-search-store";
 import { ensureCriticalQueryData } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
@@ -91,10 +92,15 @@ function DecisionViewer() {
     })),
   );
 
-  const { state: analysisState, generate } = useDecisionAnalysis(
-    decisionId,
-    decision.analysis,
-  );
+  const { byokDialog, ensureAIAvailable } = useAIKeyGate();
+  const { state: analysisState, generate: generateDecisionAnalysis } =
+    useDecisionAnalysis(decisionId, decision.analysis);
+  const generate = useCallback(async () => {
+    if (!ensureAIAvailable()) {
+      return;
+    }
+    await generateDecisionAnalysis();
+  }, [ensureAIAvailable, generateDecisionAnalysis]);
 
   const hasAnalysis =
     analysisState.status === "done" ||
@@ -279,6 +285,7 @@ function DecisionViewer() {
           </div>
         </div>
       </div>
+      {byokDialog}
     </div>
   );
 }

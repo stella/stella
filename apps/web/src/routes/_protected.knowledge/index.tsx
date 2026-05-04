@@ -1,3 +1,4 @@
+import { toastManager } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { LandmarkIcon, LightbulbIcon, PlugIcon } from "lucide-react";
@@ -68,18 +69,25 @@ function KnowledgeLanding() {
           }
 
           return (
-            <div
+            <button
+              type="button"
               className={cn(
-                "bg-card rounded-xl border p-5",
-                "cursor-default opacity-50",
+                "bg-card rounded-xl border p-5 text-start",
+                "hover:border-foreground/15 opacity-50 transition-colors",
               )}
               key={section.key}
+              onClick={() => {
+                toastManager.add({
+                  title: t("common.comingSoon"),
+                  type: "foreground",
+                });
+              }}
             >
               {cardBody}
               <p className="text-muted-foreground mt-3 text-xs">
                 {t("common.comingSoon")}
               </p>
-            </div>
+            </button>
           );
         })}
       </div>

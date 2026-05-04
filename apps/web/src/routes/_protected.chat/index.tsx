@@ -10,6 +10,7 @@ import { v7 as uuidv7 } from "uuid";
 import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
+import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
 import {
   getChatAnonymized,
@@ -34,6 +35,7 @@ export const Route = createFileRoute("/_protected/chat/")({
 
 function ChatIndex() {
   const t = useTranslations();
+  const { byokDialog, ensureAIAvailable } = useAIKeyGate();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const userContext = useChatUserContext();
@@ -78,6 +80,9 @@ function ChatIndex() {
             autoFocus
             controller={controller}
             onSubmit={async (draft) => {
+              if (!ensureAIAvailable()) {
+                return;
+              }
               // Build the request payload first, then resolve the
               // Chat<> instance from the cache; the thread route
               // reads the *same* cached instance, so kicking off
@@ -108,6 +113,7 @@ function ChatIndex() {
               void invalidateGroupedChatThreads(queryClient);
             }}
           />
+          {byokDialog}
         </div>
         <PromptSuggestions
           onSelect={(prompt) => {

@@ -1,8 +1,10 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { openAIKeyRequiredDialog } from "@/components/require-ai-key";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
+import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-config-queries";
 import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
 /**
@@ -12,8 +14,14 @@ import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-quer
 export const useStartWorkflow = (workspaceId: string) => {
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
+  const { data: aiAvailability } = useQuery(aiAvailabilityOptions);
 
   return async (args?: { entityIds?: string[]; entityIdsOrder?: string[] }) => {
+    if (!aiAvailability?.available) {
+      openAIKeyRequiredDialog();
+      return undefined;
+    }
+
     try {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
