@@ -44,6 +44,7 @@ import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useAIKeyGate } from "@/components/require-ai-key";
+import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
@@ -186,6 +187,21 @@ export const ChatTabPanel = ({
     placeholder: t("chat.contextPlaceholder", { context: chatContextLabel }),
     threadRef,
   });
+  const focusComposer = editorController.focus;
+
+  useEffect(() => {
+    if (messages.length > 0 || isGenerating) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      focusComposer();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [focusComposer, isGenerating, messages.length, tab.id]);
 
   const stockPrompts = useSavedPrompts();
   const handleSelectPrompt = (prompt: ChatPrompt) => {
@@ -347,17 +363,12 @@ type ChatEmptyStateProps = {
   onSelectPrompt: (prompt: ChatPrompt) => void;
 };
 
-const ChatEmptyState = ({ prompts, onSelectPrompt }: ChatEmptyStateProps) => {
-  const t = useTranslations();
-  return (
-    <div className="m-auto flex flex-col items-center gap-6 py-12">
-      <p className="text-foreground text-base font-medium">
-        {t("chat.greeting")}
-      </p>
-      <PromptSuggestions onSelect={onSelectPrompt} prompts={prompts} />
-    </div>
-  );
-};
+const ChatEmptyState = ({ prompts, onSelectPrompt }: ChatEmptyStateProps) => (
+  <div className="m-auto flex flex-col items-center gap-6 py-12">
+    <StellaMark className="text-foreground size-10" />
+    <PromptSuggestions onSelect={onSelectPrompt} prompts={prompts} />
+  </div>
+);
 
 const noop = () => {
   /* placeholder handler — replaced when the panel hydrates */

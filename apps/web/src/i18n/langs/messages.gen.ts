@@ -324,7 +324,7 @@ type Messages = {
     "attachment": "Attachment";
     "caseLawGreeting": "Ask about this decision — its full text is available here.";
     "chatAbout": "Chat about this";
-    "contextPlaceholder": "Chat about {context}";
+    "contextPlaceholder": "Chat about {context}, / for skills, @ to add context";
     "deleteThread": "Delete conversation";
     "documentView": {
       "original": "Original";
@@ -340,6 +340,16 @@ type Messages = {
     "fileTooLarge": "File exceeds {maxSize} limit";
     "folioCitationFallback": "p. {n}";
     "greeting": "What would you like to work on?";
+    "greetingSubtitle": "Start with a matter, document, or plain question.";
+    "landing": {
+      "lastAccessedMatters": "Last accessed matters";
+      "noMatters": "No matters yet";
+      "noPrompts": "No prompts yet";
+      "noRecentChats": "No recent chats";
+      "pinnedMatters": "Pinned matters";
+      "prompts": "Prompts";
+      "recentChats": "Recent chats";
+    };
     "maxAttachmentsReached": "Maximum {count} files per message";
     "mention": {
       "category": {
@@ -356,10 +366,10 @@ type Messages = {
     "moveToSide": "Move to side panel";
     "newChat": "New chat";
     "noThreads": "No conversations yet";
-    "placeholder": "What would you like to know?";
+    "placeholder": "Type your question here, / for skills, @ to add context";
     "prompts": {
       "noResults": "No matching prompts";
-      "noShortcuts": "No shortcuts yet. Add some in Knowledge → Skills.";
+      "noShortcuts": "No skills yet. Add some in Knowledge → Skills.";
       "scope": {
         "private": "Your prompts";
         "stock": "Built-in";
@@ -387,7 +397,7 @@ type Messages = {
     };
     "send": "Send message";
     "thinking": "Working with context";
-    "threads": "Conversations";
+    "threads": "History";
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits";
       "ask-user": "Asking for clarification";
@@ -540,6 +550,7 @@ type Messages = {
     "error": "Error";
     "expenses": "Expenses";
     "filter": "Filter";
+    "history": "History";
     "invite": "Invite";
     "invoices": "Invoices";
     "kind": "Kind";
@@ -1059,21 +1070,21 @@ type Messages = {
       };
     };
     "skills": {
-      "addShortcut": "Add shortcut";
+      "addShortcut": "Add skill";
       "defaultBadge": "Default";
-      "deleteConfirmDescription": "This shortcut will be permanently removed.";
-      "deleteConfirmTitle": "Delete shortcut?";
-      "deleteShortcut": "Delete shortcut";
-      "editShortcut": "Edit shortcut";
-      "emptyState": "No shortcuts yet. Add one to get started.";
+      "deleteConfirmDescription": "This skill will be permanently removed.";
+      "deleteConfirmTitle": "Delete skill?";
+      "deleteShortcut": "Delete skill";
+      "editShortcut": "Edit skill";
+      "emptyState": "No skills yet. Add your first one.";
       "errors": {
-        "commandConflict": "A shortcut with this command already exists";
+        "commandConflict": "A skill with this / name already exists";
         "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores";
-        "commandReserved": "\"/{command}\" is a reserved command";
+        "commandReserved": "\"/{command}\" is a reserved skill";
       };
       "form": {
-        "command": "Command";
-        "commandHint": "Lowercase letters, digits, hyphens and underscores only";
+        "command": "Skill";
+        "commandHint": "The / skill name: lowercase letters, numbers, hyphens, and underscores only";
         "commandPlaceholder": "e.g. summarize";
         "commandPrefix": "/";
         "description": "Description";
@@ -1081,7 +1092,7 @@ type Messages = {
         "name": "Name";
         "namePlaceholder": "e.g. Summarise document";
         "prompt": "Prompt";
-        "promptPlaceholder": "The text inserted into the chat composer when this shortcut is used";
+        "promptPlaceholder": "The text inserted into the chat composer when this skill is used";
         "scope": "Visibility";
         "scopePrivate": "Only me";
         "scopeTeam": "Everyone in the organisation";

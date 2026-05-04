@@ -1148,7 +1148,8 @@ export function PromptBar(props: PromptBarProps) {
   // control (and the bar stays the single point of intent).
   const showStop = isGenerating && onStop !== undefined;
   const isSendBlocked = sendDisabledReason !== undefined;
-  const inputDisabled = busy || isSendBlocked;
+  const inputDisabled = isSendBlocked;
+  const submitDisabled = busy || isSendBlocked;
 
   // Glow on attention pulse — kicked from the inspector when the
   // user clicks the AI-suggestions chip so they see the bar light
@@ -1176,13 +1177,13 @@ export function PromptBar(props: PromptBarProps) {
   // Wrap controller.submit so the host's `onSubmit` is the only
   // outbound channel; the editor's draft (HTML) becomes the prompt.
   const submitDraft = useCallback(async () => {
-    if (inputDisabled) {
+    if (submitDisabled) {
       return;
     }
     await submit((draft) => {
       onSubmit({ prompt: draft.html });
     });
-  }, [inputDisabled, onSubmit, submit]);
+  }, [onSubmit, submit, submitDisabled]);
 
   // Register Enter handler — TipTap's keymap delegates Enter to
   // the `setSubmitHandler` registered here. Without this, Enter
@@ -1289,7 +1290,7 @@ export function PromptBar(props: PromptBarProps) {
             <Button
               aria-label={showStop ? "Stop response" : "Send prompt"}
               className="rounded-full"
-              disabled={showStop ? false : busy || !canSubmit || isSendBlocked}
+              disabled={showStop ? false : submitDisabled || !canSubmit}
               onClick={() => {
                 if (showStop) {
                   onStop?.();

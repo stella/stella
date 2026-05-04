@@ -321,7 +321,7 @@
     "attachment": "Pielikums",
     "caseLawGreeting": "Uzdod jautājumus par šo lēmumu — pilns teksts ir pieejams šeit.",
     "chatAbout": "Ievietot AI čatā",
-    "contextPlaceholder": "Tērzēt par {context}",
+    "contextPlaceholder": "Tērzēt par {context}, / prasmēm, @ konteksta pievienošanai",
     "deleteThread": "Dzēst sarunu",
     "documentView": {
       "original": "Oriģināls",
@@ -337,6 +337,16 @@
     "fileTooLarge": "Fails pārsniedz {maxSize} ierobežojumu",
     "folioCitationFallback": "lpp. {n}",
     "greeting": "Pie kā vēlaties strādāt?",
+    "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
+    "landing": {
+      "lastAccessedMatters": "Pēdējās atvērtās lietas",
+      "noMatters": "Lietu vēl nav",
+      "noPrompts": "Promptu vēl nav",
+      "noRecentChats": "Nav nesenu čatu",
+      "pinnedMatters": "Piespraustās lietas",
+      "prompts": "Prompti",
+      "recentChats": "Nesenie čati"
+    },
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mention": {
       "category": {
@@ -353,10 +363,10 @@
     "moveToSide": "Pārvietot uz sānu paneli",
     "newChat": "Jauna saruna",
     "noThreads": "Sarunu vēl nav",
-    "placeholder": "Ko vēlaties uzzināt?",
+    "placeholder": "Ierakstiet jautājumu šeit, / prasmēm, @ konteksta pievienošanai",
     "prompts": {
       "noResults": "Nav atbilstošu uzvedņu",
-      "noShortcuts": "Vēl nav saīšņu. Pievienojiet tās sadaļā Zināšanas → Prasmes.",
+      "noShortcuts": "Prasmju vēl nav. Pievienojiet tās sadaļā Zināšanas → Prasmes.",
       "scope": {
         "private": "Jūsu uzvednes",
         "stock": "Iebūvētas",
@@ -384,7 +394,7 @@
     },
     "send": "Nosūtīt ziņu",
     "thinking": "Strādāju ar kontekstu",
-    "threads": "Sarunas",
+    "threads": "Vēsture",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
       "ask-user": "Precizējuma pieprasīšana",
@@ -537,6 +547,7 @@
     "error": "Kļūda",
     "expenses": "Izdevumi",
     "filter": "Filtrs",
+    "history": "Vēsture",
     "invite": "Uzaicināt",
     "invoices": "Rēķini",
     "kind": "Veids",
@@ -1056,21 +1067,21 @@
       }
     },
     "skills": {
-      "addShortcut": "Pievienot saīsni",
+      "addShortcut": "Pievienot prasmi",
       "defaultBadge": "Noklusējuma",
-      "deleteConfirmDescription": "Šī saīsne tiks neatgriezeniski dzēsta.",
-      "deleteConfirmTitle": "Dzēst saīsni?",
-      "deleteShortcut": "Dzēst saīsni",
-      "editShortcut": "Rediģēt saīsni",
-      "emptyState": "Vēl nav saīšņu. Pievienojiet pirmo.",
+      "deleteConfirmDescription": "Šī prasme tiks neatgriezeniski noņemta.",
+      "deleteConfirmTitle": "Dzēst prasmi?",
+      "deleteShortcut": "Dzēst prasmi",
+      "editShortcut": "Rediģēt prasmi",
+      "emptyState": "Prasmju vēl nav. Pievienojiet pirmo.",
       "errors": {
-        "commandConflict": "Saīsne ar šo komandu jau pastāv",
+        "commandConflict": "Prasme ar šo / nosaukumu jau pastāv",
         "commandInvalid": "Izmantojiet tikai mazos burtus, ciparus, defises un pasvītrojumus",
-        "commandReserved": "\"/{command}\" ir rezervēta komanda"
+        "commandReserved": "\"/{command}\" ir rezervēta prasme"
       },
       "form": {
-        "command": "Komanda",
-        "commandHint": "Tikai mazie burti, cipari, defises un pasvītrojumi",
+        "command": "Prasme",
+        "commandHint": "/ prasmes nosaukums: tikai mazie burti, cipari, defises un pasvītras",
         "commandPlaceholder": "piem. kopsavilkums",
         "commandPrefix": "/",
         "description": "Apraksts",
@@ -1078,7 +1089,7 @@
         "name": "Nosaukums",
         "namePlaceholder": "piem. Dokumenta kopsavilkums",
         "prompt": "Uzvedne",
-        "promptPlaceholder": "Teksts, kas tiek ievietots tērzēšanas redaktorā, izmantojot šo saīsni",
+        "promptPlaceholder": "Teksts, kas tiek ievietots čata kompozitorā, kad tiek izmantota šī prasme",
         "scope": "Redzamība",
         "scopePrivate": "Tikai es",
         "scopeTeam": "Visi organizācijā"

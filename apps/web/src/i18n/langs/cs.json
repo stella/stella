@@ -321,7 +321,7 @@
     "attachment": "Příloha",
     "caseLawGreeting": "Zeptejte se na toto rozhodnutí — plný text je k dispozici.",
     "chatAbout": "Vložit do AI chatu",
-    "contextPlaceholder": "Chat o {context}",
+    "contextPlaceholder": "Chat o {context}, / pro dovednosti, @ pro přidání kontextu",
     "deleteThread": "Smazat konverzaci",
     "documentView": {
       "original": "Originál",
@@ -337,6 +337,16 @@
     "fileTooLarge": "Soubor překračuje limit {maxSize}",
     "folioCitationFallback": "str. {n}",
     "greeting": "Na čem chcete pracovat?",
+    "greetingSubtitle": "Začněte spisem, dokumentem nebo obyčejnou otázkou.",
+    "landing": {
+      "lastAccessedMatters": "Naposledy otevřené spisy",
+      "noMatters": "Zatím žádné spisy",
+      "noPrompts": "Zatím žádné prompty",
+      "noRecentChats": "Zatím žádné nedávné chaty",
+      "pinnedMatters": "Připnuté spisy",
+      "prompts": "Prompty",
+      "recentChats": "Nedávné chaty"
+    },
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mention": {
       "category": {
@@ -353,10 +363,10 @@
     "moveToSide": "Přesunout do bočního panelu",
     "newChat": "Nový chat",
     "noThreads": "Zatím žádné konverzace",
-    "placeholder": "Co byste chtěli vědět?",
+    "placeholder": "Zde napište svůj dotaz, / pro dovednosti, @ pro přidání kontextu",
     "prompts": {
       "noResults": "Žádné odpovídající promty",
-      "noShortcuts": "Zatím žádné zkratky. Přidejte je v části Znalosti → Dovednosti.",
+      "noShortcuts": "Zatím žádné dovednosti. Přidejte je v části Znalosti → Dovednosti.",
       "scope": {
         "private": "Vaše promty",
         "stock": "Vestavěné",
@@ -384,7 +394,7 @@
     },
     "send": "Odeslat zprávu",
     "thinking": "Pracuji s kontextem",
-    "threads": "Konverzace",
+    "threads": "Historie",
     "tool": {
       "apply-active-docx-edits": "Používám úpravy DOCX",
       "ask-user": "Žádost o upřesnění",
@@ -537,6 +547,7 @@
     "error": "Chyba",
     "expenses": "Výdaje",
     "filter": "Filtr",
+    "history": "Historie",
     "invite": "Pozvat",
     "invoices": "Faktury",
     "kind": "Druh",
@@ -1056,21 +1067,21 @@
       }
     },
     "skills": {
-      "addShortcut": "Přidat zkratku",
+      "addShortcut": "Přidat dovednost",
       "defaultBadge": "Výchozí",
-      "deleteConfirmDescription": "Tato zkratka bude trvale odstraněna.",
-      "deleteConfirmTitle": "Smazat zkratku?",
-      "deleteShortcut": "Smazat zkratku",
-      "editShortcut": "Upravit zkratku",
-      "emptyState": "Žádné zkratky. Přidejte první.",
+      "deleteConfirmDescription": "Tato dovednost bude trvale odstraněna.",
+      "deleteConfirmTitle": "Smazat dovednost?",
+      "deleteShortcut": "Smazat dovednost",
+      "editShortcut": "Upravit dovednost",
+      "emptyState": "Žádné dovednosti. Přidejte první.",
       "errors": {
-        "commandConflict": "Zkratka s tímto příkazem již existuje",
+        "commandConflict": "Dovednost s tímto / názvem již existuje",
         "commandInvalid": "Používejte pouze malá písmena, číslice, pomlčky a podtržítka",
-        "commandReserved": "\"/{command}\" je rezervovaný příkaz"
+        "commandReserved": "\"/{command}\" je rezervovaná dovednost"
       },
       "form": {
-        "command": "Příkaz",
-        "commandHint": "Pouze malá písmena, číslice, pomlčky a podtržítka",
+        "command": "Dovednost",
+        "commandHint": "Název / dovednosti: pouze malá písmena, číslice, pomlčky a podtržítka",
         "commandPlaceholder": "např. shrnout",
         "commandPrefix": "/",
         "description": "Popis",
@@ -1078,7 +1089,7 @@
         "name": "Název",
         "namePlaceholder": "např. Shrnout dokument",
         "prompt": "Prompt",
-        "promptPlaceholder": "Text vložený do kompozéru chatu při použití této zkratky",
+        "promptPlaceholder": "Text vložený do kompozéru chatu při použití této dovednosti",
         "scope": "Viditelnost",
         "scopePrivate": "Pouze já",
         "scopeTeam": "Všichni v organizaci"

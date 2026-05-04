@@ -321,7 +321,7 @@
     "attachment": "Anhang",
     "caseLawGreeting": "Stelle Fragen zu dieser Entscheidung — der vollständige Text ist hier verfügbar.",
     "chatAbout": "In AI-Chat einfügen",
-    "contextPlaceholder": "Chat über {context}",
+    "contextPlaceholder": "Chat über {context}, / für Skills, @ für Kontext",
     "deleteThread": "Konversation löschen",
     "documentView": {
       "original": "Original",
@@ -337,6 +337,16 @@
     "fileTooLarge": "Datei überschreitet das Limit von {maxSize}",
     "folioCitationFallback": "S. {n}",
     "greeting": "Woran möchten Sie arbeiten?",
+    "greetingSubtitle": "Beginnen Sie mit einer Sache, einem Dokument oder einer einfachen Frage.",
+    "landing": {
+      "lastAccessedMatters": "Zuletzt geöffnete Sachen",
+      "noMatters": "Noch keine Sachen",
+      "noPrompts": "Noch keine Prompts",
+      "noRecentChats": "Keine letzten Chats",
+      "pinnedMatters": "Angeheftete Sachen",
+      "prompts": "Prompts",
+      "recentChats": "Letzte Chats"
+    },
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mention": {
       "category": {
@@ -353,10 +363,10 @@
     "moveToSide": "In Seitenleiste verschieben",
     "newChat": "Neuer Chat",
     "noThreads": "Noch keine Konversationen",
-    "placeholder": "Was möchten Sie wissen?",
+    "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
     "prompts": {
       "noResults": "Keine passenden Prompts",
-      "noShortcuts": "Noch keine Kürzel. Fügen Sie welche unter Wissen → Kürzel hinzu.",
+      "noShortcuts": "Noch keine Skills. Fügen Sie welche unter Wissen → Skills hinzu.",
       "scope": {
         "private": "Eigene Prompts",
         "stock": "Vorgegeben",
@@ -384,7 +394,7 @@
     },
     "send": "Nachricht senden",
     "thinking": "Arbeite mit Kontext",
-    "threads": "Konversationen",
+    "threads": "Verlauf",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
       "ask-user": "Um Klärung bitten",
@@ -537,6 +547,7 @@
     "error": "Fehler",
     "expenses": "Ausgaben",
     "filter": "Filtern",
+    "history": "Verlauf",
     "invite": "Einladen",
     "invoices": "Rechnungen",
     "kind": "Art",
@@ -1056,21 +1067,21 @@
       }
     },
     "skills": {
-      "addShortcut": "Kürzel hinzufügen",
+      "addShortcut": "Skill hinzufügen",
       "defaultBadge": "Standard",
-      "deleteConfirmDescription": "Dieses Kürzel wird dauerhaft entfernt.",
-      "deleteConfirmTitle": "Kürzel löschen?",
-      "deleteShortcut": "Kürzel löschen",
-      "editShortcut": "Kürzel bearbeiten",
-      "emptyState": "Noch keine Kürzel. Fügen Sie eines hinzu.",
+      "deleteConfirmDescription": "Dieser Skill wird dauerhaft entfernt.",
+      "deleteConfirmTitle": "Skill löschen?",
+      "deleteShortcut": "Skill löschen",
+      "editShortcut": "Skill bearbeiten",
+      "emptyState": "Noch keine Skills. Fügen Sie einen hinzu.",
       "errors": {
-        "commandConflict": "Ein Kürzel mit diesem Befehl existiert bereits",
+        "commandConflict": "Ein Skill mit diesem / Namen existiert bereits",
         "commandInvalid": "Nur Kleinbuchstaben, Ziffern, Bindestriche und Unterstriche verwenden",
-        "commandReserved": "\"/{command}\" ist ein reservierter Befehl"
+        "commandReserved": "\"/{command}\" ist ein reservierter Skill"
       },
       "form": {
-        "command": "Befehl",
-        "commandHint": "Nur Kleinbuchstaben, Ziffern, Bindestriche und Unterstriche",
+        "command": "Skill",
+        "commandHint": "Der / Skill-Name: nur Kleinbuchstaben, Ziffern, Bindestriche und Unterstriche",
         "commandPlaceholder": "z.B. zusammenfassen",
         "commandPrefix": "/",
         "description": "Beschreibung",
@@ -1078,7 +1089,7 @@
         "name": "Name",
         "namePlaceholder": "z.B. Dokument zusammenfassen",
         "prompt": "Prompt",
-        "promptPlaceholder": "Der Text, der in das Chat-Eingabefeld eingefügt wird",
+        "promptPlaceholder": "Der Text, der beim Verwenden dieses Skills in den Chat-Composer eingefügt wird",
         "scope": "Sichtbarkeit",
         "scopePrivate": "Nur ich",
         "scopeTeam": "Alle in der Organisation"

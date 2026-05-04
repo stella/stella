@@ -15,6 +15,7 @@ import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
 import {
@@ -23,6 +24,8 @@ import {
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
+import type { ChatPrompt } from "@/lib/prompts/types";
+import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
@@ -49,6 +52,7 @@ export const ChatThreadPage = ({
   const getUserContext = useEffectEvent(() => userContext);
   const showToolCalls = useDevStore((state) => state.showToolCalls);
   const controller = useChatEditor({ threadRef });
+  const prompts = useSavedPrompts();
 
   // Local copy of the persisted contextMatterIds, seeded from the
   // server and re-seeded whenever the page navigates to a different
@@ -141,6 +145,15 @@ export const ChatThreadPage = ({
     void navigate({ to: "/chat" });
   };
 
+  const selectPrompt = (prompt: ChatPrompt) => {
+    const editor = controller.editor;
+    if (!editor) {
+      return;
+    }
+    editor.commands.setContent(prompt.body);
+    editor.commands.focus("end");
+  };
+
   return (
     <div className="flex w-full max-w-2xl flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between gap-2 px-4 py-2">
@@ -192,20 +205,26 @@ export const ChatThreadPage = ({
 
       <Conversation>
         <ConversationContent className="gap-3">
-          <ChatThreadMessages
-            approvalPendingMessageId={approvalPendingMessageId}
-            autoApprovedTools={autoApprovedTools}
-            handleAlwaysAllow={handleAlwaysAllow}
-            handleApprove={handleApprove}
-            handleDeny={handleDeny}
-            isGenerating={isGenerating}
-            messages={messages}
-            onAskUserSubmit={handleAskUserSubmit}
-            showThinkingIndicator
-            showToolCalls={showToolCalls}
-            streamdownComponents={streamdownComponents}
-            workspaceId={workspaceId}
-          />
+          {messages.length === 0 && !isGenerating ? (
+            <div className="m-auto w-full max-w-md px-4">
+              <PromptSuggestions onSelect={selectPrompt} prompts={prompts} />
+            </div>
+          ) : (
+            <ChatThreadMessages
+              approvalPendingMessageId={approvalPendingMessageId}
+              autoApprovedTools={autoApprovedTools}
+              handleAlwaysAllow={handleAlwaysAllow}
+              handleApprove={handleApprove}
+              handleDeny={handleDeny}
+              isGenerating={isGenerating}
+              messages={messages}
+              onAskUserSubmit={handleAskUserSubmit}
+              showThinkingIndicator
+              showToolCalls={showToolCalls}
+              streamdownComponents={streamdownComponents}
+              workspaceId={workspaceId}
+            />
+          )}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>

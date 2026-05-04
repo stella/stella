@@ -321,7 +321,7 @@
     "attachment": "Manus",
     "caseLawGreeting": "Esita küsimusi selle otsuse kohta — täistekst on siin saadaval.",
     "chatAbout": "Lisa AI vestlusesse",
-    "contextPlaceholder": "Vestle teemal {context}",
+    "contextPlaceholder": "Vestle teemal {context}, / oskuste jaoks, @ konteksti lisamiseks",
     "deleteThread": "Kustuta vestlus",
     "documentView": {
       "original": "Originaal",
@@ -337,6 +337,16 @@
     "fileTooLarge": "Fail ületab {maxSize} piirangu",
     "folioCitationFallback": "lk {n}",
     "greeting": "Millega soovite tegeleda?",
+    "greetingSubtitle": "Alustage asjast, dokumendist või lihtsast küsimusest.",
+    "landing": {
+      "lastAccessedMatters": "Viimati avatud asjad",
+      "noMatters": "Asju veel pole",
+      "noPrompts": "Prompte veel pole",
+      "noRecentChats": "Hiljutisi vestlusi pole",
+      "pinnedMatters": "Kinnitatud asjad",
+      "prompts": "Promptid",
+      "recentChats": "Hiljutised vestlused"
+    },
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mention": {
       "category": {
@@ -353,10 +363,10 @@
     "moveToSide": "Vii külgpaneeli",
     "newChat": "Uus vestlus",
     "noThreads": "Vestlusi pole veel",
-    "placeholder": "Mida soovite teada?",
+    "placeholder": "Kirjutage oma küsimus siia, / oskuste jaoks, @ konteksti lisamiseks",
     "prompts": {
       "noResults": "Sobivaid küsimusi pole",
-      "noShortcuts": "Otseteid pole veel. Lisage neid jaotises Teadmised → Oskused.",
+      "noShortcuts": "Oskusi veel pole. Lisage need jaotises Teadmised → Oskused.",
       "scope": {
         "private": "Sinu küsimused",
         "stock": "Sisseehitatud",
@@ -384,7 +394,7 @@
     },
     "send": "Saada sõnum",
     "thinking": "Töötan kontekstiga",
-    "threads": "Vestlused",
+    "threads": "Ajalugu",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
       "ask-user": "Täpsustuse küsimine",
@@ -537,6 +547,7 @@
     "error": "Viga",
     "expenses": "Kulud",
     "filter": "Filter",
+    "history": "Ajalugu",
     "invite": "Kutsu",
     "invoices": "Arved",
     "kind": "Liik",
@@ -1056,21 +1067,21 @@
       }
     },
     "skills": {
-      "addShortcut": "Lisa otsetee",
+      "addShortcut": "Lisa oskus",
       "defaultBadge": "Vaikimisi",
-      "deleteConfirmDescription": "See otsetee eemaldatakse jäädavalt.",
-      "deleteConfirmTitle": "Kustuta otsetee?",
-      "deleteShortcut": "Kustuta otsetee",
-      "editShortcut": "Muuda otseteed",
-      "emptyState": "Otseteid pole veel. Lisa esimene.",
+      "deleteConfirmDescription": "See oskus eemaldatakse jäädavalt.",
+      "deleteConfirmTitle": "Kas kustutada oskus?",
+      "deleteShortcut": "Kustuta oskus",
+      "editShortcut": "Muuda oskust",
+      "emptyState": "Oskusi veel pole. Lisage esimene.",
       "errors": {
-        "commandConflict": "Selle käsuga otsetee on juba olemas",
+        "commandConflict": "Selle / nimega oskus on juba olemas",
         "commandInvalid": "Kasuta ainult väiketähti, numbreid, sidekriipse ja allkriipse",
-        "commandReserved": "\"/{command}\" on reserveeritud käsk"
+        "commandReserved": "\"/{command}\" on reserveeritud oskus"
       },
       "form": {
-        "command": "Käsk",
-        "commandHint": "Ainult väiketähed, numbrid, sidekriipsud ja allkriipsud",
+        "command": "Oskus",
+        "commandHint": "/ oskuse nimi: ainult väiketähed, numbrid, sidekriipsud ja alakriipsud",
         "commandPlaceholder": "nt. kokkuvõte",
         "commandPrefix": "/",
         "description": "Kirjeldus",
@@ -1078,7 +1089,7 @@
         "name": "Nimi",
         "namePlaceholder": "nt. Dokumendi kokkuvõte",
         "prompt": "Prompt",
-        "promptPlaceholder": "Tekst, mis lisatakse vestluse koostajasse selle otsetee kasutamisel",
+        "promptPlaceholder": "Tekst, mis lisatakse vestluse koostajasse selle oskuse kasutamisel",
         "scope": "Nähtavus",
         "scopePrivate": "Ainult mina",
         "scopeTeam": "Kõik organisatsioonis"

@@ -321,7 +321,7 @@
     "attachment": "Melléklet",
     "caseLawGreeting": "Kérdezz erről a határozatról — a teljes szöveg itt elérhető.",
     "chatAbout": "Beszúrás az AI chatbe",
-    "contextPlaceholder": "Csevegés erről: {context}",
+    "contextPlaceholder": "Chat erről: {context}, / a skillekhez, @ kontextus hozzáadásához",
     "deleteThread": "Beszélgetés törlése",
     "documentView": {
       "original": "Eredeti",
@@ -337,6 +337,16 @@
     "fileTooLarge": "A fájl meghaladja a {maxSize} korlátot",
     "folioCitationFallback": "o. {n}",
     "greeting": "Min szeretne dolgozni?",
+    "greetingSubtitle": "Kezdje egy üggyel, dokumentummal vagy egyszerű kérdéssel.",
+    "landing": {
+      "lastAccessedMatters": "Legutóbb megnyitott ügyek",
+      "noMatters": "Még nincsenek ügyek",
+      "noPrompts": "Még nincsenek promptok",
+      "noRecentChats": "Nincsenek legutóbbi chatek",
+      "pinnedMatters": "Kitűzött ügyek",
+      "prompts": "Promptok",
+      "recentChats": "Legutóbbi chatek"
+    },
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mention": {
       "category": {
@@ -353,10 +363,10 @@
     "moveToSide": "Áthelyezés az oldalsó panelbe",
     "newChat": "Új csevegés",
     "noThreads": "Még nincsenek beszélgetések",
-    "placeholder": "Mit szeretne tudni?",
+    "placeholder": "Írja ide a kérdését, / a skillekhez, @ kontextus hozzáadásához",
     "prompts": {
       "noResults": "Nincs egyező prompt",
-      "noShortcuts": "Még nincsenek parancsikonok. Adjon hozzá néhányat a Tudás → Készségek menüpontban.",
+      "noShortcuts": "Még nincsenek skillek. Adjon hozzá a Tudás → Skillek részen.",
       "scope": {
         "private": "Saját promptok",
         "stock": "Beépített",
@@ -384,7 +394,7 @@
     },
     "send": "Üzenet küldése",
     "thinking": "Kontextussal dolgozom",
-    "threads": "Beszélgetések",
+    "threads": "Előzmények",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
       "ask-user": "Pontosítás kérése",
@@ -537,6 +547,7 @@
     "error": "Hiba",
     "expenses": "Kiadások",
     "filter": "Szűrő",
+    "history": "Előzmények",
     "invite": "Meghívás",
     "invoices": "Számlák",
     "kind": "Fajta",
@@ -1056,21 +1067,21 @@
       }
     },
     "skills": {
-      "addShortcut": "Parancsikon hozzáadása",
+      "addShortcut": "Skill hozzáadása",
       "defaultBadge": "Alapértelmezett",
-      "deleteConfirmDescription": "Ez a parancsikon véglegesen törlésre kerül.",
-      "deleteConfirmTitle": "Parancsikon törlése?",
-      "deleteShortcut": "Parancsikon törlése",
-      "editShortcut": "Parancsikon szerkesztése",
-      "emptyState": "Még nincsenek parancsikonok. Adjon hozzá egyet.",
+      "deleteConfirmDescription": "Ez a skill véglegesen törlődik.",
+      "deleteConfirmTitle": "Skill törlése?",
+      "deleteShortcut": "Skill törlése",
+      "editShortcut": "Skill szerkesztése",
+      "emptyState": "Még nincsenek skillek. Adja hozzá az elsőt.",
       "errors": {
-        "commandConflict": "Ezzel a paranccsal már létezik egy parancsikon",
+        "commandConflict": "Már létezik skill ezzel a / névvel",
         "commandInvalid": "Csak kisbetűket, számokat, kötőjeleket és aláhúzásokat használjon",
-        "commandReserved": "\"/{command}\" egy fenntartott parancs"
+        "commandReserved": "\"/{command}\" fenntartott skill"
       },
       "form": {
-        "command": "Parancs",
-        "commandHint": "Csak kisbetűk, számok, kötőjelek és aláhúzások",
+        "command": "Skill",
+        "commandHint": "A / skill neve: csak kisbetűk, számok, kötőjelek és aláhúzások",
         "commandPlaceholder": "pl. összefoglalás",
         "commandPrefix": "/",
         "description": "Leírás",
@@ -1078,7 +1089,7 @@
         "name": "Név",
         "namePlaceholder": "pl. Dokumentum összefoglalása",
         "prompt": "Prompt",
-        "promptPlaceholder": "A szöveg, amely be lesz illesztve a csevegő szerkesztőbe",
+        "promptPlaceholder": "A chat szerkesztőbe beszúrt szöveg, amikor ezt a skillt használják",
         "scope": "Láthatóság",
         "scopePrivate": "Csak én",
         "scopeTeam": "Mindenki a szervezetben"

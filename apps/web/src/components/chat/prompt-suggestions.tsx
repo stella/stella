@@ -28,23 +28,28 @@ export const PromptSuggestions = ({
   }
 
   return (
-    <div className={cn("flex flex-col items-center gap-3", className)}>
-      <p className="text-muted-foreground text-xs">
+    <div className={cn("flex w-full flex-col items-center gap-3", className)}>
+      <p className="text-muted-foreground text-sm">
         {t("chat.prompts.tryOne")}
       </p>
-      <div className="flex flex-col items-stretch gap-1.5 self-stretch">
+      <div className="flex w-full flex-col items-stretch gap-2">
         {prompts.map((prompt) => (
           <button
-            className="border-border hover:border-foreground/20 hover:bg-accent/50 group flex items-center gap-2 rounded-md border px-3 py-2 text-start transition-colors"
+            className="border-border hover:border-foreground/20 hover:bg-accent/50 group flex gap-3 rounded-md border px-4 py-3 text-start transition-colors"
             key={prompt.id}
             onClick={() => onSelect(prompt)}
             type="button"
           >
-            <span className="text-foreground text-xs font-medium">
-              {prompt.name}
+            <span className="text-muted-foreground/55 group-hover:text-muted-foreground mt-0.5 flex size-4 shrink-0 items-center justify-center font-mono text-[13px] leading-none transition-colors">
+              /
             </span>
-            <span className="text-muted-foreground line-clamp-1 flex-1 text-xs">
-              {prompt.body}
+            <span className="min-w-0 flex-1">
+              <span className="text-foreground block text-sm leading-5 font-medium">
+                {prompt.name}
+              </span>
+              <span className="text-muted-foreground line-clamp-2 text-xs leading-4">
+                {prompt.body}
+              </span>
             </span>
           </button>
         ))}

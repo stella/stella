@@ -321,7 +321,7 @@
     "attachment": "Pièce jointe",
     "caseLawGreeting": "Pose des questions sur cette décision — le texte complet est disponible ici.",
     "chatAbout": "Insérer dans le chat IA",
-    "contextPlaceholder": "Discuter de {context}",
+    "contextPlaceholder": "Chat sur {context}, / pour les skills, @ pour ajouter du contexte",
     "deleteThread": "Supprimer la conversation",
     "documentView": {
       "original": "Original",
@@ -337,6 +337,16 @@
     "fileTooLarge": "Le fichier dépasse la limite de {maxSize}",
     "folioCitationFallback": "p. {n}",
     "greeting": "Sur quoi souhaitez-vous travailler ?",
+    "greetingSubtitle": "Commencez par un dossier, un document ou une question simple.",
+    "landing": {
+      "lastAccessedMatters": "Dossiers consultés récemment",
+      "noMatters": "Aucun dossier pour le moment",
+      "noPrompts": "Aucun prompt pour le moment",
+      "noRecentChats": "Aucun chat récent",
+      "pinnedMatters": "Dossiers épinglés",
+      "prompts": "Prompts",
+      "recentChats": "Chats récents"
+    },
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
     "mention": {
       "category": {
@@ -353,10 +363,10 @@
     "moveToSide": "Déplacer vers le panneau latéral",
     "newChat": "Nouvelle conversation",
     "noThreads": "Aucune conversation",
-    "placeholder": "Que souhaitez-vous savoir ?",
+    "placeholder": "Saisissez votre question ici, / pour les skills, @ pour ajouter du contexte",
     "prompts": {
       "noResults": "Aucun prompt correspondant",
-      "noShortcuts": "Aucun raccourci pour l'instant. Ajoutez-en dans Connaissance → Compétences.",
+      "noShortcuts": "Aucun skill pour le moment. Ajoutez-en dans Connaissances → Skills.",
       "scope": {
         "private": "Vos prompts",
         "stock": "Intégrés",
@@ -384,7 +394,7 @@
     },
     "send": "Envoyer le message",
     "thinking": "Traitement du contexte",
-    "threads": "Conversations",
+    "threads": "Historique",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
       "ask-user": "Demande de précision",
@@ -537,6 +547,7 @@
     "error": "Erreur",
     "expenses": "Dépenses",
     "filter": "Filtrer",
+    "history": "Historique",
     "invite": "Inviter",
     "invoices": "Factures",
     "kind": "Type",
@@ -1056,21 +1067,21 @@
       }
     },
     "skills": {
-      "addShortcut": "Ajouter un raccourci",
+      "addShortcut": "Ajouter un skill",
       "defaultBadge": "Par défaut",
-      "deleteConfirmDescription": "Ce raccourci sera supprimé définitivement.",
-      "deleteConfirmTitle": "Supprimer le raccourci ?",
-      "deleteShortcut": "Supprimer le raccourci",
-      "editShortcut": "Modifier le raccourci",
-      "emptyState": "Aucun raccourci pour l'instant. Ajoutez-en un pour commencer.",
+      "deleteConfirmDescription": "Ce skill sera supprimé définitivement.",
+      "deleteConfirmTitle": "Supprimer le skill ?",
+      "deleteShortcut": "Supprimer le skill",
+      "editShortcut": "Modifier le skill",
+      "emptyState": "Aucun skill pour le moment. Ajoutez le premier.",
       "errors": {
-        "commandConflict": "Un raccourci avec cette commande existe déjà",
+        "commandConflict": "Un skill avec ce nom / existe déjà",
         "commandInvalid": "Utilisez uniquement des minuscules, chiffres, tirets et tirets bas",
-        "commandReserved": "\"/{command}\" est une commande réservée"
+        "commandReserved": "\"/{command}\" est un skill réservé"
       },
       "form": {
-        "command": "Commande",
-        "commandHint": "Minuscules, chiffres, tirets et tirets bas uniquement",
+        "command": "Skill",
+        "commandHint": "Nom du skill / : minuscules, chiffres, tirets et underscores uniquement",
         "commandPlaceholder": "ex. résumer",
         "commandPrefix": "/",
         "description": "Description",
@@ -1078,7 +1089,7 @@
         "name": "Nom",
         "namePlaceholder": "ex. Résumer le document",
         "prompt": "Invite",
-        "promptPlaceholder": "Le texte inséré dans le compositeur de chat lors de l'utilisation de ce raccourci",
+        "promptPlaceholder": "Le texte inséré dans le compositeur de chat lorsque ce skill est utilisé",
         "scope": "Visibilité",
         "scopePrivate": "Moi uniquement",
         "scopeTeam": "Tous dans l'organisation"

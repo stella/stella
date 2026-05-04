@@ -321,7 +321,7 @@
     "attachment": "Priedas",
     "caseLawGreeting": "Klausk apie šį sprendimą — visas tekstas pasiekiamas čia.",
     "chatAbout": "Įterpti į AI pokalbį",
-    "contextPlaceholder": "Pokalbis apie {context}",
+    "contextPlaceholder": "Pokalbis apie {context}, / įgūdžiams, @ kontekstui pridėti",
     "deleteThread": "Ištrinti pokalbį",
     "documentView": {
       "original": "Originalas",
@@ -337,6 +337,16 @@
     "fileTooLarge": "Failas viršija {maxSize} limitą",
     "folioCitationFallback": "p. {n}",
     "greeting": "Prie ko norėtumėte dirbti?",
+    "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
+    "landing": {
+      "lastAccessedMatters": "Paskutinės atidarytos bylos",
+      "noMatters": "Bylų dar nėra",
+      "noPrompts": "Raginimų dar nėra",
+      "noRecentChats": "Nėra naujausių pokalbių",
+      "pinnedMatters": "Prisegtos bylos",
+      "prompts": "Raginimai",
+      "recentChats": "Neseniai naudoti pokalbiai"
+    },
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mention": {
       "category": {
@@ -353,10 +363,10 @@
     "moveToSide": "Perkelti į šoninį skydelį",
     "newChat": "Naujas pokalbis",
     "noThreads": "Pokalbių dar nėra",
-    "placeholder": "Ko norėtumėte paklausti?",
+    "placeholder": "Čia įveskite klausimą, / įgūdžiams, @ kontekstui pridėti",
     "prompts": {
       "noResults": "Nėra atitinkančių raginimų",
-      "noShortcuts": "Dar nėra sparčiųjų klavišų. Pridėkite juos dalyje Žinios → Įgūdžiai.",
+      "noShortcuts": "Įgūdžių dar nėra. Pridėkite juos skiltyje Žinios → Įgūdžiai.",
       "scope": {
         "private": "Jūsų raginimai",
         "stock": "Įmontuoti",
@@ -384,7 +394,7 @@
     },
     "send": "Siųsti žinutę",
     "thinking": "Dirbama su kontekstu",
-    "threads": "Pokalbiai",
+    "threads": "Istorija",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
       "ask-user": "Prašoma patikslinimo",
@@ -537,6 +547,7 @@
     "error": "Klaida",
     "expenses": "Išlaidos",
     "filter": "Filtras",
+    "history": "Istorija",
     "invite": "Pakviesti",
     "invoices": "Sąskaitos",
     "kind": "Rūšis",
@@ -1056,21 +1067,21 @@
       }
     },
     "skills": {
-      "addShortcut": "Pridėti spartąjį klavišą",
+      "addShortcut": "Pridėti įgūdį",
       "defaultBadge": "Numatytasis",
-      "deleteConfirmDescription": "Šis spartysis klavišas bus visam laikui pašalintas.",
-      "deleteConfirmTitle": "Ištrinti spartųjį klavišą?",
-      "deleteShortcut": "Ištrinti spartųjį klavišą",
-      "editShortcut": "Redaguoti spartąjį klavišą",
-      "emptyState": "Dar nėra sparčiųjų klavišų. Pridėkite pirmąjį.",
+      "deleteConfirmDescription": "Šis įgūdis bus pašalintas visam laikui.",
+      "deleteConfirmTitle": "Ištrinti įgūdį?",
+      "deleteShortcut": "Ištrinti įgūdį",
+      "editShortcut": "Redaguoti įgūdį",
+      "emptyState": "Įgūdžių dar nėra. Pridėkite pirmąjį.",
       "errors": {
-        "commandConflict": "Spartysis klavišas su šia komanda jau egzistuoja",
+        "commandConflict": "Įgūdis su šiuo / pavadinimu jau yra",
         "commandInvalid": "Naudokite tik mažąsias raides, skaičius, brūkšnelius ir pabraukimus",
-        "commandReserved": "\"/{command}\" yra rezervuota komanda"
+        "commandReserved": "\"/{command}\" yra rezervuotas įgūdis"
       },
       "form": {
-        "command": "Komanda",
-        "commandHint": "Tik mažosios raidės, skaičiai, brūkšneliai ir pabraukimai",
+        "command": "Įgūdis",
+        "commandHint": "/ įgūdžio pavadinimas: tik mažosios raidės, skaičiai, brūkšneliai ir pabraukimai",
         "commandPlaceholder": "pvz. sutraukti",
         "commandPrefix": "/",
         "description": "Aprašymas",
@@ -1078,7 +1089,7 @@
         "name": "Pavadinimas",
         "namePlaceholder": "pvz. Dokumento santrauka",
         "prompt": "Užklausa",
-        "promptPlaceholder": "Tekstas, įterpiamas į pokalbio rengyklę naudojant šį spartąjį klavišą",
+        "promptPlaceholder": "Tekstas, įterpiamas į pokalbio lauką naudojant šį įgūdį",
         "scope": "Matomumas",
         "scopePrivate": "Tik aš",
         "scopeTeam": "Visi organizacijoje"

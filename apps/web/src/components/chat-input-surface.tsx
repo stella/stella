@@ -1,5 +1,5 @@
 import "./chat-editor.css";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
@@ -19,6 +19,7 @@ type ChatInputSurfaceProps = {
   controller: ChatEditorController;
   disabled?: boolean;
   onSubmit: (draft: ChatInputDraft) => Promise<void> | void;
+  onFocusChange?: ((focused: boolean) => void) | undefined;
   /**
    * When set, the surface renders an in-line stop button while
    * generating instead of the send affordance, replacing the need
@@ -28,17 +29,18 @@ type ChatInputSurfaceProps = {
   onStop?: () => void;
 };
 
-// todo: check the code quality
 export const ChatInputSurface = ({
   autoFocus,
   className,
   controller,
   disabled = false,
   onSubmit,
+  onFocusChange,
   isGenerating = false,
   onStop,
 }: ChatInputSurfaceProps) => {
   const t = useTranslations();
+  const rootRef = useRef<HTMLDivElement>(null);
   const {
     attachments,
     canSubmit,
@@ -56,21 +58,22 @@ export const ChatInputSurface = ({
     setSubmitHandler,
     submit,
   } = controller;
-  const inputDisabled = disabled || isGenerating;
+  const inputDisabled = disabled;
+  const submitDisabled = disabled || isGenerating;
 
   const submitDraft = useCallback(async () => {
     // While the assistant is streaming we render Stop in place of
     // Send, but Enter still calls submit unless we gate it here.
     // Without this guard, a user pressing Enter during a turn fires
     // an overlapping `sendMessage` and the two responses interleave.
-    if (inputDisabled) {
+    if (submitDisabled) {
       return;
     }
 
     await submit(async (draft) => {
       await onSubmit(draft);
     });
-  }, [inputDisabled, onSubmit, submit]);
+  }, [onSubmit, submit, submitDisabled]);
 
   useEffect(() => {
     setSubmitHandler(submitDraft);
@@ -94,6 +97,22 @@ export const ChatInputSurface = ({
     }
   }, [editor, inputDisabled]);
 
+  const handleFocus = useCallback(() => {
+    onFocusChange?.(true);
+  }, [onFocusChange]);
+
+  const handleBlur = useCallback(
+    (event: React.FocusEvent<HTMLDivElement>) => {
+      const nextTarget = event.relatedTarget;
+      if (nextTarget instanceof Node && rootRef.current?.contains(nextTarget)) {
+        return;
+      }
+
+      onFocusChange?.(false);
+    },
+    [onFocusChange],
+  );
+
   return (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/no-noninteractive-element-interactions
     <div
@@ -103,9 +122,12 @@ export const ChatInputSurface = ({
         !inputDisabled && "focus-within:border-ring",
         className,
       )}
+      onBlurCapture={handleBlur}
       onDragOver={inputDisabled ? undefined : handleDragOver}
       onDrop={inputDisabled ? undefined : handleDrop}
+      onFocusCapture={handleFocus}
       onPaste={inputDisabled ? undefined : handlePaste}
+      ref={rootRef}
     >
       <ChatDraftAttachmentChips files={attachments} onRemove={removeFile} />
       <div
@@ -157,9 +179,9 @@ export const ChatInputSurface = ({
           <Button
             className={cn(
               "bg-foreground text-background hover:bg-foreground/90 ms-auto shrink-0",
-              (inputDisabled || !canSubmit) && "opacity-50",
+              (submitDisabled || !canSubmit) && "opacity-50",
             )}
-            disabled={inputDisabled || !canSubmit}
+            disabled={submitDisabled || !canSubmit}
             onClick={() => {
               void submitDraft();
             }}
