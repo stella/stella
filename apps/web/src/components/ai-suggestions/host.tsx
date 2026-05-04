@@ -1107,7 +1107,6 @@ export function PromptBarShell({
         "group/bar bg-background/75 relative flex items-end gap-1 rounded-2xl border backdrop-blur-xl backdrop-saturate-150 transition-[box-shadow,border-color]",
         "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
         "after:pointer-events-none after:absolute after:-inset-4 after:-z-10 after:rounded-2xl after:bg-[radial-gradient(ellipse_at_center,var(--background)_0%,transparent_70%)] after:opacity-50",
-        "focus-within:border-foreground/30",
         "w-[min(560px,calc(100%-2rem))] py-1 ps-1.5 pe-1",
         layout === "floating"
           ? "absolute start-1/2 bottom-8 z-50 -translate-x-1/2"
@@ -1149,6 +1148,7 @@ export function PromptBar(props: PromptBarProps) {
   // control (and the bar stays the single point of intent).
   const showStop = isGenerating && onStop !== undefined;
   const isSendBlocked = sendDisabledReason !== undefined;
+  const inputDisabled = busy || isSendBlocked;
 
   // Glow on attention pulse — kicked from the inspector when the
   // user clicks the AI-suggestions chip so they see the bar light
@@ -1176,13 +1176,13 @@ export function PromptBar(props: PromptBarProps) {
   // Wrap controller.submit so the host's `onSubmit` is the only
   // outbound channel; the editor's draft (HTML) becomes the prompt.
   const submitDraft = useCallback(async () => {
-    if (busy || isSendBlocked) {
+    if (inputDisabled) {
       return;
     }
     await submit((draft) => {
       onSubmit({ prompt: draft.html });
     });
-  }, [busy, isSendBlocked, onSubmit, submit]);
+  }, [inputDisabled, onSubmit, submit]);
 
   // Register Enter handler — TipTap's keymap delegates Enter to
   // the `setSubmitHandler` registered here. Without this, Enter
@@ -1194,21 +1194,24 @@ export function PromptBar(props: PromptBarProps) {
     };
   }, [setSubmitHandler, submitDraft]);
 
+  useEffect(() => {
+    editor?.setEditable(!inputDisabled);
+    if (inputDisabled) {
+      editor?.commands.blur();
+    }
+  }, [editor, inputDisabled]);
+
   return (
     <PromptBarShell
       aria-busy={busy}
       aria-label="AI prompt"
       className={cn(
-        // While the model is generating or applying, signal the
-        // wait clearly: a soft primary ring + the inline spinner
-        // overlay below. Without this the bar looks identical to
-        // its idle state and users don't know we're working.
-        busy && "border-primary/40 ring-primary/25 ring-2",
+        !inputDisabled && "focus-within:border-foreground/30",
         // Attention pulse — kicked by the inspector chip click to
         // close the panel→producer loop visually. Stronger ring
         // than the busy state because it's transient and meant to
         // catch the eye, not communicate ongoing work.
-        attention && "border-primary ring-primary/40 ring-4",
+        attention && !inputDisabled && "border-primary ring-primary/40 ring-4",
       )}
       layout={layout}
       role="toolbar"
@@ -1253,6 +1256,7 @@ export function PromptBar(props: PromptBarProps) {
             isEmpty &&
               emptyPlaceholder !== undefined &&
               "folio-ai-bar-editor--custom-placeholder",
+            inputDisabled && "pointer-events-none",
           )}
           editor={editor}
         />

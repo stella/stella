@@ -2,7 +2,7 @@ import type React from "react";
 import { Children } from "react";
 
 import { cn } from "@stll/ui/lib/utils";
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   FileTextIcon,
@@ -161,7 +161,10 @@ const useResolvedEntityMime = ({
   const { data } = useQuery({
     ...(workspaceId && entityId
       ? entityOptions(workspaceId, entityId)
-      : { queryKey: ["mention-entity-disabled"] as const }),
+      : {
+          queryKey: ["mention-entity-disabled"] as const,
+          queryFn: skipToken,
+        }),
     enabled: workspaceId !== undefined && entityId !== undefined,
     staleTime: Number.POSITIVE_INFINITY,
   });

@@ -255,7 +255,7 @@ export const ChatTabPanel = ({
       tab={tab}
     >
       <Conversation className="min-h-0 flex-1">
-        <ConversationContent className="gap-4 p-4">
+        <ConversationContent className="gap-3">
           {messages.length === 0 && !isGenerating ? (
             <ChatEmptyState
               onSelectPrompt={handleSelectPrompt}
@@ -535,7 +535,7 @@ export const ChatTabPanelShell = ({
       tab={tab}
     >
       <Conversation className="min-h-0 flex-1">
-        <ConversationContent className="gap-4 p-4">
+        <ConversationContent className="gap-3">
           <ChatEmptyState onSelectPrompt={noop} prompts={stockPrompts} />
         </ConversationContent>
       </Conversation>
