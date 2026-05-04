@@ -32,7 +32,15 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
   const updateView = useUpdateView(workspaceId);
 
   const storedColumnSizing = useTableStore(
-    useShallow((s) => s.columnSizing.get(viewId) ?? {}),
+    useShallow((s) => {
+      const sizing = s.columnSizing.get(viewId) ?? {};
+      const {
+        [selectColId]: _selectSize,
+        [addPropertyColId]: _addPropertySize,
+        ...propertySizing
+      } = sizing;
+      return propertySizing;
+    }),
   );
   const setStoredColumnSizing = useTableStore((s) => s.setColumnSizing);
   const [columnSizing, setColumnSizing] = useState(storedColumnSizing);

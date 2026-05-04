@@ -251,7 +251,7 @@ export const WorkspaceTable = ({
     leftColumns: table.getLeftLeafColumns(),
     centerColumns: table.getCenterLeafColumns(),
     rightColumns: table.getRightLeafColumns(),
-  });
+  }).filter((column) => column.getIsVisible());
   const addPropertyColumn =
     orderedColumns.find((column) => column.id === addPropertyColId) ?? null;
   const renderColumns = orderedColumns.filter(
@@ -262,20 +262,12 @@ export const WorkspaceTable = ({
     (sum, column) => sum + column.getSize(),
     0,
   );
-  const leftoverWidth = Math.max(0, wrapperWidth - tableWidth);
-  const trailingFillerWidth = leftoverWidth;
   const gridStyle: WorkspaceGridStyle = {
-    "--workspace-table-columns": getGridTemplateColumns(
-      renderColumns,
-      trailingFillerWidth,
-      addPropertyColumn ? [addPropertyColumn] : [],
-    ),
-    minWidth: tableWidth + trailingFillerWidth,
+    "--workspace-table-columns": getGridTemplateColumns(orderedColumns),
+    minWidth: tableWidth,
+    width: tableWidth,
   };
-  const horizontalMaxScroll = Math.max(
-    0,
-    tableWidth + trailingFillerWidth - wrapperWidth,
-  );
+  const horizontalMaxScroll = Math.max(0, tableWidth - wrapperWidth);
   const handleColumnReorder = useCallback(
     (sourceId: string, targetId: string, edge: ColumnDropEdge) => {
       const sourceColumn = table.getColumn(sourceId);
@@ -433,7 +425,7 @@ export const WorkspaceTable = ({
       <div
         aria-colcount={visibleColumnCount}
         aria-rowcount={rowModel.rows.length}
-        className="relative min-h-full w-full text-sm"
+        className="relative min-h-full text-sm"
         role="grid"
         style={gridStyle}
       >
@@ -453,11 +445,6 @@ export const WorkspaceTable = ({
                   />
                 ),
               )}
-              <WorkspaceGridHead
-                aria-hidden="true"
-                className="border-e-0"
-                role="presentation"
-              />
               {addPropertyColumn && (
                 <DraggableHeaderCell
                   addColumnHovered={isAddColumnHovered}
@@ -476,7 +463,7 @@ export const WorkspaceTable = ({
         </div>
         <div>
           {paddingTop > 0 && (
-            <WorkspaceGridRow aria-hidden="true">
+            <WorkspaceGridRow aria-hidden="true" className="pointer-events-none">
               <WorkspaceGridFillerCell
                 className="border-b-0"
                 style={{
@@ -540,7 +527,7 @@ export const WorkspaceTable = ({
             );
           })}
           {paddingBottom > 0 && (
-            <WorkspaceGridRow aria-hidden="true">
+            <WorkspaceGridRow aria-hidden="true" className="pointer-events-none">
               <WorkspaceGridFillerCell
                 className="border-b-0"
                 style={{
@@ -558,7 +545,6 @@ export const WorkspaceTable = ({
           )}
           <BottomRow
             onFolderCreated={setEditingEntityId}
-            table={table}
             workspaceId={workspaceId}
           />
         </div>
@@ -1308,9 +1294,6 @@ const DraggableRow = ({
           )}
         </WorkspaceGridCell>
       ))}
-      <WorkspaceGridFillerCell
-        className={cn(isAddColumnHoverRow && "group-hover/row:bg-background")}
-      />
       <AddPropertyCell
         addColumnHovered={addColumnHovered}
         cell={addPropertyCell}
