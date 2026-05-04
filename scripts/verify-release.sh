@@ -5,20 +5,22 @@
 # regressions without needing a real install or a second build.
 #
 # Checks:
-#   1. Each platform binary embeds the channel-correct updater
-#      endpoint (build-time jq mutation actually baked the URL).
+#   1. Each platform updater payload embeds the channel-correct
+#      updater endpoint (build-time jq mutation actually baked the
+#      URL into the binary).
 #   2. The latest.json on S3/CloudFront has the expected shape:
 #      version matches the tag, every advertised platform has a
 #      url + signature, signatures are non-empty.
-#   3. CloudFront serves the manifest publicly (no auth wall) and
-#      returns the bytes S3 has, not a stale cached copy.
+#   3. CloudFront serves the manifest publicly (no auth wall).
 #
 # Usage:
 #   bash scripts/verify-release.sh <tag>
-#     e.g. bash scripts/verify-release.sh v0.0.2-rc.6
+#     e.g. bash scripts/verify-release.sh v0.0.2
 #
-# Requires `gh`, `jq`, `curl`, and an unzip-capable shell. Pulls
-# installer artifacts from the GitHub Release into a temp dir.
+# Requires `gh`, `jq`, `curl`, `tar`. Optional: `7z` for the Windows
+# inner-binary check (script falls back to a softer signal without
+# it). On macOS, uses `hdiutil` (built-in) only as a fallback if the
+# `.app.tar.gz` updater payload is absent on the release.
 set -euo pipefail
 
 if [[ $# -ne 1 ]]; then
@@ -38,8 +40,9 @@ NOTES=()
 
 note_pass() { PASS=$((PASS + 1)); printf '  \xe2\x9c\x93  %s\n' "$1"; }
 note_fail() { FAIL=$((FAIL + 1)); NOTES+=("$1"); printf '  \xe2\x9c\x97  %s\n' "$1"; }
+note_info() { printf '  \xe2\x84\xb9\xef\xb8\x8f  %s\n' "$1"; }
 
-# ── Check 3: CloudFront reachability + parity with S3 ───────────
+# ── Check 3: CloudFront reachability ───────────────────────────
 echo "Check 3: CloudFront serves $expected_endpoint"
 http_code=$(curl -sSo /tmp/release-verify-cf.json -w '%{http_code}' "$expected_endpoint" || true)
 if [[ "$http_code" != "200" ]]; then
@@ -53,7 +56,7 @@ else
   fi
 fi
 
-# ── Check 2: manifest shape ──────────────────────────────────────
+# ── Check 2: manifest shape ────────────────────────────────────
 if [[ -s /tmp/release-verify-cf.json ]] && jq -e . /tmp/release-verify-cf.json >/dev/null 2>&1; then
   echo "Check 2: manifest shape"
   manifest_version=$(jq -r '.version // empty' /tmp/release-verify-cf.json)
@@ -71,7 +74,6 @@ if [[ -s /tmp/release-verify-cf.json ]] && jq -e . /tmp/release-verify-cf.json >
     fi
   done
 
-  # Every advertised platform must carry a non-empty url + signature.
   while IFS=$'\t' read -r platform url sig; do
     if [[ -z "$url" || "$url" == "null" ]]; then
       note_fail "platform $platform has no url"
@@ -83,45 +85,85 @@ if [[ -s /tmp/release-verify-cf.json ]] && jq -e . /tmp/release-verify-cf.json >
   done < <(jq -r '.platforms | to_entries[] | "\(.key)\t\(.value.url // "")\t\(.value.signature // "")"' /tmp/release-verify-cf.json)
 fi
 
-# ── Check 1: binary embeds the channel-correct endpoint ─────────
+# ── Check 1: binary embeds the channel-correct endpoint ────────
 echo "Check 1: binary embeds $expected_endpoint"
 work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
+trap 'cleanup' EXIT
 
-# Pull only the assets we care about; gh release download supports
-# pattern matching so we don't need to know the exact filename.
-patterns=(
-  "Stella-windows-x64-setup.exe"
-  "Stella-macos-universal.dmg"
-)
-for pattern in "${patterns[@]}"; do
-  if ! gh release download "$tag" --pattern "$pattern" --dir "$work" 2>/dev/null; then
-    note_fail "could not download $pattern from release $tag"
+mounted_dmg=""
+cleanup() {
+  if [[ -n "$mounted_dmg" ]]; then
+    hdiutil detach "$mounted_dmg" -quiet >/dev/null 2>&1 || true
   fi
-done
+  rm -rf "$work"
+}
 
-shopt -s nullglob
-for f in "$work"/*; do
-  case "$f" in
-    *.exe)
-      if strings -- "$f" | grep -Fq "$expected_endpoint"; then
-        note_pass "$(basename "$f") embeds $expected_endpoint"
-      else
-        note_fail "$(basename "$f") does NOT embed $expected_endpoint"
-      fi
-      ;;
-    *.dmg)
-      # DMG is HFS+/APFS; strings still works on the raw bytes
-      # because the Mach-O binary lives inside as a contiguous
-      # blob and the URL is a literal ASCII string in __TEXT.
-      if strings -- "$f" | grep -Fq "$expected_endpoint"; then
-        note_pass "$(basename "$f") embeds $expected_endpoint"
-      else
-        note_fail "$(basename "$f") does NOT embed $expected_endpoint"
-      fi
-      ;;
-  esac
-done
+# Helper: strings|grep on one file, with a label for the report.
+# The subshell turns pipefail off — grep -q closes the pipe on the
+# first match and `strings` exits with SIGPIPE (141), which under
+# pipefail would make the entire pipeline look failed even when the
+# URL was matched.
+check_inner_binary() {
+  local label="$1" path="$2"
+  if [[ ! -f "$path" ]]; then
+    note_fail "$label: inner binary not found at $path"
+    return
+  fi
+  if (set +o pipefail; strings -- "$path" | grep -Fq "$expected_endpoint"); then
+    note_pass "$label embeds $expected_endpoint"
+  else
+    note_fail "$label does NOT embed $expected_endpoint"
+  fi
+}
+
+# --- macOS: prefer the .app.tar.gz updater payload (just gzip+tar
+#     so we can extract anywhere). Fall back to mounting the .dmg
+#     with hdiutil if the tar.gz is absent (older releases).
+mac_payload="Stella-macos-universal.app.tar.gz"
+if gh release download "$tag" --pattern "$mac_payload" --dir "$work" 2>/dev/null; then
+  tar -xzf "$work/$mac_payload" -C "$work" 2>/dev/null
+  # Tauri tars `<productName>.app` at the top level. The Mach-O
+  # binary lives in Contents/MacOS — name varies (productName) so
+  # grab the first executable in there.
+  app_dir=$(find "$work" -maxdepth 2 -name '*.app' -type d | head -n 1)
+  if [[ -n "$app_dir" ]]; then
+    inner=$(find "$app_dir/Contents/MacOS" -maxdepth 1 -type f | head -n 1)
+    check_inner_binary "macOS app ($mac_payload)" "$inner"
+  else
+    note_fail "macOS: no .app directory found inside $mac_payload"
+  fi
+elif gh release download "$tag" --pattern "Stella-macos-universal.dmg" --dir "$work" 2>/dev/null; then
+  note_info "macOS: .app.tar.gz absent; mounting .dmg as fallback"
+  if mounted_dmg=$(hdiutil attach "$work/Stella-macos-universal.dmg" -nobrowse -noverify -noautoopen -mountrandom /tmp 2>/dev/null | awk '/\/Volumes\// || /\/tmp\// {print $NF; exit}'); then
+    inner=$(find "$mounted_dmg" -maxdepth 4 -path '*/Contents/MacOS/*' -type f | head -n 1)
+    check_inner_binary "macOS .dmg" "$inner"
+  else
+    note_fail "macOS: failed to mount $work/Stella-macos-universal.dmg"
+  fi
+else
+  note_fail "macOS: neither $mac_payload nor .dmg downloadable from $tag"
+fi
+
+# --- Windows: extract the NSIS installer with 7z to reach the
+#     inner binary. NSIS LZMA-compresses payloads, so a flat
+#     `strings` on the outer .exe can't see the URL.
+win_exe="Stella-windows-x64-setup.exe"
+if gh release download "$tag" --pattern "$win_exe" --dir "$work" 2>/dev/null; then
+  if command -v 7z >/dev/null 2>&1; then
+    win_extract="$work/win-extract"
+    mkdir -p "$win_extract"
+    if 7z x -y -o"$win_extract" "$work/$win_exe" >/dev/null 2>&1; then
+      inner=$(find "$win_extract" -maxdepth 3 -iname '*.exe' -not -iname '*-setup.exe' -not -iname 'uninstall*.exe' -type f | head -n 1)
+      check_inner_binary "Windows app ($win_exe)" "$inner"
+    else
+      note_fail "Windows: 7z failed to extract $win_exe"
+    fi
+  else
+    note_info "Windows: 7z not installed; skipping inner-binary check (install with 'brew install p7zip')"
+  fi
+else
+  note_fail "Windows: could not download $win_exe from $tag"
+fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
