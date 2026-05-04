@@ -345,6 +345,7 @@ export const WorkspaceTable = ({
         onDrag: ({ source, location }) => {
           const target = location.current.dropTargets.at(0);
           if (!target) {
+            lastColumnDropPosition.current = null;
             return;
           }
 
