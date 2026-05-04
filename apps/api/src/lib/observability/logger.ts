@@ -26,10 +26,25 @@ const emit = ({
       ...record,
       attributes,
     });
-    return;
+  } else {
+    otelLogger.emit(record);
   }
 
-  otelLogger.emit(record);
+  // Stdout backstop for ERROR records. The OTel pipeline above
+  // can be wired to a remote exporter later; until it is, this
+  // mirrors ERROR records to stdout so incidents are debuggable
+  // from the runtime's standard log stream. ERROR-only by
+  // default keeps volume small and avoids surfacing request
+  // payloads that might appear at lower severities.
+  if (severityNumber === SeverityNumber.ERROR) {
+    process.stderr.write(
+      `${JSON.stringify({
+        severity: severityText,
+        message,
+        ...attributes,
+      })}\n`,
+    );
+  }
 };
 
 export const logger = {
