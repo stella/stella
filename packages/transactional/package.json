@@ -28,7 +28,7 @@
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
-    "react-email": "^6.0.0",
+    "react-email": "^6.0.5",
     "typescript": "catalog:"
   }
 }
