@@ -333,11 +333,11 @@ export function AIKeyRequiredDialog({
                 ))}
               </SelectPopup>
             </Select>
-            <p className="text-muted-foreground text-xs">
-              {REGIONAL_PROVIDERS.has(provider)
-                ? tOrganization("aiConfig.dataRegionDescription")
-                : tOrganization("aiConfig.dataRegionUnsupported")}
-            </p>
+            {!REGIONAL_PROVIDERS.has(provider) && (
+              <p className="text-muted-foreground text-xs">
+                {tOrganization("aiConfig.dataRegionUnsupported")}
+              </p>
+            )}
           </Field>
         </DialogPanel>
         <DialogFooter>

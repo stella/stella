@@ -16,9 +16,9 @@
   "ai": {
     "editWithAI": "Upravit pomocí AI",
     "keyRequired": {
-      "cta": "Open AI settings",
-      "description": "This instance has no platform AI keys provisioned. Add your own API key to start using AI features.",
-      "title": "AI key required"
+      "cta": "Přidat API klíč",
+      "description": "Nejsou nastavené žádné výchozí AI klíče. Přidejte vlastní API klíč, abyste mohli používat funkce AI.",
+      "title": "Chybí AI klíč"
     }
   },
   "anonymize": {
@@ -1158,13 +1158,12 @@
       "apiKeyPlaceholder": "Zadejte svůj API klíč",
       "apiKeyUpdatePlaceholder": "Zadejte nový klíč pro aktualizaci",
       "baseUrl": "Základní URL",
-      "configure": "Konfigurovat",
+      "configure": "Nastavit",
       "dataRegion": "Region dat",
-      "dataRegionDescription": "Volání AI poteče přes vybraný region kvůli suverenitě dat.",
       "dataRegionUnsupported": "Regionální směrování je dostupné jen pro Google AI (Vertex AI).",
-      "description": "Připojte vlastní API klíč nebo zvolte region pro suverenitu dat.",
+      "description": "Přidejte vlastní API klíč nebo zvolte region.",
       "overrideRoles": "Přepsat role",
-      "overrideRolesDescription": "Vyberte, které AI role použijí váš klíč. Nevybrané role poběží na výchozím klíči platformy.",
+      "overrideRolesDescription": "Vyberte, pro které AI role se má použít váš klíč.",
       "provider": "Poskytovatel",
       "providers": {
         "anthropic": "Anthropic",
@@ -1184,7 +1183,7 @@
         "pdf": "PDF (dokumenty)",
         "reasoning": "Uvažování (analýza)"
       },
-      "title": "Konfigurace AI"
+      "title": "Nastavení AI"
     },
     "invitations": {
       "cancelInvitation": "Zrušit pozvánku",
@@ -1322,7 +1321,7 @@
     "organization": {
       "activeMembers": "Aktivní členové",
       "ai": "Nastavení AI",
-      "aiDescription": "Připojte vlastní API klíč nebo zvolte region pro suverenitu dat",
+      "aiDescription": "Přidejte vlastní API klíč nebo zvolte region",
       "matterNumbering": "Číslování spisů",
       "matterNumberingDescription": "Nastavte, jak se generují referenční čísla nových spisů",
       "membersDescription": "Spravujte, kdo má přístup k této organizaci, a čekající pozvánky",
@@ -1338,8 +1337,8 @@
     "title": "Nastavení"
   },
   "success": {
-    "aiConfigDeleted": "AI configuration removed",
-    "aiConfigUpdated": "AI configuration updated",
+    "aiConfigDeleted": "Nastavení AI odstraněno",
+    "aiConfigUpdated": "Nastavení AI aktualizováno",
     "clientUpdated": "Klient aktualizován",
     "contactCreated": "Klient vytvořen",
     "contactDeleted": "Klient smazán",

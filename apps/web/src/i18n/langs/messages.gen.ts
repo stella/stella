@@ -19,7 +19,7 @@ type Messages = {
   "ai": {
     "editWithAI": "Edit with AI";
     "keyRequired": {
-      "cta": "Open AI settings";
+      "cta": "Add API key";
       "description": "This instance has no platform AI keys provisioned. Add your own API key to start using AI features.";
       "title": "AI key required";
     };
@@ -1161,13 +1161,12 @@ type Messages = {
       "apiKeyPlaceholder": "Enter your API key";
       "apiKeyUpdatePlaceholder": "Enter new key to update";
       "baseUrl": "Base URL";
-      "configure": "Configure";
+      "configure": "Set up";
       "dataRegion": "Data region";
-      "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.";
       "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).";
       "description": "Bring your own API key or configure data sovereignty region.";
       "overrideRoles": "Override roles";
-      "overrideRolesDescription": "Select which AI roles use your key. Unselected roles use the platform default.";
+      "overrideRolesDescription": "Choose which AI roles should use your key.";
       "provider": "Provider";
       "providers": {
         "anthropic": "Anthropic";
@@ -1187,7 +1186,7 @@ type Messages = {
         "pdf": "PDF (documents)";
         "reasoning": "Reasoning (analysis)";
       };
-      "title": "AI configuration";
+      "title": "AI settings";
     };
     "invitations": {
       "cancelInvitation": "Cancel invitation";
@@ -1324,8 +1323,8 @@ type Messages = {
     };
     "organization": {
       "activeMembers": "Active members";
-      "ai": "AI configuration";
-      "aiDescription": "Bring your own API key or configure data sovereignty region";
+      "ai": "AI settings";
+      "aiDescription": "Add your own API key or choose a data sovereignty region";
       "matterNumbering": "Matter numbering";
       "matterNumberingDescription": "Configure how new matter reference numbers are generated";
       "membersDescription": "Manage who has access to this organization and any pending invitations";
@@ -1341,8 +1340,8 @@ type Messages = {
     "title": "Settings";
   };
   "success": {
-    "aiConfigDeleted": "AI configuration removed";
-    "aiConfigUpdated": "AI configuration updated";
+    "aiConfigDeleted": "AI settings removed";
+    "aiConfigUpdated": "AI settings updated";
     "clientUpdated": "Client updated";
     "contactCreated": "Client created";
     "contactDeleted": "Client deleted";

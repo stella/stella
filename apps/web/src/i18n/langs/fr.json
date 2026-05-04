@@ -16,9 +16,9 @@
   "ai": {
     "editWithAI": "Modifier avec l’IA",
     "keyRequired": {
-      "cta": "Open AI settings",
-      "description": "This instance has no platform AI keys provisioned. Add your own API key to start using AI features.",
-      "title": "AI key required"
+      "cta": "Ajouter une clé API",
+      "description": "Aucune clé d’IA de plateforme n’est configurée pour cette instance. Ajoutez votre propre clé API pour utiliser les fonctionnalités d’IA.",
+      "title": "Clé d’IA requise"
     }
   },
   "anonymize": {
@@ -1158,13 +1158,12 @@
       "apiKeyPlaceholder": "Enter your API key",
       "apiKeyUpdatePlaceholder": "Enter new key to update",
       "baseUrl": "Base URL",
-      "configure": "Configure",
+      "configure": "Configurer",
       "dataRegion": "Data region",
-      "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.",
       "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).",
       "description": "Bring your own API key or configure data sovereignty region.",
       "overrideRoles": "Override roles",
-      "overrideRolesDescription": "Select which AI roles use your key. Unselected roles use the platform default.",
+      "overrideRolesDescription": "Choisissez les rôles d’IA qui doivent utiliser votre clé.",
       "provider": "Provider",
       "providers": {
         "anthropic": "Anthropic",
@@ -1184,7 +1183,7 @@
         "pdf": "PDF (documents)",
         "reasoning": "Reasoning (analysis)"
       },
-      "title": "AI configuration"
+      "title": "Paramètres d’IA"
     },
     "invitations": {
       "cancelInvitation": "Annuler l'invitation",
@@ -1321,8 +1320,8 @@
     },
     "organization": {
       "activeMembers": "Active members",
-      "ai": "AI configuration",
-      "aiDescription": "Bring your own API key or configure data sovereignty region",
+      "ai": "Paramètres d’IA",
+      "aiDescription": "Ajoutez votre propre clé API ou choisissez une région pour la souveraineté des données",
       "matterNumbering": "Matter numbering",
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",
       "membersDescription": "Manage who has access to this organization",
@@ -1338,8 +1337,8 @@
     "title": "Settings"
   },
   "success": {
-    "aiConfigDeleted": "AI configuration removed",
-    "aiConfigUpdated": "AI configuration updated",
+    "aiConfigDeleted": "Paramètres d’IA supprimés",
+    "aiConfigUpdated": "Paramètres d’IA mis à jour",
     "clientUpdated": "Client mis à jour",
     "contactCreated": "Client créé",
     "contactDeleted": "Client supprimé",

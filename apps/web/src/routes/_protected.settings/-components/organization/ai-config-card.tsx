@@ -276,11 +276,11 @@ export const AIConfigCard = () => {
                   ))}
                 </SelectPopup>
               </Select>
-              <p className="text-muted-foreground text-xs">
-                {REGIONAL_PROVIDERS.has(provider)
-                  ? t("aiConfig.dataRegionDescription")
-                  : t("aiConfig.dataRegionUnsupported")}
-              </p>
+              {!REGIONAL_PROVIDERS.has(provider) && (
+                <p className="text-muted-foreground text-xs">
+                  {t("aiConfig.dataRegionUnsupported")}
+                </p>
+              )}
             </Field>
 
             <Field>
