@@ -292,14 +292,16 @@ export const ChatTabPanel = ({
         onStop={() => {
           void stop();
         }}
-        onSubmit={async ({ prompt }) => {
-          if (!(await ensureAIAvailable())) {
-            return;
-          }
-          // PromptBar emits the raw editor HTML; the legacy
-          // backend already parses `<entity-mention>` tags out
-          // of the `text` field, so we forward unchanged.
-          void sendMessage({ text: prompt });
+        onSubmit={({ prompt }) => {
+          void ensureAIAvailable().then((available) => {
+            if (!available) {
+              return;
+            }
+            // PromptBar emits the raw editor HTML; the legacy
+            // backend already parses `<entity-mention>` tags out
+            // of the `text` field, so we forward unchanged.
+            void sendMessage({ text: prompt });
+          });
         }}
         onTogglePanel={() => {
           // Standalone has no thread toggle; never called.

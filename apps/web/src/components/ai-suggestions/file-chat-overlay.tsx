@@ -812,15 +812,17 @@ const FileChatOverlayInner = ({
         onStop={() => {
           void stop();
         }}
-        onSubmit={async ({ prompt }) => {
-          if (!(await ensureAIAvailable())) {
-            return;
-          }
-          // Always pop the thread open on send, even if the user
-          // minimised it earlier — they're sending a new prompt
-          // and want to see the response stream in.
-          setPanelOpen(true);
-          void sendMessage({ text: prompt });
+        onSubmit={({ prompt }) => {
+          void ensureAIAvailable().then((available) => {
+            if (!available) {
+              return;
+            }
+            // Always pop the thread open on send, even if the user
+            // minimised it earlier — they're sending a new prompt
+            // and want to see the response stream in.
+            setPanelOpen(true);
+            void sendMessage({ text: prompt });
+          });
         }}
         onTogglePanel={() => setPanelOpen((v) => !v)}
         panelOpen={panelOpen}
