@@ -44,15 +44,15 @@ export const PDFPage = ({ pageId, renderOverlay, fallback }: PDFPageProps) => {
     <div
       ref={(el) => {
         const shouldScrollToPage =
-          scrollTo !== null &&
-          scrollTo.target === undefined &&
-          scrollTo.pageId === pageId;
+          scrollTo !== null && scrollTo.pageId === pageId;
 
         if (!el || !shouldScrollToPage) {
           return;
         }
         el.scrollIntoView({ block: "start" });
-        setScrollTo(null);
+        if (scrollTo.target === undefined) {
+          setScrollTo(null);
+        }
       }}
       {...{ [PAGE_ID_ATTRIBUTE]: pageId }}
       className="relative mx-auto border-transparent"

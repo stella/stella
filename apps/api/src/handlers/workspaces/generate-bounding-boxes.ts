@@ -11,6 +11,7 @@ import { generateBBoxes } from "@/api/lib/bbox/generate-b-boxes";
 import { generateBBoxesMock } from "@/api/lib/bbox/generate-b-boxes-mock";
 import { prepareJustificationData } from "@/api/lib/bbox/generate-b-boxes-shared";
 import { tSafeId } from "@/api/lib/custom-schema";
+import type { BoundingBox } from "@/api/types";
 
 const config = {
   permissions: { workspace: ["update"] },
@@ -51,41 +52,40 @@ const generateBoundingBoxes = createSafeHandler(
     const preparedData = preparedDataResult.value;
 
     const generateFn = isMockAI() ? generateBBoxesMock : generateBBoxes;
-    const bBoxes = await Promise.all(
-      preparedData.pageNumbers.map(
-        async (pageNumber) =>
-          await generateFn({
-            abortSignal: AbortSignal.timeout(60_000),
-            justificationId,
-            organizationId,
-            orgAIConfig: orgAIConfig ?? null,
-            workspaceId,
-            data: {
-              pdf: preparedData.pdf,
-              pageNumber,
-              prompt: preparedData.prompt,
-              fieldContent: preparedData.fieldContent,
-              justificationText: preparedData.justificationText,
-            },
-          }),
-      ),
-    );
+    const boxes: BoundingBox[] = [];
 
-    const boxes = bBoxes.flat();
+    for (const pageNumber of preparedData.pageNumbers) {
+      const pageBoxes = await generateFn({
+        abortSignal: AbortSignal.timeout(60_000),
+        justificationId,
+        organizationId,
+        orgAIConfig: orgAIConfig ?? null,
+        workspaceId,
+        data: {
+          pdf: preparedData.pdf,
+          pageNumber,
+          prompt: preparedData.prompt,
+          fieldContent: preparedData.fieldContent,
+          justificationText: preparedData.justificationText,
+        },
+      });
 
-    yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .update(justifications)
-          .set({
-            boundingBoxes: {
-              version: 1,
-              boxes,
-            },
-          })
-          .where(eq(justifications.id, justificationId)),
-      ),
-    );
+      boxes.push(...pageBoxes);
+
+      yield* Result.await(
+        safeDb((tx) =>
+          tx
+            .update(justifications)
+            .set({
+              boundingBoxes: {
+                version: 1,
+                boxes,
+              },
+            })
+            .where(eq(justifications.id, justificationId)),
+        ),
+      );
+    }
 
     return Result.ok({ boxes });
   },

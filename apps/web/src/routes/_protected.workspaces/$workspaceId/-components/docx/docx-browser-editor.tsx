@@ -48,6 +48,7 @@ import {
   useDocxFitZoom,
   useDocxWheelZoom,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom";
+import { useDocxBlockScroll } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
 import {
@@ -358,20 +359,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     editorRef.current?.setZoom(targetZoom);
   }, [targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);
-
-  // Listen for citation-chip clicks broadcast by the chat overlay.
-  // The peek viewer has its own listener; this one covers the
-  // editing-mode editor where the inspector path doesn't apply.
-  useEffect(() => {
-    const handler = (event: CustomEvent<{ blockId: string }>) => {
-      if (!event.detail.blockId) {
-        return;
-      }
-      editorRef.current?.scrollToBlock(event.detail.blockId);
-    };
-    window.addEventListener("folio:scroll-to-block", handler);
-    return () => window.removeEventListener("folio:scroll-to-block", handler);
-  }, []);
+  useDocxBlockScroll({ editorRef, fieldId });
 
   useEffect(() => {
     if (
