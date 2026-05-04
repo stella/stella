@@ -13,7 +13,6 @@ import {
   DefaultPendingComponent,
 } from "@/components/route-components";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { RouteTelemetry } from "@/lib/analytics/route-telemetry";
 import { ensureCriticalQueryData } from "@/lib/react-query";
 import { sessionOptions } from "@/routes/-queries";
 
@@ -56,7 +55,6 @@ function RootComponent() {
     <>
       <HeadContent />
       <RootAnalyticsIdentity />
-      <RouteTelemetry />
       <div className="flex h-dvh w-full flex-col">
         <Outlet />
         {DevRoot ? (
@@ -75,6 +73,7 @@ const RootAnalyticsIdentity = () => {
 
   useEffect(() => {
     if (user === null) {
+      analytics.reset({ onlyIfIdentified: true });
       return;
     }
     analytics.identifyUser({

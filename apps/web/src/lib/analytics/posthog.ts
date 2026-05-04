@@ -9,17 +9,15 @@ import { logDevError } from "@/lib/errors/utils";
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
   event === WEB_ANALYTICS_EVENTS.exception ||
   event === WEB_ANALYTICS_EVENTS.identify ||
-  event === WEB_ANALYTICS_EVENTS.pagePerformance ||
   event === WEB_ANALYTICS_EVENTS.pageViewed;
 
 /**
  * Initialize PostHog and return an Analytics adapter.
  *
  * Stella only sends error diagnostics through this adapter. Session
- * replay, heatmaps, autocapture, PostHog-managed pageviews/performance,
- * and remote PostHog feature configuration are structurally disabled here
- * rather than relying on deployment-specific environment settings. Basic
- * page events are explicit and sanitized below.
+ * replay, heatmaps, autocapture, and remote PostHog feature configuration are
+ * structurally disabled here rather than relying on deployment-specific
+ * environment settings.
  */
 export const createPostHogAnalytics = (
   key: string,
@@ -74,15 +72,10 @@ export const createPostHogAnalytics = (
       logDevError(error);
       posthog.captureException(error);
     },
-    capturePagePerformance: ({ loadBucket, routeId }) => {
-      void posthog.capture(WEB_ANALYTICS_EVENTS.pagePerformance, {
-        load_bucket: loadBucket,
-        route_id: routeId,
-      });
-    },
-    capturePageViewed: ({ routeId }) => {
-      void posthog.capture(WEB_ANALYTICS_EVENTS.pageViewed, {
-        route_id: routeId,
+    capturePageViewed: ({ href, path }) => {
+      posthog.capture(WEB_ANALYTICS_EVENTS.pageViewed, {
+        href,
+        path,
       });
     },
     identifyUser: (user) => {
@@ -101,7 +94,11 @@ export const createPostHogAnalytics = (
         name: user.name,
       });
     },
-    reset: () => {
+    reset: ({ onlyIfIdentified } = {}) => {
+      if (onlyIfIdentified && !posthog._isIdentified()) {
+        return;
+      }
+
       posthog.reset();
     },
   };

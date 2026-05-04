@@ -134,28 +134,21 @@ describe("PostHog browser analytics adapter", () => {
     expect(initOptions?.before_send({ event: "$heatmap" })).toBeNull();
   });
 
-  test("captures only sanitized page telemetry payloads", () => {
+  test("captures sanitized page view payloads", () => {
     const { analytics } = createPostHogAnalytics(
       "phc_test",
       "https://posthog.test",
     );
 
-    analytics.capturePageViewed({ routeId: "/cases/$caseId" });
-    analytics.capturePagePerformance({
-      loadBucket: "500_1000",
-      routeId: "/cases/$caseId",
+    analytics.capturePageViewed({
+      href: "/cases?tab=active",
+      path: "/cases",
     });
 
     expect(captureMock).toHaveBeenCalledWith(WEB_ANALYTICS_EVENTS.pageViewed, {
-      route_id: "/cases/$caseId",
+      href: "/cases?tab=active",
+      path: "/cases",
     });
-    expect(captureMock).toHaveBeenCalledWith(
-      WEB_ANALYTICS_EVENTS.pagePerformance,
-      {
-        load_bucket: "500_1000",
-        route_id: "/cases/$caseId",
-      },
-    );
   });
 
   test("identifies users with optional person properties", () => {
@@ -217,6 +210,33 @@ describe("PostHog browser analytics adapter", () => {
       email: undefined,
       name: undefined,
     });
+  });
+
+  test("reset can be limited to identified sessions", () => {
+    const { analytics } = createPostHogAnalytics(
+      "phc_test",
+      "https://posthog.test",
+    );
+
+    analytics.reset({ onlyIfIdentified: true });
+
+    expect(resetMock).not.toHaveBeenCalled();
+
+    analytics.identifyUser({ id: "user_123" });
+    analytics.reset({ onlyIfIdentified: true });
+
+    expect(resetMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("reset clears anonymous sessions by default", () => {
+    const { analytics } = createPostHogAnalytics(
+      "phc_test",
+      "https://posthog.test",
+    );
+
+    analytics.reset();
+
+    expect(resetMock).toHaveBeenCalledTimes(1);
   });
 
   test("reset clears the in-memory identity guard", () => {

@@ -13,7 +13,6 @@ export const noopAnalytics: Analytics = {
     }
     logDevError(error);
   },
-  capturePagePerformance: noop,
   capturePageViewed: noop,
   identifyUser: noop,
   reset: noop,

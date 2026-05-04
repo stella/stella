@@ -1,7 +1,6 @@
 export const WEB_ANALYTICS_EVENTS = {
   exception: "$exception",
   identify: "$identify",
-  pagePerformance: "page_performance",
   pageViewed: "page_viewed",
 } as const;
 
@@ -10,18 +9,18 @@ export type WebAnalyticsEvent =
 
 export type Analytics = {
   captureError: (error: unknown) => void;
-  capturePagePerformance: (properties: PagePerformanceProperties) => void;
   capturePageViewed: (properties: PageViewedProperties) => void;
   identifyUser: (user: AnalyticsUserIdentity) => void;
-  reset: () => void;
+  reset: (options?: AnalyticsResetOptions) => void;
+};
+
+export type AnalyticsResetOptions = {
+  onlyIfIdentified?: boolean;
 };
 
 export type PageViewedProperties = {
-  routeId: string;
-};
-
-export type PagePerformanceProperties = PageViewedProperties & {
-  loadBucket: string;
+  href: string;
+  path: string;
 };
 
 export type AnalyticsUserIdentity = {
