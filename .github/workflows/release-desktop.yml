@@ -32,9 +32,19 @@ concurrency:
 
 jobs:
   resolve:
-    # The workflow_run trigger fires on success or failure; gate on
-    # success and resolve the tag the upstream run was building.
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && (startsWith(github.event.workflow_run.head_branch, 'v') || github.event.workflow_run.event == 'workflow_dispatch')) }}
+    # Trigger on `success` OR `failure` of release.yml — desktop
+    # builds don't depend on the API/ingestion deploy succeeding.
+    # The release.yml `publish` job (which creates the GitHub
+    # Release object we upload to) runs before `promote` (the API
+    # deploy that's been the recurring failure point); as long as
+    # publish succeeded, the Release exists and resolve below can
+    # find it. If even publish failed, our own gh api lookup of
+    # the tag will fail-fast with a clear error.
+    #
+    # Skip `cancelled` (a newer release.yml run replaced it; that
+    # newer run will trigger us instead) and `skipped` (release.yml
+    # never actually ran, so there's nothing for us to release).
+    if: ${{ github.event_name == 'workflow_dispatch' || (contains(fromJSON('["success", "failure"]'), github.event.workflow_run.conclusion) && startsWith(github.event.workflow_run.head_branch, 'v')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
