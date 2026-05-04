@@ -59,10 +59,6 @@ const MAX_INFRA_OFFSET =
 const MAX_PORT_OFFSET = MAX_PORT - Math.max(...Object.values(DEFAULT_PORTS));
 const PORT_SEARCH_LIMIT = 2000;
 const WEB_HTML_MARKER = 'id="app"';
-const DESKTOP_HTML_MARKERS = [
-  "<title>stella desktop</title>",
-  'id="root"',
-] as const;
 
 export type DevMode = (typeof DEV_MODES)[number];
 
@@ -1104,16 +1100,6 @@ const validateWebHtml = (response: Response, bodyText: string) => {
     : `expected HTML marker ${WEB_HTML_MARKER}`;
 };
 
-const validateDesktopViewHtml = (response: Response, bodyText: string) => {
-  if (!response.ok) {
-    return `expected 200 from desktop view root, received ${String(response.status)}`;
-  }
-
-  return DESKTOP_HTML_MARKERS.every((marker) => bodyText.includes(marker))
-    ? undefined
-    : `expected desktop HTML markers ${DESKTOP_HTML_MARKERS.join(", ")}`;
-};
-
 const validateDesktopBridgeHealth =
   (expectedPort: number) => (response: Response, bodyText: string) => {
     if (!response.ok) {
@@ -1345,14 +1331,21 @@ const buildPersistentSteps = ({
   }
 
   if (modeIncludesDesktop(mode)) {
-    primary.push({
-      cmd: [resolveCommandPath("bun"), "run", "dev:view"],
-      cwd: pathResolve(rootDir, "apps/desktop"),
-      env: desktopEnv,
-      label: "Desktop view server",
+    // Tauri's beforeDevCommand spawns dev:view itself; we override devUrl
+    // so Tauri waits for the runner-allocated port instead of the static
+    // 5177 baked into tauri.conf.json.
+    const tauriConfigOverride = JSON.stringify({
+      build: { devUrl: desktopViewUrlForPort(ports.desktopView) },
     });
     secondary.push({
-      cmd: [resolveCommandPath("bun"), "run", "dev:app"],
+      cmd: [
+        resolveCommandPath("bun"),
+        "run",
+        "dev",
+        "--",
+        "-c",
+        tauriConfigOverride,
+      ],
       cwd: pathResolve(rootDir, "apps/desktop"),
       env: desktopEnv,
       label: "Desktop app",
@@ -1392,14 +1385,11 @@ const buildReadinessChecks = ({
   }
 
   if (modeIncludesDesktop(mode)) {
-    primary.push({
-      label: "Desktop view server",
-      url: desktopViewUrlForPort(ports.desktopView),
-      validate: validateDesktopViewHtml,
-    });
     secondary.push({
       label: "Desktop bridge",
-      timeoutMs: 60_000,
+      // Cold Rust compile of the Tauri crate routinely takes several
+      // minutes; the bridge only binds after the build finishes.
+      timeoutMs: 900_000,
       url: `${desktopBridgeUrlForPort(ports.desktopBridge)}/health`,
       validate: validateDesktopBridgeHealth(ports.desktopBridge),
     });
