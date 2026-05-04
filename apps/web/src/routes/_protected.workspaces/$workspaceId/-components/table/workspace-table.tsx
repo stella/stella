@@ -151,6 +151,13 @@ export const WorkspaceTable = ({
     const tab = s.tabs.find((candidate) => candidate.id === s.activeId);
     return tab?.type === "pdf" ? tab.entityId : null;
   });
+  const activePropertyId = useInspectorStore((s) => {
+    if (!s.activeId) {
+      return null;
+    }
+    const tab = s.tabs.find((candidate) => candidate.id === s.activeId);
+    return tab?.type === "pdf" ? (tab.propertyId ?? null) : null;
+  });
 
   const activeTaskId = useInspectorStore((s) => {
     if (!s.activeId) {
@@ -494,6 +501,7 @@ export const WorkspaceTable = ({
             return (
               <DraggableRow
                 activeEntityId={activeEntityId}
+                activePropertyId={activePropertyId}
                 activeTaskId={activeTaskId}
                 addColumnHoverRowId={addColumnHoverRowId}
                 addColumnHovered={isAddColumnHovered}
@@ -892,6 +900,71 @@ const shouldIgnoreRowExpansionClick = (target: EventTarget) => {
   );
 };
 
+type ActiveCellFlashInput = {
+  activeCellPropertyId: string | null;
+  activationSeq: number;
+  rowRef: React.RefObject<HTMLDivElement | null>;
+  visibleCells: Cell<TableTreeNode, unknown>[];
+};
+
+const useActiveCellFlash = ({
+  activeCellPropertyId,
+  activationSeq,
+  rowRef,
+  visibleCells,
+}: ActiveCellFlashInput) => {
+  const previousCellActivationSeq = useRef(activationSeq);
+
+  useEffect(() => {
+    const rowElement = rowRef.current;
+    if (
+      !rowElement ||
+      !activeCellPropertyId ||
+      activationSeq === previousCellActivationSeq.current
+    ) {
+      previousCellActivationSeq.current = activationSeq;
+      return;
+    }
+
+    const cellIndex = visibleCells.findIndex(
+      (cell) => cell.column.id === activeCellPropertyId,
+    );
+    const cellElement = rowElement.children.item(cellIndex);
+    if (!(cellElement instanceof HTMLElement)) {
+      previousCellActivationSeq.current = activationSeq;
+      return;
+    }
+
+    cellElement.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const c = "var(--color-primary)";
+    const t = "transparent";
+    cellElement.animate(
+      [
+        { boxShadow: `inset 0 0 0 2px ${c}` },
+        { boxShadow: `inset 0 0 0 2px ${t}` },
+      ],
+      { duration: 500, easing: "ease-out" },
+    );
+    previousCellActivationSeq.current = activationSeq;
+  }, [activationSeq, activeCellPropertyId, rowRef, visibleCells]);
+};
+
+type ActiveRowInput = {
+  activeCellPropertyId: string | null;
+  activeEntityId: string | null;
+  activeTaskId: string | null;
+  entityId: string;
+};
+
+const isActiveRow = ({
+  activeCellPropertyId,
+  activeEntityId,
+  activeTaskId,
+  entityId,
+}: ActiveRowInput) =>
+  entityId === activeTaskId ||
+  (entityId === activeEntityId && activeCellPropertyId === null);
+
 // -- Draggable table row --
 
 type DraggableRowProps = {
@@ -904,6 +977,7 @@ type DraggableRowProps = {
   table: WorkspaceTableType;
   workspaceId: string;
   activeEntityId: string | null;
+  activePropertyId: string | null;
   activeTaskId: string | null;
   addColumnHoverRowId: string | null;
   addColumnHovered: boolean;
@@ -928,6 +1002,7 @@ const DraggableRow = ({
   table,
   workspaceId,
   activeEntityId,
+  activePropertyId,
   activeTaskId,
   addColumnHoverRowId,
   addColumnHovered,
@@ -955,8 +1030,6 @@ const DraggableRow = ({
     null,
   );
   const entity = row.original;
-
-  useInspectorFlash(entity.entityId, rowRef);
   const isFolder = entity.kind === "folder";
   const isTask = entity.kind === "task";
   const isAddColumnHoverRow = addColumnHoverRowId === row.id;
@@ -968,6 +1041,25 @@ const DraggableRow = ({
     : undefined;
   const name = getEntityName(entity);
   const file = getFirstFile(entity);
+  const activeCellPropertyId =
+    entity.entityId === activeEntityId ? activePropertyId : null;
+  const activeRow = isActiveRow({
+    activeCellPropertyId,
+    activeEntityId,
+    activeTaskId,
+    entityId: entity.entityId,
+  });
+  const activationSeq = useInspectorStore((s) => s.activationSeq);
+
+  useInspectorFlash(entity.entityId, rowRef, {
+    enabled: activeCellPropertyId === null,
+  });
+  useActiveCellFlash({
+    activeCellPropertyId,
+    activationSeq,
+    rowRef,
+    visibleCells,
+  });
 
   const getBulkSelectedEntities = () => {
     const selectedRows = table.getSelectedRowModel().rows;
@@ -1160,11 +1252,7 @@ const DraggableRow = ({
       aria-rowindex={virtualIndex + 2}
       aria-selected={row.getIsSelected()}
       className={cn((isTask || !isFolder) && "cursor-pointer")}
-      data-active={
-        entity.entityId === activeEntityId ||
-        entity.entityId === activeTaskId ||
-        undefined
-      }
+      data-active={activeRow || undefined}
       data-index={virtualIndex}
       data-state={row.getIsSelected() ? "selected" : undefined}
       key={row.id}

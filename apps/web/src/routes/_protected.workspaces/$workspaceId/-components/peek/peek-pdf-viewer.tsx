@@ -39,8 +39,8 @@ import {
   useDocxFitZoom,
   useDocxWheelZoom,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom";
+import { useDocxBlockScroll } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { PageAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-anonymization";
 import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
 
@@ -149,7 +149,7 @@ const PeekPdfViewerContent = ({
         buffer={file.buffer}
         className="document-preview-surface h-full"
         contentClassName="relative space-y-2 px-2 pt-2"
-        fileId={file.fileId}
+        fileId={fieldId}
         invertColors={isImageOrigin ? false : undefined}
         scaleOffset={scaleOffset}
         renderPage={(props) => (
@@ -437,41 +437,7 @@ const PeekDocxViewer = ({
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const targetZoom = useDocxFitZoom(containerRef, scaleOffset);
-  const pendingBlockScroll = useInspectorStore((s) => s.pendingBlockScroll);
-  const clearPendingBlockScroll = useInspectorStore(
-    (s) => s.clearPendingBlockScroll,
-  );
-
-  // Consume the workspace store's one-shot block scroll request when
-  // it targets this DOCX field. Fires on every change while the
-  // editor is mounted, so opening a file via a citation chip and
-  // clicking another chip both work — the editor is the canonical
-  // owner of the scroll, the store just signals "go to this block".
-  useEffect(() => {
-    if (pendingBlockScroll === null || pendingBlockScroll.tabId !== fieldId) {
-      return;
-    }
-    const ok = editorRef.current?.scrollToBlock(pendingBlockScroll.blockId);
-    if (ok !== undefined) {
-      clearPendingBlockScroll();
-    }
-  }, [clearPendingBlockScroll, fieldId, pendingBlockScroll]);
-
-  // Window-level fallback: citation chips also dispatch a window
-  // event for surfaces (e.g. the file-chat-overlay editor) that
-  // aren't tracked in the inspector store. The peek viewer reacts
-  // too, so a chip click reaches whichever DOCX editor is mounted
-  // — overlay or inspector.
-  useEffect(() => {
-    const handler = (event: CustomEvent<{ blockId: string }>) => {
-      if (!event.detail.blockId) {
-        return;
-      }
-      editorRef.current?.scrollToBlock(event.detail.blockId);
-    };
-    window.addEventListener("folio:scroll-to-block", handler);
-    return () => window.removeEventListener("folio:scroll-to-block", handler);
-  }, []);
+  useDocxBlockScroll({ editorRef, fieldId });
 
   // Sync scaleOffset from inspector +/- buttons to Folio zoom
   useLayoutEffect(() => {

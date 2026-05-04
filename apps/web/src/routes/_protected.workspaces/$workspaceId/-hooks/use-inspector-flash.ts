@@ -11,6 +11,7 @@ import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-
 export const useInspectorFlash = (
   entityId: string,
   ref: React.RefObject<HTMLElement | null>,
+  { enabled = true }: { enabled?: boolean } = {},
 ) => {
   const isActive = useInspectorStore((s) => {
     if (!s.activeId) {
@@ -27,7 +28,7 @@ export const useInspectorFlash = (
 
   useEffect(() => {
     const el = ref.current;
-    if (el && isActive && seq !== prevSeq.current) {
+    if (enabled && el && isActive && seq !== prevSeq.current) {
       el.scrollIntoView({ block: "nearest", behavior: "smooth" });
 
       const c = "var(--color-primary)";
@@ -70,5 +71,5 @@ export const useInspectorFlash = (
       }
     }
     prevSeq.current = seq;
-  }, [isActive, seq, ref]);
+  }, [enabled, isActive, seq, ref]);
 };

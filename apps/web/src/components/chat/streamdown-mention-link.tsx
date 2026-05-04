@@ -20,6 +20,7 @@ import { openEntityInInspector } from "@/components/chat/entity-open";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME } from "@/lib/consts";
+import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 import { getMatterColor } from "@/lib/matter-colors";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -36,26 +37,6 @@ const WORKSPACE_REF_HASH_PREFIX = "#stella-workspace-ref=";
 // pass through untouched, matching how `#stella-entity-ref=`
 // and friends already work.
 const FOLIO_BLOCK_PREFIX = "#folio:";
-
-/**
- * Public window event broadcast when a `#folio:` citation chip
- * is clicked. Both the peek DOCX viewer (inspector) and the file
- * chat overlay editor listen for this; whichever has the live
- * editor mounted scrolls. Augmenting `WindowEventMap` lets
- * listeners receive a strongly-typed event without an `as` cast.
- */
-export const FOLIO_SCROLL_EVENT = "folio:scroll-to-block";
-
-export type FolioScrollEventDetail = { blockId: string };
-
-declare global {
-  // Global augmentation requires an interface — `type` doesn't merge
-  // with the lib.dom WindowEventMap declaration.
-  // eslint-disable-next-line typescript-eslint/consistent-type-definitions
-  interface WindowEventMap {
-    "folio:scroll-to-block": CustomEvent<FolioScrollEventDetail>;
-  }
-}
 
 const CATEGORY_ICON: Record<
   Exclude<MentionCategory, "entity">,

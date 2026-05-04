@@ -80,7 +80,7 @@ const FullscreenPdfViewer = () => {
         buffer={file.buffer}
         className="document-preview-surface h-full"
         contentClassName="relative mt-2 space-y-2 px-2"
-        fileId={file.fileId}
+        fileId={fieldId}
         invertColors={isImageOrigin ? false : undefined}
         onPageChanged={handlePageChanged}
         onPageCountChanged={setPdfPageCount}

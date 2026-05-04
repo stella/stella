@@ -47,6 +47,8 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
+import type { Citation } from "@/lib/citations";
+import { iterateJustificationCitations } from "@/lib/citations";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
 import { isUnauthorizedError } from "@/lib/errors";
@@ -55,9 +57,10 @@ import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import {
   PDFProvider,
   getPDFPageIdByNumber,
-  usePDFStore,
+  useOptionalPDFStore,
 } from "@/lib/pdf/pdf-context";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
+import { renderJustificationContent } from "@/lib/render-justification-content";
 import { toSafeId } from "@/lib/safe-id";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
@@ -84,13 +87,13 @@ import { SuggestionsFacet } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { useRailContextMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-rail-context-menu";
 import { useTabContextMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-tab-context-menu";
 import { VersionsFacet } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/versions-facet";
-import { PeekJustification } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-justification";
 import {
   PeekPdfControls,
   PeekPdfViewer,
   PeekSuspenseFallback,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
 import { TaskDetailPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel";
+import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { useRenameEntity } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { entityVersionsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
@@ -767,7 +770,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         </Suspense>
       )}
 
-      {/* PDF content — render all open PDF tabs, show only the active one.
+      {/* Document content — render all open document tabs, show only the active one.
          Keeping inactive viewers mounted avoids the blink on tab switch
          (no unmount → Suspense fallback → remount cycle). */}
       {pdfTabs.map((tab) => {
@@ -1109,9 +1112,83 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           });
         };
 
+        const fileViewer =
+          isNativeDocxDisplay && tab.propertyId !== undefined ? (
+            <DocxBrowserEditor
+              actionsKey={tab.id}
+              actionsMapRef={docxActionsRef}
+              entityId={tab.entityId}
+              errorFallback={viewerErrorFallback}
+              fieldId={tab.id}
+              initialScrollTop={docxScrollTopByTab.get(tab.id)}
+              isEditing={isEditingNativeDocx}
+              onClose={() => {
+                docxActionsRef.current.delete(tab.id);
+                setEditingDocxTabId(null);
+              }}
+              onCompatibilityChange={(compatibility) => {
+                setDocxCompatibilityByTab((prev) => {
+                  if (prev.get(tab.id) === compatibility) {
+                    return prev;
+                  }
+                  const next = new Map(prev);
+                  next.set(tab.id, compatibility);
+                  return next;
+                });
+              }}
+              onError={handleViewerError}
+              onReadonlyEditAttempt={promptDocxUnlock}
+              onSaved={(fieldId) => {
+                if (fieldId !== tab.id) {
+                  setDocxScrollTopByTab((prev) => {
+                    const scrollTop = prev.get(tab.id);
+                    if (scrollTop === undefined) {
+                      return prev;
+                    }
+                    const next = new Map(prev);
+                    next.set(fieldId, scrollTop);
+                    return next;
+                  });
+                  setScaleOffsets((prev) => {
+                    const scaleOffset = prev.get(tab.id);
+                    if (scaleOffset === undefined) {
+                      return prev;
+                    }
+                    const next = new Map(prev);
+                    next.set(fieldId, scaleOffset);
+                    return next;
+                  });
+                  useInspectorStore
+                    .getState()
+                    .replacePdfFieldId(tab.id, fieldId);
+                }
+              }}
+              onScrollTopChange={handleDocxScrollTopChange}
+              propertyId={tab.propertyId}
+              scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+              showActionBar={false}
+              workspaceId={tab.workspaceId}
+            />
+          ) : (
+            <PeekPdfViewer
+              activePropertyId={tab.propertyId ?? ""}
+              entityId={tab.entityId}
+              errorFallback={viewerErrorFallback}
+              fieldId={tab.id}
+              filePurpose={isNativeDocxDisplay ? "native-display" : "display"}
+              mimeType={tab.mimeType ?? undefined}
+              onDocxScrollTopChange={handleDocxScrollTopChange}
+              onError={handleViewerError}
+              onPeekNavigate={closeAll}
+              scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+              viewId={peekPdfViewId}
+              workspaceId={tab.workspaceId}
+            />
+          );
+
         const viewerPane = (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            {!isNativeDocxDisplay && tab.justificationFieldId && (
+            {tab.justificationFieldId && (
               <Suspense
                 fallback={
                   <div
@@ -1124,7 +1201,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   </div>
                 }
               >
-                <JustificationBar
+                <DocumentAiSourceBar
                   activeTab={tab}
                   fieldId={tab.justificationFieldId}
                   isActiveTab={isActive}
@@ -1132,85 +1209,16 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 />
               </Suspense>
             )}
-            {isNativeDocxDisplay && tab.propertyId !== undefined ? (
-              <DocxBrowserEditor
-                actionsKey={tab.id}
-                actionsMapRef={docxActionsRef}
-                entityId={tab.entityId}
-                errorFallback={viewerErrorFallback}
-                fieldId={tab.id}
-                initialScrollTop={docxScrollTopByTab.get(tab.id)}
-                isEditing={isEditingNativeDocx}
-                onClose={() => {
-                  docxActionsRef.current.delete(tab.id);
-                  setEditingDocxTabId(null);
-                }}
-                onCompatibilityChange={(compatibility) => {
-                  setDocxCompatibilityByTab((prev) => {
-                    if (prev.get(tab.id) === compatibility) {
-                      return prev;
-                    }
-                    const next = new Map(prev);
-                    next.set(tab.id, compatibility);
-                    return next;
-                  });
-                }}
-                onError={handleViewerError}
-                onReadonlyEditAttempt={promptDocxUnlock}
-                onSaved={(fieldId) => {
-                  if (fieldId !== tab.id) {
-                    setDocxScrollTopByTab((prev) => {
-                      const scrollTop = prev.get(tab.id);
-                      if (scrollTop === undefined) {
-                        return prev;
-                      }
-                      const next = new Map(prev);
-                      next.set(fieldId, scrollTop);
-                      return next;
-                    });
-                    setScaleOffsets((prev) => {
-                      const scaleOffset = prev.get(tab.id);
-                      if (scaleOffset === undefined) {
-                        return prev;
-                      }
-                      const next = new Map(prev);
-                      next.set(fieldId, scaleOffset);
-                      return next;
-                    });
-                    useInspectorStore
-                      .getState()
-                      .replacePdfFieldId(tab.id, fieldId);
-                  }
-                }}
-                onScrollTopChange={handleDocxScrollTopChange}
-                propertyId={tab.propertyId}
-                scaleOffset={scaleOffsets.get(tab.id) ?? 0}
-                showActionBar={false}
-                workspaceId={tab.workspaceId}
-              />
-            ) : (
-              <PeekPdfViewer
-                activePropertyId={tab.propertyId ?? ""}
-                entityId={tab.entityId}
-                errorFallback={viewerErrorFallback}
-                fieldId={tab.id}
-                filePurpose={isNativeDocxDisplay ? "native-display" : "display"}
-                mimeType={tab.mimeType ?? undefined}
-                onDocxScrollTopChange={handleDocxScrollTopChange}
-                onError={handleViewerError}
-                onPeekNavigate={closeAll}
-                scaleOffset={scaleOffsets.get(tab.id) ?? 0}
-                viewId={peekPdfViewId}
-                workspaceId={tab.workspaceId}
-              />
-            )}
+            <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+              {fileViewer}
+              {previewOverlay}
+            </div>
           </div>
         );
 
         const viewerContent = (
           <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
             {viewerPane}
-            {previewOverlay}
           </div>
         );
 
@@ -1813,9 +1821,9 @@ const InspectorPdfErrorFallback = ({
   );
 };
 
-// ── Justification bar ──────────────────────────────
+// ── Document AI source bar ─────────────────────────
 
-const JustificationBar = ({
+const DocumentAiSourceBar = ({
   activeTab,
   fieldId,
   isActiveTab,
@@ -1833,6 +1841,10 @@ const JustificationBar = ({
   const { data: entity } = useSuspenseQuery(
     entityOptions(workspaceId, activeTab.entityId),
   );
+  useSyncJustifications({
+    workspaceId,
+    entityIds: [activeTab.entityId],
+  });
 
   const justification = useWorkspaceStore((s) =>
     s.justifications.find((j) => j.fieldId === fieldId),
@@ -1860,23 +1872,51 @@ const JustificationBar = ({
       ? slots[currentIdx + 1]
       : null;
 
-  const [isExpanded, setIsExpanded] = useState(false);
   const setActiveJustification = useWorkspaceStore(
     (s) => s.setActiveJustification,
   );
+  const requestBlockScroll = useInspectorStore((s) => s.requestBlockScroll);
+  const [isAnswerExpanded, setIsAnswerExpanded] = useState(false);
 
   // Eagerly generate bboxes when the justification bar mounts.
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
   const [isGeneratingBoxes, setIsGeneratingBoxes] = useState(false);
-  const setScrollTo = usePDFStore((s) => s.setScrollTo);
-  const pages = usePDFStore((s) => s.pages);
+  const setScrollTo = useOptionalPDFStore((s) => s.setScrollTo);
+  const pages = useOptionalPDFStore((s) => s.pages);
 
   const justificationId = justification?.id;
   const boundingBoxes = justification?.boundingBoxes;
+  const activeDocumentJustificationContent = useMemo(
+    () =>
+      justification
+        ? {
+            ...justification.content,
+            blocks: justification.content.blocks.filter(
+              (block) => block.fileFieldId === activeTab.id,
+            ),
+          }
+        : null,
+    [activeTab.id, justification],
+  );
+  const citations = useMemo(
+    () =>
+      activeDocumentJustificationContent
+        ? [...iterateJustificationCitations(activeDocumentJustificationContent)]
+        : [],
+    [activeDocumentJustificationContent],
+  );
+  const hasBoundingBoxCitations = citations.some(
+    (citation) => citation.kind === "pdf-bates",
+  );
 
   useEffect(() => {
-    if (!justificationId || !isActiveTab || boundingBoxes) {
+    if (
+      !justificationId ||
+      !isActiveTab ||
+      !hasBoundingBoxCitations ||
+      boundingBoxes
+    ) {
       return undefined;
     }
 
@@ -1917,6 +1957,7 @@ const JustificationBar = ({
     };
   }, [
     justificationId,
+    hasBoundingBoxCitations,
     boundingBoxes,
     isActiveTab,
     workspaceId,
@@ -1924,14 +1965,26 @@ const JustificationBar = ({
     analytics,
   ]);
 
-  // Scroll to the first bbox page when boxes become available.
-  // Use a ref for `pages` so viewport/zoom changes don't re-trigger
-  // the scroll (the effect should run once when boxes appear).
-  const pagesRef = useRef(pages);
-  pagesRef.current = pages;
+  useEffect(() => {
+    setIsAnswerExpanded(false);
+  }, [fieldId]);
 
   useEffect(() => {
-    if (!boundingBoxes || !isActiveTab) {
+    if (!isGeneratingBoxes) {
+      return undefined;
+    }
+
+    const interval = window.setInterval(() => {
+      void queryClient.invalidateQueries({
+        queryKey: workspaceKeys.justifications(workspaceId),
+      });
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [isGeneratingBoxes, queryClient, workspaceId]);
+
+  useEffect(() => {
+    if (!boundingBoxes || !isActiveTab || !pages || !setScrollTo) {
       return;
     }
 
@@ -1945,7 +1998,7 @@ const JustificationBar = ({
 
     const pageId = getPDFPageIdByNumber({
       fieldId: activeTab.id,
-      pages: pagesRef.current,
+      pages,
       pageNumber: firstBox.pageNumber,
     });
     if (pageId && justificationId) {
@@ -1954,7 +2007,14 @@ const JustificationBar = ({
         target: { kind: "justification", id: justificationId },
       });
     }
-  }, [activeTab.id, boundingBoxes, justificationId, isActiveTab, setScrollTo]);
+  }, [
+    activeTab.id,
+    boundingBoxes,
+    justificationId,
+    isActiveTab,
+    pages,
+    setScrollTo,
+  ]);
 
   // Sync activeJustification before paint so PageCitation can
   // render bboxes without waiting for PeekJustification's effect.
@@ -1962,7 +2022,7 @@ const JustificationBar = ({
   // hidden, and their effects must not overwrite the active tab's
   // justification.
   useLayoutEffect(() => {
-    if (justificationId && isActiveTab) {
+    if (justificationId && isActiveTab && hasBoundingBoxCitations) {
       setActiveJustification({ id: justificationId, pageNumber: 1 });
     }
     return () => {
@@ -1970,7 +2030,12 @@ const JustificationBar = ({
         setActiveJustification(null);
       }
     };
-  }, [justificationId, isActiveTab, setActiveJustification]);
+  }, [
+    justificationId,
+    hasBoundingBoxCitations,
+    isActiveTab,
+    setActiveJustification,
+  ]);
 
   if (!justification) {
     return null;
@@ -2000,92 +2065,163 @@ const JustificationBar = ({
     }
     return null;
   })();
+  const handleCitationClick = (citation: Citation) => {
+    if (citation.kind === "docx-folio") {
+      requestBlockScroll(activeTab.id, citation.blockId);
+      return;
+    }
+
+    setActiveJustification({
+      id: justification.id,
+      pageNumber: citation.pageNumber,
+    });
+    if (!pages || !setScrollTo) {
+      return;
+    }
+    const pageId = getPDFPageIdByNumber({
+      fieldId: activeTab.id,
+      pages,
+      pageNumber: citation.pageNumber,
+    });
+    if (!pageId) {
+      return;
+    }
+    setScrollTo({
+      pageId,
+      target: { kind: "justification", id: justification.id },
+    });
+  };
+  const justificationNodes = activeDocumentJustificationContent
+    ? renderJustificationContent({
+        content: activeDocumentJustificationContent,
+        renderCitation: ({ citation, key }) => (
+          <SourceCitationChip
+            citation={citation}
+            key={key}
+            onClick={() => handleCitationClick(citation)}
+          />
+        ),
+      }).nodes
+    : [];
 
   return (
     <div className="bg-muted/30 flex shrink-0 flex-col border-b px-3">
       <div
-        className={cn("flex items-center justify-between", TOOLBAR_ROW_HEIGHT)}
+        className={cn(
+          "flex w-full min-w-0 items-center gap-2 text-xs",
+          TOOLBAR_ROW_HEIGHT,
+        )}
       >
+        {isGeneratingBoxes && (
+          <LoaderCircleIcon className="text-muted-foreground size-3 shrink-0 animate-spin" />
+        )}
         <button
-          className="flex flex-1 cursor-pointer items-center gap-2 overflow-hidden text-start text-xs"
-          onClick={() => setIsExpanded((prev) => !prev)}
+          aria-expanded={isAnswerExpanded}
+          className="min-w-0 flex-1 truncate text-start"
+          onClick={() => setIsAnswerExpanded((expanded) => !expanded)}
+          title={shortAnswer ?? undefined}
           type="button"
         >
-          <div className="flex items-center gap-1.5 truncate">
-            {isGeneratingBoxes && (
-              <LoaderCircleIcon className="text-muted-foreground size-3 shrink-0 animate-spin" />
-            )}
-            {propertyName && (
-              <span className="text-muted-foreground">{propertyName}: </span>
-            )}
-            <span className="font-medium">
-              {shortAnswer ?? t("workspaces.pdf.evidence")}
-            </span>
-          </div>
-        </button>
-
-        <div className="flex shrink-0 items-center gap-1 ps-4">
-          <Button
-            disabled={!prevSlot}
-            onClick={() => {
-              if (!prevSlot) {
-                return;
-              }
-              openPdf({
-                id: activeTab.id,
-                entityId: activeTab.entityId,
-                label: activeTab.label,
-                workspaceId: activeTab.workspaceId,
-                mimeType: activeTab.mimeType,
-                pdfFileId: activeTab.pdfFileId,
-                justificationFieldId: prevSlot.fieldId,
-                propertyId: prevSlot.property.id,
-              });
-            }}
-            size="icon-xs"
-            variant="ghost"
-          >
-            <ChevronLeftIcon className="size-3.5" />
-          </Button>
-          <span className="text-muted-foreground min-w-8 text-center text-[10px] tabular-nums">
-            {currentIdx + 1} / {slots.length}
+          {propertyName && (
+            <span className="text-muted-foreground">{propertyName}: </span>
+          )}
+          <span className="font-medium">
+            {shortAnswer ?? t("workspaces.pdf.evidence")}
           </span>
-          <Button
-            disabled={!nextSlot}
-            onClick={() => {
-              if (!nextSlot) {
-                return;
-              }
-              openPdf({
-                id: activeTab.id,
-                entityId: activeTab.entityId,
-                label: activeTab.label,
-                workspaceId: activeTab.workspaceId,
-                mimeType: activeTab.mimeType,
-                pdfFileId: activeTab.pdfFileId,
-                justificationFieldId: nextSlot.fieldId,
-                propertyId: nextSlot.property.id,
-              });
-            }}
-            size="icon-xs"
-            variant="ghost"
-          >
-            <ChevronRightIcon className="size-3.5" />
-          </Button>
-        </div>
+        </button>
+        <Button
+          disabled={!prevSlot}
+          onClick={() => {
+            if (!prevSlot) {
+              return;
+            }
+            openPdf({
+              id: activeTab.id,
+              entityId: activeTab.entityId,
+              label: activeTab.label,
+              workspaceId: activeTab.workspaceId,
+              mimeType: activeTab.mimeType,
+              pdfFileId: activeTab.pdfFileId,
+              justificationFieldId: prevSlot.fieldId,
+              propertyId: prevSlot.property.id,
+            });
+          }}
+          size="icon-xs"
+          variant="ghost"
+        >
+          <ChevronLeftIcon className="size-3.5" />
+        </Button>
+        <span className="text-muted-foreground min-w-8 text-center text-[10px] tabular-nums">
+          {currentIdx + 1} / {slots.length}
+        </span>
+        <Button
+          disabled={!nextSlot}
+          onClick={() => {
+            if (!nextSlot) {
+              return;
+            }
+            openPdf({
+              id: activeTab.id,
+              entityId: activeTab.entityId,
+              label: activeTab.label,
+              workspaceId: activeTab.workspaceId,
+              mimeType: activeTab.mimeType,
+              pdfFileId: activeTab.pdfFileId,
+              justificationFieldId: nextSlot.fieldId,
+              propertyId: nextSlot.property.id,
+            });
+          }}
+          size="icon-xs"
+          variant="ghost"
+        >
+          <ChevronRightIcon className="size-3.5" />
+        </Button>
       </div>
-      {isExpanded && (
-        <div className="max-h-40 overflow-y-auto pb-2 text-xs">
-          <p className="text-muted-foreground mb-1 font-semibold">
-            {t("workspaces.pdf.evidence")}:
-          </p>
-          <PeekJustification
-            activeFileFieldId={activeTab.id}
-            justification={justification}
-          />
+      {isAnswerExpanded && shortAnswer !== null && (
+        <div className="text-foreground/85 max-h-32 min-w-0 overflow-y-auto pb-2 text-xs leading-relaxed break-words">
+          {justificationNodes}
         </div>
       )}
     </div>
+  );
+};
+
+const DOCX_SOURCE_PREVIEW_CHARS = 28;
+
+const SourceCitationChip = ({
+  citation,
+  onClick,
+}: {
+  citation: Citation;
+  onClick: () => void;
+}) => {
+  if (citation.kind === "pdf-bates") {
+    return (
+      <button
+        className="bg-primary/10 text-primary hover:bg-primary/20 inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium transition-colors"
+        onClick={onClick}
+        type="button"
+      >
+        p.&nbsp;{citation.pageNumber}
+      </button>
+    );
+  }
+
+  const trimmed = citation.text.trim();
+  const preview =
+    trimmed.length > DOCX_SOURCE_PREVIEW_CHARS
+      ? `${trimmed.slice(0, DOCX_SOURCE_PREVIEW_CHARS).trimEnd()}...`
+      : trimmed || "Text";
+
+  return (
+    <button
+      className="bg-primary/10 text-primary hover:bg-primary/20 inline-flex max-w-36 shrink-0 items-center truncate rounded-md px-1.5 py-0.5 text-[11px] font-medium transition-colors"
+      onClick={onClick}
+      title={trimmed || undefined}
+      type="button"
+    >
+      "{preview}"
+    </button>
   );
 };
 
