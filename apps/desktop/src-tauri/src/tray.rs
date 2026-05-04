@@ -301,6 +301,11 @@ mod tests {
   fn make_snapshot(sessions: Vec<SessionSnapshot>) -> AppSnapshot {
     AppSnapshot {
       bridge_port: 45_901,
+      bridge_version: crate::types::BRIDGE_VERSION,
+      capabilities: crate::types::BRIDGE_CAPABILITIES
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect(),
       linked_account: None,
       notification_preferences: DesktopNotificationPreferences::default(),
       running_since: "2026-01-01T00:00:00Z".into(),

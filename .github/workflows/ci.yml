@@ -160,6 +160,28 @@ jobs:
         if: steps.changed-files.outputs.package_checks_required == 'true'
         run: bun run test -- --concurrency=2 ${{ steps.affected.outputs.flag }}
 
+      # Self-test the bridge-version guard so a regression in the
+      # script itself is caught immediately, not on the next desktop
+      # bridge change. Always runs (no `if:` gate) — it's seconds
+      # and has no deps.
+      - name: Test bridge-version guard script
+        run: bash scripts/check-bridge-version.test.sh
+
+      # Self-test the release-channel script. The desktop release
+      # pipeline relies on three independent steps deriving the
+      # same channel from a tag (updater endpoint baked into the
+      # binary, S3 manifest mirror path, CloudFront invalidation
+      # key). A bug here makes them silently disagree.
+      - name: Test release-channel script
+        run: bash scripts/release-channel.test.sh
+
+      # Fail PRs that change the desktop bridge surface without
+      # bumping BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs.
+      # See scripts/check-bridge-version.sh for rationale.
+      - name: Bridge-version guard
+        if: github.event_name == 'pull_request'
+        run: bash scripts/check-bridge-version.sh
+
   # Astro landing build. The existing ci-checks job runs lint,
   # typecheck, and test, but no `astro build`, so plugin/runtime
   # incompatibilities surface only at deploy time. Catch those
