@@ -87,7 +87,7 @@ export const createPostHogAnalytics = (
     },
     identifyUser: (user) => {
       const distinctId = posthog.get_distinct_id();
-      
+
       if (distinctId === user.id) {
         return;
       }
