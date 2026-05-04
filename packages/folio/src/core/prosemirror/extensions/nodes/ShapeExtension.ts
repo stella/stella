@@ -545,7 +545,8 @@ export const ShapeExtension = createNodeExtension({
       let fillAttr: string;
       if (attrs.fillType === "gradient" && attrs.gradientStops) {
         const safeShapeId =
-          sanitizeSvgId(attrs.shapeId) ?? Math.random().toString(36).slice(2, 8);
+          sanitizeSvgId(attrs.shapeId) ??
+          Math.random().toString(36).slice(2, 8);
         const gradId = `grad-${safeShapeId}`;
         gradient = createGradientElement(gradId, attrs);
         fillAttr = gradient ? `url(#${gradId})` : safeFillColor;

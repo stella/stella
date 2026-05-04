@@ -94,9 +94,9 @@ describe("ShapeExtension.sanitizeSvgId", () => {
   });
 
   test("strips characters that could break out of a CSS url fragment", () => {
-    expect(
-      sanitizeSvgId("shape);background:url(javascript:alert(1))"),
-    ).toBe("shapebackgroundurljavascriptalert1");
+    expect(sanitizeSvgId("shape);background:url(javascript:alert(1))")).toBe(
+      "shapebackgroundurljavascriptalert1",
+    );
   });
 
   test("rejects nullish and fully stripped values", () => {
