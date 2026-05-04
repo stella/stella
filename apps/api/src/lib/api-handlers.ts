@@ -190,6 +190,25 @@ const createSafeScopedHandler = <
 
       return toSafeStatusResponse(500, { message: "Internal server error" });
     } catch (error) {
+      // A typed HandlerError thrown synchronously (or escaping the
+      // Result.gen pipeline) must still surface as its own status,
+      // not a generic 500. Without this branch a deeper handler
+      // that throws HandlerError for a recoverable condition (e.g.
+      // an AI request hitting a role the org has not configured a
+      // BYOK key for) gets reported to the user as "Internal
+      // server error" with no actionable detail.
+      if (HandlerError.is(error)) {
+        if (error.status >= 500) {
+          logAndCaptureSafeError({
+            request: ctx.request,
+            route: ctx.route,
+            error,
+            statusCode: error.status,
+          });
+        }
+        return toSafeStatusResponse(error.status, { message: error.message });
+      }
+
       logAndCaptureSafeError({
         request: ctx.request,
         route: ctx.route,
