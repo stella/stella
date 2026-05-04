@@ -119,6 +119,9 @@ export const isAppSnapshot = (value: unknown): value is AppSnapshot => {
 
   return (
     typeof record["bridgePort"] === "number" &&
+    typeof record["bridgeVersion"] === "number" &&
+    Array.isArray(record["capabilities"]) &&
+    (record["capabilities"] as unknown[]).every((c) => typeof c === "string") &&
     typeof record["runningSince"] === "string" &&
     Array.isArray(record["sessions"]) &&
     typeof record["notificationPreferences"] === "object" &&

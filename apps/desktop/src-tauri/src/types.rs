@@ -237,6 +237,8 @@ mod tests {
   fn test_app_snapshot_roundtrip() {
     let snapshot = AppSnapshot {
       bridge_port: 45_901,
+      bridge_version: BRIDGE_VERSION,
+      capabilities: BRIDGE_CAPABILITIES.iter().map(|s| (*s).to_string()).collect(),
       linked_account: Some(LinkedAccountSnapshot {
         email: "test@test.com".into(),
         name: Some("Jane".into()),

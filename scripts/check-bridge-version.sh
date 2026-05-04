@@ -50,7 +50,7 @@ fi
 # types.rs was modified in this PR.
 version_diff=$(
   git diff "$base_ref...HEAD" -- apps/desktop/src-tauri/src/types.rs \
-    | grep -E '^[+-]pub const BRIDGE_VERSION' \
+    | grep -E '^[+-]pub const BRIDGE_VERSION:' \
     || true
 )
 

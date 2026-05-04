@@ -28,7 +28,10 @@ EOF
 setup_repo() {
   dir=$(mktemp -d)
   cd "$dir"
-  git init -q
+  # Pin branch to `main` regardless of `init.defaultBranch` — the
+  # guard always diffs against `main`, and on hosts that default
+  # to `master` the diff would resolve to a non-existent ref.
+  git init -q -b main
   git config user.email test@example.invalid
   git config user.name test
   mkdir -p apps/desktop/src-tauri/src apps/desktop/src/shared
