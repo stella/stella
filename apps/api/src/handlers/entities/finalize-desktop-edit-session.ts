@@ -11,6 +11,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
+import { closeSessionConnections } from "@/api/handlers/entities/desktop-edit-session-events";
 import { findDocxFieldForProperty } from "@/api/handlers/entities/desktop-edit-session-utils";
 import { validateDocxBuffer } from "@/api/handlers/entities/validate-docx-buffer";
 import {
@@ -447,12 +448,13 @@ export const finalizeDesktopEditSessionHandler = async ({
       await deleteCheckpointKey(checkpointKeyToDelete);
     }
 
-    if (result.outcome === "finalized") {
-      broadcast(authorizedSession.value.workspaceId, {
-        type: "invalidate-query",
-        data: ["entities", authorizedSession.value.workspaceId],
-      });
+    broadcast(authorizedSession.value.workspaceId, {
+      type: "invalidate-query",
+      data: ["entities", authorizedSession.value.workspaceId],
+    });
+    closeSessionConnections(sessionId);
 
+    if (result.outcome === "finalized") {
       await processExtraction(result.entityId).catch((error: unknown) => {
         captureError(error, {
           entityId: result.entityId,

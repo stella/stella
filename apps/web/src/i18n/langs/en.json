@@ -1540,6 +1540,7 @@
         "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.",
         "authRequiredTitle": "Your session expired",
         "forceRelease": "Force release",
+        "openAction": "Open in desktop",
         "openedDescription": "Word opens a local copy. When you finish editing, a new revision is created automatically.",
         "openedTitle": "Opened in stella desktop",
         "opening": "Opening...",

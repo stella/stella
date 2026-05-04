@@ -1540,6 +1540,7 @@
         "authRequiredDescription": "Actualisez stella et reconnectez-vous avant d’utiliser l’édition sur le bureau.",
         "authRequiredTitle": "Votre session a expiré",
         "forceRelease": "Forcer la libération",
+        "openAction": "Ouvrir dans l’app de bureau",
         "openedDescription": "Word ouvre une copie locale. Une nouvelle révision est créée automatiquement à la fin de la modification.",
         "openedTitle": "Ouvert dans stella desktop",
         "opening": "Ouverture...",

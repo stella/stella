@@ -1540,6 +1540,7 @@
         "authRequiredDescription": "Pirms rediģēšanas datora lietotnē atsvaidziniet stella un piesakieties vēlreiz.",
         "authRequiredTitle": "Sesija ir beigusies",
         "forceRelease": "Piespiedu atbrīvošana",
+        "openAction": "Atvērt datora lietotnē",
         "openedDescription": "Word atver lokālo kopiju. Pēc rediģēšanas pabeigšanas automātiski tiek izveidota jauna redakcija.",
         "openedTitle": "Atvērts lietotnē stella desktop",
         "opening": "Atver...",

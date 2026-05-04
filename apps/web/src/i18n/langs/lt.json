@@ -1540,6 +1540,7 @@
         "authRequiredDescription": "Prieš redaguodami darbalaukyje atnaujinkite stella ir prisijunkite iš naujo.",
         "authRequiredTitle": "Sesija baigėsi",
         "forceRelease": "Priverstinai atlaisvinti",
+        "openAction": "Atidaryti darbalaukio programoje",
         "openedDescription": "Word atidaro vietinę kopiją. Baigus redaguoti, automatiškai sukuriama nauja versija.",
         "openedTitle": "Atidaryta programoje stella desktop",
         "opening": "Atidaroma...",

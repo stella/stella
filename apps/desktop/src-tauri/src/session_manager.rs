@@ -1,4 +1,7 @@
-use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{
+  event::{AccessKind, AccessMode},
+  Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -228,6 +231,15 @@ fn is_word_lock_file_for(candidate: &str, file_name: &str) -> bool {
   file_name_chars.next();
 
   candidate_suffix == file_name_chars.as_str()
+}
+
+fn is_write_close_event(kind: &EventKind) -> bool {
+  matches!(
+    kind,
+    EventKind::Access(AccessKind::Close(
+      AccessMode::Any | AccessMode::Write | AccessMode::Other,
+    ))
+  )
 }
 
 async fn has_word_lock_file(dir: &Path, file_name: &str) -> bool {
@@ -1261,7 +1273,10 @@ impl SessionManager {
     let watcher_result = notify::recommended_watcher(move |res: Result<Event, _>| {
       if let Ok(event) = res {
         match event.kind {
-          EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) => {
+          EventKind::Modify(_)
+          | EventKind::Create(_)
+          | EventKind::Remove(_)
+          | EventKind::Access(AccessKind::Close(_)) => {
             let changed_file = event
               .paths
               .first()
@@ -1272,11 +1287,18 @@ impl SessionManager {
             let mgr = Arc::clone(&mgr_for_watcher);
             let sid = sid_for_watcher.clone();
             let fname = fname_for_watcher.clone();
+            let should_finalize_without_lock = is_write_close_event(&event.kind);
 
             let _ = tokio::runtime::Handle::try_current().map(|handle| {
               handle.spawn(async move {
-                handle_filesystem_event(mgr, &sid, changed_file.as_deref(), &fname)
-                  .await;
+                handle_filesystem_event(
+                  mgr,
+                  &sid,
+                  changed_file.as_deref(),
+                  &fname,
+                  should_finalize_without_lock,
+                )
+                .await;
               });
             });
           }
@@ -1635,6 +1657,7 @@ async fn handle_filesystem_event(
   session_id: &str,
   changed_file: Option<&str>,
   managed_file_name: &str,
+  should_finalize_without_lock: bool,
 ) {
   let is_managed = changed_file.is_none() || changed_file == Some(managed_file_name);
 
@@ -1696,6 +1719,24 @@ async fn handle_filesystem_event(
         if should_finish {
           mgr.finish_session(&sid);
           let _ = mgr.persist_sessions().await;
+          mgr.retry_session(&sid).await;
+        }
+      }));
+    } else if is_managed && should_finalize_without_lock && !session.pending_finalize {
+      if let Some(handle) = session.auto_finalize_timer.take() {
+        handle.abort();
+      }
+      let mgr_clone = Arc::clone(&manager);
+      let sid = session_id.to_string();
+      session.auto_finalize_timer = Some(tokio::spawn(async move {
+        tokio::time::sleep(AUTO_FINALIZE_DELAY).await;
+        let mut mgr = mgr_clone.lock().await;
+        let should_finish = mgr.sessions.get(&sid).is_some_and(|s| {
+          !s.pending_finalize && !s.takeover_detected && !s.word_lock_seen
+        });
+        if should_finish {
+          mgr.finish_session(&sid);
+          mgr.persist_sessions().await;
           mgr.retry_session(&sid).await;
         }
       }));
@@ -1914,5 +1955,21 @@ mod tests {
     assert!(is_word_lock_file_for("~$document.docx", "document.docx"));
     assert!(!is_word_lock_file_for("document.docx", "document.docx"));
     assert!(!is_word_lock_file_for("~$brief.docx", "~$brief.docx"));
+  }
+
+  #[test]
+  fn write_close_events_can_finalize_lockless_editors() {
+    assert!(is_write_close_event(&EventKind::Access(AccessKind::Close(
+      AccessMode::Write,
+    ))));
+    assert!(is_write_close_event(&EventKind::Access(AccessKind::Close(
+      AccessMode::Any,
+    ))));
+    assert!(!is_write_close_event(&EventKind::Access(AccessKind::Open(
+      AccessMode::Write,
+    ))));
+    assert!(!is_write_close_event(&EventKind::Modify(
+      notify::event::ModifyKind::Data(notify::event::DataChange::Content),
+    )));
   }
 }

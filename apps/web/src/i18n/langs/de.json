@@ -1540,6 +1540,7 @@
         "authRequiredDescription": "Aktualisieren Sie stella und melden Sie sich erneut an, bevor Sie die Desktop-Bearbeitung verwenden.",
         "authRequiredTitle": "Ihre Sitzung ist abgelaufen",
         "forceRelease": "Freigabe erzwingen",
+        "openAction": "Im Desktop öffnen",
         "openedDescription": "Word öffnet eine lokale Kopie. Nach Abschluss der Bearbeitung wird automatisch eine neue Revision erstellt.",
         "openedTitle": "In stella desktop geöffnet",
         "opening": "Wird geöffnet...",
