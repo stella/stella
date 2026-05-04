@@ -16,7 +16,7 @@ type KnowledgeSection = {
 };
 
 export const knowledgeSections: readonly KnowledgeSection[] = [
-  { key: "caseLaw", icon: LandmarkIcon, to: "/knowledge/case" },
+  { key: "caseLaw", icon: LandmarkIcon },
   { key: "skills", icon: LightbulbIcon, to: "/knowledge/skills" },
   { key: "connectors", icon: PlugIcon },
 ];
