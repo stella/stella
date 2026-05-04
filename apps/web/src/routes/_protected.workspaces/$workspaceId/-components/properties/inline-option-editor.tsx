@@ -8,7 +8,7 @@ import {
   PopoverPopup,
   PopoverTrigger,
 } from "@stll/ui/components/popover";
-import { CircleDotIcon, PlusIcon, TagsIcon, XIcon } from "lucide-react";
+import { PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { WorkspacePropertyOption } from "@/lib/types";
@@ -23,7 +23,6 @@ const colorAt = (index: number): OptionColor =>
   optionColors[index % optionColors.length] ?? "gray";
 
 type InlineOptionEditorProps = {
-  type: "single-select" | "multi-select";
   options: WorkspacePropertyOption[];
   pushOption: (option: WorkspacePropertyOption) => void;
   removeOptionAt: (index: number) => void;
@@ -33,7 +32,6 @@ type InlineOptionEditorProps = {
 };
 
 export const InlineOptionEditor = ({
-  type,
   options,
   pushOption,
   removeOptionAt,
@@ -43,8 +41,6 @@ export const InlineOptionEditor = ({
 }: InlineOptionEditorProps) => {
   const t = useTranslations();
   const [draft, setDraft] = useState("");
-  const isMulti = type === "multi-select";
-  const HeaderIcon = isMulti ? TagsIcon : CircleDotIcon;
 
   const addFromDraft = () => {
     const value = draft.trim();
@@ -70,16 +66,8 @@ export const InlineOptionEditor = ({
   return (
     <div className="bg-muted/64 flex flex-col gap-2 rounded-[9px] border p-3">
       <div className="flex items-center gap-1.5">
-        <HeaderIcon className="text-muted-foreground size-2.5" />
         <span className="text-muted-foreground text-[11px] font-medium tracking-[0.08em] uppercase">
-          {isMulti
-            ? t("workspaces.properties.multiOptionsTitle")
-            : t("workspaces.properties.singleOptionsTitle")}
-        </span>
-        <span className="text-muted-foreground/72 ms-1 text-[11px]">
-          {isMulti
-            ? t("workspaces.properties.multiOptionsHelp")
-            : t("workspaces.properties.singleOptionsHelp")}
+          {t("workspaces.properties.optionsLabel")}
         </span>
       </div>
 
@@ -102,7 +90,7 @@ export const InlineOptionEditor = ({
 
       <div className="flex items-center gap-1.5 rounded-[7px] border border-dashed py-1 ps-1 pe-1.5">
         <Button
-          aria-label={t("workspaces.properties.addOptionPressEnter")}
+          aria-label={t("workspaces.properties.addOption")}
           className="text-muted-foreground/72 size-6 shrink-0"
           onClick={addFromDraft}
           size="icon-sm"
@@ -120,17 +108,9 @@ export const InlineOptionEditor = ({
               addFromDraft();
             }
           }}
-          placeholder={t("workspaces.properties.addOptionPressEnter")}
+          placeholder={t("workspaces.properties.addOption")}
           value={draft}
         />
-        <button
-          aria-label={t("workspaces.properties.addOptionPressEnter")}
-          className="text-muted-foreground/72 hover:text-foreground rounded-sm border px-1.5 py-px text-[10px] leading-none transition-colors"
-          onClick={addFromDraft}
-          type="button"
-        >
-          ↵
-        </button>
       </div>
 
       {options.length > 0 && (
@@ -140,12 +120,6 @@ export const InlineOptionEditor = ({
           value={fallback}
         />
       )}
-
-      <p className="text-muted-foreground/72 text-[11px]">
-        {isMulti
-          ? t("workspaces.properties.multiOptionsFooter")
-          : t("workspaces.properties.singleOptionsFooter")}
-      </p>
     </div>
   );
 };

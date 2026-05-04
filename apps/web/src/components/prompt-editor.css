@@ -1,0 +1,16 @@
+.prompt-editor-selection::selection,
+.prompt-editor-selection *::selection,
+.prompt-editor-selection::-moz-selection,
+.prompt-editor-selection *::-moz-selection {
+  background-color: color-mix(
+    in srgb,
+    var(--color-primary) 45%,
+    transparent
+  ) !important;
+  color: inherit !important;
+}
+
+.prompt-editor-selected-text {
+  background-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
+  box-decoration-break: clone;
+}

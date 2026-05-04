@@ -3,7 +3,6 @@ import { useCallback, useEffect } from "react";
 
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
-import { EditorContent } from "@tiptap/react";
 import { ArrowUpIcon, PaperclipIcon, SquareIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -12,6 +11,7 @@ import type {
   ChatInputDraft,
 } from "@/components/chat-editor-provider";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
+import { PromptEditorContent } from "@/components/prompt-editor";
 
 type ChatInputSurfaceProps = {
   autoFocus?: boolean;
@@ -113,7 +113,7 @@ export const ChatInputSurface = ({
         onKeyDown={(event) => event.stopPropagation()}
         role="presentation"
       >
-        <EditorContent
+        <PromptEditorContent
           className={cn(inputDisabled && "pointer-events-none")}
           editor={editor}
         />

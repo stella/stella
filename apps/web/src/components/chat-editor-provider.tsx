@@ -12,7 +12,6 @@ import type React from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
-import Document from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";
 import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -40,6 +39,7 @@ import {
   createPromptSlashSuggestion,
   PromptSlash,
 } from "@/components/chat/prompt-slash-extension";
+import { createPromptEditorDocument } from "@/components/prompt-editor";
 import { getAnalytics } from "@/lib/analytics/provider";
 import {
   createChatDraftState,
@@ -598,17 +598,7 @@ export const useChatEditor = ({
     autofocus: false,
     content: draftDoc,
     extensions: [
-      Document.extend({
-        // ProseMirror's `selectAll` command is built in but not
-        // bound by default when the editor is composed manually
-        // (no `StarterKit`); without this, Cmd/Ctrl+A in the
-        // composer reads as a no-op.
-        addKeyboardShortcuts() {
-          return {
-            "Mod-a": () => this.editor.commands.selectAll(),
-          };
-        },
-      }),
+      createPromptEditorDocument(),
       Paragraph,
       Text,
       // Shift+Enter inserts a hard break (newline) instead of

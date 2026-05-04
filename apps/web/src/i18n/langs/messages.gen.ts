@@ -17,6 +17,7 @@ type Messages = {
     };
   };
   "ai": {
+    "editWithAI": "Edit with AI";
     "keyRequired": {
       "cta": "Open AI settings";
       "description": "This instance has no platform AI keys provisioned. Add your own API key to start using AI features.";
@@ -1746,20 +1747,17 @@ type Messages = {
     "possibleDuplicates": "Possible duplicates";
     "properties": {
       "addInputProperty": "Add at least one input property using \"@\"";
-      "addOptionPressEnter": "Add option, press ↵";
+      "addOption": "Add option";
       "addPromptForBetterResults": "Add a prompt for better results";
       "addReadingSource": "add";
       "aiExtraction": "AI extraction";
-      "autoPrompt": "Auto prompt from column name";
       "autoPromptFailed": "Couldn't generate a prompt.";
-      "autoPromptHelp": "turns the name into a prompt";
       "chipDate": "Date";
       "chipMulti": "Multi option";
       "chipNumber": "Number";
       "chipSingle": "Single option";
       "chipText": "Text";
       "clip": "Clip";
-      "cmdEnterToCreate": "to create";
       "composerTitle": "Tell stella what to find";
       "conditionSeparator": "AND";
       "conditions": "Conditions ({count})";
@@ -1799,9 +1797,6 @@ type Messages = {
       "int": "Integer";
       "keepEmpty": "Keep Empty";
       "manualColumn": "Manual column";
-      "multiOptionsFooter": "Options outside this list won't be picked. Stella may match multiple per document.";
-      "multiOptionsHelp": "Stella picks one or more of these per row";
-      "multiOptionsTitle": "Multi options";
       "multiSelect": "Multi Select";
       "nameProperty": "Name property";
       "newColumn": "New column";
@@ -1831,9 +1826,6 @@ type Messages = {
       "selectColor": "Select color";
       "selectOperator": "Select operator";
       "setPromptPlaceholder": "Set a prompt to extract the information";
-      "singleOptionsFooter": "Options outside this list won't be picked. Stella picks the single best match per document.";
-      "singleOptionsHelp": "Stella picks exactly one of these per row";
-      "singleOptionsTitle": "Single options";
       "singleSelect": "Single Select";
       "sortAscending": "Sort ascending";
       "sortAscendingDate": "Oldest first";

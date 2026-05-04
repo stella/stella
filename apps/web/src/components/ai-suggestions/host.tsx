@@ -42,7 +42,6 @@ import {
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
 import { cn } from "@stll/ui/lib/utils";
-import { EditorContent } from "@tiptap/react";
 import {
   ArrowUpIcon,
   CheckIcon,
@@ -60,6 +59,7 @@ import {
   MessageResponse,
 } from "@/components/ai-elements/message";
 import type { ChatEditorController } from "@/components/chat-editor-provider";
+import { PromptEditorContent } from "@/components/prompt-editor";
 
 import type {
   AssistantThreadMessage,
@@ -1243,7 +1243,7 @@ export function PromptBar(props: PromptBarProps) {
               {emptyPlaceholder}
             </div>
           )}
-        <EditorContent
+        <PromptEditorContent
           // Height is content-driven: a single line of 13px text
           // is ~20px tall (`leading-5`) and the cell's `min-h-8`
           // (2rem) + `items-center` centres it vertically;
