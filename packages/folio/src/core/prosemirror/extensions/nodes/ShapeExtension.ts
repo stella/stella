@@ -54,64 +54,251 @@ export type ShapeAttrs = {
   glowRadius?: number;
 };
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
 /**
- * Build SVG path for a shape type
+ * CSS color allowlist for SVG attribute values.
+ *
+ * Why: shape colors round-trip through ProseMirror data-* attributes, so the
+ * value is a CSS color string by the time it reaches the renderer. Accept the
+ * shapes the parser produces (`#RRGGBB`, `var(--token, #RRGGBB)`) and a small
+ * set of well-known keywords. Reject anything else so a crafted DOCX cannot
+ * smuggle attribute-injection payloads or `url(...)` references.
  */
-function getShapeSVG(type: string, w: number, h: number): string {
+const HEX_COLOR_ATTR_RE = /^#[0-9A-Fa-f]{6}$/;
+const VAR_COLOR_RE = /^var\(--[a-z0-9-]+(?:,\s*#[0-9A-Fa-f]{6})?\)$/i;
+const NAMED_COLORS = new Set([
+  "none",
+  "transparent",
+  "black",
+  "white",
+  "currentColor",
+]);
+
+export function sanitizeColor(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const v = value.trim();
+  if (NAMED_COLORS.has(v)) {
+    return v;
+  }
+  if (HEX_COLOR_ATTR_RE.test(v)) {
+    return v;
+  }
+  if (VAR_COLOR_RE.test(v)) {
+    return v;
+  }
+  return null;
+}
+
+const DISPLAY_MODES = new Set<NonNullable<ShapeAttrs["displayMode"]>>([
+  "inline",
+  "float",
+  "block",
+]);
+const CSS_FLOATS = new Set<NonNullable<ShapeAttrs["cssFloat"]>>([
+  "left",
+  "right",
+  "none",
+]);
+
+/**
+ * CSS transform values for shape rotation/flips. Allow only the function calls
+ * the parser actually emits (`rotate(Ndeg)`, `scaleX(-1)`, `scaleY(-1)`) so
+ * a crafted DOCX cannot inject arbitrary CSS via the inline `style` attribute.
+ */
+const SAFE_TRANSFORM_TOKEN_RE =
+  /^(?:rotate\(-?\d+(?:\.\d+)?deg\)|scaleX\(-1\)|scaleY\(-1\))$/;
+
+export function sanitizeTransform(
+  value: string | null | undefined,
+): string | null {
+  if (!value) {
+    return null;
+  }
+  const tokens = value.trim().split(/\s+/);
+  if (tokens.length === 0) {
+    return null;
+  }
+  for (const t of tokens) {
+    if (!SAFE_TRANSFORM_TOKEN_RE.test(t)) {
+      return null;
+    }
+  }
+  return tokens.join(" ");
+}
+
+function sanitizeDisplayMode(
+  value: string | null | undefined,
+): NonNullable<ShapeAttrs["displayMode"]> | null {
+  for (const allowed of DISPLAY_MODES) {
+    if (allowed === value) {
+      return allowed;
+    }
+  }
+  return null;
+}
+
+function sanitizeCssFloat(
+  value: string | null | undefined,
+): NonNullable<ShapeAttrs["cssFloat"]> | null {
+  for (const allowed of CSS_FLOATS) {
+    if (allowed === value) {
+      return allowed;
+    }
+  }
+  return null;
+}
+
+function finiteNumber(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function setNum(el: Element, name: string, value: number): void {
+  el.setAttribute(name, String(value));
+}
+
+/**
+ * Build the inner shape element (rect/ellipse/etc) for the given shape type.
+ */
+function createShapeElement(type: string, w: number, h: number): SVGElement {
   switch (type) {
     case "ellipse":
-    case "oval":
-      return `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2}" ry="${h / 2}" />`;
-    case "roundRect":
-      return `<rect x="0" y="0" width="${w}" height="${h}" rx="${Math.min(w, h) * 0.1}" />`;
+    case "oval": {
+      const el = document.createElementNS(SVG_NS, "ellipse");
+      setNum(el, "cx", w / 2);
+      setNum(el, "cy", h / 2);
+      setNum(el, "rx", w / 2);
+      setNum(el, "ry", h / 2);
+      return el;
+    }
+    case "roundRect": {
+      const el = document.createElementNS(SVG_NS, "rect");
+      setNum(el, "x", 0);
+      setNum(el, "y", 0);
+      setNum(el, "width", w);
+      setNum(el, "height", h);
+      setNum(el, "rx", Math.min(w, h) * 0.1);
+      return el;
+    }
     case "triangle":
-    case "isosTriangle":
-      return `<polygon points="${w / 2},0 ${w},${h} 0,${h}" />`;
-    case "diamond":
-      return `<polygon points="${w / 2},0 ${w},${h / 2} ${w / 2},${h} 0,${h / 2}" />`;
+    case "isosTriangle": {
+      const el = document.createElementNS(SVG_NS, "polygon");
+      el.setAttribute("points", `${w / 2},0 ${w},${h} 0,${h}`);
+      return el;
+    }
+    case "diamond": {
+      const el = document.createElementNS(SVG_NS, "polygon");
+      el.setAttribute(
+        "points",
+        `${w / 2},0 ${w},${h / 2} ${w / 2},${h} 0,${h / 2}`,
+      );
+      return el;
+    }
     case "line":
-    case "straightConnector1":
-      return `<line x1="0" y1="${h / 2}" x2="${w}" y2="${h / 2}" />`;
-    default:
-      return `<rect x="0" y="0" width="${w}" height="${h}" />`;
+    case "straightConnector1": {
+      const el = document.createElementNS(SVG_NS, "line");
+      setNum(el, "x1", 0);
+      setNum(el, "y1", h / 2);
+      setNum(el, "x2", w);
+      setNum(el, "y2", h / 2);
+      return el;
+    }
+    default: {
+      const el = document.createElementNS(SVG_NS, "rect");
+      setNum(el, "x", 0);
+      setNum(el, "y", 0);
+      setNum(el, "width", w);
+      setNum(el, "height", h);
+      return el;
+    }
+  }
+}
+
+type GradientStop = { position: number; color: string };
+
+function isGradientStopShape(
+  value: unknown,
+): value is { position: number; color: string } {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as { position?: unknown; color?: unknown };
+  return (
+    typeof candidate.position === "number" &&
+    typeof candidate.color === "string"
+  );
+}
+
+export function parseGradientStops(raw: string | undefined): GradientStop[] {
+  if (!raw) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.flatMap((s: unknown) => {
+      if (!isGradientStopShape(s)) {
+        return [];
+      }
+      const color = sanitizeColor(s.color);
+      return color === null ? [] : [{ position: s.position, color }];
+    });
+  } catch {
+    return [];
   }
 }
 
 /**
- * Build SVG gradient <defs> content from shape attrs
+ * Create a gradient <defs> element. Returns null when stops are empty/invalid.
  */
-function buildSVGGradientDef(gradId: string, attrs: ShapeAttrs): string {
-  let stops = "";
-  try {
-    const parsed = JSON.parse(attrs.gradientStops || "[]") as {
-      position: number;
-      color: string;
-    }[];
-    stops = parsed
-      .map(
-        (s) =>
-          `<stop offset="${Math.round(s.position / 1000)}%" stop-color="${s.color}" />`,
-      )
-      .join("");
-  } catch {
-    return "";
+function createGradientElement(
+  gradId: string,
+  attrs: ShapeAttrs,
+): SVGElement | null {
+  const stops = parseGradientStops(attrs.gradientStops);
+  if (stops.length === 0) {
+    return null;
   }
 
-  const gType = attrs.gradientType || "linear";
+  const gType = attrs.gradientType ?? "linear";
+  const isRadial =
+    gType === "radial" || gType === "rectangular" || gType === "path";
 
-  if (gType === "radial" || gType === "rectangular" || gType === "path") {
-    return `<radialGradient id="${gradId}" cx="50%" cy="50%" r="50%">${stops}</radialGradient>`;
+  const grad = document.createElementNS(
+    SVG_NS,
+    isRadial ? "radialGradient" : "linearGradient",
+  );
+  grad.setAttribute("id", gradId);
+
+  if (isRadial) {
+    grad.setAttribute("cx", "50%");
+    grad.setAttribute("cy", "50%");
+    grad.setAttribute("r", "50%");
+  } else {
+    const angle = attrs.gradientAngle ?? 0;
+    const rad = ((angle - 90) * Math.PI) / 180;
+    const x1 = Math.round(50 + 50 * Math.cos(rad + Math.PI));
+    const y1 = Math.round(50 + 50 * Math.sin(rad + Math.PI));
+    const x2 = Math.round(50 + 50 * Math.cos(rad));
+    const y2 = Math.round(50 + 50 * Math.sin(rad));
+    grad.setAttribute("x1", `${x1}%`);
+    grad.setAttribute("y1", `${y1}%`);
+    grad.setAttribute("x2", `${x2}%`);
+    grad.setAttribute("y2", `${y2}%`);
   }
 
-  // Linear gradient — convert angle to SVG coordinates
-  const angle = attrs.gradientAngle || 0;
-  const rad = ((angle - 90) * Math.PI) / 180;
-  const x1 = Math.round(50 + 50 * Math.cos(rad + Math.PI));
-  const y1 = Math.round(50 + 50 * Math.sin(rad + Math.PI));
-  const x2 = Math.round(50 + 50 * Math.cos(rad));
-  const y2 = Math.round(50 + 50 * Math.sin(rad));
+  for (const s of stops) {
+    const stop = document.createElementNS(SVG_NS, "stop");
+    stop.setAttribute("offset", `${Math.round(s.position / 1000)}%`);
+    stop.setAttribute("stop-color", s.color);
+    grad.append(stop);
+  }
 
-  return `<linearGradient id="${gradId}" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%">${stops}</linearGradient>`;
+  return grad;
 }
 
 export const ShapeExtension = createNodeExtension({
@@ -150,7 +337,7 @@ export const ShapeExtension = createNodeExtension({
       {
         tag: "span.docx-shape",
         getAttrs(dom): ShapeAttrs {
-          const el = dom as HTMLElement;
+          const el = dom;
           const d = el.dataset;
           return {
             shapeType: d["shapeType"] || "rect",
@@ -203,8 +390,8 @@ export const ShapeExtension = createNodeExtension({
     ],
     toDOM(node) {
       const attrs = node.attrs as ShapeAttrs;
-      const w = attrs.width || 100;
-      const h = attrs.height || 80;
+      const w = attrs.width ?? 100;
+      const h = attrs.height ?? 80;
 
       const domAttrs: Record<string, string> = {
         class: "docx-shape",
@@ -272,6 +459,17 @@ export const ShapeExtension = createNodeExtension({
         domAttrs["data-glow-radius"] = String(attrs.glowRadius);
       }
 
+      // Sanitize untrusted values that flow into CSS/SVG attributes.
+      const safeTransform = sanitizeTransform(attrs.transform);
+      const safeDisplayMode = sanitizeDisplayMode(attrs.displayMode);
+      const safeCssFloat = sanitizeCssFloat(attrs.cssFloat);
+      const safeShadowColor = sanitizeColor(attrs.shadowColor);
+      const safeGlowColor = sanitizeColor(attrs.glowColor);
+      const safeGlowRadius = finiteNumber(attrs.glowRadius);
+      const safeShadowBlur = finiteNumber(attrs.shadowBlur);
+      const safeShadowOffsetX = finiteNumber(attrs.shadowOffsetX);
+      const safeShadowOffsetY = finiteNumber(attrs.shadowOffsetY);
+
       // Build styles
       const styles: string[] = [
         "display: inline-block",
@@ -281,81 +479,87 @@ export const ShapeExtension = createNodeExtension({
         "line-height: 0",
       ];
 
-      if (attrs.transform) {
-        styles.push(`transform: ${attrs.transform}`);
+      if (safeTransform) {
+        styles.push(`transform: ${safeTransform}`);
       }
 
       if (
-        attrs.displayMode === "float" &&
-        attrs.cssFloat &&
-        attrs.cssFloat !== "none"
+        safeDisplayMode === "float" &&
+        safeCssFloat &&
+        safeCssFloat !== "none"
       ) {
-        styles.push(`float: ${attrs.cssFloat}`);
+        styles.push(`float: ${safeCssFloat}`);
         styles.push("margin: 4px 8px");
-      } else if (attrs.displayMode === "block") {
+      } else if (safeDisplayMode === "block") {
         styles.push("display: block");
         styles.push("margin: 4px auto");
       }
 
-      // Shadow via CSS box-shadow on the container
-      if (attrs.shadowColor) {
-        const sx = attrs.shadowOffsetX || 2;
-        const sy = attrs.shadowOffsetY || 2;
-        const sb = attrs.shadowBlur || 4;
-        styles.push(
-          `filter: drop-shadow(${sx}px ${sy}px ${sb}px ${attrs.shadowColor})`,
-        );
+      const filters: string[] = [];
+      if (safeShadowColor) {
+        const sx = safeShadowOffsetX ?? 2;
+        const sy = safeShadowOffsetY ?? 2;
+        const sb = safeShadowBlur ?? 4;
+        filters.push(`drop-shadow(${sx}px ${sy}px ${sb}px ${safeShadowColor})`);
       }
-
-      // Glow via CSS filter
-      if (attrs.glowColor && attrs.glowRadius) {
-        const existingFilter = styles.find((s) => s.startsWith("filter:"));
-        const glowFilter = `drop-shadow(0 0 ${attrs.glowRadius}px ${attrs.glowColor})`;
-        if (existingFilter) {
-          // Append glow to existing filter
-          const idx = styles.indexOf(existingFilter);
-          styles[idx] = `${existingFilter} ${glowFilter}`;
-        } else {
-          styles.push(`filter: ${glowFilter}`);
-        }
+      if (safeGlowColor !== null && safeGlowRadius !== null) {
+        filters.push(`drop-shadow(0 0 ${safeGlowRadius}px ${safeGlowColor})`);
+      }
+      if (filters.length > 0) {
+        styles.push(`filter: ${filters.join(" ")}`);
       }
 
       domAttrs["style"] = styles.join("; ");
 
-      // Build SVG gradient defs if needed
-      let svgDefs = "";
-      let fill: string;
+      // Resolve fill / stroke colors. `none` is allowed; reject anything that
+      // isn't a known color shape so it can't break out of the SVG attribute.
+      const safeFillColor = sanitizeColor(attrs.fillColor) ?? "#ffffff";
+      const safeStrokeColor =
+        sanitizeColor(attrs.outlineColor) ??
+        "var(--doc-shape-outline, #000000)";
+      const strokeWidth = finiteNumber(attrs.outlineWidth) ?? 1;
 
+      // Build SVG via DOM APIs so attribute values are escaped by the browser.
+      const svg = document.createElementNS(SVG_NS, "svg");
+      svg.setAttribute("xmlns", SVG_NS);
+      setNum(svg, "width", w);
+      setNum(svg, "height", h);
+      svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+
+      let gradient: SVGElement | null = null;
+      let fillAttr: string;
       if (attrs.fillType === "gradient" && attrs.gradientStops) {
         const gradId = `grad-${attrs.shapeId || Math.random().toString(36).slice(2, 8)}`;
-        fill = `url(#${gradId})`;
-        svgDefs = buildSVGGradientDef(gradId, attrs);
+        gradient = createGradientElement(gradId, attrs);
+        fillAttr = gradient ? `url(#${gradId})` : safeFillColor;
       } else {
-        fill =
-          attrs.fillType === "none" ? "none" : attrs.fillColor || "#ffffff";
+        fillAttr = attrs.fillType === "none" ? "none" : safeFillColor;
       }
 
-      const strokeWidth = attrs.outlineWidth || 1;
-      const strokeColor = attrs.outlineColor || "#000000";
-      const strokeDash =
-        attrs.outlineStyle === "dashed"
-          ? ' stroke-dasharray="8 4"'
-          : attrs.outlineStyle === "dotted"
-            ? ' stroke-dasharray="2 2"'
-            : "";
+      svg.setAttribute(
+        "style",
+        `fill:${fillAttr};stroke:${safeStrokeColor};stroke-width:${strokeWidth}`,
+      );
 
-      const svgContent = getShapeSVG(attrs.shapeType || "rect", w, h);
+      if (gradient) {
+        const defs = document.createElementNS(SVG_NS, "defs");
+        defs.append(gradient);
+        svg.append(defs);
+      }
 
-      // Create SVG element as innerHTML
-      const svgHtml = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="fill:${fill};stroke:${strokeColor};stroke-width:${strokeWidth}${strokeDash}">${svgDefs ? `<defs>${svgDefs}</defs>` : ""}${svgContent}</svg>`;
+      const shapeEl = createShapeElement(attrs.shapeType || "rect", w, h);
+      if (attrs.outlineStyle === "dashed") {
+        shapeEl.setAttribute("stroke-dasharray", "8 4");
+      } else if (attrs.outlineStyle === "dotted") {
+        shapeEl.setAttribute("stroke-dasharray", "2 2");
+      }
+      svg.append(shapeEl);
 
-      // Use a span wrapper with innerHTML
-      // ProseMirror will handle this as an atom node
       const span = document.createElement("span");
       for (const [key, value] of Object.entries(domAttrs)) {
         span.setAttribute(key, value);
       }
-      span.innerHTML = svgHtml;
+      span.append(svg);
 
       return { dom: span };
     },
