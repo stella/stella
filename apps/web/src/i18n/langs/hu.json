@@ -354,7 +354,7 @@
     "placeholder": "Mit szeretne tudni?",
     "prompts": {
       "noResults": "Nincs egyező prompt",
-      "noShortcuts": "No shortcuts yet. Add some in Knowledge → Skills.",
+      "noShortcuts": "Még nincsenek parancsikonok. Adjon hozzá néhányat a Tudás → Készségek menüpontban.",
       "scope": {
         "private": "Saját promptok",
         "stock": "Beépített",

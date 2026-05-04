@@ -354,7 +354,7 @@
     "placeholder": "Ko vēlaties uzzināt?",
     "prompts": {
       "noResults": "Nav atbilstošu uzvedņu",
-      "noShortcuts": "No shortcuts yet. Add some in Knowledge → Skills.",
+      "noShortcuts": "Vēl nav saīšņu. Pievienojiet tās sadaļā Zināšanas → Prasmes.",
       "scope": {
         "private": "Jūsu uzvednes",
         "stock": "Iebūvētas",

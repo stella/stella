@@ -354,7 +354,7 @@
     "placeholder": "Mida soovite teada?",
     "prompts": {
       "noResults": "Sobivaid küsimusi pole",
-      "noShortcuts": "No shortcuts yet. Add some in Knowledge → Skills.",
+      "noShortcuts": "Otseteid pole veel. Lisage neid jaotises Teadmised → Oskused.",
       "scope": {
         "private": "Sinu küsimused",
         "stock": "Sisseehitatud",

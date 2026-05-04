@@ -354,7 +354,7 @@
     "placeholder": "¿Qué le gustaría saber?",
     "prompts": {
       "noResults": "Sin prompts coincidentes",
-      "noShortcuts": "No shortcuts yet. Add some in Knowledge → Skills.",
+      "noShortcuts": "Aún no hay atajos. Añade algunos en Conocimiento → Habilidades.",
       "scope": {
         "private": "Tus prompts",
         "stock": "Predefinidos",

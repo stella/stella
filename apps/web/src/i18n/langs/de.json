@@ -354,7 +354,7 @@
     "placeholder": "Was möchten Sie wissen?",
     "prompts": {
       "noResults": "Keine passenden Prompts",
-      "noShortcuts": "No shortcuts yet. Add some in Knowledge → Skills.",
+      "noShortcuts": "Noch keine Kürzel. Fügen Sie welche unter Wissen → Kürzel hinzu.",
       "scope": {
         "private": "Eigene Prompts",
         "stock": "Vorgegeben",

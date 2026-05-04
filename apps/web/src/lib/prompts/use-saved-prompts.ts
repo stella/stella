@@ -22,6 +22,7 @@ export const useSavedPrompts = (): ChatPrompt[] => {
         id: s.id,
         scope: s.scope,
         name: s.name,
+        command: s.command,
         body: s.prompt,
       })),
     [shortcuts],

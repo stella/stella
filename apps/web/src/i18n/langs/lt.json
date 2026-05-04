@@ -354,7 +354,7 @@
     "placeholder": "Ko norėtumėte paklausti?",
     "prompts": {
       "noResults": "Nėra atitinkančių raginimų",
-      "noShortcuts": "No shortcuts yet. Add some in Knowledge → Skills.",
+      "noShortcuts": "Dar nėra sparčiųjų klavišų. Pridėkite juos dalyje Žinios → Įgūdžiai.",
       "scope": {
         "private": "Jūsų raginimai",
         "stock": "Įmontuoti",

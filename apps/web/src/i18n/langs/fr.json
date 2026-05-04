@@ -354,7 +354,7 @@
     "placeholder": "Que souhaitez-vous savoir ?",
     "prompts": {
       "noResults": "Aucun prompt correspondant",
-      "noShortcuts": "No shortcuts yet. Add some in Knowledge → Skills.",
+      "noShortcuts": "Aucun raccourci pour l'instant. Ajoutez-en dans Connaissance → Compétences.",
       "scope": {
         "private": "Vos prompts",
         "stock": "Intégrés",

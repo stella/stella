@@ -59,6 +59,7 @@ const filterPrompts = (prompts: ChatPrompt[], query: string): ChatPrompt[] => {
   return prompts.filter(
     (prompt) =>
       prompt.name.toLowerCase().includes(trimmed) ||
+      prompt.command?.toLowerCase().includes(trimmed) === true ||
       prompt.body.toLowerCase().includes(trimmed),
   );
 };

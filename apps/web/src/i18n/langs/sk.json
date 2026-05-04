@@ -354,7 +354,7 @@
     "placeholder": "Čo by ste chceli vedieť?",
     "prompts": {
       "noResults": "Žiadne zhodné prompty",
-      "noShortcuts": "No shortcuts yet. Add some in Knowledge → Skills.",
+      "noShortcuts": "Zatiaľ žiadne skratky. Pridajte ich v časti Vedomosti → Zručnosti.",
       "scope": {
         "private": "Vaše prompty",
         "stock": "Vstavané",

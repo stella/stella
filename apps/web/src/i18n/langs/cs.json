@@ -354,7 +354,7 @@
     "placeholder": "Co byste chtěli vědět?",
     "prompts": {
       "noResults": "Žádné odpovídající promty",
-      "noShortcuts": "No shortcuts yet. Add some in Knowledge → Skills.",
+      "noShortcuts": "Zatím žádné zkratky. Přidejte je v části Znalosti → Dovednosti.",
       "scope": {
         "private": "Vaše promty",
         "stock": "Vestavěné",

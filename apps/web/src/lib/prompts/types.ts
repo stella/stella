@@ -27,6 +27,12 @@ export type ChatPrompt = {
   /** Short label shown on the chip and in the slash menu. */
   name: string;
   /**
+   * The slash command handle (without the leading `/`). Used for
+   * filtering when the user types `/foo` in the composer.
+   * Stock prompts don't have a command handle; DB-backed shortcuts do.
+   */
+  command?: string | undefined;
+  /**
    * The body inserted into the composer when the prompt is picked.
    * Plain text — entity mentions get added by the user after.
    */

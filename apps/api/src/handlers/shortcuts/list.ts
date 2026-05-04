@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, or } from "drizzle-orm";
+import { and, desc, eq, or } from "drizzle-orm";
 
 import { promptShortcuts, PROMPT_SHORTCUT_SCOPES } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -35,7 +35,7 @@ const listShortcuts = createSafeRootHandler(
               ),
             ),
           )
-          .orderBy(promptShortcuts.createdAt),
+          .orderBy(desc(promptShortcuts.createdAt)),
       ),
     );
 
