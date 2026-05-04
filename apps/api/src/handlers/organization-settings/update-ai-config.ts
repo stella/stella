@@ -20,6 +20,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { validateSafeBaseURL } from "@/api/lib/safe-base-url";
 
 const updateAIConfigBody = t.Object({
   provider: t.UnionEnum([
@@ -126,7 +127,7 @@ const updateAIConfig = createSafeRootHandler(
 
     // Resolve baseURL: body > existing > reject for
     // openai_compatible.
-    const resolvedBaseURL = body.baseURL ?? existingConfig?.baseURL;
+    let resolvedBaseURL = body.baseURL ?? existingConfig?.baseURL;
     if (body.provider === "openai_compatible" && !resolvedBaseURL) {
       return Result.err(
         new HandlerError({
@@ -134,6 +135,20 @@ const updateAIConfig = createSafeRootHandler(
           message: "Base URL is required for OpenAI-compatible provider",
         }),
       );
+    }
+
+    // SSRF guard: when a baseURL is in play (caller-supplied
+    // or carried over from storage), require HTTPS and reject
+    // private/loopback/link-local hosts before we make any
+    // outbound call with it.
+    if (resolvedBaseURL) {
+      const urlCheck = validateSafeBaseURL(resolvedBaseURL);
+      if (!urlCheck.ok) {
+        return Result.err(
+          new HandlerError({ status: 400, message: urlCheck.error }),
+        );
+      }
+      resolvedBaseURL = urlCheck.url;
     }
 
     // Reject region + non-regional provider at the boundary.
