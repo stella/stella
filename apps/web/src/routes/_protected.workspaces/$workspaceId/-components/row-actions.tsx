@@ -30,9 +30,9 @@ import {
   EyeIcon,
   FileOutputIcon,
   FolderPlusIcon,
-  HistoryIcon,
   LaptopIcon,
   LockOpenIcon,
+  Maximize2Icon,
   MessageSquareIcon,
   PencilIcon,
   Trash2Icon,
@@ -490,8 +490,13 @@ export const RowActions = ({
         {/* --- Features --- */}
         {!isBulk && !isFolder && entity.kind !== "task" && file && (
           <MenuItem onClick={openVersionHistory}>
-            <HistoryIcon />
-            {t("fileDetail.viewVersionHistory")}
+            {/* Same intent as the inspector's full-view button
+                (open this file in the document route — the
+                versions panel is just one of the facets there).
+                Match the icon + label so the two surfaces don't
+                look like two different actions. */}
+            <Maximize2Icon />
+            {t("workspaces.pdf.fullView")}
           </MenuItem>
         )}
         <MenuItem onClick={handleChatAbout}>

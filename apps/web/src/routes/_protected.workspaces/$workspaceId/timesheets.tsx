@@ -10,7 +10,7 @@ import {
 } from "@stll/ui/components/select";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
 import { toastManager } from "@stll/ui/components/toast";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -30,6 +30,28 @@ import { TimesheetWeekView } from "@/routes/_protected.workspaces/$workspaceId/-
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/timesheets",
 )({
+  // Time tracking is intentionally excluded from the current
+  // product surface — block any entry to /timesheets (StatCard
+  // click, direct URL, deep link) with a "coming soon" toast and
+  // bounce the user back to the workspace overview. Once the
+  // feature is reintroduced, drop this beforeLoad and re-link the
+  // overview StatCard.
+  beforeLoad: ({ params }) => {
+    toastManager.add({
+      title: "Coming soon",
+      type: "info",
+      timeout: 4000,
+    });
+    throw redirect({
+      to: "/workspaces/$workspaceId",
+      params: { workspaceId: params.workspaceId },
+      // Replace `/timesheets` rather than push the overview on top
+      // of it. Pushing creates a back-button loop: Back from the
+      // overview returns to `/timesheets`, which immediately
+      // redirects forward again. Per Codex review on PR #80.
+      replace: true,
+    });
+  },
   component: TimesheetsPage,
 });
 

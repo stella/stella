@@ -29,7 +29,9 @@ import { useTranslations } from "use-intl";
 import { MatterNumberHint } from "@/components/matter-number-hint";
 import { usePermissions } from "@/hooks/use-permissions";
 import { APIError } from "@/lib/errors";
-import { InfoSoudSection } from "@/routes/_protected.workspaces/$workspaceId/-components/infosoud-section";
+// TODO: re-enable when the InfoSoud section is gated to CS-only
+// customers (it's Czech-court-system specific by design).
+// import { InfoSoudSection } from "@/routes/_protected.workspaces/$workspaceId/-components/infosoud-section";
 import { MembersSection } from "@/routes/_protected.workspaces/$workspaceId/-components/members-section";
 import { PartiesSection } from "@/routes/_protected.workspaces/$workspaceId/-components/parties-section";
 import {
@@ -187,9 +189,14 @@ export const MatterMetadataSheet = ({
             <Separator />
 
             {/* InfoSoud */}
-            <InfoSoudSection active={isOpen} workspaceId={workspaceId} />
-
-            <Separator />
+            {/* TODO: add with proper localization support for CS-only
+                customers. The component is wired and works, but the
+                surface (CZ court IDs, sp. zn. labels, etc.) is
+                Czech-only by design — we hide it from the UX until
+                we have a locale gate that only shows it to CS users
+                or surfaces an EN explainer for non-CS users. */}
+            {/* <InfoSoudSection active={isOpen} workspaceId={workspaceId} /> */}
+            {/* <Separator /> */}
 
             {/* Members */}
             <MembersSection workspaceId={workspaceId} />
