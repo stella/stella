@@ -848,24 +848,28 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
   await db.insert(chatThreads).values([
     {
       id: ids.chatThreadGlobalA1,
+      organizationId: ids.orgA,
       userId: ids.userA1,
       title: "Global thread A1",
       workspaceId: null,
     },
     {
       id: ids.chatThreadWorkspaceA1,
+      organizationId: ids.orgA,
       userId: ids.userA1,
       title: "Workspace thread A1",
       workspaceId: ids.wsA1,
     },
     {
       id: ids.chatThreadWorkspaceA2,
+      organizationId: ids.orgA,
       userId: ids.userA1,
       title: "Workspace thread A2",
       workspaceId: ids.wsA2,
     },
     {
       id: ids.chatThreadWorkspaceB1,
+      organizationId: ids.orgB,
       userId: ids.userB1,
       title: "Workspace thread B1",
       workspaceId: ids.wsA1,

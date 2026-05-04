@@ -73,6 +73,14 @@ export const checkpointDesktopEditSessionHandler = async ({
     });
   }
 
+  if (authorizedSession.status === "permission-revoked") {
+    return status(403, {
+      code: "desktop_edit_session_permission_revoked",
+      message:
+        "Desktop edit permission was revoked. Reopen the document from stella.",
+    });
+  }
+
   const fileName = authorizedSession.value.fileName;
   const buffer = await file.arrayBuffer();
   const sha256Hex = new Bun.CryptoHasher("sha256").update(buffer).digest("hex");

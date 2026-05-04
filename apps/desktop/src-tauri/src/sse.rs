@@ -29,8 +29,6 @@ pub fn spawn_sse_listener(
 ) -> tokio::task::JoinHandle<()> {
   tokio::spawn(async move {
     loop {
-      // SSE endpoint authenticates by session ID + open status only
-      // (no token needed; it was validated on open_docx).
       // Replace localhost with 127.0.0.1 to avoid IPv6 resolution
       // issues with reqwest on macOS.
       let base = api_base_url.replace("localhost", "127.0.0.1");
@@ -61,7 +59,7 @@ pub fn spawn_sse_listener(
           if !r.status().is_success() {
             let status = r.status().as_u16();
             tracing::warn!(session_id = %session_id, status, "SSE rejected");
-            if status == 404 || status == 409 || status == 401 {
+            if status == 404 || status == 409 || status == 401 || status == 403 {
               let mut mgr = manager.lock().await;
               if status == 409 {
                 mgr

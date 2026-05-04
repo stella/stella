@@ -36,6 +36,8 @@ import {
 } from "@/api/lib/email";
 import { AUTH_RATE_LIMIT_MAX_WINDOW, AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
+import { isMemberRole } from "@/api/lib/member-roles";
+import type { MemberRole } from "@/api/lib/member-roles";
 import { enrichRequestContext } from "@/api/lib/observability/request-context";
 import { parseUserAgent } from "@/api/lib/parse-user-agent";
 import {
@@ -304,12 +306,14 @@ const createAuth = () => {
             },
           }
         : {}),
-      ...(env.MICROSOFT_AUTH_CLIENT_ID && env.MICROSOFT_AUTH_CLIENT_SECRET
+      ...(env.MICROSOFT_AUTH_CLIENT_ID &&
+      env.MICROSOFT_AUTH_CLIENT_SECRET &&
+      env.MICROSOFT_AUTH_TENANT_ID
         ? {
             microsoft: {
               clientId: env.MICROSOFT_AUTH_CLIENT_ID,
               clientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
-              tenantId: env.MICROSOFT_AUTH_TENANT_ID ?? "common",
+              tenantId: env.MICROSOFT_AUTH_TENANT_ID,
             },
           }
         : {}),
@@ -537,25 +541,50 @@ export const getAuth = () => {
   return _auth;
 };
 
-export type MemberRole = keyof typeof roles;
+export type { MemberRole } from "@/api/lib/member-roles";
 
 export const getSessionAndMemberRole = async (
   headers: Headers | Record<string, string>,
 ) => {
-  const [sessionResult, memberRoleResult] = await Promise.all([
-    Result.tryPromise(
-      async () =>
-        await getAuth().api.getSession({
-          headers,
-        }),
-    ),
-    Result.tryPromise(
-      async () =>
-        await getAuth().api.getActiveMemberRole({
-          headers,
-        }),
-    ),
-  ]);
+  const sessionResult = await Result.tryPromise(
+    async () =>
+      await getAuth().api.getSession({
+        headers,
+      }),
+  );
+
+  const session = Result.isOk(sessionResult)
+    ? sessionResult.value?.session
+    : null;
+  const user = Result.isOk(sessionResult) ? sessionResult.value?.user : null;
+  const activeOrganizationId = getSessionActiveOrganizationId(session);
+
+  const memberRoleResult =
+    session && user && activeOrganizationId
+      ? await Result.tryPromise(async () => {
+          const row = await db.query.member.findFirst({
+            where: {
+              userId: { eq: user.id },
+              organizationId: { eq: activeOrganizationId },
+            },
+            columns: {
+              role: true,
+            },
+          });
+
+          if (!row) {
+            return null;
+          }
+
+          if (!isMemberRole(row.role)) {
+            return null;
+          }
+
+          return {
+            role: row.role,
+          };
+        })
+      : Result.ok(null);
 
   return {
     sessionResult,
@@ -645,6 +674,9 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
       }
 
       const memberRole = memberRoleResult.value;
+      if (!memberRole) {
+        return status(401);
+      }
       const activeOrganizationId = toSafeId<"organization">(rawOrgId);
       const userId = toSafeId<"user">(user.id);
 

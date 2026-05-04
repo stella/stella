@@ -79,9 +79,6 @@ type DesktopEditSessionEventsHandlerProps = {
 export const desktopEditSessionEventsHandler = async ({
   sessionId,
 }: DesktopEditSessionEventsHandlerProps) => {
-  // SSE connections are authenticated by session ID + open status only.
-  // The token was validated on the initial open_docx call; we don't
-  // re-validate here because token rotation would break reconnects.
   const eventState = await readDesktopEditSessionEventState(sessionId);
 
   if (!eventState) {

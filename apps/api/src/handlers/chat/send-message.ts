@@ -142,6 +142,7 @@ const sendMessage = createSafeRootHandler(
     const thread = yield* Result.await(
       loadThread({
         initialContextMatterIds: requestedContextMatterIds,
+        organizationId: session.activeOrganizationId,
         safeDb,
         threadId: body.threadId,
         title: extractTitle(validatedMessage.message.parts),
@@ -395,6 +396,7 @@ type ThreadRecord = {
 
 type LoadThreadProps = {
   initialContextMatterIds: SafeId<"workspace">[];
+  organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   title: string;
@@ -414,6 +416,7 @@ type LoadThreadResult =
 
 const loadThread = async ({
   initialContextMatterIds,
+  organizationId,
   safeDb,
   threadId,
   title,
@@ -497,6 +500,7 @@ const loadThread = async ({
     const insertResult = await safeDb((tx) =>
       tx.insert(chatThreads).values({
         id: threadId,
+        organizationId,
         title,
         userId,
         workspaceId,

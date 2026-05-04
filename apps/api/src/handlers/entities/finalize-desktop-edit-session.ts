@@ -79,6 +79,14 @@ export const finalizeDesktopEditSessionHandler = async ({
     });
   }
 
+  if (authorizedSession.status === "permission-revoked") {
+    return status(403, {
+      code: "desktop_edit_session_permission_revoked",
+      message:
+        "Desktop edit permission was revoked. Reopen the document from stella.",
+    });
+  }
+
   const uploadedKeys: string[] = [];
   let checkpointKeyToDelete: string | null = null;
   let shouldRollbackUploadedKeys = true;

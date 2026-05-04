@@ -106,8 +106,6 @@ jobs:
       - name: Turbo remote cache
         if: steps.changed-files.outputs.package_checks_required == 'true'
         uses: rharkor/caching-for-turbo@56219402aacc0d06b650d898c222996dbc1191ec # v2.3.14
-        with:
-          max-age: 7d
 
       - name: Install dependencies
         if: steps.changed-files.outputs.package_checks_required == 'true'

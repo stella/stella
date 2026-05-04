@@ -2217,6 +2217,9 @@ export const chatThreads = p.pgTable(
       .text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
     title: p.varchar({ length: 255 }).notNull(),
     /**
      * Matters the chat draws context from. Empty array (the
@@ -2254,6 +2257,9 @@ export const chatThreads = p.pgTable(
     p
       .index("chat_threads_workspace_user_idx")
       .on(table.workspaceId, table.userId),
+    p
+      .index("chat_threads_organization_user_idx")
+      .on(table.organizationId, table.userId),
     p.index("chat_threads_user_updated_idx").on(table.userId, table.updatedAt),
     ...chatThreadPolicies(),
   ],

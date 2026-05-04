@@ -8,6 +8,7 @@ import {
 import {
   desktopEditSessionEventsHandler,
   desktopEditSessionEventsParamsSchema,
+  desktopEditSessionEventsQuerySchema,
 } from "@/api/handlers/entities/desktop-edit-session-events";
 import {
   finalizeDesktopEditSessionBodySchema,
@@ -48,6 +49,7 @@ export const desktopEditSessionsRoute = new Elysia({
       }),
     {
       params: desktopEditSessionEventsParamsSchema,
+      query: desktopEditSessionEventsQuerySchema,
     },
   )
   .post(

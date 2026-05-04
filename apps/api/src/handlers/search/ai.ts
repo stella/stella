@@ -573,6 +573,7 @@ export const createSearchSummaryChatThread = async ({
   const insertResult = await safeDb(async (tx) => {
     await tx.insert(chatThreads).values({
       id: threadId,
+      organizationId,
       title: body.title,
       userId,
       // Search summaries can span multiple workspaces, so the
