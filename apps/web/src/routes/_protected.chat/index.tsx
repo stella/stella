@@ -1,14 +1,24 @@
 import { useEffectEvent, useRef } from "react";
 
+import { Button } from "@stll/ui/components/button";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Maximize2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 
 import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
+import Tooltip from "@/components/tooltip";
+import {
+  getChatAnonymized,
+  useChatAnonymized,
+  useSetChatAnonymized,
+} from "@/lib/chat-anonymized-store";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
+import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
@@ -16,6 +26,7 @@ import {
   chatThreadOptions,
   invalidateGroupedChatThreads,
 } from "@/routes/_protected.chat/-queries";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 export const Route = createFileRoute("/_protected/chat/")({
   component: ChatIndex,
@@ -28,14 +39,34 @@ function ChatIndex() {
   const userContext = useChatUserContext();
   const getUserContext = useEffectEvent(() => userContext);
   const threadIdRef = useRef(uuidv7());
-  const controller = useChatEditor({
-    threadRef: { scope: "global", threadId: threadIdRef.current },
-  });
+  const threadRef: ChatThreadRef = {
+    scope: "global",
+    threadId: threadIdRef.current,
+  };
+  const controller = useChatEditor({ threadRef });
   const stockPrompts = useSavedPrompts();
+  const anonymized = useChatAnonymized(threadRef);
+  const setAnonymized = useSetChatAnonymized(threadRef);
+  const getAnonymized = useEffectEvent(() => getChatAnonymized(threadRef));
+  const openInspectorChat = useInspectorStore((s) => s.openChat);
+
+  const moveToSide = () => {
+    openInspectorChat({ id: threadIdRef.current });
+    void navigate({ to: "/chat" });
+  };
 
   return (
     <div className="flex w-full max-w-2xl flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-end px-4 py-2">
+      <div className="flex items-center justify-end gap-1 px-4 py-2">
+        <ChatAnonymizedToggle enabled={anonymized} onChange={setAnonymized} />
+        <Tooltip
+          content={t("chat.moveToSide")}
+          render={
+            <Button onClick={moveToSide} size="icon-sm" variant="ghost">
+              <Maximize2Icon className="size-4" />
+            </Button>
+          }
+        />
         <ThreadsSheet />
       </div>
       <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4">
@@ -55,10 +86,11 @@ function ChatIndex() {
               const message = await buildChatRequestMessage(draft);
               const { chat } = await queryClient.ensureQueryData(
                 chatThreadOptions({
-                  key: { scope: "global", threadId: threadIdRef.current },
+                  key: threadRef,
                   context: {
                     allowMissingThread: true,
                     getUserContext,
+                    getAnonymized,
                   },
                 }),
               );

@@ -3,7 +3,7 @@ import { useEffectEvent, useState } from "react";
 import { Button, buttonVariants } from "@stll/ui/components/button";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { PanelRightIcon, PlusIcon } from "lucide-react";
+import { Maximize2Icon, PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -16,6 +16,10 @@ import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import Tooltip from "@/components/tooltip";
+import {
+  useChatAnonymized,
+  useSetChatAnonymized,
+} from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
@@ -59,7 +63,8 @@ export const ChatThreadPage = ({
   const [seededForThreadId, setSeededForThreadId] = useState<string | null>(
     null,
   );
-  const [anonymized, setAnonymized] = useState(false);
+  const anonymized = useChatAnonymized(threadRef);
+  const setAnonymized = useSetChatAnonymized(threadRef);
   const getContextMatterIds = useEffectEvent(() => contextMatterIds ?? []);
   const getAnonymized = useEffectEvent(() => anonymized);
 
@@ -175,7 +180,7 @@ export const ChatThreadPage = ({
             content={t("chat.moveToSide")}
             render={
               <Button onClick={moveToSide} size="icon-sm" variant="ghost">
-                <PanelRightIcon className="size-4" />
+                <Maximize2Icon className="size-4" />
               </Button>
             }
           />
