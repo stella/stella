@@ -72,9 +72,8 @@ export const createPostHogAnalytics = (
       logDevError(error);
       posthog.captureException(error);
     },
-    capturePageViewed: ({ href, path }) => {
+    capturePageViewed: ({ path }) => {
       posthog.capture(WEB_ANALYTICS_EVENTS.pageViewed, {
-        href,
         path,
       });
     },

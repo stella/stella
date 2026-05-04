@@ -141,12 +141,10 @@ describe("PostHog browser analytics adapter", () => {
     );
 
     analytics.capturePageViewed({
-      href: "/cases?tab=active",
       path: "/cases",
     });
 
     expect(captureMock).toHaveBeenCalledWith(WEB_ANALYTICS_EVENTS.pageViewed, {
-      href: "/cases?tab=active",
       path: "/cases",
     });
   });

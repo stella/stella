@@ -99,7 +99,6 @@ export function getRouter() {
 
   router.subscribe("onResolved", ({ toLocation }) => {
     analyticsValue.analytics.capturePageViewed({
-      href: toLocation.href,
       path: toLocation.pathname,
     });
   });

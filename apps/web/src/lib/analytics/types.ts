@@ -19,7 +19,6 @@ export type AnalyticsResetOptions = {
 };
 
 export type PageViewedProperties = {
-  href: string;
   path: string;
 };
 
