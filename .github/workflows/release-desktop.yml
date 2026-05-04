@@ -51,6 +51,17 @@ jobs:
       # production manifest.
       channel: ${{ steps.ref.outputs.channel }}
     steps:
+      # Lightweight first-pass checkout of the workflow's own ref
+      # (not the release tag yet — that resolves below) so the
+      # Resolve step can shell out to scripts/release-channel.sh.
+      # The pinned-SHA checkout further down then re-checks out
+      # the release commit for everything else.
+      - name: Checkout workflow scripts
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          sparse-checkout: scripts
+          sparse-checkout-cone-mode: false
+
       - name: Resolve release ref
         id: ref
         env:
@@ -113,18 +124,11 @@ jobs:
             exit 1
           fi
 
-          # Derive the updater channel from the tag suffix:
-          #   v0.0.2          -> "" (stable channel, default updater feed)
-          #   v0.0.2-rc.1     -> "rc"
-          #   v0.0.2-beta.3   -> "beta"
-          # The S3 mirror keys off this so an rc tag never overwrites
-          # the production manifest at /desktop/prod/latest.json.
-          if [[ "$REF" == *-* ]]; then
-            CHANNEL="${REF#*-}"
-            CHANNEL="${CHANNEL%%.*}"
-          else
-            CHANNEL=""
-          fi
+          # Resolve the channel via the shared script so the
+          # in-binary updater endpoint, the manifest mirror path,
+          # and the CloudFront invalidation key all derive from
+          # exactly the same logic. See scripts/release-channel.sh.
+          CHANNEL=$(bash scripts/release-channel.sh "$REF")
 
           echo "value=$REF" >> "$GITHUB_OUTPUT"
           echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
@@ -275,6 +279,25 @@ jobs:
             const out = toml.replace(/^version = \"[^\"]+\"/m, 'version = \"' + process.env.VERSION + '\"');
             fs.writeFileSync(path, out);
           "
+
+      # The updater endpoint is baked into the binary at build time.
+      # Without per-channel pinning, every build (stable + rc + beta)
+      # would poll the same endpoint, defeating the channel split on
+      # the publish side. Stamp the channel-specific URL into the
+      # config so an rc-built install only ever sees rc updates.
+      - name: Pin updater endpoint to release channel
+        shell: bash
+        env:
+          CHANNEL: ${{ needs.resolve.outputs.channel }}
+        run: |
+          channel_dir="${CHANNEL:-prod}"
+          endpoint="https://downloads.stll.app/desktop/$channel_dir/latest.json"
+          conf=apps/desktop/src-tauri/tauri.conf.json
+          jq --arg e "$endpoint" \
+            '.plugins.updater.endpoints = [$e]' \
+            "$conf" > "$conf.tmp"
+          mv "$conf.tmp" "$conf"
+          echo "Updater endpoint set to: $endpoint"
 
       # ─── Windows: Azure Trusted Signing ────────────────────
       # trusted-signing-cli is invoked by Tauri's bundler via
