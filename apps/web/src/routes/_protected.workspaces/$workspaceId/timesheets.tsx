@@ -45,6 +45,11 @@ export const Route = createFileRoute(
     throw redirect({
       to: "/workspaces/$workspaceId",
       params: { workspaceId: params.workspaceId },
+      // Replace `/timesheets` rather than push the overview on top
+      // of it. Pushing creates a back-button loop: Back from the
+      // overview returns to `/timesheets`, which immediately
+      // redirects forward again. Per Codex review on PR #80.
+      replace: true,
     });
   },
   component: TimesheetsPage,
