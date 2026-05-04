@@ -67,6 +67,14 @@ export const SuggestionsFacet = ({
   // effect and fires another navigate — an unstoppable loop.
   const hasDispatchedRef = useRef(false);
 
+  // Stable boolean: only flips when the callback transitions
+  // present ↔ absent (i.e. when the inspector marks this tab as
+  // active or inactive). Including the callback itself in the
+  // effect's dep list would re-fire on every parent render —
+  // this collapses the prop reference change into a single
+  // boolean we can safely depend on.
+  const hasOnMissingEditor = onMissingEditor !== undefined;
+
   useEffect(() => {
     if (registration !== undefined) {
       hasDispatchedRef.current = false;
@@ -75,9 +83,18 @@ export const SuggestionsFacet = ({
     if (hasDispatchedRef.current) {
       return;
     }
+    const dispatch = onMissingEditorRef.current;
+    if (!dispatch) {
+      // No callback (this tab isn't active). Don't latch — when
+      // the tab becomes active later, the callback appears and
+      // `hasOnMissingEditor` flipping triggers a re-run below
+      // that picks up the still-missing registration and fires.
+      // Per Codex review on PR #80.
+      return;
+    }
     hasDispatchedRef.current = true;
-    onMissingEditorRef.current?.();
-  }, [registration]);
+    dispatch();
+  }, [registration, hasOnMissingEditor]);
 
   return (
     <ReviewPanel
