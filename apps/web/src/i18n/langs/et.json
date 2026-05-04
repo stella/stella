@@ -1466,6 +1466,10 @@
     "archiveMatter": "Arhiveeri",
     "archived": "Arhiveeritud",
     "archivedBadge": "Archived",
+    "create": {
+      "ownerTypeToggle": "Toimiku tüüp",
+      "personalDescription": "Isiklikud asjad on privaatsed ega vaja klienti. Saate need hiljem edutada, et meeskonnaga jagada."
+    },
     "createNewWorkspace": "Loo uus toimik",
     "defaultName": "Pealkirjata",
     "deleteItem": "Kustuta element",
@@ -1650,6 +1654,10 @@
       "upcomingTasks": "Tulevane agenda",
       "uploaded": "laadis üles"
     },
+    "ownerType": {
+      "client": "Klient",
+      "personal": "Isiklik"
+    },
     "parties": {
       "addParty": "Lisa osapool",
       "changeClient": "Muuda klienti",
@@ -1667,6 +1675,11 @@
         "third_party": "Kolmas isik",
         "witness": "Tunnistaja"
       },
+      "personalDescription": "Isiklikud asjad on ainult teile nähtavad. Edutage kliendile, et meeskonnaga jagada.",
+      "personalLabel": "Isiklik",
+      "promoteCta": "Eduta kliendile",
+      "promoteDescription": "Lisage klient, et seda toimikut meeskonnaga jagada. See on ühesuunaline — edutatud toimikuid ei saa tagasi isiklikuks muuta.",
+      "promotedSuccess": "Toimik edutatud",
       "removeClient": "Eemalda klient",
       "removeParty": "Eemalda osapool",
       "removePartyConfirm": "Kas olete kindel, et soovite selle osapoole toimikust eemaldada?",

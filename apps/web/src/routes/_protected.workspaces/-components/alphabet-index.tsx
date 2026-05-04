@@ -63,7 +63,10 @@ export const AlphabetIndex = ({
     const seenLetters = new Set<string>();
 
     for (const g of groups) {
-      const letter = g.clientName.at(0)?.toUpperCase() ?? "#";
+      const letter =
+        g.type === "personal"
+          ? "★"
+          : (g.clientName.at(0)?.toUpperCase() ?? "#");
 
       if (seenLetters.has(letter)) {
         continue;

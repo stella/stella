@@ -1466,6 +1466,10 @@
     "archiveMatter": "Archivar",
     "archived": "Archivado",
     "archivedBadge": "Archived",
+    "create": {
+      "ownerTypeToggle": "Tipo de asunto",
+      "personalDescription": "Los asuntos personales son privados y no requieren cliente. Puede promocionarlos más tarde para compartir con el equipo."
+    },
     "createNewWorkspace": "Crear nuevo asunto",
     "defaultName": "Sin título",
     "deleteItem": "Eliminar elemento",
@@ -1650,6 +1654,10 @@
       "upcomingTasks": "Próxima agenda",
       "uploaded": "subió"
     },
+    "ownerType": {
+      "client": "Cliente",
+      "personal": "Personal"
+    },
     "parties": {
       "addParty": "Añadir parte",
       "changeClient": "Cambiar cliente",
@@ -1667,6 +1675,11 @@
         "third_party": "Tercero",
         "witness": "Testigo"
       },
+      "personalDescription": "Los asuntos personales son privados. Promocione a un cliente para compartir con el equipo.",
+      "personalLabel": "Personal",
+      "promoteCta": "Promocionar a cliente",
+      "promoteDescription": "Asigne un cliente para compartir este asunto con el equipo. Es irreversible — los asuntos promocionados no pueden volver a ser personales.",
+      "promotedSuccess": "Asunto promocionado",
       "removeClient": "Eliminar cliente",
       "removeParty": "Eliminar parte",
       "removePartyConfirm": "¿Está seguro de que desea eliminar esta parte del asunto?",

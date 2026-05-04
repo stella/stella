@@ -398,7 +398,11 @@ const MatterItem = ({
         <SidebarMenuButton
           asChild
           className="pe-12"
-          tooltip={[ws.name, ws.client?.displayName, ws.reference]
+          tooltip={[
+            ws.name,
+            ws.client?.displayName ?? t("workspaces.parties.personalLabel"),
+            ws.reference,
+          ]
             .filter(Boolean)
             .join(" — ")}
         >
@@ -410,22 +414,15 @@ const MatterItem = ({
             <MatterIcon color={ws.color} id={ws.id} />
             <span className="flex min-w-0 flex-col">
               <span className="truncate">{ws.name}</span>
-              {ws.client ? (
-                <span
-                  className="text-muted-foreground truncate text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100"
-                  title={formatFullTimestamp(ws.lastActivityAt, lang)}
-                >
-                  {ws.client.displayName}
-                  {relTime ? ` · ${relTime}` : ""}
-                </span>
-              ) : (
-                <span
-                  className="text-muted-foreground font-mono text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100"
-                  title={formatFullTimestamp(ws.lastActivityAt, lang)}
-                >
-                  {ws.reference ? `${ws.reference} · ${relTime}` : relTime}
-                </span>
-              )}
+              <span
+                className="text-muted-foreground truncate text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100"
+                title={formatFullTimestamp(ws.lastActivityAt, lang)}
+              >
+                {ws.client
+                  ? ws.client.displayName
+                  : t("workspaces.parties.personalLabel")}
+                {relTime ? ` · ${relTime}` : ""}
+              </span>
             </span>
           </Link>
         </SidebarMenuButton>
@@ -473,15 +470,16 @@ const MatterItem = ({
                   }}
                 >
                   <div className="truncate text-xs font-medium">{ws.name}</div>
-                  {ws.client && (
-                    <div className="text-muted-foreground truncate text-xs">
-                      {ws.client.displayName}
-                    </div>
-                  )}
+                  <div className="text-muted-foreground truncate text-xs">
+                    {ws.client
+                      ? ws.client.displayName
+                      : t("workspaces.parties.personalLabel")}
+                  </div>
                 </div>
                 <MenuSeparator />
                 <MatterMenuItems
                   isArchived={false}
+                  isPersonal={!ws.client}
                   isPinned={isPinned}
                   onAddMember={() => setAddMemberOpen(true)}
                   onArchive={() =>

@@ -294,7 +294,6 @@ type Messages = {
       "toastDescription": "Full-page chat lands with persisted threads.";
       "toastTitle": "Full view not yet available";
     };
-    "folioCitationFallback": "p. {n}";
     "anonymizedMode": "Anonymized AI mode";
     "anonymizedModeDisabled": "Anonymized AI mode is off";
     "anonymizedModeEnabled": "Anonymized AI mode is on";
@@ -337,6 +336,7 @@ type Messages = {
     "filePlaceholder": "Chat about {fileName}";
     "filePlaceholderAction": "Chat about";
     "fileTooLarge": "File exceeds {maxSize} limit";
+    "folioCitationFallback": "p. {n}";
     "greeting": "What would you like to work on?";
     "maxAttachmentsReached": "Maximum {count} files per message";
     "mention": {
@@ -1469,6 +1469,10 @@ type Messages = {
     "archiveMatter": "Archive";
     "archived": "Archived";
     "archivedBadge": "Archived";
+    "create": {
+      "ownerTypeToggle": "Matter type";
+      "personalDescription": "Personal matters are private to you and don't need a client. You can promote them later to share with the team.";
+    };
     "createNewWorkspace": "Create new matter";
     "defaultName": "Untitled";
     "deleteItem": "Delete item";
@@ -1653,6 +1657,10 @@ type Messages = {
       "upcomingTasks": "Upcoming agenda";
       "uploaded": "uploaded";
     };
+    "ownerType": {
+      "client": "Client";
+      "personal": "Personal";
+    };
     "parties": {
       "addParty": "Add party";
       "changeClient": "Change client";
@@ -1670,6 +1678,11 @@ type Messages = {
         "third_party": "Third party";
         "witness": "Witness";
       };
+      "personalDescription": "Personal matters are private to you. Promote to a client to share with the team.";
+      "personalLabel": "Personal";
+      "promoteCta": "Promote to client";
+      "promoteDescription": "Attach a client to share this matter with the team. This is one-way — promoted matters cannot return to personal.";
+      "promotedSuccess": "Matter promoted";
       "removeClient": "Remove client";
       "removeParty": "Remove party";
       "removePartyConfirm": "Are you sure you want to remove this party from the matter?";

@@ -99,4 +99,70 @@ describe("createWorkspaces", () => {
     });
     expect(getCallCount()).toBe(1);
   });
+
+  test("personal workspace skips the contacts lookup", async () => {
+    // Force an early return on the workspaces-limit branch so the
+    // handler never reaches the audit log (which the test fixture
+    // does not set up). The assertion of interest is that the
+    // contact lookup query was not issued at all.
+    const countSelect = {
+      from: () => ({
+        where: async () => [{ total: 1_000_000 }],
+      }),
+    };
+    let clientSelectCalls = 0;
+
+    const { safeDb, scopedDb } = createScopedDbMock({
+      select: (fields: Record<string, unknown>) => {
+        if ("total" in fields) {
+          return countSelect;
+        }
+        if ("id" in fields) {
+          clientSelectCalls += 1;
+          return {
+            from: () => ({
+              where: () => ({
+                for: () => ({
+                  limit: async () => [],
+                }),
+              }),
+            }),
+          };
+        }
+        return {
+          from: () => ({
+            where: () => ({
+              for: async () => [],
+            }),
+          }),
+        };
+      },
+      query: {
+        organizationSettings: {
+          findFirst: async () => null,
+        },
+      },
+    });
+
+    const result = await createWorkspaces.handler(
+      createContext({
+        body: {
+          id: toSafeId<"workspace">(Bun.randomUUIDv7()),
+          name: "Scratchpad",
+          filePropertyName: "Documents",
+        },
+        safeDb,
+        scopedDb,
+      }),
+    );
+
+    // 400 from the workspaces-limit branch confirms we got past the
+    // schema gate without a client lookup; 0 calls confirms the
+    // contacts table was never queried for a personal matter.
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Workspaces limit reached" },
+    });
+    expect(clientSelectCalls).toBe(0);
+  });
 });

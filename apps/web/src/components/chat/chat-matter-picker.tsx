@@ -67,7 +67,7 @@ export const ChatMatterPicker = ({
   const { data } = useQuery(workspacesNavigationOptions);
   const workspaces = data?.workspaces;
 
-  const directLabel = t("inspector.matterPicker.directLabel");
+  const personalLabel = t("workspaces.parties.personalLabel");
   const matters = useMemo<Matter[]>(() => {
     if (!workspaces) {
       return [];
@@ -77,9 +77,9 @@ export const ChatMatterPicker = ({
       name: w.name,
       color: w.color,
       clientKey: w.client?.id ?? NO_CLIENT_KEY,
-      clientLabel: w.client?.displayName ?? directLabel,
+      clientLabel: w.client?.displayName ?? personalLabel,
     }));
-  }, [workspaces, directLabel]);
+  }, [workspaces, personalLabel]);
 
   const matterById = useMemo(() => {
     const map = new Map<string, Matter>();

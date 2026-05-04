@@ -64,6 +64,7 @@ export const MatterCard = ({
 
   return (
     <MatterContextMenu
+      isPersonal={!workspace.client}
       workspaceId={workspace.id}
       workspaceName={workspace.name ?? t("workspaces.defaultName")}
     >
@@ -122,16 +123,21 @@ export const MatterCard = ({
             </div>
 
             {/* Line 1.5: client name (flat view only) */}
-            {!hideClientName && (
-              <Link
-                className="text-muted-foreground hover:text-foreground relative z-10 -mt-1 truncate text-xs hover:underline"
-                onClick={(e) => e.stopPropagation()}
-                params={{ contactId: workspace.client.id }}
-                to="/contacts/$contactId"
-              >
-                {workspace.client.displayName}
-              </Link>
-            )}
+            {!hideClientName &&
+              (workspace.client ? (
+                <Link
+                  className="text-muted-foreground hover:text-foreground relative z-10 -mt-1 truncate text-xs hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                  params={{ contactId: workspace.client.id }}
+                  to="/contacts/$contactId"
+                >
+                  {workspace.client.displayName}
+                </Link>
+              ) : (
+                <span className="text-muted-foreground -mt-1 truncate text-xs italic">
+                  {t("workspaces.parties.personalLabel")}
+                </span>
+              ))}
 
             {/* Line 2: tasks/items + deadline (left) | last active (right) */}
             <div className="flex items-center justify-between gap-2 text-xs">

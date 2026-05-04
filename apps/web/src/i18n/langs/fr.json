@@ -1466,6 +1466,10 @@
     "archiveMatter": "Archiver",
     "archived": "Archivé",
     "archivedBadge": "Archived",
+    "create": {
+      "ownerTypeToggle": "Type de dossier",
+      "personalDescription": "Les dossiers personnels sont privés et ne nécessitent pas de client. Vous pourrez les promouvoir plus tard pour les partager avec l'équipe."
+    },
     "createNewWorkspace": "Créer un nouveau dossier",
     "defaultName": "Sans titre",
     "deleteItem": "Supprimer l'élément",
@@ -1650,6 +1654,10 @@
       "upcomingTasks": "Agenda à venir",
       "uploaded": "a importé"
     },
+    "ownerType": {
+      "client": "Client",
+      "personal": "Personnel"
+    },
     "parties": {
       "addParty": "Ajouter une partie",
       "changeClient": "Changer de client",
@@ -1667,6 +1675,11 @@
         "third_party": "Tiers",
         "witness": "Témoin"
       },
+      "personalDescription": "Les dossiers personnels sont privés. Promouvoir vers un client pour partager avec l'équipe.",
+      "personalLabel": "Personnel",
+      "promoteCta": "Promouvoir au client",
+      "promoteDescription": "Associez un client pour partager ce dossier avec l'équipe. Action irréversible — les dossiers promus ne peuvent pas redevenir personnels.",
+      "promotedSuccess": "Dossier promu",
       "removeClient": "Retirer le client",
       "removeParty": "Retirer la partie",
       "removePartyConfirm": "Voulez-vous vraiment retirer cette partie du dossier ?",

@@ -1466,6 +1466,10 @@
     "archiveMatter": "Archiwizuj",
     "archived": "Zarchiwizowana",
     "archivedBadge": "Zarchiwizowana",
+    "create": {
+      "ownerTypeToggle": "Typ sprawy",
+      "personalDescription": "Sprawy osobiste są prywatne i nie wymagają klienta. Możesz je później awansować, aby udostępnić zespołowi."
+    },
     "createNewWorkspace": "Utwórz nową sprawę",
     "defaultName": "Bez tytułu",
     "deleteItem": "Usuń element",
@@ -1650,6 +1654,10 @@
       "upcomingTasks": "Nadchodząca agenda",
       "uploaded": "przesłał(a)"
     },
+    "ownerType": {
+      "client": "Klient",
+      "personal": "Osobista"
+    },
     "parties": {
       "addParty": "Dodaj stronę",
       "changeClient": "Zmień klienta",
@@ -1667,6 +1675,11 @@
         "third_party": "Strona trzecia",
         "witness": "Świadek"
       },
+      "personalDescription": "Sprawy osobiste są prywatne. Awansuj je na sprawy klienckie, aby udostępnić zespołowi.",
+      "personalLabel": "Osobista",
+      "promoteCta": "Awansuj na sprawę kliencką",
+      "promoteDescription": "Przypisz klienta, aby udostępnić tę sprawę zespołowi. Działanie jest nieodwracalne — awansowane sprawy nie mogą wrócić do osobistych.",
+      "promotedSuccess": "Sprawa awansowana",
       "removeClient": "Usuń klienta",
       "removeParty": "Usuń stronę",
       "removePartyConfirm": "Czy na pewno chcesz usunąć tę stronę ze sprawy?",

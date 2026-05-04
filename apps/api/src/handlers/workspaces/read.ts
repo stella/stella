@@ -192,9 +192,11 @@ const readWorkspaces = createSafeRootHandler(
 
     const workspaces = result.map((workspace) => {
       const { client } = workspace;
-      if (!client) {
+      if (workspace.clientId !== null && !client) {
+        // Should be impossible: a non-null clientId is an FK that
+        // resolves via the eager-loaded `client` relation.
         throw new Error(
-          `workspace ${workspace.id} has no client (NOT NULL invariant)`,
+          `workspace ${workspace.id} has clientId set but no client row`,
         );
       }
       return {
@@ -205,11 +207,13 @@ const readWorkspaces = createSafeRootHandler(
         color: workspace.color,
         lastActivityAt: workspace.lastActivityAt,
         createdAt: workspace.createdAt,
-        client: {
-          id: client.id,
-          displayName: client.displayName,
-          responsibleAttorneyName: client.responsibleAttorney?.name ?? null,
-        },
+        client: client
+          ? {
+              id: client.id,
+              displayName: client.displayName,
+              responsibleAttorneyName: client.responsibleAttorney?.name ?? null,
+            }
+          : null,
         entityCount: countMap.get(workspace.id) ?? 0,
         openTaskCount: openTaskMap.get(workspace.id) ?? 0,
         nextDeadline: deadlineMap.get(workspace.id) ?? null,

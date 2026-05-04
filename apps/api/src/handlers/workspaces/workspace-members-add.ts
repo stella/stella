@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { workspaceMembers } from "@/api/db/schema";
+import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tUserId } from "@/api/lib/custom-schema";
@@ -47,7 +47,28 @@ const addWorkspaceMember = createSafeHandler(
     }
 
     const txResult = await safeDb(async (tx) => {
-      // Lock rows then count to serialize concurrent adds.
+      // Lock the workspace row first so a concurrent promote
+      // can't change clientId between this read and the insert.
+      // Personal matters (clientId IS NULL) are creator-only by
+      // contract; the frontend hides the "add member" affordance,
+      // but enforce it here too so the endpoint cannot be used to
+      // bypass that gate (defense in depth, SOC 2).
+      const workspaceRows = await tx
+        .select({ clientId: workspaces.clientId })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId))
+        .for("update");
+      const workspace = workspaceRows.at(0);
+
+      if (!workspace) {
+        return { ok: false as const, reason: "not_found" as const };
+      }
+
+      if (workspace.clientId === null) {
+        return { ok: false as const, reason: "personal" as const };
+      }
+
+      // Lock workspace_members rows then count to serialize concurrent adds.
       // PG rejects FOR UPDATE with aggregate functions, so
       // we select rows first and count in application code.
       const lockedRows = await tx
@@ -91,6 +112,19 @@ const addWorkspaceMember = createSafeHandler(
     }
 
     if (!txResult.value.ok) {
+      if (txResult.value.reason === "not_found") {
+        return Result.err(
+          new HandlerError({ status: 404, message: "Workspace not found" }),
+        );
+      }
+      if (txResult.value.reason === "personal") {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Assign a client before adding members",
+          }),
+        );
+      }
       return Result.err(
         new HandlerError({
           status: 400,

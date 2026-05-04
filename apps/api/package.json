@@ -18,7 +18,7 @@
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware apps/api",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/api",
     "format": "oxfmt .",
-    "db:push": "bun scripts/check-clientless-workspaces.ts && bun --bun drizzle-kit push",
+    "db:push": "bun --bun drizzle-kit push",
     "db:seed-test-user": "bun scripts/seed-test-user.ts",
     "db:seed-dev": "bun scripts/seed-dev.ts",
     "db:seed-templates": "bun scripts/seed-templates.ts",

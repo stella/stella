@@ -384,9 +384,13 @@ export const workspaces = p.pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     name: p.varchar({ length: 256 }).notNull(),
     reference: p.varchar({ length: 64 }).notNull(),
-    clientId: safeUuid<"contact">("client_id")
-      .notNull()
-      .references(() => contacts.id, { onDelete: "restrict" }),
+    // Nullable: a null client_id encodes a personal matter (visible
+    // only to the creator via workspace_members). A non-null client_id
+    // is a normal client matter. Personal -> client is a one-way
+    // promotion handled by the update endpoint.
+    clientId: safeUuid<"contact">("client_id").references(() => contacts.id, {
+      onDelete: "restrict",
+    }),
     billingReference: p.varchar("billing_reference", {
       length: 128,
     }),
@@ -405,7 +409,8 @@ export const workspaces = p.pgTable(
       .on(table.organizationId, table.reference),
     p
       .index("workspaces_org_client_id_idx")
-      .on(table.organizationId, table.clientId),
+      .on(table.organizationId, table.clientId)
+      .where(isNotNull(table.clientId)),
     p.pgPolicy("workspace_select", {
       for: "select",
       to: stella,

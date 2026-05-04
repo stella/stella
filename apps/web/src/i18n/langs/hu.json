@@ -1466,6 +1466,10 @@
     "archiveMatter": "Archiválás",
     "archived": "Archivált",
     "archivedBadge": "Archived",
+    "create": {
+      "ownerTypeToggle": "Ügy típusa",
+      "personalDescription": "A személyes ügyek privátak és nem igényelnek ügyfelet. Később előléptethetők, hogy megoszthassa a csapattal."
+    },
     "createNewWorkspace": "Új ügy létrehozása",
     "defaultName": "Névtelen",
     "deleteItem": "Elem törlése",
@@ -1650,6 +1654,10 @@
       "upcomingTasks": "Közelgő agenda",
       "uploaded": "feltöltötte"
     },
+    "ownerType": {
+      "client": "Ügyfél",
+      "personal": "Személyes"
+    },
     "parties": {
       "addParty": "Fél hozzáadása",
       "changeClient": "Ügyfél módosítása",
@@ -1667,6 +1675,11 @@
         "third_party": "Harmadik fél",
         "witness": "Tanú"
       },
+      "personalDescription": "A személyes ügyek csak az Ön számára láthatók. Léptesse elő ügyfélüggyé a csapattal való megosztáshoz.",
+      "personalLabel": "Személyes",
+      "promoteCta": "Előléptetés ügyfélüggyé",
+      "promoteDescription": "Csatoljon ügyfelet az ügy csapattal való megosztásához. Az előléptetés végleges — az előléptetett ügy nem vonható vissza személyesre.",
+      "promotedSuccess": "Ügy előléptetve",
       "removeClient": "Ügyfél eltávolítása",
       "removeParty": "Fél eltávolítása",
       "removePartyConfirm": "Biztosan eltávolítja ezt a felet az ügyből?",

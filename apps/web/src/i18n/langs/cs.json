@@ -1466,6 +1466,10 @@
     "archiveMatter": "Archivovat",
     "archived": "Archivované",
     "archivedBadge": "Archivováno",
+    "create": {
+      "ownerTypeToggle": "Typ spisu",
+      "personalDescription": "Osobní spisy jsou soukromé a nepotřebují klienta. Později je můžete povýšit a sdílet s týmem."
+    },
     "createNewWorkspace": "Vytvořit nový spis",
     "defaultName": "Bez názvu",
     "deleteItem": "Smazat položku",
@@ -1650,6 +1654,10 @@
       "upcomingTasks": "Nadcházející agenda",
       "uploaded": "nahrál(a)"
     },
+    "ownerType": {
+      "client": "Klient",
+      "personal": "Osobní"
+    },
     "parties": {
       "addParty": "Přidat stranu",
       "changeClient": "Změnit klienta",
@@ -1667,6 +1675,11 @@
         "third_party": "Třetí strana",
         "witness": "Svědek"
       },
+      "personalDescription": "Osobní spisy jsou jen pro vás. Povýšením na klientský spis je sdílíte s týmem.",
+      "personalLabel": "Osobní",
+      "promoteCta": "Povýšit na klientský spis",
+      "promoteDescription": "Přidělením klienta sdílíte spis s týmem. Změna je nevratná — spis nelze vrátit na osobní.",
+      "promotedSuccess": "Spis povýšen",
       "removeClient": "Odebrat klienta",
       "removeParty": "Odebrat stranu",
       "removePartyConfirm": "Opravdu chcete odebrat tuto stranu ze spisu?",
