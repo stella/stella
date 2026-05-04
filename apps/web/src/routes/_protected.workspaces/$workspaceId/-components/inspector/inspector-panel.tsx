@@ -1273,36 +1273,51 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   // the registration.
                   // TODO: replace with an in-app approval flow that
                   // doesn't need the full editor mounted.
-                  onMissingEditor={() => {
-                    // Pre-select the suggestions facet on the
-                    // inspector store so the document route's
-                    // inspector lands directly on this panel
-                    // instead of the default Preview.
-                    setPdfFacet(tab.id, "suggestions");
-                    // Replace the current history entry rather than
-                    // pushing a new one. This is an automatic,
-                    // user-didn't-click-anything redirect: pushing
-                    // creates a back-button trap (Back returns to
-                    // the previous sidepeek state, which immediately
-                    // remounts SuggestionsFacet without an editor
-                    // and pushes again — bouncing). With `replace`
-                    // the same Back gesture takes the user out of
-                    // the suggestions flow entirely. Per Codex
-                    // review on PR #80.
-                    void navigate({
-                      to: "/workspaces/$workspaceId/$viewId/document",
-                      params: {
-                        workspaceId: tab.workspaceId,
-                        viewId: peekPdfViewId,
-                      },
-                      replace: true,
-                      search: (prev) => ({
-                        ...prev,
-                        entity: tab.entityId,
-                        field: tab.id,
-                      }),
-                    });
-                  }}
+                  //
+                  // Only the *active* tab is allowed to redirect.
+                  // Non-active PDF tabs stay mounted (CSS-hidden) so
+                  // their facet panels still run effects; without
+                  // this gate a background tab whose facet happens
+                  // to be "suggestions" would hijack the route to
+                  // its own document view. Per Codex review on
+                  // PR #80.
+                  {...(isActive
+                    ? {
+                        onMissingEditor: () => {
+                          // Pre-select the suggestions facet on
+                          // the inspector store so the document
+                          // route's inspector lands directly on
+                          // this panel instead of the default
+                          // Preview.
+                          setPdfFacet(tab.id, "suggestions");
+                          // Replace the current history entry
+                          // rather than pushing a new one. This is
+                          // an automatic, user-didn't-click-anything
+                          // redirect: pushing creates a back-button
+                          // trap (Back returns to the previous
+                          // sidepeek state, which immediately
+                          // remounts SuggestionsFacet without an
+                          // editor and pushes again — bouncing).
+                          // With `replace` the same Back gesture
+                          // takes the user out of the suggestions
+                          // flow entirely. Per Codex review on
+                          // PR #80.
+                          void navigate({
+                            to: "/workspaces/$workspaceId/$viewId/document",
+                            params: {
+                              workspaceId: tab.workspaceId,
+                              viewId: peekPdfViewId,
+                            },
+                            replace: true,
+                            search: (prev) => ({
+                              ...prev,
+                              entity: tab.entityId,
+                              field: tab.id,
+                            }),
+                          });
+                        },
+                      }
+                    : {})}
                 />
               )}
             </div>
