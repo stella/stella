@@ -43,6 +43,7 @@ import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
+import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
@@ -98,6 +99,12 @@ export const ChatTabPanel = ({
       : undefined,
   );
   const t = useTranslations();
+  const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
+
+  useEffect(() => {
+    openIfAIUnavailable();
+  }, [openIfAIUnavailable]);
+
   // Read live tab state on every send. The Chat instance is created
   // once and cached per `threadRef`, so a plain closure over `tab`
   // would freeze the IDs from the render that built the instance —
@@ -286,10 +293,15 @@ export const ChatTabPanel = ({
           void stop();
         }}
         onSubmit={({ prompt }) => {
-          // PromptBar emits the raw editor HTML; the legacy
-          // backend already parses `<entity-mention>` tags out
-          // of the `text` field, so we forward unchanged.
-          void sendMessage({ text: prompt });
+          void ensureAIAvailable().then((available) => {
+            if (!available) {
+              return;
+            }
+            // PromptBar emits the raw editor HTML; the legacy
+            // backend already parses `<entity-mention>` tags out
+            // of the `text` field, so we forward unchanged.
+            void sendMessage({ text: prompt });
+          });
         }}
         onTogglePanel={() => {
           // Standalone has no thread toggle; never called.

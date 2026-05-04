@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import {
   useSuspenseInfiniteQuery,
@@ -8,6 +8,7 @@ import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { ClockIcon, HashIcon, TableIcon, UserIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { useAIKeyGate } from "@/components/require-ai-key";
 import type { WorkspaceView } from "@/lib/types";
 import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
@@ -45,6 +46,7 @@ type TableLayoutProps = {
 
 export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   const t = useTranslations();
+  const { openIfAIUnavailable } = useAIKeyGate();
   const tableState = useTableState({ workspaceId, view });
 
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
@@ -56,6 +58,10 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       }),
     [properties, view.layout.hiddenProperties],
   );
+
+  useEffect(() => {
+    openIfAIUnavailable();
+  }, [openIfAIUnavailable]);
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useSuspenseInfiniteQuery(

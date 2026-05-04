@@ -36,6 +36,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
+import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
 import { ShortcutHintsOverlay } from "@/components/shortcut-hints-overlay";
@@ -175,14 +176,16 @@ function ProtectedComponent() {
   return (
     <SidebarProvider>
       <ChatMentionProviders>
-        <ChatEditorProvider>
-          <GlobalChatMentionRegistration />
-          <AppSidebar />
-          <CreateMatterDialog />
-          <ProtectedContent decisionId={activeDecisionId} />
-          <WorkspaceInspectorSidePanel />
-          <ShortcutHintsOverlay />
-        </ChatEditorProvider>
+        <AIAvailabilityProvider>
+          <ChatEditorProvider>
+            <GlobalChatMentionRegistration />
+            <AppSidebar />
+            <CreateMatterDialog />
+            <ProtectedContent decisionId={activeDecisionId} />
+            <WorkspaceInspectorSidePanel />
+            <ShortcutHintsOverlay />
+          </ChatEditorProvider>
+        </AIAvailabilityProvider>
       </ChatMentionProviders>
     </SidebarProvider>
   );

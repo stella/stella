@@ -3,6 +3,7 @@ import { useCallback, useRef } from "react";
 import {
   useIsMutating,
   useMutation,
+  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 
@@ -10,6 +11,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceJustification } from "@/lib/types";
+import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-config-queries";
 import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
 type UseCreateBBoxesProps = {
@@ -25,6 +27,7 @@ export const useCreateBBoxes = ({
 }: UseCreateBBoxesProps) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
+  const { data: aiAvailability } = useQuery(aiAvailabilityOptions);
   const pendingMutationsCount = useIsMutating({
     mutationKey: [CREATE_BBOXES_MUTATION_KEY],
   });
@@ -81,12 +84,16 @@ export const useCreateBBoxes = ({
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useCallback(() => {
+    if (!aiAvailability?.available) {
+      return;
+    }
+
     if (pendingRef.current > 0) {
       return;
     }
 
     mutateRef.current();
-  }, []);
+  }, [aiAvailability?.available]);
 };
 
 export const useIsCreatingBBoxes = () => {

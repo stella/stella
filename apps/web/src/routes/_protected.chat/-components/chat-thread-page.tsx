@@ -15,6 +15,7 @@ import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
 import {
   useChatAnonymized,
@@ -43,6 +44,7 @@ export const ChatThreadPage = ({
   workspaceId,
 }: ChatThreadPageProps) => {
   const t = useTranslations();
+  const { ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
   const getUserContext = useEffectEvent(() => userContext);
   const showToolCalls = useDevStore((state) => state.showToolCalls);
@@ -217,6 +219,9 @@ export const ChatThreadPage = ({
             void stop();
           }}
           onSubmit={async (draft) => {
+            if (!(await ensureAIAvailable())) {
+              return;
+            }
             await sendMessage(await buildChatRequestMessage(draft));
           }}
         />

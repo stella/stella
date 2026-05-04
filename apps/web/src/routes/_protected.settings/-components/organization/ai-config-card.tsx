@@ -120,9 +120,14 @@ export const AIConfigCard = () => {
     },
     onSuccess: async () => {
       setApiKey("");
-      await queryClient.invalidateQueries({
-        queryKey: aiConfigKeys.all,
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: aiConfigKeys.all,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: aiConfigKeys.availability,
+        }),
+      ]);
       toastManager.add({
         title: tSuccess("aiConfigUpdated"),
         type: "success",
@@ -148,9 +153,14 @@ export const AIConfigCard = () => {
     },
     onSuccess: async () => {
       setApiKey("");
-      await queryClient.invalidateQueries({
-        queryKey: aiConfigKeys.all,
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: aiConfigKeys.all,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: aiConfigKeys.availability,
+        }),
+      ]);
       toastManager.add({
         title: tSuccess("aiConfigDeleted"),
         type: "success",

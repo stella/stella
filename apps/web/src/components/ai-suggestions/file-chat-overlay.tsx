@@ -52,6 +52,7 @@ import type {
   ApprovalToolName,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { useAIKeyGate } from "@/components/require-ai-key";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
@@ -657,6 +658,11 @@ const FileChatOverlayInner = ({
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({ chat, threadRef, workspaceId });
+  const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
+
+  useEffect(() => {
+    openIfAIUnavailable();
+  }, [openIfAIUnavailable]);
 
   const filePlaceholder =
     activeFile === undefined
@@ -807,11 +813,16 @@ const FileChatOverlayInner = ({
           void stop();
         }}
         onSubmit={({ prompt }) => {
-          // Always pop the thread open on send, even if the user
-          // minimised it earlier — they're sending a new prompt
-          // and want to see the response stream in.
-          setPanelOpen(true);
-          void sendMessage({ text: prompt });
+          void ensureAIAvailable().then((available) => {
+            if (!available) {
+              return;
+            }
+            // Always pop the thread open on send, even if the user
+            // minimised it earlier — they're sending a new prompt
+            // and want to see the response stream in.
+            setPanelOpen(true);
+            void sendMessage({ text: prompt });
+          });
         }}
         onTogglePanel={() => setPanelOpen((v) => !v)}
         panelOpen={panelOpen}

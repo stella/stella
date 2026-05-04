@@ -799,21 +799,23 @@ export function AppSidebar(props: AppSidebarProps) {
         void navigate({ to: "/knowledge" });
       },
       contextMenu: {
-        recents: knowledgeSections
-          .filter(
-            (s): s is typeof s & { to: NonNullable<typeof s.to> } =>
-              s.to !== undefined,
-          )
-          .map((s) => {
-            const Icon = s.icon;
-            return {
-              label: t(`knowledge.sections.${s.key}.title`),
-              icon: <Icon />,
-              onClick: () => {
+        recents: knowledgeSections.map((s) => {
+          const Icon = s.icon;
+          return {
+            label: t(`knowledge.sections.${s.key}.title`),
+            icon: <Icon />,
+            onClick: () => {
+              if (s.to) {
                 void navigate({ to: s.to });
-              },
-            };
-          }),
+                return;
+              }
+              toastManager.add({
+                title: t("common.comingSoon"),
+                type: "foreground",
+              });
+            },
+          };
+        }),
       },
     },
     {
