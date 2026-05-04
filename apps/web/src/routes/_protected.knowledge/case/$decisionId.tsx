@@ -92,11 +92,16 @@ function DecisionViewer() {
     })),
   );
 
-  const { byokDialog, ensureAIAvailable } = useAIKeyGate();
+  const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
+
+  useEffect(() => {
+    openIfAIUnavailable();
+  }, [openIfAIUnavailable]);
+
   const { state: analysisState, generate: generateDecisionAnalysis } =
     useDecisionAnalysis(decisionId, decision.analysis);
   const generate = useCallback(async () => {
-    if (!ensureAIAvailable()) {
+    if (!(await ensureAIAvailable())) {
       return;
     }
     await generateDecisionAnalysis();
@@ -285,7 +290,6 @@ function DecisionViewer() {
           </div>
         </div>
       </div>
-      {byokDialog}
     </div>
   );
 }

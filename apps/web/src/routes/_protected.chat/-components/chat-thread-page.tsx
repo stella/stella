@@ -44,7 +44,7 @@ export const ChatThreadPage = ({
   workspaceId,
 }: ChatThreadPageProps) => {
   const t = useTranslations();
-  const { byokDialog, ensureAIAvailable } = useAIKeyGate();
+  const { ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
   const getUserContext = useEffectEvent(() => userContext);
   const showToolCalls = useDevStore((state) => state.showToolCalls);
@@ -219,13 +219,12 @@ export const ChatThreadPage = ({
             void stop();
           }}
           onSubmit={async (draft) => {
-            if (!ensureAIAvailable()) {
+            if (!(await ensureAIAvailable())) {
               return;
             }
             await sendMessage(await buildChatRequestMessage(draft));
           }}
         />
-        {byokDialog}
       </div>
     </div>
   );

@@ -35,7 +35,7 @@ export const Route = createFileRoute("/_protected/chat/")({
 
 function ChatIndex() {
   const t = useTranslations();
-  const { byokDialog, ensureAIAvailable } = useAIKeyGate();
+  const { ensureAIAvailable } = useAIKeyGate();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const userContext = useChatUserContext();
@@ -80,7 +80,7 @@ function ChatIndex() {
             autoFocus
             controller={controller}
             onSubmit={async (draft) => {
-              if (!ensureAIAvailable()) {
+              if (!(await ensureAIAvailable())) {
                 return;
               }
               // Build the request payload first, then resolve the
@@ -113,7 +113,6 @@ function ChatIndex() {
               void invalidateGroupedChatThreads(queryClient);
             }}
           />
-          {byokDialog}
         </div>
         <PromptSuggestions
           onSelect={(prompt) => {

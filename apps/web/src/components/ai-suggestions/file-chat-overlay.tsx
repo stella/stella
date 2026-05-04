@@ -658,7 +658,11 @@ const FileChatOverlayInner = ({
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({ chat, threadRef, workspaceId });
-  const { byokDialog, ensureAIAvailable } = useAIKeyGate();
+  const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
+
+  useEffect(() => {
+    openIfAIUnavailable();
+  }, [openIfAIUnavailable]);
 
   const filePlaceholder =
     activeFile === undefined
@@ -808,8 +812,8 @@ const FileChatOverlayInner = ({
         onStop={() => {
           void stop();
         }}
-        onSubmit={({ prompt }) => {
-          if (!ensureAIAvailable()) {
+        onSubmit={async ({ prompt }) => {
+          if (!(await ensureAIAvailable())) {
             return;
           }
           // Always pop the thread open on send, even if the user
@@ -829,7 +833,6 @@ const FileChatOverlayInner = ({
         showThreadToggle={hasMessages}
         status={isGenerating ? "generating" : "idle"}
       />
-      {byokDialog}
     </>
   );
 };

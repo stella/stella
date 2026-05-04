@@ -1,6 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { openAIKeyRequiredDialog } from "@/components/require-ai-key";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
@@ -18,7 +17,6 @@ export const useStartWorkflow = (workspaceId: string) => {
 
   return async (args?: { entityIds?: string[]; entityIdsOrder?: string[] }) => {
     if (!aiAvailability?.available) {
-      openAIKeyRequiredDialog();
       return undefined;
     }
 

@@ -1,5 +1,12 @@
 import type { PropsWithChildren } from "react";
-import { useCallback, useEffect, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import { Button } from "@stll/ui/components/button";
 import {
@@ -57,24 +64,70 @@ const API_KEY_PLACEHOLDER = {
   openai_compatible: "sk-...",
 } as const satisfies Record<ProviderValue, string>;
 
-let openGlobalAIKeyDialog: (() => void) | null = null;
-
-export const openAIKeyRequiredDialog = () => {
-  openGlobalAIKeyDialog?.();
+type AIAvailabilityContextValue = {
+  ensureAIAvailable: () => Promise<boolean>;
+  openAIKeyDialog: () => void;
+  openIfAIUnavailable: () => void;
 };
 
-export function AIKeyRequiredDialogHost() {
-  const [open, setOpen] = useState(false);
+const AIAvailabilityContext = createContext<AIAvailabilityContextValue | null>(
+  null,
+);
 
-  useEffect(() => {
-    openGlobalAIKeyDialog = () => setOpen(true);
-    return () => {
-      openGlobalAIKeyDialog = null;
-    };
+export function AIAvailabilityProvider({ children }: PropsWithChildren) {
+  const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const { data } = useQuery(aiAvailabilityOptions);
+
+  const openAIKeyDialog = useCallback(() => {
+    setOpen(true);
   }, []);
 
-  return <AIKeyRequiredDialog onOpenChange={setOpen} open={open} />;
+  const ensureAIAvailable = useCallback(async () => {
+    const availability = await queryClient
+      .ensureQueryData(aiAvailabilityOptions)
+      .catch(() => undefined);
+
+    if (availability?.available) {
+      return true;
+    }
+
+    setOpen(true);
+    return false;
+  }, [queryClient]);
+
+  const openIfAIUnavailable = useCallback(() => {
+    if (data && !data.available) {
+      setOpen(true);
+    }
+  }, [data]);
+
+  const value = useMemo(
+    () => ({
+      ensureAIAvailable,
+      openAIKeyDialog,
+      openIfAIUnavailable,
+    }),
+    [ensureAIAvailable, openAIKeyDialog, openIfAIUnavailable],
+  );
+
+  return (
+    <AIAvailabilityContext.Provider value={value}>
+      {children}
+      <AIKeyRequiredDialog onOpenChange={setOpen} open={open} />
+    </AIAvailabilityContext.Provider>
+  );
 }
+
+export const useAIKeyGate = () => {
+  const context = useContext(AIAvailabilityContext);
+
+  if (!context) {
+    throw new Error("useAIKeyGate must be used within AIAvailabilityProvider");
+  }
+
+  return context;
+};
 
 /**
  * Whether AI features are available right now: either the org has
@@ -88,26 +141,6 @@ export function useAIAvailable(): boolean {
   return data.available;
 }
 
-export const useAIKeyGate = () => {
-  const [open, setOpen] = useState(false);
-  const { data } = useQuery(aiAvailabilityOptions);
-
-  const ensureAIAvailable = useCallback(() => {
-    if (data?.available) {
-      return true;
-    }
-
-    setOpen(true);
-    return false;
-  }, [data?.available]);
-
-  return {
-    ensureAIAvailable,
-    byokDialog: <AIKeyRequiredDialog onOpenChange={setOpen} open={open} />,
-    openAIKeyDialog: () => setOpen(true),
-  };
-};
-
 /**
  * Gate AI routes when the instance has no provisioned keys and
  * the org has not supplied their own. Send-time surfaces should
@@ -116,7 +149,11 @@ export const useAIKeyGate = () => {
 export function RequireAIKey({ children }: PropsWithChildren) {
   const t = useTranslations();
   const { data, isPending, isError } = useQuery(aiAvailabilityOptions);
-  const { byokDialog, openAIKeyDialog } = useAIKeyGate();
+  const { openAIKeyDialog, openIfAIUnavailable } = useAIKeyGate();
+
+  useEffect(() => {
+    openIfAIUnavailable();
+  }, [openIfAIUnavailable]);
 
   if (isPending) {
     return null;
@@ -147,7 +184,6 @@ export function RequireAIKey({ children }: PropsWithChildren) {
           </Button>
         </div>
       </div>
-      {byokDialog}
     </div>
   );
 }

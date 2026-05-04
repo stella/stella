@@ -7,7 +7,6 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
-import { openAIKeyRequiredDialog } from "@/components/require-ai-key";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
@@ -86,7 +85,6 @@ export const useCreateBBoxes = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useCallback(() => {
     if (!aiAvailability?.available) {
-      openAIKeyRequiredDialog();
       return;
     }
 

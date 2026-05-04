@@ -99,7 +99,12 @@ export const ChatTabPanel = ({
       : undefined,
   );
   const t = useTranslations();
-  const { byokDialog, ensureAIAvailable } = useAIKeyGate();
+  const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
+
+  useEffect(() => {
+    openIfAIUnavailable();
+  }, [openIfAIUnavailable]);
+
   // Read live tab state on every send. The Chat instance is created
   // once and cached per `threadRef`, so a plain closure over `tab`
   // would freeze the IDs from the render that built the instance —
@@ -287,8 +292,8 @@ export const ChatTabPanel = ({
         onStop={() => {
           void stop();
         }}
-        onSubmit={({ prompt }) => {
-          if (!ensureAIAvailable()) {
+        onSubmit={async ({ prompt }) => {
+          if (!(await ensureAIAvailable())) {
             return;
           }
           // PromptBar emits the raw editor HTML; the legacy
@@ -304,7 +309,6 @@ export const ChatTabPanel = ({
         showThreadToggle={false}
         status={isGenerating ? "generating" : "idle"}
       />
-      {byokDialog}
     </ChatTabPanelChrome>
   );
 };
