@@ -49,6 +49,17 @@ const SCHEME_TO_THEME_COLOR: Record<string, ColorValue["themeColor"]> = {
 };
 
 /**
+ * sRGB hex per OOXML (ST_HexColorRGB): exactly six hex digits, case-insensitive.
+ * Anything else is rejected so untrusted DOCX input cannot smuggle markup through
+ * downstream renderers that interpolate the value into HTML/SVG.
+ */
+const HEX_COLOR_RE = /^[0-9A-Fa-f]{6}$/;
+
+function isHexColor(val: string | undefined | null): val is string {
+  return typeof val === "string" && HEX_COLOR_RE.test(val);
+}
+
+/**
  * Common preset color names to RGB hex values.
  */
 const PRESET_COLORS: Record<string, string> = {
@@ -111,12 +122,12 @@ export function parseColorElement(
 
   const children = getChildElements(element);
 
-  // sRGB color: a:srgbClr[@val]
+  // sRGB color: a:srgbClr[@val] — must be 6 hex digits per OOXML
   const srgbClr = children.find((el) => el.name === "a:srgbClr");
   if (srgbClr) {
     const val = getAttribute(srgbClr, null, "val");
-    if (val) {
-      return applyColorModifiers({ rgb: val }, srgbClr);
+    if (isHexColor(val)) {
+      return applyColorModifiers({ rgb: val.toUpperCase() }, srgbClr);
     }
   }
 
@@ -132,11 +143,11 @@ export function parseColorElement(
     }
   }
 
-  // System color: a:sysClr[@lastClr]
+  // System color: a:sysClr[@lastClr] — fall back to black if missing/malformed
   const sysClr = children.find((el) => el.name === "a:sysClr");
   if (sysClr) {
     const lastClr = getAttribute(sysClr, null, "lastClr");
-    return { rgb: lastClr ?? "000000" };
+    return { rgb: isHexColor(lastClr) ? lastClr.toUpperCase() : "000000" };
   }
 
   // Preset color: a:prstClr[@val]
