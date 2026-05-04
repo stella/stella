@@ -92,7 +92,11 @@ impl Default for DesktopUpdateSnapshot {
       base_url: None,
       channel: None,
       current_hash: None,
-      current_version: None,
+      // Stamp the build's own version so the Settings panel shows
+      // it immediately, before any updater check populates the
+      // remote-version fields. Without this, the UI falls back to
+      // the "Preview build" / "Development build" label.
+      current_version: Some(env!("CARGO_PKG_VERSION").to_string()),
       last_checked_at: None,
       latest_hash: None,
       latest_version: None,
