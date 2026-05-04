@@ -44,13 +44,19 @@ const config = {
 const seedShortcuts = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user }) {
+    // Private shortcuts are user-global (the unique index is
+    // `(userId, command) WHERE scope = 'private'`), so the existence
+    // check must scope by user + private — not by active org. Filtering
+    // by org made this handler 500 with a duplicate-key error when a
+    // user who already had private shortcuts in one org switched to
+    // another and the seed call ran afresh.
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.$count(
           promptShortcuts,
           and(
-            eq(promptShortcuts.organizationId, session.activeOrganizationId),
             eq(promptShortcuts.userId, user.id),
+            eq(promptShortcuts.scope, "private"),
           ),
         ),
       ),
@@ -62,19 +68,24 @@ const seedShortcuts = createSafeRootHandler(
 
     yield* Result.await(
       safeDb((tx) =>
-        tx.insert(promptShortcuts).values(
-          DEFAULT_SHORTCUTS.map((s) => ({
-            id: createSafeId<"promptShortcut">(),
-            organizationId: session.activeOrganizationId,
-            userId: user.id,
-            scope: "private" as const,
-            name: s.name,
-            description: s.description,
-            command: s.command,
-            prompt: s.prompt,
-            isDefault: true,
-          })),
-        ),
+        tx
+          .insert(promptShortcuts)
+          .values(
+            DEFAULT_SHORTCUTS.map((s) => ({
+              id: createSafeId<"promptShortcut">(),
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+              scope: "private" as const,
+              name: s.name,
+              description: s.description,
+              command: s.command,
+              prompt: s.prompt,
+              isDefault: true,
+            })),
+          )
+          // Defensive in case two clients race the seed; the existence
+          // check above is the primary gate.
+          .onConflictDoNothing(),
       ),
     );
 
