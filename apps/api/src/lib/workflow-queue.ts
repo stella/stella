@@ -393,7 +393,14 @@ export const initWorkflowWorker = () => {
       workspaceId: data.workspaceId,
     });
     void (async () => {
-      await markPendingPlannedFieldsErrored(data);
+      await markPendingPlannedFieldsErrored(data).catch(
+        (pendingFieldsError: unknown) => {
+          captureError(pendingFieldsError, {
+            workspaceId: data.workspaceId,
+            entityId: data.entityId,
+          });
+        },
+      );
       await onEntityCompleted(
         branded.workspaceId,
         branded.organizationId,
