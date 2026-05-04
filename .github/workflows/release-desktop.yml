@@ -274,7 +274,7 @@ jobs:
 
       - name: Sign Windows installers via Azure Trusted Signing
         if: matrix.os == 'windows'
-        uses: azure/trusted-signing-action@5dc2f74e4ca38d1e3abee5b53cab17d35aafa0d2 # v0.5.9
+        uses: azure/trusted-signing-action@bb15ca63eb5548cc306f4f335c5617bb414abcad # v0.5.9
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
