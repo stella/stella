@@ -351,6 +351,25 @@ jobs:
           printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
           bun run build -- --target ${{ matrix.target }} --bundles dmg,updater
 
+      # Tauri's bundler staples notarization to the .app inside the
+      # DMG, but not to the DMG itself. Without this step, users on
+      # a cold network on first launch hit a Gatekeeper online
+      # check and may see a "verifying" delay or unsigned warning
+      # if the check fails. Stapling the DMG embeds the notarization
+      # ticket so launch is offline-instant.
+      - name: Staple notarization ticket to DMG
+        if: matrix.os == 'macos'
+        working-directory: apps/desktop
+        shell: bash
+        run: |
+          bundle_dir="src-tauri/target/${{ matrix.target }}/release/bundle"
+          for dmg in "$bundle_dir"/dmg/*.dmg; do
+            [[ -f "$dmg" ]] || continue
+            echo "Stapling $dmg"
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+          done
+
       - name: Rename artifacts to stable, version-less filenames
         # Tauri produces version-stamped names like
         # `Stella_0.0.1_x64-setup.exe`. We collapse them into stable
