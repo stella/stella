@@ -1,13 +1,14 @@
 use notify::{
-  event::{AccessKind, AccessMode},
-  Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+  event::AccessKind, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
+use tokio::process::Command;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
@@ -49,13 +50,15 @@ pub fn set_takeover_response(label: &str, approved: bool) {
   }
 }
 
-const AUTO_FINALIZE_DELAY: Duration = Duration::from_millis(2500);
 const CHECKPOINT_DEBOUNCE: Duration = Duration::from_millis(1200);
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(20);
 const REMOTE_SAVE_TIMEOUT: Duration = Duration::from_secs(60);
 const RETRY_INTERVAL: Duration = Duration::from_secs(15);
-const LOCK_POLL_INTERVAL: Duration = Duration::from_secs(2);
+const OPEN_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const CLOSED_RECHECK_COUNT: u8 = 5;
 const TAKEN_OVER_CODE: &str = "desktop_edit_session_taken_over";
+const LIBRE_OFFICE_LOCK_PREFIX: &str = ".~lock.";
+const LIBRE_OFFICE_LOCK_SUFFIX: &str = "#";
 const WORD_LOCK_PREFIX: &str = "~$";
 const SUPPORT_EMAIL: &str = "hello@stll.app";
 
@@ -80,14 +83,15 @@ struct DesktopSession {
   takeover_detected: bool,
   workspace_id: String,
   // Runtime-only
+  changed_during_remote_save: bool,
   checkpoint_in_flight: bool,
   finalize_in_flight: bool,
-  word_lock_seen: bool,
+  local_open_seen: bool,
+  closed_recheck_count: u8,
   retry_notice_shown: bool,
   _watcher: Option<RecommendedWatcher>,
   checkpoint_timer: Option<JoinHandle<()>>,
-  auto_finalize_timer: Option<JoinHandle<()>>,
-  lock_poll_timer: Option<JoinHandle<()>>,
+  open_poll_timer: Option<JoinHandle<()>>,
   sse_listener: Option<JoinHandle<()>>,
 }
 
@@ -134,10 +138,7 @@ impl DesktopSession {
     if let Some(handle) = self.checkpoint_timer.take() {
       handle.abort();
     }
-    if let Some(handle) = self.auto_finalize_timer.take() {
-      handle.abort();
-    }
-    if let Some(handle) = self.lock_poll_timer.take() {
+    if let Some(handle) = self.open_poll_timer.take() {
       handle.abort();
     }
     if let Some(handle) = self.sse_listener.take() {
@@ -233,18 +234,23 @@ fn is_word_lock_file_for(candidate: &str, file_name: &str) -> bool {
   candidate_suffix == file_name_chars.as_str()
 }
 
-fn is_write_close_event(kind: &EventKind) -> bool {
-  matches!(
-    kind,
-    EventKind::Access(AccessKind::Close(AccessMode::Write))
-  )
+fn is_libre_office_lock_file_for(candidate: &str, file_name: &str) -> bool {
+  candidate
+    .strip_prefix(LIBRE_OFFICE_LOCK_PREFIX)
+    .and_then(|name| name.strip_suffix(LIBRE_OFFICE_LOCK_SUFFIX))
+    .is_some_and(|name| name == file_name)
 }
 
-async fn has_word_lock_file(dir: &Path, file_name: &str) -> bool {
+fn is_temporary_lock_file_for(candidate: &str, file_name: &str) -> bool {
+  is_word_lock_file_for(candidate, file_name)
+    || is_libre_office_lock_file_for(candidate, file_name)
+}
+
+async fn has_temporary_lock_file(dir: &Path, file_name: &str) -> bool {
   match tokio::fs::read_dir(dir).await {
     Ok(mut entries) => {
       while let Ok(Some(entry)) = entries.next_entry().await {
-        if is_word_lock_file_for(&entry.file_name().to_string_lossy(), file_name) {
+        if is_temporary_lock_file_for(&entry.file_name().to_string_lossy(), file_name) {
           return true;
         }
       }
@@ -252,6 +258,48 @@ async fn has_word_lock_file(dir: &Path, file_name: &str) -> bool {
     }
     Err(_) => false,
   }
+}
+
+async fn append_probe_reports_locked(file_path: &Path) -> bool {
+  match tokio::fs::OpenOptions::new()
+    .append(true)
+    .open(file_path)
+    .await
+  {
+    Ok(_) => false,
+    Err(e) => matches!(
+      e.kind(),
+      ErrorKind::PermissionDenied | ErrorKind::WouldBlock
+    ),
+  }
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+async fn lsof_reports_open(file_path: &Path) -> bool {
+  match Command::new("lsof").arg("-t").arg(file_path).output().await {
+    Ok(output) if output.status.success() => !output.stdout.is_empty(),
+    Ok(output) => !output.stdout.is_empty(),
+    Err(_) => false,
+  }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+async fn lsof_reports_open(_: &Path) -> bool {
+  false
+}
+
+async fn local_file_appears_open(file_path: &Path, file_name: &str) -> bool {
+  let dir = file_path.parent().unwrap_or(Path::new("."));
+
+  if has_temporary_lock_file(dir, file_name).await {
+    return true;
+  }
+
+  if append_probe_reports_locked(file_path).await {
+    return true;
+  }
+
+  lsof_reports_open(file_path).await
 }
 
 impl SessionManager {
@@ -340,14 +388,15 @@ impl SessionManager {
         status: persisted.status,
         takeover_detected: persisted.takeover_detected,
         workspace_id: persisted.workspace_id,
+        changed_during_remote_save: false,
         checkpoint_in_flight: false,
         finalize_in_flight: false,
-        word_lock_seen: false,
+        local_open_seen: false,
+        closed_recheck_count: 0,
         retry_notice_shown: false,
         _watcher: None,
         checkpoint_timer: None,
-        auto_finalize_timer: None,
-        lock_poll_timer: None,
+        open_poll_timer: None,
         sse_listener: None,
       };
 
@@ -455,6 +504,9 @@ impl SessionManager {
         session.file_name = managed_file_name;
         session.last_checkpoint_at = remote.last_checkpoint_at.clone();
         session.last_error = None;
+        session.local_open_seen = false;
+        session.closed_recheck_count = 0;
+        session.changed_during_remote_save = false;
         session.pending_finalize = false;
         session.retry_notice_shown = false;
         session.session_token = remote.session_token.clone();
@@ -540,14 +592,15 @@ impl SessionManager {
       status: SessionStatus::Opening,
       takeover_detected: false,
       workspace_id: request.workspace_id,
+      changed_during_remote_save: false,
       checkpoint_in_flight: false,
       finalize_in_flight: false,
-      word_lock_seen: false,
+      local_open_seen: false,
+      closed_recheck_count: 0,
       retry_notice_shown: false,
       _watcher: None,
       checkpoint_timer: None,
-      auto_finalize_timer: None,
-      lock_poll_timer: None,
+      open_poll_timer: None,
       sse_listener: None,
     };
 
@@ -859,6 +912,7 @@ impl SessionManager {
     }
 
     let session = self.sessions.get_mut(session_id).unwrap();
+    session.changed_during_remote_save = false;
     session.checkpoint_in_flight = true;
     session.last_error = None;
     session.status = SessionStatus::Syncing;
@@ -905,9 +959,13 @@ impl SessionManager {
       }
       CheckpointResult::Uploaded {
         next_sha,
+        current_sha,
         checkpointed_at,
         rotated_token,
       } => {
+        let changed_during_upload =
+          session.changed_during_remote_save || current_sha != next_sha;
+
         // Apply rotated token from server
         if let Some(ref new_token) = rotated_token {
           session.session_token = new_token.clone();
@@ -917,17 +975,29 @@ impl SessionManager {
         }
 
         session.last_checkpoint_sha = Some(next_sha.clone());
-        session.last_local_sha = next_sha;
+        session.last_local_sha = current_sha;
         session.last_checkpoint_at = Some(checkpointed_at);
         session.last_error = None;
         session.retry_notice_shown = false;
-        session.status = if session.pending_finalize {
+        session.changed_during_remote_save = false;
+        session.status = if changed_during_upload {
+          SessionStatus::Syncing
+        } else if session.pending_finalize {
           SessionStatus::Finalizing
         } else {
           SessionStatus::Ready
         };
+
+        #[allow(dropping_references)]
+        drop(session);
+
         self.persist_sessions().await;
         self.emit_state_change();
+
+        if changed_during_upload {
+          return false;
+        }
+
         true
       }
       CheckpointResult::TakenOver(message) => {
@@ -1039,11 +1109,23 @@ impl SessionManager {
     }
 
     match response.json::<CheckpointResponse>().await {
-      Ok(cp) => CheckpointResult::Uploaded {
-        next_sha,
-        checkpointed_at: cp.checkpointed_at,
-        rotated_token: cp.rotated_session_token,
-      },
+      Ok(cp) => {
+        let current_sha = match tokio::fs::read(file_path).await {
+          Ok(bytes) => hash_bytes(&bytes),
+          Err(e) => {
+            return CheckpointResult::Error(format!(
+              "Failed to re-read file after checkpoint upload: {e}"
+            ));
+          }
+        };
+
+        CheckpointResult::Uploaded {
+          next_sha,
+          current_sha,
+          checkpointed_at: cp.checkpointed_at,
+          rotated_token: cp.rotated_session_token,
+        }
+      }
       Err(e) => CheckpointResult::Error(format!(
         "stella desktop received an invalid checkpoint response: {e}"
       )),
@@ -1053,22 +1135,47 @@ impl SessionManager {
   // --- Finalize ---
 
   pub async fn finalize_session(&mut self, session_id: &str) -> bool {
-    {
+    let (file_path, checkpoint_sha) = {
       let session = match self.sessions.get(session_id) {
         Some(s) if !s.finalize_in_flight && !s.takeover_detected => s,
         _ => return false,
       };
 
-      let sha_match = session
-        .last_checkpoint_sha
-        .as_deref()
-        .is_some_and(|cs| session.last_local_sha == cs);
-      if !sha_match {
+      let Some(checkpoint_sha) = session.last_checkpoint_sha.clone() else {
+        return false;
+      };
+
+      if session.last_local_sha != checkpoint_sha {
         return false;
       }
+
+      (session.file_path.clone(), checkpoint_sha)
+    };
+
+    let current_sha = match tokio::fs::read(&file_path).await {
+      Ok(bytes) => hash_bytes(&bytes),
+      Err(e) => {
+        let session = self.sessions.get_mut(session_id).unwrap();
+        session.last_error = Some(format!("Failed to read file before finalize: {e}"));
+        session.status = SessionStatus::Error;
+        self.persist_sessions().await;
+        self.emit_state_change();
+        return false;
+      }
+    };
+
+    if current_sha != checkpoint_sha {
+      let session = self.sessions.get_mut(session_id).unwrap();
+      session.last_local_sha = current_sha;
+      session.pending_finalize = true;
+      session.status = SessionStatus::Syncing;
+      self.persist_sessions().await;
+      self.emit_state_change();
+      return false;
     }
 
     let session = self.sessions.get_mut(session_id).unwrap();
+    session.changed_during_remote_save = false;
     session.finalize_in_flight = true;
     session.last_error = None;
     session.status = SessionStatus::Finalizing;
@@ -1092,6 +1199,19 @@ impl SessionManager {
 
     match result {
       FinalizeResult::Finalized { version_number, .. } => {
+        if session.changed_during_remote_save {
+          session.changed_during_remote_save = false;
+          session.last_error = Some(
+            "The file changed while stella desktop was finalizing. Your local copy was preserved."
+              .to_string(),
+          );
+          session.pending_finalize = false;
+          session.status = SessionStatus::Error;
+          self.persist_sessions().await;
+          self.emit_state_change();
+          return false;
+        }
+
         let file_name = session.file_name.clone();
         self.show_notification(
           NotifType::RevisionCreated,
@@ -1108,6 +1228,19 @@ impl SessionManager {
         true
       }
       FinalizeResult::NoChanges => {
+        if session.changed_during_remote_save {
+          session.changed_during_remote_save = false;
+          session.last_error = Some(
+            "The file changed while stella desktop was finalizing. Your local copy was preserved."
+              .to_string(),
+          );
+          session.pending_finalize = false;
+          session.status = SessionStatus::Error;
+          self.persist_sessions().await;
+          self.emit_state_change();
+          return false;
+        }
+
         self.cleanup_session_internal(session_id, true).await;
         true
       }
@@ -1230,7 +1363,28 @@ impl SessionManager {
       return;
     }
 
-    let checkpoint_ready = self.sync_checkpoint(session_id).await;
+    let mut checkpoint_ready = false;
+    for _ in 0..3 {
+      checkpoint_ready = self.sync_checkpoint(session_id).await;
+      if checkpoint_ready {
+        break;
+      }
+
+      let should_retry_checkpoint = self.sessions.get(session_id).is_some_and(|s| {
+        !s.takeover_detected
+          && !s.checkpoint_in_flight
+          && !s.finalize_in_flight
+          && s.last_error.is_none()
+          && s.status == SessionStatus::Syncing
+          && s
+            .last_checkpoint_sha
+            .as_deref()
+            .is_none_or(|sha| s.last_local_sha != sha)
+      });
+      if !should_retry_checkpoint {
+        break;
+      }
+    }
 
     let should_finalize = self
       .sessions
@@ -1246,8 +1400,8 @@ impl SessionManager {
 
   pub async fn attach_watcher(manager: &Arc<Mutex<Self>>, session_id: &str) {
     let (watch_dir, file_name, sid) = {
-      let mut mgr = manager.lock().await;
-      let session = match mgr.sessions.get_mut(session_id) {
+      let mgr = manager.lock().await;
+      let session = match mgr.sessions.get(session_id) {
         Some(s) if !s.takeover_detected => s,
         _ => return,
       };
@@ -1255,7 +1409,6 @@ impl SessionManager {
       let dir = Path::new(&session.file_path)
         .parent()
         .unwrap_or(Path::new("."));
-      session.word_lock_seen = has_word_lock_file(dir, &session.file_name).await;
 
       (
         dir.to_path_buf(),
@@ -1285,18 +1438,11 @@ impl SessionManager {
             let mgr = Arc::clone(&mgr_for_watcher);
             let sid = sid_for_watcher.clone();
             let fname = fname_for_watcher.clone();
-            let should_finalize_without_lock = is_write_close_event(&event.kind);
 
             let _ = tokio::runtime::Handle::try_current().map(|handle| {
               handle.spawn(async move {
-                handle_filesystem_event(
-                  mgr,
-                  &sid,
-                  changed_file.as_deref(),
-                  &fname,
-                  should_finalize_without_lock,
-                )
-                .await;
+                handle_filesystem_event(mgr, &sid, changed_file.as_deref(), &fname)
+                  .await;
               });
             });
           }
@@ -1310,6 +1456,7 @@ impl SessionManager {
       match watcher_result {
         Ok(mut w) => {
           let _ = w.watch(&watch_dir, RecursiveMode::NonRecursive);
+          ensure_open_poll_loop(session, manager, &sid);
           session._watcher = Some(w);
         }
         Err(e) => {
@@ -1622,6 +1769,7 @@ enum CheckpointResult {
   Unchanged,
   Uploaded {
     next_sha: String,
+    current_sha: String,
     checkpointed_at: String,
     rotated_token: Option<String>,
   },
@@ -1655,25 +1803,12 @@ async fn handle_filesystem_event(
   session_id: &str,
   changed_file: Option<&str>,
   managed_file_name: &str,
-  should_finalize_without_lock: bool,
 ) {
   let is_managed = changed_file.is_none() || changed_file == Some(managed_file_name);
-
-  let (should_schedule_checkpoint, file_path, file_name) = {
-    let mgr = manager.lock().await;
-    let session = match mgr.sessions.get(session_id) {
-      Some(s) if !s.takeover_detected => s,
-      _ => return,
-    };
-    (
-      is_managed,
-      session.file_path.clone(),
-      session.file_name.clone(),
-    )
-  };
-
-  let dir = Path::new(&file_path).parent().unwrap_or(Path::new("."));
-  let has_lock = has_word_lock_file(dir, &file_name).await;
+  let is_temporary_lock = changed_file
+    .is_some_and(|file| is_temporary_lock_file_for(file, managed_file_name));
+  let is_relevant = is_managed || is_temporary_lock;
+  let mut state_changed = false;
 
   {
     let mut mgr = manager.lock().await;
@@ -1682,66 +1817,37 @@ async fn handle_filesystem_event(
       _ => return,
     };
 
-    if has_lock {
-      if let Some(handle) = session.auto_finalize_timer.take() {
-        handle.abort();
-      }
-      session.word_lock_seen = true;
-
-      // Start lock poll if not already running
-      if session.lock_poll_timer.is_none() {
-        let mgr_clone = Arc::clone(&manager);
-        let sid = session_id.to_string();
-        session.lock_poll_timer = Some(tokio::spawn(async move {
-          lock_poll_loop(mgr_clone, sid).await;
-        }));
-      }
-      return;
-    }
-
-    if session.word_lock_seen && !session.pending_finalize {
-      session.word_lock_seen = false;
-      if let Some(handle) = session.lock_poll_timer.take() {
-        handle.abort();
+    if is_relevant {
+      if session.pending_finalize && !session.finalize_in_flight {
+        session.pending_finalize = false;
+        session.local_open_seen = true;
+        session.closed_recheck_count = 0;
+        session.status = if session
+          .last_checkpoint_sha
+          .as_deref()
+          .is_some_and(|sha| session.last_local_sha == sha)
+        {
+          SessionStatus::Ready
+        } else {
+          SessionStatus::Syncing
+        };
+        state_changed = true;
       }
 
-      // Schedule auto-finalize
-      let mgr_clone = Arc::clone(&manager);
-      let sid = session_id.to_string();
-      session.auto_finalize_timer = Some(tokio::spawn(async move {
-        tokio::time::sleep(AUTO_FINALIZE_DELAY).await;
-        let mut mgr = mgr_clone.lock().await;
-        let should_finish = mgr.sessions.get(&sid).is_some_and(|s| {
-          !s.pending_finalize && !s.takeover_detected && !s.word_lock_seen
-        });
-        if should_finish {
-          mgr.finish_session(&sid);
-          let _ = mgr.persist_sessions().await;
-          mgr.retry_session(&sid).await;
-        }
-      }));
-    } else if is_managed && should_finalize_without_lock && !session.pending_finalize {
-      if let Some(handle) = session.auto_finalize_timer.take() {
-        handle.abort();
+      if session.checkpoint_in_flight || session.finalize_in_flight {
+        session.changed_during_remote_save = true;
       }
-      let mgr_clone = Arc::clone(&manager);
-      let sid = session_id.to_string();
-      session.auto_finalize_timer = Some(tokio::spawn(async move {
-        tokio::time::sleep(AUTO_FINALIZE_DELAY).await;
-        let mut mgr = mgr_clone.lock().await;
-        let should_finish = mgr.sessions.get(&sid).is_some_and(|s| {
-          !s.pending_finalize && !s.takeover_detected && !s.word_lock_seen
-        });
-        if should_finish {
-          mgr.finish_session(&sid);
-          mgr.persist_sessions().await;
-          mgr.retry_session(&sid).await;
-        }
-      }));
+      ensure_open_poll_loop(session, &manager, session_id);
     }
   }
 
-  if should_schedule_checkpoint {
+  if state_changed {
+    let mgr = manager.lock().await;
+    mgr.persist_sessions().await;
+    mgr.emit_state_change();
+  }
+
+  if is_managed {
     // Schedule debounced checkpoint
     let mgr_clone = Arc::clone(&manager);
     let sid = session_id.to_string();
@@ -1764,52 +1870,91 @@ async fn handle_filesystem_event(
   }
 }
 
-async fn lock_poll_loop(manager: Arc<Mutex<SessionManager>>, session_id: String) {
-  let mut interval = tokio::time::interval(LOCK_POLL_INTERVAL);
+fn ensure_open_poll_loop(
+  session: &mut DesktopSession,
+  manager: &Arc<Mutex<SessionManager>>,
+  session_id: &str,
+) {
+  if session
+    .open_poll_timer
+    .as_ref()
+    .is_some_and(|handle| !handle.is_finished())
+  {
+    return;
+  }
+
+  let mgr_clone = Arc::clone(manager);
+  let sid = session_id.to_string();
+  session.open_poll_timer = Some(tokio::spawn(async move {
+    open_poll_loop(mgr_clone, sid).await;
+  }));
+}
+
+async fn open_poll_loop(manager: Arc<Mutex<SessionManager>>, session_id: String) {
+  let mut interval = tokio::time::interval(OPEN_POLL_INTERVAL);
   interval.tick().await; // skip first immediate tick
 
   loop {
     interval.tick().await;
 
-    let (file_path, file_name) = {
+    let Some((file_path, file_name)) = ({
       let mgr = manager.lock().await;
       match mgr.sessions.get(&session_id) {
-        Some(s) if s.word_lock_seen && !s.pending_finalize => {
-          (s.file_path.clone(), s.file_name.clone())
+        Some(s)
+          if !s.pending_finalize
+            && !s.takeover_detected
+            && !s.checkpoint_in_flight
+            && !s.finalize_in_flight =>
+        {
+          Some((s.file_path.clone(), s.file_name.clone()))
+        }
+        Some(s)
+          if !s.pending_finalize
+            && !s.takeover_detected
+            && (s.checkpoint_in_flight || s.finalize_in_flight) =>
+        {
+          None
         }
         _ => return,
       }
+    }) else {
+      continue;
     };
 
-    let dir = Path::new(&file_path).parent().unwrap_or(Path::new("."));
-    let has_lock = has_word_lock_file(dir, &file_name).await;
+    let appears_open = local_file_appears_open(Path::new(&file_path), &file_name).await;
 
-    if !has_lock {
-      let mut mgr = manager.lock().await;
-      if let Some(session) = mgr.sessions.get_mut(&session_id) {
-        session.word_lock_seen = false;
-        if let Some(handle) = session.lock_poll_timer.take() {
-          handle.abort();
-        }
-
-        // Schedule auto-finalize
-        let mgr_clone = Arc::clone(&manager);
-        let sid = session_id.clone();
-        session.auto_finalize_timer = Some(tokio::spawn(async move {
-          tokio::time::sleep(AUTO_FINALIZE_DELAY).await;
-          let mut m = mgr_clone.lock().await;
-          let should_finish = m.sessions.get(&sid).is_some_and(|s| {
-            !s.pending_finalize && !s.takeover_detected && !s.word_lock_seen
-          });
-          if should_finish {
-            m.finish_session(&sid);
-            m.persist_sessions().await;
-            m.retry_session(&sid).await;
-          }
-        }));
-      }
+    let mut mgr = manager.lock().await;
+    let Some(session) = mgr.sessions.get_mut(&session_id) else {
+      return;
+    };
+    if session.pending_finalize || session.takeover_detected {
+      session.open_poll_timer.take();
       return;
     }
+    if session.checkpoint_in_flight || session.finalize_in_flight {
+      continue;
+    }
+
+    if appears_open {
+      session.local_open_seen = true;
+      session.closed_recheck_count = 0;
+      continue;
+    }
+
+    if !session.local_open_seen {
+      continue;
+    }
+
+    session.closed_recheck_count = session.closed_recheck_count.saturating_add(1);
+    if session.closed_recheck_count < CLOSED_RECHECK_COUNT {
+      continue;
+    }
+
+    session.open_poll_timer.take();
+    mgr.finish_session(&session_id);
+    mgr.persist_sessions().await;
+    mgr.retry_session(&session_id).await;
+    return;
   }
 }
 
@@ -1956,18 +2101,19 @@ mod tests {
   }
 
   #[test]
-  fn write_close_events_can_finalize_lockless_editors() {
-    assert!(is_write_close_event(&EventKind::Access(AccessKind::Close(
-      AccessMode::Write,
-    ))));
-    assert!(!is_write_close_event(&EventKind::Access(
-      AccessKind::Close(AccessMode::Any,)
-    )));
-    assert!(!is_write_close_event(&EventKind::Access(AccessKind::Open(
-      AccessMode::Write,
-    ))));
-    assert!(!is_write_close_event(&EventKind::Modify(
-      notify::event::ModifyKind::Data(notify::event::DataChange::Content),
-    )));
+  fn temporary_lock_file_detection_matches_supported_owner_files() {
+    assert!(is_temporary_lock_file_for("~$cument.docx", "document.docx"));
+    assert!(is_temporary_lock_file_for(
+      ".~lock.document.docx#",
+      "document.docx"
+    ));
+    assert!(!is_temporary_lock_file_for(
+      ".~lock.other.docx#",
+      "document.docx"
+    ));
+    assert!(!is_temporary_lock_file_for(
+      "document.docx",
+      "document.docx"
+    ));
   }
 }
