@@ -1026,6 +1026,7 @@ const DraggableRow = ({
         aria-rowindex={virtualIndex + 2}
         aria-selected={row.getIsSelected()}
         data-active={entity.entityId === activeEntityId || undefined}
+        data-index={virtualIndex}
         data-state={row.getIsSelected() ? "selected" : undefined}
         key={row.id}
         onContextMenu={handleContextMenu}
@@ -1096,6 +1097,7 @@ const DraggableRow = ({
         entity.entityId === activeTaskId ||
         undefined
       }
+      data-index={virtualIndex}
       data-state={row.getIsSelected() ? "selected" : undefined}
       key={row.id}
       onClick={handleRowClick}
