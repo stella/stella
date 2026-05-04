@@ -883,7 +883,7 @@
     "bold": "Tučné",
     "boldShortcut": "Tučné (Ctrl+B)",
     "bulletList": "Odrážkový seznam",
-    "checkingDocxEditDescription": "stella ještě ověřuje, jestli lze tento DOCX bezpečně upravovat. Zkuste to znovu, až se dokument načte.",
+    "checkingDocxEditDescription": "Stella ještě ověřuje, jestli lze tento DOCX bezpečně upravovat. Zkuste to znovu, až se dokument načte.",
     "checkingDocxEditTitle": "Kontrola dokumentu",
     "comment": "Komentář",
     "comments": {
@@ -1294,7 +1294,7 @@
   },
   "selfhost": {
     "dismissUpdate": "Dismiss update notice",
-    "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
+    "updateAvailable": "Stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
   },
   "settings": {
@@ -1551,7 +1551,7 @@
         "takeoverWaiting": "Čekání na odpověď",
         "takeoverWaitingDescription": "Žádáme {name} o uvolnění zámku...",
         "unavailableDescription": "Před použitím desktopových úprav spusťte stella desktop a nechte ho běžet.",
-        "unavailableTitle": "stella desktop není k dispozici."
+        "unavailableTitle": "Stella desktop není k dispozici."
       },
       "downloadAsZip": "Stáhnout .zip soubor",
       "downloadOriginal": "Původní soubor",
@@ -1796,8 +1796,8 @@
       "int": "Celé číslo",
       "keepEmpty": "Ponechat prázdné",
       "manualColumn": "Manuální sloupec",
-      "multiOptionsFooter": "Možnosti mimo tento seznam nebudou vybrány. stella může vybrat více možností na dokument.",
-      "multiOptionsHelp": "stella vybere jednu nebo více z těchto pro každý řádek",
+      "multiOptionsFooter": "Možnosti mimo tento seznam nebudou vybrány. Stella může vybrat více možností na dokument.",
+      "multiOptionsHelp": "Stella vybere jednu nebo více z těchto pro každý řádek",
       "multiOptionsTitle": "Více možností",
       "multiSelect": "Vícenásobný výběr",
       "nameProperty": "Vlastnost názvu",
@@ -1828,8 +1828,8 @@
       "selectColor": "Vyberte barvu",
       "selectOperator": "Vyberte operátor",
       "setPromptPlaceholder": "Nastavte prompt pro extrakci informací",
-      "singleOptionsFooter": "Možnosti mimo tento seznam nebudou vybrány. stella vybírá jednu nejlepší shodu na dokument.",
-      "singleOptionsHelp": "stella vybere přesně jednu z těchto pro každý řádek",
+      "singleOptionsFooter": "Možnosti mimo tento seznam nebudou vybrány. Stella vybírá jednu nejlepší shodu na dokument.",
+      "singleOptionsHelp": "Stella vybere přesně jednu z těchto pro každý řádek",
       "singleOptionsTitle": "Jednotlivé možnosti",
       "singleSelect": "Jednoduchý výběr",
       "sortAscending": "Řadit vzestupně",

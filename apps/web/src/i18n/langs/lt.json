@@ -883,7 +883,7 @@
     "bold": "Bold",
     "boldShortcut": "Bold (Ctrl+B)",
     "bulletList": "Bullet List",
-    "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
+    "checkingDocxEditDescription": "Stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
     "checkingDocxEditTitle": "Checking document",
     "comment": "Comment",
     "comments": {
@@ -1294,7 +1294,7 @@
   },
   "selfhost": {
     "dismissUpdate": "Dismiss update notice",
-    "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
+    "updateAvailable": "Stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
   },
   "settings": {
@@ -1551,7 +1551,7 @@
         "takeoverWaiting": "Laukiama atsakymo",
         "takeoverWaitingDescription": "Prašoma {name} atlaisvinti užraktą...",
         "unavailableDescription": "Prieš redaguodami darbalaukyje paleiskite stella desktop ir palikite ją veikti.",
-        "unavailableTitle": "stella desktop nepasiekiama."
+        "unavailableTitle": "Stella desktop nepasiekiama."
       },
       "downloadAsZip": "Atsisiųsti .zip failą",
       "downloadOriginal": "Originalus failas",
@@ -1796,8 +1796,8 @@
       "int": "Sveikasis skaičius",
       "keepEmpty": "Palikti tuščią",
       "manualColumn": "Rankinis stulpelis",
-      "multiOptionsFooter": "Options outside this list won't be picked. stella may match multiple per document.",
-      "multiOptionsHelp": "stella picks one or more of these per row",
+      "multiOptionsFooter": "Options outside this list won't be picked. Stella may match multiple per document.",
+      "multiOptionsHelp": "Stella picks one or more of these per row",
       "multiOptionsTitle": "Multi options",
       "multiSelect": "Keli pasirinkimai",
       "nameProperty": "Pavadinimo savybė",
@@ -1828,8 +1828,8 @@
       "selectColor": "Pasirinkite spalvą",
       "selectOperator": "Pasirinkite operatorių",
       "setPromptPlaceholder": "Nustatykite užklausą informacijos išgavimui",
-      "singleOptionsFooter": "Options outside this list won't be picked. stella picks the single best match per document.",
-      "singleOptionsHelp": "stella picks exactly one of these per row",
+      "singleOptionsFooter": "Options outside this list won't be picked. Stella picks the single best match per document.",
+      "singleOptionsHelp": "Stella picks exactly one of these per row",
       "singleOptionsTitle": "Single options",
       "singleSelect": "Vienas pasirinkimas",
       "sortAscending": "Rūšiuoti didėjimo tvarka",

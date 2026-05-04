@@ -883,7 +883,7 @@
     "bold": "Bold",
     "boldShortcut": "Bold (Ctrl+B)",
     "bulletList": "Bullet List",
-    "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
+    "checkingDocxEditDescription": "Stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
     "checkingDocxEditTitle": "Checking document",
     "comment": "Comment",
     "comments": {
@@ -1294,7 +1294,7 @@
   },
   "selfhost": {
     "dismissUpdate": "Dismiss update notice",
-    "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
+    "updateAvailable": "Stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
   },
   "settings": {
@@ -1551,7 +1551,7 @@
         "takeoverWaiting": "Warte auf Antwort",
         "takeoverWaitingDescription": "{name} wird gebeten, die Sperre freizugeben...",
         "unavailableDescription": "Starten Sie stella desktop und lassen Sie die App geöffnet, bevor Sie die Desktop-Bearbeitung verwenden.",
-        "unavailableTitle": "stella desktop ist nicht verfügbar."
+        "unavailableTitle": "Stella desktop ist nicht verfügbar."
       },
       "downloadAsZip": "Als .zip herunterladen",
       "downloadOriginal": "Originaldatei",
@@ -1796,8 +1796,8 @@
       "int": "Ganzzahl",
       "keepEmpty": "Leer lassen",
       "manualColumn": "Manuelle Spalte",
-      "multiOptionsFooter": "Optionen außerhalb dieser Liste werden nicht gewählt. stella kann mehrere pro Dokument auswählen.",
-      "multiOptionsHelp": "stella wählt eine oder mehrere davon pro Zeile aus",
+      "multiOptionsFooter": "Optionen außerhalb dieser Liste werden nicht gewählt. Stella kann mehrere pro Dokument auswählen.",
+      "multiOptionsHelp": "Stella wählt eine oder mehrere davon pro Zeile aus",
       "multiOptionsTitle": "Mehrfachoptionen",
       "multiSelect": "Mehrfachauswahl",
       "nameProperty": "Namenseigenschaft",
@@ -1828,8 +1828,8 @@
       "selectColor": "Farbe auswählen",
       "selectOperator": "Operator auswählen",
       "setPromptPlaceholder": "Prompt zum Extrahieren der Informationen festlegen",
-      "singleOptionsFooter": "Optionen außerhalb dieser Liste werden nicht gewählt. stella wählt pro Dokument die beste Übereinstimmung.",
-      "singleOptionsHelp": "stella wählt genau eine davon pro Zeile aus",
+      "singleOptionsFooter": "Optionen außerhalb dieser Liste werden nicht gewählt. Stella wählt pro Dokument die beste Übereinstimmung.",
+      "singleOptionsHelp": "Stella wählt genau eine davon pro Zeile aus",
       "singleOptionsTitle": "Einzeloptionen",
       "singleSelect": "Einfachauswahl",
       "sortAscending": "Aufsteigend sortieren",

@@ -886,7 +886,7 @@ type Messages = {
     "bold": "Bold";
     "boldShortcut": "Bold (Ctrl+B)";
     "bulletList": "Bullet List";
-    "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.";
+    "checkingDocxEditDescription": "Stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.";
     "checkingDocxEditTitle": "Checking document";
     "comment": "Comment";
     "comments": {
@@ -1297,7 +1297,7 @@ type Messages = {
   };
   "selfhost": {
     "dismissUpdate": "Dismiss update notice";
-    "updateAvailable": "stella v{latest} is available. You're running v{installed}.";
+    "updateAvailable": "Stella v{latest} is available. You're running v{installed}.";
     "viewReleaseNotes": "View release notes";
   };
   "settings": {
@@ -1554,7 +1554,7 @@ type Messages = {
         "takeoverWaiting": "Waiting for response";
         "takeoverWaitingDescription": "Asking {name} to release the lock...";
         "unavailableDescription": "Start stella desktop and keep it running before using desktop editing.";
-        "unavailableTitle": "stella desktop is not available.";
+        "unavailableTitle": "Stella desktop is not available.";
       };
       "downloadAsZip": "Download as ZIP";
       "downloadOriginal": "Original file";
@@ -1799,8 +1799,8 @@ type Messages = {
       "int": "Integer";
       "keepEmpty": "Keep Empty";
       "manualColumn": "Manual column";
-      "multiOptionsFooter": "Options outside this list won't be picked. stella may match multiple per document.";
-      "multiOptionsHelp": "stella picks one or more of these per row";
+      "multiOptionsFooter": "Options outside this list won't be picked. Stella may match multiple per document.";
+      "multiOptionsHelp": "Stella picks one or more of these per row";
       "multiOptionsTitle": "Multi options";
       "multiSelect": "Multi Select";
       "nameProperty": "Name property";
@@ -1831,8 +1831,8 @@ type Messages = {
       "selectColor": "Select color";
       "selectOperator": "Select operator";
       "setPromptPlaceholder": "Set a prompt to extract the information";
-      "singleOptionsFooter": "Options outside this list won't be picked. stella picks the single best match per document.";
-      "singleOptionsHelp": "stella picks exactly one of these per row";
+      "singleOptionsFooter": "Options outside this list won't be picked. Stella picks the single best match per document.";
+      "singleOptionsHelp": "Stella picks exactly one of these per row";
       "singleOptionsTitle": "Single options";
       "singleSelect": "Single Select";
       "sortAscending": "Sort ascending";

@@ -388,7 +388,7 @@
       "apply-active-docx-edits": "Applying DOCX edits",
       "ask-user": "Precizējuma pieprasīšana",
       "create-document": "Dokumenta izveide",
-      "describe-stella-function": "stella funkcijas pārbaude",
+      "describe-stella-function": "Stella funkcijas pārbaude",
       "docxCommentSummary": "Add a comment to {blockId}",
       "docxDeleteSummary": "Delete {blockId}",
       "docxEditMore": "{count, plural, one {# more edit} other {# more edits}}",
@@ -883,7 +883,7 @@
     "bold": "Bold",
     "boldShortcut": "Bold (Ctrl+B)",
     "bulletList": "Bullet List",
-    "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
+    "checkingDocxEditDescription": "Stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
     "checkingDocxEditTitle": "Checking document",
     "comment": "Comment",
     "comments": {
@@ -1294,7 +1294,7 @@
   },
   "selfhost": {
     "dismissUpdate": "Dismiss update notice",
-    "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
+    "updateAvailable": "Stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
   },
   "settings": {
@@ -1551,7 +1551,7 @@
         "takeoverWaiting": "Gaida atbildi",
         "takeoverWaitingDescription": "Lūdzam {name} atbrīvot bloķēšanu...",
         "unavailableDescription": "Pirms rediģēšanas datora lietotnē palaidiet stella desktop un atstājiet to ieslēgtu.",
-        "unavailableTitle": "stella desktop nav pieejams."
+        "unavailableTitle": "Stella desktop nav pieejams."
       },
       "downloadAsZip": "Lejupielādēt .zip failu",
       "downloadOriginal": "Oriģinālais fails",
@@ -1796,8 +1796,8 @@
       "int": "Vesels skaitlis",
       "keepEmpty": "Atstāt tukšu",
       "manualColumn": "Manuāla kolonna",
-      "multiOptionsFooter": "Options outside this list won't be picked. stella may match multiple per document.",
-      "multiOptionsHelp": "stella picks one or more of these per row",
+      "multiOptionsFooter": "Options outside this list won't be picked. Stella may match multiple per document.",
+      "multiOptionsHelp": "Stella picks one or more of these per row",
       "multiOptionsTitle": "Multi options",
       "multiSelect": "Vairāku izvēļu",
       "nameProperty": "Nosaukuma īpašība",
@@ -1828,8 +1828,8 @@
       "selectColor": "Izvēlieties krāsu",
       "selectOperator": "Izvēlieties operatoru",
       "setPromptPlaceholder": "Iestatiet uzvedni informācijas ieguvei",
-      "singleOptionsFooter": "Options outside this list won't be picked. stella picks the single best match per document.",
-      "singleOptionsHelp": "stella picks exactly one of these per row",
+      "singleOptionsFooter": "Options outside this list won't be picked. Stella picks the single best match per document.",
+      "singleOptionsHelp": "Stella picks exactly one of these per row",
       "singleOptionsTitle": "Single options",
       "singleSelect": "Vienas izvēles",
       "sortAscending": "Kārtot augošā secībā",
