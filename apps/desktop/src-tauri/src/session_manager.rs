@@ -236,9 +236,7 @@ fn is_word_lock_file_for(candidate: &str, file_name: &str) -> bool {
 fn is_write_close_event(kind: &EventKind) -> bool {
   matches!(
     kind,
-    EventKind::Access(AccessKind::Close(
-      AccessMode::Any | AccessMode::Write | AccessMode::Other,
-    ))
+    EventKind::Access(AccessKind::Close(AccessMode::Write))
   )
 }
 
@@ -1962,9 +1960,9 @@ mod tests {
     assert!(is_write_close_event(&EventKind::Access(AccessKind::Close(
       AccessMode::Write,
     ))));
-    assert!(is_write_close_event(&EventKind::Access(AccessKind::Close(
-      AccessMode::Any,
-    ))));
+    assert!(!is_write_close_event(&EventKind::Access(
+      AccessKind::Close(AccessMode::Any,)
+    )));
     assert!(!is_write_close_event(&EventKind::Access(AccessKind::Open(
       AccessMode::Write,
     ))));

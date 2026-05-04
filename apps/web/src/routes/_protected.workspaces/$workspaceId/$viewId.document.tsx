@@ -236,6 +236,7 @@ function RouteComponentInner({
   );
   const resetPdfViewerState = useWorkspaceStore((s) => s.resetPdfViewerState);
   const openPdfForEntity = useInspectorStore((s) => s.openPdfForEntity);
+  const currentFileFieldIdsByPropertyRef = useRef(new Map<string, string>());
   const navigate = Route.useNavigate();
 
   useEffect(() => {
@@ -323,13 +324,24 @@ function RouteComponentInner({
   const usesEmbeddedDocxToolbar =
     shouldRenderDocxBrowserShell && filePropertyId !== undefined;
   const latestFileFieldForProperty =
-    activeFileField === undefined && filePropertyId !== undefined
-      ? entity.fields.find(
+    filePropertyId !== undefined
+      ? entity.fields.findLast(
           (field) =>
             field.propertyId === filePropertyId &&
             field.content.type === "file",
         )
       : undefined;
+
+  useEffect(() => {
+    if (activeFileField === undefined) {
+      return;
+    }
+
+    currentFileFieldIdsByPropertyRef.current.set(
+      activeFileField.propertyId,
+      activeFileField.id,
+    );
+  }, [activeFileField]);
 
   useEffect(() => {
     if (
@@ -339,6 +351,18 @@ function RouteComponentInner({
       return;
     }
 
+    const previousCurrentFieldId = currentFileFieldIdsByPropertyRef.current.get(
+      latestFileFieldForProperty.propertyId,
+    );
+
+    if (previousCurrentFieldId !== fieldId) {
+      return;
+    }
+
+    currentFileFieldIdsByPropertyRef.current.set(
+      latestFileFieldForProperty.propertyId,
+      latestFileFieldForProperty.id,
+    );
     setActiveFieldId(latestFileFieldForProperty.id);
     useInspectorStore
       .getState()
