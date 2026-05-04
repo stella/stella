@@ -8,6 +8,7 @@ import { logDevError } from "@/lib/errors/utils";
 
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
   event === WEB_ANALYTICS_EVENTS.exception ||
+  event === WEB_ANALYTICS_EVENTS.identify ||
   event === WEB_ANALYTICS_EVENTS.pagePerformance ||
   event === WEB_ANALYTICS_EVENTS.pageViewed;
 
@@ -48,7 +49,7 @@ export const createPostHogAnalytics = (
     disable_web_experiments: true,
     mask_all_text: true,
     mask_personal_data_properties: true,
-    person_profiles: "never",
+    person_profiles: "identified_only",
     capture_heatmaps: false,
     capture_performance: false,
     capture_pageview: false,
@@ -83,6 +84,25 @@ export const createPostHogAnalytics = (
       void posthog.capture(WEB_ANALYTICS_EVENTS.pageViewed, {
         route_id: routeId,
       });
+    },
+    identifyUser: (user) => {
+      const distinctId = posthog.get_distinct_id();
+      
+      if (distinctId === user.id) {
+        return;
+      }
+
+      if (posthog._isIdentified() && distinctId !== user.id) {
+        posthog.reset();
+      }
+
+      posthog.identify(user.id, {
+        email: user.email,
+        name: user.name,
+      });
+    },
+    reset: () => {
+      posthog.reset();
     },
   };
 

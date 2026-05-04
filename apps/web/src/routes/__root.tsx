@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
@@ -12,6 +12,7 @@ import {
   DefaultErrorComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { RouteTelemetry } from "@/lib/analytics/route-telemetry";
 import { ensureCriticalQueryData } from "@/lib/react-query";
 import { sessionOptions } from "@/routes/-queries";
@@ -54,6 +55,7 @@ function RootComponent() {
   return (
     <>
       <HeadContent />
+      <RootAnalyticsIdentity />
       <RouteTelemetry />
       <div className="flex h-dvh w-full flex-col">
         <Outlet />
@@ -66,3 +68,21 @@ function RootComponent() {
     </>
   );
 }
+
+const RootAnalyticsIdentity = () => {
+  const analytics = useAnalytics();
+  const user = Route.useRouteContext({ select: (context) => context.user });
+
+  useEffect(() => {
+    if (user === null) {
+      return;
+    }
+    analytics.identifyUser({
+      id: user.id,
+      email: user.email,
+      name: user.name ?? undefined,
+    });
+  }, [analytics, user]);
+
+  return null;
+};

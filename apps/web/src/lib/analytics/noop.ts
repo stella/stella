@@ -15,4 +15,6 @@ export const noopAnalytics: Analytics = {
   },
   capturePagePerformance: noop,
   capturePageViewed: noop,
+  identifyUser: noop,
+  reset: noop,
 };
