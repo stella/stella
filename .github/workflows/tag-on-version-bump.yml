@@ -9,6 +9,12 @@ on:
   push:
     branches: [main]
     paths: [VERSION]
+  # Manual recovery path. If the auto-trigger misses a VERSION bump
+  # (e.g. a stuck "merge already in progress" lock causes GitHub to
+  # land a follow-up empty squash commit on top of the real one, so
+  # the path filter doesn't see VERSION change in the delivered
+  # push event), run this workflow against `main` to push the tag.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -16,6 +22,13 @@ permissions:
 jobs:
   tag:
     name: Push release tag
+    # Restrict to main. The push trigger above is already main-only,
+    # but workflow_dispatch can be invoked against any ref. Without
+    # this gate, anyone with write access could push a feature branch
+    # with an arbitrary VERSION value, dispatch the workflow against
+    # that branch, and mint a signed-release tag without going
+    # through the merge-to-main review path.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Mint App token
