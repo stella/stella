@@ -92,8 +92,7 @@ trap 'rm -rf "$work"' EXIT
 # pattern matching so we don't need to know the exact filename.
 patterns=(
   "Stella-windows-x64-setup.exe"
-  "Stella-macos-aarch64.dmg"
-  "Stella-macos-x64.dmg"
+  "Stella-macos-universal.dmg"
 )
 for pattern in "${patterns[@]}"; do
   if ! gh release download "$tag" --pattern "$pattern" --dir "$work" 2>/dev/null; then
