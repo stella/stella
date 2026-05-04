@@ -886,7 +886,7 @@ type Messages = {
     "bold": "Bold";
     "boldShortcut": "Bold (Ctrl+B)";
     "bulletList": "Bullet List";
-    "checkingDocxEditDescription": "Stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.";
+    "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.";
     "checkingDocxEditTitle": "Checking document";
     "comment": "Comment";
     "comments": {
@@ -915,7 +915,7 @@ type Messages = {
     "doneEditing": "Done editing";
     "doubleClickFooter": "Double-click to add footer";
     "doubleClickHeader": "Double-click to add header";
-    "editAuthRequired": "Refresh Stella and sign in again before editing this document.";
+    "editAuthRequired": "Refresh stella and sign in again before editing this document.";
     "editDownloadFailed": "The document could not be downloaded for editing.";
     "editFile": "Edit";
     "editLink": "Edit link";
@@ -979,7 +979,7 @@ type Messages = {
     "rejectChange": "Reject Change";
     "removeLink": "Remove link";
     "renderErrorDescription": "An error occurred while rendering this component. Please try again or contact support if the problem persists.";
-    "saveCheckpointFailedDescription": "The DOCX was created locally, but Stella could not upload the checkpoint. Keep the editor open and try saving again.";
+    "saveCheckpointFailedDescription": "The DOCX was created locally, but stella could not upload the checkpoint. Keep the editor open and try saving again.";
     "saveCheckpointFailedTitle": "Could not upload save";
     "saveEditorUnavailableDescription": "The editor is not ready yet. Wait for the document to finish loading, then try saving again.";
     "saveEditorUnavailableTitle": "Editor not ready";
@@ -1304,7 +1304,7 @@ type Messages = {
     "account": {
       "desktop": "Desktop";
       "desktopAppDescription": "Open documents and files directly in stella from your computer.";
-      "desktopDescription": "Install Stella on your computer";
+      "desktopDescription": "Install stella on your computer";
       "desktopDownloadMac": "Download for macOS";
       "desktopDownloadOtherMac": "On Windows? Download for Windows";
       "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments";
@@ -1799,7 +1799,7 @@ type Messages = {
       "int": "Integer";
       "keepEmpty": "Keep Empty";
       "manualColumn": "Manual column";
-      "multiOptionsFooter": "Options outside this list won't be picked. Stella may match multiple per document.";
+      "multiOptionsFooter": "Options outside this list won't be picked. stella may match multiple per document.";
       "multiOptionsHelp": "stella picks one or more of these per row";
       "multiOptionsTitle": "Multi options";
       "multiSelect": "Multi Select";
@@ -1831,7 +1831,7 @@ type Messages = {
       "selectColor": "Select color";
       "selectOperator": "Select operator";
       "setPromptPlaceholder": "Set a prompt to extract the information";
-      "singleOptionsFooter": "Options outside this list won't be picked. Stella picks the single best match per document.";
+      "singleOptionsFooter": "Options outside this list won't be picked. stella picks the single best match per document.";
       "singleOptionsHelp": "stella picks exactly one of these per row";
       "singleOptionsTitle": "Single options";
       "singleSelect": "Single Select";
