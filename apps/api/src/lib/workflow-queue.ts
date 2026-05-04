@@ -23,6 +23,7 @@ import {
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
+import { resolveWorkflowTargetEntityIds } from "@/api/lib/workflow-targets";
 import { generateBatch } from "@/api/lib/workflow/generate-batch";
 import { generateBatchMock } from "@/api/lib/workflow/generate-batch-mock";
 import type {
@@ -228,21 +229,11 @@ export const startWorkflow = async ({
         .where(eq(entities.workspaceId, workspaceId)),
     );
 
-    const documentEntityIds = new Set(
-      entityRows.filter((e) => e.kind === "document").map((e) => e.id),
-    );
-
-    const targetIds =
-      inputEntityIds && inputEntityIds.length > 0
-        ? inputEntityIds.filter((id) => documentEntityIds.has(id))
-        : [...documentEntityIds];
-
-    // Prioritize entities from entityIdsOrder first
-    const targetSet = new Set(targetIds);
-    const prioritized = (inputOrder ?? []).filter((id) => targetSet.has(id));
-    const prioritizedSet = new Set(prioritized);
-    const remaining = targetIds.filter((id) => !prioritizedSet.has(id));
-    const orderedEntityIds = [...prioritized, ...remaining];
+    const orderedEntityIds = resolveWorkflowTargetEntityIds({
+      entityRows,
+      inputEntityIds,
+      inputOrder,
+    });
 
     if (orderedEntityIds.length === 0) {
       await redis.del(workflowKey(workspaceId, "running"));

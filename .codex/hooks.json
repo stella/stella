@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "'/home/nnad3n/coding/stll-ai/stella/.codex/hooks/block-main-push.sh'"
+            "command": "bash .codex/hooks/block-main-push.sh"
           }
         ]
       }
