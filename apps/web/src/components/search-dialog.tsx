@@ -94,6 +94,17 @@ const KIND_TRANSLATION_KEYS = {
   link: "search.kinds.link",
 } as const satisfies Record<GlobalSearchResultType, TranslationKey>;
 
+const SEARCH_KIND_TYPES = [
+  "matter",
+  "contact",
+  // "case-law",
+  "document",
+  "folder",
+  "task",
+  "message",
+  "link",
+] as const satisfies readonly GlobalSearchResultType[];
+
 const TIME_PRESET_TRANSLATION_KEYS = {
   day: "search.updatedWithinOptions.day",
   week: "search.updatedWithinOptions.week",
@@ -101,9 +112,22 @@ const TIME_PRESET_TRANSLATION_KEYS = {
   year: "search.updatedWithinOptions.year",
 } as const satisfies Record<TimePreset, TranslationKey>;
 
-const isGlobalSearchResultType = (
+const isSearchKindOption = (
   value: string,
-): value is GlobalSearchResultType => value in KIND_TRANSLATION_KEYS;
+): value is (typeof SEARCH_KIND_TYPES)[number] => {
+  switch (value) {
+    case "matter":
+    case "contact":
+    case "document":
+    case "folder":
+    case "task":
+    case "message":
+    case "link":
+      return true;
+    default:
+      return false;
+  }
+};
 
 const compactMeta = (parts: readonly (string | null | undefined)[]): string =>
   parts
@@ -251,6 +275,11 @@ export const SearchDialog = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: include searchQuery so each new query gets a fresh preset cutoff
   }, [filters.time, searchQuery]);
   const updatedTo = filterUpdatedTo(filters);
+  const selectedSearchTypes = filters.types.filter(isSearchKindOption);
+  const activeSearchTypes =
+    selectedSearchTypes.length > 0
+      ? selectedSearchTypes
+      : [...SEARCH_KIND_TYPES];
 
   const {
     data,
@@ -264,7 +293,7 @@ export const SearchDialog = ({
       query: searchQuery,
       workspaceIds: filters.workspaceIds,
       kinds: [],
-      types: filters.types,
+      types: activeSearchTypes,
       editedByUserIds: filters.editedByUserIds,
       mimeTypes: filters.mimeTypes,
       updatedFrom,
@@ -308,7 +337,7 @@ export const SearchDialog = ({
 
   const searchFilterParams = {
     workspaceIds: filters.workspaceIds,
-    types: filters.types,
+    types: activeSearchTypes,
     editedByUserIds: filters.editedByUserIds,
     mimeTypes: filters.mimeTypes,
     updatedFrom,
@@ -713,21 +742,26 @@ export const SearchDialog = ({
                     <div className="mt-4">
                       <FacetGroup
                         buckets={mergeSelectedBuckets(
-                          (facets?.type ?? []).map((bucket) => ({
-                            value: bucket.value,
-                            count: bucket.count,
-                            label: isGlobalSearchResultType(bucket.value)
-                              ? t(KIND_TRANSLATION_KEYS[bucket.value])
-                              : bucket.value,
-                          })),
+                          (facets?.type ?? []).flatMap((bucket) => {
+                            if (!isSearchKindOption(bucket.value)) {
+                              return [];
+                            }
+                            return [
+                              {
+                                value: bucket.value,
+                                count: bucket.count,
+                                label: t(KIND_TRANSLATION_KEYS[bucket.value]),
+                              },
+                            ];
+                          }),
                           filters.types,
                           (value) =>
-                            isGlobalSearchResultType(value)
+                            isSearchKindOption(value)
                               ? t(KIND_TRANSLATION_KEYS[value])
                               : value,
                         )}
                         onChange={(value) => {
-                          if (isGlobalSearchResultType(value)) {
+                          if (isSearchKindOption(value)) {
                             toggleTypeFilter(value);
                           }
                         }}
