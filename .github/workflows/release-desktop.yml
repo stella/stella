@@ -88,8 +88,11 @@ jobs:
             REF="$HEAD_BRANCH"
           fi
 
-          if [[ ! "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
-            echo "::error::Expected a release tag like v1.2.3 or v1.2.3-rc.1; got '$REF'"
+          # Pattern must stay aligned with scripts/release-channel.sh
+          # and .github/workflows/release.yml — all three gate on the
+          # same shape so a tag accepted by one is accepted by all.
+          if [[ ! "$REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+\.[0-9]+)?$ ]]; then
+            echo "::error::Expected a release tag like v1.2.3, v1.2.3-rc.1, v1.2.3-beta.1, or v1.2.3-alpha.1; got '$REF'"
             exit 1
           fi
 
