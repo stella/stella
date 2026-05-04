@@ -218,10 +218,8 @@ export const startWorkflow = async ({
       return { status: "skipped" };
     }
 
-    // AI extraction reads `fields` on entity versions (files, manual cells,
-    // etc.). Only document rows have that data model; tasks, folders, links,
-    // and messages must not be enqueued or the worker would fail on missing
-    // inputs (e.g. no Documents field on a task).
+    // Full workspace sweeps stay document-only, while explicit edit-triggered
+    // runs can target any non-folder entity that has editable fields.
     const entityRows = await scopedDb((tx) =>
       tx
         .select({ id: entities.id, kind: entities.kind })

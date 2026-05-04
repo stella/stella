@@ -29,13 +29,13 @@ describe("workflow entity targeting", () => {
     ]);
   });
 
-  test("filters explicit entity IDs to documents while preserving requested priority", () => {
+  test("keeps explicit non-folder entity IDs while preserving requested priority", () => {
     expect(
       resolveWorkflowTargetEntityIds({
         entityRows,
-        inputEntityIds: [task, documentB, link, documentA],
+        inputEntityIds: [folder, task, documentB, link, documentA],
         inputOrder: [documentA, task],
       }),
-    ).toEqual([documentA, documentB]);
+    ).toEqual([documentA, task, documentB, link]);
   });
 });

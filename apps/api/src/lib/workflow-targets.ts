@@ -12,19 +12,29 @@ type ResolveWorkflowTargetEntityIdsArgs = {
   inputOrder?: readonly SafeId<"entity">[] | undefined;
 };
 
+const isExplicitWorkflowTarget = ({ kind }: WorkflowTargetEntityRow) =>
+  kind !== "folder";
+
 export const resolveWorkflowTargetEntityIds = ({
   entityRows,
   inputEntityIds,
   inputOrder,
 }: ResolveWorkflowTargetEntityIdsArgs) => {
-  const documentEntityIds = new Set(
-    entityRows.filter((entity) => entity.kind === "document").map((e) => e.id),
-  );
+  const entityIdsByKind = {
+    documents: new Set(
+      entityRows
+        .filter((entity) => entity.kind === "document")
+        .map((entity) => entity.id),
+    ),
+    explicitTargets: new Set(
+      entityRows.filter(isExplicitWorkflowTarget).map((entity) => entity.id),
+    ),
+  };
 
   const targetIds =
     inputEntityIds && inputEntityIds.length > 0
-      ? inputEntityIds.filter((id) => documentEntityIds.has(id))
-      : [...documentEntityIds];
+      ? inputEntityIds.filter((id) => entityIdsByKind.explicitTargets.has(id))
+      : [...entityIdsByKind.documents];
 
   const targetSet = new Set(targetIds);
   const prioritized = (inputOrder ?? []).filter((id) => targetSet.has(id));
