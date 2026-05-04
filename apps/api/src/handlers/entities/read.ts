@@ -36,37 +36,50 @@ const config = {
   body: readEntitiesBodySchema,
 } satisfies HandlerConfig;
 
-const readEntities = createSafeHandler(
-  config,
-  async function* ({ safeDb, workspaceId, session, body, user: currentUser }) {
-    const page = body.page ?? 1;
-    const pageSize = body.pageSize ?? LIMITS.entitiesPageSizeDefault;
-    const result = yield* Result.await(
-      queryEntities({
-        safeDb,
-        workspaceId,
-        currentUserId: currentUser.id,
-        currentOrganizationId: session.activeOrganizationId,
-        filters: body.filters ?? [],
-        sorts: body.sorts ?? [],
-        ...(body.search !== undefined && { search: body.search }),
-        offset: (page - 1) * pageSize,
-        limit: pageSize,
-        fieldMode: body.fieldMode ?? "full",
-        fieldIds: body.fieldIds ?? [],
-        excludedKinds: [],
-        previewableForAi: body.previewableForAi ?? false,
-        includeTotalCount: true,
-      }),
-    );
+type QueryEntities = typeof queryEntities;
 
-    return Result.ok({
-      entities: result.entities,
-      totalCount: result.totalCount ?? 0,
-      page,
-      pageSize,
-    });
-  },
-);
+export const createReadEntitiesHandler = (
+  queryEntitiesImpl: QueryEntities = queryEntities,
+) =>
+  createSafeHandler(
+    config,
+    async function* ({
+      safeDb,
+      workspaceId,
+      session,
+      body,
+      user: currentUser,
+    }) {
+      const page = body.page ?? 1;
+      const pageSize = body.pageSize ?? LIMITS.entitiesPageSizeDefault;
+      const result = yield* Result.await(
+        queryEntitiesImpl({
+          safeDb,
+          workspaceId,
+          currentUserId: currentUser.id,
+          currentOrganizationId: session.activeOrganizationId,
+          filters: body.filters ?? [],
+          sorts: body.sorts ?? [],
+          ...(body.search !== undefined && { search: body.search }),
+          offset: (page - 1) * pageSize,
+          limit: pageSize,
+          fieldMode: body.fieldMode ?? "full",
+          fieldIds: body.fieldIds ?? [],
+          excludedKinds: [],
+          previewableForAi: body.previewableForAi ?? false,
+          includeTotalCount: true,
+        }),
+      );
+
+      return Result.ok({
+        entities: result.entities,
+        totalCount: result.totalCount ?? 0,
+        page,
+        pageSize,
+      });
+    },
+  );
+
+const readEntities = createReadEntitiesHandler();
 
 export default readEntities;

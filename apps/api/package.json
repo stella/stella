@@ -7,7 +7,7 @@
     "./types": "./src/types.ts"
   },
   "scripts": {
-    "test": "bun test",
+    "test": "bun test --preload ./src/tests/setup-env.ts",
     "dev": "bun run docker:dev && NODE_ENV=development bun --port 3001 --watch src/index.ts",
     "dev:ai-tools": "devtools",
     "docker:dev": "docker compose --profile dev up -d",
