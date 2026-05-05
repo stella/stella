@@ -1,5 +1,8 @@
 import { GENERATED_SKILLS } from "./skills.gen";
 
+// TODO: This is a temporary toy implementation for Stella-provided skills.
+// Replace it with importable, persisted skill packs before user-managed
+// skills become a runtime feature.
 export type SkillMetadata = {
   description: string;
   name: string;
