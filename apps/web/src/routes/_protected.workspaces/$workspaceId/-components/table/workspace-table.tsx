@@ -1212,7 +1212,7 @@ const DraggableRow = ({
             cell.column.id === selectColId && "min-w-12 shrink-0",
             cell.column.columnDef.meta?.muted && "text-muted-foreground",
             expanded &&
-              "max-h-48 overflow-y-auto whitespace-normal [&_.line-clamp-2]:line-clamp-none [&_.truncate]:min-w-0 [&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal [&_.truncate]:wrap-break-word",
+              "max-h-48 overflow-y-auto whitespace-normal [&_.line-clamp-2]:line-clamp-none [&_.truncate]:min-w-0 [&_.truncate]:overflow-visible [&_.truncate]:wrap-break-word [&_.truncate]:whitespace-normal",
             cell.column.getIsResizing() &&
               "after:bg-info after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-50 after:w-px",
             addPropertyColumn &&
