@@ -43,6 +43,13 @@ type Messages = {
     "searchPlaceholder": "Type word(s) to find…";
     "title": "Anonymization review";
   };
+  "app": {
+    "versionMismatch": {
+      "dismiss": "Dismiss update notice";
+      "message": "A new version is available (v{latest}). You're on v{installed}.";
+      "refresh": "Refresh to update";
+    };
+  };
   "appearance": {
     "cool": "Cool";
     "dark": "Dark";

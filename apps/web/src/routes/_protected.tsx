@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { ApiVersionMismatchBanner } from "@/components/api-version-mismatch-banner";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
@@ -335,6 +336,7 @@ function ProtectedContent({
 
   return (
     <SidebarInset className="flex flex-col">
+      <ApiVersionMismatchBanner />
       <SelfhostUpdateBanner />
       <header
         className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4"

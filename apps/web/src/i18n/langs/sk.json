@@ -40,6 +40,13 @@
     "searchPlaceholder": "Zadajte slová na vyhľadanie…",
     "title": "Anonymisation review"
   },
+  "app": {
+    "versionMismatch": {
+      "dismiss": "Zavrieť oznámenie o aktualizácii",
+      "message": "Je dostupná nová verzia (v{latest}). Používate v{installed}.",
+      "refresh": "Obnoviť a aktualizovať"
+    }
+  },
   "appearance": {
     "cool": "Studené",
     "dark": "Tmavý",

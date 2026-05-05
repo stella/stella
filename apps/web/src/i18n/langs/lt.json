@@ -40,6 +40,13 @@
     "searchPlaceholder": "Įveskite žodžius paieškai…",
     "title": "Anonymisation review"
   },
+  "app": {
+    "versionMismatch": {
+      "dismiss": "Atmesti atnaujinimo pranešimą",
+      "message": "Yra nauja versija (v{latest}). Naudojate v{installed}.",
+      "refresh": "Atnaujinti įkeliant iš naujo"
+    }
+  },
   "appearance": {
     "cool": "Vėsūs",
     "dark": "Tamsus",

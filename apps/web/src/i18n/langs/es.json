@@ -40,6 +40,13 @@
     "searchPlaceholder": "Escriba palabras a buscar…",
     "title": "Anonymisation review"
   },
+  "app": {
+    "versionMismatch": {
+      "dismiss": "Descartar aviso de actualización",
+      "message": "Hay una nueva versión disponible (v{latest}). Estás usando v{installed}.",
+      "refresh": "Actualizar la página"
+    }
+  },
   "appearance": {
     "cool": "Frío",
     "dark": "Oscuro",

@@ -40,6 +40,13 @@
     "searchPlaceholder": "Zadejte slova k vyhledání…",
     "title": "Kontrola anonymizace"
   },
+  "app": {
+    "versionMismatch": {
+      "dismiss": "Zavřít oznámení o aktualizaci",
+      "message": "Je dostupná nová verze (v{latest}). Používáte v{installed}.",
+      "refresh": "Obnovit a aktualizovat"
+    }
+  },
   "appearance": {
     "cool": "Studené",
     "dark": "Tmavý",

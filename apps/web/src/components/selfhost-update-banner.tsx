@@ -8,6 +8,7 @@ import * as v from "valibot";
 import { env } from "@/env";
 import { logDevError } from "@/lib/errors/utils";
 import { sanitizeHref } from "@/lib/sanitize-href";
+import { compareSemver } from "@/lib/semver-compare";
 
 const RELEASES_API_URL =
   "https://api.github.com/repos/stella/stella/releases/latest";
@@ -23,40 +24,12 @@ const releaseSchema = v.object({
 
 type Release = v.InferOutput<typeof releaseSchema>;
 
-// Compare semver strings like "0.0.2" or "0.0.2-rc.1". Returns
-// negative if `a < b`, positive if `a > b`, zero if equal. Treats
-// any prerelease as strictly older than its stable counterpart, so
-// `0.0.1` > `0.0.1-rc.5`. Good enough for the "should we show the
-// banner" decision; not a full semver compare (no build metadata).
-const compareSemver = (a: string, b: string): number => {
-  const [aCore, aPre] = a.split("-", 2);
-  const [bCore, bPre] = b.split("-", 2);
-  const aNums = (aCore ?? "0.0.0").split(".").map((n) => Number(n) || 0);
-  const bNums = (bCore ?? "0.0.0").split(".").map((n) => Number(n) || 0);
-  for (let i = 0; i < 3; i++) {
-    const diff = (aNums[i] ?? 0) - (bNums[i] ?? 0);
-    if (diff !== 0) {
-      return diff;
-    }
-  }
-  if (aPre === bPre) {
-    return 0;
-  }
-  if (!aPre) {
-    return 1;
-  }
-  if (!bPre) {
-    return -1;
-  }
-  return aPre < bPre ? -1 : 1;
-};
-
 const stripPrefix = (tag: string): string =>
   tag.startsWith("v") ? tag.slice(1) : tag;
 
 export const SelfhostUpdateBanner = () => {
   const t = useTranslations();
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
 
   const enabled = env.VITE_SELFHOST;
   const installedVersion = __APP_VERSION__;
@@ -98,14 +71,13 @@ export const SelfhostUpdateBanner = () => {
   // banner for v0.0.3 later. Stored in localStorage so it survives
   // tab refreshes within the same install.
   const dismissedKey = `${DISMISSED_KEY_PREFIX}${latestVersion}`;
+  if (dismissedVersion === latestVersion) {
+    return null;
+  }
   if (
-    !dismissed &&
     typeof localStorage !== "undefined" &&
     localStorage.getItem(dismissedKey) === "1"
   ) {
-    return null;
-  }
-  if (dismissed) {
     return null;
   }
 
@@ -113,7 +85,7 @@ export const SelfhostUpdateBanner = () => {
     if (typeof localStorage !== "undefined") {
       localStorage.setItem(dismissedKey, "1");
     }
-    setDismissed(true);
+    setDismissedVersion(latestVersion);
   };
 
   // GitHub's API only ever returns http(s) URLs, but route through

@@ -40,6 +40,13 @@
     "searchPlaceholder": "Sisestage otsitavad sõnad…",
     "title": "Anonymisation review"
   },
+  "app": {
+    "versionMismatch": {
+      "dismiss": "Sulge uuendusteade",
+      "message": "Saadaval on uus versioon (v{latest}). Kasutusel on v{installed}.",
+      "refresh": "Värskenda uuendamiseks"
+    }
+  },
   "appearance": {
     "cool": "Jahe",
     "dark": "Tume",

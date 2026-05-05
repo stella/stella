@@ -40,6 +40,13 @@
     "searchPlaceholder": "Wpisz słowa do wyszukania…",
     "title": "Przegląd anonimizacji"
   },
+  "app": {
+    "versionMismatch": {
+      "dismiss": "Zamknij powiadomienie o aktualizacji",
+      "message": "Dostępna jest nowa wersja (v{latest}). Używasz v{installed}.",
+      "refresh": "Odśwież, aby zaktualizować"
+    }
+  },
   "appearance": {
     "cool": "Chłodne",
     "dark": "Ciemny",

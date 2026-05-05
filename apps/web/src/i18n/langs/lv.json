@@ -40,6 +40,13 @@
     "searchPlaceholder": "Ievadiet meklējamos vārdus…",
     "title": "Anonymisation review"
   },
+  "app": {
+    "versionMismatch": {
+      "dismiss": "Noraidīt atjauninājuma paziņojumu",
+      "message": "Ir pieejama jauna versija (v{latest}). Jūs izmantojat v{installed}.",
+      "refresh": "Pārlādēt, lai atjauninātu"
+    }
+  },
   "appearance": {
     "cool": "Vēss",
     "dark": "Tumšs",
