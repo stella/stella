@@ -15,6 +15,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import { hasApprovedActiveDocxEditAwaitingClientOutput } from "@/components/chat/chat-ui-tools";
 import { env } from "@/env";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
@@ -289,7 +290,7 @@ export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
       allowMissingThread: context?.allowMissingThread,
       contextKind: getChatRuntimeContextKind(context),
     }),
-    queryFn: async (): Promise<ChatThreadFetched> => {
+    queryFn: async ({ client: queryClient }): Promise<ChatThreadFetched> => {
       const { messages, contextMatterIds } = await fetchThreadMessages(key, {
         allowMissingThread: context?.allowMissingThread,
       });
@@ -297,6 +298,19 @@ export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
       const chat = new Chat<PersistedChatMessage>({
         generateId: uuidv7,
         messages,
+        onError: (error) => {
+          getAnalytics().captureError(error);
+        },
+        onFinish: ({ isError }) => {
+          if (isError) {
+            return;
+          }
+
+          void Promise.all([
+            invalidateChatThread({ queryClient, threadRef: key }),
+            invalidateGroupedChatThreads(queryClient),
+          ]);
+        },
         transport: new DefaultChatTransport({
           api: getChatApiPath(),
           credentials: "include",

@@ -400,7 +400,9 @@
       },
       "tryOne": "Izmēģini vienu no tiem"
     },
+    "resend": "Nosūtīt vēlreiz",
     "send": "Nosūtīt ziņu",
+    "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
     "thinking": "Strādāju ar kontekstu",
     "threads": "Vēsture",
     "tool": {

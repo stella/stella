@@ -400,7 +400,9 @@
       },
       "tryOne": "Zacznij od jednego z tych"
     },
+    "resend": "Wyślij ponownie",
     "send": "Wyślij wiadomość",
+    "sendError": "Wystąpił problem podczas wysyłania wiadomości. Jeśli błąd będzie się powtarzał, skontaktuj się z pomocą techniczną.",
     "thinking": "Pracuję z kontekstem",
     "threads": "Historia",
     "tool": {

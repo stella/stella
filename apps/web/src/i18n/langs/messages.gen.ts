@@ -403,7 +403,9 @@ type Messages = {
       };
       "tryOne": "Try one of these to start";
     };
+    "resend": "Resend";
     "send": "Send message";
+    "sendError": "There was an issue sending your message. Contact support if the error persists.";
     "thinking": "Working with context";
     "threads": "History";
     "tool": {

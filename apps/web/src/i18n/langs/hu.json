@@ -400,7 +400,9 @@
       },
       "tryOne": "Próbáld ki valamelyiket"
     },
+    "resend": "Újraküldés",
     "send": "Üzenet küldése",
+    "sendError": "Probléma történt az üzenet elküldésekor. Ha a hiba továbbra is fennáll, vedd fel a kapcsolatot a támogatással.",
     "thinking": "Kontextussal dolgozom",
     "threads": "Előzmények",
     "tool": {

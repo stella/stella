@@ -1,5 +1,6 @@
 import type { ComponentProps } from "react";
 
+import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 import { isToolUIPart } from "ai";
 import type { FileUIPart } from "ai";
@@ -163,6 +164,37 @@ const ThinkingIndicator = () => {
   );
 };
 
+const ChatErrorMessage = ({
+  isGenerating,
+  onResend,
+}: {
+  isGenerating: boolean;
+  onResend?: (() => void | PromiseLike<void>) | undefined;
+}) => {
+  const t = useTranslations();
+
+  return (
+    <Message from="assistant">
+      <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
+        <p className="text-sm">{t("chat.sendError")}</p>
+        {onResend && (
+          <Button
+            className="self-start"
+            disabled={isGenerating}
+            onClick={() => {
+              void onResend();
+            }}
+            size="sm"
+            variant="destructive-outline"
+          >
+            {t("chat.resend")}
+          </Button>
+        )}
+      </MessageContent>
+    </Message>
+  );
+};
+
 const hasVisibleContent = (
   messages: readonly PersistedChatMessage[],
   showToolCalls: boolean,
@@ -201,8 +233,10 @@ type ChatThreadMessagesProps = {
     toolName: ApprovalToolName,
   ) => void | PromiseLike<void>;
   handleDeny: (id: string) => void | PromiseLike<void>;
+  error?: Error | undefined;
   isGenerating?: boolean | undefined;
   messages: PersistedChatMessage[];
+  onResend?: (() => void | PromiseLike<void>) | undefined;
   onAskUserSubmit: (
     toolCallId: string,
     output: AskUserOutput,
@@ -222,8 +256,10 @@ export const ChatThreadMessages = ({
   handleAlwaysAllow,
   handleApprove,
   handleDeny,
+  error,
   isGenerating = false,
   messages,
+  onResend,
   onAskUserSubmit,
   showThinkingIndicator = false,
   showToolCalls,
@@ -330,6 +366,9 @@ export const ChatThreadMessages = ({
         </MessageContent>
       </Message>
     ))}
+    {error && (
+      <ChatErrorMessage isGenerating={isGenerating} onResend={onResend} />
+    )}
     {showThinkingIndicator &&
       isGenerating &&
       !hasVisibleContent(messages, showToolCalls) && <ThinkingIndicator />}

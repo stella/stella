@@ -400,7 +400,9 @@
       },
       "tryOne": "Pradėk vienu iš šių"
     },
+    "resend": "Siųsti dar kartą",
     "send": "Siųsti žinutę",
+    "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
     "thinking": "Dirbama su kontekstu",
     "threads": "Istorija",
     "tool": {

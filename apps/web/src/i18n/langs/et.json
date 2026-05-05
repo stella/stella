@@ -400,7 +400,9 @@
       },
       "tryOne": "Alusta ühe nendest"
     },
+    "resend": "Saada uuesti",
     "send": "Saada sõnum",
+    "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
     "thinking": "Töötan kontekstiga",
     "threads": "Ajalugu",
     "tool": {

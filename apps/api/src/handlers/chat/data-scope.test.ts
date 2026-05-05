@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { ChatMention } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -230,7 +232,7 @@ describe("extractAssistantWorkspaceIds", () => {
 
 describe("expandThreadDataScope", () => {
   const buildTx = () => {
-    const setMock = mock(() => ({
+    const setMock = mock((_: { dataWorkspaceIds: SQL }) => ({
       where: mock(async () => undefined),
     }));
     const updateMock = mock(() => ({ set: setMock }));
@@ -282,6 +284,25 @@ describe("expandThreadDataScope", () => {
         new Set([wsA, wsB, wsC]),
       );
     }
+  });
+
+  test("regression: new IDs are bound as a Postgres uuid array expression", async () => {
+    const { safeDb, setMock } = buildTx();
+    await expandThreadDataScope({
+      currentDataWorkspaceIds: [wsA],
+      newWorkspaceIds: [wsB],
+      safeDb,
+      threadId,
+    });
+
+    const setArg = setMock.mock.calls.at(0)?.[0];
+    if (!setArg) {
+      throw new Error("Expected dataWorkspaceIds update");
+    }
+
+    const query = new PgDialect().sqlToQuery(setArg.dataWorkspaceIds);
+    expect(query.sql).toContain("ARRAY[$1]::uuid[]");
+    expect(query.params).toEqual([wsB]);
   });
 
   test("partial overlap: only the genuinely-new IDs are appended", async () => {

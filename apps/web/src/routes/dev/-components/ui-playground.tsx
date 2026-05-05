@@ -1302,6 +1302,8 @@ function ChatBubbleSink() {
 
       <ToolCallMock />
 
+      <ChatErrorMock />
+
       <Message from="assistant">
         <MessageContent>
           <MessageResponse>
@@ -1459,6 +1461,22 @@ function ToolCallMock() {
   );
 }
 
+function ChatErrorMock() {
+  return (
+    <Message from="assistant">
+      <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
+        <p className="text-sm">
+          There was an issue sending your message. Contact support if the error
+          persists.
+        </p>
+        <Button className="self-start" size="sm" variant="destructive-outline">
+          Resend
+        </Button>
+      </MessageContent>
+    </Message>
+  );
+}
+
 function SourceChipMock(props: { label: string; kind: "case-law" | "entity" }) {
   return (
     <button
@@ -1496,6 +1514,7 @@ function ChatBubbleInventory() {
       name: "Tool-call result card (non-approval)",
       status: "✗ not in unified",
     },
+    { name: "Chat send error", status: "✓ unified" },
     {
       name: "Source chips (case-law + entity)",
       status: "partial — own model",

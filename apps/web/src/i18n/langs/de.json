@@ -400,7 +400,9 @@
       },
       "tryOne": "Probiere einen davon zum Start"
     },
+    "resend": "Erneut senden",
     "send": "Nachricht senden",
+    "sendError": "Beim Senden deiner Nachricht ist ein Problem aufgetreten. Wende dich an den Support, wenn der Fehler weiterhin auftritt.",
     "thinking": "Arbeite mit Kontext",
     "threads": "Verlauf",
     "tool": {

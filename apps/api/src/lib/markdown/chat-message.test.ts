@@ -12,12 +12,12 @@ describe("chat message markdown serializer", () => {
     );
   });
 
-  test("serializes entity mentions without leaking source workspace IDs", () => {
+  test("serializes entity mentions with their source workspace ID in the href", () => {
     const html =
       '<p>Check <entity-mention data-id="ent_123" data-label="Retention Memo" data-category="entity" data-source-workspace-id="ws_123"></entity-mention>.</p>';
 
     expect(normalizeChatMessageHtml(html, ["ws_123"]).text).toBe(
-      "Check [Retention Memo](#stella-entity=ent_123).",
+      "Check [Retention Memo](#stella-entity=ws_123:ent_123).",
     );
   });
 
@@ -44,7 +44,7 @@ describe("chat message markdown serializer", () => {
           workspaceId: "ws_123",
         },
       ],
-      text: "Check [Retention Memo](#stella-entity=ent_123).",
+      text: "Check [Retention Memo](#stella-entity=ws_123:ent_123).",
     });
   });
 
@@ -86,6 +86,6 @@ describe("chat message markdown serializer", () => {
         workspaceId: "ws_ok",
       },
     ]);
-    expect(text).toBe("and [Doc B](#stella-entity=ent_2).");
+    expect(text).toBe("and [Doc B](#stella-entity=ws_ok:ent_2).");
   });
 });
