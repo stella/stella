@@ -27,6 +27,7 @@
     "@elysiajs/eden": "^1.4.9",
     "@libpdf/core": "catalog:",
     "@posthog/react": "^1.9.0",
+    "@pydantic/genai-prices": "^0.0.56",
     "@stll/anonymize-data": "catalog:",
     "@stll/anonymize-wasm": "catalog:",
     "@stll/api": "workspace:*",

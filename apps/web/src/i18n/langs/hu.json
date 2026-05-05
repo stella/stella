@@ -240,7 +240,7 @@
         "facts": "Facts",
         "holding": "Holding",
         "procedural-history": "Procedural history",
-        "reasoning": "Reasoning"
+        "reasoning": "Érvelés"
       }
     },
     "columns": {
@@ -283,7 +283,7 @@
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Népszerű név",
       "sections": "Szakaszok",
-      "source": "Forrás",
+      "source": "Csak becslés · árak innen:",
       "statutes": "Applicable statutes",
       "viewOriginal": "Forrás megtekintése"
     }
@@ -566,6 +566,7 @@
     "reference": "Hivatkozás",
     "rename": "Átnevezés",
     "required": "Kötelező",
+    "retry": "Újrapróbál",
     "role": "Szerepkör",
     "run": "Futtatás",
     "save": "Mentés",
@@ -1090,7 +1091,7 @@
   "navigation": {
     "account": "Fiók",
     "calendar": "Naptár",
-    "chat": "Csevegés",
+    "chat": "Chat",
     "chatAlreadyOpen": "A csevegés már nyitva van",
     "clients": "Ügyfelek",
     "contacts": "Kapcsolatok",
@@ -1116,8 +1117,12 @@
     "toggleSidebar": "Oldalsáv be/ki"
   },
   "onboarding": {
+    "aiConfigFailed": "Az MI-konfigurációt nem sikerült menteni. A beállításokban befejezheti.",
+    "aiSubtitle": "Hozza el saját API-kulcsát. A szolgáltatókat és modelleket bármikor módosíthatja.",
+    "aiTitle": "Kapcsolja össze MI-szolgáltatóját",
     "changeAnytime": "Ezt bármikor módosíthatja később.",
     "creating": {
+      "ai": "MI-beállítások mentése...",
       "done": "Befejezés...",
       "invites": "Meghívók küldése...",
       "org": "Csapat létrehozása..."
@@ -1125,13 +1130,6 @@
     "creatingTrust": "Adatai átvitel és tárolás közben is titkosítva vannak.",
     "desktopHint": "Ezt később is megteheti a fiók beállításaiban.",
     "desktopTitle": "Töltse le az asztali alkalmazást",
-    "dmsConfirmFresh": "Nem probléma. Bármikor létrehozhatja az első ügyét.",
-    "dmsConfirmMigration": "Köszönjük. Felvesszük Önnel a kapcsolatot a {dms} migrációs lehetőségekről.",
-    "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
-    "dmsNone": "Nulláról indulok",
-    "dmsPlaceholder": "DMS keresése vagy beírása...",
-    "dmsSubtitle": "Ez segít rangsorolni a lehetséges szinkronizálási opciókat.",
-    "dmsTitle": "Hol vannak jelenleg a dokumentumai?",
     "enterTeamName": "Adja meg fent a csapat nevét",
     "getStarted": "Kezdés",
     "inviteExternal": "Külső felhasználó — hozzáférést kap a dokumentumaihoz",
@@ -1144,8 +1142,8 @@
     "orgTitle": "Nevezze el csapatát",
     "skipStep": "Kihagyás",
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
+    "stepAi": "MI",
     "stepDesktop": "Asztali",
-    "stepDocuments": "Dokumentumok",
     "stepOrganization": "Csapat",
     "stepTeam": "Meghívás",
     "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms>.",
@@ -1162,6 +1160,8 @@
       "apiKeySaved": "Mentett kulcs {key}",
       "apiKeyUpdatePlaceholder": "Enter new key to update",
       "baseUrl": "Base URL",
+      "chooseModelsSubtitle": "Válasszon modellt minden szerephez. Az árak jobbra frissülnek.",
+      "chooseModelsTitle": "Modellek kiválasztása",
       "configure": "Configure",
       "credentialsPanel": "Kulcs",
       "customModelBadge": "Egyedi · {provider}",
@@ -1173,19 +1173,34 @@
       "defaultModel": "Alapértelmezett: {model}",
       "defaultModelOption": "Alapértelmezett",
       "description": "Bring your own API key or configure data sovereignty region.",
+      "editProviders": "Szolgáltatók szerkesztése",
       "keepSavedKey": "Mentett kulcs megtartása",
       "modelForRole": "{role} modellje",
       "modelIdPlaceholder": "Modellek keresése",
       "modelRequired": "Kötelező",
       "modelsDescription": "Válassz szolgáltatót és egy felkínált multimodális modellt minden AI-kategóriához.",
-      "modelsPanel": "Modellek",
+      "modelsPanel": "Módok",
       "newApiKey": "Új API-kulcs",
       "newApiKeyDescription": "Mentéskor lecseréli a mentett kulcsot.",
       "noModelResults": "Nincs egyező felkínált modell",
       "overrideRoles": "Override roles",
       "overrideRolesDescription": "Válaszd ki, mely szerepkörök használják ezt a kulcsot, majd válassz modellt minden szerepkörhöz. A ki nem választott szerepkörök a platform alapértelmezését használják.",
+      "prices": {
+        "empty": "Adjon hozzá szolgáltatót a modellárak megtekintéséhez",
+        "emptyHint": "Válasszon szolgáltatót balra, és itt megjelennek a modelljei árai.",
+        "inMtok": "Be/M",
+        "model": "Modell",
+        "outMtok": "Ki/M",
+        "perCall": "/hívás",
+        "selectedHeading": "Az ön választása",
+        "source": "csak becslés",
+        "title": "Modellárak",
+        "typicalCallHint": "Ár 1M tokenenként · hívásbecslés {input} be / {output} ki tokennel"
+      },
       "provider": "Provider",
       "providerForRole": "{role} szolgáltatója",
+      "providerKeyInvalid": "A {provider} elutasította a kulcsot. Kérjük, ellenőrizze.",
+      "providerKeyInvalidShort": "Érvénytelen",
       "providers": {
         "anthropic": "Anthropic",
         "google": "Google",
@@ -1202,10 +1217,10 @@
       "removeProvider": "Szolgáltató eltávolítása",
       "replaceKey": "Kulcs cseréje",
       "roles": {
-        "chat": "Chat (conversation)",
-        "fast": "Fast (classification)",
-        "pdf": "PDF (documents)",
-        "reasoning": "Reasoning (analysis)"
+        "chat": "Chat",
+        "fast": "Gyors",
+        "pdf": "PDF",
+        "reasoning": "Érvelés"
       },
       "selectAtLeastOneRole": "Válassz legalább egy szerepkört ehhez a kulcshoz.",
       "selectModelForEachRole": "Adj hozzá szolgáltatót, és válassz modellt minden kategóriához.",

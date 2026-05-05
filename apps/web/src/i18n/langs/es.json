@@ -240,7 +240,7 @@
         "facts": "Facts",
         "holding": "Holding",
         "procedural-history": "Procedural history",
-        "reasoning": "Reasoning"
+        "reasoning": "Razonamiento"
       }
     },
     "columns": {
@@ -283,7 +283,7 @@
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Nombre popular",
       "sections": "Secciones",
-      "source": "Fuente",
+      "source": "Solo estimaciones · precios de",
       "statutes": "Applicable statutes",
       "viewOriginal": "Ver fuente"
     }
@@ -566,6 +566,7 @@
     "reference": "Referencia",
     "rename": "Renombrar",
     "required": "Obligatorio",
+    "retry": "Reintentar",
     "role": "Rol",
     "run": "Ejecutar",
     "save": "Guardar",
@@ -1116,8 +1117,12 @@
     "toggleSidebar": "Alternar barra lateral"
   },
   "onboarding": {
+    "aiConfigFailed": "No se pudo guardar la configuración de IA. Puede completarla en los ajustes.",
+    "aiSubtitle": "Use su propia clave de API. Puede cambiar proveedores y modelos cuando quiera.",
+    "aiTitle": "Conecte su proveedor de IA",
     "changeAnytime": "Puede cambiarlo en cualquier momento.",
     "creating": {
+      "ai": "Guardando la configuración de IA...",
       "done": "Finalizando...",
       "invites": "Enviando invitaciones...",
       "org": "Creando su equipo..."
@@ -1125,13 +1130,6 @@
     "creatingTrust": "Sus datos están cifrados en tránsito y en reposo.",
     "desktopHint": "También puede hacerlo más tarde desde la configuración de la cuenta.",
     "desktopTitle": "Obtenga la aplicación de escritorio",
-    "dmsConfirmFresh": "Sin problema. Puede crear su primer asunto cuando lo desee.",
-    "dmsConfirmMigration": "Bien. Nos pondremos en contacto sobre las opciones de migración de {dms}.",
-    "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
-    "dmsNone": "Empiezo desde cero",
-    "dmsPlaceholder": "Buscar o escribir su DMS...",
-    "dmsSubtitle": "Esto nos ayuda a priorizar posibles opciones de sincronización.",
-    "dmsTitle": "Dónde tiene sus documentos actualmente?",
     "enterTeamName": "Introduzca el nombre del equipo arriba",
     "getStarted": "Comenzar",
     "inviteExternal": "Usuario externo — tendrá acceso a sus documentos",
@@ -1144,8 +1142,8 @@
     "orgTitle": "Nombre de su equipo",
     "skipStep": "Omitir",
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
+    "stepAi": "IA",
     "stepDesktop": "Escritorio",
-    "stepDocuments": "Documentos",
     "stepOrganization": "Equipo",
     "stepTeam": "Invitar",
     "termsNotice": "Al continuar, aceptas nuestros <terms>Términos de servicio</terms>.",
@@ -1162,6 +1160,8 @@
       "apiKeySaved": "Clave guardada {key}",
       "apiKeyUpdatePlaceholder": "Enter new key to update",
       "baseUrl": "Base URL",
+      "chooseModelsSubtitle": "Elige un modelo para cada rol. Los precios se actualizan a la derecha.",
+      "chooseModelsTitle": "Elegir modelos",
       "configure": "Configure",
       "credentialsPanel": "Clave",
       "customModelBadge": "Personalizado · {provider}",
@@ -1173,19 +1173,34 @@
       "defaultModel": "Predeterminado: {model}",
       "defaultModelOption": "Predeterminado",
       "description": "Bring your own API key or configure data sovereignty region.",
+      "editProviders": "Editar proveedores",
       "keepSavedKey": "Conservar clave guardada",
       "modelForRole": "Modelo para {role}",
       "modelIdPlaceholder": "Buscar modelos",
       "modelRequired": "Obligatorio",
       "modelsDescription": "Elige un proveedor y un modelo multimodal ofrecido para cada categoría de IA.",
-      "modelsPanel": "Modelos",
+      "modelsPanel": "Modos",
       "newApiKey": "Nueva clave API",
       "newApiKeyDescription": "Sustituirá la clave guardada al guardar los cambios.",
       "noModelResults": "No hay modelos ofrecidos que coincidan",
       "overrideRoles": "Override roles",
       "overrideRolesDescription": "Elige qué roles usan esta clave y luego el modelo de cada rol. Los roles no seleccionados usan el valor predeterminado de la plataforma.",
+      "prices": {
+        "empty": "Añade un proveedor para ver precios de modelos",
+        "emptyHint": "Elige un proveedor a la izquierda y mostraremos los precios de sus modelos.",
+        "inMtok": "Ent/M",
+        "model": "Modelo",
+        "outMtok": "Sal/M",
+        "perCall": "/llamada",
+        "selectedHeading": "Tu selección",
+        "source": "solo estimaciones",
+        "title": "Precios de modelos",
+        "typicalCallHint": "Tarifa por 1M tokens · llamada estimada {input} ent / {output} sal"
+      },
       "provider": "Provider",
       "providerForRole": "Proveedor para {role}",
+      "providerKeyInvalid": "{provider} rechazó la clave. Compruébela antes de guardar.",
+      "providerKeyInvalidShort": "No válida",
       "providers": {
         "anthropic": "Anthropic",
         "google": "Google",
@@ -1202,10 +1217,10 @@
       "removeProvider": "Quitar proveedor",
       "replaceKey": "Sustituir clave",
       "roles": {
-        "chat": "Chat (conversation)",
-        "fast": "Fast (classification)",
-        "pdf": "PDF (documents)",
-        "reasoning": "Reasoning (analysis)"
+        "chat": "Chat",
+        "fast": "Rápido",
+        "pdf": "PDF",
+        "reasoning": "Razonamiento"
       },
       "selectAtLeastOneRole": "Selecciona al menos un rol para esta clave.",
       "selectModelForEachRole": "Añade un proveedor y elige un modelo para cada categoría.",

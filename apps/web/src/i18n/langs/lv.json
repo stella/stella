@@ -240,7 +240,7 @@
         "facts": "Facts",
         "holding": "Holding",
         "procedural-history": "Procedural history",
-        "reasoning": "Reasoning"
+        "reasoning": "Argumentācija"
       }
     },
     "columns": {
@@ -283,7 +283,7 @@
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populārais nosaukums",
       "sections": "Sadaļas",
-      "source": "Avots",
+      "source": "Tikai aplēses · cenas no",
       "statutes": "Applicable statutes",
       "viewOriginal": "Skatīt avotu"
     }
@@ -566,6 +566,7 @@
     "reference": "Atsauce",
     "rename": "Pārdēvēt",
     "required": "Obligāts",
+    "retry": "Mēģināt vēlreiz",
     "role": "Loma",
     "run": "Palaist",
     "save": "Saglabāt",
@@ -1090,7 +1091,7 @@
   "navigation": {
     "account": "Konts",
     "calendar": "Kalendārs",
-    "chat": "Tērzēšana",
+    "chat": "Chat",
     "chatAlreadyOpen": "Saruna jau ir atvērta",
     "clients": "Klienti",
     "contacts": "Kontakti",
@@ -1116,8 +1117,12 @@
     "toggleSidebar": "Pārslēgt sānjoslu"
   },
   "onboarding": {
+    "aiConfigFailed": "Neizdevās saglabāt mākslīgā intelekta konfigurāciju. To var pabeigt iestatījumos.",
+    "aiSubtitle": "Izmantojiet savu API atslēgu. Pakalpojumu sniedzējus un modeļus varat mainīt jebkurā laikā.",
+    "aiTitle": "Pievienojiet savu MI pakalpojumu sniedzēju",
     "changeAnytime": "Šo iestatījumu varat mainīt jebkurā laikā vēlāk.",
     "creating": {
+      "ai": "Saglabājam MI konfigurāciju...",
       "done": "Pabeigšana...",
       "invites": "Ielūgumu sūtīšana...",
       "org": "Komandas izveide..."
@@ -1125,13 +1130,6 @@
     "creatingTrust": "Jūsu dati ir šifrēti pārsūtīšanas un glabāšanas laikā.",
     "desktopHint": "To varat izdarīt arī vēlāk konta iestatījumos.",
     "desktopTitle": "Iegūstiet datora lietotni",
-    "dmsConfirmFresh": "Nav problēmu. Pirmo lietu varat izveidot jebkurā laikā.",
-    "dmsConfirmMigration": "Labi zināt. Sazināsimies par {dms} migrācijas iespējām.",
-    "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
-    "dmsNone": "Sāku no nulles",
-    "dmsPlaceholder": "Meklējiet vai ievadiet savu DMS...",
-    "dmsSubtitle": "Tas palīdz mums noteikt iespējamo sinhronizācijas iespēju prioritātes.",
-    "dmsTitle": "Kur šobrīd atrodas jūsu dokumenti?",
     "enterTeamName": "Ievadiet augstāk komandas nosaukumu",
     "getStarted": "Sākt",
     "inviteExternal": "Ārējais lietotājs — iegūs piekļuvi jūsu dokumentiem",
@@ -1144,8 +1142,8 @@
     "orgTitle": "Nosauciet savu komandu",
     "skipStep": "Izlaist",
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
+    "stepAi": "MI",
     "stepDesktop": "Datora",
-    "stepDocuments": "Dokumenti",
     "stepOrganization": "Komanda",
     "stepTeam": "Uzaicināt",
     "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms>.",
@@ -1162,6 +1160,8 @@
       "apiKeySaved": "Saglabātā atslēga {key}",
       "apiKeyUpdatePlaceholder": "Enter new key to update",
       "baseUrl": "Base URL",
+      "chooseModelsSubtitle": "Katrai lomai izvēlieties modeli. Cenas atjaunojas labajā pusē.",
+      "chooseModelsTitle": "Izvēlieties modeļus",
       "configure": "Configure",
       "credentialsPanel": "Atslēga",
       "customModelBadge": "Pielāgots · {provider}",
@@ -1173,19 +1173,34 @@
       "defaultModel": "Noklusējums: {model}",
       "defaultModelOption": "Noklusējums",
       "description": "Bring your own API key or configure data sovereignty region.",
+      "editProviders": "Rediģēt pakalpojumu sniedzējus",
       "keepSavedKey": "Paturēt saglabāto atslēgu",
       "modelForRole": "{role} modelis",
       "modelIdPlaceholder": "Meklēt modeļus",
       "modelRequired": "Obligāts",
       "modelsDescription": "Katrai AI kategorijai izvēlieties pakalpojumu sniedzēju un vienu piedāvāto multimodālo modeli.",
-      "modelsPanel": "Modeļi",
+      "modelsPanel": "Režīmi",
       "newApiKey": "Jauna API atslēga",
       "newApiKeyDescription": "Saglabājot izmaiņas, tā aizstās saglabāto atslēgu.",
       "noModelResults": "Nav atbilstošu piedāvāto modeļu",
       "overrideRoles": "Override roles",
       "overrideRolesDescription": "Izvēlieties, kuras lomas izmanto šo atslēgu, un pēc tam izvēlieties modeli katrai lomai. Neatlasītās lomas izmanto platformas noklusējumu.",
+      "prices": {
+        "empty": "Pievienojiet pakalpojumu sniedzēju, lai redzētu modeļu cenas",
+        "emptyHint": "Pa kreisi izvēlieties pakalpojumu sniedzēju — šeit parādīsim tā modeļu cenas.",
+        "inMtok": "Iev/M",
+        "model": "Modelis",
+        "outMtok": "Izv/M",
+        "perCall": "/zvans",
+        "selectedHeading": "Jūsu izvēle",
+        "source": "tikai aplēses",
+        "title": "Modeļu cenas",
+        "typicalCallHint": "Cena par 1M token · zvana aplēse: {input} iev / {output} izv"
+      },
       "provider": "Provider",
       "providerForRole": "{role} pakalpojumu sniedzējs",
+      "providerKeyInvalid": "{provider} atteica atslēgu. Pārbaudiet to pirms saglabāšanas.",
+      "providerKeyInvalidShort": "Nederīgs",
       "providers": {
         "anthropic": "Anthropic",
         "google": "Google",
@@ -1202,10 +1217,10 @@
       "removeProvider": "Noņemt pakalpojumu sniedzēju",
       "replaceKey": "Aizstāt atslēgu",
       "roles": {
-        "chat": "Chat (conversation)",
-        "fast": "Fast (classification)",
-        "pdf": "PDF (documents)",
-        "reasoning": "Reasoning (analysis)"
+        "chat": "Chat",
+        "fast": "Ātrs",
+        "pdf": "PDF",
+        "reasoning": "Argumentācija"
       },
       "selectAtLeastOneRole": "Atlasiet vismaz vienu lomu šai atslēgai.",
       "selectModelForEachRole": "Pievienojiet pakalpojumu sniedzēju un izvēlieties modeli katrai kategorijai.",

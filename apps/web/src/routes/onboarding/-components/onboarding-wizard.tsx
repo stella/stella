@@ -1,38 +1,54 @@
 import { useCallback, useState } from "react";
 
 import { toastManager } from "@stll/ui/components/toast";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import {
+  createDefaultRoleModels,
+  createProviderCredentialDraft,
+  getProviderValues,
+  hasUsableProviderDrafts,
+  serializeOverrideModels,
+} from "@/components/ai-config-role-models.logic";
+import type {
+  ProviderCredentialDraft,
+  ProviderPreview,
+  RoleModelSelections,
+} from "@/components/ai-config-role-models.logic";
 import { LanguagePicker } from "@/components/language-picker";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
-import { toAuthClientError } from "@/lib/errors";
+import { toAPIError, toAuthClientError } from "@/lib/errors";
 import { sessionOptions } from "@/routes/-queries";
+import { aiConfigKeys } from "@/routes/_protected.organization/-ai-config-queries";
 import { OnboardingLayout } from "@/routes/onboarding/-components/onboarding-layout";
+import { PricesPanel } from "@/routes/onboarding/-components/prices-panel";
 import { SidebarPreview } from "@/routes/onboarding/-components/sidebar-preview";
+import { AIStep } from "@/routes/onboarding/-components/steps/ai-step";
 import type { Phase } from "@/routes/onboarding/-components/steps/creating-step";
 import { CreatingStep } from "@/routes/onboarding/-components/steps/creating-step";
-import { DmsStep } from "@/routes/onboarding/-components/steps/dms-step";
 import { DownloadStep } from "@/routes/onboarding/-components/steps/download-step";
 import { InviteStep } from "@/routes/onboarding/-components/steps/invite-step";
 import { OrganizationStep } from "@/routes/onboarding/-components/steps/organization-step";
-type Step = "organization" | "dms" | "invite" | "download" | "creating";
+type Step = "organization" | "ai" | "invite" | "download" | "creating";
 
 type WizardData = {
   orgName: string;
   orgSlug: string;
-  previousDms: string;
   emails: string[];
+  aiProviders: ProviderCredentialDraft[];
+  aiRoleModels: RoleModelSelections;
 };
 
 const TOTAL_STEPS = 4;
 
 const STEP_TO_PROGRESS = {
   organization: 0,
-  dms: 1,
+  ai: 1,
   invite: 2,
   download: 3,
 } as const satisfies Record<Exclude<Step, "creating">, number>;
@@ -42,15 +58,17 @@ export const OnboardingWizard = () => {
   const navigate = useNavigate();
   const analytics = useAnalytics();
   const invalidateSession = useInvalidateSession();
+  const queryClient = useQueryClient();
   const { data: sessionData } = useQuery(sessionOptions);
   const userEmail = sessionData?.user?.email ?? "";
   const [step, setStep] = useState<Step>("organization");
-  const [data, setData] = useState<WizardData>({
+  const [data, setData] = useState<WizardData>(() => ({
     orgName: "",
     orgSlug: "",
-    previousDms: "",
     emails: [],
-  });
+    aiProviders: [createProviderCredentialDraft()],
+    aiRoleModels: createDefaultRoleModels(),
+  }));
 
   // Creating step state
   const [creatingPhase, setCreatingPhase] = useState<Phase>("org");
@@ -58,8 +76,11 @@ export const OnboardingWizard = () => {
 
   // Live preview state
   const [previewOrgName, setPreviewOrgName] = useState("");
-  const [previewDmsCount, setPreviewDmsCount] = useState(0);
   const [previewEmailCount, setPreviewEmailCount] = useState(0);
+  const [previewAiProviders, setPreviewAiProviders] = useState<
+    readonly ProviderPreview[]
+  >([]);
+  const [aiPhase, setAiPhase] = useState<"providers" | "models">("providers");
 
   const executeSetup = useCallback(
     async (finalData: WizardData) => {
@@ -118,12 +139,54 @@ export const OnboardingWizard = () => {
         // Refresh session so the app recognizes the new org
         await invalidateSession.mutateAsync();
         await delay(500);
-        setCreatingProgress(60);
+        setCreatingProgress(50);
 
-        // Phase 2: Send invitations
+        // Phase 2: Save AI config (BYOK) if user provided one
+        const aiProviderValues = getProviderValues(finalData.aiProviders);
+        const aiOverrideModels = serializeOverrideModels({
+          providers: aiProviderValues,
+          roleModels: finalData.aiRoleModels,
+        });
+
+        if (
+          hasUsableProviderDrafts(finalData.aiProviders) &&
+          aiOverrideModels !== null
+        ) {
+          setCreatingPhase("ai");
+          setCreatingProgress(65);
+          const { error: aiConfigError } = await api["organization-settings"][
+            "ai-config"
+          ].post({
+            providers: finalData.aiProviders.map((providerDraft) => ({
+              provider: providerDraft.provider,
+              ...(providerDraft.apiKey.trim()
+                ? { apiKey: providerDraft.apiKey.trim() }
+                : {}),
+              region: providerDraft.region,
+            })),
+            overrideModels: aiOverrideModels,
+          });
+
+          if (aiConfigError) {
+            analytics.captureError(toAPIError(aiConfigError));
+            toastManager.add({
+              title: t("onboarding.aiConfigFailed"),
+              type: "warning",
+            });
+          } else {
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: aiConfigKeys.all }),
+              queryClient.invalidateQueries({
+                queryKey: aiConfigKeys.availability,
+              }),
+            ]);
+          }
+        }
+
+        // Phase 3: Send invitations
         if (finalData.emails.length > 0) {
           setCreatingPhase("invites");
-          setCreatingProgress(70);
+          setCreatingProgress(80);
 
           const inviteResults = await Promise.all(
             // eslint-disable-next-line typescript/promise-function-async
@@ -173,12 +236,19 @@ export const OnboardingWizard = () => {
         replace: true,
       });
     },
-    [analytics, invalidateSession, navigate, t],
+    [analytics, invalidateSession, navigate, queryClient, t],
   );
 
-  const preview = (
+  const showPrices = step === "ai" && aiPhase === "models";
+  const preview = showPrices ? (
+    <PricesPanel
+      providers={data.aiProviders.map((p) => p.provider)}
+      roleModels={data.aiRoleModels}
+    />
+  ) : (
     <SidebarPreview
-      dmsCount={previewDmsCount}
+      aiProviders={previewAiProviders}
+      chatActive={step === "ai"}
       emailCount={previewEmailCount}
       matterName=""
       organizationName={previewOrgName}
@@ -212,29 +282,7 @@ export const OnboardingWizard = () => {
                 orgSlug: slug,
               }));
               setPreviewOrgName(name);
-              setStep("dms");
-            }}
-          />
-        </OnboardingLayout>
-      );
-    }
-
-    if (step === "dms") {
-      return (
-        <OnboardingLayout
-          currentStep={STEP_TO_PROGRESS.dms}
-          onBack={() => setStep("organization")}
-          preview={preview}
-          totalSteps={TOTAL_STEPS}
-        >
-          <DmsStep
-            onSelectionChange={setPreviewDmsCount}
-            onNext={({ dms }) => {
-              setData((d) => ({
-                ...d,
-                previousDms: dms,
-              }));
-              setStep("invite");
+              setStep("ai");
             }}
           />
         </OnboardingLayout>
@@ -245,7 +293,7 @@ export const OnboardingWizard = () => {
       return (
         <OnboardingLayout
           currentStep={STEP_TO_PROGRESS.invite}
-          onBack={() => setStep("dms")}
+          onBack={() => setStep("ai")}
           preview={preview}
           totalSteps={TOTAL_STEPS}
         >
@@ -256,6 +304,47 @@ export const OnboardingWizard = () => {
               setData((d) => ({ ...d, emails }));
               setStep("download");
             }}
+          />
+        </OnboardingLayout>
+      );
+    }
+
+    if (step === "ai") {
+      return (
+        <OnboardingLayout
+          currentStep={STEP_TO_PROGRESS.ai}
+          onBack={() => {
+            if (aiPhase === "models") {
+              setAiPhase("providers");
+              return;
+            }
+            setStep("organization");
+          }}
+          preview={preview}
+          totalSteps={TOTAL_STEPS}
+        >
+          <AIStep
+            onNext={() => setStep("invite")}
+            onPhaseChange={setAiPhase}
+            onPreviewChange={setPreviewAiProviders}
+            phase={aiPhase}
+            onProvidersChange={(aiProviders) => {
+              setData((d) => ({ ...d, aiProviders }));
+            }}
+            onRoleModelsChange={(aiRoleModels) => {
+              setData((d) => ({ ...d, aiRoleModels }));
+            }}
+            onSkip={() => {
+              setData((d) => ({
+                ...d,
+                aiProviders: [createProviderCredentialDraft()],
+                aiRoleModels: createDefaultRoleModels(),
+              }));
+              setPreviewAiProviders([]);
+              setStep("download");
+            }}
+            providers={data.aiProviders}
+            roleModels={data.aiRoleModels}
           />
         </OnboardingLayout>
       );

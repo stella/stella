@@ -240,7 +240,7 @@
         "facts": "Skutkový stav",
         "holding": "Výrok",
         "procedural-history": "Procesná história",
-        "reasoning": "Právne posúdenie"
+        "reasoning": "Uvažovanie"
       }
     },
     "columns": {
@@ -283,7 +283,7 @@
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populárny názov",
       "sections": "Časti",
-      "source": "Zdroj",
+      "source": "Iba odhady · ceny z",
       "statutes": "Applicable statutes",
       "viewOriginal": "Zobraziť zdroj"
     }
@@ -566,6 +566,7 @@
     "reference": "Referencia",
     "rename": "Premenovať",
     "required": "Povinné",
+    "retry": "Skúsiť znova",
     "role": "Rola",
     "run": "Spustiť",
     "save": "Uložiť",
@@ -1116,8 +1117,12 @@
     "toggleSidebar": "Prepnúť bočný panel"
   },
   "onboarding": {
+    "aiConfigFailed": "Nastavenie AI sa nepodarilo uložiť. Môžete ho dokončiť v nastaveniach.",
+    "aiSubtitle": "Prineste si vlastný API kľúč. Poskytovateľov aj modely môžete kedykoľvek zmeniť.",
+    "aiTitle": "Pripojte svojho poskytovateľa AI",
     "changeAnytime": "Toto nastavenie môžete zmeniť aj kedykoľvek neskôr.",
     "creating": {
+      "ai": "Ukladáme nastavenie AI...",
       "done": "Dokončujeme nastavenie...",
       "invites": "Odosielame pozvánky...",
       "org": "Vytvárame váš tím..."
@@ -1125,13 +1130,6 @@
     "creatingTrust": "Vaše dáta sú šifrované pri prenose aj v úložisku.",
     "desktopHint": "Môžete to urobiť aj neskôr v nastaveniach účtu.",
     "desktopTitle": "Stiahnite si aplikáciu pre počítač",
-    "dmsConfirmFresh": "Žiadny problém. Spis si založíte, keď budete pripravení.",
-    "dmsConfirmMigration": "Ďakujeme za info. Ozveme sa vám ohľadom možností migrácie z {dms}.",
-    "dmsNoCommitment": "Môžete začať aj bez akéhokoľvek importu dát.",
-    "dmsNone": "Začínam od začiatku",
-    "dmsPlaceholder": "Hľadajte alebo napíšte názov DMS...",
-    "dmsSubtitle": "Pomôže nám to určiť priority pre budúce možnosti synchronizácie.",
-    "dmsTitle": "Kde v súčasnosti máte svoje dokumenty?",
     "enterTeamName": "Zadajte vyššie názov tímu",
     "getStarted": "Začať",
     "inviteExternal": "Externý používateľ — bude mať prístup k vašim dokumentom",
@@ -1144,8 +1142,8 @@
     "orgTitle": "Pomenujte svoj tím",
     "skipStep": "Preskočiť",
     "someInvitesFailed": "{count, plural, one {# pozvánka zlyhala} few {# pozvánky zlyhali} other {# pozvánok zlyhalo}}",
+    "stepAi": "AI",
     "stepDesktop": "Aplikácia",
-    "stepDocuments": "Dokumenty",
     "stepOrganization": "Tím",
     "stepTeam": "Pozvánky",
     "termsNotice": "Pokračovaním súhlasíte s <terms>Podmienkami služby</terms>.",
@@ -1162,6 +1160,8 @@
       "apiKeySaved": "Uložený kľúč {key}",
       "apiKeyUpdatePlaceholder": "Enter new key to update",
       "baseUrl": "Base URL",
+      "chooseModelsSubtitle": "Pre každú rolu zvoľte model. Ceny sa aktualizujú vpravo.",
+      "chooseModelsTitle": "Vyberte modely",
       "configure": "Configure",
       "credentialsPanel": "Kľúč",
       "customModelBadge": "Vlastný · {provider}",
@@ -1173,19 +1173,34 @@
       "defaultModel": "Predvolené: {model}",
       "defaultModelOption": "Predvolené",
       "description": "Bring your own API key or configure data sovereignty region.",
+      "editProviders": "Upraviť poskytovateľov",
       "keepSavedKey": "Ponechať uložený kľúč",
       "modelForRole": "Model pre rolu {role}",
       "modelIdPlaceholder": "Hľadať modely",
       "modelRequired": "Povinné",
       "modelsDescription": "Pre každú kategóriu AI vyberte poskytovateľa a jeden ponúkaný multimodálny model.",
-      "modelsPanel": "Modely",
+      "modelsPanel": "Módy",
       "newApiKey": "Nový API kľúč",
       "newApiKeyDescription": "Po uložení zmien nahradí uložený kľúč.",
       "noModelResults": "Žiadne zodpovedajúce ponúkané modely",
       "overrideRoles": "Override roles",
       "overrideRolesDescription": "Vyberte, ktoré roly používajú tento kľúč, a potom vyberte model pre každú rolu. Nevybrané roly použijú predvolené nastavenie platformy.",
+      "prices": {
+        "empty": "Pridajte poskytovateľa a uvidíte ceny modelov",
+        "emptyHint": "Zvoľte poskytovateľa vľavo — zobrazíme ceny jeho modelov.",
+        "inMtok": "Vst/M",
+        "model": "Model",
+        "outMtok": "Výst/M",
+        "perCall": "/volanie",
+        "selectedHeading": "Váš výber",
+        "source": "iba odhady",
+        "title": "Ceny modelov",
+        "typicalCallHint": "Sadzba za 1M tokenov · odhad volania: {input} vst / {output} výst"
+      },
       "provider": "Provider",
       "providerForRole": "Poskytovateľ pre {role}",
+      "providerKeyInvalid": "{provider} odmietol kľúč. Skontrolujte ho pred uložením.",
+      "providerKeyInvalidShort": "Neplatný",
       "providers": {
         "anthropic": "Anthropic",
         "google": "Google",
@@ -1202,10 +1217,10 @@
       "removeProvider": "Odstrániť poskytovateľa",
       "replaceKey": "Nahradiť kľúč",
       "roles": {
-        "chat": "Chat (conversation)",
-        "fast": "Fast (classification)",
-        "pdf": "PDF (documents)",
-        "reasoning": "Reasoning (analysis)"
+        "chat": "Chat",
+        "fast": "Rýchly",
+        "pdf": "PDF",
+        "reasoning": "Uvažovanie"
       },
       "selectAtLeastOneRole": "Vyberte pre tento kľúč aspoň jednu rolu.",
       "selectModelForEachRole": "Pridajte poskytovateľa a pre každú kategóriu vyberte model.",

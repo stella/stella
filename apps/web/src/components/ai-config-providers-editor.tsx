@@ -33,11 +33,23 @@ const API_KEY_PLACEHOLDER = {
   openrouter: "sk-or-v1-...",
 } as const satisfies Record<ProviderValue, string>;
 
+export type ProviderRowStatus =
+  | "idle"
+  | "checking"
+  | "valid"
+  | "invalid"
+  | "saved";
+
 type AIConfigProvidersEditorProps = {
   compact?: boolean;
   disabled?: boolean;
   onProvidersChange: (providers: ProviderCredentialDraft[]) => void;
   providers: ProviderCredentialDraft[];
+  // Optional inline-save UX for the onboarding flow. When supplied,
+  // the editor renders a Save button per row so the user explicitly
+  // confirms each key before validation/network requests fire.
+  onSaveRow?: (index: number) => void;
+  rowStatuses?: ProviderRowStatus[];
 };
 
 export const AIConfigProvidersEditor = ({
@@ -45,8 +57,11 @@ export const AIConfigProvidersEditor = ({
   disabled = false,
   onProvidersChange,
   providers,
+  onSaveRow,
+  rowStatuses,
 }: AIConfigProvidersEditorProps) => {
   const t = useTranslations("organization");
+  const tCommon = useTranslations("common");
   const canAddProvider = providers.length < PROVIDER_KEYS.length;
 
   const updateProvider = (
@@ -112,9 +127,18 @@ export const AIConfigProvidersEditor = ({
           const showKeyInput = providerDraft.replacingKey || !hasSavedKey;
 
           if (compact) {
+            const rowStatus: ProviderRowStatus = rowStatuses?.[index] ?? "idle";
+            const hasUsableKey =
+              providerDraft.apiKey.trim().length > 0 ||
+              (hasSavedKey && !providerDraft.replacingKey);
+            const showSaveButton =
+              onSaveRow !== undefined &&
+              hasUsableKey &&
+              rowStatus !== "saved" &&
+              rowStatus !== "valid";
             return (
               <div
-                className="grid gap-2 border-t p-2 first:border-t-0 sm:grid-cols-[minmax(8rem,0.9fr)_minmax(10rem,1fr)_minmax(9rem,1fr)_2.25rem] sm:items-center"
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-1 border-t p-2 first:border-t-0 sm:grid-cols-[minmax(5rem,0.7fr)_minmax(0,1fr)_minmax(5rem,0.7fr)_auto] sm:items-center"
                 key={`${providerDraft.provider}-${index}`}
               >
                 <Select
@@ -228,16 +252,31 @@ export const AIConfigProvidersEditor = ({
                   )}
                 </div>
 
-                <Button
-                  aria-label={t("aiConfig.removeProvider")}
-                  disabled={disabled || providers.length === 1}
-                  onClick={() => removeProvider(index)}
-                  size="icon"
-                  type="button"
-                  variant="ghost"
-                >
-                  <Trash2Icon className="size-4" />
-                </Button>
+                {showSaveButton ? (
+                  <Button
+                    disabled={disabled || rowStatus === "checking"}
+                    loading={rowStatus === "checking"}
+                    onClick={() => onSaveRow?.(index)}
+                    size="sm"
+                    type="button"
+                    variant={rowStatus === "invalid" ? "outline" : "default"}
+                  >
+                    {rowStatus === "invalid"
+                      ? tCommon("retry")
+                      : tCommon("save")}
+                  </Button>
+                ) : (
+                  <Button
+                    aria-label={t("aiConfig.removeProvider")}
+                    disabled={disabled || providers.length === 1}
+                    onClick={() => removeProvider(index)}
+                    size="icon"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <Trash2Icon className="size-4" />
+                  </Button>
+                )}
               </div>
             );
           }

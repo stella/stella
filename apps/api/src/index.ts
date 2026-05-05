@@ -3,6 +3,7 @@ import { Elysia } from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 
 import { env } from "@/api/env";
+import { aiConfigPublicRoute } from "@/api/handlers/ai-config/routes";
 import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
 import { authMetadataRoute } from "@/api/handlers/auth/routes";
 import { authUiRoute } from "@/api/handlers/auth/ui-routes";
@@ -311,6 +312,7 @@ const api = new Elysia()
       .use(expensesRoute)
       .use(invoicesRoute)
       .use(organizationSettingsRoute)
+      .use(aiConfigPublicRoute)
       .use(clauseCategoriesRoute)
       .use(clausesRoute)
       .use(contactsRoute)

@@ -240,7 +240,7 @@
         "facts": "Facts",
         "holding": "Holding",
         "procedural-history": "Procedural history",
-        "reasoning": "Reasoning"
+        "reasoning": "Arutlus"
       }
     },
     "columns": {
@@ -283,7 +283,7 @@
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Rahvanimi",
       "sections": "Jaotised",
-      "source": "Allikas",
+      "source": "Ainult hinnangud · hinnad",
       "statutes": "Applicable statutes",
       "viewOriginal": "Vaata allikat"
     }
@@ -566,6 +566,7 @@
     "reference": "Viide",
     "rename": "Nimeta ümber",
     "required": "Kohustuslik",
+    "retry": "Proovi uuesti",
     "role": "Roll",
     "run": "Käivita",
     "save": "Salvesta",
@@ -1090,7 +1091,7 @@
   "navigation": {
     "account": "Konto",
     "calendar": "Kalender",
-    "chat": "Vestlus",
+    "chat": "Chat",
     "chatAlreadyOpen": "Vestlus on juba avatud",
     "clients": "Kliendid",
     "contacts": "Kontaktid",
@@ -1116,8 +1117,12 @@
     "toggleSidebar": "Külgriba kuvamine"
   },
   "onboarding": {
+    "aiConfigFailed": "AI seadistust ei õnnestunud salvestada. Saate selle lõpetada seadetes.",
+    "aiSubtitle": "Kasutage oma API-võtit. Teenusepakkujaid ja mudeleid saate muuta igal ajal.",
+    "aiTitle": "Ühendage oma AI teenusepakkuja",
     "changeAnytime": "Seda saate igal ajal hiljem muuta.",
     "creating": {
+      "ai": "Salvestame AI seadistust...",
       "done": "Lõpetamine...",
       "invites": "Kutsete saatmine...",
       "org": "Meeskonna loomine..."
@@ -1125,13 +1130,6 @@
     "creatingTrust": "Teie andmed on krüptitud nii edastamisel kui salvestamisel.",
     "desktopHint": "Saate seda teha ka hiljem konto seadetes.",
     "desktopTitle": "Hankige töölauarakendus",
-    "dmsConfirmFresh": "Pole probleemi. Saate oma esimese asja luua igal ajal.",
-    "dmsConfirmMigration": "Hea teada. Võtame teiega ühendust {dms} migratsioonivõimaluste osas.",
-    "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
-    "dmsNone": "Alustan nullist",
-    "dmsPlaceholder": "Otsige või sisestage oma DMS...",
-    "dmsSubtitle": "See aitab meil võimalikke sünkroonimisvõimalusi prioriseerida.",
-    "dmsTitle": "Kus on teie dokumendid praegu?",
     "enterTeamName": "Sisestage ülal meeskonna nimi",
     "getStarted": "Alusta",
     "inviteExternal": "Väline kasutaja — saab juurdepääsu teie dokumentidele",
@@ -1144,8 +1142,8 @@
     "orgTitle": "Nimetage oma meeskond",
     "skipStep": "Jäta vahele",
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
+    "stepAi": "AI",
     "stepDesktop": "Töölaud",
-    "stepDocuments": "Dokumendid",
     "stepOrganization": "Meeskond",
     "stepTeam": "Kutsu",
     "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms>.",
@@ -1162,6 +1160,8 @@
       "apiKeySaved": "Salvestatud võti {key}",
       "apiKeyUpdatePlaceholder": "Enter new key to update",
       "baseUrl": "Base URL",
+      "chooseModelsSubtitle": "Vali igale rollile mudel. Hinnad uuenevad paremal.",
+      "chooseModelsTitle": "Vali mudelid",
       "configure": "Configure",
       "credentialsPanel": "Võti",
       "customModelBadge": "Kohandatud · {provider}",
@@ -1173,19 +1173,34 @@
       "defaultModel": "Vaikimisi: {model}",
       "defaultModelOption": "Vaikimisi",
       "description": "Bring your own API key or configure data sovereignty region.",
+      "editProviders": "Muuda teenusepakkujaid",
       "keepSavedKey": "Hoia salvestatud võti alles",
       "modelForRole": "Rolli {role} mudel",
       "modelIdPlaceholder": "Otsi mudeleid",
       "modelRequired": "Nõutav",
       "modelsDescription": "Vali iga AI-kategooria jaoks teenusepakkuja ja üks pakutud multimodaalne mudel.",
-      "modelsPanel": "Mudelid",
+      "modelsPanel": "Režiimid",
       "newApiKey": "Uus API võti",
       "newApiKeyDescription": "See asendab salvestatud võtme muudatuste salvestamisel.",
       "noModelResults": "Sobivaid pakutud mudeleid ei leitud",
       "overrideRoles": "Override roles",
       "overrideRolesDescription": "Vali, millised rollid kasutavad seda võtit, ja seejärel iga rolli mudel. Valimata rollid kasutavad platvormi vaikevalikut.",
+      "prices": {
+        "empty": "Lisage teenusepakkuja, et näha mudelihindu",
+        "emptyHint": "Valige vasakult teenusepakkuja ja näitame siin selle mudelite hinda.",
+        "inMtok": "Sisse/M",
+        "model": "Mudel",
+        "outMtok": "Välja/M",
+        "perCall": "/kõne",
+        "selectedHeading": "Sinu valik",
+        "source": "ainult hinnangud",
+        "title": "Mudelihinnad",
+        "typicalCallHint": "Hind 1M tokeni kohta · kõnehind kasutab {input} sisse / {output} välja"
+      },
       "provider": "Provider",
       "providerForRole": "{role} teenusepakkuja",
+      "providerKeyInvalid": "{provider} keeldus võtmest. Kontrollige seda enne salvestamist.",
+      "providerKeyInvalidShort": "Vigane",
       "providers": {
         "anthropic": "Anthropic",
         "google": "Google",
@@ -1202,10 +1217,10 @@
       "removeProvider": "Eemalda teenusepakkuja",
       "replaceKey": "Asenda võti",
       "roles": {
-        "chat": "Chat (conversation)",
-        "fast": "Fast (classification)",
-        "pdf": "PDF (documents)",
-        "reasoning": "Reasoning (analysis)"
+        "chat": "Chat",
+        "fast": "Kiire",
+        "pdf": "PDF",
+        "reasoning": "Arutlus"
       },
       "selectAtLeastOneRole": "Vali selle võtme jaoks vähemalt üks roll.",
       "selectModelForEachRole": "Lisa teenusepakkuja ja vali iga kategooria jaoks mudel.",

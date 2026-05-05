@@ -4,7 +4,7 @@ import { useTranslations } from "use-intl";
 
 import { StellaWordmark } from "@/components/stella-wordmark";
 
-export type Phase = "org" | "invites" | "done";
+export type Phase = "org" | "ai" | "invites" | "done";
 
 type CreatingStepProps = {
   currentPhase: Phase;
@@ -42,6 +42,7 @@ export const CreatingStep = ({ currentPhase, progress }: CreatingStepProps) => {
 
         <p className="text-muted-foreground mt-4 text-sm">
           {currentPhase === "org" && t("onboarding.creating.org")}
+          {currentPhase === "ai" && t("onboarding.creating.ai")}
           {currentPhase === "invites" && t("onboarding.creating.invites")}
           {currentPhase === "done" && t("onboarding.creating.done")}
         </p>
