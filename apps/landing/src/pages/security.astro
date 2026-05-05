@@ -3,7 +3,7 @@ import Base from "../layouts/Base.astro";
 import ThemeToggle from "../components/ThemeToggle.astro";
 ---
 
-<Base title="Security — stella" description="How stella protects your data. Security controls, data handling, and compliance.">
+<Base title="Security — stella" description="How stella protects your data. Security controls and data handling.">
   <div class="flex min-h-dvh flex-col">
     <nav class="mx-auto flex w-full max-w-300 items-center justify-between px-6 py-5">
       <a href="/">
@@ -30,9 +30,10 @@ import ThemeToggle from "../components/ThemeToggle.astro";
               Security at stella
             </h1>
             <p class="mt-6 text-lg leading-[1.8]" style="color: var(--muted-foreground)">
-              stella handles privileged legal data. Security is the foundation that
-              everything else is built on. Our architecture enforces least
-              privilege, workspace isolation, and encryption at every layer.
+              stella handles privileged legal data. Security is a core design
+              constraint across the product. We design around least privilege,
+              workspace isolation, and encryption for the parts of the system
+              that handle customer data.
             </p>
             <div
               class="mt-8 rounded-2xl p-6"
@@ -107,11 +108,9 @@ import ThemeToggle from "../components/ThemeToggle.astro";
                 "IMDSv2 enforced (SSRF protection)",
               ]},
               { category: "AI", items: [
-                "No training on customer data",
-                "Prompts scoped to workspace",
-                "Citation&#8209;grounded outputs",
-                "Optional PII anonymisation before inference",
-                "Usage&#8209;based, no data retention",
+                "Currently bring your own key (BYOK)",
+                "AI requests are sent to the provider you configure",
+                "Review your provider’s terms, retention settings, and data&#8209;use policy before enabling AI features",
               ]},
               { category: "Monitoring", items: [
                 "GuardDuty threat detection",
@@ -153,7 +152,7 @@ import ThemeToggle from "../components/ThemeToggle.astro";
               <tbody style="color: var(--muted-foreground)">
                 {[
                   { provider: "Amazon Web Services", purpose: "Cloud infrastructure, RDS PostgreSQL, S3 storage", region: "Customer-selected" },
-                  { provider: "Google Cloud", purpose: "AI model inference (Gemini)", region: "Customer-selected" },
+                  { provider: "Customer-configured AI providers", purpose: "AI model inference when BYOK is enabled", region: "Provider-dependent" },
                   { provider: "PostHog", purpose: "Product analytics", region: "EU" },
                 ].map((row) => (
                   <tr style="border-bottom: 1px solid var(--border)">
