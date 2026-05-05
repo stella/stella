@@ -265,7 +265,19 @@ function RouteComponentInner({
 
   useEffect(
     () => () => {
-      useInspectorStore.getState().setPdfMetadataLane(fieldId, "closed");
+      const inspectorState = useInspectorStore.getState();
+      for (const tab of inspectorState.tabs) {
+        if (tab.type !== "pdf" || tab.id !== fieldId) {
+          continue;
+        }
+
+        if (tab.metadataLane === "expanded" && tab.facet === "suggestions") {
+          inspectorState.setPdfFacet(fieldId, "metadata");
+        }
+        break;
+      }
+
+      inspectorState.setPdfMetadataLane(fieldId, "closed");
     },
     [fieldId],
   );
