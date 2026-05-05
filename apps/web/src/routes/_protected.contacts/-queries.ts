@@ -5,10 +5,11 @@ import { toAPIError } from "@/lib/errors";
 
 export const contactsKeys = {
   all: ["contacts"],
+  lists: () => [...contactsKeys.all, "list"],
   list: (filters?: {
     type?: "person" | "organization" | undefined;
     q?: string | undefined;
-  }) => [...contactsKeys.all, "list", filters],
+  }) => [...contactsKeys.lists(), filters],
   byId: (contactId: string) => [...contactsKeys.all, contactId],
 };
 

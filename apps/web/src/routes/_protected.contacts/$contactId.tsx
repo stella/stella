@@ -19,6 +19,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
@@ -51,6 +52,7 @@ import {
   PARTY_ROLE_LABEL_KEYS,
   toPartyRole,
 } from "@/routes/_protected.workspaces/$workspaceId/-party-roles";
+import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
 export const Route = createFileRoute("/_protected/contacts/$contactId")({
@@ -174,6 +176,12 @@ function ContactDetailPage() {
             <div className="space-y-2 text-sm">
               <EditableRow
                 contact={contact}
+                field="displayName"
+                label={t("contacts.fields.displayName")}
+                value={contact.displayName}
+              />
+              <EditableRow
+                contact={contact}
                 field="prefix"
                 label={t("contacts.fields.prefix")}
                 value={contact.prefix}
@@ -205,12 +213,20 @@ function ContactDetailPage() {
             </div>
           )}
           {contact.type === "organization" && (
-            <EditableRow
-              contact={contact}
-              field="organizationName"
-              label={t("common.organizationName")}
-              value={contact.organizationName}
-            />
+            <div className="space-y-2 text-sm">
+              <EditableRow
+                contact={contact}
+                field="displayName"
+                label={t("contacts.fields.displayName")}
+                value={contact.displayName}
+              />
+              <EditableRow
+                contact={contact}
+                field="organizationName"
+                label={t("common.organizationName")}
+                value={contact.organizationName}
+              />
+            </div>
           )}
         </section>
 
@@ -507,20 +523,42 @@ const getContactMetadata = (contact: ContactData): ContactMetadata => {
   };
 };
 
+type InvalidateContactCachesOptions = {
+  invalidateWorkspaces?: boolean;
+};
+
+const invalidateContactCaches = async (
+  queryClient: QueryClient,
+  contactId: string,
+  { invalidateWorkspaces = false }: InvalidateContactCachesOptions = {},
+) => {
+  const promises = [
+    queryClient.invalidateQueries({
+      queryKey: contactsKeys.byId(contactId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: contactsKeys.lists(),
+    }),
+  ];
+
+  if (invalidateWorkspaces) {
+    promises.push(
+      queryClient.invalidateQueries({
+        queryKey: workspacesKeys.all,
+      }),
+    );
+  }
+
+  await Promise.all(promises);
+};
+
 const useContactPatch = (contact: ContactData) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const updateContact = useUpdateContact();
 
   const handleSuccess = () => {
-    // eslint-disable-next-line typescript/no-floating-promises
-    queryClient.invalidateQueries({
-      queryKey: contactsKeys.byId(contact.id),
-    });
-    // eslint-disable-next-line typescript/no-floating-promises
-    queryClient.invalidateQueries({
-      queryKey: contactsKeys.list(),
-    });
+    void invalidateContactCaches(queryClient, contact.id);
   };
 
   const handleError = (onError?: () => void) => {
@@ -543,10 +581,8 @@ const useContactPatch = (contact: ContactData) => {
 
   const saveContactPatchAsync = async (patch: ContactPatch) => {
     try {
-      await updateContact.mutateAsync(
-        { contactId: contact.id, ...patch },
-        { onSuccess: handleSuccess },
-      );
+      await updateContact.mutateAsync({ contactId: contact.id, ...patch });
+      await invalidateContactCaches(queryClient, contact.id);
       return true;
     } catch {
       handleError();
@@ -1178,13 +1214,8 @@ const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
       },
       {
         onSuccess: () => {
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
-            queryKey: contactsKeys.byId(contact.id),
-          });
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
-            queryKey: contactsKeys.list(),
+          void invalidateContactCaches(queryClient, contact.id, {
+            invalidateWorkspaces: field === "responsibleAttorneyId",
           });
         },
         onError: () => {
@@ -1385,14 +1416,7 @@ const ContactNotesEditor = ({ contact }: { contact: ContactData }) => {
       },
       {
         onSuccess: () => {
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
-            queryKey: contactsKeys.byId(contact.id),
-          });
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
-            queryKey: contactsKeys.list(),
-          });
+          void invalidateContactCaches(queryClient, contact.id);
         },
         onError: () => {
           stellaToast.add({
@@ -1471,6 +1495,16 @@ const EditableRow = ({
         return;
       }
       payload = { [field]: parsed };
+    } else if (field === "displayName") {
+      if (!trimmed) {
+        stellaToast.add({
+          title: t("errors.actionFailed"),
+          type: "error",
+        });
+        setInputValue(value ?? "");
+        return;
+      }
+      payload = { displayName: trimmed };
     } else {
       payload = { [field]: trimmed || null };
     }
@@ -1479,13 +1513,8 @@ const EditableRow = ({
       { contactId: contact.id, ...payload },
       {
         onSuccess: () => {
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
-            queryKey: contactsKeys.byId(contact.id),
-          });
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
-            queryKey: contactsKeys.list(),
+          void invalidateContactCaches(queryClient, contact.id, {
+            invalidateWorkspaces: field === "displayName",
           });
         },
         onError: () => {
