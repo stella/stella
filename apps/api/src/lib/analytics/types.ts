@@ -16,6 +16,7 @@ export type CountBucket = "0" | "1" | "2_3" | "4_plus";
 export type ModelKeySource = ResolvedModelInfo["keySource"] | "unknown";
 export type AIFailureReason =
   | "auth"
+  | "byok_quota"
   | "configuration"
   | "provider"
   | "rate_limit"
@@ -53,6 +54,8 @@ export type AIGenerationCompletedProperties = AIModelTelemetryProperties &
   };
 
 export type AIGenerationFailedProperties = SafeAIAnalyticsMetadata & {
+  error_message?: string;
+  error_message_kind?: "non_standard";
   error_type: string;
   failure_reason: AIFailureReason;
   feature: string;
