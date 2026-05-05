@@ -75,6 +75,7 @@
       "title": "Invitación a la organización"
     },
     "lastUsed": "Último utilizado",
+    "oneTimeCodeExpired": "Tu código de un solo uso ha caducado. Solicita un código nuevo.",
     "openInProvider": "Abrir {provider}",
     "orSignInWithEmail": "o inicia sesión con el correo electrónico",
     "organizationNamePlaceholder": "Mi Organización",

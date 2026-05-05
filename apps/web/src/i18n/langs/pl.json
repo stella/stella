@@ -75,6 +75,7 @@
       "title": "Zaproszenie do organizacji"
     },
     "lastUsed": "Ostatnio użyte",
+    "oneTimeCodeExpired": "Twój kod jednorazowy wygasł. Poproś o nowy kod.",
     "openInProvider": "Otwórz {provider}",
     "orSignInWithEmail": "lub zaloguj się e-mailem",
     "organizationNamePlaceholder": "Moja organizacja",

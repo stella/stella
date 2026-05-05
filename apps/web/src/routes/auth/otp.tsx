@@ -30,6 +30,7 @@ import { COMMON_TIMEZONES } from "@/lib/timezones";
 import { InboxQuickJump } from "./-components/inbox-quick-jump";
 
 const OTP_LENGTH = 6;
+const OTP_EXPIRED_MESSAGE = "OTP expired";
 
 const searchSchema = v.strictObject({
   email: emailSchema(),
@@ -107,7 +108,10 @@ function OTP() {
         setOtp("");
         if (signInError.status !== HTTP_TOO_MANY_REQUESTS) {
           toastManager.add({
-            title: signInError.message ?? t("errors.actionFailed"),
+            title:
+              signInError.message === OTP_EXPIRED_MESSAGE
+                ? t("auth.oneTimeCodeExpired")
+                : (signInError.message ?? t("errors.actionFailed")),
             type: "error",
           });
         }

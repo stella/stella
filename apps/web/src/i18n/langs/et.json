@@ -75,6 +75,7 @@
       "title": "Kutse organisatsiooni"
     },
     "lastUsed": "Viimati kasutatud",
+    "oneTimeCodeExpired": "Sinu ühekordne kood on aegunud. Küsi uus kood.",
     "openInProvider": "Ava {provider}",
     "orSignInWithEmail": "või logi sisse e-postiga",
     "organizationNamePlaceholder": "Minu organisatsioon",

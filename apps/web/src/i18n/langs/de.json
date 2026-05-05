@@ -75,6 +75,7 @@
       "title": "Einladung zur Organisation"
     },
     "lastUsed": "Zuletzt verwendet",
+    "oneTimeCodeExpired": "Ihr Einmalcode ist abgelaufen. Fordern Sie einen neuen Code an.",
     "openInProvider": "{provider} öffnen",
     "orSignInWithEmail": "oder mit E-Mail anmelden",
     "organizationNamePlaceholder": "Meine Organisation",

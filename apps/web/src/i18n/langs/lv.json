@@ -75,6 +75,7 @@
       "title": "Uzaicinājums organizācijā"
     },
     "lastUsed": "Pēdējoreiz izmantots",
+    "oneTimeCodeExpired": "Jūsu vienreizējā koda derīguma termiņš ir beidzies. Pieprasiet jaunu kodu.",
     "openInProvider": "Atvērt {provider}",
     "orSignInWithEmail": "vai pierakstieties ar e-pastu",
     "organizationNamePlaceholder": "Mana organizācija",

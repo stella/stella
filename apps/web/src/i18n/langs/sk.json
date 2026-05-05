@@ -75,6 +75,7 @@
       "title": "Pozvánka do organizácie"
     },
     "lastUsed": "Naposledy použité",
+    "oneTimeCodeExpired": "Platnosť jednorazového kódu vypršala. Požiadajte o nový kód.",
     "openInProvider": "Otvoriť {provider}",
     "orSignInWithEmail": "alebo sa prihláste e-mailom",
     "organizationNamePlaceholder": "Moja organizácia",
