@@ -100,7 +100,7 @@ jobs:
 
   smoke:
     name: Build and smoke test API image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
     needs: resolve
     permissions:
@@ -211,32 +211,25 @@ jobs:
           docker logs stella-api-smoke || true
           exit 1
 
-  publish:
-    name: Publish API image and manifest
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    needs: [resolve, smoke]
+  build-arm64:
+    name: Build API image (linux/arm64)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    needs: resolve
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
 
     outputs:
-      image_digest: ${{ steps.build.outputs.digest }}
-      release_ref: ${{ needs.resolve.outputs.release_ref }}
+      digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ needs.resolve.outputs.release_sha }}
-          fetch-depth: 0
-
-      - name: Resolve app version (strip leading `v`)
-        # The frontend reads `VERSION` literally (`0.0.1-rc.1`) at
-        # build time, so the backend's `STELLA_VERSION` must match
-        # without the `v` prefix or PostHog `app_version` events from
-        # the two sides won't group together.
-        id: app-version
-        env:
-          REF: ${{ needs.resolve.outputs.release_ref }}
-        run: echo "value=${REF#v}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
@@ -248,35 +241,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Docker metadata
-        id: meta
-        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=${{ needs.resolve.outputs.release_ref }}
-            type=sha,prefix=sha-
-
-      - name: Build and push API image
+      - name: Build and push by digest
         id: build
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
           file: apps/api/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/arm64
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-arm64
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-arm64,mode=max
           build-args: |
-            STELLA_VERSION=${{ steps.app-version.outputs.value }}
+            STELLA_VERSION=${{ needs.resolve.outputs.version }}
 
       - name: Attest image provenance
-        # Soft-fail: artifact attestations on private repos are
-        # plan-gated by GitHub. If the org plan or feature flag isn't
-        # eligible, the rest of the publish (release object, manifest
-        # upload, prod promote) should still succeed. Once attestations
-        # become available, this step starts succeeding again with no
-        # code change.
         continue-on-error: true
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
@@ -284,9 +262,104 @@ jobs:
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
+  build-amd64:
+    name: Build API image (linux/amd64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: resolve
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ needs.resolve.outputs.release_sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          platforms: linux/amd64
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-amd64
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-amd64,mode=max
+          build-args: |
+            STELLA_VERSION=${{ needs.resolve.outputs.version }}
+
+      - name: Attest image provenance
+        continue-on-error: true
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  manifest:
+    name: Assemble multi-arch manifest and GitHub release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [resolve, build-arm64, build-amd64]
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ needs.resolve.outputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-arch manifest list
+        id: manifest
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          ARM64_DIGEST: ${{ needs.build-arm64.outputs.digest }}
+          AMD64_DIGEST: ${{ needs.build-amd64.outputs.digest }}
+          SHA: ${{ needs.resolve.outputs.release_sha }}
+        run: |
+          docker buildx imagetools create \
+            -t "${IMAGE}:${RELEASE_REF}" \
+            -t "${IMAGE}:sha-${SHA:0:7}" \
+            "${IMAGE}@${ARM64_DIGEST}" \
+            "${IMAGE}@${AMD64_DIGEST}"
+
+          digest="$(docker buildx imagetools inspect "${IMAGE}:${RELEASE_REF}" --format '{{.Manifest.Digest}}')"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
       - name: Create release manifest
         env:
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_DIGEST: ${{ steps.manifest.outputs.digest }}
           IMAGE_NAME: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
         run: |
@@ -339,8 +412,8 @@ jobs:
     # production by accident if the upstream validation regex changes.
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: publish
-    if: ${{ !contains(needs.publish.outputs.release_ref, '-') }}
+    needs: [resolve, build-arm64, smoke]
+    if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
     permissions:
       contents: read
     steps:
@@ -356,8 +429,8 @@ jobs:
       - name: Dispatch and watch promote-release.yml
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          RELEASE_REF: ${{ needs.publish.outputs.release_ref }}
-          IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          IMAGE_DIGEST: ${{ needs.build-arm64.outputs.digest }}
           INFRA_REPO: ${{ github.repository_owner }}/stella-infra
         run: |
           dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
