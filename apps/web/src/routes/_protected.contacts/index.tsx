@@ -482,6 +482,9 @@ const CreateContactDialog = () => {
         type: "success",
       });
       setIsOpen(false);
+      form.reset();
+      setAresBillingAddress(null);
+      setIsAresLoading(false);
     },
   });
 
