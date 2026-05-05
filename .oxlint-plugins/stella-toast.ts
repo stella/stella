@@ -58,6 +58,10 @@ export default {
       create(context: RuleContext) {
         return {
           ImportDeclaration(node: ImportDeclarationNode) {
+            if (typeof node.source.value !== "string") {
+              return;
+            }
+
             if (node.source.value === RAW_TOAST_MODULE) {
               context.report({ node, messageId: "rawToast" });
               return;
