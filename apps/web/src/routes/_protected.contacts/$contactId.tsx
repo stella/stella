@@ -523,23 +523,33 @@ const getContactMetadata = (contact: ContactData): ContactMetadata => {
   };
 };
 
-const invalidateContactCaches = (
+type InvalidateContactCachesOptions = {
+  invalidateWorkspaces?: boolean;
+};
+
+const invalidateContactCaches = async (
   queryClient: QueryClient,
   contactId: string,
+  { invalidateWorkspaces = false }: InvalidateContactCachesOptions = {},
 ) => {
-  // eslint-disable-next-line typescript/no-floating-promises
-  queryClient.invalidateQueries({
-    queryKey: contactsKeys.byId(contactId),
-  });
-  // eslint-disable-next-line typescript/no-floating-promises
-  queryClient.invalidateQueries({
-    queryKey: contactsKeys.list(),
-  });
-  // Client contact fields are embedded in workspace list/detail/navigation data.
-  // eslint-disable-next-line typescript/no-floating-promises
-  queryClient.invalidateQueries({
-    queryKey: workspacesKeys.all,
-  });
+  const promises = [
+    queryClient.invalidateQueries({
+      queryKey: contactsKeys.byId(contactId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: contactsKeys.lists(),
+    }),
+  ];
+
+  if (invalidateWorkspaces) {
+    promises.push(
+      queryClient.invalidateQueries({
+        queryKey: workspacesKeys.all,
+      }),
+    );
+  }
+
+  await Promise.all(promises);
 };
 
 const useContactPatch = (contact: ContactData) => {
@@ -548,7 +558,7 @@ const useContactPatch = (contact: ContactData) => {
   const updateContact = useUpdateContact();
 
   const handleSuccess = () => {
-    invalidateContactCaches(queryClient, contact.id);
+    void invalidateContactCaches(queryClient, contact.id);
   };
 
   const handleError = (onError?: () => void) => {
@@ -571,10 +581,8 @@ const useContactPatch = (contact: ContactData) => {
 
   const saveContactPatchAsync = async (patch: ContactPatch) => {
     try {
-      await updateContact.mutateAsync(
-        { contactId: contact.id, ...patch },
-        { onSuccess: handleSuccess },
-      );
+      await updateContact.mutateAsync({ contactId: contact.id, ...patch });
+      await invalidateContactCaches(queryClient, contact.id);
       return true;
     } catch {
       handleError();
@@ -1206,7 +1214,9 @@ const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
       },
       {
         onSuccess: () => {
-          invalidateContactCaches(queryClient, contact.id);
+          void invalidateContactCaches(queryClient, contact.id, {
+            invalidateWorkspaces: field === "responsibleAttorneyId",
+          });
         },
         onError: () => {
           stellaToast.add({
@@ -1406,7 +1416,7 @@ const ContactNotesEditor = ({ contact }: { contact: ContactData }) => {
       },
       {
         onSuccess: () => {
-          invalidateContactCaches(queryClient, contact.id);
+          void invalidateContactCaches(queryClient, contact.id);
         },
         onError: () => {
           stellaToast.add({
@@ -1503,7 +1513,9 @@ const EditableRow = ({
       { contactId: contact.id, ...payload },
       {
         onSuccess: () => {
-          invalidateContactCaches(queryClient, contact.id);
+          void invalidateContactCaches(queryClient, contact.id, {
+            invalidateWorkspaces: field === "displayName",
+          });
         },
         onError: () => {
           stellaToast.add({
