@@ -1015,6 +1015,7 @@ function computeVisibleRange(
 type PromptBarProps = {
   layout: FileAIChatLayout;
   status: FileAIChatStatus;
+  canSubmitNow?: (() => boolean) | undefined;
   onSubmit: (input: { prompt: string }) => void;
   onNewThread?: (() => void) | undefined;
   newThreadLabel?: string | undefined;
@@ -1126,6 +1127,7 @@ export function PromptBar(props: PromptBarProps) {
     pendingCount,
     panelOpen,
     showThreadToggle,
+    canSubmitNow,
     onSubmit,
     onStop,
     onNewThread,
@@ -1180,10 +1182,13 @@ export function PromptBar(props: PromptBarProps) {
     if (submitDisabled) {
       return;
     }
+    if (canSubmitNow && !canSubmitNow()) {
+      return;
+    }
     await submit((draft) => {
       onSubmit({ prompt: draft.html });
     });
-  }, [onSubmit, submit, submitDisabled]);
+  }, [canSubmitNow, onSubmit, submit, submitDisabled]);
 
   // Register Enter handler — TipTap's keymap delegates Enter to
   // the `setSubmitHandler` registered here. Without this, Enter
