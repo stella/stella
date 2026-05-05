@@ -56,6 +56,11 @@ type KanbanViewProps = {
   workspaceId: string;
 };
 
+type CreateFromKanbanOptions = {
+  kind: EntityKind;
+  taskStatus?: string | undefined;
+};
+
 export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const t = useTranslations();
   const labels = useBatchUploadLabels();
@@ -69,14 +74,25 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const [hiddenGroups, setHiddenGroups] = useState(new Set());
   const [localColumnOrder, setLocalColumnOrder] = useState<string[]>([]);
 
-  const handleCreate = async (kind: EntityKind) => {
+  const handleCreate = async ({
+    kind,
+    taskStatus,
+  }: CreateFromKanbanOptions) => {
     if (kind === "task") {
+      const body = taskStatus
+        ? {
+            queryKey: entitiesKeys.all(workspaceId),
+            name: t("tasks.untitled"),
+            status: taskStatus,
+          }
+        : {
+            queryKey: entitiesKeys.all(workspaceId),
+            name: t("tasks.untitled"),
+          };
+
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({
-          queryKey: entitiesKeys.all(workspaceId),
-          name: t("tasks.untitled"),
-        });
+        .put(body);
 
       const entityId = response.data?.entityId;
       if (response.error || !entityId) {
@@ -492,8 +508,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
                 : undefined
             }
             onCreate={(kind) => {
-              handleCreate(kind).catch(() => {
-                // Error handled inside handleCreate
+              void handleCreate({
+                kind,
+                taskStatus:
+                  isStatusGrouping && value !== null ? value : undefined,
               });
             }}
             onDrop={(entityId) => handleDrop(value, entityId)}
