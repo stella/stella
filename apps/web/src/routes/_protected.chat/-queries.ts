@@ -238,14 +238,32 @@ export const buildSendRequestBody = ({
   return body;
 };
 
-const shouldSendAutomaticallyAfterToolResponse = ({
-  messages,
-}: {
-  messages: PersistedChatMessage[];
-}) =>
-  !hasApprovedActiveDocxEditAwaitingClientOutput({ messages }) &&
-  (lastAssistantMessageIsCompleteWithApprovalResponses({ messages }) ||
-    lastAssistantMessageIsCompleteWithToolCalls({ messages }));
+// Per-thread guard against empty-completion auto-resubmit storms.
+// When a model returns finish_reason=stop with zero tokens (observed
+// with cached prefixes on small Gemini variants), the AI SDK does
+// not append a new assistant message, so the same tool-result tail
+// keeps satisfying the predicate and useChat resubmits at ~1.5 Hz
+// until the user reloads. Requiring the message count to grow since
+// the last fire breaks the loop without affecting the legitimate
+// post-tool-result resubmit.
+const createSendAutomaticallyPredicate = () => {
+  let lastFiredAtCount = 0;
+  return ({ messages }: { messages: PersistedChatMessage[] }) => {
+    if (hasApprovedActiveDocxEditAwaitingClientOutput({ messages })) {
+      return false;
+    }
+    if (messages.length <= lastFiredAtCount) {
+      return false;
+    }
+    const shouldFire =
+      lastAssistantMessageIsCompleteWithApprovalResponses({ messages }) ||
+      lastAssistantMessageIsCompleteWithToolCalls({ messages });
+    if (shouldFire) {
+      lastFiredAtCount = messages.length;
+    }
+    return shouldFire;
+  };
+};
 
 export type ChatThreadFetched = {
   chat: Chat<PersistedChatMessage>;
@@ -287,7 +305,7 @@ export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
             }),
           }),
         }),
-        sendAutomaticallyWhen: shouldSendAutomaticallyAfterToolResponse,
+        sendAutomaticallyWhen: createSendAutomaticallyPredicate(),
       });
 
       return { chat, contextMatterIds };

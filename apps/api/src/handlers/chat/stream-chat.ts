@@ -26,10 +26,17 @@ import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-regi
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
+import {
+  getModelForRole,
+  getModelInfoForRole,
+  getTemperatureForRole,
+} from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  ChatEmptyCompletionError,
+  HandlerError,
+} from "@/api/lib/errors/tagged-errors";
 
 const MAX_TOOL_STEPS = 8;
 
@@ -122,6 +129,7 @@ export const streamChat = async ({
       return "error";
     },
     execute: ({ writer }) => {
+      const modelInfo = getModelInfoForRole("chat", orgAIConfig);
       const result = streamText({
         abortSignal,
         model: getModelForRole("chat", orgAIConfig),
@@ -137,6 +145,26 @@ export const streamChat = async ({
         },
         stopWhen: [stepCountIs(MAX_TOOL_STEPS), hasToolCall("ask-user")],
         messages: modelMessages,
+        onFinish: ({ finishReason, totalUsage }) => {
+          // Some providers (notably gemini-2.5-flash-lite on cached
+          // prefixes) return finish_reason=stop with zero output
+          // tokens. The frontend predicate guards against the
+          // resulting auto-resubmit storm, but the failure is
+          // otherwise invisible — capture it so we can track which
+          // models regress.
+          if (finishReason === "stop" && (totalUsage.outputTokens ?? 0) === 0) {
+            captureError(
+              new ChatEmptyCompletionError({
+                message: "Model returned finish_reason=stop with zero output",
+              }),
+              {
+                threadId,
+                provider: modelInfo.provider,
+                modelId: modelInfo.modelId,
+              },
+            );
+          }
+        },
       });
 
       const uiStream = result.toUIMessageStream<ChatMessage>();

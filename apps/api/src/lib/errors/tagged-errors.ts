@@ -85,6 +85,18 @@ export class ChatToolError extends TaggedError("ChatToolError")<{
   cause?: unknown;
 }>() {}
 
+/**
+ * Chat stream finished with finish_reason=stop and zero output
+ * tokens. Observed with small Gemini variants (notably 2.5-flash-lite)
+ * on cached prefix replays. Surfaced as a tagged error for telemetry
+ * so we can track which models cause it.
+ */
+export class ChatEmptyCompletionError extends TaggedError(
+  "ChatEmptyCompletionError",
+)<{
+  message: string;
+}>() {}
+
 /** Sandbox execution failure: transpile, runtime, limit, or marshalling. */
 export class SandboxError extends TaggedError("SandboxError")<{
   reason:
