@@ -153,7 +153,7 @@ const FileCell = ({
         content={fileName}
         render={
           <button
-            className="bg-muted grid max-w-full cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5"
+            className="bg-muted grid min-w-0 max-w-full cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start"
             onClick={() =>
               openPdf({
                 id: fieldId,
@@ -170,7 +170,7 @@ const FileCell = ({
         }
       >
         <DocumentIcon className="size-3.5 shrink-0" mimeType={mimeType} />
-        <span className="truncate">{fileName}</span>
+        <span className="min-w-0 truncate text-start">{fileName}</span>
       </Tooltip>
     );
   }
@@ -179,11 +179,11 @@ const FileCell = ({
     <Tooltip
       content={fileName}
       render={
-        <span className="bg-muted grid max-w-full grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 opacity-60" />
+        <span className="bg-muted grid min-w-0 max-w-full grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start opacity-60" />
       }
     >
       <DocumentIcon className="size-3.5 shrink-0" mimeType={mimeType} />
-      <span className="truncate">{fileName}</span>
+      <span className="min-w-0 truncate text-start">{fileName}</span>
     </Tooltip>
   );
 };

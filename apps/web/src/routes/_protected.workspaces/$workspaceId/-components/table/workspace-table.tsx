@@ -88,8 +88,6 @@ const TABLE_ROW_ESTIMATE_PX = 41;
 const TABLE_ROW_OVERSCAN = 16;
 const EXPANDED_ROW_MAX_HEIGHT_PX = 192;
 const TABLE_COLUMN_DRAG_TYPE = "workspace-table-column";
-const ADD_COLUMN_HOVER_COLOR =
-  "color-mix(in srgb, var(--color-foreground) 4%, var(--color-background))";
 
 type WorkspaceGridStyle = CSSProperties & {
   "--workspace-table-columns": string;
@@ -131,10 +129,6 @@ export const WorkspaceTable = ({
   const lastColumnDropPosition = useRef<ColumnDropPosition | null>(null);
   const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
   const [wrapperWidth, setWrapperWidth] = useState(0);
-  const [addColumnHoverRowId, setAddColumnHoverRowId] = useState<string | null>(
-    null,
-  );
-  const [isAddColumnHovered, setIsAddColumnHovered] = useState(false);
   const expandedTableRowEntityId = useWorkspaceStore(
     (s) => s.expandedTableRowEntityId,
   );
@@ -435,11 +429,13 @@ export const WorkspaceTable = ({
               {getOrderedHeaders(headerGroup.headers, renderColumns).map(
                 (header, index) => (
                   <DraggableHeaderCell
-                    addColumnHovered={isAddColumnHovered}
+                    collapseEndBorder={
+                      Boolean(addPropertyColumn) &&
+                      index === renderColumns.length - 1
+                    }
                     header={header}
                     index={index}
                     key={header.id}
-                    onAddColumnHoverChange={setIsAddColumnHovered}
                     onToggleSelectAll={handleToggleSelectAll}
                     selectAllState={selectAllState}
                   />
@@ -447,13 +443,11 @@ export const WorkspaceTable = ({
               )}
               {addPropertyColumn && (
                 <DraggableHeaderCell
-                  addColumnHovered={isAddColumnHovered}
                   header={getRequiredHeader(
                     headerGroup.headers,
                     addPropertyColumn.id,
                   )}
                   index={renderColumns.length}
-                  onAddColumnHoverChange={setIsAddColumnHovered}
                   onToggleSelectAll={handleToggleSelectAll}
                   selectAllState={selectAllState}
                 />
@@ -475,10 +469,7 @@ export const WorkspaceTable = ({
                 }}
               />
               {addPropertyColumn && (
-                <AddPropertyRailSpacer
-                  addColumnHovered={isAddColumnHovered}
-                  height={paddingTop}
-                />
+                <AddPropertyRailSpacer height={paddingTop} />
               )}
             </WorkspaceGridRow>
           )}
@@ -493,8 +484,6 @@ export const WorkspaceTable = ({
                 activeEntityId={activeEntityId}
                 activePropertyId={activePropertyId}
                 activeTaskId={activeTaskId}
-                addColumnHoverRowId={addColumnHoverRowId}
-                addColumnHovered={isAddColumnHovered}
                 editingEntityId={editingEntityId}
                 expanded={expandedTableRowEntityId === row.original.entityId}
                 index={virtualRow.index}
@@ -510,10 +499,6 @@ export const WorkspaceTable = ({
                 }}
                 onStartEditing={setEditingEntityId}
                 onStopEditing={() => setEditingEntityId(null)}
-                onAddColumnHoverChange={(hovered) => {
-                  setIsAddColumnHovered(hovered);
-                  setAddColumnHoverRowId(hovered ? row.id : null);
-                }}
                 onToggleExpanded={(entityId) => {
                   setExpandedTableRowEntityId(
                     expandedTableRowEntityId === entityId ? null : entityId,
@@ -542,10 +527,7 @@ export const WorkspaceTable = ({
                 }}
               />
               {addPropertyColumn && (
-                <AddPropertyRailSpacer
-                  addColumnHovered={isAddColumnHovered}
-                  height={paddingBottom}
-                />
+                <AddPropertyRailSpacer height={paddingBottom} />
               )}
             </WorkspaceGridRow>
           )}
@@ -563,8 +545,7 @@ export const WorkspaceTable = ({
 type DraggableHeaderCellProps = {
   header: Header<TableTreeNode, unknown>;
   index: number;
-  addColumnHovered: boolean;
-  onAddColumnHoverChange: (hovered: boolean) => void;
+  collapseEndBorder?: boolean;
   onToggleSelectAll: () => void;
   selectAllState: SelectAllState;
 };
@@ -572,8 +553,7 @@ type DraggableHeaderCellProps = {
 const DraggableHeaderCell = ({
   header,
   index,
-  addColumnHovered,
-  onAddColumnHoverChange,
+  collapseEndBorder = false,
   onToggleSelectAll,
   selectAllState,
 }: DraggableHeaderCellProps) => {
@@ -664,24 +644,15 @@ const DraggableHeaderCell = ({
       className={cn(
         "relative",
         isAddPropertyColumn && "border-s",
+        collapseEndBorder && "border-e-0",
         isDragging && "opacity-50",
         closestEdge && "overflow-visible",
         header.column.getIsResizing() &&
           "after:bg-info after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-50 after:w-px",
       )}
       ref={headerRef}
-      onPointerEnter={
-        isAddPropertyColumn ? () => onAddColumnHoverChange(true) : undefined
-      }
-      onPointerDown={
-        isAddPropertyColumn ? () => onAddColumnHoverChange(false) : undefined
-      }
-      onPointerLeave={
-        isAddPropertyColumn ? () => onAddColumnHoverChange(false) : undefined
-      }
       style={{
         ...getGridPinningStyles(header.column),
-        ...getAddColumnHoverStyles(isAddPropertyColumn && addColumnHovered),
       }}
     >
       <PinnedBoundary column={header.column} />
@@ -808,17 +779,6 @@ const getGridPinningStyles = (column: Column<TableTreeNode>): CSSProperties => {
     left: `${column.getStart("left")}px`,
     position: "sticky",
     zIndex: column.id === selectColId ? 3 : 2,
-  };
-};
-
-const getAddColumnHoverStyles = (hovered: boolean): CSSProperties => {
-  if (!hovered) {
-    return {};
-  }
-
-  return {
-    backgroundColor: ADD_COLUMN_HOVER_COLOR,
-    borderBottomColor: ADD_COLUMN_HOVER_COLOR,
   };
 };
 
@@ -972,13 +932,10 @@ type DraggableRowProps = {
   activeEntityId: string | null;
   activePropertyId: string | null;
   activeTaskId: string | null;
-  addColumnHoverRowId: string | null;
-  addColumnHovered: boolean;
   editingEntityId: string | null;
   expanded: boolean;
   lastSelectedIndex: React.RefObject<number | null>;
   measureElement: (element: Element | null) => void;
-  onAddColumnHoverChange: (hovered: boolean) => void;
   onRename: (entityId: string, newName: string) => void;
   onStartEditing: (entityId: string) => void;
   onStopEditing: () => void;
@@ -997,13 +954,10 @@ const DraggableRow = ({
   activeEntityId,
   activePropertyId,
   activeTaskId,
-  addColumnHoverRowId,
-  addColumnHovered,
   editingEntityId,
   expanded,
   lastSelectedIndex,
   measureElement,
-  onAddColumnHoverChange,
   onRename,
   onStartEditing,
   onStopEditing,
@@ -1025,7 +979,6 @@ const DraggableRow = ({
   const entity = row.original;
   const isFolder = entity.kind === "folder";
   const isTask = entity.kind === "task";
-  const isAddColumnHoverRow = addColumnHoverRowId === row.id;
   const visibleCells = getOrderedCells(row.getVisibleCells(), renderColumns);
   const addPropertyCell = addPropertyColumn
     ? row
@@ -1228,11 +1181,9 @@ const DraggableRow = ({
           onClick={() => row.toggleExpanded()}
           style={{ gridColumn: addPropertyCell ? "3 / -2" : "3 / -1" }}
         />
-        <FolderAddPropertyCell
-          addColumnHovered={addColumnHovered}
+        <AddPropertyCell
           cell={addPropertyCell}
           columnIndex={renderColumns.length + 1}
-          onAddColumnHoverChange={onAddColumnHoverChange}
           selected={row.getIsSelected()}
         />
       </WorkspaceGridRow>
@@ -1258,36 +1209,20 @@ const DraggableRow = ({
           aria-colindex={cellIndex + 1}
           className={cn(
             "relative",
-            isAddColumnHoverRow && "group-hover/row:bg-background",
             cell.column.id === selectColId && "min-w-12 shrink-0",
             cell.column.columnDef.meta?.muted && "text-muted-foreground",
             expanded &&
-              "max-h-48 overflow-y-auto whitespace-normal [&_.line-clamp-2]:line-clamp-none [&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal",
+              "max-h-48 overflow-y-auto whitespace-normal [&_.line-clamp-2]:line-clamp-none [&_.truncate]:min-w-0 [&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal [&_.truncate]:wrap-break-word",
             cell.column.getIsResizing() &&
               "after:bg-info after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-50 after:w-px",
+            addPropertyColumn &&
+              cellIndex === visibleCells.length - 1 &&
+              "border-e-0",
           )}
           data-state={cell.row.getIsSelected() ? "selected" : undefined}
           key={cell.id}
-          onPointerEnter={
-            cell.column.id === addPropertyColId
-              ? () => onAddColumnHoverChange(true)
-              : undefined
-          }
-          onPointerDown={
-            cell.column.id === addPropertyColId
-              ? () => onAddColumnHoverChange(false)
-              : undefined
-          }
-          onPointerLeave={
-            cell.column.id === addPropertyColId
-              ? () => onAddColumnHoverChange(false)
-              : undefined
-          }
           style={{
             ...getGridPinningStyles(cell.column),
-            ...getAddColumnHoverStyles(
-              cell.column.id === addPropertyColId && addColumnHovered,
-            ),
             maxHeight: expanded ? EXPANDED_ROW_MAX_HEIGHT_PX : undefined,
           }}
         >
@@ -1302,47 +1237,25 @@ const DraggableRow = ({
         </WorkspaceGridCell>
       ))}
       <AddPropertyCell
-        addColumnHovered={addColumnHovered}
         cell={addPropertyCell}
         columnIndex={renderColumns.length + 1}
-        onAddColumnHoverChange={onAddColumnHoverChange}
         selected={row.getIsSelected()}
       />
     </WorkspaceGridRow>
   );
 };
 
-type FolderAddPropertyCellProps = {
+type AddPropertyCellProps = {
   cell: Cell<TableTreeNode, unknown> | undefined;
   columnIndex: number;
   selected: boolean;
-  addColumnHovered: boolean;
-  onAddColumnHoverChange: (hovered: boolean) => void;
 };
-
-const FolderAddPropertyCell = ({
-  cell,
-  columnIndex,
-  selected,
-  addColumnHovered,
-  onAddColumnHoverChange,
-}: FolderAddPropertyCellProps) => (
-  <AddPropertyCell
-    addColumnHovered={addColumnHovered}
-    cell={cell}
-    columnIndex={columnIndex}
-    onAddColumnHoverChange={onAddColumnHoverChange}
-    selected={selected}
-  />
-);
 
 const AddPropertyCell = ({
   cell,
   columnIndex,
   selected,
-  addColumnHovered,
-  onAddColumnHoverChange,
-}: FolderAddPropertyCellProps) => {
+}: AddPropertyCellProps) => {
   if (!cell) {
     return null;
   }
@@ -1350,14 +1263,10 @@ const AddPropertyCell = ({
   return (
     <WorkspaceGridCell
       aria-colindex={columnIndex}
-      className="group-hover/row:bg-background group-data-[state=selected]/row:bg-background group-data-[state=selected]/row:group-hover/row:bg-background border-s p-0"
+      className="border-s p-0"
       data-state={selected ? "selected" : undefined}
-      onPointerEnter={() => onAddColumnHoverChange(true)}
-      onPointerDown={() => onAddColumnHoverChange(false)}
-      onPointerLeave={() => onAddColumnHoverChange(false)}
       style={{
         ...getGridPinningStyles(cell.column),
-        ...getAddColumnHoverStyles(addColumnHovered),
       }}
     >
       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -1366,17 +1275,13 @@ const AddPropertyCell = ({
 };
 
 type AddPropertyRailSpacerProps = {
-  addColumnHovered: boolean;
   height: number;
 };
 
-const AddPropertyRailSpacer = ({
-  addColumnHovered,
-  height,
-}: AddPropertyRailSpacerProps) => (
+const AddPropertyRailSpacer = ({ height }: AddPropertyRailSpacerProps) => (
   <WorkspaceGridCell
     aria-hidden="true"
-    className="group-hover/row:bg-background border-s border-b-0 p-0"
+    className="border-s border-b-0 p-0"
     role="presentation"
     style={{
       gridColumn: "-2 / -1",
@@ -1384,7 +1289,6 @@ const AddPropertyRailSpacer = ({
       position: "sticky",
       right: 0,
       zIndex: 2,
-      ...getAddColumnHoverStyles(addColumnHovered),
     }}
   />
 );
