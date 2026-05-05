@@ -450,13 +450,17 @@ jobs:
               break
             fi
 
+            # Match by displayTitle so concurrent dispatches (e.g. a
+            # stable promote firing alongside an rc promote) cannot
+            # be confused. promote-release.yml sets a per-run title
+            # of "Promote <release_ref> → <target_environment>".
             run_id="$(
               gh run list \
                 --repo "$INFRA_REPO" \
                 --workflow promote-release.yml \
                 --event workflow_dispatch \
-                --json databaseId,createdAt \
-                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | .databaseId" \
+                --json databaseId,createdAt,displayTitle \
+                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle | contains(\"$RELEASE_REF\")) | .databaseId" \
                 --limit 10 \
                 | head -n 1
             )"
@@ -525,13 +529,17 @@ jobs:
               break
             fi
 
+            # Match by displayTitle so concurrent dispatches (e.g. a
+            # stable promote firing alongside an rc promote) cannot
+            # be confused. promote-release.yml sets a per-run title
+            # of "Promote <release_ref> → <target_environment>".
             run_id="$(
               gh run list \
                 --repo "$INFRA_REPO" \
                 --workflow promote-release.yml \
                 --event workflow_dispatch \
-                --json databaseId,createdAt \
-                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | .databaseId" \
+                --json databaseId,createdAt,displayTitle \
+                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle | contains(\"$RELEASE_REF\")) | .databaseId" \
                 --limit 10 \
                 | head -n 1
             )"
