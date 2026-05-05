@@ -75,6 +75,7 @@
       "title": "Organization invitation"
     },
     "lastUsed": "Last used",
+    "oneTimeCodeExpired": "Your one-time code has expired. Request a new code.",
     "openInProvider": "Open {provider}",
     "orSignInWithEmail": "or sign in with email",
     "organizationNamePlaceholder": "My organization",

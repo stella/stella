@@ -75,6 +75,7 @@
       "title": "Kvietimas į organizaciją"
     },
     "lastUsed": "Paskutinį kartą naudotas",
+    "oneTimeCodeExpired": "Jūsų vienkartinio kodo galiojimas baigėsi. Paprašykite naujo kodo.",
     "openInProvider": "Atverti {provider}",
     "orSignInWithEmail": "arba prisijunkite el. paštu",
     "organizationNamePlaceholder": "Mano organizacija",

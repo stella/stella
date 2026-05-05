@@ -75,6 +75,7 @@
       "title": "Szervezeti meghívó"
     },
     "lastUsed": "Legutóbb használt",
+    "oneTimeCodeExpired": "Az egyszer használatos kód lejárt. Kérjen új kódot.",
     "openInProvider": "{provider} megnyitása",
     "orSignInWithEmail": "vagy jelentkezz be e-maillel",
     "organizationNamePlaceholder": "Szervezetem",
