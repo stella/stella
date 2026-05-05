@@ -78,9 +78,6 @@ export type MatterMenuCallbacks = {
   onDelete: () => void;
   isPinned: boolean;
   isArchived: boolean;
-  // Personal matters are creator-only until promoted; the backend
-  // rejects member adds with 400, so hide the affordance here.
-  isPersonal: boolean;
 };
 
 /**
@@ -98,7 +95,6 @@ export const MatterMenuItems = ({
   onDelete,
   isPinned,
   isArchived,
-  isPersonal,
 }: MatterMenuCallbacks) => {
   const t = useTranslations();
 
@@ -112,12 +108,10 @@ export const MatterMenuItems = ({
         <PenLineIcon />
         {t("common.rename")}
       </MenuItem>
-      {!isPersonal && (
-        <MenuItem onClick={onAddMember}>
-          <UserPlusIcon />
-          {t("workspaces.members.addMember")}
-        </MenuItem>
-      )}
+      <MenuItem onClick={onAddMember}>
+        <UserPlusIcon />
+        {t("workspaces.members.addMember")}
+      </MenuItem>
       <MenuItem onClick={onCopyLink}>
         <ClipboardCopyIcon />
         {t("common.copyLink")}
@@ -159,7 +153,6 @@ type MatterContextMenuProps = {
   workspaceId: string;
   workspaceName: string;
   isArchived?: boolean;
-  isPersonal: boolean;
   children: React.ReactNode | ((rename: RenameState) => React.ReactNode);
 };
 
@@ -167,7 +160,6 @@ export const MatterContextMenu = ({
   workspaceId,
   workspaceName,
   isArchived = false,
-  isPersonal,
   children,
 }: MatterContextMenuProps) => {
   const t = useTranslations();
@@ -293,7 +285,6 @@ export const MatterContextMenu = ({
         <MenuPopup anchor={menuAnchor ?? undefined} className="z-50">
           <MatterMenuItems
             isArchived={isArchived}
-            isPersonal={isPersonal}
             isPinned={pinned}
             onAddMember={() => setAddMemberOpen(true)}
             onOpenInNewTab={() => {
