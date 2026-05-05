@@ -37,9 +37,9 @@ import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
 
 const config = {
   permissions: { workspace: ["create"] },
-  // A request without `clientId` creates a personal matter (visible
-  // only to the creator). With `clientId`, it's a normal client
-  // matter and `memberUserIds` may add additional members.
+  // A request without `clientId` creates a personal matter (initially
+  // visible only to the creator). With `clientId`, it's a normal
+  // client matter and `memberUserIds` may add additional members.
   body: t.Object({
     id: tSafeId("workspace"),
     clientId: t.Optional(tSafeId("contact")),
@@ -59,9 +59,9 @@ const createWorkspaces = createSafeRootHandler(
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
         const organizationId = session.activeOrganizationId;
-        // Personal matters (no clientId) always have exactly one
-        // member: the creator. Additional members can only be
-        // attached via promotion through the update endpoint.
+        // New personal matters (no clientId) start with exactly one
+        // member: the creator. Additional members can be attached
+        // through the workspace members endpoint after creation.
         const requestedMemberUserIds =
           body.clientId !== undefined && body.memberUserIds !== undefined
             ? Array.from(new Set(body.memberUserIds))
@@ -136,8 +136,8 @@ const createWorkspaces = createSafeRootHandler(
 
         // Membership verified above — brand each requested user ID.
         // Combined with the session user.id, this gives a typed list
-        // of org-validated members for the insert below. Personal
-        // matters always have exactly one member: the creator.
+        // of org-validated members for the insert below. New personal
+        // matters start with exactly one member: the creator.
         const workspaceMemberUserIds = Array.from(
           new Set([
             user.id,

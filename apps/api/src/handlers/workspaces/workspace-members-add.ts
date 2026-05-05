@@ -5,6 +5,12 @@ import { t } from "elysia";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditContext,
+  writeAuditLog,
+} from "@/api/lib/audit-log";
 import { tUserId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -21,7 +27,7 @@ const config = {
 
 const addWorkspaceMember = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, body }) {
+  async function* ({ safeDb, session, workspaceId, user, request, body }) {
     // Verify user is a member of the organization.
     // `member` is an org-level auth table (no RLS policy);
     // safeDb works for querying it.
@@ -47,14 +53,10 @@ const addWorkspaceMember = createSafeHandler(
     }
 
     const txResult = await safeDb(async (tx) => {
-      // Lock the workspace row first so a concurrent promote
-      // can't change clientId between this read and the insert.
-      // Personal matters (clientId IS NULL) are creator-only by
-      // contract; the frontend hides the "add member" affordance,
-      // but enforce it here too so the endpoint cannot be used to
-      // bypass that gate (defense in depth, SOC 2).
+      // Lock the workspace row first so concurrent workspace
+      // deletion or promotion cannot race this membership insert.
       const workspaceRows = await tx
-        .select({ clientId: workspaces.clientId })
+        .select({ id: workspaces.id })
         .from(workspaces)
         .where(eq(workspaces.id, workspaceId))
         .for("update");
@@ -62,10 +64,6 @@ const addWorkspaceMember = createSafeHandler(
 
       if (!workspace) {
         return { ok: false as const, reason: "not_found" as const };
-      }
-
-      if (workspace.clientId === null) {
-        return { ok: false as const, reason: "personal" as const };
       }
 
       // Lock workspace_members rows then count to serialize concurrent adds.
@@ -93,6 +91,27 @@ const addWorkspaceMember = createSafeHandler(
           createdAt: workspaceMembers.createdAt,
         });
 
+      await writeAuditLog(
+        {
+          ...createAuditContext({
+            organizationId: session.activeOrganizationId,
+            workspaceId,
+            userId: user.id,
+            request,
+          }),
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+          resourceId: workspaceId,
+          changes: {
+            membersAdded: {
+              old: null,
+              new: [body.userId],
+            },
+          },
+        },
+        tx,
+      );
+
       return { ok: true as const, rows };
     });
 
@@ -115,14 +134,6 @@ const addWorkspaceMember = createSafeHandler(
       if (txResult.value.reason === "not_found") {
         return Result.err(
           new HandlerError({ status: 404, message: "Workspace not found" }),
-        );
-      }
-      if (txResult.value.reason === "personal") {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Assign a client before adding members",
-          }),
         );
       }
       return Result.err(

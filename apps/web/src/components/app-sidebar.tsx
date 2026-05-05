@@ -479,7 +479,6 @@ const MatterItem = ({
                 <MenuSeparator />
                 <MatterMenuItems
                   isArchived={false}
-                  isPersonal={!ws.client}
                   isPinned={isPinned}
                   onAddMember={() => setAddMemberOpen(true)}
                   onArchive={() =>

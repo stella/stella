@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { auditLogs, workspaceMembers } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -36,23 +37,60 @@ const createContext = ({
       "ws_test123" as SafeId<"workspace">,
   }) as Parameters<typeof addWorkspaceMember.handler>[0];
 
-const workspaceSelect = (rows: { clientId: string | null }[]) => ({
-  from: () => ({
-    where: () => ({
-      for: async () => rows,
+const selectRowsInOrder = (rowsByCall: unknown[][]) => {
+  let callIndex = 0;
+
+  return () => ({
+    from: () => ({
+      where: () => ({
+        for: async () => rowsByCall.at(callIndex++) ?? [],
+      }),
     }),
-  }),
-});
+  });
+};
+
+const isArrayWithLength = (
+  value: unknown,
+  length: number,
+): value is unknown[] => Array.isArray(value) && value.length === length;
 
 describe("addWorkspaceMember", () => {
-  test("rejects adding a member to a personal matter", async () => {
+  test("adds a member to a personal matter", async () => {
+    const createdAt = new Date("2026-01-01T00:00:00.000Z");
+    const createdWorkspaceMemberId =
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
+      Bun.randomUUIDv7() as SafeId<"workspaceMember">;
+    const insertedWorkspaceMembers: unknown[] = [];
+    const insertedAuditLogs: unknown[] = [];
     const { safeDb, scopedDb } = createScopedDbMock({
       query: {
         member: {
           findFirst: async () => ({ id: "member_existing" }),
         },
       },
-      select: () => workspaceSelect([{ clientId: null }]),
+      select: selectRowsInOrder([[{ id: "ws_test123" }], []]),
+      insert: (table: unknown) => ({
+        values: (value: unknown) => {
+          if (table === workspaceMembers) {
+            insertedWorkspaceMembers.push(value);
+            return {
+              returning: async () => [
+                {
+                  id: createdWorkspaceMemberId,
+                  userId: "user_invitee",
+                  createdAt,
+                },
+              ],
+            };
+          }
+
+          if (table === auditLogs) {
+            insertedAuditLogs.push(value);
+          }
+
+          return undefined;
+        },
+      }),
     });
 
     const result = await addWorkspaceMember.handler(
@@ -64,8 +102,40 @@ describe("addWorkspaceMember", () => {
     );
 
     expect(result).toEqual({
-      code: 400,
-      response: { message: "Assign a client before adding members" },
+      id: createdWorkspaceMemberId,
+      userId: "user_invitee",
+      createdAt,
+    });
+    expect(insertedWorkspaceMembers).toEqual([
+      {
+        workspaceId: "ws_test123",
+        userId: "user_invitee",
+      },
+    ]);
+    expect(insertedAuditLogs).toHaveLength(1);
+    const auditBatch = insertedAuditLogs.at(0);
+    expect(isArrayWithLength(auditBatch, 1)).toBe(true);
+    if (!isArrayWithLength(auditBatch, 1)) {
+      throw new Error("Expected one audit log insert");
+    }
+    expect(auditBatch.at(0)).toEqual({
+      action: "update",
+      changes: {
+        membersAdded: {
+          old: null,
+          new: ["user_invitee"],
+        },
+      },
+      metadata: {
+        forwardedFor: null,
+        ipAddress: null,
+        userAgent: null,
+      },
+      organizationId: "org_test123",
+      resourceId: "ws_test123",
+      resourceType: "workspace",
+      userId: "user_test123",
+      workspaceId: "ws_test123",
     });
   });
 
@@ -76,7 +146,7 @@ describe("addWorkspaceMember", () => {
           findFirst: async () => ({ id: "member_existing" }),
         },
       },
-      select: () => workspaceSelect([]),
+      select: selectRowsInOrder([[]]),
     });
 
     const result = await addWorkspaceMember.handler(
