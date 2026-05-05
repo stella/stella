@@ -49,6 +49,11 @@ const selectRowsInOrder = (rowsByCall: unknown[][]) => {
   });
 };
 
+const isArrayWithLength = (
+  value: unknown,
+  length: number,
+): value is unknown[] => Array.isArray(value) && value.length === length;
+
 describe("addWorkspaceMember", () => {
   test("adds a member to a personal matter", async () => {
     const createdAt = new Date("2026-01-01T00:00:00.000Z");
@@ -108,6 +113,30 @@ describe("addWorkspaceMember", () => {
       },
     ]);
     expect(insertedAuditLogs).toHaveLength(1);
+    const auditBatch = insertedAuditLogs.at(0);
+    expect(isArrayWithLength(auditBatch, 1)).toBe(true);
+    if (!isArrayWithLength(auditBatch, 1)) {
+      throw new Error("Expected one audit log insert");
+    }
+    expect(auditBatch.at(0)).toEqual({
+      action: "update",
+      changes: {
+        membersAdded: {
+          old: null,
+          new: ["user_invitee"],
+        },
+      },
+      metadata: {
+        forwardedFor: null,
+        ipAddress: null,
+        userAgent: null,
+      },
+      organizationId: "org_test123",
+      resourceId: "ws_test123",
+      resourceType: "workspace",
+      userId: "user_test123",
+      workspaceId: "ws_test123",
+    });
   });
 
   test("rejects when the workspace cannot be found", async () => {

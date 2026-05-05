@@ -619,9 +619,8 @@ export const resolveAccessibleWorkspaces = async (
   if (ADMIN_BYPASS_ROLES.includes(memberRole)) {
     // Admins see every client matter in the org, plus any personal
     // matter (clientId IS NULL) they themselves are a member of.
-    // Without this gate, an org owner could open another user's
-    // personal scratchpad by URL — violates the "creator-only"
-    // contract enforced for personal matters.
+    // Without this gate, an org owner could open a personal
+    // scratchpad they were not explicitly added to by URL.
     const accessibleWorkspaces = await db
       .select({
         id: workspaces.id,
