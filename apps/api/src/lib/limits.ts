@@ -67,7 +67,7 @@ export const LIMITS = {
   chatContextTextMaxChars: 32_000,
   /** Max number of file attachments per chat message. */
   chatContextFilesPerMessage: 5,
-  /** Max characters of TypeScript source the chat execute-typescript tool accepts. */
+  /** Max characters of TypeScript source the chat run-stella-query tool accepts. */
   chatRunCodeMaxLength: 16_000,
   /** Default page size for readonly chat execute functions. */
   chatExecutePageSizeDefault: 50,

@@ -3,12 +3,12 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const anonymizeTextFieldsMock = mock();
 const loadAnonymizationGazetteerEntriesMock = mock();
+const decryptContentMock = mock();
 const captureErrorMock = mock();
 const analyticsCaptureMock = mock();
 const analyticsFlushMock = mock(async function flushAnalyticsMock() {
@@ -21,22 +21,53 @@ const getAnalyticsMock = mock(() => ({
 const searchAcrossMattersExecute = mock();
 const readContentAcrossMattersExecute = mock();
 const readContactExecute = mock();
-type CreateOrgToolsMockInput = {
-  accessibleWorkspaceIds: SafeId<"workspace">[];
-  organizationId: SafeId<"organization">;
-  scopedDb: McpRequestContext["scopedDb"];
+type MockSearchHit = {
+  entityId: string;
+  headline?: string | null;
+  kind?: string;
+  name: string;
+  workspaceId: string;
+  workspaceName?: string;
 };
-const createOrgToolsMock = mock((_input: CreateOrgToolsMockInput) => ({
-  "search-across-matters": {
-    execute: searchAcrossMattersExecute,
+const searchProviderSearchMock = mock(
+  async (input: { limit: number; query: string }) => {
+    const result = await searchAcrossMattersExecute(
+      {
+        limit: input.limit,
+        query: input.query,
+      },
+      {
+        messages: [],
+        toolCallId: "mcp",
+      },
+    );
+    const hits: MockSearchHit[] =
+      typeof result === "object" &&
+      result !== null &&
+      "hits" in result &&
+      Array.isArray(result.hits)
+        ? result.hits
+        : [];
+
+    return {
+      totalCount:
+        typeof result === "object" &&
+        result !== null &&
+        "totalCount" in result &&
+        typeof result.totalCount === "number"
+          ? result.totalCount
+          : hits.length,
+      hits: hits.map((hit) => ({
+        entityId: hit.entityId,
+        workspaceId: hit.workspaceId,
+        workspaceName: hit.workspaceName ?? "Matter Alpha",
+        title: hit.name,
+        kind: hit.kind ?? "document",
+        headline: hit.headline ?? null,
+      })),
+    };
   },
-  "read-content-across-matters": {
-    execute: readContentAcrossMattersExecute,
-  },
-  "read-contact": {
-    execute: readContactExecute,
-  },
-}));
+);
 const readEntityByIdHandlerMock = mock();
 const searchDecisionsHandlerMock = mock();
 const readDecisionHandlerMock = mock();
@@ -99,6 +130,17 @@ void mock.module("@/api/lib/analytics", () => ({
   getAnalytics: getAnalyticsMock,
 }));
 
+void mock.module("@/api/lib/content-encryption", () => ({
+  decryptContent: decryptContentMock,
+  encryptContent: mock(),
+}));
+
+void mock.module("@/api/lib/search/provider", () => ({
+  getSearchProvider: () => ({
+    search: searchProviderSearchMock,
+  }),
+}));
+
 void mock.module("@/api/mcp/anonymization", () => ({
   anonymizeTextFields: anonymizeTextFieldsMock,
 }));
@@ -109,10 +151,6 @@ void mock.module("@/api/lib/anonymization-blacklist", () => ({
     normalizeAnonymizationBlacklistEntriesMock,
   normalizeAnonymizationBlacklistEntry:
     normalizeAnonymizationBlacklistEntryMock,
-}));
-
-void mock.module("@/api/handlers/chat/tools/org-tools", () => ({
-  createOrgTools: createOrgToolsMock,
 }));
 
 void mock.module("@/api/handlers/entities/read-by-id", () => ({
@@ -231,15 +269,60 @@ const createSelectBuilder = (rows: unknown[]) => {
   return builder;
 };
 
-const createScopedDb = (rows: unknown[] = []) =>
+type ExtractedContentRow = {
+  charCount: number;
+  ciphertext: string;
+  entity: {
+    kind: string;
+    name: string;
+    workspaceId: string;
+  };
+  iv: string;
+  workspaceId: string;
+};
+
+const createExtractedContentRow = ({
+  charCount = 321,
+  name = "Share Purchase Agreement",
+  workspaceId = "ws_1",
+}: {
+  charCount?: number;
+  name?: string;
+  workspaceId?: string;
+} = {}): ExtractedContentRow => ({
+  charCount,
+  ciphertext: "ciphertext",
+  entity: {
+    kind: "document",
+    name,
+    workspaceId,
+  },
+  iv: "iv",
+  workspaceId,
+});
+
+const createScopedDb = (
+  rows: unknown[] = [],
+  extractedContentRow: ExtractedContentRow | null = null,
+) =>
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only implements the query shape used by getFetchableEntityMap
   mock(
     async (
       callback: (tx: {
+        query: {
+          extractedContent: {
+            findFirst: () => Promise<ExtractedContentRow | null>;
+          };
+        };
         select: () => ReturnType<typeof createSelectBuilder>;
       }) => unknown,
     ) =>
       await callback({
+        query: {
+          extractedContent: {
+            findFirst: async () => extractedContentRow,
+          },
+        },
         select: () => createSelectBuilder(rows),
       }),
   ) as unknown as McpRequestContext["scopedDb"] & ReturnType<typeof mock>;
@@ -269,8 +352,11 @@ describe("OpenAI-compatible MCP tools", () => {
     loadAnonymizationGazetteerEntriesMock.mockResolvedValue([]);
     captureErrorMock.mockReset();
     searchAcrossMattersExecute.mockReset();
+    searchProviderSearchMock.mockClear();
     readContentAcrossMattersExecute.mockReset();
     readContactExecute.mockReset();
+    decryptContentMock.mockReset();
+    decryptContentMock.mockResolvedValue("Full document text");
     readEntityByIdHandlerMock.mockReset();
     searchDecisionsHandlerMock.mockReset();
     readDecisionHandlerMock.mockReset();
@@ -437,13 +523,6 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("fetch returns document text with citation metadata", async () => {
-    readContentAcrossMattersExecute.mockResolvedValue({
-      charCount: 321,
-      name: "Share Purchase Agreement",
-      text: "Full document text",
-      truncated: false,
-      workspaceId: "ws_1",
-    });
     mockReadEntityByIdHandlerOk({
       entityId: "entity_1",
       fields: [
@@ -458,7 +537,9 @@ describe("OpenAI-compatible MCP tools", () => {
       name: "Share Purchase Agreement",
     });
 
-    const context = createContext();
+    const context = createContext({
+      scopedDb: createScopedDb([], createExtractedContentRow()),
+    });
     const result = await handleMcpToolCall({
       args: { id: "entity_1" },
       context,
@@ -728,17 +809,16 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("fetch rejects documents outside the MCP workspace allowlist", async () => {
-    readContentAcrossMattersExecute.mockResolvedValue({
-      name: "Share Purchase Agreement",
-      text: "Full document text",
-      truncated: false,
-      workspaceId: "ws_2",
-    });
-
     const result = await handleMcpToolCall({
       args: { id: "entity_1" },
       context: createContext({
         accessibleWorkspaceIds: ["ws_1"],
+        scopedDb: createScopedDb(
+          [],
+          createExtractedContentRow({
+            workspaceId: "ws_2",
+          }),
+        ),
       }),
       toolName: "fetch",
     });
@@ -753,7 +833,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(readEntityByIdHandlerMock).not.toHaveBeenCalled();
   });
 
-  test("search_across_matters passes the MCP workspace allowlist to org tools", async () => {
+  test("search_across_matters passes the MCP workspace allowlist to search", async () => {
     searchAcrossMattersExecute.mockResolvedValue({
       hits: [],
       totalCount: 0,
@@ -768,44 +848,37 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "search_across_matters",
     });
 
-    const orgToolsInput = createOrgToolsMock.mock.calls.at(-1)?.[0];
-    expect(orgToolsInput?.accessibleWorkspaceIds).toEqual([
-      toSafeId<"workspace">("ws_1"),
-      toSafeId<"workspace">("ws_3"),
-    ]);
-    expect(orgToolsInput?.organizationId).toBe(
-      toSafeId<"organization">("org_1"),
-    );
-    expect(orgToolsInput?.scopedDb).toBe(context.scopedDb);
+    expect(searchProviderSearchMock).toHaveBeenCalledWith({
+      limit: 10,
+      organizationId: toSafeId<"organization">("org_1"),
+      query: "share purchase",
+      workspaceIds: [
+        toSafeId<"workspace">("ws_1"),
+        toSafeId<"workspace">("ws_3"),
+      ],
+    });
   });
 
-  test("read_content_across_matters passes the MCP workspace allowlist to org tools", async () => {
-    readContentAcrossMattersExecute.mockResolvedValue({
-      charCount: 321,
-      name: "Share Purchase Agreement",
-      text: "Full document text",
-      truncated: false,
-      workspaceId: "ws_1",
-    });
-
+  test("read_content_across_matters returns content from allowed workspaces", async () => {
     const context = createContext({
       accessibleWorkspaceIds: ["ws_1", "ws_3"],
+      scopedDb: createScopedDb([], createExtractedContentRow()),
     });
-    await handleMcpToolCall({
+    const result = await handleMcpToolCall({
       args: { entity_id: "entity_1" },
       context,
       toolName: "read_content_across_matters",
     });
 
-    const orgToolsInput = createOrgToolsMock.mock.calls.at(-1)?.[0];
-    expect(orgToolsInput?.accessibleWorkspaceIds).toEqual([
-      toSafeId<"workspace">("ws_1"),
-      toSafeId<"workspace">("ws_3"),
-    ]);
-    expect(orgToolsInput?.organizationId).toBe(
-      toSafeId<"organization">("org_1"),
-    );
-    expect(orgToolsInput?.scopedDb).toBe(context.scopedDb);
+    expect(parseToolPayload(result)).toEqual({
+      charCount: 321,
+      entityId: "entity_1",
+      kind: "document",
+      name: "Share Purchase Agreement",
+      text: "Full document text",
+      truncated: false,
+      workspaceId: "ws_1",
+    });
   });
 
   test("search anonymizes titles in anonymized mode", async () => {
@@ -941,13 +1014,7 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("fetch anonymizes title and text in anonymized mode", async () => {
-    readContentAcrossMattersExecute.mockResolvedValue({
-      charCount: 321,
-      name: "John Smith SPA",
-      text: "John Smith signed the agreement",
-      truncated: false,
-      workspaceId: "ws_1",
-    });
+    decryptContentMock.mockResolvedValueOnce("John Smith signed the agreement");
     mockReadEntityByIdHandlerOk({
       entityId: "entity_1",
       fields: [
@@ -968,7 +1035,14 @@ describe("OpenAI-compatible MCP tools", () => {
 
     const result = await handleMcpToolCall({
       args: { id: "entity_1" },
-      context: createContext(),
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          createExtractedContentRow({
+            name: "John Smith SPA",
+          }),
+        ),
+      }),
       mode: "anonymized",
       toolName: "fetch",
     });
@@ -990,13 +1064,7 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("fetch preserves empty anonymized output instead of leaking original content", async () => {
-    readContentAcrossMattersExecute.mockResolvedValue({
-      charCount: 42,
-      name: "John Smith",
-      text: "John Smith",
-      truncated: false,
-      workspaceId: "ws_1",
-    });
+    decryptContentMock.mockResolvedValueOnce("John Smith");
     mockReadEntityByIdHandlerOk({
       entityId: "entity_1",
       fields: [
@@ -1017,7 +1085,15 @@ describe("OpenAI-compatible MCP tools", () => {
 
     const result = await handleMcpToolCall({
       args: { id: "entity_1" },
-      context: createContext(),
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          createExtractedContentRow({
+            charCount: 42,
+            name: "John Smith",
+          }),
+        ),
+      }),
       mode: "anonymized",
       toolName: "fetch",
     });
@@ -1039,13 +1115,7 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("fetch uses generic placeholders when anonymized fields are unexpectedly missing", async () => {
-    readContentAcrossMattersExecute.mockResolvedValue({
-      charCount: 42,
-      name: "John Smith",
-      text: "John Smith",
-      truncated: false,
-      workspaceId: "ws_1",
-    });
+    decryptContentMock.mockResolvedValueOnce("John Smith");
     mockReadEntityByIdHandlerOk({
       entityId: "entity_1",
       fields: [
@@ -1066,7 +1136,15 @@ describe("OpenAI-compatible MCP tools", () => {
 
     const result = await handleMcpToolCall({
       args: { id: "entity_1" },
-      context: createContext(),
+      context: createContext({
+        scopedDb: createScopedDb(
+          [],
+          createExtractedContentRow({
+            charCount: 42,
+            name: "John Smith",
+          }),
+        ),
+      }),
       mode: "anonymized",
       toolName: "fetch",
     });

@@ -4,8 +4,10 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { entities, extractedContent, fields } from "@/api/db/schema";
 import { readEntityByIdHandler } from "@/api/handlers/entities/read-by-id";
 import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
+import { decryptContent } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
+import { getSearchProvider } from "@/api/lib/search/provider";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
@@ -15,15 +17,11 @@ import {
   DEFAULT_COMPAT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
   errorResult,
-  getOrgTools,
-  hasErrorMessage,
   MAX_SEARCH_LIMIT,
-  MCP_TOOL_EXECUTION_OPTIONS,
   normalizeTextField,
   parseRequiredString,
   stringProp,
   textResult,
-  toolThrownErrorToMcpResult,
 } from "@/api/mcp/tool-utils";
 
 type CompatToolName = "fetch" | "search";
@@ -50,6 +48,7 @@ type CompatFetchPayload = {
 };
 
 const ANONYMIZED_FIELD_MISSING_FALLBACK = "[REDACTED]";
+const COMPAT_FETCH_CONTENT_MAX_CHARS = 8000;
 
 const getFetchableEntityMap = async ({
   context,
@@ -388,32 +387,22 @@ const handleCompatSearchTool: McpToolHandler = async ({
     return query;
   }
 
-  const executeSearchAcrossMatters =
-    getOrgTools(context)["search-across-matters"].execute;
-  if (!executeSearchAcrossMatters) {
-    return errorResult("Tool is not executable");
-  }
-
   const limit = DEFAULT_COMPAT_SEARCH_LIMIT;
   const compatLimit = Math.min(limit * 2, MAX_SEARCH_LIMIT);
-  let result: Awaited<ReturnType<typeof executeSearchAcrossMatters>>;
-  try {
-    result = await executeSearchAcrossMatters(
-      { limit: compatLimit, query },
-      MCP_TOOL_EXECUTION_OPTIONS,
-    );
-  } catch (error) {
-    const mapped = toolThrownErrorToMcpResult(error);
-    if (mapped) {
-      return mapped;
-    }
-    throw error;
-  }
-  if (hasErrorMessage(result)) {
-    return errorResult(result.error);
-  }
+  const result = await getSearchProvider().search({
+    query,
+    organizationId: context.organizationId,
+    workspaceIds: context.accessibleWorkspaceIds,
+    limit: compatLimit,
+  });
 
-  const hits = getCompatSearchHits(result);
+  const hits = getCompatSearchHits({
+    hits: result.hits.map((hit) => ({
+      entityId: hit.entityId,
+      workspaceId: hit.workspaceId,
+      name: hit.title,
+    })),
+  });
   const fetchableMap = await getFetchableEntityMap({
     context,
     entityIds: getCompatSearchEntityIds(hits),
@@ -452,28 +441,45 @@ const handleCompatFetchTool: McpToolHandler = async ({
   }
   const entityId = brandPersistedEntityId(rawEntityId);
 
-  const executeReadContentAcrossMatters =
-    getOrgTools(context)["read-content-across-matters"].execute;
-  if (!executeReadContentAcrossMatters) {
-    return errorResult("Tool is not executable");
+  if (context.accessibleWorkspaceIds.length === 0) {
+    return errorResult("Document content is unavailable");
   }
 
-  let result: Awaited<ReturnType<typeof executeReadContentAcrossMatters>>;
-  try {
-    result = await executeReadContentAcrossMatters(
-      { entityId },
-      MCP_TOOL_EXECUTION_OPTIONS,
-    );
-  } catch (error) {
-    const mapped = toolThrownErrorToMcpResult(error);
-    if (mapped) {
-      return mapped;
-    }
-    throw error;
+  const row = await context.scopedDb((tx) =>
+    tx.query.extractedContent.findFirst({
+      where: {
+        entityId: { eq: entityId },
+        organizationId: { eq: context.organizationId },
+        workspaceId: { in: context.accessibleWorkspaceIds },
+      },
+      with: {
+        entity: {
+          columns: {
+            name: true,
+            workspaceId: true,
+          },
+        },
+      },
+    }),
+  );
+
+  if (!row?.entity) {
+    return errorResult("Document content is unavailable");
   }
-  if (hasErrorMessage(result)) {
-    return errorResult(result.error);
-  }
+
+  const text = await decryptContent(
+    context.organizationId,
+    row.ciphertext,
+    row.iv,
+  );
+  const truncated = text.length > COMPAT_FETCH_CONTENT_MAX_CHARS;
+  const result = {
+    charCount: row.charCount,
+    name: row.entity.name,
+    text: truncated ? text.slice(0, COMPAT_FETCH_CONTENT_MAX_CHARS) : text,
+    truncated,
+    workspaceId: row.entity.workspaceId,
+  };
 
   const fetchPayload = getCompatFetchPayload({ entityId: rawEntityId, result });
   if (!fetchPayload) {

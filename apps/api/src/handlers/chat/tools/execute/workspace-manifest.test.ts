@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/org-manifest";
-import { buildReadonlyFunctionTypeDeclarations } from "@/api/handlers/chat/tools/execute/readonly-manifest";
+import {
+  buildReadonlyFunctionTypeDeclarations,
+  createReadonlyFunctionContract,
+} from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import {
   buildReadonlyWorkspaceFunctionManifest,
   listMatterEntitiesContract,
@@ -41,7 +44,8 @@ describe("workspace manifest helpers", () => {
       expect(entry.value.name).toBe("getMatterEntityContents");
       expect(entry.value.description).toContain("Get extracted text content");
       expect(entry.value.inputSchema.type).toBe("object");
-      expect(entry.value.outputSchema.type).toBe("array");
+      expect(entry.value.outputSchema.type).toBe("object");
+      expect(entry.value.outputSchema.properties).toHaveProperty("items");
     }
   });
 
@@ -80,8 +84,20 @@ describe("workspace manifest helpers", () => {
       expect(declarations.value).toContain("offset?: number");
       expect(declarations.value).toContain("getMatterEntities(input: {");
       expect(declarations.value).toContain("entityRefs: string[]");
-      expect(declarations.value).toContain("Promise<Array<{");
+      expect(declarations.value).toContain("Promise<{");
+      expect(declarations.value).toContain("items: Array<{");
     }
+  });
+
+  test("rejects bare array outputs at compile time", () => {
+    createReadonlyFunctionContract({
+      description: "Invalid contract used only to enforce the type boundary.",
+      input: v.strictObject({}),
+      name: "invalidReadonlyArrayOutput",
+      // @ts-expect-error readonly Stella AI functions must return { items } or
+      // { items, hasMore, nextOffset }, never a bare record array.
+      output: v.array(v.string()),
+    });
   });
 
   test("accepts UUID file ids in entity field output", () => {

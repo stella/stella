@@ -8,12 +8,12 @@ import {
 } from "@/components/chat/chat-ui-tools";
 
 describe("chat tool titles", () => {
-  test("maps current cross-matter tools to translation keys", () => {
-    expect(getChatToolTitleKey("search-across-matters")).toBe(
-      "chat.tool.search-across-matters",
+  test("maps Stella API tools to translation keys", () => {
+    expect(getChatToolTitleKey("describe-stella-api")).toBe(
+      "chat.tool.describe-stella-api",
     );
-    expect(getChatToolTitleKey("read-content-across-matters")).toBe(
-      "chat.tool.read-content-across-matters",
+    expect(getChatToolTitleKey("run-stella-query")).toBe(
+      "chat.tool.run-stella-query",
     );
   });
 

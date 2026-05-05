@@ -157,8 +157,8 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
         }),
       );
 
-      return Result.ok(
-        properties.map((property) => ({
+      return Result.ok({
+        items: properties.map((property) => ({
           content: property.content,
           createdAt: property.createdAt.toISOString(),
           matterRef: refRegistry.toMatterRef(property.workspaceId),
@@ -182,7 +182,7 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
               : property.tool,
           type: property.content.type,
         })),
-      );
+      });
     },
   ),
 
@@ -318,8 +318,8 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
         }),
       );
 
-      return Result.ok(
-        entities.map((entity) => {
+      return Result.ok({
+        items: entities.map((entity) => {
           if (!entity.currentVersion) {
             panic("Entity has no currentVersion");
           }
@@ -364,7 +364,7 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
             versionCount: entity.versions.length,
           };
         }),
-      );
+      });
     },
   ),
 
@@ -467,7 +467,7 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
           }),
       });
 
-      return Result.ok(items);
+      return Result.ok({ items });
     },
   ),
 });

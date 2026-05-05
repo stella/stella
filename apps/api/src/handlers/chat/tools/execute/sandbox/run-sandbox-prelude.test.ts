@@ -5,7 +5,7 @@ import {
   SANDBOX_BRIDGE_LOCAL_ALIAS,
   SANDBOX_CONSOLE_METHODS,
   SANDBOX_HOST_BRIDGE_GLOBAL,
-  SANDBOX_STELLA_GLOBAL,
+  SANDBOX_READ_GLOBAL,
   SANDBOX_THENABLE_PROPERTY_NAMES,
   buildHostBridgePrelude,
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox-prelude";
@@ -32,13 +32,11 @@ describe("buildHostBridgePrelude", () => {
     }
   });
 
-  it("guards thenable property names on the stella proxy", () => {
+  it("guards thenable property names on the read proxy", () => {
     const prelude = buildHostBridgePrelude();
     for (const name of SANDBOX_THENABLE_PROPERTY_NAMES) {
       expect(prelude).toContain(`name === "${name}"`);
     }
-    expect(prelude).toContain(
-      `globalThis.${SANDBOX_STELLA_GLOBAL} = new Proxy`,
-    );
+    expect(prelude).toContain(`globalThis.${SANDBOX_READ_GLOBAL} = new Proxy`);
   });
 });

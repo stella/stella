@@ -30,13 +30,10 @@ const CHAT_TOOL_TITLE_KEYS = {
   "apply-active-docx-edits": "chat.tool.apply-active-docx-edits",
   "ask-user": "chat.tool.ask-user",
   "create-document": "chat.tool.create-document",
-  "describe-stella-function": "chat.tool.describe-stella-function",
-  "execute-typescript": "chat.tool.execute-typescript",
+  "describe-stella-api": "chat.tool.describe-stella-api",
+  "run-stella-query": "chat.tool.run-stella-query",
   "load-skill": "chat.tool.load-skill",
-  "read-contact": "chat.tool.read-contact",
-  "read-content-across-matters": "chat.tool.read-content-across-matters",
   "read-skill-resource": "chat.tool.read-skill-resource",
-  "search-across-matters": "chat.tool.search-across-matters",
   "update-entity-fields": "chat.tool.update-entity-fields",
 } as const satisfies Record<keyof ChatUITools, TranslationKey>;
 

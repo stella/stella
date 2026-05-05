@@ -4,14 +4,20 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { ExecuteToolContract } from "@/api/handlers/chat/tools/execute/execute-tool-function";
-import { SANDBOX_STELLA_GLOBAL } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox-prelude";
+import type { StellaAIOutput } from "@/api/handlers/chat/tools/execute/pagination";
+import { SANDBOX_READ_GLOBAL } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox-prelude";
 import { ChatToolValidationError } from "@/api/lib/errors/tagged-errors";
 import { jsonSchemaToAsyncFnType } from "@/api/lib/json-schema/json-schema-to-type";
+
+type ReadonlyFunctionOutputSchema = v.GenericSchema<
+  unknown,
+  StellaAIOutput<unknown>
+>;
 
 type CreateFunctionSchemaProps = {
   description: string;
   inputSchema: v.GenericSchema;
-  outputSchema: v.GenericSchema;
+  outputSchema: ReadonlyFunctionOutputSchema;
 };
 
 const createFunctionSchema = ({
@@ -29,7 +35,7 @@ const createFunctionSchema = ({
 type CreateReadonlyFunctionContractProps<
   TName extends string,
   TInputSchema extends v.GenericSchema,
-  TOutputSchema extends v.GenericSchema,
+  TOutputSchema extends ReadonlyFunctionOutputSchema,
 > = {
   description: string;
   input: TInputSchema;
@@ -40,7 +46,7 @@ type CreateReadonlyFunctionContractProps<
 export const createReadonlyFunctionContract = <
   TName extends string,
   TInputSchema extends v.GenericSchema,
-  TOutputSchema extends v.GenericSchema,
+  TOutputSchema extends ReadonlyFunctionOutputSchema,
 >({
   description,
   input,
@@ -58,7 +64,11 @@ export const createReadonlyFunctionContract = <
     }),
   }) as const satisfies ExecuteToolContract<TName, TInputSchema, TOutputSchema>;
 
-export type ReadonlyFunctionContract = ExecuteToolContract;
+export type ReadonlyFunctionContract = ExecuteToolContract<
+  string,
+  v.GenericSchema,
+  ReadonlyFunctionOutputSchema
+>;
 
 export type ReadonlyFunctionManifest = {
   description: string;
@@ -157,7 +167,7 @@ export const buildReadonlyFunctionTypeDeclarations = (
 
     return [
       "declare global {",
-      `  namespace ${SANDBOX_STELLA_GLOBAL} {`,
+      `  namespace ${SANDBOX_READ_GLOBAL} {`,
       ...signatures.map((signature) => `    ${signature};`),
       "  }",
       "}",

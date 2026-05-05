@@ -1,7 +1,9 @@
 import type { Result } from "better-result";
 import * as v from "valibot";
 
+import { ENTITY_KINDS } from "@/api/db/schema";
 import {
+  buildItemsOutputSchema,
   buildPaginatedOutputSchema,
   paginationInputEntries,
 } from "@/api/handlers/chat/tools/execute/pagination";
@@ -10,9 +12,14 @@ import {
   buildReadonlyFunctionTypeDeclarations,
   createReadonlyFunctionContract,
 } from "@/api/handlers/chat/tools/execute/readonly-manifest";
-import type { ReadonlyFunctionManifest } from "@/api/handlers/chat/tools/execute/readonly-manifest";
+import type {
+  ReadonlyFunctionContract,
+  ReadonlyFunctionManifest,
+} from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import type { ChatToolValidationError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+
+const entityKindSchema = v.picklist(ENTITY_KINDS);
 
 const matterRefSchema = v.pipe(
   v.string(),
@@ -20,11 +27,41 @@ const matterRefSchema = v.pipe(
   v.description("Short matter ref returned by Stella tools"),
 );
 
+const entityRefSchema = v.pipe(
+  v.string(),
+  v.regex(/^ent_\d+$/),
+  v.description("Short entity ref returned by Stella tools"),
+);
+
+const contactRefSchema = v.pipe(
+  v.string(),
+  v.regex(/^contact_\d+$/),
+  v.description("Short contact ref returned by Stella tools"),
+);
+
 const matterRefsSchema = v.pipe(
   v.array(matterRefSchema),
   v.minLength(1),
   v.maxLength(LIMITS.chatExecuteDetailIdsMax),
   v.description("Matter refs to inspect"),
+);
+
+const contactRefsSchema = v.pipe(
+  v.array(contactRefSchema),
+  v.minLength(1),
+  v.maxLength(LIMITS.chatExecuteDetailIdsMax),
+  v.description("Contact refs to inspect"),
+);
+
+const aiSearchLimitSchema = v.optional(
+  v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(1),
+    v.maxValue(20),
+    v.description("Max search hits to return"),
+  ),
+  10,
 );
 
 const matterListItemSchema = v.strictObject({
@@ -74,6 +111,55 @@ const matterDetailSchema = v.strictObject({
   reference: v.nullable(v.pipe(v.string(), v.description("Matter reference"))),
 });
 
+const contactEmailSchema = v.strictObject({
+  address: v.pipe(v.string(), v.description("Email address")),
+  isPrimary: v.boolean(),
+  label: v.optional(v.pipe(v.string(), v.description("Custom label"))),
+  type: v.picklist(["work", "personal", "other"]),
+});
+
+const contactPhoneSchema = v.strictObject({
+  isPrimary: v.boolean(),
+  label: v.optional(v.pipe(v.string(), v.description("Custom label"))),
+  number: v.pipe(v.string(), v.description("Phone number")),
+  type: v.picklist(["mobile", "office", "home", "fax", "other"]),
+});
+
+const contactSummaryEntries = {
+  contactRef: contactRefSchema,
+  displayName: v.pipe(v.string(), v.description("Contact display name")),
+  primaryEmail: v.nullable(v.pipe(v.string(), v.description("Primary email"))),
+  primaryPhone: v.nullable(v.pipe(v.string(), v.description("Primary phone"))),
+  type: v.picklist(["person", "organization"]),
+} as const;
+
+const contactSummarySchema = v.strictObject(contactSummaryEntries);
+
+const contactDetailSchema = v.strictObject({
+  ...contactSummaryEntries,
+  emails: v.array(contactEmailSchema),
+  firstName: v.nullable(v.pipe(v.string(), v.description("First name"))),
+  lastName: v.nullable(v.pipe(v.string(), v.description("Last name"))),
+  organizationName: v.nullable(
+    v.pipe(v.string(), v.description("Organization name")),
+  ),
+  phones: v.array(contactPhoneSchema),
+});
+
+const documentSearchHitSchema = v.strictObject({
+  entityRef: entityRefSchema,
+  headline: v.nullable(v.pipe(v.string(), v.description("Search snippet"))),
+  kind: entityKindSchema,
+  matterName: v.pipe(v.string(), v.description("Matter name")),
+  matterRef: matterRefSchema,
+  mention: v.pipe(
+    v.string(),
+    v.description("Markdown mention to copy when referring to this document"),
+  ),
+  name: v.pipe(v.string(), v.description("Document title")),
+  updatedAt: v.pipe(v.string(), v.description("ISO timestamp")),
+});
+
 const listMattersInputSchema = v.strictObject({
   ...paginationInputEntries,
 });
@@ -82,9 +168,36 @@ const getMattersInputSchema = v.strictObject({
   matterRefs: matterRefsSchema,
 });
 
+const listContactsInputSchema = v.strictObject({
+  query: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(LIMITS.searchQueryMaxLength),
+      v.description("Optional contact name search"),
+    ),
+  ),
+  ...paginationInputEntries,
+});
+
+const getContactsInputSchema = v.strictObject({
+  contactRefs: contactRefsSchema,
+});
+
+const searchMatterDocumentsInputSchema = v.strictObject({
+  limit: aiSearchLimitSchema,
+  matterRefs: matterRefsSchema,
+  query: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.searchQueryMaxLength),
+    v.description("Search query (keywords or phrases)"),
+  ),
+});
+
 export const listMattersContract = createReadonlyFunctionContract({
   description:
-    "List matters the user can access. Returns lightweight top-level metadata per matter (no client or counts); use getMatters for full detail.",
+    "List matters the user can access. Returns StellaAIPage<MatterSummary>: read matters from `result.items`, then paginate with `result.hasMore` and `result.nextOffset`. Use getMatters for full detail.",
   input: listMattersInputSchema,
   name: "listMatters",
   output: buildPaginatedOutputSchema(matterListItemSchema),
@@ -92,16 +205,43 @@ export const listMattersContract = createReadonlyFunctionContract({
 
 export const getMattersContract = createReadonlyFunctionContract({
   description:
-    "Get full matter details for known matter refs, including client, color, and entity/property counts.",
+    "Get full matter details for known matter refs, including client, color, and entity/property counts. Returns StellaAIItems<MatterDetail>: read matter records from `result.items`.",
   input: getMattersInputSchema,
   name: "getMatters",
-  output: v.array(matterDetailSchema),
+  output: buildItemsOutputSchema(matterDetailSchema),
+});
+
+export const listContactsContract = createReadonlyFunctionContract({
+  description:
+    "List compact contact summaries in the organization, optionally filtered by name. Returns StellaAIPage<ContactSummary>: read contacts from `result.items`, then paginate with `result.hasMore` and `result.nextOffset`. Use getContacts for full detail.",
+  input: listContactsInputSchema,
+  name: "listContacts",
+  output: buildPaginatedOutputSchema(contactSummarySchema),
+});
+
+export const getContactsContract = createReadonlyFunctionContract({
+  description:
+    "Get contact details for known contact refs. Returns StellaAIItems<ContactDetail>: read contact records from `result.items`.",
+  input: getContactsInputSchema,
+  name: "getContacts",
+  output: buildItemsOutputSchema(contactDetailSchema),
+});
+
+export const searchMatterDocumentsContract = createReadonlyFunctionContract({
+  description:
+    "Search documents in specific known matters. Returns StellaAIItems<DocumentSearchHit>: read hits from `result.items`. First call listMatters when you need matter refs; pass only the matters relevant to the user's request.",
+  input: searchMatterDocumentsInputSchema,
+  name: "searchMatterDocuments",
+  output: buildItemsOutputSchema(documentSearchHitSchema),
 });
 
 export const readonlyOrgFunctionContracts = [
   listMattersContract,
   getMattersContract,
-] as const;
+  listContactsContract,
+  getContactsContract,
+  searchMatterDocumentsContract,
+] as const satisfies readonly ReadonlyFunctionContract[];
 
 export const buildReadonlyOrgFunctionManifest = (): Result<
   ReadonlyFunctionManifest[],

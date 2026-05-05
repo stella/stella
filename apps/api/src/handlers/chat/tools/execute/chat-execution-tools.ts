@@ -6,19 +6,19 @@ import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db";
 import {
-  DESCRIBE_STELLA_FUNCTION_TOOL_DESCRIPTION,
-  EXECUTE_TYPESCRIPT_TOOL_DESCRIPTION,
+  DESCRIBE_STELLA_API_TOOL_DESCRIPTION,
+  RUN_STELLA_QUERY_TOOL_DESCRIPTION,
 } from "@/api/handlers/chat/tools/execute/chat-execution-tool-descriptions";
 import { createReadonlyOrgFunctionRegistry } from "@/api/handlers/chat/tools/execute/org-function-registry";
 import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/org-manifest";
+import type { ReadonlyFunctionContract } from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import {
   buildReadonlyFunctionManifest,
   findReadonlyFunctionManifestEntry,
 } from "@/api/handlers/chat/tools/execute/readonly-manifest";
-import type { ReadonlyFunctionContract } from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
-import { runSandbox } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import type { SandboxFunctionRegistry } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
+import { runSandbox } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import { createReadonlyWorkspaceFunctionRegistry } from "@/api/handlers/chat/tools/execute/workspace-function-registry";
 import { readonlyWorkspaceFunctionContracts } from "@/api/handlers/chat/tools/execute/workspace-manifest";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -51,7 +51,7 @@ const mergeSandboxRegistries = ({
 
   for (const [name, fn] of Object.entries(workspaceRegistry)) {
     if (name in mergedRegistry) {
-      panic(`Duplicate readonly stella function name: ${name}`);
+      panic(`Duplicate readonly read function name: ${name}`);
     }
 
     mergedRegistry[name] = fn;
@@ -108,15 +108,15 @@ export const createChatExecutionTools = ({
   });
 
   return {
-    "describe-stella-function": tool({
-      description: DESCRIBE_STELLA_FUNCTION_TOOL_DESCRIPTION,
+    "describe-stella-api": tool({
+      description: DESCRIBE_STELLA_API_TOOL_DESCRIPTION,
       inputSchema: valibotSchema(
         v.strictObject({
           name: v.optional(
             v.pipe(
               v.string(),
               v.description(
-                "Readonly `stella` function name to inspect. " +
+                "Readonly `read` function name to inspect. " +
                   "Omit to list all available functions.",
               ),
             ),
@@ -130,10 +130,22 @@ export const createChatExecutionTools = ({
             readonlyFunctionContracts,
           ).unwrap();
           return {
-            functions: manifest.map((entry) => ({
-              name: entry.name,
-              description: entry.description,
-            })),
+            functions: manifest.map((entry) => {
+              const outputProperties =
+                entry.outputSchema.type === "object"
+                  ? entry.outputSchema.properties
+                  : undefined;
+
+              return {
+                name: entry.name,
+                description: entry.description,
+                outputShape:
+                  outputProperties !== undefined &&
+                  Object.hasOwn(outputProperties, "hasMore")
+                    ? "{ items, hasMore, nextOffset }"
+                    : "{ items }",
+              };
+            }),
           };
         }
 
@@ -144,7 +156,7 @@ export const createChatExecutionTools = ({
 
         if (!manifestEntry) {
           throw new ChatToolError({
-            message: `Unknown readonly stella function: ${name}`,
+            message: `Unknown readonly read function: ${name}`,
           });
         }
 
@@ -154,8 +166,8 @@ export const createChatExecutionTools = ({
       },
     }),
 
-    "execute-typescript": tool({
-      description: EXECUTE_TYPESCRIPT_TOOL_DESCRIPTION,
+    "run-stella-query": tool({
+      description: RUN_STELLA_QUERY_TOOL_DESCRIPTION,
       inputSchema: valibotSchema(
         v.strictObject({
           code: v.pipe(

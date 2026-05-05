@@ -20,7 +20,11 @@ import type {
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
+import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/org-manifest";
+import { buildReadonlyFunctionManifest } from "@/api/handlers/chat/tools/execute/readonly-manifest";
+import type { ReadonlyFunctionManifest } from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import { readonlyWorkspaceFunctionContracts } from "@/api/handlers/chat/tools/execute/workspace-manifest";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -236,7 +240,7 @@ const appendContextMatterScope = ({
   if (effective.length === 0) {
     return [
       prompt,
-      "MATTER SCOPE: No matters are pinned to this chat. The user may ask about anything across the matters they can access. Discover relevant matters with `stella.listMatters` (paginated) or `stella.searchEntities` before answering — do NOT ask the user to name a matter unless the question is genuinely ambiguous after lookup.",
+      "MATTER SCOPE: No matters are pinned to this chat. The user may ask about anything across the matters they can access. Discover relevant matters with `read.listMatters` (paginated) before answering — do NOT ask the user to name a matter unless the question is genuinely ambiguous after lookup.",
     ].join("\n\n");
   }
 
@@ -250,7 +254,7 @@ const appendContextMatterScope = ({
     prompt,
     [
       heading,
-      `Restrict matter-scoped function calls (\`stella.list*\`, \`stella.search*\`, \`stella.get*\`) to \`matterRefs: [${refList}]\`. Do NOT call them with matter refs outside this set — even if the user names another matter, surface that as a clarification instead of widening scope yourself.`,
+      `Restrict matter-scoped function calls (\`read.list*\`, \`read.search*\`, \`read.get*\`) to \`matterRefs: [${refList}]\`. Do NOT call them with matter refs outside this set — even if the user names another matter, surface that as a clarification instead of widening scope yourself.`,
     ].join("\n"),
   ].join("\n\n");
 };
@@ -458,10 +462,10 @@ const buildActiveFilePrompt = ({
 
   return [
     `ACTIVE FILE: The user is viewing "${safeName}" (entity ref ${entityRef}) in the inspector sidebar.`,
-    `DEFAULT SCOPE: While an active file is set, treat it as the sole subject of any open-ended question ("what's going on", "summarize this", "what does it say", "explain", and similar). Read its contents with \`stella.getMatterEntityContents\` using \`matterRefs: ["${matterRef}"]\` and \`entityRefs: ["${entityRef}"]\`, and answer ONLY from that file.`,
+    `DEFAULT SCOPE: While an active file is set, treat it as the sole subject of any open-ended question ("what's going on", "summarize this", "what does it say", "explain", and similar). Read its contents with \`read.getMatterEntityContents\` using \`matterRefs: ["${matterRef}"]\` and \`entityRefs: ["${entityRef}"]\`, and answer ONLY from that file.`,
     "`create-document` creates a separate new DOCX from markdown. Do NOT use it to edit, rewrite, replace, save, or make a new version of the active file. If live DOCX editing is available below, use `apply-active-docx-edits`; otherwise explain that the document must be opened for editing first. Never create a substitute document.",
     buildActiveDocxEditPrompt(activeFile),
-    `Do NOT call matter-wide retrieval (\`stella.searchEntities\`, \`stella.listEntities\`, or \`stella.getMatterEntities\`) for these open-ended questions — the user does not want answers synthesised from other files in the matter. The chat history is always available; reference earlier turns directly without re-fetching.`,
+    `Do NOT call matter-wide retrieval (\`read.searchMatterDocuments\`, \`read.listMatterEntities\`, or \`read.getMatterEntities\`) for these open-ended questions — the user does not want answers synthesised from other files in the matter. The chat history is always available; reference earlier turns directly without re-fetching.`,
     `Widen the scope to the rest of the matter ONLY when the user explicitly asks (e.g., "compare with the other contracts", "search across the matter", or names another document). When that happens, the matter-wide retrieval functions above are allowed again; scope them to \`matterRefs: ["${matterRef}"]\` as usual.`,
   ]
     .filter((section) => section.length > 0)
@@ -472,7 +476,7 @@ const buildActiveDocxEditPrompt = (activeFile: IncomingActiveFile) => {
   const snapshot = activeFile.docxEditSnapshot;
   if (!snapshot) {
     return [
-      "ACTIVE DOCX EDITING: The editor is briefly initialising and you don't have block ids yet to target with `apply-active-docx-edits`. Reply with EXACTLY ONE short sentence (in the user's language) asking them to retry in a moment — the editor is loading. Do NOT add a second sentence, do NOT offer alternatives, do NOT ask the user to specify focus, do NOT lecture about modes. Do not claim you changed anything. Do not invent block ids. Do not call `execute-typescript`, `stella.getMatterEntityContents`, or `create-document` to satisfy edit requests.",
+      "ACTIVE DOCX EDITING: The editor is briefly initialising and you don't have block ids yet to target with `apply-active-docx-edits`. Reply with EXACTLY ONE short sentence (in the user's language) asking them to retry in a moment — the editor is loading. Do NOT add a second sentence, do NOT offer alternatives, do NOT ask the user to specify focus, do NOT lecture about modes. Do not claim you changed anything. Do not invent block ids. Do not call `run-stella-query`, `read.getMatterEntityContents`, or `create-document` to satisfy edit requests.",
     ].join("\n");
   }
 
@@ -515,7 +519,7 @@ const buildActiveDocxEditPrompt = (activeFile: IncomingActiveFile) => {
     'FORBIDDEN: Any reply that asserts work has been done, prepared, queued, suggested, drafted, or "is ready for review" — in any phrasing — without `apply-active-docx-edits` being called in the same turn is a TRUTHFULNESS violation. Examples of forbidden lies: "I prepared N suggestions", "the changes are ready in the panel", "formatting unification is ready", "draft is queued", "review is prepared". If you cannot produce any operations (nothing to fix, or the request is outside the tool\'s capability), say so plainly and DO NOT pretend otherwise.',
     'TOOL CAPABILITY (and its limits): `apply-active-docx-edits` operates on TEXT CONTENT inside paragraphs, headings, and list items only. It can replace, insert, delete, or comment on text. It CANNOT change visual formatting — fonts, bold/italic/underline, font size, colour, indents, alignment, margins, line spacing, list bullet style, paragraph styles (Heading 1 etc.), tabs, or page layout. If the user asks for formatting changes ("format", "unify formatting", "make headings bigger", "bold the parties"), tell them honestly that the AI tool only edits text content; suggest they use the document\'s own formatting controls. Do NOT pretend you queued formatting changes — there is no operation type for that.',
     'FIELD CODES: A block whose text shows odd gaps — e.g. "Section .", "Schedule No. .", "Page of", "Date: ." — has a Word field code (cross-reference, page number, date, sequence number) the user must edit IN WORD. The rendered number/text is generated from the field; it is not literal block text and `replaceInBlock` cannot fill it in. Skip those blocks: tell the user honestly that AI cannot edit cross-reference / field codes (they should refresh fields in Word with Ctrl+A then F9), and propose only the edits that target real block text. NEVER queue an op whose `find` contains a gap that\'s really a field code.',
-    "Do not call `execute-typescript`, `stella.getMatterEntityContents`, or `create-document` to satisfy active DOCX edit requests; `apply-active-docx-edits` is the only tool that can propose changes to the open document.",
+    "Do not call `run-stella-query`, `read.getMatterEntityContents`, or `create-document` to satisfy active DOCX edit requests; `apply-active-docx-edits` is the only tool that can propose changes to the open document.",
     'CASCADING CHANGES: Before proposing any edit, scan the document for places that REFER TO or DEPEND ON the value being changed and include the dependent fixes in the SAME tool call. Examples: (a) the user changes a price — every restatement of that number in words, in totals, in instalment schedules, in deposit/balance lines, in penalty caps that reference it, must be updated together; (b) the user changes a party name — every occurrence (signature block, header, cross-reference list, defined-terms section) must follow; (c) the user changes a date — derived deadlines, anniversaries, and statute references that depend on it must follow; (d) the user changes a clause number — every cross-reference ("as set out in Article X") must follow. If the right cascade is genuinely ambiguous (e.g. user lowers the total but the document splits it into deposit + arrears and you cannot tell which side absorbs the delta), call `ask-user` ONCE with the specific cascade question before producing any operations. Don\'t propose half a change.',
     "Use the block ids below for tool operations. Prefer `replaceInBlock` with an exact `find` string for localized edits. Use `replaceBlock` only when the whole paragraph/list item should change.",
     'Tool input example: {"operations":[{"type":"replaceInBlock","blockId":"b-0010","find":"Acme Inc.","replace":"Example Ltd.","severity":"low","area":"Names"}]}. Operations must be objects, not strings. Use `blockId`, not `id`.',
@@ -640,17 +644,75 @@ const appendActiveDecisionPromptIfExists = async ({
     );
   });
 
+const readonlyFunctionContracts = [
+  ...readonlyOrgFunctionContracts,
+  ...readonlyWorkspaceFunctionContracts,
+] as const;
+
+const getOutputShape = (entry: ReadonlyFunctionManifest) => {
+  const outputProperties =
+    entry.outputSchema.type === "object"
+      ? entry.outputSchema.properties
+      : undefined;
+
+  return outputProperties !== undefined &&
+    Object.hasOwn(outputProperties, "hasMore")
+    ? "{ items, hasMore, nextOffset }"
+    : "{ items }";
+};
+
+const formatInputShape = (entry: ReadonlyFunctionManifest) => {
+  const inputProperties =
+    entry.inputSchema.type === "object"
+      ? entry.inputSchema.properties
+      : undefined;
+
+  if (inputProperties === undefined) {
+    return "input";
+  }
+
+  const required = new Set(entry.inputSchema.required);
+  const fields: string[] = [];
+
+  for (const name of Object.keys(inputProperties)) {
+    fields.push(required.has(name) ? name : `${name}?`);
+  }
+
+  return fields.length === 0 ? "{}" : `{ ${fields.join(", ")} }`;
+};
+
+const summarizeFunctionDescription = (description: string) => {
+  const summary = description.split(" Returns ").at(0);
+  return summary ?? description;
+};
+
 /**
- * One short hint pointing the model at lazy discovery instead of
- * dumping the full readonly `stella` API into every prompt. The
- * model can call `describe-stella-function` (no input) for the
- * function catalog and `describe-stella-function({name})` for one
- * function's full JSON Schema. Saves ~9k chars per turn versus
- * preloading the typed declarations; round-trips only when the
- * focused tools don't fit.
+ * Compact readonly read API catalog. This deliberately lists
+ * names and top-level input keys, not full JSON Schemas; the
+ * model can call `describe-stella-api({name})` when it needs
+ * exact validation details. The catalog is generated from the
+ * same contracts as the tool runtime so names and shapes cannot
+ * drift by hand.
  */
-const READONLY_DISCOVERY_HINT =
-  "For arbitrary readonly queries that the focused tools can't express, use `execute-typescript`. When answering about workspace or organization data, fetch current data inside that tool with `stella.*` calls; never answer counts or exhaustive lists from prior context, visible UI state, examples, or pasted arrays such as `const entities = [...]`. Paginate until `hasMore` is false when the answer requires the complete set. The `stella.*` function catalog is NOT pre-listed in this prompt — call `describe-stella-function` (no input) to list available function names + descriptions, then `describe-stella-function({name})` for one function's full schema. Prefer focused tools whenever one fits.";
+const READONLY_API_HINT = (() => {
+  const manifest = buildReadonlyFunctionManifest(
+    readonlyFunctionContracts,
+  ).unwrap();
+  const lines = manifest.map(
+    (entry) =>
+      `- read.${entry.name}(${formatInputShape(entry)}) -> ${getOutputShape(entry)}: ${summarizeFunctionDescription(entry.description)}`,
+  );
+
+  return [
+    "For Stella data reads, use the Stella API:",
+    "- call `run-stella-query` with TypeScript that uses `read.*`",
+    "- every read result stores records in `result.items`; paginated list results also include `result.hasMore` and `result.nextOffset`",
+    "- call `describe-stella-api({name})` only when you need a function's full input/output schema",
+    "When answering about workspace or organization data, fetch current data inside `run-stella-query`; never answer counts or exhaustive lists from prior context, visible UI state, examples, or pasted arrays such as `const entities = [...]`. Paginate until `hasMore` is false when the answer requires the complete set. Prefer focused action/UI tools whenever one fits.",
+    "Available Stella read functions:",
+    ...lines,
+  ].join("\n");
+})();
 
 type AppendActiveFilePromptIfEntityExistsProps = {
   activeFile: IncomingActiveFile;
@@ -689,7 +751,7 @@ const buildPromptParts = ({
   const cacheStablePrefix = joinPromptSections([
     ...CORE_RULE_SECTIONS,
     buildSkillCatalogSection(skillMetadata),
-    READONLY_DISCOVERY_HINT,
+    READONLY_API_HINT,
   ]);
   const sections = [cacheStablePrefix, ...requestContextSections];
   const userContextBlock = buildUserContextBlock(userContext);

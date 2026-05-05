@@ -44,16 +44,36 @@ export const buildPaginatedOutputSchema = <TItemSchema extends v.GenericSchema>(
     ),
   });
 
+export const buildItemsOutputSchema = <TItemSchema extends v.GenericSchema>(
+  itemSchema: TItemSchema,
+) =>
+  v.strictObject({
+    items: v.pipe(
+      v.array(itemSchema),
+      v.description(
+        "Returned records. All Stella AI data-read functions put records here.",
+      ),
+    ),
+  });
+
 export type PaginationInput = {
   offset?: number | undefined;
   limit: number;
 };
 
-export type PaginatedOutput<TItem> = {
+export type StellaAIItemsOutput<TItem> = {
+  items: TItem[];
+};
+
+export type StellaAIPaginatedOutput<TItem> = {
   hasMore: boolean;
   items: TItem[];
   nextOffset: number | null;
 };
+
+export type StellaAIOutput<TItem> =
+  | StellaAIItemsOutput<TItem>
+  | StellaAIPaginatedOutput<TItem>;
 
 export const buildPaginatedResult = <TItem>({
   items,
@@ -63,7 +83,7 @@ export const buildPaginatedResult = <TItem>({
   items: TItem[];
   limit: number;
   offset: number;
-}): PaginatedOutput<TItem> => {
+}): StellaAIPaginatedOutput<TItem> => {
   const hasMore = items.length > limit;
   const pageItems = hasMore ? items.slice(0, limit) : items;
 

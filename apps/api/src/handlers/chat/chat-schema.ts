@@ -71,7 +71,7 @@ export const sendMessageBodySchema = t.Object({
   /**
    * Matters the chat draws context from. Empty (or omitted) means
    * "no matters pinned" — the AI discovers matters lazily via the
-   * readonly stella API. Non-empty narrows tool authorization so
+   * readonly read API. Non-empty narrows tool authorization so
    * requested matterRefs must be a subset of this set. The set is
    * persisted on the chat thread so subsequent turns reuse it
    * without re-sending.

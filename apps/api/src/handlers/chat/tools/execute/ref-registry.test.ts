@@ -6,6 +6,8 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "./ref-registry";
 
 type HydratedEntityValue = {
+  contactRef?: string;
+  contactRefs?: string[];
   entityRef?: string;
   entityRefs?: string[];
   fields?: { dependsOnPropertyRef: string }[];
@@ -31,14 +33,19 @@ describe("chat ref registry", () => {
     const propertyId = toSafeId<"property">(
       "37286c24-6145-572e-ad27-15a1d4454d59",
     );
+    const contactId = toSafeId<"contact">(
+      "6111c8e9-1404-5b6f-8a9a-0e3a93e8179a",
+    );
 
     const matterRef = registry.toMatterRef(workspaceId);
     const entityRef = registry.toEntityRef({ entityId, workspaceId });
     const propertyRef = registry.toPropertyRef(propertyId);
+    const contactRef = registry.toContactRef(contactId);
 
     expect(matterRef).toBe("mat_1");
     expect(entityRef).toBe("ent_1");
     expect(propertyRef).toBe("prop_1");
+    expect(contactRef).toBe("contact_1");
     expect(
       registry.toEntityMention({
         entityId,
@@ -65,12 +72,14 @@ describe("chat ref registry", () => {
         entityRef,
         fields: [{ propertyRef }],
         matterRef,
+        contactRef,
         mention: `[Matter](#stella-workspace-ref=${matterRef}) [Doc](#stella-entity-ref=${entityRef})`,
       }),
     ).toEqual({
       entityRef: entityId,
       fields: [{ propertyRef: propertyId }],
       matterRef: workspaceId,
+      contactRef: contactId,
       mention:
         "[Matter](#stella-workspace=0dc54d0c-10d7-501d-897e-e801dbd0998c) " +
         "[Doc](#stella-entity=0dc54d0c-10d7-501d-897e-e801dbd0998c:c09ec856-d945-5ecc-82e3-bb5382165f34)",
@@ -80,6 +89,7 @@ describe("chat ref registry", () => {
       entityRef: entityId,
       fields: [{ dependsOnPropertyRef: propertyId }],
       matterRef: workspaceId,
+      contactRef: contactId,
       mention:
         "[Matter](#stella-workspace=0dc54d0c-10d7-501d-897e-e801dbd0998c) " +
         "[Doc](#stella-entity=0dc54d0c-10d7-501d-897e-e801dbd0998c:c09ec856-d945-5ecc-82e3-bb5382165f34)",
@@ -90,6 +100,7 @@ describe("chat ref registry", () => {
       entityRef,
       fields: [{ dependsOnPropertyRef: propertyRef }],
       matterRef,
+      contactRef,
       mention: `[Matter](#stella-workspace-ref=${matterRef}) [Doc](#stella-entity-ref=${entityRef})`,
       parentRef: entityRef,
     });
