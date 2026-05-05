@@ -260,10 +260,9 @@ jobs:
           TRUST_RESULT="${{ needs.trust-check.result }}"
           EVENT="${{ github.event_name }}"
 
-          # When the trust-check job was skipped (private repo
-          # visibility gate or irrelevant label event), all
-          # downstream jobs are also skipped. This is expected
-          # and should not block the PR.
+          # When the trust-check job was skipped (draft PR or
+          # irrelevant label event), all downstream jobs are also
+          # skipped. This is expected and should not block the PR.
           if [[ "$TRUST_RESULT" == "skipped" ]]; then
             echo "Trust-check skipped. Passing."
             exit 0

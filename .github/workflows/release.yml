@@ -255,7 +255,6 @@ jobs:
             STELLA_VERSION=${{ needs.resolve.outputs.version }}
 
       - name: Attest image provenance
-        continue-on-error: true
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -306,7 +305,6 @@ jobs:
             STELLA_VERSION=${{ needs.resolve.outputs.version }}
 
       - name: Attest image provenance
-        continue-on-error: true
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -390,15 +388,26 @@ jobs:
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
         run: |
           if ! gh release view "$RELEASE_REF" >/dev/null 2>&1; then
-            prerelease_args=()
+            extra_args=()
             if [[ "$RELEASE_REF" == *-rc.* ]]; then
-              prerelease_args+=(--prerelease)
+              extra_args+=(--prerelease)
+            else
+              # Defer the "latest" flag until release-desktop.yml has
+              # uploaded the signed installers. Without this, GitHub
+              # auto-promotes the new stable release on creation, but
+              # the desktop build runs as a workflow_run trigger and
+              # takes another ~25 min — during that window
+              # /releases/latest/download/Stella-macos-universal.dmg
+              # 404s for end users. release-desktop.yml flips the
+              # flag in its final step, after both Mac + Windows
+              # signed installers are attached to the release.
+              extra_args+=(--latest=false)
             fi
             gh release create "$RELEASE_REF" \
               --title "$RELEASE_REF" \
               --notes-file NOTES.md \
               --verify-tag \
-              "${prerelease_args[@]}"
+              "${extra_args[@]}"
           fi
           gh release upload "$RELEASE_REF" release-manifest.json --clobber
 
