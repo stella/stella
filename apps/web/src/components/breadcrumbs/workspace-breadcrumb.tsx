@@ -285,19 +285,17 @@ export const WorkspaceBreadcrumb = ({
                 onChange={(e) => setValue(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
-                    handleSaveProjectName();
+                    e.currentTarget.blur();
                   }
                   if (e.key === "Escape") {
                     escapedNameRef.current = true;
                     e.currentTarget.blur();
                   }
                 }}
-                ref={(el) => {
-                  el?.focus();
-                }}
+                autoFocus
                 size="sm"
                 unstyled
-                value={value || displayName}
+                value={value}
               />
             </>
           ) : (
@@ -380,19 +378,17 @@ export const WorkspaceBreadcrumb = ({
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
-                handleSaveProjectName();
+                e.currentTarget.blur();
               }
               if (e.key === "Escape") {
                 escapedNameRef.current = true;
                 e.currentTarget.blur();
               }
             }}
-            ref={(el) => {
-              el?.focus();
-            }}
+            autoFocus
             size="sm"
             unstyled
-            value={value || displayName}
+            value={value}
           />
           {referenceSegment}
           {referenceHint}

@@ -73,11 +73,7 @@ type UpdateWorkspaceVars = {
   };
 };
 
-export const workspaceUpdateInvalidationKeys = (workspaceId: string) => [
-  workspacesKeys.byId(workspaceId),
-  workspacesKeys.navigation(),
-  workspacesKeys.all,
-];
+export const workspaceUpdateInvalidationKeys = () => [workspacesKeys.all];
 
 export const useUpdateWorkspace = () => {
   const analytics = useAnalytics();
@@ -108,10 +104,8 @@ export const useUpdateWorkspace = () => {
         throw toAPIError(response.error);
       }
     },
-    onSuccess: (_data, variables) => {
-      for (const queryKey of workspaceUpdateInvalidationKeys(
-        variables.workspaceId,
-      )) {
+    onSuccess: () => {
+      for (const queryKey of workspaceUpdateInvalidationKeys()) {
         void queryClient.invalidateQueries({ queryKey });
       }
     },
