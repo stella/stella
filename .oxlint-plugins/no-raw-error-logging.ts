@@ -104,7 +104,11 @@ const isRawErrorExpression = (node) => {
     return true;
   }
 
-  if (isRawErrorMember(node) || isStringErrorCall(node)) {
+  if (node.type === "MemberExpression") {
+    return isRawErrorMember(node) || isRawErrorExpression(node.object);
+  }
+
+  if (isStringErrorCall(node)) {
     return true;
   }
 
@@ -112,7 +116,7 @@ const isRawErrorExpression = (node) => {
     return node.expressions.some(isRawErrorExpression);
   }
 
-  if (node.type === "BinaryExpression") {
+  if (node.type === "BinaryExpression" || node.type === "LogicalExpression") {
     return isRawErrorExpression(node.left) || isRawErrorExpression(node.right);
   }
 
@@ -139,25 +143,31 @@ const checkLoggerAttributeNode = (context, node) => {
     return;
   }
 
-  if (node.type === "ObjectExpression") {
-    checkLoggerAttributeObject(context, node);
-    return;
-  }
-
-  if (node.type === "ConditionalExpression") {
-    checkLoggerAttributeNode(context, node.consequent);
-    checkLoggerAttributeNode(context, node.alternate);
-    return;
-  }
-
-  if (node.type === "LogicalExpression") {
-    checkLoggerAttributeNode(context, node.left);
-    checkLoggerAttributeNode(context, node.right);
-    return;
-  }
-
-  if (node.type === "TSAsExpression" || node.type === "TSSatisfiesExpression") {
-    checkLoggerAttributeNode(context, node.expression);
+  switch (node.type) {
+    case "ObjectExpression":
+      checkLoggerAttributeObject(context, node);
+      break;
+    case "ConditionalExpression":
+      checkLoggerAttributeNode(context, node.consequent);
+      checkLoggerAttributeNode(context, node.alternate);
+      break;
+    case "LogicalExpression":
+      checkLoggerAttributeNode(context, node.left);
+      checkLoggerAttributeNode(context, node.right);
+      break;
+    case "TSAsExpression":
+    case "TSSatisfiesExpression":
+    case "ChainExpression":
+      checkLoggerAttributeNode(context, node.expression);
+      break;
+    default:
+      if (isRawErrorExpression(node)) {
+        context.report({
+          node,
+          messageId: "rawErrorAttribute",
+          data: { name: "argument" },
+        });
+      }
   }
 };
 
@@ -173,24 +183,16 @@ const checkLoggerAttributeObject = (context, objectNode) => {
     }
 
     const keyName = getPropertyName(prop.key);
-    if (!keyName) {
-      continue;
-    }
-
-    if (keyName === "message" && isRawErrorExpression(prop.value)) {
+    if (isRawErrorExpression(prop.value)) {
       context.report({
         node: prop,
         messageId: "rawErrorAttribute",
-        data: { name: keyName },
+        data: { name: keyName ?? "property" },
       });
       continue;
     }
 
-    if (!RAW_ERROR_PROPERTY_NAMES.has(keyName)) {
-      continue;
-    }
-
-    if (keyName !== "error" && !isRawErrorExpression(prop.value)) {
+    if (!keyName || !RAW_ERROR_PROPERTY_NAMES.has(keyName)) {
       continue;
     }
 
