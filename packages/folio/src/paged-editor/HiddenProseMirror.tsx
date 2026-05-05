@@ -45,6 +45,7 @@ import type { Document, Theme, StyleDefinitions } from "../core/types/document";
 import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
 // Import ProseMirror CSS
 import "prosemirror-view/style/prosemirror.css";
+
 import "../core/prosemirror/editor.css";
 
 // ============================================================================

@@ -50,6 +50,11 @@ const TARGETS = {
    * Conservative upper bound for per-paragraph layout cost.
    */
   layoutTimePerBlock: 0.5, // ms
+
+  /**
+   * Below this per-paragraph cost, timer precision dominates the ratio check.
+   */
+  layoutTimePerBlockRatioNoiseFloor: 0.01, // ms
 } as const;
 
 /**
@@ -346,9 +351,11 @@ describe("Layout Engine Performance", () => {
       const minTime = Math.min(...timePerBlock);
       const maxTime = Math.max(...timePerBlock);
 
-      expect(maxTime / minTime).toBeLessThanOrEqual(
-        TARGETS.layoutTimePerBlockRatio,
-      );
+      if (maxTime >= TARGETS.layoutTimePerBlockRatioNoiseFloor) {
+        expect(maxTime / minTime).toBeLessThanOrEqual(
+          TARGETS.layoutTimePerBlockRatio,
+        );
+      }
       expect(maxTime).toBeLessThanOrEqual(TARGETS.layoutTimePerBlock);
     });
   });
