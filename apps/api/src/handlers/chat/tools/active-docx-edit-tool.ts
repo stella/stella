@@ -161,10 +161,10 @@ export const createActiveDocxEditTool = () =>
     description:
       "Propose edits for the DOCX currently open in the document " +
       "editor. Use this whenever the user asks to change, edit, " +
-      "replace, rewrite, or 'propíš/uprav' text in the open DOCX, or " +
-      "asks for a review/redline. Operations are queued for the user to " +
-      "review and apply themselves; this tool does NOT write to the " +
-      "document. See each schema field for its semantics.",
+      "replace, rewrite, revise, or update text in the open DOCX, or asks " +
+      "for a review/redline. Operations are queued for the user to review " +
+      "and apply themselves; this tool does NOT write to the document. " +
+      "See each schema field for its semantics.",
     needsApproval: true,
     inputSchema: valibotSchema(
       v.strictObject({
