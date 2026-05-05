@@ -240,21 +240,16 @@ type LogAndCaptureSafeErrorProps = {
   statusCode: number;
 };
 
-const LOGGED_STACK_FRAME_COUNT = 3;
-const LOGGED_STACK_FRAME_MAX_LENGTH = 768;
-
-const errorStackFrames = (stack: string): string | undefined => {
-  const frames = stack
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith("at "))
-    .slice(0, LOGGED_STACK_FRAME_COUNT);
-
-  if (frames.length === 0) {
-    return undefined;
+const getErrorStatusCode = (error: Error): number | undefined => {
+  if ("statusCode" in error && typeof error.statusCode === "number") {
+    return error.statusCode;
   }
 
-  return frames.join("\n").slice(0, LOGGED_STACK_FRAME_MAX_LENGTH);
+  if ("status" in error && typeof error.status === "number") {
+    return error.status;
+  }
+
+  return undefined;
 };
 
 const logAndCaptureSafeError = ({
@@ -276,18 +271,13 @@ const logAndCaptureSafeError = ({
   };
 
   if (error instanceof Error) {
-    attributes["error.message"] = error.message.slice(0, 512);
-    if (error.stack) {
-      const frames = errorStackFrames(error.stack);
-      if (frames) {
-        attributes["error.frames"] = frames;
-      }
+    const errorStatusCode = getErrorStatusCode(error);
+    if (errorStatusCode !== undefined) {
+      attributes["error.status_code"] = errorStatusCode;
     }
     // Walk up to three levels of `.cause` so nested wrappers
     // (generator-result re-throws, AI SDK over fetch errors,
-    // etc.) don't hide the underlying failure type. Nested
-    // messages are deliberately omitted because they can carry
-    // privileged payload snippets from external libraries.
+    // etc.) don't hide the underlying failure type.
     const seen = new WeakSet<object>([error]);
     let cause: unknown = (error as { cause?: unknown }).cause;
     let depth = 1;
@@ -295,12 +285,6 @@ const logAndCaptureSafeError = ({
       seen.add(cause);
       const prefix = depth === 1 ? "error.cause" : `error.cause${depth}`;
       attributes[`${prefix}.type`] = errorTag(cause);
-      if (cause.stack) {
-        const frames = errorStackFrames(cause.stack);
-        if (frames) {
-          attributes[`${prefix}.frames`] = frames;
-        }
-      }
       cause = (cause as { cause?: unknown }).cause;
       depth++;
     }

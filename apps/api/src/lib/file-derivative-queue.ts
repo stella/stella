@@ -13,6 +13,7 @@ import {
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { redisConnectionOptions } from "@/api/lib/redis-options";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -167,14 +168,16 @@ export const initFileDerivativeWorker = () => {
     });
     logger.error("file_derivative.pdf_failed", {
       entityId: job?.data.entityId ?? "",
-      error: String(error),
+      "error.type": errorTag(error),
       fieldId: job?.data.fieldId ?? "",
       workspaceId: job?.data.workspaceId ?? "",
     });
   });
 
   worker.on("error", (error) => {
-    logger.error("file_derivative.worker_error", { error: String(error) });
+    logger.error("file_derivative.worker_error", {
+      "error.type": errorTag(error),
+    });
   });
 
   logger.info("file_derivative.worker_started", {

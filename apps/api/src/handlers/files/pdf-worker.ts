@@ -19,7 +19,7 @@ try {
   process.stdout.write(String(pdf.isEncrypted));
   process.exit(0);
 } catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`pdf-worker error: ${message}\n`);
+  const type = error instanceof Error ? error.constructor.name : "UnknownError";
+  process.stderr.write(`pdf-worker error: ${type}\n`);
   process.exit(1);
 }

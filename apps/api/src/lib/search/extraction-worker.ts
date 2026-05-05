@@ -76,7 +76,7 @@ try {
   }
   process.exit(0);
 } catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`extraction-worker error: ${message}\n`);
+  const type = error instanceof Error ? error.constructor.name : "UnknownError";
+  process.stderr.write(`extraction-worker error: ${type}\n`);
   process.exit(1);
 }

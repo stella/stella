@@ -543,8 +543,8 @@ export const createAIAnalyticsCallbacks = ({
         ? { "ai.model": resolvedModelInfo.modelId }
         : {}),
       ...(cwMessage?.kind === "safe"
-        ? { "error.message": cwMessage.message }
-        : { "error.message_kind": "non_standard" }),
+        ? { "ai.error_message": cwMessage.message }
+        : { "ai.error_message_kind": "non_standard" }),
     });
 
     if (!debugEnabled) {
