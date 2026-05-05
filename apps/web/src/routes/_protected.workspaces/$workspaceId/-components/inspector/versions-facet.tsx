@@ -49,9 +49,6 @@ export const VersionsFacet = ({
         onClearCompare={() => {
           // No-op; compare flow is owned by the document route.
         }}
-        onCompare={() => {
-          // No-op; compare flow is owned by the document route.
-        }}
         onSwitchVersion={async (fieldId, versionId) => {
           const target = data.versions.find((v) => v.id === versionId);
           if (!target?.file) {

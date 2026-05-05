@@ -23,7 +23,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   CheckIcon,
   DownloadIcon,
-  GitCompareArrowsIcon,
   HistoryIcon,
   PlusIcon,
   Trash2Icon,
@@ -45,7 +44,6 @@ type VersionsSidebarProps = {
   versions: Version[];
   currentVersionId: string | null;
   onSwitchVersion: (fieldId: string, versionId: string) => Promise<void> | void;
-  onCompare: (baseVersionId: string, targetVersionId: string) => void;
   onClearCompare: () => void;
   isComparing: boolean;
 };
@@ -92,22 +90,11 @@ export function VersionsSidebar({
   versions,
   currentVersionId,
   onSwitchVersion,
-  onCompare,
   onClearCompare,
   isComparing,
 }: VersionsSidebarProps) {
   const t = useTranslations();
   const locale = useLocale();
-
-  const selectedVersion = versions.find(
-    (v) => v.file?.fieldId === currentFieldId,
-  );
-  const olderVersions = selectedVersion
-    ? versions.filter(
-        (v) =>
-          v.versionNumber < selectedVersion.versionNumber && v.file !== null,
-      )
-    : [];
 
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -262,62 +249,7 @@ export function VersionsSidebar({
         </div>
       </ScrollArea>
 
-      {/* Compare buttons */}
-      {olderVersions.length > 0 && selectedVersion && (
-        <ScrollArea className="max-h-32 shrink-0 border-t">
-          <div className="flex flex-col gap-px p-1">
-            {olderVersions.map((older) => (
-              <AlertDialog key={older.id}>
-                <AlertDialogTrigger
-                  nativeButton
-                  render={
-                    <button
-                      className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-1.5 rounded-md px-3 py-1.5 text-start text-xs transition-colors disabled:pointer-events-none disabled:opacity-50"
-                      disabled={isComparing}
-                      type="button"
-                    />
-                  }
-                >
-                  <GitCompareArrowsIcon className="size-3 shrink-0" />
-                  {t("fileDetail.changesSince", {
-                    version: `v${older.versionNumber}`,
-                  })}
-                </AlertDialogTrigger>
-                <AlertDialogPopup>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      {t("fileDetail.compareAcceptedChangesTitle")}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {t("fileDetail.compareAcceptedChangesDescription", {
-                        baseVersion: `v${older.versionNumber}`,
-                        targetVersion: `v${selectedVersion.versionNumber}`,
-                      })}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogClose render={<Button variant="ghost" />}>
-                      {t("common.cancel")}
-                    </AlertDialogClose>
-                    <AlertDialogClose
-                      render={
-                        <Button
-                          onClick={() =>
-                            onCompare(older.id, selectedVersion.id)
-                          }
-                          variant="default"
-                        />
-                      }
-                    >
-                      {t("fileDetail.showDiff")}
-                    </AlertDialogClose>
-                  </AlertDialogFooter>
-                </AlertDialogPopup>
-              </AlertDialog>
-            ))}
-          </div>
-        </ScrollArea>
-      )}
+      {/* TODO */}
 
       {/* Footer row — mirrors the Metadata facet's "Extract
        *  entity type" trigger so both facets share one bottom-row

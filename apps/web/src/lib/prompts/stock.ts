@@ -26,12 +26,13 @@ export const useStockPrompts = (): ChatPrompt[] => {
         name: t("chat.prompts.stock.findRisks.name"),
         body: t("chat.prompts.stock.findRisks.body"),
       },
-      {
-        id: "compare-versions",
-        scope: "stock",
-        name: t("chat.prompts.stock.compareVersions.name"),
-        body: t("chat.prompts.stock.compareVersions.body"),
-      },
+      // TODO
+      // {
+      //   id: "compare-versions",
+      //   scope: "stock",
+      //   name: t("chat.prompts.stock.compareVersions.name"),
+      //   body: t("chat.prompts.stock.compareVersions.body"),
+      // },
       {
         id: "draft-response",
         scope: "stock",
