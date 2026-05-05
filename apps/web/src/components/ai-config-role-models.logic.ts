@@ -13,6 +13,13 @@ export type ProviderValue = (typeof PROVIDER_KEYS)[number];
 export type RegionValue = (typeof REGION_KEYS)[number];
 export type RoleValue = (typeof ROLE_KEYS)[number];
 
+export type ProviderValidationStatus = "checking" | "valid" | "invalid";
+
+export type ProviderPreview = {
+  provider: ProviderValue;
+  status: ProviderValidationStatus;
+};
+
 export type ProviderCredentialDraft = {
   provider: ProviderValue;
   apiKey: string;

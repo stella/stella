@@ -240,7 +240,7 @@
         "facts": "Sachverhalt",
         "holding": "Spruch",
         "procedural-history": "Verfahrensgang",
-        "reasoning": "Begründung"
+        "reasoning": "Argumentation"
       }
     },
     "columns": {
@@ -283,7 +283,7 @@
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populärer Name",
       "sections": "Abschnitte",
-      "source": "Quelle",
+      "source": "Nur Schätzungen · Preise aus",
       "statutes": "Applicable statutes",
       "viewOriginal": "Quelle anzeigen"
     }
@@ -566,6 +566,7 @@
     "reference": "Referenz",
     "rename": "Umbenennen",
     "required": "Erforderlich",
+    "retry": "Erneut versuchen",
     "role": "Rolle",
     "run": "Ausführen",
     "save": "Speichern",
@@ -1116,8 +1117,12 @@
     "toggleSidebar": "Seitenleiste ein-/ausblenden"
   },
   "onboarding": {
+    "aiConfigFailed": "Ihre KI-Konfiguration konnte nicht gespeichert werden. Sie können sie in den Einstellungen abschließen.",
+    "aiSubtitle": "Verwenden Sie Ihren eigenen API-Schlüssel. Anbieter und Modelle können Sie jederzeit ändern.",
+    "aiTitle": "Verbinden Sie Ihren KI-Anbieter",
     "changeAnytime": "Diese Einstellung können Sie jederzeit später ändern.",
     "creating": {
+      "ai": "KI-Konfiguration wird gespeichert...",
       "done": "Wird abgeschlossen...",
       "invites": "Einladungen werden versendet...",
       "org": "Ihr Team wird eingerichtet..."
@@ -1125,13 +1130,6 @@
     "creatingTrust": "Ihre Daten sind bei Übertragung und Speicherung verschlüsselt.",
     "desktopHint": "Sie können dies auch später in den Kontoeinstellungen tun.",
     "desktopTitle": "Holen Sie sich die Desktop-App",
-    "dmsConfirmFresh": "Kein Problem. Sie können Ihre erste Akte anlegen, wann immer Sie möchten.",
-    "dmsConfirmMigration": "Gut zu wissen. Wir melden uns bei Ihnen zu den Migrationsmöglichkeiten von {dms}.",
-    "dmsNoCommitment": "Sie können auch ganz ohne Datenimport loslegen.",
-    "dmsNone": "Ich fange neu an",
-    "dmsPlaceholder": "DMS suchen oder eingeben...",
-    "dmsSubtitle": "Das hilft uns, mögliche Synchronisierungsoptionen zu priorisieren.",
-    "dmsTitle": "Wo liegen Ihre Dokumente heute?",
     "enterTeamName": "Teamname eingeben",
     "getStarted": "Loslegen",
     "inviteExternal": "Externer Nutzer — erhält Zugriff auf Ihre Dokumente",
@@ -1144,8 +1142,8 @@
     "orgTitle": "Benennen Sie Ihr Team",
     "skipStep": "Überspringen",
     "someInvitesFailed": "{count, plural, one {# Einladung fehlgeschlagen} other {# Einladungen fehlgeschlagen}}",
+    "stepAi": "KI",
     "stepDesktop": "Desktop",
-    "stepDocuments": "Dokumente",
     "stepOrganization": "Team",
     "stepTeam": "Einladen",
     "termsNotice": "Mit dem Fortfahren stimmen Sie unseren <terms>Nutzungsbedingungen</terms> zu.",
@@ -1162,6 +1160,8 @@
       "apiKeySaved": "Gespeicherter Schlüssel {key}",
       "apiKeyUpdatePlaceholder": "Enter new key to update",
       "baseUrl": "Base URL",
+      "chooseModelsSubtitle": "Wählen Sie ein Modell pro Rolle. Preise erscheinen rechts.",
+      "chooseModelsTitle": "Modelle wählen",
       "configure": "Configure",
       "credentialsPanel": "Schlüssel",
       "customModelBadge": "Benutzerdefiniert · {provider}",
@@ -1173,19 +1173,34 @@
       "defaultModel": "Standard: {model}",
       "defaultModelOption": "Standard",
       "description": "Bring your own API key or configure data sovereignty region.",
+      "editProviders": "Anbieter bearbeiten",
       "keepSavedKey": "Gespeicherten Schlüssel behalten",
       "modelForRole": "Modell für {role}",
       "modelIdPlaceholder": "Modelle suchen",
       "modelRequired": "Erforderlich",
       "modelsDescription": "Wähle für jede AI-Kategorie einen Provider und ein angebotenes multimodales Modell.",
-      "modelsPanel": "Modelle",
+      "modelsPanel": "Modi",
       "newApiKey": "Neuer API-Schlüssel",
       "newApiKeyDescription": "Er ersetzt den gespeicherten Schlüssel beim Speichern.",
       "noModelResults": "Keine passenden angebotenen Modelle",
       "overrideRoles": "Override roles",
       "overrideRolesDescription": "Wähle aus, welche Rollen diesen Schlüssel verwenden, und lege für jede Rolle ein Modell fest. Nicht ausgewählte Rollen verwenden den Plattformstandard.",
+      "prices": {
+        "empty": "Fügen Sie einen Anbieter hinzu, um Modellpreise zu sehen",
+        "emptyHint": "Wählen Sie links einen Anbieter — wir zeigen seine Modellpreise hier.",
+        "inMtok": "Ein/M",
+        "model": "Modell",
+        "outMtok": "Aus/M",
+        "perCall": "/Aufruf",
+        "selectedHeading": "Ihre Auswahl",
+        "source": "nur Schätzungen",
+        "title": "Modellpreise",
+        "typicalCallHint": "Preise pro 1M Tokens · Aufrufschätzung verwendet {input} ein / {output} aus"
+      },
       "provider": "Provider",
       "providerForRole": "Provider für {role}",
+      "providerKeyInvalid": "{provider} hat den Schlüssel abgelehnt. Bitte überprüfen Sie ihn.",
+      "providerKeyInvalidShort": "Ungültig",
       "providers": {
         "anthropic": "Anthropic",
         "google": "Google",
@@ -1202,10 +1217,10 @@
       "removeProvider": "Provider entfernen",
       "replaceKey": "Schlüssel ersetzen",
       "roles": {
-        "chat": "Chat (conversation)",
-        "fast": "Fast (classification)",
-        "pdf": "PDF (documents)",
-        "reasoning": "Reasoning (analysis)"
+        "chat": "Chat",
+        "fast": "Schnell",
+        "pdf": "PDF",
+        "reasoning": "Argumentation"
       },
       "selectAtLeastOneRole": "Wähle mindestens eine Rolle für diesen Schlüssel aus.",
       "selectModelForEachRole": "Füge einen Provider hinzu und wähle für jede Kategorie ein Modell aus.",

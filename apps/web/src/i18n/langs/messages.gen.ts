@@ -569,6 +569,7 @@ type Messages = {
     "reference": "Reference";
     "rename": "Rename";
     "required": "Required";
+    "retry": "Retry";
     "role": "Role";
     "run": "Run";
     "save": "Save";
@@ -1119,8 +1120,12 @@ type Messages = {
     "toggleSidebar": "Toggle sidebar";
   };
   "onboarding": {
+    "aiConfigFailed": "Couldn't save your AI configuration. You can finish it from settings.";
+    "aiSubtitle": "Bring your own API key. You can change providers and models anytime.";
+    "aiTitle": "Connect your AI provider";
     "changeAnytime": "You can change this anytime in settings.";
     "creating": {
+      "ai": "Saving AI configuration...";
       "done": "Finishing up...";
       "invites": "Sending invitations...";
       "org": "Creating your team...";
@@ -1128,13 +1133,6 @@ type Messages = {
     "creatingTrust": "Your data is encrypted at rest and in transit.";
     "desktopHint": "You can also do this later from your account settings.";
     "desktopTitle": "Get the desktop app";
-    "dmsConfirmFresh": "No problem; you can create your first matter anytime.";
-    "dmsConfirmMigration": "Good to know. We'll reach out about {dms} migration options.";
-    "dmsNoCommitment": "No commitment required. You can start fresh and import later.";
-    "dmsNone": "Starting fresh";
-    "dmsPlaceholder": "Search or type your DMS...";
-    "dmsSubtitle": "This helps us prioritize possible sync options.";
-    "dmsTitle": "Where are your documents today?";
     "enterTeamName": "Enter your team name above";
     "getStarted": "Get Started";
     "inviteExternal": "External — will have access to your documents";
@@ -1147,8 +1145,8 @@ type Messages = {
     "orgTitle": "Name your team";
     "skipStep": "Skip this step";
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}";
+    "stepAi": "AI";
     "stepDesktop": "Desktop";
-    "stepDocuments": "Documents";
     "stepOrganization": "Team";
     "stepTeam": "Invite";
     "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms>.";
@@ -1162,6 +1160,9 @@ type Messages = {
       "apiKey": "API key";
       "apiKeyConfiguredPlaceholder": "Configured: {key}. Enter a new key to replace it.";
       "apiKeyPlaceholder": "Enter your API key";
+      "chooseModelsSubtitle": "Pick a model for each role. Prices update on the right.";
+      "chooseModelsTitle": "Choose models";
+      "editProviders": "Edit providers";
       "apiKeySaved": "Saved key {key}";
       "apiKeyUpdatePlaceholder": "Enter new key to update";
       "baseUrl": "Base URL";
@@ -1181,7 +1182,7 @@ type Messages = {
       "modelIdPlaceholder": "Search models";
       "modelRequired": "Required";
       "modelsDescription": "Choose a provider and one offered multimodal model for each AI category.";
-      "modelsPanel": "Models";
+      "modelsPanel": "Modes";
       "newApiKey": "New API key";
       "newApiKeyDescription": "This will replace the saved key when you save changes.";
       "noModelResults": "No matching offered models";
@@ -1189,6 +1190,20 @@ type Messages = {
       "overrideRolesDescription": "Choose which roles use this key, then choose a model for each role. Unselected roles use the platform default.";
       "provider": "Provider";
       "providerForRole": "{role} provider";
+      "prices": {
+        "empty": "Add a provider to see model prices";
+        "emptyHint": "Pick a provider on the left and we will show pricing for its models here.";
+        "inMtok": "In/M";
+        "model": "Model";
+        "outMtok": "Out/M";
+        "perCall": "/call";
+        "selectedHeading": "Your selection";
+        "source": "estimates only";
+        "title": "Model prices";
+        "typicalCallHint": "Per-1M-token rates · per-call estimate uses {input} in / {output} out";
+      };
+      "providerKeyInvalid": "{provider} rejected the key. Double-check it before saving.";
+      "providerKeyInvalidShort": "Invalid";
       "providers": {
         "anthropic": "Anthropic";
         "google": "Google";
@@ -1205,10 +1220,10 @@ type Messages = {
       "removeProvider": "Remove provider";
       "replaceKey": "Replace key";
       "roles": {
-        "chat": "Chat (conversation)";
-        "fast": "Fast (classification)";
-        "pdf": "PDF (documents)";
-        "reasoning": "Reasoning (analysis)";
+        "chat": "Chat";
+        "fast": "Fast";
+        "pdf": "PDF";
+        "reasoning": "Reasoning";
       };
       "selectAtLeastOneRole": "Select at least one role for this key.";
       "selectModelForEachRole": "Add a provider and select a model for each category.";

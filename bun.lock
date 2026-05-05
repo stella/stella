@@ -192,6 +192,7 @@
         "@elysiajs/eden": "^1.4.9",
         "@libpdf/core": "catalog:",
         "@posthog/react": "^1.9.0",
+        "@pydantic/genai-prices": "^0.0.56",
         "@stll/anonymize-data": "catalog:",
         "@stll/anonymize-wasm": "catalog:",
         "@stll/api": "workspace:*",
@@ -1242,6 +1243,8 @@
     "@protobufjs/pool": ["@protobufjs/pool@1.1.0", "", {}, "sha512-0kELaGSIDBKvcgS4zkjz1PeddatrjYcmMWOlAuAPwAeccUrPHdUqo/J6LiymHHEiJT5NrF1UVwxY14f+fy4WQw=="],
 
     "@protobufjs/utf8": ["@protobufjs/utf8@1.1.0", "", {}, "sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw=="],
+
+    "@pydantic/genai-prices": ["@pydantic/genai-prices@0.0.56", "", { "dependencies": { "yargs": "^17.7.2" }, "bin": { "genai-prices": "dist/cli.js" } }, "sha512-QfvMLHWsy5C+yepycd8FRciSvy9jLm82HdGY9b8Rlc3qvTiby2MlwNun5e+hXsk1mYwJNGIZybi0+gAXdJL+gQ=="],
 
     "@react-email/body": ["@react-email/body@0.3.0", "", { "peerDependencies": { "react": "^18.0 || ^19.0 || ^19.0.0-rc" } }, "sha512-uGo0BOOzjbMUo3lu+BIDWayvn5o6Xyfmnlla5VGf05n8gHMvO1ll7U4FtzWe3hxMLwt53pmc4iE0M+B5slG+Ug=="],
 

@@ -240,7 +240,7 @@
         "facts": "Facts",
         "holding": "Holding",
         "procedural-history": "Procedural history",
-        "reasoning": "Reasoning"
+        "reasoning": "Raisonnement"
       }
     },
     "columns": {
@@ -283,7 +283,7 @@
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Nom courant",
       "sections": "Sections",
-      "source": "Source",
+      "source": "Estimations uniquement · prix de",
       "statutes": "Applicable statutes",
       "viewOriginal": "Voir la source"
     }
@@ -566,6 +566,7 @@
     "reference": "Référence",
     "rename": "Renommer",
     "required": "Obligatoire",
+    "retry": "Réessayer",
     "role": "Rôle",
     "run": "Exécuter",
     "save": "Enregistrer",
@@ -1090,7 +1091,7 @@
   "navigation": {
     "account": "Compte",
     "calendar": "Calendrier",
-    "chat": "Discussion",
+    "chat": "Chat",
     "chatAlreadyOpen": "La conversation est déjà ouverte",
     "clients": "Clients",
     "contacts": "Contacts",
@@ -1116,8 +1117,12 @@
     "toggleSidebar": "Afficher/masquer la barre latérale"
   },
   "onboarding": {
+    "aiConfigFailed": "Impossible d'enregistrer votre configuration IA. Vous pouvez la finaliser dans les paramètres.",
+    "aiSubtitle": "Utilisez votre propre clé API. Vous pouvez changer de fournisseur et de modèle à tout moment.",
+    "aiTitle": "Connectez votre fournisseur d'IA",
     "changeAnytime": "Vous pourrez modifier cela à tout moment.",
     "creating": {
+      "ai": "Enregistrement de la configuration IA...",
       "done": "Finalisation...",
       "invites": "Envoi des invitations...",
       "org": "Création de votre équipe..."
@@ -1125,13 +1130,6 @@
     "creatingTrust": "Vos données sont chiffrées en transit et au repos.",
     "desktopHint": "Vous pouvez aussi le faire plus tard depuis les paramètres du compte.",
     "desktopTitle": "Téléchargez l'application bureau",
-    "dmsConfirmFresh": "Pas de problème. Vous pourrez créer votre premier dossier quand vous le souhaitez.",
-    "dmsConfirmMigration": "Bien noté. Nous vous contacterons concernant les options de migration depuis {dms}.",
-    "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
-    "dmsNone": "Je pars de zéro",
-    "dmsPlaceholder": "Rechercher ou saisir votre DMS...",
-    "dmsSubtitle": "Cela nous aide à prioriser les options de synchronisation possibles.",
-    "dmsTitle": "Où sont vos documents actuellement ?",
     "enterTeamName": "Saisissez le nom de l'équipe ci-dessus",
     "getStarted": "Commencer",
     "inviteExternal": "Utilisateur externe — aura accès à vos documents",
@@ -1144,8 +1142,8 @@
     "orgTitle": "Nommez votre équipe",
     "skipStep": "Passer",
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
+    "stepAi": "IA",
     "stepDesktop": "Bureau",
-    "stepDocuments": "Documents",
     "stepOrganization": "Équipe",
     "stepTeam": "Inviter",
     "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms>.",
@@ -1162,6 +1160,8 @@
       "apiKeySaved": "Clé enregistrée {key}",
       "apiKeyUpdatePlaceholder": "Enter new key to update",
       "baseUrl": "Base URL",
+      "chooseModelsSubtitle": "Choisissez un modèle par rôle. Les prix se mettent à jour à droite.",
+      "chooseModelsTitle": "Choisir les modèles",
       "configure": "Configure",
       "credentialsPanel": "Clé",
       "customModelBadge": "Personnalisé · {provider}",
@@ -1173,19 +1173,34 @@
       "defaultModel": "Par défaut : {model}",
       "defaultModelOption": "Par défaut",
       "description": "Bring your own API key or configure data sovereignty region.",
+      "editProviders": "Modifier les fournisseurs",
       "keepSavedKey": "Conserver la clé enregistrée",
       "modelForRole": "Modèle pour {role}",
       "modelIdPlaceholder": "Rechercher des modèles",
       "modelRequired": "Obligatoire",
       "modelsDescription": "Choisissez un fournisseur et un modèle multimodal proposé pour chaque catégorie IA.",
-      "modelsPanel": "Modèles",
+      "modelsPanel": "Modes",
       "newApiKey": "Nouvelle clé API",
       "newApiKeyDescription": "Elle remplacera la clé enregistrée lors de l’enregistrement.",
       "noModelResults": "Aucun modèle proposé correspondant",
       "overrideRoles": "Override roles",
       "overrideRolesDescription": "Choisissez les rôles qui utilisent cette clé, puis choisissez un modèle pour chaque rôle. Les rôles non sélectionnés utilisent le réglage par défaut de la plateforme.",
+      "prices": {
+        "empty": "Ajoutez un fournisseur pour voir les prix des modèles",
+        "emptyHint": "Choisissez un fournisseur à gauche pour afficher les prix de ses modèles.",
+        "inMtok": "Ent/M",
+        "model": "Modèle",
+        "outMtok": "Sort/M",
+        "perCall": "/appel",
+        "selectedHeading": "Votre sélection",
+        "source": "estimations uniquement",
+        "title": "Prix des modèles",
+        "typicalCallHint": "Tarif par 1M tokens · estimation par appel avec {input} ent / {output} sort"
+      },
       "provider": "Provider",
       "providerForRole": "Fournisseur pour {role}",
+      "providerKeyInvalid": "{provider} a rejeté la clé. Vérifiez-la avant d'enregistrer.",
+      "providerKeyInvalidShort": "Invalide",
       "providers": {
         "anthropic": "Anthropic",
         "google": "Google",
@@ -1202,10 +1217,10 @@
       "removeProvider": "Supprimer le fournisseur",
       "replaceKey": "Remplacer la clé",
       "roles": {
-        "chat": "Chat (conversation)",
-        "fast": "Fast (classification)",
-        "pdf": "PDF (documents)",
-        "reasoning": "Reasoning (analysis)"
+        "chat": "Chat",
+        "fast": "Rapide",
+        "pdf": "PDF",
+        "reasoning": "Raisonnement"
       },
       "selectAtLeastOneRole": "Sélectionnez au moins un rôle pour cette clé.",
       "selectModelForEachRole": "Ajoutez un fournisseur et choisissez un modèle pour chaque catégorie.",

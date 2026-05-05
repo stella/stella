@@ -240,7 +240,7 @@
         "facts": "Stan faktyczny",
         "holding": "Sentencja",
         "procedural-history": "Przebieg postępowania",
-        "reasoning": "Uzasadnienie"
+        "reasoning": "Rozumowanie"
       }
     },
     "columns": {
@@ -283,7 +283,7 @@
       "nalusDisclaimer": "Źródło: NALUS, Trybunał Konstytucyjny Republiki Czeskiej. Bezpłatnie. Niniejsza wersja elektroniczna nie jest autentyczna; autentyczne są wyłącznie oryginały z godłem państwowym i podpisem upoważnionej osoby.",
       "popularName": "Nazwa potoczna",
       "sections": "Sekcje",
-      "source": "Źródło",
+      "source": "Tylko szacunki · ceny z",
       "statutes": "Powołane przepisy",
       "viewOriginal": "Zobacz źródło"
     }
@@ -566,6 +566,7 @@
     "reference": "Numer referencyjny",
     "rename": "Zmień nazwę",
     "required": "Wymagane",
+    "retry": "Spróbuj ponownie",
     "role": "Rola",
     "run": "Uruchom",
     "save": "Zapisz",
@@ -1090,7 +1091,7 @@
   "navigation": {
     "account": "Konto",
     "calendar": "Kalendarz",
-    "chat": "Czat",
+    "chat": "Chat",
     "chatAlreadyOpen": "Czat jest już otwarty",
     "clients": "Klienci",
     "contacts": "Kontakty",
@@ -1116,8 +1117,12 @@
     "toggleSidebar": "Przełącz panel boczny"
   },
   "onboarding": {
+    "aiConfigFailed": "Nie udało się zapisać konfiguracji AI. Możesz ją dokończyć w ustawieniach.",
+    "aiSubtitle": "Użyj własnego klucza API. Dostawców i modele możesz zmienić w dowolnym momencie.",
+    "aiTitle": "Połącz swojego dostawcę AI",
     "changeAnytime": "To ustawienie możesz zmienić w dowolnym momencie.",
     "creating": {
+      "ai": "Zapisywanie konfiguracji AI...",
       "done": "Kończenie...",
       "invites": "Wysyłanie zaproszeń...",
       "org": "Tworzenie zespołu..."
@@ -1125,13 +1130,6 @@
     "creatingTrust": "Twoje dane są szyfrowane podczas przesyłania i przechowywania.",
     "desktopHint": "Możesz to zrobić również później w ustawieniach konta.",
     "desktopTitle": "Pobierz aplikację desktopową",
-    "dmsConfirmFresh": "Żaden problem. Pierwszą sprawę możesz utworzyć w dowolnym momencie.",
-    "dmsConfirmMigration": "Dobrze wiedzieć. Skontaktujemy się w sprawie opcji migracji z {dms}.",
-    "dmsNoCommitment": "Bez zobowiązań. Możesz zacząć od nowa i importować dane później.",
-    "dmsNone": "Zaczynam od zera",
-    "dmsPlaceholder": "Wyszukaj lub wpisz nazwę DMS...",
-    "dmsSubtitle": "Pomoże nam to ustalić priorytety dla przyszłych opcji synchronizacji.",
-    "dmsTitle": "Gdzie obecnie masz swoje dokumenty?",
     "enterTeamName": "Wpisz powyżej nazwę zespołu",
     "getStarted": "Rozpocznij",
     "inviteExternal": "Użytkownik zewnętrzny — uzyska dostęp do Twoich dokumentów",
@@ -1144,8 +1142,8 @@
     "orgTitle": "Nazwij swój zespół",
     "skipStep": "Pomiń",
     "someInvitesFailed": "{count, plural, one {# zaproszenie nie zostało wysłane} few {# zaproszenia nie zostały wysłane} many {# zaproszeń nie zostało wysłanych} other {# zaproszeń nie zostało wysłanych}}",
+    "stepAi": "AI",
     "stepDesktop": "Aplikacja",
-    "stepDocuments": "Dokumenty",
     "stepOrganization": "Zespół",
     "stepTeam": "Zaproszenia",
     "termsNotice": "Kontynuując, akceptujesz nasze <terms>Warunki korzystania z usługi</terms>.",
@@ -1162,6 +1160,8 @@
       "apiKeySaved": "Zapisany klucz {key}",
       "apiKeyUpdatePlaceholder": "Wprowadź nowy klucz, aby go zaktualizować",
       "baseUrl": "Bazowy URL",
+      "chooseModelsSubtitle": "Wybierz model dla każdej roli. Ceny aktualizują się po prawej.",
+      "chooseModelsTitle": "Wybierz modele",
       "configure": "Skonfiguruj",
       "credentialsPanel": "Klucz",
       "customModelBadge": "Niestandardowy · {provider}",
@@ -1173,19 +1173,34 @@
       "defaultModel": "Domyślny: {model}",
       "defaultModelOption": "Domyślny",
       "description": "Użyj własnego klucza API lub skonfiguruj region suwerenności danych.",
+      "editProviders": "Edytuj dostawców",
       "keepSavedKey": "Zachowaj zapisany klucz",
       "modelForRole": "Model dla roli {role}",
       "modelIdPlaceholder": "Szukaj modeli",
       "modelRequired": "Wymagane",
       "modelsDescription": "Dla każdej kategorii AI wybierz dostawcę i jeden oferowany model multimodalny.",
-      "modelsPanel": "Modele",
+      "modelsPanel": "Tryby",
       "newApiKey": "Nowy klucz API",
       "newApiKeyDescription": "Po zapisaniu zmian zastąpi zapisany klucz.",
       "noModelResults": "Brak pasujących oferowanych modeli",
       "overrideRoles": "Nadpisz role",
       "overrideRolesDescription": "Wybierz, które role używają tego klucza, a potem wybierz model dla każdej roli. Niezaznaczone role używają domyślnych ustawień platformy.",
+      "prices": {
+        "empty": "Dodaj dostawcę, aby zobaczyć ceny modeli",
+        "emptyHint": "Wybierz dostawcę po lewej — pokażemy tu ceny jego modeli.",
+        "inMtok": "We/M",
+        "model": "Model",
+        "outMtok": "Wy/M",
+        "perCall": "/wywołanie",
+        "selectedHeading": "Twój wybór",
+        "source": "tylko szacunki",
+        "title": "Ceny modeli",
+        "typicalCallHint": "Stawka za 1M tokenów · wywołanie szacowane: {input} we / {output} wy"
+      },
       "provider": "Dostawca",
       "providerForRole": "Dostawca dla {role}",
+      "providerKeyInvalid": "{provider} odrzucił klucz. Sprawdź go przed zapisaniem.",
+      "providerKeyInvalidShort": "Nieprawidłowy",
       "providers": {
         "anthropic": "Anthropic",
         "google": "Google",
@@ -1202,10 +1217,10 @@
       "removeProvider": "Usuń dostawcę",
       "replaceKey": "Zastąp klucz",
       "roles": {
-        "chat": "Chat (conversation)",
-        "fast": "Fast (classification)",
-        "pdf": "PDF (documents)",
-        "reasoning": "Reasoning (analysis)"
+        "chat": "Chat",
+        "fast": "Szybki",
+        "pdf": "PDF",
+        "reasoning": "Rozumowanie"
       },
       "selectAtLeastOneRole": "Wybierz co najmniej jedną rolę dla tego klucza.",
       "selectModelForEachRole": "Dodaj dostawcę i wybierz model dla każdej kategorii.",

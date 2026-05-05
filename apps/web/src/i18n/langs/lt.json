@@ -240,7 +240,7 @@
         "facts": "Facts",
         "holding": "Holding",
         "procedural-history": "Procedural history",
-        "reasoning": "Reasoning"
+        "reasoning": "Mąstymas"
       }
     },
     "columns": {
@@ -283,7 +283,7 @@
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populiarus pavadinimas",
       "sections": "Skyriai",
-      "source": "Šaltinis",
+      "source": "Tik įvertinimai · kainos iš",
       "statutes": "Applicable statutes",
       "viewOriginal": "Žiūrėti šaltinį"
     }
@@ -566,6 +566,7 @@
     "reference": "Nuoroda",
     "rename": "Pervadinti",
     "required": "Privalomas",
+    "retry": "Bandyti dar kartą",
     "role": "Rolė",
     "run": "Paleisti",
     "save": "Išsaugoti",
@@ -1090,7 +1091,7 @@
   "navigation": {
     "account": "Paskyra",
     "calendar": "Kalendorius",
-    "chat": "Pokalbis",
+    "chat": "Chat",
     "chatAlreadyOpen": "Pokalbis jau atidarytas",
     "clients": "Klientai",
     "contacts": "Kontaktai",
@@ -1116,8 +1117,12 @@
     "toggleSidebar": "Perjungti šoninę juostą"
   },
   "onboarding": {
+    "aiConfigFailed": "Nepavyko išsaugoti dirbtinio intelekto konfigūracijos. Galite ją užbaigti nustatymuose.",
+    "aiSubtitle": "Naudokite savo API raktą. Tiekėjus ir modelius galite keisti bet kada.",
+    "aiTitle": "Prijunkite savo AI tiekėją",
     "changeAnytime": "Šį nustatymą galėsite pakeisti bet kada vėliau.",
     "creating": {
+      "ai": "Išsaugoma AI konfigūracija...",
       "done": "Baigiama...",
       "invites": "Siunčiami kvietimai...",
       "org": "Kuriama komanda..."
@@ -1125,13 +1130,6 @@
     "creatingTrust": "Jūsų duomenys yra šifruojami perduodant ir saugant.",
     "desktopHint": "Tai galite padaryti ir vėliau paskyros nustatymuose.",
     "desktopTitle": "Atsisiųskite kompiuterio programą",
-    "dmsConfirmFresh": "Jokių problemų. Pirmą bylą galėsite sukurti bet kada.",
-    "dmsConfirmMigration": "Gerai žinoti. Susisieksime dėl {dms} migracijos galimybių.",
-    "dmsNoCommitment": "No commitment required. You can start fresh and import later.",
-    "dmsNone": "Pradedu nuo nulio",
-    "dmsPlaceholder": "Ieškokite arba įveskite DMS...",
-    "dmsSubtitle": "Tai padeda mums nustatyti galimų sinchronizavimo parinkčių prioritetus.",
-    "dmsTitle": "Kur šiuo metu laikote dokumentus?",
     "enterTeamName": "Įveskite aukščiau komandos pavadinimą",
     "getStarted": "Pradėti",
     "inviteExternal": "Išorinis naudotojas — turės prieigą prie jūsų dokumentų",
@@ -1144,8 +1142,8 @@
     "orgTitle": "Pavadinkite savo komandą",
     "skipStep": "Praleisti",
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
+    "stepAi": "AI",
     "stepDesktop": "Kompiuteris",
-    "stepDocuments": "Dokumentai",
     "stepOrganization": "Komanda",
     "stepTeam": "Kvietimai",
     "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms>.",
@@ -1162,6 +1160,8 @@
       "apiKeySaved": "Išsaugotas raktas {key}",
       "apiKeyUpdatePlaceholder": "Enter new key to update",
       "baseUrl": "Base URL",
+      "chooseModelsSubtitle": "Kiekvienai rolei pasirinkite modelį. Kainos atnaujinamos dešinėje.",
+      "chooseModelsTitle": "Pasirinkite modelius",
       "configure": "Configure",
       "credentialsPanel": "Raktas",
       "customModelBadge": "Pasirinktinis · {provider}",
@@ -1173,19 +1173,34 @@
       "defaultModel": "Numatytasis: {model}",
       "defaultModelOption": "Numatytasis",
       "description": "Bring your own API key or configure data sovereignty region.",
+      "editProviders": "Redaguoti tiekėjus",
       "keepSavedKey": "Palikti išsaugotą raktą",
       "modelForRole": "{role} modelis",
       "modelIdPlaceholder": "Ieškoti modelių",
       "modelRequired": "Privaloma",
       "modelsDescription": "Kiekvienai AI kategorijai pasirinkite teikėją ir vieną siūlomą multimodalinį modelį.",
-      "modelsPanel": "Modeliai",
+      "modelsPanel": "Režimai",
       "newApiKey": "Naujas API raktas",
       "newApiKeyDescription": "Išsaugojus pakeitimus jis pakeis išsaugotą raktą.",
       "noModelResults": "Nėra atitinkančių siūlomų modelių",
       "overrideRoles": "Override roles",
       "overrideRolesDescription": "Pasirinkite, kurie vaidmenys naudoja šį raktą, tada kiekvienam vaidmeniui pasirinkite modelį. Nepasirinkti vaidmenys naudoja platformos numatytuosius nustatymus.",
+      "prices": {
+        "empty": "Pridėkite tiekėją, kad matytumėte modelių kainas",
+        "emptyHint": "Kairėje pasirinkite tiekėją — čia parodysime jo modelių kainas.",
+        "inMtok": "Įv/M",
+        "model": "Modelis",
+        "outMtok": "Išv/M",
+        "perCall": "/kvietimas",
+        "selectedHeading": "Jūsų pasirinkimas",
+        "source": "tik įvertinimai",
+        "title": "Modelių kainos",
+        "typicalCallHint": "Įkainis už 1M tokenų · kvietimo įvertinimas: {input} įv / {output} išv"
+      },
       "provider": "Provider",
       "providerForRole": "{role} teikėjas",
+      "providerKeyInvalid": "{provider} atmetė raktą. Prieš išsaugodami patikrinkite.",
+      "providerKeyInvalidShort": "Negaliojantis",
       "providers": {
         "anthropic": "Anthropic",
         "google": "Google",
@@ -1202,10 +1217,10 @@
       "removeProvider": "Pašalinti teikėją",
       "replaceKey": "Pakeisti raktą",
       "roles": {
-        "chat": "Chat (conversation)",
-        "fast": "Fast (classification)",
-        "pdf": "PDF (documents)",
-        "reasoning": "Reasoning (analysis)"
+        "chat": "Chat",
+        "fast": "Greitas",
+        "pdf": "PDF",
+        "reasoning": "Mąstymas"
       },
       "selectAtLeastOneRole": "Pasirinkite bent vieną vaidmenį šiam raktui.",
       "selectModelForEachRole": "Pridėkite teikėją ir kiekvienai kategorijai pasirinkite modelį.",
