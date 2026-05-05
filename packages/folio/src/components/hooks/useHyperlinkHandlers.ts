@@ -2,16 +2,7 @@ import { useCallback, useState } from "react";
 
 import type { EditorView } from "prosemirror-view";
 
-import {
-  insertHyperlink,
-  removeHyperlink,
-  setHyperlink,
-} from "../../core/prosemirror";
 import { sanitizeExternalUrl } from "../../core/utils/urlSecurity";
-import type {
-  HyperlinkData,
-  UseHyperlinkDialogReturn,
-} from "../dialogs/HyperlinkDialog";
 import type { HyperlinkPopupData } from "../ui/HyperlinkPopup";
 
 // Toast stub — mirrors the one in DocxEditor.tsx.
@@ -51,19 +42,13 @@ export type UseHyperlinkHandlersDeps = {
   getActiveEditorView: () => EditorView | null | undefined;
   /** Focuses the currently active editor */
   focusActiveEditor: () => void;
-  /** The hyperlink dialog state manager (from useHyperlinkDialog) */
-  hyperlinkDialog: UseHyperlinkDialogReturn;
 };
 
 export type UseHyperlinkHandlersReturn = {
   /** Popup state (Google Docs-style floating popup on link click) */
   hyperlinkPopupData: HyperlinkPopupData | null;
-  /** Update popup state directly (used by keyboard shortcut handler) */
+  /** Update popup state directly */
   setHyperlinkPopupData: (data: HyperlinkPopupData | null) => void;
-  /** Handle hyperlink dialog form submission */
-  handleHyperlinkSubmit: (data: HyperlinkData) => void;
-  /** Handle hyperlink removal from the dialog */
-  handleHyperlinkRemove: () => void;
   /** Handle hyperlink click to show popup */
   handleHyperlinkClick: (data: HyperlinkPopupData) => void;
   /** Navigate to the link URL in a new tab */
@@ -85,58 +70,9 @@ export type UseHyperlinkHandlersReturn = {
 export const useHyperlinkHandlers = ({
   getActiveEditorView,
   focusActiveEditor,
-  hyperlinkDialog,
 }: UseHyperlinkHandlersDeps): UseHyperlinkHandlersReturn => {
   const [hyperlinkPopupData, setHyperlinkPopupData] =
     useState<HyperlinkPopupData | null>(null);
-
-  // Shared: remove hyperlink mark and refocus editor
-  const doRemoveHyperlink = useCallback(() => {
-    const view = getActiveEditorView();
-    if (!view) {
-      return;
-    }
-    removeHyperlink(view.state, view.dispatch);
-    focusActiveEditor();
-  }, [getActiveEditorView, focusActiveEditor]);
-
-  // Handle hyperlink dialog submit
-  const handleHyperlinkSubmit = useCallback(
-    (data: HyperlinkData) => {
-      const view = getActiveEditorView();
-      if (!view) {
-        return;
-      }
-
-      const url = data.url || "";
-      const tooltip = data.tooltip;
-
-      // Check if we have a selection
-      const { empty } = view.state.selection;
-
-      if (empty && data.displayText) {
-        // No selection but display text provided - insert new linked text
-        insertHyperlink(
-          data.displayText,
-          url,
-          tooltip,
-        )(view.state, view.dispatch);
-      } else if (!empty) {
-        // Have selection - apply hyperlink to it
-        setHyperlink(url, tooltip)(view.state, view.dispatch);
-      }
-
-      hyperlinkDialog.close();
-      focusActiveEditor();
-    },
-    [hyperlinkDialog, getActiveEditorView, focusActiveEditor],
-  );
-
-  // Handle hyperlink removal (from dialog)
-  const handleHyperlinkRemove = useCallback(() => {
-    doRemoveHyperlink();
-    hyperlinkDialog.close();
-  }, [hyperlinkDialog, doRemoveHyperlink]);
 
   // Handle hyperlink click — show popup
   const handleHyperlinkClick = useCallback(
@@ -340,8 +276,6 @@ export const useHyperlinkHandlers = ({
   return {
     hyperlinkPopupData,
     setHyperlinkPopupData,
-    handleHyperlinkSubmit,
-    handleHyperlinkRemove,
     handleHyperlinkClick,
     handleHyperlinkPopupNavigate,
     handleHyperlinkPopupCopy,

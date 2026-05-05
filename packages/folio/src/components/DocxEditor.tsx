@@ -95,8 +95,6 @@ import {
   clearFormatting,
   applyStyle,
   createStyleResolver,
-  getHyperlinkAttrs,
-  getSelectedText,
   setRtl,
   setLtr,
   isInTable,
@@ -186,7 +184,6 @@ import { CommentsSidebar } from "./CommentsSidebar";
 import type { TrackedChangeEntry } from "./CommentsSidebar";
 // Dialog hooks and utilities (static imports — lightweight, no UI)
 import type { FindMatch } from "./dialogs/findReplaceUtils";
-import { useHyperlinkDialog } from "./dialogs/HyperlinkDialog";
 import { useFindReplace as useFindReplaceState } from "./dialogs/useFindReplace";
 import {
   DefaultLoadingIndicator,
@@ -263,11 +260,6 @@ const toast = (msg: string) => {
 const FindReplaceDialog = lazy(() =>
   import("./dialogs/FindReplaceDialog").then((m) => ({
     default: m.FindReplaceDialog,
-  })),
-);
-const HyperlinkDialog = lazy(() =>
-  import("./dialogs/HyperlinkDialog").then((m) => ({
-    default: m.HyperlinkDialog,
   })),
 );
 const TablePropertiesDialog = lazy(() =>
@@ -1326,17 +1318,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     // Find/Replace hook
     const findReplace = useFindReplaceState();
 
-    // Hyperlink dialog hook
-    const hyperlinkDialog = useHyperlinkDialog();
-
     // Page setup dialog state
     const [showPageSetup, setShowPageSetup] = useState(false);
 
-    // Hyperlink handlers (dialog submit, popup state, navigation, etc.)
+    // Hyperlink handlers (popup state, navigation, etc.)
     const {
       hyperlinkPopupData,
-      handleHyperlinkSubmit,
-      handleHyperlinkRemove,
       handleHyperlinkClick,
       handleHyperlinkPopupNavigate,
       handleHyperlinkPopupCopy,
@@ -1346,7 +1333,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     } = useHyperlinkHandlers({
       getActiveEditorView,
       focusActiveEditor,
-      hyperlinkDialog,
     });
 
     const {
@@ -1959,7 +1945,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       })();
     }, [onPrint, t]);
 
-    // Keyboard shortcuts for Find/Replace (Ctrl+F, Ctrl+H) and delete table selection
+    // Keyboard shortcuts for Find/Replace (Ctrl+F, Ctrl+H), print, and delete table selection
     useEffect(() => {
       const openFindFromSelection = () => {
         const selection = window.getSelection();
@@ -2030,27 +2016,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           } else if (e.key.toLowerCase() === "p" && !e.repeat) {
             e.preventDefault();
             handleDirectPrint();
-          } else if (e.key.toLowerCase() === "k") {
-            e.preventDefault();
-            // Open hyperlink dialog
-            const view = pagedEditorRef.current?.getView();
-            if (view) {
-              const selectedText = getSelectedText(view.state);
-              const existingLink = getHyperlinkAttrs(view.state);
-              if (existingLink) {
-                const linkData: import("./dialogs/HyperlinkDialog").HyperlinkData =
-                  {
-                    url: existingLink.href,
-                    displayText: selectedText,
-                  };
-                if (existingLink.tooltip) {
-                  linkData.tooltip = existingLink.tooltip;
-                }
-                hyperlinkDialog.openEdit(linkData);
-              } else {
-                hyperlinkDialog.openInsert(selectedText);
-              }
-            }
           }
         }
       };
@@ -2059,7 +2024,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       return () => {
         document.removeEventListener("keydown", handleKeyDown);
       };
-    }, [findReplace, handleDirectPrint, hyperlinkDialog, tableSelection]);
+    }, [findReplace, handleDirectPrint, tableSelection]);
 
     // Handle footnote/endnote properties update
     const handleApplyFootnoteProperties = useCallback(
@@ -2498,26 +2463,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         }
         if (action === "setLtr") {
           setLtr(commandState, view.dispatch);
-          return;
-        }
-        if (action === "insertLink") {
-          // Get the selected text for the hyperlink dialog
-          const selectedText = getSelectedText(commandState);
-          // Check if we're editing an existing link
-          const existingLink = getHyperlinkAttrs(commandState);
-          if (existingLink) {
-            const editData: import("./dialogs/HyperlinkDialog").HyperlinkData =
-              {
-                url: existingLink.href,
-                displayText: selectedText,
-              };
-            if (existingLink.tooltip) {
-              editData.tooltip = existingLink.tooltip;
-            }
-            hyperlinkDialog.openEdit(editData);
-          } else {
-            hyperlinkDialog.openInsert(selectedText);
-          }
           return;
         }
 
@@ -4088,23 +4033,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                   onReplaceAll={handleReplaceAll}
                   initialSearchText={findReplace.state.searchText}
                   currentResult={findResultRef.current}
-                />
-              )}
-              {hyperlinkDialog.state.status !== "closed" && (
-                <HyperlinkDialog
-                  isOpen={true}
-                  onClose={hyperlinkDialog.close}
-                  onSubmit={handleHyperlinkSubmit}
-                  isEditing={hyperlinkDialog.state.status === "edit"}
-                  {...(hyperlinkDialog.state.status === "edit"
-                    ? { onRemove: handleHyperlinkRemove }
-                    : {})}
-                  {...(hyperlinkDialog.state.status === "edit"
-                    ? { initialData: hyperlinkDialog.state.initialData }
-                    : {})}
-                  {...(hyperlinkDialog.state.selectedText
-                    ? { selectedText: hyperlinkDialog.state.selectedText }
-                    : {})}
                 />
               )}
               {tablePropsOpen && (

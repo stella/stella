@@ -76,7 +76,6 @@ export type FormattingAction =
   | "numberedList"
   | "indent"
   | "outdent"
-  | "insertLink"
   | "insertPageBreak"
   | "setRtl"
   | "setLtr"
