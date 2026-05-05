@@ -463,7 +463,10 @@ export const WorkspaceTable = ({
         </div>
         <div>
           {paddingTop > 0 && (
-            <WorkspaceGridRow aria-hidden="true" className="pointer-events-none">
+            <WorkspaceGridRow
+              aria-hidden="true"
+              className="pointer-events-none"
+            >
               <WorkspaceGridFillerCell
                 className="border-b-0"
                 style={{
@@ -527,7 +530,10 @@ export const WorkspaceTable = ({
             );
           })}
           {paddingBottom > 0 && (
-            <WorkspaceGridRow aria-hidden="true" className="pointer-events-none">
+            <WorkspaceGridRow
+              aria-hidden="true"
+              className="pointer-events-none"
+            >
               <WorkspaceGridFillerCell
                 className="border-b-0"
                 style={{
@@ -544,6 +550,7 @@ export const WorkspaceTable = ({
             </WorkspaceGridRow>
           )}
           <BottomRow
+            table={table}
             onFolderCreated={setEditingEntityId}
             workspaceId={workspaceId}
           />
