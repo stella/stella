@@ -1,6 +1,7 @@
 import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
 import type { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import {
@@ -10,6 +11,7 @@ import {
 import { getInternalColId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const selectColId = getInternalColId("select");
+const bottomRowClassName = `sticky bottom-0 z-20 cursor-pointer ${TOOLBAR_ROW_HEIGHT}`;
 
 type BottomRowProps = {
   workspaceId: string;
@@ -30,7 +32,7 @@ export const BottomRow = ({
       uploadOnly
       render={
         // oxlint-disable-next-line jsx_a11y/prefer-tag-over-role
-        <WorkspaceGridRow className="cursor-pointer" role="button">
+        <WorkspaceGridRow className={bottomRowClassName} role="button">
           <WorkspaceGridCell
             className="z-10 flex items-center justify-center border-t-2"
             style={{

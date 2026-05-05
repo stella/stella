@@ -93,6 +93,11 @@ type WorkspaceGridStyle = CSSProperties & {
   "--workspace-table-columns": string;
 };
 
+type EndFillerInput = {
+  renderColumns: Column<TableTreeNode>[];
+  addPropertyColumn: Column<TableTreeNode> | null;
+};
+
 type WorkspaceTableProps = {
   workspaceId: string;
   table: WorkspaceTableType;
@@ -256,12 +261,16 @@ export const WorkspaceTable = ({
     (sum, column) => sum + column.getSize(),
     0,
   );
+  const gridWidth = Math.max(tableWidth, wrapperWidth);
   const gridStyle: WorkspaceGridStyle = {
-    "--workspace-table-columns": getGridTemplateColumns(orderedColumns),
+    "--workspace-table-columns": getWorkspaceGridTemplateColumns({
+      renderColumns,
+      addPropertyColumn,
+    }),
     minWidth: tableWidth,
-    width: tableWidth,
+    width: gridWidth,
   };
-  const horizontalMaxScroll = Math.max(0, tableWidth - wrapperWidth);
+  const horizontalMaxScroll = Math.max(0, gridWidth - wrapperWidth);
   const handleColumnReorder = useCallback(
     (sourceId: string, targetId: string, edge: ColumnDropEdge) => {
       const sourceColumn = table.getColumn(sourceId);
@@ -419,7 +428,7 @@ export const WorkspaceTable = ({
       <div
         aria-colcount={visibleColumnCount}
         aria-rowcount={rowModel.rows.length}
-        className="relative min-h-full text-sm"
+        className="relative flex min-h-full flex-col text-sm"
         role="grid"
         style={gridStyle}
       >
@@ -441,6 +450,10 @@ export const WorkspaceTable = ({
                   />
                 ),
               )}
+              <HeaderEndFillerCell
+                addPropertyColumn={addPropertyColumn}
+                renderColumns={renderColumns}
+              />
               {addPropertyColumn && (
                 <DraggableHeaderCell
                   header={getRequiredHeader(
@@ -455,7 +468,7 @@ export const WorkspaceTable = ({
             </WorkspaceGridRow>
           ))}
         </div>
-        <div>
+        <div className="flex flex-1 flex-col">
           {paddingTop > 0 && (
             <WorkspaceGridRow
               aria-hidden="true"
@@ -531,6 +544,7 @@ export const WorkspaceTable = ({
               )}
             </WorkspaceGridRow>
           )}
+          <TableEndFiller />
           <BottomRow
             table={table}
             onFolderCreated={setEditingEntityId}
@@ -541,6 +555,59 @@ export const WorkspaceTable = ({
     </div>
   );
 };
+
+const TableEndFiller = () => (
+  <WorkspaceGridRow
+    aria-hidden="true"
+    className="pointer-events-none min-h-0 flex-1"
+    role="presentation"
+  >
+    <WorkspaceGridFillerCell
+      className="bg-background border-b-0"
+      style={{ gridColumn: "1 / -1" }}
+    />
+  </WorkspaceGridRow>
+);
+
+const HeaderEndFillerCell = ({
+  renderColumns,
+  addPropertyColumn,
+}: EndFillerInput) => (
+  <WorkspaceGridHead
+    aria-hidden="true"
+    className={cn("pointer-events-none", addPropertyColumn && "border-e-0")}
+    role="presentation"
+    style={{
+      gridColumn: getEndFillerGridColumn({
+        renderColumns,
+        addPropertyColumn,
+      }),
+    }}
+  />
+);
+
+type RowEndFillerCellProps = EndFillerInput & {
+  selected: boolean;
+};
+
+const RowEndFillerCell = ({
+  renderColumns,
+  addPropertyColumn,
+  selected,
+}: RowEndFillerCellProps) => (
+  <WorkspaceGridCell
+    aria-hidden="true"
+    className={cn("p-0", addPropertyColumn && "border-e-0")}
+    data-state={selected ? "selected" : undefined}
+    role="presentation"
+    style={{
+      gridColumn: getEndFillerGridColumn({
+        renderColumns,
+        addPropertyColumn,
+      }),
+    }}
+  />
+);
 
 type DraggableHeaderCellProps = {
   header: Header<TableTreeNode, unknown>;
@@ -652,6 +719,7 @@ const DraggableHeaderCell = ({
       )}
       ref={headerRef}
       style={{
+        gridColumn: isAddPropertyColumn ? undefined : index + 1,
         ...getGridPinningStyles(header.column),
       }}
     >
@@ -726,6 +794,25 @@ const getRequiredHeader = (
   return header;
 };
 
+function getWorkspaceGridTemplateColumns({
+  renderColumns,
+  addPropertyColumn,
+}: EndFillerInput) {
+  const contentColumns = getGridTemplateColumns(renderColumns);
+  if (addPropertyColumn) {
+    return `${contentColumns} minmax(0, 1fr) ${addPropertyColumn.getSize()}px`;
+  }
+
+  return `${contentColumns} minmax(0, 1fr)`;
+}
+
+function getEndFillerGridColumn({
+  renderColumns,
+  addPropertyColumn,
+}: EndFillerInput) {
+  return `${renderColumns.length + 1} / ${addPropertyColumn ? "-2" : "-1"}`;
+}
+
 type SelectAllHeaderProps = {
   state: SelectAllState;
   onToggle: () => void;
@@ -764,6 +851,7 @@ const SelectAllHeader = ({ state, onToggle }: SelectAllHeaderProps) => {
 const getGridPinningStyles = (column: Column<TableTreeNode>): CSSProperties => {
   if (column.id === addPropertyColId) {
     return {
+      gridColumn: "-2 / -1",
       position: "sticky",
       right: 0,
       zIndex: 2,
@@ -1147,6 +1235,7 @@ const DraggableRow = ({
           data-state={row.getIsSelected() ? "selected" : undefined}
           key={selectCell.id}
           style={{
+            gridColumn: 1,
             ...getGridPinningStyles(selectCell.column),
           }}
         >
@@ -1160,6 +1249,7 @@ const DraggableRow = ({
           key={nameCell.id}
           onClick={() => row.toggleExpanded()}
           style={{
+            gridColumn: 2,
             ...getGridPinningStyles(nameCell.column),
           }}
         >
@@ -1222,6 +1312,7 @@ const DraggableRow = ({
           data-state={cell.row.getIsSelected() ? "selected" : undefined}
           key={cell.id}
           style={{
+            gridColumn: cellIndex + 1,
             ...getGridPinningStyles(cell.column),
             maxHeight: expanded ? EXPANDED_ROW_MAX_HEIGHT_PX : undefined,
           }}
@@ -1236,6 +1327,11 @@ const DraggableRow = ({
           )}
         </WorkspaceGridCell>
       ))}
+      <RowEndFillerCell
+        addPropertyColumn={addPropertyColumn}
+        renderColumns={renderColumns}
+        selected={row.getIsSelected()}
+      />
       <AddPropertyCell
         cell={addPropertyCell}
         columnIndex={renderColumns.length + 1}
