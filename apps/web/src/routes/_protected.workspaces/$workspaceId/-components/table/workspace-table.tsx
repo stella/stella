@@ -22,7 +22,7 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import { Checkbox } from "@stll/ui/components/checkbox";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { flexRender } from "@tanstack/react-table";
 import type {
@@ -337,7 +337,7 @@ export const WorkspaceTable = ({
           if (source.data["type"] !== ENTITY_DRAG_TYPE) {
             return;
           }
-          toastManager.add({
+          stellaToast.add({
             title: t("workspaces.table.reorderReadOnly"),
             type: "info",
           });

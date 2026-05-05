@@ -160,7 +160,7 @@ import {
 } from "@stll/ui/components/table";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
 import { Textarea } from "@stll/ui/components/textarea";
-import { toast } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import {
   Tooltip,
   TooltipPopup,
@@ -269,7 +269,7 @@ export function UiPlayground() {
   );
 
   const showPromiseToast = () => {
-    void toast.promise(
+    void stellaToast.promise(
       new Promise<string>((resolve) => {
         setTimeout(() => resolve("complete"), 900);
       }),
@@ -282,11 +282,11 @@ export function UiPlayground() {
   };
 
   const showUpdatingToast = () => {
-    const toastId = toast.loading("Uploading bundle", {
+    const toastId = stellaToast.loading("Uploading bundle", {
       description: "Preparing files",
     });
     setTimeout(() => {
-      toast.update(toastId, {
+      stellaToast.update(toastId, {
         title: "Upload complete",
         description: "Three files were added to the matter.",
         type: "success",
@@ -462,7 +462,7 @@ export function UiPlayground() {
                 <Form
                   onSubmit={(event) => {
                     event.preventDefault();
-                    toast.success("Form submitted");
+                    stellaToast.success("Form submitted");
                   }}
                 >
                   <Field>
@@ -964,14 +964,14 @@ export function UiPlayground() {
                 <div className="flex flex-wrap gap-2">
                   <Button
                     onClick={() => {
-                      void toast.success("Saved");
+                      void stellaToast.success("Saved");
                     }}
                   >
                     Success
                   </Button>
                   <Button
                     onClick={() => {
-                      void toast.error("Unable to save", {
+                      void stellaToast.error("Unable to save", {
                         description: "The server rejected the update.",
                       });
                     }}
@@ -981,11 +981,11 @@ export function UiPlayground() {
                   </Button>
                   <Button
                     onClick={() => {
-                      void toast.warning("Missing approver", {
+                      void stellaToast.warning("Missing approver", {
                         action: {
                           label: "Assign",
                           onClick: () => {
-                            void toast.info("Assignee picker opened");
+                            void stellaToast.info("Assignee picker opened");
                           },
                         },
                       });
@@ -1002,11 +1002,11 @@ export function UiPlayground() {
                   </Button>
                   <Button
                     onClick={() => {
-                      void toast.info(
+                      void stellaToast.info(
                         "This is a deliberately long notification title that should wrap cleanly inside the toast viewport",
                         {
                           description:
-                            "Descriptions should wrap without pushing the close button out of the toast.",
+                            "Descriptions should wrap without pushing the close button out of the stellaToast.",
                         },
                       );
                     }}

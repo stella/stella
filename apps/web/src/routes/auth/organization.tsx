@@ -13,7 +13,7 @@ import {
 } from "@stll/ui/components/frame";
 import { Input } from "@stll/ui/components/input";
 import { Skeleton } from "@stll/ui/components/skeleton";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useForm, useStore } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
@@ -164,7 +164,7 @@ const OrganizationList = ({
       });
 
       if (error) {
-        toastManager.add({
+        stellaToast.add({
           title: error.message ?? t("errors.actionFailed"),
           type: "error",
         });
@@ -270,7 +270,7 @@ const CreateOrganizationForm = ({
 
       if (slugCheckError) {
         analytics.captureError(toAuthClientError(slugCheckError));
-        toastManager.add({
+        stellaToast.add({
           title: slugCheckError.message ?? t("errors.actionFailed"),
           type: "error",
         });
@@ -293,7 +293,7 @@ const CreateOrganizationForm = ({
 
       if (createError) {
         analytics.captureError(toAuthClientError(createError));
-        toastManager.add({
+        stellaToast.add({
           title: createError.message ?? t("errors.actionFailed"),
           type: "error",
         });
@@ -308,7 +308,7 @@ const CreateOrganizationForm = ({
 
       if (setActiveError) {
         analytics.captureError(toAuthClientError(setActiveError));
-        toastManager.add({
+        stellaToast.add({
           title: setActiveError.message ?? t("errors.actionFailed"),
           type: "error",
         });
@@ -325,7 +325,7 @@ const CreateOrganizationForm = ({
         });
       } catch (error) {
         analytics.captureError(error);
-        toastManager.add({
+        stellaToast.add({
           title:
             error instanceof Error ? error.message : t("errors.actionFailed"),
           type: "error",

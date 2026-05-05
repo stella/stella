@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@stll/ui/components/button";
 import { Popover, PopoverPopup } from "@stll/ui/components/popover";
 import { Separator } from "@stll/ui/components/separator";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { EyeOffIcon, PencilLineIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -84,7 +84,7 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
           void startWorkflow();
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });

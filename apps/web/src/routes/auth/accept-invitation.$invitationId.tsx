@@ -8,7 +8,7 @@ import {
   FramePanel,
   FrameTitle,
 } from "@stll/ui/components/frame";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -72,7 +72,7 @@ function AcceptInvitation() {
       });
 
       if (error) {
-        toastManager.add({
+        stellaToast.add({
           title: error.message ?? t("errors.actionFailed"),
           type: "error",
         });
@@ -86,7 +86,7 @@ function AcceptInvitation() {
       );
 
       if (setActiveError) {
-        toastManager.add({
+        stellaToast.add({
           title: setActiveError.message ?? t("errors.actionFailed"),
           type: "error",
         });
@@ -108,7 +108,7 @@ function AcceptInvitation() {
       });
 
       if (error) {
-        toastManager.add({
+        stellaToast.add({
           title: error.message ?? t("errors.actionFailed"),
           type: "error",
         });

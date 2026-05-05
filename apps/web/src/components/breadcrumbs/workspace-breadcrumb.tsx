@@ -11,7 +11,7 @@ import {
 } from "@stll/ui/components/color-picker";
 import { Input } from "@stll/ui/components/input";
 import { Popover, PopoverPopup } from "@stll/ui/components/popover";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useMatch } from "@tanstack/react-router";
 import type { ResolveParams } from "@tanstack/react-router";
@@ -122,7 +122,7 @@ export const WorkspaceBreadcrumb = ({
             APIError.is(error) && error.status < 500
               ? error.message
               : t("errors.actionFailed");
-          toastManager.add({ title: message, type: "error" });
+          stellaToast.add({ title: message, type: "error" });
           setIsEditingRef(false);
         },
       },

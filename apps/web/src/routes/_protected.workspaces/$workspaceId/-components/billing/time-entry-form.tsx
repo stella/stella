@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { Textarea } from "@stll/ui/components/textarea";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useForm, useStore } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -94,7 +94,7 @@ export const TimeEntryForm = ({
     },
     onSubmit: async ({ value }) => {
       if (!value.matterId) {
-        toastManager.add({
+        stellaToast.add({
           title: t("billing.matterRequired"),
           type: "error",
         });

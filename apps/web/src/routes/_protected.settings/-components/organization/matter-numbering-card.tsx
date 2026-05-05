@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
@@ -95,14 +95,14 @@ export const MatterNumberingCard = () => {
       await queryClient.invalidateQueries({
         queryKey: organizationSettingsKeys.all,
       });
-      toastManager.add({
+      stellaToast.add({
         title: t("success.matterNumberingUpdated"),
         type: "success",
       });
     },
     onError: (error) => {
       analytics.captureError(error);
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });

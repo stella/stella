@@ -13,7 +13,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@stll/ui/components/sheet";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -43,9 +43,9 @@ import {
 } from "@/routes/_protected.workspaces/-queries";
 
 const comingSoon = (label: string) => {
-  toastManager.add({
+  stellaToast.add({
     title: label,
-    type: "foreground",
+    type: "neutral",
   });
 };
 
@@ -95,7 +95,7 @@ export const MatterMetadataSheet = ({
             APIError.is(error) && error.status < 500
               ? error.message
               : t("errors.actionFailed");
-          toastManager.add({ title: message, type: "error" });
+          stellaToast.add({ title: message, type: "error" });
           setNameValue(workspace.name);
         },
       },
@@ -132,7 +132,7 @@ export const MatterMetadataSheet = ({
             APIError.is(error) && error.status < 500
               ? error.message
               : t("errors.actionFailed");
-          toastManager.add({ title: message, type: "error" });
+          stellaToast.add({ title: message, type: "error" });
         },
       },
     );
@@ -143,7 +143,7 @@ export const MatterMetadataSheet = ({
       return;
     }
 
-    const toastId = toastManager.add({
+    const toastId = stellaToast.add({
       title: t("workspaces.deletingWorkspace"),
       type: "loading",
       timeout: Number.POSITIVE_INFINITY,
@@ -153,7 +153,7 @@ export const MatterMetadataSheet = ({
       { workspaceId },
       {
         onError: () => {
-          toastManager.update(toastId, {
+          stellaToast.update(toastId, {
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -161,7 +161,7 @@ export const MatterMetadataSheet = ({
         // eslint-disable-next-line typescript/no-misused-promises
         onSuccess: () => {
           void (async () => {
-            toastManager.update(toastId, {
+            stellaToast.update(toastId, {
               title: t("success.workspaceDeletedSuccessfully"),
               type: "success",
             });

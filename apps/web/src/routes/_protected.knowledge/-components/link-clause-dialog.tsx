@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useQuery } from "@tanstack/react-query";
 import { SearchIcon, TextQuoteIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -102,7 +102,7 @@ export const LinkClauseDialog = ({
     setLinking(false);
 
     if (response.error) {
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("clauses.linkFailed"),
         description: userErrorMessage(
@@ -113,7 +113,7 @@ export const LinkClauseDialog = ({
       return;
     }
 
-    toastManager.add({
+    stellaToast.add({
       type: "success",
       title: t("clauses.linked"),
     });

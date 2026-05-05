@@ -19,7 +19,7 @@ import {
 import { Input } from "@stll/ui/components/input";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { Textarea } from "@stll/ui/components/textarea";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -445,7 +445,7 @@ export const ExistingFileOrganizerDialog = ({
 
     onOpenChange(false);
 
-    const toastId = toastManager.add({
+    const toastId = stellaToast.add({
       type: "loading",
       title: t("workspaces.importOrganizer.applying"),
       timeout: 0,
@@ -541,7 +541,7 @@ export const ExistingFileOrganizerDialog = ({
 
     run()
       .then(() => {
-        toastManager.update(toastId, {
+        stellaToast.update(toastId, {
           type: "success",
           title: t("workspaces.importOrganizer.organized"),
           timeout: undefined,
@@ -549,7 +549,7 @@ export const ExistingFileOrganizerDialog = ({
       })
       .catch((error: unknown) => {
         analytics.captureError(error);
-        toastManager.update(toastId, {
+        stellaToast.update(toastId, {
           type: "error",
           title: t("workspaces.importOrganizer.failed"),
           timeout: undefined,

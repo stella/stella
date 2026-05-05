@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import {
   useQuery,
   useQueryClient,
@@ -109,7 +109,7 @@ const MemberRow = ({
       { workspaceId, userId: member.userId },
       {
         onSuccess: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("success.memberRemoved"),
             type: "success",
           });
@@ -119,7 +119,7 @@ const MemberRow = ({
           });
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -221,7 +221,7 @@ export const AddMemberDialog = ({
       { workspaceId, userId: selectedUserId },
       {
         onSuccess: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("success.memberAdded"),
             type: "success",
           });
@@ -233,7 +233,7 @@ export const AddMemberDialog = ({
           setSelectedUserId(null);
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });

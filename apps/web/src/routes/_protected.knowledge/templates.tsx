@@ -3,7 +3,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
@@ -509,7 +509,7 @@ const TemplateDetail = ({
     if (response.error) {
       renameDispatch({ type: "saveFailed" });
       renameCancelledRef.current = false;
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("templates.renameFailed"),
         description: userErrorMessage(
@@ -522,7 +522,7 @@ const TemplateDetail = ({
 
     renameDispatch({ type: "saved", name: trimmed });
     onRenamed(trimmed);
-    toastManager.add({
+    stellaToast.add({
       type: "success",
       title: t("templates.templateRenamed"),
     });
@@ -616,7 +616,7 @@ const TemplateDetail = ({
 
     if (response.error) {
       fieldEditDispatch({ type: "saveFailed" });
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("templates.fieldUpdateFailed"),
         description: userErrorMessage(
@@ -638,7 +638,7 @@ const TemplateDetail = ({
 
     fieldEditDispatch({ type: "saved" });
 
-    toastManager.add({
+    stellaToast.add({
       type: "success",
       title: t("templates.fieldsUpdated"),
     });

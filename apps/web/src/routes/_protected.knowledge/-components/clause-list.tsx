@@ -26,7 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@stll/ui/components/menu";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import {
   DownloadIcon,
   MoreHorizontalIcon,
@@ -118,7 +118,7 @@ export const ClauseList = ({
     });
 
     if (response.error) {
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("clauses.exportFailed"),
         description: userErrorMessage(
@@ -393,7 +393,7 @@ const CategoryRow = ({
     setDeleting(false);
 
     if (response.error) {
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("clauses.deleteFailed"),
         description: userErrorMessage(
@@ -529,7 +529,7 @@ const CategoryFormDialog = ({
       setSaving(false);
 
       if (response.error) {
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t("clauses.saveFailed"),
           description: userErrorMessage(
@@ -547,7 +547,7 @@ const CategoryFormDialog = ({
       setSaving(false);
 
       if (response.error) {
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t("clauses.saveFailed"),
           description: userErrorMessage(

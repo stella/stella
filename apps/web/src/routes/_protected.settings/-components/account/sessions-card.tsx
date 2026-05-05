@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/components/table";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import {
   useMutation,
   useQueryClient,
@@ -136,7 +136,7 @@ const RevokeSessionButton = ({ token }: RevokeSessionButtonProps) => {
       const result = await revokeAuthSession({ token: sessionToken });
 
       if (result.error) {
-        toastManager.add({
+        stellaToast.add({
           title: result.error.message ?? t("errors.actionFailed"),
           type: "error",
         });
@@ -146,7 +146,7 @@ const RevokeSessionButton = ({ token }: RevokeSessionButtonProps) => {
       return result.data;
     },
     onSuccess: async () => {
-      toastManager.add({
+      stellaToast.add({
         title: t("success.sessionRevoked"),
         type: "success",
       });
@@ -182,7 +182,7 @@ const RevokeAllDialog = () => {
       const result = await authClient.revokeOtherSessions();
 
       if (result.error) {
-        toastManager.add({
+        stellaToast.add({
           title: result.error.message ?? t("errors.actionFailed"),
           type: "error",
         });
@@ -192,7 +192,7 @@ const RevokeAllDialog = () => {
       return result.data;
     },
     onSuccess: async () => {
-      toastManager.add({
+      stellaToast.add({
         title: t("success.otherSessionsRevoked"),
         type: "success",
       });

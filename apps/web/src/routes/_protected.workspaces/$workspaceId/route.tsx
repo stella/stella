@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import type { QueryClient } from "@tanstack/react-query";
 import {
@@ -139,7 +139,7 @@ const loadWorkspaceOrRedirect = async (
   } catch (error) {
     if (APIError.is(error) && error.status === 404) {
       const t = getTranslator();
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.matterNotFound"),
         type: "error",
       });

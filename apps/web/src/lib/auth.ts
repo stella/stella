@@ -1,6 +1,6 @@
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { ac, roles } from "@stll/permissions";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import type { BetterAuthClientPlugin } from "better-auth/client";
 import {
   emailOTPClient,
@@ -61,7 +61,7 @@ export const authClient = createAuthClient({
     onError: (context) => {
       if (context.response.status === HTTP_TOO_MANY_REQUESTS) {
         const t = getTranslator();
-        toastManager.add({
+        stellaToast.add({
           title: t("auth.rateLimitExceeded"),
           type: "error",
         });

@@ -1,4 +1,4 @@
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { isEntityActiveInMainRoute } from "@/components/chat/entity-route-detect";
 import { getTranslator } from "@/i18n/i18n-store";
@@ -155,7 +155,7 @@ export const openEntityInInspector = async (
     }
 
     const t = getTranslator();
-    toastManager.add({
+    stellaToast.add({
       title: t("errors.actionFailed"),
       type: "error",
     });
@@ -163,7 +163,7 @@ export const openEntityInInspector = async (
   } catch (error) {
     getAnalytics().captureError(error);
     const t = getTranslator();
-    toastManager.add({
+    stellaToast.add({
       title: error instanceof Error ? error.message : t("errors.actionFailed"),
       type: "error",
     });

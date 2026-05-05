@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -106,7 +106,7 @@ export const OnboardingWizard = () => {
 
       if (createOrgError) {
         analytics.captureError(toAuthClientError(createOrgError));
-        toastManager.add({
+        stellaToast.add({
           title: createOrgError.message ?? t("errors.actionFailed"),
           type: "error",
         });
@@ -125,7 +125,7 @@ export const OnboardingWizard = () => {
 
       if (setActiveError) {
         analytics.captureError(toAuthClientError(setActiveError));
-        toastManager.add({
+        stellaToast.add({
           title: setActiveError.message ?? t("errors.actionFailed"),
           type: "error",
         });
@@ -169,7 +169,7 @@ export const OnboardingWizard = () => {
 
           if (aiConfigError) {
             analytics.captureError(toAPIError(aiConfigError));
-            toastManager.add({
+            stellaToast.add({
               title: t("onboarding.aiConfigFailed"),
               type: "warning",
             });
@@ -203,7 +203,7 @@ export const OnboardingWizard = () => {
           ).length;
 
           if (failedCount > 0) {
-            toastManager.add({
+            stellaToast.add({
               title: t("onboarding.someInvitesFailed", {
                 count: failedCount,
               }),

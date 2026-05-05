@@ -26,7 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@stll/ui/components/menu";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import {
   MoreHorizontalIcon,
   PencilIcon,
@@ -156,7 +156,7 @@ const CategoryRow = ({
     setDeleting(false);
 
     if (response.error) {
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("templates.categoryDeleteFailed"),
         description: userErrorMessage(
@@ -291,7 +291,7 @@ const CategoryFormDialog = ({
       setSaving(false);
 
       if (response.error) {
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t("templates.categorySaveFailed"),
           description: userErrorMessage(
@@ -309,7 +309,7 @@ const CategoryFormDialog = ({
       setSaving(false);
 
       if (response.error) {
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t("templates.categorySaveFailed"),
           description: userErrorMessage(

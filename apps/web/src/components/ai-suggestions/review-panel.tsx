@@ -26,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
@@ -731,7 +731,7 @@ const IdentityPopover = ({
       }
     },
     onSuccess: async () => {
-      toastManager.add({
+      stellaToast.add({
         title: t("docxReview.identitySaved"),
         type: "success",
       });
@@ -740,7 +740,7 @@ const IdentityPopover = ({
       });
     },
     onError: () => {
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });

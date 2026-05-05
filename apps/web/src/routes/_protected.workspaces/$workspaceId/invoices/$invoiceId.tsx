@@ -19,7 +19,7 @@ import { Form } from "@stll/ui/components/form";
 import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import { Textarea } from "@stll/ui/components/textarea";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useForm, useStore } from "@tanstack/react-form";
 import {
   useMutation,
@@ -101,7 +101,7 @@ function InvoiceDetailPage() {
 }
 
 const showErrorToast = (title: string) => {
-  toastManager.add({ type: "error", title });
+  stellaToast.add({ type: "error", title });
 };
 
 const InvoiceDetail = ({

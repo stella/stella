@@ -8,7 +8,7 @@ import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import type { OptionColor } from "@stll/api/types";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import {
   useMutation,
   useInfiniteQuery,
@@ -96,14 +96,14 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
       const entityId = response.data?.entityId;
       if (response.error || !entityId) {
-        toastManager.add({
+        stellaToast.add({
           title: t("errors.actionFailed"),
           type: "error",
         });
         return;
       }
 
-      toastManager.add({
+      stellaToast.add({
         title: t("success.taskCreated"),
         type: "success",
       });
@@ -120,13 +120,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       },
       {
         onSuccess: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("success.documentCreated"),
             type: "success",
           });
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -202,7 +202,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           status,
         });
       if (response.error) {
-        toastManager.add({
+        stellaToast.add({
           title: t("errors.actionFailed"),
           type: "error",
         });
@@ -283,7 +283,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       return;
     }
     if (isBuiltInGrouping) {
-      toastManager.add({
+      stellaToast.add({
         title: t("workspaces.kanban.readOnlyGrouping"),
         type: "info",
       });
@@ -320,7 +320,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     )?.id;
 
     if (!filePropertyId) {
-      toastManager.add({
+      stellaToast.add({
         title: t("workspaces.files.addFilePropertyToUpload"),
         type: "warning",
       });

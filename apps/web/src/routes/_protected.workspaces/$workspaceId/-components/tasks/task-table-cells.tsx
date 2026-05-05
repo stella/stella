@@ -1,4 +1,4 @@
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
@@ -65,7 +65,7 @@ const useUpdateTask = (workspaceId: string, taskId: string) => {
     },
     onError: (error) => {
       analytics.captureError(error);
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });

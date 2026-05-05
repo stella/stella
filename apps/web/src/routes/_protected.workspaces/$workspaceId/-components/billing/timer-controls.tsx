@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "@stll/ui/components/button";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { PlayIcon, SquareIcon } from "lucide-react";
@@ -66,7 +66,7 @@ export const TimerControls = ({ workspaceId }: TimerControlsProps) => {
 
   const handleStart = () => {
     if (!matterId) {
-      toastManager.add({
+      stellaToast.add({
         title: t("billing.matterRequired"),
         type: "error",
       });
@@ -83,7 +83,7 @@ export const TimerControls = ({ workspaceId }: TimerControlsProps) => {
       },
       {
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("billing.failedToStartTimer"),
             type: "error",
           });
@@ -97,7 +97,7 @@ export const TimerControls = ({ workspaceId }: TimerControlsProps) => {
       { workspaceId },
       {
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("billing.failedToStopTimer"),
             type: "error",
           });

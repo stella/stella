@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon } from "lucide-react";
@@ -87,7 +87,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
 
     const entityId = response.data?.entityId;
     if (response.error || !entityId) {
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });
@@ -248,14 +248,14 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     } else if (isTaskDateProperty(datePropertyId)) {
       // Future-proofing for any new built-in task date pseudo-property.
       if (kind !== "task") {
-        toastManager.add({
+        stellaToast.add({
           title: t("workspaces.views.calendar.dueDateTaskOnly"),
-          type: "foreground",
+          type: "neutral",
         });
       } else {
-        toastManager.add({
+        stellaToast.add({
           title: t("workspaces.views.calendar.noDates"),
-          type: "foreground",
+          type: "neutral",
         });
       }
     } else {

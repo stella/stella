@@ -26,7 +26,7 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "@stll/ui/components/menu";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useSuspenseQuery } from "@tanstack/react-query";
@@ -673,7 +673,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
             { workspaceId, entityId, parentId: null },
             {
               onError: () => {
-                toastManager.add({
+                stellaToast.add({
                   title: t("errors.actionFailed"),
                   type: "error",
                 });
@@ -1307,7 +1307,7 @@ const FilesystemRow = ({
                     },
                     {
                       onError: () => {
-                        toastManager.add({
+                        stellaToast.add({
                           title: t("errors.actionFailed"),
                           type: "error",
                         });

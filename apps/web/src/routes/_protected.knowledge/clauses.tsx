@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -168,7 +168,7 @@ function RouteComponent() {
       }
 
       if (response.error) {
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t("clauses.loadFailed"),
           description: userErrorMessage(

@@ -181,6 +181,7 @@ export default defineConfig({
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
     "./.oxlint-plugins/no-raw-user-id-schema.ts",
+    "./.oxlint-plugins/stella-toast.ts",
   ],
 
   overrides: [
@@ -315,6 +316,7 @@ export default defineConfig({
         "security-guards/no-unsanitized-href": "error",
         "sonarjs/jsx-no-leaked-render": "error",
         "sonarjs/no-hook-setter-in-body": "error",
+        "stella-toast/stella-toast": "error",
       },
     },
     {

@@ -1,5 +1,5 @@
 import { Button } from "@stll/ui/components/button";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import {
   CheckCheckIcon,
   CircleOffIcon,
@@ -44,7 +44,7 @@ export const BatchActionBar = ({
       {
         onSuccess: () => onClear(),
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -59,7 +59,7 @@ export const BatchActionBar = ({
       {
         onSuccess: () => onClear(),
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });

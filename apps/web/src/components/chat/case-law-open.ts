@@ -1,4 +1,4 @@
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { getTranslator } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
@@ -57,7 +57,7 @@ export const openCaseLawDecision = async (
     const decisionId = await resolveCaseLawDecisionRouteParam(rawDecisionRef);
     if (!decisionId) {
       const t = getTranslator();
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });
@@ -70,7 +70,7 @@ export const openCaseLawDecision = async (
     });
   } catch (error) {
     const t = getTranslator();
-    toastManager.add({
+    stellaToast.add({
       title: error instanceof Error ? error.message : t("errors.actionFailed"),
       type: "error",
     });

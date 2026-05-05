@@ -13,7 +13,7 @@ import {
 } from "@stll/ui/components/select";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { Textarea } from "@stll/ui/components/textarea";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import {
   useQuery,
   useQueryClient,
@@ -86,7 +86,7 @@ function ContactDetailPage() {
         // eslint-disable-next-line typescript/no-misused-promises
         onSuccess: () => {
           void (async () => {
-            toastManager.add({
+            stellaToast.add({
               title: t("success.contactDeleted"),
               type: "success",
             });
@@ -97,7 +97,7 @@ function ContactDetailPage() {
           })();
         },
         onError: (error) => {
-          toastManager.add({
+          stellaToast.add({
             title:
               error instanceof Error ? error.message : t("errors.actionFailed"),
             type: "error",
@@ -524,7 +524,7 @@ const useContactPatch = (contact: ContactData) => {
   };
 
   const handleError = (onError?: () => void) => {
-    toastManager.add({
+    stellaToast.add({
       title: t("errors.actionFailed"),
       type: "error",
     });
@@ -580,7 +580,7 @@ const ContactCommunicationEditor = ({ contact }: { contact: ContactData }) => {
     }
 
     if (!v.safeParse(EMAIL_SCHEMA, address).success) {
-      toastManager.add({
+      stellaToast.add({
         title: t("contacts.communication.invalidEmail"),
         type: "error",
       });
@@ -592,7 +592,7 @@ const ContactCommunicationEditor = ({ contact }: { contact: ContactData }) => {
         (email) => email.address.toLowerCase() === address.toLowerCase(),
       )
     ) {
-      toastManager.add({
+      stellaToast.add({
         title: t("contacts.communication.alreadyExists"),
         type: "error",
       });
@@ -622,7 +622,7 @@ const ContactCommunicationEditor = ({ contact }: { contact: ContactData }) => {
     }
 
     if (phones.some((phone) => phone.number === number)) {
-      toastManager.add({
+      stellaToast.add({
         title: t("contacts.communication.alreadyExists"),
         type: "error",
       });
@@ -652,7 +652,7 @@ const ContactCommunicationEditor = ({ contact }: { contact: ContactData }) => {
     }
 
     if (!DATA_BOX_ID_PATTERN.test(id)) {
-      toastManager.add({
+      stellaToast.add({
         title: t("contacts.communication.invalidDataBox"),
         type: "error",
       });
@@ -660,7 +660,7 @@ const ContactCommunicationEditor = ({ contact }: { contact: ContactData }) => {
     }
 
     if (dataBoxes.some((dataBox) => dataBox.id === id)) {
-      toastManager.add({
+      stellaToast.add({
         title: t("contacts.communication.alreadyExists"),
         type: "error",
       });
@@ -931,7 +931,7 @@ const ContactCustomFieldsEditor = ({ contact }: { contact: ContactData }) => {
     const value = patch.value.trim();
 
     if (!label) {
-      toastManager.add({
+      stellaToast.add({
         title: t("contacts.customFields.labelRequired"),
         type: "error",
       });
@@ -1188,7 +1188,7 @@ const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
           });
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -1395,7 +1395,7 @@ const ContactNotesEditor = ({ contact }: { contact: ContactData }) => {
           });
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -1451,7 +1451,7 @@ const EditableRow = ({
     }
 
     if (maxLength !== undefined && trimmed.length > maxLength) {
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });
@@ -1489,7 +1489,7 @@ const EditableRow = ({
           });
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });

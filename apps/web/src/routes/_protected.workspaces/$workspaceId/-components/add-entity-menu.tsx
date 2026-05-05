@@ -8,7 +8,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/components/menu";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   FolderPlusIcon,
@@ -98,7 +98,7 @@ export const AddEntityMenu = ({
       },
       {
         onSuccess: (data) => {
-          toastManager.add({
+          stellaToast.add({
             title: t("success.folderCreated"),
             type: "success",
           });
@@ -107,7 +107,7 @@ export const AddEntityMenu = ({
           }
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -124,14 +124,14 @@ export const AddEntityMenu = ({
 
     const entityId = response.data?.entityId;
     if (response.error || !entityId) {
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });
       return;
     }
 
-    toastManager.add({
+    stellaToast.add({
       title: t("success.taskCreated"),
       type: "success",
     });

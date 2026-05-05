@@ -21,7 +21,7 @@ import {
 import { Field, FieldLabel } from "@stll/ui/components/field";
 import { Input } from "@stll/ui/components/input";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
@@ -227,7 +227,7 @@ export const CreateMatterDialog = () => {
     );
 
     if (Result.isError(result)) {
-      toastManager.add({
+      stellaToast.add({
         title: toActionErrorTitle({
           error: result.error,
           fallback: t("errors.actionFailed"),
@@ -247,7 +247,7 @@ export const CreateMatterDialog = () => {
       type,
     });
 
-    toastManager.add({
+    stellaToast.add({
       title: t("success.contactCreated"),
       type: "success",
     });
@@ -290,7 +290,7 @@ export const CreateMatterDialog = () => {
     );
 
     if (Result.isError(result)) {
-      toastManager.add({
+      stellaToast.add({
         title: toActionErrorTitle({
           error: result.error,
           fallback: t("errors.actionFailed"),

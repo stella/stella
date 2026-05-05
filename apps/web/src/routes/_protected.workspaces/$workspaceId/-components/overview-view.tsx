@@ -26,7 +26,7 @@ import {
   PopoverTrigger,
 } from "@stll/ui/components/popover";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import {
   TooltipPopup,
   Tooltip as TooltipRoot,
@@ -150,13 +150,13 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     });
     const entityId = response.data?.entityId;
     if (response.error || !entityId) {
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });
       return;
     }
-    toastManager.add({
+    stellaToast.add({
       title: t("success.taskCreated"),
       type: "success",
     });
@@ -201,7 +201,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       ]);
     },
     onError: () => {
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });

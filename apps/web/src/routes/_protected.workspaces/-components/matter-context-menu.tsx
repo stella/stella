@@ -35,7 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArchiveRestoreIcon,
@@ -231,9 +231,9 @@ export const MatterContextMenu = ({
     const url = `${window.location.origin}/workspaces/${workspaceId}`;
     try {
       await navigator.clipboard.writeText(url);
-      toastManager.add({ title: t("common.copied"), type: "success" });
+      stellaToast.add({ title: t("common.copied"), type: "success" });
     } catch {
-      toastManager.add({ title: t("errors.actionFailed"), type: "error" });
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     }
   };
 
@@ -242,7 +242,7 @@ export const MatterContextMenu = ({
       return;
     }
 
-    const toastId = toastManager.add({
+    const toastId = stellaToast.add({
       title: t("workspaces.deletingWorkspace"),
       type: "loading",
       timeout: Number.POSITIVE_INFINITY,
@@ -252,7 +252,7 @@ export const MatterContextMenu = ({
       { workspaceId },
       {
         onSuccess: () => {
-          toastManager.update(toastId, {
+          stellaToast.update(toastId, {
             title: t("success.workspaceDeletedSuccessfully"),
             type: "success",
           });
@@ -262,7 +262,7 @@ export const MatterContextMenu = ({
           });
         },
         onError: () => {
-          toastManager.update(toastId, {
+          stellaToast.update(toastId, {
             title: t("errors.failedToDeleteWorkspace"),
             type: "error",
           });
@@ -273,7 +273,7 @@ export const MatterContextMenu = ({
 
   const handleUnarchive = () => {
     const onError = () => {
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });
@@ -407,7 +407,7 @@ export const AddMemberDialog = ({
       { workspaceId, userId: selectedUserId },
       {
         onSuccess: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("success.memberAdded"),
             type: "success",
           });
@@ -419,7 +419,7 @@ export const AddMemberDialog = ({
           setSelectedUserId(null);
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });

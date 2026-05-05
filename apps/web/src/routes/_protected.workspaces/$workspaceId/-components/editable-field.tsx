@@ -14,7 +14,7 @@ import { useState } from "react";
 
 import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
 import { Input } from "@stll/ui/components/input";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
@@ -224,7 +224,7 @@ const InlineEditor = ({
       void startWorkflow({ entityIds: [entityId] });
     },
     onError: () => {
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });

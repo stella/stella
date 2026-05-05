@@ -28,7 +28,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
@@ -180,7 +180,7 @@ export const ViewSwitcher = ({
       { viewIds: reordered },
       {
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.failedToReorderViews"),
             type: "error",
           });
@@ -247,7 +247,7 @@ export const ViewSwitcher = ({
                           onViewChange(viewId);
                         },
                         onError: () => {
-                          toastManager.add({
+                          stellaToast.add({
                             title: t("errors.failedToCreateView"),
                             type: "error",
                           });
@@ -349,7 +349,7 @@ const ViewTab = ({
       {
         onSuccess: () => setIsRenaming(false),
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.failedToRenameView"),
             type: "error",
           });
@@ -455,7 +455,7 @@ const ViewTabMenu = ({
       },
       {
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.failedToDuplicateView"),
             type: "error",
           });
@@ -469,7 +469,7 @@ const ViewTabMenu = ({
       { viewId: id },
       {
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.failedToDeleteView"),
             type: "error",
           });
@@ -520,7 +520,7 @@ const ViewTabMenu = ({
                         },
                         {
                           onError: () => {
-                            toastManager.add({
+                            stellaToast.add({
                               title: t("errors.failedToChangeViewType"),
                               type: "error",
                             });

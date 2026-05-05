@@ -10,7 +10,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@stll/ui/components/sheet";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useMatch, useNavigate } from "@tanstack/react-router";
@@ -166,7 +166,7 @@ const DeleteThreadButton = ({
       });
     },
     onError: () => {
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });

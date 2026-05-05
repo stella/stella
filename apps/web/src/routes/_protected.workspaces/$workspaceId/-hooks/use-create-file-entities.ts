@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import {
   useMutation,
   useQueryClient,
@@ -161,7 +161,7 @@ export const uploadFileEntitiesBatched = async (
     const initialTotal = files.length;
     const showProgress = initialTotal > 1;
 
-    const toastId = toastManager.add({
+    const toastId = stellaToast.add({
       type: "loading",
       title: labels.uploading,
       description: showProgress
@@ -177,14 +177,14 @@ export const uploadFileEntitiesBatched = async (
     queue.on("progress", () => {
       const { completed, total } = queue.getProgress();
       if (total > 1) {
-        toastManager.update(toastId, {
+        stellaToast.update(toastId, {
           description: labels.progress(completed, total),
         });
       }
     });
 
     queue.on("rate-limited", ({ retryAfterS }) => {
-      toastManager.update(toastId, {
+      stellaToast.update(toastId, {
         description: labels.rateLimited(retryAfterS),
       });
     });
@@ -192,7 +192,7 @@ export const uploadFileEntitiesBatched = async (
     queue.on("resumed", () => {
       const { completed, total } = queue.getProgress();
       if (total > 1) {
-        toastManager.update(toastId, {
+        stellaToast.update(toastId, {
           description: labels.progress(completed, total),
         });
       }
@@ -212,7 +212,7 @@ export const uploadFileEntitiesBatched = async (
       const successCount = completed.length;
 
       if (cancelled) {
-        toastManager.update(toastId, {
+        stellaToast.update(toastId, {
           type: successCount > 0 || failedCount > 0 ? "warning" : "info",
           title: labels.partial(failedCount, total),
           description:
@@ -221,7 +221,7 @@ export const uploadFileEntitiesBatched = async (
           actionProps: undefined,
         });
       } else if (failedCount === 0) {
-        toastManager.update(toastId, {
+        stellaToast.update(toastId, {
           type: "success",
           title: labels.uploadedSuccessfully,
           description: undefined,
@@ -229,7 +229,7 @@ export const uploadFileEntitiesBatched = async (
           actionProps: undefined,
         });
       } else if (successCount > 0) {
-        toastManager.update(toastId, {
+        stellaToast.update(toastId, {
           type: "warning",
           title: labels.partial(failedCount, total),
           description: formatFailedFiles(failedNames),
@@ -240,7 +240,7 @@ export const uploadFileEntitiesBatched = async (
           },
         });
       } else {
-        toastManager.update(toastId, {
+        stellaToast.update(toastId, {
           type: "error",
           title: labels.uploadFailed,
           description: formatFailedFiles(failedNames),
@@ -253,7 +253,7 @@ export const uploadFileEntitiesBatched = async (
       }
 
       if (renamedCount > 0) {
-        toastManager.add({
+        stellaToast.add({
           title: labels.renamed(renamedCount),
           type: "info",
           // Informational only — no action required from the

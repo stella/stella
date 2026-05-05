@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@stll/ui/components/menu";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import {
   LayoutTemplateIcon,
   MoreHorizontalIcon,
@@ -79,7 +79,7 @@ export const TemplateList = ({
   const discover = useCallback(
     async (file: File) => {
       if (file.type !== DOCX_MIME) {
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t("templates.invalidFileType"),
         });
@@ -91,7 +91,7 @@ export const TemplateList = ({
       setDiscovering(false);
 
       if (response.error) {
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t("templates.discoveryFailed"),
           description: userErrorMessage(
@@ -104,7 +104,7 @@ export const TemplateList = ({
 
       const { data } = response;
       if (data instanceof Response) {
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t("templates.discoveryFailed"),
         });
@@ -222,7 +222,7 @@ const TemplateRow = ({
     setDeleting(false);
 
     if (response.error) {
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("templates.deleteFailed"),
         description: userErrorMessage(
@@ -233,7 +233,7 @@ const TemplateRow = ({
       return;
     }
 
-    toastManager.add({
+    stellaToast.add({
       type: "success",
       title: t("templates.templateDeleted"),
     });

@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { Textarea } from "@stll/ui/components/textarea";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
@@ -129,7 +129,7 @@ export const ClauseFormDialog = ({
       setSaving(false);
 
       if (response.error) {
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t("clauses.updateFailed"),
           description: userErrorMessage(
@@ -140,7 +140,7 @@ export const ClauseFormDialog = ({
         return;
       }
 
-      toastManager.add({
+      stellaToast.add({
         type: "success",
         title: t("clauses.clauseUpdated"),
       });
@@ -165,7 +165,7 @@ export const ClauseFormDialog = ({
       setSaving(false);
 
       if (response.error) {
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t("clauses.createFailed"),
           description: userErrorMessage(
@@ -176,7 +176,7 @@ export const ClauseFormDialog = ({
         return;
       }
 
-      toastManager.add({
+      stellaToast.add({
         type: "success",
         title: t("clauses.clauseCreated"),
       });

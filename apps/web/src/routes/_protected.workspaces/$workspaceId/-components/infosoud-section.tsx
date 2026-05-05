@@ -11,7 +11,7 @@ import {
 } from "@stll/ui/components/combobox";
 import { Field, FieldLabel } from "@stll/ui/components/field";
 import { Input } from "@stll/ui/components/input";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import {
@@ -164,7 +164,7 @@ export const InfoSoudSection = ({
         notFound: t("workspaces.infosoud.notFound"),
       });
       setLookupError(message);
-      toastManager.add({ title: message, type: "error" });
+      stellaToast.add({ title: message, type: "error" });
       return;
     }
 
@@ -203,7 +203,7 @@ export const InfoSoudSection = ({
         fallback: t("workspaces.infosoud.importAgendaFailed"),
         notFound: t("workspaces.infosoud.notFound"),
       });
-      toastManager.add({ title: message, type: "error" });
+      stellaToast.add({ title: message, type: "error" });
       return;
     }
 
@@ -211,7 +211,7 @@ export const InfoSoudSection = ({
       queryKey: entitiesKeys.all(workspaceId),
     });
 
-    toastManager.add({
+    stellaToast.add({
       title:
         importResult.value.created === 0
           ? t("workspaces.infosoud.importAgendaUpToDate")

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 
 import { Button } from "@stll/ui/components/button";
 import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -85,7 +85,7 @@ export const ExpenseListView = ({
       {
         onSuccess: () => setFormOpen(false),
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("billing.failedToSave"),
             type: "error",
           });
@@ -114,7 +114,7 @@ export const ExpenseListView = ({
       {
         onSuccess: () => setEditingId(null),
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("billing.failedToSave"),
             type: "error",
           });
@@ -128,7 +128,7 @@ export const ExpenseListView = ({
       { workspaceId, id },
       {
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("billing.failedToDelete"),
             type: "error",
           });
