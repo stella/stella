@@ -6,7 +6,7 @@
  * - Border/outline style, color, and width
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import {
   Dialog,
@@ -45,6 +45,7 @@ export function ImagePropertiesDialog({
   onApply,
   currentData,
 }: ImagePropertiesDialogProps) {
+  const id = useId();
   const [alt, setAlt] = useState("");
   const [borderWidth, setBorderWidth] = useState(0);
   const [borderColor, setBorderColor] = useState("#000000");
@@ -72,6 +73,11 @@ export function ImagePropertiesDialog({
   const inputCls =
     "border-input bg-background text-foreground flex-1 rounded border px-1.5 py-1 text-xs outline-none";
   const sectionLabelCls = "text-foreground text-[13px] font-semibold";
+  const fieldIds = {
+    borderWidth: `${id}-img-border-width`,
+    borderStyle: `${id}-img-border-style`,
+    borderColor: `${id}-img-border-color`,
+  };
 
   return (
     <Dialog
@@ -105,11 +111,11 @@ export function ImagePropertiesDialog({
             <div className="flex flex-col gap-2">
               <div className={sectionLabelCls}>Border</div>
               <div className="flex items-center gap-2">
-                <label htmlFor="img-border-width" className={labelCls}>
+                <label htmlFor={fieldIds.borderWidth} className={labelCls}>
                   Width
                 </label>
                 <input
-                  id="img-border-width"
+                  id={fieldIds.borderWidth}
                   type="number"
                   className={`${inputCls} max-w-[80px]`}
                   min={0}
@@ -121,11 +127,11 @@ export function ImagePropertiesDialog({
                 <span className="text-muted-foreground text-xs">px</span>
               </div>
               <div className="flex items-center gap-2">
-                <label htmlFor="img-border-style" className={labelCls}>
+                <label htmlFor={fieldIds.borderStyle} className={labelCls}>
                   Style
                 </label>
                 <select
-                  id="img-border-style"
+                  id={fieldIds.borderStyle}
                   className={inputCls}
                   value={borderStyle}
                   onChange={(e) => setBorderStyle(e.target.value)}
@@ -141,11 +147,11 @@ export function ImagePropertiesDialog({
                 </select>
               </div>
               <div className="flex items-center gap-2">
-                <label htmlFor="img-border-color" className={labelCls}>
+                <label htmlFor={fieldIds.borderColor} className={labelCls}>
                   Color
                 </label>
                 <input
-                  id="img-border-color"
+                  id={fieldIds.borderColor}
                   type="color"
                   value={borderColor}
                   onChange={(e) => setBorderColor(e.target.value)}

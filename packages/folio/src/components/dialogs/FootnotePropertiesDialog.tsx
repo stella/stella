@@ -4,7 +4,7 @@
  * Edits position, numbering format, start number, and restart rules.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import {
   Dialog,
@@ -63,6 +63,7 @@ export function FootnotePropertiesDialog({
   footnotePr,
   endnotePr,
 }: FootnotePropertiesDialogProps) {
+  const id = useId();
   const [fnPosition, setFnPosition] = useState<FootnotePosition>(
     footnotePr?.position ?? "pageBottom",
   );
@@ -113,6 +114,16 @@ export function FootnotePropertiesDialog({
   const inputCls =
     "border-input bg-background text-foreground w-[60px] rounded border px-2 py-1 text-[13px] outline-none";
   const sectionCls = "mb-4 rounded border p-3";
+  const fieldIds = {
+    fnPosition: `${id}-fn-position`,
+    fnNumFmt: `${id}-fn-num-fmt`,
+    fnStartAt: `${id}-fn-start-at`,
+    fnNumbering: `${id}-fn-numbering`,
+    enPosition: `${id}-en-position`,
+    enNumFmt: `${id}-en-num-fmt`,
+    enStartAt: `${id}-en-start-at`,
+    enNumbering: `${id}-en-numbering`,
+  };
 
   return (
     <Dialog
@@ -135,11 +146,11 @@ export function FootnotePropertiesDialog({
             <div className={sectionCls}>
               <h4 className="mb-2 text-sm font-semibold">Footnotes</h4>
 
-              <label htmlFor="fn-position" className={labelCls}>
+              <label htmlFor={fieldIds.fnPosition} className={labelCls}>
                 Position
               </label>
               <select
-                id="fn-position"
+                id={fieldIds.fnPosition}
                 className={selectCls}
                 value={fnPosition}
                 onChange={(e) =>
@@ -150,11 +161,11 @@ export function FootnotePropertiesDialog({
                 <option value="beneathText">Below text</option>
               </select>
 
-              <label htmlFor="fn-num-fmt" className={labelCls}>
+              <label htmlFor={fieldIds.fnNumFmt} className={labelCls}>
                 Number format
               </label>
               <select
-                id="fn-num-fmt"
+                id={fieldIds.fnNumFmt}
                 className={selectCls}
                 value={fnNumFmt}
                 onChange={(e) => setFnNumFmt(e.target.value as NumberFormat)}
@@ -168,11 +179,11 @@ export function FootnotePropertiesDialog({
 
               <div className="flex items-center gap-3">
                 <div>
-                  <label htmlFor="fn-start-at" className={labelCls}>
+                  <label htmlFor={fieldIds.fnStartAt} className={labelCls}>
                     Start at
                   </label>
                   <input
-                    id="fn-start-at"
+                    id={fieldIds.fnStartAt}
                     type="number"
                     min={1}
                     className={inputCls}
@@ -183,11 +194,11 @@ export function FootnotePropertiesDialog({
                   />
                 </div>
                 <div className="flex-1">
-                  <label htmlFor="fn-numbering" className={labelCls}>
+                  <label htmlFor={fieldIds.fnNumbering} className={labelCls}>
                     Numbering
                   </label>
                   <select
-                    id="fn-numbering"
+                    id={fieldIds.fnNumbering}
                     className={selectCls}
                     value={fnRestart}
                     onChange={(e) =>
@@ -206,11 +217,11 @@ export function FootnotePropertiesDialog({
             <div className={sectionCls}>
               <h4 className="mb-2 text-sm font-semibold">Endnotes</h4>
 
-              <label htmlFor="en-position" className={labelCls}>
+              <label htmlFor={fieldIds.enPosition} className={labelCls}>
                 Position
               </label>
               <select
-                id="en-position"
+                id={fieldIds.enPosition}
                 className={selectCls}
                 value={enPosition}
                 onChange={(e) =>
@@ -221,11 +232,11 @@ export function FootnotePropertiesDialog({
                 <option value="sectEnd">End of section</option>
               </select>
 
-              <label htmlFor="en-num-fmt" className={labelCls}>
+              <label htmlFor={fieldIds.enNumFmt} className={labelCls}>
                 Number format
               </label>
               <select
-                id="en-num-fmt"
+                id={fieldIds.enNumFmt}
                 className={selectCls}
                 value={enNumFmt}
                 onChange={(e) => setEnNumFmt(e.target.value as NumberFormat)}
@@ -239,11 +250,11 @@ export function FootnotePropertiesDialog({
 
               <div className="flex items-center gap-3">
                 <div>
-                  <label htmlFor="en-start-at" className={labelCls}>
+                  <label htmlFor={fieldIds.enStartAt} className={labelCls}>
                     Start at
                   </label>
                   <input
-                    id="en-start-at"
+                    id={fieldIds.enStartAt}
                     type="number"
                     min={1}
                     className={inputCls}
@@ -254,11 +265,11 @@ export function FootnotePropertiesDialog({
                   />
                 </div>
                 <div className="flex-1">
-                  <label htmlFor="en-numbering" className={labelCls}>
+                  <label htmlFor={fieldIds.enNumbering} className={labelCls}>
                     Numbering
                   </label>
                   <select
-                    id="en-numbering"
+                    id={fieldIds.enNumbering}
                     className={selectCls}
                     value={enRestart}
                     onChange={(e) =>

@@ -13,7 +13,7 @@
  * - Validation and error handling
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 
 import {
@@ -144,6 +144,7 @@ export function HyperlinkDialog({
   isEditing = false,
   bookmarks = [],
 }: HyperlinkDialogProps) {
+  const id = useId();
   // State
   const [linkType, setLinkType] = useState<LinkType>("url");
   const [url, setUrl] = useState("");
@@ -276,6 +277,14 @@ export function HyperlinkDialog({
   const inputErrorCls =
     "border-destructive bg-background text-foreground w-full rounded border px-3 py-2.5 text-sm outline-none";
   const hintCls = "text-muted-foreground mt-1 text-xs";
+  const fieldIds = {
+    url: `${id}-hyperlink-url`,
+    urlError: `${id}-url-error`,
+    urlHint: `${id}-url-hint`,
+    bookmark: `${id}-hyperlink-bookmark`,
+    displayText: `${id}-hyperlink-display-text`,
+    tooltip: `${id}-hyperlink-tooltip`,
+  };
 
   return (
     <Dialog
@@ -338,12 +347,12 @@ export function HyperlinkDialog({
             {/* URL input */}
             {linkType === "url" && (
               <div className="mb-4">
-                <label htmlFor="hyperlink-url" className={labelCls}>
+                <label htmlFor={fieldIds.url} className={labelCls}>
                   URL
                 </label>
                 <input
                   ref={urlInputRef}
-                  id="hyperlink-url"
+                  id={fieldIds.url}
                   type="text"
                   className={urlError && touched ? inputErrorCls : inputCls}
                   value={url}
@@ -359,15 +368,20 @@ export function HyperlinkDialog({
                   }}
                   placeholder="https://example.com"
                   aria-invalid={!!urlError}
-                  aria-describedby={urlError ? "url-error" : "url-hint"}
+                  aria-describedby={
+                    urlError ? fieldIds.urlError : fieldIds.urlHint
+                  }
                 />
                 {urlError && touched && (
-                  <div id="url-error" className="text-destructive mt-1 text-xs">
+                  <div
+                    id={fieldIds.urlError}
+                    className="text-destructive mt-1 text-xs"
+                  >
                     {urlError}
                   </div>
                 )}
                 {!urlError && (
-                  <div id="url-hint" className={hintCls}>
+                  <div id={fieldIds.urlHint} className={hintCls}>
                     Enter a web address, email (mailto:), or phone (tel:)
                   </div>
                 )}
@@ -377,12 +391,12 @@ export function HyperlinkDialog({
             {/* Bookmark select */}
             {linkType === "bookmark" && (
               <div className="mb-4">
-                <label htmlFor="hyperlink-bookmark" className={labelCls}>
+                <label htmlFor={fieldIds.bookmark} className={labelCls}>
                   Bookmark
                 </label>
                 <select
                   ref={bookmarkSelectRef}
-                  id="hyperlink-bookmark"
+                  id={fieldIds.bookmark}
                   className={`${inputCls} cursor-pointer`}
                   value={bookmark}
                   onChange={(e) => setBookmark(e.target.value)}
@@ -399,11 +413,11 @@ export function HyperlinkDialog({
 
             {/* Display text */}
             <div className="mb-4">
-              <label htmlFor="hyperlink-display-text" className={labelCls}>
+              <label htmlFor={fieldIds.displayText} className={labelCls}>
                 Display Text
               </label>
               <input
-                id="hyperlink-display-text"
+                id={fieldIds.displayText}
                 type="text"
                 className={inputCls}
                 value={displayText}
@@ -417,11 +431,11 @@ export function HyperlinkDialog({
 
             {/* Tooltip */}
             <div className="mb-4">
-              <label htmlFor="hyperlink-tooltip" className={labelCls}>
+              <label htmlFor={fieldIds.tooltip} className={labelCls}>
                 Tooltip (optional)
               </label>
               <input
-                id="hyperlink-tooltip"
+                id={fieldIds.tooltip}
                 type="text"
                 className={inputCls}
                 value={tooltip}
