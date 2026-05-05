@@ -184,8 +184,9 @@ import {
 import type { CommentMarkRange } from "./commentAnchors";
 import { CommentsSidebar } from "./CommentsSidebar";
 import type { TrackedChangeEntry } from "./CommentsSidebar";
-import { useHyperlinkDialog } from "./dialogs/HyperlinkDialog";
 // Dialog hooks and utilities (static imports — lightweight, no UI)
+import type { FindMatch } from "./dialogs/findReplaceUtils";
+import { useHyperlinkDialog } from "./dialogs/HyperlinkDialog";
 import { useFindReplace as useFindReplaceState } from "./dialogs/useFindReplace";
 import {
   DefaultLoadingIndicator,
@@ -194,6 +195,7 @@ import {
 } from "./DocxEditorHelpers";
 import { ErrorBoundary, ErrorProvider } from "./ErrorBoundary";
 import { FormattingBar } from "./FormattingBar";
+import { resolveFindMatchRange } from "./hooks/findReplaceSelection";
 import type { DocumentLoadState } from "./hooks/useDocumentLoader";
 import { useDocumentLoader } from "./hooks/useDocumentLoader";
 import { useFindReplace } from "./hooks/useFindReplace";
@@ -1541,6 +1543,25 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       [replaceComments],
     );
 
+    const selectFindMatch = useCallback((match: FindMatch): boolean => {
+      const editor = pagedEditorRef.current;
+      const view = editor?.getView();
+      if (!editor || !view) {
+        return false;
+      }
+
+      const range = resolveFindMatchRange(view.state.doc, match);
+      if (!range) {
+        return false;
+      }
+
+      editor.setSelection(range.from, range.to);
+      requestAnimationFrame(() => {
+        editor.scrollToPosition(range.from);
+      });
+      return true;
+    }, []);
+
     // Find/Replace handlers (depends on handleDocumentChange)
     const {
       findResultRef,
@@ -1550,10 +1571,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       handleReplace,
       handleReplaceAll,
     } = useFindReplace({
-      documentState: history.state,
+      getDocumentState: buildCurrentDocument,
       containerRef,
       handleDocumentChange,
       findReplace,
+      selectMatch: selectFindMatch,
     });
 
     // Handle selection changes from ProseMirror
@@ -1939,6 +1961,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
 
     // Keyboard shortcuts for Find/Replace (Ctrl+F, Ctrl+H) and delete table selection
     useEffect(() => {
+      const openFindFromSelection = () => {
+        const selection = window.getSelection();
+        const selectedText =
+          selection && !selection.isCollapsed ? selection.toString() : "";
+        findReplace.openFind(selectedText);
+      };
+
       const handleKeyDown = (e: KeyboardEvent) => {
         // Check for Ctrl+F (Find) or Ctrl+H (Replace)
         const isMac = navigator.platform.toUpperCase().includes("MAC");
@@ -1995,20 +2024,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         }
 
         if (cmdOrCtrl && !e.shiftKey && !e.altKey) {
-          if (e.key.toLowerCase() === "f") {
+          if (e.key.toLowerCase() === "f" || e.key.toLowerCase() === "h") {
             e.preventDefault();
-            // Get selected text if any
-            const selection = window.getSelection();
-            const selectedText =
-              selection && !selection.isCollapsed ? selection.toString() : "";
-            findReplace.openFind(selectedText);
-          } else if (e.key.toLowerCase() === "h") {
-            e.preventDefault();
-            // Get selected text if any
-            const selection = window.getSelection();
-            const selectedText =
-              selection && !selection.isCollapsed ? selection.toString() : "";
-            findReplace.openReplace(selectedText);
+            openFindFromSelection();
           } else if (e.key.toLowerCase() === "p" && !e.repeat) {
             e.preventDefault();
             handleDirectPrint();
@@ -4069,7 +4087,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                   onReplace={handleReplace}
                   onReplaceAll={handleReplaceAll}
                   initialSearchText={findReplace.state.searchText}
-                  replaceMode={findReplace.state.dialog.mode === "replace"}
                   currentResult={findResultRef.current}
                 />
               )}

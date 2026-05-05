@@ -28,6 +28,7 @@ import type {
 } from "../prosemirror/utils/tabCalculator";
 import { getAuthorColorIdx, AUTHOR_COLORS } from "../utils/authorColors";
 import { resolveFontFamily } from "../utils/fontResolver";
+import { getAutomaticTextColorForBackground } from "./documentColors";
 import { isFloatingImageRun } from "./renderUtils";
 import type { RenderContext } from "./renderUtils";
 
@@ -1133,6 +1134,12 @@ export function renderParagraphFragment(
   // Apply shading (background color)
   if (block.attrs?.shading) {
     fragmentEl.style.backgroundColor = block.attrs.shading;
+    const automaticTextColor = getAutomaticTextColorForBackground(
+      block.attrs.shading,
+    );
+    if (automaticTextColor) {
+      fragmentEl.style.color = automaticTextColor;
+    }
   }
 
   // Calculate available width for justify

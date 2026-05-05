@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { getFindReplaceOverlayStyle } from "./findReplaceDialogLayout";
+import { getFindEnterAction } from "./findReplaceInteraction";
 import type { FindOptions, FindResult, FindMatch } from "./findReplaceUtils";
 
 // Re-export types and utilities so existing imports still work
@@ -109,12 +111,9 @@ export function FindReplaceDialog({
   onFind,
   onFindNext,
   onFindPrevious,
-  onReplace,
-  onReplaceAll,
   onHighlightMatches,
   onClearHighlights,
   initialSearchText = "",
-  replaceMode = false,
   currentResult,
   className,
   style,
@@ -122,15 +121,12 @@ export function FindReplaceDialog({
   const t = useTranslations("folio");
   // State
   const [searchText, setSearchText] = useState("");
-  const [replaceText, setReplaceText] = useState("");
-  const [showReplace, setShowReplace] = useState(replaceMode);
   const [matchCase, setMatchCase] = useState(false);
   const [matchWholeWord, setMatchWholeWord] = useState(false);
   const [result, setResult] = useState<FindResult | null>(null);
 
   // Refs
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const replaceInputRef = useRef<HTMLInputElement>(null);
 
   // Sync with external result if provided
   useEffect(() => {
@@ -143,8 +139,6 @@ export function FindReplaceDialog({
   useEffect(() => {
     if (isOpen) {
       setSearchText(initialSearchText);
-      setReplaceText("");
-      setShowReplace(replaceMode);
       setResult(null);
 
       setTimeout(() => {
@@ -166,7 +160,7 @@ export function FindReplaceDialog({
       onClearHighlights();
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, initialSearchText, replaceMode]);
+  }, [isOpen, initialSearchText]);
 
   const performSearch = useCallback(() => {
     if (!searchText.trim()) {
@@ -201,40 +195,50 @@ export function FindReplaceDialog({
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [matchCase, matchWholeWord]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    if (!searchText.trim()) {
+      setResult(null);
+      onClearHighlights?.();
+      return undefined;
+    }
+
+    const timeout = setTimeout(performSearch, 120);
+    return () => clearTimeout(timeout);
+  }, [isOpen, searchText, performSearch, onClearHighlights]);
+
   const handleSearchChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     setSearchText(e.target.value);
+    setResult(null);
   }, []);
 
   const handleSearchKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        if (e.shiftKey) {
-          handleFindPrevious();
-        } else if (!result) {
+        const action = getFindEnterAction({
+          searchText,
+          result,
+          shiftKey: e.shiftKey,
+        });
+        if (action === "search") {
           performSearch();
-        } else {
-          handleFindNext();
+          return;
         }
+        if (action === "previous") {
+          handleFindPrevious();
+          return;
+        }
+        handleFindNext();
       } else if (e.key === "Escape") {
         onClose();
       }
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [result, performSearch, onClose],
-  );
-
-  const handleReplaceKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        handleReplace();
-      } else if (e.key === "Escape") {
-        onClose();
-      }
-    },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [onClose],
+    [searchText, result, performSearch, onClose],
   );
 
   const handleFindNext = useCallback(() => {
@@ -243,7 +247,7 @@ export function FindReplaceDialog({
       return;
     }
 
-    if (!result) {
+    if (!result || result.totalCount === 0) {
       performSearch();
       return;
     }
@@ -264,7 +268,7 @@ export function FindReplaceDialog({
       return;
     }
 
-    if (!result) {
+    if (!result || result.totalCount === 0) {
       performSearch();
       return;
     }
@@ -281,68 +285,6 @@ export function FindReplaceDialog({
       });
     }
   }, [searchText, result, performSearch, onFindPrevious]);
-
-  const handleReplace = useCallback(() => {
-    if (!result || result.totalCount === 0) {
-      return;
-    }
-
-    const success = onReplace(replaceText);
-    if (success) {
-      const newResult = onFind(searchText, { matchCase, matchWholeWord });
-      setResult(newResult);
-      if (newResult?.matches && onHighlightMatches) {
-        onHighlightMatches(newResult.matches);
-      }
-    }
-  }, [
-    result,
-    replaceText,
-    searchText,
-    matchCase,
-    matchWholeWord,
-    onReplace,
-    onFind,
-    onHighlightMatches,
-  ]);
-
-  const handleReplaceAll = useCallback(() => {
-    if (!searchText.trim()) {
-      return;
-    }
-
-    const count = onReplaceAll(searchText, replaceText, {
-      matchCase,
-      matchWholeWord,
-    });
-    if (count > 0) {
-      setResult({
-        matches: [],
-        totalCount: 0,
-        currentIndex: -1,
-      });
-      if (onClearHighlights) {
-        onClearHighlights();
-      }
-    }
-  }, [
-    searchText,
-    replaceText,
-    matchCase,
-    matchWholeWord,
-    onReplaceAll,
-    onClearHighlights,
-  ]);
-
-  const toggleReplaceMode = useCallback(() => {
-    setShowReplace((prev) => {
-      const newValue = !prev;
-      if (newValue) {
-        setTimeout(() => replaceInputRef.current?.focus(), 100);
-      }
-      return newValue;
-    });
-  }, []);
 
   const handleOverlayClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
@@ -365,18 +307,19 @@ export function FindReplaceDialog({
 
   const hasMatches = result && result.totalCount > 0;
   const noMatches = result && result.totalCount === 0 && searchText.trim();
+  const overlayStyle = getFindReplaceOverlayStyle(style);
 
   return (
     <div
       role="presentation"
-      className={`docx-find-replace-dialog-overlay pointer-events-none fixed inset-0 z-[10000] flex items-start justify-end bg-transparent ${className || ""}`}
-      style={style}
+      className={`docx-find-replace-dialog-overlay pointer-events-none fixed end-0 bottom-0 z-[10002] flex items-start justify-end bg-transparent ${className || ""}`}
+      style={overlayStyle}
       data-slot="folio-find-replace-overlay"
       onClick={handleOverlayClick}
       onKeyDown={handleDialogKeyDown}
     >
       <div
-        className="docx-find-replace-dialog bg-popover text-popover-foreground pointer-events-auto me-5 mt-15 w-[min(440px,calc(100vw-40px))] rounded-lg border shadow-xl"
+        className="docx-find-replace-dialog bg-popover text-popover-foreground pointer-events-auto me-4 mt-3 w-[min(440px,calc(100vw-var(--folio-find-replace-left,5.5rem)-2rem))] rounded-lg border shadow-xl"
         data-testid="find-replace-dialog"
         role="dialog"
         aria-modal="false"
@@ -388,11 +331,7 @@ export function FindReplaceDialog({
             className="flex min-w-0 items-center gap-2 text-sm font-medium"
           >
             <SearchIcon className="text-muted-foreground size-4 shrink-0" />
-            <span className="truncate">
-              {showReplace
-                ? t("findReplace.findAndReplace")
-                : t("findReplace.find")}
-            </span>
+            <span className="truncate">{t("findReplace.find")}</span>
           </h2>
           <Button
             onClick={onClose}
@@ -469,50 +408,6 @@ export function FindReplaceDialog({
             </div>
           )}
 
-          {showReplace && (
-            <div className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2">
-              <label
-                className="text-muted-foreground text-xs font-medium"
-                htmlFor="replace-text"
-              >
-                {t("findReplace.replace")}
-              </label>
-              <Input
-                ref={replaceInputRef}
-                id="replace-text"
-                nativeInput
-                type="text"
-                className="h-8"
-                size="sm"
-                value={replaceText}
-                onChange={(e) => setReplaceText(e.target.value)}
-                onKeyDown={handleReplaceKeyDown}
-                placeholder={t("findReplace.replacePlaceholder")}
-                aria-label={t("findReplace.replaceText")}
-              />
-              <div className="flex items-center gap-1">
-                <Button
-                  onClick={handleReplace}
-                  disabled={!hasMatches}
-                  size="xs"
-                  title={t("findReplace.replaceCurrent")}
-                  variant="outline"
-                >
-                  {t("findReplace.replace")}
-                </Button>
-                <Button
-                  onClick={handleReplaceAll}
-                  disabled={!hasMatches}
-                  size="xs"
-                  title={t("findReplace.replaceAll")}
-                  variant="outline"
-                >
-                  {t("findReplace.replaceAll")}
-                </Button>
-              </div>
-            </div>
-          )}
-
           <div className="ms-20 flex flex-wrap items-center gap-x-4 gap-y-2">
             <label className="text-muted-foreground flex items-center gap-2 text-xs">
               <Checkbox checked={matchCase} onCheckedChange={setMatchCase} />
@@ -525,11 +420,6 @@ export function FindReplaceDialog({
               />
               {t("findReplace.wholeWords")}
             </label>
-            {!showReplace && (
-              <Button onClick={toggleReplaceMode} size="xs" variant="ghost">
-                {t("findReplace.showReplace")}
-              </Button>
-            )}
           </div>
         </div>
       </div>

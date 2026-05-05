@@ -432,8 +432,8 @@ export function findInParagraph(
     matches.push({
       paragraphIndex,
       contentIndex: contentInfo.contentIndex,
-      startOffset: contentInfo.offsetInContent,
-      endOffset: contentInfo.offsetInContent + (match.end - match.start),
+      startOffset: match.start,
+      endOffset: match.end,
       text: paragraphText.slice(match.start, match.end),
     });
   }

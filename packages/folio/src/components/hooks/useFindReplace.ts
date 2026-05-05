@@ -11,6 +11,7 @@ import { useRef, useCallback } from "react";
 
 import type { Document } from "../../core/types/document";
 import { replaceTextInDocument } from "../../core/utils/replaceText";
+import { getAdjacentFindIndex } from "../dialogs/findReplaceInteraction";
 import { findInDocument, scrollToMatch } from "../dialogs/findReplaceUtils";
 import type {
   FindMatch,
@@ -24,14 +25,18 @@ import type { UseFindReplaceReturn as FindReplaceStateReturn } from "../dialogs/
 // ============================================================================
 
 type UseFindReplaceParams = {
-  /** Current document state from history */
-  documentState: Document | null;
+  /** Current document state fallback for existing mounted callers during HMR */
+  documentState?: Document | null;
+  /** Returns the current live document state from the editor */
+  getDocumentState?: () => Document | null;
   /** Ref to the scrollable container for scrollToMatch */
   containerRef: React.RefObject<HTMLDivElement | null>;
   /** Callback to push a new document state */
   handleDocumentChange: (newDoc: Document) => void;
   /** Dialog state manager from useFindReplace (dialogs) */
   findReplace: FindReplaceStateReturn;
+  /** Select and reveal a match in the live editor */
+  selectMatch?: (match: FindMatch) => boolean;
 };
 
 export type UseFindReplaceReturn = {
@@ -59,22 +64,31 @@ export type UseFindReplaceReturn = {
 
 export function useFindReplace({
   documentState,
+  getDocumentState,
   containerRef,
   handleDocumentChange,
   findReplace,
+  selectMatch,
 }: UseFindReplaceParams): UseFindReplaceReturn {
   // Store the current find result for navigation
   const findResultRef = useRef<FindResult | null>(null);
+  const { setMatches, goToMatch } = findReplace;
+
+  const readDocumentState = useCallback(
+    () => getDocumentState?.() ?? documentState ?? null,
+    [getDocumentState, documentState],
+  );
 
   // Handle find operation
   const handleFind = useCallback(
     (searchText: string, options: FindOptions): FindResult | null => {
-      if (!documentState || !searchText.trim()) {
+      const currentDocument = readDocumentState();
+      if (!currentDocument || !searchText.trim()) {
         findResultRef.current = null;
         return null;
       }
 
-      const matches = findInDocument(documentState, searchText, options);
+      const matches = findInDocument(currentDocument, searchText, options);
       const result: FindResult = {
         matches,
         totalCount: matches.length,
@@ -82,66 +96,82 @@ export function useFindReplace({
       };
 
       findResultRef.current = result;
-      findReplace.setMatches(matches, 0);
+      setMatches(matches, 0);
 
       // Scroll to first match
-      if (matches.length > 0 && containerRef.current) {
+      if (matches.length > 0) {
         // SAFETY: length > 0 guarantees index 0 exists
-        scrollToMatch(containerRef.current, matches[0]!);
+        const firstMatch = matches[0]!;
+        if (!selectMatch?.(firstMatch) && containerRef.current) {
+          scrollToMatch(containerRef.current, firstMatch);
+        }
       }
 
       return result;
     },
-    [documentState, findReplace, containerRef],
+    [readDocumentState, setMatches, containerRef, selectMatch],
   );
 
   // Handle find next
   const handleFindNext = useCallback((): FindMatch | null => {
-    if (!findResultRef.current || findResultRef.current.matches.length === 0) {
+    const currentResult = findResultRef.current;
+    if (!currentResult || currentResult.matches.length === 0) {
       return null;
     }
 
-    const newIndex = findReplace.goToNextMatch();
-    const match = findResultRef.current.matches[newIndex];
+    const newIndex = getAdjacentFindIndex(
+      currentResult.currentIndex,
+      currentResult.matches.length,
+      "next",
+    );
+    const match = currentResult.matches[newIndex];
     findResultRef.current = {
-      ...findResultRef.current,
+      ...currentResult,
       currentIndex: newIndex,
     };
+    goToMatch(newIndex);
 
     // Scroll to the match
-    if (match && containerRef.current) {
+    if (match && !selectMatch?.(match) && containerRef.current) {
       scrollToMatch(containerRef.current, match);
     }
 
     return match || null;
-  }, [findReplace, containerRef]);
+  }, [goToMatch, containerRef, selectMatch]);
 
   // Handle find previous
   const handleFindPrevious = useCallback((): FindMatch | null => {
-    if (!findResultRef.current || findResultRef.current.matches.length === 0) {
+    const currentResult = findResultRef.current;
+    if (!currentResult || currentResult.matches.length === 0) {
       return null;
     }
 
-    const newIndex = findReplace.goToPreviousMatch();
-    const match = findResultRef.current.matches[newIndex];
+    const newIndex = getAdjacentFindIndex(
+      currentResult.currentIndex,
+      currentResult.matches.length,
+      "previous",
+    );
+    const match = currentResult.matches[newIndex];
     findResultRef.current = {
-      ...findResultRef.current,
+      ...currentResult,
       currentIndex: newIndex,
     };
+    goToMatch(newIndex);
 
     // Scroll to the match
-    if (match && containerRef.current) {
+    if (match && !selectMatch?.(match) && containerRef.current) {
       scrollToMatch(containerRef.current, match);
     }
 
     return match || null;
-  }, [findReplace, containerRef]);
+  }, [goToMatch, containerRef, selectMatch]);
 
   // Handle replace current match
   const handleReplace = useCallback(
     (replaceText: string): boolean => {
+      const currentDocument = readDocumentState();
       if (
-        !documentState ||
+        !currentDocument ||
         !findResultRef.current ||
         findResultRef.current.matches.length === 0
       ) {
@@ -157,7 +187,7 @@ export function useFindReplace({
       // Execute replace command
       try {
         const newDoc = replaceTextInDocument(
-          documentState,
+          currentDocument,
           {
             start: {
               paragraphIndex: currentMatch.paragraphIndex,
@@ -177,24 +207,25 @@ export function useFindReplace({
         return false;
       }
     },
-    [documentState, handleDocumentChange],
+    [readDocumentState, handleDocumentChange],
   );
 
   // Handle replace all matches
   const handleReplaceAll = useCallback(
     (searchText: string, replaceText: string, options: FindOptions): number => {
-      if (!documentState || !searchText.trim()) {
+      const currentDocument = readDocumentState();
+      if (!currentDocument || !searchText.trim()) {
         return 0;
       }
 
       // Find all matches first
-      const matches = findInDocument(documentState, searchText, options);
+      const matches = findInDocument(currentDocument, searchText, options);
       if (matches.length === 0) {
         return 0;
       }
 
       // Replace from end to start to maintain correct indices
-      let doc = documentState;
+      let doc = currentDocument;
       const sortedMatches = [...matches].toSorted((a, b) => {
         if (a.paragraphIndex !== b.paragraphIndex) {
           return b.paragraphIndex - a.paragraphIndex;
@@ -225,11 +256,11 @@ export function useFindReplace({
 
       handleDocumentChange(doc);
       findResultRef.current = null;
-      findReplace.setMatches([], 0);
+      setMatches([], 0);
 
       return matches.length;
     },
-    [documentState, handleDocumentChange, findReplace],
+    [readDocumentState, handleDocumentChange, setMatches],
   );
 
   return {

@@ -21,6 +21,7 @@ import type {
   ParagraphFragment,
   ImageRun,
 } from "../layout-engine/types";
+import { getAutomaticTextColorForBackground } from "./documentColors";
 import { renderParagraphFragment } from "./renderParagraph";
 import { emuToPixels, isFloatingImageRun } from "./renderUtils";
 import type { RenderContext } from "./renderUtils";
@@ -520,6 +521,12 @@ function renderTableCell(
   // Background color
   if (cell.background) {
     cellEl.style.backgroundColor = cell.background;
+    const automaticTextColor = getAutomaticTextColorForBackground(
+      cell.background,
+    );
+    if (automaticTextColor) {
+      cellEl.style.color = automaticTextColor;
+    }
   }
 
   // Vertical alignment

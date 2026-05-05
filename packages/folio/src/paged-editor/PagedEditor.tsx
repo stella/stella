@@ -115,6 +115,7 @@ import type {
   SectionProperties,
   HeaderFooter,
 } from "../core/types/document";
+import { computeEffectiveHeaderFooterMargins } from "./headerFooterMargins";
 // Internal components
 import { HiddenProseMirror } from "./HiddenProseMirror";
 import type { HiddenProseMirrorRef } from "./HiddenProseMirror";
@@ -2151,46 +2152,13 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               )
             : undefined;
 
-          // Adjust margins if header/footer content exceeds available space
-          // (Word and Google Docs push body content down when header grows).
-          // Only the DEFAULT header/footer heights drive the margin adjustment;
-          // first-page variants only appear on page 1 and must not inflate the
-          // margins for every page (which could eliminate the content area).
-          const headerDistance = margins.header ?? 48;
-          const footerDistance = margins.footer ?? 48;
-          const availableHeaderSpace = margins.top - headerDistance;
-          const availableFooterSpace = margins.bottom - footerDistance;
-          const hfHeight = (hf: HeaderFooterContent | undefined) =>
-            hf ? (hf.visualBottom ?? hf.height) : 0;
-          const hfFooterHeight = (hf: HeaderFooterContent | undefined) =>
-            hf
-              ? Math.max(
-                  (hf.visualBottom ?? hf.height) - (hf.visualTop ?? 0),
-                  hf.height,
-                )
-              : 0;
-          const headerContentHeight = hfHeight(headerContentForRender);
-          const footerContentHeight = hfFooterHeight(footerContentForRender);
-
-          let effectiveMargins = margins;
-          if (
-            headerContentHeight > availableHeaderSpace ||
-            footerContentHeight > availableFooterSpace
-          ) {
-            effectiveMargins = { ...margins };
-            if (headerContentHeight > availableHeaderSpace) {
-              effectiveMargins.top = Math.max(
-                margins.top,
-                headerDistance + headerContentHeight,
-              );
-            }
-            if (footerContentHeight > availableFooterSpace) {
-              effectiveMargins.bottom = Math.max(
-                margins.bottom,
-                footerDistance + footerContentHeight,
-              );
-            }
-          }
+          const effectiveMargins = computeEffectiveHeaderFooterMargins({
+            margins,
+            headerContent: headerContentForRender,
+            footerContent: footerContentForRender,
+            firstPageHeaderContent: firstPageHeaderForRender,
+            firstPageFooterContent: firstPageFooterForRender,
+          });
 
           // Step 3: Layout blocks onto pages (two-pass if footnotes exist)
           let newLayout: Layout;
