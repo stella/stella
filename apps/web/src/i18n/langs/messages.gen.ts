@@ -43,6 +43,13 @@ type Messages = {
     "searchPlaceholder": "Type word(s) to find…";
     "title": "Anonymization review";
   };
+  "app": {
+    "versionMismatch": {
+      "dismiss": "Dismiss update notice";
+      "message": "A new version is available (v{latest}). You're on v{installed}.";
+      "refresh": "Refresh to update";
+    };
+  };
   "appearance": {
     "cool": "Cool";
     "dark": "Dark";
@@ -1171,12 +1178,11 @@ type Messages = {
       "apiKey": "API key";
       "apiKeyConfiguredPlaceholder": "Configured: {key}. Enter a new key to replace it.";
       "apiKeyPlaceholder": "Enter your API key";
-      "chooseModelsSubtitle": "Pick a model for each role. Prices update on the right.";
-      "chooseModelsTitle": "Choose models";
-      "editProviders": "Edit providers";
       "apiKeySaved": "Saved key {key}";
       "apiKeyUpdatePlaceholder": "Enter new key to update";
       "baseUrl": "Base URL";
+      "chooseModelsSubtitle": "Pick a model for each role. Prices update on the right.";
+      "chooseModelsTitle": "Choose models";
       "configure": "Configure";
       "credentialsPanel": "Key";
       "customModelBadge": "Custom · {provider}";
@@ -1188,6 +1194,7 @@ type Messages = {
       "defaultModel": "Default: {model}";
       "defaultModelOption": "Default";
       "description": "Bring your own API key or configure data sovereignty region.";
+      "editProviders": "Edit providers";
       "keepSavedKey": "Keep saved key";
       "modelForRole": "{role} model";
       "modelIdPlaceholder": "Search models";
@@ -1199,8 +1206,6 @@ type Messages = {
       "noModelResults": "No matching offered models";
       "overrideRoles": "Override roles";
       "overrideRolesDescription": "Choose which roles use this key, then choose a model for each role. Unselected roles use the platform default.";
-      "provider": "Provider";
-      "providerForRole": "{role} provider";
       "prices": {
         "empty": "Add a provider to see model prices";
         "emptyHint": "Pick a provider on the left and we will show pricing for its models here.";
@@ -1213,6 +1218,8 @@ type Messages = {
         "title": "Model prices";
         "typicalCallHint": "Per-1M-token rates · per-call estimate uses {input} in / {output} out";
       };
+      "provider": "Provider";
+      "providerForRole": "{role} provider";
       "providerKeyInvalid": "{provider} rejected the key. Double-check it before saving.";
       "providerKeyInvalidShort": "Invalid";
       "providers": {
