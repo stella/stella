@@ -472,13 +472,13 @@ export const WorkspaceTable = ({
                 }}
               />
               {addPropertyColumn && (
-                <WorkspaceGridFillerCell
-                  className="border-b-0"
-                  style={{ gridColumn: "-3 / -2", height: paddingTop }}
-                />
-              )}
-              {addPropertyColumn && (
-                <AddPropertyRailSpacer height={paddingTop} />
+                <>
+                  <WorkspaceGridFillerCell
+                    className="border-b-0"
+                    style={{ gridColumn: "-3 / -2", height: paddingTop }}
+                  />
+                  <AddPropertyRailSpacer height={paddingTop} />
+                </>
               )}
             </WorkspaceGridRow>
           )}
@@ -536,13 +536,13 @@ export const WorkspaceTable = ({
                 }}
               />
               {addPropertyColumn && (
-                <WorkspaceGridFillerCell
-                  className="border-b-0"
-                  style={{ gridColumn: "-3 / -2", height: paddingBottom }}
-                />
-              )}
-              {addPropertyColumn && (
-                <AddPropertyRailSpacer height={paddingBottom} />
+                <>
+                  <WorkspaceGridFillerCell
+                    className="border-b-0"
+                    style={{ gridColumn: "-3 / -2", height: paddingBottom }}
+                  />
+                  <AddPropertyRailSpacer height={paddingBottom} />
+                </>
               )}
             </WorkspaceGridRow>
           )}
