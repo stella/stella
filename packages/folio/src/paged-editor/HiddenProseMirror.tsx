@@ -42,6 +42,7 @@ import { fromProseDoc } from "../core/prosemirror/conversion/fromProseDoc";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
 import { schema } from "../core/prosemirror/schema";
 import type { Document, Theme, StyleDefinitions } from "../core/types/document";
+import { suppressHiddenEditorScrollToSelection } from "./hiddenEditorScroll";
 import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
 // Import ProseMirror CSS
 import "prosemirror-view/style/prosemirror.css";
@@ -306,6 +307,7 @@ const HiddenProseMirrorComponent = forwardRef<
 
         return onKeyDownRef.current?.(view, event) ?? false;
       },
+      handleScrollToSelection: suppressHiddenEditorScrollToSelection,
       // Prevent focus handling from interfering with visual layer
       handleDOMEvents: {
         focus: () => false,

@@ -1,7 +1,8 @@
 # Third-Party Notice
 
-This package contains code originally from [Eigenpal docx-editor](https://github.com/eigenpal/docx-editor),
-licensed under the MIT License.
+This package contains code originally from [Eigenpal docx-editor](https://github.com/eigenpal/docx-editor).
+The upstream Eigenpal code was originally licensed under the MIT License;
+the original license text is reproduced below.
 
 ## Original MIT License
 

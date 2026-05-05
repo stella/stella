@@ -3045,8 +3045,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         },
         getCurrentPage: () => scrollPageInfo.currentPage,
         getTotalPages: () => scrollPageInfo.totalPages,
-        scrollToPage: (_pageNumber: number) => {
-          // TODO: Implement page navigation in ProseMirror
+        scrollToPage: (pageNumber: number) => {
+          pagedEditorRef.current?.scrollToPage(pageNumber);
         },
         openPrintPreview: handleDirectPrint,
         print: handleDirectPrint,
@@ -3693,6 +3693,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                         commentsSidebarOpen={showCommentsSidebar}
                         anchorPositionMode="comments"
                         onAnchorPositionsChange={setAnchorPositions}
+                        onTotalPagesChange={(totalPages) => {
+                          setScrollPageInfo((previous) => ({
+                            ...previous,
+                            totalPages,
+                          }));
+                        }}
                         scrollContainerRef={scrollContainerRef}
                         sidebarOverlay={
                           showCommentsSidebar ? (
