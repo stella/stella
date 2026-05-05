@@ -35,13 +35,20 @@ enum RemoteSessionStatus {
 pub fn spawn_sse_listener(
   manager: Arc<Mutex<SessionManager>>,
   session_id: String,
-  api_base_url: String,
+  _api_base_url: String,
 ) -> tokio::task::JoinHandle<()> {
   tokio::spawn(async move {
     loop {
+      let Some((client, current_api_base_url, _)) = ({
+        let mgr = manager.lock().await;
+        mgr.remote_status_probe_details(&session_id)
+      }) else {
+        return;
+      };
+
       // Replace localhost with 127.0.0.1 to avoid IPv6 resolution
       // issues with reqwest on macOS.
-      let base = api_base_url.replace("localhost", "127.0.0.1");
+      let base = current_api_base_url.replace("localhost", "127.0.0.1");
       let url = format!(
         "{base}/v1/desktop-edit-sessions/\
          {session_id}/events"
@@ -49,12 +56,6 @@ pub fn spawn_sse_listener(
 
       tracing::info!(session_id = %session_id, "SSE connecting");
 
-      let Some((client, _, _)) = ({
-        let mgr = manager.lock().await;
-        mgr.remote_status_probe_details(&session_id)
-      }) else {
-        return;
-      };
       tracing::debug!(session_id = %session_id, "SSE sending request");
       let response = match client
         .get(&url)
@@ -73,16 +74,6 @@ pub fn spawn_sse_listener(
             tracing::warn!(session_id = %session_id, status, "SSE rejected");
 
             match classify_sse_rejection(status) {
-              SseRejection::TakenOver => {
-                let mut mgr = manager.lock().await;
-                mgr
-                  .mark_session_taken_over_public(
-                    &session_id,
-                    "Desktop editing moved to another device.",
-                  )
-                  .await;
-                return;
-              }
               SseRejection::ProbeStatus => {
                 match probe_remote_session_status(&manager, &session_id).await {
                   RemoteSessionStatus::Open | RemoteSessionStatus::Retry => {}
@@ -181,13 +172,11 @@ pub fn spawn_sse_listener(
 enum SseRejection {
   ProbeStatus,
   Retry,
-  TakenOver,
 }
 
 fn classify_sse_rejection(status: u16) -> SseRejection {
   match status {
-    401 | 403 | 404 => SseRejection::ProbeStatus,
-    409 => SseRejection::TakenOver,
+    401 | 403 | 404 | 409 => SseRejection::ProbeStatus,
     _ => SseRejection::Retry,
   }
 }
@@ -312,6 +301,7 @@ mod tests {
     assert_eq!(classify_sse_rejection(401), SseRejection::ProbeStatus);
     assert_eq!(classify_sse_rejection(403), SseRejection::ProbeStatus);
     assert_eq!(classify_sse_rejection(404), SseRejection::ProbeStatus);
+    assert_eq!(classify_sse_rejection(409), SseRejection::ProbeStatus);
   }
 
   #[test]
