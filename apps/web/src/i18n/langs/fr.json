@@ -349,10 +349,10 @@
     "landing": {
       "lastAccessedMatters": "Dossiers consultés récemment",
       "noMatters": "Aucun dossier pour le moment",
-      "noPrompts": "Aucun prompt pour le moment",
+      "noPrompts": "Aucun skill pour le moment",
       "noRecentChats": "Aucun chat récent",
       "pinnedMatters": "Dossiers épinglés",
-      "prompts": "Prompts",
+      "prompts": "Skills",
       "recentChats": "Chats récents"
     },
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
@@ -373,12 +373,12 @@
     "noThreads": "Aucune conversation",
     "placeholder": "Saisissez votre question ici, / pour les skills, @ pour ajouter du contexte",
     "prompts": {
-      "noResults": "Aucun prompt correspondant",
+      "noResults": "Aucun skill correspondant",
       "noShortcuts": "Aucun skill pour le moment. Ajoutez-en dans Connaissances → Skills.",
       "scope": {
-        "private": "Vos prompts",
+        "private": "Vos skills",
         "stock": "Intégrés",
-        "team": "Prompts d'équipe"
+        "team": "Skills d'équipe"
       },
       "stock": {
         "compareVersions": {
@@ -1066,7 +1066,7 @@
         "title": "Connecteurs"
       },
       "skills": {
-        "description": "Compétences et prompts IA personnalisés",
+        "description": "Skills IA personnalisés",
         "title": "Compétences"
       },
       "templates": {

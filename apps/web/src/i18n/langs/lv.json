@@ -349,10 +349,10 @@
     "landing": {
       "lastAccessedMatters": "Pēdējās atvērtās lietas",
       "noMatters": "Lietu vēl nav",
-      "noPrompts": "Promptu vēl nav",
+      "noPrompts": "Prasmju vēl nav",
       "noRecentChats": "Nav nesenu čatu",
       "pinnedMatters": "Piespraustās lietas",
-      "prompts": "Prompti",
+      "prompts": "Prasmes",
       "recentChats": "Nesenie čati"
     },
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
@@ -373,12 +373,12 @@
     "noThreads": "Sarunu vēl nav",
     "placeholder": "Ierakstiet jautājumu šeit, / prasmēm, @ konteksta pievienošanai",
     "prompts": {
-      "noResults": "Nav atbilstošu uzvedņu",
+      "noResults": "Nav atbilstošu prasmju",
       "noShortcuts": "Prasmju vēl nav. Pievienojiet tās sadaļā Zināšanas → Prasmes.",
       "scope": {
-        "private": "Jūsu uzvednes",
+        "private": "Jūsu prasmes",
         "stock": "Iebūvētas",
-        "team": "Komandas uzvednes"
+        "team": "Komandas prasmes"
       },
       "stock": {
         "compareVersions": {
@@ -1066,7 +1066,7 @@
         "title": "Savienotāji"
       },
       "skills": {
-        "description": "Pielāgotas AI prasmes un uzvednes",
+        "description": "Pielāgotas AI prasmes",
         "title": "Prasmes"
       },
       "templates": {

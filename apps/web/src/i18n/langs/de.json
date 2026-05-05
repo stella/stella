@@ -349,10 +349,10 @@
     "landing": {
       "lastAccessedMatters": "Zuletzt geöffnete Sachen",
       "noMatters": "Noch keine Sachen",
-      "noPrompts": "Noch keine Prompts",
+      "noPrompts": "Noch keine Skills",
       "noRecentChats": "Keine letzten Chats",
       "pinnedMatters": "Angeheftete Sachen",
-      "prompts": "Prompts",
+      "prompts": "Skills",
       "recentChats": "Letzte Chats"
     },
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
@@ -373,12 +373,12 @@
     "noThreads": "Noch keine Konversationen",
     "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
     "prompts": {
-      "noResults": "Keine passenden Prompts",
+      "noResults": "Keine passenden Skills",
       "noShortcuts": "Noch keine Skills. Fügen Sie welche unter Wissen → Skills hinzu.",
       "scope": {
-        "private": "Eigene Prompts",
+        "private": "Eigene Skills",
         "stock": "Vorgegeben",
-        "team": "Team-Prompts"
+        "team": "Team-Skills"
       },
       "stock": {
         "compareVersions": {
@@ -1066,7 +1066,7 @@
         "title": "Konnektoren"
       },
       "skills": {
-        "description": "Benutzerdefinierte KI-Skills und Prompts",
+        "description": "Benutzerdefinierte KI-Skills",
         "title": "Fähigkeiten"
       },
       "templates": {

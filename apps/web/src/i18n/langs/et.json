@@ -349,10 +349,10 @@
     "landing": {
       "lastAccessedMatters": "Viimati avatud asjad",
       "noMatters": "Asju veel pole",
-      "noPrompts": "Prompte veel pole",
+      "noPrompts": "Oskusi veel pole",
       "noRecentChats": "Hiljutisi vestlusi pole",
       "pinnedMatters": "Kinnitatud asjad",
-      "prompts": "Promptid",
+      "prompts": "Oskused",
       "recentChats": "Hiljutised vestlused"
     },
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
@@ -373,12 +373,12 @@
     "noThreads": "Vestlusi pole veel",
     "placeholder": "Kirjutage oma küsimus siia, / oskuste jaoks, @ konteksti lisamiseks",
     "prompts": {
-      "noResults": "Sobivaid küsimusi pole",
+      "noResults": "Sobivaid oskusi pole",
       "noShortcuts": "Oskusi veel pole. Lisage need jaotises Teadmised → Oskused.",
       "scope": {
-        "private": "Sinu küsimused",
+        "private": "Sinu oskused",
         "stock": "Sisseehitatud",
-        "team": "Tiimi küsimused"
+        "team": "Tiimi oskused"
       },
       "stock": {
         "compareVersions": {
@@ -1066,7 +1066,7 @@
         "title": "Konnektorid"
       },
       "skills": {
-        "description": "Kohandatud tehisintellekti oskused ja päringud",
+        "description": "Kohandatud tehisintellekti oskused",
         "title": "Oskused"
       },
       "templates": {

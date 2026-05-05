@@ -349,10 +349,10 @@
     "landing": {
       "lastAccessedMatters": "Naposledy otevřené spisy",
       "noMatters": "Zatím žádné spisy",
-      "noPrompts": "Zatím žádné prompty",
+      "noPrompts": "Zatím žádné dovednosti",
       "noRecentChats": "Zatím žádné nedávné chaty",
       "pinnedMatters": "Připnuté spisy",
-      "prompts": "Prompty",
+      "prompts": "Dovednosti",
       "recentChats": "Nedávné chaty"
     },
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
@@ -373,12 +373,12 @@
     "noThreads": "Zatím žádné konverzace",
     "placeholder": "Zde napište svůj dotaz, / pro dovednosti, @ pro přidání kontextu",
     "prompts": {
-      "noResults": "Žádné odpovídající promty",
+      "noResults": "Žádné odpovídající dovednosti",
       "noShortcuts": "Zatím žádné dovednosti. Přidejte je v části Znalosti → Dovednosti.",
       "scope": {
-        "private": "Vaše promty",
+        "private": "Vaše dovednosti",
         "stock": "Vestavěné",
-        "team": "Týmové promty"
+        "team": "Týmové dovednosti"
       },
       "stock": {
         "compareVersions": {
@@ -1066,7 +1066,7 @@
         "title": "Konektory"
       },
       "skills": {
-        "description": "Vlastní AI dovednosti a prompty",
+        "description": "Vlastní AI dovednosti",
         "title": "Dovednosti"
       },
       "templates": {

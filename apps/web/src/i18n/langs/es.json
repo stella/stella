@@ -349,10 +349,10 @@
     "landing": {
       "lastAccessedMatters": "Asuntos abiertos recientemente",
       "noMatters": "Aún no hay asuntos",
-      "noPrompts": "Aún no hay prompts",
+      "noPrompts": "Aún no hay habilidades",
       "noRecentChats": "No hay chats recientes",
       "pinnedMatters": "Asuntos fijados",
-      "prompts": "Prompts",
+      "prompts": "Habilidades",
       "recentChats": "Chats recientes"
     },
     "maxAttachmentsReached": "Máximo {count} archivos por mensaje",
@@ -373,12 +373,12 @@
     "noThreads": "Aún no hay conversaciones",
     "placeholder": "Escriba su pregunta aquí, / para skills, @ para añadir contexto",
     "prompts": {
-      "noResults": "Sin prompts coincidentes",
+      "noResults": "Sin habilidades coincidentes",
       "noShortcuts": "Aún no hay skills. Añádalas en Conocimiento → Skills.",
       "scope": {
-        "private": "Tus prompts",
+        "private": "Tus habilidades",
         "stock": "Predefinidos",
-        "team": "Prompts del equipo"
+        "team": "Habilidades del equipo"
       },
       "stock": {
         "compareVersions": {
@@ -1066,7 +1066,7 @@
         "title": "Conectores"
       },
       "skills": {
-        "description": "Habilidades y prompts personalizados de IA",
+        "description": "Habilidades de IA personalizadas",
         "title": "Habilidades"
       },
       "templates": {

@@ -28,6 +28,7 @@ import {
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
@@ -73,12 +74,12 @@ function ChatIndex() {
   const openInspectorChat = useInspectorStore((s) => s.openChat);
   const [contextMatterIds, setContextMatterIds] = useState<string[]>([]);
   const getContextMatterIds = useEffectEvent(() => contextMatterIds);
-  const [isComposerFocused, setIsComposerFocused] = useState(false);
 
   const pinnedMatters = useMemo(() => {
     const workspaceById = new Map<string, PinnedMatter>();
     for (const workspace of workspaces ?? []) {
       workspaceById.set(workspace.id, {
+        color: workspace.color,
         id: workspace.id,
         lastActivityAt: workspace.lastActivityAt,
         name: workspace.name,
@@ -104,6 +105,7 @@ function ChatIndex() {
         )
         .slice(0, 5)
         .map((workspace) => ({
+          color: workspace.color,
           id: workspace.id,
           lastActivityAt: workspace.lastActivityAt,
           name: workspace.name,
@@ -187,12 +189,7 @@ function ChatIndex() {
       </div>
       <div className="flex flex-1 flex-col items-center overflow-y-auto px-4 pb-16">
         <div className="flex min-h-[22rem] w-full max-w-2xl shrink-0 flex-col items-center justify-center gap-8">
-          <div
-            className={cn(
-              "flex flex-col items-center gap-4 text-center transition-opacity duration-150",
-              isComposerFocused && "opacity-60",
-            )}
-          >
+          <div className="flex flex-col items-center gap-4 text-center">
             <div className="border-border bg-background text-foreground flex size-12 items-center justify-center rounded-lg border shadow-sm">
               <StellaMark className="size-7" />
             </div>
@@ -204,7 +201,6 @@ function ChatIndex() {
             <ChatInputSurface
               autoFocus
               controller={controller}
-              onFocusChange={setIsComposerFocused}
               onSubmit={async (draft) => {
                 if (!(await ensureAIAvailable())) {
                   return;
@@ -242,12 +238,7 @@ function ChatIndex() {
             />
           </div>
         </div>
-        <div
-          className={cn(
-            "grid min-h-52 w-full gap-8 transition-opacity duration-150 md:grid-cols-3",
-            isComposerFocused && "opacity-55",
-          )}
-        >
+        <div className="grid min-h-52 w-full gap-8 md:grid-cols-3">
           <LandingSection
             heading={
               <Link
@@ -260,20 +251,29 @@ function ChatIndex() {
             }
           >
             {visibleMatters.length > 0 ? (
-              visibleMatters.map((matter) => (
-                <Link
-                  className="group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start transition-colors outline-none focus-visible:ring-2"
-                  key={matter.id}
-                  params={{ workspaceId: matter.id }}
-                  to="/workspaces/$workspaceId"
-                >
-                  <LandingItemText
-                    icon={<LayersIcon className="size-4" />}
-                    meta={formatRelativeTime(matter.lastActivityAt, lang)}
-                    title={matter.name}
-                  />
-                </Link>
-              ))
+              visibleMatters.map((matter) => {
+                const matterColor = resolveMatterColor(matter.id, matter.color);
+                return (
+                  <Link
+                    className="group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start transition-colors outline-none focus-visible:ring-2"
+                    key={matter.id}
+                    params={{ workspaceId: matter.id }}
+                    to="/workspaces/$workspaceId"
+                  >
+                    <LandingItemText
+                      icon={
+                        <LayersIcon
+                          className="size-4"
+                          style={{ color: matterColor }}
+                        />
+                      }
+                      iconTone="matter"
+                      meta={formatRelativeTime(matter.lastActivityAt, lang)}
+                      title={matter.name}
+                    />
+                  </Link>
+                );
+              })
             ) : (
               <LandingEmpty>{t("chat.landing.noMatters")}</LandingEmpty>
             )}
@@ -356,6 +356,7 @@ function ChatIndex() {
 }
 
 type PinnedMatter = {
+  color: string | null;
   id: string;
   lastActivityAt: string | Date;
   name: string;
@@ -420,13 +421,21 @@ const LandingButton = ({ icon, meta, onClick, title }: LandingButtonProps) => (
 
 type LandingItemTextProps = {
   icon?: ReactElement;
+  iconTone?: "muted" | "matter" | undefined;
   meta?: string | undefined;
   title: string;
 };
 
-const LandingItemText = ({ icon, meta, title }: LandingItemTextProps) => (
+const LandingItemText = ({
+  icon,
+  iconTone = "muted",
+  meta,
+  title,
+}: LandingItemTextProps) => (
   <span className="flex min-w-0 items-start gap-2">
-    {icon !== undefined && <LandingRowIcon>{icon}</LandingRowIcon>}
+    {icon !== undefined && (
+      <LandingRowIcon tone={iconTone}>{icon}</LandingRowIcon>
+    )}
     <span className="min-w-0 flex-1">
       <span className="text-foreground block truncate text-sm font-medium">
         {title}
@@ -442,10 +451,17 @@ const LandingItemText = ({ icon, meta, title }: LandingItemTextProps) => (
 
 type LandingRowIconProps = {
   children: ReactElement;
+  tone?: "muted" | "matter" | undefined;
 };
 
-const LandingRowIcon = ({ children }: LandingRowIconProps) => (
-  <span className="text-muted-foreground/55 group-hover:text-muted-foreground mt-0.5 flex size-4 shrink-0 items-center justify-center transition-colors">
+const LandingRowIcon = ({ children, tone = "muted" }: LandingRowIconProps) => (
+  <span
+    className={cn(
+      "mt-0.5 flex size-4 shrink-0 items-center justify-center transition-colors",
+      tone === "muted" &&
+        "text-muted-foreground/55 group-hover:text-muted-foreground",
+    )}
+  >
     {children}
   </span>
 );

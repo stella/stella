@@ -352,10 +352,10 @@ type Messages = {
     "landing": {
       "lastAccessedMatters": "Last accessed matters";
       "noMatters": "No matters yet";
-      "noPrompts": "No prompts yet";
+      "noPrompts": "No skills yet";
       "noRecentChats": "No recent chats";
       "pinnedMatters": "Pinned matters";
-      "prompts": "Prompts";
+      "prompts": "Skills";
       "recentChats": "Recent chats";
     };
     "maxAttachmentsReached": "Maximum {count} files per message";
@@ -376,12 +376,12 @@ type Messages = {
     "noThreads": "No conversations yet";
     "placeholder": "Type your question here, / for skills, @ to add context";
     "prompts": {
-      "noResults": "No matching prompts";
+      "noResults": "No matching skills";
       "noShortcuts": "No skills yet. Add some in Knowledge → Skills.";
       "scope": {
-        "private": "Your prompts";
+        "private": "Your skills";
         "stock": "Built-in";
-        "team": "Team prompts";
+        "team": "Team skills";
       };
       "stock": {
         "compareVersions": {
@@ -1069,7 +1069,7 @@ type Messages = {
         "title": "Connectors";
       };
       "skills": {
-        "description": "Custom AI skills and prompts";
+        "description": "Custom AI skills";
         "title": "Skills";
       };
       "templates": {

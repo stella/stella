@@ -1,11 +1,20 @@
 import { Fragment, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { pageTitle } from "@/lib/page-title";
 import { AlphabetIndex } from "@/routes/_protected.workspaces/-components/alphabet-index";
 import { ClientGroupHeader } from "@/routes/_protected.workspaces/-components/client-group-header";
@@ -13,6 +22,7 @@ import { MatterCard } from "@/routes/_protected.workspaces/-components/matter-ca
 import { MattersTable } from "@/routes/_protected.workspaces/-components/matters-table";
 import { MattersToolbar } from "@/routes/_protected.workspaces/-components/matters-toolbar";
 import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
+import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 import type {
   Workspace,
   WorkspaceGroup,
@@ -40,6 +50,7 @@ export const Route = createFileRoute("/_protected/workspaces/")({
 function RouteComponent() {
   const t = useTranslations();
   const { data } = useSuspenseQuery(workspacesOptions);
+  const canCreateMatter = usePermissions({ workspace: ["create"] });
 
   const { sortKey, sortDesc, groupBy, collapsedGroups } = useConfigStore(
     useShallow((s) => ({
@@ -56,6 +67,8 @@ function RouteComponent() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const workspaces = data.workspaces;
+  const canOpenCreateMatter =
+    canCreateMatter && workspaces.length < data.workspacesCountLimit;
 
   const filtered = workspaces.filter((w) => {
     if (!search.trim()) {
@@ -111,40 +124,100 @@ function RouteComponent() {
   });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <MattersToolbar
-        onSearchChange={setSearch}
-        search={search}
-        searchRef={searchRef}
-      />
+    <MattersPageContextMenu canCreateMatter={canOpenCreateMatter}>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <MattersToolbar
+          onSearchChange={setSearch}
+          search={search}
+          searchRef={searchRef}
+        />
 
-      <div className="relative flex-1">
-        <div className="absolute inset-0 overflow-y-auto" ref={scrollRef}>
-          {sorted.length === 0 ? (
-            <div className="text-muted-foreground flex flex-1 items-center justify-center p-8 text-sm">
-              {workspaces.length === 0
-                ? t("workspaces.noMatters")
-                : t("common.empty")}
-            </div>
-          ) : (
-            <MattersContentView
-              displayed={displayed}
-              focusIndex={focusIndex}
+        <div className="relative flex-1">
+          <div className="absolute inset-0 overflow-y-auto" ref={scrollRef}>
+            {sorted.length === 0 ? (
+              <div className="text-muted-foreground flex flex-1 items-center justify-center p-8 text-sm">
+                {workspaces.length === 0
+                  ? t("workspaces.noMatters")
+                  : t("common.empty")}
+              </div>
+            ) : (
+              <MattersContentView
+                displayed={displayed}
+                focusIndex={focusIndex}
+                groups={groups}
+              />
+            )}
+          </div>
+          {groups && groups.length > 0 && (
+            <AlphabetIndex
+              collapsedGroups={collapsedGroups}
               groups={groups}
+              scrollContainerRef={scrollRef}
             />
           )}
         </div>
-        {groups && groups.length > 0 && (
-          <AlphabetIndex
-            collapsedGroups={collapsedGroups}
-            groups={groups}
-            scrollContainerRef={scrollRef}
-          />
-        )}
       </div>
-    </div>
+    </MattersPageContextMenu>
   );
 }
+
+type MattersPageContextMenuProps = {
+  canCreateMatter: boolean;
+  children: ReactNode;
+};
+
+const MattersPageContextMenu = ({
+  canCreateMatter,
+  children,
+}: MattersPageContextMenuProps): ReactNode => {
+  const t = useTranslations();
+  const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
+  const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<{
+    getBoundingClientRect: () => DOMRect;
+  } | null>(null);
+
+  if (!canCreateMatter) {
+    return children;
+  }
+
+  return (
+    <div
+      className="contents"
+      onContextMenu={(event) => {
+        event.preventDefault();
+        const x = event.clientX;
+        const y = event.clientY;
+        setAnchor({
+          getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+        });
+        setOpen(true);
+      }}
+    >
+      {children}
+      <Menu
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen);
+          if (!nextOpen) {
+            setAnchor(null);
+          }
+        }}
+        open={open}
+      >
+        <MenuTrigger
+          nativeButton={false}
+          render={<span className="sr-only" />}
+        />
+        <MenuPopup anchor={anchor ?? undefined}>
+          <MenuItem onClick={() => openCreateMatter()}>
+            <PlusIcon />
+            {t("workspaces.createNewWorkspace")}
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
+    </div>
+  );
+};
 
 type MattersContentViewProps = {
   displayed: Workspace[];
