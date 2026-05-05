@@ -412,7 +412,7 @@ jobs:
     # production by accident if the upstream validation regex changes.
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [resolve, build-arm64, smoke]
+    needs: [resolve, manifest, smoke]
     if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
     permissions:
       contents: read
@@ -430,7 +430,6 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
-          IMAGE_DIGEST: ${{ needs.build-arm64.outputs.digest }}
           INFRA_REPO: ${{ github.repository_owner }}/stella-infra
         run: |
           dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -438,7 +437,6 @@ jobs:
             gh workflow run promote-release.yml \
               --repo "$INFRA_REPO" \
               --field release_ref="$RELEASE_REF" \
-              --field image_digest="$IMAGE_DIGEST" \
               --field run_migrations=true \
               --field frontend=true 2>&1
           )"
