@@ -202,6 +202,8 @@ import { useHyperlinkHandlers } from "./hooks/useHyperlinkHandlers";
 import { useImageHandlers } from "./hooks/useImageHandlers";
 import { InlineHeaderFooterEditor } from "./InlineHeaderFooterEditor";
 import type { InlineHeaderFooterEditorRef } from "./InlineHeaderFooterEditor";
+import { updateScrollPageTotal } from "./scrollPageInfo";
+import type { ScrollPageInfo } from "./scrollPageInfo";
 import { TextContextMenu } from "./TextContextMenu";
 import type { TextContextAction, TextContextMenuItem } from "./TextContextMenu";
 import { ToolbarButton, ToolbarSeparator } from "./Toolbar";
@@ -1136,11 +1138,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     }, []);
 
     // Scroll-based page indicator (Google Docs style)
-    const [scrollPageInfo, setScrollPageInfo] = useState<{
-      currentPage: number;
-      totalPages: number;
-      visible: boolean;
-    }>({ currentPage: 1, totalPages: 1, visible: false });
+    const [scrollPageInfo, setScrollPageInfo] = useState<ScrollPageInfo>({
+      currentPage: 1,
+      totalPages: 1,
+      visible: false,
+    });
     const [bodyHistoryAvailability, setBodyHistoryAvailability] = useState({
       canRedo: false,
       canUndo: false,
@@ -3045,8 +3047,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         },
         getCurrentPage: () => scrollPageInfo.currentPage,
         getTotalPages: () => scrollPageInfo.totalPages,
-        scrollToPage: (_pageNumber: number) => {
-          // TODO: Implement page navigation in ProseMirror
+        scrollToPage: (pageNumber: number) => {
+          pagedEditorRef.current?.scrollToPage(pageNumber);
         },
         openPrintPreview: handleDirectPrint,
         print: handleDirectPrint,
@@ -3693,6 +3695,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                         commentsSidebarOpen={showCommentsSidebar}
                         anchorPositionMode="comments"
                         onAnchorPositionsChange={setAnchorPositions}
+                        onTotalPagesChange={(totalPages) => {
+                          setScrollPageInfo((previous) =>
+                            updateScrollPageTotal(previous, totalPages),
+                          );
+                        }}
                         scrollContainerRef={scrollContainerRef}
                         sidebarOverlay={
                           showCommentsSidebar ? (

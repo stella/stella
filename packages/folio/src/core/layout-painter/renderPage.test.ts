@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { Page, ParagraphBlock } from "../layout-engine/types";
 import type { BlockLookup } from "./index";
-import { computePageFingerprint } from "./renderPage";
+import { computePageFingerprint, getDefaultPageFontFamily } from "./renderPage";
 
 const page: Page = {
   number: 1,
@@ -53,6 +53,14 @@ describe("render page fingerprint", () => {
   test("changes when comment annotations change without layout geometry changing", () => {
     expect(computePageFingerprint(page, lookup(blockWithComment()))).not.toBe(
       computePageFingerprint(page, lookup(blockWithComment(123))),
+    );
+  });
+});
+
+describe("page font fallback", () => {
+  test("uses the same metric-compatible Calibri fallback as text measurement", () => {
+    expect(getDefaultPageFontFamily()).toBe(
+      "Calibri, Carlito, Arial, Helvetica, sans-serif",
     );
   });
 });

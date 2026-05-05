@@ -28,6 +28,7 @@ import type {
   TextBoxFragment,
 } from "../layout-engine/types";
 import type { BorderSpec, Theme } from "../types/document";
+import { resolveFontFamily } from "../utils/fontResolver";
 import { borderToStyle } from "../utils/formatToStyle";
 import type { BlockLookup } from "./index";
 import { renderFragment } from "./renderFragment";
@@ -105,6 +106,9 @@ export const PAGE_CLASS_NAMES = {
 
 // RenderContext is re-exported from renderUtils
 export type { RenderContext } from "./renderUtils";
+
+export const getDefaultPageFontFamily = (): string =>
+  resolveFontFamily("Calibri").cssFallback;
 
 /**
  * Header/footer content for rendering
@@ -210,9 +214,10 @@ function applyPageStyles(
   element.style.boxShadow = "none";
   element.style.outline = "none";
 
-  // Set default font styles (matches Word default: 11pt Calibri)
-  // Individual runs will override these with their own font settings
-  element.style.fontFamily = 'Calibri, "Segoe UI", Arial, sans-serif';
+  // Set default font styles (matches Word default: 11pt Calibri).
+  // Keep this fallback chain aligned with canvas measurement so text widths
+  // do not drift when Calibri is unavailable and Carlito is used instead.
+  element.style.fontFamily = getDefaultPageFontFamily();
   // Use pixels to match Canvas-based measurements (11pt = 11 * 96/72 ≈ 14.67px)
   element.style.fontSize = `${(11 * 96) / 72}px`;
   element.style.color = "var(--doc-canvas-text, #000)";

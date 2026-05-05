@@ -132,6 +132,10 @@ import {
 // Selection sync
 import { LayoutSelectionGate } from "./LayoutSelectionGate";
 import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
+import {
+  getPageScrollTarget,
+  isValidPmScrollPosition,
+} from "./scrollNavigation";
 import { SelectionOverlay } from "./SelectionOverlay";
 import { getTransactionDirtyRange } from "./transactionDirtyRange";
 import { useDragAutoScroll } from "./useDragAutoScroll";
@@ -209,6 +213,8 @@ export type PagedEditorProps = {
   }) => void;
   /** Callback with pre-computed Y positions for comment/tracked-change anchors (for sidebar positioning without DOM queries). */
   onAnchorPositionsChange?: (positions: Map<string, number>) => void;
+  /** Callback when layout reports a different total page count. */
+  onTotalPagesChange?: (totalPages: number) => void;
   /** Which mark anchors should be mapped for sidebars/margin markers. */
   anchorPositionMode?: "comments" | "comments-and-revisions";
 };
@@ -244,6 +250,8 @@ export type PagedEditorRef = {
   relayout(): void;
   /** Scroll the visible pages to bring a PM position into view. */
   scrollToPosition(pmPos: number): void;
+  /** Scroll the visible pages to bring a page into view. */
+  scrollToPage(pageNumber: number): void;
 };
 
 // =============================================================================
@@ -1854,6 +1862,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onHyperlinkClick,
       onContextMenu,
       onAnchorPositionsChange,
+      onTotalPagesChange,
       anchorPositionMode = "comments-and-revisions",
     } = props;
 
@@ -1887,10 +1896,13 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     // when parent passes unstable callback references
     const onSelectionChangeRef = useRef(onSelectionChange);
     const onDocumentChangeRef = useRef(onDocumentChange);
+    const onTotalPagesChangeRef = useRef(onTotalPagesChange);
+    const lastTotalPagesRef = useRef<number | null>(null);
 
     // Keep refs in sync with latest props
     onSelectionChangeRef.current = onSelectionChange;
     onDocumentChangeRef.current = onDocumentChange;
+    onTotalPagesChangeRef.current = onTotalPagesChange;
 
     // State
     const [layout, setLayout] = useState<Layout | null>(null);
@@ -3162,6 +3174,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
     /** Scroll visible pages to a ProseMirror position. */
     const scrollToPositionImpl = useCallback((pmPos: number) => {
+      if (!isValidPmScrollPosition(pmPos)) {
+        return;
+      }
+
       const pageContainer = pagesContainerRef.current;
       if (!pageContainer) {
         return;
@@ -3265,6 +3281,27 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       };
       requestAnimationFrame(refine);
     }, []);
+
+    const scrollToPageImpl = useCallback(
+      (pageNumber: number) => {
+        const target = getPageScrollTarget(layout, pageNumber);
+        if (!target) {
+          return;
+        }
+
+        if (target.type === "position") {
+          scrollToPositionImpl(target.pmPos);
+          return;
+        }
+
+        const pageContainer = pagesContainerRef.current;
+        const shell = pageContainer?.querySelector<HTMLElement>(
+          `[data-page-number="${String(target.pageIndex + 1)}"]`,
+        );
+        shell?.scrollIntoView({ block: "center", inline: "nearest" });
+      },
+      [layout, scrollToPositionImpl],
+    );
 
     const focusHiddenEditor = useCallback(() => {
       if (readOnly) {
@@ -4827,9 +4864,24 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
         },
         scrollToPosition: scrollToPositionImpl,
+        scrollToPage: scrollToPageImpl,
       }),
-      [layout, runLayoutPipeline, scrollToPositionImpl],
+      [layout, runLayoutPipeline, scrollToPageImpl, scrollToPositionImpl],
     );
+
+    useEffect(() => {
+      if (!layout) {
+        return;
+      }
+
+      const totalPages = layout.pages.length;
+      if (lastTotalPagesRef.current === totalPages) {
+        return;
+      }
+
+      lastTotalPagesRef.current = totalPages;
+      onTotalPagesChangeRef.current?.(totalPages);
+    }, [layout]);
 
     // Update selection overlay when layout changes
     // This is needed because handleEditorViewReady calls runLayoutPipeline which
