@@ -1191,12 +1191,11 @@ const DraggableRow = ({
         </WorkspaceGridCell>
         <WorkspaceGridCell
           aria-colindex={3}
-          className="cursor-pointer"
+          className="cursor-pointer border-e-0"
           data-state={row.getIsSelected() ? "selected" : undefined}
           onClick={() => row.toggleExpanded()}
-          style={{ gridColumn: addPropertyCell ? "3 / -3" : "3 / -1" }}
+          style={{ gridColumn: addPropertyCell ? "3 / -2" : "3 / -1" }}
         />
-        {addPropertyCell && <WorkspaceGridFillerCell />}
         <AddPropertyCell
           cell={addPropertyCell}
           columnIndex={renderColumns.length + 1}
