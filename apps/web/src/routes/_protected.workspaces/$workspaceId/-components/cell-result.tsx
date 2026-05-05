@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { SquareMinusIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "use-intl";
 
 import Tooltip from "@/components/tooltip";
@@ -153,7 +154,7 @@ const FileCell = ({
         content={fileName}
         render={
           <button
-            className="bg-muted grid min-w-0 max-w-full cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start"
+            className="bg-muted grid max-w-full min-w-0 cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start"
             onClick={() =>
               openPdf({
                 id: fieldId,
@@ -179,7 +180,7 @@ const FileCell = ({
     <Tooltip
       content={fileName}
       render={
-        <span className="bg-muted grid min-w-0 max-w-full grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start opacity-60" />
+        <span className="bg-muted grid max-w-full min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start opacity-60" />
       }
     >
       <DocumentIcon className="size-3.5 shrink-0" mimeType={mimeType} />
@@ -242,9 +243,19 @@ type IntCellProps = {
   currency: string | null;
 };
 
+const IntCellContainer = ({ children }: { children: ReactNode }) => (
+  <div className="min-w-0 max-w-full truncate tabular-nums text-start">
+    {children}
+  </div>
+);
+
 const IntCell = ({ value, currency }: IntCellProps) => {
   if (!currency) {
-    return <div>{new Intl.NumberFormat().format(value)}</div>;
+    return (
+      <IntCellContainer>
+        {new Intl.NumberFormat().format(value)}
+      </IntCellContainer>
+    );
   }
 
   const formattedResult = Result.try(() =>
@@ -257,11 +268,11 @@ const IntCell = ({ value, currency }: IntCellProps) => {
 
   if (formattedResult.isErr()) {
     return (
-      <div>
+      <IntCellContainer>
         {new Intl.NumberFormat().format(value)} {currency}
-      </div>
+      </IntCellContainer>
     );
   }
 
-  return <div>{formattedResult.value}</div>;
+  return <IntCellContainer>{formattedResult.value}</IntCellContainer>;
 };
