@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { isMockAI } from "@/api/consts";
 import { propertyContentSchema } from "@/api/db/schema-validators";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
+import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";

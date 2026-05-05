@@ -22,7 +22,7 @@ import { authSchema, session as sessionTable } from "@/api/db/auth-schema";
 import { db } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
+import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";

@@ -2,7 +2,7 @@ import { generateText } from "ai";
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
+import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeHandler } from "@/api/lib/api-handlers";

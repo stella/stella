@@ -10,7 +10,7 @@ import { jsonField } from "@/api/db/json-utils";
 import { entities, fields, justifications, properties } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
+import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
