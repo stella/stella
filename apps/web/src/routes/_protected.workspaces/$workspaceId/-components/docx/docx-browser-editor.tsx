@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 import "@stll/folio/editor.css";
+
 import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
 import type { ActiveDocxRegistrationToken } from "@/components/ai-suggestions/active-docx-store";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
@@ -51,6 +52,7 @@ import {
 import { useDocxBlockScroll } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
+
 import {
   getDocxEditBlockReason,
   selectEditorBuffer,

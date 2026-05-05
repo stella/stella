@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { db } from "@/api/db/root";
+import { logger } from "@/api/lib/observability/logger";
 
 const MIGRATIONS_DIR = resolve(process.cwd(), "drizzle");
 const ESCAPE_HATCH_ENV = "SKIP_MIGRATION_CHECK";
@@ -36,10 +37,9 @@ const queryAppliedHashes = async (): Promise<Set<string>> => {
 
 export const assertMigrationsApplied = async (): Promise<void> => {
   if (process.env[ESCAPE_HATCH_ENV] === "true") {
-    console.warn(
-      `[startup] ${ESCAPE_HATCH_ENV}=true; migration drift check disabled. ` +
-        "Use only for incident recovery; remove the env var after.",
-    );
+    logger.warn("startup.migration_check_disabled", {
+      escape_hatch_env: ESCAPE_HATCH_ENV,
+    });
     return;
   }
 

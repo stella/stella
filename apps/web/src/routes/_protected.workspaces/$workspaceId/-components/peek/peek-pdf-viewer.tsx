@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 import "@stll/folio/editor.css";
+
 import "./peek-docx.css";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";

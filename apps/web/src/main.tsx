@@ -6,6 +6,7 @@ import { RouterProvider } from "@tanstack/react-router";
 
 import "@/fonts.css";
 import "@stll/ui/globals.css";
+
 import { initializeI18n } from "@/i18n/i18n-store";
 import { getRouter } from "@/router";
 
