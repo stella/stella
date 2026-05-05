@@ -3,9 +3,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
-import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import messages from "@/i18n/langs/en.json";
 import type Messages from "@/i18n/langs/messages.gen";
+
+process.env["VITE_API_URL"] = "http://localhost:3001";
+
+const { ChatThreadMessages } =
+  await import("@/components/chat/chat-thread-messages");
 
 describe("chat thread messages", () => {
   test("shows a resendable chat message when the chat runtime errors", () => {
