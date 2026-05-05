@@ -3,7 +3,6 @@ import type { ComponentProps } from "react";
 
 import { useChat } from "@ai-sdk/react";
 import type { Chat } from "@ai-sdk/react";
-import { useQueryClient } from "@tanstack/react-query";
 import { isToolUIPart } from "ai";
 
 import type {
@@ -12,24 +11,16 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import {
-  invalidateChatThread,
-  invalidateGroupedChatThreads,
-} from "@/routes/_protected.chat/-queries";
 
 type UseChatSessionOptions = {
   chat: Chat<PersistedChatMessage>;
-  threadRef: ChatThreadRef;
   workspaceId?: string | undefined;
 };
 
 export const useChatSession = ({
   chat,
-  threadRef,
   workspaceId,
 }: UseChatSessionOptions) => {
-  const queryClient = useQueryClient();
   const [autoApprovedTools, setAutoApprovedTools] = useState(
     () => new Set<ApprovalToolName>(),
   );
@@ -48,23 +39,13 @@ export const useChatSession = ({
   const sendMessage = useCallback(
     async (message: Parameters<typeof sendChatMessage>[0]) => {
       await sendChatMessage(message);
-      if (chat.status === "error" || chat.error) {
-        return;
-      }
-      await invalidateChatThread({ queryClient, threadRef });
-      await invalidateGroupedChatThreads(queryClient);
     },
-    [chat, queryClient, sendChatMessage, threadRef],
+    [sendChatMessage],
   );
 
   const resendLatestMessage = useCallback(async () => {
     await regenerate();
-    if (chat.status === "error" || chat.error) {
-      return;
-    }
-    await invalidateChatThread({ queryClient, threadRef });
-    await invalidateGroupedChatThreads(queryClient);
-  }, [chat, queryClient, regenerate, threadRef]);
+  }, [regenerate]);
 
   const handleApprove = useCallback(
     (id: string, _toolName?: ApprovalToolName) =>

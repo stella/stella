@@ -693,7 +693,7 @@ const FileChatOverlayInner = ({
     addToolOutput,
     streamdownComponents,
     approvalPendingMessageId,
-  } = useChatSession({ chat, threadRef, workspaceId });
+  } = useChatSession({ chat, workspaceId });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
 
   useEffect(() => {

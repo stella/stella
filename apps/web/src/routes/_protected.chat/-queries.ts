@@ -290,7 +290,7 @@ export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
       allowMissingThread: context?.allowMissingThread,
       contextKind: getChatRuntimeContextKind(context),
     }),
-    queryFn: async (): Promise<ChatThreadFetched> => {
+    queryFn: async ({ client: queryClient }): Promise<ChatThreadFetched> => {
       const { messages, contextMatterIds } = await fetchThreadMessages(key, {
         allowMissingThread: context?.allowMissingThread,
       });
@@ -300,6 +300,16 @@ export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
         messages,
         onError: (error) => {
           getAnalytics().captureError(error);
+        },
+        onFinish: ({ isError }) => {
+          if (isError) {
+            return;
+          }
+
+          void Promise.all([
+            invalidateChatThread({ queryClient, threadRef: key }),
+            invalidateGroupedChatThreads(queryClient),
+          ]);
         },
         transport: new DefaultChatTransport({
           api: getChatApiPath(),

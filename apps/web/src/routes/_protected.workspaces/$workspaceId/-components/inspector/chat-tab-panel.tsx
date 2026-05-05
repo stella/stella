@@ -179,7 +179,7 @@ export const ChatTabPanel = ({
     handleAlwaysAllow,
     streamdownComponents,
     approvalPendingMessageId,
-  } = useChatSession({ chat, threadRef, workspaceId: tabWorkspaceId });
+  } = useChatSession({ chat, workspaceId: tabWorkspaceId });
 
   // TipTap composer for this thread — `@`-mention chips, drafts,
   // attachments come from the same provider as the right-panel

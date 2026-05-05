@@ -109,7 +109,7 @@ export const ChatThreadPage = ({
     handleAlwaysAllow,
     streamdownComponents,
     approvalPendingMessageId,
-  } = useChatSession({ chat, threadRef, workspaceId });
+  } = useChatSession({ chat, workspaceId });
 
   const openInspectorChat = useInspectorStore((s) => s.openChat);
   const navigate = useNavigate();
