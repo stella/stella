@@ -69,7 +69,11 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
-          if gh api "repos/${{ github.repository }}/git/refs/tags/$TAG" >/dev/null 2>&1; then
+          # /git/ref/{ref} is the EXACT-match endpoint. The plural
+          # /git/refs/{ref} does prefix matching: a check for
+          # `v0.1.0` would also match `v0.1.0-rc.1` and skip the
+          # real tag push.
+          if gh api "repos/${{ github.repository }}/git/ref/tags/$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists; nothing to do."
             echo "skip=true" >> "$GITHUB_ENV"
           fi
