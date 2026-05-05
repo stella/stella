@@ -19,6 +19,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
@@ -51,6 +52,7 @@ import {
   PARTY_ROLE_LABEL_KEYS,
   toPartyRole,
 } from "@/routes/_protected.workspaces/$workspaceId/-party-roles";
+import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
 export const Route = createFileRoute("/_protected/contacts/$contactId")({
@@ -174,6 +176,12 @@ function ContactDetailPage() {
             <div className="space-y-2 text-sm">
               <EditableRow
                 contact={contact}
+                field="displayName"
+                label={t("contacts.fields.displayName")}
+                value={contact.displayName}
+              />
+              <EditableRow
+                contact={contact}
                 field="prefix"
                 label={t("contacts.fields.prefix")}
                 value={contact.prefix}
@@ -205,12 +213,20 @@ function ContactDetailPage() {
             </div>
           )}
           {contact.type === "organization" && (
-            <EditableRow
-              contact={contact}
-              field="organizationName"
-              label={t("common.organizationName")}
-              value={contact.organizationName}
-            />
+            <div className="space-y-2 text-sm">
+              <EditableRow
+                contact={contact}
+                field="displayName"
+                label={t("contacts.fields.displayName")}
+                value={contact.displayName}
+              />
+              <EditableRow
+                contact={contact}
+                field="organizationName"
+                label={t("common.organizationName")}
+                value={contact.organizationName}
+              />
+            </div>
           )}
         </section>
 
@@ -507,20 +523,32 @@ const getContactMetadata = (contact: ContactData): ContactMetadata => {
   };
 };
 
+const invalidateContactCaches = (
+  queryClient: QueryClient,
+  contactId: string,
+) => {
+  // eslint-disable-next-line typescript/no-floating-promises
+  queryClient.invalidateQueries({
+    queryKey: contactsKeys.byId(contactId),
+  });
+  // eslint-disable-next-line typescript/no-floating-promises
+  queryClient.invalidateQueries({
+    queryKey: contactsKeys.list(),
+  });
+  // Client contact fields are embedded in workspace list/detail/navigation data.
+  // eslint-disable-next-line typescript/no-floating-promises
+  queryClient.invalidateQueries({
+    queryKey: workspacesKeys.all,
+  });
+};
+
 const useContactPatch = (contact: ContactData) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const updateContact = useUpdateContact();
 
   const handleSuccess = () => {
-    // eslint-disable-next-line typescript/no-floating-promises
-    queryClient.invalidateQueries({
-      queryKey: contactsKeys.byId(contact.id),
-    });
-    // eslint-disable-next-line typescript/no-floating-promises
-    queryClient.invalidateQueries({
-      queryKey: contactsKeys.list(),
-    });
+    invalidateContactCaches(queryClient, contact.id);
   };
 
   const handleError = (onError?: () => void) => {
@@ -1178,14 +1206,7 @@ const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
       },
       {
         onSuccess: () => {
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
-            queryKey: contactsKeys.byId(contact.id),
-          });
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
-            queryKey: contactsKeys.list(),
-          });
+          invalidateContactCaches(queryClient, contact.id);
         },
         onError: () => {
           stellaToast.add({
@@ -1385,14 +1406,7 @@ const ContactNotesEditor = ({ contact }: { contact: ContactData }) => {
       },
       {
         onSuccess: () => {
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
-            queryKey: contactsKeys.byId(contact.id),
-          });
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
-            queryKey: contactsKeys.list(),
-          });
+          invalidateContactCaches(queryClient, contact.id);
         },
         onError: () => {
           stellaToast.add({
@@ -1471,6 +1485,16 @@ const EditableRow = ({
         return;
       }
       payload = { [field]: parsed };
+    } else if (field === "displayName") {
+      if (!trimmed) {
+        stellaToast.add({
+          title: t("errors.actionFailed"),
+          type: "error",
+        });
+        setInputValue(value ?? "");
+        return;
+      }
+      payload = { displayName: trimmed };
     } else {
       payload = { [field]: trimmed || null };
     }
@@ -1479,14 +1503,7 @@ const EditableRow = ({
       { contactId: contact.id, ...payload },
       {
         onSuccess: () => {
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
-            queryKey: contactsKeys.byId(contact.id),
-          });
-          // eslint-disable-next-line typescript/no-floating-promises
-          queryClient.invalidateQueries({
-            queryKey: contactsKeys.list(),
-          });
+          invalidateContactCaches(queryClient, contact.id);
         },
         onError: () => {
           stellaToast.add({
