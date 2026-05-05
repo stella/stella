@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
@@ -162,7 +162,7 @@ export const ConfigureStep = ({
       setSaving(false);
 
       if (response.error) {
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t("templates.saveFailed"),
           description: userErrorMessage(
@@ -173,7 +173,7 @@ export const ConfigureStep = ({
         return;
       }
 
-      toastManager.add({
+      stellaToast.add({
         type: "success",
         title: t("templates.templateSaved"),
       });

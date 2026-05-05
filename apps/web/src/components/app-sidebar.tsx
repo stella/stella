@@ -27,7 +27,7 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/components/menu";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import {
   formatForDisplay,
@@ -354,7 +354,7 @@ const MatterItem = ({
       {
         onSuccess: () => setIsRenaming(false),
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -502,12 +502,12 @@ const MatterItem = ({
                       try {
                         const url = `${window.location.origin}/workspaces/${ws.id}`;
                         await navigator.clipboard.writeText(url);
-                        toastManager.add({
+                        stellaToast.add({
                           title: t("common.copied"),
                           type: "success",
                         });
                       } catch {
-                        toastManager.add({
+                        stellaToast.add({
                           title: t("errors.actionFailed"),
                           type: "error",
                         });
@@ -647,7 +647,7 @@ export function AppSidebar(props: AppSidebarProps) {
       return;
     }
 
-    const toastId = toastManager.add({
+    const toastId = stellaToast.add({
       title: t("workspaces.deletingWorkspace"),
       type: "loading",
       timeout: Number.POSITIVE_INFINITY,
@@ -657,7 +657,7 @@ export function AppSidebar(props: AppSidebarProps) {
       { workspaceId },
       {
         onSuccess: () => {
-          toastManager.update(toastId, {
+          stellaToast.update(toastId, {
             title: t("success.workspaceDeletedSuccessfully"),
             type: "success",
           });
@@ -671,7 +671,7 @@ export function AppSidebar(props: AppSidebarProps) {
           })();
         },
         onError: () => {
-          toastManager.update(toastId, {
+          stellaToast.update(toastId, {
             title: t("errors.failedToDeleteWorkspace"),
             type: "error",
           });
@@ -810,9 +810,9 @@ export function AppSidebar(props: AppSidebarProps) {
                 void navigate({ to: s.to });
                 return;
               }
-              toastManager.add({
+              stellaToast.add({
                 title: t("common.comingSoon"),
-                type: "foreground",
+                type: "neutral",
               });
             },
           };

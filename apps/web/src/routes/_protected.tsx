@@ -16,6 +16,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { Separator } from "@stll/ui/components/separator";
+import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/components/toast";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -479,6 +480,14 @@ function WorkspaceInspectorSidePanel() {
   // Rail is always shown; only when there are real tabs and the
   // user hasn't minimized do we widen to the full pane width.
   const widthPx = `${showPaneContent ? width : INSPECTOR_RAIL_WIDTH}px`;
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(TOAST_RIGHT_OFFSET_VAR, widthPx);
+
+    return () => {
+      document.documentElement.style.removeProperty(TOAST_RIGHT_OFFSET_VAR);
+    };
+  }, [widthPx]);
 
   return (
     <div

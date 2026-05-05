@@ -18,7 +18,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -276,7 +276,7 @@ export function AIKeyRequiredDialog({
         queryClient.invalidateQueries({ queryKey: aiConfigKeys.all }),
         queryClient.invalidateQueries({ queryKey: aiConfigKeys.availability }),
       ]);
-      toastManager.add({
+      stellaToast.add({
         title: tSuccess("aiConfigUpdated"),
         type: "success",
       });
@@ -284,7 +284,7 @@ export function AIKeyRequiredDialog({
     },
     onError: (error) => {
       analytics.captureError(error);
-      toastManager.add({
+      stellaToast.add({
         title: error instanceof Error ? error.message : tErrors("actionFailed"),
         type: "error",
       });

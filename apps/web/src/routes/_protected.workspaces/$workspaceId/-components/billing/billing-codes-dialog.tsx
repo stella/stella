@@ -6,7 +6,7 @@ import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useForm } from "@tanstack/react-form";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { PlusIcon, TrashIcon } from "lucide-react";
@@ -47,7 +47,7 @@ export const BillingCodesDialog = ({
       { workspaceId, id },
       {
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("common.somethingWentWrong"),
             type: "error",
           });
@@ -61,7 +61,7 @@ export const BillingCodesDialog = ({
       { workspaceId, id, active: !active },
       {
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("common.somethingWentWrong"),
             type: "error",
           });
@@ -116,7 +116,7 @@ export const BillingCodesDialog = ({
                   {
                     onSuccess: () => setShowForm(false),
                     onError: () => {
-                      toastManager.add({
+                      stellaToast.add({
                         title: t("common.somethingWentWrong"),
                         type: "error",
                       });

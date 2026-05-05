@@ -19,7 +19,7 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/components/menu";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
@@ -213,14 +213,14 @@ export const RowActions = ({
 
       await openDocxInDesktop(desktopInput);
 
-      toastManager.add({
+      stellaToast.add({
         description: t("workspaces.files.desktopEdit.openedDescription"),
         title: t("workspaces.files.desktopEdit.openedTitle"),
         type: "success",
       });
     } catch (error) {
       if (error instanceof Error && isUnauthorizedError(error)) {
-        toastManager.add({
+        stellaToast.add({
           description: t(
             "workspaces.files.desktopEdit.authRequiredDescription",
           ),
@@ -230,7 +230,7 @@ export const RowActions = ({
         return;
       }
 
-      toastManager.add({
+      stellaToast.add({
         description: t("workspaces.files.desktopEdit.unavailableDescription"),
         title: t("workspaces.files.desktopEdit.unavailableTitle"),
         type: "error",
@@ -254,7 +254,7 @@ export const RowActions = ({
       workspaceId,
     });
 
-    toastManager.add({
+    stellaToast.add({
       description: t("workspaces.files.desktopEdit.openedDescription"),
       title: t("workspaces.files.desktopEdit.openedTitle"),
       type: "success",
@@ -283,7 +283,7 @@ export const RowActions = ({
       }
 
       // Consent request sent — show waiting toast with 30s timeout
-      const toastId = toastManager.add({
+      const toastId = stellaToast.add({
         title: t("workspaces.files.desktopEdit.takeoverWaiting"),
         description: t(
           "workspaces.files.desktopEdit.takeoverWaitingDescription",
@@ -299,7 +299,7 @@ export const RowActions = ({
       // becomes stale but harmless (force-release on an already-
       // released lock is a no-op on the API side).
       setTimeout(() => {
-        toastManager.close(toastId);
+        stellaToast.close(toastId);
         void doForceTakeover();
       }, 30_000);
     } catch {
@@ -307,7 +307,7 @@ export const RowActions = ({
         await doForceTakeover();
       } catch (forceError) {
         if (forceError instanceof Error && isUnauthorizedError(forceError)) {
-          toastManager.add({
+          stellaToast.add({
             description: t(
               "workspaces.files.desktopEdit.authRequiredDescription",
             ),
@@ -317,7 +317,7 @@ export const RowActions = ({
           return;
         }
 
-        toastManager.add({
+        stellaToast.add({
           description: t("workspaces.files.desktopEdit.unavailableDescription"),
           title: t("workspaces.files.desktopEdit.unavailableTitle"),
           type: "error",
@@ -349,7 +349,7 @@ export const RowActions = ({
     const targets = allTargets.filter((e) => e.kind !== "folder");
 
     if (targets.length === 0) {
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });
@@ -373,17 +373,17 @@ export const RowActions = ({
     }
 
     if (failedCount === 0) {
-      toastManager.add({
+      stellaToast.add({
         title: t("common.duplicated"),
         type: "success",
       });
     } else if (failedCount === targets.length) {
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });
     } else {
-      toastManager.add({
+      stellaToast.add({
         title: t("common.duplicated"),
         description: t("errors.actionFailed"),
         type: "warning",
@@ -399,7 +399,7 @@ export const RowActions = ({
       { workspaceId, entityIds: ids },
       {
         onSuccess: () => {
-          toastManager.add({
+          stellaToast.add({
             title: isBulk
               ? t("common.deletedCount", { count: ids.length })
               : `"${name}" deleted`,
@@ -407,7 +407,7 @@ export const RowActions = ({
           });
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: "Failed to delete",
             type: "error",
           });
@@ -639,7 +639,7 @@ const CreateSubfolderMenuItem = ({
       },
       {
         onSuccess: (data) => {
-          toastManager.add({
+          stellaToast.add({
             title: t("success.folderCreated"),
             type: "success",
           });
@@ -648,7 +648,7 @@ const CreateSubfolderMenuItem = ({
           }
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -679,7 +679,7 @@ const downloadEntityAsZip = async (
   msg: Msg,
 ) => {
   const name = getEntityName(entity);
-  const toastId = toastManager.add({
+  const toastId = stellaToast.add({
     type: "loading",
     title: msg.downloading,
   });
@@ -699,14 +699,14 @@ const downloadEntityAsZip = async (
   });
 
   if (Result.isError(blobResult)) {
-    toastManager.update(toastId, {
+    stellaToast.update(toastId, {
       title: msg.failed,
       type: "error",
     });
     return;
   }
 
-  toastManager.close(toastId);
+  stellaToast.close(toastId);
   downloadFile(blobResult.value, `${name}.zip`);
 };
 
@@ -722,7 +722,7 @@ const downloadSingleFile = async (
     .get({ query: { purpose: asPdf ? "display" : "download" } });
 
   if (response.error) {
-    toastManager.add({ title: msg.failed, type: "error" });
+    stellaToast.add({ title: msg.failed, type: "error" });
     return;
   }
 
@@ -738,7 +738,7 @@ const downloadSingleFile = async (
   });
 
   if (Result.isError(blobResult)) {
-    toastManager.add({ title: msg.failed, type: "error" });
+    stellaToast.add({ title: msg.failed, type: "error" });
     return;
   }
 

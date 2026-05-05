@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useForm, useStore } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
@@ -114,7 +114,7 @@ export const InviteMemberDialog = ({
         return;
       }
 
-      toastManager.add({
+      stellaToast.add({
         title: t("success.invitationSent"),
         type: "success",
       });

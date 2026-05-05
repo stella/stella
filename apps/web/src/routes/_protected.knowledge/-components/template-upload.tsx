@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import { Button } from "@stll/ui/components/button";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -29,7 +29,7 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
   const discover = useCallback(
     async (file: File) => {
       if (file.type !== DOCX_MIME) {
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t("templates.invalidFileType"),
         });
@@ -44,7 +44,7 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
       setLoading(false);
 
       if (response.error) {
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t("templates.discoveryFailed"),
           description: userErrorMessage(
@@ -57,7 +57,7 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
 
       const { data } = response;
       if (data instanceof Response) {
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t("templates.discoveryFailed"),
         });

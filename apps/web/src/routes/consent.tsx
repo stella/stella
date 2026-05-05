@@ -8,7 +8,7 @@ import {
   FramePanel,
   FrameTitle,
 } from "@stll/ui/components/frame";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -124,7 +124,7 @@ function ConsentPage() {
     if (result.error) {
       setHasError(true);
       setIsPending(false);
-      toastManager.add({
+      stellaToast.add({
         title: result.error.message ?? t("consent.error"),
         type: "error",
       });
@@ -135,7 +135,7 @@ function ConsentPage() {
     if (!redirectUrl) {
       setHasError(true);
       setIsPending(false);
-      toastManager.add({
+      stellaToast.add({
         title: t("consent.error"),
         type: "error",
       });

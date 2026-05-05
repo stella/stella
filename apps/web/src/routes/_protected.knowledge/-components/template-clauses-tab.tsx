@@ -10,7 +10,7 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangleIcon,
@@ -181,7 +181,7 @@ const LinkedClauseRow = ({
     setUnlinking(false);
 
     if (response.error) {
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("clauses.unlinkFailed"),
         description: userErrorMessage(
@@ -192,7 +192,7 @@ const LinkedClauseRow = ({
       return;
     }
 
-    toastManager.add({
+    stellaToast.add({
       type: "success",
       title: t("clauses.unlinked"),
     });
@@ -211,7 +211,7 @@ const LinkedClauseRow = ({
     setSyncing(false);
 
     if (response.error) {
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("clauses.syncFailed"),
         description: userErrorMessage(
@@ -222,7 +222,7 @@ const LinkedClauseRow = ({
       return;
     }
 
-    toastManager.add({
+    stellaToast.add({
       type: "success",
       title: t("clauses.synced"),
     });

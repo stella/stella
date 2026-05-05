@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@stll/ui/components/button";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -134,14 +134,14 @@ export const AIConfigCard = () => {
           queryKey: aiConfigKeys.availability,
         }),
       ]);
-      toastManager.add({
+      stellaToast.add({
         title: tSuccess("aiConfigUpdated"),
         type: "success",
       });
     },
     onError: (error) => {
       analytics.captureError(error);
-      toastManager.add({
+      stellaToast.add({
         title: error instanceof Error ? error.message : tErrors("actionFailed"),
         type: "error",
       });
@@ -169,14 +169,14 @@ export const AIConfigCard = () => {
           queryKey: aiConfigKeys.availability,
         }),
       ]);
-      toastManager.add({
+      stellaToast.add({
         title: tSuccess("aiConfigDeleted"),
         type: "success",
       });
     },
     onError: (error) => {
       analytics.captureError(error);
-      toastManager.add({
+      stellaToast.add({
         title: tErrors("actionFailed"),
         type: "error",
       });

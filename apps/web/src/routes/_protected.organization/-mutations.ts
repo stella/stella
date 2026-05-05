@@ -1,4 +1,4 @@
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
@@ -20,7 +20,7 @@ export const useRemoveMember = () => {
       });
 
       if (result.error) {
-        toastManager.add({
+        stellaToast.add({
           title: result.error.message ?? t("errors.actionFailed"),
           type: "error",
         });
@@ -30,7 +30,7 @@ export const useRemoveMember = () => {
       return result.data;
     },
     onSuccess: () => {
-      toastManager.add({
+      stellaToast.add({
         title: t("success.memberRemoved"),
         type: "success",
       });
@@ -89,7 +89,7 @@ export const useCancelInvitation = () => {
       });
 
       if (result.error) {
-        toastManager.add({
+        stellaToast.add({
           title: result.error.message ?? t("errors.actionFailed"),
           type: "error",
         });
@@ -101,7 +101,7 @@ export const useCancelInvitation = () => {
     onSuccess: () => {
       // eslint-disable-next-line typescript/no-floating-promises
       queryClient.invalidateQueries({ queryKey: organizationKeys.all });
-      toastManager.add({
+      stellaToast.add({
         title: t("success.invitationCanceled"),
         type: "success",
       });

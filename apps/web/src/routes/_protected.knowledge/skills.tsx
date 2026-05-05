@@ -10,7 +10,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -111,12 +111,13 @@ function SkillsPage() {
     setDeleting(false);
 
     if (response.error) {
-      toastManager.add({
-        type: "error",
+      stellaToast.add({
+        title: t("common.unexpectedError"),
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
         ),
+        type: "error",
       });
       return;
     }

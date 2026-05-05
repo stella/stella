@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { Textarea } from "@stll/ui/components/textarea";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { useTranslations } from "use-intl";
 
@@ -140,12 +140,13 @@ export const ShortcutFormDialog = ({
           setCommandError(t("knowledge.skills.errors.commandConflict"));
           return;
         }
-        toastManager.add({
-          type: "error",
+        stellaToast.add({
+          title: t("common.unexpectedError"),
           description: userErrorMessage(
             response.error,
             t("common.unexpectedError"),
           ),
+          type: "error",
         });
         return;
       }
@@ -167,12 +168,13 @@ export const ShortcutFormDialog = ({
           setCommandError(t("knowledge.skills.errors.commandConflict"));
           return;
         }
-        toastManager.add({
-          type: "error",
+        stellaToast.add({
+          title: t("common.unexpectedError"),
           description: userErrorMessage(
             response.error,
             t("common.unexpectedError"),
           ),
+          type: "error",
         });
         return;
       }

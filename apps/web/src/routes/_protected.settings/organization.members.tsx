@@ -24,7 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/components/table";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import {
   useMutation,
@@ -304,13 +304,13 @@ function Members() {
                                 },
                                 {
                                   onSuccess: () => {
-                                    toastManager.add({
+                                    stellaToast.add({
                                       title: t("success.invitationResent"),
                                       type: "success",
                                     });
                                   },
                                   onError: () => {
-                                    toastManager.add({
+                                    stellaToast.add({
                                       title: t("errors.actionFailed"),
                                       type: "error",
                                     });
@@ -394,7 +394,7 @@ const RoleCell = ({
 
       if (result.error) {
         analytics.captureError(toAuthClientError(result.error));
-        toastManager.add({
+        stellaToast.add({
           title: result.error.message ?? t("errors.actionFailed"),
           type: "error",
         });
@@ -403,7 +403,7 @@ const RoleCell = ({
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: organizationKeys.all });
-      toastManager.add({ title: t("success.roleUpdated"), type: "success" });
+      stellaToast.add({ title: t("success.roleUpdated"), type: "success" });
     },
   });
 

@@ -14,7 +14,7 @@ import {
 import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
 import { Input } from "@stll/ui/components/input";
 import { Skeleton } from "@stll/ui/components/skeleton";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import type { UseMutationResult } from "@tanstack/react-query";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
@@ -407,7 +407,7 @@ export const SearchDialog = ({
           });
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("common.somethingWentWrong"),
             type: "error",
           });
@@ -435,7 +435,7 @@ export const SearchDialog = ({
           );
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("common.somethingWentWrong"),
             type: "error",
           });

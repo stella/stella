@@ -1,4 +1,4 @@
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { LandmarkIcon, LightbulbIcon, PlugIcon } from "lucide-react";
@@ -77,9 +77,9 @@ function KnowledgeLanding() {
               )}
               key={section.key}
               onClick={() => {
-                toastManager.add({
+                stellaToast.add({
                   title: t("common.comingSoon"),
-                  type: "foreground",
+                  type: "neutral",
                 });
               }}
             >

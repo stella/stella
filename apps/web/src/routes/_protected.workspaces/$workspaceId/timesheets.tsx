@@ -9,7 +9,7 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import {
   ChevronLeftIcon,
@@ -37,7 +37,7 @@ export const Route = createFileRoute(
   // feature is reintroduced, drop this beforeLoad and re-link the
   // overview StatCard.
   beforeLoad: ({ params }) => {
-    toastManager.add({
+    stellaToast.add({
       title: "Coming soon",
       type: "info",
       timeout: 4000,
@@ -219,7 +219,7 @@ function TimesheetsPage() {
             onValueChange={(val) => {
               if (val) {
                 handleExport(val).catch(() => {
-                  toastManager.add({
+                  stellaToast.add({
                     title: t("errors.actionFailed"),
                     type: "error",
                   });

@@ -4,7 +4,7 @@ import { prorateHourlyCents } from "@stll/money";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
@@ -115,7 +115,7 @@ export const TimesheetDayView = ({
       {
         onSuccess: () => setFormOpen(false),
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -146,7 +146,7 @@ export const TimesheetDayView = ({
       {
         onSuccess: () => setEditingId(null),
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -160,7 +160,7 @@ export const TimesheetDayView = ({
       { workspaceId, id },
       {
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -174,7 +174,7 @@ export const TimesheetDayView = ({
       { workspaceId, id, status },
       {
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });

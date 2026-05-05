@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 import { Button } from "@stll/ui/components/button";
 import { Separator } from "@stll/ui/components/separator";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
@@ -115,7 +115,7 @@ export const PdfViewerControls = ({
       downloadFile(await fileResponse.blob(), fileMetadata.fileName);
     } catch (error: unknown) {
       analytics.captureError(error);
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });
@@ -140,7 +140,7 @@ export const PdfViewerControls = ({
       printPdfBuffer(data);
     } catch (error: unknown) {
       analytics.captureError(error);
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });

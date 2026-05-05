@@ -12,7 +12,7 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
 } from "@stll/ui/components/menu";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   DatabaseIcon,
@@ -126,7 +126,7 @@ export const DevSidebarGroup = () => {
     const start = await api.dev.seed.post();
     if (start.error) {
       setSeeding(false);
-      toastManager.add({ title: "Seed failed", type: "error" });
+      stellaToast.add({ title: "Seed failed", type: "error" });
       return;
     }
 
@@ -134,13 +134,13 @@ export const DevSidebarGroup = () => {
       const status = await api.dev.seed.get();
       if (status.error) {
         setSeeding(false);
-        toastManager.add({ title: "Seed status failed", type: "error" });
+        stellaToast.add({ title: "Seed status failed", type: "error" });
         return;
       }
 
       if (status.data.status === "failed") {
         setSeeding(false);
-        toastManager.add({
+        stellaToast.add({
           title: "Seed failed",
           description: status.data.message,
           type: "error",
@@ -151,7 +151,7 @@ export const DevSidebarGroup = () => {
       if (status.data.status === "succeeded") {
         setSeeding(false);
         await queryClient.invalidateQueries();
-        toastManager.add({
+        stellaToast.add({
           title: "Dev data seeded",
           type: "success",
         });
@@ -162,7 +162,7 @@ export const DevSidebarGroup = () => {
     }
 
     setSeeding(false);
-    toastManager.add({
+    stellaToast.add({
       title: "Seed still running",
       type: "info",
     });
@@ -173,14 +173,14 @@ export const DevSidebarGroup = () => {
     const { error } = await api.dev["clear-cache"].post();
     setClearingCache(false);
     if (error) {
-      toastManager.add({
+      stellaToast.add({
         title: "Clear cache failed",
         type: "error",
       });
       return;
     }
     queryClient.clear();
-    toastManager.add({
+    stellaToast.add({
       title: "Cache cleared, reloading…",
       type: "success",
     });
@@ -192,14 +192,14 @@ export const DevSidebarGroup = () => {
     const { error } = await api.dev.clean.post();
     setCleaning(false);
     if (error) {
-      toastManager.add({
+      stellaToast.add({
         title: "Clean failed",
         type: "error",
       });
       return;
     }
     await queryClient.invalidateQueries();
-    toastManager.add({
+    stellaToast.add({
       title: "Dev data cleaned",
       type: "success",
     });

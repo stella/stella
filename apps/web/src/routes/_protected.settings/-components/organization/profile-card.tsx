@@ -6,7 +6,7 @@ import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
 import { Form } from "@stll/ui/components/form";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
 import { Input } from "@stll/ui/components/input";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useForm, useStore } from "@tanstack/react-form";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -59,7 +59,7 @@ export const OrganizationProfileCard = () => {
 
     if (result.error) {
       analytics.captureError(toAuthClientError(result.error));
-      toastManager.add({
+      stellaToast.add({
         title: result.error.message ?? t("errors.actionFailed"),
         type: "error",
       });
@@ -68,7 +68,7 @@ export const OrganizationProfileCard = () => {
 
     await queryClient.invalidateQueries({ queryKey: organizationKeys.all });
     form.reset({ name: pendingName });
-    toastManager.add({
+    stellaToast.add({
       title: t("success.organizationUpdated"),
       type: "success",
     });

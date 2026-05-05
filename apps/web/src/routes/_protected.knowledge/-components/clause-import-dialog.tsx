@@ -10,7 +10,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -96,7 +96,7 @@ export const ClauseImportDialog = ({
     setImporting(false);
 
     if (response.error) {
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("clauses.importFailed"),
         description: userErrorMessage(
@@ -109,7 +109,7 @@ export const ClauseImportDialog = ({
 
     const data = response.data;
     if (data instanceof Response) {
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("clauses.importFailed"),
       });
@@ -117,7 +117,7 @@ export const ClauseImportDialog = ({
     }
 
     setResult(data);
-    toastManager.add({
+    stellaToast.add({
       type: "success",
       title: t("clauses.importSuccess", {
         count: data.created,

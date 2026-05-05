@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { Textarea } from "@stll/ui/components/textarea";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useForm } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
 
@@ -84,14 +84,14 @@ export const ExpenseForm = ({
     },
     onSubmit: async ({ value }) => {
       if (!value.matterId) {
-        toastManager.add({
+        stellaToast.add({
           title: t("billing.matterRequired"),
           type: "error",
         });
         return;
       }
       if (value.amount <= 0) {
-        toastManager.add({
+        stellaToast.add({
           title: t("billing.failedToSave"),
           type: "error",
         });

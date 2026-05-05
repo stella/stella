@@ -13,7 +13,7 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@stll/ui/components/input-otp";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -70,7 +70,7 @@ function OTP() {
       });
 
       if (error) {
-        toastManager.add({
+        stellaToast.add({
           title:
             error.status === HTTP_TOO_MANY_REQUESTS
               ? t("auth.rateLimitExceeded")
@@ -81,7 +81,7 @@ function OTP() {
       }
 
       setOtp("");
-      toastManager.add({
+      stellaToast.add({
         title: t("auth.codeSentAgain"),
         type: "success",
       });
@@ -107,7 +107,7 @@ function OTP() {
       if (signInError) {
         setOtp("");
         if (signInError.status !== HTTP_TOO_MANY_REQUESTS) {
-          toastManager.add({
+          stellaToast.add({
             title:
               signInError.message === OTP_EXPIRED_MESSAGE
                 ? t("auth.oneTimeCodeExpired")

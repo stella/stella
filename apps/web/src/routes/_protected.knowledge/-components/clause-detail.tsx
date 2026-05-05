@@ -28,7 +28,7 @@ import {
 } from "@stll/ui/components/menu";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
 import { Textarea } from "@stll/ui/components/textarea";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import {
   ArrowLeftIcon,
@@ -151,7 +151,7 @@ export const ClauseDetailView = ({
     const response = await api.clauses({ clauseId }).get();
 
     if (response.error) {
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("clauses.loadFailed"),
         description: userErrorMessage(
@@ -200,7 +200,7 @@ export const ClauseDetailView = ({
     setDeleting(false);
 
     if (response.error) {
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("clauses.deleteFailed"),
         description: userErrorMessage(
@@ -211,7 +211,7 @@ export const ClauseDetailView = ({
       return;
     }
 
-    toastManager.add({
+    stellaToast.add({
       type: "success",
       title: t("clauses.clauseDeleted"),
     });
@@ -485,7 +485,7 @@ const VariantRow = ({
     setDeleting(false);
 
     if (response.error) {
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("clauses.deleteFailed"),
         description: userErrorMessage(
@@ -496,7 +496,7 @@ const VariantRow = ({
       return;
     }
 
-    toastManager.add({
+    stellaToast.add({
       type: "success",
       title: t("clauses.variantDeleted"),
     });
@@ -596,7 +596,7 @@ const VariantFormDialog = ({
     setSaving(false);
 
     if (response.error) {
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("clauses.saveFailed"),
         description: userErrorMessage(
@@ -607,7 +607,7 @@ const VariantFormDialog = ({
       return;
     }
 
-    toastManager.add({
+    stellaToast.add({
       type: "success",
       title: t("clauses.variantCreated"),
     });
@@ -703,7 +703,7 @@ const HistoryTab = ({
       setLoading(false);
 
       if (response.error) {
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t("clauses.loadFailed"),
           description: userErrorMessage(

@@ -24,7 +24,7 @@ import {
   SelectTrigger as StSelectTrigger,
   SelectValue as StSelectValue,
 } from "@stll/ui/components/select";
-import { toast, toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
@@ -272,14 +272,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   }, [fieldId]);
 
   const reportUnsupportedEditAttempt = useCallback(() => {
-    toast.warning(t("folio.unsupportedDocxEditTitle"), {
+    stellaToast.warning(t("folio.unsupportedDocxEditTitle"), {
       description: t("folio.unsupportedDocxEditDescription"),
     });
     onClose();
   }, [onClose, t]);
 
   const reportPendingCompatibility = useCallback(() => {
-    toast.info(t("folio.checkingDocxEditTitle"), {
+    stellaToast.info(t("folio.checkingDocxEditTitle"), {
       description: t("folio.checkingDocxEditDescription"),
     });
   }, [t]);
@@ -373,7 +373,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
 
     errorToastShownRef.current = true;
-    toastManager.add({
+    stellaToast.add({
       description: t(editSessionErrorDescriptionKey(state.reason)),
       title: t("folio.editOpenFailedTitle"),
       type: "error",
@@ -573,7 +573,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
 
     const ref = editorRef.current;
     if (!ref) {
-      toastManager.add({
+      stellaToast.add({
         description: t("folio.saveEditorUnavailableDescription"),
         title: t("folio.saveEditorUnavailableTitle"),
         type: "error",
@@ -595,7 +595,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
 
     const buffer = await ref.save({ selective: true });
     if (!buffer) {
-      toastManager.add({
+      stellaToast.add({
         description: t("folio.saveSerializeFailedDescription"),
         title: t("folio.saveSerializeFailedTitle"),
         type: "error",
@@ -607,7 +607,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     const saved = await saveCheckpoint(buffer);
     if (!saved) {
       setAutosaveStatus("pending");
-      toastManager.add({
+      stellaToast.add({
         description: t("folio.saveCheckpointFailedDescription"),
         title: t("folio.saveCheckpointFailedTitle"),
         type: "error",

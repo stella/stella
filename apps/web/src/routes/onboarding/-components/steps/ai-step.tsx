@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@stll/ui/components/button";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useTranslations } from "use-intl";
 
 import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor";
@@ -176,7 +176,7 @@ export const AIStep = ({
           ...prev,
           [draft.provider]: { status: "invalid", savedKey: fp },
         }));
-        toastManager.add({
+        stellaToast.add({
           title: tOrganization("aiConfig.providerKeyInvalid", {
             provider: tOrganization(`aiConfig.providers.${draft.provider}`),
           }),
@@ -193,7 +193,7 @@ export const AIStep = ({
         const toastKey = `${draft.provider}:${fp}`;
         if (!toastedRef.current.has(toastKey)) {
           toastedRef.current.add(toastKey);
-          toastManager.add({
+          stellaToast.add({
             title: tOrganization("aiConfig.providerKeyInvalid", {
               provider: tOrganization(`aiConfig.providers.${draft.provider}`),
             }),

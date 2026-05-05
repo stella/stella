@@ -4,7 +4,7 @@ import { Button } from "@stll/ui/components/button";
 import { Field, FieldError } from "@stll/ui/components/field";
 import { Form } from "@stll/ui/components/form";
 import { Input } from "@stll/ui/components/input";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { useForm, useStore } from "@tanstack/react-form";
 import { createFileRoute, redirect } from "@tanstack/react-router";
@@ -80,7 +80,7 @@ function LoginOrSignup() {
 
     analytics.captureError(toAuthClientError(error));
     if (error.status !== HTTP_TOO_MANY_REQUESTS) {
-      toastManager.add({
+      stellaToast.add({
         title: error.message ?? t("errors.actionFailed"),
         type: "error",
       });
@@ -107,7 +107,7 @@ function LoginOrSignup() {
       if (error) {
         analytics.captureError(toAuthClientError(error));
         if (error.status !== HTTP_TOO_MANY_REQUESTS) {
-          toastManager.add({
+          stellaToast.add({
             title: error.message ?? t("errors.actionFailed"),
             type: "error",
           });
@@ -125,7 +125,7 @@ function LoginOrSignup() {
             await response.json(),
           );
           if (parsed.success) {
-            toastManager.add({
+            stellaToast.add({
               title: `Dev OTP: ${parsed.output.otp}`,
               type: "info",
               // Dev-only convenience toast — once the user reads the

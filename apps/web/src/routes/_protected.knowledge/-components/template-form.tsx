@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { Textarea } from "@stll/ui/components/textarea";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { AlertTriangleIcon, EyeIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -820,7 +820,7 @@ export const TemplateForm = ({
             break;
           }
         }
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t("templates.validationErrors"),
         });
@@ -854,7 +854,7 @@ export const TemplateForm = ({
           format === "pdf"
             ? "templates.pdfConversionFailed"
             : "templates.fillFailed";
-        toastManager.add({
+        stellaToast.add({
           type: "error",
           title: t(errorKey),
           description: userErrorMessage(
@@ -939,7 +939,7 @@ export const TemplateForm = ({
     }
 
     if (!validateAll(values)) {
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("templates.validationErrors"),
       });
@@ -955,7 +955,7 @@ export const TemplateForm = ({
 
     if (response.error || response.data instanceof Response) {
       setPreview({ kind: "idle" });
-      toastManager.add({
+      stellaToast.add({
         type: "error",
         title: t("templates.previewFailed"),
         description: response.error

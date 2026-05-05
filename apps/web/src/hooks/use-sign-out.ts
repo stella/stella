@@ -1,4 +1,4 @@
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -18,7 +18,7 @@ export const useSignOut = () => {
       const result = await authClient.signOut();
 
       if (result.error) {
-        toastManager.add({
+        stellaToast.add({
           title: result.error.message ?? t("errors.actionFailed"),
           type: "error",
         });

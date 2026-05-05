@@ -15,7 +15,7 @@ import {
 import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
 import { Form } from "@stll/ui/components/form";
 import { Input } from "@stll/ui/components/input";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { revalidateLogic, useForm } from "@tanstack/react-form";
 import type { AnyFieldApi } from "@tanstack/react-form";
 import { panic } from "better-result";
@@ -168,7 +168,7 @@ export const EditFieldDialog = ({
             setIsOpen(false);
           },
           onError: () => {
-            toastManager.add({
+            stellaToast.add({
               title: t("errors.actionFailed"),
               type: "error",
             });

@@ -22,10 +22,13 @@ type ToastData = {
 const toastManager = Toast.createToastManager<ToastData>();
 const anchoredToastManager = Toast.createToastManager<ToastData>();
 
+const TOAST_RIGHT_OFFSET_VAR = "--stella-toast-right-offset";
+
 const TOAST_ICONS = {
   error: CircleAlertIcon,
   info: InfoIcon,
   loading: LoaderCircleIcon,
+  neutral: null,
   success: CircleCheckIcon,
   warning: TriangleAlertIcon,
 } as const;
@@ -62,6 +65,8 @@ type ToastPromiseOptions<Value> = {
 
 type ToastApi = {
   (title: React.ReactNode, options?: ToastOptions): string;
+  add: (options: ToastAddOptions) => string;
+  close: (id?: string) => void;
   dismiss: (id?: string) => void;
   error: (title: React.ReactNode, options?: ToastOptions) => string;
   info: (title: React.ReactNode, options?: ToastOptions) => string;
@@ -73,6 +78,10 @@ type ToastApi = {
   success: (title: React.ReactNode, options?: ToastOptions) => string;
   update: (id: string, options: ToastUpdateOptions) => void;
   warning: (title: React.ReactNode, options?: ToastOptions) => string;
+};
+
+type ToastAddOptions = ToastUpdateOptions & {
+  title: React.ReactNode;
 };
 
 type ToastPosition =
@@ -87,10 +96,15 @@ type ToastProviderProps = {
   position?: ToastPosition;
 } & Toast.Provider.Props;
 
-const toast: ToastApi = Object.assign(
+const stellaToast: ToastApi = Object.assign(
   (title: React.ReactNode, options?: ToastOptions) =>
     addToast(title, undefined, options),
   {
+    add: (options: ToastAddOptions) =>
+      toastManager.add(normalizeToastAddOptions(options)),
+    close: (id?: string) => {
+      toastManager.close(id);
+    },
     dismiss: (id?: string) => {
       if (id === undefined) {
         toastManager.close();
@@ -109,7 +123,7 @@ const toast: ToastApi = Object.assign(
       promiseValue: Promise<Value>,
       options: ToastPromiseOptions<Value>,
     ) => {
-      const toastId = toast.loading(
+      const toastId = stellaToast.loading(
         getPromiseToastTitle(options.loading),
         getPromiseToastOptions(options.loading),
       );
@@ -117,14 +131,14 @@ const toast: ToastApi = Object.assign(
       try {
         const value = await promiseValue;
 
-        toast.update(
+        stellaToast.update(
           toastId,
           getPromiseToastUpdateOptions(options.success, value, "success"),
         );
 
         return value;
       } catch (error) {
-        toast.update(
+        stellaToast.update(
           toastId,
           getPromiseToastUpdateOptions(options.error, error, "error"),
         );
@@ -164,12 +178,14 @@ function Toasts({ position }: { position: ToastPosition }) {
       <Toast.Viewport
         className={cn(
           "fixed z-[60] mx-auto flex w-[calc(100%-var(--toast-inset)*2)] max-w-90 [--toast-inset:--spacing(4)] sm:[--toast-inset:--spacing(8)]",
+          "md:data-[position*=right]:w-[calc(100%-var(--toast-inset)*2-min(var(--stella-toast-right-offset,0px),calc(100vw-var(--toast-inset)*2-10rem)))]",
           // Vertical positioning
           "data-[position*=top]:top-(--toast-inset)",
           "data-[position*=bottom]:bottom-(--toast-inset)",
           // Horizontal positioning
           "data-[position*=left]:start-(--toast-inset)",
           "data-[position*=right]:end-(--toast-inset)",
+          "md:data-[position*=right]:end-[calc(var(--toast-inset)+min(var(--stella-toast-right-offset,0px),calc(100vw-var(--toast-inset)*2-10rem)))]",
           "data-[position*=center]:left-1/2 data-[position*=center]:-translate-x-1/2",
         )}
         data-position={position}
@@ -232,8 +248,8 @@ function Toasts({ position }: { position: ToastPosition }) {
               }
               toast={toastItem}
             >
-              <Toast.Content className="pointer-events-auto flex items-center justify-between gap-1.5 overflow-hidden px-3.5 py-3 text-sm transition-opacity duration-250 select-text data-behind:opacity-0 data-behind:not-data-expanded:pointer-events-none data-expanded:opacity-100">
-                <div className="flex min-w-0 gap-2">
+              <Toast.Content className="pointer-events-auto flex items-center gap-3 overflow-hidden px-3.5 py-3 text-sm transition-opacity duration-250 select-text data-behind:opacity-0 data-behind:not-data-expanded:pointer-events-none data-expanded:opacity-100">
+                <div className="flex min-w-0 flex-1 gap-2">
                   {Icon && (
                     <div
                       className="select-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&>svg]:h-lh [&>svg]:w-4"
@@ -243,9 +259,9 @@ function Toasts({ position }: { position: ToastPosition }) {
                     </div>
                   )}
 
-                  <div className="flex flex-col gap-0.5 select-text">
+                  <div className="flex min-w-0 flex-col gap-0.5 select-text">
                     <Toast.Title
-                      className="font-medium"
+                      className="truncate font-medium"
                       data-slot="toast-title"
                     />
                     <Toast.Description
@@ -254,24 +270,26 @@ function Toasts({ position }: { position: ToastPosition }) {
                     />
                   </div>
                 </div>
-                {toastItem.actionProps && (
-                  <Toast.Action
-                    className={cn(
-                      buttonVariants({ size: "xs" }),
-                      "select-none",
-                    )}
-                    data-slot="toast-action"
+                <div className="ms-auto flex shrink-0 items-center gap-2">
+                  {toastItem.actionProps && (
+                    <Toast.Action
+                      className={cn(
+                        buttonVariants({ size: "xs" }),
+                        "select-none",
+                      )}
+                      data-slot="toast-action"
+                    >
+                      {toastItem.actionProps.children}
+                    </Toast.Action>
+                  )}
+                  <Toast.Close
+                    className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer rounded p-0.5 transition-colors select-none"
+                    data-slot="toast-close"
+                    aria-label="Close notification"
                   >
-                    {toastItem.actionProps.children}
-                  </Toast.Action>
-                )}
-                <Toast.Close
-                  className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer rounded p-0.5 transition-colors select-none"
-                  data-slot="toast-close"
-                  aria-label="Close notification"
-                >
-                  <XIcon className="size-4" />
-                </Toast.Close>
+                    <XIcon className="size-4" />
+                  </Toast.Close>
+                </div>
               </Toast.Content>
             </Toast.Root>
           );
@@ -331,8 +349,8 @@ function AnchoredToasts() {
                     <Toast.Title data-slot="toast-title" />
                   </Toast.Content>
                 ) : (
-                  <Toast.Content className="pointer-events-auto flex items-center justify-between gap-1.5 overflow-hidden px-3.5 py-3 text-sm select-text">
-                    <div className="flex min-w-0 gap-2">
+                  <Toast.Content className="pointer-events-auto flex items-center gap-3 overflow-hidden px-3.5 py-3 text-sm select-text">
+                    <div className="flex min-w-0 flex-1 gap-2">
                       {Icon && (
                         <div
                           className="select-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&>svg]:h-lh [&>svg]:w-4"
@@ -342,9 +360,9 @@ function AnchoredToasts() {
                         </div>
                       )}
 
-                      <div className="flex flex-col gap-0.5 select-text">
+                      <div className="flex min-w-0 flex-col gap-0.5 select-text">
                         <Toast.Title
-                          className="font-medium"
+                          className="truncate font-medium"
                           data-slot="toast-title"
                         />
                         <Toast.Description
@@ -357,7 +375,7 @@ function AnchoredToasts() {
                       <Toast.Action
                         className={cn(
                           buttonVariants({ size: "xs" }),
-                          "select-none",
+                          "ms-auto shrink-0 select-none",
                         )}
                         data-slot="toast-action"
                       >
@@ -539,8 +557,7 @@ function isToastType(type: string | undefined): type is ToastType {
 export {
   ToastProvider,
   type ToastPosition,
-  toast,
-  toastManager,
+  TOAST_RIGHT_OFFSET_VAR,
+  stellaToast,
   AnchoredToastProvider,
-  anchoredToastManager,
 };

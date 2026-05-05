@@ -4,7 +4,7 @@ import { Button } from "@stll/ui/components/button";
 import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -44,7 +44,7 @@ export const SplitEntryDialog = ({
 
   const handleSubmit = () => {
     if (totalPercentage !== 100) {
-      toastManager.add({
+      stellaToast.add({
         title: t("billing.split.totalMustBe100"),
         type: "error",
       });
@@ -53,7 +53,7 @@ export const SplitEntryDialog = ({
 
     const invalidMatter = splits.some((s) => !s.matterId);
     if (invalidMatter) {
-      toastManager.add({
+      stellaToast.add({
         title: t("billing.matterRequired"),
         type: "error",
       });
@@ -72,7 +72,7 @@ export const SplitEntryDialog = ({
       {
         onSuccess: () => onOpenChange(false),
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });

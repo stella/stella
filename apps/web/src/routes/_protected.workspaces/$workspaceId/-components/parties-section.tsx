@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import {
   useQuery,
   useQueryClient,
@@ -87,7 +87,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
           handleSetClient({ id, displayName: name });
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -101,7 +101,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
       { workspaceId, clientId: contact.id },
       {
         onSuccess: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("success.clientUpdated"),
             type: "success",
           });
@@ -111,7 +111,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
           });
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -234,7 +234,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
           setSelectedContact({ id, displayName: name });
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -255,7 +255,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
       },
       {
         onSuccess: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("workspaces.parties.promotedSuccess"),
             type: "success",
           });
@@ -270,7 +270,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
           handleClose();
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -380,7 +380,7 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
       },
       {
         onSuccess: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("success.partyRemoved"),
             type: "success",
           });
@@ -390,7 +390,7 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
           });
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -468,7 +468,7 @@ const AddPartyDialog = ({ workspaceId }: AddPartyDialogProps) => {
       },
       {
         onSuccess: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("success.partyAdded"),
             type: "success",
           });
@@ -481,7 +481,7 @@ const AddPartyDialog = ({ workspaceId }: AddPartyDialogProps) => {
           setSelectedRole(null);
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });

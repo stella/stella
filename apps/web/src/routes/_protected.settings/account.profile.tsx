@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import {
   useMutation,
   useQueryClient,
@@ -69,7 +69,7 @@ function ProfilePage() {
       }
     },
     onSuccess: async () => {
-      toastManager.add({
+      stellaToast.add({
         title: t("settings.account.timezoneSaved"),
         type: "success",
       });
@@ -78,7 +78,7 @@ function ProfilePage() {
       });
     },
     onError: () => {
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });
@@ -96,7 +96,7 @@ function ProfilePage() {
       }
     },
     onSuccess: async () => {
-      toastManager.add({
+      stellaToast.add({
         title: t("settings.account.wordEditIdentitySaved"),
         type: "success",
       });
@@ -105,7 +105,7 @@ function ProfilePage() {
       });
     },
     onError: () => {
-      toastManager.add({
+      stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });

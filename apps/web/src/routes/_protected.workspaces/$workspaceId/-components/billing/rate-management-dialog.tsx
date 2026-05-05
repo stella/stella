@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useForm } from "@tanstack/react-form";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { ArrowLeftIcon, PlusIcon, StarIcon, TrashIcon } from "lucide-react";
@@ -99,7 +99,7 @@ const RateTablesView = ({
       { workspaceId, id, isDefault: true },
       {
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("common.somethingWentWrong"),
             type: "error",
           });
@@ -113,7 +113,7 @@ const RateTablesView = ({
       { workspaceId, id },
       {
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("common.somethingWentWrong"),
             type: "error",
           });
@@ -145,7 +145,7 @@ const RateTablesView = ({
               {
                 onSuccess: () => setShowForm(false),
                 onError: () => {
-                  toastManager.add({
+                  stellaToast.add({
                     title: t("common.somethingWentWrong"),
                     type: "error",
                   });
@@ -346,7 +346,7 @@ const RateEntriesView = ({
       { workspaceId, rateTableId, id },
       {
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("common.somethingWentWrong"),
             type: "error",
           });
@@ -400,7 +400,7 @@ const RateEntriesView = ({
               {
                 onSuccess: () => setShowForm(false),
                 onError: () => {
-                  toastManager.add({
+                  stellaToast.add({
                     title: t("common.somethingWentWrong"),
                     type: "error",
                   });

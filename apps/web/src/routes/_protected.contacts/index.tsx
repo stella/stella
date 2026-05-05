@@ -35,7 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/components/table";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useForm, useStore } from "@tanstack/react-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -224,13 +224,13 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
           queryClient.invalidateQueries({
             queryKey: contactsKeys.all,
           });
-          toastManager.add({
+          stellaToast.add({
             title: t("success.contactDeleted"),
             type: "success",
           });
         },
         onError: (error) => {
-          toastManager.add({
+          stellaToast.add({
             title:
               error instanceof Error ? error.message : t("errors.actionFailed"),
             type: "error",
@@ -477,7 +477,7 @@ const CreateContactDialog = () => {
       await queryClient.invalidateQueries({
         queryKey: contactsKeys.all,
       });
-      toastManager.add({
+      stellaToast.add({
         title: t("success.contactCreated"),
         type: "success",
       });
@@ -496,7 +496,7 @@ const CreateContactDialog = () => {
     const ico = normalizeIcoInput(form.state.values.registrationNumber);
 
     if (ico.length !== 8) {
-      toastManager.add({
+      stellaToast.add({
         title: t("contacts.create.invalidIco"),
         type: "error",
       });
@@ -514,7 +514,7 @@ const CreateContactDialog = () => {
         response.data.type === "lookup" ? response.data.company : null;
 
       if (!company) {
-        toastManager.add({
+        stellaToast.add({
           title: t("contacts.create.aresNotFound"),
           type: "error",
         });
@@ -526,12 +526,12 @@ const CreateContactDialog = () => {
       form.setFieldValue("displayName", company.name);
       setAresBillingAddress(toBillingAddress(company.address));
 
-      toastManager.add({
+      stellaToast.add({
         title: t("contacts.create.aresApplied"),
         type: "success",
       });
     } catch (error) {
-      toastManager.add({
+      stellaToast.add({
         title:
           error instanceof Error ? error.message : t("errors.actionFailed"),
         type: "error",

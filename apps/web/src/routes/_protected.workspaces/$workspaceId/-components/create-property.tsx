@@ -15,7 +15,7 @@ import {
   PopoverTrigger,
 } from "@stll/ui/components/popover";
 import { Skeleton } from "@stll/ui/components/skeleton";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
@@ -510,7 +510,7 @@ const PropertyComposerBody = ({
             onClose();
           },
           onError: () => {
-            toastManager.add({
+            stellaToast.add({
               title: t("errors.actionFailed"),
               type: "error",
             });
@@ -566,7 +566,7 @@ const PropertyComposerBody = ({
           onCreated?.(result);
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -628,7 +628,7 @@ const PropertyComposerBody = ({
           });
         },
         onError: () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("workspaces.properties.autoPromptFailed"),
             type: "error",
           });

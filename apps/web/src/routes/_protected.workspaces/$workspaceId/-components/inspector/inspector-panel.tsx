@@ -13,7 +13,7 @@ import type { DocxCompatibility } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { Skeleton } from "@stll/ui/components/skeleton";
-import { toast, toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import {
   useQuery,
@@ -304,14 +304,14 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         canSafelyEdit: compatibility?.canSafelyEdit,
       });
       if (blockReason === "pendingCompatibility") {
-        toast.info(t("folio.checkingDocxEditTitle"), {
+        stellaToast.info(t("folio.checkingDocxEditTitle"), {
           description: t("folio.checkingDocxEditDescription"),
         });
         return;
       }
 
       if (blockReason === "unsafe") {
-        toast.warning(t("folio.unsupportedDocxEditTitle"), {
+        stellaToast.warning(t("folio.unsupportedDocxEditTitle"), {
           description: t("folio.unsupportedDocxEditDescription"),
         });
         return;
@@ -420,7 +420,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         {
           onError: () => {
             useInspectorStore.getState().updateLabel(tab.id, previousLabel);
-            toastManager.add({
+            stellaToast.add({
               title: t("errors.actionFailed"),
               type: "error",
             });
@@ -964,14 +964,14 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             canSafelyEdit: compatibility?.canSafelyEdit,
           });
           if (blockReason === "pendingCompatibility") {
-            toast.info(t("folio.checkingDocxEditTitle"), {
+            stellaToast.info(t("folio.checkingDocxEditTitle"), {
               description: t("folio.checkingDocxEditDescription"),
             });
             return;
           }
 
           if (blockReason === "unsafe") {
-            toast.warning(t("folio.unsupportedDocxEditTitle"), {
+            stellaToast.warning(t("folio.unsupportedDocxEditTitle"), {
               description: t("folio.unsupportedDocxEditDescription"),
             });
             return;
@@ -1098,7 +1098,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         );
 
         const handleViewerError = () => {
-          toastManager.add({
+          stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
@@ -1430,14 +1430,14 @@ const DocxDesktopOpenButton = ({
         workspaceId,
       });
 
-      toastManager.add({
+      stellaToast.add({
         description: t("workspaces.files.desktopEdit.openedDescription"),
         title: t("workspaces.files.desktopEdit.openedTitle"),
         type: "success",
       });
     } catch (error) {
       if (error instanceof Error && isUnauthorizedError(error)) {
-        toastManager.add({
+        stellaToast.add({
           description: t(
             "workspaces.files.desktopEdit.authRequiredDescription",
           ),
@@ -1448,7 +1448,7 @@ const DocxDesktopOpenButton = ({
       }
 
       getAnalytics().captureError(error);
-      toastManager.add({
+      stellaToast.add({
         description: t("workspaces.files.desktopEdit.unavailableDescription"),
         title: t("workspaces.files.desktopEdit.unavailableTitle"),
         type: "error",
@@ -1621,7 +1621,7 @@ const FullViewPreviewGuard = ({
       return;
     }
     setPdfFacet(tabId, "metadata");
-    toast.info(t("inspector.facet.previewInFullViewToast"));
+    stellaToast.info(t("inspector.facet.previewInFullViewToast"));
     flashMinimize(tabId);
   }, [facet, tabId, setPdfFacet, flashMinimize, t]);
   return null;

@@ -9,7 +9,7 @@ import {
   AlertDialogTrigger,
 } from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
-import { toastManager } from "@stll/ui/components/toast";
+import { stellaToast } from "@stll/ui/components/toast";
 import { Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -76,7 +76,7 @@ export const DeleteProperty = ({
                     },
                     {
                       onError: () => {
-                        toastManager.add({
+                        stellaToast.add({
                           title: t("errors.actionFailed"),
                           type: "error",
                         });
