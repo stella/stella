@@ -10,8 +10,11 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 
 use crate::session_manager::SessionManager;
+use crate::types::ErrorResponse;
 
 const RECONNECT_DELAY: Duration = Duration::from_secs(5);
+const STATUS_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
+const TAKEN_OVER_CODE: &str = "desktop_edit_session_taken_over";
 
 #[derive(Debug, serde::Deserialize)]
 struct SseEvent {
@@ -20,18 +23,32 @@ struct SseEvent {
   data: serde_json::Value,
 }
 
+enum RemoteSessionStatus {
+  Closed(String),
+  Open,
+  Retry,
+  TakenOver(String),
+}
+
 /// Spawn an SSE listener for a session. Reconnects automatically
 /// on disconnect. Returns when the session is removed.
 pub fn spawn_sse_listener(
   manager: Arc<Mutex<SessionManager>>,
   session_id: String,
-  api_base_url: String,
+  _api_base_url: String,
 ) -> tokio::task::JoinHandle<()> {
   tokio::spawn(async move {
     loop {
+      let Some((client, current_api_base_url, _)) = ({
+        let mgr = manager.lock().await;
+        mgr.remote_status_probe_details(&session_id)
+      }) else {
+        return;
+      };
+
       // Replace localhost with 127.0.0.1 to avoid IPv6 resolution
       // issues with reqwest on macOS.
-      let base = api_base_url.replace("localhost", "127.0.0.1");
+      let base = current_api_base_url.replace("localhost", "127.0.0.1");
       let url = format!(
         "{base}/v1/desktop-edit-sessions/\
          {session_id}/events"
@@ -39,10 +56,6 @@ pub fn spawn_sse_listener(
 
       tracing::info!(session_id = %session_id, "SSE connecting");
 
-      let client = reqwest::Client::builder()
-        .http1_only()
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new());
       tracing::debug!(session_id = %session_id, "SSE sending request");
       let response = match client
         .get(&url)
@@ -59,25 +72,33 @@ pub fn spawn_sse_listener(
           if !r.status().is_success() {
             let status = r.status().as_u16();
             tracing::warn!(session_id = %session_id, status, "SSE rejected");
-            if status == 404 || status == 409 || status == 401 || status == 403 {
-              let mut mgr = manager.lock().await;
-              if status == 409 {
-                mgr
-                  .mark_session_taken_over_public(
-                    &session_id,
-                    "Desktop editing moved to another device.",
-                  )
-                  .await;
-              } else {
-                mgr
-                  .close_remote_session_public(
-                    &session_id,
-                    "Desktop edit session was closed.",
-                  )
-                  .await;
+
+            match classify_sse_rejection(status) {
+              SseRejection::ProbeStatus => {
+                match probe_remote_session_status(&manager, &session_id).await {
+                  RemoteSessionStatus::Open | RemoteSessionStatus::Retry => {}
+                  RemoteSessionStatus::Closed(message) => {
+                    let mut mgr = manager.lock().await;
+                    mgr.close_remote_session_public(&session_id, &message).await;
+                    return;
+                  }
+                  RemoteSessionStatus::TakenOver(message) => {
+                    let mut mgr = manager.lock().await;
+                    mgr
+                      .mark_session_taken_over_public(&session_id, &message)
+                      .await;
+                    return;
+                  }
+                }
               }
+              SseRejection::Retry => {}
             }
-            return;
+
+            tokio::time::sleep(RECONNECT_DELAY).await;
+            if !manager.lock().await.session_exists(&session_id) {
+              return;
+            }
+            continue;
           }
           r
         }
@@ -147,6 +168,91 @@ pub fn spawn_sse_listener(
   })
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum SseRejection {
+  ProbeStatus,
+  Retry,
+}
+
+fn classify_sse_rejection(status: u16) -> SseRejection {
+  match status {
+    401 | 403 | 404 | 409 => SseRejection::ProbeStatus,
+    _ => SseRejection::Retry,
+  }
+}
+
+async fn probe_remote_session_status(
+  manager: &Arc<Mutex<SessionManager>>,
+  session_id: &str,
+) -> RemoteSessionStatus {
+  let Some((client, api_base_url, session_token)) = ({
+    let mgr = manager.lock().await;
+    mgr.remote_status_probe_details(session_id)
+  }) else {
+    return RemoteSessionStatus::Retry;
+  };
+
+  let base = api_base_url.replace("localhost", "127.0.0.1");
+  let url = format!(
+    "{base}/v1/desktop-edit-sessions/{session_id}/status?sessionToken={session_token}"
+  );
+
+  let response = match client.get(&url).timeout(STATUS_PROBE_TIMEOUT).send().await {
+    Ok(response) => response,
+    Err(error) => {
+      tracing::debug!(
+        session_id,
+        error = %error,
+        "SSE status probe failed"
+      );
+      return RemoteSessionStatus::Retry;
+    }
+  };
+
+  let status = response.status();
+  if status.is_success() {
+    return RemoteSessionStatus::Open;
+  }
+
+  let error_body: Option<ErrorResponse> = response.json().await.ok();
+
+  if status.as_u16() == 409 {
+    if error_body.as_ref().and_then(|error| error.code.as_deref())
+      == Some(TAKEN_OVER_CODE)
+    {
+      return RemoteSessionStatus::TakenOver(
+        error_body
+          .and_then(|error| error.message)
+          .unwrap_or_else(|| "Desktop editing moved to another device.".to_string()),
+      );
+    }
+
+    return RemoteSessionStatus::Closed(
+      error_body
+        .and_then(|error| error.message)
+        .unwrap_or_else(|| "Desktop edit session was closed.".to_string()),
+    );
+  }
+
+  if status.as_u16() == 404 {
+    return RemoteSessionStatus::Closed(
+      error_body
+        .and_then(|error| error.message)
+        .unwrap_or_else(|| "Desktop edit session was closed.".to_string()),
+    );
+  }
+
+  if matches!(status.as_u16(), 401 | 403) {
+    tracing::warn!(
+      session_id,
+      status = status.as_u16(),
+      "SSE status probe returned authorization error; preserving local session"
+    );
+  }
+
+  RemoteSessionStatus::Retry
+}
+
 async fn handle_sse_event(
   manager: &Arc<Mutex<SessionManager>>,
   session_id: &str,
@@ -184,4 +290,23 @@ async fn handle_sse_event(
 /// Find the position of `\n\n` in a byte slice.
 fn find_double_newline(buf: &[u8]) -> Option<usize> {
   buf.windows(2).position(|w| w == b"\n\n")
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn sse_auth_or_missing_responses_probe_status_before_cleanup() {
+    assert_eq!(classify_sse_rejection(401), SseRejection::ProbeStatus);
+    assert_eq!(classify_sse_rejection(403), SseRejection::ProbeStatus);
+    assert_eq!(classify_sse_rejection(404), SseRejection::ProbeStatus);
+    assert_eq!(classify_sse_rejection(409), SseRejection::ProbeStatus);
+  }
+
+  #[test]
+  fn sse_unexpected_errors_retry_without_cleanup() {
+    assert_eq!(classify_sse_rejection(422), SseRejection::Retry);
+    assert_eq!(classify_sse_rejection(500), SseRejection::Retry);
+  }
 }

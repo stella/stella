@@ -61,6 +61,7 @@ const LIBRE_OFFICE_LOCK_PREFIX: &str = ".~lock.";
 const LIBRE_OFFICE_LOCK_SUFFIX: &str = "#";
 const WORD_LOCK_PREFIX: &str = "~$";
 const SUPPORT_EMAIL: &str = "hello@stll.app";
+const DESKTOP_HTTP_USER_AGENT: &str = "stella-desktop";
 
 // Internal session with runtime-only fields
 struct DesktopSession {
@@ -169,7 +170,20 @@ fn session_key(workspace_id: &str, entity_id: &str, property_id: &str) -> String
 }
 
 fn normalize_api_base_url(url: &str) -> String {
-  url.strip_suffix('/').unwrap_or(url).to_string()
+  let normalized = url.strip_suffix('/').unwrap_or(url);
+  match normalized {
+    "https://app.stll.app" | "https://my.stll.app" => {
+      "https://api.stll.app".to_string()
+    }
+    _ => normalized.to_string(),
+  }
+}
+
+fn build_http_client() -> reqwest::Client {
+  reqwest::Client::builder()
+    .user_agent(DESKTOP_HTTP_USER_AGENT)
+    .build()
+    .unwrap_or_else(|_| reqwest::Client::new())
 }
 
 fn sanitize_file_name(name: &str) -> String {
@@ -323,7 +337,7 @@ impl SessionManager {
       edit_root: data_dir.join("editing"),
       support_root: data_dir.clone(),
       store_load_issue: None,
-      http_client: reqwest::Client::new(),
+      http_client: build_http_client(),
       app_handle: None,
     }
   }
@@ -443,6 +457,19 @@ impl SessionManager {
   /// Expose the HTTP client so callers can download outside the lock.
   pub fn http_client(&self) -> &reqwest::Client {
     &self.http_client
+  }
+
+  pub fn remote_status_probe_details(
+    &self,
+    session_id: &str,
+  ) -> Option<(reqwest::Client, String, String)> {
+    self.sessions.get(session_id).map(|session| {
+      (
+        self.http_client.clone(),
+        session.api_base_url.clone(),
+        session.session_token.clone(),
+      )
+    })
   }
 
   pub async fn open_docx(
