@@ -96,7 +96,9 @@ export const ChatThreadPage = ({
   }
 
   const {
+    error,
     messages,
+    resendLatestMessage,
     sendMessage,
     stop,
     isGenerating,
@@ -205,7 +207,7 @@ export const ChatThreadPage = ({
 
       <Conversation>
         <ConversationContent className="gap-3">
-          {messages.length === 0 && !isGenerating ? (
+          {messages.length === 0 && !isGenerating && !error ? (
             <div className="m-auto w-full max-w-md px-4">
               <PromptSuggestions onSelect={selectPrompt} prompts={prompts} />
             </div>
@@ -213,12 +215,14 @@ export const ChatThreadPage = ({
             <ChatThreadMessages
               approvalPendingMessageId={approvalPendingMessageId}
               autoApprovedTools={autoApprovedTools}
+              error={error}
               handleAlwaysAllow={handleAlwaysAllow}
               handleApprove={handleApprove}
               handleDeny={handleDeny}
               isGenerating={isGenerating}
               messages={messages}
               onAskUserSubmit={handleAskUserSubmit}
+              onResend={resendLatestMessage}
               showThinkingIndicator
               showToolCalls={showToolCalls}
               streamdownComponents={streamdownComponents}

@@ -400,7 +400,9 @@
       },
       "tryOne": "Prueba uno de estos para empezar"
     },
+    "resend": "Reenviar",
     "send": "Enviar mensaje",
+    "sendError": "Hubo un problema al enviar tu mensaje. Contacta con soporte si el error persiste.",
     "thinking": "Trabajando con contexto",
     "threads": "Historial",
     "tool": {

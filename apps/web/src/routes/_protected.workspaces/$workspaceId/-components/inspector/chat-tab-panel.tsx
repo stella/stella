@@ -166,7 +166,9 @@ export const ChatTabPanel = ({
   const { chat } = data;
 
   const {
+    error,
     messages,
+    resendLatestMessage,
     sendMessage,
     stop,
     isGenerating,
@@ -272,7 +274,7 @@ export const ChatTabPanel = ({
     >
       <Conversation className="min-h-0 flex-1">
         <ConversationContent className="gap-3">
-          {messages.length === 0 && !isGenerating ? (
+          {messages.length === 0 && !isGenerating && !error ? (
             <ChatEmptyState
               onSelectPrompt={handleSelectPrompt}
               prompts={stockPrompts}
@@ -281,12 +283,14 @@ export const ChatTabPanel = ({
             <ChatThreadMessages
               approvalPendingMessageId={approvalPendingMessageId}
               autoApprovedTools={autoApprovedTools}
+              error={error}
               handleAlwaysAllow={handleAlwaysAllow}
               handleApprove={handleApprove}
               handleDeny={handleDeny}
               isGenerating={isGenerating}
               messages={messages}
               onAskUserSubmit={handleAskUserSubmit}
+              onResend={resendLatestMessage}
               showThinkingIndicator
               showToolCalls={showToolCalls}
               streamdownComponents={streamdownComponents}

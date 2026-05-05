@@ -679,7 +679,9 @@ const FileChatOverlayInner = ({
   const { chat } = data;
 
   const {
+    error,
     messages,
+    resendLatestMessage,
     sendMessage,
     stop,
     isGenerating,
@@ -754,15 +756,16 @@ const FileChatOverlayInner = ({
   const [panelOpen, setPanelOpen] = useState(false);
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;
+  const hasThreadContent = hasMessages || error !== undefined;
   const lastMessageId = messages.at(-1)?.id ?? null;
   // Auto-open the thread panel as soon as the first message
   // lands so users see streaming without having to click the
   // chevron themselves.
   useEffect(() => {
-    if (hasMessages) {
+    if (hasThreadContent) {
       setPanelOpen(true);
     }
-  }, [hasMessages]);
+  }, [hasThreadContent]);
   useLayoutEffect(() => {
     const scrollElement = threadScrollRef.current;
     if (!scrollElement) {
@@ -777,7 +780,7 @@ const FileChatOverlayInner = ({
 
   return (
     <>
-      {panelOpen && hasMessages && (
+      {panelOpen && hasThreadContent && (
         <div
           aria-label="AI thread"
           className={cn(
@@ -809,12 +812,14 @@ const FileChatOverlayInner = ({
               approvalPendingMessageId={approvalPendingMessageId}
               autoApprovedTools={autoApprovedTools}
               blockedApprovalTools={blockedApprovalTools}
+              error={error}
               handleAlwaysAllow={handleAlwaysAllow}
               handleApprove={handleApproveWithDocxUnlock}
               handleDeny={handleDeny}
               isGenerating={isGenerating}
               messages={messages}
               onAskUserSubmit={handleAskUserSubmit}
+              onResend={resendLatestMessage}
               showThinkingIndicator
               showToolCalls={showToolCalls}
               streamdownComponents={streamdownComponents}
@@ -866,7 +871,7 @@ const FileChatOverlayInner = ({
             ? "editor-loading"
             : undefined
         }
-        showThreadToggle={hasMessages}
+        showThreadToggle={hasThreadContent}
         status={isGenerating ? "generating" : "idle"}
       />
     </>

@@ -155,6 +155,10 @@ export const expandThreadDataScope = async ({
   if (additions.length === 0) {
     return Result.ok([...currentDataWorkspaceIds]);
   }
+  const additionsArray = sql`ARRAY[${sql.join(
+    additions.map((id) => sql`${id}`),
+    sql`, `,
+  )}]::uuid[]`;
 
   const updateResult = await safeDb((tx) =>
     tx
@@ -167,7 +171,7 @@ export const expandThreadDataScope = async ({
         dataWorkspaceIds: sql`(
           SELECT ARRAY(
             SELECT DISTINCT unnest(
-              ${chatThreads.dataWorkspaceIds} || ${additions}::uuid[]
+              ${chatThreads.dataWorkspaceIds} || ${additionsArray}
             )
           )
         )`,

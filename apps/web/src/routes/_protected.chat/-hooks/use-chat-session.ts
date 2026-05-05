@@ -35,7 +35,9 @@ export const useChatSession = ({
   );
 
   const {
+    error,
     messages,
+    regenerate,
     sendMessage: sendChatMessage,
     stop,
     status,
@@ -46,11 +48,23 @@ export const useChatSession = ({
   const sendMessage = useCallback(
     async (message: Parameters<typeof sendChatMessage>[0]) => {
       await sendChatMessage(message);
+      if (chat.status === "error" || chat.error) {
+        return;
+      }
       await invalidateChatThread({ queryClient, threadRef });
       await invalidateGroupedChatThreads(queryClient);
     },
-    [queryClient, sendChatMessage, threadRef],
+    [chat, queryClient, sendChatMessage, threadRef],
   );
+
+  const resendLatestMessage = useCallback(async () => {
+    await regenerate();
+    if (chat.status === "error" || chat.error) {
+      return;
+    }
+    await invalidateChatThread({ queryClient, threadRef });
+    await invalidateGroupedChatThreads(queryClient);
+  }, [chat, queryClient, regenerate, threadRef]);
 
   const handleApprove = useCallback(
     (id: string, _toolName?: ApprovalToolName) =>
@@ -96,7 +110,9 @@ export const useChatSession = ({
   const isGenerating = status === "submitted" || status === "streaming";
 
   return {
+    error,
     messages,
+    resendLatestMessage,
     sendMessage,
     stop,
     isGenerating,

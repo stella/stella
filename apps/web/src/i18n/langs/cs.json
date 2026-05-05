@@ -400,7 +400,9 @@
       },
       "tryOne": "Začni s jedním z těchto"
     },
+    "resend": "Odeslat znovu",
     "send": "Odeslat zprávu",
+    "sendError": "Při odesílání zprávy došlo k problému. Pokud chyba přetrvává, kontaktujte podporu.",
     "thinking": "Pracuji s kontextem",
     "threads": "Historie",
     "tool": {
