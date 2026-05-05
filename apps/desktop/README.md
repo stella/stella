@@ -10,10 +10,12 @@ bun --cwd apps/desktop run dev
 bun run dev:desktop
 ```
 
-The desktop bridge only allows loopback origins by default:
+The desktop bridge allows these origins by default:
 
 - `http://localhost:${STELLA_WEB_PORT:-3000}`
 - `http://127.0.0.1:${STELLA_WEB_PORT:-3000}`
+- `https://my.stll.app`
+- `https://app.stll.app`
 
 The root `bun run dev:desktop` runner sets `STELLA_WEB_PORT`,
 `STELLA_DESKTOP_VIEW_PORT`, and `STELLA_DESKTOP_BRIDGE_PORT`
@@ -25,8 +27,8 @@ Packaged builds should set these environment variables before building:
 
 - `STELLA_DESKTOP_ALLOWED_ORIGINS`
   - Comma-separated exact web origins allowed to call the privileged localhost bridge
-  - Example: `https://my.stll.app`
-  - Keep this explicit; the default loopback-only allowlist is intentional
+  - Read at runtime; appended to the built-in defaults (loopback + hosted SPA)
+  - Use this for selfhost or staging origins
 - `STELLA_DESKTOP_BRIDGE_PORT`
   - Optional override for the localhost bridge port during development
 - `STELLA_DESKTOP_VIEW_PORT`
