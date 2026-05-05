@@ -22,3 +22,19 @@ export const shouldEnablePostHog = ({
   localDebug,
 }: PostHogEnvironment): boolean =>
   hasRealPostHogProject({ key, host }) && (!isDev || localDebug);
+
+export const assertProductionTelemetry = ({
+  key,
+  host,
+  isDev,
+}: PostHogConfig & { isDev: boolean }): void => {
+  if (isDev) {
+    return;
+  }
+  if (!hasRealPostHogProject({ key, host })) {
+    throw new Error(
+      "POSTHOG_KEY and POSTHOG_HOST must be set to a real project in production. " +
+        "Backend telemetry is disabled when the placeholder value is used.",
+    );
+  }
+};

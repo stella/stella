@@ -9,6 +9,7 @@ import { env } from "@/api/env";
 import type { ModelRole, OrgAIConfig } from "@/api/lib/ai-models";
 import { getModelInfoForRole } from "@/api/lib/ai-models";
 import { errorTag } from "@/api/lib/errors/utils";
+import { logger } from "@/api/lib/observability/logger";
 
 import { getAnalytics } from "./client";
 import { SERVER_ANALYTICS_EVENTS } from "./types";
@@ -501,6 +502,23 @@ export const createAIAnalyticsCallbacks = ({
     hasCapturedGenerationError = true;
     const activeStep = [...stepState.values()].at(-1);
 
+    const sanitizedMessage =
+      error instanceof Error && error.message
+        ? String(sanitizeForAIAnalytics(error.message)).slice(0, 256)
+        : undefined;
+    logger.error("ai.generation.failed", {
+      "error.type": errorTag(error),
+      "ai.feature": config.feature,
+      "ai.failure_reason": classifyFailureReason(error),
+      ...(resolvedModelInfo?.provider
+        ? { "ai.provider": resolvedModelInfo.provider }
+        : {}),
+      ...(resolvedModelInfo?.modelId
+        ? { "ai.model": resolvedModelInfo.modelId }
+        : {}),
+      ...(sanitizedMessage ? { "error.message": sanitizedMessage } : {}),
+    });
+
     if (!debugEnabled) {
       analytics.capture({
         distinctId,
@@ -508,6 +526,13 @@ export const createAIAnalyticsCallbacks = ({
         properties: {
           ...pickSafeMetadata(config.properties),
           error_type: errorTag(error),
+          ...(error instanceof Error && error.message
+            ? {
+                error_message: String(
+                  sanitizeForAIAnalytics(error.message),
+                ).slice(0, 512),
+              }
+            : {}),
           failure_reason: classifyFailureReason(error),
           feature: config.feature,
           ...(activeStep
