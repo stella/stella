@@ -167,10 +167,10 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     columnDefs.push({
       id: addPropertyColId,
       accessorKey: addPropertyColId,
-      header: () => <CreateProperty workspaceId={workspaceId} />,
-      cell: () => (
-        <CreateProperty triggerVariant="blank-cell" workspaceId={workspaceId} />
+      header: () => (
+        <CreateProperty triggerVariant="icon" workspaceId={workspaceId} />
       ),
+      cell: () => null,
       enableResizing: false,
       enablePinning: false,
       enableSorting: false,

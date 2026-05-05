@@ -64,19 +64,19 @@ describe("workspace grid column ordering", () => {
       rightColumns: [],
     });
 
-    expect(getGridTemplateColumns(orderedColumns, 0)).toBe(
-      "48px 240px 200px 160px 0px",
+    expect(getGridTemplateColumns(orderedColumns)).toBe(
+      "48px 240px 200px 160px",
     );
   });
 
-  test("places the filler before end-pinned utility columns", () => {
+  test("keeps end utility columns as real columns", () => {
     expect(
-      getGridTemplateColumns(
-        [column("select", 48), column("documents", 240)],
-        120,
-        [column("add-property", 48)],
-      ),
-    ).toBe("48px 240px 120px 48px");
+      getGridTemplateColumns([
+        column("select", 48),
+        column("documents", 240),
+        column("add-property", 40),
+      ]),
+    ).toBe("48px 240px 40px");
   });
 
   test("moves a dragged column before the targeted column", () => {

@@ -375,7 +375,7 @@ const InlineIntEditor = ({
   if (!editing) {
     return (
       <button
-        className="hover:bg-muted w-full rounded px-2 py-1 text-start text-sm transition-colors"
+        className="hover:bg-muted block w-full min-w-0 rounded px-2 py-1 text-start text-sm transition-colors"
         onClick={() => {
           setDraft(String(value));
           setEditing(true);
@@ -415,6 +415,9 @@ const InlineIntEditor = ({
 
 // -- Shared display helpers --
 
+const intDisplayClass =
+  "block min-w-0 max-w-full truncate tabular-nums text-start text-sm";
+
 const IntDisplay = ({
   value,
   currency,
@@ -424,7 +427,9 @@ const IntDisplay = ({
 }) => {
   if (!currency) {
     return (
-      <span className="text-sm">{new Intl.NumberFormat().format(value)}</span>
+      <span className={intDisplayClass}>
+        {new Intl.NumberFormat().format(value)}
+      </span>
     );
   }
 
@@ -434,10 +439,10 @@ const IntDisplay = ({
       currency,
       minimumFractionDigits: 0,
     }).format(value);
-    return <span className="text-sm">{formatted}</span>;
+    return <span className={intDisplayClass}>{formatted}</span>;
   } catch {
     return (
-      <span className="text-sm">
+      <span className={intDisplayClass}>
         {new Intl.NumberFormat().format(value)} {currency}
       </span>
     );

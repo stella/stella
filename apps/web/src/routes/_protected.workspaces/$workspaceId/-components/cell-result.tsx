@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { Result } from "better-result";
 import { SquareMinusIcon } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
@@ -153,7 +155,7 @@ const FileCell = ({
         content={fileName}
         render={
           <button
-            className="bg-muted grid max-w-full cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5"
+            className="bg-muted grid max-w-full min-w-0 cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start"
             onClick={() =>
               openPdf({
                 id: fieldId,
@@ -170,7 +172,7 @@ const FileCell = ({
         }
       >
         <DocumentIcon className="size-3.5 shrink-0" mimeType={mimeType} />
-        <span className="truncate">{fileName}</span>
+        <span className="min-w-0 truncate text-start">{fileName}</span>
       </Tooltip>
     );
   }
@@ -179,11 +181,11 @@ const FileCell = ({
     <Tooltip
       content={fileName}
       render={
-        <span className="bg-muted grid max-w-full grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 opacity-60" />
+        <span className="bg-muted grid max-w-full min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start opacity-60" />
       }
     >
       <DocumentIcon className="size-3.5 shrink-0" mimeType={mimeType} />
-      <span className="truncate">{fileName}</span>
+      <span className="min-w-0 truncate text-start">{fileName}</span>
     </Tooltip>
   );
 };
@@ -242,9 +244,19 @@ type IntCellProps = {
   currency: string | null;
 };
 
+const IntCellContainer = ({ children }: { children: ReactNode }) => (
+  <div className="max-w-full min-w-0 truncate text-start tabular-nums">
+    {children}
+  </div>
+);
+
 const IntCell = ({ value, currency }: IntCellProps) => {
   if (!currency) {
-    return <div>{new Intl.NumberFormat().format(value)}</div>;
+    return (
+      <IntCellContainer>
+        {new Intl.NumberFormat().format(value)}
+      </IntCellContainer>
+    );
   }
 
   const formattedResult = Result.try(() =>
@@ -257,11 +269,11 @@ const IntCell = ({ value, currency }: IntCellProps) => {
 
   if (formattedResult.isErr()) {
     return (
-      <div>
+      <IntCellContainer>
         {new Intl.NumberFormat().format(value)} {currency}
-      </div>
+      </IntCellContainer>
     );
   }
 
-  return <div>{formattedResult.value}</div>;
+  return <IntCellContainer>{formattedResult.value}</IntCellContainer>;
 };
