@@ -17,9 +17,8 @@ permissions:
 jobs:
   analyze:
     if: >-
-      github.event.repository.visibility == 'public'
-      && (github.event_name != 'pull_request'
-          || github.event.pull_request.draft != true)
+      github.event_name != 'pull_request'
+      || github.event.pull_request.draft != true
     runs-on: ubuntu-latest
     permissions:
       actions: read

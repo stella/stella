@@ -30,12 +30,7 @@ jobs:
   dependency-review:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # Dependency Review needs Dependency Graph + GitHub Advanced Security on
-    # private repos, but is available for public repositories. Keep it wired up
-    # for launch while avoiding a hard failure before the repository is public.
-    if: >-
-      github.event.repository.visibility == 'public'
-      && github.event.pull_request.draft != true
+    if: github.event.pull_request.draft != true
 
     steps:
       - name: Checkout

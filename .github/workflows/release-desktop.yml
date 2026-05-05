@@ -606,3 +606,17 @@ jobs:
             --distribution-id "$DIST_ID" \
             --paths "/$key" \
             --no-cli-pager > /dev/null
+
+      # Promote the release to "latest" only after the signed
+      # installers are attached. release.yml creates the release
+      # with --latest=false so /releases/latest/download/Stella-*
+      # keeps pointing at the previous fully-built release while
+      # this workflow is still building. Prereleases never get the
+      # latest flag (GitHub excludes them from /releases/latest by
+      # default) so we only flip for stable tags.
+      - name: Promote release to latest
+        if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+        run: gh release edit "$RELEASE_REF" --latest
