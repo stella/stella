@@ -98,7 +98,6 @@ import {
   MatterMenuItems,
 } from "@/routes/_protected.workspaces/-components/matter-context-menu";
 import {
-  useArchiveWorkspace,
   useDeleteWorkspace,
   useUpdateWorkspace,
 } from "@/routes/_protected.workspaces/-mutations";
@@ -269,7 +268,6 @@ const MatterItem = ({
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
   const updateWorkspace = useUpdateWorkspace();
-  const archiveWorkspace = useArchiveWorkspace();
   const escapedRef = useRef(false);
   const dropRef = useRef<HTMLLIElement>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
@@ -479,21 +477,9 @@ const MatterItem = ({
                 <MenuSeparator />
                 <MatterMenuItems
                   isArchived={false}
+                  isPersonal={!ws.client}
                   isPinned={isPinned}
                   onAddMember={() => setAddMemberOpen(true)}
-                  onArchive={() =>
-                    archiveWorkspace.mutate(
-                      { workspaceId: ws.id },
-                      {
-                        onError: () => {
-                          toastManager.add({
-                            title: t("errors.actionFailed"),
-                            type: "error",
-                          });
-                        },
-                      },
-                    )
-                  }
                   onCopyLink={() => {
                     void (async () => {
                       try {

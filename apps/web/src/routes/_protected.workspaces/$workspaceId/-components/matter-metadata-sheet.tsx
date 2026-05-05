@@ -17,7 +17,6 @@ import { toastManager } from "@stll/ui/components/toast";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
-  ArchiveIcon,
   CopyIcon,
   CopyPlusIcon,
   EllipsisIcon,
@@ -242,15 +241,6 @@ export const MatterMetadataSheet = ({
               >
                 <LockIcon className="size-4" />
                 {t("workspaces.lockMatter")}
-              </Button>
-              <Button
-                className="justify-start"
-                onClick={() => comingSoon(t("common.comingSoon"))}
-                size="sm"
-                variant="ghost"
-              >
-                <ArchiveIcon className="size-4" />
-                {t("workspaces.archiveMatter")}
               </Button>
             </div>
 

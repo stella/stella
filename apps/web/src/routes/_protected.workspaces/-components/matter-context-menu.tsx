@@ -38,7 +38,6 @@ import {
 import { toastManager } from "@stll/ui/components/toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArchiveIcon,
   ArchiveRestoreIcon,
   ClipboardCopyIcon,
   ExternalLinkIcon,
@@ -59,7 +58,6 @@ import {
   workspaceMembersOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
 import {
-  useArchiveWorkspace,
   useDeleteWorkspace,
   useUnarchiveWorkspace,
   useUpdateWorkspace,
@@ -68,66 +66,69 @@ import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 // ── Shared menu items ────────────────────────────────────────
 
-export type MatterMenuCallbacks = {
+type MatterMenuBaseCallbacks = {
   onOpenInNewTab: () => void;
   onRename: () => void;
   onAddMember: () => void;
   onCopyLink: () => void;
   onTogglePin: () => void;
-  onArchive: () => void;
   onDelete: () => void;
   isPinned: boolean;
-  isArchived: boolean;
+  // Personal matters are creator-only until promoted; the backend
+  // rejects member adds with 400, so hide the affordance here.
+  isPersonal: boolean;
 };
+
+export type MatterMenuCallbacks =
+  | (MatterMenuBaseCallbacks & {
+      isArchived: true;
+      onUnarchive: () => void;
+    })
+  | (MatterMenuBaseCallbacks & {
+      isArchived: false;
+      onUnarchive?: never;
+    });
 
 /**
  * Renders the canonical set of matter menu items.
  * Used inside both the card context menu and the sidebar menu
  * to guarantee identical actions, icons, and order.
  */
-export const MatterMenuItems = ({
-  onOpenInNewTab,
-  onRename,
-  onAddMember,
-  onCopyLink,
-  onTogglePin,
-  onArchive,
-  onDelete,
-  isPinned,
-  isArchived,
-}: MatterMenuCallbacks) => {
+export const MatterMenuItems = (props: MatterMenuCallbacks) => {
   const t = useTranslations();
 
   return (
     <>
-      <MenuItem onClick={onOpenInNewTab}>
+      <MenuItem onClick={props.onOpenInNewTab}>
         <ExternalLinkIcon />
         {t("common.openInNewTab")}
       </MenuItem>
-      <MenuItem onClick={onRename}>
+      <MenuItem onClick={props.onRename}>
         <PenLineIcon />
         {t("common.rename")}
       </MenuItem>
-      <MenuItem onClick={onAddMember}>
-        <UserPlusIcon />
-        {t("workspaces.members.addMember")}
-      </MenuItem>
-      <MenuItem onClick={onCopyLink}>
+      {!props.isPersonal && (
+        <MenuItem onClick={props.onAddMember}>
+          <UserPlusIcon />
+          {t("workspaces.members.addMember")}
+        </MenuItem>
+      )}
+      <MenuItem onClick={props.onCopyLink}>
         <ClipboardCopyIcon />
         {t("common.copyLink")}
       </MenuItem>
-      <MenuItem onClick={onTogglePin}>
-        {isPinned ? <PinOffIcon /> : <PinIcon />}
-        {isPinned ? t("common.unpin") : t("common.pin")}
+      <MenuItem onClick={props.onTogglePin}>
+        {props.isPinned ? <PinOffIcon /> : <PinIcon />}
+        {props.isPinned ? t("common.unpin") : t("common.pin")}
       </MenuItem>
       <MenuSeparator />
-      <MenuItem onClick={onArchive}>
-        {isArchived ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
-        {isArchived
-          ? t("workspaces.unarchiveMatter")
-          : t("workspaces.archiveMatter")}
-      </MenuItem>
-      <MenuItem onClick={onDelete} variant="destructive">
+      {props.isArchived && (
+        <MenuItem onClick={props.onUnarchive}>
+          <ArchiveRestoreIcon />
+          {t("workspaces.unarchiveMatter")}
+        </MenuItem>
+      )}
+      <MenuItem onClick={props.onDelete} variant="destructive">
         <Trash2Icon />
         {t("common.delete")}
       </MenuItem>
@@ -153,6 +154,7 @@ type MatterContextMenuProps = {
   workspaceId: string;
   workspaceName: string;
   isArchived?: boolean;
+  isPersonal: boolean;
   children: React.ReactNode | ((rename: RenameState) => React.ReactNode);
 };
 
@@ -160,6 +162,7 @@ export const MatterContextMenu = ({
   workspaceId,
   workspaceName,
   isArchived = false,
+  isPersonal,
   children,
 }: MatterContextMenuProps) => {
   const t = useTranslations();
@@ -168,7 +171,6 @@ export const MatterContextMenu = ({
 
   const queryClient = useQueryClient();
   const updateWorkspace = useUpdateWorkspace();
-  const archiveWorkspace = useArchiveWorkspace();
   const unarchiveWorkspace = useUnarchiveWorkspace();
   const deleteWorkspace = useDeleteWorkspace();
 
@@ -254,6 +256,34 @@ export const MatterContextMenu = ({
     );
   };
 
+  const handleUnarchive = () => {
+    const onError = () => {
+      toastManager.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+    };
+
+    unarchiveWorkspace.mutate({ workspaceId }, { onError });
+  };
+
+  const matterMenuCallbacks = {
+    isPersonal,
+    isPinned: pinned,
+    onAddMember: () => setAddMemberOpen(true),
+    onCopyLink: () => {
+      void handleCopyLink();
+    },
+    onDelete: () => setDeleteOpen(true),
+    onOpenInNewTab: () => {
+      void window.open(`/workspaces/${workspaceId}`, "_blank");
+    },
+    onRename: () => {
+      setRename({ status: "editing", draft: workspaceName });
+    },
+    onTogglePin: () => togglePin(workspaceId),
+  } satisfies MatterMenuBaseCallbacks;
+
   return (
     <div
       onContextMenu={(e) => {
@@ -283,36 +313,15 @@ export const MatterContextMenu = ({
           render={<span className="sr-only" />}
         />
         <MenuPopup anchor={menuAnchor ?? undefined} className="z-50">
-          <MatterMenuItems
-            isArchived={isArchived}
-            isPinned={pinned}
-            onAddMember={() => setAddMemberOpen(true)}
-            onOpenInNewTab={() => {
-              void window.open(`/workspaces/${workspaceId}`, "_blank");
-            }}
-            onArchive={() => {
-              const onError = () => {
-                toastManager.add({
-                  title: t("errors.actionFailed"),
-                  type: "error",
-                });
-              };
-
-              if (isArchived) {
-                unarchiveWorkspace.mutate({ workspaceId }, { onError });
-              } else {
-                archiveWorkspace.mutate({ workspaceId }, { onError });
-              }
-            }}
-            onCopyLink={() => {
-              void handleCopyLink();
-            }}
-            onDelete={() => setDeleteOpen(true)}
-            onRename={() => {
-              setRename({ status: "editing", draft: workspaceName });
-            }}
-            onTogglePin={() => togglePin(workspaceId)}
-          />
+          {isArchived ? (
+            <MatterMenuItems
+              {...matterMenuCallbacks}
+              isArchived
+              onUnarchive={handleUnarchive}
+            />
+          ) : (
+            <MatterMenuItems {...matterMenuCallbacks} isArchived={false} />
+          )}
         </MenuPopup>
       </Menu>
 
