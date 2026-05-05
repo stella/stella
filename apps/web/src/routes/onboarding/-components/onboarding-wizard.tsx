@@ -341,7 +341,7 @@ export const OnboardingWizard = () => {
                 aiRoleModels: createDefaultRoleModels(),
               }));
               setPreviewAiProviders([]);
-              setStep("download");
+              setStep("invite");
             }}
             providers={data.aiProviders}
             roleModels={data.aiRoleModels}
