@@ -2,6 +2,7 @@ import Redis from "ioredis";
 
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { redisConnectionOptions } from "@/api/lib/redis-options";
 import {
@@ -201,14 +202,19 @@ const initRedis = async () => {
             parsed.event,
           );
         }
-      } catch {
-        logger.warn("sse.invalid_redis_message", { message });
+      } catch (error) {
+        logger.warn("sse.invalid_redis_message", {
+          "error.type": errorTag(error),
+          "message.bytes": message.length,
+        });
       }
     });
 
     logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
   } catch (error: unknown) {
-    logger.error("sse.redis_connection_failed", { error: String(error) });
+    logger.error("sse.redis_connection_failed", {
+      "error.type": errorTag(error),
+    });
   }
 };
 
@@ -231,7 +237,9 @@ export const broadcast = (
   publisher
     .publish(REDIS_CHANNEL, JSON.stringify(payload))
     .catch((error: unknown) => {
-      logger.warn("sse.redis_publish_failed", { error: String(error) });
+      logger.warn("sse.redis_publish_failed", {
+        "error.type": errorTag(error),
+      });
       // Fallback: deliver locally when Redis is unavailable so
       // single-instance deployments still get SSE invalidation.
       broadcastLocal(workspaceId, event);
@@ -250,7 +258,9 @@ export const broadcastToOrganization = (
   publisher
     .publish(REDIS_CHANNEL, JSON.stringify(payload))
     .catch((error: unknown) => {
-      logger.warn("sse.redis_publish_failed", { error: String(error) });
+      logger.warn("sse.redis_publish_failed", {
+        "error.type": errorTag(error),
+      });
       broadcastLocalToOrganization(organizationId, event);
     });
 };

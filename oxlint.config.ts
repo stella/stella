@@ -171,6 +171,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
+    "./.oxlint-plugins/no-raw-error-logging.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
@@ -423,6 +424,12 @@ export default defineConfig({
           { drizzleObjectName: ["db", "tx"] },
         ],
         "security-guards/no-raw-filename-write": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-raw-error-logging/no-raw-error-logging": "error",
       },
     },
     {

@@ -14,6 +14,7 @@ import { loadOrgAIConfig } from "@/api/lib/ai-config-cache";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { redisConnectionOptions } from "@/api/lib/redis-options";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -374,7 +375,7 @@ export const initWorkflowWorker = () => {
       workspaceId: data.workspaceId,
       entityId: data.entityId,
       attemptsMade: String(job.attemptsMade),
-      error: String(error),
+      "error.type": errorTag(error),
     });
 
     // With `attempts: 2` enabled on the queue, the failed event fires
@@ -415,7 +416,7 @@ export const initWorkflowWorker = () => {
   });
 
   worker.on("error", (error) => {
-    logger.error("workflow.worker_error", { error: String(error) });
+    logger.error("workflow.worker_error", { "error.type": errorTag(error) });
   });
 
   logger.info("workflow.worker_started", {
