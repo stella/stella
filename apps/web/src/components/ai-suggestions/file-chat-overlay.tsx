@@ -841,7 +841,7 @@ const FileChatOverlayInner = ({
 
       <PromptBar
         attentionPulseSeq={attentionPulseSeq}
-        canSubmitNow={() => canSubmitWithCurrentDocxSnapshot()}
+        canSubmitNow={canSubmitWithCurrentDocxSnapshot}
         editorController={editorController}
         emptyPlaceholder={
           activeFile && filePlaceholderAction ? (
