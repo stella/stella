@@ -1,5 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import path from "node:path";
+import { GENERATED_SKILLS } from "./skills.gen";
 
 export type SkillMetadata = {
   description: string;
@@ -17,11 +16,10 @@ export type StellaSkill = SkillMetadata & {
   resources: SkillResource[];
 };
 
-const SKILLS_ROOT = path.join(import.meta.dirname, "..", "skills");
-const SKILL_FILE_NAME = "SKILL.md";
-const RESOURCE_ROOTS = ["knowledge", "prompts"] as const;
 const RESOURCE_EXTENSIONS = [".md", ".prompt.md"] as const;
-const skillResourcesCache = new Map<string, SkillResource[]>();
+const skillsById: ReadonlyMap<string, GeneratedSkill> = new Map(
+  GENERATED_SKILLS.map((skill) => [skill.id, skill]),
+);
 
 type Frontmatter = {
   description?: string | undefined;
@@ -29,14 +27,16 @@ type Frontmatter = {
   version?: string | undefined;
 };
 
+type GeneratedSkill = (typeof GENERATED_SKILLS)[number];
+
 export const listSkillMetadata = (): SkillMetadata[] =>
-  listSkillIds()
-    .map((skillId) => readSkillMetadata(skillId))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  GENERATED_SKILLS.map((skill) => readSkillMetadata(skill.id)).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
 
 export const loadSkill = (skillId: string): StellaSkill => {
-  const skillPath = getSkillFilePath(skillId);
-  const parsed = parseSkillFile(readFileSync(skillPath, "utf-8"));
+  const skill = getSkill(skillId);
+  const parsed = parseSkillFile(skill.source);
 
   return {
     ...parsed.metadata,
@@ -46,33 +46,8 @@ export const loadSkill = (skillId: string): StellaSkill => {
 };
 
 export const listSkillResources = (skillId: string): SkillResource[] => {
-  const cachedResources = skillResourcesCache.get(skillId);
-  if (cachedResources) {
-    return cachedResources;
-  }
-
-  const skillDir = getSkillDir(skillId);
-  const resources: SkillResource[] = [];
-
-  for (const rootName of RESOURCE_ROOTS) {
-    const rootDir = path.join(skillDir, rootName);
-    if (!existsSync(rootDir)) {
-      continue;
-    }
-
-    collectResourcePaths({
-      baseDir: skillDir,
-      currentDir: rootDir,
-      kind: rootName === "knowledge" ? "knowledge" : "prompt",
-      resources,
-    });
-  }
-
-  const sortedResources = resources.sort((a, b) =>
-    a.path.localeCompare(b.path),
-  );
-  skillResourcesCache.set(skillId, sortedResources);
-  return sortedResources;
+  const skill = getSkill(skillId);
+  return skill.resources.map(({ kind, path }) => ({ kind, path }));
 };
 
 export const readSkillResource = ({
@@ -83,52 +58,36 @@ export const readSkillResource = ({
   skillId: string;
 }): string => {
   const normalizedPath = normalizeResourcePath(resourcePath);
-  const skillDir = getSkillDir(skillId);
-  const resolvedPath = path.resolve(skillDir, normalizedPath);
-  const resolvedSkillDir = path.resolve(skillDir);
-
-  if (!resolvedPath.startsWith(`${resolvedSkillDir}${path.sep}`)) {
-    throw new Error("Skill resource path escapes the skill directory");
-  }
-
+  const skill = getSkill(skillId);
   if (!isAllowedResourcePath(normalizedPath)) {
     throw new Error("Skill resource path is not a whitelisted resource");
   }
 
-  if (!existsSync(resolvedPath) || !statSync(resolvedPath).isFile()) {
+  const resource = skill.resources.find(
+    (candidate) => candidate.path === normalizedPath,
+  );
+  if (!resource) {
     throw new Error("Skill resource not found");
   }
 
-  return readFileSync(resolvedPath, "utf-8");
+  return resource.source;
 };
 
-const listSkillIds = (): string[] =>
-  readdirSync(SKILLS_ROOT, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter((skillId) =>
-      existsSync(path.join(SKILLS_ROOT, skillId, SKILL_FILE_NAME)),
-    )
-    .sort((a, b) => a.localeCompare(b));
-
 const readSkillMetadata = (skillId: string): SkillMetadata =>
-  parseSkillFile(readFileSync(getSkillFilePath(skillId), "utf-8")).metadata;
+  parseSkillFile(getSkill(skillId).source).metadata;
 
-const getSkillDir = (skillId: string): string => {
+const getSkill = (skillId: string) => {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(skillId)) {
     throw new Error("Invalid skill id");
   }
 
-  const skillDir = path.join(SKILLS_ROOT, skillId);
-  if (!existsSync(path.join(skillDir, SKILL_FILE_NAME))) {
+  const skill = skillsById.get(skillId);
+  if (!skill) {
     throw new Error(`Unknown skill: ${skillId}`);
   }
 
-  return skillDir;
+  return skill;
 };
-
-const getSkillFilePath = (skillId: string): string =>
-  path.join(getSkillDir(skillId), SKILL_FILE_NAME);
 
 const parseSkillFile = (
   source: string,
@@ -189,47 +148,12 @@ const stripYamlString = (value: string): string => {
   return trimmed.replace(/^["']|["']$/g, "");
 };
 
-const collectResourcePaths = ({
-  baseDir,
-  currentDir,
-  kind,
-  resources,
-}: {
-  baseDir: string;
-  currentDir: string;
-  kind: SkillResource["kind"];
-  resources: SkillResource[];
-}) => {
-  for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
-    const entryPath = path.join(currentDir, entry.name);
-
-    if (entry.isDirectory()) {
-      collectResourcePaths({
-        baseDir,
-        currentDir: entryPath,
-        kind,
-        resources,
-      });
-      continue;
-    }
-
-    if (!entry.isFile() || !hasAllowedResourceExtension(entry.name)) {
-      continue;
-    }
-
-    resources.push({
-      kind,
-      path: path.relative(baseDir, entryPath).split(path.sep).join("/"),
-    });
-  }
-};
-
 const normalizeResourcePath = (resourcePath: string): string => {
-  if (path.isAbsolute(resourcePath)) {
+  if (resourcePath.startsWith("/")) {
     throw new Error("Skill resource path must be relative");
   }
 
-  const normalized = path.posix.normalize(resourcePath.replaceAll("\\", "/"));
+  const normalized = normalizePosixPath(resourcePath.replaceAll("\\", "/"));
   if (
     normalized === "." ||
     normalized === ".." ||
@@ -252,3 +176,30 @@ const isAllowedResourcePath = (resourcePath: string): boolean => {
 
 const hasAllowedResourceExtension = (resourcePath: string): boolean =>
   RESOURCE_EXTENSIONS.some((extension) => resourcePath.endsWith(extension));
+
+const normalizePosixPath = (resourcePath: string): string => {
+  const segments: string[] = [];
+
+  for (const segment of resourcePath.split("/")) {
+    if (!segment || segment === ".") {
+      continue;
+    }
+
+    if (segment === "..") {
+      if (segments.length === 0) {
+        return "..";
+      }
+
+      segments.pop();
+      continue;
+    }
+
+    segments.push(segment);
+  }
+
+  if (segments.length === 0) {
+    return ".";
+  }
+
+  return segments.join("/");
+};
