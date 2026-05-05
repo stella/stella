@@ -386,9 +386,9 @@ export const workspaces = p.pgTable(
     name: p.varchar({ length: 256 }).notNull(),
     reference: p.varchar({ length: 64 }).notNull(),
     // Nullable: a null client_id encodes a personal matter (visible
-    // only to workspace_members). A non-null client_id is a normal
-    // client matter. Personal -> client is a one-way promotion
-    // handled by the update endpoint.
+    // only to the creator via workspace_members). A non-null client_id
+    // is a normal client matter. Personal -> client is a one-way
+    // promotion handled by the update endpoint.
     clientId: safeUuid<"contact">("client_id").references(() => contacts.id, {
       onDelete: "restrict",
     }),
