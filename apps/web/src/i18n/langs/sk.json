@@ -321,7 +321,7 @@
     "attachment": "Príloha",
     "caseLawGreeting": "Spýtajte sa na toto rozhodnutie — plný text je k dispozícii.",
     "chatAbout": "Vložiť do AI chatu",
-    "contextPlaceholder": "Chat o {context}",
+    "contextPlaceholder": "Chat o {context}, / pre zručnosti, @ na pridanie kontextu",
     "deleteThread": "Zmazať konverzáciu",
     "documentView": {
       "original": "Originál",
@@ -337,6 +337,16 @@
     "fileTooLarge": "Súbor prekračuje limit {maxSize}",
     "folioCitationFallback": "str. {n}",
     "greeting": "Na čom chcete pracovať?",
+    "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
+    "landing": {
+      "lastAccessedMatters": "Naposledy otvorené spisy",
+      "noMatters": "Zatiaľ žiadne spisy",
+      "noPrompts": "Zatiaľ žiadne prompty",
+      "noRecentChats": "Zatiaľ žiadne nedávne chaty",
+      "pinnedMatters": "Pripnuté spisy",
+      "prompts": "Prompty",
+      "recentChats": "Nedávne chaty"
+    },
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mention": {
       "category": {
@@ -353,10 +363,10 @@
     "moveToSide": "Presunúť do bočného panela",
     "newChat": "Nový chat",
     "noThreads": "Zatiaľ žiadne konverzácie",
-    "placeholder": "Čo by ste chceli vedieť?",
+    "placeholder": "Sem napíšte svoju otázku, / pre zručnosti, @ na pridanie kontextu",
     "prompts": {
       "noResults": "Žiadne zhodné prompty",
-      "noShortcuts": "Zatiaľ žiadne skratky. Pridajte ich v časti Vedomosti → Zručnosti.",
+      "noShortcuts": "Zatiaľ žiadne zručnosti. Pridajte ich v časti Znalosti → Zručnosti.",
       "scope": {
         "private": "Vaše prompty",
         "stock": "Vstavané",
@@ -384,7 +394,7 @@
     },
     "send": "Odoslať správu",
     "thinking": "Pracujem s kontextom",
-    "threads": "Konverzácie",
+    "threads": "História",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
       "ask-user": "Žiadosť o upresnenie",
@@ -537,6 +547,7 @@
     "error": "Chyba",
     "expenses": "Výdavky",
     "filter": "Filtrovať",
+    "history": "História",
     "invite": "Pozvať",
     "invoices": "Faktúry",
     "kind": "Druh",
@@ -1056,21 +1067,21 @@
       }
     },
     "skills": {
-      "addShortcut": "Pridať skratku",
+      "addShortcut": "Pridať zručnosť",
       "defaultBadge": "Predvolená",
-      "deleteConfirmDescription": "Táto skratka bude trvalo odstránená.",
-      "deleteConfirmTitle": "Odstrániť skratku?",
-      "deleteShortcut": "Odstrániť skratku",
-      "editShortcut": "Upraviť skratku",
-      "emptyState": "Zatiaľ žiadne skratky. Pridajte prvú.",
+      "deleteConfirmDescription": "Táto zručnosť bude natrvalo odstránená.",
+      "deleteConfirmTitle": "Zmazať zručnosť?",
+      "deleteShortcut": "Zmazať zručnosť",
+      "editShortcut": "Upraviť zručnosť",
+      "emptyState": "Žiadne zručnosti. Pridajte prvú.",
       "errors": {
-        "commandConflict": "Skratka s týmto príkazom už existuje",
+        "commandConflict": "Zručnosť s týmto / názvom už existuje",
         "commandInvalid": "Používajte iba malé písmená, číslice, pomlčky a podčiarkovníky",
-        "commandReserved": "\"/{command}\" je rezervovaný príkaz"
+        "commandReserved": "\"/{command}\" je rezervovaná zručnosť"
       },
       "form": {
-        "command": "Príkaz",
-        "commandHint": "Iba malé písmená, číslice, pomlčky a podčiarkovníky",
+        "command": "Zručnosť",
+        "commandHint": "Názov / zručnosti: iba malé písmená, číslice, pomlčky a podčiarkovníky",
         "commandPlaceholder": "napr. zhrnúť",
         "commandPrefix": "/",
         "description": "Popis",
@@ -1078,7 +1089,7 @@
         "name": "Názov",
         "namePlaceholder": "napr. Zhrnúť dokument",
         "prompt": "Výzva",
-        "promptPlaceholder": "Text vložený do skladača chatu pri použití tejto skratky",
+        "promptPlaceholder": "Text vložený do kompozéra chatu pri použití tejto zručnosti",
         "scope": "Viditeľnosť",
         "scopePrivate": "Len ja",
         "scopeTeam": "Všetci v organizácii"

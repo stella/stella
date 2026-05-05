@@ -321,7 +321,7 @@
     "attachment": "Załącznik",
     "caseLawGreeting": "Zapytaj mnie o to orzeczenie — mam dostęp do pełnej treści.",
     "chatAbout": "Omów na czacie",
-    "contextPlaceholder": "Czat o {context}",
+    "contextPlaceholder": "Czat o {context}, / dla umiejętności, @ aby dodać kontekst",
     "deleteThread": "Usuń rozmowę",
     "documentView": {
       "original": "Oryginał",
@@ -337,6 +337,16 @@
     "fileTooLarge": "Plik przekracza limit {maxSize}",
     "folioCitationFallback": "s. {n}",
     "greeting": "Nad czym chcesz pracować?",
+    "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
+    "landing": {
+      "lastAccessedMatters": "Ostatnio otwarte sprawy",
+      "noMatters": "Nie ma jeszcze spraw",
+      "noPrompts": "Nie ma jeszcze promptów",
+      "noRecentChats": "Brak ostatnich chatów",
+      "pinnedMatters": "Przypięte sprawy",
+      "prompts": "Prompty",
+      "recentChats": "Ostatnie chaty"
+    },
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mention": {
       "category": {
@@ -353,10 +363,10 @@
     "moveToSide": "Przenieś do panelu bocznego",
     "newChat": "Nowy czat",
     "noThreads": "Brak rozmów",
-    "placeholder": "Co chciałbyś wiedzieć?",
+    "placeholder": "Wpisz pytanie tutaj, / dla umiejętności, @ aby dodać kontekst",
     "prompts": {
       "noResults": "Brak pasujących promptów",
-      "noShortcuts": "Brak skrótów. Dodaj je w sekcji Wiedza → Umiejętności.",
+      "noShortcuts": "Nie ma jeszcze umiejętności. Dodaj je w Wiedza → Umiejętności.",
       "scope": {
         "private": "Twoje prompty",
         "stock": "Wbudowane",
@@ -384,7 +394,7 @@
     },
     "send": "Wyślij wiadomość",
     "thinking": "Pracuję z kontekstem",
-    "threads": "Rozmowy",
+    "threads": "Historia",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
       "ask-user": "Prośba o wyjaśnienie",
@@ -537,6 +547,7 @@
     "error": "Błąd",
     "expenses": "Wydatki",
     "filter": "Filtr",
+    "history": "Historia",
     "invite": "Zaproś",
     "invoices": "Faktury",
     "kind": "Rodzaj",
@@ -1056,21 +1067,21 @@
       }
     },
     "skills": {
-      "addShortcut": "Dodaj skrót",
+      "addShortcut": "Dodaj umiejętność",
       "defaultBadge": "Domyślny",
-      "deleteConfirmDescription": "Ten skrót zostanie trwale usunięty.",
-      "deleteConfirmTitle": "Usunąć skrót?",
-      "deleteShortcut": "Usuń skrót",
-      "editShortcut": "Edytuj skrót",
-      "emptyState": "Brak skrótów. Dodaj pierwszy.",
+      "deleteConfirmDescription": "Ta umiejętność zostanie trwale usunięta.",
+      "deleteConfirmTitle": "Usunąć umiejętność?",
+      "deleteShortcut": "Usuń umiejętność",
+      "editShortcut": "Edytuj umiejętność",
+      "emptyState": "Nie ma jeszcze umiejętności. Dodaj pierwszą.",
       "errors": {
-        "commandConflict": "Skrót z tą komendą już istnieje",
+        "commandConflict": "Umiejętność o tej nazwie / już istnieje",
         "commandInvalid": "Używaj tylko małych liter, cyfr, myślników i podkreśleń",
-        "commandReserved": "\"/{command}\" jest zarezerwowaną komendą"
+        "commandReserved": "\"/{command}\" jest zarezerwowaną umiejętnością"
       },
       "form": {
-        "command": "Komenda",
-        "commandHint": "Tylko małe litery, cyfry, myślniki i podkreślenia",
+        "command": "Umiejętność",
+        "commandHint": "Nazwa umiejętności /: tylko małe litery, cyfry, myślniki i podkreślenia",
         "commandPlaceholder": "np. podsumuj",
         "commandPrefix": "/",
         "description": "Opis",
@@ -1078,7 +1089,7 @@
         "name": "Nazwa",
         "namePlaceholder": "np. Podsumuj dokument",
         "prompt": "Prompt",
-        "promptPlaceholder": "Tekst wstawiany do kompozytora czatu przy użyciu tego skrótu",
+        "promptPlaceholder": "Tekst wstawiany do kompozytora chatu po użyciu tej umiejętności",
         "scope": "Widoczność",
         "scopePrivate": "Tylko ja",
         "scopeTeam": "Wszyscy w organizacji"

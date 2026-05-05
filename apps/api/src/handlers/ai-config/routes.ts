@@ -6,6 +6,7 @@ import {
   probeProvider,
 } from "@/api/lib/ai-provider-probe";
 import { getSessionAndMemberRole } from "@/api/lib/auth";
+import { logger } from "@/api/lib/observability/logger";
 
 /**
  * Authenticated, org-agnostic AI provider key health-check.
@@ -29,18 +30,16 @@ export const aiConfigPublicRoute = new Elysia({ prefix: "/ai-config" }).post(
     try {
       const result = await probeProvider(body.provider, body.apiKey);
       if (!result.valid) {
-        console.warn(
-          `[validate-ai-provider] ${body.provider} rejected:`,
-          result.error,
-        );
+        logger.warn("ai_config.provider_validation_rejected", {
+          provider: body.provider,
+        });
       }
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      console.warn(
-        `[validate-ai-provider] ${body.provider} unreachable:`,
-        message,
-      );
+      logger.warn("ai_config.provider_validation_unreachable", {
+        provider: body.provider,
+      });
       return status(502, { message });
     }
   },

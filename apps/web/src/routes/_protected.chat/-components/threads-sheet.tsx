@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 
 import { Button } from "@stll/ui/components/button";
 import {
@@ -23,9 +24,21 @@ import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { groupedChatThreadsOptions } from "@/routes/_protected.chat/-queries";
 
-export const ThreadsSheet = () => {
+type ThreadsSheetProps = {
+  icon?: ReactNode;
+  label?: string | undefined;
+  triggerVariant?: "section" | "toolbar";
+};
+
+export const ThreadsSheet = ({
+  icon,
+  label,
+  triggerVariant = "toolbar",
+}: ThreadsSheetProps) => {
   const t = useTranslations();
+  const commonT = useTranslations("common");
   const [isOpen, setIsOpen] = useState(false);
+  const triggerLabel = label ?? commonT("history");
 
   const globalThreadMatch = useMatch({
     from: "/_protected/chat/$threadId",
@@ -53,17 +66,31 @@ export const ThreadsSheet = () => {
 
   return (
     <Sheet onOpenChange={setIsOpen} open={isOpen}>
-      <SheetTrigger
-        render={
-          <Button aria-label={t("chat.threads")} size="sm" variant="ghost" />
-        }
-      >
-        <MessageSquareIcon className="size-4" />
-        {t("chat.threads")}
-      </SheetTrigger>
+      {triggerVariant === "section" ? (
+        <SheetTrigger
+          render={
+            <button
+              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase transition-colors outline-none focus-visible:ring-2"
+              type="button"
+            />
+          }
+        >
+          {icon ?? <MessageSquareIcon className="size-4" />}
+          {triggerLabel}
+        </SheetTrigger>
+      ) : (
+        <SheetTrigger
+          render={
+            <Button aria-label={triggerLabel} size="sm" variant="ghost" />
+          }
+        >
+          <MessageSquareIcon className="size-4" />
+          {triggerLabel}
+        </SheetTrigger>
+      )}
       <SheetPopup side="right">
         <SheetHeader>
-          <SheetTitle>{t("chat.threads")}</SheetTitle>
+          <SheetTitle>{triggerLabel}</SheetTitle>
         </SheetHeader>
         <SheetPanel>
           <div className="flex flex-col gap-4">

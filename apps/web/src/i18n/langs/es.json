@@ -321,7 +321,7 @@
     "attachment": "Adjunto",
     "caseLawGreeting": "Pregunta sobre esta decisión — el texto completo está disponible aquí.",
     "chatAbout": "Insertar en chat de IA",
-    "contextPlaceholder": "Chat sobre {context}",
+    "contextPlaceholder": "Chat sobre {context}, / para skills, @ para añadir contexto",
     "deleteThread": "Eliminar conversación",
     "documentView": {
       "original": "Original",
@@ -337,6 +337,16 @@
     "fileTooLarge": "El archivo supera el límite de {maxSize}",
     "folioCitationFallback": "p. {n}",
     "greeting": "¿En qué le gustaría trabajar?",
+    "greetingSubtitle": "Empiece con un asunto, un documento o una pregunta sencilla.",
+    "landing": {
+      "lastAccessedMatters": "Asuntos abiertos recientemente",
+      "noMatters": "Aún no hay asuntos",
+      "noPrompts": "Aún no hay prompts",
+      "noRecentChats": "No hay chats recientes",
+      "pinnedMatters": "Asuntos fijados",
+      "prompts": "Prompts",
+      "recentChats": "Chats recientes"
+    },
     "maxAttachmentsReached": "Máximo {count} archivos por mensaje",
     "mention": {
       "category": {
@@ -353,10 +363,10 @@
     "moveToSide": "Mover al panel lateral",
     "newChat": "Nueva conversación",
     "noThreads": "Aún no hay conversaciones",
-    "placeholder": "¿Qué le gustaría saber?",
+    "placeholder": "Escriba su pregunta aquí, / para skills, @ para añadir contexto",
     "prompts": {
       "noResults": "Sin prompts coincidentes",
-      "noShortcuts": "Aún no hay atajos. Añade algunos en Conocimiento → Habilidades.",
+      "noShortcuts": "Aún no hay skills. Añádalas en Conocimiento → Skills.",
       "scope": {
         "private": "Tus prompts",
         "stock": "Predefinidos",
@@ -384,7 +394,7 @@
     },
     "send": "Enviar mensaje",
     "thinking": "Trabajando con contexto",
-    "threads": "Conversaciones",
+    "threads": "Historial",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
       "ask-user": "Pidiendo una aclaración",
@@ -537,6 +547,7 @@
     "error": "Error",
     "expenses": "Gastos",
     "filter": "Filtro",
+    "history": "Historial",
     "invite": "Invitar",
     "invoices": "Facturas",
     "kind": "Tipo",
@@ -1056,21 +1067,21 @@
       }
     },
     "skills": {
-      "addShortcut": "Añadir atajo",
+      "addShortcut": "Añadir skill",
       "defaultBadge": "Predeterminado",
-      "deleteConfirmDescription": "Este atajo se eliminará permanentemente.",
-      "deleteConfirmTitle": "¿Eliminar atajo?",
-      "deleteShortcut": "Eliminar atajo",
-      "editShortcut": "Editar atajo",
-      "emptyState": "Aún no hay atajos. Añade uno para comenzar.",
+      "deleteConfirmDescription": "Esta skill se eliminará de forma permanente.",
+      "deleteConfirmTitle": "¿Eliminar skill?",
+      "deleteShortcut": "Eliminar skill",
+      "editShortcut": "Editar skill",
+      "emptyState": "Aún no hay skills. Añada la primera.",
       "errors": {
-        "commandConflict": "Ya existe un atajo con este comando",
+        "commandConflict": "Ya existe una skill con este nombre /",
         "commandInvalid": "Usa solo letras minúsculas, dígitos, guiones y guiones bajos",
-        "commandReserved": "\"/{command}\" es un comando reservado"
+        "commandReserved": "\"/{command}\" es una skill reservada"
       },
       "form": {
-        "command": "Comando",
-        "commandHint": "Solo letras minúsculas, dígitos, guiones y guiones bajos",
+        "command": "Skill",
+        "commandHint": "Nombre de la skill /: solo minúsculas, números, guiones y guiones bajos",
         "commandPlaceholder": "p. ej. resumir",
         "commandPrefix": "/",
         "description": "Descripción",
@@ -1078,7 +1089,7 @@
         "name": "Nombre",
         "namePlaceholder": "p. ej. Resumir documento",
         "prompt": "Prompt",
-        "promptPlaceholder": "El texto que se inserta en el compositor de chat al usar este atajo",
+        "promptPlaceholder": "El texto que se inserta en el compositor de chat al usar esta skill",
         "scope": "Visibilidad",
         "scopePrivate": "Solo yo",
         "scopeTeam": "Todos en la organización"
