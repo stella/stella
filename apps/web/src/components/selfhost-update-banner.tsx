@@ -29,7 +29,7 @@ const stripPrefix = (tag: string): string =>
 
 export const SelfhostUpdateBanner = () => {
   const t = useTranslations();
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
 
   const enabled = env.VITE_SELFHOST;
   const installedVersion = __APP_VERSION__;
@@ -71,14 +71,13 @@ export const SelfhostUpdateBanner = () => {
   // banner for v0.0.3 later. Stored in localStorage so it survives
   // tab refreshes within the same install.
   const dismissedKey = `${DISMISSED_KEY_PREFIX}${latestVersion}`;
+  if (dismissedVersion === latestVersion) {
+    return null;
+  }
   if (
-    !dismissed &&
     typeof localStorage !== "undefined" &&
     localStorage.getItem(dismissedKey) === "1"
   ) {
-    return null;
-  }
-  if (dismissed) {
     return null;
   }
 
@@ -86,7 +85,7 @@ export const SelfhostUpdateBanner = () => {
     if (typeof localStorage !== "undefined") {
       localStorage.setItem(dismissedKey, "1");
     }
-    setDismissed(true);
+    setDismissedVersion(latestVersion);
   };
 
   // GitHub's API only ever returns http(s) URLs, but route through

@@ -42,9 +42,9 @@
   },
   "app": {
     "versionMismatch": {
-      "dismiss": "Dismiss update notice",
-      "message": "A new version is available (v{latest}). You're on v{installed}.",
-      "refresh": "Refresh to update"
+      "dismiss": "Atmesti atnaujinimo pranešimą",
+      "message": "Yra nauja versija (v{latest}). Naudojate v{installed}.",
+      "refresh": "Atnaujinti įkeliant iš naujo"
     }
   },
   "appearance": {

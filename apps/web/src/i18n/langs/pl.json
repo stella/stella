@@ -42,9 +42,9 @@
   },
   "app": {
     "versionMismatch": {
-      "dismiss": "Dismiss update notice",
-      "message": "A new version is available (v{latest}). You're on v{installed}.",
-      "refresh": "Refresh to update"
+      "dismiss": "Zamknij powiadomienie o aktualizacji",
+      "message": "Dostępna jest nowa wersja (v{latest}). Używasz v{installed}.",
+      "refresh": "Odśwież, aby zaktualizować"
     }
   },
   "appearance": {

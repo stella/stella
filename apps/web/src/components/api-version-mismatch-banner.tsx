@@ -18,7 +18,7 @@ const healthSchema = v.object({
 
 export const ApiVersionMismatchBanner = () => {
   const t = useTranslations();
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
 
   // Selfhost has its own GitHub-release-driven banner. Skip there
   // so the two don't fight for the same slot.
@@ -57,14 +57,13 @@ export const ApiVersionMismatchBanner = () => {
   // Per-version dismissal so dismissing 0.0.8 doesn't suppress
   // the banner when 0.0.9 ships.
   const dismissedKey = `${DISMISSED_KEY_PREFIX}${serverVersion}`;
+  if (dismissedVersion === serverVersion) {
+    return null;
+  }
   if (
-    !dismissed &&
     typeof localStorage !== "undefined" &&
     localStorage.getItem(dismissedKey) === "1"
   ) {
-    return null;
-  }
-  if (dismissed) {
     return null;
   }
 
@@ -72,7 +71,7 @@ export const ApiVersionMismatchBanner = () => {
     if (typeof localStorage !== "undefined") {
       localStorage.setItem(dismissedKey, "1");
     }
-    setDismissed(true);
+    setDismissedVersion(serverVersion);
   };
 
   const handleRefresh = () => {

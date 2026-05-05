@@ -42,9 +42,9 @@
   },
   "app": {
     "versionMismatch": {
-      "dismiss": "Dismiss update notice",
-      "message": "A new version is available (v{latest}). You're on v{installed}.",
-      "refresh": "Refresh to update"
+      "dismiss": "Frissítési értesítés elvetése",
+      "message": "Új verzió érhető el (v{latest}). Jelenlegi verzió: v{installed}.",
+      "refresh": "Frissítés újratöltéssel"
     }
   },
   "appearance": {

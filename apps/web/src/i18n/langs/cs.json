@@ -42,9 +42,9 @@
   },
   "app": {
     "versionMismatch": {
-      "dismiss": "Dismiss update notice",
-      "message": "A new version is available (v{latest}). You're on v{installed}.",
-      "refresh": "Refresh to update"
+      "dismiss": "Zavřít oznámení o aktualizaci",
+      "message": "Je dostupná nová verze (v{latest}). Používáte v{installed}.",
+      "refresh": "Obnovit a aktualizovat"
     }
   },
   "appearance": {
