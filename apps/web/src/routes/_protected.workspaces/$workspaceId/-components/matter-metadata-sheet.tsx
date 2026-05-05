@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Button } from "@stll/ui/components/button";
 import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
@@ -61,6 +61,8 @@ export const MatterMetadataSheet = ({
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const escapedNameRef = useRef(false);
   const [referenceValue, setReferenceValue] = useState("");
   const [referenceError, setReferenceError] = useState("");
 
@@ -68,6 +70,37 @@ export const MatterMetadataSheet = ({
   const deleteWorkspace = useDeleteWorkspace();
   const canDeleteWorkspace = usePermissions({ workspace: ["delete"] });
   const updateWorkspace = useUpdateWorkspace();
+
+  const handleSaveName = () => {
+    if (escapedNameRef.current) {
+      escapedNameRef.current = false;
+      setNameValue(workspace.name);
+      return;
+    }
+
+    const trimmed = nameValue.trim();
+    if (!trimmed || trimmed === workspace.name) {
+      setNameValue(workspace.name);
+      return;
+    }
+
+    updateWorkspace.mutate(
+      {
+        workspaceId,
+        name: trimmed,
+      },
+      {
+        onError: (error) => {
+          const message =
+            APIError.is(error) && error.status < 500
+              ? error.message
+              : t("errors.actionFailed");
+          toastManager.add({ title: message, type: "error" });
+          setNameValue(workspace.name);
+        },
+      },
+    );
+  };
 
   const handleSaveReference = () => {
     const trimmed = referenceValue.trim();
@@ -145,6 +178,8 @@ export const MatterMetadataSheet = ({
         onOpenChange={(open) => {
           setIsOpen(open);
           if (open) {
+            escapedNameRef.current = false;
+            setNameValue(workspace.name);
             setReferenceValue(workspace.reference ?? "");
           }
         }}
@@ -159,6 +194,30 @@ export const MatterMetadataSheet = ({
             <SheetDescription />
           </SheetHeader>
           <SheetPanel className="flex flex-1 flex-col gap-4">
+            {/* Name */}
+            <section className="px-4">
+              <span className="text-muted-foreground mb-1.5 block text-sm font-medium">
+                {t("common.name")}
+              </span>
+              <Input
+                disabled={updateWorkspace.isPending}
+                onBlur={handleSaveName}
+                onChange={(e) => setNameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.currentTarget.blur();
+                  }
+                  if (e.key === "Escape") {
+                    escapedNameRef.current = true;
+                    e.currentTarget.blur();
+                  }
+                }}
+                value={nameValue}
+              />
+            </section>
+
+            <Separator />
+
             {/* Reference */}
             <section className="px-4">
               <span className="text-muted-foreground mb-1.5 block text-sm font-medium">

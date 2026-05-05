@@ -73,8 +73,11 @@ type UpdateWorkspaceVars = {
   };
 };
 
+export const workspaceUpdateInvalidationKeys = () => [workspacesKeys.all];
+
 export const useUpdateWorkspace = () => {
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateWorkspaceVars) => {
@@ -99,6 +102,11 @@ export const useUpdateWorkspace = () => {
 
       if (response.error) {
         throw toAPIError(response.error);
+      }
+    },
+    onSuccess: () => {
+      for (const queryKey of workspaceUpdateInvalidationKeys()) {
+        void queryClient.invalidateQueries({ queryKey });
       }
     },
     onError: (error) => {

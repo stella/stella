@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   BreadcrumbItem,
@@ -44,6 +44,7 @@ export const WorkspaceBreadcrumb = ({
   });
   const [value, setValue] = useState("");
   const [isEditing, setIsEditing] = useState(false);
+  const escapedNameRef = useRef(false);
   const [refValue, setRefValue] = useState("");
   const [isEditingRef, setIsEditingRef] = useState(false);
   const [refError, setRefError] = useState("");
@@ -63,7 +64,20 @@ export const WorkspaceBreadcrumb = ({
 
   const displayName = workspace.name ?? workspaceId;
 
+  const startEditingName = () => {
+    escapedNameRef.current = false;
+    setValue(displayName);
+    setIsEditing(true);
+  };
+
   const handleSaveProjectName = () => {
+    if (escapedNameRef.current) {
+      escapedNameRef.current = false;
+      setValue(displayName);
+      setIsEditing(false);
+      return;
+    }
+
     setIsEditing(false);
 
     const workspaceName = value.trim();
@@ -248,39 +262,86 @@ export const WorkspaceBreadcrumb = ({
       <>
         {clientSegment}
         <BreadcrumbItem className="shrink-0">
-          <Link
-            activeOptions={{ exact: true, includeSearch: false }}
-            activeProps={{ className: "text-foreground font-semibold" }}
-            className="hover:text-foreground inline-flex max-w-80 items-center gap-1.5 font-semibold transition-colors"
-            params={{ workspaceId }}
-            title={displayName}
-            to="/workspaces/$workspaceId"
-          >
-            <span
-              className="flex shrink-0"
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setColorPickerOpen(true);
-              }}
-              ref={setIconAnchor}
-            >
-              <LayersIcon className="size-3.5" style={{ color: activeColor }} />
-            </span>
-            <span className="truncate">{displayName}</span>
-            {workspace.reference && !isEditingRef ? (
+          {isEditing ? (
+            <>
               <span
-                className="text-muted-foreground/60 shrink-0 text-sm"
+                className="flex shrink-0"
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  setRefValue(workspace.reference ?? "");
-                  setRefError("");
-                  setIsEditingRef(true);
+                  e.stopPropagation();
+                  setColorPickerOpen(true);
                 }}
+                ref={setIconAnchor}
               >
-                {workspace.reference}
+                <LayersIcon
+                  className="size-3.5"
+                  style={{ color: activeColor }}
+                />
               </span>
-            ) : null}
-          </Link>
+              <Input
+                className={`${matterNameInputClassName} w-fit`}
+                disabled={updateWorkspace.isPending}
+                onBlur={() => handleSaveProjectName()}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.currentTarget.blur();
+                  }
+                  if (e.key === "Escape") {
+                    escapedNameRef.current = true;
+                    e.currentTarget.blur();
+                  }
+                }}
+                autoFocus
+                size="sm"
+                unstyled
+                value={value}
+              />
+            </>
+          ) : (
+            <Link
+              activeOptions={{ exact: true, includeSearch: false }}
+              activeProps={{ className: "text-foreground font-semibold" }}
+              className="hover:text-foreground inline-flex max-w-80 items-center gap-1.5 font-semibold transition-colors"
+              onContextMenu={(e) => {
+                e.preventDefault();
+                startEditingName();
+              }}
+              params={{ workspaceId }}
+              title={displayName}
+              to="/workspaces/$workspaceId"
+            >
+              <span
+                className="flex shrink-0"
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setColorPickerOpen(true);
+                }}
+                ref={setIconAnchor}
+              >
+                <LayersIcon
+                  className="size-3.5"
+                  style={{ color: activeColor }}
+                />
+              </span>
+              <span className="truncate">{displayName}</span>
+              {workspace.reference && !isEditingRef ? (
+                <span
+                  className="text-muted-foreground/60 shrink-0 text-sm"
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setRefValue(workspace.reference ?? "");
+                    setRefError("");
+                    setIsEditingRef(true);
+                  }}
+                >
+                  {workspace.reference}
+                </span>
+              ) : null}
+            </Link>
+          )}
           {isEditingRef ? referenceSegment : null}
           {referenceHint}
         </BreadcrumbItem>
@@ -317,15 +378,17 @@ export const WorkspaceBreadcrumb = ({
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
-                handleSaveProjectName();
+                e.currentTarget.blur();
+              }
+              if (e.key === "Escape") {
+                escapedNameRef.current = true;
+                e.currentTarget.blur();
               }
             }}
-            ref={(el) => {
-              el?.focus();
-            }}
+            autoFocus
             size="sm"
             unstyled
-            value={value || displayName}
+            value={value}
           />
           {referenceSegment}
           {referenceHint}
@@ -343,16 +406,15 @@ export const WorkspaceBreadcrumb = ({
           activeOptions={{ exact: true, includeSearch: false }}
           activeProps={{ className: "text-foreground font-semibold" }}
           className="hover:text-foreground max-w-80 truncate font-semibold transition-colors"
-          title={displayName}
           onClick={() => {
-            setIsEditing(true);
+            startEditingName();
           }}
           onContextMenu={(e) => {
             e.preventDefault();
-            setValue(displayName);
-            setIsEditing(true);
+            startEditingName();
           }}
           params={{ workspaceId }}
+          title={displayName}
           to="/workspaces/$workspaceId"
         >
           {displayName}

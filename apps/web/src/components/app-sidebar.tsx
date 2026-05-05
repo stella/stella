@@ -260,6 +260,7 @@ const MatterItem = ({
   const isPinned = usePinnedStore((s) => s.isPinned(ws.id));
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
+  const { state, setOpen, isMobile } = useSidebar();
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(ws.name);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -273,6 +274,7 @@ const MatterItem = ({
   const [isDropTarget, setIsDropTarget] = useState(false);
 
   const canDrag = isPinned && !!onReorder;
+  const isCollapsed = state === "collapsed" && !isMobile;
 
   const onReorderRef = useRef(onReorder);
   onReorderRef.current = onReorder;
@@ -313,6 +315,21 @@ const MatterItem = ({
   const cancelRename = () => {
     setIsRenaming(false);
     setRenameValue(ws.name);
+  };
+
+  const startRename = () => {
+    escapedRef.current = false;
+    setMenuOpen(false);
+    setCtxAnchor(null);
+    setRenameValue(ws.name);
+
+    if (isCollapsed) {
+      setOpen(true);
+      window.requestAnimationFrame(() => setIsRenaming(true));
+      return;
+    }
+
+    setIsRenaming(true);
   };
 
   const handleRename = () => {
@@ -502,8 +519,7 @@ const MatterItem = ({
                     void window.open(`/workspaces/${ws.id}`, "_blank");
                   }}
                   onRename={() => {
-                    setRenameValue(ws.name);
-                    setIsRenaming(true);
+                    startRename();
                   }}
                   onTogglePin={() => onTogglePin(ws.id)}
                 />
