@@ -53,7 +53,7 @@ const ONE_SECOND_MS = 1000;
 const SERVER_DISTINCT_ID = "server";
 const ERROR_CAUSE_MAX_DEPTH = 3;
 const RESOURCE_EXHAUSTED_CODE = "RESOURCE_EXHAUSTED";
-const GEMINI_FREE_TIER_QUOTA_MARKER = "FreeTier";
+const GEMINI_QUOTA_PATTERN = /quota/i;
 const isLocalPostHogDebugEnabled = (): boolean =>
   env.isDev && env.POSTHOG_LOCAL_DEBUG;
 
@@ -216,22 +216,27 @@ const getResponseBodyText = (error: unknown): string | undefined => {
     return undefined;
   }
 
-  const serialized = JSON.stringify(responseBody);
-  return serialized;
+  try {
+    return JSON.stringify(responseBody);
+  } catch {
+    return undefined;
+  }
 };
 
-const isGeminiFreeTierQuotaError = (error: unknown): boolean => {
+const hasGeminiQuotaSignal = (text: string | undefined): boolean =>
+  text !== undefined &&
+  text.includes(RESOURCE_EXHAUSTED_CODE) &&
+  GEMINI_QUOTA_PATTERN.test(text);
+
+const isGeminiQuotaError = (error: unknown): boolean => {
   const message = error instanceof Error ? error.message : "";
-  if (
-    message.includes(RESOURCE_EXHAUSTED_CODE) &&
-    message.includes(GEMINI_FREE_TIER_QUOTA_MARKER)
-  ) {
+  if (hasGeminiQuotaSignal(message)) {
     return true;
   }
 
   return (
     getErrorStatusCode(error) === 429 &&
-    (getResponseBodyText(error)?.includes(RESOURCE_EXHAUSTED_CODE) ?? false)
+    hasGeminiQuotaSignal(getResponseBodyText(error))
   );
 };
 
@@ -241,7 +246,7 @@ const isBYOKGeminiQuotaError = (
 ): boolean =>
   modelKeySource === "byok" &&
   findInErrorCauseChain(error, (candidate) =>
-    isGeminiFreeTierQuotaError(candidate) ? true : undefined,
+    isGeminiQuotaError(candidate) ? true : undefined,
   ) === true;
 
 // Provider error messages we feel safe surfacing as raw text.

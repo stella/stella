@@ -657,7 +657,7 @@ describe("createAIAnalyticsCallbacks", () => {
           message:
             "Quota exceeded for quota metric 'Generate requests per day per project per model'",
           responseBody:
-            '{"error":{"code":429,"status":"RESOURCE_EXHAUSTED","details":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}}',
+            '{"error":{"code":429,"status":"RESOURCE_EXHAUSTED","details":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel"}]}}',
           statusCode: 429,
         }),
       ),
@@ -669,6 +669,103 @@ describe("createAIAnalyticsCallbacks", () => {
       throw new Error("Expected aggregate AI failure event");
     }
     expect(event.properties.failure_reason).toBe("byok_quota");
+  });
+
+  test("keeps shared-capacity Gemini resource exhaustion classified as rate limit", async () => {
+    const aiAnalyticsModule = await loadAIAnalytics();
+
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => void 0,
+    };
+
+    const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
+      analytics,
+      feature: "analysis.basic",
+      modelRole: "fast",
+      orgAIConfig: createGoogleOrgAIConfig(),
+      traceId: "trace_shared_capacity",
+    });
+
+    callbacks.captureError(
+      createErrorWithCause(
+        "Failed after 3 attempts. Last error: server capacity",
+        createTransportError({
+          message: "Resource exhausted, please try again later.",
+          responseBody:
+            '{"error":{"code":429,"message":"Resource exhausted, please try again later.","status":"RESOURCE_EXHAUSTED"}}',
+          statusCode: 429,
+        }),
+      ),
+    );
+
+    const event = events.at(0);
+    expect(event?.event).toBe(SERVER_ANALYTICS_EVENTS.aiGenerationFailed);
+    if (event?.event !== SERVER_ANALYTICS_EVENTS.aiGenerationFailed) {
+      throw new Error("Expected aggregate AI failure event");
+    }
+    expect(event.properties.failure_reason).toBe("rate_limit");
+  });
+
+  test("keeps response body serialization failures from breaking classification", async () => {
+    const aiAnalyticsModule = await loadAIAnalytics();
+
+    const circularResponseBody: Record<string, unknown> = {
+      status: "RESOURCE_EXHAUSTED",
+    };
+    circularResponseBody["self"] = circularResponseBody;
+
+    const cases = [
+      {
+        message: "circular response body",
+        responseBody: circularResponseBody,
+      },
+      {
+        message: "bigint response body",
+        responseBody: {
+          remainingQuota: 0n,
+          status: "RESOURCE_EXHAUSTED",
+        },
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const events: Parameters<Analytics["capture"]>[0][] = [];
+
+      const analytics: Analytics = {
+        capture: (event) => {
+          events.push(event);
+        },
+        flush: async () => void 0,
+      };
+
+      const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
+        analytics,
+        feature: "analysis.basic",
+        modelRole: "fast",
+        orgAIConfig: createGoogleOrgAIConfig(),
+        traceId: `trace_${testCase.message}`,
+      });
+
+      callbacks.captureError(
+        createTransportError({
+          message: "Too many requests",
+          responseBody: testCase.responseBody,
+          statusCode: 429,
+        }),
+      );
+
+      const event = events.at(0);
+      expect(event?.event).toBe(SERVER_ANALYTICS_EVENTS.aiGenerationFailed);
+      if (event?.event !== SERVER_ANALYTICS_EVENTS.aiGenerationFailed) {
+        throw new Error("Expected aggregate AI failure event");
+      }
+      expect(event.properties.failure_reason).toBe("rate_limit");
+    }
   });
 
   test("keeps platform Gemini quota exhaustion classified as rate limit", async () => {
