@@ -240,6 +240,23 @@ type LogAndCaptureSafeErrorProps = {
   statusCode: number;
 };
 
+const LOGGED_STACK_FRAME_COUNT = 3;
+const LOGGED_STACK_FRAME_MAX_LENGTH = 768;
+
+const errorStackFrames = (stack: string): string | undefined => {
+  const frames = stack
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("at "))
+    .slice(0, LOGGED_STACK_FRAME_COUNT);
+
+  if (frames.length === 0) {
+    return undefined;
+  }
+
+  return frames.join("\n").slice(0, LOGGED_STACK_FRAME_MAX_LENGTH);
+};
+
 const logAndCaptureSafeError = ({
   request,
   route,
@@ -261,13 +278,16 @@ const logAndCaptureSafeError = ({
   if (error instanceof Error) {
     attributes["error.message"] = error.message.slice(0, 512);
     if (error.stack) {
-      attributes["error.stack"] = error.stack.slice(0, 4096);
+      const frames = errorStackFrames(error.stack);
+      if (frames) {
+        attributes["error.frames"] = frames;
+      }
     }
     // Walk up to three levels of `.cause` so nested wrappers
     // (generator-result re-throws, AI SDK over fetch errors,
-    // etc.) don't hide the underlying failure. Three is a
-    // pragmatic cap: deeper chains in our stack are rare,
-    // and the line-size budget already gets spent on stacks.
+    // etc.) don't hide the underlying failure type. Nested
+    // messages are deliberately omitted because they can carry
+    // privileged payload snippets from external libraries.
     const seen = new WeakSet<object>([error]);
     let cause: unknown = (error as { cause?: unknown }).cause;
     let depth = 1;
@@ -275,9 +295,11 @@ const logAndCaptureSafeError = ({
       seen.add(cause);
       const prefix = depth === 1 ? "error.cause" : `error.cause${depth}`;
       attributes[`${prefix}.type`] = errorTag(cause);
-      attributes[`${prefix}.message`] = cause.message.slice(0, 512);
       if (cause.stack) {
-        attributes[`${prefix}.stack`] = cause.stack.slice(0, 4096);
+        const frames = errorStackFrames(cause.stack);
+        if (frames) {
+          attributes[`${prefix}.frames`] = frames;
+        }
       }
       cause = (cause as { cause?: unknown }).cause;
       depth++;
