@@ -42,7 +42,6 @@ import { viewsRoute } from "@/api/handlers/views/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { captureRequestError, getAnalytics } from "@/api/lib/analytics";
-import { assertProductionTelemetry } from "@/api/lib/analytics/config";
 import { getAuth } from "@/api/lib/auth";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { DEV_INSPECTOR_ORIGINS } from "@/api/lib/dev-origins";
@@ -352,12 +351,6 @@ const startS3RefreshLoop = () => {
 // the database has not received, exit before serving any
 // request against a stale schema.
 await assertMigrationsApplied();
-
-assertProductionTelemetry({
-  key: env.POSTHOG_KEY,
-  host: env.POSTHOG_HOST,
-  isDev: env.isDev,
-});
 
 await refreshS3();
 startS3RefreshLoop();
