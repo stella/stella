@@ -627,8 +627,14 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             onScroll={handleMonthScroll}
             ref={monthScrollRef}
           >
-            <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 text-muted-foreground sticky top-0 z-20 border-b px-4 py-1.5 text-xs font-medium backdrop-blur">
-              {monthLabel}
+            <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 border-b px-4 py-1.5 backdrop-blur">
+              <button
+                className="text-muted-foreground hover:text-foreground rounded text-xs font-medium transition-colors"
+                onClick={() => scrollToMonth(viewDate)}
+                type="button"
+              >
+                {monthLabel}
+              </button>
             </div>
 
             {monthWeeks.map((week) => (
