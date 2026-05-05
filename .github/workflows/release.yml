@@ -426,14 +426,18 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          TARGET_ENV: production
           INFRA_REPO: ${{ github.repository_owner }}/stella-infra
         run: |
           dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # Must match the `run-name:` template in
+          # stella-infra/.github/workflows/promote-release.yml
+          expected_title="Promote ${RELEASE_REF} → ${TARGET_ENV}"
           dispatch_output="$(
             gh workflow run promote-release.yml \
               --repo "$INFRA_REPO" \
               --field release_ref="$RELEASE_REF" \
-              --field target_environment=production \
+              --field target_environment="$TARGET_ENV" \
               --field run_migrations=true \
               --field frontend=true 2>&1
           )"
@@ -450,17 +454,17 @@ jobs:
               break
             fi
 
-            # Match by displayTitle so concurrent dispatches (e.g. a
-            # stable promote firing alongside an rc promote) cannot
-            # be confused. promote-release.yml sets a per-run title
-            # of "Promote <release_ref> → <target_environment>".
+            # Match by exact displayTitle so concurrent dispatches
+            # cannot be confused, and prefix-overlapping refs
+            # (v1.2.3 vs v1.2.3-rc.1, v1.2.3-rc.1 vs v1.2.3-rc.10)
+            # never collide.
             run_id="$(
               gh run list \
                 --repo "$INFRA_REPO" \
                 --workflow promote-release.yml \
                 --event workflow_dispatch \
                 --json databaseId,createdAt,displayTitle \
-                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle | contains(\"$RELEASE_REF\")) | .databaseId" \
+                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle == \"$expected_title\") | .databaseId" \
                 --limit 10 \
                 | head -n 1
             )"
@@ -505,14 +509,18 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          TARGET_ENV: staging
           INFRA_REPO: ${{ github.repository_owner }}/stella-infra
         run: |
           dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # Must match the `run-name:` template in
+          # stella-infra/.github/workflows/promote-release.yml
+          expected_title="Promote ${RELEASE_REF} → ${TARGET_ENV}"
           dispatch_output="$(
             gh workflow run promote-release.yml \
               --repo "$INFRA_REPO" \
               --field release_ref="$RELEASE_REF" \
-              --field target_environment=staging \
+              --field target_environment="$TARGET_ENV" \
               --field run_migrations=true \
               --field frontend=true 2>&1
           )"
@@ -529,17 +537,17 @@ jobs:
               break
             fi
 
-            # Match by displayTitle so concurrent dispatches (e.g. a
-            # stable promote firing alongside an rc promote) cannot
-            # be confused. promote-release.yml sets a per-run title
-            # of "Promote <release_ref> → <target_environment>".
+            # Match by exact displayTitle so concurrent dispatches
+            # cannot be confused, and prefix-overlapping refs
+            # (v1.2.3 vs v1.2.3-rc.1, v1.2.3-rc.1 vs v1.2.3-rc.10)
+            # never collide.
             run_id="$(
               gh run list \
                 --repo "$INFRA_REPO" \
                 --workflow promote-release.yml \
                 --event workflow_dispatch \
                 --json databaseId,createdAt,displayTitle \
-                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle | contains(\"$RELEASE_REF\")) | .databaseId" \
+                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle == \"$expected_title\") | .databaseId" \
                 --limit 10 \
                 | head -n 1
             )"
