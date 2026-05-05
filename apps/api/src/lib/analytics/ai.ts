@@ -19,6 +19,7 @@ import type {
   AnalyticsPrimitive,
   CountBucket,
   LatencyBucket,
+  ModelKeySource,
   SafeAIAnalyticsMetadata,
   TokenBucket,
 } from "./types";
@@ -50,6 +51,9 @@ const MAX_STRING_LENGTH = 2000;
 const TRUNCATION_MARKER = " [truncated]";
 const ONE_SECOND_MS = 1000;
 const SERVER_DISTINCT_ID = "server";
+const ERROR_CAUSE_MAX_DEPTH = 3;
+const RESOURCE_EXHAUSTED_CODE = "RESOURCE_EXHAUSTED";
+const GEMINI_FREE_TIER_QUOTA_MARKER = "FreeTier";
 const isLocalPostHogDebugEnabled = (): boolean =>
   env.isDev && env.POSTHOG_LOCAL_DEBUG;
 
@@ -152,12 +156,102 @@ const getErrorStatusCode = (error: unknown): number | undefined => {
   return undefined;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const getErrorCause = (error: unknown): unknown => {
+  if (!isRecord(error)) {
+    return undefined;
+  }
+
+  return error["cause"];
+};
+
+const findInErrorCauseChain = <T>(
+  error: unknown,
+  match: (candidate: unknown) => T | undefined,
+): T | undefined => {
+  let candidate = error;
+  let remainingCauseDepth = ERROR_CAUSE_MAX_DEPTH;
+  const seen = new WeakSet<object>();
+
+  while (candidate !== undefined) {
+    if (isRecord(candidate)) {
+      if (seen.has(candidate)) {
+        return undefined;
+      }
+      seen.add(candidate);
+    }
+
+    const result = match(candidate);
+    if (result !== undefined) {
+      return result;
+    }
+
+    if (remainingCauseDepth === 0) {
+      return undefined;
+    }
+
+    candidate = getErrorCause(candidate);
+    remainingCauseDepth -= 1;
+  }
+
+  return undefined;
+};
+
+const sanitizeProviderMessage = (message: string, maxLength: number): string =>
+  String(sanitizeForAIAnalytics(message.trim())).slice(0, maxLength);
+
+const getResponseBodyText = (error: unknown): string | undefined => {
+  if (!isRecord(error) || !("responseBody" in error)) {
+    return undefined;
+  }
+
+  const responseBody = error["responseBody"];
+  if (typeof responseBody === "string") {
+    return responseBody;
+  }
+
+  if (responseBody === undefined) {
+    return undefined;
+  }
+
+  const serialized = JSON.stringify(responseBody);
+  return serialized;
+};
+
+const isGeminiFreeTierQuotaError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : "";
+  if (
+    message.includes(RESOURCE_EXHAUSTED_CODE) &&
+    message.includes(GEMINI_FREE_TIER_QUOTA_MARKER)
+  ) {
+    return true;
+  }
+
+  return (
+    getErrorStatusCode(error) === 429 &&
+    (getResponseBodyText(error)?.includes(RESOURCE_EXHAUSTED_CODE) ?? false)
+  );
+};
+
+const isBYOKGeminiQuotaError = (
+  error: unknown,
+  modelKeySource: ModelKeySource | undefined,
+): boolean =>
+  modelKeySource === "byok" &&
+  findInErrorCauseChain(error, (candidate) =>
+    isGeminiFreeTierQuotaError(candidate) ? true : undefined,
+  ) === true;
+
 // Provider error messages we feel safe surfacing as raw text.
 // Google Generative AI and most other AI gateways return errors
 // prefixed with an UPPER_SNAKE_CASE code (PERMISSION_DENIED,
 // RESOURCE_EXHAUSTED, INVALID_ARGUMENT, ...). Anything else may
 // echo request bodies, prompt fragments, or file names, so we
 // drop the message text and only keep the bucketed reason.
+// Wrapped provider errors are common, so we look for that enum-style
+// code in the cause chain without broadening the allowlist.
 const SAFE_PROVIDER_MESSAGE_PATTERN = /^[A-Z][A-Z_]+(:|\s)/;
 
 type ClassifiedErrorMessage =
@@ -168,20 +262,64 @@ const classifyErrorMessage = (
   error: unknown,
   maxLength: number,
 ): ClassifiedErrorMessage | undefined => {
-  if (!(error instanceof Error) || !error.message) {
+  if (!(error instanceof Error)) {
     return undefined;
   }
+
   const trimmed = error.message.trim();
-  if (!SAFE_PROVIDER_MESSAGE_PATTERN.test(trimmed)) {
-    return { kind: "non_standard" };
+  if (SAFE_PROVIDER_MESSAGE_PATTERN.test(trimmed)) {
+    return {
+      kind: "safe",
+      message: sanitizeProviderMessage(trimmed, maxLength),
+    };
   }
-  return {
-    kind: "safe",
-    message: String(sanitizeForAIAnalytics(trimmed)).slice(0, maxLength),
-  };
+
+  let safeCauseMessage: string | undefined;
+  let candidate = getErrorCause(error);
+  let remainingCauseDepth = ERROR_CAUSE_MAX_DEPTH;
+  const seen = new WeakSet<object>();
+  seen.add(error);
+
+  while (candidate !== undefined && remainingCauseDepth > 0) {
+    if (isRecord(candidate)) {
+      if (seen.has(candidate)) {
+        break;
+      }
+      seen.add(candidate);
+    }
+
+    if (candidate instanceof Error) {
+      const causeMessage = candidate.message.trim();
+      if (SAFE_PROVIDER_MESSAGE_PATTERN.test(causeMessage)) {
+        safeCauseMessage = causeMessage;
+      }
+    }
+
+    candidate = getErrorCause(candidate);
+    remainingCauseDepth -= 1;
+  }
+
+  if (safeCauseMessage) {
+    return {
+      kind: "safe",
+      message: sanitizeProviderMessage(safeCauseMessage, maxLength),
+    };
+  }
+
+  return { kind: "non_standard" };
 };
 
-const classifyFailureReason = (error: unknown): AIFailureReason => {
+const getErrorStatusCodeFromChain = (error: unknown): number | undefined =>
+  findInErrorCauseChain(error, getErrorStatusCode);
+
+const classifyFailureReason = (
+  error: unknown,
+  modelKeySource?: ModelKeySource,
+): AIFailureReason => {
+  if (isBYOKGeminiQuotaError(error, modelKeySource)) {
+    return "byok_quota";
+  }
+
   const tag = errorTag(error);
   if (tag.includes("Validation")) {
     return "validation";
@@ -193,7 +331,7 @@ const classifyFailureReason = (error: unknown): AIFailureReason => {
     return "timeout";
   }
 
-  const statusCode = getErrorStatusCode(error);
+  const statusCode = getErrorStatusCodeFromChain(error);
   if (statusCode === 401 || statusCode === 403) {
     return "auth";
   }
@@ -530,12 +668,14 @@ export const createAIAnalyticsCallbacks = ({
 
     hasCapturedGenerationError = true;
     const activeStep = [...stepState.values()].at(-1);
+    const modelKeySource = resolvedModelInfo?.keySource;
+    const failureReason = classifyFailureReason(error, modelKeySource);
 
     const cwMessage = classifyErrorMessage(error, 256);
     logger.error("ai.generation.failed", {
       "error.type": errorTag(error),
       "ai.feature": config.feature,
-      "ai.failure_reason": classifyFailureReason(error),
+      "ai.failure_reason": failureReason,
       ...(resolvedModelInfo?.provider
         ? { "ai.provider": resolvedModelInfo.provider }
         : {}),
@@ -558,7 +698,7 @@ export const createAIAnalyticsCallbacks = ({
           ...(phMessage?.kind === "safe"
             ? { error_message: phMessage.message }
             : { error_message_kind: "non_standard" }),
-          failure_reason: classifyFailureReason(error),
+          failure_reason: failureReason,
           feature: config.feature,
           ...(activeStep
             ? {

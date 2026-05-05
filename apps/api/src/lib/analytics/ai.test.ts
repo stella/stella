@@ -5,6 +5,8 @@ import type {
 } from "ai";
 import { describe, expect, test } from "bun:test";
 
+import type { OrgAIConfig } from "@/api/lib/ai-models";
+
 import { SERVER_ANALYTICS_EVENTS } from "./types";
 import type { Analytics } from "./types";
 
@@ -18,6 +20,57 @@ process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
 
 const loadAIAnalytics = async () => await import("./ai");
+
+const setErrorCause = (error: Error, cause: unknown): Error => {
+  Object.defineProperty(error, "cause", {
+    configurable: true,
+    value: cause,
+  });
+  return error;
+};
+
+const createErrorWithCause = (message: string, cause: unknown): Error =>
+  setErrorCause(new Error(message), cause);
+
+type TransportErrorOptions = {
+  cause?: unknown;
+  message: string;
+  responseBody?: unknown;
+  statusCode?: number;
+};
+
+const createTransportError = ({
+  cause,
+  message,
+  responseBody,
+  statusCode,
+}: TransportErrorOptions): Error => {
+  const error = Object.assign(new Error(message), {
+    ...(responseBody === undefined ? {} : { responseBody }),
+    ...(statusCode === undefined ? {} : { statusCode }),
+  });
+
+  if (cause !== undefined) {
+    setErrorCause(error, cause);
+  }
+
+  return error;
+};
+
+const createGoogleOrgAIConfig = (): OrgAIConfig => ({
+  providers: [
+    {
+      apiKey: "org-google-secret",
+      provider: "google",
+    },
+  ],
+  overrideModels: {
+    chat: { provider: "google", modelId: "gemini-2.5-flash" },
+    fast: { provider: "google", modelId: "gemini-2.5-flash" },
+    reasoning: { provider: "google", modelId: "gemini-2.5-pro" },
+    pdf: { provider: "google", modelId: "gemini-2.5-flash" },
+  },
+});
 
 describe("sanitizeForAIAnalytics", () => {
   test("replaces binary payloads with summaries", async () => {
@@ -428,6 +481,273 @@ describe("createAIAnalyticsCallbacks", () => {
     });
     expect(JSON.stringify(event.properties)).not.toContain("secret client");
     expect(JSON.stringify(event.properties)).not.toContain("trace_should_not");
+  });
+
+  test("captures safe provider messages from wrapped causes", async () => {
+    const aiAnalyticsModule = await loadAIAnalytics();
+
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => void 0,
+    };
+
+    const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
+      analytics,
+      feature: "analysis.basic",
+      traceId: "trace_wrapped_message",
+    });
+
+    callbacks.captureError(
+      createErrorWithCause(
+        "Failed after 3 attempts. Last error: quota failed",
+        new Error("RESOURCE_EXHAUSTED: Quota exceeded for metric: requests"),
+      ),
+    );
+
+    const event = events.at(0);
+    expect(event?.event).toBe(SERVER_ANALYTICS_EVENTS.aiGenerationFailed);
+    if (event?.event !== SERVER_ANALYTICS_EVENTS.aiGenerationFailed) {
+      throw new Error("Expected aggregate AI failure event");
+    }
+    expect(event.properties.error_message).toStartWith("RESOURCE_EXHAUSTED");
+    expect(event.properties).not.toHaveProperty("error_message_kind");
+  });
+
+  test("captures the deepest safe provider message within three cause levels", async () => {
+    const aiAnalyticsModule = await loadAIAnalytics();
+
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => void 0,
+    };
+
+    const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
+      analytics,
+      feature: "analysis.basic",
+      traceId: "trace_deep_message",
+    });
+
+    const fourthCause = new Error("UNAUTHENTICATED: outside search depth");
+    const thirdCause = createErrorWithCause(
+      "INVALID_ARGUMENT: deepest captured message",
+      fourthCause,
+    );
+    const secondCause = createErrorWithCause(
+      "RESOURCE_EXHAUSTED: shallower captured message",
+      thirdCause,
+    );
+    const firstCause = createErrorWithCause(
+      "PERMISSION_DENIED: shallow captured message",
+      secondCause,
+    );
+
+    callbacks.captureError(
+      createErrorWithCause("Failed after 3 attempts", firstCause),
+    );
+
+    const event = events.at(0);
+    expect(event?.event).toBe(SERVER_ANALYTICS_EVENTS.aiGenerationFailed);
+    if (event?.event !== SERVER_ANALYTICS_EVENTS.aiGenerationFailed) {
+      throw new Error("Expected aggregate AI failure event");
+    }
+    expect(event.properties.error_message).toBe(
+      "INVALID_ARGUMENT: deepest captured message",
+    );
+  });
+
+  test("ignores safe provider messages beyond three cause levels", async () => {
+    const aiAnalyticsModule = await loadAIAnalytics();
+
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => void 0,
+    };
+
+    const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
+      analytics,
+      feature: "analysis.basic",
+      traceId: "trace_too_deep_message",
+    });
+
+    const fourthCause = new Error("RESOURCE_EXHAUSTED: outside search depth");
+    const thirdCause = createErrorWithCause("wrapped", fourthCause);
+    const secondCause = createErrorWithCause("wrapped", thirdCause);
+    const firstCause = createErrorWithCause("wrapped", secondCause);
+
+    callbacks.captureError(
+      createErrorWithCause("Failed after 3 attempts", firstCause),
+    );
+
+    const event = events.at(0);
+    expect(event?.event).toBe(SERVER_ANALYTICS_EVENTS.aiGenerationFailed);
+    if (event?.event !== SERVER_ANALYTICS_EVENTS.aiGenerationFailed) {
+      throw new Error("Expected aggregate AI failure event");
+    }
+    expect(event.properties.error_message_kind).toBe("non_standard");
+    expect(event.properties).not.toHaveProperty("error_message");
+  });
+
+  test("terminates provider message classification on cause cycles", async () => {
+    const aiAnalyticsModule = await loadAIAnalytics();
+
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => void 0,
+    };
+
+    const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
+      analytics,
+      feature: "analysis.basic",
+      traceId: "trace_cycle_message",
+    });
+
+    const cyclicError = new Error("Failed after 3 attempts");
+    setErrorCause(cyclicError, cyclicError);
+    callbacks.captureError(cyclicError);
+
+    const event = events.at(0);
+    expect(event?.event).toBe(SERVER_ANALYTICS_EVENTS.aiGenerationFailed);
+    if (event?.event !== SERVER_ANALYTICS_EVENTS.aiGenerationFailed) {
+      throw new Error("Expected aggregate AI failure event");
+    }
+    expect(event.properties.error_message_kind).toBe("non_standard");
+    expect(event.properties).not.toHaveProperty("error_message");
+  });
+
+  test("classifies wrapped Gemini BYOK quota exhaustion separately", async () => {
+    const aiAnalyticsModule = await loadAIAnalytics();
+
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => void 0,
+    };
+
+    const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
+      analytics,
+      feature: "analysis.basic",
+      modelRole: "fast",
+      orgAIConfig: createGoogleOrgAIConfig(),
+      traceId: "trace_byok_quota",
+    });
+
+    callbacks.captureError(
+      createErrorWithCause(
+        "Failed after 3 attempts. Last error: quota failed",
+        createTransportError({
+          message:
+            "Quota exceeded for quota metric 'Generate requests per day per project per model'",
+          responseBody:
+            '{"error":{"code":429,"status":"RESOURCE_EXHAUSTED","details":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}}',
+          statusCode: 429,
+        }),
+      ),
+    );
+
+    const event = events.at(0);
+    expect(event?.event).toBe(SERVER_ANALYTICS_EVENTS.aiGenerationFailed);
+    if (event?.event !== SERVER_ANALYTICS_EVENTS.aiGenerationFailed) {
+      throw new Error("Expected aggregate AI failure event");
+    }
+    expect(event.properties.failure_reason).toBe("byok_quota");
+  });
+
+  test("keeps platform Gemini quota exhaustion classified as rate limit", async () => {
+    const aiAnalyticsModule = await loadAIAnalytics();
+
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => void 0,
+    };
+
+    const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
+      analytics,
+      feature: "analysis.basic",
+      modelRole: "fast",
+      traceId: "trace_platform_quota",
+    });
+
+    callbacks.captureError(
+      createErrorWithCause(
+        "Failed after 3 attempts. Last error: quota failed",
+        createTransportError({
+          message:
+            "Quota exceeded for quota metric 'Generate requests per day per project per model'",
+          responseBody:
+            '{"error":{"code":429,"status":"RESOURCE_EXHAUSTED","details":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}}',
+          statusCode: 429,
+        }),
+      ),
+    );
+
+    const event = events.at(0);
+    expect(event?.event).toBe(SERVER_ANALYTICS_EVENTS.aiGenerationFailed);
+    if (event?.event !== SERVER_ANALYTICS_EVENTS.aiGenerationFailed) {
+      throw new Error("Expected aggregate AI failure event");
+    }
+    expect(event.properties.failure_reason).toBe("rate_limit");
+  });
+
+  test("keeps non-quota 429 failures classified as rate limit", async () => {
+    const aiAnalyticsModule = await loadAIAnalytics();
+
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => void 0,
+    };
+
+    const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
+      analytics,
+      feature: "analysis.basic",
+      modelRole: "fast",
+      orgAIConfig: createGoogleOrgAIConfig(),
+      traceId: "trace_non_quota_429",
+    });
+
+    callbacks.captureError(
+      createErrorWithCause(
+        "Failed after 3 attempts. Last error: rate limit",
+        createTransportError({
+          message: "Too many requests",
+          responseBody: '{"error":{"code":429,"status":"RATE_LIMITED"}}',
+          statusCode: 429,
+        }),
+      ),
+    );
+
+    const event = events.at(0);
+    expect(event?.event).toBe(SERVER_ANALYTICS_EVENTS.aiGenerationFailed);
+    if (event?.event !== SERVER_ANALYTICS_EVENTS.aiGenerationFailed) {
+      throw new Error("Expected aggregate AI failure event");
+    }
+    expect(event.properties.failure_reason).toBe("rate_limit");
   });
 
   test("classifies AI SDK statusCode transport failures", async () => {
