@@ -2,7 +2,7 @@
  * FormattingBar — clean, minimal toolbar for legal document editing.
  *
  * Controls (left to right):
- * Undo Redo | Style ▾ | B I U | A▾ 🔗 | ≡▾ 1. • ◁ ▷
+ * Undo Redo | Style ▾ | B I U | A▾ | ≡▾ 1. • ◁ ▷
  *
  * Everything else (font, size, strikethrough, highlight, comments,
  * editing mode) is accessible via keyboard shortcuts or host app chrome.
@@ -264,10 +264,6 @@ export function FormattingBar(props: FormattingBarProps) {
         case "u":
           claimShortcut(event);
           handleFormat("underline");
-          break;
-        case "k":
-          claimShortcut(event);
-          handleFormat("insertLink");
           break;
         case "d":
           claimShortcut(event);
