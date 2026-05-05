@@ -405,11 +405,7 @@ jobs:
   promote:
     # Auto-promote stable releases (vX.Y.Z) to production. Any tag
     # carrying a prerelease label (vX.Y.Z-anything) publishes the
-    # artifact and stops here, so the flow can be exercised end-to-
-    # end without deploying. The check is intentionally an allow-list
-    # ("no hyphen") rather than a deny-list against `-rc.`, so future
-    # prerelease conventions (-rc1, -beta.N, -alpha) cannot reach
-    # production by accident if the upstream validation regex changes.
+    # artifact and is handled by `promote-staging` below.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [resolve, manifest, smoke]
@@ -430,13 +426,18 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          TARGET_ENV: production
           INFRA_REPO: ${{ github.repository_owner }}/stella-infra
         run: |
           dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # Must match the `run-name:` template in
+          # stella-infra/.github/workflows/promote-release.yml
+          expected_title="Promote ${RELEASE_REF} → ${TARGET_ENV}"
           dispatch_output="$(
             gh workflow run promote-release.yml \
               --repo "$INFRA_REPO" \
               --field release_ref="$RELEASE_REF" \
+              --field target_environment="$TARGET_ENV" \
               --field run_migrations=true \
               --field frontend=true 2>&1
           )"
@@ -453,13 +454,100 @@ jobs:
               break
             fi
 
+            # Match by exact displayTitle so concurrent dispatches
+            # cannot be confused, and prefix-overlapping refs
+            # (v1.2.3 vs v1.2.3-rc.1, v1.2.3-rc.1 vs v1.2.3-rc.10)
+            # never collide.
             run_id="$(
               gh run list \
                 --repo "$INFRA_REPO" \
                 --workflow promote-release.yml \
                 --event workflow_dispatch \
-                --json databaseId,createdAt \
-                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | .databaseId" \
+                --json databaseId,createdAt,displayTitle \
+                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle == \"$expected_title\") | .databaseId" \
+                --limit 10 \
+                | head -n 1
+            )"
+
+            if [[ -z "$run_id" ]]; then
+              sleep 2
+            fi
+          done
+
+          if [[ -z "$run_id" ]]; then
+            echo "Could not find the dispatched promotion workflow run." >&2
+            exit 1
+          fi
+
+          gh run watch "$run_id" \
+            --repo "$INFRA_REPO" \
+            --compact \
+            --exit-status
+
+  promote-staging:
+    # Auto-promote release-candidate tags (vX.Y.Z-rc.N) to staging.
+    # Same dispatch pattern as `promote` above; the infra workflow
+    # reads target_environment to resolve the staging-scoped vars
+    # and apply role.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [resolve, manifest, smoke]
+    if: ${{ contains(needs.resolve.outputs.release_ref, '-rc.') }}
+    permissions:
+      contents: read
+    steps:
+      - name: Mint App token for the infra repo
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.STELLA_RELEASE_APP_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: stella-infra
+
+      - name: Dispatch and watch promote-release.yml (staging)
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          TARGET_ENV: staging
+          INFRA_REPO: ${{ github.repository_owner }}/stella-infra
+        run: |
+          dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # Must match the `run-name:` template in
+          # stella-infra/.github/workflows/promote-release.yml
+          expected_title="Promote ${RELEASE_REF} → ${TARGET_ENV}"
+          dispatch_output="$(
+            gh workflow run promote-release.yml \
+              --repo "$INFRA_REPO" \
+              --field release_ref="$RELEASE_REF" \
+              --field target_environment="$TARGET_ENV" \
+              --field run_migrations=true \
+              --field frontend=true 2>&1
+          )"
+          printf '%s\n' "$dispatch_output"
+
+          run_id="$(
+            printf '%s\n' "$dispatch_output" \
+              | sed -nE 's#.*https://github.com/[^/]+/[^/]+/actions/runs/([0-9]+).*#\1#p' \
+              | head -n 1
+          )"
+
+          for _ in {1..30}; do
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+
+            # Match by exact displayTitle so concurrent dispatches
+            # cannot be confused, and prefix-overlapping refs
+            # (v1.2.3 vs v1.2.3-rc.1, v1.2.3-rc.1 vs v1.2.3-rc.10)
+            # never collide.
+            run_id="$(
+              gh run list \
+                --repo "$INFRA_REPO" \
+                --workflow promote-release.yml \
+                --event workflow_dispatch \
+                --json databaseId,createdAt,displayTitle \
+                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle == \"$expected_title\") | .databaseId" \
                 --limit 10 \
                 | head -n 1
             )"
