@@ -51,7 +51,6 @@ import {
 import { useTranslations } from "use-intl";
 
 import { UserIdentity } from "@/components/user-avatar";
-import { usePermissions } from "@/hooks/use-permissions";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
 import { useAddWorkspaceMember } from "@/routes/_protected.workspaces/$workspaceId/-mutations/workspace-members";
@@ -64,10 +63,7 @@ import {
   useUnarchiveWorkspace,
   useUpdateWorkspace,
 } from "@/routes/_protected.workspaces/-mutations";
-import {
-  workspacesKeys,
-  workspacesOptions,
-} from "@/routes/_protected.workspaces/-queries";
+import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
 // ── Shared menu items ────────────────────────────────────────
@@ -169,6 +165,7 @@ export type RenameState =
 type MatterContextMenuProps = {
   workspaceId: string;
   workspaceName: string;
+  canCreateMatter?: boolean | undefined;
   isArchived?: boolean;
   isPersonal: boolean;
   children: React.ReactNode | ((rename: RenameState) => React.ReactNode);
@@ -177,6 +174,7 @@ type MatterContextMenuProps = {
 export const MatterContextMenu = ({
   workspaceId,
   workspaceName,
+  canCreateMatter = false,
   isArchived = false,
   isPersonal,
   children,
@@ -184,14 +182,12 @@ export const MatterContextMenu = ({
   const t = useTranslations();
   const { togglePin, isPinned } = usePinnedStore();
   const pinned = isPinned(workspaceId);
-  const canCreateMatter = usePermissions({ workspace: ["create"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
 
   const queryClient = useQueryClient();
   const updateWorkspace = useUpdateWorkspace();
   const unarchiveWorkspace = useUnarchiveWorkspace();
   const deleteWorkspace = useDeleteWorkspace();
-  const { data: workspacesData } = useQuery(workspacesOptions);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<{
@@ -289,12 +285,7 @@ export const MatterContextMenu = ({
   const matterMenuCallbacks = {
     isPersonal,
     isPinned: pinned,
-    onCreateMatter:
-      canCreateMatter &&
-      workspacesData &&
-      workspacesData.workspaces.length < workspacesData.workspacesCountLimit
-        ? () => openCreateMatter()
-        : undefined,
+    onCreateMatter: canCreateMatter ? () => openCreateMatter() : undefined,
     onAddMember: () => setAddMemberOpen(true),
     onCopyLink: () => {
       void handleCopyLink();

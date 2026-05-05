@@ -142,6 +142,7 @@ function RouteComponent() {
               </div>
             ) : (
               <MattersContentView
+                canCreateMatter={canOpenCreateMatter}
                 displayed={displayed}
                 focusIndex={focusIndex}
                 groups={groups}
@@ -185,6 +186,9 @@ const MattersPageContextMenu = ({
     <div
       className="contents"
       onContextMenu={(event) => {
+        if (event.defaultPrevented) {
+          return;
+        }
         event.preventDefault();
         const x = event.clientX;
         const y = event.clientY;
@@ -220,12 +224,14 @@ const MattersPageContextMenu = ({
 };
 
 type MattersContentViewProps = {
+  canCreateMatter: boolean;
   displayed: Workspace[];
   groups: WorkspaceGroup[] | null;
   focusIndex: number;
 };
 
 const MattersContentView = ({
+  canCreateMatter,
   displayed,
   groups,
   focusIndex,
@@ -264,6 +270,7 @@ const MattersContentView = ({
                 {!collapsed &&
                   group.workspaces.map((workspace, i) => (
                     <MatterCard
+                      canCreateMatter={canCreateMatter}
                       focused={focusIndex === baseIndex + i}
                       hideClientName
                       key={workspace.id}
@@ -278,6 +285,7 @@ const MattersContentView = ({
         <div className="grid auto-rows-min gap-3 md:grid-cols-3" ref={gridRef}>
           {displayed.map((workspace, i) => (
             <MatterCard
+              canCreateMatter={canCreateMatter}
               focused={focusIndex === i}
               key={workspace.id}
               workspace={workspace}
