@@ -7,6 +7,7 @@ import { panic } from "better-result";
 import { env } from "@/api/env";
 import type { SupportedLang } from "@/api/lib/locale";
 
+import { formatTransactionalEmailFrom } from "./from";
 import { createSESTransport } from "./ses";
 import { createSMTPTransport } from "./smtp";
 import type { EmailTransport } from "./transport";
@@ -56,6 +57,9 @@ const getTransport = (): EmailTransport => {
   return cachedTransport;
 };
 
+const getTransactionalEmailFrom = () =>
+  formatTransactionalEmailFrom(env.TRANSACTIONAL_EMAIL_FROM);
+
 type SendOTPEmailProps = {
   email: string;
   otp: string;
@@ -76,7 +80,7 @@ export const sendOTPEmail = async ({
   ]);
 
   await getTransport().send({
-    from: env.TRANSACTIONAL_EMAIL_FROM,
+    from: getTransactionalEmailFrom(),
     to: email,
     subject: BetterAuthOTP.subject(lang),
     html,
@@ -116,7 +120,7 @@ export const sendNewDeviceLoginEmail = async ({
   ]);
 
   await getTransport().send({
-    from: env.TRANSACTIONAL_EMAIL_FROM,
+    from: getTransactionalEmailFrom(),
     to: email,
     subject: NewDeviceLogin.subject(lang),
     html,
@@ -153,7 +157,7 @@ export const sendOrganizationInvitation = async ({
   ]);
 
   await getTransport().send({
-    from: env.TRANSACTIONAL_EMAIL_FROM,
+    from: getTransactionalEmailFrom(),
     to: email,
     subject: OrganizationInvitation.subject(lang, {
       organizationName,
