@@ -1,6 +1,7 @@
+import type { ReactNode } from "react";
+
 import { Result } from "better-result";
 import { SquareMinusIcon } from "lucide-react";
-import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "use-intl";
 
 import Tooltip from "@/components/tooltip";
@@ -244,7 +245,7 @@ type IntCellProps = {
 };
 
 const IntCellContainer = ({ children }: { children: ReactNode }) => (
-  <div className="min-w-0 max-w-full truncate tabular-nums text-start">
+  <div className="max-w-full min-w-0 truncate text-start tabular-nums">
     {children}
   </div>
 );

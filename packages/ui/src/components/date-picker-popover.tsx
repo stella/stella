@@ -395,7 +395,7 @@ function DatePickerPopover({
           <button
             aria-label={value ? displayLabel : undefined}
             className={cn(
-              "flex min-h-7 h-auto w-full min-w-0 items-center gap-1.5",
+              "flex h-auto min-h-7 w-full min-w-0 items-center gap-1.5",
               "rounded-md px-1.5 text-sm",
               "hover:bg-muted transition-colors",
               isOverdue
@@ -409,7 +409,7 @@ function DatePickerPopover({
         }
       >
         <CalendarIcon className="size-3.5 shrink-0" />
-        <span className="min-w-0 flex-1 text-start wrap-break-word overflow-hidden text-ellipsis">
+        <span className="min-w-0 flex-1 overflow-hidden text-start wrap-break-word text-ellipsis">
           {displayLabel}
         </span>
         {isOverdue && overdueLabel && (
