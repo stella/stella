@@ -261,12 +261,26 @@ const logAndCaptureSafeError = ({
   if (error instanceof Error) {
     attributes["error.message"] = error.message.slice(0, 512);
     if (error.stack) {
-      const firstFrame = error.stack
-        .split("\n")
-        .find((line) => line.trim().startsWith("at "));
-      if (firstFrame) {
-        attributes["error.frame"] = firstFrame.trim().slice(0, 256);
+      attributes["error.stack"] = error.stack.slice(0, 4096);
+    }
+    // Walk up to three levels of `.cause` so nested wrappers
+    // (generator-result re-throws, AI SDK over fetch errors,
+    // etc.) don't hide the underlying failure. Three is a
+    // pragmatic cap: deeper chains in our stack are rare,
+    // and the line-size budget already gets spent on stacks.
+    const seen = new WeakSet<object>([error]);
+    let cause: unknown = (error as { cause?: unknown }).cause;
+    let depth = 1;
+    while (cause instanceof Error && depth <= 3 && !seen.has(cause)) {
+      seen.add(cause);
+      const prefix = depth === 1 ? "error.cause" : `error.cause${depth}`;
+      attributes[`${prefix}.type`] = errorTag(cause);
+      attributes[`${prefix}.message`] = cause.message.slice(0, 512);
+      if (cause.stack) {
+        attributes[`${prefix}.stack`] = cause.stack.slice(0, 4096);
       }
+      cause = (cause as { cause?: unknown }).cause;
+      depth++;
     }
   }
 
