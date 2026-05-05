@@ -6,6 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -27,7 +28,13 @@ export const useCreateBBoxes = ({
 }: UseCreateBBoxesProps) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const { data: aiAvailability } = useQuery(aiAvailabilityOptions);
+  const activeOrganizationId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data: aiAvailability } = useQuery(
+    aiAvailabilityOptions({ organizationId: activeOrganizationId }),
+  );
   const pendingMutationsCount = useIsMutating({
     mutationKey: [CREATE_BBOXES_MUTATION_KEY],
   });

@@ -134,7 +134,7 @@ export const OnboardingWizard = () => {
       }
 
       // From here the org already exists; if anything fails
-      // the safest recovery is to navigate to /workspaces.
+      // the safest recovery is to navigate to the main chat.
       try {
         // Refresh session so the app recognizes the new org
         await invalidateSession.mutateAsync();
@@ -174,10 +174,24 @@ export const OnboardingWizard = () => {
               type: "warning",
             });
           } else {
+            queryClient.setQueryData(
+              aiConfigKeys.availability({ organizationId: orgData.id }),
+              {
+                available: true,
+                instanceProvisioned: false,
+                orgConfigured: true,
+              },
+            );
             await Promise.all([
-              queryClient.invalidateQueries({ queryKey: aiConfigKeys.all }),
               queryClient.invalidateQueries({
-                queryKey: aiConfigKeys.availability,
+                queryKey: aiConfigKeys.byOrganization({
+                  organizationId: orgData.id,
+                }),
+              }),
+              queryClient.invalidateQueries({
+                queryKey: aiConfigKeys.availability({
+                  organizationId: orgData.id,
+                }),
               }),
             ]);
           }
@@ -232,7 +246,7 @@ export const OnboardingWizard = () => {
       }
 
       await navigate({
-        to: "/workspaces",
+        to: "/chat",
         replace: true,
       });
     },

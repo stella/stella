@@ -4,6 +4,7 @@ import { Button } from "@stll/ui/components/button";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
 import { stellaToast } from "@stll/ui/components/toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
 import { Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -41,7 +42,13 @@ export const AIConfigCard = () => {
   const tErrors = useTranslations("errors");
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const { data: config } = useQuery(aiConfigOptions);
+  const activeOrganizationId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data: config } = useQuery(
+    aiConfigOptions({ organizationId: activeOrganizationId }),
+  );
 
   const initialProviders =
     config?.configured && config.providers.length > 0
@@ -126,12 +133,24 @@ export const AIConfigCard = () => {
     },
     onSuccess: async (data) => {
       setProviders(providerDraftsFromStoredProviders(data.providers));
+      queryClient.setQueryData(
+        aiConfigKeys.availability({ organizationId: activeOrganizationId }),
+        {
+          available: true,
+          instanceProvisioned: config?.instanceProvisioned ?? false,
+          orgConfigured: true,
+        },
+      );
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: aiConfigKeys.all,
+          queryKey: aiConfigKeys.byOrganization({
+            organizationId: activeOrganizationId,
+          }),
         }),
         queryClient.invalidateQueries({
-          queryKey: aiConfigKeys.availability,
+          queryKey: aiConfigKeys.availability({
+            organizationId: activeOrganizationId,
+          }),
         }),
       ]);
       stellaToast.add({
@@ -161,12 +180,24 @@ export const AIConfigCard = () => {
       const nextProviders = [createProviderCredentialDraft()];
       setProviders(nextProviders);
       setRoleModels(createDefaultRoleModels(getProviderValues(nextProviders)));
+      queryClient.setQueryData(
+        aiConfigKeys.availability({ organizationId: activeOrganizationId }),
+        {
+          available: config?.instanceProvisioned ?? false,
+          instanceProvisioned: config?.instanceProvisioned ?? false,
+          orgConfigured: false,
+        },
+      );
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: aiConfigKeys.all,
+          queryKey: aiConfigKeys.byOrganization({
+            organizationId: activeOrganizationId,
+          }),
         }),
         queryClient.invalidateQueries({
-          queryKey: aiConfigKeys.availability,
+          queryKey: aiConfigKeys.availability({
+            organizationId: activeOrganizationId,
+          }),
         }),
       ]);
       stellaToast.add({

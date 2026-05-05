@@ -20,7 +20,7 @@ import {
 } from "@stll/ui/components/dialog";
 import { stellaToast } from "@stll/ui/components/toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor";
@@ -63,7 +63,15 @@ const AIAvailabilityContext = createContext<AIAvailabilityContextValue | null>(
 export function AIAvailabilityProvider({ children }: PropsWithChildren) {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
-  const { data } = useQuery(aiAvailabilityOptions);
+  const activeOrganizationId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const availabilityOptions = useMemo(
+    () => aiAvailabilityOptions({ organizationId: activeOrganizationId }),
+    [activeOrganizationId],
+  );
+  const { data, isFetching } = useQuery(availabilityOptions);
 
   const openAIKeyDialog = useCallback(() => {
     setOpen(true);
@@ -71,7 +79,7 @@ export function AIAvailabilityProvider({ children }: PropsWithChildren) {
 
   const ensureAIAvailable = useCallback(async () => {
     const availability = await queryClient
-      .ensureQueryData(aiAvailabilityOptions)
+      .fetchQuery(availabilityOptions)
       .catch(() => undefined);
 
     if (availability?.available) {
@@ -80,13 +88,19 @@ export function AIAvailabilityProvider({ children }: PropsWithChildren) {
 
     setOpen(true);
     return false;
-  }, [queryClient]);
+  }, [availabilityOptions, queryClient]);
 
   const openIfAIUnavailable = useCallback(() => {
-    if (data && !data.available) {
+    if (data && !data.available && !isFetching) {
       setOpen(true);
     }
-  }, [data]);
+  }, [data, isFetching]);
+
+  useEffect(() => {
+    if (data?.available) {
+      setOpen(false);
+    }
+  }, [data?.available]);
 
   const value = useMemo(
     () => ({
@@ -120,7 +134,13 @@ export const useAIKeyGate = () => {
  * BYOK or the instance has provisioned keys.
  */
 export function useAIAvailable(): boolean {
-  const { data, isError } = useQuery(aiAvailabilityOptions);
+  const activeOrganizationId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data, isError } = useQuery(
+    aiAvailabilityOptions({ organizationId: activeOrganizationId }),
+  );
   if (isError || data === undefined) {
     return false;
   }
@@ -134,14 +154,20 @@ export function useAIAvailable(): boolean {
  */
 export function RequireAIKey({ children }: PropsWithChildren) {
   const t = useTranslations();
-  const { data, isPending, isError } = useQuery(aiAvailabilityOptions);
+  const activeOrganizationId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data, isFetching, isPending, isError } = useQuery(
+    aiAvailabilityOptions({ organizationId: activeOrganizationId }),
+  );
   const { openAIKeyDialog, openIfAIUnavailable } = useAIKeyGate();
 
   useEffect(() => {
     openIfAIUnavailable();
   }, [openIfAIUnavailable]);
 
-  if (isPending) {
+  if (isPending || (isFetching && data?.available === false)) {
     return null;
   }
 
@@ -190,7 +216,13 @@ export function AIKeyRequiredDialog({
   const tSuccess = useTranslations("success");
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const { data: config } = useQuery(aiConfigOptions);
+  const activeOrganizationId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data: config } = useQuery(
+    aiConfigOptions({ organizationId: activeOrganizationId }),
+  );
   const [providers, setProviders] = useState<ProviderCredentialDraft[]>(() => [
     createProviderCredentialDraft(),
   ]);
@@ -272,9 +304,25 @@ export function AIKeyRequiredDialog({
     },
     onSuccess: async (data) => {
       setProviders(providerDraftsFromStoredProviders(data.providers));
+      queryClient.setQueryData(
+        aiConfigKeys.availability({ organizationId: activeOrganizationId }),
+        {
+          available: true,
+          instanceProvisioned: config?.instanceProvisioned ?? false,
+          orgConfigured: true,
+        },
+      );
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: aiConfigKeys.all }),
-        queryClient.invalidateQueries({ queryKey: aiConfigKeys.availability }),
+        queryClient.invalidateQueries({
+          queryKey: aiConfigKeys.byOrganization({
+            organizationId: activeOrganizationId,
+          }),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: aiConfigKeys.availability({
+            organizationId: activeOrganizationId,
+          }),
+        }),
       ]);
       stellaToast.add({
         title: tSuccess("aiConfigUpdated"),
