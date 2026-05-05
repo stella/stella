@@ -152,6 +152,35 @@ const getErrorStatusCode = (error: unknown): number | undefined => {
   return undefined;
 };
 
+// Provider error messages we feel safe surfacing as raw text.
+// Google Generative AI and most other AI gateways return errors
+// prefixed with an UPPER_SNAKE_CASE code (PERMISSION_DENIED,
+// RESOURCE_EXHAUSTED, INVALID_ARGUMENT, ...). Anything else may
+// echo request bodies, prompt fragments, or file names, so we
+// drop the message text and only keep the bucketed reason.
+const SAFE_PROVIDER_MESSAGE_PATTERN = /^[A-Z][A-Z_]+(:|\s)/;
+
+type ClassifiedErrorMessage =
+  | { kind: "safe"; message: string }
+  | { kind: "non_standard" };
+
+const classifyErrorMessage = (
+  error: unknown,
+  maxLength: number,
+): ClassifiedErrorMessage | undefined => {
+  if (!(error instanceof Error) || !error.message) {
+    return undefined;
+  }
+  const trimmed = error.message.trim();
+  if (!SAFE_PROVIDER_MESSAGE_PATTERN.test(trimmed)) {
+    return { kind: "non_standard" };
+  }
+  return {
+    kind: "safe",
+    message: String(sanitizeForAIAnalytics(trimmed)).slice(0, maxLength),
+  };
+};
+
 const classifyFailureReason = (error: unknown): AIFailureReason => {
   const tag = errorTag(error);
   if (tag.includes("Validation")) {
@@ -502,10 +531,7 @@ export const createAIAnalyticsCallbacks = ({
     hasCapturedGenerationError = true;
     const activeStep = [...stepState.values()].at(-1);
 
-    const sanitizedMessage =
-      error instanceof Error && error.message
-        ? String(sanitizeForAIAnalytics(error.message)).slice(0, 256)
-        : undefined;
+    const cwMessage = classifyErrorMessage(error, 256);
     logger.error("ai.generation.failed", {
       "error.type": errorTag(error),
       "ai.feature": config.feature,
@@ -516,23 +542,22 @@ export const createAIAnalyticsCallbacks = ({
       ...(resolvedModelInfo?.modelId
         ? { "ai.model": resolvedModelInfo.modelId }
         : {}),
-      ...(sanitizedMessage ? { "error.message": sanitizedMessage } : {}),
+      ...(cwMessage?.kind === "safe"
+        ? { "error.message": cwMessage.message }
+        : { "error.message_kind": "non_standard" }),
     });
 
     if (!debugEnabled) {
+      const phMessage = classifyErrorMessage(error, 512);
       analytics.capture({
         distinctId,
         event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
         properties: {
           ...pickSafeMetadata(config.properties),
           error_type: errorTag(error),
-          ...(error instanceof Error && error.message
-            ? {
-                error_message: String(
-                  sanitizeForAIAnalytics(error.message),
-                ).slice(0, 512),
-              }
-            : {}),
+          ...(phMessage?.kind === "safe"
+            ? { error_message: phMessage.message }
+            : { error_message_kind: "non_standard" }),
           failure_reason: classifyFailureReason(error),
           feature: config.feature,
           ...(activeStep
