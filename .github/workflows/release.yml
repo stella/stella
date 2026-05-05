@@ -317,7 +317,7 @@ jobs:
     name: Assemble multi-arch manifest and GitHub release
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [resolve, build-arm64, build-amd64]
+    needs: [resolve, build-arm64, build-amd64, smoke]
     permissions:
       contents: write
       packages: write
