@@ -249,7 +249,7 @@ export function VersionsSidebar({
         </div>
       </ScrollArea>
 
-      {/* TODO */}
+      {/* TODO: Restore version comparison controls once the feature is finalized. */}
 
       {/* Footer row — mirrors the Metadata facet's "Extract
        *  entity type" trigger so both facets share one bottom-row

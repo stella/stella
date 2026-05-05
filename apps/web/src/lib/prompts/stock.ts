@@ -26,13 +26,7 @@ export const useStockPrompts = (): ChatPrompt[] => {
         name: t("chat.prompts.stock.findRisks.name"),
         body: t("chat.prompts.stock.findRisks.body"),
       },
-      // TODO
-      // {
-      //   id: "compare-versions",
-      //   scope: "stock",
-      //   name: t("chat.prompts.stock.compareVersions.name"),
-      //   body: t("chat.prompts.stock.compareVersions.body"),
-      // },
+      // TODO: Re-enable version comparison prompt once the feature is complete.
       {
         id: "draft-response",
         scope: "stock",
