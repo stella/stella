@@ -110,13 +110,13 @@ const parseReferenceCategory = (
   return null;
 };
 
-const toMentionHref = ({
-  category,
-  id,
-}: {
-  category: ChatMentionCategory;
-  id: string;
-}): ChatMentionHref => `${CHAT_MENTION_HREF_PREFIXES[category]}${id}`;
+const toMentionHref = (mention: ChatMention): ChatMentionHref => {
+  if (mention.category === "entity" && mention.workspaceId !== null) {
+    return `${CHAT_MENTION_HREF_PREFIXES.entity}${mention.workspaceId}:${mention.id}`;
+  }
+
+  return `${CHAT_MENTION_HREF_PREFIXES[mention.category]}${mention.id}`;
+};
 
 const toReferenceHref = ({
   category,
@@ -210,7 +210,7 @@ const replaceMentionsWithAnchors = (
 
     mentions.push(mention);
 
-    const href = toMentionHref({ category, id });
+    const href = toMentionHref(mention);
     const anchor = $("<a></a>").attr("href", href).text(label);
 
     $(node).replaceWith(anchor);

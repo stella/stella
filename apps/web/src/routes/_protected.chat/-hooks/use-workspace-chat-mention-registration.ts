@@ -23,8 +23,16 @@ type EntityMentionPage = {
   entities: WorkspaceEntity[];
 };
 
-const toEntityMentionOptions = (data: EntityMentionPage) =>
-  data.entities.map((entity) => buildEntityMentionOption({ entity }));
+const toEntityMentionOptions = ({
+  data,
+  workspaceId,
+}: {
+  data: EntityMentionPage;
+  workspaceId: string;
+}) =>
+  data.entities.map((entity) =>
+    buildEntityMentionOption({ entity, sourceWorkspaceId: workspaceId }),
+  );
 
 export const useWorkspaceChatMentionRegistration = (
   workspaceId: string,
@@ -67,9 +75,9 @@ export const useWorkspaceChatMentionRegistration = (
       }
       const data = await queryClient.fetchQuery(options);
 
-      return toEntityMentionOptions(data);
+      return toEntityMentionOptions({ data, workspaceId });
     },
-    [createSearchOptions, queryClient],
+    [createSearchOptions, queryClient, workspaceId],
   );
   const debouncedSearchEntities = useDebouncedCallback(
     async ({
@@ -117,7 +125,7 @@ export const useWorkspaceChatMentionRegistration = (
         options.queryKey,
       );
       if (cachedData) {
-        return toEntityMentionOptions(cachedData);
+        return toEntityMentionOptions({ data: cachedData, workspaceId });
       }
 
       return await new Promise<ChatMentionOption[]>((resolve) => {
@@ -125,7 +133,7 @@ export const useWorkspaceChatMentionRegistration = (
         void debouncedSearchEntities({ query, resolve });
       });
     },
-    [createSearchOptions, debouncedSearchEntities, queryClient],
+    [createSearchOptions, debouncedSearchEntities, queryClient, workspaceId],
   );
 
   useEffect(
