@@ -44,7 +44,6 @@ import {
   CalendarClockIcon,
   ClockIcon,
   FolderTreeIcon,
-  LayoutDashboardIcon,
   PlusIcon,
   SquareCheckIcon,
   UploadIcon,
@@ -52,6 +51,10 @@ import {
 import { useTranslations } from "use-intl";
 
 import { renderDragPreview } from "@/components/drag-preview";
+import {
+  EMPTY_SCREEN_MATTERS_VIDEO,
+  EmptyScreen,
+} from "@/components/empty-screen";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
@@ -61,7 +64,6 @@ import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type { EntityKind, WorkspaceEntity } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
-import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { AddMemberDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/members-section";
@@ -125,6 +127,7 @@ const getLocaleDayLabel = (dayIndex: number, locale: string) => {
 
 export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const t = useTranslations();
+  const tWorkspaces = useTranslations("workspaces");
   const lang = useI18nStore((s) => s.lang);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -867,36 +870,39 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         </section>
       </div>
 
-      {/* Recent activity */}
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-muted-foreground text-sm font-medium">
-            {t("workspaces.overview.recentActivity")}
-          </h2>
-          <Button
-            className="h-7 text-xs"
-            onClick={() => fileInputRef.current?.click()}
-            size="sm"
-            variant="ghost"
-          >
-            <UploadIcon className="size-3" />
-            {t("common.uploadFiles")}
-          </Button>
-          <input
-            className="hidden"
-            multiple
-            onChange={(e) => {
-              const files = e.target.files;
-              if (files && files.length > 0) {
-                handleCreateFileEntities([...files]);
-              }
-              e.target.value = "";
-            }}
-            ref={fileInputRef}
-            type="file"
-          />
-        </div>
-        {hasActivity ? (
+      {!hasActivity && (
+        <EmptyScreen
+          className="min-h-[420px] overflow-visible p-0"
+          description={tWorkspaces("emptyDocuments.description")}
+          primaryAction={{
+            label: tWorkspaces("uploadDocuments"),
+            icon: UploadIcon,
+            onClick: () => fileInputRef.current?.click(),
+          }}
+          title={tWorkspaces("emptyDocuments.title")}
+          video={{
+            ...EMPTY_SCREEN_MATTERS_VIDEO,
+            title: tWorkspaces("emptyMatters.videoLabel"),
+          }}
+        />
+      )}
+
+      {hasActivity && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-muted-foreground text-sm font-medium">
+              {t("workspaces.overview.recentActivity")}
+            </h2>
+            <Button
+              className="h-7 text-xs"
+              onClick={() => fileInputRef.current?.click()}
+              size="sm"
+              variant="ghost"
+            >
+              <UploadIcon className="size-3" />
+              {t("common.uploadFiles")}
+            </Button>
+          </div>
           <div className="divide-y rounded-lg border">
             {recentEntities.map((entity) => (
               <OverviewRow
@@ -907,14 +913,21 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               />
             ))}
           </div>
-        ) : (
-          <EmptyState
-            icon={LayoutDashboardIcon}
-            message={t("workspaces.overview.getStarted")}
-            workspaceId={workspaceId}
-          />
-        )}
-      </section>
+        </section>
+      )}
+      <input
+        className="hidden"
+        multiple
+        onChange={(e) => {
+          const files = e.target.files;
+          if (files && files.length > 0) {
+            handleCreateFileEntities([...files]);
+          }
+          e.target.value = "";
+        }}
+        ref={fileInputRef}
+        type="file"
+      />
     </div>
   );
 };

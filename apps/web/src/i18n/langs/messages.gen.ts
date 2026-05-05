@@ -524,6 +524,7 @@ type Messages = {
     "add": "Add";
     "all": "All";
     "cancel": "Cancel";
+    "captions": "Captions";
     "caseLaw": "Case Law";
     "category": "Category";
     "changeColor": "Change color";
@@ -549,6 +550,7 @@ type Messages = {
     "deleteConfirmDescription": "Are you sure you want to delete \"{name}\"? This action cannot be undone.";
     "deletedCount": "{count, plural, one {# item} other {# items}} deleted";
     "description": "Description";
+    "documentation": "Documentation";
     "done": "Done";
     "download": "Download";
     "duplicate": "Duplicate";
@@ -556,6 +558,12 @@ type Messages = {
     "edit": "Edit";
     "email": "Email";
     "empty": "Empty";
+    "emptyScreen": {
+      "letUsKnowAt": "Let us know at";
+      "needHelp": "Need help?";
+      "orLetUsKnowAt": "or let us know at";
+      "viewDocumentation": "View documentation";
+    };
     "enterKey": "↵";
     "error": "Error";
     "expenses": "Expenses";
@@ -582,6 +590,7 @@ type Messages = {
     "organization": "Organization";
     "organizationName": "Organization name";
     "pin": "Pin";
+    "playVideo": "Play video";
     "preview": "Preview";
     "previous": "Previous";
     "print": "Print";
@@ -699,6 +708,9 @@ type Messages = {
       "personal": "Personal";
       "work": "Work";
     };
+    "emptyDescription": "Create contacts once, then reuse them across matters, parties, and billing details.";
+    "emptyTitle": "Create your first contact";
+    "emptyVideoLabel": "Contacts overview";
     "fields": {
       "bankAccountBankName": "Bank name";
       "bankAccountBic": "BIC/SWIFT";
@@ -1086,7 +1098,10 @@ type Messages = {
       "deleteConfirmTitle": "Delete skill?";
       "deleteShortcut": "Delete skill";
       "editShortcut": "Edit skill";
+      "emptyDescription": "Create reusable prompts for the work your team repeats, from summaries to first-pass drafting instructions.";
       "emptyState": "No skills yet. Add your first one.";
+      "emptyTitle": "Create your first skill";
+      "emptyVideoLabel": "Skills overview";
       "errors": {
         "commandConflict": "A skill with this / name already exists";
         "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores";
@@ -1581,6 +1596,16 @@ type Messages = {
     "documentsCount": "{count, plural, one {# document} other {# documents}}";
     "dropToUploadFiles": "Drop to upload files";
     "duplicateWithContent": "Duplicate with content";
+    "emptyDocuments": {
+      "description": "Upload documents to enable table extraction, document organization, in-browser editing, and search across this matter.";
+      "title": "Upload your first documents";
+      "videoLabel": "Matter documents overview";
+    };
+    "emptyMatters": {
+      "description": "Create a matter to organize documents, contacts, tasks, and team activity in one place.";
+      "title": "Create your first matter";
+      "videoLabel": "Matter setup overview";
+    };
     "entitiesCount": "{count, plural, one {# item} other {# items}}";
     "exportToCsv": "Export to CSV";
     "fields": {
@@ -1919,6 +1944,7 @@ type Messages = {
       "manualInput": "Manually";
     };
     "unarchiveMatter": "Unarchive";
+    "uploadDocuments": "Upload documents";
     "views": {
       "addFields": "Add fields";
       "aiGenerated": "AI-generated";

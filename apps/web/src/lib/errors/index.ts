@@ -1,7 +1,5 @@
 import { TaggedError } from "better-result";
 
-import type { AuthErrorCode } from "@/lib/auth";
-
 export class APIError extends TaggedError("ApiError")<{
   status: number;
   message: string;
@@ -81,6 +79,12 @@ export const userErrorMessage = (
   return toAPIError(error).message;
 };
 
+const AUTH_ERROR_CODES = {
+  YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION: true,
+} as const;
+
+type AuthErrorCode = keyof typeof AUTH_ERROR_CODES;
+
 export class AuthClientError extends TaggedError("AuthClientError")<{
   code?: AuthErrorCode | undefined;
   message: string;
@@ -95,12 +99,19 @@ type ToAuthClientErrorProps = {
   statusText: string;
 };
 
+const isAuthClientErrorCode = (code: string): code is AuthErrorCode =>
+  code in AUTH_ERROR_CODES;
+
 export const toAuthClientError = (props: ToAuthClientErrorProps) => {
   const { code, status, statusText } = props;
   const message = props.message ?? "Unknown better-auth error";
 
   if (!props.code) {
     return new AuthClientError({ message, status, statusText });
+  }
+
+  if (code && isAuthClientErrorCode(code)) {
+    return new AuthClientError({ code, message, status, statusText });
   }
 
   return new APIError({

@@ -521,6 +521,7 @@
     "add": "Ajouter",
     "all": "Tous",
     "cancel": "Annuler",
+    "captions": "Captions",
     "caseLaw": "Jurisprudence",
     "category": "Catégorie",
     "changeColor": "Changer la couleur",
@@ -546,6 +547,7 @@
     "deleteConfirmDescription": "Voulez-vous vraiment supprimer « {name} » ? Cette action est irréversible.",
     "deletedCount": "{count, plural, one {# élément supprimé} other {# éléments supprimés}}",
     "description": "Description",
+    "documentation": "Documentation",
     "done": "Terminé",
     "download": "Télécharger",
     "duplicate": "Dupliquer",
@@ -553,6 +555,12 @@
     "edit": "Modifier",
     "email": "E-mail",
     "empty": "Vide",
+    "emptyScreen": {
+      "letUsKnowAt": "Let us know at",
+      "needHelp": "Need help?",
+      "orLetUsKnowAt": "or let us know at",
+      "viewDocumentation": "View documentation"
+    },
     "enterKey": "↵",
     "error": "Erreur",
     "expenses": "Dépenses",
@@ -579,6 +587,7 @@
     "organization": "Organisation",
     "organizationName": "Nom de l'organisation",
     "pin": "Épingler",
+    "playVideo": "Play video",
     "preview": "Aperçu",
     "previous": "Précédent",
     "print": "Imprimer",
@@ -696,6 +705,9 @@
       "personal": "Personnel",
       "work": "Professionnel"
     },
+    "emptyDescription": "Créez les contacts une fois, puis réutilisez-les dans les dossiers, les parties et les informations de facturation.",
+    "emptyTitle": "Créer votre premier contact",
+    "emptyVideoLabel": "Vue d’ensemble des contacts",
     "fields": {
       "bankAccountBankName": "Nom de la banque",
       "bankAccountBic": "BIC/SWIFT",
@@ -1083,7 +1095,10 @@
       "deleteConfirmTitle": "Supprimer le skill ?",
       "deleteShortcut": "Supprimer le skill",
       "editShortcut": "Modifier le skill",
+      "emptyDescription": "Créez des prompts réutilisables pour le travail que votre équipe répète, des résumés aux consignes de première rédaction.",
       "emptyState": "Aucun skill pour le moment. Ajoutez le premier.",
+      "emptyTitle": "Créer votre premier skill",
+      "emptyVideoLabel": "Aperçu des skills",
       "errors": {
         "commandConflict": "Un skill avec ce nom / existe déjà",
         "commandInvalid": "Utilisez uniquement des minuscules, chiffres, tirets et tirets bas",
@@ -1578,6 +1593,16 @@
     "documentsCount": "{count, plural, one {# document} other {# documents}}",
     "dropToUploadFiles": "Déposez pour importer des fichiers",
     "duplicateWithContent": "Dupliquer avec le contenu",
+    "emptyDocuments": {
+      "description": "Importez des documents pour activer l’extraction de tableaux, l’organisation des documents, la modification dans le navigateur et la recherche dans ce dossier.",
+      "title": "Importez vos premiers documents",
+      "videoLabel": "Vue d’ensemble des documents du dossier"
+    },
+    "emptyMatters": {
+      "description": "Créez un dossier pour organiser les documents, contacts, tâches et l’activité de l’équipe au même endroit.",
+      "title": "Créez votre premier dossier",
+      "videoLabel": "Présentation de la configuration du dossier"
+    },
     "entitiesCount": "{count, plural, one {# élément} other {# éléments}}",
     "exportToCsv": "Exporter en CSV",
     "fields": {
@@ -1916,6 +1941,7 @@
       "manualInput": "Manuellement"
     },
     "unarchiveMatter": "Unarchive",
+    "uploadDocuments": "Upload documents",
     "views": {
       "addFields": "Ajouter des champs",
       "aiGenerated": "Généré par IA",

@@ -14,6 +14,10 @@ import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import {
+  EMPTY_SCREEN_MATTERS_VIDEO,
+  EmptyScreen,
+} from "@/components/empty-screen";
 import { usePermissions } from "@/hooks/use-permissions";
 import { pageTitle } from "@/lib/page-title";
 import { AlphabetIndex } from "@/routes/_protected.workspaces/-components/alphabet-index";
@@ -51,6 +55,7 @@ function RouteComponent() {
   const t = useTranslations();
   const { data } = useSuspenseQuery(workspacesOptions);
   const canCreateMatter = usePermissions({ workspace: ["create"] });
+  const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
 
   const { sortKey, sortDesc, groupBy, collapsedGroups } = useConfigStore(
     useShallow((s) => ({
@@ -135,11 +140,27 @@ function RouteComponent() {
         <div className="relative flex-1">
           <div className="absolute inset-0 overflow-y-auto" ref={scrollRef}>
             {sorted.length === 0 ? (
-              <div className="text-muted-foreground flex flex-1 items-center justify-center p-8 text-sm">
-                {workspaces.length === 0
-                  ? t("workspaces.noMatters")
-                  : t("common.empty")}
-              </div>
+              workspaces.length === 0 ? (
+                <EmptyScreen
+                  className="min-h-full"
+                  description={t("workspaces.emptyMatters.description")}
+                  primaryAction={{
+                    label: t("workspaces.createNewWorkspace"),
+                    icon: PlusIcon,
+                    onClick: () => openCreateMatter(),
+                  }}
+                  mediaPlacement="bottom"
+                  title={t("workspaces.emptyMatters.title")}
+                  video={{
+                    ...EMPTY_SCREEN_MATTERS_VIDEO,
+                    title: t("workspaces.emptyMatters.videoLabel"),
+                  }}
+                />
+              ) : (
+                <div className="text-muted-foreground flex flex-1 items-center justify-center p-8 text-sm">
+                  {t("common.empty")}
+                </div>
+              )
             ) : (
               <MattersContentView
                 canCreateMatter={canOpenCreateMatter}

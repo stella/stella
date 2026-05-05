@@ -521,6 +521,7 @@
     "add": "Pridėti",
     "all": "Visi",
     "cancel": "Atšaukti",
+    "captions": "Captions",
     "caseLaw": "Teismų praktika",
     "category": "Kategorija",
     "changeColor": "Pakeisti spalvą",
@@ -546,6 +547,7 @@
     "deleteConfirmDescription": "Ar tikrai norite ištrinti \"{name}\"? Šio veiksmo negalima atšaukti.",
     "deletedCount": "{count, plural, one {# elementas ištrintas} few {# elementai ištrinti} other {# elementų ištrinta}}",
     "description": "Aprašymas",
+    "documentation": "Documentation",
     "done": "Atlikta",
     "download": "Atsisiųsti",
     "duplicate": "Dubliuoti",
@@ -553,6 +555,12 @@
     "edit": "Redaguoti",
     "email": "El. paštas",
     "empty": "Tuščia",
+    "emptyScreen": {
+      "letUsKnowAt": "Let us know at",
+      "needHelp": "Need help?",
+      "orLetUsKnowAt": "or let us know at",
+      "viewDocumentation": "View documentation"
+    },
     "enterKey": "↵",
     "error": "Klaida",
     "expenses": "Išlaidos",
@@ -579,6 +587,7 @@
     "organization": "Organizacija",
     "organizationName": "Organizacijos pavadinimas",
     "pin": "Prisegti",
+    "playVideo": "Play video",
     "preview": "Peržiūra",
     "previous": "Ankstesnis",
     "print": "Spausdinti",
@@ -696,6 +705,9 @@
       "personal": "Asmeninis",
       "work": "Darbinis"
     },
+    "emptyDescription": "Sukurkite kontaktus vieną kartą ir pakartotinai naudokite juos bylose, šalyse ir atsiskaitymo duomenyse.",
+    "emptyTitle": "Sukurkite pirmąjį kontaktą",
+    "emptyVideoLabel": "Kontaktų apžvalga",
     "fields": {
       "bankAccountBankName": "Banko pavadinimas",
       "bankAccountBic": "BIC/SWIFT",
@@ -1083,7 +1095,10 @@
       "deleteConfirmTitle": "Ištrinti įgūdį?",
       "deleteShortcut": "Ištrinti įgūdį",
       "editShortcut": "Redaguoti įgūdį",
+      "emptyDescription": "Kurkite pakartotinai naudojamas užklausas darbui, kurį jūsų komanda kartoja, nuo santraukų iki pirmųjų juodraščių instrukcijų.",
       "emptyState": "Įgūdžių dar nėra. Pridėkite pirmąjį.",
+      "emptyTitle": "Sukurkite pirmąjį įgūdį",
+      "emptyVideoLabel": "Įgūdžių apžvalga",
       "errors": {
         "commandConflict": "Įgūdis su šiuo / pavadinimu jau yra",
         "commandInvalid": "Naudokite tik mažąsias raides, skaičius, brūkšnelius ir pabraukimus",
@@ -1578,6 +1593,16 @@
     "documentsCount": "{count, plural, one {# dokumentas} few {# dokumentai} many {# dokumento} other {# dokumentų}}",
     "dropToUploadFiles": "Vilkite failus norėdami įkelti",
     "duplicateWithContent": "Dubliuoti su turiniu",
+    "emptyDocuments": {
+      "description": "Įkelkite dokumentus, kad galėtumėte išgauti lenteles, tvarkyti dokumentus, redaguoti naršyklėje ir ieškoti šioje byloje.",
+      "title": "Įkelkite pirmuosius dokumentus",
+      "videoLabel": "Bylos dokumentų apžvalga"
+    },
+    "emptyMatters": {
+      "description": "Sukurkite bylą, kad vienoje vietoje tvarkytumėte dokumentus, kontaktus, užduotis ir komandos veiklą.",
+      "title": "Sukurkite pirmąją bylą",
+      "videoLabel": "Bylos nustatymo apžvalga"
+    },
     "entitiesCount": "{count, plural, one {# elementas} few {# elementai} many {# elemento} other {# elementų}}",
     "exportToCsv": "Eksportuoti į CSV",
     "fields": {
@@ -1916,6 +1941,7 @@
       "manualInput": "Rankiniu būdu"
     },
     "unarchiveMatter": "Unarchive",
+    "uploadDocuments": "Upload documents",
     "views": {
       "addFields": "Pridėti laukus",
       "aiGenerated": "Sugeneruota AI",

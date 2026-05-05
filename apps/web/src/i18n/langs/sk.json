@@ -521,6 +521,7 @@
     "add": "Pridať",
     "all": "Všetko",
     "cancel": "Zrušiť",
+    "captions": "Captions",
     "caseLaw": "Judikatúra",
     "category": "Kategória",
     "changeColor": "Zmeniť farbu",
@@ -546,6 +547,7 @@
     "deleteConfirmDescription": "Naozaj chcete vymazať „{name}“? Túto akciu nie je možné vrátiť.",
     "deletedCount": "{count, plural, one {# položka zmazaná} few {# položky zmazané} other {# položiek zmazaných}}",
     "description": "Popis",
+    "documentation": "Documentation",
     "done": "Hotovo",
     "download": "Stiahnuť",
     "duplicate": "Duplikovať",
@@ -553,6 +555,12 @@
     "edit": "Upraviť",
     "email": "E-mail",
     "empty": "Prázdne",
+    "emptyScreen": {
+      "letUsKnowAt": "Let us know at",
+      "needHelp": "Need help?",
+      "orLetUsKnowAt": "or let us know at",
+      "viewDocumentation": "View documentation"
+    },
     "enterKey": "↵",
     "error": "Chyba",
     "expenses": "Výdavky",
@@ -579,6 +587,7 @@
     "organization": "Organizácia",
     "organizationName": "Názov organizácie",
     "pin": "Pripnúť",
+    "playVideo": "Play video",
     "preview": "Náhľad",
     "previous": "Predchádzajúci",
     "print": "Tlačiť",
@@ -696,6 +705,9 @@
       "personal": "Osobný",
       "work": "Pracovný"
     },
+    "emptyDescription": "Vytvorte kontakty raz a potom ich opakovane používajte v spisoch, stranách a fakturačných údajoch.",
+    "emptyTitle": "Vytvorte prvý kontakt",
+    "emptyVideoLabel": "Prehľad kontaktov",
     "fields": {
       "bankAccountBankName": "Názov banky",
       "bankAccountBic": "BIC/SWIFT",
@@ -1083,7 +1095,10 @@
       "deleteConfirmTitle": "Zmazať zručnosť?",
       "deleteShortcut": "Zmazať zručnosť",
       "editShortcut": "Upraviť zručnosť",
+      "emptyDescription": "Vytvárajte opakovane použiteľné prompty pre prácu, ktorú váš tím opakuje, od zhrnutí po pokyny pre prvé návrhy.",
       "emptyState": "Žiadne zručnosti. Pridajte prvú.",
+      "emptyTitle": "Vytvorte prvú zručnosť",
+      "emptyVideoLabel": "Prehľad zručností",
       "errors": {
         "commandConflict": "Zručnosť s týmto / názvom už existuje",
         "commandInvalid": "Používajte iba malé písmená, číslice, pomlčky a podčiarkovníky",
@@ -1578,6 +1593,16 @@
     "documentsCount": "{count, plural, one {# dokument} few {# dokumenty} other {# dokumentov}}",
     "dropToUploadFiles": "Presuňte súbory pre nahranie",
     "duplicateWithContent": "Duplikovať s obsahom",
+    "emptyDocuments": {
+      "description": "Nahrajte dokumenty, aby ste mohli extrahovať tabuľky, organizovať dokumenty, upravovať ich priamo v prehliadači a vyhľadávať v tomto spise.",
+      "title": "Nahrajte prvé dokumenty",
+      "videoLabel": "Prehľad dokumentov v spise"
+    },
+    "emptyMatters": {
+      "description": "Vytvorte spis na organizáciu dokumentov, kontaktov, úloh a tímovej aktivity na jednom mieste.",
+      "title": "Vytvorte prvý spis",
+      "videoLabel": "Prehľad nastavenia spisu"
+    },
     "entitiesCount": "{count, plural, one {# položka} few {# položky} other {# položiek}}",
     "exportToCsv": "Exportovať do CSV",
     "fields": {
@@ -1916,6 +1941,7 @@
       "manualInput": "Ručne"
     },
     "unarchiveMatter": "Unarchive",
+    "uploadDocuments": "Upload documents",
     "views": {
       "addFields": "Pridať polia",
       "aiGenerated": "Vygenerované AI",

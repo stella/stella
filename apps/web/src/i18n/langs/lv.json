@@ -521,6 +521,7 @@
     "add": "Pievienot",
     "all": "Visi",
     "cancel": "Atcelt",
+    "captions": "Captions",
     "caseLaw": "Tiesu prakse",
     "category": "Kategorija",
     "changeColor": "Mainīt krāsu",
@@ -546,6 +547,7 @@
     "deleteConfirmDescription": "Vai tiešām vēlaties dzēst \"{name}\"? Šo darbību nevar atsaukt.",
     "deletedCount": "{count, plural, one {# vienums dzēsts} other {# vienumi dzēsti}}",
     "description": "Apraksts",
+    "documentation": "Documentation",
     "done": "Gatavs",
     "download": "Lejupielādēt",
     "duplicate": "Dublēt",
@@ -553,6 +555,12 @@
     "edit": "Rediģēt",
     "email": "E-pasts",
     "empty": "Tukšs",
+    "emptyScreen": {
+      "letUsKnowAt": "Let us know at",
+      "needHelp": "Need help?",
+      "orLetUsKnowAt": "or let us know at",
+      "viewDocumentation": "View documentation"
+    },
     "enterKey": "↵",
     "error": "Kļūda",
     "expenses": "Izdevumi",
@@ -579,6 +587,7 @@
     "organization": "Organizācija",
     "organizationName": "Organizācijas nosaukums",
     "pin": "Piespraust",
+    "playVideo": "Play video",
     "preview": "Priekšskatījums",
     "previous": "Iepriekšējais",
     "print": "Drukāt",
@@ -696,6 +705,9 @@
       "personal": "Personīgais",
       "work": "Darba"
     },
+    "emptyDescription": "Izveidojiet kontaktpersonas vienreiz un atkārtoti izmantojiet tās lietās, pusēs un norēķinu datos.",
+    "emptyTitle": "Izveidojiet pirmo kontaktpersonu",
+    "emptyVideoLabel": "Kontaktpersonu pārskats",
     "fields": {
       "bankAccountBankName": "Bankas nosaukums",
       "bankAccountBic": "BIC/SWIFT",
@@ -1083,7 +1095,10 @@
       "deleteConfirmTitle": "Dzēst prasmi?",
       "deleteShortcut": "Dzēst prasmi",
       "editShortcut": "Rediģēt prasmi",
+      "emptyDescription": "Izveidojiet atkārtoti izmantojamus promptus darbam, ko jūsu komanda atkārto, no kopsavilkumiem līdz pirmo melnrakstu norādījumiem.",
       "emptyState": "Prasmju vēl nav. Pievienojiet pirmo.",
+      "emptyTitle": "Izveidojiet pirmo prasmi",
+      "emptyVideoLabel": "Prasmju pārskats",
       "errors": {
         "commandConflict": "Prasme ar šo / nosaukumu jau pastāv",
         "commandInvalid": "Izmantojiet tikai mazos burtus, ciparus, defises un pasvītrojumus",
@@ -1578,6 +1593,16 @@
     "documentsCount": "{count, plural, zero {# dokumentu} one {# dokuments} other {# dokumenti}}",
     "dropToUploadFiles": "Nometiet, lai augšupielādētu failus",
     "duplicateWithContent": "Dublēt ar saturu",
+    "emptyDocuments": {
+      "description": "Augšupielādējiet dokumentus, lai iespējotu tabulu izguvi, dokumentu kārtošanu, rediģēšanu pārlūkā un meklēšanu šajā lietā.",
+      "title": "Augšupielādējiet pirmos dokumentus",
+      "videoLabel": "Lietas dokumentu pārskats"
+    },
+    "emptyMatters": {
+      "description": "Izveidojiet lietu, lai vienuviet organizētu dokumentus, kontaktpersonas, uzdevumus un komandas aktivitātes.",
+      "title": "Izveidojiet pirmo lietu",
+      "videoLabel": "Lietas iestatīšanas pārskats"
+    },
     "entitiesCount": "{count, plural, zero {# vienumu} one {# vienums} other {# vienumi}}",
     "exportToCsv": "Eksportēt uz CSV",
     "fields": {
@@ -1916,6 +1941,7 @@
       "manualInput": "Manuāli"
     },
     "unarchiveMatter": "Unarchive",
+    "uploadDocuments": "Upload documents",
     "views": {
       "addFields": "Pievienot laukus",
       "aiGenerated": "AI ģenerēts",

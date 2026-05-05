@@ -37,18 +37,6 @@ export const WorkspaceGridHead = ({
   />
 );
 
-export const WorkspaceGridFillerHead = ({
-  className,
-  ...props
-}: React.ComponentProps<"div">) => (
-  <WorkspaceGridHead
-    aria-hidden="true"
-    className={cn("border-e-0 p-0", className)}
-    role="presentation"
-    {...props}
-  />
-);
-
 export const WorkspaceGridCell = ({
   className,
   ...props

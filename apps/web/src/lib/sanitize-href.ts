@@ -2,8 +2,9 @@
  * Sanitize a URL for use in `<a href>` attributes.
  *
  * Rejects `javascript:`, `data:`, `vbscript:`, and other
- * dangerous protocols. Returns `undefined` for unsafe URLs
- * so the caller can fall back to plain text rendering.
+ * dangerous protocols. Allows web URLs, relative URLs, fragment
+ * links, and mail links. Returns `undefined` for unsafe URLs so
+ * the caller can fall back to plain text rendering.
  */
 export const sanitizeHref = (
   url: string | null | undefined,
@@ -27,7 +28,11 @@ export const sanitizeHref = (
   }
 
   const parsed = new URL(trimmed);
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+  if (
+    parsed.protocol !== "http:" &&
+    parsed.protocol !== "https:" &&
+    parsed.protocol !== "mailto:"
+  ) {
     return undefined;
   }
 
