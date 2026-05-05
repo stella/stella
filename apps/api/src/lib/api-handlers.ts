@@ -258,6 +258,18 @@ const logAndCaptureSafeError = ({
     "error.type": errorTag(error),
   };
 
+  if (error instanceof Error) {
+    attributes["error.message"] = error.message.slice(0, 512);
+    if (error.stack) {
+      const firstFrame = error.stack
+        .split("\n")
+        .find((line) => line.trim().startsWith("at "));
+      if (firstFrame) {
+        attributes["error.frame"] = firstFrame.trim().slice(0, 256);
+      }
+    }
+  }
+
   if (reqCtx?.posthogDistinctId) {
     attributes["posthogDistinctId"] = reqCtx.posthogDistinctId;
   }
