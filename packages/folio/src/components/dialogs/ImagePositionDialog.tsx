@@ -7,7 +7,7 @@
  * - Distance from text (top/bottom/left/right)
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import {
   Dialog,
@@ -56,6 +56,7 @@ export function ImagePositionDialog({
   onApply,
   currentData,
 }: ImagePositionDialogProps) {
+  const id = useId();
   const [hMode, setHMode] = useState<"align" | "offset">("align");
   const [hAlign, setHAlign] = useState("center");
   const [hRelativeTo, setHRelativeTo] = useState("column");
@@ -128,6 +129,20 @@ export function ImagePositionDialog({
     "border-input bg-background text-foreground flex-1 rounded border px-1.5 py-1 text-xs outline-none";
   const sectionLabelCls = "text-foreground text-[13px] font-semibold";
   const distLabelCls = "w-[45px] text-muted-foreground text-xs";
+  const fieldIds = {
+    hMode: `${id}-img-pos-h-mode`,
+    hAlign: `${id}-img-pos-h-align`,
+    hOffset: `${id}-img-pos-h-offset`,
+    hRelativeTo: `${id}-img-pos-h-rel`,
+    vMode: `${id}-img-pos-v-mode`,
+    vAlign: `${id}-img-pos-v-align`,
+    vOffset: `${id}-img-pos-v-offset`,
+    vRelativeTo: `${id}-img-pos-v-rel`,
+    distTop: `${id}-img-pos-dist-top`,
+    distBottom: `${id}-img-pos-dist-bottom`,
+    distLeft: `${id}-img-pos-dist-left`,
+    distRight: `${id}-img-pos-dist-right`,
+  };
 
   return (
     <Dialog
@@ -150,12 +165,12 @@ export function ImagePositionDialog({
             <div className="flex flex-col gap-2">
               <div className={sectionLabelCls}>Horizontal</div>
               <div className="flex items-center gap-2">
-                <label className={labelCls} htmlFor="img-pos-h-mode">
+                <label className={labelCls} htmlFor={fieldIds.hMode}>
                   Position
                 </label>
                 <select
-                  id="img-pos-h-mode"
                   className={inputCls}
+                  id={fieldIds.hMode}
                   value={hMode}
                   onChange={(e) =>
                     setHMode(e.target.value as "align" | "offset")
@@ -167,12 +182,12 @@ export function ImagePositionDialog({
               </div>
               {hMode === "align" ? (
                 <div className="flex items-center gap-2">
-                  <label className={labelCls} htmlFor="img-pos-h-align">
+                  <label className={labelCls} htmlFor={fieldIds.hAlign}>
                     Align
                   </label>
                   <select
-                    id="img-pos-h-align"
                     className={inputCls}
+                    id={fieldIds.hAlign}
                     value={hAlign}
                     onChange={(e) => setHAlign(e.target.value)}
                   >
@@ -183,25 +198,25 @@ export function ImagePositionDialog({
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <label className={labelCls} htmlFor="img-pos-h-offset">
+                  <label className={labelCls} htmlFor={fieldIds.hOffset}>
                     Offset (px)
                   </label>
                   <input
-                    id="img-pos-h-offset"
-                    type="number"
                     className={inputCls}
+                    id={fieldIds.hOffset}
+                    type="number"
                     value={hOffset}
                     onChange={(e) => setHOffset(Number(e.target.value) || 0)}
                   />
                 </div>
               )}
               <div className="flex items-center gap-2">
-                <label className={labelCls} htmlFor="img-pos-h-rel">
+                <label className={labelCls} htmlFor={fieldIds.hRelativeTo}>
                   Relative to
                 </label>
                 <select
-                  id="img-pos-h-rel"
                   className={inputCls}
+                  id={fieldIds.hRelativeTo}
                   value={hRelativeTo}
                   onChange={(e) => setHRelativeTo(e.target.value)}
                 >
@@ -217,12 +232,12 @@ export function ImagePositionDialog({
             <div className="flex flex-col gap-2">
               <div className={sectionLabelCls}>Vertical</div>
               <div className="flex items-center gap-2">
-                <label className={labelCls} htmlFor="img-pos-v-mode">
+                <label className={labelCls} htmlFor={fieldIds.vMode}>
                   Position
                 </label>
                 <select
-                  id="img-pos-v-mode"
                   className={inputCls}
+                  id={fieldIds.vMode}
                   value={vMode}
                   onChange={(e) =>
                     setVMode(e.target.value as "align" | "offset")
@@ -234,12 +249,12 @@ export function ImagePositionDialog({
               </div>
               {vMode === "align" ? (
                 <div className="flex items-center gap-2">
-                  <label className={labelCls} htmlFor="img-pos-v-align">
+                  <label className={labelCls} htmlFor={fieldIds.vAlign}>
                     Align
                   </label>
                   <select
-                    id="img-pos-v-align"
                     className={inputCls}
+                    id={fieldIds.vAlign}
                     value={vAlign}
                     onChange={(e) => setVAlign(e.target.value)}
                   >
@@ -250,25 +265,25 @@ export function ImagePositionDialog({
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <label className={labelCls} htmlFor="img-pos-v-offset">
+                  <label className={labelCls} htmlFor={fieldIds.vOffset}>
                     Offset (px)
                   </label>
                   <input
-                    id="img-pos-v-offset"
-                    type="number"
                     className={inputCls}
+                    id={fieldIds.vOffset}
+                    type="number"
                     value={vOffset}
                     onChange={(e) => setVOffset(Number(e.target.value) || 0)}
                   />
                 </div>
               )}
               <div className="flex items-center gap-2">
-                <label className={labelCls} htmlFor="img-pos-v-rel">
+                <label className={labelCls} htmlFor={fieldIds.vRelativeTo}>
                   Relative to
                 </label>
                 <select
-                  id="img-pos-v-rel"
                   className={inputCls}
+                  id={fieldIds.vRelativeTo}
                   value={vRelativeTo}
                   onChange={(e) => setVRelativeTo(e.target.value)}
                 >
@@ -285,53 +300,53 @@ export function ImagePositionDialog({
               <div className={sectionLabelCls}>Distance from text (px)</div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="flex items-center gap-2">
-                  <label className={distLabelCls} htmlFor="img-pos-dist-top">
+                  <label className={distLabelCls} htmlFor={fieldIds.distTop}>
                     Top
                   </label>
                   <input
-                    id="img-pos-dist-top"
-                    type="number"
                     className={inputCls}
+                    id={fieldIds.distTop}
                     min={0}
+                    type="number"
                     value={distTop}
                     onChange={(e) => setDistTop(Number(e.target.value) || 0)}
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className={distLabelCls} htmlFor="img-pos-dist-bottom">
+                  <label className={distLabelCls} htmlFor={fieldIds.distBottom}>
                     Bottom
                   </label>
                   <input
-                    id="img-pos-dist-bottom"
-                    type="number"
                     className={inputCls}
+                    id={fieldIds.distBottom}
                     min={0}
+                    type="number"
                     value={distBottom}
                     onChange={(e) => setDistBottom(Number(e.target.value) || 0)}
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className={distLabelCls} htmlFor="img-pos-dist-left">
+                  <label className={distLabelCls} htmlFor={fieldIds.distLeft}>
                     Left
                   </label>
                   <input
-                    id="img-pos-dist-left"
-                    type="number"
                     className={inputCls}
+                    id={fieldIds.distLeft}
                     min={0}
+                    type="number"
                     value={distLeft}
                     onChange={(e) => setDistLeft(Number(e.target.value) || 0)}
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className={distLabelCls} htmlFor="img-pos-dist-right">
+                  <label className={distLabelCls} htmlFor={fieldIds.distRight}>
                     Right
                   </label>
                   <input
-                    id="img-pos-dist-right"
-                    type="number"
                     className={inputCls}
+                    id={fieldIds.distRight}
                     min={0}
+                    type="number"
                     value={distRight}
                     onChange={(e) => setDistRight(Number(e.target.value) || 0)}
                   />

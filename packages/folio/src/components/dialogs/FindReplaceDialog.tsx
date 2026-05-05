@@ -118,6 +118,7 @@ export function FindReplaceDialog({
   className,
   style,
 }: FindReplaceDialogProps): React.ReactElement | null {
+  const id = React.useId();
   const t = useTranslations("folio");
   // State
   const [searchText, setSearchText] = useState("");
@@ -308,6 +309,8 @@ export function FindReplaceDialog({
   const hasMatches = result && result.totalCount > 0;
   const noMatches = result && result.totalCount === 0 && searchText.trim();
   const overlayStyle = getFindReplaceOverlayStyle(style);
+  const titleId = `${id}-find-replace-dialog-title`;
+  const findTextId = `${id}-find-text`;
 
   return (
     <div
@@ -323,12 +326,12 @@ export function FindReplaceDialog({
         data-testid="find-replace-dialog"
         role="dialog"
         aria-modal="false"
-        aria-labelledby="find-replace-dialog-title"
+        aria-labelledby={titleId}
       >
         <div className="bg-muted/30 flex items-center justify-between gap-3 border-b px-3 py-2">
           <h2
-            id="find-replace-dialog-title"
             className="flex min-w-0 items-center gap-2 text-sm font-medium"
+            id={titleId}
           >
             <SearchIcon className="text-muted-foreground size-4 shrink-0" />
             <span className="truncate">{t("findReplace.find")}</span>
@@ -348,13 +351,13 @@ export function FindReplaceDialog({
           <div className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2">
             <label
               className="text-muted-foreground text-xs font-medium"
-              htmlFor="find-text"
+              htmlFor={findTextId}
             >
               {t("findReplace.find")}
             </label>
             <Input
               ref={searchInputRef}
-              id="find-text"
+              id={findTextId}
               nativeInput
               type="text"
               className="h-8"

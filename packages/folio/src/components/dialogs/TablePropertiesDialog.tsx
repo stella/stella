@@ -2,7 +2,7 @@
  * Table Properties Dialog — width type, width value, alignment.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 
 import {
   Dialog,
@@ -36,6 +36,7 @@ export function TablePropertiesDialog({
   onApply,
   currentProps,
 }: TablePropertiesDialogProps) {
+  const id = useId();
   const [width, setWidth] = useState(currentProps?.width ?? 0);
   const [widthType, setWidthType] = useState(currentProps?.widthType ?? "auto");
   const [justification, setJustification] = useState(
@@ -74,6 +75,11 @@ export function TablePropertiesDialog({
   const labelCls = "w-20 text-muted-foreground text-[13px]";
   const inputCls =
     "border-input bg-background text-foreground flex-1 rounded border px-2 py-1.5 text-[13px] outline-none";
+  const fieldIds = {
+    widthType: `${id}-tp-width-type`,
+    width: `${id}-tp-width`,
+    align: `${id}-tp-align`,
+  };
 
   return (
     <Dialog
@@ -93,12 +99,12 @@ export function TablePropertiesDialog({
 
           <div className="flex flex-col gap-3 px-5 py-4">
             <div className="flex items-center gap-3">
-              <label className={labelCls} htmlFor="tp-width-type">
+              <label className={labelCls} htmlFor={fieldIds.widthType}>
                 Width type
               </label>
               <select
                 className={inputCls}
-                id="tp-width-type"
+                id={fieldIds.widthType}
                 onChange={(e) => setWidthType(e.target.value)}
                 value={widthType}
               >
@@ -110,12 +116,12 @@ export function TablePropertiesDialog({
 
             {widthType !== "auto" && (
               <div className="flex items-center gap-3">
-                <label className={labelCls} htmlFor="tp-width">
+                <label className={labelCls} htmlFor={fieldIds.width}>
                   Width
                 </label>
                 <input
                   className={inputCls}
-                  id="tp-width"
+                  id={fieldIds.width}
                   min={0}
                   onChange={(e) => setWidth(Number(e.target.value) || 0)}
                   step={widthType === "pct" ? 5 : 100}
@@ -129,12 +135,12 @@ export function TablePropertiesDialog({
             )}
 
             <div className="flex items-center gap-3">
-              <label className={labelCls} htmlFor="tp-align">
+              <label className={labelCls} htmlFor={fieldIds.align}>
                 Alignment
               </label>
               <select
                 className={inputCls}
-                id="tp-align"
+                id={fieldIds.align}
                 onChange={(e) => setJustification(e.target.value)}
                 value={justification}
               >

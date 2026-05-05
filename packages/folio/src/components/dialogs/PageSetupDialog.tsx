@@ -7,7 +7,7 @@
  * - Margins (top, bottom, left, right) in inches
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import {
   Dialog,
@@ -80,6 +80,7 @@ export function PageSetupDialog({
   onApply,
   currentProps,
 }: PageSetupDialogProps) {
+  const id = useId();
   const [pageWidth, setPageWidth] = useState(DEFAULT_WIDTH);
   const [pageHeight, setPageHeight] = useState(DEFAULT_HEIGHT);
   const [orientation, setOrientation] = useState<"portrait" | "landscape">(
@@ -156,6 +157,14 @@ export function PageSetupDialog({
     "border-input bg-background text-foreground flex-1 rounded border px-2 py-1.5 text-[13px] outline-none";
   const sectionLabelCls =
     "text-muted-foreground text-xs font-semibold uppercase tracking-wide";
+  const fieldIds = {
+    size: `${id}-ps-size`,
+    orientation: `${id}-ps-orientation`,
+    marginTop: `${id}-ps-margin-top`,
+    marginBottom: `${id}-ps-margin-bottom`,
+    marginLeft: `${id}-ps-margin-left`,
+    marginRight: `${id}-ps-margin-right`,
+  };
 
   return (
     <Dialog
@@ -178,11 +187,11 @@ export function PageSetupDialog({
             <div className={sectionLabelCls}>Page Size</div>
 
             <div className="flex items-center gap-3">
-              <label htmlFor="ps-size" className={labelCls}>
+              <label htmlFor={fieldIds.size} className={labelCls}>
                 Size
               </label>
               <select
-                id="ps-size"
+                id={fieldIds.size}
                 className={inputCls}
                 value={sizeIndex}
                 onChange={(e) => handlePageSizeChange(Number(e.target.value))}
@@ -197,11 +206,11 @@ export function PageSetupDialog({
             </div>
 
             <div className="flex items-center gap-3">
-              <label htmlFor="ps-orientation" className={labelCls}>
+              <label htmlFor={fieldIds.orientation} className={labelCls}>
                 Orientation
               </label>
               <select
-                id="ps-orientation"
+                id={fieldIds.orientation}
                 className={inputCls}
                 value={orientation}
                 onChange={(e) =>
@@ -219,11 +228,11 @@ export function PageSetupDialog({
             <div className={`${sectionLabelCls} mt-1`}>Margins</div>
 
             <div className="flex items-center gap-3">
-              <label htmlFor="ps-margin-top" className={labelCls}>
+              <label htmlFor={fieldIds.marginTop} className={labelCls}>
                 Top
               </label>
               <input
-                id="ps-margin-top"
+                id={fieldIds.marginTop}
                 type="number"
                 className={inputCls}
                 min={0}
@@ -238,11 +247,11 @@ export function PageSetupDialog({
             </div>
 
             <div className="flex items-center gap-3">
-              <label htmlFor="ps-margin-bottom" className={labelCls}>
+              <label htmlFor={fieldIds.marginBottom} className={labelCls}>
                 Bottom
               </label>
               <input
-                id="ps-margin-bottom"
+                id={fieldIds.marginBottom}
                 type="number"
                 className={inputCls}
                 min={0}
@@ -257,11 +266,11 @@ export function PageSetupDialog({
             </div>
 
             <div className="flex items-center gap-3">
-              <label htmlFor="ps-margin-left" className={labelCls}>
+              <label htmlFor={fieldIds.marginLeft} className={labelCls}>
                 Left
               </label>
               <input
-                id="ps-margin-left"
+                id={fieldIds.marginLeft}
                 type="number"
                 className={inputCls}
                 min={0}
@@ -276,11 +285,11 @@ export function PageSetupDialog({
             </div>
 
             <div className="flex items-center gap-3">
-              <label htmlFor="ps-margin-right" className={labelCls}>
+              <label htmlFor={fieldIds.marginRight} className={labelCls}>
                 Right
               </label>
               <input
-                id="ps-margin-right"
+                id={fieldIds.marginRight}
                 type="number"
                 className={inputCls}
                 min={0}
