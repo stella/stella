@@ -61,6 +61,41 @@ describe("Folio find and replace", () => {
     expect(matches[0]?.startOffset).toBe(0);
   });
 
+  test("reports match offsets relative to the whole paragraph", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "run",
+                  content: [{ type: "text", text: "Series " }],
+                },
+                {
+                  type: "run",
+                  content: [{ type: "text", text: "Stock" }],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const matches = findInDocument(
+      document,
+      "stock",
+      createDefaultFindOptions(),
+    );
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.contentIndex).toBe(1);
+    expect(matches[0]?.startOffset).toBe(7);
+    expect(matches[0]?.endOffset).toBe(12);
+  });
+
   test("replaces matches inside table cells", () => {
     const document = createTableDocument();
     const match = findInDocument(
