@@ -521,6 +521,7 @@
     "add": "Hozzáadás",
     "all": "Összes",
     "cancel": "Mégse",
+    "captions": "Captions",
     "caseLaw": "Joggyakorlat",
     "category": "Kategória",
     "changeColor": "Szín módosítása",
@@ -546,6 +547,7 @@
     "deleteConfirmDescription": "Biztosan törölni szeretné a következőt: „{name}“? Ez a művelet nem vonható vissza.",
     "deletedCount": "{count, plural, one {# elem} other {# elem}} törölve",
     "description": "Leírás",
+    "documentation": "Documentation",
     "done": "Kész",
     "download": "Letöltés",
     "duplicate": "Másolás",
@@ -553,6 +555,12 @@
     "edit": "Szerkesztés",
     "email": "E-mail",
     "empty": "Üres",
+    "emptyScreen": {
+      "letUsKnowAt": "Let us know at",
+      "needHelp": "Need help?",
+      "orLetUsKnowAt": "or let us know at",
+      "viewDocumentation": "View documentation"
+    },
     "enterKey": "↵",
     "error": "Hiba",
     "expenses": "Kiadások",
@@ -579,6 +587,7 @@
     "organization": "Szervezet",
     "organizationName": "Szervezet neve",
     "pin": "Rögzítés",
+    "playVideo": "Play video",
     "preview": "Előnézet",
     "previous": "Előző",
     "print": "Nyomtatás",
@@ -696,6 +705,9 @@
       "personal": "Személyes",
       "work": "Munkahelyi"
     },
+    "emptyDescription": "Hozzon létre névjegyeket egyszer, majd használja őket újra ügyekben, feleknél és számlázási adatokban.",
+    "emptyTitle": "Hozza létre az első kapcsolatot",
+    "emptyVideoLabel": "Kapcsolatok áttekintése",
     "fields": {
       "bankAccountBankName": "Bank neve",
       "bankAccountBic": "BIC/SWIFT",
@@ -1083,7 +1095,10 @@
       "deleteConfirmTitle": "Skill törlése?",
       "deleteShortcut": "Skill törlése",
       "editShortcut": "Skill szerkesztése",
+      "emptyDescription": "Hozzon létre újrahasználható promptokat az ismétlődő csapatmunkához, az összefoglalóktól az első vázlatok utasításaiig.",
       "emptyState": "Még nincsenek skillek. Adja hozzá az elsőt.",
+      "emptyTitle": "Hozza létre az első skillt",
+      "emptyVideoLabel": "Skillek áttekintése",
       "errors": {
         "commandConflict": "Már létezik skill ezzel a / névvel",
         "commandInvalid": "Csak kisbetűket, számokat, kötőjeleket és aláhúzásokat használjon",
@@ -1578,6 +1593,16 @@
     "documentsCount": "{count, plural, one {# dokumentum} other {# dokumentum}}",
     "dropToUploadFiles": "Húzza ide a fájlokat a feltöltéshez",
     "duplicateWithContent": "Másolás tartalommal",
+    "emptyDocuments": {
+      "description": "Töltsön fel dokumentumokat a táblázatok kinyeréséhez, a dokumentumok rendszerezéséhez, a böngészőn belüli szerkesztéshez és az ügyön belüli kereséshez.",
+      "title": "Töltse fel az első dokumentumokat",
+      "videoLabel": "Ügy dokumentumainak áttekintése"
+    },
+    "emptyMatters": {
+      "description": "Hozzon létre egy ügyet, hogy egy helyen rendezze a dokumentumokat, kapcsolattartókat, feladatokat és a csapat tevékenységét.",
+      "title": "Hozza létre az első ügyét",
+      "videoLabel": "Ügybeállítás áttekintése"
+    },
     "entitiesCount": "{count, plural, one {# elem} other {# elem}}",
     "exportToCsv": "Exportálás CSV-be",
     "fields": {
@@ -1916,6 +1941,7 @@
       "manualInput": "Kézzel"
     },
     "unarchiveMatter": "Unarchive",
+    "uploadDocuments": "Upload documents",
     "views": {
       "addFields": "Mezők hozzáadása",
       "aiGenerated": "MI által generált",

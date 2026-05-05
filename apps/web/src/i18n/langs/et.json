@@ -521,6 +521,7 @@
     "add": "Lisa",
     "all": "Kõik",
     "cancel": "Tühista",
+    "captions": "Captions",
     "caseLaw": "Kohtupraktika",
     "category": "Kategooria",
     "changeColor": "Muuda värvi",
@@ -546,6 +547,7 @@
     "deleteConfirmDescription": "Kas olete kindel, et soovite kustutada \"{name}\"? Seda toimingut ei saa tagasi võtta.",
     "deletedCount": "{count, plural, one {# üksus} other {# üksust}} kustutatud",
     "description": "Kirjeldus",
+    "documentation": "Documentation",
     "done": "Valmis",
     "download": "Laadi alla",
     "duplicate": "Dubleeri",
@@ -553,6 +555,12 @@
     "edit": "Muuda",
     "email": "E-post",
     "empty": "Tühi",
+    "emptyScreen": {
+      "letUsKnowAt": "Let us know at",
+      "needHelp": "Need help?",
+      "orLetUsKnowAt": "or let us know at",
+      "viewDocumentation": "View documentation"
+    },
     "enterKey": "↵",
     "error": "Viga",
     "expenses": "Kulud",
@@ -579,6 +587,7 @@
     "organization": "Organisatsioon",
     "organizationName": "Organisatsiooni nimi",
     "pin": "Kinnita",
+    "playVideo": "Play video",
     "preview": "Eelvaade",
     "previous": "Eelmine",
     "print": "Prindi",
@@ -696,6 +705,9 @@
       "personal": "Isiklik",
       "work": "Töö"
     },
+    "emptyDescription": "Looge kontaktid üks kord ja kasutage neid seejärel asjades, osapooltes ja arveldusandmetes.",
+    "emptyTitle": "Looge esimene kontakt",
+    "emptyVideoLabel": "Kontaktide ülevaade",
     "fields": {
       "bankAccountBankName": "Panga nimi",
       "bankAccountBic": "BIC/SWIFT",
@@ -1083,7 +1095,10 @@
       "deleteConfirmTitle": "Kas kustutada oskus?",
       "deleteShortcut": "Kustuta oskus",
       "editShortcut": "Muuda oskust",
+      "emptyDescription": "Looge korduvkasutatavaid juhiseid töö jaoks, mida teie meeskond kordab, alates kokkuvõtetest kuni esimeste mustandite suunisteni.",
       "emptyState": "Oskusi veel pole. Lisage esimene.",
+      "emptyTitle": "Looge esimene oskus",
+      "emptyVideoLabel": "Oskuste ülevaade",
       "errors": {
         "commandConflict": "Selle / nimega oskus on juba olemas",
         "commandInvalid": "Kasuta ainult väiketähti, numbreid, sidekriipse ja allkriipse",
@@ -1578,6 +1593,16 @@
     "documentsCount": "{count, plural, one {# dokument} other {# dokumenti}}",
     "dropToUploadFiles": "Lohistage failid üleslaadimiseks siia",
     "duplicateWithContent": "Dubleeri koos sisuga",
+    "emptyDocuments": {
+      "description": "Laadige dokumendid üles, et võimaldada tabelite eraldamist, dokumentide korrastamist, brauseris redigeerimist ja otsingut selles asjas.",
+      "title": "Laadige üles esimesed dokumendid",
+      "videoLabel": "Asja dokumentide ülevaade"
+    },
+    "emptyMatters": {
+      "description": "Looge asi, et korraldada dokumendid, kontaktid, ülesanded ja tiimi tegevus ühes kohas.",
+      "title": "Looge esimene asi",
+      "videoLabel": "Asja seadistamise ülevaade"
+    },
     "entitiesCount": "{count, plural, one {# element} other {# elementi}}",
     "exportToCsv": "Ekspordi CSV-sse",
     "fields": {
@@ -1916,6 +1941,7 @@
       "manualInput": "Käsitsi"
     },
     "unarchiveMatter": "Unarchive",
+    "uploadDocuments": "Upload documents",
     "views": {
       "addFields": "Lisa väljad",
       "aiGenerated": "Tehisintellektiga loodud",

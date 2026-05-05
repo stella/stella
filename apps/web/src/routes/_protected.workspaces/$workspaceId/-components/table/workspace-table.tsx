@@ -62,7 +62,6 @@ import type {
 import {
   WorkspaceGridCell,
   WorkspaceGridFillerCell,
-  WorkspaceGridFillerHead,
   WorkspaceGridHead,
   WorkspaceGridRow,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid";
@@ -257,13 +256,10 @@ export const WorkspaceTable = ({
     (sum, column) => sum + column.getSize(),
     0,
   );
-  const fillerTemplate = addPropertyColumn ? " minmax(0, 1fr)" : "";
   const gridStyle: WorkspaceGridStyle = {
-    "--workspace-table-columns": `${getGridTemplateColumns(renderColumns)}${fillerTemplate}${
-      addPropertyColumn ? ` ${addPropertyColumn.getSize()}px` : ""
-    }`,
+    "--workspace-table-columns": getGridTemplateColumns(orderedColumns),
     minWidth: tableWidth,
-    width: "100%",
+    width: tableWidth,
   };
   const horizontalMaxScroll = Math.max(0, tableWidth - wrapperWidth);
   const handleColumnReorder = useCallback(
@@ -433,6 +429,10 @@ export const WorkspaceTable = ({
               {getOrderedHeaders(headerGroup.headers, renderColumns).map(
                 (header, index) => (
                   <DraggableHeaderCell
+                    collapseEndBorder={
+                      Boolean(addPropertyColumn) &&
+                      index === renderColumns.length - 1
+                    }
                     header={header}
                     index={index}
                     key={header.id}
@@ -442,18 +442,15 @@ export const WorkspaceTable = ({
                 ),
               )}
               {addPropertyColumn && (
-                <>
-                  <WorkspaceGridFillerHead />
-                  <DraggableHeaderCell
-                    header={getRequiredHeader(
-                      headerGroup.headers,
-                      addPropertyColumn.id,
-                    )}
-                    index={renderColumns.length}
-                    onToggleSelectAll={handleToggleSelectAll}
-                    selectAllState={selectAllState}
-                  />
-                </>
+                <DraggableHeaderCell
+                  header={getRequiredHeader(
+                    headerGroup.headers,
+                    addPropertyColumn.id,
+                  )}
+                  index={renderColumns.length}
+                  onToggleSelectAll={handleToggleSelectAll}
+                  selectAllState={selectAllState}
+                />
               )}
             </WorkspaceGridRow>
           ))}
@@ -467,18 +464,12 @@ export const WorkspaceTable = ({
               <WorkspaceGridFillerCell
                 className="border-b-0"
                 style={{
-                  gridColumn: addPropertyColumn ? "1 / -3" : "1 / -1",
+                  gridColumn: addPropertyColumn ? "1 / -2" : "1 / -1",
                   height: paddingTop,
                 }}
               />
               {addPropertyColumn && (
-                <>
-                  <WorkspaceGridFillerCell
-                    className="border-b-0"
-                    style={{ gridColumn: "-3 / -2", height: paddingTop }}
-                  />
-                  <AddPropertyRailSpacer height={paddingTop} />
-                </>
+                <AddPropertyRailSpacer height={paddingTop} />
               )}
             </WorkspaceGridRow>
           )}
@@ -531,18 +522,12 @@ export const WorkspaceTable = ({
               <WorkspaceGridFillerCell
                 className="border-b-0"
                 style={{
-                  gridColumn: addPropertyColumn ? "1 / -3" : "1 / -1",
+                  gridColumn: addPropertyColumn ? "1 / -2" : "1 / -1",
                   height: paddingBottom,
                 }}
               />
               {addPropertyColumn && (
-                <>
-                  <WorkspaceGridFillerCell
-                    className="border-b-0"
-                    style={{ gridColumn: "-3 / -2", height: paddingBottom }}
-                  />
-                  <AddPropertyRailSpacer height={paddingBottom} />
-                </>
+                <AddPropertyRailSpacer height={paddingBottom} />
               )}
             </WorkspaceGridRow>
           )}
@@ -1230,6 +1215,9 @@ const DraggableRow = ({
               "max-h-48 overflow-y-auto whitespace-normal [&_.line-clamp-2]:line-clamp-none [&_.truncate]:min-w-0 [&_.truncate]:overflow-visible [&_.truncate]:wrap-break-word [&_.truncate]:whitespace-normal",
             cell.column.getIsResizing() &&
               "after:bg-info after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-50 after:w-px",
+            addPropertyColumn &&
+              cellIndex === visibleCells.length - 1 &&
+              "border-e-0",
           )}
           data-state={cell.row.getIsSelected() ? "selected" : undefined}
           key={cell.id}
@@ -1248,7 +1236,6 @@ const DraggableRow = ({
           )}
         </WorkspaceGridCell>
       ))}
-      {addPropertyCell && <WorkspaceGridFillerCell />}
       <AddPropertyCell
         cell={addPropertyCell}
         columnIndex={renderColumns.length + 1}

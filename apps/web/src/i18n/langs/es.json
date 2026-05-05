@@ -521,6 +521,7 @@
     "add": "Añadir",
     "all": "Todos",
     "cancel": "Cancelar",
+    "captions": "Captions",
     "caseLaw": "Jurisprudencia",
     "category": "Categoría",
     "changeColor": "Cambiar color",
@@ -546,6 +547,7 @@
     "deleteConfirmDescription": "¿Está seguro de que desea eliminar \"{name}\"? Esta acción no se puede deshacer.",
     "deletedCount": "{count, plural, one {# elemento eliminado} other {# elementos eliminados}}",
     "description": "Descripción",
+    "documentation": "Documentation",
     "done": "Hecho",
     "download": "Descargar",
     "duplicate": "Duplicar",
@@ -553,6 +555,12 @@
     "edit": "Editar",
     "email": "Correo electrónico",
     "empty": "Vacío",
+    "emptyScreen": {
+      "letUsKnowAt": "Let us know at",
+      "needHelp": "Need help?",
+      "orLetUsKnowAt": "or let us know at",
+      "viewDocumentation": "View documentation"
+    },
     "enterKey": "↵",
     "error": "Error",
     "expenses": "Gastos",
@@ -579,6 +587,7 @@
     "organization": "Organización",
     "organizationName": "Nombre de la organización",
     "pin": "Fijar",
+    "playVideo": "Play video",
     "preview": "Vista previa",
     "previous": "Anterior",
     "print": "Imprimir",
@@ -696,6 +705,9 @@
       "personal": "Personal",
       "work": "Trabajo"
     },
+    "emptyDescription": "Cree contactos una vez y reutilícelos en asuntos, partes y datos de facturación.",
+    "emptyTitle": "Cree su primer contacto",
+    "emptyVideoLabel": "Vista general de contactos",
     "fields": {
       "bankAccountBankName": "Nombre del banco",
       "bankAccountBic": "BIC/SWIFT",
@@ -1083,7 +1095,10 @@
       "deleteConfirmTitle": "¿Eliminar skill?",
       "deleteShortcut": "Eliminar skill",
       "editShortcut": "Editar skill",
+      "emptyDescription": "Cree prompts reutilizables para el trabajo que su equipo repite, desde resúmenes hasta instrucciones para primeros borradores.",
       "emptyState": "Aún no hay skills. Añada la primera.",
+      "emptyTitle": "Cree su primera skill",
+      "emptyVideoLabel": "Resumen de skills",
       "errors": {
         "commandConflict": "Ya existe una skill con este nombre /",
         "commandInvalid": "Usa solo letras minúsculas, dígitos, guiones y guiones bajos",
@@ -1578,6 +1593,16 @@
     "documentsCount": "{count, plural, one {# documento} other {# documentos}}",
     "dropToUploadFiles": "Suelte para subir archivos",
     "duplicateWithContent": "Duplicar con contenido",
+    "emptyDocuments": {
+      "description": "Suba documentos para habilitar la extracción de tablas, la organización de documentos, la edición en el navegador y la búsqueda en este asunto.",
+      "title": "Suba sus primeros documentos",
+      "videoLabel": "Resumen de documentos del asunto"
+    },
+    "emptyMatters": {
+      "description": "Cree un asunto para organizar documentos, contactos, tareas y actividad del equipo en un solo lugar.",
+      "title": "Cree su primer asunto",
+      "videoLabel": "Resumen de configuración del asunto"
+    },
     "entitiesCount": "{count, plural, one {# elemento} other {# elementos}}",
     "exportToCsv": "Exportar a CSV",
     "fields": {
@@ -1916,6 +1941,7 @@
       "manualInput": "Manualmente"
     },
     "unarchiveMatter": "Unarchive",
+    "uploadDocuments": "Upload documents",
     "views": {
       "addFields": "Añadir campos",
       "aiGenerated": "Generado por IA",

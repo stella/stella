@@ -69,6 +69,7 @@ export const env = createEnv({
     VITE_FEATURE_DESKTOP_EDITING: featureFlagSchema,
     VITE_FEEDBACK_EMAIL_TO: v.optional(v.pipe(v.string(), v.email())),
     VITE_TERMS_URL: v.optional(linkUrlSchema, "/terms"),
+    VITE_EMPTY_STATE_MATTERS_VIDEO_URL: v.optional(v.pipe(v.string(), v.url())),
     // Base URL the desktop-app download buttons point at. Defaults
     // to upstream GitHub releases; self-hosters who mirror the
     // binaries can point this at their own host (filenames are

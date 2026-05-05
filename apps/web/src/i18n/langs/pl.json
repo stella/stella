@@ -521,6 +521,7 @@
     "add": "Dodaj",
     "all": "Wszystkie",
     "cancel": "Anuluj",
+    "captions": "Captions",
     "caseLaw": "Orzecznictwo",
     "category": "Kategoria",
     "changeColor": "Zmień kolor",
@@ -546,6 +547,7 @@
     "deleteConfirmDescription": "Czy na pewno chcesz usunąć „{name}“? Tej operacji nie można cofnąć.",
     "deletedCount": "{count, plural, one {# element usunięto} few {# elementy usunięto} other {# elementów usunięto}}",
     "description": "Opis",
+    "documentation": "Documentation",
     "done": "Gotowe",
     "download": "Pobierz",
     "duplicate": "Duplikuj",
@@ -553,6 +555,12 @@
     "edit": "Edytuj",
     "email": "E-mail",
     "empty": "Puste",
+    "emptyScreen": {
+      "letUsKnowAt": "Let us know at",
+      "needHelp": "Need help?",
+      "orLetUsKnowAt": "or let us know at",
+      "viewDocumentation": "View documentation"
+    },
     "enterKey": "↵",
     "error": "Błąd",
     "expenses": "Wydatki",
@@ -579,6 +587,7 @@
     "organization": "Organizacja",
     "organizationName": "Nazwa organizacji",
     "pin": "Przypnij",
+    "playVideo": "Play video",
     "preview": "Podgląd",
     "previous": "Poprzedni",
     "print": "Drukuj",
@@ -696,6 +705,9 @@
       "personal": "Prywatny",
       "work": "Służbowy"
     },
+    "emptyDescription": "Utwórz kontakty raz, a potem używaj ich ponownie w sprawach, stronach i danych rozliczeniowych.",
+    "emptyTitle": "Utwórz pierwszy kontakt",
+    "emptyVideoLabel": "Przegląd kontaktów",
     "fields": {
       "bankAccountBankName": "Nazwa banku",
       "bankAccountBic": "BIC/SWIFT",
@@ -1083,7 +1095,10 @@
       "deleteConfirmTitle": "Usunąć umiejętność?",
       "deleteShortcut": "Usuń umiejętność",
       "editShortcut": "Edytuj umiejętność",
+      "emptyDescription": "Twórz prompty wielokrotnego użytku dla pracy, którą zespół powtarza, od podsumowań po instrukcje do pierwszych wersji.",
       "emptyState": "Nie ma jeszcze umiejętności. Dodaj pierwszą.",
+      "emptyTitle": "Utwórz pierwszą umiejętność",
+      "emptyVideoLabel": "Przegląd umiejętności",
       "errors": {
         "commandConflict": "Umiejętność o tej nazwie / już istnieje",
         "commandInvalid": "Używaj tylko małych liter, cyfr, myślników i podkreśleń",
@@ -1578,6 +1593,16 @@
     "documentsCount": "{count, plural, one {# dokument} few {# dokumenty} many {# dokumentów} other {# dokumentu}}",
     "dropToUploadFiles": "Upuść pliki, aby je przesłać",
     "duplicateWithContent": "Duplikuj z zawartością",
+    "emptyDocuments": {
+      "description": "Prześlij dokumenty, aby włączyć wyodrębnianie tabel, porządkowanie dokumentów, edycję w przeglądarce i wyszukiwanie w tej sprawie.",
+      "title": "Prześlij pierwsze dokumenty",
+      "videoLabel": "Przegląd dokumentów sprawy"
+    },
+    "emptyMatters": {
+      "description": "Utwórz sprawę, aby uporządkować dokumenty, kontakty, zadania i aktywność zespołu w jednym miejscu.",
+      "title": "Utwórz pierwszą sprawę",
+      "videoLabel": "Przegląd konfiguracji sprawy"
+    },
     "entitiesCount": "{count, plural, one {# element} few {# elementy} many {# elementów} other {# elementu}}",
     "exportToCsv": "Eksportuj do CSV",
     "fields": {
@@ -1916,6 +1941,7 @@
       "manualInput": "Ręcznie"
     },
     "unarchiveMatter": "Przywróć z archiwum",
+    "uploadDocuments": "Upload documents",
     "views": {
       "addFields": "Dodaj pola",
       "aiGenerated": "Wygenerowane przez AI",

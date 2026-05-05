@@ -50,6 +50,10 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import {
+  EMPTY_SCREEN_TABLE_PREVIEW,
+  EmptyScreen,
+} from "@/components/empty-screen";
 import Tooltip from "@/components/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
@@ -77,7 +81,9 @@ export const Route = createFileRoute("/_protected/contacts/")({
 
 function ContactsPage() {
   const t = useTranslations();
+  const tContacts = useTranslations("contacts");
   const canCreateContact = usePermissions({ contact: ["create"] });
+  const [createContactOpen, setCreateContactOpen] = useState(false);
   const [filter, setFilter] = useState<ContactFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -96,6 +102,11 @@ function ContactsPage() {
   );
 
   const items = data?.items ?? [];
+  const isFirstUseEmpty =
+    !isLoading &&
+    items.length === 0 &&
+    searchQuery.trim() === "" &&
+    filter === "all";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-t p-4">
@@ -131,37 +142,61 @@ function ContactsPage() {
             onClick={() => setFilter("organization")}
           />
         </div>
-        {canCreateContact && <CreateContactDialog />}
+        {canCreateContact && (
+          <CreateContactDialog
+            onOpenChange={setCreateContactOpen}
+            open={createContactOpen}
+          />
+        )}
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-8" />
-            <TableHead>{t("common.name")}</TableHead>
-            <TableHead>{t("common.email")}</TableHead>
-            <TableHead>{t("contacts.columns.phone")}</TableHead>
-            <TableHead className="text-end">{t("common.matters")}</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.map((contact) => (
-            <ContactRow contact={contact} key={contact.id} />
-          ))}
-          {!isLoading && items.length === 0 && (
+      {isFirstUseEmpty && canCreateContact ? (
+        <EmptyScreen
+          className="min-h-[520px] p-0"
+          description={tContacts("emptyDescription")}
+          primaryAction={{
+            label: tContacts("newContact"),
+            icon: PlusIcon,
+            onClick: () => setCreateContactOpen(true),
+          }}
+          title={tContacts("emptyTitle")}
+          video={{
+            ...EMPTY_SCREEN_TABLE_PREVIEW,
+            title: tContacts("emptyTitle"),
+          }}
+        />
+      ) : (
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell
-                className="text-muted-foreground py-8 text-center"
-                colSpan={6}
-              >
-                <p>{t("contacts.noContactsFound")}</p>
-                <p className="text-sm">{t("contacts.noContactsDescription")}</p>
-              </TableCell>
+              <TableHead className="w-8" />
+              <TableHead>{t("common.name")}</TableHead>
+              <TableHead>{t("common.email")}</TableHead>
+              <TableHead>{t("contacts.columns.phone")}</TableHead>
+              <TableHead className="text-end">{t("common.matters")}</TableHead>
+              <TableHead />
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {items.map((contact) => (
+              <ContactRow contact={contact} key={contact.id} />
+            ))}
+            {!isLoading && items.length === 0 && (
+              <TableRow>
+                <TableCell
+                  className="text-muted-foreground py-8 text-center"
+                  colSpan={6}
+                >
+                  <p>{t("contacts.noContactsFound")}</p>
+                  <p className="text-sm">
+                    {t("contacts.noContactsDescription")}
+                  </p>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      )}
     </div>
   );
 }
@@ -417,10 +452,17 @@ const toBillingAddress = (
   };
 };
 
-const CreateContactDialog = () => {
+type CreateContactDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+
+const CreateContactDialog = ({
+  open,
+  onOpenChange,
+}: CreateContactDialogProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const [isOpen, setIsOpen] = useState(false);
   const [isAresLoading, setIsAresLoading] = useState(false);
   const [aresBillingAddress, setAresBillingAddress] =
     useState<BillingAddress | null>(null);
@@ -481,7 +523,7 @@ const CreateContactDialog = () => {
         title: t("success.contactCreated"),
         type: "success",
       });
-      setIsOpen(false);
+      onOpenChange(false);
       form.reset();
       setAresBillingAddress(null);
       setIsAresLoading(false);
@@ -543,15 +585,15 @@ const CreateContactDialog = () => {
 
   return (
     <Dialog
-      onOpenChange={(open) => {
-        setIsOpen(open);
-        if (!open) {
+      onOpenChange={(nextOpen) => {
+        onOpenChange(nextOpen);
+        if (!nextOpen) {
           form.reset();
           setAresBillingAddress(null);
           setIsAresLoading(false);
         }
       }}
-      open={isOpen}
+      open={open}
     >
       <DialogTrigger render={<Button size="sm" />}>
         <PlusIcon />

@@ -17,6 +17,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  EMPTY_SCREEN_TABLE_PREVIEW,
+  EmptyScreen,
+} from "@/components/empty-screen";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { roleOptions } from "@/routes/-queries";
@@ -49,6 +53,7 @@ type ShortcutRow = {
 
 function SkillsPage() {
   const t = useTranslations();
+  const tSkills = useTranslations("knowledge.skills");
   const queryClient = useQueryClient();
 
   const { data: shortcuts = [], isLoading } = useQuery(shortcutsOptions());
@@ -139,9 +144,20 @@ function SkillsPage() {
       </div>
 
       {shortcuts.length === 0 && !isLoading && (
-        <p className="text-muted-foreground text-sm">
-          {t("knowledge.skills.emptyState")}
-        </p>
+        <EmptyScreen
+          className="min-h-[520px] p-0"
+          description={tSkills("emptyDescription")}
+          primaryAction={{
+            label: tSkills("addShortcut"),
+            icon: PlusIcon,
+            onClick: openCreate,
+          }}
+          title={tSkills("emptyTitle")}
+          video={{
+            ...EMPTY_SCREEN_TABLE_PREVIEW,
+            title: tSkills("emptyTitle"),
+          }}
+        />
       )}
 
       {teamShortcuts.length > 0 && (

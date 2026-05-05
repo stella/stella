@@ -521,6 +521,7 @@
     "add": "Hinzufügen",
     "all": "Alle",
     "cancel": "Abbrechen",
+    "captions": "Captions",
     "caseLaw": "Rechtsprechung",
     "category": "Kategorie",
     "changeColor": "Farbe ändern",
@@ -546,6 +547,7 @@
     "deleteConfirmDescription": "Möchten Sie \"{name}\" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
     "deletedCount": "{count, plural, one {# Element} other {# Elemente}} gelöscht",
     "description": "Beschreibung",
+    "documentation": "Documentation",
     "done": "Fertig",
     "download": "Herunterladen",
     "duplicate": "Duplizieren",
@@ -553,6 +555,12 @@
     "edit": "Bearbeiten",
     "email": "E-Mail",
     "empty": "Leer",
+    "emptyScreen": {
+      "letUsKnowAt": "Let us know at",
+      "needHelp": "Need help?",
+      "orLetUsKnowAt": "or let us know at",
+      "viewDocumentation": "View documentation"
+    },
     "enterKey": "↵",
     "error": "Fehler",
     "expenses": "Ausgaben",
@@ -579,6 +587,7 @@
     "organization": "Organisation",
     "organizationName": "Organisationsname",
     "pin": "Anheften",
+    "playVideo": "Play video",
     "preview": "Vorschau",
     "previous": "Zurück",
     "print": "Drucken",
@@ -696,6 +705,9 @@
       "personal": "Privat",
       "work": "Geschäftlich"
     },
+    "emptyDescription": "Erstellen Sie Kontakte einmal und verwenden Sie sie anschließend in Mandaten, Parteien und Abrechnungsdaten.",
+    "emptyTitle": "Ersten Kontakt erstellen",
+    "emptyVideoLabel": "Kontaktübersicht",
     "fields": {
       "bankAccountBankName": "Bankname",
       "bankAccountBic": "BIC/SWIFT",
@@ -1083,7 +1095,10 @@
       "deleteConfirmTitle": "Skill löschen?",
       "deleteShortcut": "Skill löschen",
       "editShortcut": "Skill bearbeiten",
+      "emptyDescription": "Erstellen Sie wiederverwendbare Prompts für wiederkehrende Arbeit im Team, von Zusammenfassungen bis zu Anweisungen für erste Entwürfe.",
       "emptyState": "Noch keine Skills. Fügen Sie einen hinzu.",
+      "emptyTitle": "Ersten Skill erstellen",
+      "emptyVideoLabel": "Skill-Übersicht",
       "errors": {
         "commandConflict": "Ein Skill mit diesem / Namen existiert bereits",
         "commandInvalid": "Nur Kleinbuchstaben, Ziffern, Bindestriche und Unterstriche verwenden",
@@ -1578,6 +1593,16 @@
     "documentsCount": "{count, plural, one {# Dokument} other {# Dokumente}}",
     "dropToUploadFiles": "Dateien zum Hochladen ablegen",
     "duplicateWithContent": "Mit Inhalt duplizieren",
+    "emptyDocuments": {
+      "description": "Laden Sie Dokumente hoch, um Tabellenextraktion, Dokumentorganisation, Bearbeitung im Browser und Suche in dieser Akte zu ermöglichen.",
+      "title": "Laden Sie Ihre ersten Dokumente hoch",
+      "videoLabel": "Dokumentenübersicht der Akte"
+    },
+    "emptyMatters": {
+      "description": "Erstellen Sie eine Akte, um Dokumente, Kontakte, Aufgaben und Teamaktivitäten an einem Ort zu organisieren.",
+      "title": "Erstellen Sie Ihre erste Akte",
+      "videoLabel": "Überblick zur Akteneinrichtung"
+    },
     "entitiesCount": "{count, plural, one {# Element} other {# Elemente}}",
     "exportToCsv": "Als CSV exportieren",
     "fields": {
@@ -1916,6 +1941,7 @@
       "manualInput": "Manuell"
     },
     "unarchiveMatter": "Unarchive",
+    "uploadDocuments": "Upload documents",
     "views": {
       "addFields": "Felder hinzufügen",
       "aiGenerated": "KI-generiert",

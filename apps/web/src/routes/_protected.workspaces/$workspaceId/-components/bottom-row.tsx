@@ -5,13 +5,11 @@ import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-comp
 import type { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import {
   WorkspaceGridCell,
-  WorkspaceGridFillerCell,
   WorkspaceGridRow,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid";
 import { getInternalColId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const selectColId = getInternalColId("select");
-const addPropertyColId = getInternalColId("add-property");
 
 type BottomRowProps = {
   workspaceId: string;
@@ -25,7 +23,6 @@ export const BottomRow = ({
   onFolderCreated,
 }: BottomRowProps) => {
   const t = useTranslations();
-  const addPropertyColumn = table.getColumn(addPropertyColId);
 
   return (
     <AddEntityMenu
@@ -58,23 +55,8 @@ export const BottomRow = ({
             aria-hidden="true"
             className="border-t-2"
             role="presentation"
-            style={{ gridColumn: addPropertyColumn ? "3 / -3" : "3 / -1" }}
+            style={{ gridColumn: "3 / -1" }}
           />
-          {addPropertyColumn && (
-            <>
-              <WorkspaceGridFillerCell className="border-t-2" />
-              <WorkspaceGridCell
-                aria-hidden="true"
-                className="border-s border-t-2 p-0"
-                role="presentation"
-                style={{
-                  position: "sticky",
-                  right: 0,
-                  zIndex: 2,
-                }}
-              />
-            </>
-          )}
         </WorkspaceGridRow>
       }
       workspaceId={workspaceId}
