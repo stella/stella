@@ -720,6 +720,21 @@ const FileChatOverlayInner = ({
     placeholder: filePlaceholder,
     threadRef,
   });
+  const canSubmitWithCurrentDocxSnapshot = useEffectEvent(() => {
+    if (!activeFile || !docxEditorRef) {
+      return true;
+    }
+
+    const snapshot = docxEditorRef.current?.createAIEditSnapshot() ?? null;
+    if (snapshot) {
+      lastSentDocxEditSnapshotRef.current = snapshot;
+      return true;
+    }
+
+    lastSentDocxEditSnapshotRef.current = null;
+    setEditorReady(false);
+    return false;
+  });
 
   const handleApproveWithDocxUnlock = async (
     approvalId: string,
@@ -826,6 +841,7 @@ const FileChatOverlayInner = ({
 
       <PromptBar
         attentionPulseSeq={attentionPulseSeq}
+        canSubmitNow={() => canSubmitWithCurrentDocxSnapshot()}
         editorController={editorController}
         emptyPlaceholder={
           activeFile && filePlaceholderAction ? (
