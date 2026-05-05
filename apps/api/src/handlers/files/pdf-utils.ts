@@ -1,14 +1,18 @@
 import { Result, TaggedError } from "better-result";
-import { resolve } from "node:path";
 
 import { LIMITS } from "@/api/lib/limits";
+import { resolveRuntimeWorkerPath } from "@/api/lib/runtime-worker-path";
 import { spawnWorker } from "@/api/lib/subprocess";
 
 class CorruptedPdfError extends TaggedError("CorruptedPdfError")<{
   message: string;
 }>() {}
 
-const WORKER_PATH = resolve(import.meta.dir, "pdf-worker.ts");
+const WORKER_PATH = resolveRuntimeWorkerPath({
+  outputFile: "pdf-worker.js",
+  sourceDir: import.meta.dir,
+  sourceFile: "pdf-worker.ts",
+});
 
 export const isEncryptedPdf = async (buffer: ArrayBuffer) => {
   const result = await spawnWorker({

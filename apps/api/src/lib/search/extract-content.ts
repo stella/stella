@@ -8,15 +8,19 @@
  */
 
 import { Result } from "better-result";
-import { resolve } from "node:path";
 
 import { captureError } from "@/api/lib/analytics";
 import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { resolveRuntimeWorkerPath } from "@/api/lib/runtime-worker-path";
 import { spawnWorker } from "@/api/lib/subprocess";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
-const WORKER_PATH = resolve(import.meta.dir, "extraction-worker.ts");
+const WORKER_PATH = resolveRuntimeWorkerPath({
+  outputFile: "extraction-worker.js",
+  sourceDir: import.meta.dir,
+  sourceFile: "extraction-worker.ts",
+});
 
 const SUPPORTED_MIMES = new Set<string>([PDF_MIME_TYPE, DOCX_MIME_TYPE]);
 

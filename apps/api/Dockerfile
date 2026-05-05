@@ -30,6 +30,15 @@ RUN bun build \
     --target bun \
     --outfile /app/server \
     apps/api/src/index.ts
+RUN mkdir -p /app/runtime-workers && \
+    bun build \
+      --target bun \
+      --outfile /app/runtime-workers/pdf-worker.js \
+      apps/api/src/handlers/files/pdf-worker.ts && \
+    bun build \
+      --target bun \
+      --outfile /app/runtime-workers/extraction-worker.js \
+      apps/api/src/lib/search/extraction-worker.ts
 
 # Run the compiled API as non-root.
 #
@@ -44,11 +53,13 @@ FROM deps AS runner
 # Defaults to "dev" for local `docker build` outside the release flow.
 ARG STELLA_VERSION=dev
 ENV STELLA_VERSION=${STELLA_VERSION}
+ENV STELLA_WORKER_DIR=/\$bunfs/root/workers
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 COPY --chown=stella:stella --from=pruner /app/out/full/ .
 COPY --chown=stella:stella --from=builder /app/server /app/server
 RUN mkdir -p '/$bunfs/root'
+COPY --chown=stella:stella --from=builder /app/runtime-workers /\$bunfs/root/workers
 COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/file-scan/yara /\$bunfs/root/yara
 COPY --chown=stella:stella --from=deps \
     /app/node_modules/@stll/aho-corasick-wasm/dist/*.wasm \
