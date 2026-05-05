@@ -152,7 +152,10 @@ export const streamChat = async ({
           // resulting auto-resubmit storm, but the failure is
           // otherwise invisible — capture it so we can track which
           // models regress.
-          if (finishReason === "stop" && (totalUsage.outputTokens ?? 0) === 0) {
+          // `outputTokens` is `number | undefined` — only fire when
+          // explicitly zero, otherwise providers that omit usage
+          // metadata would all be misclassified as empty.
+          if (finishReason === "stop" && totalUsage.outputTokens === 0) {
             captureError(
               new ChatEmptyCompletionError({
                 message: "Model returned finish_reason=stop with zero output",
