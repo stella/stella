@@ -349,10 +349,10 @@
     "landing": {
       "lastAccessedMatters": "Legutóbb megnyitott ügyek",
       "noMatters": "Még nincsenek ügyek",
-      "noPrompts": "Még nincsenek promptok",
+      "noPrompts": "Még nincsenek skillek",
       "noRecentChats": "Nincsenek legutóbbi chatek",
       "pinnedMatters": "Kitűzött ügyek",
-      "prompts": "Promptok",
+      "prompts": "Skillek",
       "recentChats": "Legutóbbi chatek"
     },
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
@@ -373,12 +373,12 @@
     "noThreads": "Még nincsenek beszélgetések",
     "placeholder": "Írja ide a kérdését, / a skillekhez, @ kontextus hozzáadásához",
     "prompts": {
-      "noResults": "Nincs egyező prompt",
+      "noResults": "Nincs egyező skill",
       "noShortcuts": "Még nincsenek skillek. Adjon hozzá a Tudás → Skillek részen.",
       "scope": {
-        "private": "Saját promptok",
+        "private": "Saját skillek",
         "stock": "Beépített",
-        "team": "Csapat promptjai"
+        "team": "Csapat skillek"
       },
       "stock": {
         "compareVersions": {
@@ -1066,7 +1066,7 @@
         "title": "Csatlakozók"
       },
       "skills": {
-        "description": "Egyéni MI-képességek és promptok",
+        "description": "Egyéni MI-skillek",
         "title": "Képességek"
       },
       "templates": {

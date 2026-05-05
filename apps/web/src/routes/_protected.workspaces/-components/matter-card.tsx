@@ -32,12 +32,14 @@ const DAY_MS = 86_400_000;
 
 type MatterCardProps = {
   workspace: Workspace;
+  canCreateMatter?: boolean | undefined;
   focused: boolean;
   hideClientName?: boolean;
 };
 
 export const MatterCard = ({
   workspace,
+  canCreateMatter = false,
   focused,
   hideClientName,
 }: MatterCardProps) => {
@@ -64,6 +66,7 @@ export const MatterCard = ({
 
   return (
     <MatterContextMenu
+      canCreateMatter={canCreateMatter}
       isPersonal={!workspace.client}
       workspaceId={workspace.id}
       workspaceName={workspace.name ?? t("workspaces.defaultName")}

@@ -349,10 +349,10 @@
     "landing": {
       "lastAccessedMatters": "Naposledy otvorené spisy",
       "noMatters": "Zatiaľ žiadne spisy",
-      "noPrompts": "Zatiaľ žiadne prompty",
+      "noPrompts": "Zatiaľ žiadne zručnosti",
       "noRecentChats": "Zatiaľ žiadne nedávne chaty",
       "pinnedMatters": "Pripnuté spisy",
-      "prompts": "Prompty",
+      "prompts": "Zručnosti",
       "recentChats": "Nedávne chaty"
     },
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
@@ -373,12 +373,12 @@
     "noThreads": "Zatiaľ žiadne konverzácie",
     "placeholder": "Sem napíšte svoju otázku, / pre zručnosti, @ na pridanie kontextu",
     "prompts": {
-      "noResults": "Žiadne zhodné prompty",
+      "noResults": "Žiadne zhodné zručnosti",
       "noShortcuts": "Zatiaľ žiadne zručnosti. Pridajte ich v časti Znalosti → Zručnosti.",
       "scope": {
-        "private": "Vaše prompty",
+        "private": "Vaše zručnosti",
         "stock": "Vstavané",
-        "team": "Tímové prompty"
+        "team": "Tímové zručnosti"
       },
       "stock": {
         "compareVersions": {
@@ -1066,7 +1066,7 @@
         "title": "Konektory"
       },
       "skills": {
-        "description": "Vlastné AI zručnosti a prompty",
+        "description": "Vlastné AI zručnosti",
         "title": "Zručnosti"
       },
       "templates": {

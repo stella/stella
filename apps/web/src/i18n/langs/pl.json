@@ -349,10 +349,10 @@
     "landing": {
       "lastAccessedMatters": "Ostatnio otwarte sprawy",
       "noMatters": "Nie ma jeszcze spraw",
-      "noPrompts": "Nie ma jeszcze promptów",
+      "noPrompts": "Nie ma jeszcze umiejętności",
       "noRecentChats": "Brak ostatnich chatów",
       "pinnedMatters": "Przypięte sprawy",
-      "prompts": "Prompty",
+      "prompts": "Umiejętności",
       "recentChats": "Ostatnie chaty"
     },
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
@@ -373,12 +373,12 @@
     "noThreads": "Brak rozmów",
     "placeholder": "Wpisz pytanie tutaj, / dla umiejętności, @ aby dodać kontekst",
     "prompts": {
-      "noResults": "Brak pasujących promptów",
+      "noResults": "Brak pasujących umiejętności",
       "noShortcuts": "Nie ma jeszcze umiejętności. Dodaj je w Wiedza → Umiejętności.",
       "scope": {
-        "private": "Twoje prompty",
+        "private": "Twoje umiejętności",
         "stock": "Wbudowane",
-        "team": "Prompty zespołu"
+        "team": "Umiejętności zespołu"
       },
       "stock": {
         "compareVersions": {
@@ -1066,7 +1066,7 @@
         "title": "Konektory"
       },
       "skills": {
-        "description": "Niestandardowe umiejętności AI i prompty",
+        "description": "Niestandardowe umiejętności AI",
         "title": "Umiejętności"
       },
       "templates": {

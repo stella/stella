@@ -349,10 +349,10 @@
     "landing": {
       "lastAccessedMatters": "Paskutinės atidarytos bylos",
       "noMatters": "Bylų dar nėra",
-      "noPrompts": "Raginimų dar nėra",
+      "noPrompts": "Įgūdžių dar nėra",
       "noRecentChats": "Nėra naujausių pokalbių",
       "pinnedMatters": "Prisegtos bylos",
-      "prompts": "Raginimai",
+      "prompts": "Įgūdžiai",
       "recentChats": "Neseniai naudoti pokalbiai"
     },
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
@@ -373,12 +373,12 @@
     "noThreads": "Pokalbių dar nėra",
     "placeholder": "Čia įveskite klausimą, / įgūdžiams, @ kontekstui pridėti",
     "prompts": {
-      "noResults": "Nėra atitinkančių raginimų",
+      "noResults": "Nėra atitinkančių įgūdžių",
       "noShortcuts": "Įgūdžių dar nėra. Pridėkite juos skiltyje Žinios → Įgūdžiai.",
       "scope": {
-        "private": "Jūsų raginimai",
+        "private": "Jūsų įgūdžiai",
         "stock": "Įmontuoti",
-        "team": "Komandos raginimai"
+        "team": "Komandos įgūdžiai"
       },
       "stock": {
         "compareVersions": {
@@ -1066,7 +1066,7 @@
         "title": "Jungtys"
       },
       "skills": {
-        "description": "Individualūs AI įgūdžiai ir užklausos",
+        "description": "Individualūs AI įgūdžiai",
         "title": "Įgūdžiai"
       },
       "templates": {

@@ -147,6 +147,12 @@ export const ChatMatterPicker = ({
   const triggerSwatch = selected[0]
     ? resolveMatterColor(selected[0].id, selected[0].color)
     : null;
+  const extraCountStyle = triggerSwatch
+    ? {
+        backgroundColor: `color-mix(in srgb, ${triggerSwatch} 14%, transparent)`,
+        color: triggerSwatch,
+      }
+    : undefined;
 
   const toggle = (matterId: string) => {
     if (matterIds.includes(matterId)) {
@@ -183,7 +189,10 @@ export const ChatMatterPicker = ({
         />
         <span className="truncate">{triggerLabel}</span>
         {extraCount > 0 && (
-          <span className="bg-muted text-foreground rounded-sm px-1 text-[10px] font-medium tabular-nums">
+          <span
+            className="bg-muted text-foreground rounded-sm px-1 text-[10px] font-medium tabular-nums"
+            style={extraCountStyle}
+          >
             +{extraCount}
           </span>
         )}

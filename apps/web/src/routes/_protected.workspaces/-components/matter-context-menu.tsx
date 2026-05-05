@@ -44,6 +44,7 @@ import {
   PenLineIcon,
   PinIcon,
   PinOffIcon,
+  PlusIcon,
   Trash2Icon,
   UserPlusIcon,
 } from "lucide-react";
@@ -63,10 +64,12 @@ import {
   useUpdateWorkspace,
 } from "@/routes/_protected.workspaces/-mutations";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
+import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
 // ── Shared menu items ────────────────────────────────────────
 
 type MatterMenuBaseCallbacks = {
+  onCreateMatter?: (() => void) | undefined;
   onOpenInNewTab: () => void;
   onRename: () => void;
   onAddMember: () => void;
@@ -99,6 +102,15 @@ export const MatterMenuItems = (props: MatterMenuCallbacks) => {
 
   return (
     <>
+      {props.onCreateMatter && (
+        <>
+          <MenuItem onClick={props.onCreateMatter}>
+            <PlusIcon />
+            {t("workspaces.createNewWorkspace")}
+          </MenuItem>
+          <MenuSeparator />
+        </>
+      )}
       <MenuItem onClick={props.onOpenInNewTab}>
         <ExternalLinkIcon />
         {t("common.openInNewTab")}
@@ -153,6 +165,7 @@ export type RenameState =
 type MatterContextMenuProps = {
   workspaceId: string;
   workspaceName: string;
+  canCreateMatter?: boolean | undefined;
   isArchived?: boolean;
   isPersonal: boolean;
   children: React.ReactNode | ((rename: RenameState) => React.ReactNode);
@@ -161,6 +174,7 @@ type MatterContextMenuProps = {
 export const MatterContextMenu = ({
   workspaceId,
   workspaceName,
+  canCreateMatter = false,
   isArchived = false,
   isPersonal,
   children,
@@ -168,6 +182,7 @@ export const MatterContextMenu = ({
   const t = useTranslations();
   const { togglePin, isPinned } = usePinnedStore();
   const pinned = isPinned(workspaceId);
+  const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
 
   const queryClient = useQueryClient();
   const updateWorkspace = useUpdateWorkspace();
@@ -270,6 +285,7 @@ export const MatterContextMenu = ({
   const matterMenuCallbacks = {
     isPersonal,
     isPinned: pinned,
+    onCreateMatter: canCreateMatter ? () => openCreateMatter() : undefined,
     onAddMember: () => setAddMemberOpen(true),
     onCopyLink: () => {
       void handleCopyLink();
