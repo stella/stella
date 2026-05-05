@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { organizationSettings } from "@/api/db/schema";
-import { invalidateOrgAIConfig } from "@/api/lib/ai-config-cache";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
@@ -34,8 +33,6 @@ const deleteAIConfig = createSafeRootHandler(
           ),
       ),
     );
-
-    invalidateOrgAIConfig(session.activeOrganizationId);
 
     return Result.ok({ deleted: true });
   },

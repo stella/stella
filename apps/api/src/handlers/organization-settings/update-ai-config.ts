@@ -3,7 +3,6 @@ import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import { organizationSettings } from "@/api/db/schema";
-import { invalidateOrgAIConfig } from "@/api/lib/ai-config-cache";
 import {
   decryptAIConfig,
   encryptAIConfig,
@@ -193,8 +192,6 @@ const updateAIConfig = createSafeRootHandler(
           }),
       ),
     );
-
-    invalidateOrgAIConfig(session.activeOrganizationId);
 
     return Result.ok({
       providers: orgConfig.providers.map((providerConfig) => ({
