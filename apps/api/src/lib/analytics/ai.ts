@@ -9,6 +9,7 @@ import { env } from "@/api/env";
 import type { ModelRole, OrgAIConfig } from "@/api/lib/ai-models";
 import { getModelInfoForRole } from "@/api/lib/ai-models";
 import { errorTag } from "@/api/lib/errors/utils";
+import { logger } from "@/api/lib/observability/logger";
 
 import { getAnalytics } from "./client";
 import { SERVER_ANALYTICS_EVENTS } from "./types";
@@ -149,6 +150,35 @@ const getErrorStatusCode = (error: unknown): number | undefined => {
   }
 
   return undefined;
+};
+
+// Provider error messages we feel safe surfacing as raw text.
+// Google Generative AI and most other AI gateways return errors
+// prefixed with an UPPER_SNAKE_CASE code (PERMISSION_DENIED,
+// RESOURCE_EXHAUSTED, INVALID_ARGUMENT, ...). Anything else may
+// echo request bodies, prompt fragments, or file names, so we
+// drop the message text and only keep the bucketed reason.
+const SAFE_PROVIDER_MESSAGE_PATTERN = /^[A-Z][A-Z_]+(:|\s)/;
+
+type ClassifiedErrorMessage =
+  | { kind: "safe"; message: string }
+  | { kind: "non_standard" };
+
+const classifyErrorMessage = (
+  error: unknown,
+  maxLength: number,
+): ClassifiedErrorMessage | undefined => {
+  if (!(error instanceof Error) || !error.message) {
+    return undefined;
+  }
+  const trimmed = error.message.trim();
+  if (!SAFE_PROVIDER_MESSAGE_PATTERN.test(trimmed)) {
+    return { kind: "non_standard" };
+  }
+  return {
+    kind: "safe",
+    message: String(sanitizeForAIAnalytics(trimmed)).slice(0, maxLength),
+  };
 };
 
 const classifyFailureReason = (error: unknown): AIFailureReason => {
@@ -501,13 +531,33 @@ export const createAIAnalyticsCallbacks = ({
     hasCapturedGenerationError = true;
     const activeStep = [...stepState.values()].at(-1);
 
+    const cwMessage = classifyErrorMessage(error, 256);
+    logger.error("ai.generation.failed", {
+      "error.type": errorTag(error),
+      "ai.feature": config.feature,
+      "ai.failure_reason": classifyFailureReason(error),
+      ...(resolvedModelInfo?.provider
+        ? { "ai.provider": resolvedModelInfo.provider }
+        : {}),
+      ...(resolvedModelInfo?.modelId
+        ? { "ai.model": resolvedModelInfo.modelId }
+        : {}),
+      ...(cwMessage?.kind === "safe"
+        ? { "error.message": cwMessage.message }
+        : { "error.message_kind": "non_standard" }),
+    });
+
     if (!debugEnabled) {
+      const phMessage = classifyErrorMessage(error, 512);
       analytics.capture({
         distinctId,
         event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
         properties: {
           ...pickSafeMetadata(config.properties),
           error_type: errorTag(error),
+          ...(phMessage?.kind === "safe"
+            ? { error_message: phMessage.message }
+            : { error_message_kind: "non_standard" }),
           failure_reason: classifyFailureReason(error),
           feature: config.feature,
           ...(activeStep
