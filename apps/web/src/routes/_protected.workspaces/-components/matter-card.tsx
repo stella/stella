@@ -64,6 +64,7 @@ export const MatterCard = ({
 
   return (
     <MatterContextMenu
+      isPersonal={!workspace.client}
       workspaceId={workspace.id}
       workspaceName={workspace.name ?? t("workspaces.defaultName")}
     >

@@ -1,6 +1,5 @@
 import { TaggedError } from "better-result";
 
-import { authClient } from "@/lib/auth";
 import type { AuthErrorCode } from "@/lib/auth";
 
 export class APIError extends TaggedError("ApiError")<{
@@ -96,19 +95,12 @@ type ToAuthClientErrorProps = {
   statusText: string;
 };
 
-const isAuthClientErrorCode = (code: string): code is AuthErrorCode =>
-  code in authClient.$ERROR_CODES;
-
 export const toAuthClientError = (props: ToAuthClientErrorProps) => {
   const { code, status, statusText } = props;
   const message = props.message ?? "Unknown better-auth error";
 
   if (!props.code) {
     return new AuthClientError({ message, status, statusText });
-  }
-
-  if (code && isAuthClientErrorCode(code)) {
-    return new AuthClientError({ code, message, status, statusText });
   }
 
   return new APIError({
