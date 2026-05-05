@@ -377,26 +377,7 @@
       "noShortcuts": "Még nincsenek skillek. Adjon hozzá a Tudás → Skillek részen.",
       "scope": {
         "private": "Saját skillek",
-        "stock": "Beépített",
         "team": "Csapat skillek"
-      },
-      "stock": {
-        "compareVersions": {
-          "body": "Hasonlítsd össze ennek a dokumentumnak két verzióját, és sorold fel az összes lényeges változást a helyével együtt.",
-          "name": "Verziók összehasonlítása"
-        },
-        "draftResponse": {
-          "body": "Fogalmazz mérsékelt választ erre a levélre. Tartsd a hangvételt szakszerűnek, válaszolj minden felvetett pontra, és jelöld a megerősítendő nyitott kérdéseket.",
-          "name": "Válasz megfogalmazása"
-        },
-        "findRisks": {
-          "body": "Vizsgáld át ezt a dokumentumot jogi kockázatok, hiányzó védelmek és kétértelmű klauzulák szempontjából. Minden megállapításhoz hivatkozd a konkrét klauzulát.",
-          "name": "Kockázatok keresése"
-        },
-        "summarizeDocument": {
-          "body": "Foglald össze ezt a dokumentumot. Térj ki a felekre, főbb kötelezettségekre, határidőkre, pénzügyi feltételekre és minden megszüntetési vagy felelősségi rendelkezésre.",
-          "name": "Dokumentum összefoglalása"
-        }
       },
       "tryOne": "Próbáld ki valamelyiket"
     },

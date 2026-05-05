@@ -377,26 +377,7 @@
       "noShortcuts": "Prasmju vēl nav. Pievienojiet tās sadaļā Zināšanas → Prasmes.",
       "scope": {
         "private": "Jūsu prasmes",
-        "stock": "Iebūvētas",
         "team": "Komandas prasmes"
-      },
-      "stock": {
-        "compareVersions": {
-          "body": "Salīdzini divas šī dokumenta versijas un uzskaiti katru būtisko izmaiņu kopā ar tās atrašanās vietu.",
-          "name": "Salīdzināt versijas"
-        },
-        "draftResponse": {
-          "body": "Sastādi izsvērtu atbildi uz šo vēstuli. Saglabā profesionālu toni, atbildi uz katru izvirzīto punktu un atzīmē atvērtos jautājumus, kas man jāapstiprina.",
-          "name": "Sastādīt atbildi"
-        },
-        "findRisks": {
-          "body": "Pārskati šo dokumentu, lai atrastu juridiskos riskus, trūkstošas aizsardzības un divdomīgus punktus. Katram atklājumam norādi konkrēto punktu.",
-          "name": "Atrast riskus"
-        },
-        "summarizeDocument": {
-          "body": "Apkopo šo dokumentu. Aptver puses, galvenos pienākumus, datumus, finanšu nosacījumus un visus izbeigšanas vai atbildības noteikumus.",
-          "name": "Apkopot dokumentu"
-        }
       },
       "tryOne": "Izmēģini vienu no tiem"
     },

@@ -11,24 +11,18 @@ import { cn } from "@stll/ui/lib/utils";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { useTranslations } from "use-intl";
 
+import type { TranslationKey } from "@/i18n/types";
 import type { ChatPrompt, PromptScope } from "@/lib/prompts/types";
 
 const SCOPE_ORDER: PromptScope[] = ["private", "team"];
+const SCOPE_LABEL_KEYS = {
+  private: "chat.prompts.scope.private",
+  team: "chat.prompts.scope.team",
+} satisfies Record<PromptScope, TranslationKey>;
 
 const useScopeLabel = () => {
   const t = useTranslations();
-  return (scope: PromptScope): string => {
-    switch (scope) {
-      case "stock":
-        return t("chat.prompts.scope.stock");
-      case "team":
-        return t("chat.prompts.scope.team");
-      case "private":
-        return t("chat.prompts.scope.private");
-      default:
-        return scope;
-    }
-  };
+  return (scope: PromptScope): string => t(SCOPE_LABEL_KEYS[scope]);
 };
 
 const groupByScope = (

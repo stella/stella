@@ -752,7 +752,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         // cache: a brand-new chat tab) doesn't bubble up to the
         // workspace route's pending component. The fallback is a
         // visual shell that mirrors the real panel's chrome —
-        // header, empty state with stock prompts, prompt-bar
+        // header, empty state with saved prompts, prompt-bar
         // shape — so the user sees the expected interface
         // immediately and the data hydrates a frame later, no
         // spinner.

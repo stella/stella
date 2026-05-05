@@ -377,26 +377,7 @@
       "noShortcuts": "Zatiaľ žiadne zručnosti. Pridajte ich v časti Znalosti → Zručnosti.",
       "scope": {
         "private": "Vaše zručnosti",
-        "stock": "Vstavané",
         "team": "Tímové zručnosti"
-      },
-      "stock": {
-        "compareVersions": {
-          "body": "Porovnaj dve verzie tohto dokumentu a vypíš každú vecnú zmenu spolu s jej umiestnením.",
-          "name": "Porovnať verzie"
-        },
-        "draftResponse": {
-          "body": "Navrhni vyváženú odpoveď na tento list. Zachovaj profesionálny tón, reaguj na každý vznesený bod a označ otvorené otázky, ktoré mám potvrdiť.",
-          "name": "Navrhnúť odpoveď"
-        },
-        "findRisks": {
-          "body": "Prejdi tento dokument a nájdi právne riziká, chýbajúce ochrany a nejednoznačné klauzuly. Pre každé zistenie uveď konkrétnu klauzulu.",
-          "name": "Nájsť riziká"
-        },
-        "summarizeDocument": {
-          "body": "Zhrň tento dokument. Pokry strany, hlavné povinnosti, termíny, finančné podmienky a všetky ustanovenia o ukončení alebo zodpovednosti.",
-          "name": "Zhrnúť dokument"
-        }
       },
       "tryOne": "Začni s jedným z týchto"
     },

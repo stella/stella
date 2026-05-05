@@ -53,6 +53,7 @@
     "@stll/case-law": "workspace:*",
     "@stll/docx-utils": "workspace:*",
     "@stll/feature-flags": "workspace:*",
+    "@stll/folio": "workspace:*",
     "@stll/infosoud": "workspace:*",
     "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",

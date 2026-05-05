@@ -377,26 +377,7 @@
       "noShortcuts": "Nie ma jeszcze umiejętności. Dodaj je w Wiedza → Umiejętności.",
       "scope": {
         "private": "Twoje umiejętności",
-        "stock": "Wbudowane",
         "team": "Umiejętności zespołu"
-      },
-      "stock": {
-        "compareVersions": {
-          "body": "Porównaj dwie wersje tego dokumentu i wymień każdą istotną zmianę wraz z jej miejscem.",
-          "name": "Porównaj wersje"
-        },
-        "draftResponse": {
-          "body": "Sporządź wyważoną odpowiedź na to pismo. Zachowaj profesjonalny ton, odnieś się do każdego poruszonego punktu i zaznacz otwarte kwestie do potwierdzenia.",
-          "name": "Sporządź odpowiedź"
-        },
-        "findRisks": {
-          "body": "Przejrzyj ten dokument pod kątem ryzyk prawnych, brakujących zabezpieczeń i niejednoznacznych klauzul. Dla każdego wniosku wskaż konkretną klauzulę.",
-          "name": "Znajdź ryzyka"
-        },
-        "summarizeDocument": {
-          "body": "Podsumuj ten dokument. Omów strony, główne zobowiązania, daty, warunki finansowe oraz wszelkie postanowienia dotyczące rozwiązania umowy lub odpowiedzialności.",
-          "name": "Podsumuj dokument"
-        }
       },
       "tryOne": "Zacznij od jednego z tych"
     },

@@ -79,6 +79,7 @@
     "lucide-react": "catalog:",
     "pdfjs-dist": "^5.7.284",
     "posthog-js": "^1.372.5",
+    "prosemirror-view": "^1.41.8",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "react-resizable-panels": "^4.10.0",

@@ -377,26 +377,7 @@
       "noShortcuts": "No skills yet. Add some in Knowledge → Skills.",
       "scope": {
         "private": "Your skills",
-        "stock": "Built-in",
         "team": "Team skills"
-      },
-      "stock": {
-        "compareVersions": {
-          "body": "Compare two versions of this document and list every material change with its location.",
-          "name": "Compare versions"
-        },
-        "draftResponse": {
-          "body": "Draft a measured response to this letter. Keep the tone professional, address each point raised, and flag any open questions for me to confirm.",
-          "name": "Draft a response"
-        },
-        "findRisks": {
-          "body": "Review this document for legal risks, missing protections, and ambiguous clauses. Cite the specific clause for each finding.",
-          "name": "Find risks"
-        },
-        "summarizeDocument": {
-          "body": "Summarise this document. Cover parties, key obligations, dates, financial terms, and any termination or liability provisions.",
-          "name": "Summarise a document"
-        }
       },
       "tryOne": "Try one of these to start"
     },

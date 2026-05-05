@@ -377,26 +377,7 @@
       "noShortcuts": "Aún no hay skills. Añádalas en Conocimiento → Skills.",
       "scope": {
         "private": "Tus habilidades",
-        "stock": "Predefinidos",
         "team": "Habilidades del equipo"
-      },
-      "stock": {
-        "compareVersions": {
-          "body": "Compara dos versiones de este documento y enumera cada cambio sustancial con su ubicación.",
-          "name": "Comparar versiones"
-        },
-        "draftResponse": {
-          "body": "Redacta una respuesta mesurada a esta carta. Mantén un tono profesional, aborda cada punto y señala las preguntas abiertas que deba confirmar.",
-          "name": "Redactar una respuesta"
-        },
-        "findRisks": {
-          "body": "Revisa este documento en busca de riesgos legales, protecciones ausentes y cláusulas ambiguas. Indica la cláusula concreta de cada hallazgo.",
-          "name": "Buscar riesgos"
-        },
-        "summarizeDocument": {
-          "body": "Resume este documento. Cubre las partes, las principales obligaciones, las fechas, las condiciones económicas y cualquier cláusula de terminación o responsabilidad.",
-          "name": "Resumir un documento"
-        }
       },
       "tryOne": "Prueba uno de estos para empezar"
     },
