@@ -66,7 +66,13 @@ COPY --chown=stella:stella --from=deps \
     /app/node_modules/@stll/fuzzy-search-wasm/dist/*.wasm \
     /app/node_modules/@stll/regex-set-wasm/dist/*.wasm \
     /\$bunfs/root/
+# quickjs-emscripten loads this WASM file at runtime from the
+# compiled Bun binary's `$bunfs/root` asset directory.
+COPY --chown=stella:stella --from=deps \
+    /app/node_modules/@jitl/quickjs-wasmfile-release-asyncify/dist/emscripten-module.wasm \
+    /\$bunfs/root/emscripten-module.wasm
 COPY --chown=stella:stella --from=deps /app/node_modules/@stll/aho-corasick-wasm/dist/wasi-worker-browser.mjs /\$bunfs/root/wasi-worker-browser.mjs
+RUN test -f '/$bunfs/root/emscripten-module.wasm'
 WORKDIR /app/apps/api
 
 # Build-time smoke: invoke the ingestion entrypoint with a fake
