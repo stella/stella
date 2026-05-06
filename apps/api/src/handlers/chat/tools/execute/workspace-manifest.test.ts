@@ -91,11 +91,12 @@ describe("workspace manifest helpers", () => {
 
   test("rejects bare array outputs at compile time", () => {
     createReadonlyFunctionContract({
-      description: "Invalid contract used only to enforce the type boundary.",
+      summary: "Invalid contract used only to enforce the type boundary.",
       input: v.strictObject({}),
       name: "invalidReadonlyArrayOutput",
-      // @ts-expect-error readonly Stella AI functions must return { items } or
-      // { items, hasMore, nextOffset }, never a bare record array.
+      // @ts-expect-error readonly Stella AI functions must use a
+      // buildItemsOutputSchema or buildPaginatedOutputSchema descriptor,
+      // never a bare schema.
       output: v.array(v.string()),
     });
   });

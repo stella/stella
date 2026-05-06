@@ -323,40 +323,41 @@ const getMatterEntityContentsInputSchema = v.strictObject({
 });
 
 export const listMatterPropertiesContract = createReadonlyFunctionContract({
-  description:
-    "List compact property summaries for one or more matters. Returns StellaAIPage<PropertySummary>: read properties from `result.items`, then paginate with `result.hasMore` and `result.nextOffset`.",
+  summary: "List compact property summaries for one or more matters.",
   input: listMatterPropertiesInputSchema,
   name: "listMatterProperties",
   output: buildPaginatedOutputSchema(propertySummarySchema),
 });
 
 export const getMatterPropertiesContract = createReadonlyFunctionContract({
-  description:
-    "Get full property definitions, including property content and tool configuration, for known property refs in known matters. Returns StellaAIItems<PropertyDetail>: read property records from `result.items`.",
+  summary:
+    "Get full property definitions, including property content and tool configuration, for known property refs in known matters.",
   input: getMatterPropertiesInputSchema,
   name: "getMatterProperties",
   output: buildItemsOutputSchema(propertyDetailSchema),
 });
 
 export const listMatterEntitiesContract = createReadonlyFunctionContract({
-  description:
-    "List compact entity summaries for one or more matters. Returns StellaAIPage<EntitySummary>: read entities from `result.items`, then paginate with `result.hasMore` and `result.nextOffset`; never use `result.entities`. Use returned refs for follow-up calls. Reference entities in user-facing answers with markdown links like `[Name](#stella-entity-ref=ent_1)`. Each field's `content` is the stored value discriminated union (same shape as the DB). Resolve property display names via `listMatterProperties` or `getMatterProperties`. Supports optional kind and parent filters.",
+  summary: "List compact entity summaries for one or more matters.",
+  details:
+    "Use returned refs for follow-up calls. Reference entities in user-facing answers with markdown links like `[Name](#stella-entity-ref=ent_1)`. Each field's `content` is the stored value discriminated union (same shape as the DB). Resolve property display names via `listMatterProperties` or `getMatterProperties`. Supports optional kind and parent filters.",
   input: listMatterEntitiesInputSchema,
   name: "listMatterEntities",
   output: buildPaginatedOutputSchema(entitySummarySchema),
 });
 
 export const getMatterEntitiesContract = createReadonlyFunctionContract({
-  description:
-    "Get rich entity details for known entity refs in known matters. Returns StellaAIItems<EntityDetail>: read entity records from `result.items`; never use `result.entities`. Use refs for follow-up calls. Reference entities in user-facing answers with markdown links like `[Name](#stella-entity-ref=ent_1)`. Each field's `content` is the stored value discriminated union (same shape as the DB). Resolve property display names via `listMatterProperties` or `getMatterProperties`.",
+  summary: "Get rich entity details for known entity refs in known matters.",
+  details:
+    "Use refs for follow-up calls. Reference entities in user-facing answers with markdown links like `[Name](#stella-entity-ref=ent_1)`. Each field's `content` is the stored value discriminated union (same shape as the DB). Resolve property display names via `listMatterProperties` or `getMatterProperties`.",
   input: getMatterEntitiesInputSchema,
   name: "getMatterEntities",
   output: buildItemsOutputSchema(entityDetailSchema),
 });
 
 export const getMatterEntityContentsContract = createReadonlyFunctionContract({
-  description:
-    "Get extracted text content for known entity refs in known matters. Returns StellaAIItems<EntityContent>: read content records from `result.items`. Text is truncated server-side when needed.",
+  summary: "Get extracted text content for known entity refs in known matters.",
+  details: "Text is truncated server-side when needed.",
   input: getMatterEntityContentsInputSchema,
   name: "getMatterEntityContents",
   output: buildItemsOutputSchema(entityContentSchema),

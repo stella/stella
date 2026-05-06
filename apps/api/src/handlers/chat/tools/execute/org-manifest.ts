@@ -196,40 +196,41 @@ const searchMatterDocumentsInputSchema = v.strictObject({
 });
 
 export const listMattersContract = createReadonlyFunctionContract({
-  description:
-    "List matters the user can access. Returns StellaAIPage<MatterSummary>: read matters from `result.items`, then paginate with `result.hasMore` and `result.nextOffset`. Use getMatters for full detail.",
+  summary: "List matters the user can access.",
+  details: "Use getMatters for full detail.",
   input: listMattersInputSchema,
   name: "listMatters",
   output: buildPaginatedOutputSchema(matterListItemSchema),
 });
 
 export const getMattersContract = createReadonlyFunctionContract({
-  description:
-    "Get full matter details for known matter refs, including client, color, and entity/property counts. Returns StellaAIItems<MatterDetail>: read matter records from `result.items`.",
+  summary:
+    "Get full matter details for known matter refs, including client, color, and entity/property counts.",
   input: getMattersInputSchema,
   name: "getMatters",
   output: buildItemsOutputSchema(matterDetailSchema),
 });
 
 export const listContactsContract = createReadonlyFunctionContract({
-  description:
-    "List compact contact summaries in the organization, optionally filtered by name. Returns StellaAIPage<ContactSummary>: read contacts from `result.items`, then paginate with `result.hasMore` and `result.nextOffset`. Use getContacts for full detail.",
+  summary:
+    "List compact contact summaries in the organization, optionally filtered by name.",
+  details: "Use getContacts for full detail.",
   input: listContactsInputSchema,
   name: "listContacts",
   output: buildPaginatedOutputSchema(contactSummarySchema),
 });
 
 export const getContactsContract = createReadonlyFunctionContract({
-  description:
-    "Get contact details for known contact refs. Returns StellaAIItems<ContactDetail>: read contact records from `result.items`.",
+  summary: "Get contact details for known contact refs.",
   input: getContactsInputSchema,
   name: "getContacts",
   output: buildItemsOutputSchema(contactDetailSchema),
 });
 
 export const searchMatterDocumentsContract = createReadonlyFunctionContract({
-  description:
-    "Search documents in specific known matters. Returns StellaAIItems<DocumentSearchHit>: read hits from `result.items`. First call listMatters when you need matter refs; pass only the matters relevant to the user's request.",
+  summary: "Search documents in specific known matters.",
+  details:
+    "First call listMatters when you need matter refs; pass only the matters relevant to the user's request.",
   input: searchMatterDocumentsInputSchema,
   name: "searchMatterDocuments",
   output: buildItemsOutputSchema(documentSearchHitSchema),

@@ -130,22 +130,11 @@ export const createChatExecutionTools = ({
             readonlyFunctionContracts,
           ).unwrap();
           return {
-            functions: manifest.map((entry) => {
-              const outputProperties =
-                entry.outputSchema.type === "object"
-                  ? entry.outputSchema.properties
-                  : undefined;
-
-              return {
-                name: entry.name,
-                description: entry.description,
-                outputShape:
-                  outputProperties !== undefined &&
-                  Object.hasOwn(outputProperties, "hasMore")
-                    ? "{ items, hasMore, nextOffset }"
-                    : "{ items }",
-              };
-            }),
+            functions: manifest.map((entry) => ({
+              name: entry.name,
+              summary: entry.summary,
+              outputShape: entry.outputShape,
+            })),
           };
         }
 

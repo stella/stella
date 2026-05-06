@@ -649,18 +649,6 @@ const readonlyFunctionContracts = [
   ...readonlyWorkspaceFunctionContracts,
 ] as const;
 
-const getOutputShape = (entry: ReadonlyFunctionManifest) => {
-  const outputProperties =
-    entry.outputSchema.type === "object"
-      ? entry.outputSchema.properties
-      : undefined;
-
-  return outputProperties !== undefined &&
-    Object.hasOwn(outputProperties, "hasMore")
-    ? "{ items, hasMore, nextOffset }"
-    : "{ items }";
-};
-
 const formatInputShape = (entry: ReadonlyFunctionManifest) => {
   const inputProperties =
     entry.inputSchema.type === "object"
@@ -681,11 +669,6 @@ const formatInputShape = (entry: ReadonlyFunctionManifest) => {
   return fields.length === 0 ? "{}" : `{ ${fields.join(", ")} }`;
 };
 
-const summarizeFunctionDescription = (description: string) => {
-  const summary = description.split(" Returns ").at(0);
-  return summary ?? description;
-};
-
 /**
  * Compact readonly read API catalog. This deliberately lists
  * names and top-level input keys, not full JSON Schemas; the
@@ -700,7 +683,7 @@ const READONLY_API_HINT = (() => {
   ).unwrap();
   const lines = manifest.map(
     (entry) =>
-      `- read.${entry.name}(${formatInputShape(entry)}) -> ${getOutputShape(entry)}: ${summarizeFunctionDescription(entry.description)}`,
+      `- read.${entry.name}(${formatInputShape(entry)}) -> ${entry.outputShape}: ${entry.summary}`,
   );
 
   return [
