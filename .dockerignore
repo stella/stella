@@ -2,6 +2,7 @@
 .claude
 .turbo
 .cache
+apps/desktop/src-tauri/target
 dist
 node_modules
 **/.env

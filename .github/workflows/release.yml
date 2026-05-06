@@ -160,12 +160,6 @@ jobs:
           SMTP_PORT: "1025"
           TRANSACTIONAL_EMAIL_FROM: "noreply@example.com"
           USE_MOCK_AI: "true"
-          # Smoke test only verifies the binary boots; the database
-          # is empty so the startup migration-hash check would
-          # fail-closed and abort the build. Skip it here — the
-          # check stays active in real deploys via the production
-          # task definition env.
-          SKIP_MIGRATION_CHECK: "true"
         run: |
           cleanup_smoke() {
             docker rm -f stella-api-smoke >/dev/null 2>&1 || true
@@ -194,7 +188,6 @@ jobs:
             --env SMTP_PORT \
             --env TRANSACTIONAL_EMAIL_FROM \
             --env USE_MOCK_AI \
-            --env SKIP_MIGRATION_CHECK \
             stella-api:smoke
 
           for _ in {1..60}; do

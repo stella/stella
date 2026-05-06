@@ -44,6 +44,7 @@ import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { captureRequestError, getAnalytics } from "@/api/lib/analytics";
 import { getAuth } from "@/api/lib/auth";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
+import { migrateOnBoot } from "@/api/lib/db/migrate-on-boot";
 import { DEV_INSPECTOR_ORIGINS } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -347,9 +348,9 @@ const startS3RefreshLoop = () => {
   timer.unref();
 };
 
-// Schema-drift fail-fast. If the runtime expects migrations
-// the database has not received, exit before serving any
-// request against a stale schema.
+// Apply the runtime image's migrations, then fail fast if the
+// database still does not match the local migration files.
+await migrateOnBoot();
 await assertMigrationsApplied();
 
 await refreshS3();

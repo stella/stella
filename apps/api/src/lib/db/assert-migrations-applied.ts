@@ -1,12 +1,17 @@
 import { sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 
 import { db } from "@/api/db/root";
+import {
+  assertMigrationsDirectoryPresent,
+  DRIZZLE_MIGRATIONS_SCHEMA,
+  DRIZZLE_MIGRATIONS_TABLE,
+  MIGRATIONS_DIR,
+} from "@/api/lib/db/migration-config";
 import { logger } from "@/api/lib/observability/logger";
 
-const MIGRATIONS_DIR = resolve(process.cwd(), "drizzle");
 const ESCAPE_HATCH_ENV = "SKIP_MIGRATION_CHECK";
 
 type LocalMigration = { name: string; hash: string };
@@ -30,7 +35,7 @@ const queryAppliedHashes = async (): Promise<Set<string>> => {
   // of the migration.sql contents at apply time, so a mismatch
   // also catches a file edited after it was applied.
   const result = await db.execute<AppliedMigrationRow>(
-    sql`SELECT hash FROM drizzle.__drizzle_migrations`,
+    sql`SELECT hash FROM ${sql.identifier(DRIZZLE_MIGRATIONS_SCHEMA)}.${sql.identifier(DRIZZLE_MIGRATIONS_TABLE)}`,
   );
   return new Set(result.map((row) => row.hash));
 };
@@ -42,6 +47,8 @@ export const assertMigrationsApplied = async (): Promise<void> => {
     });
     return;
   }
+
+  assertMigrationsDirectoryPresent();
 
   const local = listLocalMigrations();
   if (local.length === 0) {
