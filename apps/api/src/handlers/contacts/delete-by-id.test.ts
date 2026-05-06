@@ -72,6 +72,57 @@ describe("deleteContactById", () => {
     expect(deleteCalled).toBe(false);
   });
 
+  test("blocks deleting a contact assigned to a non-active matter", async () => {
+    let deleteCalled = false;
+    let updateCalled = false;
+    const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: () => ({
+              limit: async () => [{ id: "contact_test123" }],
+            }),
+          }),
+        }),
+      }),
+      $count: async () => 1,
+      update: () => ({
+        set: () => ({
+          where: () => ({
+            returning: async () => {
+              updateCalled = true;
+              return [{ id: "workspace_archived123" }];
+            },
+          }),
+        }),
+      }),
+      delete: () => ({
+        where: async () => {
+          deleteCalled = true;
+          return [];
+        },
+      }),
+    });
+
+    const result = await deleteContactById.handler(
+      createContext({
+        contactId: Bun.randomUUIDv7(),
+        safeDb,
+        scopedDb,
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 409,
+      response: {
+        message: "Reassign or delete 1 matter before deleting this contact",
+      },
+    });
+    expect(getCallCount()).toBe(1);
+    expect(updateCalled).toBe(false);
+    expect(deleteCalled).toBe(false);
+  });
+
   test("returns 404 when the contact does not exist", async () => {
     const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
       select: () => ({

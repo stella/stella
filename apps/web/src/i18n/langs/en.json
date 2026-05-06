@@ -681,6 +681,7 @@
       "valuePlaceholder": "Value"
     },
     "deleteContact": "Delete client",
+    "deleteContactBlockedByMatters": "This contact is still assigned as a client on matters. Reassign or delete those matters before deleting the contact.",
     "deleteContactConfirmDescription": "Are you sure you want to delete this contact? This action cannot be undone.",
     "editContact": "Edit client",
     "emailTypes": {

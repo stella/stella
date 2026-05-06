@@ -530,7 +530,7 @@
     "deleteConfirmDescription": "Opravdu chcete smazat „{name}“? Tuto akci nelze vrátit zpět.",
     "deletedCount": "{count, plural, one {# položka smazána} few {# položky smazány} other {# položek smazáno}}",
     "description": "Popis",
-    "documentation": "Documentation",
+    "documentation": "Dokumentace",
     "done": "Hotovo",
     "download": "Stáhnout",
     "duplicate": "Duplikovat",
@@ -539,10 +539,10 @@
     "email": "E-mail",
     "empty": "Prázdné",
     "emptyScreen": {
-      "letUsKnowAt": "Let us know at",
-      "needHelp": "Need help?",
-      "orLetUsKnowAt": "or let us know at",
-      "viewDocumentation": "View documentation"
+      "letUsKnowAt": "Napište nám na",
+      "needHelp": "Potřebujete pomoc?",
+      "orLetUsKnowAt": "nebo nám napište na",
+      "viewDocumentation": "Zobrazit dokumentaci"
     },
     "enterKey": "↵",
     "error": "Chyba",
@@ -570,7 +570,7 @@
     "organization": "Organizace",
     "organizationName": "Název organizace",
     "pin": "Připnout",
-    "playVideo": "Play video",
+    "playVideo": "Přehrát video",
     "preview": "Náhled",
     "previous": "Předchozí",
     "print": "Tisknout",
@@ -681,6 +681,7 @@
       "valuePlaceholder": "Hodnota"
     },
     "deleteContact": "Smazat klienta",
+    "deleteContactBlockedByMatters": "Tento kontakt je stále přiřazen jako klient u spisů. Než kontakt smažete, přeřaďte nebo smažte tyto spisy.",
     "deleteContactConfirmDescription": "Opravdu chcete smazat tento kontakt? Tuto akci nelze vrátit.",
     "editContact": "Upravit klienta",
     "emailTypes": {
@@ -722,9 +723,9 @@
     "filterOrganizations": "Organizace",
     "filterPersons": "Osoby",
     "mattersAsClient": "Spisy jako klient",
-    "newContact": "Nový klient",
-    "noContactsDescription": "Vytvořte svého prvního klienta a začněte je přiřazovat ke spisům.",
-    "noContactsFound": "Žádní klienti nenalezeni",
+    "newContact": "Nový kontakt",
+    "noContactsDescription": "Vytvořte první kontakt a začněte ho přiřazovat ke spisům.",
+    "noContactsFound": "Žádné kontakty nenalezeny",
     "noMattersAsClient": "Tento kontakt není klientem žádného spisu.",
     "phoneTypes": {
       "fax": "Fax",

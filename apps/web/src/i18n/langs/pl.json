@@ -681,6 +681,7 @@
       "valuePlaceholder": "Wartość"
     },
     "deleteContact": "Usuń klienta",
+    "deleteContactBlockedByMatters": "Ten kontakt nadal jest przypisany jako klient w sprawach. Przypisz te sprawy ponownie albo usuń je przed usunięciem kontaktu.",
     "deleteContactConfirmDescription": "Czy na pewno chcesz usunąć ten kontakt? Tej operacji nie można cofnąć.",
     "editContact": "Edytuj klienta",
     "emailTypes": {

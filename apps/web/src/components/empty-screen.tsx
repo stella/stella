@@ -102,56 +102,82 @@ export const EmptyScreen = ({
 }: EmptyScreenProps) => {
   const [isVideoOpen, setIsVideoOpen] = useState(false);
   const canPlayVideo = getPlayableVideo(video) !== undefined;
+  const hasMedia = video !== undefined || preview !== undefined;
   const isBottomMedia = mediaPlacement === "bottom";
+  const sizeClass = hasMedia
+    ? "min-h-[520px] flex-1 px-6 py-12"
+    : "min-h-0 px-4 py-12 sm:py-16";
+  let layoutClass = "items-center justify-center";
 
-  return (
-    <section
-      className={cn(
-        "relative flex min-h-[520px] flex-1 flex-col overflow-hidden px-6 py-12",
-        isBottomMedia
-          ? "items-center gap-8 pt-12 pb-28"
-          : "items-center justify-center",
-        className,
-      )}
-    >
-      {isBottomMedia ? (
-        <>
-          <EmptyScreenContent
-            description={description}
-            docsHref={docsHref}
-            primaryAction={primaryAction}
-            title={title}
-            variant="center"
-          />
-          <div
-            className={cn(
-              "mx-auto mt-auto w-full max-w-3xl",
-              mediaContainerClassName,
-            )}
-          >
-            <EmptyScreenMedia
-              onPlay={() => setIsVideoOpen(true)}
-              preview={preview}
-              video={video}
-            />
-          </div>
-        </>
-      ) : (
-        <div className="mx-auto grid w-full max-w-5xl items-center gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
+  if (hasMedia && isBottomMedia) {
+    layoutClass = "items-center gap-8 pt-12 pb-28";
+  }
+
+  let body: ReactNode;
+
+  if (!hasMedia) {
+    body = (
+      <EmptyScreenContent
+        description={description}
+        docsHref={docsHref}
+        primaryAction={primaryAction}
+        title={title}
+        variant="center"
+      />
+    );
+  } else if (isBottomMedia) {
+    body = (
+      <>
+        <EmptyScreenContent
+          description={description}
+          docsHref={docsHref}
+          primaryAction={primaryAction}
+          title={title}
+          variant="center"
+        />
+        <div
+          className={cn(
+            "mx-auto mt-auto w-full max-w-3xl",
+            mediaContainerClassName,
+          )}
+        >
           <EmptyScreenMedia
             onPlay={() => setIsVideoOpen(true)}
             preview={preview}
             video={video}
           />
-          <EmptyScreenContent
-            description={description}
-            docsHref={docsHref}
-            primaryAction={primaryAction}
-            title={title}
-            variant="start"
-          />
         </div>
+      </>
+    );
+  } else {
+    body = (
+      <div className="mx-auto grid w-full max-w-5xl items-center gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
+        <EmptyScreenMedia
+          onPlay={() => setIsVideoOpen(true)}
+          preview={preview}
+          video={video}
+        />
+        <EmptyScreenContent
+          description={description}
+          docsHref={docsHref}
+          primaryAction={primaryAction}
+          title={title}
+          variant="start"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <section
+      className={cn(
+        "relative flex flex-col overflow-hidden",
+        sizeClass,
+        layoutClass,
+        className,
       )}
+    >
+      {body}
       {showHelpBar && (
         <HelpBar docsHref={docsHref} supportEmail={supportEmail} />
       )}

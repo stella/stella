@@ -42,7 +42,7 @@ const deleteContactById = createSafeRootHandler(
         };
       }
 
-      const matterCount = await tx.$count(
+      const clientMatterCount = await tx.$count(
         workspaces,
         and(
           eq(workspaces.clientId, params.contactId),
@@ -50,12 +50,12 @@ const deleteContactById = createSafeRootHandler(
         ),
       );
 
-      if (matterCount > 0) {
+      if (clientMatterCount > 0) {
         return {
           ok: false as const,
           status: 409 as const,
-          message: `Reassign or delete ${matterCount} matter${
-            matterCount === 1 ? "" : "s"
+          message: `Reassign or delete ${clientMatterCount} matter${
+            clientMatterCount === 1 ? "" : "s"
           } before deleting this contact`,
         };
       }
@@ -63,7 +63,12 @@ const deleteContactById = createSafeRootHandler(
       const affectedWorkspaces = await tx
         .select({ id: workspaceContacts.workspaceId })
         .from(workspaceContacts)
-        .where(eq(workspaceContacts.contactId, params.contactId));
+        .where(
+          and(
+            eq(workspaceContacts.contactId, params.contactId),
+            eq(workspaceContacts.organizationId, session.activeOrganizationId),
+          ),
+        );
 
       await tx
         .delete(contacts)
