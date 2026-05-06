@@ -1,0 +1,738 @@
+---
+import Base from "../layouts/Base.astro";
+import ThemeToggle from "../components/ThemeToggle.astro";
+
+const githubUrl = "https://github.com/stella/stella";
+const releasesUrl = `${githubUrl}/releases`;
+---
+
+<Base
+  title="stella | changelog"
+  description="Latest Stella releases, product changes, fixes, and release notes."
+>
+  <div class="flex min-h-dvh flex-col">
+    <main class="flex-1">
+      <section class="relative flex min-h-[52dvh] flex-col overflow-hidden px-6">
+        <div class="absolute inset-0 overflow-hidden" id="gradient-bg">
+          <div
+            id="gradient-light"
+            class="absolute inset-0 dark:opacity-0 transition-opacity duration-500"
+          >
+          </div>
+          <div
+            id="gradient-dark"
+            class="absolute inset-0 opacity-0 dark:opacity-100 transition-opacity duration-500"
+          >
+          </div>
+        </div>
+        <div
+          class="pointer-events-none absolute inset-x-0 bottom-0 h-1/2"
+          style="background: linear-gradient(to bottom, transparent, var(--background))"
+        >
+        </div>
+
+        <nav
+          class="relative z-10 mx-auto flex w-full max-w-300 items-center justify-between py-5"
+        >
+          <a href="/" aria-label="stella home">
+            <img
+              src="/images/stella-logo.svg"
+              alt="stella"
+              class="h-6 dark:invert"
+            />
+          </a>
+          <ThemeToggle />
+        </nav>
+
+        <div
+          class="relative z-10 mx-auto flex w-full max-w-300 flex-1 items-center justify-center py-20"
+        >
+          <h1>
+            <a
+              href="/changelog"
+              class="font-display text-5xl font-medium leading-[1.05] transition-opacity hover:opacity-80 sm:text-6xl lg:text-7xl"
+            >
+              Changelog
+            </a>
+          </h1>
+        </div>
+      </section>
+
+      <section class="px-6 pb-20 lg:pb-24">
+        <div class="mx-auto max-w-5xl">
+          <div id="changelog-releases" class="space-y-5" aria-live="polite">
+            <article
+              class="rounded-lg p-6"
+              style="background: var(--card); border: 1px solid var(--border)"
+            >
+              <div class="h-3 w-28 rounded-full" style="background: var(--muted)">
+              </div>
+              <div class="mt-5 h-7 w-48 rounded-full" style="background: var(--muted)">
+              </div>
+              <div class="mt-6 space-y-3">
+                <div class="h-3 w-full rounded-full" style="background: var(--muted)">
+                </div>
+                <div class="h-3 w-5/6 rounded-full" style="background: var(--muted)">
+                </div>
+                <div class="h-3 w-2/3 rounded-full" style="background: var(--muted)">
+                </div>
+              </div>
+            </article>
+          </div>
+          <nav
+            id="changelog-pagination"
+            class="mt-6 hidden items-center justify-between gap-3"
+            aria-label="Changelog pagination"
+          >
+          </nav>
+
+          <noscript>
+            <div
+              class="rounded-lg p-6"
+              style="background: var(--card); border: 1px solid var(--border)"
+            >
+              <p class="text-sm leading-[1.8]" style="color: var(--muted-foreground)">
+                JavaScript is required to load the live changelog feed. You can
+                still read every release on
+                <a
+                  href={releasesUrl}
+                  class="font-medium transition-opacity hover:opacity-70"
+                  style="color: var(--foreground)"
+                  >GitHub</a
+                >.
+              </p>
+            </div>
+          </noscript>
+        </div>
+      </section>
+    </main>
+
+    <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
+      <div
+        class="mx-auto flex max-w-300 flex-col items-center justify-between gap-4 text-sm sm:flex-row"
+        style="color: var(--muted-foreground)"
+      >
+        <a href="/imprint" class="transition-opacity hover:opacity-70">
+          stella labs, s.r.o.
+        </a>
+        <nav class="flex flex-wrap items-center justify-center gap-4" aria-label="Footer">
+          <a href="/changelog" class="transition-opacity hover:opacity-70">Changelog</a>
+          <a href="/security" class="transition-opacity hover:opacity-70">Security</a>
+          <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
+          <a href="/imprint" class="transition-opacity hover:opacity-70">Imprint</a>
+          <a href="mailto:contact@stll.app" class="transition-opacity hover:opacity-70">
+            Contact
+          </a>
+        </nav>
+      </div>
+      <div
+        class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
+        style="background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--auth-gradient-end) 42%, transparent))"
+      >
+      </div>
+    </footer>
+  </div>
+
+  <style>
+    .changelog-entry {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--foreground);
+      scroll-margin-top: 2rem;
+    }
+
+    .changelog-body h2,
+    .changelog-body h3 {
+      color: var(--foreground);
+      font-family: "Cabinet Grotesk", system-ui, sans-serif;
+      font-weight: 500;
+      margin-top: 1.5rem;
+    }
+
+    .changelog-body h2 {
+      font-size: 1.75rem;
+      line-height: 1.15;
+    }
+
+    .changelog-body h3 {
+      font-size: 1.125rem;
+      line-height: 1.45;
+      color: var(--muted-foreground);
+    }
+
+    .changelog-body p,
+    .changelog-body li {
+      color: var(--muted-foreground);
+      font-size: 0.9375rem;
+      line-height: 1.8;
+    }
+
+    .changelog-body ul {
+      margin-top: 0.75rem;
+      padding-left: 1.1rem;
+    }
+
+    .changelog-body li + li {
+      margin-top: 0.35rem;
+    }
+
+    .changelog-body a {
+      color: var(--foreground);
+      font-weight: 500;
+      text-decoration: none;
+    }
+
+    .changelog-body a:hover {
+      opacity: 0.7;
+    }
+
+    .changelog-body video {
+      aspect-ratio: 16 / 9;
+      background: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      display: block;
+      margin-top: 1rem;
+      height: auto;
+      object-fit: contain;
+      width: 100%;
+    }
+
+    @media (max-width: 640px) {
+      .changelog-body video {
+        border-radius: 0.375rem;
+        margin-inline: -0.5rem;
+        max-width: calc(100% + 1rem);
+        width: calc(100% + 1rem);
+      }
+    }
+  </style>
+
+  <script>
+    type GitHubRelease = {
+      body: string | null;
+      draft: boolean;
+      html_url: string;
+      name: string | null;
+      prerelease: boolean;
+      published_at: string | null;
+      tag_name: string;
+    };
+
+    const RELEASES_PER_PAGE = 5;
+    const releasesApiBase = "https://api.github.com/repos/stella/stella/releases";
+    const releasesEndpoint =
+      `${releasesApiBase}?per_page=${RELEASES_PER_PAGE}`;
+    const releasesContainer = document.getElementById("changelog-releases");
+    const paginationContainer = document.getElementById("changelog-pagination");
+
+    let currentPage = (() => {
+      const page = Number(new URLSearchParams(window.location.search).get("page"));
+      if (!Number.isInteger(page) || page < 1) return 1;
+      return page;
+    })();
+    let hasNextPage = false;
+
+    const safeHttpsUrl = (value: string) => {
+      try {
+        const url = new URL(value);
+        if (url.protocol !== "https:") return null;
+        return url.href;
+      } catch {
+        return null;
+      }
+    };
+
+    const releaseAnchorId = (tagName: string) =>
+      tagName
+        .toLowerCase()
+        .replaceAll(".", "-")
+        .replace(/[^a-z0-9-]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "");
+
+    const appendTextWithInlineMarkdown = (target: HTMLElement, text: string) => {
+      const inlinePattern =
+        /(\*\*([^*]+)\*\*)|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
+      let cursor = 0;
+
+      for (const match of text.matchAll(inlinePattern)) {
+        const index = match.index ?? 0;
+        if (index > cursor) {
+          target.append(document.createTextNode(text.slice(cursor, index)));
+        }
+
+        const boldText = match[2];
+        const linkText = match[3];
+        const linkUrl = match[4];
+
+        if (boldText) {
+          const strong = document.createElement("strong");
+          strong.textContent = boldText;
+          target.append(strong);
+        } else if (linkText && linkUrl) {
+          const link = document.createElement("a");
+          link.textContent = linkText;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          try {
+            const url = new URL(linkUrl);
+            if (url.protocol === "https:" || url.protocol === "http:") {
+              link.href = url.href;
+            }
+          } catch {
+            link.removeAttribute("href");
+          }
+          target.append(link);
+        }
+
+        cursor = index + match[0].length;
+      }
+
+      if (cursor < text.length) {
+        target.append(document.createTextNode(text.slice(cursor)));
+      }
+    };
+
+    const renderMarkdownFragment = (body: string) => {
+      const fragment = document.createDocumentFragment();
+      let currentList: HTMLUListElement | null = null;
+
+      const closeList = () => {
+        if (currentList) {
+          fragment.append(currentList);
+          currentList = null;
+        }
+      };
+
+      for (const rawLine of body.split("\n")) {
+        const line = rawLine.trim();
+        if (!line) {
+          closeList();
+          continue;
+        }
+
+        const htmlVideoSrc = line.match(
+          /^<video\b[^>]*\bsrc=["']([^"']+)["'][^>]*><\/video>$/i,
+        )?.[1];
+        const markdownVideoSrc = line.match(/^!\[[^\]]*]\((https:\/\/[^)\s]+)\)$/)?.[1];
+        const videoSrc = htmlVideoSrc ?? markdownVideoSrc;
+        if (videoSrc) {
+          closeList();
+          const safeSrc = safeHttpsUrl(videoSrc);
+          if (!safeSrc) continue;
+
+          const video = document.createElement("video");
+          video.controls = true;
+          video.preload = "metadata";
+          video.src = safeSrc;
+          fragment.append(video);
+          continue;
+        }
+
+        if (line.startsWith("# ")) {
+          closeList();
+          const heading = document.createElement("h2");
+          heading.textContent = line.slice(2);
+          fragment.append(heading);
+          continue;
+        }
+
+        if (line.startsWith("## ")) {
+          closeList();
+          const heading = document.createElement("h3");
+          heading.textContent = line.slice(3);
+          fragment.append(heading);
+          continue;
+        }
+
+        if (line.startsWith("### ")) {
+          closeList();
+          const heading = document.createElement("h3");
+          heading.textContent = line.slice(4);
+          fragment.append(heading);
+          continue;
+        }
+
+        if (line.startsWith("- ")) {
+          if (!currentList) {
+            currentList = document.createElement("ul");
+          }
+          const item = document.createElement("li");
+          appendTextWithInlineMarkdown(item, line.slice(2));
+          currentList.append(item);
+          continue;
+        }
+
+        closeList();
+        const paragraph = document.createElement("p");
+        appendTextWithInlineMarkdown(paragraph, line);
+        fragment.append(paragraph);
+      }
+
+      closeList();
+      return fragment;
+    };
+
+    const splitReleaseBody = (body: string) => {
+      const lines = body.split("\n");
+      const changesIndex = lines.findIndex(
+        (line) => line.trim() === "## Changes",
+      );
+
+      if (changesIndex === -1) {
+        return { manualNotes: "", fullNotes: body.trim() };
+      }
+
+      return {
+        manualNotes: lines.slice(0, changesIndex).join("\n").trim(),
+        fullNotes: lines.slice(changesIndex + 1).join("\n").trim(),
+      };
+    };
+
+    const renderReleaseBody = (body: string) => {
+      const fragment = document.createDocumentFragment();
+      const { manualNotes, fullNotes } = splitReleaseBody(body);
+
+      if (manualNotes) {
+        fragment.append(renderMarkdownFragment(manualNotes));
+      }
+
+      if (!fullNotes) {
+        return fragment;
+      }
+
+      const details = document.createElement("details");
+      details.className = manualNotes ? "mt-6" : "";
+
+      const summary = document.createElement("summary");
+      summary.className =
+        "cursor-pointer text-sm font-medium transition-opacity hover:opacity-70";
+      summary.style.color = "var(--foreground)";
+      summary.textContent = "Full release notes";
+
+      const content = document.createElement("div");
+      content.className = "mt-4 space-y-3";
+      content.append(renderMarkdownFragment(fullNotes));
+
+      details.append(summary, content);
+      fragment.append(details);
+      return fragment;
+    };
+
+    const formatDate = (publishedAt: string | null) => {
+      if (!publishedAt) return "Unpublished";
+      return new Intl.DateTimeFormat("en", {
+        dateStyle: "medium",
+      }).format(new Date(publishedAt));
+    };
+
+    const renderRelease = (release: GitHubRelease) => {
+      const article = document.createElement("article");
+      article.id = releaseAnchorId(release.tag_name);
+      article.className = "changelog-entry rounded-lg p-6 sm:p-7";
+
+      const meta = document.createElement("div");
+      meta.className = "flex flex-wrap items-center gap-3 text-sm font-medium";
+      meta.style.color = "var(--muted-foreground)";
+
+      const title = document.createElement("h2");
+      const titleLink = document.createElement("a");
+      titleLink.href = `#${article.id}`;
+      titleLink.className =
+        "font-display text-3xl font-medium transition-opacity hover:opacity-70 sm:text-4xl";
+      titleLink.style.color = "var(--foreground)";
+      titleLink.textContent = release.name || release.tag_name;
+      title.append(titleLink);
+      meta.append(title);
+
+      const date = document.createElement("span");
+      date.textContent = formatDate(release.published_at);
+      meta.append(date);
+
+      const releaseLink = document.createElement("a");
+      releaseLink.className =
+        "inline-flex h-9 shrink-0 items-center justify-center rounded-[0.625rem] px-3 text-sm font-medium transition-opacity hover:opacity-80 whitespace-nowrap";
+      releaseLink.href = release.html_url;
+      releaseLink.target = "_blank";
+      releaseLink.rel = "noopener noreferrer";
+      releaseLink.style.background = "var(--background)";
+      releaseLink.style.border = "1px solid var(--border)";
+      releaseLink.style.color = "var(--foreground)";
+      releaseLink.textContent = "View release";
+      meta.append(releaseLink);
+
+      const body = document.createElement("div");
+      body.className = "changelog-body mt-6 space-y-3";
+      body.append(renderReleaseBody(release.body || "No release notes published."));
+
+      article.append(meta, body);
+      return article;
+    };
+
+    const renderMessage = (text: string) => {
+      const message = document.createElement("article");
+      message.className = "rounded-lg p-6";
+      message.style.background = "var(--card)";
+      message.style.border = "1px solid var(--border)";
+
+      const paragraph = document.createElement("p");
+      paragraph.className = "text-sm leading-[1.8]";
+      paragraph.style.color = "var(--muted-foreground)";
+      paragraph.append(document.createTextNode(`${text} `));
+
+      const link = document.createElement("a");
+      link.href = "https://github.com/stella/stella/releases";
+      link.className = "font-medium transition-opacity hover:opacity-70";
+      link.style.color = "var(--foreground)";
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "GitHub releases";
+      paragraph.append(link, document.createTextNode("."));
+
+      message.append(paragraph);
+      return message;
+    };
+
+    const renderLoading = () => {
+      const article = document.createElement("article");
+      article.className = "rounded-lg p-6";
+      article.style.background = "var(--card)";
+      article.style.border = "1px solid var(--border)";
+
+      const tag = document.createElement("div");
+      tag.className = "h-3 w-28 rounded-full";
+      tag.style.background = "var(--muted)";
+
+      const title = document.createElement("div");
+      title.className = "mt-5 h-7 w-48 rounded-full";
+      title.style.background = "var(--muted)";
+
+      const lines = document.createElement("div");
+      lines.className = "mt-6 space-y-3";
+
+      for (const width of ["100%", "83.333333%", "66.666667%"]) {
+        const line = document.createElement("div");
+        line.className = "h-3 rounded-full";
+        line.style.background = "var(--muted)";
+        line.style.width = width;
+        lines.append(line);
+      }
+
+      article.append(tag, title, lines);
+      return article;
+    };
+
+    const updatePageUrl = () => {
+      const url = new URL(window.location.href);
+      if (currentPage === 1) {
+        url.searchParams.delete("page");
+      } else {
+        url.searchParams.set("page", String(currentPage));
+      }
+      window.history.replaceState(null, "", url);
+    };
+
+    const responseHasNextPage = (response: Response) =>
+      response.headers.get("link")?.includes('rel="next"') ?? false;
+
+    const buildReleasesUrl = () =>
+      `${releasesEndpoint}&page=${currentPage}`;
+
+    const renderPagination = () => {
+      if (!paginationContainer) return;
+      paginationContainer.replaceChildren();
+
+      if (currentPage === 1 && !hasNextPage) {
+        paginationContainer.classList.add("hidden");
+        paginationContainer.classList.remove("flex");
+        return;
+      }
+
+      const previousButton = document.createElement("button");
+      previousButton.type = "button";
+      previousButton.className =
+        "inline-flex h-10 items-center justify-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40";
+      previousButton.style.background = "var(--card)";
+      previousButton.style.border = "1px solid var(--border)";
+      previousButton.style.color = "var(--foreground)";
+      previousButton.disabled = currentPage === 1;
+      previousButton.textContent = "Previous";
+      previousButton.addEventListener("click", () => {
+        if (currentPage === 1) return;
+        currentPage -= 1;
+        loadReleases();
+      });
+
+      const pageIndicator = document.createElement("span");
+      pageIndicator.className = "text-sm tabular-nums";
+      pageIndicator.style.color = "var(--muted-foreground)";
+      pageIndicator.textContent = `Page ${currentPage}`;
+
+      const nextButton = document.createElement("button");
+      nextButton.type = "button";
+      nextButton.className =
+        "inline-flex h-10 items-center justify-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40";
+      nextButton.style.background = "var(--card)";
+      nextButton.style.border = "1px solid var(--border)";
+      nextButton.style.color = "var(--foreground)";
+      nextButton.disabled = !hasNextPage;
+      nextButton.textContent = "Next";
+      nextButton.addEventListener("click", () => {
+        if (!hasNextPage) return;
+        currentPage += 1;
+        loadReleases();
+      });
+
+      paginationContainer.append(previousButton, pageIndicator, nextButton);
+      paginationContainer.classList.remove("hidden");
+      paginationContainer.classList.add("flex");
+    };
+
+    const loadReleases = async () => {
+      if (!releasesContainer) return;
+
+      try {
+        releasesContainer.replaceChildren(renderLoading());
+
+        const response = await fetch(buildReleasesUrl(), {
+          headers: { Accept: "application/vnd.github+json" },
+        });
+        if (!response.ok) {
+          hasNextPage = false;
+          renderPagination();
+          releasesContainer.replaceChildren(
+            renderMessage("Release notes could not be loaded right now. Read them directly on"),
+          );
+          return;
+        }
+
+        const releases = (await response.json()) as GitHubRelease[];
+        const publishedReleases = releases.filter(
+          (release) => !release.draft && !release.prerelease,
+        );
+        if (publishedReleases.length === 0) {
+          hasNextPage = false;
+          renderPagination();
+          releasesContainer.replaceChildren(
+            renderMessage("No public releases are published yet. Check"),
+          );
+          return;
+        }
+
+        hasNextPage = responseHasNextPage(response);
+        updatePageUrl();
+        renderPagination();
+        releasesContainer.replaceChildren(
+          ...publishedReleases.map(renderRelease),
+        );
+      } catch {
+        hasNextPage = false;
+        renderPagination();
+        releasesContainer.replaceChildren(
+          renderMessage("Release notes could not be loaded right now. Read them directly on"),
+        );
+      }
+    };
+
+    loadReleases();
+
+    async function initGradient(containerId: string, svgUrl: string) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      const resp = await fetch(svgUrl);
+      const svg = await resp.text();
+      container.innerHTML = svg;
+
+      const svgEl = container.querySelector("svg");
+      if (svgEl) {
+        svgEl.style.width = "100%";
+        svgEl.style.height = "100%";
+      }
+
+      const groups = container.querySelectorAll<SVGGElement>("svg g");
+      const group = groups[groups.length - 1] ?? null;
+      const rects = group
+        ? [...group.querySelectorAll<SVGRectElement>("rect")]
+        : [];
+      const filterId =
+        group?.getAttribute("filter")?.match(/url\(#([^)]+)\)/)?.[1] ?? "";
+      const n = rects.length;
+      if (n === 0) return;
+
+      const bases = rects.map((r) => {
+        const gradId = r.getAttribute("fill")?.match(/#(\w+)/)?.[1];
+        if (!gradId) return 0.5;
+        const grad = container.querySelector(`#${gradId}`);
+        if (!grad) return 0.5;
+        let max = 0;
+        for (const stop of grad.querySelectorAll("stop")) {
+          max = Math.max(
+            max,
+            parseFloat(stop.getAttribute("stop-opacity") ?? "0"),
+          );
+        }
+        return max;
+      });
+
+      const startTime = performance.now();
+
+      function loop() {
+        const layerEl = document.getElementById(containerId);
+        if (layerEl && getComputedStyle(layerEl).opacity === "0") {
+          requestAnimationFrame(loop);
+          return;
+        }
+
+        const t = (performance.now() - startTime) / 1000;
+
+        const peak1 =
+          0.3 + Math.sin(t * 0.04) * 0.25 + Math.sin(t * 0.067) * 0.1;
+        const peak2 =
+          0.7 + Math.sin(t * 0.053 + 2) * 0.2 + Math.cos(t * 0.037) * 0.15;
+        const w1 = 0.18 + Math.sin(t * 0.03) * 0.06;
+        const w2 = 0.15 + Math.cos(t * 0.045) * 0.05;
+        const hueShift = Math.sin(t * 0.06) * 6.5 - 1.5;
+
+        if (group) {
+          group.style.filter = `url(#${filterId}) hue-rotate(${hueShift.toFixed(1)}deg)`;
+        }
+
+        for (let i = 0; i < n; i++) {
+          const r = rects[i];
+          const norm = i / n;
+          const base = bases[i];
+          const isOdd = i % 2 === 1;
+
+          const d1 = Math.abs(norm - peak1);
+          const d2 = Math.abs(norm - peak2);
+          const envelope = Math.max(
+            Math.exp(-(d1 * d1) / (2 * w1 * w1)),
+            Math.exp(-(d2 * d2) / (2 * w2 * w2)),
+          );
+          const breathe = Math.sin(t * 0.35 + i * 0.2) * 0.08;
+          const opacity = base + envelope * 0.45 + breathe;
+
+          const dir = isOdd ? 1 : -1;
+          const sway = Math.sin(t * 0.22 + i * 0.25) * dir * 6;
+          const ySway = Math.cos(t * 0.15 + i * 0.18) * dir * 3;
+          const scaleX = 1 + Math.sin(t * 0.2 + i * 0.3) * 0.06;
+
+          r.setAttribute(
+            "transform",
+            `translate(${sway.toFixed(1)}, ${ySway.toFixed(1)}) scale(${scaleX.toFixed(3)}, 1)`,
+          );
+          r.style.opacity = Math.min(1.2, Math.max(0.08, opacity)).toFixed(3);
+        }
+
+        requestAnimationFrame(loop);
+      }
+
+      requestAnimationFrame(loop);
+    }
+
+    initGradient("gradient-light", "/images/gradients/hero-light.svg");
+    initGradient("gradient-dark", "/images/gradients/hero-dark.svg");
+  </script>
+</Base>

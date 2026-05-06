@@ -12,7 +12,10 @@ Each release tag (`vX.Y.Z` or `vX.Y.Z-rc.N`) publishes:
 - immutable image references by tag, git SHA, and digest,
 - a `release-manifest.json` file containing the source commit, image digest,
   and migration file inventory,
-- GitHub release notes generated from merged changes.
+- GitHub release notes generated from merged changes, optionally prefixed with
+  a manual description from `docs/changelog/<tag>.md`,
+- a public changelog entry on `https://stll.app/changelog`, sourced from GitHub
+  Releases.
 
 The manifest is intentionally infra neutral. It names artifacts and migrations
 only; environment-specific deploy details belong in the operator's private
@@ -38,13 +41,22 @@ should lag the release that stopped using the old data.
 
 1. Ensure CI is green on `main`.
 2. Generate and review any required migration files.
-3. Create a signed release tag:
+3. In one commit, bump `VERSION` and optionally add the matching manual
+   changelog note:
 
    ```bash
-   git tag -s vX.Y.Z -m "vX.Y.Z"
-   git push origin vX.Y.Z
+   printf "X.Y.Z\n" > VERSION
+   $EDITOR docs/changelog/vX.Y.Z.md
+   git add VERSION docs/changelog/vX.Y.Z.md
+   git commit -m "chore: release vX.Y.Z"
    ```
 
-4. Wait for the release workflow to publish the image and manifest.
-5. Promote the release from a private deploy repository or your own deployment
+   For RCs, use matching values such as `VERSION=1.2.3-rc.1` and
+   `docs/changelog/v1.2.3-rc.1.md`.
+4. Merge the commit to `main`. The `tag-on-version-bump.yml` workflow pushes
+   the matching `vX.Y.Z` tag automatically. The tag then triggers
+   `release.yml`.
+5. Wait for the release workflow to publish the image, manifest, and GitHub
+   release notes.
+6. Promote the release from a private deploy repository or your own deployment
    system by consuming the manifest's immutable image digest.
