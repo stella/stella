@@ -3,7 +3,7 @@ name = "stella-desktop"
 version = "0.0.1"
 edition = "2021"
 description = "stella desktop — managed Word editing for stella"
-license = "AGPL-3.0"
+license = "Apache-2.0"
 
 [lib]
 name = "stella_desktop_lib"
