@@ -159,6 +159,7 @@ const dateFormatter = new Intl.DateTimeFormat("en", { dateStyle: "medium" });
       if (!container) return;
 
       const resp = await fetch(svgUrl);
+      if (!resp.ok) return;
       const svg = await resp.text();
       container.innerHTML = svg;
 
@@ -196,8 +197,7 @@ const dateFormatter = new Intl.DateTimeFormat("en", { dateStyle: "medium" });
       const startTime = performance.now();
 
       function loop() {
-        const layerEl = document.getElementById(containerId);
-        if (layerEl && getComputedStyle(layerEl).opacity === "0") {
+        if (getComputedStyle(container).opacity === "0") {
           requestAnimationFrame(loop);
           return;
         }
