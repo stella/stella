@@ -302,7 +302,7 @@ const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
       </div>
       {previewOperations.map((operation, index) => (
         <div
-          className="text-foreground/90 truncate"
+          className="text-foreground-strong-muted truncate"
           key={`${operation.blockId}-${operation.type}-${index}`}
         >
           {renderOperationSummary(operation)}

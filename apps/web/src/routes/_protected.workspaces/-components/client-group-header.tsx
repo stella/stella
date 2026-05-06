@@ -78,7 +78,7 @@ export const ClientGroupHeader = ({
       </span>
       {group.type === "client" && group.responsibleAttorneyName && (
         <>
-          <span className="text-muted-foreground/50">·</span>
+          <span className="text-foreground-subtle">·</span>
           <span className="text-muted-foreground text-xs">
             {group.responsibleAttorneyName}
           </span>

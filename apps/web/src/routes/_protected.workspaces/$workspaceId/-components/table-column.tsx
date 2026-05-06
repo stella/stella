@@ -211,7 +211,7 @@ const WithOpenEntityButton = ({
     <div className="w-full min-w-0 text-start">
       {children}
       <Button
-        className="text-muted-foreground/70 hover:text-foreground absolute end-1.5 bottom-1.5 hidden h-6 gap-1 px-1.5 text-xs opacity-70 group-data-[expanded-cell]/cell-content:flex hover:opacity-100"
+        className="text-foreground-ghost hover:text-foreground absolute end-1.5 bottom-1.5 hidden h-6 gap-1 px-1.5 text-xs opacity-70 group-data-[expanded-cell]/cell-content:flex hover:opacity-100"
         data-row-expansion-ignore
         onClick={(event) => {
           event.stopPropagation();

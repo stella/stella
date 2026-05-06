@@ -850,9 +850,9 @@ const FileChatOverlayInner = ({
         editorController={editorController}
         emptyPlaceholder={
           activeFile && filePlaceholderAction ? (
-            <span className="text-muted-foreground/70 flex min-w-0 items-center gap-1.5 text-[13px] leading-5">
+            <span className="text-foreground-ghost flex min-w-0 items-center gap-1.5 text-[13px] leading-5">
               <span className="shrink-0">{filePlaceholderAction}</span>
-              <span className="text-foreground/75 max-w-64 truncate">
+              <span className="text-foreground-label max-w-64 truncate">
                 {activeFile.fileName}
               </span>
             </span>

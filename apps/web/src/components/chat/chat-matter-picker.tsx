@@ -262,7 +262,7 @@ export const ChatMatterPicker = ({
               className="text-muted-foreground size-3.5 shrink-0"
             />
             <input
-              className="placeholder:text-muted-foreground/80 h-7 w-full min-w-0 bg-transparent text-xs outline-none"
+              className="placeholder:text-foreground-placeholder h-7 w-full min-w-0 bg-transparent text-xs outline-none"
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
                 // base-ui's Menu listens for keystrokes (typeahead

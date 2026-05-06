@@ -168,6 +168,7 @@ export default defineConfig({
     "eslint-plugin-drizzle",
     "eslint-plugin-sonarjs",
     "./.oxlint-plugins/no-raw-colors.ts",
+    "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
@@ -242,6 +243,7 @@ export default defineConfig({
       ],
       rules: {
         "no-raw-colors/no-raw-colors": "error",
+        "no-raw-foreground-opacity/no-raw-foreground-opacity": "error",
         "no-inline-style-colors/no-inline-style-colors": "error",
         "no-physical-properties/no-physical-properties": "error",
       },

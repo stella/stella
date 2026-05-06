@@ -1323,7 +1323,7 @@ function ChatBubbleSink() {
         <MessageContent>
           <span className="text-muted-foreground inline-flex items-center gap-2 text-xs">
             <LoaderIcon
-              className="text-muted-foreground/70 size-3 animate-spin"
+              className="text-foreground-ghost size-3 animate-spin"
               aria-hidden="true"
             />
             Thinking…

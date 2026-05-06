@@ -219,7 +219,7 @@ function MenuShortcut({ className, ...props }: React.ComponentProps<"kbd">) {
   return (
     <kbd
       className={cn(
-        "text-muted-foreground/72 ms-auto font-sans text-xs font-medium tracking-widest",
+        "text-foreground-label ms-auto font-sans text-xs font-medium tracking-widest",
         className,
       )}
       data-slot="menu-shortcut"

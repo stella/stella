@@ -1673,7 +1673,9 @@ const FacetBar = ({
               active
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
-              active && pulsing && "ring-foreground/40 animate-pulse ring-2",
+              active &&
+                pulsing &&
+                "ring-foreground-disabled animate-pulse ring-2",
               disabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
             )}
             disabled={disabled}
@@ -1807,7 +1809,7 @@ const InspectorPdfErrorFallback = ({
         </Button>
       </div>
       <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-        <AlertTriangleIcon className="text-muted-foreground/40 size-8" />
+        <AlertTriangleIcon className="text-foreground-disabled size-8" />
         <p className="text-muted-foreground text-sm">
           {t("common.somethingWentWrong")}
         </p>
@@ -2178,7 +2180,7 @@ const DocumentAiSourceBar = ({
         </Button>
       </div>
       {isAnswerExpanded && shortAnswer !== null && (
-        <div className="text-foreground/85 max-h-32 min-w-0 overflow-y-auto pb-2 text-xs leading-relaxed break-words">
+        <div className="text-foreground-strong-muted max-h-32 min-w-0 overflow-y-auto pb-2 text-xs leading-relaxed break-words">
           {justificationNodes}
         </div>
       )}

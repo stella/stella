@@ -193,7 +193,7 @@ const getRecencyClass = (date: Date | string): string => {
   if (age < 7 * DAY_MS) {
     return "text-muted-foreground text-xs";
   }
-  return "text-muted-foreground/50 text-xs";
+  return "text-foreground-subtle text-xs";
 };
 
 type DeadlineInfo = { label: string; className: string };

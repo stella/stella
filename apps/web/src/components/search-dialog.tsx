@@ -1542,7 +1542,7 @@ const SearchResultItem = ({
           />
         )}
       </div>
-      <span className="text-muted-foreground/45 mt-0.5 shrink-0 px-1 text-xs tabular-nums">
+      <span className="text-foreground-subtle mt-0.5 shrink-0 px-1 text-xs tabular-nums">
         {resultNumber}
       </span>
     </CommandItem>

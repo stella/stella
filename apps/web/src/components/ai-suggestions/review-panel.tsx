@@ -628,7 +628,7 @@ export const ReviewPanel = ({
                   )}
                 />
                 <span>{group.label}</span>
-                <span className="text-muted-foreground/70 tabular-nums">
+                <span className="text-foreground-ghost tabular-nums">
                   {group.items.length}
                 </span>
                 <span
@@ -956,8 +956,8 @@ const RedlinePreview = ({
       : "text-[14.5px] leading-6",
     rejected && "opacity-60",
   );
-  const muted = "text-muted-foreground/80";
-  const contextCls = "text-foreground/88";
+  const muted = "text-foreground-strong-muted";
+  const contextCls = "text-foreground-strong-muted";
   // oxlint-disable-next-line no-inline-style-colors/no-inline-style-colors -- emerald not in named-color blacklist
   const insCls =
     "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1 py-0.5 rounded-sm";
@@ -967,7 +967,7 @@ const RedlinePreview = ({
   const arrow = (
     <ArrowRightIcon
       aria-hidden="true"
-      className="text-muted-foreground/70 mx-1 inline size-3.5 align-middle"
+      className="text-foreground-ghost mx-1 inline size-3.5 align-middle"
     />
   );
 
@@ -1171,7 +1171,7 @@ const SuggestionRow = ({
             <span
               className={cn(
                 "text-muted-foreground flex shrink-0 items-center gap-1 text-[11px]",
-                isAccepted && "text-foreground/60",
+                isAccepted && "text-foreground-muted",
               )}
             >
               {item.status === "accepted" && <CheckIcon className="size-3" />}

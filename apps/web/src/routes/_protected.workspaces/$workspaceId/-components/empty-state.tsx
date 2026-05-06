@@ -47,7 +47,7 @@ export const EmptyState = ({
         <div>
           <p className="text-muted-foreground text-sm">{message}</p>
           {hint && (
-            <p className="text-muted-foreground/80 mt-1 text-xs">{hint}</p>
+            <p className="text-foreground-strong-muted mt-1 text-xs">{hint}</p>
           )}
         </div>
       </div>

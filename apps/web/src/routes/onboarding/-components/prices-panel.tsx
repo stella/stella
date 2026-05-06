@@ -308,7 +308,7 @@ export const PricesPanel = ({ providers, roleModels }: PricesPanelProps) => {
       </div>
 
       <div className="border-t px-5 py-2.5">
-        <p className="text-muted-foreground/80 text-xs">
+        <p className="text-foreground-strong-muted text-xs">
           <a
             className="hover:text-foreground underline underline-offset-2"
             href="https://github.com/pydantic/genai-prices"

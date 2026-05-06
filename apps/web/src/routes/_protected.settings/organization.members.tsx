@@ -497,7 +497,7 @@ type SortableHeadProps = {
 const SortableHead = ({ label, active, onClick }: SortableHeadProps) => (
   <TableHead>
     <button
-      className="text-foreground hover:text-foreground/80 group inline-flex items-center gap-1 text-start"
+      className="text-foreground hover:text-foreground-strong-muted group inline-flex items-center gap-1 text-start"
       onClick={onClick}
       type="button"
     >

@@ -113,7 +113,7 @@ export const OrganizationStep = ({
             ? t("common.next")
             : t("onboarding.enterTeamName")}
         </Button>
-        <p className="text-muted-foreground/60 mt-3 text-center text-xs">
+        <p className="text-foreground-muted mt-3 text-center text-xs">
           {t("onboarding.changeAnytime")}
         </p>
       </Form>
