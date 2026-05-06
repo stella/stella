@@ -46,11 +46,13 @@ env:
 jobs:
   build-and-deploy:
     name: Build amd64 + dispatch staging promote
-    # Skip entirely when staging is paused — saves CI minutes
-    # and keeps the workflow tab clean. To turn back on: flip
-    # the `STAGING_ENABLED` repo variable in stella-infra to
-    # 'true' (the same flag the promote-release fail-fast reads).
-    if: vars.STAGING_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
+    # No staging-paused gate here: vars.STAGING_ENABLED lives in
+    # stella-infra and isn't visible to this workflow. The
+    # infra-side promote-release.yml already fail-fasts when
+    # staging is paused, so the worst case of running this
+    # workflow against a paused env is a wasted ~6 min build
+    # that ends in a one-line "::error::Staging is paused" from
+    # the dispatched run.
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -123,7 +125,11 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
         with:
-          app-id: ${{ secrets.STELLA_RELEASE_APP_ID }}
+          # Match the convention used by release.yml's promote +
+          # promote-staging jobs: client-id from vars, private-key
+          # from secrets. Other workflows in this repo (release,
+          # tag-on-version-bump, deploy-landing) all use this pair.
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: stella-infra
