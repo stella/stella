@@ -4544,6 +4544,28 @@ if (import.meta.main) {
   };
 
   const target = await resolveTarget();
+  if (
+    !explicitOrgId &&
+    !explicitUserId &&
+    target.organizationId !== DEFAULT_ORG_ID
+  ) {
+    console.log(
+      `Resolved seed target ${target.organizationId} for user ${target.userId} (${target.label}); restarting with org-scoped IDs`,
+    );
+    const child = Bun.spawn({
+      cmd: [process.execPath, import.meta.path],
+      env: {
+        ...process.env,
+        STELLA_SEED_ID_NAMESPACE: `org:${target.organizationId}`,
+        STELLA_SEED_ORG_ID: target.organizationId,
+        STELLA_SEED_USER_ID: target.userId,
+      },
+      stderr: "inherit",
+      stdout: "inherit",
+    });
+    process.exit(await child.exited);
+  }
+
   console.log(
     `Seeding into org ${target.organizationId} for user ${target.userId} (${target.label})`,
   );
