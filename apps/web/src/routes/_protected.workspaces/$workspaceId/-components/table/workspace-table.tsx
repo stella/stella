@@ -161,16 +161,14 @@ export const WorkspaceTable = ({
       return undefined;
     }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
+      if (event.key !== "Escape" || event.defaultPrevented) {
         return;
       }
-      event.preventDefault();
-      event.stopPropagation();
       setExpandedTableCell(null);
     };
-    document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("keydown", onKeyDown);
     return () => {
-      document.removeEventListener("keydown", onKeyDown, true);
+      document.removeEventListener("keydown", onKeyDown);
     };
   }, [expandedTableCell]);
 
