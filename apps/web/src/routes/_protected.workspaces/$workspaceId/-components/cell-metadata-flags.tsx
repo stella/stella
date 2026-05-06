@@ -111,6 +111,11 @@ const normalizeManualFlags = (flags: string[]) =>
 const haveSameFlags = (a: string[], b: string[]) =>
   a.length === b.length && a.every((flag, index) => flag === b[index]);
 
+type UpdateCellMetadataVariables = {
+  baseManualFlags: string[];
+  manualFlags: string[];
+};
+
 type CellMetadataFlagsProps = {
   workspaceId: string;
   entityId: string;
@@ -373,13 +378,17 @@ const useCellMetadataFlags = ({
   const hasVerifiedFlag = currentManualFlags.includes(VERIFIED_FLAG_ID);
 
   const updateMetadata = useMutation({
-    mutationFn: async (manualFlags: string[]) => {
+    mutationFn: async ({
+      baseManualFlags,
+      manualFlags,
+    }: UpdateCellMetadataVariables) => {
       const response = await api
         .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .metadata.patch({
           queryKey: entitiesKeys.all(workspaceId),
           entityId: toSafeId<"entity">(entityId),
           propertyId: toSafeId<"property">(propertyId),
+          baseManualFlags,
           manualFlags,
         });
 
@@ -389,6 +398,7 @@ const useCellMetadataFlags = ({
 
       return response.data;
     },
+    scope: { id: `cell-metadata:${workspaceId}:${entityId}:${propertyId}` },
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: entitiesKeys.all(workspaceId),
@@ -415,13 +425,14 @@ const useCellMetadataFlags = ({
     );
     pendingManualFlagsRef.current = next;
     setPendingManualFlags(next);
-    updateMetadata.mutate(next);
+    updateMetadata.mutate({ baseManualFlags: current, manualFlags: next });
   };
 
   const clearFlags = () => {
+    const current = pendingManualFlagsRef.current ?? metadataManualFlags;
     pendingManualFlagsRef.current = [];
     setPendingManualFlags([]);
-    updateMetadata.mutate([]);
+    updateMetadata.mutate({ baseManualFlags: current, manualFlags: [] });
   };
 
   return {
