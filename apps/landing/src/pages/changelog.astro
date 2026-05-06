@@ -134,59 +134,65 @@ const releasesUrl = `${githubUrl}/releases`;
   </div>
 
   <style>
-    .changelog-entry {
+    :global(.changelog-entry) {
       background: var(--card);
       border: 1px solid var(--border);
       color: var(--foreground);
       scroll-margin-top: 2rem;
     }
 
-    .changelog-body h2,
-    .changelog-body h3 {
+    :global(.changelog-body h2),
+    :global(.changelog-body h3) {
       color: var(--foreground);
       font-family: "Cabinet Grotesk", system-ui, sans-serif;
       font-weight: 500;
       margin-top: 1.5rem;
     }
 
-    .changelog-body h2 {
+    :global(.changelog-body h2:first-child),
+    :global(.changelog-body h3:first-child) {
+      margin-top: 0;
+    }
+
+    :global(.changelog-body h2) {
       font-size: 1.75rem;
       line-height: 1.15;
     }
 
-    .changelog-body h3 {
+    :global(.changelog-body h3) {
       font-size: 1.125rem;
       line-height: 1.45;
       color: var(--muted-foreground);
     }
 
-    .changelog-body p,
-    .changelog-body li {
+    :global(.changelog-body p),
+    :global(.changelog-body li) {
       color: var(--muted-foreground);
       font-size: 0.9375rem;
       line-height: 1.8;
     }
 
-    .changelog-body ul {
+    :global(.changelog-body ul) {
+      list-style: disc;
       margin-top: 0.75rem;
       padding-left: 1.1rem;
     }
 
-    .changelog-body li + li {
+    :global(.changelog-body li + li) {
       margin-top: 0.35rem;
     }
 
-    .changelog-body a {
+    :global(.changelog-body a) {
       color: var(--foreground);
       font-weight: 500;
       text-decoration: none;
     }
 
-    .changelog-body a:hover {
+    :global(.changelog-body a:hover) {
       opacity: 0.7;
     }
 
-    .changelog-body video {
+    :global(.changelog-body video) {
       aspect-ratio: 16 / 9;
       background: var(--muted);
       border: 1px solid var(--border);
@@ -199,7 +205,7 @@ const releasesUrl = `${githubUrl}/releases`;
     }
 
     @media (max-width: 640px) {
-      .changelog-body video {
+      :global(.changelog-body video) {
         border-radius: 0.375rem;
         margin-inline: -0.5rem;
         max-width: calc(100% + 1rem);
