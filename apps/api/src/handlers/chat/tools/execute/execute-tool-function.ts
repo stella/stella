@@ -42,6 +42,11 @@ export type ExecuteToolFunctionExecuteProps = {
 type ExecuteToolError = ChatToolError | SafeDbError;
 
 type ExecuteToolResult<TValue> = Result<TValue, ExecuteToolError>;
+type ExecuteToolExecutionError = ExecuteToolError | Panic | UnhandledException;
+type ExecuteToolExecutionResult<TValue> = Result<
+  TValue,
+  ExecuteToolExecutionError
+>;
 
 export type ExecuteToolHandler<
   TInputSchema extends v.GenericSchema,
@@ -79,11 +84,13 @@ export const createToolFunction = <
 
     signal.throwIfAborted();
 
-    const handlerResult = await Result.gen(() =>
-      handler(parsedInput, { signal }),
-    )
-      .catch((error: unknown) => Result.err(normalizeThrownError(error)))
-      .then((result) => result.mapError(mapExecutionError));
+    const rawHandlerResult: ExecuteToolExecutionResult<
+      v.InferOutput<TOutputSchema>
+    > = await Result.gen(() => handler(parsedInput, { signal })).catch(
+      (error: unknown) => Result.err(normalizeThrownError(error)),
+    );
+
+    const handlerResult = rawHandlerResult.mapError(mapExecutionError);
 
     signal.throwIfAborted();
 
@@ -135,8 +142,6 @@ const normalizeThrownError = (error: unknown): Panic | UnhandledException => {
 
   return new UnhandledException({ cause: error });
 };
-
-type ExecuteToolExecutionError = ExecuteToolError | Panic | UnhandledException;
 
 const mapExecutionError = (error: ExecuteToolExecutionError) => {
   if (Panic.is(error)) {
