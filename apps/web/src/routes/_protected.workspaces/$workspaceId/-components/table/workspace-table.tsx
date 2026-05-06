@@ -156,6 +156,24 @@ export const WorkspaceTable = ({
     useState<ExpandedTableCell | null>(null);
   const [wrapperWidth, setWrapperWidth] = useState(0);
 
+  useEffect(() => {
+    if (!expandedTableCell) {
+      return undefined;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      setExpandedTableCell(null);
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [expandedTableCell]);
+
   const renameEntity = useRenameEntity();
 
   const activeEntityId = useInspectorStore((s) => {
