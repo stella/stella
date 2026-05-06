@@ -1936,7 +1936,23 @@ type Messages = {
       "parties": "Parties";
     };
     "table": {
+      "clearFlags": "Clear flags";
+      "flagCell": "Flag cell";
+      "flags": {
+        "contradiction": "Contradiction";
+        "contradictionDescription": "May conflict with other data.";
+        "followUp": "Follow up";
+        "followUpDescription": "Needs a next action.";
+        "important": "Important";
+        "importantDescription": "Marks a key value.";
+        "needsReview": "Needs review";
+        "needsReviewDescription": "Requires manual review.";
+        "verified": "Verified";
+        "verifiedDescription": "Manually confirmed.";
+      };
       "reorderReadOnly": "Table rows follow the current sort";
+      "tightContent": "Tight";
+      "wrapContent": "Wrap content";
     };
     "tasksCount": "{count, plural, one {# agenda item} other {# agenda items}}";
     "tools": {

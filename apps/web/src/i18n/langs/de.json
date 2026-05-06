@@ -1933,7 +1933,23 @@
       "parties": "Parteien"
     },
     "table": {
-      "reorderReadOnly": "Tabellenzeilen folgen der aktuellen Sortierung"
+      "clearFlags": "Markierungen löschen",
+      "flagCell": "Zelle markieren",
+      "flags": {
+        "contradiction": "Widerspruch",
+        "contradictionDescription": "Kann anderen Daten widersprechen.",
+        "followUp": "Nachfassen",
+        "followUpDescription": "Erfordert eine nächste Aktion.",
+        "important": "Wichtig",
+        "importantDescription": "Kennzeichnet einen Schlüsselwert.",
+        "needsReview": "Zu prüfen",
+        "needsReviewDescription": "Erfordert manuelle Prüfung.",
+        "verified": "Verifiziert",
+        "verifiedDescription": "Manuell bestätigt."
+      },
+      "reorderReadOnly": "Tabellenzeilen folgen der aktuellen Sortierung",
+      "tightContent": "Kompakt",
+      "wrapContent": "Text umbrechen"
     },
     "tasksCount": "{count, plural, one {# Agendaeintrag} other {# Agendaeinträge}}",
     "tools": {

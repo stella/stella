@@ -1933,7 +1933,23 @@
       "parties": "Osapooled"
     },
     "table": {
-      "reorderReadOnly": "Tabeliread järgivad praegust sortimist"
+      "clearFlags": "Eemalda märgised",
+      "flagCell": "Märgista lahter",
+      "flags": {
+        "contradiction": "Vastuolu",
+        "contradictionDescription": "Võib olla vastuolus teiste andmetega.",
+        "followUp": "Järeltegevus",
+        "followUpDescription": "Vajab järgmist tegevust.",
+        "important": "Tähtis",
+        "importantDescription": "Märgib võtmeväärtuse.",
+        "needsReview": "Vajab ülevaatust",
+        "needsReviewDescription": "Vajab käsitsi ülevaatust.",
+        "verified": "Kinnitatud",
+        "verifiedDescription": "Käsitsi kinnitatud."
+      },
+      "reorderReadOnly": "Tabeliread järgivad praegust sortimist",
+      "tightContent": "Kompaktne",
+      "wrapContent": "Murra tekst"
     },
     "tasksCount": "{count, plural, one {# agenda kirje} other {# agenda kirjet}}",
     "tools": {

@@ -1933,7 +1933,23 @@
       "parties": "Strony"
     },
     "table": {
-      "reorderReadOnly": "Wiersze tabeli są zgodne z bieżącym sortowaniem"
+      "clearFlags": "Wyczyść oznaczenia",
+      "flagCell": "Oznacz komórkę",
+      "flags": {
+        "contradiction": "Sprzeczność",
+        "contradictionDescription": "Może być sprzeczne z innymi danymi.",
+        "followUp": "Dalsze działania",
+        "followUpDescription": "Wymaga kolejnego działania.",
+        "important": "Ważne",
+        "importantDescription": "Oznacza kluczową wartość.",
+        "needsReview": "Do sprawdzenia",
+        "needsReviewDescription": "Wymaga ręcznej weryfikacji.",
+        "verified": "Zweryfikowane",
+        "verifiedDescription": "Potwierdzone ręcznie."
+      },
+      "reorderReadOnly": "Wiersze tabeli są zgodne z bieżącym sortowaniem",
+      "tightContent": "Kompaktowo",
+      "wrapContent": "Zawijaj tekst"
     },
     "tasksCount": "{count, plural, one {# pozycja agendy} few {# pozycje agendy} other {# pozycji agendy}}",
     "tools": {

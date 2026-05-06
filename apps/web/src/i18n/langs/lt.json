@@ -1933,7 +1933,23 @@
       "parties": "Šalys"
     },
     "table": {
-      "reorderReadOnly": "Lentelės eilutės laikosi dabartinio rūšiavimo"
+      "clearFlags": "Išvalyti žymas",
+      "flagCell": "Pažymėti langelį",
+      "flags": {
+        "contradiction": "Prieštara",
+        "contradictionDescription": "Gali prieštarauti kitiems duomenims.",
+        "followUp": "Tolesnis veiksmas",
+        "followUpDescription": "Reikia kito veiksmo.",
+        "important": "Svarbu",
+        "importantDescription": "Pažymi esminę reikšmę.",
+        "needsReview": "Reikia peržiūros",
+        "needsReviewDescription": "Reikia rankinės peržiūros.",
+        "verified": "Patvirtinta",
+        "verifiedDescription": "Patvirtinta rankiniu būdu."
+      },
+      "reorderReadOnly": "Lentelės eilutės laikosi dabartinio rūšiavimo",
+      "tightContent": "Kompaktiškai",
+      "wrapContent": "Laužyti tekstą"
     },
     "tasksCount": "{count, plural, one {# agendos elementas} few {# agendos elementai} other {# agendos elementų}}",
     "tools": {

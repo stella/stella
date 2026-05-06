@@ -6,13 +6,18 @@ import { alias } from "drizzle-orm/pg-core";
 import type { SafeDb, Transaction } from "@/api/db";
 import { member, user } from "@/api/db/auth-schema";
 import {
+  cellMetadata,
   desktopEditSessions,
   entities,
   entityVersions,
   fields,
   searchDocuments,
 } from "@/api/db/schema";
-import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import type {
+  CellMetadata,
+  EntityKind,
+  FieldContent,
+} from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   AGENDA_ITEM_KIND,
@@ -30,6 +35,17 @@ import type { ViewFilterCondition, ViewSort } from "@/api/lib/views-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export type QueryEntitiesFieldMode = "full" | "visible";
+
+type CellMetadataFlagProvenanceResult = {
+  addedBy: string;
+  addedAt: string;
+  addedByName: string | null;
+  addedByImage: string | null;
+};
+
+type CellMetadataResult = Omit<CellMetadata, "flagProvenance"> & {
+  flagProvenance?: Record<string, CellMetadataFlagProvenanceResult>;
+};
 
 export type QueryEntityResult = {
   entityId: string;
@@ -72,6 +88,10 @@ export type QueryEntityResult = {
     entityId: string;
     content: FieldContent;
   }[];
+  cellMetadata: {
+    propertyId: string;
+    metadata: CellMetadataResult;
+  }[];
 };
 
 type QueryEntitiesProps = {
@@ -103,6 +123,100 @@ const organizationMemberIdsSubquery = (
     .where(eq(member.organizationId, organizationId))
     .groupBy(member.userId)
     .as(aliasName);
+
+type VersionScopedRow = {
+  entityVersionId: string;
+};
+
+const groupByEntityVersionId = <TRow extends VersionScopedRow>(
+  rows: TRow[],
+) => {
+  const byVersionId = new Map<string, TRow[]>();
+  for (const row of rows) {
+    const list = byVersionId.get(row.entityVersionId);
+    if (list) {
+      list.push(row);
+    } else {
+      byVersionId.set(row.entityVersionId, [row]);
+    }
+  }
+  return byVersionId;
+};
+
+const getCellMetadataActorIds = (
+  rows: { metadata: CellMetadata }[],
+): string[] => {
+  const userIds = new Set<string>();
+  for (const row of rows) {
+    for (const provenance of Object.values(row.metadata.flagProvenance ?? {})) {
+      userIds.add(provenance.addedBy);
+    }
+  }
+  return [...userIds];
+};
+
+type CellMetadataActor = {
+  id: string;
+  name: string | null;
+  image: string | null;
+};
+
+const enrichCellMetadata = (
+  metadata: CellMetadata,
+  actorMap: Map<string, CellMetadataActor>,
+): CellMetadataResult => {
+  const provenanceEntries = Object.entries(metadata.flagProvenance ?? {});
+  if (provenanceEntries.length === 0) {
+    return {
+      manualFlags: metadata.manualFlags,
+      version: metadata.version,
+    };
+  }
+
+  return {
+    ...metadata,
+    flagProvenance: Object.fromEntries(
+      provenanceEntries.map(([flag, provenance]) => {
+        const actor = actorMap.get(provenance.addedBy);
+        return [
+          flag,
+          {
+            ...provenance,
+            addedByName: actor?.name ?? null,
+            addedByImage: actor?.image ?? null,
+          },
+        ];
+      }),
+    ),
+  };
+};
+
+const buildCellMetadataPredicates = ({
+  fieldIds,
+  fieldMode,
+  idFilter,
+}: {
+  fieldIds: SafeId<"property">[];
+  fieldMode: QueryEntitiesFieldMode;
+  idFilter: SQL;
+}) => {
+  const predicates = [
+    eq(cellMetadata.entityVersionId, entities.currentVersionId),
+    idFilter,
+  ];
+  if (fieldMode !== "visible") {
+    return predicates;
+  }
+
+  const uniqueFieldIds = [...new Set(fieldIds)];
+  if (uniqueFieldIds.length === 0) {
+    predicates.push(sql`false`);
+    return predicates;
+  }
+
+  predicates.push(inArray(cellMetadata.propertyId, uniqueFieldIds));
+  return predicates;
+};
 
 const queryEntitiesGenerator = async function* ({
   safeDb,
@@ -206,11 +320,17 @@ const queryEntitiesGenerator = async function* ({
       }
     }
   }
+  const cellMetadataPredicates = buildCellMetadataPredicates({
+    fieldIds,
+    fieldMode,
+    idFilter,
+  });
 
   const [
     entityRowsResult,
     versionCountsResult,
     fieldRowsResult,
+    cellMetadataRowsResult,
     activeSessionsResult,
   ] = await Promise.all([
     safeDb((tx) => {
@@ -306,6 +426,16 @@ const queryEntitiesGenerator = async function* ({
         .from(fields)
         .innerJoin(entities, and(...fieldPredicates)),
     ),
+    safeDb((tx) =>
+      tx
+        .select({
+          entityVersionId: cellMetadata.entityVersionId,
+          propertyId: cellMetadata.propertyId,
+          metadata: cellMetadata.metadata,
+        })
+        .from(cellMetadata)
+        .innerJoin(entities, and(...cellMetadataPredicates)),
+    ),
     safeDb((tx) => {
       const sessionEditorMembers = organizationMemberIdsSubquery(
         tx,
@@ -342,7 +472,41 @@ const queryEntitiesGenerator = async function* ({
   const entityRows = yield* entityRowsResult;
   const versionCounts = yield* versionCountsResult;
   const fieldRows = yield* fieldRowsResult;
+  const cellMetadataRows = yield* cellMetadataRowsResult;
   const activeSessions = yield* activeSessionsResult;
+  const cellMetadataActorIds = getCellMetadataActorIds(cellMetadataRows);
+  const cellMetadataActors =
+    cellMetadataActorIds.length > 0
+      ? yield* Result.await(
+          safeDb((tx) => {
+            const actorMembers = tx
+              .select({ userId: member.userId })
+              .from(member)
+              .where(
+                and(
+                  eq(member.organizationId, currentOrganizationId),
+                  inArray(member.userId, cellMetadataActorIds),
+                ),
+              )
+              .groupBy(member.userId)
+              .as("cell_metadata_actor_members");
+
+            return tx
+              .select({
+                id: user.id,
+                name: sql<
+                  string | null
+                >`coalesce(nullif(trim(${user.name}), ''), ${user.email})`,
+                image: user.image,
+              })
+              .from(actorMembers)
+              .innerJoin(user, eq(actorMembers.userId, user.id));
+          }),
+        )
+      : [];
+  const cellMetadataActorMap = new Map(
+    cellMetadataActors.map((actor) => [actor.id, actor]),
+  );
 
   const versionCountMap = new Map(
     versionCounts.map((v) => [v.entityId, v.versionCount]),
@@ -362,15 +526,8 @@ const queryEntitiesGenerator = async function* ({
     }
   }
 
-  const fieldsByVersionId = new Map<string, typeof fieldRows>();
-  for (const field of fieldRows) {
-    const list = fieldsByVersionId.get(field.entityVersionId);
-    if (list) {
-      list.push(field);
-    } else {
-      fieldsByVersionId.set(field.entityVersionId, [field]);
-    }
-  }
+  const fieldsByVersionId = groupByEntityVersionId(fieldRows);
+  const cellMetadataByVersionId = groupByEntityVersionId(cellMetadataRows);
 
   const entityMap = new Map(entityRows.map((e) => [e.id, e]));
 
@@ -387,6 +544,7 @@ const queryEntitiesGenerator = async function* ({
     }
 
     const entityFields = fieldsByVersionId.get(versionId) ?? [];
+    const entityCellMetadata = cellMetadataByVersionId.get(versionId) ?? [];
 
     result.push({
       entityId: entity.id,
@@ -428,6 +586,10 @@ const queryEntitiesGenerator = async function* ({
         propertyId: field.propertyId,
         entityId: entity.id,
         content: field.content,
+      })),
+      cellMetadata: entityCellMetadata.map((entry) => ({
+        propertyId: entry.propertyId,
+        metadata: enrichCellMetadata(entry.metadata, cellMetadataActorMap),
       })),
     });
   }

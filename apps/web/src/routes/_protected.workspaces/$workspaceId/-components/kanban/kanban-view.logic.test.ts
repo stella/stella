@@ -46,6 +46,7 @@ const entity = (
   readOnly: false,
   sortOrder: null,
   activeEditBy: null,
+  cellMetadata: {},
   fields: {},
 });
 

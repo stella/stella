@@ -13,6 +13,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useShallow } from "zustand/shallow";
 
 import type { WorkspaceView } from "@/lib/types";
+import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 import { getInternalColId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
@@ -43,6 +44,8 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
     }),
   );
   const setStoredColumnSizing = useTableStore((s) => s.setColumnSizing);
+  const contentMode = useTableStore((s) => s.contentMode[viewId] ?? "tight");
+  const setContentMode = useTableStore((s) => s.setContentMode);
   const [columnSizing, setColumnSizing] = useState(storedColumnSizing);
 
   const debouncedSetStoredColumnSizing = useDebouncedCallback(
@@ -152,6 +155,10 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
 
   return {
     view,
+    contentMode,
+    setContentMode: (mode: TableContentMode) => {
+      setContentMode(viewId, mode);
+    },
     state: {
       columnSizing,
       columnOrder,

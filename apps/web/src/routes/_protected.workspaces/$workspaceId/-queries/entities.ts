@@ -28,7 +28,7 @@ type KanbanGroupOptionsInput = QueryOptionsInput<KanbanGroupKey>;
 
 type RawWorkspaceEntity = Omit<
   WorkspaceEntity,
-  "entityId" | "parentId" | "fields"
+  "entityId" | "parentId" | "fields" | "cellMetadata"
 > & {
   entityId: string;
   parentId: string | null;
@@ -37,6 +37,10 @@ type RawWorkspaceEntity = Omit<
     propertyId: string;
     entityId: string;
     content: WorkspaceField["content"];
+  }[];
+  cellMetadata: {
+    propertyId: string;
+    metadata: WorkspaceEntity["cellMetadata"][string];
   }[];
 };
 
@@ -49,6 +53,10 @@ const toWorkspaceEntity = (entity: RawWorkspaceEntity): WorkspaceEntity => {
       entityId: toSafeId<"entity">(field.entityId),
       content: field.content,
     };
+  }
+  const cellMetadata: WorkspaceEntity["cellMetadata"] = {};
+  for (const entry of entity.cellMetadata) {
+    cellMetadata[entry.propertyId] = entry.metadata;
   }
   return {
     entityId: toSafeId<"entity">(entity.entityId),
@@ -87,6 +95,7 @@ const toWorkspaceEntity = (entity: RawWorkspaceEntity): WorkspaceEntity => {
     sortOrder: entity.sortOrder,
     activeEditBy: entity.activeEditBy,
     fields,
+    cellMetadata,
   };
 };
 

@@ -1,7 +1,12 @@
 import type { PropsWithChildren } from "react";
 
+import { Button } from "@stll/ui/components/button";
+import { EyeIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
+import { CellMetadataFlags } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -32,6 +37,7 @@ const PropertyCell = ({
 }) => {
   const field = entity.fields[property.id];
   const fieldContent = field?.content;
+  const cellMetadata = entity.cellMetadata[property.id];
 
   const justification = useWorkspaceStore((s) =>
     s.justifications.find((j) => j.fieldId === field?.id),
@@ -55,6 +61,12 @@ const PropertyCell = ({
   if (property.content.type === "file" || fieldContent?.type === "file") {
     return (
       <span className="flex min-w-0 items-center gap-1.5">
+        <CellMetadataFlags
+          entityId={entity.entityId}
+          metadata={cellMetadata}
+          propertyId={property.id}
+          workspaceId={property.workspaceId}
+        />
         <CellResult field={field} property={property} />
         {entity.activeEditBy && (
           <ActiveEditBadge
@@ -69,14 +81,22 @@ const PropertyCell = ({
 
   if (property.tool.type === "manual-input") {
     return (
-      <EditableField
-        content={fieldContent}
-        entityId={entity.entityId}
-        entityKind={entity.kind}
-        property={property}
-        propertyId={property.id}
-        workspaceId={property.workspaceId}
-      />
+      <>
+        <CellMetadataFlags
+          entityId={entity.entityId}
+          metadata={cellMetadata}
+          propertyId={property.id}
+          workspaceId={property.workspaceId}
+        />
+        <EditableField
+          content={fieldContent}
+          entityId={entity.entityId}
+          entityKind={entity.kind}
+          property={property}
+          propertyId={property.id}
+          workspaceId={property.workspaceId}
+        />
+      </>
     );
   }
 
@@ -124,13 +144,29 @@ const PropertyCell = ({
           propertyId={property.id}
           workspaceId={property.workspaceId}
         >
+          <CellMetadataFlags
+            entityId={entity.entityId}
+            metadata={cellMetadata}
+            propertyId={property.id}
+            workspaceId={property.workspaceId}
+          />
           <CellResult field={field} property={property} />
         </WithOpenEntityButton>
       );
     }
   }
 
-  return <CellResult field={field} property={property} />;
+  return (
+    <>
+      <CellMetadataFlags
+        entityId={entity.entityId}
+        metadata={cellMetadata}
+        propertyId={property.id}
+        workspaceId={property.workspaceId}
+      />
+      <CellResult field={field} property={property} />
+    </>
+  );
 };
 
 type WithOpenEntityButtonProps = {
@@ -144,8 +180,7 @@ type WithOpenEntityButtonProps = {
   workspaceId: string;
 };
 
-/** Makes the cell clickable to open the peek PDF viewer
- *  in the inspector with the AI justification visible. */
+/** Shows a peek PDF preview in the inspector with the AI justification visible. */
 const WithOpenEntityButton = ({
   fieldId,
   entityId,
@@ -157,26 +192,37 @@ const WithOpenEntityButton = ({
   workspaceId,
   children,
 }: PropsWithChildren<WithOpenEntityButtonProps>) => {
+  const t = useTranslations();
   const openPdf = useInspectorStore((s) => s.openPdf);
+  const handleOpenPreview = () => {
+    openPdf({
+      id: fieldId,
+      entityId,
+      label,
+      mimeType,
+      pdfFileId: pdfFileId ?? null,
+      justificationFieldId,
+      propertyId,
+      workspaceId,
+    });
+  };
 
   return (
-    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
-    <div
-      className="w-full min-w-0 cursor-pointer text-start"
-      onClick={() =>
-        openPdf({
-          id: fieldId,
-          entityId,
-          label,
-          mimeType,
-          pdfFileId: pdfFileId ?? null,
-          justificationFieldId,
-          propertyId,
-          workspaceId,
-        })
-      }
-    >
+    <div className="w-full min-w-0 text-start">
       {children}
+      <Button
+        className="text-muted-foreground/70 hover:text-foreground absolute end-1.5 bottom-1.5 hidden h-6 gap-1 px-1.5 text-xs opacity-70 group-data-[expanded-cell]/cell-content:flex hover:opacity-100"
+        data-row-expansion-ignore
+        onClick={(event) => {
+          event.stopPropagation();
+          handleOpenPreview();
+        }}
+        size="xs"
+        variant="ghost"
+      >
+        <EyeIcon className="size-3.5" />
+        {t("common.preview")}
+      </Button>
     </div>
   );
 };

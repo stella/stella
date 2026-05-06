@@ -23,6 +23,7 @@ import type {
   BankAccount,
   BillingAddress,
   BoundingBoxes,
+  CellMetadata,
   ContactAddress,
   ContactEmail,
   ContactPersistedMetadata,
@@ -1114,6 +1115,41 @@ export const fields = p.pgTable(
       .onDelete("cascade"),
     p.index("fields_workspace_id_idx").on(table.workspaceId),
     p.unique("fields_id_ws_unq").on(table.id, table.workspaceId),
+    ...wsPolicies(),
+  ],
+);
+
+export const cellMetadata = p.pgTable(
+  "cell_metadata",
+  {
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    entityVersionId: safeUuid<"entityVersion">("entity_version_id")
+      .notNull()
+      .references(() => entityVersions.id, { onDelete: "cascade" }),
+    propertyId: safeUuid<"property">("property_id").notNull(),
+    metadata: jsonb().$type<CellMetadata>().notNull(),
+    createdBy: p
+      .text("created_by")
+      .references(() => user.id, { onDelete: "set null" }),
+    updatedBy: p
+      .text("updated_by")
+      .references(() => user.id, { onDelete: "set null" }),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({
+      columns: [table.entityVersionId, table.propertyId],
+      name: "cell_metadata_entity_version_id_property_id_pk",
+    }),
+    p
+      .foreignKey({
+        columns: [table.propertyId, table.workspaceId],
+        foreignColumns: [properties.id, properties.workspaceId],
+      })
+      .onDelete("cascade"),
+    p.index("cell_metadata_workspace_id_idx").on(table.workspaceId),
+    p.index("cell_metadata_entity_version_id_idx").on(table.entityVersionId),
     ...wsPolicies(),
   ],
 );

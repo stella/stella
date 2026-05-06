@@ -49,8 +49,9 @@ import { DOCX_MIME } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
 import { ClientOperationError, isUnauthorizedError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
-import type { WorkspaceEntity } from "@/lib/types";
+import type { WorkspaceCellMetadata, WorkspaceEntity } from "@/lib/types";
 import { isFileDisplayable } from "@/lib/types";
+import { CellMetadataMenuSection } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { getPdfDownloadFileName } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
@@ -86,6 +87,10 @@ type RowActionsProps = {
   anchor?: VirtualAnchor | null | undefined;
   /** Extra entities included in bulk actions. */
   selectedEntities?: WorkspaceEntity[] | undefined;
+  cellMetadataTarget?:
+    | { propertyId: string; metadata: WorkspaceCellMetadata | undefined }
+    | null
+    | undefined;
 };
 
 export const RowActions = ({
@@ -100,6 +105,7 @@ export const RowActions = ({
   triggerTabIndex,
   anchor,
   selectedEntities,
+  cellMetadataTarget,
 }: RowActionsProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
@@ -109,6 +115,8 @@ export const RowActions = ({
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
+  const isCellContext =
+    !isBulk && cellMetadataTarget !== null && cellMetadataTarget !== undefined;
   const isDocx = !isBulk && file?.mimeType === DOCX_MIME;
   const isLockedByMe =
     isDocx && entity.activeEditBy !== null && entity.activeEditBy.isMe;
@@ -457,14 +465,25 @@ export const RowActions = ({
             {t("common.rename")}
           </MenuItem>
         )}
-        {!isBulk && isFolder && onSubfolderCreated && (
+        {!isBulk && cellMetadataTarget && (
+          <>
+            <MenuSeparator />
+            <CellMetadataMenuSection
+              entityId={entity.entityId}
+              metadata={cellMetadataTarget.metadata}
+              propertyId={cellMetadataTarget.propertyId}
+              workspaceId={workspaceId}
+            />
+          </>
+        )}
+        {!isCellContext && !isBulk && isFolder && onSubfolderCreated && (
           <CreateSubfolderMenuItem
             entity={entity}
             onSubfolderCreated={onSubfolderCreated}
             workspaceId={workspaceId}
           />
         )}
-        {canOpenInDesktop && (
+        {!isCellContext && canOpenInDesktop && (
           <MenuItem
             onClick={() => {
               void handleOpenInDesktop();
@@ -474,7 +493,7 @@ export const RowActions = ({
             {t("workspaces.files.desktopEdit.action")}
           </MenuItem>
         )}
-        {isLockedByOther && (
+        {!isCellContext && isLockedByOther && (
           <MenuItem
             onClick={() => {
               void handleReleaseLock();
@@ -504,105 +523,111 @@ export const RowActions = ({
           {t("chat.chatAbout")}
         </MenuItem>
 
-        <MenuSeparator />
+        {!isCellContext && (
+          <>
+            <MenuSeparator />
 
-        {/* --- File operations --- */}
-        {hasAnyFile && (isBulk || !hasPdfConversion) && (
-          <MenuItem
-            onClick={() => {
-              void handleDownload();
-            }}
-          >
-            <DownloadIcon />
-            {t("common.download")}
-          </MenuItem>
-        )}
-        {!isBulk && hasPdfConversion && (
-          <MenuSub>
-            <MenuSubTrigger>
-              <DownloadIcon />
-              {t("common.download")}
-            </MenuSubTrigger>
-            <MenuSubPopup>
+            {/* --- File operations --- */}
+            {hasAnyFile && (isBulk || !hasPdfConversion) && (
               <MenuItem
                 onClick={() => {
                   void handleDownload();
                 }}
               >
                 <DownloadIcon />
-                {t("workspaces.files.downloadOriginal")}
+                {t("common.download")}
               </MenuItem>
+            )}
+            {!isBulk && hasPdfConversion && (
+              <MenuSub>
+                <MenuSubTrigger>
+                  <DownloadIcon />
+                  {t("common.download")}
+                </MenuSubTrigger>
+                <MenuSubPopup>
+                  <MenuItem
+                    onClick={() => {
+                      void handleDownload();
+                    }}
+                  >
+                    <DownloadIcon />
+                    {t("workspaces.files.downloadOriginal")}
+                  </MenuItem>
+                  <MenuItem
+                    onClick={() => {
+                      void handleDownload(true);
+                    }}
+                  >
+                    <FileOutputIcon />
+                    {t("workspaces.files.downloadPdf")}
+                  </MenuItem>
+                </MenuSubPopup>
+              </MenuSub>
+            )}
+            {hasAnyFolder && (
               <MenuItem
                 onClick={() => {
-                  void handleDownload(true);
+                  void handleZipDownload();
                 }}
               >
-                <FileOutputIcon />
-                {t("workspaces.files.downloadPdf")}
+                <ArchiveIcon />
+                {t("workspaces.files.downloadAsZip")}
               </MenuItem>
-            </MenuSubPopup>
-          </MenuSub>
-        )}
-        {hasAnyFolder && (
-          <MenuItem
-            onClick={() => {
-              void handleZipDownload();
-            }}
-          >
-            <ArchiveIcon />
-            {t("workspaces.files.downloadAsZip")}
-          </MenuItem>
-        )}
-        <MenuItem
-          onClick={() => {
-            void handleDuplicate();
-          }}
-        >
-          <CopyIcon />
-          {t("common.duplicate")}
-        </MenuItem>
+            )}
+            <MenuItem
+              onClick={() => {
+                void handleDuplicate();
+              }}
+            >
+              <CopyIcon />
+              {t("common.duplicate")}
+            </MenuItem>
 
-        <MenuSeparator />
+            <MenuSeparator />
 
-        {/* --- Destructive --- */}
-        <AlertDialog>
-          <AlertDialogTrigger
-            render={<MenuItem closeOnClick={false} variant="destructive" />}
-          >
-            <Trash2Icon />
-            {t("common.delete")}
-          </AlertDialogTrigger>
-          <AlertDialogPopup>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {isBulk
-                  ? t("workspaces.deleteItems", {
-                      count: selectedEntities.length,
-                    })
-                  : t("workspaces.deleteItem")}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {isBulk
-                  ? t("workspaces.deleteItemsDescription", {
-                      count: selectedEntities.length,
-                    })
-                  : t("common.deleteConfirmDescription", {
-                      name,
-                    })}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogClose render={<Button variant="ghost" />}>
-                {t("common.cancel")}
-              </AlertDialogClose>
-              <AlertDialogClose
-                render={<Button onClick={handleDelete} variant="destructive" />}
+            {/* --- Destructive --- */}
+            <AlertDialog>
+              <AlertDialogTrigger
+                render={<MenuItem closeOnClick={false} variant="destructive" />}
               >
+                <Trash2Icon />
                 {t("common.delete")}
-              </AlertDialogClose>
-            </AlertDialogFooter>
-          </AlertDialogPopup>
-        </AlertDialog>
+              </AlertDialogTrigger>
+              <AlertDialogPopup>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    {isBulk
+                      ? t("workspaces.deleteItems", {
+                          count: selectedEntities.length,
+                        })
+                      : t("workspaces.deleteItem")}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {isBulk
+                      ? t("workspaces.deleteItemsDescription", {
+                          count: selectedEntities.length,
+                        })
+                      : t("common.deleteConfirmDescription", {
+                          name,
+                        })}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogClose render={<Button variant="ghost" />}>
+                    {t("common.cancel")}
+                  </AlertDialogClose>
+                  <AlertDialogClose
+                    render={
+                      <Button onClick={handleDelete} variant="destructive" />
+                    }
+                  >
+                    {t("common.delete")}
+                  </AlertDialogClose>
+                </AlertDialogFooter>
+              </AlertDialogPopup>
+            </AlertDialog>
+          </>
+        )}
       </MenuPopup>
     </Menu>
   );

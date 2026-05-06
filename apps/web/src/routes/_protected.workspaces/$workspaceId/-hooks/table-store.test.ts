@@ -11,9 +11,13 @@ const replacer = (_key: string, value: unknown): unknown => {
 };
 
 type ColumnSizingState = Record<string, number>;
+type TableContentMode = "tight" | "fit-content";
 
 type StorageShape = {
-  state: { columnSizing: Map<string, ColumnSizingState> };
+  state: {
+    columnSizing: Map<string, ColumnSizingState>;
+    contentMode: Record<string, TableContentMode>;
+  };
   version: number;
 };
 
@@ -24,6 +28,10 @@ const StorageSchema = v.strictObject({
         v.tuple([v.string(), v.record(v.string(), v.number())]),
       ),
     }),
+    contentMode: v.optional(
+      v.record(v.string(), v.picklist(["tight", "fit-content"])),
+      {},
+    ),
   }),
   version: v.number(),
 });
@@ -41,7 +49,10 @@ const parseStorage = (json: string): StorageShape | null => {
   }
   const entries = result.output.state.columnSizing[MAP_TAG];
   return {
-    state: { columnSizing: new Map(entries) },
+    state: {
+      columnSizing: new Map(entries),
+      contentMode: result.output.state.contentMode,
+    },
     version: result.output.version,
   };
 };
@@ -57,7 +68,10 @@ const expectParsed = (raw: string): StorageShape => {
 describe("Map serialization roundtrip", () => {
   test("empty Map survives roundtrip", () => {
     const data = {
-      state: { columnSizing: new Map<string, ColumnSizingState>() },
+      state: {
+        columnSizing: new Map<string, ColumnSizingState>(),
+        contentMode: {},
+      },
       version: 0,
     };
     const serialized = JSON.stringify(data, replacer);
@@ -75,6 +89,7 @@ describe("Map serialization roundtrip", () => {
           ["view-1", { col_a: 200, col_b: 150 }],
           ["view-2", { col_x: 300 }],
         ]),
+        contentMode: { "view-1": "fit-content" as const },
       },
       version: 0,
     };
@@ -90,12 +105,14 @@ describe("Map serialization roundtrip", () => {
     expect(parsed.state.columnSizing.get("view-2")).toEqual({
       col_x: 300,
     });
+    expect(parsed.state.contentMode).toEqual({ "view-1": "fit-content" });
   });
 
   test("wire format uses tagged entries", () => {
     const data = {
       state: {
         columnSizing: new Map([["v1", { a: 100 }]]),
+        contentMode: { v1: "tight" as const },
       },
       version: 0,
     };
@@ -104,6 +121,7 @@ describe("Map serialization roundtrip", () => {
     expect(wire).toEqual({
       state: {
         columnSizing: { [MAP_TAG]: [["v1", { a: 100 }]] },
+        contentMode: { v1: "tight" },
       },
       version: 0,
     });

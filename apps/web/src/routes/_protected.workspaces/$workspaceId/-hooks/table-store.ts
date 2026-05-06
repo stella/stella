@@ -10,6 +10,9 @@ import type { PersistStorage, StorageValue } from "zustand/middleware";
 import { immer } from "zustand/middleware/immer";
 
 const MAP_TAG = "__map";
+const TABLE_CONTENT_MODES = ["tight", "fit-content"] as const;
+
+export type TableContentMode = (typeof TABLE_CONTENT_MODES)[number];
 
 const replacer = (_key: string, value: unknown): unknown => {
   if (value instanceof Map) {
@@ -20,6 +23,7 @@ const replacer = (_key: string, value: unknown): unknown => {
 
 type PersistedState = {
   columnSizing: Map<string, ColumnSizingState>;
+  contentMode: Record<string, TableContentMode>;
 };
 
 const StorageSchema = v.strictObject({
@@ -29,6 +33,12 @@ const StorageSchema = v.strictObject({
         v.tuple([v.string(), v.record(v.string(), v.number())]),
       ),
     }),
+    contentMode: v.optional(
+      v.record(v.string(), v.picklist(TABLE_CONTENT_MODES)),
+    ),
+    columnWidthMode: v.optional(
+      v.record(v.string(), v.picklist(TABLE_CONTENT_MODES)),
+    ),
   }),
   version: v.optional(v.number(), 0),
 });
@@ -49,7 +59,16 @@ const parsePersistedStorage = (
   }
   const entries = result.output.state.columnSizing[MAP_TAG];
   const columnSizing = new Map<string, ColumnSizingState>(entries);
-  return { state: { columnSizing }, version: result.output.version };
+  return {
+    state: {
+      columnSizing,
+      contentMode:
+        result.output.state.contentMode ??
+        result.output.state.columnWidthMode ??
+        {},
+    },
+    version: result.output.version,
+  };
 };
 
 const mapStorage: PersistStorage<PersistedState> = {
@@ -70,6 +89,8 @@ const mapStorage: PersistStorage<PersistedState> = {
 
 type TableStore = {
   columnSizing: Map<string, ColumnSizingState>;
+  contentMode: Record<string, TableContentMode>;
+  setContentMode: (viewId: string, mode: TableContentMode) => void;
   setColumnSizing: (
     viewId: string,
     updater: Updater<ColumnSizingState>,
@@ -86,7 +107,14 @@ export const useTableStore = create<TableStore>()(
   persist(
     immer((set) => ({
       columnSizing: new Map<string, ColumnSizingState>(),
+      contentMode: {},
       rowSelection: {},
+
+      setContentMode: (viewId, mode) => {
+        set((state) => {
+          state.contentMode[viewId] = mode;
+        });
+      },
 
       setColumnSizing: (viewId, updater) => {
         set((state) => {
@@ -112,6 +140,13 @@ export const useTableStore = create<TableStore>()(
               state.columnSizing.delete(viewId);
             }
           }
+          const prunedContentMode: Record<string, TableContentMode> = {};
+          for (const [vid, mode] of Object.entries(state.contentMode)) {
+            if (active.has(vid)) {
+              prunedContentMode[vid] = mode;
+            }
+          }
+          state.contentMode = prunedContentMode;
           const pruned: Record<string, RowSelectionState> = {};
           for (const [vid, sel] of Object.entries(state.rowSelection)) {
             if (active.has(vid)) {
@@ -127,6 +162,7 @@ export const useTableStore = create<TableStore>()(
       storage: mapStorage,
       partialize: (state) => ({
         columnSizing: state.columnSizing,
+        contentMode: state.contentMode,
       }),
     },
   ),

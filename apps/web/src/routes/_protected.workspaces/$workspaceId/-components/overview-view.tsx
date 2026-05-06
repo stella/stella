@@ -1072,6 +1072,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
       readOnly: false,
       sortOrder: null,
       activeEditBy: null,
+      cellMetadata: {},
       fields,
     };
   }, [entity]);
