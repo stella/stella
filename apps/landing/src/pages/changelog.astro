@@ -220,9 +220,10 @@ const releasesUrl = `${githubUrl}/releases`;
     };
 
     const RELEASES_PER_PAGE = 5;
+    const GITHUB_RELEASES_PER_PAGE = 100;
     const releasesApiBase = "https://api.github.com/repos/stella/stella/releases";
     const releasesEndpoint =
-      `${releasesApiBase}?per_page=${RELEASES_PER_PAGE}`;
+      `${releasesApiBase}?per_page=${GITHUB_RELEASES_PER_PAGE}`;
     const releasesContainer = document.getElementById("changelog-releases");
     const paginationContainer = document.getElementById("changelog-pagination");
 
@@ -536,8 +537,39 @@ const releasesUrl = `${githubUrl}/releases`;
     const responseHasNextPage = (response: Response) =>
       response.headers.get("link")?.includes('rel="next"') ?? false;
 
-    const buildReleasesUrl = () =>
-      `${releasesEndpoint}&page=${currentPage}`;
+    const buildReleasesUrl = (githubPage: number) =>
+      `${releasesEndpoint}&page=${githubPage}`;
+
+    const fetchStableReleasePage = async () => {
+      const stableReleaseOffset = (currentPage - 1) * RELEASES_PER_PAGE;
+      const stableReleaseLimit = stableReleaseOffset + RELEASES_PER_PAGE + 1;
+      const stableReleases: GitHubRelease[] = [];
+      let githubPage = 1;
+      let hasMoreGithubPages = true;
+
+      while (hasMoreGithubPages && stableReleases.length < stableReleaseLimit) {
+        const response = await fetch(buildReleasesUrl(githubPage), {
+          headers: { Accept: "application/vnd.github+json" },
+        });
+        if (!response.ok) return null;
+
+        const releases = (await response.json()) as GitHubRelease[];
+        stableReleases.push(
+          ...releases.filter((release) => !release.draft && !release.prerelease),
+        );
+        hasMoreGithubPages = responseHasNextPage(response);
+        githubPage += 1;
+      }
+
+      return {
+        hasNextPage:
+          stableReleases.length > stableReleaseOffset + RELEASES_PER_PAGE,
+        releases: stableReleases.slice(
+          stableReleaseOffset,
+          stableReleaseOffset + RELEASES_PER_PAGE,
+        ),
+      };
+    };
 
     const renderPagination = () => {
       if (!paginationContainer) return;
@@ -595,10 +627,8 @@ const releasesUrl = `${githubUrl}/releases`;
       try {
         releasesContainer.replaceChildren(renderLoading());
 
-        const response = await fetch(buildReleasesUrl(), {
-          headers: { Accept: "application/vnd.github+json" },
-        });
-        if (!response.ok) {
+        const releasePage = await fetchStableReleasePage();
+        if (!releasePage) {
           hasNextPage = false;
           renderPagination();
           releasesContainer.replaceChildren(
@@ -607,12 +637,8 @@ const releasesUrl = `${githubUrl}/releases`;
           return;
         }
 
-        const releases = (await response.json()) as GitHubRelease[];
-        const publishedReleases = releases.filter(
-          (release) => !release.draft && !release.prerelease,
-        );
-        if (publishedReleases.length === 0) {
-          hasNextPage = false;
+        hasNextPage = releasePage.hasNextPage;
+        if (releasePage.releases.length === 0) {
           renderPagination();
           releasesContainer.replaceChildren(
             renderMessage("No public releases are published yet. Check"),
@@ -620,11 +646,10 @@ const releasesUrl = `${githubUrl}/releases`;
           return;
         }
 
-        hasNextPage = responseHasNextPage(response);
         updatePageUrl();
         renderPagination();
         releasesContainer.replaceChildren(
-          ...publishedReleases.map(renderRelease),
+          ...releasePage.releases.map(renderRelease),
         );
       } catch {
         hasNextPage = false;
