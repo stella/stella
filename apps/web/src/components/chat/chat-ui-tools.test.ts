@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { ChatPart } from "@/components/chat/chat-ui-tools";
 import {
   getChatToolTitleKey,
+  getUserMessageHtmlHistory,
   hasApprovedActiveDocxEditAwaitingClientOutput,
   isApprovalPart,
 } from "@/components/chat/chat-ui-tools";
@@ -98,5 +99,53 @@ describe("hasApprovedActiveDocxEditAwaitingClientOutput", () => {
         ],
       }),
     ).toBe(false);
+  });
+});
+
+describe("getUserMessageHtmlHistory", () => {
+  test("returns user message HTML from newest to oldest", () => {
+    expect(
+      getUserMessageHtmlHistory([
+        {
+          id: "message-1",
+          parts: [{ text: "Older prompt", type: "text" }],
+          role: "user",
+        },
+        {
+          id: "message-2",
+          parts: [{ text: "Assistant response", type: "text" }],
+          role: "assistant",
+        },
+        {
+          id: "message-3",
+          parts: [{ text: "Latest prompt", type: "text" }],
+          role: "user",
+        },
+      ]),
+    ).toEqual(["Latest prompt", "Older prompt"]);
+  });
+
+  test("skips user messages without text", () => {
+    expect(
+      getUserMessageHtmlHistory([
+        {
+          id: "message-1",
+          parts: [{ text: "Reusable prompt", type: "text" }],
+          role: "user",
+        },
+        {
+          id: "message-2",
+          parts: [
+            {
+              filename: "contract.pdf",
+              mediaType: "application/pdf",
+              type: "file",
+              url: "https://example.com/contract.pdf",
+            },
+          ],
+          role: "user",
+        },
+      ]),
+    ).toEqual(["Reusable prompt"]);
   });
 });

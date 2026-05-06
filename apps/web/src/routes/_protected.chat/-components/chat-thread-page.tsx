@@ -15,6 +15,7 @@ import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import { getUserMessageHtmlHistory } from "@/components/chat/chat-ui-tools";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
@@ -51,7 +52,6 @@ export const ChatThreadPage = ({
   const userContext = useChatUserContext();
   const getUserContext = useEffectEvent(() => userContext);
   const showToolCalls = useDevStore((state) => state.showToolCalls);
-  const controller = useChatEditor({ threadRef });
   const prompts = useSavedPrompts();
 
   // Local copy of the persisted contextMatterIds, seeded from the
@@ -110,6 +110,10 @@ export const ChatThreadPage = ({
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({ chat, workspaceId });
+  const controller = useChatEditor({
+    sentMessageHistoryHtml: getUserMessageHtmlHistory(messages),
+    threadRef,
+  });
 
   const openInspectorChat = useInspectorStore((s) => s.openChat);
   const navigate = useNavigate();

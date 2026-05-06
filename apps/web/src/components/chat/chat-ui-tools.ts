@@ -106,3 +106,29 @@ export const hasApprovedActiveDocxEditAwaitingClientOutput = ({
 
   return message.parts.some(isApprovedActiveDocxEditPart);
 };
+
+export const getUserMessageHtmlHistory = (
+  messages: readonly PersistedChatMessage[],
+) => {
+  const history: string[] = [];
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages.at(index);
+    if (!message || message.role !== "user") {
+      continue;
+    }
+
+    const textParts: string[] = [];
+    for (const part of message.parts) {
+      if (part.type === "text" && part.text.trim()) {
+        textParts.push(part.text);
+      }
+    }
+
+    if (textParts.length > 0) {
+      history.push(textParts.join("\n\n"));
+    }
+  }
+
+  return history;
+};
