@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 import {
+  buildPreparationSteps,
   checkPortAvailabilityOnHosts,
   createApiEnv,
   createDesktopEnv,
@@ -523,6 +524,29 @@ describe("worktree helpers", () => {
 });
 
 describe("dev env factories", () => {
+  test("prepares API databases by applying migrations", () => {
+    const rootDir = createTempDir();
+    mkdirSync(resolve(rootDir, "apps/api"), { recursive: true });
+
+    const steps = buildPreparationSteps({
+      infraOffset: 10,
+      infraPorts: infraPortsForOffset(10),
+      mode: "dev",
+      ports: portsForOffset(10),
+      rootDir,
+      skipDbPush: false,
+      skipInstall: true,
+    });
+
+    expect(steps).toHaveLength(1);
+    expect(steps.at(0)?.cmd.slice(1)).toEqual(["run", "db:migrate"]);
+    expect(steps.at(0)?.cwd).toBe(resolve(rootDir, "apps/api"));
+    expect(steps.at(0)?.env).toMatchObject({
+      DATABASE_URL: "postgres://postgres:postgres@localhost:5442/stella",
+    });
+    expect(steps.at(0)?.label).toBe("Applying database migrations");
+  });
+
   test("threads computed ports into the API env without infra overrides at offset 0", () => {
     const result = createApiEnv({
       baseEnv: { KEEP_ME: "1" },

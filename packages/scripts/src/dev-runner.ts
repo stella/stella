@@ -1198,7 +1198,7 @@ const createGitContext = (cwd: string): GitContext => {
   };
 };
 
-const buildPreparationSteps = ({
+export const buildPreparationSteps = ({
   infraOffset,
   infraPorts,
   mode,
@@ -1231,7 +1231,7 @@ const buildPreparationSteps = ({
       envFilePath: pathResolve(rootDir, "apps/api/.env"),
     });
     steps.push({
-      cmd: [resolveCommandPath("bun"), "run", "db:push"],
+      cmd: [resolveCommandPath("bun"), "run", "db:migrate"],
       cwd: pathResolve(rootDir, "apps/api"),
       env: createApiEnv({
         baseEnv: apiBaseEnv,
@@ -1239,7 +1239,7 @@ const buildPreparationSteps = ({
         infraPorts,
         ports,
       }),
-      label: "Pushing database schema",
+      label: "Applying database migrations",
     });
   }
 

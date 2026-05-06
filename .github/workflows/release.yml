@@ -139,6 +139,25 @@ jobs:
       - name: Build smoke image
         run: docker build -f apps/api/Dockerfile -t stella-api:smoke .
 
+      - name: Prepare smoke database
+        env:
+          PGPASSWORD: postgres
+        run: |
+          docker run --rm --network host \
+            --env PGPASSWORD \
+            --volume "$PWD/docker/postgres/init.sql:/init.sql:ro" \
+            postgres:18 \
+            psql -h 127.0.0.1 -U postgres -d stella -f /init.sql
+
+      - name: Apply smoke migrations
+        env:
+          DATABASE_URL: "postgres://postgres:postgres@127.0.0.1:5432/stella"
+        run: |
+          docker run --rm --network host \
+            --env DATABASE_URL \
+            stella-api:smoke \
+            bun --bun drizzle-kit migrate
+
       - name: Run smoke container
         env:
           BETTER_AUTH_SECRET: "release-smoke-secret-at-least-32-chars"
@@ -160,12 +179,6 @@ jobs:
           SMTP_PORT: "1025"
           TRANSACTIONAL_EMAIL_FROM: "noreply@example.com"
           USE_MOCK_AI: "true"
-          # Smoke test only verifies the binary boots; the database
-          # is empty so the startup migration-hash check would
-          # fail-closed and abort the build. Skip it here — the
-          # check stays active in real deploys via the production
-          # task definition env.
-          SKIP_MIGRATION_CHECK: "true"
         run: |
           cleanup_smoke() {
             docker rm -f stella-api-smoke >/dev/null 2>&1 || true
@@ -194,7 +207,6 @@ jobs:
             --env SMTP_PORT \
             --env TRANSACTIONAL_EMAIL_FROM \
             --env USE_MOCK_AI \
-            --env SKIP_MIGRATION_CHECK \
             stella-api:smoke
 
           for _ in {1..60}; do

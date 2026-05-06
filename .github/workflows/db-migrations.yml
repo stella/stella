@@ -5,6 +5,8 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "apps/api/src/db/**"
+      - "apps/api/src/index.ts"
+      - "apps/api/src/lib/db/**"
       - "apps/api/drizzle/**"
       - "apps/api/drizzle.config.ts"
       - "scripts/check-migration-safety.ts"
@@ -69,6 +71,15 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:8
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Checkout
@@ -116,3 +127,49 @@ jobs:
             echo "::error::Migration count mismatch: $APPLIED applied, $EXPECTED on disk."
             exit 1
           }
+
+      - name: Verify API boots with migration check enabled
+        working-directory: apps/api
+        env:
+          BETTER_AUTH_SECRET: "migration-smoke-secret-at-least-32-chars"
+          BETTER_AUTH_URL: "http://127.0.0.1:3001"
+          DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
+          EMAIL_PROVIDER: smtp
+          FRONTEND_URL: "http://127.0.0.1:3000"
+          GOTENBERG_PASSWORD: gotenberg
+          GOTENBERG_URL: "http://127.0.0.1:3000"
+          GOTENBERG_USERNAME: gotenberg
+          REDIS_URL: "redis://127.0.0.1:6379"
+          S3_BUCKET: stella
+          S3_CREDENTIALS_PROVIDER: none
+          S3_ENDPOINT: "http://127.0.0.1:9000"
+          S3_REGION: us-east-1
+          SMTP_HOST: "127.0.0.1"
+          SMTP_PORT: "1025"
+          TRANSACTIONAL_EMAIL_FROM: "noreply@example.com"
+          USE_MOCK_AI: "true"
+        run: |
+          set -euo pipefail
+          log_file="$RUNNER_TEMP/stella-api-smoke.log"
+          bun src/index.ts >"$log_file" 2>&1 &
+          api_pid=$!
+
+          cleanup() {
+            kill "$api_pid" >/dev/null 2>&1 || true
+            wait "$api_pid" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          for _ in {1..60}; do
+            if curl -fsS http://127.0.0.1:3001/health >/dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "$api_pid" >/dev/null 2>&1; then
+              cat "$log_file"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          cat "$log_file"
+          exit 1
