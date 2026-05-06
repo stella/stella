@@ -16,6 +16,7 @@ import {
   isWorktreeCheckout,
   parseDockerComposePsJson,
   parseArgs,
+  parseForeignPortOwners,
   portsForOffset,
   requiredPortsForMode,
   resolveMainRootFromCommonDir,
@@ -306,6 +307,106 @@ describe("shared Docker service readiness", () => {
     ).toBe("minio-setup has not completed yet (state=running)");
 
     expect(getSharedDockerServicesWaitFailure(readyStatuses)).toBeUndefined();
+  });
+});
+
+describe("parseForeignPortOwners", () => {
+  const sharedPorts = [5432, 6379, 9000, 9001, 3003] as const;
+
+  test("returns nothing when output is empty", () => {
+    expect(
+      parseForeignPortOwners({
+        expectedProject: "stella-dev",
+        output: "",
+        sharedPorts,
+      }),
+    ).toEqual([]);
+  });
+
+  test("ignores containers from the expected compose project", () => {
+    const output = [
+      "stella-dev-postgres-1\tstella-dev\t0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp",
+      "stella-dev-valkey-1\tstella-dev\t0.0.0.0:6379->6379/tcp",
+    ].join("\n");
+
+    expect(
+      parseForeignPortOwners({
+        expectedProject: "stella-dev",
+        output,
+        sharedPorts,
+      }),
+    ).toEqual([]);
+  });
+
+  test("flags foreign compose project containers holding shared ports", () => {
+    const output = [
+      "stella-1-table-export-postgres-1\tstella-1-table-export\t0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp",
+      "stella-1-table-export-valkey-1\tstella-1-table-export\t0.0.0.0:6379->6379/tcp",
+      "stella-1-table-export-gotenberg-1\tstella-1-table-export\t0.0.0.0:3003->3000/tcp",
+      "snoopy-brewing-music-db-1\tsnoopy-brewing-music\t127.0.0.1:5434->5432/tcp",
+    ].join("\n");
+
+    expect(
+      parseForeignPortOwners({
+        expectedProject: "stella-dev",
+        output,
+        sharedPorts,
+      }),
+    ).toEqual([
+      {
+        composeProject: "stella-1-table-export",
+        containerName: "stella-1-table-export-postgres-1",
+        hostPort: 5432,
+      },
+      {
+        composeProject: "stella-1-table-export",
+        containerName: "stella-1-table-export-valkey-1",
+        hostPort: 6379,
+      },
+      {
+        composeProject: "stella-1-table-export",
+        containerName: "stella-1-table-export-gotenberg-1",
+        hostPort: 3003,
+      },
+    ]);
+  });
+
+  test("flags containers without a compose project label", () => {
+    const output =
+      "rogue-postgres\t\t0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp";
+
+    expect(
+      parseForeignPortOwners({
+        expectedProject: "stella-dev",
+        output,
+        sharedPorts,
+      }),
+    ).toEqual([
+      {
+        composeProject: "",
+        containerName: "rogue-postgres",
+        hostPort: 5432,
+      },
+    ]);
+  });
+
+  test("only counts each host port once per container even with dual-stack mappings", () => {
+    const output =
+      "other-pg\tother-project\t0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp";
+
+    expect(
+      parseForeignPortOwners({
+        expectedProject: "stella-dev",
+        output,
+        sharedPorts,
+      }),
+    ).toEqual([
+      {
+        composeProject: "other-project",
+        containerName: "other-pg",
+        hostPort: 5432,
+      },
+    ]);
   });
 });
 
