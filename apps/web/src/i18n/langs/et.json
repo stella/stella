@@ -681,6 +681,7 @@
       "valuePlaceholder": "Väärtus"
     },
     "deleteContact": "Kustuta klient",
+    "deleteContactBlockedByMatters": "See kontakt on endiselt aktiivsetes asjades kliendiks määratud. Määrake need asjad ümber või kustutage need enne kontakti kustutamist.",
     "deleteContactConfirmDescription": "Kas olete kindel, et soovite selle kontakti kustutada? Seda toimingut ei saa tagasi võtta.",
     "editContact": "Muuda klienti",
     "emailTypes": {

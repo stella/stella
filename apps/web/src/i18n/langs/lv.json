@@ -681,6 +681,7 @@
       "valuePlaceholder": "Vērtība"
     },
     "deleteContact": "Dzēst klientu",
+    "deleteContactBlockedByMatters": "Šī kontaktpersona joprojām ir norādīta kā klients aktīvās lietās. Pirms kontaktpersonas dzēšanas pārpiešķiriet vai dzēsiet šīs lietas.",
     "deleteContactConfirmDescription": "Vai tiešām vēlaties dzēst šo kontaktu? Šo darbību nevar atsaukt.",
     "editContact": "Rediģēt klientu",
     "emailTypes": {

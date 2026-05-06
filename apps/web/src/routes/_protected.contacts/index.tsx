@@ -50,10 +50,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import {
-  EMPTY_SCREEN_TABLE_PREVIEW,
-  EmptyScreen,
-} from "@/components/empty-screen";
+import { EmptyScreen } from "@/components/empty-screen";
 import Tooltip from "@/components/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
@@ -152,7 +149,6 @@ function ContactsPage() {
 
       {isFirstUseEmpty && canCreateContact ? (
         <EmptyScreen
-          className="min-h-[520px] p-0"
           description={tContacts("emptyDescription")}
           primaryAction={{
             label: tContacts("newContact"),
@@ -160,10 +156,6 @@ function ContactsPage() {
             onClick: () => setCreateContactOpen(true),
           }}
           title={tContacts("emptyTitle")}
-          video={{
-            ...EMPTY_SCREEN_TABLE_PREVIEW,
-            title: tContacts("emptyTitle"),
-          }}
         />
       ) : (
         <Table>
@@ -235,6 +227,7 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
   const deleteContact = useDeleteContact();
   const queryClient = useQueryClient();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const deleteBlockedDescription = t("contacts.deleteContactBlockedByMatters");
 
   const primaryEmail =
     contact.emails?.find((e) => e.isPrimary) ?? contact.emails?.at(0);
@@ -273,6 +266,18 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
         },
       },
     );
+  };
+
+  const handleDeleteOpen = () => {
+    if (contact.matterCount > 0) {
+      stellaToast.add({
+        title: deleteBlockedDescription,
+        type: "error",
+      });
+      return;
+    }
+
+    setDeleteOpen(true);
   };
 
   return (
@@ -346,7 +351,7 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
             {canDeleteContact && (
               <MenuItem
                 disabled={deleteContact.isPending}
-                onClick={() => setDeleteOpen(true)}
+                onClick={handleDeleteOpen}
                 variant="destructive"
               >
                 {t("contacts.deleteContact")}

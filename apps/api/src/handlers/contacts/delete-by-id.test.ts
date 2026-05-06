@@ -72,6 +72,65 @@ describe("deleteContactById", () => {
     expect(deleteCalled).toBe(false);
   });
 
+  test("detaches hidden matter clients before deleting the contact", async () => {
+    let deleteCalled = false;
+    let updateCalled = false;
+    let selectCallCount = 0;
+    const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
+      select: () => {
+        selectCallCount += 1;
+
+        if (selectCallCount === 1) {
+          return {
+            from: () => ({
+              where: () => ({
+                for: () => ({
+                  limit: async () => [{ id: "contact_test123" }],
+                }),
+              }),
+            }),
+          };
+        }
+
+        return {
+          from: () => ({
+            where: async () => [{ id: "workspace_party123" }],
+          }),
+        };
+      },
+      $count: async () => 0,
+      update: () => ({
+        set: () => ({
+          where: () => ({
+            returning: async () => {
+              updateCalled = true;
+              return [{ id: "workspace_archived123" }];
+            },
+          }),
+        }),
+      }),
+      delete: () => ({
+        where: async () => {
+          deleteCalled = true;
+          return [];
+        },
+      }),
+    });
+
+    const result = await deleteContactById.handler(
+      createContext({
+        contactId: Bun.randomUUIDv7(),
+        safeDb,
+        scopedDb,
+      }),
+    );
+
+    expect(result).toBeUndefined();
+    expect(getCallCount()).toBe(1);
+    expect(updateCalled).toBe(true);
+    expect(deleteCalled).toBe(true);
+  });
+
   test("returns 404 when the contact does not exist", async () => {
     const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
       select: () => ({

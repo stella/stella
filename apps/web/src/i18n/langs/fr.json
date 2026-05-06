@@ -681,6 +681,7 @@
       "valuePlaceholder": "Valeur"
     },
     "deleteContact": "Supprimer le client",
+    "deleteContactBlockedByMatters": "Ce contact est encore défini comme client dans des dossiers actifs. Réattribuez ou supprimez ces dossiers avant de supprimer le contact.",
     "deleteContactConfirmDescription": "Voulez-vous vraiment supprimer ce contact ? Cette action est irréversible.",
     "editContact": "Modifier le client",
     "emailTypes": {

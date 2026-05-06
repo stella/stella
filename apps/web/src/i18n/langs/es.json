@@ -681,6 +681,7 @@
       "valuePlaceholder": "Valor"
     },
     "deleteContact": "Eliminar cliente",
+    "deleteContactBlockedByMatters": "Este contacto sigue asignado como cliente en asuntos activos. Reasigne o elimine esos asuntos antes de eliminar el contacto.",
     "deleteContactConfirmDescription": "¿Está seguro de que desea eliminar este contacto? Esta acción no se puede deshacer.",
     "editContact": "Editar cliente",
     "emailTypes": {

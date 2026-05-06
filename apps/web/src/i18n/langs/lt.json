@@ -681,6 +681,7 @@
       "valuePlaceholder": "Reikšmė"
     },
     "deleteContact": "Ištrinti klientą",
+    "deleteContactBlockedByMatters": "Šis kontaktas vis dar priskirtas kaip klientas aktyviose bylose. Prieš ištrindami kontaktą, perskirkite arba ištrinkite tas bylas.",
     "deleteContactConfirmDescription": "Ar tikrai norite ištrinti šį kontaktą? Šio veiksmo negalima atšaukti.",
     "editContact": "Redaguoti klientą",
     "emailTypes": {

@@ -80,6 +80,7 @@ function ContactDetailPage() {
   const canDeleteContact = usePermissions({ contact: ["delete"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const deleteBlockedDescription = t("contacts.deleteContactBlockedByMatters");
 
   const handleDelete = async () => {
     await deleteContact.mutateAsync(
@@ -107,6 +108,18 @@ function ContactDetailPage() {
         },
       },
     );
+  };
+
+  const handleDeleteOpen = () => {
+    if (contact.clientMatters.length > 0) {
+      stellaToast.add({
+        title: deleteBlockedDescription,
+        type: "error",
+      });
+      return;
+    }
+
+    setIsDeleteOpen(true);
   };
 
   return (
@@ -154,7 +167,7 @@ function ContactDetailPage() {
           {canDeleteContact && (
             <Button
               disabled={deleteContact.isPending}
-              onClick={() => setIsDeleteOpen(true)}
+              onClick={handleDeleteOpen}
               size="sm"
               variant="destructive"
             >
