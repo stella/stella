@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
+  brandPersistedContactId,
   brandPersistedEntityId,
   brandPersistedPropertyId,
   brandPersistedWorkspaceId,
@@ -129,6 +130,7 @@ const isUuidString = (value: unknown): value is string =>
 export type ChatRefRegistry = ReturnType<typeof createChatRefRegistry>;
 
 export const createChatRefRegistry = () => {
+  const contactState = createRefState<SafeId<"contact">>("contact");
   const matterState = createRefState<SafeId<"workspace">>("mat");
   const propertyState = createRefState<SafeId<"property">>("prop");
   const entityState = createRefState<EntityTarget>("ent");
@@ -145,6 +147,13 @@ export const createChatRefRegistry = () => {
       key: propertyId,
       state: propertyState,
       target: propertyId,
+    });
+
+  const toContactRef = (contactId: SafeId<"contact">) =>
+    getOrCreateRef({
+      key: contactId,
+      state: contactState,
+      target: contactId,
     });
 
   const toEntityRef = ({ entityId, workspaceId }: EntityTarget) =>
@@ -213,6 +222,11 @@ export const createChatRefRegistry = () => {
         return propertyId;
       }
 
+      const contactId = contactState.refToTarget.get(value);
+      if (contactId) {
+        return contactId;
+      }
+
       return resolveAssistantTextRefs(value);
     }
 
@@ -238,6 +252,9 @@ export const createChatRefRegistry = () => {
     isUuidString(value)
       ? toPropertyRef(brandPersistedPropertyId(value))
       : value;
+
+  const toHydratedContactRef = (value: unknown) =>
+    isUuidString(value) ? toContactRef(brandPersistedContactId(value)) : value;
 
   const toHydratedEntityRef = ({
     entityId,
@@ -358,6 +375,16 @@ export const createChatRefRegistry = () => {
         continue;
       }
 
+      if (key === "contactRef") {
+        entries.push([key, toHydratedContactRef(child)]);
+        continue;
+      }
+
+      if (key === "contactRefs" && Array.isArray(child)) {
+        entries.push([key, child.map(toHydratedContactRef)]);
+        continue;
+      }
+
       entries.push([key, hydrateAssistantValueRefs(child)]);
     }
 
@@ -375,6 +402,12 @@ export const createChatRefRegistry = () => {
         refs,
         state: entityState,
       }).map((targets) => targets.map(({ entityId }) => entityId)),
+    resolveContactRefs: (refs: string[]) =>
+      resolveRefs({
+        kind: "contact",
+        refs,
+        state: contactState,
+      }),
     resolveMatterRefs: (refs: string[]) =>
       resolveRefs({
         kind: "matter",
@@ -399,6 +432,7 @@ export const createChatRefRegistry = () => {
         state: propertyState,
       }),
     toEntityRef,
+    toContactRef,
     toMatterRef,
     toPropertyRef,
     toEntityMention: ({

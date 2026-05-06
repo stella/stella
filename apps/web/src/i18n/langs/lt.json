@@ -409,6 +409,7 @@
       "apply-active-docx-edits": "Applying DOCX edits",
       "ask-user": "Prašoma patikslinimo",
       "create-document": "Kuriamas dokumentas",
+      "describe-stella-api": "Tikrinama Stella API",
       "describe-stella-function": "Tikrinama stella funkcija",
       "docxCommentSummary": "Add a comment to {blockId}",
       "docxDeleteSummary": "Delete {blockId}",
@@ -423,6 +424,7 @@
       "read-contact": "Skaitomas kontaktas",
       "read-content-across-matters": "Skaitomas turinys keliose bylose",
       "read-skill-resource": "Skaitomas įgūdžio išteklius",
+      "run-stella-query": "Vykdoma Stella užklausa",
       "search-across-matters": "Ieškoma keliose bylose",
       "unknown": "Naudojamas įrankis",
       "update-entity-fields": "Atnaujinami metaduomenys"

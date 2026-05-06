@@ -409,6 +409,7 @@
       "apply-active-docx-edits": "Applying DOCX edits",
       "ask-user": "Täpsustuse küsimine",
       "create-document": "Dokumendi loomine",
+      "describe-stella-api": "Stella API kontrollimine",
       "describe-stella-function": "Stella funktsiooni kontrollimine",
       "docxCommentSummary": "Add a comment to {blockId}",
       "docxDeleteSummary": "Delete {blockId}",
@@ -423,6 +424,7 @@
       "read-contact": "Kontakti lugemine",
       "read-content-across-matters": "Sisu lugemine kõigist asjadest",
       "read-skill-resource": "Oskuse ressursi lugemine",
+      "run-stella-query": "Stella päringu käivitamine",
       "search-across-matters": "Otsing kõigis asjades",
       "unknown": "Tööriista kasutamine",
       "update-entity-fields": "Metaandmete uuendamine"

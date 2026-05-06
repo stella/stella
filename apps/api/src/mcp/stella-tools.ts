@@ -4,12 +4,14 @@ import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
+import { decryptContent } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedContactId,
   brandPersistedEntityId,
 } from "@/api/lib/safe-id-boundaries";
+import { getSearchProvider } from "@/api/lib/search/provider";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionUrl,
@@ -18,9 +20,7 @@ import {
   ensureWorkspaceAccess,
   enumProp,
   errorResult,
-  getOrgTools,
   intProp,
-  invokeAiTool,
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,
   parseOptionalEnum,
@@ -29,6 +29,8 @@ import {
   stringProp,
   textResult,
 } from "@/api/mcp/tool-utils";
+
+const MCP_CONTENT_MAX_CHARS = 8000;
 
 type StellaToolName =
   | "get_matter_overview"
@@ -324,9 +326,23 @@ const handleSearchAcrossMattersTool: McpToolHandler = async ({
     return limit;
   }
 
-  return await invokeAiTool({
-    args: { limit, query },
-    tool: getOrgTools(context)["search-across-matters"],
+  const result = await getSearchProvider().search({
+    query,
+    organizationId: context.organizationId,
+    workspaceIds: context.accessibleWorkspaceIds,
+    limit,
+  });
+
+  return textResult({
+    totalCount: result.totalCount,
+    hits: result.hits.map((hit) => ({
+      entityId: hit.entityId,
+      workspaceId: hit.workspaceId,
+      workspaceName: hit.workspaceName,
+      name: hit.title,
+      kind: hit.kind,
+      headline: hit.headline,
+    })),
   });
 };
 
@@ -476,9 +492,50 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
     return rawEntityId;
   }
 
-  return await invokeAiTool({
-    args: { entityId: brandPersistedEntityId(rawEntityId) },
-    tool: getOrgTools(context)["read-content-across-matters"],
+  const entityId = brandPersistedEntityId(rawEntityId);
+
+  if (context.accessibleWorkspaceIds.length === 0) {
+    return errorResult("No extracted content available for this entity.");
+  }
+
+  const row = await context.scopedDb((tx) =>
+    tx.query.extractedContent.findFirst({
+      where: {
+        entityId: { eq: entityId },
+        organizationId: { eq: context.organizationId },
+        workspaceId: { in: context.accessibleWorkspaceIds },
+      },
+      with: {
+        entity: {
+          columns: {
+            kind: true,
+            name: true,
+            workspaceId: true,
+          },
+        },
+      },
+    }),
+  );
+
+  if (!row?.entity) {
+    return errorResult("No extracted content available for this entity.");
+  }
+
+  const plaintext = await decryptContent(
+    context.organizationId,
+    row.ciphertext,
+    row.iv,
+  );
+  const truncated = plaintext.length > MCP_CONTENT_MAX_CHARS;
+
+  return textResult({
+    charCount: row.charCount,
+    entityId,
+    kind: row.entity.kind,
+    name: row.entity.name ?? null,
+    text: truncated ? plaintext.slice(0, MCP_CONTENT_MAX_CHARS) : plaintext,
+    truncated,
+    workspaceId: row.entity.workspaceId,
   });
 };
 
@@ -663,9 +720,40 @@ const handleReadContactTool: McpToolHandler = async ({ args, context }) => {
     return rawContactId;
   }
 
-  return await invokeAiTool({
-    args: { contactId: brandPersistedContactId(rawContactId) },
-    tool: getOrgTools(context)["read-contact"],
+  const contactId = brandPersistedContactId(rawContactId);
+
+  const contact = await context.scopedDb((tx) =>
+    tx.query.contacts.findFirst({
+      where: {
+        id: { eq: contactId },
+        organizationId: { eq: context.organizationId },
+      },
+      columns: {
+        id: true,
+        type: true,
+        displayName: true,
+        firstName: true,
+        lastName: true,
+        organizationName: true,
+        emails: true,
+        phones: true,
+      },
+    }),
+  );
+
+  if (!contact) {
+    return errorResult("Contact not found");
+  }
+
+  return textResult({
+    contactId: contact.id,
+    type: contact.type,
+    displayName: contact.displayName,
+    firstName: contact.firstName,
+    lastName: contact.lastName,
+    organizationName: contact.organizationName,
+    emails: contact.emails ?? [],
+    phones: contact.phones ?? [],
   });
 };
 

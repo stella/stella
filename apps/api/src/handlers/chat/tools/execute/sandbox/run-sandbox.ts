@@ -429,7 +429,7 @@ const executeSandboxScript = async ({
     const ctx = scope.manage(sandboxContext.value);
     configureSandboxRuntime({ ctx, limits, deadline, state });
 
-    const stellaCall = ctx.newFunction(
+    const readCall = ctx.newFunction(
       SANDBOX_HOST_BRIDGE_GLOBAL,
       (nameHandle, argsHandle) =>
         handleStellaCall({
@@ -443,8 +443,8 @@ const executeSandboxScript = async ({
           argsHandle,
         }),
     );
-    scope.manage(stellaCall);
-    ctx.setProp(ctx.global, SANDBOX_HOST_BRIDGE_GLOBAL, stellaCall);
+    scope.manage(readCall);
+    ctx.setProp(ctx.global, SANDBOX_HOST_BRIDGE_GLOBAL, readCall);
 
     try {
       return (
@@ -597,7 +597,7 @@ const getSandboxFunction = ({
     return Result.err(
       createVmBridgeError(
         "SandboxUnknownFunction",
-        `Unknown stella function: ${name}`,
+        `Unknown read function: ${name}`,
       ),
     );
   }
@@ -607,7 +607,7 @@ const getSandboxFunction = ({
     return Result.err(
       createVmBridgeError(
         "SandboxUnknownFunction",
-        `Unknown stella function: ${name}`,
+        `Unknown read function: ${name}`,
       ),
     );
   }

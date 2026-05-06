@@ -409,6 +409,7 @@
       "apply-active-docx-edits": "Applying DOCX edits",
       "ask-user": "Pontosítás kérése",
       "create-document": "Dokumentum létrehozása",
+      "describe-stella-api": "Stella API ellenőrzése",
       "describe-stella-function": "stella-függvény vizsgálata",
       "docxCommentSummary": "Add a comment to {blockId}",
       "docxDeleteSummary": "Delete {blockId}",
@@ -423,6 +424,7 @@
       "read-contact": "Kapcsolat olvasása",
       "read-content-across-matters": "Tartalom olvasása az ügyek között",
       "read-skill-resource": "Készség-erőforrás olvasása",
+      "run-stella-query": "Stella-lekérdezés futtatása",
       "search-across-matters": "Keresés az ügyek között",
       "unknown": "Eszköz használata",
       "update-entity-fields": "Metaadatok frissítése"

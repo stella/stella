@@ -88,8 +88,8 @@ const sendMessage = createSafeRootHandler(
     // may include the chat's matter plus any others the user wants
     // in scope, validated against the user's accessible matters.
     // Empty (or omitted) means "no matters pinned" — the AI is
-    // expected to discover relevant matters via the readonly stella
-    // API instead of being preloaded with thousands of IDs.
+    // expected to discover relevant matters via the readonly
+    // Stella API instead of being preloaded with thousands of IDs.
     const requestedContextMatterIds = body.contextMatterIds ?? [];
     const accessibleSet = new Set<string>(accessibleWorkspaceIds);
     if (!requestedContextMatterIds.every((id) => accessibleSet.has(id))) {

@@ -409,6 +409,7 @@
       "apply-active-docx-edits": "Používám úpravy DOCX",
       "ask-user": "Žádost o upřesnění",
       "create-document": "Vytváření dokumentu",
+      "describe-stella-api": "Kontrola Stella API",
       "describe-stella-function": "Kontrola funkce stella",
       "docxCommentSummary": "Přidat komentář k {blockId}",
       "docxDeleteSummary": "Smazat {blockId}",
@@ -423,6 +424,7 @@
       "read-contact": "Čtení kontaktu",
       "read-content-across-matters": "Čtení obsahu napříč věcmi",
       "read-skill-resource": "Čtení zdroje dovednosti",
+      "run-stella-query": "Spouštění dotazu Stella",
       "search-across-matters": "Vyhledávání napříč věcmi",
       "unknown": "Použití nástroje",
       "update-entity-fields": "Aktualizace metadat"

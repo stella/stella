@@ -409,6 +409,7 @@
       "apply-active-docx-edits": "Applying DOCX edits",
       "ask-user": "Precizējuma pieprasīšana",
       "create-document": "Dokumenta izveide",
+      "describe-stella-api": "Stella API pārbaude",
       "describe-stella-function": "Stella funkcijas pārbaude",
       "docxCommentSummary": "Add a comment to {blockId}",
       "docxDeleteSummary": "Delete {blockId}",
@@ -423,6 +424,7 @@
       "read-contact": "Kontaktpersonas lasīšana",
       "read-content-across-matters": "Satura lasīšana vairākās lietās",
       "read-skill-resource": "Prasmes resursa lasīšana",
+      "run-stella-query": "Stella vaicājuma izpilde",
       "search-across-matters": "Meklēšana vairākās lietās",
       "unknown": "Rīka izmantošana",
       "update-entity-fields": "Metadatu atjaunināšana"

@@ -4,14 +4,29 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { ExecuteToolContract } from "@/api/handlers/chat/tools/execute/execute-tool-function";
-import { SANDBOX_STELLA_GLOBAL } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox-prelude";
+import type {
+  StellaAIOutput,
+  StellaAIOutputDescriptor,
+  StellaAIOutputShape,
+} from "@/api/handlers/chat/tools/execute/pagination";
+import { SANDBOX_READ_GLOBAL } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox-prelude";
 import { ChatToolValidationError } from "@/api/lib/errors/tagged-errors";
 import { jsonSchemaToAsyncFnType } from "@/api/lib/json-schema/json-schema-to-type";
+
+type ReadonlyFunctionOutputSchema = v.GenericSchema<
+  unknown,
+  StellaAIOutput<unknown>
+>;
+
+type ReadonlyFunctionOutputDescriptor = StellaAIOutputDescriptor<
+  ReadonlyFunctionOutputSchema,
+  StellaAIOutputShape
+>;
 
 type CreateFunctionSchemaProps = {
   description: string;
   inputSchema: v.GenericSchema;
-  outputSchema: v.GenericSchema;
+  outputSchema: ReadonlyFunctionOutputSchema;
 };
 
 const createFunctionSchema = ({
@@ -26,45 +41,89 @@ const createFunctionSchema = ({
     v.returnsAsync(outputSchema),
   );
 
+const composeSchemaDescription = ({
+  details,
+  summary,
+}: {
+  details: string | undefined;
+  summary: string;
+}) => (details ? `${summary} ${details}` : summary);
+
 type CreateReadonlyFunctionContractProps<
   TName extends string,
   TInputSchema extends v.GenericSchema,
-  TOutputSchema extends v.GenericSchema,
+  TOutputDescriptor extends ReadonlyFunctionOutputDescriptor,
 > = {
-  description: string;
+  /** One-line catalog blurb shown in the system-prompt API listing. */
+  summary: string;
+  /**
+   * Optional extra prose appended to the schema description for
+   * `describe-stella-api({name})`. Use this for context that does not
+   * fit in a one-line summary; the return-shape hint is derived from
+   * the output descriptor and must not be repeated here.
+   */
+  details?: string;
   input: TInputSchema;
   name: TName;
-  output: TOutputSchema;
+  output: TOutputDescriptor;
 };
 
 export const createReadonlyFunctionContract = <
   TName extends string,
   TInputSchema extends v.GenericSchema,
-  TOutputSchema extends v.GenericSchema,
+  TOutputDescriptor extends ReadonlyFunctionOutputDescriptor,
 >({
-  description,
+  details,
   input,
   name,
   output,
-}: CreateReadonlyFunctionContractProps<TName, TInputSchema, TOutputSchema>) =>
-  ({
+  summary,
+}: CreateReadonlyFunctionContractProps<
+  TName,
+  TInputSchema,
+  TOutputDescriptor
+>) => {
+  const baseContract = {
     input,
     name,
-    output,
+    output: output.schema,
     schema: createFunctionSchema({
-      description,
+      description: composeSchemaDescription({ details, summary }),
       inputSchema: input,
-      outputSchema: output,
+      outputSchema: output.schema,
     }),
-  }) as const satisfies ExecuteToolContract<TName, TInputSchema, TOutputSchema>;
+  } as const satisfies ExecuteToolContract<
+    TName,
+    TInputSchema,
+    TOutputDescriptor["schema"]
+  >;
 
-export type ReadonlyFunctionContract = ExecuteToolContract;
+  return {
+    ...baseContract,
+    details,
+    outputShape: output.outputShape,
+    summary,
+  } as const;
+};
+
+export type ReadonlyFunctionContract = ExecuteToolContract<
+  string,
+  v.GenericSchema,
+  ReadonlyFunctionOutputSchema
+> & {
+  details: string | undefined;
+  outputShape: StellaAIOutputShape;
+  summary: string;
+};
 
 export type ReadonlyFunctionManifest = {
   description: string;
+  details: string | undefined;
   inputSchema: JsonSchema;
   name: string;
   outputSchema: JsonSchema;
+  outputShape: StellaAIOutputShape;
+  summary: string;
 };
 
 const toManifestSchema = (
@@ -104,9 +163,12 @@ const buildReadonlyFunctionManifestEntry = ({
 
     return Result.ok({
       description: v.getDescription(contract.schema) ?? "",
+      details: contract.details,
       inputSchema,
       name: contract.name,
       outputSchema,
+      outputShape: contract.outputShape,
+      summary: contract.summary,
     });
   });
 
@@ -157,7 +219,7 @@ export const buildReadonlyFunctionTypeDeclarations = (
 
     return [
       "declare global {",
-      `  namespace ${SANDBOX_STELLA_GLOBAL} {`,
+      `  namespace ${SANDBOX_READ_GLOBAL} {`,
       ...signatures.map((signature) => `    ${signature};`),
       "  }",
       "}",

@@ -148,7 +148,7 @@ describe("runSandbox", () => {
   it("round-trips a host call through the bridge", async () => {
     const result = await runSandbox({
       source: `
-        const r = await stella.echo({ value: "ada" });
+        const r = await read.echo({ value: "ada" });
         return r.value;
       `,
       registry: baseRegistry,
@@ -163,8 +163,8 @@ describe("runSandbox", () => {
   it("supports multiple sequential awaits", async () => {
     const result = await runSandbox({
       source: `
-        const a = await stella.add({ a: 1, b: 2 });
-        const b = await stella.add({ a: a.sum, b: 3 });
+        const a = await read.add({ a: 1, b: 2 });
+        const b = await read.add({ a: a.sum, b: 3 });
         return b.sum;
       `,
       registry: baseRegistry,
@@ -180,9 +180,9 @@ describe("runSandbox", () => {
     const result = await runSandbox({
       source: `
         for (let i = 0; i < 3; i++) {
-          await stella.echo({ value: String(i) });
+          await read.echo({ value: String(i) });
         }
-        return await stella.slow({ ms: 40 });
+        return await read.slow({ ms: 40 });
       `,
       registry: baseRegistry,
     });
@@ -193,9 +193,9 @@ describe("runSandbox", () => {
     }
   });
 
-  it("resolves when the program returns a stella promise without await (async return chaining)", async () => {
+  it("resolves when the program returns a read promise without await (async return chaining)", async () => {
     const result = await runSandbox({
-      source: `return stella.slow({ ms: 40 });`,
+      source: `return read.slow({ ms: 40 });`,
       registry: baseRegistry,
     });
     expect(Result.isOk(result)).toBe(true);
@@ -205,11 +205,11 @@ describe("runSandbox", () => {
     }
   });
 
-  it("lets try/catch handle a rejecting stella call when using return await", async () => {
+  it("lets try/catch handle a rejecting read call when using return await", async () => {
     const result = await runSandbox({
       source: `
         try {
-          return await stella.echo({ value: 123 });
+          return await read.echo({ value: 123 });
         } catch (err) {
           return "caught";
         }
@@ -223,11 +223,11 @@ describe("runSandbox", () => {
     }
   });
 
-  it("does not run try/catch when returning a rejecting stella promise without await", async () => {
+  it("does not run try/catch when returning a rejecting read promise without await", async () => {
     const result = await runSandbox({
       source: `
         try {
-          return stella.echo({ value: 123 });
+          return read.echo({ value: 123 });
         } catch (err) {
           return "caught";
         }
@@ -244,7 +244,7 @@ describe("runSandbox", () => {
     const result = await runSandbox({
       source: `
         for (let i = 0; i < 100; i++) {
-          await stella.echo({ value: "x" });
+          await read.echo({ value: "x" });
         }
         return "done";
       `,
@@ -272,7 +272,7 @@ describe("runSandbox", () => {
   it("times out long host work near the deadline instead of the host duration", async () => {
     const startedAt = Date.now();
     const result = await runSandbox({
-      source: `await stella.slow({ ms: 800 }); return "ok";`,
+      source: `await read.slow({ ms: 800 }); return "ok";`,
       registry: baseRegistry,
       limits: { maxDurationMs: 100 },
     });
@@ -386,7 +386,7 @@ describe("runSandbox", () => {
     const result = await runSandbox({
       source: `
         try {
-          await stella.doesNotExist({});
+          await read.doesNotExist({});
           return "no-throw";
         } catch (err) {
           return "threw: " + (err && err.message ? err.message : String(err));
@@ -406,7 +406,7 @@ describe("runSandbox", () => {
       source: `
         try {
           // value should be string, but we pass a number
-          await stella.echo({ value: 123 });
+          await read.echo({ value: 123 });
           return "no-throw";
         } catch (err) {
           return "caught";
@@ -468,7 +468,7 @@ describe("runSandbox", () => {
 
   it("round-trips undefined from host functions", async () => {
     const result = await runSandbox({
-      source: `return await stella.noop({});`,
+      source: `return await read.noop({});`,
       registry: baseRegistry,
     });
     expect(Result.isOk(result)).toBe(true);
@@ -478,10 +478,10 @@ describe("runSandbox", () => {
     }
   });
 
-  it("does not treat stella as a thenable during promise resolution", async () => {
+  it("does not treat read as a thenable during promise resolution", async () => {
     const result = await runSandbox({
       source: `
-        await Promise.resolve(stella);
+        await Promise.resolve(read);
         return "resolved";
       `,
       registry: baseRegistry,
@@ -496,7 +496,7 @@ describe("runSandbox", () => {
 
   it("counts host calls per execution and does not share state across runs", async () => {
     const first = await runSandbox({
-      source: `await stella.echo({ value: "a" }); return "ok";`,
+      source: `await read.echo({ value: "a" }); return "ok";`,
       registry: baseRegistry,
     });
     const second = await runSandbox({
@@ -542,7 +542,7 @@ describe("runSandbox", () => {
       runSandbox({
         source: `
           globalThis.token = "left";
-          await stella.slow({ ms: 50 });
+          await read.slow({ ms: 50 });
           return globalThis.token;
         `,
         registry: baseRegistry,
@@ -550,7 +550,7 @@ describe("runSandbox", () => {
       runSandbox({
         source: `
           globalThis.token = "right";
-          await stella.slow({ ms: 50 });
+          await read.slow({ ms: 50 });
           return globalThis.token;
         `,
         registry: baseRegistry,
@@ -590,7 +590,7 @@ describe("runSandbox", () => {
     const registry: SandboxFunctionRegistry = { hold };
 
     const firstPromise = runSandbox({
-      source: `return await stella.hold({ label: "first" });`,
+      source: `return await read.hold({ label: "first" });`,
       registry,
       concurrencyKey: "user-a",
     });
@@ -599,7 +599,7 @@ describe("runSandbox", () => {
     });
 
     const secondPromise = runSandbox({
-      source: `return await stella.hold({ label: "second" });`,
+      source: `return await read.hold({ label: "second" });`,
       registry,
       concurrencyKey: "user-a",
     });
@@ -645,7 +645,7 @@ describe("runSandbox", () => {
     const promises = ["a", "b", "c", "d"].map(
       async (label) =>
         await runSandbox({
-          source: `return await stella.hold({ label: "${label}" });`,
+          source: `return await read.hold({ label: "${label}" });`,
           registry,
           concurrencyKey: `user-${label}`,
         }),
@@ -687,7 +687,7 @@ describe("runSandbox", () => {
     const promises = ["a", "b", "c", "d", "e"].map(
       async (label) =>
         await runSandbox({
-          source: `return await stella.hold({ label: "${label}" });`,
+          source: `return await read.hold({ label: "${label}" });`,
           registry,
           concurrencyKey: `user-${label}`,
         }),
@@ -732,7 +732,7 @@ describe("runSandbox", () => {
     const registry: SandboxFunctionRegistry = { hold };
 
     const firstPromise = runSandbox({
-      source: `return await stella.hold({ label: "first" });`,
+      source: `return await read.hold({ label: "first" });`,
       registry,
       concurrencyKey: "user-a",
       limits: { maxDurationMs: 2000 },
@@ -764,7 +764,7 @@ describe("runSandbox", () => {
 
   it("releases keyed and global slots after a timeout", async () => {
     const firstPromise = runSandbox({
-      source: `await stella.slow({ ms: 150 }); return "late";`,
+      source: `await read.slow({ ms: 150 }); return "late";`,
       registry: baseRegistry,
       concurrencyKey: "user-a",
       limits: { maxDurationMs: 50 },
@@ -811,7 +811,7 @@ describe("runSandbox", () => {
 
     const firstPromise = runSandbox({
       source: `
-        await stella.hold({ label: "first" });
+        await read.hold({ label: "first" });
         throw new Error("boom");
       `,
       registry,
@@ -866,12 +866,12 @@ describe("runSandbox", () => {
   it("keeps healthy parallel runs working while another run times out", async () => {
     const [timedOut, healthy] = await Promise.all([
       runSandbox({
-        source: `await stella.slow({ ms: 300 }); return "late";`,
+        source: `await read.slow({ ms: 300 }); return "late";`,
         registry: baseRegistry,
         limits: { maxDurationMs: 50 },
       }),
       runSandbox({
-        source: `const r = await stella.echo({ value: "healthy" }); return r.value;`,
+        source: `const r = await read.echo({ value: "healthy" }); return r.value;`,
         registry: baseRegistry,
       }),
     ]);
@@ -889,7 +889,7 @@ describe("runSandbox", () => {
 
   it("keeps later runs clean after a timed out host call finishes in the background", async () => {
     const timedOut = await runSandbox({
-      source: `await stella.slow({ ms: 300 }); return "late";`,
+      source: `await read.slow({ ms: 300 }); return "late";`,
       registry: baseRegistry,
       limits: { maxDurationMs: 50 },
     });
@@ -911,7 +911,7 @@ describe("runSandbox", () => {
   it("cannot recover deleted host globals through function constructors", async () => {
     const result = await runSandbox({
       source: `
-        const escape = stella.echo.constructor(
+        const escape = read.echo.constructor(
           "return [typeof globalThis.process, typeof globalThis.require, typeof globalThis.fetch].join(':')",
         );
         return escape();
@@ -927,7 +927,7 @@ describe("runSandbox", () => {
 
   it("does not expose the raw bridge function on globalThis", async () => {
     const result = await runSandbox({
-      source: `return typeof globalThis.__stellaCall;`,
+      source: `return typeof globalThis.__readCall;`,
       registry: baseRegistry,
     });
 
@@ -955,7 +955,7 @@ describe("runSandbox", () => {
     const result = await runSandbox({
       source: `
         try {
-          await stella.hidden({});
+          await read.hidden({});
           return "leaked";
         } catch (error) {
           return String(error && error.message ? error.message : error);
@@ -967,7 +967,7 @@ describe("runSandbox", () => {
     expect(Result.isOk(result)).toBe(true);
     if (Result.isOk(result)) {
       expect(result.value.value).not.toBe("leaked");
-      expect(String(result.value.value)).toContain("Unknown stella function");
+      expect(String(result.value.value)).toContain("Unknown read function");
     }
   });
 
@@ -997,7 +997,7 @@ describe("runSandbox", () => {
     };
 
     const result = await runSandbox({
-      source: `await stella.mutate({ ms: 200, value: 7 }); return "done";`,
+      source: `await read.mutate({ ms: 200, value: 7 }); return "done";`,
       registry,
       limits: { maxDurationMs: 50 },
     });

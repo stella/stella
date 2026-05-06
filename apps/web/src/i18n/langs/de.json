@@ -409,6 +409,7 @@
       "apply-active-docx-edits": "Applying DOCX edits",
       "ask-user": "Um Klärung bitten",
       "create-document": "Dokument erstellen",
+      "describe-stella-api": "Stella API prüfen",
       "describe-stella-function": "stella-Funktion prüfen",
       "docxCommentSummary": "Add a comment to {blockId}",
       "docxDeleteSummary": "Delete {blockId}",
@@ -423,6 +424,7 @@
       "read-contact": "Kontakt lesen",
       "read-content-across-matters": "Inhalte in allen Mandaten lesen",
       "read-skill-resource": "Skill-Ressource lesen",
+      "run-stella-query": "Stella-Abfrage ausführen",
       "search-across-matters": "In allen Mandaten suchen",
       "unknown": "Werkzeug verwenden",
       "update-entity-fields": "Metadaten aktualisieren"

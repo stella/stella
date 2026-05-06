@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { ENTITY_KINDS, PROPERTY_STATUSES } from "@/api/db/schema";
 import {
+  buildItemsOutputSchema,
   buildPaginatedOutputSchema,
   paginationInputEntries,
 } from "@/api/handlers/chat/tools/execute/pagination";
@@ -11,7 +12,10 @@ import {
   buildReadonlyFunctionTypeDeclarations,
   createReadonlyFunctionContract,
 } from "@/api/handlers/chat/tools/execute/readonly-manifest";
-import type { ReadonlyFunctionManifest } from "@/api/handlers/chat/tools/execute/readonly-manifest";
+import type {
+  ReadonlyFunctionContract,
+  ReadonlyFunctionManifest,
+} from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import type { ChatToolValidationError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -319,43 +323,44 @@ const getMatterEntityContentsInputSchema = v.strictObject({
 });
 
 export const listMatterPropertiesContract = createReadonlyFunctionContract({
-  description:
-    "List compact property summaries for one or more matters. Supports pagination.",
+  summary: "List compact property summaries for one or more matters.",
   input: listMatterPropertiesInputSchema,
   name: "listMatterProperties",
   output: buildPaginatedOutputSchema(propertySummarySchema),
 });
 
 export const getMatterPropertiesContract = createReadonlyFunctionContract({
-  description:
+  summary:
     "Get full property definitions, including property content and tool configuration, for known property refs in known matters.",
   input: getMatterPropertiesInputSchema,
   name: "getMatterProperties",
-  output: v.array(propertyDetailSchema),
+  output: buildItemsOutputSchema(propertyDetailSchema),
 });
 
 export const listMatterEntitiesContract = createReadonlyFunctionContract({
-  description:
-    "List compact entity summaries for one or more matters. Use returned refs for follow-up calls. Reference entities in user-facing answers with markdown links like `[Name](#stella-entity-ref=ent_1)`. Each field's `content` is the stored value discriminated union (same shape as the DB). Resolve property display names via `listMatterProperties` or `getMatterProperties`. Supports optional kind and parent filters plus pagination.",
+  summary: "List compact entity summaries for one or more matters.",
+  details:
+    "Use returned refs for follow-up calls. Reference entities in user-facing answers with markdown links like `[Name](#stella-entity-ref=ent_1)`. Each field's `content` is the stored value discriminated union (same shape as the DB). Resolve property display names via `listMatterProperties` or `getMatterProperties`. Supports optional kind and parent filters.",
   input: listMatterEntitiesInputSchema,
   name: "listMatterEntities",
   output: buildPaginatedOutputSchema(entitySummarySchema),
 });
 
 export const getMatterEntitiesContract = createReadonlyFunctionContract({
-  description:
-    "Get rich entity details for known entity refs in known matters. Use refs for follow-up calls. Reference entities in user-facing answers with markdown links like `[Name](#stella-entity-ref=ent_1)`. Each field's `content` is the stored value discriminated union (same shape as the DB). Resolve property display names via `listMatterProperties` or `getMatterProperties`.",
+  summary: "Get rich entity details for known entity refs in known matters.",
+  details:
+    "Use refs for follow-up calls. Reference entities in user-facing answers with markdown links like `[Name](#stella-entity-ref=ent_1)`. Each field's `content` is the stored value discriminated union (same shape as the DB). Resolve property display names via `listMatterProperties` or `getMatterProperties`.",
   input: getMatterEntitiesInputSchema,
   name: "getMatterEntities",
-  output: v.array(entityDetailSchema),
+  output: buildItemsOutputSchema(entityDetailSchema),
 });
 
 export const getMatterEntityContentsContract = createReadonlyFunctionContract({
-  description:
-    "Get extracted text content for known entity refs in known matters. Text is truncated server-side when needed.",
+  summary: "Get extracted text content for known entity refs in known matters.",
+  details: "Text is truncated server-side when needed.",
   input: getMatterEntityContentsInputSchema,
   name: "getMatterEntityContents",
-  output: v.array(entityContentSchema),
+  output: buildItemsOutputSchema(entityContentSchema),
 });
 
 export const readonlyWorkspaceFunctionContracts = [
@@ -364,7 +369,7 @@ export const readonlyWorkspaceFunctionContracts = [
   listMatterEntitiesContract,
   getMatterEntitiesContract,
   getMatterEntityContentsContract,
-] as const;
+] as const satisfies readonly ReadonlyFunctionContract[];
 
 export type ReadonlyWorkspaceFunctionName =
   (typeof readonlyWorkspaceFunctionContracts)[number]["name"];

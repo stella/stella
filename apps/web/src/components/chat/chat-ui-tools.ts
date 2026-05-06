@@ -30,31 +30,41 @@ const CHAT_TOOL_TITLE_KEYS = {
   "apply-active-docx-edits": "chat.tool.apply-active-docx-edits",
   "ask-user": "chat.tool.ask-user",
   "create-document": "chat.tool.create-document",
-  "describe-stella-function": "chat.tool.describe-stella-function",
-  "execute-typescript": "chat.tool.execute-typescript",
+  "describe-stella-api": "chat.tool.describe-stella-api",
+  "run-stella-query": "chat.tool.run-stella-query",
   "load-skill": "chat.tool.load-skill",
-  "read-contact": "chat.tool.read-contact",
-  "read-content-across-matters": "chat.tool.read-content-across-matters",
   "read-skill-resource": "chat.tool.read-skill-resource",
-  "search-across-matters": "chat.tool.search-across-matters",
   "update-entity-fields": "chat.tool.update-entity-fields",
 } as const satisfies Record<keyof ChatUITools, TranslationKey>;
+
+const LEGACY_CHAT_TOOL_TITLE_KEYS = {
+  "describe-stella-function": "chat.tool.describe-stella-function",
+  "execute-typescript": "chat.tool.execute-typescript",
+  "read-contact": "chat.tool.read-contact",
+  "read-content-across-matters": "chat.tool.read-content-across-matters",
+  "search-across-matters": "chat.tool.search-across-matters",
+} as const satisfies Record<string, TranslationKey>;
+
+const CHAT_TOOL_DISPLAY_TITLE_KEYS = {
+  ...CHAT_TOOL_TITLE_KEYS,
+  ...LEGACY_CHAT_TOOL_TITLE_KEYS,
+} as const;
 
 const UNKNOWN_CHAT_TOOL_TITLE_KEY =
   "chat.tool.unknown" satisfies TranslationKey;
 
 export type ChatToolTitleKey =
-  | (typeof CHAT_TOOL_TITLE_KEYS)[keyof typeof CHAT_TOOL_TITLE_KEYS]
+  | (typeof CHAT_TOOL_DISPLAY_TITLE_KEYS)[keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS]
   | typeof UNKNOWN_CHAT_TOOL_TITLE_KEY;
 
 const isChatToolName = (
   toolName: string,
-): toolName is keyof typeof CHAT_TOOL_TITLE_KEYS =>
-  toolName in CHAT_TOOL_TITLE_KEYS;
+): toolName is keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS =>
+  toolName in CHAT_TOOL_DISPLAY_TITLE_KEYS;
 
 export const getChatToolTitleKey = (toolName: string) => {
   if (isChatToolName(toolName)) {
-    return CHAT_TOOL_TITLE_KEYS[toolName];
+    return CHAT_TOOL_DISPLAY_TITLE_KEYS[toolName];
   }
 
   return UNKNOWN_CHAT_TOOL_TITLE_KEY;

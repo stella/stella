@@ -1,11 +1,11 @@
 /** Guest-visible name of the QuickJS function the host registers before prelude runs. */
-export const SANDBOX_HOST_BRIDGE_GLOBAL = "__stellaCall" as const;
+export const SANDBOX_HOST_BRIDGE_GLOBAL = "__readCall" as const;
 
-/** Guest global exposing workspace functions as `stella.<name>(input)`. */
-export const SANDBOX_STELLA_GLOBAL = "stella" as const;
+/** Guest global exposing readonly data functions as `read.<name>(input)`. */
+export const SANDBOX_READ_GLOBAL = "read" as const;
 
 /** Local alias in emitted prelude for the captured bridge function. */
-export const SANDBOX_BRIDGE_LOCAL_ALIAS = "__stellaBridge" as const;
+export const SANDBOX_BRIDGE_LOCAL_ALIAS = "__readBridge" as const;
 
 export const SANDBOX_BLOCKED_GLOBALS = [
   "require",
@@ -22,7 +22,7 @@ export const SANDBOX_CONSOLE_METHODS = [
   "debug",
 ] as const;
 
-/** Property names the `stella` proxy must not expose so `stella` is not a thenable. */
+/** Property names the `read` proxy must not expose so `read` is not a thenable. */
 export const SANDBOX_THENABLE_PROPERTY_NAMES = [
   "then",
   "catch",
@@ -53,7 +53,7 @@ export const buildHostBridgePrelude = (): string => {
 ${consoleBody}
   };
 ${blockedDeletes}
-  globalThis.${SANDBOX_STELLA_GLOBAL} = new Proxy(Object.create(null), {
+  globalThis.${SANDBOX_READ_GLOBAL} = new Proxy(Object.create(null), {
     get(_target, name) {
       if (typeof name !== "string") return undefined;
       if (${thenableGuard}) {

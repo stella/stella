@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db";
+import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -21,6 +23,10 @@ const workspaceId = toSafeId<"workspace">(
 const entityId = toSafeId<"entity">("44444444-4444-4444-8444-444444444444");
 
 const unusedScopedDb: ScopedDb = async () => {
+  throw new Error("This test only constructs tool schemas.");
+};
+
+const unusedSafeDb: SafeDb = async () => {
   throw new Error("This test only constructs tool schemas.");
 };
 
@@ -59,6 +65,28 @@ describe("chat tool schemas", () => {
         ],
       }),
     ).not.toThrow();
+  });
+
+  test("chat tools expose readonly data through the Stella API", () => {
+    const tools = getChatTools({
+      organizationId,
+      refRegistry: createChatRefRegistry(),
+      safeDb: unusedSafeDb,
+      scopedDb: unusedScopedDb,
+      userId,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [workspaceId],
+      }),
+      workspaceId: null,
+      hasActiveFileChat: false,
+    });
+
+    expect(tools).toHaveProperty("ask-user");
+    expect(tools).toHaveProperty("run-stella-query");
+    expect(tools).not.toHaveProperty("search-across-matters");
+    expect(tools).not.toHaveProperty("read-content-across-matters");
+    expect(tools).not.toHaveProperty("read-contact");
   });
 
   test("created document output includes the canonical entity mention", () => {

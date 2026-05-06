@@ -44,7 +44,7 @@ describe("chat prompt builders", () => {
     expect(prompt).not.toContain("Status");
   });
 
-  test("system prompts point at lazy stella discovery instead of pre-listing the API", () => {
+  test("system prompts include a compact Stella API catalog", () => {
     const refRegistry = createChatRefRegistry();
     const workspacePrompt = buildWorkspacePromptText({
       entityCount: 1,
@@ -59,11 +59,16 @@ describe("chat prompt builders", () => {
     });
 
     for (const prompt of [workspacePrompt, globalPrompt]) {
-      expect(prompt).toContain("describe-stella-function");
-      expect(prompt.toLowerCase()).toContain("not pre-listed");
-      // The full readonly `stella` API must NOT appear in the
-      // prompt — that's the whole point of the slim design.
-      expect(prompt).not.toContain("namespace stella {");
+      expect(prompt).toContain("For Stella data reads, use the Stella API");
+      expect(prompt).toContain("describe-stella-api");
+      expect(prompt).toContain("run-stella-query");
+      expect(prompt).toContain("result.items");
+      expect(prompt).toContain("Available Stella read functions");
+      expect(prompt).toContain("read.listContacts({");
+      expect(prompt).toContain("read.getMatterEntityContents({");
+      // Full declarations and JSON schemas stay out of the prompt;
+      // `describe-stella-api({name})` remains the detailed fallback.
+      expect(prompt).not.toContain("namespace read {");
       expect(prompt).not.toContain("declare global {");
     }
   });
