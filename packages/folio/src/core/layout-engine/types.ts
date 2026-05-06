@@ -788,10 +788,14 @@ export type FootnoteContent = {
  * Options for the layout engine.
  */
 export type LayoutOptions = {
-  /** Default page size. */
+  /** Initial page size. */
   pageSize: { w: number; h: number };
-  /** Default page margins. */
+  /** Initial page margins. */
   margins: PageMargins;
+  /** Body-level final section page size. */
+  finalPageSize?: { w: number; h: number };
+  /** Body-level final section margins. */
+  finalMargins?: PageMargins;
   /** Column configuration. */
   columns?: ColumnLayout;
   /** Gap between rendered pages (for UI). */

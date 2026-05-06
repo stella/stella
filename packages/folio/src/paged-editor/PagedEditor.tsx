@@ -68,7 +68,7 @@ import {
 } from "../core/layout-bridge/toFlowBlocks";
 // Layout engine
 import { layoutDocument } from "../core/layout-engine";
-import type { ColumnLayout } from "../core/layout-engine";
+import type { ColumnLayout, SectionLayoutConfig } from "../core/layout-engine";
 import type {
   Layout,
   FlowBlock,
@@ -85,7 +85,6 @@ import type {
   ParagraphBorders,
   ParagraphSpacing,
   TextBoxBlock,
-  SectionBreakBlock,
 } from "../core/layout-engine/types";
 import {
   DEFAULT_TEXTBOX_MARGINS,
@@ -137,6 +136,7 @@ import {
   getPageScrollTarget,
   isValidPmScrollPosition,
 } from "./scrollNavigation";
+import { computePerBlockWidths } from "./sectionBlockWidths";
 import { SelectionOverlay } from "./SelectionOverlay";
 import { getTransactionDirtyRange } from "./transactionDirtyRange";
 import { useDragAutoScroll } from "./useDragAutoScroll";
@@ -535,57 +535,6 @@ function getColumns(
     cols.separator = sectionProps.separator;
   }
   return cols;
-}
-
-/**
- * Compute per-block measurement widths by scanning for section breaks.
- * Blocks in multi-column sections must be measured at column width, not full content width.
- *
- * OOXML note: Each section break carries the CURRENT section's properties.
- * Section N's blocks use config from sectionBreak[N].
- * The final section (after all breaks) uses defaultColumns (body-level).
- */
-function computePerBlockWidths(
-  blocks: FlowBlock[],
-  defaultContentWidth: number,
-  defaultColumns: ColumnLayout | undefined,
-): number[] {
-  function colWidth(cw: number, cols: ColumnLayout): number {
-    if (cols.count <= 1) {
-      return cw;
-    }
-    return Math.floor((cw - (cols.count - 1) * cols.gap) / cols.count);
-  }
-
-  // Collect section break indices and their column configs
-  const breakIndices: number[] = [];
-  const sectionConfigs: ColumnLayout[] = [];
-  for (let i = 0; i < blocks.length; i++) {
-    const block = blocks[i]!; // SAFETY: i < blocks.length
-    if (block.kind === "sectionBreak") {
-      breakIndices.push(i);
-      const sb = block as SectionBreakBlock;
-      sectionConfigs.push(sb.columns ?? { count: 1, gap: 0 });
-    }
-  }
-  // Final section uses body-level columns
-  sectionConfigs.push(defaultColumns ?? { count: 1, gap: 0 });
-
-  // Assign widths: section N's blocks use sectionConfigs[N]
-  let sectionIdx = 0;
-  const widths: number[] = [];
-
-  for (let i = 0; i < blocks.length; i++) {
-    const cols = sectionConfigs[sectionIdx]!; // SAFETY: sectionIdx tracks section boundaries within sectionConfigs
-    widths.push(colWidth(defaultContentWidth, cols));
-
-    // After this section break, move to next section
-    if (sectionIdx < breakIndices.length && i === breakIndices[sectionIdx]) {
-      sectionIdx++;
-    }
-  }
-
-  return widths;
 }
 
 /**
@@ -2080,11 +2029,18 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           setBlocks(newBlocks);
 
           // Compute per-block widths accounting for section breaks with different column configs
-          const blockWidths = computePerBlockWidths(
-            newBlocks,
-            contentWidth,
-            columns,
-          );
+          const bodyLayoutConfig: SectionLayoutConfig = {
+            pageSize,
+            margins,
+          };
+          if (columns !== undefined) {
+            bodyLayoutConfig.columns = columns;
+          }
+          const blockWidths = computePerBlockWidths({
+            blocks: newBlocks,
+            bodyConfig: bodyLayoutConfig,
+            finalConfig: bodyLayoutConfig,
+          });
           const incrementalResult =
             options.dirtyRange &&
             !options.forceFull &&

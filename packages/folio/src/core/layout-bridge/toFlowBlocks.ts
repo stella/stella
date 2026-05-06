@@ -59,6 +59,10 @@ export type ToFlowBlocksOptions = {
   pageContentHeight?: number;
   /** Shared list counters for nested containers. */
   listCounters?: Map<number, number[]>;
+  /** Latest concrete counters by abstract numbering definition. */
+  listAbstractCounters?: Map<number, number[]>;
+  /** Shared startOverride state for nested containers. */
+  listSeenNumIds?: Set<string>;
 };
 
 const DEFAULT_FONT = "Calibri";
@@ -214,6 +218,8 @@ function getLastListCounters(
 function computeListMarker(
   pmAttrs: PMParagraphAttrs,
   listCounters: Map<number, number[]>,
+  abstractCounters: Map<number, number[]>,
+  seenNumIds: Set<string>,
 ): string | null {
   const numId = pmAttrs.numPr?.numId;
   if (numId === null || numId === undefined || numId === 0) {
@@ -238,11 +244,35 @@ function computeListMarker(
   const level = pmAttrs.numPr?.ilvl ?? 0;
   const counters =
     listCounters.get(numId) ?? (Array.from({ length: 9 }, () => 0) as number[]);
+  const abstractNumId = pmAttrs.listAbstractNumId;
+  if (abstractNumId !== undefined && level > 0) {
+    const latestAbstractCounters = abstractCounters.get(abstractNumId);
+    const missingParentCounters = counters
+      .slice(0, level)
+      .every((value) => value === 0);
+    if (latestAbstractCounters && missingParentCounters) {
+      for (let i = 0; i < level; i += 1) {
+        counters[i] = latestAbstractCounters[i] ?? 0;
+      }
+    }
+  }
+
+  const seenKey = `${numId}:${level}`;
+  if (!seenNumIds.has(seenKey)) {
+    seenNumIds.add(seenKey);
+    if (pmAttrs.listStartOverride != null) {
+      counters[level] = pmAttrs.listStartOverride - 1;
+    }
+  }
+
   counters[level] = (counters[level] ?? 0) + 1;
   for (let i = level + 1; i < counters.length; i += 1) {
     counters[i] = 0;
   }
   listCounters.set(numId, counters);
+  if (abstractNumId !== undefined) {
+    abstractCounters.set(abstractNumId, [...counters]);
+  }
 
   const levelFormats =
     pmAttrs.listLevelNumFmts ??
@@ -623,6 +653,8 @@ function convertParagraphAttrs(
   pmAttrs: PMParagraphAttrs,
   theme?: Theme | null,
   listCounters?: Map<number, number[]>,
+  listAbstractCounters?: Map<number, number[]>,
+  listSeenNumIds?: Set<string>,
 ): ParagraphAttrs {
   const attrs: ParagraphAttrs = {};
 
@@ -830,7 +862,12 @@ function convertParagraphAttrs(
     attrs.numPr = numPr;
   }
   const resolvedMarker = listCounters
-    ? computeListMarker(pmAttrs, listCounters)
+    ? computeListMarker(
+        pmAttrs,
+        listCounters,
+        listAbstractCounters ?? new Map(),
+        listSeenNumIds ?? new Set(),
+      )
     : null;
   if (resolvedMarker !== null) {
     attrs.listMarker = resolvedMarker;
@@ -910,6 +947,8 @@ function convertParagraph(
     pmAttrs,
     options.theme,
     options.listCounters,
+    options.listAbstractCounters,
+    options.listSeenNumIds,
   );
 
   return {
@@ -1395,10 +1434,19 @@ export function toFlowBlocks(
     defaultFont: options.defaultFont ?? DEFAULT_FONT,
     defaultSize: options.defaultSize ?? DEFAULT_SIZE,
     listCounters: options.listCounters ?? new Map<number, number[]>(),
+    listAbstractCounters:
+      options.listAbstractCounters ?? new Map<number, number[]>(),
+    listSeenNumIds: options.listSeenNumIds ?? new Set<string>(),
   };
 
   const blocks: FlowBlock[] = [];
   const offset = 0; // Start at document beginning
+  let lastSectionMarginsTwips = {
+    top: 1440,
+    bottom: 1440,
+    left: 1440,
+    right: 1440,
+  };
 
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   doc.forEach((node, nodeOffset) => {
@@ -1438,13 +1486,21 @@ export function toFlowBlocks(
             // Populate margins
             if (
               secProps.marginTop !== undefined ||
-              secProps.marginLeft !== undefined
+              secProps.marginBottom !== undefined ||
+              secProps.marginLeft !== undefined ||
+              secProps.marginRight !== undefined
             ) {
+              lastSectionMarginsTwips = {
+                top: secProps.marginTop ?? lastSectionMarginsTwips.top,
+                bottom: secProps.marginBottom ?? lastSectionMarginsTwips.bottom,
+                left: secProps.marginLeft ?? lastSectionMarginsTwips.left,
+                right: secProps.marginRight ?? lastSectionMarginsTwips.right,
+              };
               sectionBreak.margins = {
-                top: twipsToPixels(secProps.marginTop ?? 1440),
-                bottom: twipsToPixels(secProps.marginBottom ?? 1440),
-                left: twipsToPixels(secProps.marginLeft ?? 1440),
-                right: twipsToPixels(secProps.marginRight ?? 1440),
+                top: twipsToPixels(lastSectionMarginsTwips.top),
+                bottom: twipsToPixels(lastSectionMarginsTwips.bottom),
+                left: twipsToPixels(lastSectionMarginsTwips.left),
+                right: twipsToPixels(lastSectionMarginsTwips.right),
               };
             }
             // Populate columns

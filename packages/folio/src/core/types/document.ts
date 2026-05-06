@@ -42,6 +42,7 @@ export type {
   LineSpacingRule,
   ParagraphAlignment,
   ParagraphFormatting,
+  SpacingExplicit,
   TableWidthType,
   TableMeasurement,
   TableBorders,

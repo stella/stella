@@ -18,6 +18,7 @@ import type {
   ParagraphFormatting,
   TextFormatting,
 } from "../../types/document";
+import { mergeTextFormatting } from "../../utils/textFormattingMerge";
 
 /**
  * Resolved style properties ready for rendering
@@ -189,7 +190,7 @@ export class StyleResolver {
     }
 
     // Merge style's run properties
-    const merged = this.mergeTextFormatting(result, style.rPr);
+    const merged = mergeTextFormatting(result, style.rPr);
 
     return merged && Object.keys(merged).length > 0 ? merged : undefined;
   }
@@ -267,7 +268,7 @@ export class StyleResolver {
       }
     }
     if (style.rPr) {
-      const merged = this.mergeTextFormatting(result.runFormatting, style.rPr);
+      const merged = mergeTextFormatting(result.runFormatting, style.rPr);
       if (merged !== undefined) {
         result.runFormatting = merged;
       }
@@ -294,7 +295,7 @@ export class StyleResolver {
       const value = source[key];
       if (value !== undefined) {
         if (key === "runProperties") {
-          const mergedRPr = this.mergeTextFormatting(
+          const mergedRPr = mergeTextFormatting(
             result.runProperties,
             source.runProperties,
           );
@@ -311,40 +312,6 @@ export class StyleResolver {
         } else if (key === "tabs" && Array.isArray(value)) {
           // Tabs from higher priority source replace lower priority
           result.tabs = [...value];
-        } else {
-          (result as Record<string, unknown>)[key] = value;
-        }
-      }
-    }
-
-    return result;
-  }
-
-  /**
-   * Merge text formatting (source overrides target)
-   */
-  private mergeTextFormatting(
-    target: TextFormatting | undefined,
-    source: TextFormatting | undefined,
-  ): TextFormatting | undefined {
-    if (!source) {
-      return target;
-    }
-    if (!target) {
-      return source ? { ...source } : undefined;
-    }
-
-    const result = { ...target };
-
-    for (const key of Object.keys(source) as (keyof TextFormatting)[]) {
-      const value = source[key];
-      if (value !== undefined) {
-        if (typeof value === "object" && value !== null) {
-          // Deep merge for objects like fontFamily, color, underline
-          (result as Record<string, unknown>)[key] = {
-            ...(result[key] as Record<string, unknown>),
-            ...(value as Record<string, unknown>),
-          };
         } else {
           (result as Record<string, unknown>)[key] = value;
         }

@@ -186,6 +186,9 @@ function convertPMParagraph(
   if (pFormatting) {
     paragraph.formatting = pFormatting;
   }
+  if (attrs.renderedPageBreakBefore) {
+    paragraph.renderedPageBreakBefore = true;
+  }
 
   // Restore full section properties (round-trip) or fallback to break type only
   if (attrs._sectionProperties) {
@@ -248,6 +251,13 @@ function paragraphAttrsToFormatting(
         delete result.pageBreakBefore;
       }
     }
+    if (attrs.spacingExplicit !== orig.spacingExplicit) {
+      if (attrs.spacingExplicit) {
+        result.spacingExplicit = attrs.spacingExplicit;
+      } else {
+        delete result.spacingExplicit;
+      }
+    }
     if (attrs.bidi !== (orig.bidi ?? undefined)) {
       if (attrs.bidi) {
         result.bidi = attrs.bidi;
@@ -276,6 +286,7 @@ function paragraphAttrsToFormatting(
     attrs.tabs ||
     attrs.outlineLevel !== null ||
     attrs.contextualSpacing ||
+    attrs.spacingExplicit ||
     attrs.bidi;
 
   if (!hasFormatting) {
@@ -297,6 +308,9 @@ function paragraphAttrsToFormatting(
   }
   if (attrs.lineSpacingRule) {
     f.lineSpacingRule = attrs.lineSpacingRule;
+  }
+  if (attrs.spacingExplicit) {
+    f.spacingExplicit = attrs.spacingExplicit;
   }
   if (attrs.indentLeft) {
     f.indentLeft = attrs.indentLeft;

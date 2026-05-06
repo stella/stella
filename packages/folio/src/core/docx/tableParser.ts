@@ -1183,6 +1183,7 @@ function parseCellContent(
   numbering: NumberingMap | null,
   rels: RelationshipMap | null,
   media: Map<string, MediaFile> | null,
+  options?: { inHeaderFooter?: boolean },
 ): (Paragraph | Table)[] {
   const content: (Paragraph | Table)[] = [];
 
@@ -1198,11 +1199,27 @@ function parseCellContent(
 
     if (localName === "p") {
       // Parse paragraph
-      const para = parseParagraph(child, styles, theme, numbering, rels, media);
+      const para = parseParagraph(
+        child,
+        styles,
+        theme,
+        numbering,
+        rels,
+        media,
+        options,
+      );
       content.push(para);
     } else if (localName === "tbl") {
       // Parse nested table (recursive)
-      const table = parseTable(child, styles, theme, numbering, rels, media);
+      const table = parseTable(
+        child,
+        styles,
+        theme,
+        numbering,
+        rels,
+        media,
+        options,
+      );
       content.push(table);
     }
     // Other content types in cells are rare but could be added
@@ -1241,6 +1258,7 @@ export function parseTableCell(
   numbering: NumberingMap | null,
   rels: RelationshipMap | null,
   media: Map<string, MediaFile> | null,
+  options?: { inHeaderFooter?: boolean },
 ): TableCell {
   const cell: TableCell = {
     type: "tableCell",
@@ -1273,6 +1291,7 @@ export function parseTableCell(
     numbering,
     rels,
     media,
+    options,
   );
 
   return cell;
@@ -1300,6 +1319,7 @@ export function parseTableRow(
   numbering: NumberingMap | null,
   rels: RelationshipMap | null,
   media: Map<string, MediaFile> | null,
+  options?: { inHeaderFooter?: boolean },
 ): TableRow {
   const row: TableRow = {
     type: "tableRow",
@@ -1331,6 +1351,7 @@ export function parseTableRow(
       numbering,
       rels,
       media,
+      options,
     );
     row.cells.push(cell);
   }
@@ -1363,7 +1384,101 @@ export function parseTableGrid(
     widths.push(width);
   }
 
+  if (widths.length > 0 && widths.every((width) => width <= 0)) {
+    return undefined;
+  }
+
   return widths.length > 0 ? widths : undefined;
+}
+
+function hasRowGridOffsets(rowElement: XmlElement): boolean {
+  const trPrElement = findChild(rowElement, "w", "trPr");
+  if (!trPrElement) {
+    return false;
+  }
+
+  const gridBefore =
+    parseNumericAttribute(
+      findChild(trPrElement, "w", "gridBefore"),
+      "w",
+      "val",
+    ) ?? 0;
+  const gridAfter =
+    parseNumericAttribute(
+      findChild(trPrElement, "w", "gridAfter"),
+      "w",
+      "val",
+    ) ?? 0;
+
+  return gridBefore > 0 || gridAfter > 0;
+}
+
+function getTableGridWidth(table: Table): number | null {
+  const totalWidth = table.columnWidths?.reduce((sum, width) => sum + width, 0);
+  if (!totalWidth || totalWidth <= 0) {
+    return null;
+  }
+  return totalWidth;
+}
+
+function cellWidthCoversTableGrid(
+  cell: TableCell,
+  tableGridWidth: number | null,
+): boolean {
+  const width = cell.formatting?.width;
+  if (!width || width.type !== "dxa" || tableGridWidth === null) {
+    return false;
+  }
+  return width.value >= tableGridWidth;
+}
+
+function inferImplicitSingleCellRowSpans(
+  table: Table,
+  rowsWithGridOffsets: Set<number>,
+): void {
+  const gridColumnCount = table.columnWidths?.length ?? 0;
+  if (gridColumnCount <= 1) {
+    return;
+  }
+
+  const tableGridWidth = getTableGridWidth(table);
+  if (tableGridWidth === null) {
+    return;
+  }
+
+  for (const [rowIndex, row] of table.rows.entries()) {
+    if (row.cells.length !== 1) {
+      continue;
+    }
+    if (rowsWithGridOffsets.has(rowIndex)) {
+      continue;
+    }
+
+    const cell = row.cells.at(0);
+    if (!cell) {
+      continue;
+    }
+
+    const currentSpan = cell.formatting?.gridSpan ?? 1;
+    if (currentSpan >= gridColumnCount) {
+      continue;
+    }
+
+    if (cell.formatting?.vMerge) {
+      continue;
+    }
+    if (cell.formatting?.gridSpan != null) {
+      continue;
+    }
+    if (!cellWidthCoversTableGrid(cell, tableGridWidth)) {
+      continue;
+    }
+
+    cell.formatting = {
+      ...cell.formatting,
+      gridSpan: gridColumnCount,
+    };
+  }
 }
 
 // ============================================================================
@@ -1388,6 +1503,7 @@ export function parseTable(
   numbering: NumberingMap | null,
   rels: RelationshipMap | null,
   media: Map<string, MediaFile> | null,
+  options?: { inHeaderFooter?: boolean },
 ): Table {
   const table: Table = {
     type: "table",
@@ -1413,7 +1529,8 @@ export function parseTable(
 
   // Parse rows
   const rows = findChildren(tblElement, "w", "tr");
-  for (const rowElement of rows) {
+  const rowsWithGridOffsets = new Set<number>();
+  for (const [rowIndex, rowElement] of rows.entries()) {
     const row = parseTableRow(
       rowElement,
       styles,
@@ -1421,9 +1538,15 @@ export function parseTable(
       numbering,
       rels,
       media,
+      options,
     );
     table.rows.push(row);
+    if (hasRowGridOffsets(rowElement)) {
+      rowsWithGridOffsets.add(rowIndex);
+    }
   }
+
+  inferImplicitSingleCellRowSpans(table, rowsWithGridOffsets);
 
   return table;
 }
