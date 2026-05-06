@@ -90,39 +90,19 @@
     var(--color-neutral-500) 90%,
     var(--color-black)
   );
-  --foreground-disabled: color-mix(
-    in srgb,
-    var(--muted-foreground) 40%,
-    transparent
-  );
-  --foreground-subtle: color-mix(
-    in srgb,
-    var(--muted-foreground) 50%,
-    transparent
-  );
-  --foreground-muted: color-mix(
-    in srgb,
-    var(--muted-foreground) 60%,
-    transparent
-  );
+  --foreground-disabled: color-mix(in srgb, var(--foreground) 40%, transparent);
+  --foreground-subtle: color-mix(in srgb, var(--foreground) 50%, transparent);
+  --foreground-muted: color-mix(in srgb, var(--foreground) 60%, transparent);
   --foreground-placeholder: color-mix(
     in srgb,
-    var(--muted-foreground) 64%,
+    var(--foreground) 64%,
     transparent
   );
-  --foreground-ghost: color-mix(
-    in srgb,
-    var(--muted-foreground) 70%,
-    transparent
-  );
-  --foreground-label: color-mix(
-    in srgb,
-    var(--muted-foreground) 72%,
-    transparent
-  );
+  --foreground-ghost: color-mix(in srgb, var(--foreground) 70%, transparent);
+  --foreground-label: color-mix(in srgb, var(--foreground) 72%, transparent);
   --foreground-strong-muted: color-mix(
     in srgb,
-    var(--muted-foreground) 80%,
+    var(--foreground) 80%,
     transparent
   );
   --accent: --alpha(var(--color-black) / 4%);

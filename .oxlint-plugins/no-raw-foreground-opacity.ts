@@ -1,18 +1,20 @@
-// Detect text-like foreground opacity utilities that should use named
-// attenuation tokens instead.
+// Detect foreground opacity utilities that should use named attenuation
+// tokens instead.
 //
 // Safe:
 //   text-foreground-muted
 //   placeholder:text-foreground-placeholder
 //   decoration-foreground-disabled
+//   border-foreground-disabled
 //
 // Flagged:
 //   text-muted-foreground/60
 //   hover:text-foreground/80
 //   placeholder:text-muted-foreground/64
+//   bg-muted-foreground/50
 
 const TEXT_FOREGROUND_OPACITY_PATTERN =
-  /(?:^|:)(?:placeholder:text|text|decoration)-(?:muted-foreground|foreground)\/\d+(?:\b|$)/;
+  /(?:^|:)(?:text|decoration|bg|border|ring)-(?:muted-foreground|foreground)\/(?:40|45|50|60|64|70|72|80)(?:\b|$)/;
 
 type ReportContext = {
   report: (descriptor: {
@@ -66,8 +68,8 @@ export default {
           rawForegroundOpacity:
             "Raw foreground opacity '{{match}}' hides visual intent. " +
             "Use a named token such as text-foreground-muted, " +
-            "text-foreground-placeholder, text-foreground-label, or " +
-            "text-foreground-strong-muted.",
+            "text-foreground-placeholder, border-foreground-disabled, " +
+            "or text-foreground-strong-muted.",
         },
       },
       create(context: ReportContext) {

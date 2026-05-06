@@ -957,7 +957,7 @@ const RedlinePreview = ({
     rejected && "opacity-60",
   );
   const muted = "text-foreground-strong-muted";
-  const contextCls = "text-foreground-strong-muted";
+  const contextCls = "text-foreground";
   // oxlint-disable-next-line no-inline-style-colors/no-inline-style-colors -- emerald not in named-color blacklist
   const insCls =
     "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1 py-0.5 rounded-sm";
