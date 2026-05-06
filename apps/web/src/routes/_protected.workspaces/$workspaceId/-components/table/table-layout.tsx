@@ -217,6 +217,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
         fetchNextPage();
       }}
       table={table}
+      contentMode={tableState.contentMode}
       workspaceId={workspaceId}
     />
   );

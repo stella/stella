@@ -172,6 +172,20 @@ export type WorkspaceField = {
   content: WorkspaceFieldContent;
 };
 
+export type WorkspaceCellMetadata = {
+  version: 1;
+  manualFlags: string[];
+  flagProvenance?: Record<
+    string,
+    {
+      addedBy: string;
+      addedAt: string;
+      addedByName: string | null;
+      addedByImage: string | null;
+    }
+  >;
+};
+
 export type EntityField = {
   id: string;
   propertyId: string;
@@ -214,6 +228,7 @@ export type WorkspaceEntity = {
   sortOrder: string | null;
   activeEditBy: { name: string; image: string | null; isMe: boolean } | null;
   fields: Record<string, WorkspaceField>;
+  cellMetadata: Record<string, WorkspaceCellMetadata>;
 };
 
 export type WorkspaceView<T extends ViewLayoutType = ViewLayoutType> = {

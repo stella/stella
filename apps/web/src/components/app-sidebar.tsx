@@ -230,6 +230,9 @@ const NavBadge = ({ digit }: { digit: number }) => (
 );
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar>;
+type AppSidebarStyle = React.CSSProperties & {
+  "--matter-sidebar-tint"?: string;
+};
 
 type MatterItemProps = {
   workspace: MatterIdentity & {
@@ -634,6 +637,17 @@ export function AppSidebar(props: AppSidebarProps) {
     from: "/_protected/workspaces/$workspaceId",
     shouldThrow: false,
   });
+  const activeWorkspaceId = workspaceMatch?.params.workspaceId;
+  const activeWorkspace = workspaces?.find((ws) => ws.id === activeWorkspaceId);
+  const activeMatterColor =
+    activeWorkspaceId && activeWorkspace
+      ? resolveMatterColor(activeWorkspaceId, activeWorkspace.color)
+      : null;
+  const sidebarStyle: AppSidebarStyle | undefined = activeMatterColor
+    ? {
+        "--matter-sidebar-tint": `color-mix(in srgb, ${activeMatterColor} 2%, var(--sidebar))`,
+      }
+    : undefined;
 
   const handleCreateWorkspace = () => {
     if (!canCreateMatter) {
@@ -884,7 +898,16 @@ export function AppSidebar(props: AppSidebarProps) {
   }, [showNavBadges]);
 
   return (
-    <Sidebar {...props} collapsible="icon">
+    <Sidebar
+      {...props}
+      className={cn(
+        activeMatterColor &&
+          "[&_[data-slot=sidebar-inner]]:bg-[var(--matter-sidebar-tint)]",
+        props.className,
+      )}
+      collapsible="icon"
+      style={{ ...sidebarStyle, ...props.style }}
+    >
       {/* Stella logo header */}
       <SidebarHeader>
         <div

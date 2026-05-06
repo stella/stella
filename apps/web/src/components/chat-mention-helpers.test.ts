@@ -70,6 +70,7 @@ describe("buildEntityMentionOption", () => {
       readOnly: false,
       sortOrder: null,
       activeEditBy: null,
+      cellMetadata: {},
       fields: {
         file: {
           id: "field_1",

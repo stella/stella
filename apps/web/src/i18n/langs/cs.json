@@ -1935,7 +1935,23 @@
       "parties": "Strany"
     },
     "table": {
-      "reorderReadOnly": "Řádky tabulky se řídí aktuálním řazením"
+      "clearFlags": "Vymazat označení",
+      "flagCell": "Označit buňku",
+      "flags": {
+        "contradiction": "Rozpor",
+        "contradictionDescription": "Může být v rozporu s jinými údaji.",
+        "followUp": "Navázat",
+        "followUpDescription": "Vyžaduje následný krok.",
+        "important": "Důležité",
+        "importantDescription": "Zvýrazňuje klíčovou hodnotu.",
+        "needsReview": "Zkontrolovat",
+        "needsReviewDescription": "Vyžaduje ruční kontrolu.",
+        "verified": "Ověřeno",
+        "verifiedDescription": "Ručně potvrzeno."
+      },
+      "reorderReadOnly": "Řádky tabulky se řídí aktuálním řazením",
+      "tightContent": "Těsně",
+      "wrapContent": "Obtékat text"
     },
     "tasksCount": "{count, plural, one {# položka agendy} few {# položky agendy} other {# položek agendy}}",
     "tools": {

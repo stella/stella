@@ -1935,7 +1935,23 @@
       "parties": "Puses"
     },
     "table": {
-      "reorderReadOnly": "Tabulas rindas seko pašreizējai kārtošanai"
+      "clearFlags": "Notīrīt atzīmes",
+      "flagCell": "Atzīmēt šūnu",
+      "flags": {
+        "contradiction": "Pretruna",
+        "contradictionDescription": "Var būt pretrunā ar citiem datiem.",
+        "followUp": "Turpmāka darbība",
+        "followUpDescription": "Nepieciešama nākamā darbība.",
+        "important": "Svarīgi",
+        "importantDescription": "Atzīmē būtisku vērtību.",
+        "needsReview": "Jāpārskata",
+        "needsReviewDescription": "Nepieciešama manuāla pārbaude.",
+        "verified": "Pārbaudīts",
+        "verifiedDescription": "Manuāli apstiprināts."
+      },
+      "reorderReadOnly": "Tabulas rindas seko pašreizējai kārtošanai",
+      "tightContent": "Kompakti",
+      "wrapContent": "Aplauzt tekstu"
     },
     "tasksCount": "{count, plural, one {# agendas vienums} other {# agendas vienumi}}",
     "tools": {

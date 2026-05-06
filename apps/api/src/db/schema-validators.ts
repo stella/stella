@@ -195,6 +195,24 @@ export const fieldContentSchema = t.Union([
 
 export type FieldContent = Static<typeof fieldContentSchema>;
 
+export const cellMetadataSchema = t.Object({
+  version: v1,
+  manualFlags: t.Array(t.String({ minLength: 1, maxLength: 64 }), {
+    maxItems: 16,
+  }),
+  flagProvenance: t.Optional(
+    t.Record(
+      t.String({ minLength: 1, maxLength: 64 }),
+      t.Object({
+        addedBy: t.String({ minLength: 1 }),
+        addedAt: t.String({ format: "date-time" }),
+      }),
+    ),
+  ),
+});
+
+export type CellMetadata = Static<typeof cellMetadataSchema>;
+
 export const boundingBoxesSchema = t.Object({
   version: v1,
   boxes: t.Array(

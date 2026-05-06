@@ -1,3 +1,4 @@
+import type { ComponentType } from "react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@stll/ui/components/button";
@@ -17,8 +18,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
+import { cn } from "@stll/ui/lib/utils";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import {
+  AlignJustifyIcon,
   CalendarIcon,
   ClockIcon,
   EyeIcon,
@@ -28,9 +31,11 @@ import {
   Rows3Icon,
   SparklesIcon,
   UserIcon,
+  WrapTextIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import Tooltip from "@/components/tooltip";
 import type { TranslationKey } from "@/i18n/types";
 import type { ViewLayout, WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
@@ -38,6 +43,8 @@ import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$wor
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";
+import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
+import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 import {
   workspaceFilesOptions,
@@ -192,6 +199,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
       {view.layout.type === "table" && (
         <>
           <span className="bg-border mx-1 h-4 w-px" />
+          <TableContentModeControl viewId={view.id} />
           <CreateProperty triggerVariant="labelled" workspaceId={workspaceId} />
         </>
       )}
@@ -200,6 +208,64 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
 };
 
 // -- Layout-specific controls --
+
+type TableContentModeControlProps = {
+  viewId: string;
+};
+
+const TABLE_CONTENT_MODE_OPTIONS = [
+  {
+    mode: "tight",
+    icon: AlignJustifyIcon,
+    labelKey: "workspaces.table.tightContent",
+  },
+  {
+    mode: "fit-content",
+    icon: WrapTextIcon,
+    labelKey: "workspaces.table.wrapContent",
+  },
+] as const satisfies readonly {
+  mode: TableContentMode;
+  icon: ComponentType<{ className?: string }>;
+  labelKey: TranslationKey;
+}[];
+
+const TableContentModeControl = ({ viewId }: TableContentModeControlProps) => {
+  const t = useTranslations();
+  const mode = useTableStore((s) => s.contentMode[viewId] ?? "tight");
+  const setMode = useTableStore((s) => s.setContentMode);
+
+  return (
+    <div className="border-border/70 bg-muted/30 inline-flex h-7 shrink-0 items-center overflow-hidden rounded-md border p-0.5">
+      {TABLE_CONTENT_MODE_OPTIONS.map((option) => {
+        const Icon = option.icon;
+        const isActive = mode === option.mode;
+        return (
+          <Tooltip
+            content={t(option.labelKey)}
+            key={option.mode}
+            render={
+              <Button
+                aria-label={t(option.labelKey)}
+                aria-pressed={isActive}
+                className={cn(
+                  "text-muted-foreground h-6 min-h-0 w-7 rounded-[4px] p-0",
+                  isActive && "bg-background text-foreground shadow-xs",
+                )}
+                onClick={() => setMode(viewId, option.mode)}
+                size="icon-xs"
+                type="button"
+                variant="ghost"
+              />
+            }
+          >
+            <Icon className="size-3.5" />
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
+};
 
 type FilesystemOrganizerActionProps = {
   workspaceId: string;

@@ -1935,7 +1935,23 @@
       "parties": "Parties"
     },
     "table": {
-      "reorderReadOnly": "Les lignes du tableau suivent le tri actuel"
+      "clearFlags": "Effacer les marqueurs",
+      "flagCell": "Marquer la cellule",
+      "flags": {
+        "contradiction": "Contradiction",
+        "contradictionDescription": "Peut contredire d’autres données.",
+        "followUp": "Suivi",
+        "followUpDescription": "Nécessite une prochaine action.",
+        "important": "Important",
+        "importantDescription": "Signale une valeur clé.",
+        "needsReview": "À vérifier",
+        "needsReviewDescription": "Nécessite une vérification manuelle.",
+        "verified": "Vérifié",
+        "verifiedDescription": "Confirmé manuellement."
+      },
+      "reorderReadOnly": "Les lignes du tableau suivent le tri actuel",
+      "tightContent": "Compact",
+      "wrapContent": "Retour à la ligne"
     },
     "tasksCount": "{count, plural, one {# élément d'agenda} other {# éléments d'agenda}}",
     "tools": {

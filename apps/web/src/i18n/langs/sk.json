@@ -1935,7 +1935,23 @@
       "parties": "Strany"
     },
     "table": {
-      "reorderReadOnly": "Riadky tabuľky sa riadia aktuálnym zoradením"
+      "clearFlags": "Vymazať označenia",
+      "flagCell": "Označiť bunku",
+      "flags": {
+        "contradiction": "Rozpor",
+        "contradictionDescription": "Môže byť v rozpore s inými údajmi.",
+        "followUp": "Nadviazať",
+        "followUpDescription": "Vyžaduje následný krok.",
+        "important": "Dôležité",
+        "importantDescription": "Zvýrazňuje kľúčovú hodnotu.",
+        "needsReview": "Skontrolovať",
+        "needsReviewDescription": "Vyžaduje ručnú kontrolu.",
+        "verified": "Overené",
+        "verifiedDescription": "Ručne potvrdené."
+      },
+      "reorderReadOnly": "Riadky tabuľky sa riadia aktuálnym zoradením",
+      "tightContent": "Tesne",
+      "wrapContent": "Zalomiť text"
     },
     "tasksCount": "{count, plural, one {# položka agendy} few {# položky agendy} other {# položiek agendy}}",
     "tools": {

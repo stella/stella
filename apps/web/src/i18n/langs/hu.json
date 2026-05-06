@@ -1935,7 +1935,23 @@
       "parties": "Felek"
     },
     "table": {
-      "reorderReadOnly": "A táblázatsorok az aktuális rendezést követik"
+      "clearFlags": "Jelölések törlése",
+      "flagCell": "Cella megjelölése",
+      "flags": {
+        "contradiction": "Ellentmondás",
+        "contradictionDescription": "Más adatokkal ütközhet.",
+        "followUp": "Utánkövetés",
+        "followUpDescription": "Következő lépést igényel.",
+        "important": "Fontos",
+        "importantDescription": "Kulcsértéket jelöl.",
+        "needsReview": "Ellenőrizendő",
+        "needsReviewDescription": "Kézi ellenőrzést igényel.",
+        "verified": "Ellenőrizve",
+        "verifiedDescription": "Kézzel megerősítve."
+      },
+      "reorderReadOnly": "A táblázatsorok az aktuális rendezést követik",
+      "tightContent": "Kompakt",
+      "wrapContent": "Szöveg tördelése"
     },
     "tasksCount": "{count, plural, one {# agendatétel} other {# agendatétel}}",
     "tools": {

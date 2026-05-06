@@ -1935,7 +1935,23 @@
       "parties": "Partes"
     },
     "table": {
-      "reorderReadOnly": "Las filas de la tabla siguen el orden actual"
+      "clearFlags": "Borrar marcas",
+      "flagCell": "Marcar celda",
+      "flags": {
+        "contradiction": "Contradicción",
+        "contradictionDescription": "Puede entrar en conflicto con otros datos.",
+        "followUp": "Seguimiento",
+        "followUpDescription": "Necesita una acción siguiente.",
+        "important": "Importante",
+        "importantDescription": "Marca un valor clave.",
+        "needsReview": "Revisar",
+        "needsReviewDescription": "Requiere revisión manual.",
+        "verified": "Verificado",
+        "verifiedDescription": "Confirmado manualmente."
+      },
+      "reorderReadOnly": "Las filas de la tabla siguen el orden actual",
+      "tightContent": "Compacto",
+      "wrapContent": "Ajustar texto"
     },
     "tasksCount": "{count, plural, one {# elemento de agenda} other {# elementos de agenda}}",
     "tools": {
