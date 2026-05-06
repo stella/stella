@@ -1,4 +1,4 @@
-import { useEffectEvent, useState } from "react";
+import { useEffectEvent, useMemo, useState } from "react";
 
 import { Button, buttonVariants } from "@stll/ui/components/button";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
@@ -110,8 +110,12 @@ export const ChatThreadPage = ({
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({ chat, workspaceId });
+  const sentMessageHistoryHtml = useMemo(
+    () => getUserMessageHtmlHistory(messages),
+    [messages],
+  );
   const controller = useChatEditor({
-    sentMessageHistoryHtml: getUserMessageHtmlHistory(messages),
+    sentMessageHistoryHtml,
     threadRef,
   });
 

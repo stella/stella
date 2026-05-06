@@ -148,4 +148,21 @@ describe("getUserMessageHtmlHistory", () => {
       ]),
     ).toEqual(["Reusable prompt"]);
   });
+
+  test("trims history entries and skips whitespace-only text", () => {
+    expect(
+      getUserMessageHtmlHistory([
+        {
+          id: "message-1",
+          parts: [{ text: "   ", type: "text" }],
+          role: "user",
+        },
+        {
+          id: "message-2",
+          parts: [{ text: "\n<p>Clean prompt</p>\n", type: "text" }],
+          role: "user",
+        },
+      ]),
+    ).toEqual(["<p>Clean prompt</p>"]);
+  });
 });

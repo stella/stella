@@ -125,8 +125,9 @@ export const getUserMessageHtmlHistory = (
       }
     }
 
-    if (textParts.length > 0) {
-      history.push(textParts.join("\n\n"));
+    const content = textParts.join("\n\n").trim();
+    if (content) {
+      history.push(content);
     }
   }
 

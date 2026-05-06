@@ -185,6 +185,12 @@ const areDocsEqual = (left: JSONContent, right: JSONContent) =>
 const getEditorHtml = (editor: Editor) =>
   editor.isEmpty ? "" : editor.getHTML().trim();
 
+const isSelectionAtStart = ({ selection }: EditorState) =>
+  selection.empty && selection.from <= 1;
+
+const isSelectionAtEnd = ({ doc, selection }: EditorState) =>
+  selection.empty && selection.to >= doc.content.size - 1;
+
 export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   const registrationsRef = useRef(new Map<string, RegisteredExtension>());
   const activeEditorRef = useRef<ActiveChatEditorHandle | null>(null);
@@ -394,10 +400,7 @@ export const useChatEditor = ({
   const sentMessageHistoryHtmlRef = useRef<readonly string[]>([]);
   const messageHistoryIndexRef = useRef<number | null>(null);
   const markDraftStartedRef = useRef<(() => void) | null>(null);
-  sentMessageHistoryHtmlRef.current =
-    sentMessageHistoryHtml
-      ?.map((message) => message.trim())
-      .filter((message) => message.length > 0) ?? [];
+  sentMessageHistoryHtmlRef.current = sentMessageHistoryHtml ?? [];
   const threadKey = getChatThreadKey(threadRef);
   const {
     extensionVersion,
@@ -648,6 +651,16 @@ export const useChatEditor = ({
       const currentHtml = getEditorHtml(targetEditor);
       if (currentIndex === null && currentHtml !== "") {
         return false;
+      }
+
+      if (currentIndex !== null) {
+        const isAtHistoryBoundary =
+          event.key === "ArrowUp"
+            ? isSelectionAtStart(state)
+            : isSelectionAtEnd(state);
+        if (!isAtHistoryBoundary) {
+          return false;
+        }
       }
 
       let nextIndex: number | null = null;
