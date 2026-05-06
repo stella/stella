@@ -43,6 +43,18 @@ const readContactById = createSafeRootHandler(
       );
     }
 
+    const clientMatterCount = yield* Result.await(
+      safeDb((tx) =>
+        tx.$count(
+          workspaces,
+          and(
+            eq(workspaces.clientId, params.contactId),
+            eq(workspaces.organizationId, session.activeOrganizationId),
+          ),
+        ),
+      ),
+    );
+
     const clientMatters = yield* Result.await(
       safeDb((tx) =>
         tx.query.workspaces.findMany({
@@ -130,6 +142,7 @@ const readContactById = createSafeRootHandler(
 
     return Result.ok({
       ...contact,
+      clientMatterCount,
       clientMatters,
       partyMatters: partyMatterRows,
       partyCount: partyCountRow?.total ?? 0,

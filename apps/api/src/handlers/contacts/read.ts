@@ -92,14 +92,14 @@ const readContacts = createSafeRootHandler(
             tags: contacts.tags,
             color: contacts.color,
             createdAt: contacts.createdAt,
-            activeMatterCount: count(workspaces.id),
+            clientMatterCount: count(workspaces.id),
           })
           .from(contacts)
           .leftJoin(
             workspaces,
             and(
               eq(workspaces.clientId, contacts.id),
-              eq(workspaces.status, "active"),
+              eq(workspaces.organizationId, session.activeOrganizationId),
             ),
           )
           .where(and(...conditions))

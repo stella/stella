@@ -112,7 +112,7 @@ function ContactDetailPage() {
   };
 
   const handleDeleteOpen = () => {
-    if (activeClientMatters.length > 0) {
+    if (contact.clientMatterCount > 0) {
       stellaToast.add({
         title: deleteBlockedDescription,
         type: "error",
