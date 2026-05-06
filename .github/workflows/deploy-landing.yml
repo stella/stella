@@ -1,9 +1,9 @@
 name: Deploy Landing
 
 # Triggers the landing site deploy on every main merge that
-# touches the landing app or shared deps. Implementation lives in
-# a private reusable workflow so this file stays free of bucket
-# names, distribution IDs, role ARNs, and region strings.
+# touches the landing app or shared deps. The public repo cannot
+# call private reusable workflows directly, so this dispatches the
+# private deploy workflow and watches the resulting run.
 
 on:
   push:
@@ -16,15 +16,82 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write
   contents: read
 
 jobs:
   deploy:
     # Belt-and-suspenders: the trigger above already restricts to
-    # main, but a manual dispatch via API can pass a feature ref;
-    # the reusable workflow refuses non-main refs as well.
+    # main, but a manual dispatch via API can pass a feature ref.
+    # The private workflow refuses non-main refs as well.
     if: github.ref == 'refs/heads/main'
-    uses: stella/private-workflows/.github/workflows/deploy-landing.yml@main
-    secrets:
-      AWS_ROLE_ARN_DEPLOY: ${{ secrets.AWS_ROLE_ARN_DEPLOY }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Mint App token for the private workflows repo
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.STELLA_RELEASE_APP_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: private-workflows
+
+      - name: Dispatch and watch deploy-landing.yml
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PRIVATE_WORKFLOWS_REPO: ${{ github.repository_owner }}/private-workflows
+          SOURCE_REF: ${{ github.ref }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+          AWS_ROLE_ARN_DEPLOY: ${{ secrets.AWS_ROLE_ARN_DEPLOY }}
+        run: |
+          dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # Must match the `run-name:` template in
+          # stella/private-workflows/.github/workflows/deploy-landing.yml.
+          expected_title="Deploy landing ${SOURCE_SHA}"
+          dispatch_output="$(
+            gh workflow run deploy-landing.yml \
+              --repo "$PRIVATE_WORKFLOWS_REPO" \
+              --field source_repository="$SOURCE_REPOSITORY" \
+              --field source_ref="$SOURCE_REF" \
+              --field source_sha="$SOURCE_SHA" \
+              --field aws_role_arn_deploy="$AWS_ROLE_ARN_DEPLOY" 2>&1
+          )"
+          printf '%s\n' "$dispatch_output"
+
+          run_id="$(
+            printf '%s\n' "$dispatch_output" \
+              | sed -nE 's#.*https://github.com/[^/]+/[^/]+/actions/runs/([0-9]+).*#\1#p' \
+              | head -n 1
+          )"
+
+          for _ in {1..30}; do
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+
+            run_id="$(
+              gh run list \
+                --repo "$PRIVATE_WORKFLOWS_REPO" \
+                --workflow deploy-landing.yml \
+                --event workflow_dispatch \
+                --json databaseId,createdAt,displayTitle \
+                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle == \"$expected_title\") | .databaseId" \
+                --limit 10 \
+                | head -n 1
+            )"
+
+            if [[ -z "$run_id" ]]; then
+              sleep 2
+            fi
+          done
+
+          if [[ -z "$run_id" ]]; then
+            echo "Could not find the dispatched landing deploy workflow run." >&2
+            exit 1
+          fi
+
+          gh run watch "$run_id" \
+            --repo "$PRIVATE_WORKFLOWS_REPO" \
+            --compact \
+            --exit-status
