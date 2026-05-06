@@ -278,7 +278,7 @@ const releasesUrl = `${githubUrl}/releases`;
           link.rel = "noopener noreferrer";
           try {
             const url = new URL(linkUrl);
-            if (url.protocol === "https:" || url.protocol === "http:") {
+            if (url.protocol === "https:") {
               link.href = url.href;
             }
           } catch {
@@ -512,11 +512,14 @@ const releasesUrl = `${githubUrl}/releases`;
       const lines = document.createElement("div");
       lines.className = "mt-6 space-y-3";
 
-      for (const width of ["100%", "83.333333%", "66.666667%"]) {
+      for (const className of [
+        "h-3 w-full rounded-full",
+        "h-3 w-5/6 rounded-full",
+        "h-3 w-2/3 rounded-full",
+      ]) {
         const line = document.createElement("div");
-        line.className = "h-3 rounded-full";
+        line.className = className;
         line.style.background = "var(--muted)";
-        line.style.width = width;
         lines.append(line);
       }
 
