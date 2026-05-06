@@ -197,6 +197,7 @@ const dateFormatter = new Intl.DateTimeFormat("en", { dateStyle: "medium" });
       const startTime = performance.now();
 
       function loop() {
+        if (!container) return;
         if (getComputedStyle(container).opacity === "0") {
           requestAnimationFrame(loop);
           return;
