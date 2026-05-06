@@ -1,0 +1,154 @@
+name: Deploy main to staging
+
+# Continuous deploy of every push to main into staging. The
+# tag-based path (release.yml on vX.Y.Z) still owns production;
+# this workflow exists only to give staging a fast feedback
+# loop without cutting tags.
+#
+# What's intentionally cut compared to release.yml:
+#  - multi-arch build (Fargate is amd64-only; saves ~50% time)
+#  - smoke test (let staging surface real boot failures)
+#  - desktop installers (irrelevant to API)
+#  - GitHub Release object (no need; we deploy by digest)
+#  - Tauri updater manifest mirror (desktop-only artefact)
+#
+# End-to-end target: push-to-staging-live in ~8-10 minutes.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      # Skip pushes that can't change runtime behaviour.
+      - "**.md"
+      - "apps/desktop/**"
+      - "docs/**"
+      - "LICENSE"
+  workflow_dispatch:
+
+# A newer push to main supersedes an in-flight build/deploy:
+# we only care about the latest main, never the intermediate
+# state. Cancel-in-progress also keeps the staging environment
+# from oscillating during a rapid burst of merges.
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/stella-api
+
+jobs:
+  build-and-deploy:
+    name: Build amd64 + dispatch staging promote
+    # Skip entirely when staging is paused — saves CI minutes
+    # and keeps the workflow tab clean. To turn back on: flip
+    # the `STAGING_ENABLED` repo variable in stella-infra to
+    # 'true' (the same flag the promote-release fail-fast reads).
+    if: vars.STAGING_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Resolve synthetic ref
+        id: ref
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          short="${SHA:0:7}"
+          # Synthetic ECR + image tag. The matching shape is
+          # accepted by stella-infra's promote-release.yml regex
+          # and the staging matrix tag_pattern in
+          # terraform-plan.yml. Production stays strict semver-only.
+          echo "release_ref=main-${short}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${short}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Login to GHCR
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push (amd64)
+        id: build
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          # Single-arch — Fargate runs amd64. Cuts build time
+          # roughly in half versus release.yml's parallel
+          # arm64+amd64 multi-arch.
+          platforms: linux/amd64
+          push: true
+          # Push two tags: the SHA-pinned one (immutable, used by
+          # the promote dispatch) and a moving `main-latest`
+          # convenience tag for ad-hoc pulls. The promote step
+          # only consumes the digest, so the tag is metadata.
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.ref.outputs.release_ref }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main-latest
+          # Separate cache namespace from release.yml's
+          # buildcache-{arm64,amd64} keys so this workflow's
+          # cache churn does not invalidate production builds.
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-staging
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-staging,mode=max
+          build-args: |
+            STELLA_VERSION=${{ steps.ref.outputs.release_ref }}
+
+      - name: Attest image provenance
+        # Same defence as release.yml: GH provenance attestation
+        # makes the image's build inputs verifiable. Cheap and
+        # uniform so we keep it for staging too.
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Mint App token for the infra repo
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.STELLA_RELEASE_APP_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: stella-infra
+
+      - name: Dispatch staging promote (fire-and-forget)
+        # Fire-and-forget: we don't wait for the staging deploy
+        # to settle. release.yml waits for prod because a failed
+        # prod deploy is a tag-level event the operator needs to
+        # see synchronously; staging is meant to be best-effort
+        # and rapidly iterated. The infra workflow's own logs +
+        # SNS alarms surface failures; this workflow's job is
+        # done once the dispatch is accepted.
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          INFRA_REPO: ${{ github.repository_owner }}/stella-infra
+          RELEASE_REF: ${{ steps.ref.outputs.release_ref }}
+          GIT_SHA: ${{ github.sha }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          gh workflow run promote-release.yml \
+            --repo "$INFRA_REPO" \
+            --field release_ref="$RELEASE_REF" \
+            --field target_environment=staging \
+            --field image_digest="$IMAGE_DIGEST" \
+            --field git_sha="$GIT_SHA" \
+            --field run_migrations=true \
+            --field frontend=true
+          echo "Dispatched promote-release.yml for $RELEASE_REF (sha=$GIT_SHA, digest=$IMAGE_DIGEST)"
