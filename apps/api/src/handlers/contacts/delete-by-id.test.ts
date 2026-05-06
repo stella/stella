@@ -72,33 +72,20 @@ describe("deleteContactById", () => {
     expect(deleteCalled).toBe(false);
   });
 
-  test("detaches hidden matter clients before deleting the contact", async () => {
+  test("blocks deleting a contact assigned to a non-active matter", async () => {
     let deleteCalled = false;
     let updateCalled = false;
-    let selectCallCount = 0;
     const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
-      select: () => {
-        selectCallCount += 1;
-
-        if (selectCallCount === 1) {
-          return {
-            from: () => ({
-              where: () => ({
-                for: () => ({
-                  limit: async () => [{ id: "contact_test123" }],
-                }),
-              }),
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: () => ({
+              limit: async () => [{ id: "contact_test123" }],
             }),
-          };
-        }
-
-        return {
-          from: () => ({
-            where: async () => [{ id: "workspace_party123" }],
           }),
-        };
-      },
-      $count: async () => 0,
+        }),
+      }),
+      $count: async () => 1,
       update: () => ({
         set: () => ({
           where: () => ({
@@ -125,10 +112,15 @@ describe("deleteContactById", () => {
       }),
     );
 
-    expect(result).toBeUndefined();
+    expect(result).toEqual({
+      code: 409,
+      response: {
+        message: "Reassign or delete 1 matter before deleting this contact",
+      },
+    });
     expect(getCallCount()).toBe(1);
-    expect(updateCalled).toBe(true);
-    expect(deleteCalled).toBe(true);
+    expect(updateCalled).toBe(false);
+    expect(deleteCalled).toBe(false);
   });
 
   test("returns 404 when the contact does not exist", async () => {

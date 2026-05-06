@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
@@ -42,21 +42,20 @@ const deleteContactById = createSafeRootHandler(
         };
       }
 
-      const activeMatterCount = await tx.$count(
+      const clientMatterCount = await tx.$count(
         workspaces,
         and(
           eq(workspaces.clientId, params.contactId),
           eq(workspaces.organizationId, session.activeOrganizationId),
-          eq(workspaces.status, "active"),
         ),
       );
 
-      if (activeMatterCount > 0) {
+      if (clientMatterCount > 0) {
         return {
           ok: false as const,
           status: 409 as const,
-          message: `Reassign or delete ${activeMatterCount} matter${
-            activeMatterCount === 1 ? "" : "s"
+          message: `Reassign or delete ${clientMatterCount} matter${
+            clientMatterCount === 1 ? "" : "s"
           } before deleting this contact`,
         };
       }
@@ -71,18 +70,6 @@ const deleteContactById = createSafeRootHandler(
           ),
         );
 
-      const detachedWorkspaces = await tx
-        .update(workspaces)
-        .set({ clientId: null })
-        .where(
-          and(
-            eq(workspaces.clientId, params.contactId),
-            eq(workspaces.organizationId, session.activeOrganizationId),
-            ne(workspaces.status, "active"),
-          ),
-        )
-        .returning({ id: workspaces.id });
-
       await tx
         .delete(contacts)
         .where(
@@ -94,12 +81,7 @@ const deleteContactById = createSafeRootHandler(
 
       return {
         ok: true as const,
-        affectedWorkspaceIds: Array.from(
-          new Set([
-            ...affectedWorkspaces.map(({ id }) => id),
-            ...detachedWorkspaces.map(({ id }) => id),
-          ]),
-        ),
+        affectedWorkspaceIds: affectedWorkspaces.map(({ id }) => id),
       };
     });
 

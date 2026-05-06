@@ -681,7 +681,7 @@
       "valuePlaceholder": "Érték"
     },
     "deleteContact": "Ügyfél törlése",
-    "deleteContactBlockedByMatters": "Ez a kapcsolat még ügyfélként szerepel aktív ügyekben. A kapcsolat törlése előtt rendelje át vagy törölje ezeket az ügyeket.",
+    "deleteContactBlockedByMatters": "Ez a kapcsolat még ügyfélként szerepel ügyekben. A kapcsolat törlése előtt rendelje át vagy törölje ezeket az ügyeket.",
     "deleteContactConfirmDescription": "Biztosan törölni szeretné ezt a kontaktot? Ez a művelet nem vonható vissza.",
     "editContact": "Ügyfél szerkesztése",
     "emailTypes": {

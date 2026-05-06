@@ -681,7 +681,7 @@
       "valuePlaceholder": "Hodnota"
     },
     "deleteContact": "Smazat klienta",
-    "deleteContactBlockedByMatters": "Tento kontakt je stále přiřazen jako klient u aktivních spisů. Než kontakt smažete, přeřaďte nebo smažte tyto spisy.",
+    "deleteContactBlockedByMatters": "Tento kontakt je stále přiřazen jako klient u spisů. Než kontakt smažete, přeřaďte nebo smažte tyto spisy.",
     "deleteContactConfirmDescription": "Opravdu chcete smazat tento kontakt? Tuto akci nelze vrátit.",
     "editContact": "Upravit klienta",
     "emailTypes": {
