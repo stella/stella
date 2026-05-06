@@ -6,7 +6,7 @@ stella is built for firms that need control. Matters, documents, and search are 
 
 ## Key facts
 
-- AGPL-3.0 for open-source use; commercial licensing is available when AGPL is not suitable.
+- Apache-2.0 for open-source use; commercial licensing arrangements (support, indemnity, custom terms) are available alongside.
 - AI outputs are grounded by citations and traceable to source material.
 - Sensitive text can be anonymized before AI workflows.
 - The AI layer uses the AI SDK and remains provider-agnostic.
@@ -22,7 +22,7 @@ stella is built for firms that need control. Matters, documents, and search are 
 
 - [Repository](https://github.com/stella/stella): Source code, issues, and contributions.
 - [Manifesto](https://github.com/stella/stella/blob/main/MANIFESTO.md): Product principles and positioning.
-- [License](https://github.com/stella/stella/blob/main/LICENSE): AGPL-3.0 license text.
+- [License](https://github.com/stella/stella/blob/main/LICENSE): Apache-2.0 license text.
 
 ## Trust
 

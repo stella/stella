@@ -20,4 +20,4 @@ stella is an open-source legal workspace that brings documents, matters, review,
 
 ## Open source
 
-stella is licensed under AGPL-3.0. The source code is available on [GitHub](https://github.com/stella/stella).
+stella is licensed under Apache-2.0. The source code is available on [GitHub](https://github.com/stella/stella).

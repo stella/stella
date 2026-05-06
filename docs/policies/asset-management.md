@@ -78,10 +78,10 @@ and container base images used in the Stella monorepo.
 
 10. **Dependency review.** The `dependency-review.yml` workflow
     blocks PRs that introduce dependencies under copyleft or
-    proprietary licenses incompatible with Stella's
-    dual-licensing model (AGPL-3.0 + Commercial). The deny
-    list covers GPL, AGPL, LGPL, SSPL, BUSL, Elastic, and
-    CPAL license families.
+    proprietary licenses incompatible with stella's Apache-2.0
+    distribution and commercial-license arrangements. The deny
+    list covers GPL, AGPL, LGPL, SSPL, BUSL, Elastic, and CPAL
+    license families.
 
 ## Enforcement
 

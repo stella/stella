@@ -1,12 +1,13 @@
 name: Dependency Review
 
 # Blocks PRs that introduce dependencies with known vulnerabilities
-# or licenses incompatible with our dual-licensing model.
+# or copyleft licenses incompatible with Apache-2.0 distribution.
 #
-# Stella is dual-licensed: AGPL-3.0 (open source) + Commercial.
-# For the commercial license to work, ALL dependencies must be under
-# permissive licenses. We cannot bundle copyleft (GPL, AGPL, LGPL)
-# code in a proprietary distribution — we don't own those copyrights.
+# stella ships under Apache-2.0 with optional commercial-license
+# arrangements (support, indemnity, custom terms). Absorbing copyleft
+# (GPL, AGPL, LGPL) dependencies would force their terms onto stella
+# as a whole and foreclose those commercial arrangements; we also
+# can't sublicense copyrights we don't own.
 #
 # Allowed: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD,
 #          BlueOak-1.0.0, Unlicense, CC0-1.0, CC-BY-4.0, MIT-0,

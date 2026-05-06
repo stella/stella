@@ -21,12 +21,13 @@ service SDKs (AI providers, email, analytics, storage).
 ### Dependency selection
 
 1. **License compatibility.** New dependencies must carry a
-   license compatible with Stella's dual-licensing model
-   (AGPL-3.0 open source + Commercial). The
-   `dependency-review.yml` workflow enforces a deny list of
+   permissive license compatible with Apache-2.0 distribution.
+   The `dependency-review.yml` workflow enforces a deny list of
    27 SPDX identifiers covering GPL, AGPL, LGPL, SSPL, BUSL,
-   Elastic, and CPAL license families. Permitted licenses
-   include MIT, Apache-2.0, BSD variants, ISC, 0BSD,
+   Elastic, and CPAL license families. Absorbing copyleft
+   dependencies would force their terms onto stella as a whole
+   and foreclose commercial-license arrangements. Permitted
+   licenses include MIT, Apache-2.0, BSD variants, ISC, 0BSD,
    BlueOak-1.0.0, Unlicense, CC0-1.0, CC-BY-4.0, MIT-0,
    MPL-2.0, Python-2.0, and Zlib.
 

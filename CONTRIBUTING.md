@@ -134,8 +134,12 @@ PR. Signing is a one-time process: post the required comment on
 your first PR and all future contributions are covered.
 
 The CLA grants stella labs, s.r.o. a perpetual license to use your
-contributions. This is necessary because Stella is dual-licensed
-(AGPL-3.0 and a commercial license).
+contributions across all distributions of stella. While the project
+ships under Apache-2.0, the CLA preserves clean IP ownership: it lets
+us offer commercial arrangements (support, indemnity, custom terms)
+alongside the open-source release, and gives the project flexibility
+for any future licensing changes. Your contributions remain available
+to everyone under Apache-2.0 regardless.
 
 ## AI-Generated Contributions
 
