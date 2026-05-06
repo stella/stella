@@ -436,6 +436,10 @@ export const useChatEditor = ({
   }, [onDraftStart, threadKey]);
   markDraftStartedRef.current = markDraftStarted;
 
+  useEffect(() => {
+    messageHistoryIndexRef.current = null;
+  }, [sentMessageHistoryHtml, threadKey]);
+
   const fetchWorkspaceEntities = useCallback(
     async (workspace: ChatMentionOption, query: string) => {
       if (!workspace.sourceViewId) {
