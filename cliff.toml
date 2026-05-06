@@ -22,6 +22,9 @@ body = """
 """
 footer = ""
 trim = true
+postprocessors = [
+  { pattern = "\\(#([0-9]+)\\)", replace = "([#${1}](https://github.com/stella/stella/pull/${1}))" },
+]
 
 [git]
 conventional_commits = true

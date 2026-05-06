@@ -374,13 +374,56 @@ jobs:
           path: release-manifest.json
           retention-days: 90
 
+      - name: Resolve release notes range
+        id: release-notes-range
+        env:
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+        run: |
+          if [[ "$RELEASE_REF" == *-* ]]; then
+            echo "args=--latest --strip header" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          previous_stable="$(
+            git tag --list 'v[0-9]*.[0-9]*.[0-9]*' \
+              --merged "$RELEASE_REF" \
+              --sort=-v:refname \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+              | grep -v -x "$RELEASE_REF" \
+              | head -n 1
+          )"
+
+          if [[ -z "$previous_stable" ]]; then
+            first_commit="$(git rev-list --max-parents=0 "$RELEASE_REF" | tail -n 1)"
+            echo "args=--tag ${RELEASE_REF} --strip header ${first_commit}..${RELEASE_REF}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "args=--tag ${RELEASE_REF} --strip header ${previous_stable}..${RELEASE_REF}" >> "$GITHUB_OUTPUT"
+
       - name: Generate release notes from Conventional Commits
         uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
         with:
           config: cliff.toml
-          args: --latest --strip header
+          args: ${{ steps.release-notes-range.outputs.args }}
         env:
           OUTPUT: NOTES.md
+
+      - name: Prepend manual release description
+        env:
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+        run: |
+          manual_notes="docs/changelog/${RELEASE_REF}.md"
+          if [[ ! -f "$manual_notes" ]]; then
+            exit 0
+          fi
+
+          {
+            cat "$manual_notes"
+            printf '\n\n## Changes\n\n'
+            cat NOTES.md
+          } > NOTES.with-manual.md
+          mv NOTES.with-manual.md NOTES.md
 
       - name: Publish GitHub release manifest
         env:
