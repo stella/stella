@@ -41,6 +41,7 @@
     "apps/web": {
       "entry": ["src/main.tsx", "vite.config.ts"],
       "ignore": [
+        "public/dark-mode-init.js",
         "src/routeTree.gen.ts",
         "src/lib/anonymize/gazetteer.ts",
         "src/lib/anonymize/pdf-content-stream.ts",
@@ -59,7 +60,11 @@
       ]
     },
     "apps/landing": {
-      "entry": ["src/**/*.astro", "astro.config.*"]
+      "entry": ["src/**/*.astro", "astro.config.*", "postcss.config.mjs"],
+      "ignoreDependencies": ["@tailwindcss/postcss"]
+    },
+    "packages/case-law": {
+      "entry": ["src/*.ts", "src/**/*.test.ts"]
     },
     "packages/permissions": {
       "entry": ["src/index.ts"]
@@ -93,7 +98,7 @@
     "packages/infosoud/src/constants.ts": ["duplicates"]
   },
   "exclude": ["exports", "types"],
-  "ignoreBinaries": ["docker", "oxfmt", "tsgo", "bun"],
+  "ignoreBinaries": ["docker", "oxfmt", "tsgo", "bun", "tail"],
   "ignoreDependencies": ["@stll/typescript-config"],
   "ignoreWorkspaces": ["packages/skills", "packages/typescript-config"]
 }

@@ -377,26 +377,7 @@
       "noShortcuts": "Oskusi veel pole. Lisage need jaotises Teadmised → Oskused.",
       "scope": {
         "private": "Sinu oskused",
-        "stock": "Sisseehitatud",
         "team": "Tiimi oskused"
-      },
-      "stock": {
-        "compareVersions": {
-          "body": "Võrdle selle dokumendi kahte versiooni ja loetle kõik sisulised muudatused koos asukohaga.",
-          "name": "Võrdle versioone"
-        },
-        "draftResponse": {
-          "body": "Koosta sellele kirjale tasakaalukas vastus. Hoia toon professionaalne, vasta igale tõstatatud punktile ja märgi avatud küsimused, mida pean kinnitama.",
-          "name": "Koosta vastus"
-        },
-        "findRisks": {
-          "body": "Vaata see dokument üle ja tuvasta õiguslikud riskid, puuduvad kaitsed ja mitmetähenduslikud klauslid. Iga leiu juurde lisa konkreetne klausel.",
-          "name": "Leia riskid"
-        },
-        "summarizeDocument": {
-          "body": "Tee sellest dokumendist kokkuvõte. Käsitle pooli, peamisi kohustusi, kuupäevi, finantstingimusi ning lõpetamis- ja vastutusklausleid.",
-          "name": "Tee dokumendist kokkuvõte"
-        }
       },
       "tryOne": "Alusta ühe nendest"
     },

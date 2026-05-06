@@ -28,9 +28,6 @@ import { useTranslations } from "use-intl";
 import { MatterNumberHint } from "@/components/matter-number-hint";
 import { usePermissions } from "@/hooks/use-permissions";
 import { APIError } from "@/lib/errors";
-// TODO: re-enable when the InfoSoud section is gated to CS-only
-// customers (it's Czech-court-system specific by design).
-// import { InfoSoudSection } from "@/routes/_protected.workspaces/$workspaceId/-components/infosoud-section";
 import { MembersSection } from "@/routes/_protected.workspaces/$workspaceId/-components/members-section";
 import { PartiesSection } from "@/routes/_protected.workspaces/$workspaceId/-components/parties-section";
 import {

@@ -377,26 +377,7 @@
       "noShortcuts": "Zatím žádné dovednosti. Přidejte je v části Znalosti → Dovednosti.",
       "scope": {
         "private": "Vaše dovednosti",
-        "stock": "Vestavěné",
         "team": "Týmové dovednosti"
-      },
-      "stock": {
-        "compareVersions": {
-          "body": "Porovnej dvě verze tohoto dokumentu a vypiš každou věcnou změnu i s jejím umístěním.",
-          "name": "Porovnat verze"
-        },
-        "draftResponse": {
-          "body": "Navrhni vyváženou odpověď na tento dopis. Zachovej profesionální tón, reaguj na každý vznesený bod a označ otevřené otázky, které mám potvrdit.",
-          "name": "Navrhnout odpověď"
-        },
-        "findRisks": {
-          "body": "Projdi tento dokument a najdi právní rizika, chybějící ochrany a nejednoznačné klauzule. Pro každý nález uveď konkrétní klauzuli.",
-          "name": "Najít rizika"
-        },
-        "summarizeDocument": {
-          "body": "Shrň tento dokument. Pokryj strany, hlavní povinnosti, termíny, finanční podmínky a všechna ustanovení o ukončení nebo odpovědnosti.",
-          "name": "Shrnout dokument"
-        }
       },
       "tryOne": "Začni s jedním z těchto"
     },

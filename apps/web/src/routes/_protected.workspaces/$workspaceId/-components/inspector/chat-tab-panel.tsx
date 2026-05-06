@@ -205,7 +205,7 @@ export const ChatTabPanel = ({
     };
   }, [focusComposer, isGenerating, messages.length, tab.id]);
 
-  const stockPrompts = useSavedPrompts();
+  const savedPrompts = useSavedPrompts();
   const handleSelectPrompt = (prompt: ChatPrompt) => {
     const editor = editorController.editor;
     if (!editor) {
@@ -277,7 +277,7 @@ export const ChatTabPanel = ({
           {messages.length === 0 && !isGenerating && !error ? (
             <ChatEmptyState
               onSelectPrompt={handleSelectPrompt}
-              prompts={stockPrompts}
+              prompts={savedPrompts}
             />
           ) : (
             <ChatThreadMessages
@@ -528,7 +528,7 @@ export const ChatTabPanelShell = ({
   tab: ChatTab;
   matterColor?: string | null | undefined;
 }) => {
-  const stockPrompts = useSavedPrompts();
+  const savedPrompts = useSavedPrompts();
   return (
     <ChatTabPanelChrome
       anonymized={false}
@@ -551,7 +551,7 @@ export const ChatTabPanelShell = ({
     >
       <Conversation className="min-h-0 flex-1">
         <ConversationContent className="gap-3">
-          <ChatEmptyState onSelectPrompt={noop} prompts={stockPrompts} />
+          <ChatEmptyState onSelectPrompt={noop} prompts={savedPrompts} />
         </ConversationContent>
       </Conversation>
 

@@ -15,11 +15,16 @@
       "import": "./src/document-ast.ts"
     }
   },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsgo --noEmit"
+  },
   "dependencies": {
     "valibot": "catalog:"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
     "typescript": "catalog:"
   }
 }

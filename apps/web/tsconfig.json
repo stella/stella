@@ -6,7 +6,6 @@
       "@/*": ["./src/*"],
       "@/api/*": ["../api/src/*"], // this is for eden to work https://elysiajs.com/eden/installation#path-alias-monorepo
       "@stll/ares": ["../../packages/ares/src/index.ts"],
-      "@stll/feature-flags": ["../../packages/feature-flags/src/index.ts"],
       "@stll/infosoud": ["../../packages/infosoud/src/index.ts"],
       "@stll/money": ["../../packages/money/src/index.ts"],
       "@stll/ui/*": ["../../packages/ui/src/*"]
