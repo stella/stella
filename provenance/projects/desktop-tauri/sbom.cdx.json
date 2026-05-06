@@ -35102,8 +35102,8 @@
       "licenses": [
         {
           "license": {
-            "id": "AGPL-3.0",
-            "url": "https://opensource.org/licenses/AGPL-3.0"
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
           }
         }
       ],
