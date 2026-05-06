@@ -512,6 +512,17 @@ export function parseParagraphProperties(
       formatting.lineSpacing = line;
     }
 
+    const spacingExplicit: { before?: boolean; after?: boolean } = {};
+    if (before !== undefined) {
+      spacingExplicit.before = true;
+    }
+    if (after !== undefined) {
+      spacingExplicit.after = true;
+    }
+    if (spacingExplicit.before || spacingExplicit.after) {
+      formatting.spacingExplicit = spacingExplicit;
+    }
+
     const lineRule = getAttribute(spacing, "w", "lineRule");
     if (lineRule) {
       formatting.lineSpacingRule = lineRule as LineSpacingRule;
@@ -739,6 +750,114 @@ function getLocalName(name: string | undefined): string {
   }
   const colonIndex = name.indexOf(":");
   return colonIndex !== -1 ? name.slice(colonIndex + 1) : name;
+}
+
+function paragraphStartsWithRenderedPageBreak(node: XmlElement): boolean {
+  const inlineWrappers = new Set([
+    "hyperlink",
+    "smartTag",
+    "sdt",
+    "sdtContent",
+    "fldSimple",
+    "customXml",
+    "ins",
+    "del",
+    "moveFrom",
+    "moveTo",
+  ]);
+  const nonContentMarkers = new Set([
+    "pPr",
+    "proofErr",
+    "bookmarkStart",
+    "bookmarkEnd",
+    "commentRangeStart",
+    "commentRangeEnd",
+    "commentReference",
+    "permStart",
+    "permEnd",
+    "rsidR",
+  ]);
+  const visibleRunContent = new Set([
+    "t",
+    "tab",
+    "br",
+    "cr",
+    "sym",
+    "drawing",
+    "pict",
+    "object",
+    "softHyphen",
+    "noBreakHyphen",
+    "fldChar",
+    "instrText",
+    "pgNum",
+    "separator",
+    "continuationSeparator",
+    "footnoteRef",
+    "endnoteRef",
+    "footnoteReference",
+    "endnoteReference",
+    "ptab",
+    "monthShort",
+    "monthLong",
+    "yearShort",
+    "yearLong",
+    "dayShort",
+    "dayLong",
+  ]);
+
+  type VisitResult = "forced" | "visible" | "continue";
+  let sawRenderedPageBreak = false;
+
+  const visit = (element: XmlElement): VisitResult => {
+    for (const child of getChildElements(element)) {
+      const childName = getLocalName(child.name);
+      if (nonContentMarkers.has(childName)) {
+        continue;
+      }
+      if (childName === "lastRenderedPageBreak") {
+        sawRenderedPageBreak = true;
+        continue;
+      }
+      if (childName === "r") {
+        for (const runChild of getChildElements(child)) {
+          const runChildName = getLocalName(runChild.name);
+          if (runChildName === "rPr") {
+            continue;
+          }
+          if (runChildName === "lastRenderedPageBreak") {
+            sawRenderedPageBreak = true;
+            continue;
+          }
+          if (
+            runChildName === "br" &&
+            getAttribute(runChild, "w", "type") === "page"
+          ) {
+            return "forced";
+          }
+          if (visibleRunContent.has(runChildName)) {
+            return "visible";
+          }
+        }
+        continue;
+      }
+      if (inlineWrappers.has(childName)) {
+        const result = visit(child);
+        if (result !== "continue") {
+          return result;
+        }
+        continue;
+      }
+      return "continue";
+    }
+    return "continue";
+  };
+
+  const outcome = visit(node);
+  if (outcome === "forced") {
+    return true;
+  }
+  return outcome === "visible" && sawRenderedPageBreak;
 }
 
 type TrackedChangeParseContext = "default" | "deletion";
@@ -1370,6 +1489,7 @@ function getCommentReferenceId(runElement: XmlElement): number | null {
  * @param numbering - Numbering definitions for list info
  * @param rels - Relationship map for resolving hyperlink URLs
  * @param media - Media files map for image data
+ * @param options - Parsing options for context-specific body behavior
  * @returns Parsed Paragraph object
  */
 export function parseParagraph(
@@ -1379,6 +1499,7 @@ export function parseParagraph(
   numbering: NumberingMap | null,
   rels: RelationshipMap | null = null,
   media: Map<string, MediaFile> | null = null,
+  options?: { inHeaderFooter?: boolean },
 ): Paragraph {
   const paragraph: Paragraph = {
     type: "paragraph",
@@ -1396,6 +1517,10 @@ export function parseParagraph(
     getAttribute(node, "w14", "textId") ?? getAttribute(node, "w", "textId");
   if (textId) {
     paragraph.textId = textId;
+  }
+
+  if (!options?.inHeaderFooter && paragraphStartsWithRenderedPageBreak(node)) {
+    paragraph.renderedPageBreakBefore = true;
   }
 
   // Parse paragraph properties (w:pPr)
@@ -1477,6 +1602,16 @@ export function parseParagraph(
           isBullet: level.numFmt === "bullet",
           levelNumFmts,
         };
+        const instance = numbering.getInstance(numId);
+        const overrideForLevel = instance?.levelOverrides?.find(
+          (override) => override.ilvl === ilvl,
+        );
+        if (instance?.abstractNumId !== undefined) {
+          listRendering.abstractNumId = instance.abstractNumId;
+        }
+        if (overrideForLevel?.startOverride !== undefined) {
+          listRendering.startOverride = overrideForLevel.startOverride;
+        }
         if (level.isLgl) {
           listRendering.isLegal = true;
         }

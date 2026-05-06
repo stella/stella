@@ -237,6 +237,8 @@ export type ParagraphAlignment =
 /**
  * Complete paragraph formatting properties (w:pPr)
  */
+export type SpacingExplicit = { before?: boolean; after?: boolean };
+
 export type ParagraphFormatting = {
   // Alignment
   /** Paragraph alignment (w:jc) */
@@ -257,6 +259,8 @@ export type ParagraphFormatting = {
   beforeAutospacing?: boolean;
   /** Auto space after (w:spacing/@w:afterAutospacing) */
   afterAutospacing?: boolean;
+  /** Which spacing sides came from this paragraph's own pPr. */
+  spacingExplicit?: SpacingExplicit;
 
   // Indentation
   /** Left indent in twips (w:ind/@w:left) */

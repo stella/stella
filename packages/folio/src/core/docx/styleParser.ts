@@ -38,6 +38,7 @@ import type {
   TableLook,
   TableMeasurement,
 } from "../types/document";
+import { mergeTextFormatting } from "../utils/textFormattingMerge";
 import { resolveThemeFontRef } from "./themeParser";
 import {
   parseXmlDocument,
@@ -1442,42 +1443,6 @@ function parseDocDefaults(
   }
 
   return result.rPr || result.pPr ? result : undefined;
-}
-
-/**
- * Deep merge text formatting (source overrides target)
- */
-function mergeTextFormatting(
-  target: TextFormatting | undefined,
-  source: TextFormatting | undefined,
-): TextFormatting | undefined {
-  if (!source) {
-    return target;
-  }
-  if (!target) {
-    return source ? { ...source } : undefined;
-  }
-
-  const result = { ...target };
-
-  // Copy all defined properties from source
-  // SAFETY: dynamic property copy across matching TextFormatting keys; TS cannot
-  // correlate the key variable with the value type, so Record<string, unknown> is used
-  const out = result as Record<string, unknown>;
-  for (const key of Object.keys(source) as (keyof TextFormatting)[]) {
-    const value = source[key];
-    if (value !== undefined) {
-      out[key] =
-        typeof value === "object" && value !== null
-          ? {
-              ...(out[key] as Record<string, unknown>),
-              ...(value as Record<string, unknown>),
-            }
-          : value;
-    }
-  }
-
-  return result;
 }
 
 /**

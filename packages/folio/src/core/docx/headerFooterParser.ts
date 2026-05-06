@@ -101,6 +101,7 @@ function parseHeaderFooterContent(
 
   // Get all child elements
   const elements = root.elements ?? [];
+  const options = { inHeaderFooter: true };
 
   for (const el of elements) {
     if (el.type !== "element") {
@@ -118,12 +119,21 @@ function parseHeaderFooterContent(
         numbering,
         rels,
         media,
+        options,
       );
       content.push(paragraph);
     }
     // Parse tables
     else if (name === "w:tbl" || name.endsWith(":tbl")) {
-      const table = parseTable(el, styles, theme, numbering, rels, media);
+      const table = parseTable(
+        el,
+        styles,
+        theme,
+        numbering,
+        rels,
+        media,
+        options,
+      );
       content.push(table);
     }
     // SDT (structured document tags) can contain paragraphs/tables

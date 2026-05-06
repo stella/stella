@@ -1,50 +1,52 @@
 import { describe, expect, test } from "bun:test";
 
 import { createPaginator } from "./paginator";
-import type { ParagraphFragment } from "./types";
 
-function makeParagraphFragment(id: number): ParagraphFragment {
-  return {
-    kind: "paragraph",
-    blockId: id,
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0,
-    fromLine: 0,
-    toLine: 1,
-  };
-}
+const SIZE = { w: 800, h: 1000 };
+const MARGINS = { top: 50, right: 50, bottom: 50, left: 50 };
 
-describe("Paginator oversized fragment handling", () => {
-  test("places oversized fragment on current empty page", () => {
-    const paginator = createPaginator({
-      pageSize: { w: 200, h: 200 },
-      margins: { top: 20, right: 20, bottom: 20, left: 20 },
-    });
-
-    const fragment = makeParagraphFragment(1);
-    paginator.addFragment(fragment, 300);
-
-    expect(paginator.pages.length).toBe(1);
-    expect(fragment.y).toBe(20);
-    expect(paginator.getCurrentState().cursorY).toBe(320);
-  });
-
-  test("moves oversized fragment to next page when current page already has content", () => {
-    const paginator = createPaginator({
-      pageSize: { w: 200, h: 200 },
-      margins: { top: 20, right: 20, bottom: 20, left: 20 },
-    });
-
-    paginator.addFragment(makeParagraphFragment(1), 40);
-
-    const oversized = makeParagraphFragment(2);
-    paginator.addFragment(oversized, 300);
+describe("paginator forcePageBreak", () => {
+  test("two consecutive forcePageBreak calls preserve an explicit blank page", () => {
+    const paginator = createPaginator({ pageSize: SIZE, margins: MARGINS });
+    paginator.forcePageBreak();
+    paginator.forcePageBreak();
 
     expect(paginator.pages.length).toBe(2);
-    expect(oversized.y).toBe(20);
-    expect(oversized.x).toBe(20);
-    expect(paginator.pages[1].fragments.length).toBe(1);
+  });
+
+  test("coalesceBlankPage reuses an empty page with the active layout", () => {
+    const paginator = createPaginator({ pageSize: SIZE, margins: MARGINS });
+    paginator.forcePageBreak({ coalesceBlankPage: true });
+    paginator.forcePageBreak({ coalesceBlankPage: true });
+
+    expect(paginator.pages.length).toBe(1);
+  });
+
+  test("forcePageBreak after content followed by another forcePageBreak preserves a blank page", () => {
+    const paginator = createPaginator({ pageSize: SIZE, margins: MARGINS });
+    const state = paginator.getCurrentState();
+    state.cursorY += 100;
+    state.page.fragments.push({ kind: "paragraph" } as never);
+
+    paginator.forcePageBreak();
+    paginator.forcePageBreak();
+
+    expect(paginator.pages.length).toBe(3);
+  });
+
+  test("forcePageBreak creates a fresh blank page after the active layout changes", () => {
+    const paginator = createPaginator({ pageSize: SIZE, margins: MARGINS });
+    paginator.forcePageBreak();
+
+    const nextSize = { w: 600, h: 700 };
+    const nextMargins = { top: 30, right: 40, bottom: 50, left: 60 };
+    paginator.updatePageLayout(nextSize, nextMargins);
+    const state = paginator.forcePageBreak({ coalesceBlankPage: true });
+
+    expect(paginator.pages.length).toBe(2);
+    expect(state.page.size).toEqual(nextSize);
+    expect(state.page.margins).toEqual(nextMargins);
+    expect(state.topMargin).toBe(nextMargins.top);
+    expect(state.contentBottom).toBe(nextSize.h - nextMargins.bottom);
   });
 });

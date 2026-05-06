@@ -40,6 +40,7 @@ import type {
   MoveTo,
   MathEquation,
 } from "../../types/document";
+import { mergeTextFormatting } from "../../utils/textFormattingMerge";
 import { emuToPixels } from "../../utils/units";
 import { schema } from "../schema";
 import type {
@@ -337,6 +338,12 @@ function paragraphFormattingToAttrs(
   if (paragraph.listRendering?.levelNumFmts) {
     attrs.listLevelNumFmts = paragraph.listRendering.levelNumFmts;
   }
+  if (paragraph.listRendering?.abstractNumId !== undefined) {
+    attrs.listAbstractNumId = paragraph.listRendering.abstractNumId;
+  }
+  if (paragraph.listRendering?.startOverride !== undefined) {
+    attrs.listStartOverride = paragraph.listRendering.startOverride;
+  }
   // Store original inline formatting for lossless serialization round-trip
   if (formatting) {
     attrs._originalFormatting = formatting;
@@ -367,6 +374,7 @@ function paragraphFormattingToAttrs(
       "lineSpacingRule",
       formatting?.lineSpacingRule ?? stylePpr?.lineSpacingRule,
     );
+    set("spacingExplicit", formatting?.spacingExplicit);
     set("indentLeft", formatting?.indentLeft ?? stylePpr?.indentLeft);
     set("indentRight", formatting?.indentRight ?? stylePpr?.indentRight);
     set(
@@ -418,6 +426,7 @@ function paragraphFormattingToAttrs(
     set("spaceAfter", formatting?.spaceAfter);
     set("lineSpacing", formatting?.lineSpacing);
     set("lineSpacingRule", formatting?.lineSpacingRule);
+    set("spacingExplicit", formatting?.spacingExplicit);
     set("indentLeft", formatting?.indentLeft);
     set("indentRight", formatting?.indentRight);
     set("indentFirstLine", formatting?.indentFirstLine);
@@ -456,6 +465,9 @@ function paragraphFormattingToAttrs(
     ) {
       attrs.sectionBreakType = st;
     }
+  }
+  if (paragraph.renderedPageBreakBefore) {
+    attrs.renderedPageBreakBefore = true;
   }
 
   return attrs;
@@ -1346,74 +1358,6 @@ function convertRun(
   }
 
   return nodes;
-}
-
-/**
- * Merge two TextFormatting objects (source overrides target)
- */
-function mergeTextFormatting(
-  target: TextFormatting | undefined,
-  source: TextFormatting | undefined,
-): TextFormatting | undefined {
-  if (!source && !target) {
-    return undefined;
-  }
-  if (!source) {
-    return target;
-  }
-  if (!target) {
-    return source;
-  }
-
-  // Start with target (style formatting), then overlay source (inline formatting)
-  const result: TextFormatting = { ...target };
-
-  // Merge each property - source (inline) takes precedence
-  if (source.bold !== undefined) {
-    result.bold = source.bold;
-  }
-  if (source.italic !== undefined) {
-    result.italic = source.italic;
-  }
-  if (source.underline !== undefined) {
-    result.underline = source.underline;
-  }
-  if (source.strike !== undefined) {
-    result.strike = source.strike;
-  }
-  if (source.doubleStrike !== undefined) {
-    result.doubleStrike = source.doubleStrike;
-  }
-  if (source.color !== undefined) {
-    const hasExplicitColor =
-      source.color.rgb ||
-      source.color.themeColor ||
-      source.color.themeTint ||
-      source.color.themeShade;
-    if (!source.color.auto || hasExplicitColor) {
-      result.color = source.color;
-    }
-  }
-  if (source.highlight !== undefined) {
-    result.highlight = source.highlight;
-  }
-  if (source.fontSize !== undefined) {
-    result.fontSize = source.fontSize;
-  }
-  if (source.fontFamily !== undefined) {
-    result.fontFamily = source.fontFamily;
-  }
-  if (source.vertAlign !== undefined) {
-    result.vertAlign = source.vertAlign;
-  }
-  if (source.allCaps !== undefined) {
-    result.allCaps = source.allCaps;
-  }
-  if (source.smallCaps !== undefined) {
-    result.smallCaps = source.smallCaps;
-  }
-
-  return result;
 }
 
 /**

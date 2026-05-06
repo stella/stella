@@ -982,14 +982,33 @@ export function serializeParagraph(paragraph: Paragraph): string {
   }
 
   // Add paragraph content
+  let pendingRenderedPageBreak = paragraph.renderedPageBreakBefore === true;
   for (const content of paragraph.content) {
-    const contentXml = serializeParagraphContent(content);
+    let contentXml = serializeParagraphContent(content);
     if (contentXml) {
+      if (pendingRenderedPageBreak) {
+        const next = injectRenderedPageBreakIntoFirstRun(contentXml);
+        if (next) {
+          contentXml = next;
+          pendingRenderedPageBreak = false;
+        }
+      }
       parts.push(contentXml);
     }
   }
 
   return `<w:p${attrsStr}>${parts.join("")}</w:p>`;
+}
+
+function injectRenderedPageBreakIntoFirstRun(xml: string): string | null {
+  const runOpeningTag = /<w:r(?=[\s>/])[^>]*>/;
+  if (!runOpeningTag.test(xml)) {
+    return null;
+  }
+  return xml.replace(
+    runOpeningTag,
+    (match) => `${match}<w:lastRenderedPageBreak/>`,
+  );
 }
 
 /**
