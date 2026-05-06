@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@stll/ui/components/button";
 import {
@@ -104,6 +104,12 @@ const useFlagLabel = () => {
   const t = useTranslations();
   return (flagId: CellFlagId) => t(FLAG_LABEL_KEYS[flagId]);
 };
+
+const normalizeManualFlags = (flags: string[]) =>
+  [...new Set(flags)].toSorted();
+
+const haveSameFlags = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((flag, index) => flag === b[index]);
 
 type CellMetadataFlagsProps = {
   workspaceId: string;
@@ -333,19 +339,38 @@ const useCellMetadataFlags = ({
 }: CellMetadataFlagsProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const [pendingManualFlags, setPendingManualFlags] = useState<string[] | null>(
+    null,
+  );
+  const pendingManualFlagsRef = useRef<string[] | null>(null);
+  const metadataManualFlags = useMemo(
+    () => normalizeManualFlags(metadata?.manualFlags ?? []),
+    [metadata?.manualFlags],
+  );
+  const currentManualFlags = pendingManualFlags ?? metadataManualFlags;
+
+  useEffect(() => {
+    if (
+      pendingManualFlags !== null &&
+      haveSameFlags(pendingManualFlags, metadataManualFlags)
+    ) {
+      pendingManualFlagsRef.current = null;
+      setPendingManualFlags(null);
+    }
+  }, [metadataManualFlags, pendingManualFlags]);
+
   const activeFlags = useMemo(
     () =>
-      (metadata?.manualFlags ?? []).flatMap((flagId) => {
+      currentManualFlags.flatMap((flagId) => {
         const flag = cellFlagsById.get(flagId);
         return flag === undefined ? [] : [flag];
       }),
-    [metadata],
+    [currentManualFlags],
   );
   const decorativeFlags = activeFlags.filter(
     (flag) => flag.id !== VERIFIED_FLAG_ID,
   );
-  const hasVerifiedFlag =
-    metadata?.manualFlags.includes(VERIFIED_FLAG_ID) ?? false;
+  const hasVerifiedFlag = currentManualFlags.includes(VERIFIED_FLAG_ID);
 
   const updateMetadata = useMutation({
     mutationFn: async (manualFlags: string[]) => {
@@ -370,6 +395,8 @@ const useCellMetadataFlags = ({
       });
     },
     onError: (error) => {
+      pendingManualFlagsRef.current = null;
+      setPendingManualFlags(null);
       stellaToast.add({
         title: t("errors.actionFailed"),
         description:
@@ -380,14 +407,20 @@ const useCellMetadataFlags = ({
   });
 
   const toggleFlag = (flagId: CellFlagId) => {
-    const current = metadata?.manualFlags ?? [];
-    const next = current.includes(flagId)
-      ? current.filter((id) => id !== flagId)
-      : [...current, flagId];
+    const current = pendingManualFlagsRef.current ?? metadataManualFlags;
+    const next = normalizeManualFlags(
+      current.includes(flagId)
+        ? current.filter((id) => id !== flagId)
+        : [...current, flagId],
+    );
+    pendingManualFlagsRef.current = next;
+    setPendingManualFlags(next);
     updateMetadata.mutate(next);
   };
 
   const clearFlags = () => {
+    pendingManualFlagsRef.current = [];
+    setPendingManualFlags([]);
     updateMetadata.mutate([]);
   };
 
