@@ -217,7 +217,7 @@ type ContactItem = {
   tags: string[] | null;
   color: string | null;
   createdAt: Date;
-  matterCount: number;
+  activeMatterCount: number;
 };
 
 const ContactRow = ({ contact }: { contact: ContactItem }) => {
@@ -269,7 +269,7 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
   };
 
   const handleDeleteOpen = () => {
-    if (contact.matterCount > 0) {
+    if (contact.activeMatterCount > 0) {
       stellaToast.add({
         title: deleteBlockedDescription,
         type: "error",
@@ -329,7 +329,7 @@ const ContactRow = ({ contact }: { contact: ContactItem }) => {
         {primaryPhone?.number}
       </TableCell>
       <TableCell className="text-end tabular-nums">
-        {contact.matterCount}
+        {contact.activeMatterCount}
       </TableCell>
       <TableCell
         className="w-10 text-end"

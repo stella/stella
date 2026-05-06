@@ -92,7 +92,7 @@ const readContacts = createSafeRootHandler(
             tags: contacts.tags,
             color: contacts.color,
             createdAt: contacts.createdAt,
-            matterCount: count(workspaces.id),
+            activeMatterCount: count(workspaces.id),
           })
           .from(contacts)
           .leftJoin(
