@@ -156,6 +156,22 @@ export const WorkspaceTable = ({
     useState<ExpandedTableCell | null>(null);
   const [wrapperWidth, setWrapperWidth] = useState(0);
 
+  useEffect(() => {
+    if (!expandedTableCell) {
+      return undefined;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) {
+        return;
+      }
+      setExpandedTableCell(null);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [expandedTableCell]);
+
   const renameEntity = useRenameEntity();
 
   const activeEntityId = useInspectorStore((s) => {

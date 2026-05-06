@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Result } from "better-result";
-import { SquareMinusIcon } from "lucide-react";
+import { Loader2Icon, SquareMinusIcon } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
 import Tooltip from "@/components/tooltip";
@@ -43,7 +43,11 @@ export const CellResult = ({
         <span className={hasPreview ? "line-clamp-2" : "truncate"}>
           {hasPreview ? preview : t("workspaces.fields.calculating")}
         </span>
-        <span className="bg-muted-foreground size-2 shrink-0 animate-pulse rounded-full" />
+        <Loader2Icon
+          aria-hidden="true"
+          className="text-muted-foreground size-3 shrink-0 animate-spin"
+          strokeWidth={2.25}
+        />
       </div>
     );
   }

@@ -204,35 +204,44 @@ type CellCornerFlagProps = {
 
 const CellCornerFlag = ({ flags, metadata, onDrop }: CellCornerFlagProps) => {
   const getFlagLabel = useFlagLabel();
-  const flag = flags.at(0);
-  if (!flag) {
+  if (flags.length === 0) {
     return null;
   }
 
-  const Icon = flag.icon;
-  const label = flags.map((item) => getFlagLabel(item.id)).join(", ");
-  const provenance = metadata?.flagProvenance?.[flag.id];
-
   return (
-    <Tooltip
-      className="max-w-72 text-wrap"
-      content={<FlagProvenanceTooltip flag={flag} metadata={provenance} />}
-      render={
-        <button
-          aria-label={label}
-          className="bg-background/55 focus-visible:ring-ring absolute end-1 top-1 z-20 flex size-3 items-center justify-center rounded-full opacity-100 backdrop-blur-[2px] outline-none focus-visible:ring-1"
-          data-row-expansion-ignore
-          onClick={(event) => {
-            event.stopPropagation();
-            onDrop(flag.id);
-          }}
-          style={{ color: flag.color }}
-          type="button"
-        />
-      }
+    <div
+      className="absolute end-1 top-1 z-20 flex items-center gap-1"
+      data-row-expansion-ignore
     >
-      <Icon className="size-2.5" strokeWidth={2.5} />
-    </Tooltip>
+      {flags.map((flag) => {
+        const Icon = flag.icon;
+        const provenance = metadata?.flagProvenance?.[flag.id];
+        return (
+          <Tooltip
+            className="max-w-72 text-wrap"
+            content={
+              <FlagProvenanceTooltip flag={flag} metadata={provenance} />
+            }
+            key={flag.id}
+            render={
+              <button
+                aria-label={getFlagLabel(flag.id)}
+                className="bg-background/55 focus-visible:ring-ring flex size-3 items-center justify-center rounded-full opacity-100 backdrop-blur-[2px] outline-none focus-visible:ring-1"
+                data-row-expansion-ignore
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDrop(flag.id);
+                }}
+                style={{ color: flag.color }}
+                type="button"
+              />
+            }
+          >
+            <Icon className="size-2.5" strokeWidth={2.5} />
+          </Tooltip>
+        );
+      })}
+    </div>
   );
 };
 
