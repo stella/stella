@@ -11,6 +11,7 @@ import {
 import { Separator } from "@stll/ui/components/separator";
 import { cn } from "@stll/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -34,6 +35,8 @@ import type {
 } from "@/routes/_protected.workspaces/-types";
 import { ALL_COLUMNS } from "@/routes/_protected.workspaces/-types";
 import { useConfigStore } from "@/stores/config-store";
+
+const routeApi = getRouteApi("/_protected");
 
 const SORT_KEYS = [
   "name",
@@ -184,7 +187,10 @@ type CreateMatterPopoverProps = {
 const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
   const t = useTranslations();
   const canCreate = usePermissions({ workspace: ["create"] });
-  const { data } = useQuery(workspacesOptions);
+  const activeOrganizationId = routeApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data } = useQuery(workspacesOptions(activeOrganizationId));
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
 
   if (!data || !canCreate) {

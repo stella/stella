@@ -213,10 +213,28 @@ export const pickAuthor = (
 
 // ─── Deterministic ID generator ─────────────────────────
 
+const getSeedIdNamespace = (): string => {
+  const explicitNamespace = process.env["STELLA_SEED_ID_NAMESPACE"]?.trim();
+  if (explicitNamespace) {
+    return explicitNamespace;
+  }
+
+  const explicitOrgId = process.env["STELLA_SEED_ORG_ID"]?.trim();
+  if (explicitOrgId && explicitOrgId !== DEFAULT_ORG_ID) {
+    return `org:${explicitOrgId}`;
+  }
+
+  return "";
+};
+
 export const seedId = <T extends SafeIdType = never>(
   label: string,
 ): SafeId<T> => {
-  const hash = new Bun.CryptoHasher("sha256").update(label).digest("hex");
+  const namespace = getSeedIdNamespace();
+  const namespacedLabel = namespace ? `${namespace}:${label}` : label;
+  const hash = new Bun.CryptoHasher("sha256")
+    .update(namespacedLabel)
+    .digest("hex");
   const raw = hash.slice(0, 32);
   if (raw.length !== 32) {
     throw new Error(`Seed data: failed to create UUID for label "${label}"`);

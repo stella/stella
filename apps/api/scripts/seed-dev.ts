@@ -12,6 +12,10 @@
  * Usage:
  *   bun apps/api/scripts/seed-dev.ts
  *
+ * By default the CLI seeds the most recently active local
+ * browser session's organization. Override with:
+ *   STELLA_SEED_ORG_ID=... STELLA_SEED_USER_ID=...
+ *
  * Prerequisites:
  *   - Database running (bun run docker:dev)
  *   - Test user seeded (bun run db:seed-test-user)
@@ -31,6 +35,7 @@ import {
   extractedContent,
   fields,
   invoices,
+  justifications,
   properties,
   propertyDependencies,
   rateEntries,
@@ -40,6 +45,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import type { JustificationContent } from "@/api/db/schema";
 import type {
   EntityKind,
   FieldContent,
@@ -80,6 +86,9 @@ const DOCX_MIME =
 const HEAVY_MATTER_LABEL = "ws-heavy-virtualization";
 const HEAVY_MATTER_FILE_COUNT = 1000;
 const HEAVY_MATTER_FOLDER_COUNT = 25;
+const EXPORT_TABLE_MATTER_LABEL = "ws-export-review";
+const EXPORT_TABLE_FILE_COUNT = 72;
+const EXPORT_TABLE_FOLDER_COUNT = 6;
 
 type BillingCodeId = SafeId<"billingCode">;
 type ContactId = SafeId<"contact">;
@@ -88,6 +97,7 @@ type EntityVersionId = SafeId<"entityVersion">;
 type ExpenseId = SafeId<"expense">;
 type FieldId = SafeId<"field">;
 type InvoiceId = SafeId<"invoice">;
+type JustificationId = SafeId<"justification">;
 type PropertyId = SafeId<"property">;
 type RateEntryId = SafeId<"rateEntry">;
 type RateTableId = SafeId<"rateTable">;
@@ -446,6 +456,196 @@ const buildHeavyMatterDocNames = (): string[] => {
   return result;
 };
 
+const EXPORT_REVIEW_FOLDERS = [
+  "Corporate",
+  "Commercial",
+  "Employment",
+  "Regulatory",
+  "Finance",
+  "Real Estate",
+] as const;
+
+const EXPORT_REVIEW_DOCUMENT_TYPES = [
+  "Shareholder Register",
+  "Customer Contract",
+  "Supplier Agreement",
+  "Employment Agreement",
+  "Permit",
+  "Loan Agreement",
+  "Lease",
+  "Insurance Policy",
+] as const;
+
+const EXPORT_REVIEW_COUNTERPARTIES = [
+  "Aurora Retail GmbH",
+  "BluePeak Manufacturing s.r.o.",
+  "Cedar Cloud Ltd.",
+  "Delta Logistics Kft.",
+  "Edison Bank plc",
+  "Fjord Analytics AB",
+  "Granite Properties B.V.",
+  "Helios Energy a.s.",
+] as const;
+
+const EXPORT_REVIEW_JURISDICTIONS = [
+  "Czech Republic",
+  "Germany",
+  "Netherlands",
+  "Hungary",
+  "United Kingdom",
+] as const;
+
+const EXPORT_REVIEW_RISK_LEVELS = [
+  "Low",
+  "Medium",
+  "High",
+  "Critical",
+] as const;
+
+const EXPORT_REVIEW_REVIEW_STATUSES = [
+  "Not Started",
+  "In Review",
+  "Needs Partner",
+  "Cleared",
+] as const;
+
+const EXPORT_REVIEW_EVIDENCE_QUALITY = [
+  "Direct citation",
+  "Needs source check",
+  "Conflicting evidence",
+] as const;
+
+const buildExportReviewDocNames = (): string[] => {
+  const result: string[] = [];
+
+  for (let i = 0; i < EXPORT_TABLE_FILE_COUNT; i++) {
+    const folder = at(EXPORT_REVIEW_FOLDERS, i % EXPORT_REVIEW_FOLDERS.length);
+    const documentType = at(
+      EXPORT_REVIEW_DOCUMENT_TYPES,
+      i % EXPORT_REVIEW_DOCUMENT_TYPES.length,
+    );
+    const extension = i % 9 === 0 ? "docx" : "pdf";
+    result.push(
+      `atlas_${String(i + 1).padStart(3, "0")}_${folder.replaceAll(" ", "_")}_${documentType.replaceAll(" ", "_")}.${extension}`,
+    );
+  }
+
+  return result;
+};
+
+const EXPORT_REVIEW_DOC_NAMES = buildExportReviewDocNames();
+
+type ExportReviewMetadata = {
+  documentType: (typeof EXPORT_REVIEW_DOCUMENT_TYPES)[number];
+  counterparty: (typeof EXPORT_REVIEW_COUNTERPARTIES)[number];
+  jurisdiction: (typeof EXPORT_REVIEW_JURISDICTIONS)[number];
+  governingLaw: string;
+  effectiveDate: string;
+  expiryDate: string;
+  contractValue: number;
+  riskLevel: (typeof EXPORT_REVIEW_RISK_LEVELS)[number];
+  reviewStatus: (typeof EXPORT_REVIEW_REVIEW_STATUSES)[number];
+  evidenceQuality: (typeof EXPORT_REVIEW_EVIDENCE_QUALITY)[number];
+  tags: string[];
+  keyObligation: string;
+  riskFinding: string;
+  pageNumber: number;
+};
+
+const addDays = (date: Date, days: number): string => {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy.toISOString().slice(0, 10);
+};
+
+const buildExportReviewMetadata = (index: number): ExportReviewMetadata => {
+  const documentType = at(
+    EXPORT_REVIEW_DOCUMENT_TYPES,
+    index % EXPORT_REVIEW_DOCUMENT_TYPES.length,
+  );
+  const counterparty = at(
+    EXPORT_REVIEW_COUNTERPARTIES,
+    (index * 3) % EXPORT_REVIEW_COUNTERPARTIES.length,
+  );
+  const jurisdiction = at(
+    EXPORT_REVIEW_JURISDICTIONS,
+    (index * 5 + 2) % EXPORT_REVIEW_JURISDICTIONS.length,
+  );
+  const riskLevel = at(
+    EXPORT_REVIEW_RISK_LEVELS,
+    (index * 7) % EXPORT_REVIEW_RISK_LEVELS.length,
+  );
+  const effectiveDate = addDays(new Date(2024, 0, 1), index * 11);
+  const expiryDate = addDays(new Date(2026, 0, 1), index * 17);
+  const contractValue = 50_000 + ((index * 137_500) % 4_950_000);
+  const reviewStatus = at(
+    EXPORT_REVIEW_REVIEW_STATUSES,
+    index % EXPORT_REVIEW_REVIEW_STATUSES.length,
+  );
+  const evidenceQuality = at(
+    EXPORT_REVIEW_EVIDENCE_QUALITY,
+    index % EXPORT_REVIEW_EVIDENCE_QUALITY.length,
+  );
+  const tags = [
+    at(["change of control", "termination", "data room", "renewal"], index % 4),
+    at(["consent needed", "pricing", "privacy", "security"], (index + 1) % 4),
+  ];
+
+  return {
+    documentType,
+    counterparty,
+    jurisdiction,
+    governingLaw:
+      jurisdiction === "United Kingdom" ? "England and Wales" : jurisdiction,
+    effectiveDate,
+    expiryDate,
+    contractValue,
+    riskLevel,
+    reviewStatus,
+    evidenceQuality,
+    tags,
+    keyObligation: `${counterparty} must provide written notice before any assignment, renewal, or material service change.`,
+    riskFinding:
+      riskLevel === "High" || riskLevel === "Critical"
+        ? "Consent, notice, or termination rights require partner review before signing."
+        : "No blocking issue identified; confirm ordinary-course compliance before closing.",
+    pageNumber: (index % 4) + 1,
+  };
+};
+
+const buildExportReviewDocumentText = (
+  fileName: string,
+  index: number,
+): string => {
+  const metadata = buildExportReviewMetadata(index);
+  return `PROJECT ATLAS DATA ROOM REVIEW
+
+Document: ${fileName}
+Document type: ${metadata.documentType}
+Counterparty: ${metadata.counterparty}
+Jurisdiction: ${metadata.jurisdiction}
+Governing law: ${metadata.governingLaw}
+Effective date: ${metadata.effectiveDate}
+Expiry date: ${metadata.expiryDate}
+Contract value: EUR ${metadata.contractValue}
+Risk level: ${metadata.riskLevel}
+Review status: ${metadata.reviewStatus}
+Evidence quality: ${metadata.evidenceQuality}
+Tags: ${metadata.tags.join(", ")}
+
+Key obligation:
+${metadata.keyObligation}
+
+Risk finding:
+${metadata.riskFinding}
+
+Direct citation text:
+"${metadata.counterparty} must comply with the obligation identified above and the governing law is ${metadata.governingLaw}."
+
+Reviewer note:
+This seeded file exists so table export can be tested with many rows, attached documents, extracted metadata, and direct citations.`;
+};
+
 const workspaceDocNames: Record<string, string[]> = {
   "ws-akvizice-energo": [
     "Smlouva_o_akvizici_akcii.pdf",
@@ -496,6 +696,7 @@ const workspaceDocNames: Record<string, string[]> = {
     "Cookie_Policy_Draft.pdf",
   ],
   [HEAVY_MATTER_LABEL]: buildHeavyMatterDocNames(),
+  [EXPORT_TABLE_MATTER_LABEL]: EXPORT_REVIEW_DOC_NAMES,
 };
 
 /**
@@ -1410,6 +1611,11 @@ Last updated: January 2025
    Supervisory authority: ÚOOÚ (www.uoou.cz)`,
 };
 
+for (let i = 0; i < EXPORT_REVIEW_DOC_NAMES.length; i++) {
+  const fileName = at(EXPORT_REVIEW_DOC_NAMES, i);
+  documentTexts[fileName] = buildExportReviewDocumentText(fileName, i);
+}
+
 // ─── Contacts ───────────────────────────────────────────
 
 const orgContacts = [
@@ -2010,6 +2216,13 @@ const seedWorkspaces = [
     billingReference: "MS-GDPR-2024",
   },
   {
+    id: seedId("ws-export-review"),
+    name: "Export Review - Project Atlas Data Room",
+    reference: "2024/059",
+    clientId: at(orgContacts, 3).id, // Greenleaf
+    billingReference: "GL-EXPORT-2024",
+  },
+  {
     id: seedId("ws-heavy-virtualization"),
     name: "Virtualization Scale Test Matter",
     reference: "PERF/1000",
@@ -2033,48 +2246,214 @@ type PropertySeed = {
 const buildProperties = (
   wsId: WorkspaceId,
   wsLabel: string,
-): PropertySeed[] => [
-  {
-    id: seedId(`${wsLabel}-prop-file`),
-    workspaceId: wsId,
-    name: "Documents",
-    content: { version: 1, type: "file" },
-    tool: { version: 1, type: "manual-input" },
-    system: true,
-    kinds: ["document"],
-  },
-  {
-    id: seedId(`${wsLabel}-prop-status`),
-    workspaceId: wsId,
-    name: "Status",
-    content: {
-      version: 1,
-      type: "single-select",
-      options: [
-        { color: "green", value: "Active" },
-        { color: "amber", value: "In Review" },
-        { color: "red", value: "Closed" },
-        { color: "gray", value: "On Hold" },
-      ],
-      fallback: null,
+): PropertySeed[] => {
+  const base: PropertySeed[] = [
+    {
+      id: seedId(`${wsLabel}-prop-file`),
+      workspaceId: wsId,
+      name: "Documents",
+      content: { version: 1, type: "file" },
+      tool: { version: 1, type: "manual-input" },
+      system: true,
+      kinds: ["document"],
     },
-    tool: { version: 1, type: "manual-input" },
-  },
-  {
-    id: seedId(`${wsLabel}-prop-notes`),
-    workspaceId: wsId,
-    name: "Notes",
-    content: { version: 1, type: "text" },
-    tool: { version: 1, type: "manual-input" },
-  },
-  {
-    id: seedId(`${wsLabel}-prop-due-date`),
-    workspaceId: wsId,
-    name: "Due Date",
-    content: { version: 1, type: "date" },
-    tool: { version: 1, type: "manual-input" },
-  },
-];
+    {
+      id: seedId(`${wsLabel}-prop-status`),
+      workspaceId: wsId,
+      name: "Status",
+      content: {
+        version: 1,
+        type: "single-select",
+        options: [
+          { color: "green", value: "Active" },
+          { color: "amber", value: "In Review" },
+          { color: "red", value: "Closed" },
+          { color: "gray", value: "On Hold" },
+        ],
+        fallback: null,
+      },
+      tool: { version: 1, type: "manual-input" },
+    },
+    {
+      id: seedId(`${wsLabel}-prop-notes`),
+      workspaceId: wsId,
+      name: "Notes",
+      content: { version: 1, type: "text" },
+      tool: { version: 1, type: "manual-input" },
+    },
+    {
+      id: seedId(`${wsLabel}-prop-due-date`),
+      workspaceId: wsId,
+      name: "Due Date",
+      content: { version: 1, type: "date" },
+      tool: { version: 1, type: "manual-input" },
+    },
+  ];
+
+  if (wsLabel !== EXPORT_TABLE_MATTER_LABEL) {
+    return base;
+  }
+
+  const aiTool = (prompt: string): PropertyTool => ({
+    version: 1,
+    type: "ai-model",
+    prompt,
+  });
+
+  return [
+    ...base,
+    {
+      id: seedId(`${wsLabel}-prop-document-type`),
+      workspaceId: wsId,
+      name: "Document Type",
+      content: {
+        version: 1,
+        type: "single-select",
+        options: EXPORT_REVIEW_DOCUMENT_TYPES.map((value, index) => ({
+          color: at(["blue", "teal", "violet", "amber"], index % 4),
+          value,
+        })),
+        fallback: null,
+      },
+      tool: aiTool("Extract the document category from the attached file."),
+    },
+    {
+      id: seedId(`${wsLabel}-prop-counterparty`),
+      workspaceId: wsId,
+      name: "Counterparty",
+      content: { version: 1, type: "text" },
+      tool: aiTool("Extract the primary counterparty named in the document."),
+    },
+    {
+      id: seedId(`${wsLabel}-prop-jurisdiction`),
+      workspaceId: wsId,
+      name: "Jurisdiction",
+      content: {
+        version: 1,
+        type: "single-select",
+        options: EXPORT_REVIEW_JURISDICTIONS.map((value, index) => ({
+          color: at(["cyan", "green", "purple", "orange", "gray"], index),
+          value,
+        })),
+        fallback: null,
+      },
+      tool: aiTool("Extract the relevant jurisdiction from the document."),
+    },
+    {
+      id: seedId(`${wsLabel}-prop-governing-law`),
+      workspaceId: wsId,
+      name: "Governing Law",
+      content: { version: 1, type: "text" },
+      tool: aiTool("Extract the governing law clause."),
+    },
+    {
+      id: seedId(`${wsLabel}-prop-effective-date`),
+      workspaceId: wsId,
+      name: "Effective Date",
+      content: { version: 1, type: "date" },
+      tool: aiTool("Extract the effective date as an ISO date."),
+    },
+    {
+      id: seedId(`${wsLabel}-prop-expiry-date`),
+      workspaceId: wsId,
+      name: "Expiry Date",
+      content: { version: 1, type: "date" },
+      tool: aiTool("Extract the expiry or renewal date as an ISO date."),
+    },
+    {
+      id: seedId(`${wsLabel}-prop-contract-value`),
+      workspaceId: wsId,
+      name: "Contract Value",
+      content: { version: 1, type: "int" },
+      tool: aiTool("Extract the contract value in euros."),
+    },
+    {
+      id: seedId(`${wsLabel}-prop-risk-level`),
+      workspaceId: wsId,
+      name: "Risk Level",
+      content: {
+        version: 1,
+        type: "single-select",
+        options: [
+          { color: "green", value: "Low" },
+          { color: "amber", value: "Medium" },
+          { color: "red", value: "High" },
+          { color: "purple", value: "Critical" },
+        ],
+        fallback: null,
+      },
+      tool: aiTool("Classify the diligence risk level."),
+    },
+    {
+      id: seedId(`${wsLabel}-prop-review-status`),
+      workspaceId: wsId,
+      name: "Review Status",
+      content: {
+        version: 1,
+        type: "single-select",
+        options: [
+          { color: "gray", value: "Not Started" },
+          { color: "blue", value: "In Review" },
+          { color: "amber", value: "Needs Partner" },
+          { color: "green", value: "Cleared" },
+        ],
+        fallback: null,
+      },
+      tool: { version: 1, type: "manual-input" },
+    },
+    {
+      id: seedId(`${wsLabel}-prop-evidence-quality`),
+      workspaceId: wsId,
+      name: "Evidence Quality",
+      content: {
+        version: 1,
+        type: "single-select",
+        options: [
+          { color: "green", value: "Direct citation" },
+          { color: "amber", value: "Needs source check" },
+          { color: "red", value: "Conflicting evidence" },
+        ],
+        fallback: null,
+      },
+      tool: aiTool("Assess whether the extracted value has direct support."),
+    },
+    {
+      id: seedId(`${wsLabel}-prop-tags`),
+      workspaceId: wsId,
+      name: "Tags",
+      content: {
+        version: 1,
+        type: "multi-select",
+        options: [
+          { color: "blue", value: "change of control" },
+          { color: "amber", value: "termination" },
+          { color: "violet", value: "data room" },
+          { color: "green", value: "renewal" },
+          { color: "red", value: "consent needed" },
+          { color: "cyan", value: "pricing" },
+          { color: "purple", value: "privacy" },
+          { color: "gray", value: "security" },
+        ],
+        fallback: null,
+      },
+      tool: aiTool("Extract concise diligence tags."),
+    },
+    {
+      id: seedId(`${wsLabel}-prop-key-obligation`),
+      workspaceId: wsId,
+      name: "Key Obligation",
+      content: { version: 1, type: "text" },
+      tool: aiTool("Extract the key obligation relevant to closing."),
+    },
+    {
+      id: seedId(`${wsLabel}-prop-risk-finding`),
+      workspaceId: wsId,
+      name: "Risk Finding",
+      content: { version: 1, type: "text" },
+      tool: aiTool("Summarize the key diligence risk in one sentence."),
+    },
+  ];
+};
 
 // ─── Entities (per-workspace) ───────────────────────────
 
@@ -2090,6 +2469,37 @@ type EntitySeed = {
 
 const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
   const folderId = seedId(`${wsLabel}-folder-1`);
+  if (wsLabel === EXPORT_TABLE_MATTER_LABEL) {
+    const result: EntitySeed[] = [];
+    const folderIds: EntityId[] = [];
+
+    for (let i = 0; i < EXPORT_TABLE_FOLDER_COUNT; i++) {
+      const entityId = seedId(`${wsLabel}-folder-${i + 1}`);
+      folderIds.push(entityId);
+      result.push({
+        entityId,
+        versionId: seedId(`${wsLabel}-folder-${i + 1}-v`),
+        workspaceId: wsId,
+        kind: "folder",
+        name: at(EXPORT_REVIEW_FOLDERS, i),
+      });
+    }
+
+    const docNames = workspaceDocNames[wsLabel] ?? [];
+    for (let i = 0; i < docNames.length; i++) {
+      result.push({
+        entityId: seedId(`${wsLabel}-doc-${i + 1}`),
+        versionId: seedId(`${wsLabel}-doc-${i + 1}-v`),
+        workspaceId: wsId,
+        kind: "document",
+        name: at(docNames, i),
+        parentId: at(folderIds, i % folderIds.length),
+      });
+    }
+
+    return result;
+  }
+
   if (wsLabel === HEAVY_MATTER_LABEL) {
     const result: EntitySeed[] = [];
     const folderIds: EntityId[] = [];
@@ -2210,6 +2620,161 @@ const seedDueDate = (index: number): string => {
   return base.toISOString().slice(0, 10);
 };
 
+const addExportReviewFields = (
+  result: FieldSeed[],
+  wsLabel: string,
+  doc: EntitySeed,
+  index: number,
+) => {
+  const metadata = buildExportReviewMetadata(index);
+  result.push(
+    {
+      id: seedId(`${wsLabel}-field-document-type-${index}`),
+      workspaceId: doc.workspaceId,
+      propertyId: seedId(`${wsLabel}-prop-document-type`),
+      entityVersionId: doc.versionId,
+      content: {
+        version: 1,
+        type: "single-select",
+        value: metadata.documentType,
+      },
+    },
+    {
+      id: seedId(`${wsLabel}-field-counterparty-${index}`),
+      workspaceId: doc.workspaceId,
+      propertyId: seedId(`${wsLabel}-prop-counterparty`),
+      entityVersionId: doc.versionId,
+      content: {
+        version: 1,
+        type: "text",
+        value: metadata.counterparty,
+      },
+    },
+    {
+      id: seedId(`${wsLabel}-field-jurisdiction-${index}`),
+      workspaceId: doc.workspaceId,
+      propertyId: seedId(`${wsLabel}-prop-jurisdiction`),
+      entityVersionId: doc.versionId,
+      content: {
+        version: 1,
+        type: "single-select",
+        value: metadata.jurisdiction,
+      },
+    },
+    {
+      id: seedId(`${wsLabel}-field-governing-law-${index}`),
+      workspaceId: doc.workspaceId,
+      propertyId: seedId(`${wsLabel}-prop-governing-law`),
+      entityVersionId: doc.versionId,
+      content: {
+        version: 1,
+        type: "text",
+        value: metadata.governingLaw,
+      },
+    },
+    {
+      id: seedId(`${wsLabel}-field-effective-date-${index}`),
+      workspaceId: doc.workspaceId,
+      propertyId: seedId(`${wsLabel}-prop-effective-date`),
+      entityVersionId: doc.versionId,
+      content: {
+        version: 1,
+        type: "date",
+        value: metadata.effectiveDate,
+      },
+    },
+    {
+      id: seedId(`${wsLabel}-field-expiry-date-${index}`),
+      workspaceId: doc.workspaceId,
+      propertyId: seedId(`${wsLabel}-prop-expiry-date`),
+      entityVersionId: doc.versionId,
+      content: {
+        version: 1,
+        type: "date",
+        value: metadata.expiryDate,
+      },
+    },
+    {
+      id: seedId(`${wsLabel}-field-contract-value-${index}`),
+      workspaceId: doc.workspaceId,
+      propertyId: seedId(`${wsLabel}-prop-contract-value`),
+      entityVersionId: doc.versionId,
+      content: {
+        version: 1,
+        type: "int",
+        value: metadata.contractValue,
+        currency: "EUR",
+      },
+    },
+    {
+      id: seedId(`${wsLabel}-field-risk-level-${index}`),
+      workspaceId: doc.workspaceId,
+      propertyId: seedId(`${wsLabel}-prop-risk-level`),
+      entityVersionId: doc.versionId,
+      content: {
+        version: 1,
+        type: "single-select",
+        value: metadata.riskLevel,
+      },
+    },
+    {
+      id: seedId(`${wsLabel}-field-review-status-${index}`),
+      workspaceId: doc.workspaceId,
+      propertyId: seedId(`${wsLabel}-prop-review-status`),
+      entityVersionId: doc.versionId,
+      content: {
+        version: 1,
+        type: "single-select",
+        value: metadata.reviewStatus,
+      },
+    },
+    {
+      id: seedId(`${wsLabel}-field-evidence-quality-${index}`),
+      workspaceId: doc.workspaceId,
+      propertyId: seedId(`${wsLabel}-prop-evidence-quality`),
+      entityVersionId: doc.versionId,
+      content: {
+        version: 1,
+        type: "single-select",
+        value: metadata.evidenceQuality,
+      },
+    },
+    {
+      id: seedId(`${wsLabel}-field-tags-${index}`),
+      workspaceId: doc.workspaceId,
+      propertyId: seedId(`${wsLabel}-prop-tags`),
+      entityVersionId: doc.versionId,
+      content: {
+        version: 1,
+        type: "multi-select",
+        value: metadata.tags,
+      },
+    },
+    {
+      id: seedId(`${wsLabel}-field-key-obligation-${index}`),
+      workspaceId: doc.workspaceId,
+      propertyId: seedId(`${wsLabel}-prop-key-obligation`),
+      entityVersionId: doc.versionId,
+      content: {
+        version: 1,
+        type: "text",
+        value: metadata.keyObligation,
+      },
+    },
+    {
+      id: seedId(`${wsLabel}-field-risk-finding-${index}`),
+      workspaceId: doc.workspaceId,
+      propertyId: seedId(`${wsLabel}-prop-risk-finding`),
+      entityVersionId: doc.versionId,
+      content: {
+        version: 1,
+        type: "text",
+        value: metadata.riskFinding,
+      },
+    },
+  );
+};
+
 const buildFields = (
   wsLabel: string,
   entitySeeds: EntitySeed[],
@@ -2267,6 +2832,186 @@ const buildFields = (
         value: at(notes, noteIndex),
       },
     });
+
+    if (wsLabel === EXPORT_TABLE_MATTER_LABEL) {
+      addExportReviewFields(result, wsLabel, doc, i);
+    }
+  }
+
+  return result;
+};
+
+type JustificationSeed = {
+  id: JustificationId;
+  workspaceId: WorkspaceId;
+  fieldId: FieldId;
+  content: JustificationContent;
+  fileFieldIds: FieldId[];
+};
+
+type ExportReviewCitationSeed = {
+  fieldSuffix: string;
+  statement: string;
+  quote: string;
+};
+
+const buildExportReviewCitationSeeds = (
+  metadata: ExportReviewMetadata,
+): ExportReviewCitationSeed[] => [
+  {
+    fieldSuffix: "document-type",
+    statement: `Document type extracted as ${metadata.documentType}.`,
+    quote: `Document type: ${metadata.documentType}`,
+  },
+  {
+    fieldSuffix: "counterparty",
+    statement: `Counterparty extracted as ${metadata.counterparty}.`,
+    quote: `Counterparty: ${metadata.counterparty}`,
+  },
+  {
+    fieldSuffix: "jurisdiction",
+    statement: `Jurisdiction extracted as ${metadata.jurisdiction}.`,
+    quote: `Jurisdiction: ${metadata.jurisdiction}`,
+  },
+  {
+    fieldSuffix: "governing-law",
+    statement: `Governing law extracted as ${metadata.governingLaw}.`,
+    quote: `Governing law: ${metadata.governingLaw}`,
+  },
+  {
+    fieldSuffix: "effective-date",
+    statement: `Effective date extracted as ${metadata.effectiveDate}.`,
+    quote: `Effective date: ${metadata.effectiveDate}`,
+  },
+  {
+    fieldSuffix: "expiry-date",
+    statement: `Expiry date extracted as ${metadata.expiryDate}.`,
+    quote: `Expiry date: ${metadata.expiryDate}`,
+  },
+  {
+    fieldSuffix: "contract-value",
+    statement: `Contract value extracted as EUR ${metadata.contractValue}.`,
+    quote: `Contract value: EUR ${metadata.contractValue}`,
+  },
+  {
+    fieldSuffix: "risk-level",
+    statement: `Risk level classified as ${metadata.riskLevel}.`,
+    quote: `Risk level: ${metadata.riskLevel}`,
+  },
+  {
+    fieldSuffix: "evidence-quality",
+    statement: `Evidence quality classified as ${metadata.evidenceQuality}.`,
+    quote: `Evidence quality: ${metadata.evidenceQuality}`,
+  },
+  {
+    fieldSuffix: "tags",
+    statement: `Tags extracted as ${metadata.tags.join(", ")}.`,
+    quote: `Tags: ${metadata.tags.join(", ")}`,
+  },
+  {
+    fieldSuffix: "key-obligation",
+    statement: "Key obligation extracted from the obligation section.",
+    quote: metadata.keyObligation,
+  },
+  {
+    fieldSuffix: "risk-finding",
+    statement: "Risk finding extracted from the risk section.",
+    quote: metadata.riskFinding,
+  },
+];
+
+const buildExportReviewJustificationContent = ({
+  fileName,
+  fileFieldId,
+  metadata,
+  citationSeed,
+}: {
+  fileName: string;
+  fileFieldId: FieldId;
+  metadata: ExportReviewMetadata;
+  citationSeed: ExportReviewCitationSeed;
+}): JustificationContent => {
+  if (fileName.endsWith(".docx")) {
+    return {
+      version: 1,
+      blocks: [
+        {
+          kind: "docx-folio",
+          fileFieldId,
+          statements: [
+            {
+              text: citationSeed.statement,
+              citations: [
+                {
+                  blockId: `b-${String(metadata.pageNumber).padStart(4, "0")}`,
+                  text: citationSeed.quote,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  const batesPrefix = fileName.replace(fileExtRe, "").replaceAll("_", "-");
+  return {
+    version: 1,
+    blocks: [
+      {
+        kind: "pdf-bates",
+        fileFieldId,
+        statements: [
+          {
+            text: citationSeed.statement,
+            citations: [
+              {
+                bates: `${batesPrefix}-${metadata.pageNumber}`,
+                pageNumber: metadata.pageNumber,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+};
+
+const buildExportReviewJustifications = (
+  wsId: WorkspaceId,
+  wsLabel: string,
+  entitySeeds: EntitySeed[],
+): JustificationSeed[] => {
+  if (wsLabel !== EXPORT_TABLE_MATTER_LABEL) {
+    return [];
+  }
+
+  const docs = entitySeeds.filter((e) => e.kind === "document");
+  const result: JustificationSeed[] = [];
+
+  for (let i = 0; i < docs.length; i++) {
+    const fileName = at(EXPORT_REVIEW_DOC_NAMES, i);
+    const metadata = buildExportReviewMetadata(i);
+    const fileFieldId = seedId<"field">(`${wsLabel}-field-file-${i}`);
+    const seeds = buildExportReviewCitationSeeds(metadata);
+
+    for (const citationSeed of seeds) {
+      const fieldId = seedId<"field">(
+        `${wsLabel}-field-${citationSeed.fieldSuffix}-${i}`,
+      );
+      result.push({
+        id: seedId(`${wsLabel}-justification-${citationSeed.fieldSuffix}-${i}`),
+        workspaceId: wsId,
+        fieldId,
+        content: buildExportReviewJustificationContent({
+          fileName,
+          fileFieldId,
+          metadata,
+          citationSeed,
+        }),
+        fileFieldIds: [fileFieldId],
+      });
+    }
   }
 
   return result;
@@ -2540,6 +3285,7 @@ const WS_LABELS = [
   "ws-reorganizace",
   "ws-cross-border",
   "ws-gdpr-audit",
+  EXPORT_TABLE_MATTER_LABEL,
   HEAVY_MATTER_LABEL,
 ] as const;
 
@@ -3485,6 +4231,27 @@ export async function seed(organizationId?: string, userId?: string) {
   }
   console.log(`  Fields: ${allFields.length}`);
 
+  const allJustifications: JustificationSeed[] = [];
+  for (const plan of docPlans) {
+    const wsEntities = allEntities.filter((e) => e.workspaceId === plan.wsId);
+    allJustifications.push(
+      ...buildExportReviewJustifications(plan.wsId, plan.wsLabel, wsEntities),
+    );
+  }
+  for (const justification of allJustifications) {
+    await db
+      .insert(justifications)
+      .values({
+        id: justification.id,
+        workspaceId: toWs(justification.workspaceId),
+        fieldId: justification.fieldId,
+        content: justification.content,
+        fileFieldIds: justification.fileFieldIds,
+      })
+      .onConflictDoNothing();
+  }
+  console.log(`  Justifications: ${allJustifications.length}`);
+
   // 7b. Ensure search prerequisites exist on fresh dev databases.
   // `db:push` syncs declarative schema but does not run migration
   // files, so the unaccent extension, the `stella_unaccent` text
@@ -3692,15 +4459,74 @@ export async function seed(organizationId?: string, userId?: string) {
 
 // Allow running as a CLI script
 if (import.meta.main) {
-  const testUser = await db.query.user.findFirst({
-    where: { id: { eq: DEFAULT_USER_ID } },
-    columns: { id: true },
-  });
+  const explicitOrgId = process.env["STELLA_SEED_ORG_ID"];
+  const explicitUserId = process.env["STELLA_SEED_USER_ID"];
 
-  let targetOrgId: string | undefined;
-  let targetUserId: string | undefined;
+  if (
+    (explicitOrgId && !explicitUserId) ||
+    (!explicitOrgId && explicitUserId)
+  ) {
+    console.error(
+      "Set both STELLA_SEED_ORG_ID and STELLA_SEED_USER_ID, or neither.",
+    );
+    process.exit(1);
+  }
 
-  if (!testUser) {
+  const resolveTarget = async () => {
+    if (explicitOrgId && explicitUserId) {
+      return {
+        organizationId: explicitOrgId,
+        userId: explicitUserId,
+        label: "explicit env target",
+      };
+    }
+
+    const { and, desc, eq, gt, isNotNull } = await import("drizzle-orm");
+    const {
+      member: authMember,
+      organization: authOrganization,
+      session: authSession,
+      user: authUser,
+    } = await import("@/api/db/auth-schema");
+
+    const activeSessions = await db
+      .select({
+        userId: authSession.userId,
+        organizationId: authSession.activeOrganizationId,
+        userEmail: authUser.email,
+        organizationName: authOrganization.name,
+      })
+      .from(authSession)
+      .innerJoin(authUser, eq(authUser.id, authSession.userId))
+      .innerJoin(
+        authMember,
+        and(
+          eq(authMember.userId, authSession.userId),
+          eq(authMember.organizationId, authSession.activeOrganizationId),
+        ),
+      )
+      .innerJoin(
+        authOrganization,
+        eq(authOrganization.id, authSession.activeOrganizationId),
+      )
+      .where(
+        and(
+          isNotNull(authSession.activeOrganizationId),
+          gt(authSession.expiresAt, new Date()),
+        ),
+      )
+      .orderBy(desc(authSession.updatedAt))
+      .limit(1);
+
+    const activeSession = activeSessions.at(0);
+    if (activeSession?.organizationId) {
+      return {
+        organizationId: activeSession.organizationId,
+        userId: activeSession.userId,
+        label: `${activeSession.userEmail} / ${activeSession.organizationName}`,
+      };
+    }
+
     const firstMember = await db.query.member.findFirst({
       columns: { userId: true, organizationId: true },
       where: { role: "owner" },
@@ -3710,14 +4536,19 @@ if (import.meta.main) {
       console.error("No users found. Sign in at least once before seeding.");
       process.exit(1);
     }
-    targetOrgId = firstMember.organizationId;
-    targetUserId = firstMember.userId;
-    console.log(
-      `No test user found; seeding into org ${targetOrgId} for user ${targetUserId}`,
-    );
-  }
+    return {
+      organizationId: firstMember.organizationId,
+      userId: firstMember.userId,
+      label: "latest owner fallback",
+    };
+  };
 
-  seed(targetOrgId, targetUserId)
+  const target = await resolveTarget();
+  console.log(
+    `Seeding into org ${target.organizationId} for user ${target.userId} (${target.label})`,
+  );
+
+  seed(target.organizationId, target.userId)
     .then(() => process.exit(0))
     .catch((error: unknown) => {
       console.error("Seed failed:", error);

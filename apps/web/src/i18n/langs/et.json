@@ -539,10 +539,10 @@
     "email": "E-post",
     "empty": "Tühi",
     "emptyScreen": {
-      "letUsKnowAt": "Let us know at",
-      "needHelp": "Need help?",
-      "orLetUsKnowAt": "or let us know at",
-      "viewDocumentation": "View documentation"
+      "letUsKnowAt": "Andke meile teada aadressil",
+      "needHelp": "Vajate abi?",
+      "orLetUsKnowAt": "või andke meile teada aadressil",
+      "viewDocumentation": "Vaata dokumentatsiooni"
     },
     "enterKey": "↵",
     "error": "Viga",
@@ -1963,6 +1963,10 @@
       "cannotDeleteRequired": "Vähemalt üks seda tüüpi vaade on nõutav",
       "copySuffix": "{name} (koopia)",
       "deleteView": "Kustuta vaade",
+      "exportCsv": "Ekspordi CSV",
+      "exportFailed": "Eksport nurjus",
+      "exportTable": "Ekspordi tabel",
+      "exportXlsx": "Ekspordi XLSX",
       "fields": "Väljad:",
       "fieldsSelected": "{count, plural, one {# valitud} other {# valitud}}",
       "groupBy": "Rühmita:",

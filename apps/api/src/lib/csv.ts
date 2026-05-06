@@ -3,16 +3,16 @@
  *
  * Always use `escapeCSV` from this module instead of hand-rolling
  * CSV escaping. It handles both delimiter quoting and spreadsheet
- * formula neutralization (=, +, -, @, tab, CR prefixes).
+ * formula neutralization (=, +, -, @, tab, CR, LF prefixes).
  */
 
-const FORMULA_PREFIX_RE = /^\s*[=+\-@\t\r]/;
+const FORMULA_PREFIX_RE = /^\s*[=+\-@\t\r\n]/;
 
 /**
  * Escape a value for safe inclusion in a CSV cell.
  *
  * - Quotes values containing commas, double quotes, or newlines.
- * - Neutralizes leading formula characters (=, +, -, @, tab, CR),
+ * - Neutralizes leading formula characters (=, +, -, @, tab, CR, LF),
  *   including when preceded by whitespace (Excel trims leading
  *   spaces before evaluating), by prefixing with a tab inside
  *   quotes so spreadsheets treat the cell as text.

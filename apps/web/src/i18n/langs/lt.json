@@ -539,10 +539,10 @@
     "email": "El. paštas",
     "empty": "Tuščia",
     "emptyScreen": {
-      "letUsKnowAt": "Let us know at",
-      "needHelp": "Need help?",
-      "orLetUsKnowAt": "or let us know at",
-      "viewDocumentation": "View documentation"
+      "letUsKnowAt": "Parašykite mums adresu",
+      "needHelp": "Reikia pagalbos?",
+      "orLetUsKnowAt": "arba parašykite mums adresu",
+      "viewDocumentation": "Peržiūrėti dokumentaciją"
     },
     "enterKey": "↵",
     "error": "Klaida",
@@ -1963,6 +1963,10 @@
       "cannotDeleteRequired": "Reikalingas bent vienas šio tipo rodinys",
       "copySuffix": "{name} (kopija)",
       "deleteView": "Ištrinti rodinį",
+      "exportCsv": "Eksportuoti CSV",
+      "exportFailed": "Eksportuoti nepavyko",
+      "exportTable": "Eksportuoti lentelę",
+      "exportXlsx": "Eksportuoti XLSX",
       "fields": "Laukai:",
       "fieldsSelected": "{count, plural, one {# pasirinktas} few {# pasirinkti} many {# pasirinktų} other {# pasirinktų}}",
       "groupBy": "Grupuoti pagal:",

@@ -539,10 +539,10 @@
     "email": "E-mail",
     "empty": "Prázdne",
     "emptyScreen": {
-      "letUsKnowAt": "Let us know at",
-      "needHelp": "Need help?",
-      "orLetUsKnowAt": "or let us know at",
-      "viewDocumentation": "View documentation"
+      "letUsKnowAt": "Dajte nám vedieť na",
+      "needHelp": "Potrebujete pomoc?",
+      "orLetUsKnowAt": "alebo nám dajte vedieť na",
+      "viewDocumentation": "Zobraziť dokumentáciu"
     },
     "enterKey": "↵",
     "error": "Chyba",
@@ -1963,6 +1963,10 @@
       "cannotDeleteRequired": "Je vyžadované aspoň jedno zobrazenie tohto typu",
       "copySuffix": "{name} (kópia)",
       "deleteView": "Vymazať pohľad",
+      "exportCsv": "Exportovať CSV",
+      "exportFailed": "Export zlyhal",
+      "exportTable": "Exportovať tabuľku",
+      "exportXlsx": "Exportovať XLSX",
       "fields": "Polia:",
       "fieldsSelected": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných}}",
       "groupBy": "Zoskupiť podľa:",

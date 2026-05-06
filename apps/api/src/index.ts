@@ -180,7 +180,7 @@ const api = new Elysia()
         "MCP-Protocol-Version",
         SESSION_ID_HEADER,
       ],
-      exposeHeaders: ["set-auth-token"],
+      exposeHeaders: ["set-auth-token", "Content-Disposition"],
     }),
   )
   .onError(({ error, set, code, request, route }) => {

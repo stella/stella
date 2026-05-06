@@ -1,10 +1,5 @@
-import type { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
+import type { WorkspacesData } from "@/routes/_protected.workspaces/-queries";
 
-type WorkspacesQueryFn = Exclude<
-  (typeof workspacesOptions)["queryFn"],
-  undefined
->;
-type WorkspacesData = Awaited<ReturnType<WorkspacesQueryFn>>;
 export type Workspace = WorkspacesData["workspaces"][number];
 
 export type MattersSortKey =
