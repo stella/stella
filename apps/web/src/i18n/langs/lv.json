@@ -539,10 +539,10 @@
     "email": "E-pasts",
     "empty": "Tukšs",
     "emptyScreen": {
-      "letUsKnowAt": "Let us know at",
-      "needHelp": "Need help?",
-      "orLetUsKnowAt": "or let us know at",
-      "viewDocumentation": "View documentation"
+      "letUsKnowAt": "Rakstiet mums uz",
+      "needHelp": "Nepieciešama palīdzība?",
+      "orLetUsKnowAt": "vai rakstiet mums uz",
+      "viewDocumentation": "Skatīt dokumentāciju"
     },
     "enterKey": "↵",
     "error": "Kļūda",
@@ -1963,6 +1963,10 @@
       "cannotDeleteRequired": "Ir nepieciešams vismaz viens šāda veida skats",
       "copySuffix": "{name} (kopija)",
       "deleteView": "Dzēst skatu",
+      "exportCsv": "Eksportēt CSV",
+      "exportFailed": "Eksportēšana neizdevās",
+      "exportTable": "Eksportēt tabulu",
+      "exportXlsx": "Eksportēt XLSX",
       "fields": "Lauki:",
       "fieldsSelected": "{count, plural, zero {# atlasīti} one {# atlasīts} other {# atlasīti}}",
       "groupBy": "Grupēt pēc:",

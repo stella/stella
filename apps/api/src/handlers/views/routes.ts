@@ -5,6 +5,7 @@ import createView from "@/api/handlers/views/create";
 import deleteView from "@/api/handlers/views/delete";
 import readViews from "@/api/handlers/views/read";
 import reorderViews from "@/api/handlers/views/reorder";
+import exportTableView from "@/api/handlers/views/table-export";
 import updateView from "@/api/handlers/views/update";
 import { workspaceAccessMacro } from "@/api/lib/auth";
 
@@ -31,6 +32,10 @@ export const viewsRoute = new Elysia({
       .post("/convert", convertView.handler, {
         params: convertView.config.params,
         body: convertView.config.body,
+      })
+      .get("/export", exportTableView.handler, {
+        params: exportTableView.config.params,
+        query: exportTableView.config.query,
       })
       .delete("/", deleteView.handler, {
         params: deleteView.config.params,

@@ -9,7 +9,12 @@ import {
 } from "@stll/ui/components/menu";
 import { cn } from "@stll/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  getRouteApi,
+  Link,
+  useNavigate,
+} from "@tanstack/react-router";
 import {
   AlertCircleIcon,
   ArrowDownIcon,
@@ -29,6 +34,8 @@ import { myTasksOptions } from "@/routes/_protected.todos/-queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
+
+const protectedRouteApi = getRouteApi("/_protected");
 
 type TaskFilter = "all" | "open" | "in_progress" | "done";
 
@@ -98,9 +105,14 @@ const groupByWorkspace = (tasks: readonly ValidTask[]): GroupedTasks[] => {
 function MyTodosPage() {
   const t = useTranslations();
   const navigate = useNavigate();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
   const [filter, setFilter] = useState<TaskFilter>("all");
   const { data: tasks, isLoading } = useQuery(myTasksOptions);
-  const { data: workspaces } = useQuery(workspacesOptions);
+  const { data: workspaces } = useQuery(
+    workspacesOptions(activeOrganizationId),
+  );
 
   const filtered = useMemo(() => {
     if (!tasks) {

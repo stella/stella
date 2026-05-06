@@ -18,12 +18,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { Result } from "better-result";
 import {
   AlignJustifyIcon,
   CalendarIcon,
   ClockIcon,
+  DownloadIcon,
   EyeIcon,
   FolderIcon,
   FolderOpenIcon,
@@ -33,14 +36,18 @@ import {
   UserIcon,
   WrapTextIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import Tooltip from "@/components/tooltip";
+import { env } from "@/env";
 import type { TranslationKey } from "@/i18n/types";
+import { useAnalytics } from "@/lib/analytics/provider";
+import { ClientOperationError } from "@/lib/errors";
 import type { ViewLayout, WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
+import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
@@ -200,6 +207,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
         <>
           <span className="bg-border mx-1 h-4 w-px" />
           <TableContentModeControl viewId={view.id} />
+          <TableExportMenu view={view} workspaceId={workspaceId} />
           <CreateProperty triggerVariant="labelled" workspaceId={workspaceId} />
         </>
       )}
@@ -265,6 +273,135 @@ const TableContentModeControl = ({ viewId }: TableContentModeControlProps) => {
       })}
     </div>
   );
+};
+
+type TableExportFormat = "csv" | "xlsx";
+
+type TableExportMenuProps = {
+  view: Pick<WorkspaceView, "id" | "name">;
+  workspaceId: string;
+};
+
+const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
+  const t = useTranslations();
+  const locale = useLocale();
+  const analytics = useAnalytics();
+  const [exportingFormat, setExportingFormat] =
+    useState<TableExportFormat | null>(null);
+
+  const handleExport = async (format: TableExportFormat) => {
+    setExportingFormat(format);
+    const result = await Result.tryPromise(async () => {
+      const url = new URL(
+        `/v1/views/${workspaceId}/view/${view.id}/export`,
+        env.VITE_API_URL,
+      );
+      url.searchParams.set("format", format);
+
+      const response = await fetch(url, {
+        credentials: "include",
+        headers: {
+          "Accept-Language": locale,
+        },
+      });
+      if (!response.ok) {
+        throw new ClientOperationError({
+          action: "exportTableView",
+          message: "Failed to export table view",
+        });
+      }
+
+      return {
+        blob: await response.blob(),
+        fileName:
+          getExportFileName(response.headers.get("Content-Disposition")) ??
+          `${getExportBaseName(view.name)}.${format}`,
+      };
+    });
+
+    setExportingFormat(null);
+
+    if (Result.isError(result)) {
+      analytics.captureError(result.error);
+      stellaToast.add({
+        title: t("workspaces.views.exportFailed"),
+        type: "error",
+      });
+      return;
+    }
+
+    downloadFile(result.value.blob, result.value.fileName);
+  };
+
+  return (
+    <Menu>
+      <MenuTrigger
+        render={
+          <Button
+            aria-label={t("workspaces.views.exportTable")}
+            disabled={exportingFormat !== null}
+            size="icon-xs"
+            title={t("workspaces.views.exportTable")}
+            variant="ghost"
+          />
+        }
+      >
+        <DownloadIcon className="size-3.5" />
+      </MenuTrigger>
+      <MenuPopup>
+        <MenuItem
+          disabled={exportingFormat !== null}
+          onClick={() => {
+            void handleExport("csv");
+          }}
+        >
+          {t("workspaces.views.exportCsv")}
+        </MenuItem>
+        <MenuItem
+          disabled={exportingFormat !== null}
+          onClick={() => {
+            void handleExport("xlsx");
+          }}
+        >
+          {t("workspaces.views.exportXlsx")}
+        </MenuItem>
+      </MenuPopup>
+    </Menu>
+  );
+};
+
+const getExportBaseName = (name: string): string => {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return "table";
+  }
+  return trimmed.replaceAll(/[/:*?"<>|\\]/g, "_");
+};
+
+const getExportFileName = (
+  contentDisposition: string | null,
+): string | null => {
+  if (!contentDisposition) {
+    return null;
+  }
+
+  const encodedMatch = /(?:^|;)\s*filename\*=UTF-8''([^;]+)/iu.exec(
+    contentDisposition,
+  );
+  const encodedFileName = encodedMatch?.[1];
+  if (encodedFileName) {
+    const decodedResult = Result.try(() => decodeURIComponent(encodedFileName));
+    if (!Result.isError(decodedResult)) {
+      return decodedResult.value;
+    }
+  }
+
+  const quotedMatch = /(?:^|;)\s*filename="([^"]*)"/iu.exec(contentDisposition);
+  if (quotedMatch?.[1]) {
+    return quotedMatch[1];
+  }
+
+  return /(?:^|;)\s*filename=([^;]+)/iu.exec(contentDisposition)?.[1] ?? null;
 };
 
 type FilesystemOrganizerActionProps = {

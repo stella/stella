@@ -8,7 +8,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { Skeleton } from "@stll/ui/components/skeleton";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -25,7 +25,10 @@ import { ClientGroupHeader } from "@/routes/_protected.workspaces/-components/cl
 import { MatterCard } from "@/routes/_protected.workspaces/-components/matter-card";
 import { MattersTable } from "@/routes/_protected.workspaces/-components/matters-table";
 import { MattersToolbar } from "@/routes/_protected.workspaces/-components/matters-toolbar";
-import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
+import {
+  workspacesKeys,
+  workspacesOptions,
+} from "@/routes/_protected.workspaces/-queries";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 import type {
   Workspace,
@@ -53,9 +56,16 @@ export const Route = createFileRoute("/_protected/workspaces/")({
 
 function RouteComponent() {
   const t = useTranslations();
-  const { data } = useSuspenseQuery(workspacesOptions);
+  const queryClient = useQueryClient();
+  const activeOrganizationId = Route.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data, isFetching } = useSuspenseQuery(
+    workspacesOptions(activeOrganizationId),
+  );
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
+  const resetMatterVisibilityState = useConfigStore((s) => s.updateMatters);
 
   const { sortKey, sortDesc, groupBy, collapsedGroups } = useConfigStore(
     useShallow((s) => ({
@@ -70,6 +80,20 @@ function RouteComponent() {
   const [focusIndex, setFocusIndex] = useState(-1);
   const searchRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const previousOrganizationIdRef = useRef(activeOrganizationId);
+
+  useEffect(() => {
+    if (previousOrganizationIdRef.current === activeOrganizationId) {
+      return;
+    }
+
+    previousOrganizationIdRef.current = activeOrganizationId;
+    setSearch("");
+    resetMatterVisibilityState({ collapsedGroups: [] });
+    void queryClient.invalidateQueries({
+      queryKey: workspacesKeys.list(activeOrganizationId),
+    });
+  }, [activeOrganizationId, queryClient, resetMatterVisibilityState]);
 
   const workspaces = data.workspaces;
   const canOpenCreateMatter =
@@ -140,7 +164,13 @@ function RouteComponent() {
         <div className="relative flex-1">
           <div className="absolute inset-0 overflow-y-auto" ref={scrollRef}>
             {sorted.length === 0 ? (
-              workspaces.length === 0 ? (
+              workspaces.length === 0 && isFetching ? (
+                <div className="grid auto-rows-min gap-4 border-t p-4 md:grid-cols-3">
+                  <Skeleton className="h-22 w-full rounded-xl" />
+                  <Skeleton className="h-22 w-full rounded-xl" />
+                  <Skeleton className="h-22 w-full rounded-xl" />
+                </div>
+              ) : workspaces.length === 0 ? (
                 <EmptyScreen
                   className="min-h-full"
                   description={t("workspaces.emptyMatters.description")}

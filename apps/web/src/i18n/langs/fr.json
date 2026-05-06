@@ -539,10 +539,10 @@
     "email": "E-mail",
     "empty": "Vide",
     "emptyScreen": {
-      "letUsKnowAt": "Let us know at",
-      "needHelp": "Need help?",
-      "orLetUsKnowAt": "or let us know at",
-      "viewDocumentation": "View documentation"
+      "letUsKnowAt": "Écrivez-nous à",
+      "needHelp": "Besoin d’aide ?",
+      "orLetUsKnowAt": "ou écrivez-nous à",
+      "viewDocumentation": "Voir la documentation"
     },
     "enterKey": "↵",
     "error": "Erreur",
@@ -1963,6 +1963,10 @@
       "cannotDeleteRequired": "Au moins une vue de ce type est requise",
       "copySuffix": "{name} (copie)",
       "deleteView": "Supprimer la vue",
+      "exportCsv": "Exporter en CSV",
+      "exportFailed": "Échec de l’export",
+      "exportTable": "Exporter le tableau",
+      "exportXlsx": "Exporter en XLSX",
       "fields": "Champs :",
       "fieldsSelected": "{count, plural, one {# sélectionné} many {# sélectionnés} other {# sélectionnés}}",
       "groupBy": "Regrouper par :",

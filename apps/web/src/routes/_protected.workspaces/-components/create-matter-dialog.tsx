@@ -49,13 +49,11 @@ import {
 } from "@/routes/_protected.workspaces/-components/create-matter-dialog.logic";
 import { useCreateWorkspace } from "@/routes/_protected.workspaces/-mutations";
 import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
+import type { WorkspacesData } from "@/routes/_protected.workspaces/-queries";
 import type { MatterDraftClient } from "@/routes/_protected.workspaces/-store/create-matter-store";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
-type WorkspacesQueryFn = NonNullable<(typeof workspacesOptions)["queryFn"]>;
-type ExistingWorkspace = Awaited<
-  ReturnType<WorkspacesQueryFn>
->["workspaces"][number];
+type ExistingWorkspace = WorkspacesData["workspaces"][number];
 
 const routeApi = getRouteApi("/_protected");
 
@@ -184,7 +182,7 @@ export const CreateMatterDialog = () => {
     enabled: isOpen,
   });
   const { data: workspacesData } = useQuery({
-    ...workspacesOptions,
+    ...workspacesOptions(currentUser.activeOrganizationId),
     enabled: isOpen,
   });
 

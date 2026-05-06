@@ -539,10 +539,10 @@
     "email": "E-mail",
     "empty": "Üres",
     "emptyScreen": {
-      "letUsKnowAt": "Let us know at",
-      "needHelp": "Need help?",
-      "orLetUsKnowAt": "or let us know at",
-      "viewDocumentation": "View documentation"
+      "letUsKnowAt": "Írjon nekünk ide:",
+      "needHelp": "Segítségre van szüksége?",
+      "orLetUsKnowAt": "vagy írjon nekünk ide:",
+      "viewDocumentation": "Dokumentáció megtekintése"
     },
     "enterKey": "↵",
     "error": "Hiba",
@@ -1963,6 +1963,10 @@
       "cannotDeleteRequired": "Legalább egy ilyen típusú nézet szükséges",
       "copySuffix": "{name} (másolat)",
       "deleteView": "Nézet törlése",
+      "exportCsv": "CSV exportálása",
+      "exportFailed": "Az exportálás sikertelen",
+      "exportTable": "Táblázat exportálása",
+      "exportXlsx": "XLSX exportálása",
       "fields": "Mezők:",
       "fieldsSelected": "{count, plural, one {# kiválasztva} other {# kiválasztva}}",
       "groupBy": "Csoportosítás:",

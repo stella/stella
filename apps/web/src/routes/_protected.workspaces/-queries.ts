@@ -5,6 +5,10 @@ import { toAPIError } from "@/lib/errors";
 
 export const workspacesKeys = {
   all: ["workspaces"],
+  list: (activeOrganizationId: string) => [
+    ...workspacesKeys.all,
+    activeOrganizationId,
+  ],
   navigation: () => [...workspacesKeys.all, "navigation"],
   byId: (workspaceId: string) => [...workspacesKeys.all, workspaceId],
   overview: (workspaceId: string) => [
@@ -13,18 +17,27 @@ export const workspacesKeys = {
   ],
 };
 
-export const workspacesOptions = queryOptions({
-  queryKey: workspacesKeys.all,
-  queryFn: async ({ signal }) => {
-    const response = await api.workspaces.get({ fetch: { signal } });
+const readWorkspaces = async (signal?: AbortSignal) => {
+  const response = await api.workspaces.get(
+    signal ? { fetch: { signal } } : {},
+  );
 
-    if (response.error) {
-      throw toAPIError(response.error);
-    }
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
 
-    return response.data;
-  },
-});
+  return response.data;
+};
+
+export type WorkspacesData = Awaited<ReturnType<typeof readWorkspaces>>;
+
+export const workspacesOptions = (activeOrganizationId: string) =>
+  queryOptions({
+    queryKey: workspacesKeys.list(activeOrganizationId),
+    queryFn: async ({ signal }) => await readWorkspaces(signal),
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
 
 export const workspacesNavigationOptions = queryOptions({
   queryKey: workspacesKeys.navigation(),

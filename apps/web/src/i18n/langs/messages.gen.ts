@@ -1966,6 +1966,10 @@ type Messages = {
       "cannotDeleteRequired": "At least one view of this type is required";
       "copySuffix": "{name} (copy)";
       "deleteView": "Delete view";
+      "exportCsv": "Export CSV";
+      "exportFailed": "Export failed";
+      "exportTable": "Export table";
+      "exportXlsx": "Export XLSX";
       "fields": "Fields:";
       "fieldsSelected": "{count, plural, one {# selected} other {# selected}}";
       "groupBy": "Group by:";
