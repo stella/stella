@@ -9,6 +9,7 @@ import {
   FileTextIcon,
   LibraryIcon,
   SearchIcon,
+  UserIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -24,11 +25,13 @@ const getToolInput = (part: ToolPart): unknown => {
   return part.input;
 };
 
-const getRunStellaQuerySource = (
+const CODE_TOOL_NAMES = new Set(["execute-typescript", "run-stella-query"]);
+
+const getCodeToolSource = (
   part: ToolPart,
   toolName: string,
 ): string | undefined => {
-  if (toolName !== "run-stella-query") {
+  if (!CODE_TOOL_NAMES.has(toolName)) {
     return undefined;
   }
   const input = getToolInput(part);
@@ -75,8 +78,9 @@ const getToolSubtitle = ({
   toolName: string;
 }) => {
   switch (toolName) {
+    case "execute-typescript":
     case "run-stella-query": {
-      const source = getRunStellaQuerySource(part, toolName);
+      const source = getCodeToolSource(part, toolName);
       return source ? formatCharacterCount(source.length) : null;
     }
     case "load-skill":
@@ -98,8 +102,11 @@ const getToolSubtitle = ({
 const TOOL_ICONS: Record<string, typeof SearchIcon> = {
   "ask-user": CircleHelpIcon,
   "describe-stella-api": CircleHelpIcon,
+  "describe-stella-function": CircleHelpIcon,
+  "execute-typescript": CodeIcon,
   "run-stella-query": CodeIcon,
   "load-skill": LibraryIcon,
+  "read-contact": UserIcon,
   "read-skill-resource": FileTextIcon,
 };
 
@@ -116,7 +123,7 @@ export const ToolCallCard = ({
   const [expanded, setExpanded] = useState(() =>
     Boolean(
       showDetails &&
-      (name === "run-stella-query" ||
+      (CODE_TOOL_NAMES.has(name) ||
         name === "load-skill" ||
         name === "read-skill-resource"),
     ),
@@ -135,11 +142,11 @@ export const ToolCallCard = ({
   const hasOutput = part.state === "output-available";
   const hasError = part.state === "output-error";
   const toolInput = getToolInput(part);
-  const runStellaQuerySource = getRunStellaQuerySource(part, name);
-  const showRunStellaQueryOutput = name === "run-stella-query" && hasOutput;
+  const codeToolSource = getCodeToolSource(part, name);
+  const showCodeToolOutput = CODE_TOOL_NAMES.has(name) && hasOutput;
   const canExpand =
-    runStellaQuerySource !== undefined ||
-    showRunStellaQueryOutput ||
+    codeToolSource !== undefined ||
+    showCodeToolOutput ||
     (showDetails && toolInput !== undefined) ||
     (showDetails && hasOutput);
 
@@ -180,8 +187,8 @@ export const ToolCallCard = ({
         )}
       </button>
       {expanded &&
-        (runStellaQuerySource !== undefined ||
-          showRunStellaQueryOutput ||
+        (codeToolSource !== undefined ||
+          showCodeToolOutput ||
           (showDetails && toolInput !== undefined) ||
           (showDetails && hasOutput)) && (
           <div className="space-y-2 border-t px-2 py-1.5">
@@ -195,18 +202,18 @@ export const ToolCallCard = ({
                 </pre>
               </div>
             )}
-            {runStellaQuerySource !== undefined && (
+            {codeToolSource !== undefined && (
               <div>
                 <div className="text-muted-foreground mb-1 text-[11px] font-medium">
                   {t("chat.toolCall.sourceCode")}
                 </div>
                 <pre className="bg-background/60 text-foreground max-h-96 overflow-auto rounded border px-2 py-1.5 font-mono text-[11px] whitespace-pre-wrap">
-                  {runStellaQuerySource}
+                  {codeToolSource}
                 </pre>
               </div>
             )}
             {hasOutput &&
-              (showDetails || showRunStellaQueryOutput) &&
+              (showDetails || showCodeToolOutput) &&
               "output" in part && (
                 <div>
                   <div className="text-muted-foreground mb-1 text-[11px] font-medium">

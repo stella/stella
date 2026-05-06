@@ -421,8 +421,11 @@
       "docxReplaceSummary": "Nahradiť „{find}“ za „{replace}“",
       "execute-typescript": "Spúšťanie TypeScriptu",
       "load-skill": "Načítavanie zručnosti",
+      "read-contact": "Čítanie kontaktu",
+      "read-content-across-matters": "Čítanie obsahu naprieč vecami",
       "read-skill-resource": "Čítanie zdroja zručnosti",
       "run-stella-query": "Spúšťanie dotazu Stella",
+      "search-across-matters": "Vyhľadávanie naprieč vecami",
       "unknown": "Používanie nástroja",
       "update-entity-fields": "Aktualizácia metadát"
     },

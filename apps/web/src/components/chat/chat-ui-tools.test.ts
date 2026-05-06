@@ -17,6 +17,22 @@ describe("chat tool titles", () => {
     );
   });
 
+  test("preserves labels for legacy persisted tool parts", () => {
+    expect(getChatToolTitleKey("describe-stella-function")).toBe(
+      "chat.tool.describe-stella-function",
+    );
+    expect(getChatToolTitleKey("execute-typescript")).toBe(
+      "chat.tool.execute-typescript",
+    );
+    expect(getChatToolTitleKey("search-across-matters")).toBe(
+      "chat.tool.search-across-matters",
+    );
+    expect(getChatToolTitleKey("read-content-across-matters")).toBe(
+      "chat.tool.read-content-across-matters",
+    );
+    expect(getChatToolTitleKey("read-contact")).toBe("chat.tool.read-contact");
+  });
+
   test("uses the translated unknown fallback for unknown tools", () => {
     expect(getChatToolTitleKey("searchCaseLaw")).toBe("chat.tool.unknown");
   });

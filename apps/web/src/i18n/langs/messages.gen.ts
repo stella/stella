@@ -413,6 +413,7 @@ type Messages = {
       "ask-user": "Asking for clarification";
       "create-document": "Creating document";
       "describe-stella-api": "Inspecting Stella API";
+      "describe-stella-function": "Inspecting stella function";
       "docxCommentSummary": "Add a comment to {blockId}";
       "docxDeleteSummary": "Delete {blockId}";
       "docxEditMore": "{count, plural, one {# more edit} other {# more edits}}";
@@ -421,9 +422,13 @@ type Messages = {
       "docxInsertBeforeSummary": "Insert text before {blockId}";
       "docxReplaceBlockSummary": "Replace {blockId}";
       "docxReplaceSummary": "Replace “{find}” with “{replace}”";
+      "execute-typescript": "Running TypeScript";
       "load-skill": "Loading skill";
+      "read-contact": "Reading contact";
+      "read-content-across-matters": "Reading content across matters";
       "read-skill-resource": "Reading skill resource";
       "run-stella-query": "Running Stella query";
+      "search-across-matters": "Searching across matters";
       "unknown": "Using tool";
       "update-entity-fields": "Updating metadata";
     };
