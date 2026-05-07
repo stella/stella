@@ -182,6 +182,15 @@ const isSuggestionPluginActive = (state: EditorState): boolean =>
 const areDocsEqual = (left: JSONContent, right: JSONContent) =>
   JSON.stringify(left) === JSON.stringify(right);
 
+const getEditorHtml = (editor: Editor) =>
+  editor.isEmpty ? "" : editor.getHTML().trim();
+
+const isSelectionAtStart = ({ selection }: EditorState) =>
+  selection.empty && selection.from <= 1;
+
+const isSelectionAtEnd = ({ doc, selection }: EditorState) =>
+  selection.empty && selection.to >= doc.content.size - 1;
+
 export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   const registrationsRef = useRef(new Map<string, RegisteredExtension>());
   const activeEditorRef = useRef<ActiveChatEditorHandle | null>(null);
@@ -366,10 +375,12 @@ export const useChatEditorManager = () => {
 export const useChatEditor = ({
   onDraftStart,
   placeholder,
+  sentMessageHistoryHtml,
   threadRef,
 }: {
   onDraftStart?: (() => void) | undefined;
   placeholder?: string | undefined;
+  sentMessageHistoryHtml?: readonly string[] | undefined;
   threadRef: ChatThreadRef;
 }): ChatEditorController => {
   const t = useTranslations();
@@ -382,8 +393,14 @@ export const useChatEditor = ({
   const submitHandlerRef = useRef<(() => Promise<void>) | null>(null);
   const fileIdCounterRef = useRef(0);
   const activePluginKeysRef = useRef<(string | PluginKey)[]>([]);
+  const editorRef = useRef<Editor | null>(null);
   const isApplyingStoredDraftRef = useRef(false);
+  const isNavigatingHistoryRef = useRef(false);
   const draftStartedThreadKeyRef = useRef<string | null>(null);
+  const sentMessageHistoryHtmlRef = useRef<readonly string[]>([]);
+  const messageHistoryIndexRef = useRef<number | null>(null);
+  const markDraftStartedRef = useRef<(() => void) | null>(null);
+  sentMessageHistoryHtmlRef.current = sentMessageHistoryHtml ?? [];
   const threadKey = getChatThreadKey(threadRef);
   const {
     extensionVersion,
@@ -417,6 +434,11 @@ export const useChatEditor = ({
     draftStartedThreadKeyRef.current = threadKey;
     onDraftStart?.();
   }, [onDraftStart, threadKey]);
+  markDraftStartedRef.current = markDraftStarted;
+
+  useEffect(() => {
+    messageHistoryIndexRef.current = null;
+  }, [sentMessageHistoryHtml, threadKey]);
 
   const fetchWorkspaceEntities = useCallback(
     async (workspace: ChatMentionOption, query: string) => {
@@ -566,6 +588,10 @@ export const useChatEditor = ({
       return;
     }
 
+    if (!isNavigatingHistoryRef.current) {
+      messageHistoryIndexRef.current = null;
+    }
+
     setDraft(
       threadKey,
       createChatDraftState({
@@ -593,6 +619,78 @@ export const useChatEditor = ({
   );
   const promptsRef = useRef(allPrompts);
   promptsRef.current = allPrompts;
+
+  const handleMessageHistoryKeyDown = useCallback(
+    (state: EditorState, event: KeyboardEvent) => {
+      if (
+        (event.key !== "ArrowUp" && event.key !== "ArrowDown") ||
+        event.isComposing
+      ) {
+        return false;
+      }
+
+      if (isSuggestionPluginActive(state)) {
+        return false;
+      }
+
+      if (attachmentsRef.current.length > 0) {
+        return false;
+      }
+
+      const targetEditor = editorRef.current;
+      if (targetEditor === null) {
+        return false;
+      }
+
+      const history = sentMessageHistoryHtmlRef.current;
+      const currentIndex = messageHistoryIndexRef.current;
+      if (history.length === 0) {
+        return false;
+      }
+
+      if (event.key === "ArrowDown" && currentIndex === null) {
+        return false;
+      }
+
+      const currentHtml = getEditorHtml(targetEditor);
+      if (currentIndex === null && currentHtml !== "") {
+        return false;
+      }
+
+      if (currentIndex !== null) {
+        const isAtHistoryBoundary =
+          event.key === "ArrowUp"
+            ? isSelectionAtStart(state)
+            : isSelectionAtEnd(state);
+        if (!isAtHistoryBoundary) {
+          return false;
+        }
+      }
+
+      let nextIndex: number | null = null;
+      if (event.key === "ArrowUp") {
+        nextIndex = Math.min((currentIndex ?? -1) + 1, history.length - 1);
+      } else if (currentIndex !== null && currentIndex > 0) {
+        nextIndex = currentIndex - 1;
+      }
+      const nextHtml = nextIndex === null ? "" : (history.at(nextIndex) ?? "");
+
+      event.preventDefault();
+      isNavigatingHistoryRef.current = true;
+      try {
+        targetEditor.commands.setContent(nextHtml);
+        targetEditor.commands.focus("end");
+      } finally {
+        isNavigatingHistoryRef.current = false;
+      }
+      messageHistoryIndexRef.current = nextIndex;
+      if (nextHtml !== "") {
+        markDraftStartedRef.current?.();
+      }
+      return true;
+    },
+    [],
+  );
 
   const editor = useEditor({
     autofocus: false,
@@ -634,6 +732,7 @@ export const useChatEditor = ({
       }),
     ],
     onCreate: ({ editor: nextEditor }) => {
+      editorRef.current = nextEditor;
       setIsEmpty(nextEditor.isEmpty);
     },
     onUpdate: ({ editor: nextEditor }) => {
@@ -645,6 +744,10 @@ export const useChatEditor = ({
           "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm focus-visible:outline-none",
       },
       handleKeyDown: (view, event) => {
+        if (handleMessageHistoryKeyDown(view.state, event)) {
+          return true;
+        }
+
         // Submit on Enter or Cmd/Ctrl+Enter. Shift+Enter falls
         // through to the HardBreak extension (newline). The
         // mention-suggestion plugin owns Enter while its popup is
@@ -666,6 +769,8 @@ export const useChatEditor = ({
       },
     },
   });
+
+  editorRef.current = editor;
 
   const syncEditorPlugins = useCallback(
     (targetEditor: Editor) => {
