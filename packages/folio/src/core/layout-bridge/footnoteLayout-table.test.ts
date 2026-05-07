@@ -6,6 +6,7 @@ import {
   applyFootnotePresentation,
   convertFootnoteToContent,
 } from "./footnoteLayout";
+import { resetCanvasContext } from "./measuring/measureContainer";
 
 const footnoteWithTable: Footnote = {
   type: "footnote",
@@ -65,6 +66,44 @@ const emptyFootnoteWithTable: Footnote = {
   ],
 };
 
+function withFakeTextMeasure(runTest: () => void): void {
+  const originalDocument = globalThis.document;
+  const fakeDocument = {
+    createElement() {
+      return {
+        getContext() {
+          return {
+            font: "",
+            measureText(text: string) {
+              return {
+                width: text.length * 5,
+                actualBoundingBoxAscent: 8,
+                actualBoundingBoxDescent: 2,
+              };
+            },
+          };
+        },
+      };
+    },
+  } as unknown as Document;
+
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: fakeDocument,
+  });
+  resetCanvasContext();
+
+  try {
+    runTest();
+  } finally {
+    resetCanvasContext();
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: originalDocument,
+    });
+  }
+}
+
 describe("footnote layout", () => {
   test("routes footnotes through the body pipeline so tables survive", () => {
     const content = convertFootnoteToContent(footnoteWithTable, 3, 400, {
@@ -91,18 +130,34 @@ describe("footnote layout", () => {
   });
 
   test("measures table footnotes without a caller-provided measurement hook", () => {
-    const content = convertFootnoteToContent(emptyFootnoteWithTable, 3, 400);
+    withFakeTextMeasure(() => {
+      const content = convertFootnoteToContent(emptyFootnoteWithTable, 3, 400);
 
-    expect(content.blocks.map((block) => block.kind)).toEqual(["table"]);
-    expect(Number.isNaN(content.height)).toBe(false);
-    expect(content.height).toBeGreaterThan(0);
+      expect(content.blocks.map((block) => block.kind)).toEqual([
+        "paragraph",
+        "table",
+      ]);
+      expect(Number.isNaN(content.height)).toBe(false);
+      expect(content.height).toBeGreaterThan(0);
 
-    const tableMeasure = content.measures.at(0);
-    expect(tableMeasure?.kind).toBe("table");
-    if (tableMeasure?.kind !== "table") {
-      throw new Error("Expected footnote table to have a table measure");
-    }
-    expect(tableMeasure.totalHeight).toBeGreaterThan(0);
+      const numberBlock = content.blocks.at(0);
+      expect(numberBlock?.kind).toBe("paragraph");
+      if (numberBlock?.kind !== "paragraph") {
+        throw new Error("Expected footnote number paragraph");
+      }
+      expect(numberBlock.runs.at(0)).toMatchObject({
+        kind: "text",
+        text: "3  ",
+        superscript: true,
+      });
+
+      const tableMeasure = content.measures.at(1);
+      expect(tableMeasure?.kind).toBe("table");
+      if (tableMeasure?.kind !== "table") {
+        throw new Error("Expected footnote table to have a table measure");
+      }
+      expect(tableMeasure.totalHeight).toBeGreaterThan(0);
+    });
   });
 
   test("applies footnote font size to nested table paragraphs and field runs", () => {
@@ -133,7 +188,7 @@ describe("footnote layout", () => {
       },
     ];
 
-    const table = applyFootnotePresentation(blocks, 4).at(0);
+    const table = applyFootnotePresentation(blocks, 4).at(1);
     expect(table?.kind).toBe("table");
     if (table?.kind !== "table") {
       throw new Error("Expected a table block");

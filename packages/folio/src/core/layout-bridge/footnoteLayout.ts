@@ -409,6 +409,19 @@ export function applyFootnotePresentation(
       ...first,
       runs: [numberRun, ...first.runs],
     };
+  } else {
+    output.unshift({
+      kind: "paragraph",
+      id: `fn-number-${displayNumber}`,
+      runs: [
+        {
+          kind: "text",
+          text: `${displayNumber}  `,
+          fontSize: FOOTNOTE_FONT_SIZE,
+          superscript: true,
+        },
+      ],
+    });
   }
 
   return output;

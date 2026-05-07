@@ -35,6 +35,7 @@ export type FontStyle = {
   italic?: boolean;
   letterSpacing?: number; // in pixels
   textTransform?: "uppercase";
+  horizontalScale?: number;
 };
 
 /**
@@ -259,7 +260,7 @@ export function measureTextWidth(text: string, style: FontStyle): number {
     width += style.letterSpacing * (measuredText.length - 1);
   }
 
-  return width;
+  return width * getHorizontalScaleFactor(style);
 }
 
 /**
@@ -316,6 +317,7 @@ export function measureRun(text: string, style: FontStyle): RunMeasurement {
       charWidth += letterSpacing;
     }
 
+    charWidth *= getHorizontalScaleFactor(style);
     charWidths.push(charWidth);
     totalWidth += charWidth;
   }
@@ -332,6 +334,10 @@ function applyTextTransform(text: string, style: FontStyle): string {
     return text.toLocaleUpperCase();
   }
   return text;
+}
+
+function getHorizontalScaleFactor(style: FontStyle): number {
+  return (style.horizontalScale ?? 100) / 100;
 }
 
 /**

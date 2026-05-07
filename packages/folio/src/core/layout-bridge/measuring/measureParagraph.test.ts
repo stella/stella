@@ -128,7 +128,7 @@ describe("inline image paragraph measurement", () => {
 });
 
 describe("all-caps paragraph measurement", () => {
-  test("measures all-caps runs using uppercase glyph widths", () => {
+  function withFakeTextMeasure(runTest: () => void): void {
     const originalDocument = globalThis.document;
     const fakeDocument = {
       createElement() {
@@ -160,6 +160,18 @@ describe("all-caps paragraph measurement", () => {
     resetCanvasContext();
 
     try {
+      runTest();
+    } finally {
+      resetCanvasContext();
+      Object.defineProperty(globalThis, "document", {
+        configurable: true,
+        value: originalDocument,
+      });
+    }
+  }
+
+  test("measures all-caps runs using uppercase glyph widths", () => {
+    withFakeTextMeasure(() => {
       const measure = measureParagraph(
         {
           kind: "paragraph",
@@ -170,12 +182,21 @@ describe("all-caps paragraph measurement", () => {
       );
 
       expect(measure.lines).toHaveLength(2);
-    } finally {
-      resetCanvasContext();
-      Object.defineProperty(globalThis, "document", {
-        configurable: true,
-        value: originalDocument,
-      });
-    }
+    });
+  });
+
+  test("measures horizontally scaled runs using scaled glyph widths", () => {
+    withFakeTextMeasure(() => {
+      const measure = measureParagraph(
+        {
+          kind: "paragraph",
+          id: "scaled",
+          runs: [{ kind: "text", text: "iiii", horizontalScale: 150 }],
+        },
+        25,
+      );
+
+      expect(measure.lines).toHaveLength(2);
+    });
   });
 });

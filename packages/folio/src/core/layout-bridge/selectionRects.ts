@@ -79,6 +79,9 @@ function runToFontStyle(run: TextRun | TabRun): FontStyle {
       ? { letterSpacing: run.letterSpacing }
       : {}),
     ...(run.allCaps ? { textTransform: "uppercase" as const } : {}),
+    ...(run.horizontalScale !== undefined
+      ? { horizontalScale: run.horizontalScale }
+      : {}),
   };
 }
 

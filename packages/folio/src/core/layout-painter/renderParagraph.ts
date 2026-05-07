@@ -927,11 +927,12 @@ export function renderLine(
       // Measure text width for accurate tab position tracking
       const fontSize = run.fontSize || 11;
       const fontFamily = run.fontFamily || "Calibri";
-      currentX += measureText(
+      const measuredWidth = measureText(
         run.allCaps ? run.text.toLocaleUpperCase() : run.text,
         fontSize,
         fontFamily,
       );
+      currentX += measuredWidth * ((run.horizontalScale ?? 100) / 100);
     } else if (isImageRun(run)) {
       // Skip floating images - they're rendered separately at page level.
       // Exception: inside table cells, floating images must render in-flow
