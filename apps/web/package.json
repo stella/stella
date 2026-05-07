@@ -72,6 +72,7 @@
     "better-auth": "catalog:",
     "better-result": "catalog:",
     "class-variance-authority": "^0.7.1",
+    "cobe": "^2.0.1",
     "diff": "catalog:",
     "idb": "^8.0.3",
     "immer": "^11.1.4",

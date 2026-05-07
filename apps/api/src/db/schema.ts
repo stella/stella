@@ -157,6 +157,12 @@ export type SchedulerSchedule =
   | SchedulerIntervalSchedule;
 
 export type SchedulerPayload = Record<string, unknown>;
+
+export type PracticeJurisdiction = {
+  countryCode: string;
+  isPrimary: boolean;
+};
+
 const tsvector = customType<{ data: string }>({
   dataType: () => "tsvector",
 });
@@ -1671,6 +1677,10 @@ export const organizationSettings = p.pgTable(
       .boolean("document_stamp_enabled")
       .notNull()
       .default(true),
+    practiceJurisdictions: jsonb("practice_jurisdictions")
+      .$type<PracticeJurisdiction[]>()
+      .notNull()
+      .default([]),
     /** Encrypted OrgAIConfig JSON (AES-256-GCM). */
     aiConfigEncrypted: bytea("ai_config_encrypted"),
     /** AES-GCM initialization vector for aiConfigEncrypted. */

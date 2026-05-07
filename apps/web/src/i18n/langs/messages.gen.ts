@@ -1160,6 +1160,16 @@ type Messages = {
     "inviteInvalidEmail": "Not a valid email: {value}";
     "inviteSubtitle": "They'll receive an email with a link to join.";
     "inviteTitle": "Invite your team";
+    "jurisdictionGlobeLabel": "Selected practice jurisdictions on a globe";
+    "jurisdictionMakePrimary": "Make {name} primary";
+    "jurisdictionPrimary": "Primary";
+    "jurisdictionRemove": "Remove {name}";
+    "jurisdictionSaveFailed": "Couldn't save your jurisdictions. You can finish this from settings.";
+    "jurisdictionSearchLabel": "Search countries";
+    "jurisdictionSearchPlaceholder": "Search countries";
+    "jurisdictionSubtitle": "Choose the countries you commonly work with. Stella will use this to rank sources, templates, and legal context.";
+    "jurisdictionSuggested": "Suggested";
+    "jurisdictionTitle": "Pick your practice jurisdictions";
     "orgNameLabel": "Team name";
     "orgSubtitle": "This is how your colleagues will find you.";
     "orgTitle": "Name your team";
@@ -1167,6 +1177,7 @@ type Messages = {
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}";
     "stepAi": "AI";
     "stepDesktop": "Desktop";
+    "stepJurisdiction": "Jurisdiction";
     "stepOrganization": "Team";
     "stepTeam": "Invite";
     "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms>.";

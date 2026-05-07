@@ -236,6 +236,7 @@ const sendMessage = createSafeRootHandler(
         activeFile: body.activeFile,
         contextMatterIds: effectiveContextMatterIds,
         messageWindow,
+        organizationId: session.activeOrganizationId,
         refuseNonPlainTextFiles: thirdPartyBoundary.type === "anonymized",
         safeDb,
         userContext: body.userContext,
@@ -605,6 +606,7 @@ type PrepareChatContextProps = {
   activeFile: IncomingActiveFile | undefined;
   contextMatterIds: SafeId<"workspace">[];
   messageWindow: ChatMessage[];
+  organizationId: SafeId<"organization">;
   refRegistry: ReturnType<typeof createChatRefRegistry>;
   refuseNonPlainTextFiles: boolean;
   safeDb: SafeDb;
@@ -627,6 +629,7 @@ const prepareChatContext = async ({
   activeFile,
   contextMatterIds,
   messageWindow,
+  organizationId,
   refRegistry,
   refuseNonPlainTextFiles,
   safeDb,
@@ -635,11 +638,22 @@ const prepareChatContext = async ({
   workspaceId,
 }: PrepareChatContextProps): Promise<PrepareChatContextResult> =>
   await Result.gen(async function* () {
+    const orgSettingsRow = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.organizationSettings.findFirst({
+          where: { organizationId: { eq: organizationId } },
+          columns: { practiceJurisdictions: true },
+        }),
+      ),
+    );
+    const practiceJurisdictions = orgSettingsRow?.practiceJurisdictions ?? [];
+
     const [systemResult, hydratedMessagesResult] = await Promise.all([
       buildChatSystemPromptParts({
         activeDecision,
         activeFile,
         contextMatterIds,
+        practiceJurisdictions,
         refRegistry,
         safeDb,
         userContext,

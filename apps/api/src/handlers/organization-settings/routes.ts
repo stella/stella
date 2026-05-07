@@ -9,6 +9,7 @@ import readAnonymizationBlacklist from "@/api/handlers/organization-settings/rea
 import updateOrganizationSettings from "@/api/handlers/organization-settings/update";
 import updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
 import updateAnonymizationBlacklist from "@/api/handlers/organization-settings/update-anonymization-blacklist";
+import updatePracticeJurisdictions from "@/api/handlers/organization-settings/update-practice-jurisdictions";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 export const organizationSettingsRoute = new Elysia({
@@ -22,6 +23,9 @@ export const organizationSettingsRoute = new Elysia({
   .get("/", readOrganizationSettings.handler)
   .post("/", updateOrganizationSettings.handler, {
     body: updateOrganizationSettings.config.body,
+  })
+  .post("/practice-jurisdictions", updatePracticeJurisdictions.handler, {
+    body: updatePracticeJurisdictions.config.body,
   })
   .post("/preview", previewOrganizationSettings.handler, {
     body: previewOrganizationSettings.config.body,

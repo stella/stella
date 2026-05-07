@@ -21,6 +21,7 @@ const readOrganizationSettings = createSafeRootHandler(
           columns: {
             matterNumberPattern: true,
             matterNumberPadding: true,
+            practiceJurisdictions: true,
           },
         }),
       ),
@@ -31,6 +32,7 @@ const readOrganizationSettings = createSafeRootHandler(
         row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
       matterNumberPadding:
         row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
+      practiceJurisdictions: row?.practiceJurisdictions ?? [],
     });
   },
 );
