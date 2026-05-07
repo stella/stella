@@ -70,6 +70,13 @@ export type ToFlowBlocksOptions = {
 };
 
 const DEFAULT_FONT = "Calibri";
+const DEFAULT_TABLE_CELL_MARGIN_TWIPS = {
+  top: 0,
+  right: 108,
+  bottom: 0,
+  left: 108,
+} as const;
+type TablePaddingSide = keyof typeof DEFAULT_TABLE_CELL_MARGIN_TWIPS;
 
 /**
  * Constrain image dimensions to fit within the page content area.
@@ -1199,6 +1206,7 @@ function convertTableCell(
     | { top?: number; bottom?: number; left?: number; right?: number }
     | undefined;
   const resolvePaddingSide = (
+    side: TablePaddingSide,
     cellTwips: number | undefined,
     tableTwips: number | undefined,
   ): number => {
@@ -1211,13 +1219,17 @@ function convertTableCell(
     if (tableTwips !== undefined) {
       return twipsToPixels(tableTwips);
     }
-    return 0;
+    return twipsToPixels(DEFAULT_TABLE_CELL_MARGIN_TWIPS[side]);
   };
   const padding = {
-    top: resolvePaddingSide(margins?.top, tableCellMargins?.top),
-    right: resolvePaddingSide(margins?.right, tableCellMargins?.right),
-    bottom: resolvePaddingSide(margins?.bottom, tableCellMargins?.bottom),
-    left: resolvePaddingSide(margins?.left, tableCellMargins?.left),
+    top: resolvePaddingSide("top", margins?.top, tableCellMargins?.top),
+    right: resolvePaddingSide("right", margins?.right, tableCellMargins?.right),
+    bottom: resolvePaddingSide(
+      "bottom",
+      margins?.bottom,
+      tableCellMargins?.bottom,
+    ),
+    left: resolvePaddingSide("left", margins?.left, tableCellMargins?.left),
   };
 
   const cell: TableCell = {

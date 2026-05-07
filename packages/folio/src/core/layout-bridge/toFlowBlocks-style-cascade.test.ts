@@ -195,4 +195,98 @@ describe("toFlowBlocks style cascade", () => {
       expect(tableBlock.rows[0]?.cells[0]?.padding?.right).toBeCloseTo(19.2, 1);
     }
   });
+
+  test("style-less tables use built-in TableNormal side padding", () => {
+    const table: Table = {
+      type: "table",
+      rows: [
+        {
+          type: "tableRow",
+          cells: [
+            {
+              type: "tableCell",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    {
+                      type: "run",
+                      content: [{ type: "text", text: "cell" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const document: Document = {
+      package: {
+        document: { content: [table] },
+      },
+    };
+
+    const tableBlock = toFlowBlocks(toProseDoc(document), {})[0];
+    expect(tableBlock?.kind).toBe("table");
+    if (tableBlock?.kind === "table") {
+      const padding = tableBlock.rows.at(0)?.cells.at(0)?.padding;
+      expect(padding?.top).toBe(0);
+      expect(padding?.right).toBeCloseTo(7.2, 1);
+      expect(padding?.bottom).toBe(0);
+      expect(padding?.left).toBeCloseTo(7.2, 1);
+    }
+  });
+
+  test("explicit zero cell margins fall through to table defaults", () => {
+    const table: Table = {
+      type: "table",
+      formatting: {
+        cellMargins: {
+          left: { value: 144, type: "dxa" },
+          right: { value: 288, type: "dxa" },
+        },
+      },
+      rows: [
+        {
+          type: "tableRow",
+          cells: [
+            {
+              type: "tableCell",
+              formatting: {
+                margins: {
+                  left: { value: 0, type: "dxa" },
+                  right: { value: 0, type: "dxa" },
+                },
+              },
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    {
+                      type: "run",
+                      content: [{ type: "text", text: "cell" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const document: Document = {
+      package: {
+        document: { content: [table] },
+      },
+    };
+
+    const tableBlock = toFlowBlocks(toProseDoc(document), {})[0];
+    expect(tableBlock?.kind).toBe("table");
+    if (tableBlock?.kind === "table") {
+      const padding = tableBlock.rows.at(0)?.cells.at(0)?.padding;
+      expect(padding?.left).toBeCloseTo(9.6, 1);
+      expect(padding?.right).toBeCloseTo(19.2, 1);
+    }
+  });
 });
