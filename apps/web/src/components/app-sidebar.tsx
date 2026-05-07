@@ -1200,7 +1200,7 @@ export function AppSidebar(props: AppSidebarProps) {
                   <LogOutIcon />
                   {t("common.signOut")}
                 </MenuItem>
-                <div className="text-muted-foreground/70 px-2 pt-1.5 pb-1 text-[0.6875rem] tabular-nums">
+                <div className="text-foreground-ghost px-2 pt-1.5 pb-1 text-[0.6875rem] tabular-nums">
                   v{__APP_VERSION__}
                 </div>
               </MenuPopup>

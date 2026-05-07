@@ -67,7 +67,7 @@ export const DownloadStep = ({ onNext, onSkip }: DownloadStepProps) => {
         )}
       </div>
 
-      <p className="text-muted-foreground/60 mt-3 text-xs">
+      <p className="text-foreground-muted mt-3 text-xs">
         {t("onboarding.desktopHint")}
       </p>
 

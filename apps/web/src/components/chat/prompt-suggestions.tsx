@@ -40,7 +40,7 @@ export const PromptSuggestions = ({
             onClick={() => onSelect(prompt)}
             type="button"
           >
-            <span className="text-muted-foreground/55 group-hover:text-muted-foreground mt-0.5 flex size-4 shrink-0 items-center justify-center font-mono text-[13px] leading-none transition-colors">
+            <span className="text-foreground-muted group-hover:text-muted-foreground mt-0.5 flex size-4 shrink-0 items-center justify-center font-mono text-[13px] leading-none transition-colors">
               /
             </span>
             <span className="min-w-0 flex-1">

@@ -987,7 +987,7 @@ const AutosaveIndicator = ({ status }: { status: AutosaveStatus }) => {
   return (
     <span
       aria-label={isSynced ? t("folio.synced") : t("folio.syncing")}
-      className="text-muted-foreground/70 inline-flex h-8 w-8 items-center justify-center"
+      className="text-foreground-ghost inline-flex h-8 w-8 items-center justify-center"
       role="status"
       title={isSynced ? t("folio.synced") : t("folio.syncing")}
     >

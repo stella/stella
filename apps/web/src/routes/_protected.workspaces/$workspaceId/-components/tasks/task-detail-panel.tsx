@@ -308,7 +308,7 @@ export const TaskDetailPanel = ({
             />
           ) : (
             <button
-              className="hover:text-foreground/80 w-full text-start text-base font-semibold transition-colors"
+              className="hover:text-foreground-strong-muted w-full text-start text-base font-semibold transition-colors"
               onClick={startEditingName}
               type="button"
             >

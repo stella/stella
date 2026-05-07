@@ -32,7 +32,7 @@ function TabsList({
         "text-muted-foreground relative z-0 flex w-fit items-center justify-center gap-x-0.5",
         "data-[orientation=vertical]:flex-col",
         variant === "default"
-          ? "bg-muted text-muted-foreground/72 rounded-lg p-0.5"
+          ? "bg-muted text-foreground-label rounded-lg p-0.5"
           : "*:data-[slot=tabs-tab]:hover:bg-accent data-[orientation=horizontal]:py-1 data-[orientation=vertical]:px-1",
         className,
       )}

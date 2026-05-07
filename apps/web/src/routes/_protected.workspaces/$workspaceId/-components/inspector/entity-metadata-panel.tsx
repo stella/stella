@@ -306,7 +306,7 @@ const EntityMetadataContent = ({
                 <>
                   <span
                     className={cn(
-                      "text-muted-foreground/80 inline-flex items-center gap-1 text-[10px] font-medium tracking-wide uppercase",
+                      "text-foreground-strong-muted inline-flex items-center gap-1 text-[10px] font-medium tracking-wide uppercase",
                       isPending && "opacity-60",
                     )}
                   >
@@ -358,7 +358,7 @@ const EntityMetadataContent = ({
                           <div className="text-primary mb-1 text-[10px] font-semibold tracking-wide uppercase">
                             {t("workspaces.justification")}
                           </div>
-                          <div className="text-foreground/80 text-xs leading-relaxed break-words">
+                          <div className="text-foreground-strong-muted text-xs leading-relaxed break-words">
                             <Justification
                               justification={activeJustification}
                               workspaceId={workspaceId}

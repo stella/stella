@@ -91,7 +91,7 @@ export const InlineOptionEditor = ({
       <div className="flex items-center gap-1.5 rounded-[7px] border border-dashed py-1 ps-1 pe-1.5">
         <Button
           aria-label={t("workspaces.properties.addOption")}
-          className="text-muted-foreground/72 size-6 shrink-0"
+          className="text-foreground-label size-6 shrink-0"
           onClick={addFromDraft}
           size="icon-sm"
           type="button"
@@ -100,7 +100,7 @@ export const InlineOptionEditor = ({
           <PlusIcon className="size-3" />
         </Button>
         <input
-          className="placeholder:text-muted-foreground/72 flex-1 bg-transparent text-sm focus-visible:outline-none"
+          className="placeholder:text-foreground-placeholder flex-1 bg-transparent text-sm focus-visible:outline-none"
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -195,7 +195,7 @@ const OptionRow = ({
         value={draft}
       />
       <Button
-        className="text-muted-foreground/64 size-5 opacity-0 group-hover:opacity-100"
+        className="text-foreground-placeholder size-5 opacity-0 group-hover:opacity-100"
         onClick={onRemove}
         size="icon-sm"
         type="button"

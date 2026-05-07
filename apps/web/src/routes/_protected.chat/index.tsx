@@ -459,7 +459,7 @@ const LandingRowIcon = ({ children, tone = "muted" }: LandingRowIconProps) => (
     className={cn(
       "mt-0.5 flex size-4 shrink-0 items-center justify-center transition-colors",
       tone === "muted" &&
-        "text-muted-foreground/55 group-hover:text-muted-foreground",
+        "text-foreground-muted group-hover:text-muted-foreground",
     )}
   >
     {children}

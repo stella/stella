@@ -217,8 +217,8 @@ export const StatusMessage = ({
       className={cn(
         "size-10",
         status === "error"
-          ? "text-muted-foreground/40"
-          : "text-muted-foreground/60",
+          ? "text-foreground-disabled"
+          : "text-foreground-muted",
       )}
     />
     <div className="flex flex-col items-center gap-y-1.5">

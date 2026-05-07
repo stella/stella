@@ -36,6 +36,13 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
+  --color-foreground-disabled: var(--foreground-disabled);
+  --color-foreground-subtle: var(--foreground-subtle);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-placeholder: var(--foreground-placeholder);
+  --color-foreground-ghost: var(--foreground-ghost);
+  --color-foreground-label: var(--foreground-label);
+  --color-foreground-strong-muted: var(--foreground-strong-muted);
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
@@ -82,6 +89,21 @@
     in srgb,
     var(--color-neutral-500) 90%,
     var(--color-black)
+  );
+  --foreground-disabled: color-mix(in srgb, var(--foreground) 40%, transparent);
+  --foreground-subtle: color-mix(in srgb, var(--foreground) 50%, transparent);
+  --foreground-muted: color-mix(in srgb, var(--foreground) 60%, transparent);
+  --foreground-placeholder: color-mix(
+    in srgb,
+    var(--foreground) 64%,
+    transparent
+  );
+  --foreground-ghost: color-mix(in srgb, var(--foreground) 70%, transparent);
+  --foreground-label: color-mix(in srgb, var(--foreground) 72%, transparent);
+  --foreground-strong-muted: color-mix(
+    in srgb,
+    var(--foreground) 80%,
+    transparent
   );
   --accent: --alpha(var(--color-black) / 4%);
   --accent-foreground: var(--color-neutral-800);

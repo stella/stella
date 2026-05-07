@@ -512,11 +512,11 @@ function DatePickerPopover({
                         "rounded-full text-xs transition-colors",
                         "focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none",
                         disabled
-                          ? "text-muted-foreground/30 cursor-not-allowed"
+                          ? "text-foreground-disabled cursor-not-allowed"
                           : "hover:bg-muted cursor-pointer",
                         !day.isCurrentMonth &&
                           !disabled &&
-                          "text-muted-foreground/40",
+                          "text-foreground-disabled",
                         day.isToday &&
                           !isSelected &&
                           !disabled &&
@@ -721,7 +721,7 @@ const YearGrid = ({
                   "rounded-md px-2 py-1.5 text-xs transition-colors",
                   "hover:bg-muted cursor-pointer",
                   "focus-visible:ring-ring focus-visible:ring-1 focus-visible:outline-none",
-                  isOutside && !isSelected && "text-muted-foreground/50",
+                  isOutside && !isSelected && "text-foreground-subtle",
                   isNow && !isSelected && "ring-foreground font-medium ring-1",
                   isSelected &&
                     "bg-primary text-primary-foreground hover:bg-primary/90",

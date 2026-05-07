@@ -253,7 +253,7 @@ function LoginOrSignup() {
           )}
         </form.Subscribe>
       </Form>
-      <p className="text-muted-foreground/60 text-xs">
+      <p className="text-foreground-muted text-xs">
         {t.rich("onboarding.termsNotice", {
           terms: (chunks: React.ReactNode) => (
             <a

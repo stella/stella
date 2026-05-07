@@ -165,7 +165,7 @@ export const CellMetadataFlags = ({
                 "bg-background/55 focus-visible:ring-ring absolute end-1 top-1 z-20 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px] transition-opacity outline-none focus-visible:ring-1",
                 hasVerifiedFlag
                   ? "opacity-100"
-                  : "text-muted-foreground/70 opacity-0 group-hover/cell-content:opacity-100",
+                  : "text-foreground-ghost opacity-0 group-hover/cell-content:opacity-100",
               )}
               onClick={(event) => {
                 event.stopPropagation();

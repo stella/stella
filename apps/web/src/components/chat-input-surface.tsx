@@ -142,7 +142,7 @@ export const ChatInputSurface = ({
         {isEmpty && attachments.length === 0 && (
           <span
             aria-hidden="true"
-            className="text-muted-foreground/64 pointer-events-none absolute start-3 top-2 text-sm"
+            className="text-foreground-placeholder pointer-events-none absolute start-3 top-2 text-sm"
           >
             {t("chat.placeholder")}
           </span>

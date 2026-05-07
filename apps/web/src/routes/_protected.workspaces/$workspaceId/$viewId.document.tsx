@@ -788,7 +788,7 @@ const VersionDropZone = ({
       {children}
       {isDropTarget && (
         <div className="border-foreground/20 bg-foreground/5 pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-lg border-2 border-dashed">
-          <div className="text-foreground/50 flex flex-col items-center gap-2">
+          <div className="text-foreground-subtle flex flex-col items-center gap-2">
             <UploadIcon className="size-8" />
             <span className="text-sm font-medium">
               {t("fileDetail.dropToUploadVersion")}

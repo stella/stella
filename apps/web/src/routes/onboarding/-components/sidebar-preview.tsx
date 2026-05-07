@@ -119,7 +119,7 @@ export const SidebarPreview = ({
               {organizationName}
             </span>
           ) : (
-            <span className="text-muted-foreground/50">
+            <span className="text-foreground-subtle">
               {t("onboarding.orgNameLabel")}
             </span>
           )}
@@ -132,7 +132,7 @@ export const SidebarPreview = ({
           icon={SearchIcon}
           label={t("navigation.search")}
           trailing={
-            <kbd className="text-muted-foreground/80 text-[0.625rem]">
+            <kbd className="text-foreground-strong-muted text-[0.625rem]">
               {formatForDisplay(HOTKEYS.SEARCH)}
             </kbd>
           }
@@ -193,7 +193,7 @@ export const SidebarPreview = ({
                     className={`size-1.5 rounded-full transition-opacity duration-500 ease-in-out ${STATUS_DOT_CLASS[status]}`}
                     style={{ opacity: dotShouldPulse && !pulseOn ? 0.3 : 1 }}
                   />
-                  <span className="text-muted-foreground/80 text-[10px] tracking-wide uppercase">
+                  <span className="text-foreground-strong-muted text-[10px] tracking-wide uppercase">
                     {tOrganization(
                       status === "invalid"
                         ? "aiConfig.providerKeyInvalidShort"

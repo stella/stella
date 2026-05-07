@@ -1079,7 +1079,7 @@ export function PromptBarPlaceholderContent({
   children: ReactNode;
 }) {
   return (
-    <span className="text-muted-foreground/60 truncate text-[13px] leading-5">
+    <span className="text-foreground-muted truncate text-[13px] leading-5">
       {children}
     </span>
   );
@@ -1495,7 +1495,7 @@ function ThreadPanel(props: ThreadPanelProps) {
           onDoubleClick={() => onResize(null)}
           className="group absolute inset-x-0 -top-3 z-20 flex h-3 cursor-ns-resize touch-none items-center justify-center select-none"
         >
-          <div className="bg-muted-foreground/50 group-hover:bg-primary h-1 w-12 rounded-full transition-colors" />
+          <div className="bg-foreground-subtle group-hover:bg-primary h-1 w-12 rounded-full transition-colors" />
         </div>
       )}
 
@@ -1546,8 +1546,8 @@ function ThreadPanel(props: ThreadPanelProps) {
           // branch because the thread doesn't render until the first
           // message arrives; standalone always renders, so we need a
           // gentle landing surface instead of a blank canvas.
-          <div className="text-muted-foreground/80 m-auto flex max-w-[28ch] flex-col items-center gap-1 text-center text-[12px] text-balance">
-            <span className="text-foreground/80 text-[13px] font-medium">
+          <div className="text-foreground-strong-muted m-auto flex max-w-[28ch] flex-col items-center gap-1 text-center text-[12px] text-balance">
+            <span className="text-foreground-strong-muted text-[13px] font-medium">
               Start a chat
             </span>
             <span>
@@ -1772,7 +1772,7 @@ function SuggestionCard(props: SuggestionCardProps) {
       data-status={suggestion.status}
       className={cn(
         "border-border/60 bg-background/60 rounded-lg border px-3 py-2 transition-colors",
-        focused && "border-foreground/40 bg-muted/40",
+        focused && "border-foreground-disabled bg-muted/40",
       )}
     >
       <button
@@ -1816,7 +1816,7 @@ function SuggestionCard(props: SuggestionCardProps) {
           >
             −
           </span>
-          <span className="decoration-muted-foreground/70 line-through">
+          <span className="decoration-foreground-ghost line-through">
             {suggestion.originalText}
           </span>
         </div>

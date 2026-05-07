@@ -75,7 +75,7 @@ type LabelPreset = {
 };
 
 const LABEL_PRESETS: LabelPreset[] = [
-  { key: "draft", color: "bg-muted-foreground/40" },
+  { key: "draft", color: "bg-foreground-disabled" },
   // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
   { key: "counterpartyReview", color: "bg-blue-500 dark:bg-blue-400" },
   // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
@@ -553,4 +553,4 @@ function VersionItem({
 
 const firstName = (fullName: string) => fullName.split(/\s+/).at(0) ?? fullName;
 
-const DEFAULT_LABEL_COLOR = "bg-muted-foreground/40";
+const DEFAULT_LABEL_COLOR = "bg-foreground-disabled";

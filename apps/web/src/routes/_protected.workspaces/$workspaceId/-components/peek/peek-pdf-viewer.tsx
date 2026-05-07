@@ -176,7 +176,7 @@ const PeekViewerErrorFallback = ({ onRetry }: { onRetry: () => void }) => {
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-      <AlertTriangleIcon className="text-muted-foreground/40 size-8" />
+      <AlertTriangleIcon className="text-foreground-disabled size-8" />
       <p className="text-muted-foreground text-sm">
         {t("common.somethingWentWrong")}
       </p>

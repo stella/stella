@@ -80,7 +80,7 @@ export const EntityLink = ({
       <button
         className={cn(
           "inline-flex items-center gap-0.5",
-          "text-foreground decoration-muted-foreground/40 underline",
+          "text-foreground decoration-foreground-disabled underline",
           "underline-offset-2 transition-colors",
           "hover:decoration-foreground cursor-pointer",
         )}
@@ -162,7 +162,7 @@ export const EntityLink = ({
     <button
       className={cn(
         "inline-flex items-center gap-0.5",
-        "text-foreground decoration-muted-foreground/40 underline",
+        "text-foreground decoration-foreground-disabled underline",
         "underline-offset-2 transition-colors",
         "hover:decoration-foreground cursor-pointer",
       )}

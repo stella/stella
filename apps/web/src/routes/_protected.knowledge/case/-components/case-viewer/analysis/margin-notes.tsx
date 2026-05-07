@@ -124,7 +124,7 @@ export const MarginNotes = ({
 
         return (
           <button
-            className="text-foreground/60 hover:text-foreground/80 absolute start-0 end-0 border-s-[3px] py-1 ps-2.5 text-start transition-colors"
+            className="text-foreground-muted hover:text-foreground-strong-muted absolute start-0 end-0 border-s-[3px] py-1 ps-2.5 text-start transition-colors"
             key={item.id}
             onClick={() => scrollTo(item.startAnchorId)}
             ref={(el) => measureRef(el, item.id)}
@@ -139,12 +139,12 @@ export const MarginNotes = ({
             type="button"
           >
             {item.heading && (
-              <span className="text-foreground/80 mb-0.5 block text-[0.8rem] leading-tight font-semibold">
+              <span className="text-foreground-strong-muted mb-0.5 block text-[0.8rem] leading-tight font-semibold">
                 {capitalize(item.heading)}
               </span>
             )}
             {item.text && (
-              <span className="text-foreground/65 block text-[0.75rem] leading-snug">
+              <span className="text-foreground-placeholder block text-[0.75rem] leading-snug">
                 {item.text}
               </span>
             )}
