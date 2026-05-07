@@ -6,6 +6,7 @@ import {
   getUserMessageHtmlHistory,
   hasApprovedActiveDocxEditAwaitingClientOutput,
   isApprovalPart,
+  isPublicOfficialChatToolName,
 } from "@/components/chat/chat-ui-tools";
 
 describe("chat tool titles", () => {
@@ -40,6 +41,14 @@ describe("chat tool titles", () => {
 });
 
 describe("isApprovalPart", () => {
+  test("distinguishes official public lookup tools from other public tools", () => {
+    expect(isPublicOfficialChatToolName("ares_lookup_company")).toBe(true);
+    expect(isPublicOfficialChatToolName("ares_search_companies")).toBe(true);
+    expect(isPublicOfficialChatToolName("mcp__salvia__search_decisions")).toBe(
+      false,
+    );
+  });
+
   test("treats active DOCX edit tools as approval parts", () => {
     const part = {
       approval: { id: "approval-1" },
@@ -66,7 +75,7 @@ describe("isApprovalPart", () => {
     expect(isApprovalPart(part)).toBe(true);
   });
 
-  test("treats external native API tools as approval parts", () => {
+  test("treats legacy external native API approval requests as approval parts", () => {
     const part = {
       approval: { id: "approval-1" },
       input: { ico: "27082440" },
@@ -77,6 +86,18 @@ describe("isApprovalPart", () => {
     };
 
     expect(isApprovalPart(part)).toBe(true);
+  });
+
+  test("does not treat public ARES output as an approval part", () => {
+    const part = {
+      input: { ico: "27082440" },
+      output: { ico: "27082440", name: "Alza.cz a.s." },
+      state: "output-available",
+      toolCallId: "tool-call-1",
+      type: "tool-ares_lookup_company",
+    };
+
+    expect(isApprovalPart(part)).toBe(false);
   });
 
   test("does not treat ask-user as an approval part", () => {

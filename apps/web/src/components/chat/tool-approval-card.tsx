@@ -17,6 +17,7 @@ import {
   getChatToolTitleKey,
   isExternalMcpToolName,
   isApprovalToolName,
+  isPublicOfficialChatToolName,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
@@ -366,6 +367,7 @@ export const ToolApprovalCard = ({
   const isBlocked = blockedApprovalTools?.has(name) ?? false;
   const isExternalMcpApproval = isExternalMcpToolName(name);
   const canPersistApproval = name !== "apply-active-docx-edits";
+  const isPublicOfficialApproval = isPublicOfficialChatToolName(name);
   /**
    * DOCX edit batches always go to the side review panel — never
    * gated by a chat-level Allow/Deny. The card collapses to a
@@ -397,6 +399,7 @@ export const ToolApprovalCard = ({
       isBlocked ||
       autoApproveRef.current ||
       (!isDocxEditBatch &&
+        !isPublicOfficialApproval &&
         !conversationApprovedTools.has(name) &&
         !alwaysApprovedTools.has(name))
     ) {
@@ -415,6 +418,7 @@ export const ToolApprovalCard = ({
     alwaysApprovedTools,
     conversationApprovedTools,
     isDocxEditBatch,
+    isPublicOfficialApproval,
     name,
     part,
     onApprove,
@@ -527,55 +531,59 @@ export const ToolApprovalCard = ({
         )}
 
       {/* Actions — hidden for DOCX edit batches (reviewed in the side panel). */}
-      {approvalId && !isProcessing && !isBlocked && !isDocxEditBatch && (
-        <div className="border-border/50 flex flex-wrap items-center gap-2 border-t px-3 py-2">
-          <Button
-            autoFocus
-            onClick={() => {
-              setResponded(true);
-              onApprove(approvalId, name);
-            }}
-            size="xs"
-          >
-            {t("chat.approval.allowOnce")}
-          </Button>
-          {canPersistApproval && (
+      {approvalId &&
+        !isProcessing &&
+        !isBlocked &&
+        !isDocxEditBatch &&
+        !isPublicOfficialApproval && (
+          <div className="border-border/50 flex flex-wrap items-center gap-2 border-t px-3 py-2">
             <Button
+              autoFocus
               onClick={() => {
                 setResponded(true);
-                onAllowInConversation(approvalId, name);
+                onApprove(approvalId, name);
               }}
               size="xs"
-              variant="outline"
             >
-              {t("chat.approval.allowInConversation")}
+              {t("chat.approval.allowOnce")}
             </Button>
-          )}
-          {canPersistApproval && (
+            {canPersistApproval && (
+              <Button
+                onClick={() => {
+                  setResponded(true);
+                  onAllowInConversation(approvalId, name);
+                }}
+                size="xs"
+                variant="outline"
+              >
+                {t("chat.approval.allowInConversation")}
+              </Button>
+            )}
+            {canPersistApproval && (
+              <Button
+                onClick={() => {
+                  setResponded(true);
+                  onAlwaysAllow(approvalId, name);
+                }}
+                size="xs"
+                variant="outline"
+              >
+                {t("chat.approval.alwaysAllow")}
+              </Button>
+            )}
             <Button
+              className="ms-auto"
               onClick={() => {
                 setResponded(true);
-                onAlwaysAllow(approvalId, name);
+                onDeny(approvalId);
               }}
               size="xs"
-              variant="outline"
+              variant="ghost"
             >
-              {t("chat.approval.alwaysAllow")}
+              {t("chat.approval.deny")}
             </Button>
-          )}
-          <Button
-            className="ms-auto"
-            onClick={() => {
-              setResponded(true);
-              onDeny(approvalId);
-            }}
-            size="xs"
-            variant="ghost"
-          >
-            {t("chat.approval.deny")}
-          </Button>
-        </div>
-      )}
+          </div>
+        )}
     </div>
   );
 };

@@ -21,6 +21,10 @@ export type ActiveDocxEditApprovalPart = Extract<
   { type: "tool-apply-active-docx-edits" }
 >;
 export type AskUserInput = SharedChatUITools["ask-user"]["input"];
+type PublicOfficialToolName = Extract<
+  BuiltInApprovalToolName,
+  "ares_lookup_company" | "ares_search_companies"
+>;
 
 const CHAT_TOOL_TITLE_KEYS = {
   "apply-active-docx-edits": "chat.tool.apply-active-docx-edits",
@@ -51,9 +55,19 @@ const CHAT_TOOL_DISPLAY_TITLE_KEYS = {
 const UNKNOWN_CHAT_TOOL_TITLE_KEY =
   "chat.tool.unknown" satisfies TranslationKey;
 
+const PUBLIC_OFFICIAL_CHAT_TOOL_NAMES = {
+  ares_lookup_company: true,
+  ares_search_companies: true,
+} as const satisfies Record<PublicOfficialToolName, true>;
+
 export const isExternalMcpToolName = (
   toolName: string,
 ): toolName is `mcp__${string}` => toolName.startsWith("mcp__");
+
+export const isPublicOfficialChatToolName = (
+  toolName: string,
+): toolName is PublicOfficialToolName =>
+  toolName in PUBLIC_OFFICIAL_CHAT_TOOL_NAMES;
 
 export type ChatToolTitleKey =
   | (typeof CHAT_TOOL_DISPLAY_TITLE_KEYS)[keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS]
@@ -95,7 +109,18 @@ export const isApprovalPart = (part: unknown): part is ApprovalToolPart => {
   }
 
   const toolName = part.type.slice("tool-".length);
-  return isApprovalToolName(toolName);
+  if (!isApprovalToolName(toolName)) {
+    return false;
+  }
+
+  if (
+    toolName === "apply-active-docx-edits" ||
+    isExternalMcpToolName(toolName)
+  ) {
+    return true;
+  }
+
+  return "approval" in part;
 };
 
 export const isApprovedActiveDocxEditPart = (

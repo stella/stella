@@ -123,21 +123,25 @@ describe("chat tool schemas", () => {
 
     expect(aresLookup.needsApproval).toBeUndefined();
     expect(getChatToolPolicy(aresLookup)).toEqual({
+      kind: "public_official",
       needsApproval: false,
       requiresAnonymization: false,
     });
     expect(aresSearch.needsApproval).toBeUndefined();
     expect(getChatToolPolicy(aresSearch)).toEqual({
+      kind: "public_official",
       needsApproval: false,
       requiresAnonymization: false,
     });
     expect(updateEntityFields.needsApproval).toBe(true);
     expect(getChatToolPolicy(updateEntityFields)).toEqual({
+      kind: "mutation",
       needsApproval: true,
       requiresAnonymization: false,
     });
     expect(createDocument.needsApproval).toBeUndefined();
     expect(getChatToolPolicy(createDocument)).toEqual({
+      kind: "internal",
       needsApproval: false,
       requiresAnonymization: false,
     });

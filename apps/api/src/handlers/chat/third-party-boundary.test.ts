@@ -257,4 +257,76 @@ describe("chat third-party anonymization boundary", () => {
 
     expect(result.error).toMatchObject({ status: 422 });
   });
+
+  test("allows official public lookup tools without anonymized mode", async () => {
+    const boundary = createRawBoundary();
+    const tools = {
+      official_lookup: applyChatToolPolicy(
+        tool({
+          inputSchema: valibotSchema(v.strictObject({ ico: v.string() })),
+          execute: async ({ ico }) => ({ ico, name: "Alza.cz a.s." }),
+        }),
+        CHAT_TOOL_POLICY_KIND.publicOfficial,
+      ),
+    };
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      // SAFETY: the helper only reads and wraps execute() in this unit test.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      tools: tools as unknown as ToolSet,
+    });
+    // SAFETY: the test fixture above defines this execute signature.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    const executable = prepared["official_lookup"] as
+      | { execute?: ((input: { ico: string }) => Promise<unknown>) | undefined }
+      | undefined;
+
+    expect(await executable?.execute?.({ ico: "27082440" })).toEqual({
+      ico: "27082440",
+      name: "Alza.cz a.s.",
+    });
+  });
+
+  test("refuses unofficial public lookup tools without anonymized mode", async () => {
+    const boundary = createRawBoundary();
+    const tools = {
+      unofficial_lookup: applyChatToolPolicy(
+        tool({
+          inputSchema: valibotSchema(v.strictObject({ query: v.string() })),
+          execute: async ({ query }) => ({ query }),
+        }),
+        CHAT_TOOL_POLICY_KIND.publicUnofficial,
+      ),
+    };
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      // SAFETY: the helper only reads and wraps execute() in this unit test.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      tools: tools as unknown as ToolSet,
+    });
+    // SAFETY: the test fixture above defines this execute signature.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    const executable = prepared["unofficial_lookup"] as
+      | {
+          execute?:
+            | ((input: { query: string }) => Promise<unknown>)
+            | undefined;
+        }
+      | undefined;
+
+    if (!executable?.execute) {
+      throw new Error("Expected unofficial lookup execute function");
+    }
+
+    const result = await Result.tryPromise({
+      try: async () => await executable.execute?.({ query: "Jan Novák" }),
+      catch: (cause) => cause,
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("Expected unofficial public lookup refusal");
+    }
+
+    expect(result.error).toMatchObject({ status: 422 });
+  });
 });
