@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { toSafeId } from "@/api/lib/branded-types";
+import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 
 import {
   appendActiveFilePromptIfEntityExists,
@@ -66,6 +67,10 @@ describe("chat prompt builders", () => {
       expect(prompt).toContain("Available Stella read functions");
       expect(prompt).toContain("read.listContacts({");
       expect(prompt).toContain("read.getMatterEntityContents({");
+      expect(prompt).toContain("DOCX REVIEW TAGS");
+      expect(prompt).toContain(DOCX_REVIEW_MARKUP_EXAMPLES.insertion);
+      expect(prompt).toContain(DOCX_REVIEW_MARKUP_EXAMPLES.deletion);
+      expect(prompt).toContain(DOCX_REVIEW_MARKUP_EXAMPLES.comment);
       // Full declarations and JSON schemas stay out of the prompt;
       // `describe-stella-api({name})` remains the detailed fallback.
       expect(prompt).not.toContain("namespace read {");

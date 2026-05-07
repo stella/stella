@@ -1,6 +1,7 @@
 import type { FolioAIBlock } from "@stll/folio/server";
 import * as v from "valibot";
 
+import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import { Unreachable } from "@/api/lib/errors/tagged-errors";
 import type { TextInput } from "@/api/lib/workflow/generate-batch-shared";
 import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
@@ -17,7 +18,19 @@ export const WORKFLOW_SYSTEM_PROMPT =
   "Return an object whose keys are exactly the provided " +
   "propertyIds and values contain the answer and justification " +
   "for each propertyId. The justification schema for the current " +
-  "batch tells you exactly how to cite each source.";
+  "batch tells you exactly how to cite each source. " +
+  "DOCX block text may contain review tags: " +
+  `${DOCX_REVIEW_MARKUP_EXAMPLES.insertion}, ` +
+  `${DOCX_REVIEW_MARKUP_EXAMPLES.deletion}, and ` +
+  `${DOCX_REVIEW_MARKUP_EXAMPLES.comment}. Treat insert tags as text that ` +
+  "belongs to the reviewed version, delete tags as text that was removed, " +
+  "and comment tags as reviewer notes attached near the surrounding text. " +
+  "Use tag attributes such as author, initials, date, status, and thread " +
+  "when the prompt asks who made a change, when it was made, or whether a " +
+  "comment is resolved or a reply. " +
+  "Use these tags when the prompt asks about edits, prior wording, removed " +
+  "language, additions, redlines, or comments. Otherwise answer without " +
+  "showing the tag syntax.";
 
 const ACTIVE_DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS = 1500;
 

@@ -7,6 +7,7 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import { fileNameSearchText } from "@/api/lib/search/query";
@@ -144,7 +145,7 @@ const buildSearchDocument = async (
         iv,
       );
       if (plaintext) {
-        fieldTexts.push(plaintext);
+        fieldTexts.push(docxReviewMarkupToSearchText(plaintext));
       }
     } catch (error) {
       // Decryption fails when CONTENT_ENCRYPTION_KEY was
