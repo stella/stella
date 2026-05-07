@@ -1164,7 +1164,7 @@
     "jurisdictionSaveFailed": "Nem sikerült menteni a joghatóságokat. Ezt a beállításokban fejezheti be.",
     "jurisdictionSearchLabel": "Országok keresése",
     "jurisdictionSearchPlaceholder": "Országok keresése",
-    "jurisdictionSubtitle": "Válassza ki azokat az országokat, amelyekkel rendszeresen dolgozik. A Stella ez alapján rangsorolja a forrásokat, sablonokat és jogi kontextust.",
+    "jurisdictionSubtitle": "Válassza ki azokat az országokat, amelyekkel rendszeresen dolgozik. A Stella ennek alapján szabja személyre az élményét.",
     "jurisdictionSuggested": "Javasolt",
     "jurisdictionTitle": "Válassza ki gyakorlati joghatóságait",
     "orgNameLabel": "Csapat neve",

@@ -1164,7 +1164,7 @@
     "jurisdictionSaveFailed": "Couldn't save your jurisdictions. You can finish this from settings.",
     "jurisdictionSearchLabel": "Search countries",
     "jurisdictionSearchPlaceholder": "Search countries",
-    "jurisdictionSubtitle": "Choose the countries you commonly work with. Stella will use this to rank sources, templates, and legal context.",
+    "jurisdictionSubtitle": "Choose the countries you commonly work with. Stella will use this to customize your experience.",
     "jurisdictionSuggested": "Suggested",
     "jurisdictionTitle": "Pick your practice jurisdictions",
     "orgNameLabel": "Team name",

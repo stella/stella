@@ -1164,7 +1164,7 @@
     "jurisdictionSaveFailed": "Ihre Jurisdiktionen konnten nicht gespeichert werden. Sie können dies in den Einstellungen abschließen.",
     "jurisdictionSearchLabel": "Länder suchen",
     "jurisdictionSearchPlaceholder": "Länder suchen",
-    "jurisdictionSubtitle": "Wählen Sie die Länder aus, mit denen Sie regelmäßig arbeiten. Stella nutzt dies, um Quellen, Vorlagen und Rechtskontext zu priorisieren.",
+    "jurisdictionSubtitle": "Wählen Sie die Länder aus, mit denen Sie regelmäßig arbeiten. Stella passt damit Ihre Erfahrung an.",
     "jurisdictionSuggested": "Vorgeschlagen",
     "jurisdictionTitle": "Wählen Sie Ihre Praxisjurisdiktionen",
     "orgNameLabel": "Teamname",

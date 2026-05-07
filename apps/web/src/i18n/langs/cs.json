@@ -1164,7 +1164,7 @@
     "jurisdictionSaveFailed": "Jurisdikce se nepodařilo uložit. Můžete je doplnit v nastavení.",
     "jurisdictionSearchLabel": "Hledat země",
     "jurisdictionSearchPlaceholder": "Hledat země",
-    "jurisdictionSubtitle": "Vyberte země, se kterými běžně pracujete. Stella podle toho seřadí zdroje, šablony a právní kontext.",
+    "jurisdictionSubtitle": "Vyberte země, se kterými běžně pracujete. Stella podle toho přizpůsobí vaše prostředí.",
     "jurisdictionSuggested": "Doporučeno",
     "jurisdictionTitle": "Vyberte jurisdikce své praxe",
     "orgNameLabel": "Název týmu",

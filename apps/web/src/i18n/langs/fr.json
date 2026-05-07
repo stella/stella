@@ -1164,7 +1164,7 @@
     "jurisdictionSaveFailed": "Impossible d’enregistrer vos juridictions. Vous pourrez terminer depuis les paramètres.",
     "jurisdictionSearchLabel": "Rechercher des pays",
     "jurisdictionSearchPlaceholder": "Rechercher des pays",
-    "jurisdictionSubtitle": "Choisissez les pays avec lesquels vous travaillez couramment. Stella les utilisera pour classer les sources, modèles et contextes juridiques.",
+    "jurisdictionSubtitle": "Choisissez les pays avec lesquels vous travaillez habituellement. Stella s’en servira pour personnaliser votre expérience.",
     "jurisdictionSuggested": "Suggéré",
     "jurisdictionTitle": "Choisissez vos juridictions de pratique",
     "orgNameLabel": "Nom de l'équipe",
