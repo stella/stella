@@ -35,6 +35,19 @@ export const classifyAIError = (error: unknown): AIErrorKind => {
       return "provider_unavailable";
     }
   }
+  // Walk through any wrapper that carries the original provider error
+  // on `cause` (e.g. our own `WorkflowIntegrationError`, or generic
+  // `Error.cause` from a higher-level rethrow). Without this, callers
+  // that pass a wrapped error get classified as `unknown` and miss the
+  // mapped HTTP status / UX copy.
+  if (
+    error !== null &&
+    typeof error === "object" &&
+    "cause" in error &&
+    error.cause !== undefined
+  ) {
+    return classifyAIError(error.cause);
+  }
   return "unknown";
 };
 
