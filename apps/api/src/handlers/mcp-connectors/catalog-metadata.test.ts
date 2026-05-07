@@ -55,7 +55,7 @@ describe("mcpConnectorCatalogMetadata", () => {
       expect.objectContaining({
         slug: "ares",
         isRecommended: true,
-        iconUrl: "https://ares.gov.cz/favicon.ico",
+        iconUrl: "https://ares.gov.cz/logo-ares-new.ico",
         recommendedJurisdictions: ["CZ"],
       }),
     );

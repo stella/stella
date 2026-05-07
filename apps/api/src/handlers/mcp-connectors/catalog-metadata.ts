@@ -31,7 +31,7 @@ const NATIVE_TOOL_CATALOG = [
       "Czech company lookup by IČO or company name from the public ARES register.",
     url: "https://ares.gov.cz",
     documentationUrl: "https://ares.gov.cz/stranky/vyvojar-info",
-    iconUrl: "https://ares.gov.cz/favicon.ico",
+    iconUrl: "https://ares.gov.cz/logo-ares-new.ico",
     recommendedJurisdictions: [...ARES_RECOMMENDED_JURISDICTIONS],
   },
 ] satisfies NativeToolCatalogItem[];
