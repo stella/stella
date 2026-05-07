@@ -170,9 +170,6 @@ const mcpOAuthClientCheck = sql`(
   ${organizationCheck} AND EXISTS (
   SELECT 1 FROM mcp_connectors mc
   WHERE mc.id = connector_id
-    AND (mc.organization_id IS NULL OR mc.organization_id = (SELECT current_setting(
-      '${sql.raw(SETTING_ORGANIZATION_ID)}', true
-    )))
   )
 )`;
 

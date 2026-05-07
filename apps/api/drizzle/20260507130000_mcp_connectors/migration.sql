@@ -140,9 +140,6 @@ CREATE POLICY "mcp_oauth_client_select" ON "mcp_oauth_clients" AS PERMISSIVE FOR
   )) AND EXISTS (
   SELECT 1 FROM mcp_connectors mc
   WHERE mc.id = connector_id
-    AND (mc.organization_id IS NULL OR mc.organization_id = (SELECT current_setting(
-      'app.organization_id', true
-    )))
 )));
 --> statement-breakpoint
 CREATE POLICY "mcp_oauth_client_insert" ON "mcp_oauth_clients" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK ((
@@ -152,9 +149,6 @@ CREATE POLICY "mcp_oauth_client_insert" ON "mcp_oauth_clients" AS PERMISSIVE FOR
   )) AND EXISTS (
   SELECT 1 FROM mcp_connectors mc
   WHERE mc.id = connector_id
-    AND (mc.organization_id IS NULL OR mc.organization_id = (SELECT current_setting(
-      'app.organization_id', true
-    )))
 )));
 --> statement-breakpoint
 CREATE POLICY "mcp_oauth_client_update" ON "mcp_oauth_clients" AS PERMISSIVE FOR UPDATE TO "stella" USING ((
@@ -164,9 +158,6 @@ CREATE POLICY "mcp_oauth_client_update" ON "mcp_oauth_clients" AS PERMISSIVE FOR
   )) AND EXISTS (
   SELECT 1 FROM mcp_connectors mc
   WHERE mc.id = connector_id
-    AND (mc.organization_id IS NULL OR mc.organization_id = (SELECT current_setting(
-      'app.organization_id', true
-    )))
 )));
 --> statement-breakpoint
 CREATE POLICY "mcp_oauth_client_delete" ON "mcp_oauth_clients" AS PERMISSIVE FOR DELETE TO "stella" USING ((
@@ -176,9 +167,6 @@ CREATE POLICY "mcp_oauth_client_delete" ON "mcp_oauth_clients" AS PERMISSIVE FOR
   )) AND EXISTS (
   SELECT 1 FROM mcp_connectors mc
   WHERE mc.id = connector_id
-    AND (mc.organization_id IS NULL OR mc.organization_id = (SELECT current_setting(
-      'app.organization_id', true
-    )))
 )));
 --> statement-breakpoint
 CREATE POLICY "mcp_user_connection_select" ON "mcp_user_connections" AS PERMISSIVE FOR SELECT TO "stella" USING ((
