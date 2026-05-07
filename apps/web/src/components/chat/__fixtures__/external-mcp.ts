@@ -1,9 +1,9 @@
 import type { ChatMessage } from "@stll/api/types";
 
-const legalDataHunterDocumentUrl =
+const externalMcpDocumentUrl =
   "https://hj.tribunalconstitucional.es/HJ/es/Resolucion/Show/29068";
 
-const legalDataHunterSearchHit = {
+const externalMcpSearchHit = {
   source: "ES/ConstitutionalCourt",
   source_id: "ECLI:ES:TC:2022:105",
   score: 0.615_528_226,
@@ -15,15 +15,15 @@ const legalDataHunterSearchHit = {
   title: "SENTENCIA 105/2022, de 13 de septiembre",
   snippet:
     "El Pleno del Tribunal Constitucional, compuesto por el magistrado don Pedro Jose Gonzalez-Trevijano Sanchez, presidente; los magistrados don Juan Antonio Xiol Rios, don Santiago Martinez-Vares Garcia, don Antonio Narvaez Rodriguez, don Ricardo Enriquez Sancho y don Candido Conde-Pumpido Touron; la m",
-  url: legalDataHunterDocumentUrl,
+  url: externalMcpDocumentUrl,
 };
 
-export const legalDataHunterSearchResponseFixture = {
+export const externalMcpSearchResponseFixture = {
   content: [
     {
       text: JSON.stringify({
         query: "sentencia tribunal constitucional proteccion datos personales",
-        hits: [legalDataHunterSearchHit],
+        hits: [externalMcpSearchHit],
         total_hits: 10,
         elapsed_ms: 1807,
       }),
@@ -33,7 +33,7 @@ export const legalDataHunterSearchResponseFixture = {
   isError: false,
 } as const;
 
-const legalDataHunterGetDocument = {
+const externalMcpGetDocument = {
   source_id: "ECLI:ES:TC:2022:105",
   source: "ES/ConstitutionalCourt",
   title: "SENTENCIA 105/2022, de 13 de septiembre",
@@ -44,7 +44,7 @@ const legalDataHunterGetDocument = {
     "SENTENCIA",
     "En el recurso de amparo num. 229-2021, promovido por don M.J.L., contra la providencia de la Seccion Primera de la Sala de lo Contencioso-Administrativo del Tribunal Supremo, de 19 de noviembre de 2020.",
   ].join("\n\n"),
-  url: legalDataHunterDocumentUrl,
+  url: externalMcpDocumentUrl,
   date: "2022-09-13",
   country: "ES",
   language: "es",
@@ -59,7 +59,7 @@ const legalDataHunterGetDocument = {
   data_type: "case_law",
 };
 
-export const legalDataHunterGetDocumentObservedShape = {
+export const externalMcpGetDocumentObservedShape = {
   mcpWrapperKeys: ["content", "isError"],
   contentTextChars: 120_159,
   documentTextChars: 119_202,
@@ -84,18 +84,18 @@ export const legalDataHunterGetDocumentObservedShape = {
   },
 } as const;
 
-export const legalDataHunterGetDocumentResponseFixture = {
+export const externalMcpGetDocumentResponseFixture = {
   content: [
     {
-      text: JSON.stringify(legalDataHunterGetDocument),
+      text: JSON.stringify(externalMcpGetDocument),
       type: "text",
     },
   ],
   isError: false,
 } as const;
 
-export const legalDataHunterCitedAssistantMessageFixture = {
-  id: "mock-legal-data-hunter-cited-assistant",
+export const externalMcpCitedAssistantMessageFixture = {
+  id: "mock-external-mcp-cited-assistant",
   role: "assistant",
   parts: [
     {
@@ -103,14 +103,14 @@ export const legalDataHunterCitedAssistantMessageFixture = {
     },
     {
       type: "dynamic-tool",
-      toolName: "mcp__legaldatahunter__get_document",
-      toolCallId: "tool_mock_legaldatahunter_get_document_105_2022",
+      toolName: "mcp__externallegal__get_document",
+      toolCallId: "tool_mock_external_mcp_get_document_105_2022",
       state: "output-available",
       input: {
         source: "ES/ConstitutionalCourt",
         source_id: "ECLI:ES:TC:2022:105",
       },
-      output: legalDataHunterGetDocumentResponseFixture,
+      output: externalMcpGetDocumentResponseFixture,
       callProviderMetadata: {
         mcp: {
           name: "ai-sdk-mcp-client",
@@ -126,7 +126,7 @@ export const legalDataHunterCitedAssistantMessageFixture = {
       type: "text",
       state: "done",
       text: [
-        "The Tribunal Constitucional decision recognizes the case as a recurso de amparo decided by the Pleno, with a full document record available from Legal Data Hunter.",
+        "The Tribunal Constitucional decision recognizes the case as a recurso de amparo decided by the Pleno, with a full document record available from the external MCP server.",
         "",
         "The relevant citation is [SENTENCIA 105/2022, de 13 de septiembre](https://hj.tribunalconstitucional.es/HJ/es/Resolucion/Show/29068).",
       ].join("\n"),

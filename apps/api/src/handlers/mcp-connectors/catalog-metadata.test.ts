@@ -33,9 +33,9 @@ describe("mcpConnectorCatalogMetadata", () => {
 
   it("does not recommend generic connectors without catalog metadata", () => {
     const connector = {
-      slug: "legaldatahunter",
-      displayName: "Legal Data Hunter",
-      url: "https://legaldatahunter.com/mcp",
+      slug: "global-legal-search",
+      displayName: "Global Legal Search",
+      url: "https://example.com/mcp",
     };
 
     expect(

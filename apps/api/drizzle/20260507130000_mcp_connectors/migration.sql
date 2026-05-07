@@ -248,31 +248,3 @@ CREATE POLICY "mcp_oauth_state_delete" ON "mcp_oauth_state" AS PERMISSIVE FOR DE
     'app.user_id', true
   ))
 ));
---> statement-breakpoint
-INSERT INTO "mcp_connectors" (
-	"id",
-	"slug",
-	"organization_id",
-	"display_name",
-	"description",
-	"url",
-	"auth_type",
-	"is_curated",
-	"oauth_requested_scopes",
-	"allowed_tools",
-	"documentation_url",
-	"icon_url"
-) VALUES (
-	'019e0155-3cf8-7000-a5ec-4954c1fa7493',
-	'legaldatahunter',
-	NULL,
-	'Legal Data Hunter',
-	'Search legal documents, legislation, doctrine, and citations across international legal sources.',
-	'https://legaldatahunter.com/mcp',
-	'oauth2',
-	true,
-	ARRAY['mcp'],
-	NULL,
-	'https://legaldatahunter.com/docs',
-	'https://legaldatahunter.com/static/logo-512.png'
-) ON CONFLICT ("slug") DO NOTHING;

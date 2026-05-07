@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  legalDataHunterCitedAssistantMessageFixture,
-  legalDataHunterGetDocumentResponseFixture,
-  legalDataHunterSearchResponseFixture,
-} from "@/components/chat/__fixtures__/legal-data-hunter";
+  externalMcpCitedAssistantMessageFixture,
+  externalMcpGetDocumentResponseFixture,
+  externalMcpSearchResponseFixture,
+} from "@/components/chat/__fixtures__/external-mcp";
 import { collectExternalSources } from "@/components/chat/source-chips.logic";
 import type { ExternalSourceEntry } from "@/components/chat/source-chips.logic";
 
@@ -12,7 +12,7 @@ describe("external source extraction from tool output", () => {
   test("extracts a search-hit source from JSON wrapped in MCP text content", () => {
     const sources: ExternalSourceEntry[] = [];
 
-    collectExternalSources(legalDataHunterSearchResponseFixture, sources);
+    collectExternalSources(externalMcpSearchResponseFixture, sources);
 
     expect(sources).toHaveLength(1);
     expect(sources.at(0)).toMatchObject({
@@ -29,7 +29,7 @@ describe("external source extraction from tool output", () => {
   test("extracts full document text when get_document returns it", () => {
     const sources: ExternalSourceEntry[] = [];
 
-    collectExternalSources(legalDataHunterGetDocumentResponseFixture, sources);
+    collectExternalSources(externalMcpGetDocumentResponseFixture, sources);
 
     expect(sources).toHaveLength(1);
     expect(sources.at(0)).toMatchObject({
@@ -44,7 +44,7 @@ describe("external source extraction from tool output", () => {
   test("extracts full source data from a mocked cited assistant message", () => {
     const sources: ExternalSourceEntry[] = [];
 
-    for (const part of legalDataHunterCitedAssistantMessageFixture.parts) {
+    for (const part of externalMcpCitedAssistantMessageFixture.parts) {
       if ("output" in part) {
         collectExternalSources(part.output, sources);
       }
@@ -58,7 +58,7 @@ describe("external source extraction from tool output", () => {
     });
     expect(sources.at(0)?.text).toContain("recurso de amparo");
     expect(
-      legalDataHunterCitedAssistantMessageFixture.parts
+      externalMcpCitedAssistantMessageFixture.parts
         .filter((part) => part.type === "text")
         .map((part) => part.text)
         .join("\n"),
