@@ -146,10 +146,10 @@ const renderCommentAnchor = (
   });
 };
 
-const collectRangedCommentIds = (paragraph: slimdom.Element): Set<string> => {
+const collectRangedCommentIds = (part: slimdom.Document): Set<string> => {
   const ids = new Set<string>();
 
-  for (const element of elementsByLocalName(paragraph, "commentRangeStart")) {
+  for (const element of elementsByLocalName(part, "commentRangeStart")) {
     const id = readCommentId(element);
     if (id) {
       ids.add(id);
@@ -309,12 +309,9 @@ const collectTrackedChangeText = ({
 const collectText = (
   paragraph: slimdom.Element,
   comments: ReadonlyMap<string, DocxComment>,
+  rangedCommentIds: ReadonlySet<string>,
 ): string => {
   const parts: string[] = [];
-  const rangedCommentIds =
-    comments.size === 0
-      ? EMPTY_COMMENT_IDS
-      : collectRangedCommentIds(paragraph);
 
   const walk = (node: slimdom.Node) => {
     if (!(node instanceof slimdom.Element)) {
@@ -554,11 +551,15 @@ const extractBlocksFromXmlDocument = (
   startBlockIndex: number,
 ): ExtractBlocksResult => {
   const paragraphs = elementsByLocalName(document, "p");
+  const rangedCommentIds =
+    comments.size === 0 ? EMPTY_COMMENT_IDS : collectRangedCommentIds(document);
   const blocks: FolioAIBlock[] = [];
   let blockIndex = startBlockIndex;
 
   for (const paragraph of paragraphs) {
-    const text = collectText(paragraph, comments).replace(/\s+/g, " ").trim();
+    const text = collectText(paragraph, comments, rangedCommentIds)
+      .replace(/\s+/g, " ")
+      .trim();
     if (text.length === 0) {
       continue;
     }

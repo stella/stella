@@ -266,6 +266,44 @@ describe("extractFolioBlocksFromDocxBuffer", () => {
     );
   });
 
+  test("does not duplicate multi-paragraph ranged comments at the reference marker", async () => {
+    const buffer = await buildDocxBuffer({
+      commentsXml: wrapComments(`
+        <w:comment w:id="17" w:author="Reviewer">
+          <w:p><w:r><w:t>Review both paragraphs.</w:t></w:r></w:p>
+        </w:comment>
+      `),
+      documentXml: wrap(`
+        <w:p>
+          <w:commentRangeStart w:id="17"/>
+          <w:r><w:t>First paragraph</w:t></w:r>
+        </w:p>
+        <w:p>
+          <w:r><w:t>Second paragraph</w:t></w:r>
+          <w:commentRangeEnd w:id="17"/>
+          <w:r>
+            <w:rPr><w:rStyle w:val="CommentReference"/></w:rPr>
+            <w:commentReference w:id="17"/>
+          </w:r>
+        </w:p>
+      `),
+    });
+
+    const text = await extractFolioBlockTextFromDocxBuffer(buffer);
+
+    expect(text).toBe(
+      [
+        renderDocxCommentMarkup({
+          metadata: {
+            author: "Reviewer",
+          },
+          text: "Review both paragraphs.",
+        }),
+        "First paragraph\nSecond paragraph",
+      ].join(""),
+    );
+  });
+
   test("preserves comments nested inside tracked changes", async () => {
     const buffer = await buildDocxBuffer({
       commentsXml: wrapComments(`
