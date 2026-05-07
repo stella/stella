@@ -613,7 +613,7 @@ export const SearchDialog = ({
     if (e.key === "Escape" && (query.trim() || debouncedQuery.trim())) {
       e.preventDefault();
       e.stopPropagation();
-      clearSearchQuery();
+      handleEscapeAction();
     }
   };
 
@@ -723,7 +723,7 @@ export const SearchDialog = ({
             <Button
               aria-keyshortcuts="Escape"
               aria-label={t("search.escKey")}
-              className="bg-muted text-muted-foreground hover:bg-muted/80 hidden h-auto rounded border px-1.5 py-0.5 text-[0.625rem] leading-none sm:inline-flex"
+              className="border-border bg-muted text-muted-foreground hover:bg-muted/80 hidden h-auto rounded border px-1.5 py-0.5 text-[0.625rem] leading-none sm:inline-flex"
               onClick={handleEscapeAction}
               title={t("search.escKey")}
               variant="ghost"
