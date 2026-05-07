@@ -279,7 +279,7 @@ export function hashParagraphBlock(block: ParagraphBlock): string {
   for (const run of block.runs) {
     if (run.kind === "text") {
       parts.push(
-        `t:${run.text}|${run.fontFamily}|${run.fontSize}|${run.bold}|${run.italic}`,
+        `t:${run.text}|${run.fontFamily}|${run.fontSize}|${run.bold}|${run.italic}|${run.allCaps}`,
       );
     } else if (run.kind === "tab") {
       parts.push(`tab:${run.width}`);

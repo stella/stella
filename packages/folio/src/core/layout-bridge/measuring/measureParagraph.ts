@@ -150,6 +150,7 @@ function runToFontStyle(run: TextRun | TabRun): FontStyle {
     ...(run.letterSpacing !== undefined
       ? { letterSpacing: run.letterSpacing }
       : {}),
+    ...(run.allCaps ? { textTransform: "uppercase" as const } : {}),
   };
 }
 

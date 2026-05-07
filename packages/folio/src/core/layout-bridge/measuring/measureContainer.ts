@@ -34,6 +34,7 @@ export type FontStyle = {
   bold?: boolean;
   italic?: boolean;
   letterSpacing?: number; // in pixels
+  textTransform?: "uppercase";
 };
 
 /**
@@ -241,11 +242,12 @@ export function measureTextWidth(text: string, style: FontStyle): number {
   if (!text) {
     return 0;
   }
+  const measuredText = applyTextTransform(text, style);
 
   const ctx = getCanvasContext();
   ctx.font = buildFontString(style);
 
-  const metrics = ctx.measureText(text);
+  const metrics = ctx.measureText(measuredText);
 
   // Use advance width for line breaking — this is the standard metric for text flow.
   // Painted width (actualBoundingBox) includes glyph overhang which is visual only
@@ -253,8 +255,8 @@ export function measureTextWidth(text: string, style: FontStyle): number {
   let width = metrics.width;
 
   // Apply letter spacing if specified
-  if (style.letterSpacing && text.length > 1) {
-    width += style.letterSpacing * (text.length - 1);
+  if (style.letterSpacing && measuredText.length > 1) {
+    width += style.letterSpacing * (measuredText.length - 1);
   }
 
   return width;
@@ -303,7 +305,7 @@ export function measureRun(text: string, style: FontStyle): RunMeasurement {
   // Measure each character individually for click positioning
   for (let i = 0; i < text.length; i++) {
     // SAFETY: i < text.length in for loop
-    const char = text[i]!;
+    const char = applyTextTransform(text[i]!, style);
     const charMetrics = ctx.measureText(char);
 
     // Use advance width for individual characters
@@ -323,6 +325,13 @@ export function measureRun(text: string, style: FontStyle): RunMeasurement {
     charWidths,
     metrics,
   };
+}
+
+function applyTextTransform(text: string, style: FontStyle): string {
+  if (style.textTransform === "uppercase") {
+    return text.toLocaleUpperCase();
+  }
+  return text;
 }
 
 /**

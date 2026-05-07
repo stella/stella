@@ -91,6 +91,7 @@ import type {
   ParagraphBorders,
   ParagraphSpacing,
   TextBoxBlock,
+  FootnoteContent,
 } from "../core/layout-engine/types";
 import {
   DEFAULT_TEXTBOX_MARGINS,
@@ -1737,7 +1738,7 @@ function convertHeaderFooterToContent(
  */
 function buildFootnoteRenderItems(
   pageFootnoteMap: Map<number, number[]>,
-  footnoteContentMap: Map<number, { displayNumber: number }>,
+  footnoteContentMap: Map<number, FootnoteContent>,
   doc: Document | null,
 ): Map<number, FootnoteRenderItem[]> {
   const result = new Map<number, FootnoteRenderItem[]>();
@@ -1770,6 +1771,15 @@ function buildFootnoteRenderItems(
       items.push({
         displayNumber: String(displayNum),
         text,
+        ...(content
+          ? {
+              content: {
+                blocks: content.blocks,
+                measures: content.measures,
+                height: content.height,
+              },
+            }
+          : {}),
       });
     }
 
@@ -2125,10 +2135,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // Step 3: Layout blocks onto pages (two-pass if footnotes exist)
           let newLayout: Layout;
           let pageFootnoteMap = new Map<number, number[]>();
-          let footnoteContentMap = new Map<
-            number,
-            { displayNumber: number; height: number }
-          >();
+          let footnoteContentMap = new Map<number, FootnoteContent>();
 
           // Common layout options for all passes
           const bodyBreakType = sectionProperties?.sectionStart as

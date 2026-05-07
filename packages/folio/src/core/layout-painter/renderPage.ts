@@ -26,6 +26,7 @@ import type {
   TextBoxBlock,
   TextBoxMeasure,
   TextBoxFragment,
+  FootnoteContent,
 } from "../layout-engine/types";
 import type { BorderSpec, Theme } from "../types/document";
 import { resolveFontFamily } from "../utils/fontResolver";
@@ -133,7 +134,9 @@ export type FootnoteRenderItem = {
   /** Display number (e.g. "1", "2") */
   displayNumber: string;
   /** Plain text content */
-  text: string;
+  text?: string;
+  /** Pre-measured structured footnote content. */
+  content?: Pick<FootnoteContent, "blocks" | "measures" | "height">;
 };
 
 /**
@@ -797,7 +800,7 @@ function renderHeaderFooterContent(
  * Render the footnote area at the bottom of a page.
  * Includes a separator line (33% width) and footnote entries.
  */
-function renderFootnoteArea(
+export function renderFootnoteArea(
   footnotes: FootnoteRenderItem[],
   contentWidth: number,
   doc: Document,
@@ -818,24 +821,189 @@ function renderFootnoteArea(
   // Render each footnote
   for (const fn of footnotes) {
     const fnEl = doc.createElement("div");
-    fnEl.style.fontSize = "10px";
-    fnEl.style.lineHeight = "1.3";
     fnEl.style.marginBottom = "4px";
     fnEl.style.color = "var(--doc-canvas-text, #000)";
 
-    const sup = doc.createElement("sup");
-    sup.textContent = fn.displayNumber;
-    sup.style.fontSize = "7px";
-    sup.style.marginRight = "2px";
-    fnEl.append(sup);
+    if (fn.content) {
+      const contentEl = renderFootnoteContent(fn, contentWidth, doc);
+      fnEl.append(contentEl);
+    } else {
+      fnEl.style.fontSize = "10px";
+      fnEl.style.lineHeight = "1.3";
 
-    const textNode = doc.createTextNode(` ${fn.text}`);
-    fnEl.append(textNode);
+      const sup = doc.createElement("sup");
+      sup.textContent = fn.displayNumber;
+      sup.style.fontSize = "7px";
+      sup.style.marginRight = "2px";
+      fnEl.append(sup);
+
+      const textNode = doc.createTextNode(` ${fn.text ?? ""}`);
+      fnEl.append(textNode);
+    }
 
     container.append(fnEl);
   }
 
   return container;
+}
+
+function renderFootnoteContent(
+  footnote: FootnoteRenderItem,
+  contentWidth: number,
+  doc: Document,
+): HTMLElement {
+  const content = footnote.content;
+  if (!content) {
+    throw new Error("Missing structured footnote content");
+  }
+
+  const wrapper = doc.createElement("div");
+  wrapper.className = "layout-footnote-content";
+  wrapper.style.position = "relative";
+  wrapper.style.width = `${contentWidth}px`;
+  wrapper.style.height = `${content.height}px`;
+
+  const context: RenderContext = {
+    pageNumber: 0,
+    totalPages: 0,
+    section: "body",
+    contentWidth,
+  };
+
+  let y = 0;
+  for (let index = 0; index < content.blocks.length; index++) {
+    const block = content.blocks[index];
+    const measure = content.measures[index];
+    if (!block || !measure) {
+      continue;
+    }
+
+    const blockEl = renderFootnoteBlock(
+      block,
+      measure,
+      contentWidth,
+      y,
+      context,
+      doc,
+    );
+    if (!blockEl) {
+      continue;
+    }
+    wrapper.append(blockEl);
+    y += getFootnoteMeasureHeight(measure);
+  }
+
+  return wrapper;
+}
+
+function renderFootnoteBlock(
+  block: FlowBlock,
+  measure: Measure,
+  contentWidth: number,
+  y: number,
+  context: RenderContext,
+  doc: Document,
+): HTMLElement | null {
+  if (block.kind === "paragraph" && measure.kind === "paragraph") {
+    const fragment: ParagraphFragment = {
+      kind: "paragraph",
+      blockId: block.id,
+      x: 0,
+      y,
+      width: contentWidth,
+      height: measure.totalHeight,
+      fromLine: 0,
+      toLine: measure.lines.length,
+      ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
+      ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
+    };
+    const element = renderParagraphFragment(fragment, block, measure, context, {
+      document: doc,
+    });
+    positionFootnoteBlock(element, y, contentWidth, measure.totalHeight);
+    return element;
+  }
+
+  if (block.kind === "table" && measure.kind === "table") {
+    const fragment: TableFragment = {
+      kind: "table",
+      blockId: block.id,
+      x: 0,
+      y,
+      width: measure.totalWidth,
+      height: measure.totalHeight,
+      fromRow: 0,
+      toRow: block.rows.length,
+      ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
+      ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
+    };
+    const element = renderTableFragment(fragment, block, measure, context, {
+      document: doc,
+    });
+    positionFootnoteBlock(element, y, measure.totalWidth, measure.totalHeight);
+    return element;
+  }
+
+  if (block.kind === "image" && measure.kind === "image") {
+    const fragment: ImageFragment = {
+      kind: "image",
+      blockId: block.id,
+      x: 0,
+      y,
+      width: measure.width,
+      height: measure.height,
+      ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
+      ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
+    };
+    const element = renderImageFragment(fragment, block, measure, context, {
+      document: doc,
+    });
+    positionFootnoteBlock(element, y, measure.width, measure.height);
+    return element;
+  }
+
+  if (block.kind === "textBox" && measure.kind === "textBox") {
+    const fragment: TextBoxFragment = {
+      kind: "textBox",
+      blockId: block.id,
+      x: 0,
+      y,
+      width: measure.width,
+      height: measure.height,
+      ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
+      ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
+    };
+    const element = renderTextBoxFragment(fragment, block, measure, context, {
+      document: doc,
+    });
+    positionFootnoteBlock(element, y, measure.width, measure.height);
+    return element;
+  }
+
+  return null;
+}
+
+function positionFootnoteBlock(
+  element: HTMLElement,
+  top: number,
+  width: number,
+  height: number,
+): void {
+  element.style.position = "absolute";
+  element.style.left = "0";
+  element.style.top = `${top}px`;
+  element.style.width = `${width}px`;
+  element.style.height = `${height}px`;
+}
+
+function getFootnoteMeasureHeight(measure: Measure): number {
+  if (measure.kind === "paragraph" || measure.kind === "table") {
+    return measure.totalHeight;
+  }
+  if (measure.kind === "image" || measure.kind === "textBox") {
+    return measure.height;
+  }
+  return 0;
 }
 
 /**

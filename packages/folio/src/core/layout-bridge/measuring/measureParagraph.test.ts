@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { resetCanvasContext } from "./measureContainer";
 import { measureParagraph } from "./measureParagraph";
 
 const PT_TO_PX = 96 / 72;
@@ -123,5 +124,58 @@ describe("inline image paragraph measurement", () => {
     expect(measure.lines[0]?.lineHeight).toBeGreaterThan(imageHeight);
     expect(measure.lines[0]?.ascent).toBeGreaterThan(imageHeight);
     expect(measure.lines[0]?.descent).toBeGreaterThan(0);
+  });
+});
+
+describe("all-caps paragraph measurement", () => {
+  test("measures all-caps runs using uppercase glyph widths", () => {
+    const originalDocument = globalThis.document;
+    const fakeDocument = {
+      createElement() {
+        return {
+          getContext() {
+            return {
+              font: "",
+              measureText(text: string) {
+                let width = 0;
+                for (const char of text) {
+                  width += char >= "A" && char <= "Z" ? 10 : 5;
+                }
+                return {
+                  width,
+                  actualBoundingBoxAscent: 8,
+                  actualBoundingBoxDescent: 2,
+                };
+              },
+            };
+          },
+        };
+      },
+    } as unknown as Document;
+
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: fakeDocument,
+    });
+    resetCanvasContext();
+
+    try {
+      const measure = measureParagraph(
+        {
+          kind: "paragraph",
+          id: "caps",
+          runs: [{ kind: "text", text: "iiii", allCaps: true }],
+        },
+        25,
+      );
+
+      expect(measure.lines).toHaveLength(2);
+    } finally {
+      resetCanvasContext();
+      Object.defineProperty(globalThis, "document", {
+        configurable: true,
+        value: originalDocument,
+      });
+    }
   });
 });
