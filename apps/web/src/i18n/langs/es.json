@@ -384,9 +384,9 @@
     "resend": "Reenviar",
     "send": "Enviar mensaje",
     "sendError": "Hubo un problema al enviar tu mensaje. Contacta con soporte si el error persiste.",
-    "sendErrorInsufficientCredits": "The AI provider needs more credits. Contact your workspace admin to top up the account.",
-    "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.",
-    "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin to upgrade the plan.",
+    "sendErrorInsufficientCredits": "El proveedor de IA necesita más créditos. Pídele al administrador del espacio de trabajo que recargue la cuenta.",
+    "sendErrorProviderUnavailable": "El proveedor de IA no está disponible temporalmente. Inténtalo de nuevo en un momento.",
+    "sendErrorQuotaExhausted": "Se ha agotado la cuota del proveedor de IA. Inténtalo de nuevo en un minuto o pídele al administrador del espacio de trabajo que mejore el plan.",
     "thinking": "Trabajando con contexto",
     "threads": "Historial",
     "tool": {

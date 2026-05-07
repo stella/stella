@@ -384,9 +384,9 @@
     "resend": "Odoslať znova",
     "send": "Odoslať správu",
     "sendError": "Pri odosielaní správy nastal problém. Ak chyba pretrváva, kontaktujte podporu.",
-    "sendErrorInsufficientCredits": "The AI provider needs more credits. Contact your workspace admin to top up the account.",
-    "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.",
-    "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin to upgrade the plan.",
+    "sendErrorInsufficientCredits": "AI poskytovateľ potrebuje doplniť kredity. Požiadajte správcu pracovného priestoru o navýšenie zostatku.",
+    "sendErrorProviderUnavailable": "AI poskytovateľ je dočasne nedostupný. Skúste to prosím o chvíľu znova.",
+    "sendErrorQuotaExhausted": "Kvóta AI poskytovateľa je vyčerpaná. Skúste to o chvíľu znova alebo požiadajte správcu pracovného priestoru o navýšenie plánu.",
     "thinking": "Pracujem s kontextom",
     "threads": "História",
     "tool": {

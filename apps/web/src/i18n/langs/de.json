@@ -384,9 +384,9 @@
     "resend": "Erneut senden",
     "send": "Nachricht senden",
     "sendError": "Beim Senden deiner Nachricht ist ein Problem aufgetreten. Wende dich an den Support, wenn der Fehler weiterhin auftritt.",
-    "sendErrorInsufficientCredits": "The AI provider needs more credits. Contact your workspace admin to top up the account.",
-    "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.",
-    "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin to upgrade the plan.",
+    "sendErrorInsufficientCredits": "Der KI-Provider benötigt mehr Guthaben. Bitte deinen Workspace-Admin, das Konto aufzuladen.",
+    "sendErrorProviderUnavailable": "Der KI-Provider ist vorübergehend nicht verfügbar. Bitte versuche es gleich noch einmal.",
+    "sendErrorQuotaExhausted": "Das Kontingent des KI-Providers ist aufgebraucht. Versuche es gleich noch einmal oder bitte deinen Workspace-Admin, das Paket zu erweitern.",
     "thinking": "Arbeite mit Kontext",
     "threads": "Verlauf",
     "tool": {
