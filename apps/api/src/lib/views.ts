@@ -106,6 +106,12 @@ const VIEW_NAMES = {
     files: "Pliki",
     todos: "Zadania",
   },
+  "pt-BR": {
+    overview: "Visão geral",
+    table: "Tabela",
+    files: "Arquivos",
+    todos: "Tarefas",
+  },
   sk: {
     overview: "Prehľad",
     table: "Tabuľka",

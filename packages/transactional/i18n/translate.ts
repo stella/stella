@@ -10,6 +10,7 @@ import hu from "./langs/hu.json";
 import lt from "./langs/lt.json";
 import lv from "./langs/lv.json";
 import pl from "./langs/pl.json";
+import ptBr from "./langs/pt-BR.json";
 import sk from "./langs/sk.json";
 
 const langMessages = {
@@ -23,6 +24,7 @@ const langMessages = {
   lt,
   lv,
   pl,
+  "pt-BR": ptBr,
   sk,
 } as const;
 

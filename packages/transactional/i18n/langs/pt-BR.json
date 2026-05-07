@@ -1,0 +1,32 @@
+{
+  "invitation": {
+    "accept": "Aceitar convite",
+    "body": "Você foi convidado para participar de {organizationName} por {invitedByUsername}. Clique abaixo para aceitar.",
+    "expires": "Este convite expira em 48 horas.",
+    "heading": "Convite da organização",
+    "ignore": "Se você não esperava este convite, pode ignorar este e-mail com segurança.",
+    "subject": "Você foi convidado para participar de {organizationName}"
+  },
+  "newDeviceLogin": {
+    "action": "Revisar sessões",
+    "body": "Sua conta recebeu um acesso de um novo dispositivo ou local.",
+    "device": "Dispositivo",
+    "heading": "Novo acesso detectado",
+    "ignore": "Se foi você, nenhuma ação é necessária. Se não reconhece esta atividade, revise suas sessões ativas e revogue as que não reconhecer.",
+    "ipAddress": "Endereço IP",
+    "preview": "Novo acesso de {device}",
+    "subject": "Novo acesso à sua conta stella",
+    "time": "Horário"
+  },
+  "otp": {
+    "changeEmail": "Use este código para verificar seu novo endereço de e-mail.",
+    "emailVerification": "Use este código para verificar seu endereço de e-mail.",
+    "expires": "Este código expira em 5 minutos.",
+    "forgetPassword": "Use este código para redefinir sua senha.",
+    "heading": "Seu código único da stella",
+    "ignore": "Se você não solicitou este código, pode ignorar este e-mail.",
+    "preview": "Use este código para verificar sua identidade",
+    "signIn": "Use este código para entrar na sua conta stella.",
+    "subject": "Seu código de verificação da stella"
+  }
+}
