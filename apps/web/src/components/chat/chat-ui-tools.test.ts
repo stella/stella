@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { ChatPart } from "@/components/chat/chat-ui-tools";
 import {
   getChatToolTitleKey,
+  getApprovalToolName,
   getUserMessageHtmlHistory,
   hasApprovedActiveDocxEditAwaitingClientOutput,
   isApprovalPart,
@@ -73,6 +74,24 @@ describe("isApprovalPart", () => {
     };
 
     expect(isApprovalPart(part)).toBe(true);
+  });
+
+  test("treats dynamic external MCP approval requests as approval parts", () => {
+    const part = {
+      approval: { id: "approval-1" },
+      input: { query: "protección de datos" },
+      state: "approval-requested",
+      toolCallId: "tool-call-1",
+      toolName: "mcp__legal-data-hunter__search",
+      type: "dynamic-tool",
+    };
+
+    expect(isApprovalPart(part)).toBe(true);
+    if (!isApprovalPart(part)) {
+      throw new Error("Expected dynamic MCP approval part");
+    }
+
+    expect(getApprovalToolName(part)).toBe("mcp__legal-data-hunter__search");
   });
 
   test("treats legacy external native API approval requests as approval parts", () => {

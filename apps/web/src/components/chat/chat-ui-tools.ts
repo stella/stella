@@ -13,9 +13,14 @@ export type SharedChatUITools = Pick<ChatUITools, "ask-user">;
 export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
 type BuiltInApprovalToolName = Exclude<keyof ChatUITools, "ask-user">;
 export type ApprovalToolName = BuiltInApprovalToolName | `mcp__${string}`;
+type DynamicApprovalToolPart = ChatPart & {
+  type: "dynamic-tool";
+  toolName: ApprovalToolName;
+};
 export type ApprovalToolPart =
   | Extract<ChatPart, { type: `tool-${ApprovalToolName}` }>
-  | (ChatPart & { type: `tool-mcp__${string}` });
+  | (ChatPart & { type: `tool-mcp__${string}` })
+  | DynamicApprovalToolPart;
 export type ActiveDocxEditApprovalPart = Extract<
   ChatPart,
   { type: "tool-apply-active-docx-edits" }
@@ -96,20 +101,50 @@ export const getChatToolTitleKey = (toolName: string) => {
   return UNKNOWN_CHAT_TOOL_TITLE_KEY;
 };
 
-/** Check if a tool part has an approval field (approval flow). */
-export const isApprovalPart = (part: unknown): part is ApprovalToolPart => {
+const getToolNameFromPart = (part: unknown): string | null => {
   if (
     typeof part !== "object" ||
     part === null ||
     !("type" in part) ||
-    typeof part.type !== "string" ||
-    !part.type.startsWith("tool-")
+    typeof part.type !== "string"
   ) {
+    return null;
+  }
+
+  if (part.type === "dynamic-tool") {
+    if (!("toolName" in part) || typeof part.toolName !== "string") {
+      return null;
+    }
+
+    return part.toolName;
+  }
+
+  if (!part.type.startsWith("tool-")) {
+    return null;
+  }
+
+  return part.type.slice("tool-".length);
+};
+
+export const getApprovalToolName = (
+  part: ApprovalToolPart,
+): ApprovalToolName => {
+  const toolName = getToolNameFromPart(part);
+  if (toolName !== null && isApprovalToolName(toolName)) {
+    return toolName;
+  }
+
+  throw new Error("Unsupported approval tool");
+};
+
+/** Check if a tool part has an approval field (approval flow). */
+export const isApprovalPart = (part: unknown): part is ApprovalToolPart => {
+  if (typeof part !== "object" || part === null) {
     return false;
   }
 
-  const toolName = part.type.slice("tool-".length);
-  if (!isApprovalToolName(toolName)) {
+  const toolName = getToolNameFromPart(part);
+  if (toolName === null || !isApprovalToolName(toolName)) {
     return false;
   }
 

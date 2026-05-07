@@ -15,8 +15,8 @@ import { useTranslations } from "use-intl";
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import {
   getChatToolTitleKey,
+  getApprovalToolName,
   isExternalMcpToolName,
-  isApprovalToolName,
   isPublicOfficialChatToolName,
 } from "@/components/chat/chat-ui-tools";
 import type {
@@ -91,15 +91,6 @@ const getApprovalId = (part: ApprovalToolPart): string | null => {
     default:
       return null;
   }
-};
-
-const getApprovalToolName = (part: ApprovalToolPart): ApprovalToolName => {
-  const toolName = part.type.slice("tool-".length);
-  if (isApprovalToolName(toolName)) {
-    return toolName;
-  }
-
-  throw new Error("Unsupported approval tool");
 };
 
 // -- Select badge (colored chip matching table UX) --
