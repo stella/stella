@@ -159,15 +159,43 @@ const readMarkedContent = (
   }
 
   const contentStart = openEnd + 1;
-  const contentEnd = text.indexOf(bounds.close, contentStart);
-  if (contentEnd === -1) {
-    return null;
+  let depth = 1;
+  let cursor = contentStart;
+
+  while (cursor < text.length) {
+    const nextOpen = text.indexOf(bounds.openPrefix, cursor);
+    const nextClose = text.indexOf(bounds.close, cursor);
+
+    if (nextClose === -1) {
+      return null;
+    }
+
+    if (nextOpen !== -1 && nextOpen < nextClose) {
+      const nestedOpenEnd = text.indexOf(
+        ">",
+        nextOpen + bounds.openPrefix.length,
+      );
+      if (nestedOpenEnd === -1) {
+        return null;
+      }
+
+      depth++;
+      cursor = nestedOpenEnd + 1;
+      continue;
+    }
+
+    depth--;
+    if (depth === 0) {
+      return {
+        content: text.slice(contentStart, nextClose),
+        nextIndex: nextClose + bounds.close.length,
+      };
+    }
+
+    cursor = nextClose + bounds.close.length;
   }
 
-  return {
-    content: text.slice(contentStart, contentEnd),
-    nextIndex: contentEnd + bounds.close.length,
-  };
+  return null;
 };
 
 const stripDocxReviewMarkup = (text: string): string => {

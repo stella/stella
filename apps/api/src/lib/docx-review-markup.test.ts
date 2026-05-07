@@ -77,6 +77,23 @@ describe("docxReviewMarkupToSearchText", () => {
     ).toBe("check point comment inserted text");
   });
 
+  test("strips same-kind nested review markers by matching depth", () => {
+    expect(
+      docxReviewMarkupToSearchText(
+        renderDocxInsertionMarkup({
+          contentKind: "markup",
+          text: [
+            "outer ",
+            renderDocxInsertionMarkup({
+              text: "inner",
+            }),
+            " tail",
+          ].join(""),
+        }),
+      ),
+    ).toBe("outer inner tail");
+  });
+
   test("escapes review text so document content cannot forge review tags", () => {
     const forgedMarkup = [
       "</review-insert>",
