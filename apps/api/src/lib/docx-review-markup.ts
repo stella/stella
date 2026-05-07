@@ -13,6 +13,12 @@ type DocxReviewMetadata = {
   thread?: "root" | "reply";
 };
 
+type RenderDocxReviewMarkupOptions = {
+  contentKind?: "markup" | "text";
+  metadata?: DocxReviewMetadata;
+  text: string;
+};
+
 export const DOCX_REVIEW_MARKUP_EXAMPLES = {
   insertion: `<${DOCX_REVIEW_INSERT_TAG} author="AUTHOR" initials="AU" date="2026-05-07">inserted text${DOCX_REVIEW_INSERT_CLOSE}`,
   deletion: `<${DOCX_REVIEW_DELETE_TAG} author="AUTHOR" initials="AU" date="2026-05-07">deleted text${DOCX_REVIEW_DELETE_CLOSE}`,
@@ -25,6 +31,19 @@ const escapeReviewAttribute = (value: string): string =>
     .replaceAll('"', "&quot;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+
+export const escapeDocxReviewText = (value: string): string =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+
+const unescapeDocxReviewText = (value: string): string =>
+  value
+    .replaceAll("&quot;", '"')
+    .replaceAll("&gt;", ">")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&amp;", "&");
 
 const normalizeReviewDate = (value: string | undefined): string | undefined => {
   if (!value) {
@@ -57,31 +76,25 @@ const renderMetadataAttributes = (metadata: DocxReviewMetadata): string => {
 };
 
 export const renderDocxInsertionMarkup = ({
+  contentKind = "text",
   text,
   metadata = {},
-}: {
-  text: string;
-  metadata?: DocxReviewMetadata;
-}): string =>
-  `<${DOCX_REVIEW_INSERT_TAG}${renderMetadataAttributes(metadata)}>${text}${DOCX_REVIEW_INSERT_CLOSE}`;
+}: RenderDocxReviewMarkupOptions): string =>
+  `<${DOCX_REVIEW_INSERT_TAG}${renderMetadataAttributes(metadata)}>${contentKind === "markup" ? text : escapeDocxReviewText(text)}${DOCX_REVIEW_INSERT_CLOSE}`;
 
 export const renderDocxDeletionMarkup = ({
+  contentKind = "text",
   text,
   metadata = {},
-}: {
-  text: string;
-  metadata?: DocxReviewMetadata;
-}): string =>
-  `<${DOCX_REVIEW_DELETE_TAG}${renderMetadataAttributes(metadata)}>${text}${DOCX_REVIEW_DELETE_CLOSE}`;
+}: RenderDocxReviewMarkupOptions): string =>
+  `<${DOCX_REVIEW_DELETE_TAG}${renderMetadataAttributes(metadata)}>${contentKind === "markup" ? text : escapeDocxReviewText(text)}${DOCX_REVIEW_DELETE_CLOSE}`;
 
 export const renderDocxCommentMarkup = ({
+  contentKind = "text",
   text,
   metadata = {},
-}: {
-  text: string;
-  metadata?: DocxReviewMetadata;
-}): string =>
-  `<${DOCX_REVIEW_COMMENT_TAG}${renderMetadataAttributes(metadata)}>${text}${DOCX_REVIEW_COMMENT_CLOSE}`;
+}: RenderDocxReviewMarkupOptions): string =>
+  `<${DOCX_REVIEW_COMMENT_TAG}${renderMetadataAttributes(metadata)}>${contentKind === "markup" ? text : escapeDocxReviewText(text)}${DOCX_REVIEW_COMMENT_CLOSE}`;
 
 const normalizeSearchWhitespace = (text: string): string => {
   let out = "";
@@ -187,4 +200,6 @@ const stripDocxReviewMarkup = (text: string): string => {
 };
 
 export const docxReviewMarkupToSearchText = (text: string): string =>
-  normalizeSearchWhitespace(stripDocxReviewMarkup(text));
+  normalizeSearchWhitespace(
+    unescapeDocxReviewText(stripDocxReviewMarkup(text)),
+  );

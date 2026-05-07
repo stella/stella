@@ -331,6 +331,7 @@ describe("extractFolioBlocksFromDocxBuffer", () => {
       [
         "Clause ",
         renderDocxInsertionMarkup({
+          contentKind: "markup",
           metadata: {
             author: "Jane Doe",
             date: "2026-05-07T12:00:00Z",

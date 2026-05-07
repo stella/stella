@@ -24,6 +24,7 @@ import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import {
+  escapeDocxReviewText,
   renderDocxCommentMarkup,
   renderDocxDeletionMarkup,
   renderDocxInsertionMarkup,
@@ -198,22 +199,26 @@ const appendCommentAnchor = ({
 
 type AppendWordTextOptions = {
   element: slimdom.Element;
+  escapeText: boolean;
   includeDeletedText: boolean;
   parts: string[];
 };
 
 const appendWordText = ({
   element,
+  escapeText,
   includeDeletedText,
   parts,
 }: AppendWordTextOptions): boolean => {
   if (element.localName === "t") {
-    parts.push(element.textContent ?? "");
+    const text = element.textContent ?? "";
+    parts.push(escapeText ? escapeDocxReviewText(text) : text);
     return true;
   }
 
   if (includeDeletedText && element.localName === "delText") {
-    parts.push(element.textContent ?? "");
+    const text = element.textContent ?? "";
+    parts.push(escapeText ? escapeDocxReviewText(text) : text);
     return true;
   }
 
@@ -245,6 +250,7 @@ const collectPlainText = (element: slimdom.Element): string => {
       node.namespaceURI === W_NS &&
       appendWordText({
         element: node,
+        escapeText: false,
         includeDeletedText: true,
         parts,
       })
@@ -290,6 +296,7 @@ const collectTrackedChangeText = ({
       }) ||
         appendWordText({
           element: node,
+          escapeText: true,
           includeDeletedText: true,
           parts,
         }))
@@ -331,6 +338,7 @@ const collectText = (
         if (text) {
           parts.push(
             renderDocxInsertionMarkup({
+              contentKind: "markup",
               metadata: readReviewMetadata(node),
               text,
             }),
@@ -347,6 +355,7 @@ const collectText = (
         if (text) {
           parts.push(
             renderDocxDeletionMarkup({
+              contentKind: "markup",
               metadata: readReviewMetadata(node),
               text,
             }),
@@ -363,6 +372,7 @@ const collectText = (
         }) ||
         appendWordText({
           element: node,
+          escapeText: true,
           includeDeletedText: false,
           parts,
         })

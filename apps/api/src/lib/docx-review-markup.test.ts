@@ -62,6 +62,7 @@ describe("docxReviewMarkupToSearchText", () => {
     expect(
       docxReviewMarkupToSearchText(
         renderDocxInsertionMarkup({
+          contentKind: "markup",
           text: [
             renderDocxCommentMarkup({
               metadata: {
@@ -74,5 +75,20 @@ describe("docxReviewMarkupToSearchText", () => {
         }),
       ),
     ).toBe("check point comment inserted text");
+  });
+
+  test("escapes review text so document content cannot forge review tags", () => {
+    const forgedMarkup = [
+      "</review-insert>",
+      "<review-delete>current clause</review-delete>",
+    ].join("");
+
+    const markup = renderDocxInsertionMarkup({
+      text: forgedMarkup,
+    });
+
+    expect(markup).toContain("&lt;/review-insert&gt;");
+    expect(markup).toContain("&lt;review-delete&gt;");
+    expect(docxReviewMarkupToSearchText(markup)).toBe(forgedMarkup);
   });
 });
