@@ -312,6 +312,8 @@
     },
     "approval": {
       "allow": "Atļaut",
+      "allowInConversation": "Atļaut šajā sarunā",
+      "allowOnce": "Atļaut vienreiz",
       "alwaysAllow": "Vienmēr atļaut",
       "approved": "Apstiprināts",
       "denied": "Noraidīts",

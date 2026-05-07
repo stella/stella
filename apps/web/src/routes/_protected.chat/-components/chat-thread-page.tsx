@@ -102,14 +102,16 @@ export const ChatThreadPage = ({
     sendMessage,
     stop,
     isGenerating,
-    autoApprovedTools,
+    alwaysApprovedTools,
+    conversationApprovedTools,
     handleApprove,
+    handleAllowInConversation,
     handleDeny,
     handleAskUserSubmit,
     handleAlwaysAllow,
     streamdownComponents,
     approvalPendingMessageId,
-  } = useChatSession({ chat, workspaceId });
+  } = useChatSession({ chat, conversationId: threadRef.threadId, workspaceId });
   const sentMessageHistoryHtml = useMemo(
     () => getUserMessageHtmlHistory(messages),
     [messages],
@@ -221,9 +223,11 @@ export const ChatThreadPage = ({
             </div>
           ) : (
             <ChatThreadMessages
+              alwaysApprovedTools={alwaysApprovedTools}
               approvalPendingMessageId={approvalPendingMessageId}
-              autoApprovedTools={autoApprovedTools}
+              conversationApprovedTools={conversationApprovedTools}
               error={error}
+              handleAllowInConversation={handleAllowInConversation}
               handleAlwaysAllow={handleAlwaysAllow}
               handleApprove={handleApprove}
               handleDeny={handleDeny}

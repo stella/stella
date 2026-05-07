@@ -312,7 +312,9 @@
     },
     "approval": {
       "allow": "Povoliť",
-      "alwaysAllow": "Vždy povoliť v tomto vlákne",
+      "allowInConversation": "Povoliť v tejto konverzácii",
+      "allowOnce": "Povoliť raz",
+      "alwaysAllow": "Vždy povoliť",
       "approved": "Povolené",
       "denied": "Zamietnuté",
       "deny": "Zamietnuť"

@@ -315,7 +315,9 @@ type Messages = {
     };
     "approval": {
       "allow": "Allow";
-      "alwaysAllow": "Always allow in this thread";
+      "allowInConversation": "Allow in this conversation";
+      "allowOnce": "Allow once";
+      "alwaysAllow": "Always allow";
       "approved": "Approved";
       "denied": "Denied";
       "deny": "Deny";

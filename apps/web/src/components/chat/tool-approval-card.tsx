@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -328,24 +329,34 @@ const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
 // -- Main card --
 
 type ToolApprovalCardProps = {
+  alwaysApprovedTools: ReadonlySet<ApprovalToolName>;
   part: ApprovalToolPart;
+  onAllowInConversation: (
+    id: string,
+    toolName: ApprovalToolName,
+  ) => void | PromiseLike<void>;
+  onAlwaysAllow: (
+    id: string,
+    toolName: ApprovalToolName,
+  ) => void | PromiseLike<void>;
   onApprove: (
     id: string,
     toolName: ApprovalToolName,
   ) => void | PromiseLike<void>;
   onDeny: (id: string) => void | PromiseLike<void>;
-  onAlwaysAllow: (toolName: ApprovalToolName) => void;
-  autoApprovedTools: ReadonlySet<ApprovalToolName>;
+  conversationApprovedTools: ReadonlySet<ApprovalToolName>;
   blockedApprovalTools?: ReadonlySet<ApprovalToolName> | undefined;
   workspaceId?: string | undefined;
 };
 
 export const ToolApprovalCard = ({
+  alwaysApprovedTools,
   part,
+  onAllowInConversation,
+  onAlwaysAllow,
   onApprove,
   onDeny,
-  onAlwaysAllow,
-  autoApprovedTools,
+  conversationApprovedTools,
   blockedApprovalTools,
   workspaceId,
 }: ToolApprovalCardProps) => {
@@ -363,8 +374,7 @@ export const ToolApprovalCard = ({
     isApprovalResponded || (responded && isApprovalRequested);
   const isBlocked = blockedApprovalTools?.has(name) ?? false;
   const isExternalMcpApproval = isExternalMcpToolName(name);
-  const canAlwaysAllow =
-    name !== "apply-active-docx-edits" && !isExternalMcpApproval;
+  const canPersistApproval = name !== "apply-active-docx-edits";
   /**
    * DOCX edit batches always go to the side review panel — never
    * gated by a chat-level Allow/Deny. The card collapses to a
@@ -386,16 +396,18 @@ export const ToolApprovalCard = ({
     onDeny(id);
   }, [isApprovalRequested, isBlocked, part, onDeny]);
 
-  // Auto-approve if the tool is in the always-allow set, OR if
-  // this is a DOCX edit batch (review happens per item in the side
-  // panel; the chat-level gate would just be friction).
+  // Auto-approve if the tool was allowed for this conversation,
+  // always allowed, OR if this is a DOCX edit batch (review happens
+  // per item in the side panel; the chat-level gate would just be
+  // friction).
   useEffect(() => {
     if (
       !isApprovalRequested ||
       isBlocked ||
       autoApproveRef.current ||
-      (!isDocxEditBatch && !canAlwaysAllow) ||
-      (!isDocxEditBatch && !autoApprovedTools.has(name))
+      (!isDocxEditBatch &&
+        !conversationApprovedTools.has(name) &&
+        !alwaysApprovedTools.has(name))
     ) {
       return;
     }
@@ -409,8 +421,8 @@ export const ToolApprovalCard = ({
   }, [
     isApprovalRequested,
     isBlocked,
-    canAlwaysAllow,
-    autoApprovedTools,
+    alwaysApprovedTools,
+    conversationApprovedTools,
     isDocxEditBatch,
     name,
     part,
@@ -525,41 +537,52 @@ export const ToolApprovalCard = ({
 
       {/* Actions — hidden for DOCX edit batches (reviewed in the side panel). */}
       {approvalId && !isProcessing && !isBlocked && !isDocxEditBatch && (
-        <div className="border-border/50 flex items-center gap-2 border-t px-3 py-2 text-xs">
-          <button
+        <div className="border-border/50 flex flex-wrap items-center gap-2 border-t px-3 py-2">
+          <Button
             autoFocus
-            className="bg-foreground text-background focus-visible:ring-ring rounded-md px-2.5 py-1 font-medium transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-1"
             onClick={() => {
               setResponded(true);
               onApprove(approvalId, name);
             }}
-            type="button"
+            size="xs"
           >
-            {t("chat.approval.allow")}
-          </button>
-          <button
-            className="text-muted-foreground hover:text-foreground rounded-md border px-2.5 py-1 transition-colors"
+            {t("chat.approval.allowOnce")}
+          </Button>
+          {canPersistApproval && (
+            <Button
+              onClick={() => {
+                setResponded(true);
+                onAllowInConversation(approvalId, name);
+              }}
+              size="xs"
+              variant="outline"
+            >
+              {t("chat.approval.allowInConversation")}
+            </Button>
+          )}
+          {canPersistApproval && (
+            <Button
+              onClick={() => {
+                setResponded(true);
+                onAlwaysAllow(approvalId, name);
+              }}
+              size="xs"
+              variant="outline"
+            >
+              {t("chat.approval.alwaysAllow")}
+            </Button>
+          )}
+          <Button
+            className="ms-auto"
             onClick={() => {
               setResponded(true);
               onDeny(approvalId);
             }}
-            type="button"
+            size="xs"
+            variant="ghost"
           >
             {t("chat.approval.deny")}
-          </button>
-          {canAlwaysAllow && (
-            <button
-              className="text-muted-foreground ms-auto underline-offset-2 hover:underline"
-              onClick={() => {
-                setResponded(true);
-                onAlwaysAllow(name);
-                onApprove(approvalId, name);
-              }}
-              type="button"
-            >
-              {t("chat.approval.alwaysAllow")}
-            </button>
-          )}
+          </Button>
         </div>
       )}
     </div>

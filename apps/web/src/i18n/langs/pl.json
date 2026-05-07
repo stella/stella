@@ -312,7 +312,9 @@
     },
     "approval": {
       "allow": "Zezwól",
-      "alwaysAllow": "Zawsze zezwalaj w tym wątku",
+      "allowInConversation": "Zezwól w tej rozmowie",
+      "allowOnce": "Zezwól raz",
+      "alwaysAllow": "Zawsze zezwalaj",
       "approved": "Zatwierdzono",
       "denied": "Odrzucono",
       "deny": "Odmów"

@@ -710,15 +710,17 @@ const FileChatOverlayInner = ({
     sendMessage,
     stop,
     isGenerating,
-    autoApprovedTools,
+    alwaysApprovedTools,
+    conversationApprovedTools,
     handleApprove,
+    handleAllowInConversation,
     handleDeny,
     handleAskUserSubmit,
     handleAlwaysAllow,
     addToolOutput,
     streamdownComponents,
     approvalPendingMessageId,
-  } = useChatSession({ chat, workspaceId });
+  } = useChatSession({ chat, conversationId: threadRef.threadId, workspaceId });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
 
   useEffect(() => {
@@ -855,10 +857,12 @@ const FileChatOverlayInner = ({
             style={{ scrollbarGutter: "stable" }}
           >
             <ChatThreadMessages
+              alwaysApprovedTools={alwaysApprovedTools}
               approvalPendingMessageId={approvalPendingMessageId}
-              autoApprovedTools={autoApprovedTools}
               blockedApprovalTools={blockedApprovalTools}
+              conversationApprovedTools={conversationApprovedTools}
               error={error}
+              handleAllowInConversation={handleAllowInConversation}
               handleAlwaysAllow={handleAlwaysAllow}
               handleApprove={handleApproveWithDocxUnlock}
               handleDeny={handleDeny}

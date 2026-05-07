@@ -340,10 +340,18 @@ const getRetryableAssistantMessageId = (
 };
 
 type ChatThreadMessagesProps = {
+  alwaysApprovedTools: ReadonlySet<ApprovalToolName>;
   approvalPendingMessageId: string | null;
-  autoApprovedTools: ReadonlySet<ApprovalToolName>;
   blockedApprovalTools?: ReadonlySet<ApprovalToolName> | undefined;
-  handleAlwaysAllow: (toolName: ApprovalToolName) => void;
+  conversationApprovedTools: ReadonlySet<ApprovalToolName>;
+  handleAllowInConversation: (
+    id: string,
+    toolName: ApprovalToolName,
+  ) => void | PromiseLike<void>;
+  handleAlwaysAllow: (
+    id: string,
+    toolName: ApprovalToolName,
+  ) => void | PromiseLike<void>;
   handleApprove: (
     id: string,
     toolName: ApprovalToolName,
@@ -367,9 +375,11 @@ type ChatThreadMessagesProps = {
 };
 
 export const ChatThreadMessages = ({
+  alwaysApprovedTools,
   approvalPendingMessageId,
-  autoApprovedTools,
   blockedApprovalTools,
+  conversationApprovedTools,
+  handleAllowInConversation,
   handleAlwaysAllow,
   handleApprove,
   handleDeny,
@@ -434,9 +444,11 @@ export const ChatThreadMessages = ({
                   if (isApprovalPart(part)) {
                     return (
                       <ToolApprovalCard
-                        autoApprovedTools={autoApprovedTools}
+                        alwaysApprovedTools={alwaysApprovedTools}
                         blockedApprovalTools={blockedApprovalTools}
+                        conversationApprovedTools={conversationApprovedTools}
                         key={part.toolCallId}
+                        onAllowInConversation={handleAllowInConversation}
                         onAlwaysAllow={handleAlwaysAllow}
                         onApprove={handleApprove}
                         onDeny={handleDeny}

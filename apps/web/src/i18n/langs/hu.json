@@ -312,7 +312,9 @@
     },
     "approval": {
       "allow": "Engedélyezés",
-      "alwaysAllow": "Mindig engedélyezze ebben a szálban",
+      "allowInConversation": "Engedélyezés ebben a beszélgetésben",
+      "allowOnce": "Engedélyezés egyszer",
+      "alwaysAllow": "Mindig engedélyezés",
       "approved": "Engedélyezve",
       "denied": "Elutasítva",
       "deny": "Elutasítás"

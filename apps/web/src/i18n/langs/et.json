@@ -312,6 +312,8 @@
     },
     "approval": {
       "allow": "Luba",
+      "allowInConversation": "Luba selles vestluses",
+      "allowOnce": "Luba üks kord",
       "alwaysAllow": "Luba alati",
       "approved": "Lubatud",
       "denied": "Keelatud",

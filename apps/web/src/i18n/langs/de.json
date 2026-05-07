@@ -312,7 +312,9 @@
     },
     "approval": {
       "allow": "Erlauben",
-      "alwaysAllow": "Immer in diesem Thread erlauben",
+      "allowInConversation": "In dieser Unterhaltung erlauben",
+      "allowOnce": "Einmal erlauben",
+      "alwaysAllow": "Immer erlauben",
       "approved": "Genehmigt",
       "denied": "Abgelehnt",
       "deny": "Ablehnen"

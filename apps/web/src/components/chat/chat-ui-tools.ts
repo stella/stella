@@ -58,6 +58,14 @@ export const isExternalMcpToolName = (
   toolName: string,
 ): toolName is `mcp__${string}` => toolName.startsWith("mcp__");
 
+export const isApprovalToolName = (
+  toolName: string,
+): toolName is ApprovalToolName =>
+  toolName === "apply-active-docx-edits" ||
+  toolName === "create-document" ||
+  toolName === "update-entity-fields" ||
+  isExternalMcpToolName(toolName);
+
 export type ChatToolTitleKey =
   | (typeof CHAT_TOOL_DISPLAY_TITLE_KEYS)[keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS]
   | typeof UNKNOWN_CHAT_TOOL_TITLE_KEY;
@@ -88,12 +96,7 @@ export const isApprovalPart = (part: unknown): part is ApprovalToolPart => {
   }
 
   const toolName = part.type.slice("tool-".length);
-  return (
-    toolName === "apply-active-docx-edits" ||
-    toolName === "create-document" ||
-    toolName === "update-entity-fields" ||
-    isExternalMcpToolName(toolName)
-  );
+  return isApprovalToolName(toolName);
 };
 
 export const isApprovedActiveDocxEditPart = (

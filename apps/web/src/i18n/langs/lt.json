@@ -312,6 +312,8 @@
     },
     "approval": {
       "allow": "Leisti",
+      "allowInConversation": "Leisti šiame pokalbyje",
+      "allowOnce": "Leisti vieną kartą",
       "alwaysAllow": "Visada leisti",
       "approved": "Patvirtinta",
       "denied": "Atmesta",

@@ -159,9 +159,11 @@ describe("chat thread messages", () => {
         timeZone="UTC"
       >
         <ChatThreadMessages
+          alwaysApprovedTools={new Set()}
           approvalPendingMessageId={null}
-          autoApprovedTools={new Set()}
+          conversationApprovedTools={new Set()}
           error={new Error("provider details must stay hidden")}
+          handleAllowInConversation={() => {}}
           handleAlwaysAllow={() => {}}
           handleApprove={() => {}}
           handleDeny={() => {}}

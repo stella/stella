@@ -312,6 +312,8 @@
     },
     "approval": {
       "allow": "Autoriser",
+      "allowInConversation": "Autoriser dans cette conversation",
+      "allowOnce": "Autoriser une fois",
       "alwaysAllow": "Toujours autoriser",
       "approved": "Approuvé",
       "denied": "Refusé",
