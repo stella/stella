@@ -5,6 +5,48 @@ import { measureParagraph } from "./measureParagraph";
 
 const PT_TO_PX = 96 / 72;
 
+function withFakeTextMeasure(runTest: () => void): void {
+  const originalDocument = globalThis.document;
+  const fakeDocument = {
+    createElement() {
+      return {
+        getContext() {
+          return {
+            font: "",
+            measureText(text: string) {
+              let width = 0;
+              for (const char of text) {
+                width += char >= "A" && char <= "Z" ? 10 : 5;
+              }
+              return {
+                width,
+                actualBoundingBoxAscent: 8,
+                actualBoundingBoxDescent: 2,
+              };
+            },
+          };
+        },
+      };
+    },
+  } as unknown as Document;
+
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: fakeDocument,
+  });
+  resetCanvasContext();
+
+  try {
+    runTest();
+  } finally {
+    resetCanvasContext();
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: originalDocument,
+    });
+  }
+}
+
 describe("empty paragraph line-height floor", () => {
   test("empty paragraph with line=1.0 auto is floored to 1.15 times fontSize", () => {
     const measure = measureParagraph(
@@ -125,51 +167,44 @@ describe("inline image paragraph measurement", () => {
     expect(measure.lines[0]?.ascent).toBeGreaterThan(imageHeight);
     expect(measure.lines[0]?.descent).toBeGreaterThan(0);
   });
+
+  test("advances floating-zone y offsets by image-inflated line height", () => {
+    withFakeTextMeasure(() => {
+      const measure = measureParagraph(
+        {
+          kind: "paragraph",
+          id: "img-float",
+          runs: [
+            {
+              kind: "image",
+              src: "data:image/png;base64,",
+              width: 35,
+              height: 90,
+            },
+            { kind: "text", text: "iiii" },
+          ],
+        },
+        40,
+        {
+          floatingZones: [
+            {
+              leftMargin: 35,
+              rightMargin: 0,
+              topY: 20,
+              bottomY: 80,
+            },
+          ],
+        },
+      );
+
+      expect(measure.lines).toHaveLength(2);
+      expect(measure.lines.at(1)?.leftOffset).toBeUndefined();
+      expect(measure.lines.at(1)?.width).toBe(20);
+    });
+  });
 });
 
 describe("all-caps paragraph measurement", () => {
-  function withFakeTextMeasure(runTest: () => void): void {
-    const originalDocument = globalThis.document;
-    const fakeDocument = {
-      createElement() {
-        return {
-          getContext() {
-            return {
-              font: "",
-              measureText(text: string) {
-                let width = 0;
-                for (const char of text) {
-                  width += char >= "A" && char <= "Z" ? 10 : 5;
-                }
-                return {
-                  width,
-                  actualBoundingBoxAscent: 8,
-                  actualBoundingBoxDescent: 2,
-                };
-              },
-            };
-          },
-        };
-      },
-    } as unknown as Document;
-
-    Object.defineProperty(globalThis, "document", {
-      configurable: true,
-      value: fakeDocument,
-    });
-    resetCanvasContext();
-
-    try {
-      runTest();
-    } finally {
-      resetCanvasContext();
-      Object.defineProperty(globalThis, "document", {
-        configurable: true,
-        value: originalDocument,
-      });
-    }
-  }
-
   test("measures all-caps runs using uppercase glyph widths", () => {
     withFakeTextMeasure(() => {
       const measure = measureParagraph(

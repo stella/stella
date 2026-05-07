@@ -526,7 +526,7 @@ export function measureParagraph(
     lines.push(line);
 
     // Update cumulative height for next line's floating zone calculation
-    cumulativeHeight += typography.lineHeight;
+    cumulativeHeight += finalTypography.lineHeight;
   };
 
   /**
