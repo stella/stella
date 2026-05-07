@@ -104,9 +104,18 @@ describe("docxReviewMarkupToSearchText", () => {
       text: forgedMarkup,
     });
 
-    expect(markup).toContain("&lt;/review-insert&gt;");
-    expect(markup).toContain("&lt;review-delete&gt;");
+    expect(markup).toContain("&lt;/review-insert>");
+    expect(markup).toContain("&lt;review-delete>");
     expect(docxReviewMarkupToSearchText(markup)).toBe(forgedMarkup);
+  });
+
+  test("escapes dangling review tag prefixes in document text", () => {
+    const text = "safe <review-insert dangling";
+
+    const markup = renderDocxInsertionMarkup({ text });
+
+    expect(markup).toContain("safe &lt;review-insert dangling");
+    expect(docxReviewMarkupToSearchText(markup)).toBe(text);
   });
 
   test("keeps ordinary angle brackets and ampersands readable", () => {

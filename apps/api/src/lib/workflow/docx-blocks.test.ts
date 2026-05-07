@@ -519,6 +519,64 @@ describe("extractFolioBlocksFromDocxBuffer", () => {
     );
   });
 
+  test("attaches threaded comment replies to the anchored root comment", async () => {
+    const buffer = await buildDocxBuffer({
+      commentsExtendedXml: wrapCommentsExtended(`
+        <w15:commentEx w15:paraId="00111111" />
+        <w15:commentEx w15:paraId="00222222" w15:paraIdParent="00111111" />
+      `),
+      commentsXml: wrapComments(`
+        <w:comment w:id="31" w:author="Reviewer" w:initials="RV" w:date="2026-05-09T13:45:00Z">
+          <w:p w15:paraId="00111111">
+            <w:r><w:t>Root question.</w:t></w:r>
+          </w:p>
+        </w:comment>
+        <w:comment w:id="32" w:author="Counsel" w:initials="CO" w:date="2026-05-10T08:15:00Z">
+          <w:p w15:paraId="00222222">
+            <w:r><w:t>Reply answer.</w:t></w:r>
+          </w:p>
+        </w:comment>
+      `),
+      documentXml: wrap(`
+        <w:p>
+          <w:r><w:t>Clause </w:t></w:r>
+          <w:commentRangeStart w:id="31"/>
+          <w:r><w:t>text</w:t></w:r>
+        </w:p>
+      `),
+    });
+
+    const blocks = await extractFolioBlocksFromDocxBuffer(buffer);
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.text).toBe(
+      [
+        "Clause ",
+        renderDocxCommentMarkup({
+          metadata: {
+            author: "Reviewer",
+            date: "2026-05-09T13:45:00Z",
+            initials: "RV",
+            status: "open",
+            thread: "root",
+          },
+          text: "Root question.",
+        }),
+        renderDocxCommentMarkup({
+          metadata: {
+            author: "Counsel",
+            date: "2026-05-10T08:15:00Z",
+            initials: "CO",
+            status: "open",
+            thread: "reply",
+          },
+          text: "Reply answer.",
+        }),
+        "text",
+      ].join(""),
+    );
+  });
+
   test("preserves paragraph separators inside comment text", async () => {
     const buffer = await buildDocxBuffer({
       commentsXml: wrapComments(`

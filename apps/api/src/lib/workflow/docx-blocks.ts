@@ -49,6 +49,7 @@ type DocxComment = {
   author: string;
   date?: string;
   initials?: string;
+  replies?: DocxComment[];
   status?: "open" | "resolved";
   text: string;
   thread?: "root" | "reply";
@@ -61,6 +62,7 @@ type DocxReviewMetadata = {
 };
 
 type CommentExtendedMetadata = {
+  parentParaId?: string;
   status?: "open" | "resolved";
   thread?: "root" | "reply";
 };
@@ -153,11 +155,17 @@ const renderCommentAnchor = (
     return undefined;
   }
 
-  return renderDocxCommentMarkup({
-    metadata: commentToReviewMetadata(comment),
-    text: comment.text,
-  });
+  return renderCommentThread(comment);
 };
+
+const renderCommentThread = (comment: DocxComment): string =>
+  [
+    renderDocxCommentMarkup({
+      metadata: commentToReviewMetadata(comment),
+      text: comment.text,
+    }),
+    ...(comment.replies ?? []).map(renderCommentThread),
+  ].join("");
 
 const collectRangedCommentIds = (part: slimdom.Document): Set<string> => {
   const ids = new Set<string>();
@@ -528,10 +536,16 @@ const readCommentExtendedMetadata = async (
       continue;
     }
 
-    metadata.set(paraId, {
+    const parentParaId = readWordAttr(commentEx, "paraIdParent");
+    const commentMetadata: CommentExtendedMetadata = {
       status: readWordAttr(commentEx, "done") === "1" ? "resolved" : "open",
-      thread: readWordAttr(commentEx, "paraIdParent") ? "reply" : "root",
-    });
+      thread: parentParaId ? "reply" : "root",
+    };
+    if (parentParaId) {
+      commentMetadata.parentParaId = parentParaId;
+    }
+
+    metadata.set(paraId, commentMetadata);
   }
 
   return metadata;
@@ -555,6 +569,89 @@ const readCommentText = (comment: slimdom.Element): string => {
   return collectPlainText(comment).replace(/\s+/g, " ").trim();
 };
 
+type CommentRecord = {
+  comment: DocxComment;
+  id: string;
+  parentParaId?: string;
+  paraId?: string;
+};
+
+const readCommentRecord = (
+  comment: slimdom.Element,
+  extendedMetadata: ReadonlyMap<string, CommentExtendedMetadata>,
+): CommentRecord | undefined => {
+  const id = readWAttr(comment, "id");
+  if (!id) {
+    return undefined;
+  }
+
+  const text = readCommentText(comment);
+  if (text.length === 0) {
+    return undefined;
+  }
+
+  const firstParagraph = comment.getElementsByTagNameNS(W_NS, "p").at(0);
+  const paraId = firstParagraph
+    ? readWordAttr(firstParagraph, "paraId")
+    : undefined;
+  const commentMetadata = paraId ? extendedMetadata.get(paraId) : undefined;
+
+  const docxComment: DocxComment = {
+    author: readWAttr(comment, "author") ?? "Unknown",
+    text,
+  };
+  const date = readWAttr(comment, "date");
+  const initials = readWAttr(comment, "initials");
+  if (date) {
+    docxComment.date = date;
+  }
+  if (initials) {
+    docxComment.initials = initials;
+  }
+  if (commentMetadata?.status) {
+    docxComment.status = commentMetadata.status;
+  }
+  if (commentMetadata?.thread) {
+    docxComment.thread = commentMetadata.thread;
+  }
+
+  const record: CommentRecord = {
+    comment: docxComment,
+    id,
+  };
+  if (commentMetadata?.parentParaId) {
+    record.parentParaId = commentMetadata.parentParaId;
+  }
+  if (paraId) {
+    record.paraId = paraId;
+  }
+
+  return record;
+};
+
+const attachThreadedCommentReplies = (
+  records: readonly CommentRecord[],
+  comments: ReadonlyMap<string, DocxComment>,
+  commentIdByParaId: ReadonlyMap<string, string>,
+): void => {
+  for (const { comment, parentParaId } of records) {
+    if (!parentParaId) {
+      continue;
+    }
+
+    const parentCommentId = commentIdByParaId.get(parentParaId);
+    const parentComment = parentCommentId
+      ? comments.get(parentCommentId)
+      : undefined;
+    if (!parentComment) {
+      continue;
+    }
+
+    parentComment.replies ??= [];
+    parentComment.replies.push(comment);
+  }
+};
+
 const readComments = async (zip: JSZip): Promise<Map<string, DocxComment>> => {
   const comments = new Map<string, DocxComment>();
   const commentsEntry = zip.file("word/comments.xml");
@@ -571,45 +668,25 @@ const readComments = async (zip: JSZip): Promise<Map<string, DocxComment>> => {
   }
 
   const extendedMetadata = await readCommentExtendedMetadata(zip);
+  const records: CommentRecord[] = [];
+  const commentIdByParaId = new Map<string, string>();
 
   for (const comment of elementsByLocalName(document, "comment")) {
-    const id = readWAttr(comment, "id");
-    if (!id) {
+    const record = readCommentRecord(comment, extendedMetadata);
+    if (!record) {
       continue;
     }
-
-    const text = readCommentText(comment);
-    if (text.length === 0) {
-      continue;
+    records.push(record);
+    if (record.paraId) {
+      commentIdByParaId.set(record.paraId, record.id);
     }
-
-    const firstParagraph = comment.getElementsByTagNameNS(W_NS, "p").at(0);
-    const paraId = firstParagraph
-      ? readWordAttr(firstParagraph, "paraId")
-      : undefined;
-    const commentMetadata = paraId ? extendedMetadata.get(paraId) : undefined;
-
-    const docxComment: DocxComment = {
-      author: readWAttr(comment, "author") ?? "Unknown",
-      text,
-    };
-    const date = readWAttr(comment, "date");
-    const initials = readWAttr(comment, "initials");
-    if (date) {
-      docxComment.date = date;
-    }
-    if (initials) {
-      docxComment.initials = initials;
-    }
-    if (commentMetadata?.status) {
-      docxComment.status = commentMetadata.status;
-    }
-    if (commentMetadata?.thread) {
-      docxComment.thread = commentMetadata.thread;
-    }
-
-    comments.set(id, docxComment);
   }
+
+  for (const { comment, id } of records) {
+    comments.set(id, comment);
+  }
+
+  attachThreadedCommentReplies(records, comments, commentIdByParaId);
 
   return comments;
 };

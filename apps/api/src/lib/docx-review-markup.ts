@@ -33,11 +33,11 @@ const escapeReviewAttribute = (value: string): string =>
     .replaceAll(">", "&gt;");
 
 const DOCX_REVIEW_TAG_TEXT_PATTERN =
-  /<\/?(?:review-insert|review-delete|review-comment)(?:\s[^<>]*)?>/g;
+  /<\/?(?:review-insert|review-delete|review-comment)\b/g;
 
 export const escapeDocxReviewText = (value: string): string =>
   value.replaceAll(DOCX_REVIEW_TAG_TEXT_PATTERN, (tag) =>
-    tag.replaceAll("<", "&lt;").replaceAll(">", "&gt;"),
+    tag.replaceAll("<", "&lt;"),
   );
 
 const unescapeDocxReviewText = (value: string): string =>
