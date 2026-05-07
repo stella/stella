@@ -4,6 +4,11 @@ const DOCX_REVIEW_COMMENT_TAG = "review-comment";
 const DOCX_REVIEW_INSERT_CLOSE = `</${DOCX_REVIEW_INSERT_TAG}>`;
 const DOCX_REVIEW_DELETE_CLOSE = `</${DOCX_REVIEW_DELETE_TAG}>`;
 const DOCX_REVIEW_COMMENT_CLOSE = `</${DOCX_REVIEW_COMMENT_TAG}>`;
+const DOCX_REVIEW_TAG_NAMES = [
+  DOCX_REVIEW_INSERT_TAG,
+  DOCX_REVIEW_DELETE_TAG,
+  DOCX_REVIEW_COMMENT_TAG,
+] as const;
 
 type DocxReviewMetadata = {
   author?: string;
@@ -32,8 +37,10 @@ const escapeReviewAttribute = (value: string): string =>
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
 
-const DOCX_REVIEW_TAG_TEXT_PATTERN =
-  /<\/?(?:review-insert|review-delete|review-comment)\b/g;
+const DOCX_REVIEW_TAG_TEXT_PATTERN = new RegExp(
+  `</?(?:${DOCX_REVIEW_TAG_NAMES.join("|")})(?=\\s|>)`,
+  "g",
+);
 
 export const escapeDocxReviewText = (value: string): string =>
   value.replaceAll(DOCX_REVIEW_TAG_TEXT_PATTERN, (tag) =>
@@ -146,12 +153,41 @@ const DOCX_REVIEW_MARKER_BOUNDS: MarkerBounds[] = [
   },
 ];
 
+const startsWithReviewMarkerOpen = (
+  text: string,
+  index: number,
+  bounds: MarkerBounds,
+): boolean => {
+  if (!text.startsWith(bounds.openPrefix, index)) {
+    return false;
+  }
+
+  const nextChar = text.at(index + bounds.openPrefix.length);
+  return nextChar === ">" || nextChar?.trim() === "";
+};
+
+const findNextReviewMarkerOpen = (
+  text: string,
+  startIndex: number,
+  bounds: MarkerBounds,
+): number => {
+  let index = text.indexOf(bounds.openPrefix, startIndex);
+  while (index !== -1) {
+    if (startsWithReviewMarkerOpen(text, index, bounds)) {
+      return index;
+    }
+    index = text.indexOf(bounds.openPrefix, index + bounds.openPrefix.length);
+  }
+
+  return -1;
+};
+
 const readMarkedContent = (
   text: string,
   index: number,
   bounds: MarkerBounds,
 ): { content: string; nextIndex: number } | null => {
-  if (!text.startsWith(bounds.openPrefix, index)) {
+  if (!startsWithReviewMarkerOpen(text, index, bounds)) {
     return null;
   }
 
@@ -165,7 +201,7 @@ const readMarkedContent = (
   let cursor = contentStart;
 
   while (cursor < text.length) {
-    const nextOpen = text.indexOf(bounds.openPrefix, cursor);
+    const nextOpen = findNextReviewMarkerOpen(text, cursor, bounds);
     const nextClose = text.indexOf(bounds.close, cursor);
 
     if (nextClose === -1) {

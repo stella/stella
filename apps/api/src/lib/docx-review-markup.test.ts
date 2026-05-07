@@ -118,6 +118,15 @@ describe("docxReviewMarkupToSearchText", () => {
     expect(docxReviewMarkupToSearchText(markup)).toBe(text);
   });
 
+  test("keeps review-tag lookalike words readable", () => {
+    const text = "safe <review-inserted> token";
+
+    const markup = renderDocxInsertionMarkup({ text });
+
+    expect(markup).toContain(text);
+    expect(docxReviewMarkupToSearchText(markup)).toBe(text);
+  });
+
   test("keeps ordinary angle brackets and ampersands readable", () => {
     const text = "AT&T covenant: 5 < 10 > 3";
 
