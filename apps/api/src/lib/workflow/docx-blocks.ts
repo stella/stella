@@ -65,6 +65,18 @@ type CommentExtendedMetadata = {
   thread?: "root" | "reply";
 };
 
+type MoveRangeKind = "from" | "to";
+
+type ActiveMoveRange = {
+  kind: MoveRangeKind;
+  metadata: DocxReviewMetadata;
+  parts: string[];
+};
+
+type MoveRangeState = {
+  active: ActiveMoveRange | undefined;
+};
+
 // Subtrees we never descend into when collecting paragraph text:
 // `mc:Fallback` is the legacy branch of `mc:AlternateContent`.
 // The preferred branch lives in a sibling `mc:Choice`; visiting both
@@ -235,6 +247,99 @@ const appendWordText = ({
   return false;
 };
 
+const appendMoveRangeMarkup = (
+  parts: string[],
+  active: ActiveMoveRange,
+): void => {
+  const text = active.parts.join("");
+  if (!text) {
+    return;
+  }
+
+  if (active.kind === "from") {
+    parts.push(
+      renderDocxDeletionMarkup({
+        contentKind: "markup",
+        metadata: active.metadata,
+        text,
+      }),
+    );
+    return;
+  }
+
+  parts.push(
+    renderDocxInsertionMarkup({
+      contentKind: "markup",
+      metadata: active.metadata,
+      text,
+    }),
+  );
+};
+
+const flushMoveRange = (
+  state: MoveRangeState,
+  parts: string[],
+  keepRangeActive: boolean,
+): void => {
+  const active = state.active;
+  if (!active) {
+    return;
+  }
+
+  appendMoveRangeMarkup(parts, active);
+
+  if (keepRangeActive) {
+    active.parts = [];
+    return;
+  }
+
+  state.active = undefined;
+};
+
+const beginMoveRange = (
+  state: MoveRangeState,
+  kind: MoveRangeKind,
+  element: slimdom.Element,
+): void => {
+  state.active = {
+    kind,
+    metadata: readReviewMetadata(element),
+    parts: [],
+  };
+};
+
+const handleMoveRangeMarker = (
+  element: slimdom.Element,
+  state: MoveRangeState,
+  parts: string[],
+): boolean => {
+  if (element.localName === "moveFromRangeStart") {
+    beginMoveRange(state, "from", element);
+    return true;
+  }
+
+  if (element.localName === "moveToRangeStart") {
+    beginMoveRange(state, "to", element);
+    return true;
+  }
+
+  if (element.localName === "moveFromRangeEnd") {
+    if (state.active?.kind === "from") {
+      flushMoveRange(state, parts, false);
+    }
+    return true;
+  }
+
+  if (element.localName === "moveToRangeEnd") {
+    if (state.active?.kind === "to") {
+      flushMoveRange(state, parts, false);
+    }
+    return true;
+  }
+
+  return false;
+};
+
 const collectPlainText = (element: slimdom.Element): string => {
   const parts: string[] = [];
 
@@ -316,6 +421,7 @@ const collectTrackedChangeText = ({
 const collectText = (
   paragraph: slimdom.Element,
   comments: ReadonlyMap<string, DocxComment>,
+  moveRangeState: MoveRangeState,
   rangedCommentIds: ReadonlySet<string>,
 ): string => {
   const parts: string[] = [];
@@ -329,6 +435,12 @@ const collectText = (
     }
 
     if (node.namespaceURI === W_NS) {
+      if (handleMoveRangeMarker(node, moveRangeState, parts)) {
+        return;
+      }
+
+      const targetParts = moveRangeState.active?.parts ?? parts;
+
       if (node.localName === "ins" || node.localName === "moveTo") {
         const text = collectTrackedChangeText({
           comments,
@@ -336,7 +448,7 @@ const collectText = (
           rangedCommentIds,
         });
         if (text) {
-          parts.push(
+          targetParts.push(
             renderDocxInsertionMarkup({
               contentKind: "markup",
               metadata: readReviewMetadata(node),
@@ -353,7 +465,7 @@ const collectText = (
           rangedCommentIds,
         });
         if (text) {
-          parts.push(
+          targetParts.push(
             renderDocxDeletionMarkup({
               contentKind: "markup",
               metadata: readReviewMetadata(node),
@@ -367,14 +479,14 @@ const collectText = (
         appendCommentAnchor({
           comments,
           element: node,
-          parts,
+          parts: targetParts,
           rangedCommentIds,
         }) ||
         appendWordText({
           element: node,
           escapeText: true,
           includeDeletedText: false,
-          parts,
+          parts: targetParts,
         })
       ) {
         return;
@@ -387,6 +499,7 @@ const collectText = (
   };
 
   walk(paragraph);
+  flushMoveRange(moveRangeState, parts, true);
   return parts.join("");
 };
 
@@ -582,10 +695,18 @@ const extractBlocksFromXmlDocument = (
   const rangedCommentIds =
     comments.size === 0 ? EMPTY_COMMENT_IDS : collectRangedCommentIds(document);
   const blocks: FolioAIBlock[] = [];
+  const moveRangeState: MoveRangeState = {
+    active: undefined,
+  };
   let blockIndex = startBlockIndex;
 
   for (const paragraph of paragraphs) {
-    const text = collectText(paragraph, comments, rangedCommentIds)
+    const text = collectText(
+      paragraph,
+      comments,
+      moveRangeState,
+      rangedCommentIds,
+    )
       .replace(/\s+/g, " ")
       .trim();
     if (text.length === 0) {

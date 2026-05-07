@@ -351,6 +351,76 @@ describe("extractFolioBlocksFromDocxBuffer", () => {
     );
   });
 
+  test("preserves move range markers as review tags", async () => {
+    const buffer = await buildDocxBuffer({
+      documentXml: wrap(`
+        <w:p>
+          <w:r><w:t>Clause </w:t></w:r>
+          <w:moveFromRangeStart w:id="5" w:author="Mover" w:initials="MV" w:date="2026-05-07T08:00:00Z"/>
+          <w:r><w:t>old position</w:t></w:r>
+          <w:moveFromRangeEnd w:id="5"/>
+          <w:r><w:t> </w:t></w:r>
+          <w:moveToRangeStart w:id="6" w:author="Mover" w:initials="MV" w:date="2026-05-07T08:05:00Z"/>
+          <w:r><w:t>new position</w:t></w:r>
+          <w:moveToRangeEnd w:id="6"/>
+        </w:p>
+      `),
+    });
+
+    const blocks = await extractFolioBlocksFromDocxBuffer(buffer);
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.text).toBe(
+      [
+        "Clause ",
+        renderDocxDeletionMarkup({
+          metadata: {
+            author: "Mover",
+            date: "2026-05-07T08:00:00Z",
+            initials: "MV",
+          },
+          text: "old position",
+        }),
+        " ",
+        renderDocxInsertionMarkup({
+          metadata: {
+            author: "Mover",
+            date: "2026-05-07T08:05:00Z",
+            initials: "MV",
+          },
+          text: "new position",
+        }),
+      ].join(""),
+    );
+  });
+
+  test("preserves move range markers across paragraphs", async () => {
+    const buffer = await buildDocxBuffer({
+      documentXml: wrap(`
+        <w:p>
+          <w:moveFromRangeStart w:id="7"/>
+          <w:r><w:t>old first paragraph</w:t></w:r>
+        </w:p>
+        <w:p>
+          <w:r><w:t>old second paragraph</w:t></w:r>
+          <w:moveFromRangeEnd w:id="7"/>
+          <w:r><w:t> current</w:t></w:r>
+        </w:p>
+      `),
+    });
+
+    const text = await extractFolioBlockTextFromDocxBuffer(buffer);
+
+    expect(text).toBe(
+      [
+        renderDocxDeletionMarkup({ text: "old first paragraph" }),
+        "\n",
+        renderDocxDeletionMarkup({ text: "old second paragraph" }),
+        " current",
+      ].join(""),
+    );
+  });
+
   test("extracts redline-aware text from the same block source", async () => {
     const buffer = await buildDocxBuffer({
       documentXml: wrap(`
