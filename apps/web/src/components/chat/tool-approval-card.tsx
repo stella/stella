@@ -16,6 +16,7 @@ import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import {
   getChatToolTitleKey,
   isExternalMcpToolName,
+  isApprovalToolName,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
@@ -93,21 +94,11 @@ const getApprovalId = (part: ApprovalToolPart): string | null => {
 
 const getApprovalToolName = (part: ApprovalToolPart): ApprovalToolName => {
   const toolName = part.type.slice("tool-".length);
-  if (isExternalMcpToolName(toolName)) {
+  if (isApprovalToolName(toolName)) {
     return toolName;
   }
 
-  switch (part.type) {
-    case "tool-apply-active-docx-edits":
-      return "apply-active-docx-edits";
-    case "tool-create-document":
-      return "create-document";
-    case "tool-update-entity-fields":
-      return "update-entity-fields";
-    default:
-      part satisfies never;
-      throw new Error("Unsupported approval tool");
-  }
+  throw new Error("Unsupported approval tool");
 };
 
 // -- Select badge (colored chip matching table UX) --

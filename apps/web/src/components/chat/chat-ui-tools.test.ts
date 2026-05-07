@@ -65,6 +65,31 @@ describe("isApprovalPart", () => {
 
     expect(isApprovalPart(part)).toBe(true);
   });
+
+  test("treats external native API tools as approval parts", () => {
+    const part = {
+      approval: { id: "approval-1" },
+      input: { ico: "27082440" },
+      providerExecuted: false,
+      state: "approval-requested",
+      toolCallId: "tool-call-1",
+      type: "tool-ares_lookup_company",
+    };
+
+    expect(isApprovalPart(part)).toBe(true);
+  });
+
+  test("does not treat ask-user as an approval part", () => {
+    const part = {
+      input: { questions: [] },
+      output: undefined,
+      state: "input-available",
+      toolCallId: "tool-call-1",
+      type: "tool-ask-user",
+    };
+
+    expect(isApprovalPart(part)).toBe(false);
+  });
 });
 
 describe("hasApprovedActiveDocxEditAwaitingClientOutput", () => {

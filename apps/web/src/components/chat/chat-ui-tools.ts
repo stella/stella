@@ -11,11 +11,8 @@ export type { ChatMessage, ChatPart, ChatUITools } from "@stll/api/types";
 export type PersistedChatMessage = ChatMessage;
 export type SharedChatUITools = Pick<ChatUITools, "ask-user">;
 export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
-export type ApprovalToolName =
-  | "apply-active-docx-edits"
-  | "create-document"
-  | "update-entity-fields"
-  | `mcp__${string}`;
+type BuiltInApprovalToolName = Exclude<keyof ChatUITools, "ask-user">;
+export type ApprovalToolName = BuiltInApprovalToolName | `mcp__${string}`;
 export type ApprovalToolPart =
   | Extract<ChatPart, { type: `tool-${ApprovalToolName}` }>
   | (ChatPart & { type: `tool-mcp__${string}` });
@@ -58,14 +55,6 @@ export const isExternalMcpToolName = (
   toolName: string,
 ): toolName is `mcp__${string}` => toolName.startsWith("mcp__");
 
-export const isApprovalToolName = (
-  toolName: string,
-): toolName is ApprovalToolName =>
-  toolName === "apply-active-docx-edits" ||
-  toolName === "create-document" ||
-  toolName === "update-entity-fields" ||
-  isExternalMcpToolName(toolName);
-
 export type ChatToolTitleKey =
   | (typeof CHAT_TOOL_DISPLAY_TITLE_KEYS)[keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS]
   | typeof UNKNOWN_CHAT_TOOL_TITLE_KEY;
@@ -74,6 +63,16 @@ const isChatToolName = (
   toolName: string,
 ): toolName is keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS =>
   toolName in CHAT_TOOL_DISPLAY_TITLE_KEYS;
+
+export const isApprovalToolName = (
+  toolName: string,
+): toolName is ApprovalToolName => {
+  if (isExternalMcpToolName(toolName)) {
+    return true;
+  }
+
+  return isChatToolName(toolName) && toolName !== "ask-user";
+};
 
 export const getChatToolTitleKey = (toolName: string) => {
   if (isChatToolName(toolName)) {
