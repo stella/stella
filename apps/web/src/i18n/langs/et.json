@@ -384,6 +384,9 @@
     "resend": "Saada uuesti",
     "send": "Saada sõnum",
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
+    "sendErrorInsufficientCredits": "The AI provider needs more credits. Contact your workspace admin to top up the account.",
+    "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.",
+    "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin to upgrade the plan.",
     "thinking": "Töötan kontekstiga",
     "threads": "Ajalugu",
     "tool": {

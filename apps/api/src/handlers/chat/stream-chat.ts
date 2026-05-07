@@ -25,6 +25,7 @@ import type { ChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
+import { classifyAIError } from "@/api/lib/ai-error";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import {
   getModelForRole,
@@ -125,8 +126,9 @@ export const streamChat = async ({
     originalMessages: preparedMessages.value,
     onFinish,
     onError: (error) => {
-      captureError(error, { threadId });
-      return "error";
+      const kind = classifyAIError(error);
+      captureError(error, { threadId, kind });
+      return kind;
     },
     execute: ({ writer }) => {
       const modelInfo = getModelInfoForRole("chat", orgAIConfig);

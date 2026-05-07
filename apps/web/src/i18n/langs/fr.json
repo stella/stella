@@ -384,6 +384,9 @@
     "resend": "Renvoyer",
     "send": "Envoyer le message",
     "sendError": "Un problème est survenu lors de l’envoi de ton message. Contacte le support si l’erreur persiste.",
+    "sendErrorInsufficientCredits": "The AI provider needs more credits. Contact your workspace admin to top up the account.",
+    "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.",
+    "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin to upgrade the plan.",
     "thinking": "Traitement du contexte",
     "threads": "Historique",
     "tool": {

@@ -191,6 +191,7 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
+import { ChatErrorMessage } from "@/components/chat/chat-thread-messages";
 import { AIKeyRequiredDialog } from "@/components/require-ai-key";
 
 type ComboboxOption = {
@@ -1461,19 +1462,35 @@ function ToolCallMock() {
   );
 }
 
+// Mirrors `AIErrorKind` in apps/api/src/lib/ai-error.ts. The
+// backend returns one of these strings on the chat stream's error
+// channel; passing them as `error.message` exercises the real
+// translation path the user will see.
+const CHAT_ERROR_VARIANTS = [
+  { label: "Generic", message: "unknown" },
+  { label: "Quota exhausted", message: "quota_exhausted" },
+  { label: "Insufficient credits", message: "insufficient_credits" },
+  { label: "Provider unavailable", message: "provider_unavailable" },
+] as const;
+
 function ChatErrorMock() {
   return (
-    <Message from="assistant">
-      <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
-        <p className="text-sm">
-          There was an issue sending your message. Contact support if the error
-          persists.
-        </p>
-        <Button className="self-start" size="sm" variant="destructive-outline">
-          Resend
-        </Button>
-      </MessageContent>
-    </Message>
+    <div className="flex flex-col gap-3">
+      {CHAT_ERROR_VARIANTS.map((variant) => (
+        <div className="flex flex-col gap-1" key={variant.message}>
+          <div className="text-muted-foreground text-[10px] uppercase">
+            {variant.label}
+          </div>
+          <ChatErrorMessage
+            error={new Error(variant.message)}
+            isGenerating={false}
+            onResend={() => {
+              /* no-op in playground */
+            }}
+          />
+        </div>
+      ))}
+    </div>
   );
 }
 

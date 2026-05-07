@@ -384,6 +384,9 @@
     "resend": "Wyślij ponownie",
     "send": "Wyślij wiadomość",
     "sendError": "Wystąpił problem podczas wysyłania wiadomości. Jeśli błąd będzie się powtarzał, skontaktuj się z pomocą techniczną.",
+    "sendErrorInsufficientCredits": "The AI provider needs more credits. Contact your workspace admin to top up the account.",
+    "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.",
+    "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin to upgrade the plan.",
     "thinking": "Pracuję z kontekstem",
     "threads": "Historia",
     "tool": {

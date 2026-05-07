@@ -23,6 +23,7 @@ import { SourceChips } from "@/components/chat/source-chips";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
+import type { TranslationKey } from "@/i18n/types";
 import { getUserFileContentUrl } from "@/lib/user-files";
 
 const USER_STREAMDOWN_COMPONENTS = {
@@ -164,10 +165,38 @@ const ThinkingIndicator = () => {
   );
 };
 
-const ChatErrorMessage = ({
+// Mirrors `AIErrorKind` in apps/api/src/lib/ai-error.ts. The
+// backend's chat stream `onError` returns one of these strings as
+// the error message; anything else falls through to the generic
+// copy.
+const CHAT_ERROR_TRANSLATION_KEYS = {
+  insufficient_credits: "chat.sendErrorInsufficientCredits",
+  provider_unavailable: "chat.sendErrorProviderUnavailable",
+  quota_exhausted: "chat.sendErrorQuotaExhausted",
+} as const satisfies Record<string, TranslationKey>;
+
+type ChatErrorTranslationKey =
+  | (typeof CHAT_ERROR_TRANSLATION_KEYS)[keyof typeof CHAT_ERROR_TRANSLATION_KEYS]
+  | "chat.sendError";
+
+const isMappedChatErrorKind = (
+  message: string,
+): message is keyof typeof CHAT_ERROR_TRANSLATION_KEYS =>
+  message in CHAT_ERROR_TRANSLATION_KEYS;
+
+const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
+  if (isMappedChatErrorKind(error.message)) {
+    return CHAT_ERROR_TRANSLATION_KEYS[error.message];
+  }
+  return "chat.sendError";
+};
+
+export const ChatErrorMessage = ({
+  error,
   isGenerating,
   onResend,
 }: {
+  error: Error;
   isGenerating: boolean;
   onResend?: (() => void | PromiseLike<void>) | undefined;
 }) => {
@@ -176,7 +205,7 @@ const ChatErrorMessage = ({
   return (
     <Message from="assistant">
       <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
-        <p className="text-sm">{t("chat.sendError")}</p>
+        <p className="text-sm">{t(chatErrorTranslationKey(error))}</p>
         {onResend && (
           <Button
             className="self-start"
@@ -367,7 +396,11 @@ export const ChatThreadMessages = ({
       </Message>
     ))}
     {error && (
-      <ChatErrorMessage isGenerating={isGenerating} onResend={onResend} />
+      <ChatErrorMessage
+        error={error}
+        isGenerating={isGenerating}
+        onResend={onResend}
+      />
     )}
     {showThinkingIndicator &&
       isGenerating &&

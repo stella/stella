@@ -384,6 +384,9 @@
     "resend": "Siųsti dar kartą",
     "send": "Siųsti žinutę",
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
+    "sendErrorInsufficientCredits": "The AI provider needs more credits. Contact your workspace admin to top up the account.",
+    "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.",
+    "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin to upgrade the plan.",
     "thinking": "Dirbama su kontekstu",
     "threads": "Istorija",
     "tool": {

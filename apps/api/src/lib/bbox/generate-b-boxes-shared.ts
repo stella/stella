@@ -11,6 +11,7 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { createFileKey } from "@/api/handlers/files/utils";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import type { BoundingBox } from "@/api/types";
@@ -30,7 +31,14 @@ export type GenerateBBoxesProps = {
   };
 };
 
-export type GenerateBBoxesResult = BoundingBox[];
+// Wraps the BoundingBox payload in a `Result` so AI provider failures
+// (Anthropic 429/500, Gemini quota, etc.) can be surfaced as typed
+// errors at the handler boundary instead of throwing through the
+// safe-handler stack as `Panic`.
+export type GenerateBBoxesResult = Result<
+  BoundingBox[],
+  WorkflowIntegrationError
+>;
 
 class JustificationTextError extends TaggedError("JustificationTextError")<{
   message: string;

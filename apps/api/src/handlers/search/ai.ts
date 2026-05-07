@@ -17,6 +17,7 @@ import {
   workspaceSearchDocuments,
 } from "@/api/db/schema";
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
+import { aiErrorStatusBody } from "@/api/lib/ai-error";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import {
   getModelForRole,
@@ -310,7 +311,11 @@ export const refineSearchQuery = async ({
 
     if (result.isErr()) {
       aiAnalytics.captureError(result.error);
-      return status(502, { message: "Failed to improve search query" });
+      const mapped = aiErrorStatusBody(result.error, {
+        status: 502,
+        message: "Failed to improve search query",
+      });
+      return status(mapped.status, mapped.body);
     }
 
     const parsedOutput = v.safeParse(
@@ -430,7 +435,11 @@ export const summarizeSearchResults = async ({
       feature: "search.summary",
       organizationId,
     });
-    return status(502, { message: "Failed to summarize search results" });
+    const mapped = aiErrorStatusBody(result.error, {
+      status: 502,
+      message: "Failed to summarize search results",
+    });
+    return status(mapped.status, mapped.body);
   }
 
   const parsedOutput = v.safeParse(

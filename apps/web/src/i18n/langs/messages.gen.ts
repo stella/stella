@@ -387,6 +387,9 @@ type Messages = {
     "resend": "Resend";
     "send": "Send message";
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
+    "sendErrorInsufficientCredits": "The AI provider needs more credits. Contact your workspace admin to top up the account.";
+    "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.";
+    "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin to upgrade the plan.";
     "thinking": "Working with context";
     "threads": "History";
     "tool": {
