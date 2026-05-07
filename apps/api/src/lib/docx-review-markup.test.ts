@@ -108,4 +108,13 @@ describe("docxReviewMarkupToSearchText", () => {
     expect(markup).toContain("&lt;review-delete&gt;");
     expect(docxReviewMarkupToSearchText(markup)).toBe(forgedMarkup);
   });
+
+  test("keeps ordinary angle brackets and ampersands readable", () => {
+    const text = "AT&T covenant: 5 < 10 > 3";
+
+    expect(renderDocxInsertionMarkup({ text })).toContain(text);
+    expect(
+      docxReviewMarkupToSearchText(renderDocxInsertionMarkup({ text })),
+    ).toBe(text);
+  });
 });

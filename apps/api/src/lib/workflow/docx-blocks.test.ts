@@ -160,6 +160,21 @@ describe("extractFolioBlocksFromDocxBuffer", () => {
     expect(blocks[0]?.text).toBe("preferred");
   });
 
+  test("keeps ordinary special characters readable in body text", async () => {
+    const buffer = await buildDocxBuffer({
+      documentXml: wrap(`
+        <w:p>
+          <w:r><w:t>AT&amp;T covenant: 5 &lt; 10 &gt; 3</w:t></w:r>
+        </w:p>
+      `),
+    });
+
+    const blocks = await extractFolioBlocksFromDocxBuffer(buffer);
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.text).toBe("AT&T covenant: 5 < 10 > 3");
+  });
+
   test("surfaces comment bubbles at their anchor", async () => {
     const buffer = await buildDocxBuffer({
       documentXml: wrap(`
