@@ -1,10 +1,9 @@
 import { useCallback } from "react";
 
-import { v7 as uuidv7 } from "uuid";
-
 import { useChatEditorManager } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 /**
@@ -31,7 +30,7 @@ export const useRequestChatAbout = (workspaceId?: string) => {
         return;
       }
 
-      const threadId = uuidv7();
+      const threadId = createChatThreadId();
       // Auto-unminimises the pane and activates the new chat tab.
       openChat({
         id: threadId,

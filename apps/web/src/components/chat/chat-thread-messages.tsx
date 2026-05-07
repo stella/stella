@@ -358,7 +358,8 @@ type ChatThreadMessagesProps = {
     output: AskUserOutput,
   ) => void | PromiseLike<void>;
   showThinkingIndicator?: boolean | undefined;
-  showToolCalls: boolean;
+  showToolCallDetails?: boolean | undefined;
+  showToolCalls?: boolean | undefined;
   streamdownComponents: {
     a: (props: ComponentProps<"a">) => React.ReactNode;
   };
@@ -378,6 +379,7 @@ export const ChatThreadMessages = ({
   onResend,
   onAskUserSubmit,
   showThinkingIndicator = false,
+  showToolCallDetails,
   showToolCalls,
   streamdownComponents,
   workspaceId,
@@ -386,6 +388,7 @@ export const ChatThreadMessages = ({
     () => getRetryableAssistantMessageId(messages),
     [messages],
   );
+  const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
 
   return (
     <>
@@ -443,12 +446,12 @@ export const ChatThreadMessages = ({
                     );
                   }
 
-                  if (isToolUIPart(part) && showToolCalls) {
+                  if (isToolUIPart(part) && shouldShowToolCalls) {
                     return (
                       <ToolCallCard
                         key={part.toolCallId}
                         part={part}
-                        showDetails
+                        showDetails={shouldShowToolCalls}
                       />
                     );
                   }
@@ -505,7 +508,9 @@ export const ChatThreadMessages = ({
       )}
       {showThinkingIndicator &&
         isGenerating &&
-        !hasVisibleContent(messages, showToolCalls) && <ThinkingIndicator />}
+        !hasVisibleContent(messages, shouldShowToolCalls) && (
+          <ThinkingIndicator />
+        )}
     </>
   );
 };

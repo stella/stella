@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 import {
   buildSendRequestBody,
   chatKeys,
@@ -15,10 +16,11 @@ const createMessage = (): PersistedChatMessage => ({
 
 describe("chatKeys", () => {
   test("separates plain chat transports from active DOCX edit transports", () => {
+    const threadId = toChatThreadId("thread-A");
     const base = {
       allowMissingThread: true,
       scope: "workspace",
-      threadId: "thread-A",
+      threadId,
       workspaceId: "ws-1",
     } as const;
 
@@ -32,7 +34,8 @@ describe("chatKeys", () => {
 });
 
 describe("matchesChatThreadAcrossScopes", () => {
-  const threadId = "thread-A";
+  const threadId = toChatThreadId("thread-A");
+  const otherThreadId = toChatThreadId("thread-B");
 
   test("matches the global scope's key for the same thread", () => {
     const key = chatKeys.thread({ scope: "global", threadId });
@@ -51,7 +54,7 @@ describe("matchesChatThreadAcrossScopes", () => {
   test("rejects keys for other threads", () => {
     expect(
       matchesChatThreadAcrossScopes(
-        chatKeys.thread({ scope: "global", threadId: "thread-B" }),
+        chatKeys.thread({ scope: "global", threadId: otherThreadId }),
         threadId,
       ),
     ).toBe(false);
@@ -60,7 +63,7 @@ describe("matchesChatThreadAcrossScopes", () => {
         chatKeys.thread({
           scope: "workspace",
           workspaceId: "ws-1",
-          threadId: "thread-B",
+          threadId: otherThreadId,
         }),
         threadId,
       ),
@@ -91,10 +94,11 @@ describe("matchesChatThreadAcrossScopes", () => {
 
 describe("buildSendRequestBody", () => {
   test("includes anonymized mode when the chat surface enables it", () => {
+    const threadId = toChatThreadId("thread-A");
     expect(
       buildSendRequestBody({
         context: { getAnonymized: () => true },
-        key: { scope: "global", threadId: "thread-A" },
+        key: { scope: "global", threadId },
         messages: [createMessage()],
       }),
     ).toMatchObject({

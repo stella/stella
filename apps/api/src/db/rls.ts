@@ -139,6 +139,116 @@ export const userPolicies = () => [
   }),
 ];
 
+const mcpConnectorVisibleCheck = sql`(
+  organization_id IS NULL OR ${organizationCheck}
+)`;
+
+export const mcpConnectorPolicies = () => [
+  p.pgPolicy("mcp_connector_select", {
+    for: "select",
+    to: stella,
+    using: mcpConnectorVisibleCheck,
+  }),
+  p.pgPolicy("mcp_connector_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: organizationCheck,
+  }),
+  p.pgPolicy("mcp_connector_update", {
+    for: "update",
+    to: stella,
+    using: organizationCheck,
+  }),
+  p.pgPolicy("mcp_connector_delete", {
+    for: "delete",
+    to: stella,
+    using: organizationCheck,
+  }),
+];
+
+const mcpOAuthClientCheck = sql`(
+  ${organizationCheck} AND EXISTS (
+  SELECT 1 FROM mcp_connectors mc
+  WHERE mc.id = connector_id
+    AND (mc.organization_id IS NULL OR mc.organization_id = (SELECT current_setting(
+      '${sql.raw(SETTING_ORGANIZATION_ID)}', true
+    )))
+  )
+)`;
+
+export const mcpOAuthClientPolicies = () => [
+  p.pgPolicy("mcp_oauth_client_select", {
+    for: "select",
+    to: stella,
+    using: mcpOAuthClientCheck,
+  }),
+  p.pgPolicy("mcp_oauth_client_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: mcpOAuthClientCheck,
+  }),
+  p.pgPolicy("mcp_oauth_client_update", {
+    for: "update",
+    to: stella,
+    using: mcpOAuthClientCheck,
+  }),
+  p.pgPolicy("mcp_oauth_client_delete", {
+    for: "delete",
+    to: stella,
+    using: mcpOAuthClientCheck,
+  }),
+];
+
+const mcpUserConnectionCheck = sql`(
+  ${organizationCheck} AND ${userCheck}
+)`;
+
+export const mcpUserConnectionPolicies = () => [
+  p.pgPolicy("mcp_user_connection_select", {
+    for: "select",
+    to: stella,
+    using: mcpUserConnectionCheck,
+  }),
+  p.pgPolicy("mcp_user_connection_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: mcpUserConnectionCheck,
+  }),
+  p.pgPolicy("mcp_user_connection_update", {
+    for: "update",
+    to: stella,
+    using: mcpUserConnectionCheck,
+  }),
+  p.pgPolicy("mcp_user_connection_delete", {
+    for: "delete",
+    to: stella,
+    using: mcpUserConnectionCheck,
+  }),
+];
+
+export const mcpOAuthStatePolicies = () => [
+  p.pgPolicy("mcp_oauth_state_select", {
+    for: "select",
+    to: stella,
+    using: mcpUserConnectionCheck,
+  }),
+  p.pgPolicy("mcp_oauth_state_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: mcpUserConnectionCheck,
+  }),
+  p.pgPolicy("mcp_oauth_state_update", {
+    for: "update",
+    to: stella,
+    using: mcpUserConnectionCheck,
+  }),
+  p.pgPolicy("mcp_oauth_state_delete", {
+    for: "delete",
+    to: stella,
+    using: mcpUserConnectionCheck,
+  }),
+];
+
 /**
  * Prompt shortcuts are org-scoped for team shortcuts (all org
  * members can read them) and user-scoped for private ones.

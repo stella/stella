@@ -51,7 +51,7 @@ export const ChatThreadPage = ({
   const { ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
   const getUserContext = useEffectEvent(() => userContext);
-  const showToolCalls = useDevStore((state) => state.showToolCalls);
+  const showToolCallDetails = useDevStore((state) => state.showToolCallDetails);
   const prompts = useSavedPrompts();
 
   // Local copy of the persisted contextMatterIds, seeded from the
@@ -165,7 +165,7 @@ export const ChatThreadPage = ({
   };
 
   return (
-    <div className="flex w-full max-w-2xl flex-1 flex-col overflow-hidden">
+    <div className="flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between gap-2 px-4 py-2">
         <div className="flex min-w-0 items-center gap-2">
           {threadRef.scope === "workspace" ? (
@@ -232,7 +232,7 @@ export const ChatThreadPage = ({
               onAskUserSubmit={handleAskUserSubmit}
               onResend={resendLatestMessage}
               showThinkingIndicator
-              showToolCalls={showToolCalls}
+              showToolCallDetails={showToolCallDetails}
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
             />

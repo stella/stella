@@ -339,6 +339,8 @@
     "editableFilePlaceholder": "Csevegés vagy szerkesztés: {fileName}",
     "editableFilePlaceholderAction": "Csevegés vagy szerkesztés",
     "editorLoading": "Loading editor…",
+    "externalSourcePlaceholder": "Csevegés erről: {title}",
+    "externalSourcePlaceholderAction": "Csevegés erről:",
     "extractingContent": "Tartalom kinyerése...",
     "filePlaceholder": "Csevegés erről: {fileName}",
     "filePlaceholderAction": "Csevegés erről:",
@@ -391,6 +393,8 @@
     "threads": "Előzmények",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
+      "ares_lookup_company": "ARES cég lekérdezése",
+      "ares_search_companies": "ARES cégkeresés",
       "ask-user": "Pontosítás kérése",
       "create-document": "Dokumentum létrehozása",
       "describe-stella-api": "Stella API ellenőrzése",
@@ -415,6 +419,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# karakter} other {# karakter}}",
+      "exactCall": "Pontos hívás",
       "field": "Mező",
       "input": "Bemenet",
       "output": "Kimenet",
@@ -1027,6 +1032,13 @@
     "unsupportedDocxEditTitle": "Editing blocked"
   },
   "inspector": {
+    "external": {
+      "confirmDescription": "Külső webhelyet készülsz megnyitni.",
+      "confirmTitle": "Külső hivatkozás megnyitása?",
+      "openLink": "Hivatkozás megnyitása",
+      "openOriginal": "Eredeti megnyitása",
+      "unavailable": "Ez a webhely nem engedélyez biztonságos előnézetet a Stellában. Ha az eszköz visszaadta a dokumentum szövegét, az itt jelenik meg; ellenkező esetben nyissa meg az eredetit."
+    },
     "facet": {
       "preview": "Preview",
       "previewInFullViewToast": "Preview is the main view here. Click the minimize button to see it alongside metadata."
@@ -1054,7 +1066,55 @@
     "showPane": "Show pane"
   },
   "knowledge": {
+    "mcp": {
+      "addServer": "Szerver hozzáadása",
+      "auth": {
+        "bearer": "Bearer token",
+        "none": "Nincs hitelesítés",
+        "oauth2": "OAuth 2.0"
+      },
+      "availableInChat": "Elérhető a chatben",
+      "builtInBadge": "Beépített",
+      "connect": "Csatlakoztatás",
+      "connected": "Csatlakoztatva",
+      "connectedToast": "MCP-konnektor csatlakoztatva",
+      "connectedWithLastUsed": "Csatlakoztatva · legutóbbi használat: {time}",
+      "customDescription": "Illesszen be egy Streamable HTTP MCP URL-t. A Stella mentés előtt felismeri az OAuthot, a Bearer tokent vagy a nyilvános hozzáférést.",
+      "customTitle": "Egyéni szerver hozzáadása",
+      "description": "Kezelje azokat a külső MCP-szervereket, amelyek eszközöket adhatnak a chathez. A tokeneket felhasználónként tároljuk.",
+      "detected": "Felismerve: {authType}",
+      "disable": "Kikapcsolás",
+      "disabled": "Csatlakoztatva · kikapcsolva",
+      "disconnect": "Leválasztás",
+      "docsLink": "Dokumentáció",
+      "emptyDescription": "A válogatott jogi MCP-konnektorok itt jelennek meg, miután engedélyezve lettek a munkaterületén.",
+      "emptyTitle": "Még nincsenek MCP-konnektorok",
+      "enable": "Bekapcsolás",
+      "errorDescription": "A konnektort nem sikerült frissíteni.",
+      "errorTitle": "Az MCP-kapcsolat sikertelen",
+      "namePlaceholder": "Megjelenítési név",
+      "needsReauth": "Újracsatlakozás szükséges",
+      "notConnected": "Nincs csatlakoztatva",
+      "off": "Ki",
+      "on": "Be",
+      "otherTitle": "További csatlakozók",
+      "probe": "Ellenőrzés",
+      "recommendedBadge": "Ajánlott",
+      "recommendedFor": "Ajánlott: {jurisdictions}",
+      "recommendedTitle": "Ajánlott az Ön joghatóságaihoz",
+      "reconnect": "Újracsatlakozás",
+      "saveToken": "Token mentése",
+      "tokenHelp": "Token beszerzése",
+      "tokenLabel": "Bearer token",
+      "tokenPlaceholder": "Token beillesztése",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Használat a chatben"
+    },
     "sections": {
+      "agents": {
+        "description": "Konfigurálható asszisztensek ismételhető munkákhoz",
+        "title": "Ügynökök"
+      },
       "caseLaw": {
         "description": "Bírósági határozatok és joggyakorlati adatbázis",
         "title": "Joggyakorlat"
@@ -1064,12 +1124,20 @@
         "title": "Kikötések"
       },
       "connectors": {
-        "description": "Csatlakozás külső rendszerekhez",
-        "title": "Csatlakozók"
+        "description": "A Stella összekapcsolása ellenőrzött külső eszközszerverekkel",
+        "title": "MCP"
+      },
+      "mcp": {
+        "description": "A Stella összekapcsolása ellenőrzött külső eszközszerverekkel",
+        "title": "MCP"
+      },
+      "prompts": {
+        "description": "Újrahasználható utasítások, amelyek / paranccsal érhetők el a chatben",
+        "title": "Promptok"
       },
       "skills": {
-        "description": "Egyéni MI-skillek",
-        "title": "Képességek"
+        "description": "Célzott AI-képességek speciális munkafolyamatokhoz",
+        "title": "Skills"
       },
       "templates": {
         "description": "Dokumentumsablonok helyőrzőkkel",
@@ -1077,39 +1145,39 @@
       }
     },
     "skills": {
-      "addShortcut": "Skill hozzáadása",
-      "defaultBadge": "Alapértelmezett",
-      "deleteConfirmDescription": "Ez a skill véglegesen törlődik.",
-      "deleteConfirmTitle": "Skill törlése?",
-      "deleteShortcut": "Skill törlése",
-      "editShortcut": "Skill szerkesztése",
-      "emptyDescription": "Hozzon létre újrahasználható promptokat az ismétlődő csapatmunkához, az összefoglalóktól az első vázlatok utasításaiig.",
-      "emptyState": "Még nincsenek skillek. Adja hozzá az elsőt.",
-      "emptyTitle": "Hozza létre az első skillt",
-      "emptyVideoLabel": "Skillek áttekintése",
+      "addShortcut": "Prompt hozzáadása",
+      "defaultBadge": "Default",
+      "deleteConfirmDescription": "Ez a prompt véglegesen törlődik.",
+      "deleteConfirmTitle": "Prompt törlése?",
+      "deleteShortcut": "Prompt törlése",
+      "editShortcut": "Prompt szerkesztése",
+      "emptyDescription": "Create reusable prompts for the work your team repeats, from summaries to first-pass drafting instructions.",
+      "emptyState": "Még nincsenek promptok. Adja hozzá az elsőt.",
+      "emptyTitle": "Első prompt létrehozása",
+      "emptyVideoLabel": "Promptok áttekintése",
       "errors": {
-        "commandConflict": "Már létezik skill ezzel a / névvel",
-        "commandInvalid": "Csak kisbetűket, számokat, kötőjeleket és aláhúzásokat használjon",
-        "commandReserved": "\"/{command}\" fenntartott skill"
+        "commandConflict": "Már létezik prompt ezzel a / névvel",
+        "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores",
+        "commandReserved": "A(z) \"/{command}\" fenntartott prompt"
       },
       "form": {
-        "command": "Skill",
-        "commandHint": "A / skill neve: csak kisbetűk, számok, kötőjelek és aláhúzások",
-        "commandPlaceholder": "pl. összefoglalás",
+        "command": "Prompt parancsikon",
+        "commandHint": "A / prompt neve: csak kisbetűk, számok, kötőjelek és aláhúzások",
+        "commandPlaceholder": "e.g. summarize",
         "commandPrefix": "/",
-        "description": "Leírás",
-        "descriptionPlaceholder": "Rövid leírás a kiválasztóban",
-        "name": "Név",
-        "namePlaceholder": "pl. Dokumentum összefoglalása",
+        "description": "Description",
+        "descriptionPlaceholder": "Short description shown in the picker",
+        "name": "Name",
+        "namePlaceholder": "e.g. Summarise document",
         "prompt": "Prompt",
-        "promptPlaceholder": "A chat szerkesztőbe beszúrt szöveg, amikor ezt a skillt használják",
-        "scope": "Láthatóság",
-        "scopePrivate": "Csak én",
-        "scopeTeam": "Mindenki a szervezetben"
+        "promptPlaceholder": "A chat szerkesztőjébe beszúrt szöveg a prompt használatakor",
+        "scope": "Visibility",
+        "scopePrivate": "Only me",
+        "scopeTeam": "Everyone in the organisation"
       },
-      "privateSection": "Saját parancsikonok",
-      "shadowed": "Csapat parancsikon takarja",
-      "teamSection": "Csapat parancsikonok"
+      "privateSection": "Saját promptok",
+      "shadowed": "A csapat promptja felülírja",
+      "teamSection": "Csapat promptjai"
     }
   },
   "navigation": {

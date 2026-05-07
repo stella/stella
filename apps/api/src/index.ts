@@ -19,10 +19,12 @@ import { devPublicRoute, devRoute } from "@/api/handlers/dev/routes";
 import { desktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
 import { entitiesRoute } from "@/api/handlers/entities/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
+import { externalPreviewRoute } from "@/api/handlers/external-preview/routes";
 import { fieldsRoute } from "@/api/handlers/fields/routes";
 import { filesRoute } from "@/api/handlers/files/routes";
 import { healthRoute } from "@/api/handlers/health/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
+import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
@@ -311,6 +313,8 @@ const api = new Elysia()
       .use(ratesRoute)
       .use(expensesRoute)
       .use(invoicesRoute)
+      .use(externalPreviewRoute)
+      .use(mcpConnectorsRoute)
       .use(organizationSettingsRoute)
       .use(aiConfigPublicRoute)
       .use(clauseCategoriesRoute)

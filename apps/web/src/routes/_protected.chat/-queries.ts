@@ -17,7 +17,7 @@ import { hasApprovedActiveDocxEditAwaitingClientOutput } from "@/components/chat
 import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { APIError, toAPIError } from "@/lib/errors";
 import type { QueryOptionsInput } from "@/lib/react-query";
@@ -44,6 +44,16 @@ type ActiveDecisionContext = {
   decisionId: string;
 };
 
+type ActiveExternalContext = {
+  connectorSlug?: string | undefined;
+  provider?: string | undefined;
+  snippet?: string | undefined;
+  sourceToolName?: string | undefined;
+  text?: string | undefined;
+  title: string;
+  url: string;
+};
+
 type ChatThreadKey = ChatThreadRef;
 
 type GroupedChatThreads = Awaited<ReturnType<typeof fetchGroupedChatThreads>>;
@@ -60,6 +70,7 @@ export type ApplyActiveDocxEditsOutput =
 type ChatThreadOptionsContext = {
   allowMissingThread?: boolean | undefined;
   getActiveDecision?: (() => ActiveDecisionContext | undefined) | undefined;
+  getActiveExternal?: (() => ActiveExternalContext | undefined) | undefined;
   getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
   /**
    * Matters this chat draws context from. The transport sends the
@@ -88,7 +99,11 @@ type ChatThreadOptionsInput = QueryOptionsInput<
   ChatThreadOptionsContext
 >;
 
-type ChatRuntimeContextKind = "active-docx-edit" | "active-file" | "plain";
+type ChatRuntimeContextKind =
+  | "active-docx-edit"
+  | "active-external"
+  | "active-file"
+  | "plain";
 
 const getChatRuntimeContextKind = (
   context: ChatThreadOptionsContext | undefined,
@@ -99,6 +114,10 @@ const getChatRuntimeContextKind = (
 
   if (context?.getActiveFile) {
     return "active-file";
+  }
+
+  if (context?.getActiveExternal) {
+    return "active-external";
   }
 
   return "plain";
@@ -195,6 +214,7 @@ export const buildSendRequestBody = ({
 
   const body: {
     activeDecision?: ActiveDecisionContext | undefined;
+    activeExternal?: ActiveExternalContext | undefined;
     activeFile?: ActiveFileContext | undefined;
     anonymized?: boolean | undefined;
     contextMatterIds?: string[] | undefined;
@@ -224,6 +244,11 @@ export const buildSendRequestBody = ({
   const activeDecision = context?.getActiveDecision?.();
   if (activeDecision) {
     body.activeDecision = activeDecision;
+  }
+
+  const activeExternal = context?.getActiveExternal?.();
+  if (activeExternal) {
+    body.activeExternal = activeExternal;
   }
 
   const contextMatterIds = context?.getContextMatterIds?.();
@@ -377,7 +402,7 @@ export const invalidateChatThread = async ({
  */
 export const matchesChatThreadAcrossScopes = (
   queryKey: readonly unknown[],
-  threadId: string,
+  threadId: ChatThreadId,
 ): boolean => {
   if (queryKey.at(0) !== "chat" || queryKey.at(1) !== "thread") {
     return false;
@@ -406,7 +431,7 @@ export const invalidateChatThreadAcrossScopes = async ({
   threadId,
 }: {
   queryClient: QueryClient;
-  threadId: string;
+  threadId: ChatThreadId;
 }) =>
   await queryClient.invalidateQueries({
     predicate: (query) =>

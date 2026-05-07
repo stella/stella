@@ -18,6 +18,8 @@ import type { ReactNode, RefObject } from "react";
 import type { DocxEditorRef } from "@stll/folio";
 import { cn } from "@stll/ui/lib/utils";
 
+import type { ChatThreadId } from "@/lib/chat-thread-ref";
+
 import { FileChatOverlay } from "./file-chat-overlay";
 import "./file-viewer-with-ai.css";
 
@@ -27,25 +29,37 @@ type ActiveFile = {
   fileName: string;
 };
 
+type ActiveExternal = {
+  connectorSlug?: string | undefined;
+  provider?: string | undefined;
+  snippet?: string | undefined;
+  sourceToolName?: string | undefined;
+  text?: string | undefined;
+  title: string;
+  url: string;
+};
+
 type FileViewerWithAIProps = {
   /**
-   * Workspace this file belongs to. Used to scope the chat
-   * thread + `@`-mention sources.
+   * Workspace this viewer belongs to. Used to scope the chat
+   * thread + `@`-mention sources when present.
    */
-  workspaceId: string;
+  workspaceId?: string | undefined;
   /**
    * Stable identifier for this file's chat thread. Use the file's
    * entity id (or any per-file unique string) so drafts + history
    * persist across mounts and stay isolated from other files'
    * chats.
    */
-  chatThreadId: string;
+  chatThreadId: ChatThreadId;
   /**
    * Optional file context surfaced to the model so prompts can
    * reference "the file you're looking at" — entity id and human
    * filename. Improves the AI's grounding when both are available.
    */
   activeFile?: ActiveFile | undefined;
+  /** Optional external source context, for MCP/web previews. */
+  activeExternal?: ActiveExternal | undefined;
   /** Optional class name applied to the wrapper. */
   className?: string;
   /** Live Folio editor ref used by the overlay's DOCX edit tool. */
@@ -62,6 +76,7 @@ export function FileViewerWithAI({
   workspaceId,
   chatThreadId,
   activeFile,
+  activeExternal,
   className,
   docxEditable,
   docxEditorRef,
@@ -76,6 +91,7 @@ export function FileViewerWithAI({
       {children}
       <FileChatOverlay
         activeFile={activeFile}
+        activeExternal={activeExternal}
         chatThreadId={chatThreadId}
         docxEditable={docxEditable}
         docxEditorRef={docxEditorRef}

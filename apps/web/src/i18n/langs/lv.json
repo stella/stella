@@ -339,6 +339,8 @@
     "editableFilePlaceholder": "Tērzēt par {fileName} vai rediģēt",
     "editableFilePlaceholderAction": "Tērzēt vai rediģēt",
     "editorLoading": "Loading editor…",
+    "externalSourcePlaceholder": "Tērzēt par {title}",
+    "externalSourcePlaceholderAction": "Tērzēt par",
     "extractingContent": "Satura izgūšana...",
     "filePlaceholder": "Tērzēt par {fileName}",
     "filePlaceholderAction": "Tērzēt par",
@@ -391,6 +393,8 @@
     "threads": "Vēsture",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
+      "ares_lookup_company": "ARES uzņēmuma meklēšana",
+      "ares_search_companies": "ARES uzņēmumu meklēšana",
       "ask-user": "Precizējuma pieprasīšana",
       "create-document": "Dokumenta izveide",
       "describe-stella-api": "Stella API pārbaude",
@@ -415,6 +419,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, zero {# rakstzīmju} one {# rakstzīme} other {# rakstzīmes}}",
+      "exactCall": "Precīzs izsaukums",
       "field": "Lauks",
       "input": "Ievade",
       "output": "Izvade",
@@ -1027,6 +1032,13 @@
     "unsupportedDocxEditTitle": "Editing blocked"
   },
   "inspector": {
+    "external": {
+      "confirmDescription": "Jūs tūlīt apmeklēsiet ārēju tīmekļa vietni.",
+      "confirmTitle": "Atvērt ārēju saiti?",
+      "openLink": "Atvērt saiti",
+      "openOriginal": "Atvērt oriģinālu",
+      "unavailable": "Šī vietne neļauj drošu priekšskatījumu Stellā. Ja rīks atgrieza dokumenta tekstu, tas parādīsies šeit; pretējā gadījumā atveriet oriģinālu."
+    },
     "facet": {
       "preview": "Preview",
       "previewInFullViewToast": "Preview is the main view here. Click the minimize button to see it alongside metadata."
@@ -1054,7 +1066,55 @@
     "showPane": "Show pane"
   },
   "knowledge": {
+    "mcp": {
+      "addServer": "Pievienot serveri",
+      "auth": {
+        "bearer": "Bearer tokens",
+        "none": "Bez autentifikācijas",
+        "oauth2": "OAuth 2.0"
+      },
+      "availableInChat": "Pieejams čatā",
+      "builtInBadge": "Iebūvēts",
+      "connect": "Pievienot",
+      "connected": "Pievienots",
+      "connectedToast": "MCP savienotājs pievienots",
+      "connectedWithLastUsed": "Pievienots · pēdoreiz izmantots {time}",
+      "customDescription": "Ielīmējiet Streamable HTTP MCP URL. Stella pirms saglabāšanas organizācijai noteiks OAuth, Bearer tokenu vai publisku piekļuvi.",
+      "customTitle": "Pievienot pielāgotu serveri",
+      "description": "Pārvaldiet ārējos MCP serverus, kas var pievienot rīkus čatam. Tokeni tiek glabāti katram lietotājam atsevišķi.",
+      "detected": "Noteikts: {authType}",
+      "disable": "Izslēgt",
+      "disabled": "Pievienots · izslēgts",
+      "disconnect": "Atvienot",
+      "docsLink": "Dokumentācija",
+      "emptyDescription": "Atlasītie juridiskie MCP savienotāji parādīsies šeit, kad tie būs iespējoti jūsu darbvietai.",
+      "emptyTitle": "MCP savienotāju vēl nav",
+      "enable": "Ieslēgt",
+      "errorDescription": "Savienotāju neizdevās atjaunināt.",
+      "errorTitle": "MCP savienojums neizdevās",
+      "namePlaceholder": "Rādāmais nosaukums",
+      "needsReauth": "Nepieciešama atkārtota pievienošana",
+      "notConnected": "Nav pievienots",
+      "off": "Izslēgts",
+      "on": "Ieslēgts",
+      "otherTitle": "Citi savienotāji",
+      "probe": "Pārbaudīt",
+      "recommendedBadge": "Ieteicams",
+      "recommendedFor": "Ieteicams: {jurisdictions}",
+      "recommendedTitle": "Ieteicams jūsu jurisdikcijām",
+      "reconnect": "Pievienot vēlreiz",
+      "saveToken": "Saglabāt tokenu",
+      "tokenHelp": "Kā iegūt tokenu",
+      "tokenLabel": "Bearer tokens",
+      "tokenPlaceholder": "Ielīmējiet tokenu",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Izmantot čatā"
+    },
     "sections": {
+      "agents": {
+        "description": "Konfigurējami asistenti atkārtojamam darbam",
+        "title": "Aģenti"
+      },
       "caseLaw": {
         "description": "Tiesas lēmumi no dažādām jurisdikcijām",
         "title": "Tiesu prakse"
@@ -1064,12 +1124,20 @@
         "title": "Klauzulas"
       },
       "connectors": {
-        "description": "Savienojums ar ārējām sistēmām",
-        "title": "Savienotāji"
+        "description": "Savienojiet Stella ar pārbaudītiem ārējiem rīku serveriem",
+        "title": "MCP"
+      },
+      "mcp": {
+        "description": "Savienojiet Stella ar pārbaudītiem ārējiem rīku serveriem",
+        "title": "MCP"
+      },
+      "prompts": {
+        "description": "Atkārtoti izmantojamas instrukcijas, kas čatā pieejamas ar /",
+        "title": "Prompti"
       },
       "skills": {
-        "description": "Pielāgotas AI prasmes",
-        "title": "Prasmes"
+        "description": "Mērķētas AI iespējas specializētām darbplūsmām",
+        "title": "Skills"
       },
       "templates": {
         "description": "Dokumentu veidnes ar vietturiem",
@@ -1077,39 +1145,39 @@
       }
     },
     "skills": {
-      "addShortcut": "Pievienot prasmi",
-      "defaultBadge": "Noklusējuma",
-      "deleteConfirmDescription": "Šī prasme tiks neatgriezeniski noņemta.",
-      "deleteConfirmTitle": "Dzēst prasmi?",
-      "deleteShortcut": "Dzēst prasmi",
-      "editShortcut": "Rediģēt prasmi",
-      "emptyDescription": "Izveidojiet atkārtoti izmantojamus promptus darbam, ko jūsu komanda atkārto, no kopsavilkumiem līdz pirmo melnrakstu norādījumiem.",
-      "emptyState": "Prasmju vēl nav. Pievienojiet pirmo.",
-      "emptyTitle": "Izveidojiet pirmo prasmi",
-      "emptyVideoLabel": "Prasmju pārskats",
+      "addShortcut": "Pievienot promptu",
+      "defaultBadge": "Default",
+      "deleteConfirmDescription": "Šis prompts tiks neatgriezeniski noņemts.",
+      "deleteConfirmTitle": "Dzēst promptu?",
+      "deleteShortcut": "Dzēst promptu",
+      "editShortcut": "Rediģēt promptu",
+      "emptyDescription": "Create reusable prompts for the work your team repeats, from summaries to first-pass drafting instructions.",
+      "emptyState": "Promptu vēl nav. Pievienojiet pirmo.",
+      "emptyTitle": "Izveidojiet pirmo promptu",
+      "emptyVideoLabel": "Promptu pārskats",
       "errors": {
-        "commandConflict": "Prasme ar šo / nosaukumu jau pastāv",
-        "commandInvalid": "Izmantojiet tikai mazos burtus, ciparus, defises un pasvītrojumus",
-        "commandReserved": "\"/{command}\" ir rezervēta prasme"
+        "commandConflict": "Prompts ar šo / nosaukumu jau pastāv",
+        "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores",
+        "commandReserved": "\"/{command}\" ir rezervēts prompts"
       },
       "form": {
-        "command": "Prasme",
-        "commandHint": "/ prasmes nosaukums: tikai mazie burti, cipari, defises un pasvītras",
-        "commandPlaceholder": "piem. kopsavilkums",
+        "command": "Prompta saīsne",
+        "commandHint": "/ prompta nosaukums: tikai mazie burti, cipari, defises un pasvītras",
+        "commandPlaceholder": "e.g. summarize",
         "commandPrefix": "/",
-        "description": "Apraksts",
-        "descriptionPlaceholder": "Īss apraksts atlasītājā",
-        "name": "Nosaukums",
-        "namePlaceholder": "piem. Dokumenta kopsavilkums",
-        "prompt": "Uzvedne",
-        "promptPlaceholder": "Teksts, kas tiek ievietots čata kompozitorā, kad tiek izmantota šī prasme",
-        "scope": "Redzamība",
-        "scopePrivate": "Tikai es",
-        "scopeTeam": "Visi organizācijā"
+        "description": "Description",
+        "descriptionPlaceholder": "Short description shown in the picker",
+        "name": "Name",
+        "namePlaceholder": "e.g. Summarise document",
+        "prompt": "Prompt",
+        "promptPlaceholder": "Teksts, kas tiek ievietots čata rakstīšanas laukā, izmantojot šo promptu",
+        "scope": "Visibility",
+        "scopePrivate": "Only me",
+        "scopeTeam": "Everyone in the organisation"
       },
-      "privateSection": "Manas saīsnes",
-      "shadowed": "Pārklāts ar komandas saīsni",
-      "teamSection": "Komandas saīsnes"
+      "privateSection": "Jūsu prompti",
+      "shadowed": "Aizstāts ar komandas promptu",
+      "teamSection": "Komandas prompti"
     }
   },
   "navigation": {

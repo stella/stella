@@ -28,6 +28,8 @@ export type AskUserInput = SharedChatUITools["ask-user"]["input"];
 
 const CHAT_TOOL_TITLE_KEYS = {
   "apply-active-docx-edits": "chat.tool.apply-active-docx-edits",
+  ares_lookup_company: "chat.tool.ares_lookup_company",
+  ares_search_companies: "chat.tool.ares_search_companies",
   "ask-user": "chat.tool.ask-user",
   "create-document": "chat.tool.create-document",
   "describe-stella-api": "chat.tool.describe-stella-api",

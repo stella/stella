@@ -339,6 +339,8 @@
     "editableFilePlaceholder": "Czat o {fileName} lub edycja",
     "editableFilePlaceholderAction": "Czat lub edycja",
     "editorLoading": "Loading editor…",
+    "externalSourcePlaceholder": "Czat o {title}",
+    "externalSourcePlaceholderAction": "Czat o",
     "extractingContent": "Wyodrębnianie treści...",
     "filePlaceholder": "Czat o {fileName}",
     "filePlaceholderAction": "Czat o",
@@ -391,6 +393,8 @@
     "threads": "Historia",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
+      "ares_lookup_company": "Wyszukiwanie firmy w ARES",
+      "ares_search_companies": "Wyszukiwanie firm w ARES",
       "ask-user": "Prośba o wyjaśnienie",
       "create-document": "Tworzenie dokumentu",
       "describe-stella-api": "Sprawdzanie API Stella",
@@ -415,6 +419,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# znak} few {# znaki} many {# znaków} other {# znaku}}",
+      "exactCall": "Dokładne wywołanie",
       "field": "Pole",
       "input": "Dane wejściowe",
       "output": "Wynik",
@@ -1027,6 +1032,13 @@
     "unsupportedDocxEditTitle": "Editing blocked"
   },
   "inspector": {
+    "external": {
+      "confirmDescription": "Za chwilę przejdziesz do zewnętrznej strony internetowej.",
+      "confirmTitle": "Otworzyć link zewnętrzny?",
+      "openLink": "Otwórz link",
+      "openOriginal": "Otwórz oryginał",
+      "unavailable": "Ta strona nie pozwala na bezpieczny podgląd w Stelli. Jeśli narzędzie zwróciło tekst dokumentu, pojawi się tutaj; w przeciwnym razie otwórz oryginał."
+    },
     "facet": {
       "preview": "Preview",
       "previewInFullViewToast": "Preview is the main view here. Click the minimize button to see it alongside metadata."
@@ -1054,7 +1066,55 @@
     "showPane": "Pokaż panel"
   },
   "knowledge": {
+    "mcp": {
+      "addServer": "Dodaj serwer",
+      "auth": {
+        "bearer": "Token Bearer",
+        "none": "Bez uwierzytelniania",
+        "oauth2": "OAuth 2.0"
+      },
+      "availableInChat": "Dostępne w czacie",
+      "builtInBadge": "Wbudowane",
+      "connect": "Połącz",
+      "connected": "Połączono",
+      "connectedToast": "Połączono konektor MCP",
+      "connectedWithLastUsed": "Połączono · ostatnio użyto {time}",
+      "customDescription": "Wklej URL Streamable HTTP MCP. Stella wykryje OAuth, token Bearer albo dostęp publiczny przed zapisaniem go dla tej organizacji.",
+      "customTitle": "Dodaj własny serwer",
+      "description": "Zarządzaj zewnętrznymi serwerami MCP, które mogą dodawać narzędzia do czatu. Tokeny są przechowywane osobno dla każdego użytkownika.",
+      "detected": "Wykryto {authType}",
+      "disable": "Wyłącz",
+      "disabled": "Połączono · wyłączone",
+      "disconnect": "Rozłącz",
+      "docsLink": "Dokumentacja",
+      "emptyDescription": "Wybrane prawnicze konektory MCP pojawią się tutaj po włączeniu ich dla Twojej przestrzeni roboczej.",
+      "emptyTitle": "Brak konektorów MCP",
+      "enable": "Włącz",
+      "errorDescription": "Nie udało się zaktualizować konektora.",
+      "errorTitle": "Połączenie MCP nie powiodło się",
+      "namePlaceholder": "Nazwa wyświetlana",
+      "needsReauth": "Wymaga ponownego połączenia",
+      "notConnected": "Nie połączono",
+      "off": "Wył.",
+      "on": "Wł.",
+      "otherTitle": "Pozostałe konektory",
+      "probe": "Sprawdź",
+      "recommendedBadge": "Rekomendowane",
+      "recommendedFor": "Rekomendowane dla {jurisdictions}",
+      "recommendedTitle": "Rekomendowane dla Twoich jurysdykcji",
+      "reconnect": "Połącz ponownie",
+      "saveToken": "Zapisz token",
+      "tokenHelp": "Jak uzyskać token",
+      "tokenLabel": "Token Bearer",
+      "tokenPlaceholder": "Wklej token",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Używaj w czacie"
+    },
     "sections": {
+      "agents": {
+        "description": "Konfigurowalni asystenci do powtarzalnej pracy",
+        "title": "Agenci"
+      },
       "caseLaw": {
         "description": "Orzeczenia sądowe i baza orzecznictwa",
         "title": "Orzecznictwo"
@@ -1064,12 +1124,20 @@
         "title": "Klauzule"
       },
       "connectors": {
-        "description": "Połączenia z systemami zewnętrznymi",
-        "title": "Konektory"
+        "description": "Połącz Stellę ze zweryfikowanymi zewnętrznymi serwerami narzędzi",
+        "title": "MCP"
+      },
+      "mcp": {
+        "description": "Połącz Stellę ze zweryfikowanymi zewnętrznymi serwerami narzędzi",
+        "title": "MCP"
+      },
+      "prompts": {
+        "description": "Instrukcje wielokrotnego użytku dostępne w czacie przez /",
+        "title": "Prompty"
       },
       "skills": {
-        "description": "Niestandardowe umiejętności AI",
-        "title": "Umiejętności"
+        "description": "Skupione możliwości AI dla specjalistycznych przepływów pracy",
+        "title": "Skills"
       },
       "templates": {
         "description": "Szablony dokumentów z symbolami zastępczymi",
@@ -1077,39 +1145,39 @@
       }
     },
     "skills": {
-      "addShortcut": "Dodaj umiejętność",
-      "defaultBadge": "Domyślny",
-      "deleteConfirmDescription": "Ta umiejętność zostanie trwale usunięta.",
-      "deleteConfirmTitle": "Usunąć umiejętność?",
-      "deleteShortcut": "Usuń umiejętność",
-      "editShortcut": "Edytuj umiejętność",
-      "emptyDescription": "Twórz prompty wielokrotnego użytku dla pracy, którą zespół powtarza, od podsumowań po instrukcje do pierwszych wersji.",
-      "emptyState": "Nie ma jeszcze umiejętności. Dodaj pierwszą.",
-      "emptyTitle": "Utwórz pierwszą umiejętność",
-      "emptyVideoLabel": "Przegląd umiejętności",
+      "addShortcut": "Dodaj prompt",
+      "defaultBadge": "Default",
+      "deleteConfirmDescription": "Ten prompt zostanie trwale usunięty.",
+      "deleteConfirmTitle": "Usunąć prompt?",
+      "deleteShortcut": "Usuń prompt",
+      "editShortcut": "Edytuj prompt",
+      "emptyDescription": "Create reusable prompts for the work your team repeats, from summaries to first-pass drafting instructions.",
+      "emptyState": "Brak promptów. Dodaj pierwszy.",
+      "emptyTitle": "Utwórz pierwszy prompt",
+      "emptyVideoLabel": "Przegląd promptów",
       "errors": {
-        "commandConflict": "Umiejętność o tej nazwie / już istnieje",
-        "commandInvalid": "Używaj tylko małych liter, cyfr, myślników i podkreśleń",
-        "commandReserved": "\"/{command}\" jest zarezerwowaną umiejętnością"
+        "commandConflict": "Prompt o tej nazwie / już istnieje",
+        "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores",
+        "commandReserved": "\"/{command}\" to zarezerwowany prompt"
       },
       "form": {
-        "command": "Umiejętność",
-        "commandHint": "Nazwa umiejętności /: tylko małe litery, cyfry, myślniki i podkreślenia",
-        "commandPlaceholder": "np. podsumuj",
+        "command": "Skrót promptu",
+        "commandHint": "Nazwa / promptu: tylko małe litery, cyfry, łączniki i podkreślenia",
+        "commandPlaceholder": "e.g. summarize",
         "commandPrefix": "/",
-        "description": "Opis",
-        "descriptionPlaceholder": "Krótki opis widoczny w selektorze",
-        "name": "Nazwa",
-        "namePlaceholder": "np. Podsumuj dokument",
+        "description": "Description",
+        "descriptionPlaceholder": "Short description shown in the picker",
+        "name": "Name",
+        "namePlaceholder": "e.g. Summarise document",
         "prompt": "Prompt",
-        "promptPlaceholder": "Tekst wstawiany do kompozytora chatu po użyciu tej umiejętności",
-        "scope": "Widoczność",
-        "scopePrivate": "Tylko ja",
-        "scopeTeam": "Wszyscy w organizacji"
+        "promptPlaceholder": "Tekst wstawiany do pola czatu po użyciu tego promptu",
+        "scope": "Visibility",
+        "scopePrivate": "Only me",
+        "scopeTeam": "Everyone in the organisation"
       },
-      "privateSection": "Moje skróty",
-      "shadowed": "Przysłonięty przez skrót zespołu",
-      "teamSection": "Skróty zespołu"
+      "privateSection": "Twoje prompty",
+      "shadowed": "Przesłonięte przez prompt zespołu",
+      "teamSection": "Prompty zespołu"
     }
   },
   "navigation": {

@@ -168,7 +168,7 @@ describe("chat thread messages", () => {
           messages={[]}
           onAskUserSubmit={() => {}}
           onResend={() => {}}
-          showToolCalls={false}
+          showToolCallDetails={false}
           streamdownComponents={{
             a: ({ children, ...props }) => <a {...props}>{children}</a>,
           }}

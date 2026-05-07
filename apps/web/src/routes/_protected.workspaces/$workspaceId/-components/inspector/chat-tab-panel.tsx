@@ -114,7 +114,7 @@ export const ChatTabPanel = ({
   const getContextMatterIds = useEffectEvent(() => tab.contextMatterIds);
   const [anonymized, setAnonymized] = useState(false);
   const getAnonymized = useEffectEvent(() => anonymized);
-  const showToolCalls = useDevStore((s) => s.showToolCalls);
+  const showToolCallDetails = useDevStore((s) => s.showToolCallDetails);
   const chatContextLabel = useChatContextLabel(tab);
 
   const { openChat, setChatContext, updateLabel } = useInspectorStore(
@@ -292,7 +292,7 @@ export const ChatTabPanel = ({
               onAskUserSubmit={handleAskUserSubmit}
               onResend={resendLatestMessage}
               showThinkingIndicator
-              showToolCalls={showToolCalls}
+              showToolCallDetails={showToolCallDetails}
               streamdownComponents={streamdownComponents}
               workspaceId={tabWorkspaceId}
             />

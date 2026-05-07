@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { v7 as uuidv7 } from "uuid";
+
+import { createChatThreadId } from "@/lib/chat-thread-ref";
 
 export const Route = createFileRoute(
   "/_protected/chat/workspaces/$workspaceId/new",
@@ -7,7 +8,10 @@ export const Route = createFileRoute(
   beforeLoad: ({ params }) => {
     throw redirect({
       to: "/chat/workspaces/$workspaceId/$threadId",
-      params: { workspaceId: params.workspaceId, threadId: uuidv7() },
+      params: {
+        workspaceId: params.workspaceId,
+        threadId: createChatThreadId(),
+      },
       replace: true,
     });
   },

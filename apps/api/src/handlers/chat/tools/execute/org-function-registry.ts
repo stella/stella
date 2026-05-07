@@ -98,11 +98,13 @@ export const createReadonlyOrgFunctionRegistry = ({
   [getMattersContract.name]: createToolFunction(
     getMattersContract,
     async function* (input) {
-      const scopedWorkspaceIds = yield* refRegistry
-        .resolveMatterRefs(input.matterRefs)
-        .andThen((workspaceIds) =>
-          ensureAllowedWorkspaceIds({ allowedWorkspaceIds, workspaceIds }),
-        );
+      const workspaceIds = yield* refRegistry.resolveMatterRefs(
+        input.matterRefs,
+      );
+      const scopedWorkspaceIds = yield* ensureAllowedWorkspaceIds({
+        allowedWorkspaceIds,
+        workspaceIds,
+      });
 
       const workspaceRows = yield* await safeDb((tx) =>
         tx.query.workspaces.findMany({
@@ -256,11 +258,13 @@ export const createReadonlyOrgFunctionRegistry = ({
   [searchMatterDocumentsContract.name]: createToolFunction(
     searchMatterDocumentsContract,
     async function* (input) {
-      const scopedWorkspaceIds = yield* refRegistry
-        .resolveMatterRefs(input.matterRefs)
-        .andThen((workspaceIds) =>
-          ensureAllowedWorkspaceIds({ allowedWorkspaceIds, workspaceIds }),
-        );
+      const workspaceIds = yield* refRegistry.resolveMatterRefs(
+        input.matterRefs,
+      );
+      const scopedWorkspaceIds = yield* ensureAllowedWorkspaceIds({
+        allowedWorkspaceIds,
+        workspaceIds,
+      });
 
       const result = yield* await Result.tryPromise({
         try: async () =>

@@ -1,9 +1,12 @@
+import type { ToolSet } from "ai";
+
 import type { SafeDb, ScopedDb } from "@/api/db";
 import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
 import {
   APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME,
   createActiveDocxEditTool,
 } from "@/api/handlers/chat/tools/active-docx-edit-tool";
+import { createAresTools } from "@/api/handlers/chat/tools/ares-tools";
 import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { createChatExecutionTools } from "@/api/handlers/chat/tools/execute/chat-execution-tools";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
@@ -16,11 +19,13 @@ type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
 type OrgTools = ReturnType<typeof createOrgTools>;
 type ChatExecutionTools = ReturnType<typeof createChatExecutionTools>;
 type SkillTools = ReturnType<typeof createSkillTools>;
+type AresTools = ReturnType<typeof createAresTools>;
 type ActiveDocxEditTools = ReturnType<typeof createActiveDocxEditTools>;
 
 export type ChatTools = OrgTools &
   ChatExecutionTools &
   SkillTools &
+  AresTools &
   WorkspaceTools &
   ActiveDocxEditTools;
 
@@ -44,6 +49,7 @@ type GetChatToolsProps = {
    * client never calls `addToolOutput`, and the call would hang.
    */
   hasActiveFileChat: boolean;
+  externalTools?: ToolSet | undefined;
 };
 
 const createActiveDocxEditTools = () => ({
@@ -59,7 +65,8 @@ export const getChatTools = ({
   refRegistry,
   workspaceId,
   hasActiveFileChat,
-}: GetChatToolsProps): Partial<ChatTools> => {
+  externalTools = {},
+}: GetChatToolsProps): ToolSet => {
   const orgTools = createOrgTools({
     accessibleWorkspaceIds: toolWorkspaceIds,
     organizationId,
@@ -75,6 +82,7 @@ export const getChatTools = ({
   const skillTools = createSkillTools({
     skills: getChatSkillMetadata(),
   });
+  const aresTools = createAresTools();
   const activeDocxEditTools = hasActiveFileChat
     ? createActiveDocxEditTools()
     : {};
@@ -84,7 +92,9 @@ export const getChatTools = ({
       ...orgTools,
       ...executionTools,
       ...skillTools,
+      ...aresTools,
       ...activeDocxEditTools,
+      ...externalTools,
     };
   }
 
@@ -100,7 +110,9 @@ export const getChatTools = ({
     ...orgTools,
     ...executionTools,
     ...skillTools,
+    ...aresTools,
     ...workspaceTools,
     ...activeDocxEditTools,
+    ...externalTools,
   };
 };
