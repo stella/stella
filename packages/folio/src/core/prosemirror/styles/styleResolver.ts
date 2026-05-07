@@ -54,6 +54,8 @@ export class StyleResolver {
   private readonly stylesById: Map<string, Style>;
   private readonly docDefaults: DocDefaults | undefined;
   private readonly defaultParagraphStyle: Style | undefined;
+  private readonly defaultCharacterStyle: Style | undefined;
+  private readonly defaultTableStyle: Style | undefined;
 
   constructor(styleDefinitions: StyleDefinitions | undefined) {
     this.stylesById = new Map();
@@ -70,6 +72,8 @@ export class StyleResolver {
 
     // Find default paragraph style
     this.defaultParagraphStyle = this.findDefaultStyle("paragraph");
+    this.defaultCharacterStyle = this.findDefaultStyle("character");
+    this.defaultTableStyle = this.findDefaultStyle("table");
   }
 
   /**
@@ -178,13 +182,13 @@ export class StyleResolver {
       result = { ...this.docDefaults.rPr };
     }
 
-    // If no styleId, return defaults
-    if (!styleId) {
-      return Object.keys(result).length > 0 ? result : undefined;
+    const defaultCharacterRpr = this.defaultCharacterStyle?.rPr;
+    if (defaultCharacterRpr) {
+      result = mergeTextFormatting(result, defaultCharacterRpr) ?? {};
     }
 
     // Get the requested style
-    const style = this.stylesById.get(styleId);
+    const style = styleId ? this.stylesById.get(styleId) : undefined;
     if (!style?.rPr) {
       return Object.keys(result).length > 0 ? result : undefined;
     }
@@ -230,6 +234,20 @@ export class StyleResolver {
   }
 
   /**
+   * Get default character style.
+   */
+  getDefaultCharacterStyle(): Style | undefined {
+    return this.defaultCharacterStyle;
+  }
+
+  /**
+   * Get default table style.
+   */
+  getDefaultTableStyle(): Style | undefined {
+    return this.defaultTableStyle;
+  }
+
+  /**
    * Check if a style exists
    */
   hasStyle(styleId: string): boolean {
@@ -240,7 +258,9 @@ export class StyleResolver {
   // Private helpers
   // ============================================================================
 
-  private findDefaultStyle(type: "paragraph" | "character"): Style | undefined {
+  private findDefaultStyle(
+    type: "paragraph" | "character" | "table",
+  ): Style | undefined {
     // First try to find explicitly marked default
     for (const style of this.stylesById.values()) {
       if (style.type === type && style.default) {

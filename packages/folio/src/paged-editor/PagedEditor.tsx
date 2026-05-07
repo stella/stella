@@ -35,6 +35,12 @@ import { getFootnoteText } from "../core/docx/footnoteParser";
 import { clickToPosition } from "../core/layout-bridge/clickToPosition";
 import { clickToPositionDom } from "../core/layout-bridge/clickToPositionDom";
 import {
+  findBodyEmptyRuns,
+  findBodyPmAnchor,
+  findBodyPmAnchors,
+  findBodyPmSpans,
+} from "../core/layout-bridge/findBodyPmSpans";
+import {
   collectFootnoteRefs,
   mapFootnotesToPages,
   buildFootnoteContentMap,
@@ -2163,6 +2169,18 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               document!.package.footnotes!,
               footnoteRefs,
               contentWidth,
+              (() => {
+                const footnoteOptions: Parameters<
+                  typeof buildFootnoteContentMap
+                >[3] = { measureBlocks };
+                if (styles) {
+                  footnoteOptions.styles = styles;
+                }
+                if (_theme !== undefined) {
+                  footnoteOptions.theme = _theme;
+                }
+                return footnoteOptions;
+              })(),
             );
 
             // Calculate per-page reserved heights
@@ -2436,12 +2454,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         const overlayRect = overlay.getBoundingClientRect();
 
         // Find spans with PM position data
-        const spans = pagesContainerRef.current.querySelectorAll(
-          "span[data-pm-start][data-pm-end]",
-        );
+        const spans = findBodyPmSpans(pagesContainerRef.current);
 
-        for (const span of Array.from(spans)) {
-          const spanEl = span as HTMLElement;
+        for (const spanEl of spans) {
           const pmStart = Number(spanEl.dataset["pmStart"]);
           const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
@@ -2496,9 +2511,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           if (
             pmPos >= pmStart &&
             pmPos <= pmEnd &&
-            span.firstChild?.nodeType === Node.TEXT_NODE
+            spanEl.firstChild?.nodeType === Node.TEXT_NODE
           ) {
-            const textNode = span.firstChild as Text;
+            const textNode = spanEl.firstChild as Text;
             const charIndex = Math.min(pmPos - pmStart, textNode.length);
 
             // Create a range at the exact character position
@@ -2562,9 +2577,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         }
 
         // Fallback: try to find position in empty paragraphs (they have empty runs)
-        const emptyRuns =
-          pagesContainerRef.current.querySelectorAll(".layout-empty-run");
-        for (const emptyRun of Array.from(emptyRuns)) {
+        const emptyRuns = findBodyEmptyRuns(pagesContainerRef.current);
+        for (const emptyRun of emptyRuns) {
           const paragraph = emptyRun.closest(
             ".layout-paragraph",
           ) as HTMLElement;
@@ -2708,12 +2722,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             const domRects: SelectionRect[] = [];
 
             // Find spans that intersect with the selection range
-            const spans = pagesContainerRef.current.querySelectorAll(
-              "span[data-pm-start][data-pm-end]",
-            );
+            const spans = findBodyPmSpans(pagesContainerRef.current);
 
-            for (const span of Array.from(spans)) {
-              const spanEl = span as HTMLElement;
+            for (const spanEl of spans) {
               const pmStart = Number(spanEl.dataset["pmStart"]);
               const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
@@ -2739,14 +2750,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
                 // Find the text node — may be a direct child or inside an <a> for hyperlinks
                 let textNode: Text | null = null;
-                if (span.firstChild?.nodeType === Node.TEXT_NODE) {
-                  textNode = span.firstChild as Text;
+                if (spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
+                  textNode = spanEl.firstChild as Text;
                 } else if (
-                  span.firstChild?.nodeType === Node.ELEMENT_NODE &&
-                  (span.firstChild as HTMLElement).tagName === "A" &&
-                  span.firstChild.firstChild?.nodeType === Node.TEXT_NODE
+                  spanEl.firstChild?.nodeType === Node.ELEMENT_NODE &&
+                  (spanEl.firstChild as HTMLElement).tagName === "A" &&
+                  spanEl.firstChild.firstChild?.nodeType === Node.TEXT_NODE
                 ) {
-                  textNode = span.firstChild.firstChild as Text;
+                  textNode = spanEl.firstChild.firstChild as Text;
                 }
                 if (!textNode) {
                   continue;
@@ -2931,9 +2942,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           const { selection: sel } = view.state;
           if (sel instanceof NodeSelection && sel.node.type.name === "image") {
             const pmPos = sel.from;
-            const imgEl = pagesContainerRef.current?.querySelector(
-              `[data-pm-start="${pmPos}"]`,
-            ) as HTMLElement | null;
+            const imgEl = pagesContainerRef.current
+              ? findBodyPmAnchor(pagesContainerRef.current, pmPos)
+              : null;
             if (imgEl) {
               setSelectedImageInfo(buildImageSelectionInfo(imgEl, pmPos));
               return;
@@ -3113,9 +3124,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       // virtualized doc only sees runs in the currently-rendered
       // buffer, so each click stepped one buffer-width forward
       // instead of jumping straight to the target.
-      const exact: HTMLElement | null = pageContainer.querySelector(
-        `[data-pm-start="${pmPos}"]`,
-      );
+      const exact = findBodyPmAnchor(pageContainer, pmPos);
       if (exact) {
         exact.scrollIntoView({ behavior: "smooth", block: "center" });
         return;
@@ -3125,9 +3134,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       // inside one of them (block-node positions never match
       // exactly but usually live inside a known run).
       let runMatch: HTMLElement | null = null;
-      for (const el of pageContainer.querySelectorAll<HTMLElement>(
-        "[data-pm-start]",
-      )) {
+      for (const el of findBodyPmAnchors(pageContainer)) {
         const start = Number(el.dataset["pmStart"]);
         if (Number.isNaN(start)) {
           continue;
@@ -3164,18 +3171,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       let attempts = 0;
       const refine = () => {
         attempts++;
-        const exactInShell = shell.querySelector<HTMLElement>(
-          `[data-pm-start="${pmPos}"]`,
-        );
+        const exactInShell = findBodyPmAnchor(shell, pmPos);
         if (exactInShell) {
           exactInShell.scrollIntoView({ behavior: "smooth", block: "center" });
           return;
         }
         let bestEl: HTMLElement | null = null;
         let bestStart = Number.NEGATIVE_INFINITY;
-        for (const el of shell.querySelectorAll<HTMLElement>(
-          "[data-pm-start]",
-        )) {
+        for (const el of findBodyPmAnchors(shell)) {
           const start = Number(el.dataset["pmStart"]);
           if (Number.isNaN(start)) {
             continue;

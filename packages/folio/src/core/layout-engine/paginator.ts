@@ -289,9 +289,7 @@ export function createPaginator(options: PaginatorOptions) {
     // Ensure we have space
     const state = ensureFits(totalHeight);
 
-    // If we moved to a new page/column, no space before needed
-    const isAtTop = state.cursorY === state.topMargin;
-    const actualSpaceBefore = isAtTop ? 0 : effectiveSpaceBefore;
+    const actualSpaceBefore = effectiveSpaceBefore;
 
     // Calculate position
     const x = getColumnX(state.columnIndex);

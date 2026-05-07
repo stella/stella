@@ -22,6 +22,7 @@ import type {
   Footnote,
   Endnote,
   Paragraph,
+  Table,
   Theme,
   RelationshipMap,
   MediaFile,
@@ -29,10 +30,12 @@ import type {
 import type { NumberingMap } from "./numberingParser";
 import { parseParagraph } from "./paragraphParser";
 import type { StyleMap } from "./styleParser";
+import { parseTable } from "./tableParser";
 import {
   parseXml,
   findChildren,
   getAttribute,
+  getChildElements,
   parseNumericAttribute,
 } from "./xmlParser";
 import type { XmlElement } from "./xmlParser";
@@ -119,6 +122,27 @@ function parseNoteType(
 // FOOTNOTE PARSING
 // ============================================================================
 
+function parseNoteBlockContent(
+  element: XmlElement,
+  styles: StyleMap | null,
+  theme: Theme | null,
+  numbering: NumberingMap | null,
+  rels: RelationshipMap | null,
+  media: Map<string, MediaFile> | null,
+): (Paragraph | Table)[] {
+  const blocks: (Paragraph | Table)[] = [];
+
+  for (const child of getChildElements(element)) {
+    if (child.name === "w:p") {
+      blocks.push(parseParagraph(child, styles, theme, numbering, rels));
+    } else if (child.name === "w:tbl") {
+      blocks.push(parseTable(child, styles, theme, numbering, rels, media));
+    }
+  }
+
+  return blocks;
+}
+
 /**
  * Parse a single footnote element (w:footnote)
  */
@@ -128,16 +152,19 @@ function parseFootnote(
   theme: Theme | null,
   numbering: NumberingMap | null,
   rels: RelationshipMap | null,
-  _media: Map<string, MediaFile> | null,
+  media: Map<string, MediaFile> | null,
 ): Footnote {
   const id = parseNumericAttribute(element, "w", "id") ?? 0;
   const typeAttr = getAttribute(element, "w", "type");
   const noteType = parseNoteType(typeAttr);
 
-  // Parse content paragraphs
-  const paragraphElements = findChildren(element, "w", "p");
-  const content: Paragraph[] = paragraphElements.map((pEl) =>
-    parseParagraph(pEl, styles, theme, numbering, rels),
+  const content = parseNoteBlockContent(
+    element,
+    styles,
+    theme,
+    numbering,
+    rels,
+    media,
   );
 
   return {
@@ -248,16 +275,19 @@ function parseEndnote(
   theme: Theme | null,
   numbering: NumberingMap | null,
   rels: RelationshipMap | null,
-  _media: Map<string, MediaFile> | null,
+  media: Map<string, MediaFile> | null,
 ): Endnote {
   const id = parseNumericAttribute(element, "w", "id") ?? 0;
   const typeAttr = getAttribute(element, "w", "type");
   const noteType = parseNoteType(typeAttr);
 
-  // Parse content paragraphs
-  const paragraphElements = findChildren(element, "w", "p");
-  const content: Paragraph[] = paragraphElements.map((pEl) =>
-    parseParagraph(pEl, styles, theme, numbering, rels),
+  const content = parseNoteBlockContent(
+    element,
+    styles,
+    theme,
+    numbering,
+    rels,
+    media,
   );
 
   return {
@@ -373,6 +403,9 @@ export function getFootnoteText(footnote: Footnote): string {
   const texts: string[] = [];
 
   for (const para of footnote.content) {
+    if (para.type !== "paragraph") {
+      continue;
+    }
     const paraTexts: string[] = [];
     for (const content of para.content) {
       if (content.type === "run") {
@@ -396,6 +429,9 @@ export function getEndnoteText(endnote: Endnote): string {
   const texts: string[] = [];
 
   for (const para of endnote.content) {
+    if (para.type !== "paragraph") {
+      continue;
+    }
     const paraTexts: string[] = [];
     for (const content of para.content) {
       if (content.type === "run") {

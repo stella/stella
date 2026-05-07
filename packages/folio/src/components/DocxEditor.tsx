@@ -69,6 +69,7 @@ import type {
 import type { DocxCompatibility } from "../core/docx/compatibility";
 import { repackDocx } from "../core/docx/rezip";
 import { attemptSelectiveSave } from "../core/docx/selectiveSave";
+import { findBodyPmAnchors } from "../core/layout-bridge/findBodyPmSpans";
 // ProseMirror editor
 import {
   TextSelection,
@@ -537,9 +538,7 @@ function findSelectionYPosition(
   if (!pagesEl) {
     return null;
   }
-  const elements = pagesEl.querySelectorAll("[data-pm-start]");
-  for (const node of elements) {
-    const el = node as HTMLElement;
+  for (const el of findBodyPmAnchors(pagesEl)) {
     const pmStart = Number(el.dataset["pmStart"]);
     const pmEnd = Number(el.dataset["pmEnd"]);
     if (pmPos >= pmStart && pmPos <= pmEnd) {

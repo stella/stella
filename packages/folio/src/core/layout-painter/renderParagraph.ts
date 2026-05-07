@@ -139,6 +139,66 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     element.style.letterSpacing = `${run.letterSpacing}px`;
   }
 
+  if (run.allCaps) {
+    element.style.textTransform = "uppercase";
+  }
+  if (run.smallCaps) {
+    element.style.fontVariant = "small-caps";
+  }
+  if (run.positionPx) {
+    element.style.verticalAlign = `${run.positionPx}px`;
+  }
+  if (run.horizontalScale && run.horizontalScale !== 100) {
+    element.style.display = "inline-block";
+    element.style.transform = `scaleX(${run.horizontalScale / 100})`;
+    element.style.transformOrigin = "left center";
+  }
+  if (run.kerningMinPt && run.kerningMinPt > 0) {
+    const fontSizePt = run.fontSize ?? 11;
+    if (fontSizePt >= run.kerningMinPt) {
+      element.style.fontKerning = "normal";
+    }
+  }
+  if (run.emboss) {
+    element.style.textShadow =
+      "1px 1px 1px rgba(255,255,255,0.5), -1px -1px 1px rgba(0,0,0,0.3)";
+  }
+  if (run.imprint) {
+    element.style.textShadow =
+      "-1px -1px 1px rgba(255,255,255,0.5), 1px 1px 1px rgba(0,0,0,0.3)";
+  }
+  if (run.textShadow && !run.emboss && !run.imprint) {
+    element.style.textShadow = "1px 1px 2px rgba(0,0,0,0.3)";
+  }
+  if (run.textOutline) {
+    element.style.webkitTextStroke = "1px currentColor";
+    (
+      element.style as CSSStyleDeclaration & {
+        webkitTextFillColor?: string;
+      }
+    ).webkitTextFillColor = "transparent";
+  }
+  if (run.emphasisMark) {
+    const variant =
+      run.emphasisMark === "comma"
+        ? "filled sesame"
+        : run.emphasisMark === "circle"
+          ? "filled circle"
+          : "filled dot";
+    const position =
+      run.emphasisMark === "underDot" ? "under right" : "over right";
+    element.style.textEmphasis = variant;
+    element.style.textEmphasisPosition = position;
+    (
+      element.style as CSSStyleDeclaration & { webkitTextEmphasis?: string }
+    ).webkitTextEmphasis = variant;
+    (
+      element.style as CSSStyleDeclaration & {
+        webkitTextEmphasisPosition?: string;
+      }
+    ).webkitTextEmphasisPosition = position;
+  }
+
   // Highlight (background color)
   if (run.highlight) {
     element.style.backgroundColor = run.highlight;
@@ -367,6 +427,8 @@ function renderInlineImageRun(run: ImageRun, doc: Document): HTMLElement {
   img.src = run.src;
   img.width = run.width;
   img.height = run.height;
+  img.style.width = `${run.width}px`;
+  img.style.height = `${run.height}px`;
   if (run.alt) {
     img.alt = run.alt;
   }
@@ -488,6 +550,25 @@ function renderFieldRun(
     ...(run.highlight !== undefined ? { highlight: run.highlight } : {}),
     ...(run.fontFamily !== undefined ? { fontFamily: run.fontFamily } : {}),
     ...(run.fontSize !== undefined ? { fontSize: run.fontSize } : {}),
+    ...(run.letterSpacing !== undefined
+      ? { letterSpacing: run.letterSpacing }
+      : {}),
+    ...(run.allCaps !== undefined ? { allCaps: run.allCaps } : {}),
+    ...(run.smallCaps !== undefined ? { smallCaps: run.smallCaps } : {}),
+    ...(run.positionPx !== undefined ? { positionPx: run.positionPx } : {}),
+    ...(run.horizontalScale !== undefined
+      ? { horizontalScale: run.horizontalScale }
+      : {}),
+    ...(run.kerningMinPt !== undefined
+      ? { kerningMinPt: run.kerningMinPt }
+      : {}),
+    ...(run.imprint !== undefined ? { imprint: run.imprint } : {}),
+    ...(run.emboss !== undefined ? { emboss: run.emboss } : {}),
+    ...(run.textShadow !== undefined ? { textShadow: run.textShadow } : {}),
+    ...(run.textOutline !== undefined ? { textOutline: run.textOutline } : {}),
+    ...(run.emphasisMark !== undefined
+      ? { emphasisMark: run.emphasisMark }
+      : {}),
     ...(run.pmStart !== undefined ? { pmStart: run.pmStart } : {}),
     ...(run.pmEnd !== undefined ? { pmEnd: run.pmEnd } : {}),
   };
@@ -710,6 +791,10 @@ export function renderLine(
 
   // Get runs for this line
   const runsForLine = sliceRunsForLine(block, line);
+  if (runsForLine.length === 1 && isImageRun(runsForLine[0]!)) {
+    lineEl.style.display = "flex";
+    lineEl.style.alignItems = "center";
+  }
 
   // Handle empty lines
   if (runsForLine.length === 0) {

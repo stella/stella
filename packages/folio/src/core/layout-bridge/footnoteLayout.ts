@@ -11,19 +11,30 @@ import type {
   Measure,
   Page,
   ParagraphBlock,
-  Run,
   TextRun,
-  RunFormatting,
   FootnoteContent,
 } from "../layout-engine/types";
-import type { Footnote } from "../types/document";
+import { footnoteToProseDoc } from "../prosemirror/conversion/toProseDoc";
+import type { Footnote, StyleDefinitions, Theme } from "../types/document";
 import { measureParagraph } from "./measuring";
+import { toFlowBlocks } from "./toFlowBlocks";
 
 /** Separator line height + padding in pixels */
 const SEPARATOR_HEIGHT = 12;
 
 /** Default footnote font size in points */
 const FOOTNOTE_FONT_SIZE = 8;
+
+export type MeasureBlocksFn = (
+  blocks: FlowBlock[],
+  contentWidth: number,
+) => Measure[];
+
+export type ConvertFootnoteOptions = {
+  styles?: StyleDefinitions | null;
+  theme?: Theme | null;
+  measureBlocks?: MeasureBlocksFn;
+};
 
 // ============================================================================
 // 1. Scan FlowBlocks for footnote references
@@ -119,126 +130,41 @@ export function convertFootnoteToContent(
   footnote: Footnote,
   displayNumber: number,
   contentWidth: number,
+  options: ConvertFootnoteOptions = {},
 ): FootnoteContent {
-  const blocks: FlowBlock[] = [];
-
-  for (let i = 0; i < footnote.content.length; i++) {
-    // SAFETY: i < footnote.content.length in for loop
-    const para = footnote.content[i]!;
-    const runs: Run[] = [];
-
-    // For the first paragraph, prepend the footnote number
-    if (i === 0) {
-      const numberRun: TextRun = {
-        kind: "text",
-        text: `${displayNumber}  `,
-        fontSize: FOOTNOTE_FONT_SIZE,
-        superscript: true,
-      };
-      runs.push(numberRun);
-    }
-
-    // Convert paragraph content to runs
-    for (const content of para.content) {
-      const contentObj = content as unknown as Record<string, unknown>;
-
-      if (
-        contentObj["type"] === "run" &&
-        Array.isArray(contentObj["content"])
-      ) {
-        const formatting = contentObj["formatting"] as
-          | Record<string, unknown>
-          | undefined;
-        const runFormatting: RunFormatting = {};
-
-        if (formatting) {
-          if (formatting["bold"]) {
-            runFormatting.bold = true;
-          }
-          if (formatting["italic"]) {
-            runFormatting.italic = true;
-          }
-          if (formatting["underline"]) {
-            runFormatting.underline = true;
-          }
-          if (formatting["strike"]) {
-            runFormatting.strike = true;
-          }
-          if (formatting["color"]) {
-            const color = formatting["color"] as Record<string, unknown>;
-            if (color["val"]) {
-              runFormatting.color = `#${color["val"]}`;
-            } else if (color["rgb"]) {
-              runFormatting.color = `#${color["rgb"]}`;
-            }
-          }
-          if (formatting["fontSize"]) {
-            runFormatting.fontSize = (formatting["fontSize"] as number) / 2; // half-points to points
-          }
-          if (formatting["fontFamily"]) {
-            const ff = formatting["fontFamily"] as Record<string, unknown>;
-            runFormatting.fontFamily = (ff["ascii"] || ff["hAnsi"]) as string;
-          }
-        }
-
-        // If no fontSize specified, use footnote default
-        if (!runFormatting.fontSize) {
-          runFormatting.fontSize = FOOTNOTE_FONT_SIZE;
-        }
-
-        for (const rc of contentObj["content"] as unknown[]) {
-          const rcObj = rc as Record<string, unknown>;
-          if (rcObj["type"] === "text" && typeof rcObj["text"] === "string") {
-            runs.push({
-              kind: "text",
-              text: rcObj["text"],
-              ...runFormatting,
-            });
-          } else if (rcObj["type"] === "tab") {
-            runs.push({ kind: "tab", ...runFormatting });
-          } else if (rcObj["type"] === "break") {
-            runs.push({ kind: "lineBreak" });
-          } else if (rcObj["type"] === "footnoteRef") {
-            // Self-reference marker - skip (we prepend the number ourselves)
-          }
-        }
-      }
-    }
-
-    // If no runs were generated, add an empty text run to ensure the paragraph renders
-    if (runs.length === 0) {
-      runs.push({ kind: "text", text: "", fontSize: FOOTNOTE_FONT_SIZE });
-    }
-
-    const paragraphBlock: ParagraphBlock = {
-      kind: "paragraph",
-      id: `fn-${footnote.id}-p${i}`,
-      runs,
-    };
-    blocks.push(paragraphBlock);
+  const proseOptions: Parameters<typeof footnoteToProseDoc>[1] = {};
+  if (options.styles) {
+    proseOptions.styles = options.styles;
   }
-
-  if (blocks.length === 0) {
-    blocks.push({
-      kind: "paragraph",
-      id: `fn-${footnote.id}-empty`,
-      runs: [{ kind: "text", text: "", fontSize: FOOTNOTE_FONT_SIZE }],
-    });
+  if (options.theme !== undefined) {
+    proseOptions.theme = options.theme;
   }
-
-  // Measure blocks
-  const measures: Measure[] = [];
-  for (const block of blocks) {
-    if (block.kind === "paragraph") {
-      const m = measureParagraph(block, contentWidth);
-      measures.push(m);
-    }
+  const pmDoc = footnoteToProseDoc(footnote.content, proseOptions);
+  const flowOptions: Parameters<typeof toFlowBlocks>[1] = {};
+  if (options.theme !== undefined) {
+    flowOptions.theme = options.theme;
   }
+  const blocks = applyFootnotePresentation(
+    toFlowBlocks(pmDoc, flowOptions),
+    displayNumber,
+  );
+
+  const measures = options.measureBlocks
+    ? options.measureBlocks(blocks, contentWidth)
+    : blocks.map((block) =>
+        block.kind === "paragraph"
+          ? measureParagraph(block, contentWidth)
+          : ({ kind: block.kind } as Measure),
+      );
 
   let totalHeight = 0;
   for (const measure of measures) {
     if (measure.kind === "paragraph") {
       totalHeight += measure.totalHeight;
+    } else if (measure.kind === "table") {
+      totalHeight += measure.totalHeight;
+    } else if (measure.kind === "image" || measure.kind === "textBox") {
+      totalHeight += measure.height;
     }
   }
 
@@ -249,6 +175,59 @@ export function convertFootnoteToContent(
     measures,
     height: totalHeight,
   };
+}
+
+export function applyFootnotePresentation(
+  blocks: FlowBlock[],
+  displayNumber: number,
+): FlowBlock[] {
+  if (blocks.length === 0) {
+    return [
+      {
+        kind: "paragraph",
+        id: `fn-empty-${displayNumber}`,
+        runs: [
+          {
+            kind: "text",
+            text: `${displayNumber}  `,
+            fontSize: FOOTNOTE_FONT_SIZE,
+            superscript: true,
+          },
+        ],
+      } satisfies ParagraphBlock,
+    ];
+  }
+
+  const output = blocks.map((block) => {
+    if (block.kind !== "paragraph") {
+      return block;
+    }
+    return {
+      ...block,
+      runs: block.runs.map((run) => {
+        if ((run.kind === "text" || run.kind === "tab") && !run.fontSize) {
+          return { ...run, fontSize: FOOTNOTE_FONT_SIZE };
+        }
+        return run;
+      }),
+    };
+  });
+
+  const first = output[0];
+  if (first?.kind === "paragraph") {
+    const numberRun: TextRun = {
+      kind: "text",
+      text: `${displayNumber}  `,
+      fontSize: FOOTNOTE_FONT_SIZE,
+      superscript: true,
+    };
+    output[0] = {
+      ...first,
+      runs: [numberRun, ...first.runs],
+    };
+  }
+
+  return output;
 }
 
 // ============================================================================
@@ -263,6 +242,7 @@ export function buildFootnoteContentMap(
   footnotes: Footnote[],
   footnoteRefs: { footnoteId: number }[],
   contentWidth: number,
+  options: ConvertFootnoteOptions = {},
 ): Map<number, FootnoteContent> {
   const contentMap = new Map<number, FootnoteContent>();
   const footnoteById = new Map<number, Footnote>();
@@ -292,6 +272,7 @@ export function buildFootnoteContentMap(
       footnote,
       displayNumber,
       contentWidth,
+      options,
     );
     contentMap.set(ref.footnoteId, content);
     displayNumber++;

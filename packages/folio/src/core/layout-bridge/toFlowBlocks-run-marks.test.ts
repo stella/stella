@@ -1,0 +1,141 @@
+import { describe, expect, test } from "bun:test";
+import { Schema } from "prosemirror-model";
+
+import type { ParagraphBlock, TextRun } from "../layout-engine/types";
+import { toFlowBlocks } from "./toFlowBlocks";
+
+const schema = new Schema({
+  nodes: {
+    doc: { content: "paragraph+" },
+    paragraph: {
+      content: "inline*",
+      group: "block",
+      attrs: {
+        styleId: { default: null },
+        defaultTextFormatting: { default: null },
+      },
+    },
+    text: { group: "inline" },
+  },
+  marks: {
+    allCaps: {},
+    smallCaps: {},
+    emboss: {},
+    imprint: {},
+    textShadow: {},
+    textOutline: {},
+    emphasisMark: {
+      attrs: { type: { default: "dot" } },
+    },
+    characterSpacing: {
+      attrs: {
+        spacing: { default: null },
+        position: { default: null },
+        scale: { default: null },
+        kerning: { default: null },
+      },
+    },
+  },
+});
+
+function buildSingleRunDoc(
+  text: string,
+  markName: string,
+  attrs?: Record<string, unknown>,
+) {
+  const mark = schema.marks[markName]?.create(attrs);
+  if (!mark) {
+    throw new Error(`Unknown mark: ${markName}`);
+  }
+  return schema.node("doc", null, [
+    schema.node("paragraph", null, [schema.text(text, [mark])]),
+  ]);
+}
+
+function firstRun(blocks: unknown[]): TextRun {
+  const paragraph = blocks.find(
+    (block) => (block as ParagraphBlock).kind === "paragraph",
+  ) as ParagraphBlock;
+  return paragraph.runs[0] as TextRun;
+}
+
+describe("toFlowBlocks run-level OOXML marks", () => {
+  test("propagates caps and text effect marks to run formatting", () => {
+    for (const markName of [
+      "allCaps",
+      "smallCaps",
+      "emboss",
+      "imprint",
+      "textShadow",
+      "textOutline",
+    ] as const) {
+      const blocks = toFlowBlocks(buildSingleRunDoc("text", markName), {});
+      expect(firstRun(blocks)[markName]).toBe(true);
+    }
+  });
+
+  test("propagates character spacing position, scale, and kerning", () => {
+    const blocks = toFlowBlocks(
+      buildSingleRunDoc("text", "characterSpacing", {
+        spacing: 16,
+        position: 12,
+        scale: 90,
+        kerning: 16,
+      }),
+      {},
+    );
+    const run = firstRun(blocks);
+
+    expect(run.letterSpacing).toBeCloseTo(1.0667, 3);
+    expect(run.positionPx).toBeCloseTo(8, 3);
+    expect(run.horizontalScale).toBe(90);
+    expect(run.kerningMinPt).toBe(8);
+  });
+
+  test("does not emit no-op character spacing values", () => {
+    const blocks = toFlowBlocks(
+      buildSingleRunDoc("text", "characterSpacing", {
+        spacing: 0,
+        position: 0,
+        scale: 100,
+        kerning: 0,
+      }),
+      {},
+    );
+    const run = firstRun(blocks);
+
+    expect(run.letterSpacing).toBeUndefined();
+    expect(run.positionPx).toBeUndefined();
+    expect(run.horizontalScale).toBeUndefined();
+    expect(run.kerningMinPt).toBeUndefined();
+  });
+
+  test("propagates emphasis mark variants", () => {
+    for (const variant of ["dot", "comma", "circle", "underDot"] as const) {
+      const blocks = toFlowBlocks(
+        buildSingleRunDoc("text", "emphasisMark", { type: variant }),
+        {},
+      );
+      expect(firstRun(blocks).emphasisMark).toBe(variant);
+    }
+  });
+
+  test("cascades paragraph default text formatting to unmarked runs", () => {
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          defaultTextFormatting: {
+            fontFamily: { ascii: "Arial Narrow", hAnsi: "Arial Narrow" },
+            fontSize: 22,
+          },
+        },
+        [schema.text("body text")],
+      ),
+    ]);
+    const run = firstRun(toFlowBlocks(doc, {}));
+
+    expect(run.fontFamily).toBe("Arial Narrow");
+    expect(run.fontSize).toBe(11);
+  });
+});

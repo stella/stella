@@ -160,6 +160,22 @@ describe("Layout Engine - Page Production", () => {
       expect(fragment.blockId).toBe(0);
     });
 
+    test("first paragraph on a page honors explicit spaceBefore", () => {
+      const blocks: FlowBlock[] = [
+        {
+          ...makeParagraphBlock(0, "Starts lower", 1),
+          attrs: { spacing: { before: 18, after: 0 } },
+        },
+      ];
+      const measures: Measure[] = [
+        makeParagraphMeasure([makeLine(0, 0, 0, 12, 100, 24)]),
+      ];
+
+      const layout = layoutDocument(blocks, measures, makeLayoutOptions());
+
+      expect(layout.pages[0].fragments[0]?.y).toBe(DEFAULT_MARGINS.top + 18);
+    });
+
     test("multiple paragraphs fit on one page", () => {
       const blocks: FlowBlock[] = [
         makeParagraphBlock(0, "First paragraph", 1),

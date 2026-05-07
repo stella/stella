@@ -383,6 +383,25 @@ export function measureParagraph(
 
   // Handle empty paragraph
   if (runs.length === 0) {
+    if (attrs?.suppressEmptyParagraphHeight) {
+      lines.push({
+        fromRun: 0,
+        fromChar: 0,
+        toRun: 0,
+        toChar: 0,
+        width: 0,
+        ascent: 0,
+        descent: 0,
+        lineHeight: 0,
+      });
+
+      return {
+        kind: "paragraph",
+        lines,
+        totalHeight: 0,
+      };
+    }
+
     const emptyFontSize = attrs?.defaultFontSize ?? DEFAULT_FONT_SIZE;
     const emptyFontFamily = attrs?.defaultFontFamily ?? DEFAULT_FONT_FAMILY;
     const emptyMetrics = calculateEmptyParagraphMetrics(
@@ -399,10 +418,18 @@ export function measureParagraph(
       ...emptyMetrics,
     });
 
+    let totalHeight = emptyMetrics.lineHeight;
+    if (spacing?.before) {
+      totalHeight += spacing.before;
+    }
+    if (spacing?.after) {
+      totalHeight += spacing.after;
+    }
+
     return {
       kind: "paragraph",
       lines,
-      totalHeight: emptyMetrics.lineHeight,
+      totalHeight,
     };
   }
 
@@ -465,13 +492,14 @@ export function measureParagraph(
       currentLine.maxFontMetrics,
     );
 
-    // If an inline image is taller than the text-based line height,
-    // use the image height directly (it's already in pixels — no pt→px conversion needed)
+    // If an inline image is taller than the text-based line height, reserve
+    // descender room on both sides to avoid clipping image-only table rows.
     const finalTypography = { ...typography };
     if (currentLine.maxImageHeightPx > finalTypography.lineHeight) {
-      finalTypography.lineHeight = currentLine.maxImageHeightPx;
-      finalTypography.ascent = currentLine.maxImageHeightPx * 0.8;
-      finalTypography.descent = currentLine.maxImageHeightPx * 0.2;
+      const imageHeight = currentLine.maxImageHeightPx;
+      const buffer = finalTypography.descent;
+      finalTypography.lineHeight = imageHeight + buffer * 2;
+      finalTypography.ascent = imageHeight + buffer;
     }
 
     const line: MeasuredLine = {

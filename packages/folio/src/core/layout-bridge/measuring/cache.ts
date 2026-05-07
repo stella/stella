@@ -314,6 +314,25 @@ export function hashParagraphBlock(block: ParagraphBlock): string {
     if (attrs.defaultFontFamily != null) {
       parts.push(`dff:${attrs.defaultFontFamily}`);
     }
+    if (attrs.suppressEmptyParagraphHeight) {
+      parts.push("sup");
+    }
+    const borders = attrs.borders;
+    if (borders) {
+      const signature = (border?: {
+        width?: number;
+        style?: string;
+        color?: string;
+      }): string =>
+        border
+          ? `${border.width ?? ""},${border.style ?? ""},${border.color ?? ""}`
+          : "";
+      parts.push(
+        `bdr:${signature(borders.top)}|${signature(borders.bottom)}|${signature(
+          borders.left,
+        )}|${signature(borders.right)}`,
+      );
+    }
   }
 
   return parts.join("||");

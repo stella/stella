@@ -39,6 +39,7 @@ import type {
   MoveFrom,
   MoveTo,
   MathEquation,
+  Theme,
 } from "../../types/document";
 import { mergeTextFormatting } from "../../utils/textFormattingMerge";
 import { emuToPixels } from "../../utils/units";
@@ -58,6 +59,8 @@ import type { StyleResolver } from "../styles";
 export type ToProseDocOptions = {
   /** Style definitions for resolving paragraph styles */
   styles?: StyleDefinitions;
+  /** Theme used when converting themed table/cell values in nested content. */
+  theme?: Theme | null;
 };
 
 /**
@@ -405,13 +408,17 @@ function paragraphFormattingToAttrs(
     set("bidi", formatting?.bidi ?? stylePpr?.bidi);
 
     // Default run properties (pPr/rPr)
+    const defaultCharStyleRpr = styleResolver.getDefaultCharacterStyle()?.rPr;
+    const styleRprWithDefaultChar = defaultCharStyleRpr
+      ? mergeTextFormatting(styleRpr, defaultCharStyleRpr)
+      : styleRpr;
     const resolvedRunProps = resolveTextFormatting(
       formatting?.runProperties,
       styleResolver,
     );
     set(
       "defaultTextFormatting",
-      mergeTextFormatting(styleRpr, resolvedRunProps),
+      mergeTextFormatting(styleRprWithDefaultChar, resolvedRunProps),
     );
 
     // If style defines numPr but inline doesn't, use style's numPr
@@ -577,9 +584,9 @@ function resolveTextFormatting(
   styleResolver: StyleResolver | null,
 ): TextFormatting | undefined {
   if (!formatting) {
-    return undefined;
+    return styleResolver?.resolveRunStyle(null);
   }
-  if (!formatting.styleId || !styleResolver) {
+  if (!styleResolver) {
     return formatting;
   }
 
@@ -666,16 +673,21 @@ function convertTable(
   const tableStyleId = table.formatting?.styleId;
   const look = table.formatting?.look;
 
-  // Resolve table borders: prefer table's own borders, fall back to table style's borders
+  // Resolve table borders through inline style, table style, then default table style.
   const tableStyle = tableStyleId
     ? styleResolver?.getStyle(tableStyleId)
     : undefined;
+  const defaultTableStyle = styleResolver?.getDefaultTableStyle();
   const resolvedTableBorders =
-    table.formatting?.borders ?? tableStyle?.tblPr?.borders;
+    table.formatting?.borders ??
+    tableStyle?.tblPr?.borders ??
+    defaultTableStyle?.tblPr?.borders;
 
-  // Resolve default cell margins: table's own cellMargins > table style's cellMargins
+  // Resolve default cell margins through the same table-style cascade.
   const tableCellMargins =
-    table.formatting?.cellMargins ?? tableStyle?.tblPr?.cellMargins;
+    table.formatting?.cellMargins ??
+    tableStyle?.tblPr?.cellMargins ??
+    defaultTableStyle?.tblPr?.cellMargins;
   let cellMarginsAttr:
     | { top?: number; bottom?: number; left?: number; right?: number }
     | undefined;
@@ -2072,6 +2084,13 @@ export function headerFooterToProseDoc(
   }
 
   return schema.node("doc", null, nodes);
+}
+
+export function footnoteToProseDoc(
+  content: (Paragraph | Table)[],
+  options?: ToProseDocOptions,
+): PMNode {
+  return headerFooterToProseDoc(content, options);
 }
 
 /**
