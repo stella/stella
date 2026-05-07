@@ -25,6 +25,7 @@ import type { ChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
+import { classifyAIError } from "@/api/lib/ai-error";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import {
   getModelForRole,
@@ -120,14 +121,25 @@ export const streamChat = async ({
     boundary: thirdPartyBoundary,
     tools,
   });
+  // The AI SDK runs error formatting in two places: the outer
+  // `createUIMessageStream({ onError })` for errors thrown inside
+  // `execute`, and the inner `result.toUIMessageStream({ onError })`
+  // for errors emitted by the model stream itself. The inner one
+  // defaults to `() => "An error occurred."` and *that* is the path a
+  // Gemini-quota / OpenRouter-credits failure actually takes — without
+  // wiring the same classifier on both, the chat client sees the
+  // generic string and our frontend kind-mapping never fires.
+  const onAiError = (error: unknown): string => {
+    const kind = classifyAIError(error);
+    captureError(error, { threadId, kind });
+    return kind;
+  };
+
   const stream = createUIMessageStream<ChatMessage>({
     generateId: () => Bun.randomUUIDv7(),
     originalMessages: preparedMessages.value,
     onFinish,
-    onError: (error) => {
-      captureError(error, { threadId });
-      return "error";
-    },
+    onError: onAiError,
     execute: ({ writer }) => {
       const modelInfo = getModelInfoForRole("chat", orgAIConfig);
       const result = streamText({
@@ -170,7 +182,9 @@ export const streamChat = async ({
         },
       });
 
-      const uiStream = result.toUIMessageStream<ChatMessage>();
+      const uiStream = result.toUIMessageStream<ChatMessage>({
+        onError: onAiError,
+      });
       writer.merge(
         resolveAssistantTextRefs
           ? resolveRefsInTextStream(

@@ -384,6 +384,9 @@
     "resend": "Renvoyer",
     "send": "Envoyer le message",
     "sendError": "Un problème est survenu lors de l’envoi de ton message. Contacte le support si l’erreur persiste.",
+    "sendErrorInsufficientCredits": "Le fournisseur d’IA a besoin de crédits supplémentaires. Demande à l’administrateur de l’espace de travail de recharger le compte.",
+    "sendErrorProviderUnavailable": "Le fournisseur d’IA est temporairement indisponible. Réessaie dans un instant.",
+    "sendErrorQuotaExhausted": "Le quota du fournisseur d’IA est épuisé. Réessaie dans une minute, ou demande à l’administrateur de l’espace de travail de passer à un plan supérieur.",
     "thinking": "Traitement du contexte",
     "threads": "Historique",
     "tool": {

@@ -384,6 +384,9 @@
     "resend": "Saada uuesti",
     "send": "Saada sõnum",
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
+    "sendErrorInsufficientCredits": "AI-teenusepakkujal on vaja rohkem krediiti. Palu töökoha administraatoril kontot täiendada.",
+    "sendErrorProviderUnavailable": "AI-teenusepakkuja pole hetkel saadaval. Proovi hetke pärast uuesti.",
+    "sendErrorQuotaExhausted": "AI-teenusepakkuja kvoot on otsas. Proovi minuti pärast uuesti või palu töökoha administraatoril paketti uuendada.",
     "thinking": "Töötan kontekstiga",
     "threads": "Ajalugu",
     "tool": {

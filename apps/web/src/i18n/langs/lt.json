@@ -384,6 +384,9 @@
     "resend": "Siųsti dar kartą",
     "send": "Siųsti žinutę",
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
+    "sendErrorInsufficientCredits": "AI teikėjui reikia daugiau kreditų. Paprašykite darbo srities administratoriaus papildyti sąskaitą.",
+    "sendErrorProviderUnavailable": "AI teikėjas laikinai nepasiekiamas. Pabandykite po akimirkos dar kartą.",
+    "sendErrorQuotaExhausted": "AI teikėjo kvota išnaudota. Pabandykite po minutės dar kartą arba paprašykite darbo srities administratoriaus atnaujinti planą.",
     "thinking": "Dirbama su kontekstu",
     "threads": "Istorija",
     "tool": {
