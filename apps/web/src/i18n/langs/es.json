@@ -1399,6 +1399,7 @@
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",
       "membersDescription": "Manage who has access to this organization",
       "pendingInvitations": "Pending invitations",
+      "practiceJurisdictions": "Jurisdicciones de práctica",
       "profile": "Profile",
       "profileDescription": "Update name and slug",
       "renameAction": "Rename",

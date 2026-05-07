@@ -1402,6 +1402,7 @@ type Messages = {
       "matterNumberingDescription": "Configure how new matter reference numbers are generated";
       "membersDescription": "Manage who has access to this organization and any pending invitations";
       "pendingInvitations": "Pending invitations";
+      "practiceJurisdictions": "Practice jurisdictions";
       "profile": "Profile";
       "profileDescription": "Update organization name";
       "renameAction": "Rename";

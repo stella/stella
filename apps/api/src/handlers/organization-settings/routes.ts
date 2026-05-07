@@ -26,6 +26,7 @@ export const organizationSettingsRoute = new Elysia({
   })
   .post("/practice-jurisdictions", updatePracticeJurisdictions.handler, {
     body: updatePracticeJurisdictions.config.body,
+    permissions: updatePracticeJurisdictions.config.permissions,
   })
   .post("/preview", previewOrganizationSettings.handler, {
     body: previewOrganizationSettings.config.body,
