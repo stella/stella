@@ -52,6 +52,19 @@ describe("isApprovalPart", () => {
 
     expect(isApprovalPart(part)).toBe(true);
   });
+
+  test("treats external MCP tools as approval parts", () => {
+    const part = {
+      approval: { id: "approval-1" },
+      input: { query: "civil code" },
+      providerExecuted: false,
+      state: "approval-requested",
+      toolCallId: "tool-call-1",
+      type: "tool-mcp__salvia__search_decisions",
+    };
+
+    expect(isApprovalPart(part)).toBe(true);
+  });
 });
 
 describe("hasApprovedActiveDocxEditAwaitingClientOutput", () => {

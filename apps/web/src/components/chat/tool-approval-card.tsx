@@ -12,7 +12,10 @@ import {
 import { useTranslations } from "use-intl";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
-import { getChatToolTitleKey } from "@/components/chat/chat-ui-tools";
+import {
+  getChatToolTitleKey,
+  isExternalMcpToolName,
+} from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
   ApprovalToolPart,
@@ -88,6 +91,11 @@ const getApprovalId = (part: ApprovalToolPart): string | null => {
 };
 
 const getApprovalToolName = (part: ApprovalToolPart): ApprovalToolName => {
+  const toolName = part.type.slice("tool-".length);
+  if (isExternalMcpToolName(toolName)) {
+    return toolName;
+  }
+
   switch (part.type) {
     case "tool-apply-active-docx-edits":
       return "apply-active-docx-edits";
@@ -354,7 +362,9 @@ export const ToolApprovalCard = ({
   const isProcessing =
     isApprovalResponded || (responded && isApprovalRequested);
   const isBlocked = blockedApprovalTools?.has(name) ?? false;
-  const canAlwaysAllow = name !== "apply-active-docx-edits";
+  const isExternalMcpApproval = isExternalMcpToolName(name);
+  const canAlwaysAllow =
+    name !== "apply-active-docx-edits" && !isExternalMcpApproval;
   /**
    * DOCX edit batches always go to the side review panel — never
    * gated by a chat-level Allow/Deny. The card collapses to a
@@ -506,6 +516,12 @@ export const ToolApprovalCard = ({
         part.input !== undefined && (
           <ActiveDocxEditSummary input={part.input} />
         )}
+      {isExternalMcpApproval &&
+        part.state !== "input-streaming" &&
+        "input" in part &&
+        part.input !== undefined && (
+          <ExternalMcpInputSummary input={part.input} />
+        )}
 
       {/* Actions — hidden for DOCX edit batches (reviewed in the side panel). */}
       {approvalId && !isProcessing && !isBlocked && !isDocxEditBatch && (
@@ -549,3 +565,11 @@ export const ToolApprovalCard = ({
     </div>
   );
 };
+
+const ExternalMcpInputSummary = ({ input }: { input: unknown }) => (
+  <div className="border-border/50 border-t px-3 py-2">
+    <pre className="bg-background/70 max-h-48 overflow-auto rounded-md border px-2 py-1.5 text-[11px] leading-4 whitespace-pre-wrap">
+      {JSON.stringify(input, null, 2)}
+    </pre>
+  </div>
+);

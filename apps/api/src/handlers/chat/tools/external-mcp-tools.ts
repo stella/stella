@@ -235,7 +235,10 @@ const loadConnectorTools = async ({
           connectorSlug: row.slug,
           toolName,
         })
-      ] = toolDefinition;
+      ] = {
+        ...toolDefinition,
+        needsApproval: true,
+      };
     }
 
     connectors.push({

@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
+import type { Static } from "elysia";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
@@ -107,6 +108,15 @@ const sendMessage = createSafeRootHandler(
     }
 
     const refRegistry = createChatRefRegistry();
+    const validationExternalMcpTools = messageNeedsExternalMcpValidation(
+      body.message,
+    )
+      ? await loadExternalMcpToolsForUser({
+          organizationId: session.activeOrganizationId,
+          safeDb,
+          userId: user.id,
+        })
+      : null;
 
     // Tool input schemas don't depend on `accessibleWorkspaceIds`
     // (scope is checked at execute time, not in the schema), so we
@@ -132,17 +142,21 @@ const sendMessage = createSafeRootHandler(
       }),
       workspaceId,
       hasActiveFileChat: true,
+      externalTools: validationExternalMcpTools?.tools,
     });
 
-    const validatedMessage = yield* Result.await(
-      validateMessage({
-        message: body.message,
-        safeDb,
-        threadId: body.threadId,
-        tools: validationTools,
-        userId: user.id,
-      }),
-    );
+    const validatedMessageResult = await validateMessage({
+      message: body.message,
+      safeDb,
+      threadId: body.threadId,
+      tools: validationTools,
+      userId: user.id,
+    });
+    await validationExternalMcpTools?.close();
+    if (Result.isError(validatedMessageResult)) {
+      return Result.err(validatedMessageResult.error);
+    }
+    const validatedMessage = validatedMessageResult.value;
 
     const thread = yield* Result.await(
       loadThread({
@@ -409,6 +423,26 @@ const sendMessage = createSafeRootHandler(
 );
 
 export default sendMessage;
+
+const messageNeedsExternalMcpValidation = (
+  message: Static<typeof sendMessageBodySchema>["message"],
+): boolean => {
+  if (message.role !== "assistant") {
+    return false;
+  }
+
+  const parts: unknown[] = Array.isArray(message.parts) ? message.parts : [];
+  return parts.some(isExternalMcpToolPart);
+};
+
+const isExternalMcpToolPart = (part: unknown): boolean => {
+  if (typeof part !== "object" || part === null || !("type" in part)) {
+    return false;
+  }
+
+  const type = part.type;
+  return typeof type === "string" && type.startsWith("tool-mcp__");
+};
 
 type ThreadRecord = {
   id: SafeId<"chatThread">;

@@ -4,7 +4,6 @@
  */
 
 import type { ChatMessage, ChatPart, ChatUITools } from "@stll/api/types";
-import { getToolName, isToolUIPart } from "ai";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -15,11 +14,11 @@ export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
 export type ApprovalToolName =
   | "apply-active-docx-edits"
   | "create-document"
-  | "update-entity-fields";
-export type ApprovalToolPart = Extract<
-  ChatPart,
-  { type: `tool-${ApprovalToolName}` }
->;
+  | "update-entity-fields"
+  | `mcp__${string}`;
+export type ApprovalToolPart =
+  | Extract<ChatPart, { type: `tool-${ApprovalToolName}` }>
+  | (ChatPart & { type: `tool-mcp__${string}` });
 export type ActiveDocxEditApprovalPart = Extract<
   ChatPart,
   { type: "tool-apply-active-docx-edits" }
@@ -55,6 +54,10 @@ const CHAT_TOOL_DISPLAY_TITLE_KEYS = {
 const UNKNOWN_CHAT_TOOL_TITLE_KEY =
   "chat.tool.unknown" satisfies TranslationKey;
 
+export const isExternalMcpToolName = (
+  toolName: string,
+): toolName is `mcp__${string}` => toolName.startsWith("mcp__");
+
 export type ChatToolTitleKey =
   | (typeof CHAT_TOOL_DISPLAY_TITLE_KEYS)[keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS]
   | typeof UNKNOWN_CHAT_TOOL_TITLE_KEY;
@@ -73,16 +76,23 @@ export const getChatToolTitleKey = (toolName: string) => {
 };
 
 /** Check if a tool part has an approval field (approval flow). */
-export const isApprovalPart = (part: ChatPart): part is ApprovalToolPart => {
-  if (!isToolUIPart(part)) {
+export const isApprovalPart = (part: unknown): part is ApprovalToolPart => {
+  if (
+    typeof part !== "object" ||
+    part === null ||
+    !("type" in part) ||
+    typeof part.type !== "string" ||
+    !part.type.startsWith("tool-")
+  ) {
     return false;
   }
 
-  const toolName = getToolName(part);
+  const toolName = part.type.slice("tool-".length);
   return (
     toolName === "apply-active-docx-edits" ||
     toolName === "create-document" ||
-    toolName === "update-entity-fields"
+    toolName === "update-entity-fields" ||
+    isExternalMcpToolName(toolName)
   );
 };
 
