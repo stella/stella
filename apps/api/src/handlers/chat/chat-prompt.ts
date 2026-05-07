@@ -12,6 +12,7 @@ import { count, eq } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { caseLawDecisions, entities, workspaces } from "@/api/db/schema";
+import type { PracticeJurisdiction } from "@/api/db/schema";
 import { formatDecisionForPrompt } from "@/api/handlers/case-law/analysis/prompts/base";
 import { parseDocumentAst } from "@/api/handlers/case-law/document-ast";
 import type {
@@ -90,6 +91,7 @@ type BuildChatSystemPromptProps = {
    * also enforces the constraint at call time).
    */
   contextMatterIds: SafeId<"workspace">[];
+  practiceJurisdictions: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
   userContext: IncomingUserContext | undefined;
@@ -105,6 +107,7 @@ export const buildChatSystemPromptParts = async ({
   activeDecision,
   activeFile,
   contextMatterIds,
+  practiceJurisdictions,
   refRegistry,
   safeDb,
   userContext,
@@ -113,6 +116,7 @@ export const buildChatSystemPromptParts = async ({
   await Result.gen(async function* () {
     if (workspaceId === null) {
       const prompt = buildGlobalPromptParts({
+        practiceJurisdictions,
         skillMetadata: getChatSkillMetadata(),
         userContext: userContext ?? null,
       });
@@ -137,6 +141,7 @@ export const buildChatSystemPromptParts = async ({
 
     const prompt = yield* Result.await(
       buildWorkspacePromptPartsFromDb({
+        practiceJurisdictions,
         refRegistry,
         safeDb,
         userContext: userContext ?? null,
@@ -279,30 +284,36 @@ export const extractTitle = (parts: ChatMessage["parts"]) => {
 };
 
 type BuildGlobalPromptProps = {
+  practiceJurisdictions?: readonly PracticeJurisdiction[];
   skillMetadata?: readonly SkillMetadata[] | undefined;
   userContext: UserContext | null;
 };
 
 export const buildGlobalPrompt = ({
+  practiceJurisdictions = [],
   skillMetadata = getChatSkillMetadata(),
   userContext,
 }: BuildGlobalPromptProps) =>
   buildGlobalPromptParts({
+    practiceJurisdictions,
     skillMetadata,
     userContext,
   }).fullPrompt;
 
 export const buildGlobalPromptParts = ({
+  practiceJurisdictions = [],
   skillMetadata = getChatSkillMetadata(),
   userContext,
 }: BuildGlobalPromptProps): ChatPromptParts =>
   buildPromptParts({
+    practiceJurisdictions,
     requestContextSections: [],
     skillMetadata,
     userContext,
   });
 
 type BuildWorkspacePromptProps = {
+  practiceJurisdictions?: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
   userContext: UserContext | null;
@@ -310,6 +321,7 @@ type BuildWorkspacePromptProps = {
 };
 
 const buildWorkspacePromptPartsFromDb = async ({
+  practiceJurisdictions = [],
   refRegistry,
   safeDb,
   userContext,
@@ -326,6 +338,7 @@ const buildWorkspacePromptPartsFromDb = async ({
     return Result.ok(
       buildWorkspacePromptParts({
         entityCount: workspacePromptData.entityCount,
+        practiceJurisdictions,
         refRegistry,
         skillMetadata: getChatSkillMetadata(),
         userContext,
@@ -398,6 +411,7 @@ const buildWorkspaceContextSections = ({
 
 type BuildWorkspacePromptTextProps = {
   entityCount: number;
+  practiceJurisdictions?: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   skillMetadata?: readonly SkillMetadata[] | undefined;
   userContext: UserContext | null;
@@ -407,6 +421,7 @@ type BuildWorkspacePromptTextProps = {
 
 export const buildWorkspacePromptText = ({
   entityCount,
+  practiceJurisdictions = [],
   refRegistry,
   skillMetadata = getChatSkillMetadata(),
   userContext,
@@ -415,6 +430,7 @@ export const buildWorkspacePromptText = ({
 }: BuildWorkspacePromptTextProps) =>
   buildWorkspacePromptParts({
     entityCount,
+    practiceJurisdictions,
     refRegistry,
     skillMetadata,
     userContext,
@@ -424,6 +440,7 @@ export const buildWorkspacePromptText = ({
 
 export const buildWorkspacePromptParts = ({
   entityCount,
+  practiceJurisdictions = [],
   refRegistry,
   skillMetadata = getChatSkillMetadata(),
   userContext,
@@ -431,6 +448,7 @@ export const buildWorkspacePromptParts = ({
   workspaceName,
 }: BuildWorkspacePromptTextProps): ChatPromptParts =>
   buildPromptParts({
+    practiceJurisdictions,
     requestContextSections: buildWorkspaceContextSections({
       entityCount,
       refRegistry,
@@ -723,12 +741,14 @@ export const appendActiveFilePromptIfEntityExists = ({
     : prompt;
 
 type BuildPromptProps = {
+  practiceJurisdictions: readonly PracticeJurisdiction[];
   requestContextSections: string[];
   skillMetadata: readonly SkillMetadata[];
   userContext: UserContext | null;
 };
 
 const buildPromptParts = ({
+  practiceJurisdictions,
   requestContextSections,
   skillMetadata,
   userContext,
@@ -739,6 +759,12 @@ const buildPromptParts = ({
     READONLY_API_HINT,
   ]);
   const sections = [cacheStablePrefix, ...requestContextSections];
+  const practiceJurisdictionLine = buildPracticeJurisdictionLine(
+    practiceJurisdictions,
+  );
+  if (practiceJurisdictionLine) {
+    sections.push(practiceJurisdictionLine);
+  }
   const userContextBlock = buildUserContextBlock(userContext);
 
   if (userContextBlock) {
@@ -749,6 +775,26 @@ const buildPromptParts = ({
     cacheStablePrefix,
     fullPrompt: joinPromptSections(sections),
   };
+};
+
+const buildPracticeJurisdictionLine = (
+  practiceJurisdictions: readonly PracticeJurisdiction[],
+): string => {
+  if (practiceJurisdictions.length === 0) {
+    return "";
+  }
+  const names = new Intl.DisplayNames(["en"], { type: "region" });
+  const ordered = [...practiceJurisdictions].sort((a, b) =>
+    a.isPrimary === b.isPrimary ? 0 : a.isPrimary ? -1 : 1,
+  );
+  const annotatePrimary = ordered.length > 1;
+  const formatted = ordered.map((jurisdiction) => {
+    const name = names.of(jurisdiction.countryCode) ?? jurisdiction.countryCode;
+    return annotatePrimary && jurisdiction.isPrimary
+      ? `${name} (primary)`
+      : name;
+  });
+  return `User generally practices law in: ${formatted.join(", ")}.`;
 };
 
 const joinPromptSections = (sections: readonly string[]) =>

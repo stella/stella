@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { stellaToast } from "@stll/ui/components/toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -18,11 +18,14 @@ import type {
   RoleModelSelections,
 } from "@/components/ai-config-role-models.logic";
 import { LanguagePicker } from "@/components/language-picker";
+import { ThemePicker } from "@/components/theme-picker";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import { toAPIError, toAuthClientError } from "@/lib/errors";
+import type { PracticeJurisdiction } from "@/lib/jurisdictions";
+import { suggestedCountryCodes as getSuggestedCountryCodes } from "@/lib/jurisdictions";
 import { sessionOptions } from "@/routes/-queries";
 import { aiConfigKeys } from "@/routes/_protected.organization/-ai-config-queries";
 import { OnboardingLayout } from "@/routes/onboarding/-components/onboarding-layout";
@@ -33,24 +36,36 @@ import type { Phase } from "@/routes/onboarding/-components/steps/creating-step"
 import { CreatingStep } from "@/routes/onboarding/-components/steps/creating-step";
 import { DownloadStep } from "@/routes/onboarding/-components/steps/download-step";
 import { InviteStep } from "@/routes/onboarding/-components/steps/invite-step";
+import {
+  JurisdictionGlobePreview,
+  JurisdictionStep,
+} from "@/routes/onboarding/-components/steps/jurisdiction-step";
 import { OrganizationStep } from "@/routes/onboarding/-components/steps/organization-step";
-type Step = "organization" | "ai" | "invite" | "download" | "creating";
+type Step =
+  | "organization"
+  | "jurisdiction"
+  | "ai"
+  | "invite"
+  | "download"
+  | "creating";
 
 type WizardData = {
   orgName: string;
   orgSlug: string;
+  practiceJurisdictions: PracticeJurisdiction[];
   emails: string[];
   aiProviders: ProviderCredentialDraft[];
   aiRoleModels: RoleModelSelections;
 };
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 
 const STEP_TO_PROGRESS = {
   organization: 0,
-  ai: 1,
-  invite: 2,
-  download: 3,
+  jurisdiction: 1,
+  ai: 2,
+  invite: 3,
+  download: 4,
 } as const satisfies Record<Exclude<Step, "creating">, number>;
 
 export const OnboardingWizard = () => {
@@ -65,10 +80,16 @@ export const OnboardingWizard = () => {
   const [data, setData] = useState<WizardData>(() => ({
     orgName: "",
     orgSlug: "",
+    practiceJurisdictions: [],
     emails: [],
     aiProviders: [createProviderCredentialDraft()],
     aiRoleModels: createDefaultRoleModels(),
   }));
+  const [suggestedCountryCodes, setSuggestedCountryCodes] = useState<string[]>(
+    [],
+  );
+  const [jurisdictionSuggestionApplied, setJurisdictionSuggestionApplied] =
+    useState(false);
 
   // Creating step state
   const [creatingPhase, setCreatingPhase] = useState<Phase>("org");
@@ -81,6 +102,42 @@ export const OnboardingWizard = () => {
     readonly ProviderPreview[]
   >([]);
   const [aiPhase, setAiPhase] = useState<"providers" | "models">("providers");
+
+  useEffect(() => {
+    const locale =
+      typeof navigator === "undefined" ? "en" : navigator.language || "en";
+
+    setSuggestedCountryCodes(
+      getSuggestedCountryCodes({
+        email: userEmail,
+        locale,
+      }),
+    );
+  }, [userEmail]);
+
+  useEffect(() => {
+    const suggestedCountryCode = suggestedCountryCodes.at(0);
+
+    if (
+      jurisdictionSuggestionApplied ||
+      data.practiceJurisdictions.length > 0 ||
+      !suggestedCountryCode
+    ) {
+      return;
+    }
+
+    setData((currentData) => ({
+      ...currentData,
+      practiceJurisdictions: [
+        { countryCode: suggestedCountryCode, isPrimary: true },
+      ],
+    }));
+    setJurisdictionSuggestionApplied(true);
+  }, [
+    data.practiceJurisdictions.length,
+    jurisdictionSuggestionApplied,
+    suggestedCountryCodes,
+  ]);
 
   const executeSetup = useCallback(
     async (finalData: WizardData) => {
@@ -140,6 +197,22 @@ export const OnboardingWizard = () => {
         await invalidateSession.mutateAsync();
         await delay(500);
         setCreatingProgress(50);
+
+        if (finalData.practiceJurisdictions.length > 0) {
+          const { error: jurisdictionError } = await api[
+            "organization-settings"
+          ]["practice-jurisdictions"].post({
+            practiceJurisdictions: finalData.practiceJurisdictions,
+          });
+
+          if (jurisdictionError) {
+            analytics.captureError(toAPIError(jurisdictionError));
+            stellaToast.add({
+              title: t("onboarding.jurisdictionSaveFailed"),
+              type: "warning",
+            });
+          }
+        }
 
         // Phase 2: Save AI config (BYOK) if user provided one
         const aiProviderValues = getProviderValues(finalData.aiProviders);
@@ -254,20 +327,29 @@ export const OnboardingWizard = () => {
   );
 
   const showPrices = step === "ai" && aiPhase === "models";
-  const preview = showPrices ? (
-    <PricesPanel
-      providers={data.aiProviders.map((p) => p.provider)}
-      roleModels={data.aiRoleModels}
-    />
-  ) : (
-    <SidebarPreview
-      aiProviders={previewAiProviders}
-      chatActive={step === "ai"}
-      emailCount={previewEmailCount}
-      matterName=""
-      organizationName={previewOrgName}
-    />
-  );
+  const preview =
+    step === "jurisdiction" ? (
+      <JurisdictionGlobePreview
+        onChange={(practiceJurisdictions) => {
+          setData((d) => ({ ...d, practiceJurisdictions }));
+          setJurisdictionSuggestionApplied(true);
+        }}
+        selected={data.practiceJurisdictions}
+      />
+    ) : showPrices ? (
+      <PricesPanel
+        providers={data.aiProviders.map((p) => p.provider)}
+        roleModels={data.aiRoleModels}
+      />
+    ) : (
+      <SidebarPreview
+        aiProviders={previewAiProviders}
+        chatActive={step === "ai"}
+        emailCount={previewEmailCount}
+        matterName=""
+        organizationName={previewOrgName}
+      />
+    );
 
   const renderStep = () => {
     if (step === "creating") {
@@ -296,6 +378,32 @@ export const OnboardingWizard = () => {
                 orgSlug: slug,
               }));
               setPreviewOrgName(name);
+              setStep("jurisdiction");
+            }}
+          />
+        </OnboardingLayout>
+      );
+    }
+
+    if (step === "jurisdiction") {
+      return (
+        <OnboardingLayout
+          currentStep={STEP_TO_PROGRESS.jurisdiction}
+          onBack={() => setStep("organization")}
+          preview={preview}
+          totalSteps={TOTAL_STEPS}
+        >
+          <JurisdictionStep
+            selected={data.practiceJurisdictions}
+            suggestedCountryCodes={suggestedCountryCodes}
+            onChange={(practiceJurisdictions) => {
+              setData((d) => ({ ...d, practiceJurisdictions }));
+              setJurisdictionSuggestionApplied(true);
+            }}
+            onNext={() => setStep("ai")}
+            onSkip={() => {
+              setData((d) => ({ ...d, practiceJurisdictions: [] }));
+              setJurisdictionSuggestionApplied(true);
               setStep("ai");
             }}
           />
@@ -332,7 +440,7 @@ export const OnboardingWizard = () => {
               setAiPhase("providers");
               return;
             }
-            setStep("organization");
+            setStep("jurisdiction");
           }}
           preview={preview}
           totalSteps={TOTAL_STEPS}
@@ -389,7 +497,10 @@ export const OnboardingWizard = () => {
   return (
     <>
       {renderStep()}
-      <LanguagePicker />
+      <div className="fixed end-4 top-4 z-20 flex items-center gap-2 lg:end-8 lg:top-6">
+        <ThemePicker />
+        <LanguagePicker />
+      </div>
     </>
   );
 };

@@ -13,6 +13,7 @@ export const OnboardingProgress = ({
   const t = useTranslations();
   const labels = [
     t("onboarding.stepOrganization"),
+    t("onboarding.stepJurisdiction"),
     t("onboarding.stepAi"),
     t("onboarding.stepTeam"),
     t("onboarding.stepDesktop"),
