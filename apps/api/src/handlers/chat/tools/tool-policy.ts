@@ -4,6 +4,7 @@ export const CHAT_TOOL_POLICY_KIND = {
   external: "external",
   internal: "internal",
   mutation: "mutation",
+  publicLookup: "publicLookup",
 } as const;
 
 export type ChatToolPolicyKind =
@@ -25,6 +26,10 @@ const CHAT_TOOL_POLICIES = {
   },
   [CHAT_TOOL_POLICY_KIND.mutation]: {
     needsApproval: true,
+    requiresAnonymization: false,
+  },
+  [CHAT_TOOL_POLICY_KIND.publicLookup]: {
+    needsApproval: false,
     requiresAnonymization: false,
   },
 } as const satisfies Record<ChatToolPolicyKind, ChatToolPolicy>;

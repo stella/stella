@@ -60,6 +60,8 @@ describe("chat prompt builders", () => {
     });
 
     for (const prompt of [workspacePrompt, globalPrompt]) {
+      expect(prompt).toContain("ASK-USER BOUNDARY");
+      expect(prompt).toContain("Never use `ask-user` to ask for permission");
       expect(prompt).toContain("For Stella data reads, use the Stella API");
       expect(prompt).toContain("describe-stella-api");
       expect(prompt).toContain("run-stella-query");

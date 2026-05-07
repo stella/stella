@@ -64,8 +64,8 @@ const createActiveDocxEditTools = () => ({
 
 const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   [APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
-  ares_lookup_company: CHAT_TOOL_POLICY_KIND.external,
-  ares_search_companies: CHAT_TOOL_POLICY_KIND.external,
+  ares_lookup_company: CHAT_TOOL_POLICY_KIND.publicLookup,
+  ares_search_companies: CHAT_TOOL_POLICY_KIND.publicLookup,
   "ask-user": CHAT_TOOL_POLICY_KIND.internal,
   "create-document": CHAT_TOOL_POLICY_KIND.internal,
   "describe-stella-api": CHAT_TOOL_POLICY_KIND.internal,

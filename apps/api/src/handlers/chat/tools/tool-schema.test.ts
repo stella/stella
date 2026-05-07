@@ -106,23 +106,30 @@ describe("chat tool schemas", () => {
     });
 
     const aresLookup = tools["ares_lookup_company"];
+    const aresSearch = tools["ares_search_companies"];
     const updateEntityFields = tools["update-entity-fields"];
     const createDocument = tools["create-document"];
     const runStellaQuery = tools["run-stella-query"];
 
     expect(aresLookup).toBeDefined();
+    expect(aresSearch).toBeDefined();
     expect(updateEntityFields).toBeDefined();
     expect(createDocument).toBeDefined();
     expect(runStellaQuery).toBeDefined();
 
-    if (!aresLookup || !updateEntityFields || !createDocument) {
+    if (!aresLookup || !aresSearch || !updateEntityFields || !createDocument) {
       throw new Error("Expected chat tools to be registered");
     }
 
-    expect(aresLookup.needsApproval).toBe(true);
+    expect(aresLookup.needsApproval).toBeUndefined();
     expect(getChatToolPolicy(aresLookup)).toEqual({
-      needsApproval: true,
-      requiresAnonymization: true,
+      needsApproval: false,
+      requiresAnonymization: false,
+    });
+    expect(aresSearch.needsApproval).toBeUndefined();
+    expect(getChatToolPolicy(aresSearch)).toEqual({
+      needsApproval: false,
+      requiresAnonymization: false,
     });
     expect(updateEntityFields.needsApproval).toBe(true);
     expect(getChatToolPolicy(updateEntityFields)).toEqual({
