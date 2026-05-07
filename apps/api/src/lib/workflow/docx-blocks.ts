@@ -424,6 +424,24 @@ const readCommentExtendedMetadata = async (
   return metadata;
 };
 
+const readCommentText = (comment: slimdom.Element): string => {
+  const paragraphs = elementsByLocalName(comment, "p");
+  const paragraphTexts: string[] = [];
+
+  for (const paragraph of paragraphs) {
+    const text = collectPlainText(paragraph).replace(/\s+/g, " ").trim();
+    if (text) {
+      paragraphTexts.push(text);
+    }
+  }
+
+  if (paragraphTexts.length > 0) {
+    return paragraphTexts.join("\n");
+  }
+
+  return collectPlainText(comment).replace(/\s+/g, " ").trim();
+};
+
 const readComments = async (zip: JSZip): Promise<Map<string, DocxComment>> => {
   const comments = new Map<string, DocxComment>();
   const commentsEntry = zip.file("word/comments.xml");
@@ -447,7 +465,7 @@ const readComments = async (zip: JSZip): Promise<Map<string, DocxComment>> => {
       continue;
     }
 
-    const text = collectPlainText(comment).replace(/\s+/g, " ").trim();
+    const text = readCommentText(comment);
     if (text.length === 0) {
       continue;
     }

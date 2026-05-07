@@ -433,4 +433,38 @@ describe("extractFolioBlocksFromDocxBuffer", () => {
       ].join(""),
     );
   });
+
+  test("preserves paragraph separators inside comment text", async () => {
+    const buffer = await buildDocxBuffer({
+      commentsXml: wrapComments(`
+        <w:comment w:id="21" w:author="Reviewer">
+          <w:p><w:r><w:t>First sentence.</w:t></w:r></w:p>
+          <w:p><w:r><w:t>Second sentence.</w:t></w:r></w:p>
+        </w:comment>
+      `),
+      documentXml: wrap(`
+        <w:p>
+          <w:r><w:t>Clause </w:t></w:r>
+          <w:commentRangeStart w:id="21"/>
+          <w:r><w:t>text</w:t></w:r>
+        </w:p>
+      `),
+    });
+
+    const blocks = await extractFolioBlocksFromDocxBuffer(buffer);
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.text).toBe(
+      [
+        "Clause ",
+        renderDocxCommentMarkup({
+          metadata: {
+            author: "Reviewer",
+          },
+          text: "First sentence. Second sentence.",
+        }),
+        "text",
+      ].join(""),
+    );
+  });
 });
