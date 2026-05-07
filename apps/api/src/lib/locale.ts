@@ -19,6 +19,7 @@ const SUPPORTED_LANGS = [
   "lt",
   "lv",
   "pl",
+  "pt-BR",
   "sk",
 ] as const;
 
@@ -34,12 +35,25 @@ export const extractLangFromRequest = (
   }
 
   for (const part of header.split(",")) {
-    const lang = part.split(";")[0]?.trim();
-    const prefix = lang?.split("-")[0];
+    const lang = part.split(";")[0]?.trim().replace("_", "-");
+    if (!lang) {
+      continue;
+    }
+
+    const exactMatch = SUPPORTED_LANGS.find((l) => l === lang);
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    const prefix = lang.split("-").at(0);
     const match = SUPPORTED_LANGS.find((l) => l === prefix);
 
     if (match) {
       return match;
+    }
+
+    if (prefix === "pt") {
+      return "pt-BR";
     }
   }
 

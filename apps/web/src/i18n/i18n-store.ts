@@ -21,6 +21,7 @@ export const supportedLanguages = [
   "lt",
   "lv",
   "pl",
+  "pt-BR",
   "sk",
 ] as const;
 
@@ -41,6 +42,7 @@ const messageLoaders = {
   lt: async () => (await import("@/i18n/langs/lt.json")).default,
   lv: async () => (await import("@/i18n/langs/lv.json")).default,
   pl: async () => (await import("@/i18n/langs/pl.json")).default,
+  "pt-BR": async () => (await import("@/i18n/langs/pt-BR.json")).default,
   sk: async () => (await import("@/i18n/langs/sk.json")).default,
 } as const satisfies Record<SupportedLanguage, MessageLoader>;
 
@@ -55,11 +57,36 @@ export const LANG_ENDONYMS = {
   lt: "Lietuvių",
   lv: "Latviešu",
   pl: "Polski",
+  "pt-BR": "Português (Brasil)",
   sk: "Slovenčina",
 } as const satisfies Record<SupportedLanguage, string>;
 
 const isSupportedLanguage = (value: string): value is SupportedLanguage =>
   supportedLanguageSet.has(value);
+
+const normalizeLocale = (value: string): string => value.replace("_", "-");
+
+const resolveSupportedLanguage = (value: string): SupportedLanguage | null => {
+  const normalized = normalizeLocale(value);
+  if (isSupportedLanguage(normalized)) {
+    return normalized;
+  }
+
+  const prefix = normalized.split("-").at(0);
+  if (!prefix) {
+    return null;
+  }
+
+  if (isSupportedLanguage(prefix)) {
+    return prefix;
+  }
+
+  if (prefix === "pt") {
+    return "pt-BR";
+  }
+
+  return null;
+};
 
 const detectLang = (): SupportedLanguage => {
   const languages =
@@ -68,9 +95,9 @@ const detectLang = (): SupportedLanguage => {
       : [];
 
   for (const candidate of languages) {
-    const prefix = candidate.split("-")[0] ?? candidate;
-    if (isSupportedLanguage(prefix)) {
-      return prefix;
+    const lang = resolveSupportedLanguage(candidate);
+    if (lang) {
+      return lang;
     }
   }
 
