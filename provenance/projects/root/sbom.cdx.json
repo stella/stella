@@ -2,7 +2,7 @@
   "bomFormat": "CycloneDX",
   "components": [
     {
-      "bom-ref": "pkg:npm/@ai-sdk/anthropic@3.0.72",
+      "bom-ref": "pkg:npm/@ai-sdk/anthropic@3.0.74",
       "evidence": {
         "identity": [
           {
@@ -50,13 +50,13 @@
           "value": "node_modules/@ai-sdk/anthropic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/anthropic@3.0.72",
+      "purl": "pkg:npm/%40ai-sdk/anthropic@3.0.74",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.72"
+      "version": "3.0.74"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/devtools@0.0.16",
@@ -116,7 +116,7 @@
       "version": "0.0.16"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.113",
+      "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.118",
       "evidence": {
         "identity": [
           {
@@ -164,16 +164,16 @@
           "value": "node_modules/@ai-sdk/google-vertex/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/google-vertex@4.0.113",
+      "purl": "pkg:npm/%40ai-sdk/google-vertex@4.0.118",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "4.0.113"
+      "version": "4.0.118"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/google@3.0.65",
+      "bom-ref": "pkg:npm/@ai-sdk/google@3.0.67",
       "evidence": {
         "identity": [
           {
@@ -233,16 +233,16 @@
           "value": "node_modules/@ai-sdk/google/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/google@3.0.65",
+      "purl": "pkg:npm/%40ai-sdk/google@3.0.67",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.65"
+      "version": "3.0.67"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.54",
+      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.58",
       "evidence": {
         "identity": [
           {
@@ -290,17 +290,17 @@
           "value": "node_modules/@ai-sdk/openai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/openai@3.0.54",
+      "purl": "pkg:npm/%40ai-sdk/openai@3.0.58",
       "scope": "required",
       "tags": [
         "framework",
         "ml"
       ],
       "type": "framework",
-      "version": "3.0.54"
+      "version": "3.0.58"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/react@3.0.172",
+      "bom-ref": "pkg:npm/@ai-sdk/react@3.0.176",
       "evidence": {
         "identity": [
           {
@@ -1344,16 +1344,16 @@
           "value": "node_modules/@ai-sdk/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/react@3.0.172",
+      "purl": "pkg:npm/%40ai-sdk/react@3.0.176",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.172"
+      "version": "3.0.176"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/valibot@2.0.25",
+      "bom-ref": "pkg:npm/@ai-sdk/valibot@2.0.27",
       "evidence": {
         "identity": [
           {
@@ -1536,13 +1536,13 @@
           "value": "node_modules/@ai-sdk/valibot/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/valibot@2.0.25",
+      "purl": "pkg:npm/%40ai-sdk/valibot@2.0.27",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "2.0.25"
+      "version": "2.0.27"
     },
     {
       "authors": [
@@ -3563,7 +3563,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1039.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1041.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3612,13 +3612,13 @@
           "value": "node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1039.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1041.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1039.0"
+      "version": "3.1041.0"
     },
     {
       "authors": [
@@ -9522,7 +9522,7 @@
             "location": "apps/web/src/components/app-sidebar.tsx#29"
           },
           {
-            "location": "apps/web/src/components/chat/chat-matter-picker.tsx#10"
+            "location": "apps/web/src/components/chat/chat-matter-picker.tsx#9"
           },
           {
             "location": "apps/web/src/components/dev-sidebar-group.tsx#14"
@@ -10547,7 +10547,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.100.6",
+      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.100.7",
       "description": "Developer tools to interact with and visualize the TanStack/react-query cache",
       "evidence": {
         "identity": [
@@ -10596,13 +10596,13 @@
           "value": "node_modules/@tanstack/react-query-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.100.6",
+      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.100.7",
       "scope": "required",
       "tags": [
         "tools"
       ],
       "type": "library",
-      "version": "5.100.6"
+      "version": "5.100.7"
     },
     {
       "authors": [
@@ -10610,7 +10610,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query@5.100.6",
+      "bom-ref": "pkg:npm/@tanstack/react-query@5.100.7",
       "description": "Hooks for managing, caching and syncing asynchronous and remote data in React",
       "evidence": {
         "identity": [
@@ -10839,7 +10839,7 @@
             "location": "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx#15"
           },
           {
-            "location": "apps/web/src/components/chat/chat-matter-picker.tsx#11"
+            "location": "apps/web/src/components/chat/chat-matter-picker.tsx#10"
           },
           {
             "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#5"
@@ -11163,10 +11163,10 @@
           "value": "node_modules/@tanstack/react-query/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query@5.100.6",
+      "purl": "pkg:npm/%40tanstack/react-query@5.100.7",
       "scope": "required",
       "type": "library",
-      "version": "5.100.6"
+      "version": "5.100.7"
     },
     {
       "authors": [
@@ -11294,7 +11294,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.168.26",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.169.1",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -11646,10 +11646,10 @@
           "value": "node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.168.26",
+      "purl": "pkg:npm/%40tanstack/react-router@1.169.1",
       "scope": "required",
       "type": "library",
-      "version": "1.168.26"
+      "version": "1.169.1"
     },
     {
       "authors": [
@@ -11871,7 +11871,7 @@
       "version": "8.21.3"
     },
     {
-      "bom-ref": "pkg:npm/@tauri-apps/api@2.10.1",
+      "bom-ref": "pkg:npm/@tauri-apps/api@2.11.0",
       "description": "Tauri API definitions",
       "evidence": {
         "identity": [
@@ -11920,13 +11920,13 @@
           "value": "node_modules/@tauri-apps/api/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tauri-apps/api@2.10.1",
+      "purl": "pkg:npm/%40tauri-apps/api@2.11.0",
       "scope": "required",
       "tags": [
         "api"
       ],
       "type": "library",
-      "version": "2.10.1"
+      "version": "2.11.0"
     },
     {
       "bom-ref": "pkg:npm/@tiptap/core@3.22.5",
@@ -13827,7 +13827,7 @@
       "version": "1.6.0"
     },
     {
-      "bom-ref": "pkg:npm/ai@6.0.170",
+      "bom-ref": "pkg:npm/ai@6.0.174",
       "description": "AI SDK by Vercel - build apps like ChatGPT, Claude, Gemini, and more with a single interface for any model using the Vercel AI Gateway or go direct to OpenAI, Anthropic, Google, or any other model provider.",
       "evidence": {
         "identity": [
@@ -13993,13 +13993,13 @@
           "value": "node_modules/ai/package.json"
         }
       ],
-      "purl": "pkg:npm/ai@6.0.170",
+      "purl": "pkg:npm/ai@6.0.174",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "6.0.170"
+      "version": "6.0.174"
     },
     {
       "authors": [
@@ -14007,7 +14007,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/astro@6.1.10",
+      "bom-ref": "pkg:npm/astro@6.2.1",
       "description": "Astro is a modern site builder with web best practices, performance, and DX front-of-mind.",
       "evidence": {
         "identity": [
@@ -14059,13 +14059,13 @@
           "value": "node_modules/astro/package.json"
         }
       ],
-      "purl": "pkg:npm/astro@6.1.10",
+      "purl": "pkg:npm/astro@6.2.1",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "6.1.10"
+      "version": "6.2.1"
     },
     {
       "bom-ref": "pkg:npm/better-auth@1.6.9",
@@ -14176,7 +14176,7 @@
           "name": "Dillon Mulroy <dillon.mulroy@gmail.com> (https://github.com/dmmulroy)"
         }
       ],
-      "bom-ref": "pkg:npm/better-result@2.9.0",
+      "bom-ref": "pkg:npm/better-result@2.9.1",
       "description": "Lightweight Result type with generator-based composition",
       "evidence": {
         "identity": [
@@ -15053,10 +15053,10 @@
           "value": "node_modules/better-result/package.json"
         }
       ],
-      "purl": "pkg:npm/better-result@2.9.0",
+      "purl": "pkg:npm/better-result@2.9.1",
       "scope": "required",
       "type": "library",
-      "version": "2.9.0"
+      "version": "2.9.1"
     },
     {
       "authors": [
@@ -16427,7 +16427,7 @@
           "name": "rayriffy <mail@rayriffy.com> (https://github.com/rayriffy)"
         }
       ],
-      "bom-ref": "pkg:npm/elysia-rate-limit@4.6.0",
+      "bom-ref": "pkg:npm/elysia-rate-limit@4.6.1",
       "description": "Rate-limiter for Elysia.js",
       "evidence": {
         "identity": [
@@ -16478,10 +16478,10 @@
           "value": "node_modules/elysia-rate-limit/package.json"
         }
       ],
-      "purl": "pkg:npm/elysia-rate-limit@4.6.0",
+      "purl": "pkg:npm/elysia-rate-limit@4.6.1",
       "scope": "required",
       "type": "library",
-      "version": "4.6.0"
+      "version": "4.6.1"
     },
     {
       "authors": [
@@ -17892,7 +17892,7 @@
             "location": "apps/web/src/components/chat/chat-draft-attachment-chips.tsx#3"
           },
           {
-            "location": "apps/web/src/components/chat/chat-matter-picker.tsx#12"
+            "location": "apps/web/src/components/chat/chat-matter-picker.tsx#11"
           },
           {
             "location": "apps/web/src/components/chat/chat-thread-messages.tsx#7"
@@ -18633,7 +18633,7 @@
           "name": "Christopher Jeffrey"
         }
       ],
-      "bom-ref": "pkg:npm/marked@18.0.2",
+      "bom-ref": "pkg:npm/marked@18.0.3",
       "description": "A markdown parser built for speed",
       "evidence": {
         "identity": [
@@ -18688,10 +18688,10 @@
           "value": "node_modules/marked/package.json"
         }
       ],
-      "purl": "pkg:npm/marked@18.0.2",
+      "purl": "pkg:npm/marked@18.0.3",
       "scope": "required",
       "type": "library",
-      "version": "18.0.2"
+      "version": "18.0.3"
     },
     {
       "authors": [
@@ -18830,7 +18830,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.372.5",
+      "bom-ref": "pkg:npm/posthog-js@1.372.6",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -18879,10 +18879,10 @@
           "value": "node_modules/posthog-js/lib/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.372.5",
+      "purl": "pkg:npm/posthog-js@1.372.6",
       "scope": "required",
       "type": "library",
-      "version": "1.372.5"
+      "version": "1.372.6"
     },
     {
       "authors": [
@@ -18890,7 +18890,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.31.0",
+      "bom-ref": "pkg:npm/posthog-node@5.32.1",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -18935,10 +18935,10 @@
           "value": "node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.31.0",
+      "purl": "pkg:npm/posthog-node@5.32.1",
       "scope": "required",
       "type": "library",
-      "version": "5.31.0"
+      "version": "5.32.1"
     },
     {
       "bom-ref": "pkg:npm/prosemirror-commands@1.7.1",
@@ -21333,7 +21333,7 @@
             "location": "apps/web/src/components/chat/ask-user-card.tsx#12"
           },
           {
-            "location": "apps/web/src/components/chat/chat-matter-picker.tsx#13"
+            "location": "apps/web/src/components/chat/chat-matter-picker.tsx#12"
           },
           {
             "location": "apps/web/src/components/chat/chat-thread-messages.tsx#8"
