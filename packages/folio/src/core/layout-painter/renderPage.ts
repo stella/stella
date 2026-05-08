@@ -807,6 +807,7 @@ export function renderFootnoteArea(
   footnotes: FootnoteRenderItem[],
   contentWidth: number,
   doc: Document,
+  context?: RenderContext,
 ): HTMLElement {
   const container = doc.createElement("div");
   container.className = "layout-footnote-area";
@@ -828,7 +829,7 @@ export function renderFootnoteArea(
     fnEl.style.color = "var(--doc-canvas-text, #000)";
 
     if (fn.content) {
-      const contentEl = renderFootnoteContent(fn, contentWidth, doc);
+      const contentEl = renderFootnoteContent(fn, contentWidth, doc, context);
       fnEl.append(contentEl);
     } else {
       fnEl.style.fontSize = "10px";
@@ -854,6 +855,7 @@ function renderFootnoteContent(
   footnote: FootnoteRenderItem,
   contentWidth: number,
   doc: Document,
+  context?: RenderContext,
 ): HTMLElement {
   const content = footnote.content;
   if (!content) {
@@ -866,10 +868,10 @@ function renderFootnoteContent(
   wrapper.style.width = `${contentWidth}px`;
   wrapper.style.height = `${content.height}px`;
 
-  const context: RenderContext = {
-    pageNumber: 0,
-    totalPages: 0,
-    section: "body",
+  const renderContext: RenderContext = {
+    pageNumber: context?.pageNumber ?? 0,
+    totalPages: context?.totalPages ?? 0,
+    section: context?.section ?? "body",
     contentWidth,
   };
 
@@ -886,7 +888,7 @@ function renderFootnoteContent(
       measure,
       contentWidth,
       y,
-      context,
+      renderContext,
       doc,
     );
     if (!blockEl) {
@@ -1396,6 +1398,7 @@ export function renderPage(
       options.footnoteArea,
       contentWidth,
       doc,
+      context,
     );
     fnAreaEl.style.position = "absolute";
     // Position at page bottom minus bottom margin (bottom of content area)

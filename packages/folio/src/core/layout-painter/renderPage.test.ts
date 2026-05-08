@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type {
   Page,
   ParagraphBlock,
+  ParagraphMeasure,
   TableBlock,
   TableMeasure,
 } from "../layout-engine/types";
@@ -178,6 +179,59 @@ describe("header and footer rendering", () => {
 });
 
 describe("footnote rendering", () => {
+  test("renders structured footnote fields with the page render context", () => {
+    const footnoteParagraph: ParagraphBlock = {
+      kind: "paragraph",
+      id: "fn-page-field",
+      runs: [
+        { kind: "text", text: "Page " },
+        { kind: "field", fieldType: "PAGE", fallback: "0" },
+        { kind: "text", text: " of " },
+        { kind: "field", fieldType: "NUMPAGES", fallback: "0" },
+      ],
+    };
+    const footnoteMeasure: ParagraphMeasure = {
+      kind: "paragraph",
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 3,
+          toChar: 1,
+          width: 72,
+          ascent: 8,
+          descent: 2,
+          lineHeight: 12,
+        },
+      ],
+      totalHeight: 12,
+    };
+
+    const pageEl = renderPage(
+      {
+        ...page,
+        footnoteReservedHeight: 24,
+        fragments: [],
+      },
+      { pageNumber: 7, totalPages: 9, section: "body" },
+      {
+        document: fakeDocument,
+        footnoteArea: [
+          {
+            displayNumber: "1",
+            content: {
+              blocks: [footnoteParagraph],
+              measures: [footnoteMeasure],
+              height: 12,
+            },
+          },
+        ],
+      },
+    );
+
+    expect(pageEl.textContent).toContain("Page 7 of 9");
+  });
+
   test("renders structured table footnote content without body PM anchors", () => {
     const tableBlock: TableBlock = {
       kind: "table",
