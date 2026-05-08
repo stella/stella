@@ -145,6 +145,35 @@ describe("renderLine text styling", () => {
   });
 });
 
+describe("renderLine tab tracking", () => {
+  test("includes preceding run letter spacing when sizing tabs", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        { kind: "text", text: "AA", letterSpacing: 10 },
+        { kind: "tab" },
+        { kind: "text", text: "B" },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 2,
+      toChar: 1,
+      width: 55,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const tabEl = lineEl.children[1] as HTMLElement | undefined;
+
+    expect(tabEl?.style.width).toBe("24px");
+  });
+});
+
 describe("renderParagraphFragment indentation handling", () => {
   test("negative side indents shift and widen line boxes", () => {
     const block: ParagraphBlock = {
