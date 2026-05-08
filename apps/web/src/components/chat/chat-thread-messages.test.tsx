@@ -1,5 +1,7 @@
+import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
@@ -12,6 +14,23 @@ process.env["VITE_API_URL"] = "http://localhost:3001";
 const { ChatThreadMessages } =
   await import("@/components/chat/chat-thread-messages");
 
+const renderWithProviders = (children: ReactNode) =>
+  renderToStaticMarkup(
+    <QueryClientProvider client={new QueryClient()}>
+      <IntlProvider
+        locale="en"
+        // SAFETY: this mirrors the app provider boundary; locale
+        // files are checked separately, while use-intl preserves
+        // English literal values in the generated Messages type.
+        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+        messages={messages as Messages}
+        timeZone="UTC"
+      >
+        {children}
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
 describe("chat thread messages", () => {
   test("shows a copy action at the end of assistant responses", () => {
     const chatMessages: PersistedChatMessage[] = [
@@ -22,30 +41,22 @@ describe("chat thread messages", () => {
       },
     ];
 
-    const html = renderToStaticMarkup(
-      <IntlProvider
-        locale="en"
-        // SAFETY: this mirrors the app provider boundary; locale
-        // files are checked separately, while use-intl preserves
-        // English literal values in the generated Messages type.
-        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-        messages={messages as Messages}
-        timeZone="UTC"
-      >
-        <ChatThreadMessages
-          approvalPendingMessageId={null}
-          autoApprovedTools={new Set()}
-          handleAlwaysAllow={() => {}}
-          handleApprove={() => {}}
-          handleDeny={() => {}}
-          messages={chatMessages}
-          onAskUserSubmit={() => {}}
-          showToolCalls={false}
-          streamdownComponents={{
-            a: ({ children, ...props }) => <a {...props}>{children}</a>,
-          }}
-        />
-      </IntlProvider>,
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        alwaysApprovedTools={new Set()}
+        approvalPendingMessageId={null}
+        conversationApprovedTools={new Set()}
+        handleAllowInConversation={() => {}}
+        handleAlwaysAllow={() => {}}
+        handleApprove={() => {}}
+        handleDeny={() => {}}
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        showToolCalls={false}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
     );
 
     expect(html).toContain("Draft answer");
@@ -67,31 +78,23 @@ describe("chat thread messages", () => {
       },
     ];
 
-    const html = renderToStaticMarkup(
-      <IntlProvider
-        locale="en"
-        // SAFETY: this mirrors the app provider boundary; locale
-        // files are checked separately, while use-intl preserves
-        // English literal values in the generated Messages type.
-        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-        messages={messages as Messages}
-        timeZone="UTC"
-      >
-        <ChatThreadMessages
-          approvalPendingMessageId={null}
-          autoApprovedTools={new Set()}
-          handleAlwaysAllow={() => {}}
-          handleApprove={() => {}}
-          handleDeny={() => {}}
-          messages={chatMessages}
-          onAskUserSubmit={() => {}}
-          onResend={() => {}}
-          showToolCalls={false}
-          streamdownComponents={{
-            a: ({ children, ...props }) => <a {...props}>{children}</a>,
-          }}
-        />
-      </IntlProvider>,
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        alwaysApprovedTools={new Set()}
+        approvalPendingMessageId={null}
+        conversationApprovedTools={new Set()}
+        handleAllowInConversation={() => {}}
+        handleAlwaysAllow={() => {}}
+        handleApprove={() => {}}
+        handleDeny={() => {}}
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onResend={() => {}}
+        showToolCalls={false}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
     );
 
     expect(html).toContain("First answer");
@@ -114,31 +117,23 @@ describe("chat thread messages", () => {
       },
     ];
 
-    const html = renderToStaticMarkup(
-      <IntlProvider
-        locale="en"
-        // SAFETY: this mirrors the app provider boundary; locale
-        // files are checked separately, while use-intl preserves
-        // English literal values in the generated Messages type.
-        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-        messages={messages as Messages}
-        timeZone="UTC"
-      >
-        <ChatThreadMessages
-          approvalPendingMessageId={null}
-          autoApprovedTools={new Set()}
-          handleAlwaysAllow={() => {}}
-          handleApprove={() => {}}
-          handleDeny={() => {}}
-          messages={chatMessages}
-          onAskUserSubmit={() => {}}
-          onResend={() => {}}
-          showToolCalls={false}
-          streamdownComponents={{
-            a: ({ children, ...props }) => <a {...props}>{children}</a>,
-          }}
-        />
-      </IntlProvider>,
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        alwaysApprovedTools={new Set()}
+        approvalPendingMessageId={null}
+        conversationApprovedTools={new Set()}
+        handleAllowInConversation={() => {}}
+        handleAlwaysAllow={() => {}}
+        handleApprove={() => {}}
+        handleDeny={() => {}}
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onResend={() => {}}
+        showToolCalls={false}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
     );
 
     expect(html).toContain("Answer before retry");
@@ -148,32 +143,24 @@ describe("chat thread messages", () => {
   });
 
   test("shows a resendable chat message when the chat runtime errors", () => {
-    const html = renderToStaticMarkup(
-      <IntlProvider
-        locale="en"
-        // SAFETY: this mirrors the app provider boundary; locale
-        // files are checked separately, while use-intl preserves
-        // English literal values in the generated Messages type.
-        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-        messages={messages as Messages}
-        timeZone="UTC"
-      >
-        <ChatThreadMessages
-          approvalPendingMessageId={null}
-          autoApprovedTools={new Set()}
-          error={new Error("provider details must stay hidden")}
-          handleAlwaysAllow={() => {}}
-          handleApprove={() => {}}
-          handleDeny={() => {}}
-          messages={[]}
-          onAskUserSubmit={() => {}}
-          onResend={() => {}}
-          showToolCalls={false}
-          streamdownComponents={{
-            a: ({ children, ...props }) => <a {...props}>{children}</a>,
-          }}
-        />
-      </IntlProvider>,
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        alwaysApprovedTools={new Set()}
+        approvalPendingMessageId={null}
+        conversationApprovedTools={new Set()}
+        error={new Error("provider details must stay hidden")}
+        handleAllowInConversation={() => {}}
+        handleAlwaysAllow={() => {}}
+        handleApprove={() => {}}
+        handleDeny={() => {}}
+        messages={[]}
+        onAskUserSubmit={() => {}}
+        onResend={() => {}}
+        showToolCallDetails={false}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
     );
 
     expect(html).toContain("There was an issue sending your message.");

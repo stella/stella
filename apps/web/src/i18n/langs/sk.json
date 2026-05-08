@@ -312,10 +312,14 @@
     },
     "approval": {
       "allow": "Povoliť",
-      "alwaysAllow": "Vždy povoliť v tomto vlákne",
+      "allowInConversation": "Povoliť v tejto konverzácii",
+      "allowOnce": "Povoliť raz",
+      "alwaysAllow": "Vždy povoliť",
       "approved": "Povolené",
       "denied": "Zamietnuté",
-      "deny": "Zamietnuť"
+      "deny": "Zamietnuť",
+      "externalMcpDescription": "Odošlú sa iba informácie potrebné pre tento dotaz.",
+      "externalMcpQuestion": "Môže Stella odoslať tento dotaz do {provider}?"
     },
     "askUser": {
       "custom": "Napísať vlastnú",
@@ -339,6 +343,8 @@
     "editableFilePlaceholder": "Chatovať alebo upraviť {fileName}",
     "editableFilePlaceholderAction": "Chatovať alebo upraviť",
     "editorLoading": "Načítava sa editor…",
+    "externalSourcePlaceholder": "Chatovať o {title}",
+    "externalSourcePlaceholderAction": "Chatovať o",
     "extractingContent": "Extrahovanie obsahu...",
     "filePlaceholder": "Chatovať o {fileName}",
     "filePlaceholderAction": "Chatovať o",
@@ -391,6 +397,8 @@
     "threads": "História",
     "tool": {
       "apply-active-docx-edits": "Použitie DOCX úprav",
+      "ares_lookup_company": "ARES vyhľadanie firmy",
+      "ares_search_companies": "ARES vyhľadávanie firiem",
       "ask-user": "Žiadosť o upresnenie",
       "create-document": "Vytváranie dokumentu",
       "describe-stella-api": "Kontrola Stella API",
@@ -415,6 +423,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znakov}}",
+      "exactCall": "Presné volanie",
       "field": "Pole",
       "input": "Vstup",
       "output": "Výstup",
@@ -1027,6 +1036,13 @@
     "unsupportedDocxEditTitle": "Úpravy zablokované"
   },
   "inspector": {
+    "external": {
+      "confirmDescription": "Chystáte sa navštíviť externý web.",
+      "confirmTitle": "Otvoriť externý odkaz?",
+      "openLink": "Otvoriť odkaz",
+      "openOriginal": "Otvoriť originál",
+      "unavailable": "Tento web nepovoľuje bezpečný náhľad v Stelle. Ak nástroj vrátil text dokumentu, zobrazí sa tu; inak otvorte originál."
+    },
     "facet": {
       "preview": "Náhľad",
       "previewInFullViewToast": "Náhľad je tu hlavným zobrazením. Kliknutím na tlačidlo minimalizácie ho zobrazíte vedľa metadát."
@@ -1054,7 +1070,60 @@
     "showPane": "Zobraziť panel"
   },
   "knowledge": {
+    "mcp": {
+      "addAndConnect": "Pridať a pripojiť",
+      "addServer": "Pridať server",
+      "addServerCardDescription": "Vložte URL servera a Stella ho pripojí v jednom kroku.",
+      "addServerCardTitle": "Pridať nový MCP server",
+      "auth": {
+        "bearer": "Bearer token",
+        "none": "Bez prihlásenia",
+        "oauth2": "OAuth 2.0"
+      },
+      "availableInChat": "Dostupné v chate",
+      "bearerTokenDescription": "Tento server používa bearer token. Na dokončenie pripojenia vložte token od poskytovateľa.",
+      "builtInBadge": "Vstavané",
+      "connect": "Pripojiť",
+      "connected": "Pripojené",
+      "connectedToast": "MCP konektor je pripojený",
+      "connectedWithLastUsed": "Pripojené · naposledy použité {time}",
+      "customDescription": "Vložte URL MCP servera. Stella zistí spôsob pripojenia a bude automaticky pokračovať.",
+      "customTitle": "Pridať vlastný server",
+      "description": "Spravujte externé MCP servery, ktoré môžu pridať nástroje do chatu. Tokeny sa ukladajú pre každého používateľa zvlášť.",
+      "detected": "Rozpoznané: {authType}",
+      "disable": "Vypnúť",
+      "disabled": "Pripojené · vypnuté",
+      "disconnect": "Odpojiť",
+      "docsLink": "Dokumentácia",
+      "emptyDescription": "Overené právne MCP konektory sa tu zobrazia po zapnutí pre váš pracovný priestor.",
+      "emptyTitle": "Zatiaľ žiadne MCP konektory",
+      "enable": "Zapnúť",
+      "errorDescription": "Konektor sa nepodarilo upraviť.",
+      "errorTitle": "Pripojenie MCP zlyhalo",
+      "namePlaceholder": "Zobrazovaný názov",
+      "needsReauth": "Vyžaduje opätovné pripojenie",
+      "notConnected": "Nepripojené",
+      "off": "Vypnuté",
+      "on": "Zapnuté",
+      "otherTitle": "Ostatné konektory",
+      "probe": "Overiť",
+      "recommendedBadge": "Odporúčané",
+      "recommendedFor": "Odporúčané pre {jurisdictions}",
+      "recommendedTitle": "Odporúčané pre vaše jurisdikcie",
+      "reconnect": "Pripojiť znova",
+      "saveToken": "Uložiť token",
+      "tokenHelp": "Ako získať token",
+      "tokenLabel": "Bearer token",
+      "tokenPlaceholder": "Vložte token",
+      "urlLabel": "URL MCP servera",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Používať v chate"
+    },
     "sections": {
+      "agents": {
+        "description": "Konfigurovateľní asistenti pre opakovanú prácu",
+        "title": "Agenti"
+      },
       "caseLaw": {
         "description": "Rozhodnutia súdov a databáza judikatúry",
         "title": "Judikatúra"
@@ -1064,12 +1133,20 @@
         "title": "Vzorové ustanovenia"
       },
       "connectors": {
-        "description": "Pripojenie k externým systémom",
-        "title": "Konektory"
+        "description": "Pripojte Stellu k overeným externým nástrojovým serverom",
+        "title": "MCP"
+      },
+      "mcp": {
+        "description": "Pripojte Stellu k overeným externým nástrojovým serverom",
+        "title": "MCP"
+      },
+      "prompts": {
+        "description": "Opakovane použiteľné inštrukcie dostupné cez / v chate",
+        "title": "Prompty"
       },
       "skills": {
-        "description": "Vlastné AI zručnosti",
-        "title": "Zručnosti"
+        "description": "Špecializované AI schopnosti pre konkrétne pracovné postupy",
+        "title": "Skills"
       },
       "templates": {
         "description": "Šablóny dokumentov so zástupnými znakmi",
@@ -1077,39 +1154,39 @@
       }
     },
     "skills": {
-      "addShortcut": "Pridať zručnosť",
-      "defaultBadge": "Predvolená",
-      "deleteConfirmDescription": "Táto zručnosť bude natrvalo odstránená.",
-      "deleteConfirmTitle": "Zmazať zručnosť?",
-      "deleteShortcut": "Zmazať zručnosť",
-      "editShortcut": "Upraviť zručnosť",
-      "emptyDescription": "Vytvárajte opakovane použiteľné prompty pre prácu, ktorú váš tím opakuje, od zhrnutí po pokyny pre prvé návrhy.",
-      "emptyState": "Žiadne zručnosti. Pridajte prvú.",
-      "emptyTitle": "Vytvorte prvú zručnosť",
-      "emptyVideoLabel": "Prehľad zručností",
+      "addShortcut": "Pridať prompt",
+      "defaultBadge": "Default",
+      "deleteConfirmDescription": "Tento prompt bude natrvalo odstránený.",
+      "deleteConfirmTitle": "Vymazať prompt?",
+      "deleteShortcut": "Vymazať prompt",
+      "editShortcut": "Upraviť prompt",
+      "emptyDescription": "Create reusable prompts for the work your team repeats, from summaries to first-pass drafting instructions.",
+      "emptyState": "Žiadne prompty. Pridajte prvý.",
+      "emptyTitle": "Vytvorte prvý prompt",
+      "emptyVideoLabel": "Prehľad promptov",
       "errors": {
-        "commandConflict": "Zručnosť s týmto / názvom už existuje",
-        "commandInvalid": "Používajte iba malé písmená, číslice, pomlčky a podčiarkovníky",
-        "commandReserved": "\"/{command}\" je rezervovaná zručnosť"
+        "commandConflict": "Prompt s týmto / názvom už existuje",
+        "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores",
+        "commandReserved": "\"/{command}\" je rezervovaný prompt"
       },
       "form": {
-        "command": "Zručnosť",
-        "commandHint": "Názov / zručnosti: iba malé písmená, číslice, pomlčky a podčiarkovníky",
-        "commandPlaceholder": "napr. zhrnúť",
+        "command": "Skratka promptu",
+        "commandHint": "Názov / promptu: iba malé písmená, číslice, pomlčky a podčiarkovníky",
+        "commandPlaceholder": "e.g. summarize",
         "commandPrefix": "/",
-        "description": "Popis",
-        "descriptionPlaceholder": "Stručný popis zobrazený vo výbere",
-        "name": "Názov",
-        "namePlaceholder": "napr. Zhrnúť dokument",
-        "prompt": "Výzva",
-        "promptPlaceholder": "Text vložený do kompozéra chatu pri použití tejto zručnosti",
-        "scope": "Viditeľnosť",
-        "scopePrivate": "Len ja",
-        "scopeTeam": "Všetci v organizácii"
+        "description": "Description",
+        "descriptionPlaceholder": "Short description shown in the picker",
+        "name": "Name",
+        "namePlaceholder": "e.g. Summarise document",
+        "prompt": "Prompt",
+        "promptPlaceholder": "Text vložený do editora chatu pri použití tohto promptu",
+        "scope": "Visibility",
+        "scopePrivate": "Only me",
+        "scopeTeam": "Everyone in the organisation"
       },
-      "privateSection": "Moje skratky",
-      "shadowed": "Prekryté tímovou skratkou",
-      "teamSection": "Tímové skratky"
+      "privateSection": "Vaše prompty",
+      "shadowed": "Prekryté tímovým promptom",
+      "teamSection": "Tímové prompty"
     }
   },
   "navigation": {

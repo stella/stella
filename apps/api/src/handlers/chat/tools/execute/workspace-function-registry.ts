@@ -73,11 +73,13 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
   [listMatterPropertiesContract.name]: createToolFunction(
     listMatterPropertiesContract,
     async function* (input) {
-      const scopedWorkspaceIds = yield* refRegistry
-        .resolveMatterRefs(input.matterRefs)
-        .andThen((workspaceIds) =>
-          ensureAllowedWorkspaceIds({ allowedWorkspaceIds, workspaceIds }),
-        );
+      const workspaceIds = yield* refRegistry.resolveMatterRefs(
+        input.matterRefs,
+      );
+      const scopedWorkspaceIds = yield* ensureAllowedWorkspaceIds({
+        allowedWorkspaceIds,
+        workspaceIds,
+      });
       const offset = input.offset ?? 0;
 
       const properties = yield* await safeDb((tx) =>
@@ -119,11 +121,13 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
   [getMatterPropertiesContract.name]: createToolFunction(
     getMatterPropertiesContract,
     async function* (input) {
-      const scopedWorkspaceIds = yield* refRegistry
-        .resolveMatterRefs(input.matterRefs)
-        .andThen((workspaceIds) =>
-          ensureAllowedWorkspaceIds({ allowedWorkspaceIds, workspaceIds }),
-        );
+      const workspaceIds = yield* refRegistry.resolveMatterRefs(
+        input.matterRefs,
+      );
+      const scopedWorkspaceIds = yield* ensureAllowedWorkspaceIds({
+        allowedWorkspaceIds,
+        workspaceIds,
+      });
       const propertyIds = yield* refRegistry.resolvePropertyRefs(
         input.propertyRefs,
       );
@@ -189,11 +193,13 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
   [listMatterEntitiesContract.name]: createToolFunction(
     listMatterEntitiesContract,
     async function* (input) {
-      const scopedWorkspaceIds = yield* refRegistry
-        .resolveMatterRefs(input.matterRefs)
-        .andThen((workspaceIds) =>
-          ensureAllowedWorkspaceIds({ allowedWorkspaceIds, workspaceIds }),
-        );
+      const workspaceIds = yield* refRegistry.resolveMatterRefs(
+        input.matterRefs,
+      );
+      const scopedWorkspaceIds = yield* ensureAllowedWorkspaceIds({
+        allowedWorkspaceIds,
+        workspaceIds,
+      });
       const offset = input.offset ?? 0;
       const parentId = yield* refRegistry.resolveParentRef(input.parentRef);
 
@@ -276,11 +282,13 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
   [getMatterEntitiesContract.name]: createToolFunction(
     getMatterEntitiesContract,
     async function* (input) {
-      const scopedWorkspaceIds = yield* refRegistry
-        .resolveMatterRefs(input.matterRefs)
-        .andThen((workspaceIds) =>
-          ensureAllowedWorkspaceIds({ allowedWorkspaceIds, workspaceIds }),
-        );
+      const workspaceIds = yield* refRegistry.resolveMatterRefs(
+        input.matterRefs,
+      );
+      const scopedWorkspaceIds = yield* ensureAllowedWorkspaceIds({
+        allowedWorkspaceIds,
+        workspaceIds,
+      });
       const entityIds = yield* refRegistry.resolveEntityRefs(input.entityRefs);
 
       const entities = yield* await safeDb((tx) =>
@@ -371,11 +379,13 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
   [getMatterEntityContentsContract.name]: createToolFunction(
     getMatterEntityContentsContract,
     async function* (input) {
-      const scopedWorkspaceIds = yield* refRegistry
-        .resolveMatterRefs(input.matterRefs)
-        .andThen((workspaceIds) =>
-          ensureAllowedWorkspaceIds({ allowedWorkspaceIds, workspaceIds }),
-        );
+      const workspaceIds = yield* refRegistry.resolveMatterRefs(
+        input.matterRefs,
+      );
+      const scopedWorkspaceIds = yield* ensureAllowedWorkspaceIds({
+        allowedWorkspaceIds,
+        workspaceIds,
+      });
       const entityIds = yield* refRegistry.resolveEntityRefs(input.entityRefs);
 
       const contentRows = yield* await safeDb((tx) =>

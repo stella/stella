@@ -312,10 +312,14 @@
     },
     "approval": {
       "allow": "Erlauben",
-      "alwaysAllow": "Immer in diesem Thread erlauben",
+      "allowInConversation": "In dieser Unterhaltung erlauben",
+      "allowOnce": "Einmal erlauben",
+      "alwaysAllow": "Immer erlauben",
       "approved": "Genehmigt",
       "denied": "Abgelehnt",
-      "deny": "Ablehnen"
+      "deny": "Ablehnen",
+      "externalMcpDescription": "Only the information needed for this tool call will be sent.",
+      "externalMcpQuestion": "Can Stella send this request to {provider}?"
     },
     "askUser": {
       "custom": "Eigene Antwort",
@@ -339,6 +343,8 @@
     "editableFilePlaceholder": "Chat über {fileName} oder bearbeiten",
     "editableFilePlaceholderAction": "Chatten oder bearbeiten",
     "editorLoading": "Loading editor…",
+    "externalSourcePlaceholder": "Chat über {title}",
+    "externalSourcePlaceholderAction": "Chat über",
     "extractingContent": "Inhalt wird extrahiert...",
     "filePlaceholder": "Chat über {fileName}",
     "filePlaceholderAction": "Chat über",
@@ -391,6 +397,8 @@
     "threads": "Verlauf",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
+      "ares_lookup_company": "ARES-Firmensuche",
+      "ares_search_companies": "ARES-Unternehmenssuche",
       "ask-user": "Um Klärung bitten",
       "create-document": "Dokument erstellen",
       "describe-stella-api": "Stella API prüfen",
@@ -415,6 +423,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# Zeichen} other {# Zeichen}}",
+      "exactCall": "Exakter Aufruf",
       "field": "Feld",
       "input": "Eingabe",
       "output": "Ausgabe",
@@ -1027,6 +1036,13 @@
     "unsupportedDocxEditTitle": "Editing blocked"
   },
   "inspector": {
+    "external": {
+      "confirmDescription": "Sie sind dabei, eine externe Website zu besuchen.",
+      "confirmTitle": "Externen Link öffnen?",
+      "openLink": "Link öffnen",
+      "openOriginal": "Original öffnen",
+      "unavailable": "Diese Website erlaubt keine sichere Vorschau in Stella. Wenn das Tool Dokumenttext zurückgegeben hat, erscheint er hier; andernfalls öffnen Sie das Original."
+    },
     "facet": {
       "preview": "Preview",
       "previewInFullViewToast": "Preview is the main view here. Click the minimize button to see it alongside metadata."
@@ -1054,7 +1070,60 @@
     "showPane": "Show pane"
   },
   "knowledge": {
+    "mcp": {
+      "addAndConnect": "Hinzufügen und verbinden",
+      "addServer": "Server hinzufügen",
+      "addServerCardDescription": "Fügen Sie eine Server-URL ein; Stella verbindet ihn in einem Ablauf.",
+      "addServerCardTitle": "Neuen MCP-Server hinzufügen",
+      "auth": {
+        "bearer": "Bearer-Token",
+        "none": "Keine Authentifizierung",
+        "oauth2": "OAuth 2.0"
+      },
+      "availableInChat": "Im Chat verfügbar",
+      "bearerTokenDescription": "Dieser Server verwendet ein Bearer-Token. Fügen Sie das Token des Anbieters ein, um die Verbindung abzuschließen.",
+      "builtInBadge": "Integriert",
+      "connect": "Verbinden",
+      "connected": "Verbunden",
+      "connectedToast": "MCP-Konnektor verbunden",
+      "connectedWithLastUsed": "Verbunden · zuletzt verwendet {time}",
+      "customDescription": "Fügen Sie die MCP-Server-URL ein. Stella erkennt die Verbindungsart und fährt automatisch fort.",
+      "customTitle": "Eigenen Server hinzufügen",
+      "description": "Verwalten Sie externe MCP-Server, die dem Chat Werkzeuge hinzufügen können. Tokens werden pro Benutzer gespeichert.",
+      "detected": "{authType} erkannt",
+      "disable": "Deaktivieren",
+      "disabled": "Verbunden · deaktiviert",
+      "disconnect": "Trennen",
+      "docsLink": "Dokumentation",
+      "emptyDescription": "Kuratierte juristische MCP-Konnektoren erscheinen hier, sobald sie für Ihren Arbeitsbereich aktiviert sind.",
+      "emptyTitle": "Noch keine MCP-Konnektoren",
+      "enable": "Aktivieren",
+      "errorDescription": "Der Konnektor konnte nicht aktualisiert werden.",
+      "errorTitle": "MCP-Verbindung fehlgeschlagen",
+      "namePlaceholder": "Anzeigename",
+      "needsReauth": "Erneute Verbindung erforderlich",
+      "notConnected": "Nicht verbunden",
+      "off": "Aus",
+      "on": "Ein",
+      "otherTitle": "Weitere Konnektoren",
+      "probe": "Prüfen",
+      "recommendedBadge": "Empfohlen",
+      "recommendedFor": "Empfohlen für {jurisdictions}",
+      "recommendedTitle": "Empfohlen für Ihre Jurisdiktionen",
+      "reconnect": "Erneut verbinden",
+      "saveToken": "Token speichern",
+      "tokenHelp": "Token erhalten",
+      "tokenLabel": "Bearer-Token",
+      "tokenPlaceholder": "Token einfügen",
+      "urlLabel": "MCP-Server-URL",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Im Chat verwenden"
+    },
     "sections": {
+      "agents": {
+        "description": "Konfigurierbare Assistenten für wiederkehrende Arbeit",
+        "title": "Agenten"
+      },
       "caseLaw": {
         "description": "Gerichtsentscheidungen und Rechtsprechungsdatenbank",
         "title": "Rechtsprechung"
@@ -1064,12 +1133,20 @@
         "title": "Klauseln"
       },
       "connectors": {
-        "description": "Verbindung zu externen Systemen",
-        "title": "Konnektoren"
+        "description": "Stella mit geprüften externen Tool-Servern verbinden",
+        "title": "MCP"
+      },
+      "mcp": {
+        "description": "Stella mit geprüften externen Tool-Servern verbinden",
+        "title": "MCP"
+      },
+      "prompts": {
+        "description": "Wiederverwendbare Anweisungen, die im Chat über / verfügbar sind",
+        "title": "Prompts"
       },
       "skills": {
-        "description": "Benutzerdefinierte KI-Skills",
-        "title": "Fähigkeiten"
+        "description": "Fokussierte KI-Fähigkeiten für spezialisierte Arbeitsabläufe",
+        "title": "Skills"
       },
       "templates": {
         "description": "Dokumentvorlagen mit Platzhaltern",
@@ -1077,39 +1154,39 @@
       }
     },
     "skills": {
-      "addShortcut": "Skill hinzufügen",
-      "defaultBadge": "Standard",
-      "deleteConfirmDescription": "Dieser Skill wird dauerhaft entfernt.",
-      "deleteConfirmTitle": "Skill löschen?",
-      "deleteShortcut": "Skill löschen",
-      "editShortcut": "Skill bearbeiten",
-      "emptyDescription": "Erstellen Sie wiederverwendbare Prompts für wiederkehrende Arbeit im Team, von Zusammenfassungen bis zu Anweisungen für erste Entwürfe.",
-      "emptyState": "Noch keine Skills. Fügen Sie einen hinzu.",
-      "emptyTitle": "Ersten Skill erstellen",
-      "emptyVideoLabel": "Skill-Übersicht",
+      "addShortcut": "Prompt hinzufügen",
+      "defaultBadge": "Default",
+      "deleteConfirmDescription": "Dieser Prompt wird dauerhaft entfernt.",
+      "deleteConfirmTitle": "Prompt löschen?",
+      "deleteShortcut": "Prompt löschen",
+      "editShortcut": "Prompt bearbeiten",
+      "emptyDescription": "Create reusable prompts for the work your team repeats, from summaries to first-pass drafting instructions.",
+      "emptyState": "Noch keine Prompts. Fügen Sie den ersten hinzu.",
+      "emptyTitle": "Ersten Prompt erstellen",
+      "emptyVideoLabel": "Prompts-Übersicht",
       "errors": {
-        "commandConflict": "Ein Skill mit diesem / Namen existiert bereits",
-        "commandInvalid": "Nur Kleinbuchstaben, Ziffern, Bindestriche und Unterstriche verwenden",
-        "commandReserved": "\"/{command}\" ist ein reservierter Skill"
+        "commandConflict": "Ein Prompt mit diesem / Namen existiert bereits",
+        "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores",
+        "commandReserved": "\"/{command}\" ist ein reservierter Prompt"
       },
       "form": {
-        "command": "Skill",
-        "commandHint": "Der / Skill-Name: nur Kleinbuchstaben, Ziffern, Bindestriche und Unterstriche",
-        "commandPlaceholder": "z.B. zusammenfassen",
+        "command": "Prompt-Kürzel",
+        "commandHint": "Der / Prompt-Name: nur Kleinbuchstaben, Zahlen, Bindestriche und Unterstriche",
+        "commandPlaceholder": "e.g. summarize",
         "commandPrefix": "/",
-        "description": "Beschreibung",
-        "descriptionPlaceholder": "Kurze Beschreibung im Auswahlmenü",
+        "description": "Description",
+        "descriptionPlaceholder": "Short description shown in the picker",
         "name": "Name",
-        "namePlaceholder": "z.B. Dokument zusammenfassen",
+        "namePlaceholder": "e.g. Summarise document",
         "prompt": "Prompt",
-        "promptPlaceholder": "Der Text, der beim Verwenden dieses Skills in den Chat-Composer eingefügt wird",
-        "scope": "Sichtbarkeit",
-        "scopePrivate": "Nur ich",
-        "scopeTeam": "Alle in der Organisation"
+        "promptPlaceholder": "Der Text, der bei Verwendung dieses Prompts in den Chat-Composer eingefügt wird",
+        "scope": "Visibility",
+        "scopePrivate": "Only me",
+        "scopeTeam": "Everyone in the organisation"
       },
-      "privateSection": "Meine Kürzel",
-      "shadowed": "Vom Team-Kürzel überschattet",
-      "teamSection": "Team-Kürzel"
+      "privateSection": "Ihre Prompts",
+      "shadowed": "Durch Team-Prompt verdeckt",
+      "teamSection": "Team-Prompts"
     }
   },
   "navigation": {

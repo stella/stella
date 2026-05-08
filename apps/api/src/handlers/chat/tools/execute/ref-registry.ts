@@ -427,12 +427,19 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     hydrateAssistantValueRefs,
     resolveAssistantTextRefs,
     resolveAssistantValueRefs,
-    resolveEntityRefs: (refs: string[]) =>
-      resolveRefs({
+    resolveEntityRefs: (refs: string[]) => {
+      const resolved = resolveRefs({
         kind: "entity",
         refs,
         state: entityState,
-      }).map((targets) => targets.map(({ entityId }) => entityId)),
+      });
+
+      if (Result.isError(resolved)) {
+        return Result.err(resolved.error);
+      }
+
+      return Result.ok(resolved.value.map(({ entityId }) => entityId));
+    },
     resolveContactRefs: (refs: string[]) =>
       resolveRefs({
         kind: "contact",
@@ -450,11 +457,17 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
         return Result.ok(undefined);
       }
 
-      return resolveRefs({
+      const resolved = resolveRefs({
         kind: "entity",
         refs: [ref],
         state: entityState,
-      }).map((targets) => targets.at(0)?.entityId);
+      });
+
+      if (Result.isError(resolved)) {
+        return Result.err(resolved.error);
+      }
+
+      return Result.ok(resolved.value.at(0)?.entityId);
     },
     resolvePropertyRefs: (refs: string[]) =>
       resolveRefs({

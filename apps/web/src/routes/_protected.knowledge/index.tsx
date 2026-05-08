@@ -1,7 +1,12 @@
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { LandmarkIcon, LightbulbIcon, PlugIcon } from "lucide-react";
+import {
+  BotIcon,
+  LightbulbIcon,
+  PlugZapIcon,
+  SparklesIcon,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -10,15 +15,16 @@ export const Route = createFileRoute("/_protected/knowledge/")({
 });
 
 type KnowledgeSection = {
-  key: "caseLaw" | "skills" | "connectors";
+  key: "agents" | "mcp" | "prompts" | "skills";
   icon: LucideIcon;
-  to?: "/knowledge/case" | "/knowledge/skills";
+  to?: "/knowledge/mcp" | "/knowledge/skills";
 };
 
 export const knowledgeSections: readonly KnowledgeSection[] = [
-  { key: "caseLaw", icon: LandmarkIcon },
-  { key: "skills", icon: LightbulbIcon, to: "/knowledge/skills" },
-  { key: "connectors", icon: PlugIcon },
+  { key: "prompts", icon: LightbulbIcon, to: "/knowledge/skills" },
+  { key: "skills", icon: SparklesIcon },
+  { key: "mcp", icon: PlugZapIcon, to: "/knowledge/mcp" },
+  { key: "agents", icon: BotIcon },
 ];
 
 function KnowledgeLanding() {

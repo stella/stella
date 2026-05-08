@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 afterEach(() => {
@@ -14,15 +15,16 @@ afterEach(() => {
 
 describe("openChat", () => {
   test("creates a workspace-scoped tab when workspaceId is provided", () => {
+    const threadId = toChatThreadId("thread-A");
     useInspectorStore.getState().openChat({
-      id: "thread-A",
+      id: threadId,
       workspaceId: "ws-1",
       contextMatterIds: ["ws-1"],
     });
 
     const tab = useInspectorStore
       .getState()
-      .tabs.find((t) => t.id === "thread-A");
+      .tabs.find((t) => t.id === threadId);
     expect(tab?.type).toBe("chat");
     if (tab?.type !== "chat") {
       throw new Error("expected chat tab");
@@ -32,11 +34,12 @@ describe("openChat", () => {
   });
 
   test("creates a global tab when workspaceId is omitted", () => {
-    useInspectorStore.getState().openChat({ id: "thread-B" });
+    const threadId = toChatThreadId("thread-B");
+    useInspectorStore.getState().openChat({ id: threadId });
 
     const tab = useInspectorStore
       .getState()
-      .tabs.find((t) => t.id === "thread-B");
+      .tabs.find((t) => t.id === threadId);
     expect(tab?.type).toBe("chat");
     if (tab?.type !== "chat") {
       throw new Error("expected chat tab");
@@ -46,18 +49,19 @@ describe("openChat", () => {
   });
 
   test("re-opening an existing tab updates workspaceId only when supplied", () => {
+    const threadId = toChatThreadId("thread-C");
     useInspectorStore.getState().openChat({
-      id: "thread-C",
+      id: threadId,
       workspaceId: "ws-1",
     });
     useInspectorStore.getState().openChat({
-      id: "thread-C",
+      id: threadId,
       contextMatterIds: ["ws-2"],
     });
 
     const tab = useInspectorStore
       .getState()
-      .tabs.find((t) => t.id === "thread-C");
+      .tabs.find((t) => t.id === threadId);
     if (tab?.type !== "chat") {
       throw new Error("expected chat tab");
     }

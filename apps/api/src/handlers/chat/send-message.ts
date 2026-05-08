@@ -1,8 +1,10 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
+import type { Static } from "elysia";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
+import { env } from "@/api/env";
 import {
   buildChatPromptCacheKey,
   buildChatSystemPromptParts,
@@ -10,6 +12,7 @@ import {
 } from "@/api/handlers/chat/chat-prompt";
 import type {
   IncomingActiveDecision,
+  IncomingActiveExternal,
   IncomingActiveFile,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
@@ -25,6 +28,7 @@ import {
   extractMentionWorkspaceIds,
 } from "@/api/handlers/chat/data-scope";
 import { ChatError } from "@/api/handlers/chat/errors";
+import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import {
   planAssistantFinishPersistence,
@@ -38,6 +42,10 @@ import {
 } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import {
+  buildExternalMcpSystemHint,
+  loadExternalMcpToolsForUser,
+} from "@/api/handlers/chat/tools/external-mcp-tools";
 import type {
   ChatMessage,
   ChatMessageContent,
@@ -73,6 +81,15 @@ const sendMessage = createSafeRootHandler(
   }) {
     yield* requireAIAvailable(orgAIConfig);
 
+    if (body.devModelId && !env.isDev) {
+      return yield* Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Dev model overrides are only available locally.",
+        }),
+      );
+    }
+
     const accessibleWorkspaceIds = activeWorkspaceIds;
     /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope validates against accessibleWorkspaceIds */
     const scope = yield* resolveChatScope({
@@ -102,6 +119,15 @@ const sendMessage = createSafeRootHandler(
     }
 
     const refRegistry = createChatRefRegistry();
+    const validationExternalMcpTools = messageNeedsExternalMcpValidation(
+      body.message,
+    )
+      ? await loadExternalMcpToolsForUser({
+          organizationId: session.activeOrganizationId,
+          safeDb,
+          userId: user.id,
+        })
+      : null;
 
     // Tool input schemas don't depend on `accessibleWorkspaceIds`
     // (scope is checked at execute time, not in the schema), so we
@@ -127,17 +153,21 @@ const sendMessage = createSafeRootHandler(
       }),
       workspaceId,
       hasActiveFileChat: true,
+      externalTools: validationExternalMcpTools?.tools,
     });
 
-    const validatedMessage = yield* Result.await(
-      validateMessage({
-        message: body.message,
-        safeDb,
-        threadId: body.threadId,
-        tools: validationTools,
-        userId: user.id,
-      }),
-    );
+    const validatedMessageResult = await validateMessage({
+      message: body.message,
+      safeDb,
+      threadId: body.threadId,
+      tools: validationTools,
+      userId: user.id,
+    });
+    await validationExternalMcpTools?.close();
+    if (Result.isError(validatedMessageResult)) {
+      return Result.err(validatedMessageResult.error);
+    }
+    const validatedMessage = validatedMessageResult.value;
 
     const thread = yield* Result.await(
       loadThread({
@@ -182,26 +212,6 @@ const sendMessage = createSafeRootHandler(
       );
     }
 
-    // Streaming tools mirror the surface the user is on: only the
-    // file-overlay client knows how to satisfy
-    // apply-active-docx-edits (it queues into the review store and
-    // sends the output back via addToolOutput). On the standalone
-    // / global chat surface there's no client executor, so we
-    // omit it — otherwise the model can call it and the request
-    // hangs forever waiting for a response.
-    const chatTools = getChatTools({
-      organizationId: session.activeOrganizationId,
-      refRegistry,
-      safeDb,
-      scopedDb,
-      userId: user.id,
-      toolWorkspaceIds: resolveToolWorkspaceIds({
-        pinnedIds: effectiveContextMatterIds,
-        accessibleWorkspaceIds,
-      }),
-      workspaceId,
-      hasActiveFileChat: body.activeFile !== undefined,
-    });
     const thirdPartyBoundary = createChatThirdPartyBoundary({
       anonymized: body.anonymized ?? false,
       anonymizationScopeId: workspaceId ?? body.threadId,
@@ -233,6 +243,7 @@ const sendMessage = createSafeRootHandler(
     const chatContext = yield* Result.await(
       prepareChatContext({
         activeDecision: body.activeDecision,
+        activeExternal: body.activeExternal,
         activeFile: body.activeFile,
         contextMatterIds: effectiveContextMatterIds,
         messageWindow,
@@ -280,95 +291,159 @@ const sendMessage = createSafeRootHandler(
       }),
     );
 
+    const externalMcpTools = await loadExternalMcpToolsForUser({
+      organizationId: session.activeOrganizationId,
+      safeDb,
+      userId: user.id,
+    });
+    // Streaming tools mirror the surface the user is on: only the
+    // file-overlay client knows how to satisfy
+    // apply-active-docx-edits (it queues into the review store and
+    // sends the output back via addToolOutput). On the standalone
+    // / global chat surface there's no client executor, so we
+    // omit it — otherwise the model can call it and the request
+    // hangs forever waiting for a response.
+    const chatTools = getChatTools({
+      organizationId: session.activeOrganizationId,
+      refRegistry,
+      safeDb,
+      scopedDb,
+      userId: user.id,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: effectiveContextMatterIds,
+        accessibleWorkspaceIds,
+      }),
+      workspaceId,
+      hasActiveFileChat: body.activeFile !== undefined,
+      externalTools: externalMcpTools.tools,
+    });
+
+    const externalMcpSystemHint = buildExternalMcpSystemHint(
+      externalMcpTools.connectors,
+    );
+    const system = externalMcpSystemHint
+      ? `${chatContext.system}\n\n${externalMcpSystemHint}`
+      : chatContext.system;
+    let externalMcpToolsClosed = false;
+    const closeExternalMcpTools = async () => {
+      if (externalMcpToolsClosed) {
+        return;
+      }
+
+      externalMcpToolsClosed = true;
+      await externalMcpTools.close();
+    };
+
     const response = yield* Result.await(
       Result.tryPromise({
-        try: async () =>
-          await streamChat({
-            abortSignal: request.signal,
-            messages: chatContext.hydratedMessages,
-            onFinish: async ({ isAborted, responseMessage }) => {
-              const resolvedMessages = resolveAssistantMessageRefs({
-                messages: [responseMessage],
-                refRegistry,
-              });
-              const resolvedResponseMessage = resolvedMessages.at(0);
-              if (!resolvedResponseMessage) {
-                panic("Missing chat response message");
-              }
+        try: async () => {
+          try {
+            const chatResponse = await streamChat({
+              abortSignal: request.signal,
+              messages: chatContext.hydratedMessages,
+              onFinish: async ({ isAborted, responseMessage }) => {
+                try {
+                  const resolvedMessages = resolveAssistantMessageRefs({
+                    messages: [responseMessage],
+                    refRegistry,
+                  });
+                  const resolvedResponseMessage = resolvedMessages.at(0);
+                  if (!resolvedResponseMessage) {
+                    panic("Missing chat response message");
+                  }
 
-              const persistencePlan = planAssistantFinishPersistence({
-                existingIds: latestMessagePlan.existingIds,
-                isAborted,
-                message: resolvedResponseMessage,
-              });
+                  const persistencePlan = planAssistantFinishPersistence({
+                    existingIds: latestMessagePlan.existingIds,
+                    isAborted,
+                    message: resolvedResponseMessage,
+                  });
 
-              // Skip scope expansion when the assistant message
-              // will not be persisted (aborted stream, planner
-              // returned `none`). Widening `data_workspace_ids`
-              // for transient parts that never land in
-              // `chat_messages` could make the thread unreadable
-              // after future access changes even though no
-              // corresponding content was saved.
-              if (persistencePlan.type === "none") {
-                return;
-              }
+                  // Skip scope expansion when the assistant message
+                  // will not be persisted (aborted stream, planner
+                  // returned `none`). Widening `data_workspace_ids`
+                  // for transient parts that never land in
+                  // `chat_messages` could make the thread unreadable
+                  // after future access changes even though no
+                  // corresponding content was saved.
+                  if (persistencePlan.type === "none") {
+                    return;
+                  }
 
-              // Widen the thread's data scope to cover any
-              // workspace-scoped content the assistant just
-              // emitted (source-document parts from search and
-              // workspace tools). Run before persistMessage so
-              // the recorded scope already includes the
-              // workspaces when the message lands in
-              // `chat_messages`.
-              //
-              // If expansion fails (transient DB error, etc.),
-              // SKIP the message persist. Storing workspace-
-              // scoped content in `chat_messages` while the
-              // owning thread's `data_workspace_ids` stays stale
-              // would leave the new content readable after the
-              // user loses access to those workspaces — the same
-              // class of leak this whole change exists to close.
-              //
-              // Intersect with `accessibleWorkspaceIds` so a
-              // hallucinated or stale UUID from the model never
-              // lands in `data_workspace_ids`. An out-of-set ID
-              // would fail the RLS subset check on every later
-              // persist, silently breaking the thread.
-              const assistantWorkspaceIds = extractAssistantWorkspaceIds(
-                resolvedResponseMessage.parts,
-              ).filter((id) => accessibleSet.has(id));
-              const expandResult = await expandThreadDataScope({
-                currentDataWorkspaceIds: dataScopeAfterUserMessage,
-                newWorkspaceIds: assistantWorkspaceIds,
-                safeDb,
-                threadId: body.threadId,
-              });
-              if (Result.isError(expandResult)) {
-                captureError(expandResult.error, { threadId: body.threadId });
-                return;
-              }
+                  // Widen the thread's data scope to cover any
+                  // workspace-scoped content the assistant just
+                  // emitted (source-document parts from search and
+                  // workspace tools). Run before persistMessage so
+                  // the recorded scope already includes the
+                  // workspaces when the message lands in
+                  // `chat_messages`.
+                  //
+                  // If expansion fails (transient DB error, etc.),
+                  // SKIP the message persist. Storing workspace-
+                  // scoped content in `chat_messages` while the
+                  // owning thread's `data_workspace_ids` stays stale
+                  // would leave the new content readable after the
+                  // user loses access to those workspaces — the same
+                  // class of leak this whole change exists to close.
+                  //
+                  // Intersect with `accessibleWorkspaceIds` so a
+                  // hallucinated or stale UUID from the model never
+                  // lands in `data_workspace_ids`. An out-of-set ID
+                  // would fail the RLS subset check on every later
+                  // persist, silently breaking the thread.
+                  const assistantWorkspaceIds = extractAssistantWorkspaceIds(
+                    resolvedResponseMessage.parts,
+                  ).filter((id) => accessibleSet.has(id));
+                  const expandResult = await expandThreadDataScope({
+                    currentDataWorkspaceIds: dataScopeAfterUserMessage,
+                    newWorkspaceIds: assistantWorkspaceIds,
+                    safeDb,
+                    threadId: body.threadId,
+                  });
+                  if (Result.isError(expandResult)) {
+                    captureError(expandResult.error, {
+                      threadId: body.threadId,
+                    });
+                    return;
+                  }
 
-              const persistResult = await persistMessage({
-                persistencePlan,
-                safeDb,
-                threadId: body.threadId,
-                userId: user.id,
-                workspaceId,
-              });
+                  const persistResult = await persistMessage({
+                    persistencePlan,
+                    safeDb,
+                    threadId: body.threadId,
+                    userId: user.id,
+                    workspaceId,
+                  });
 
-              if (Result.isError(persistResult)) {
-                captureError(persistResult.error, { threadId: body.threadId });
-              }
-            },
-            orgAIConfig,
-            promptCacheKey: chatContext.promptCacheKey,
-            resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
-            resolveAssistantValueRefs: refRegistry.resolveAssistantValueRefs,
-            thirdPartyBoundary,
-            threadId: body.threadId,
-            tools: chatTools,
-            system: chatContext.system,
-          }),
+                  if (Result.isError(persistResult)) {
+                    captureError(persistResult.error, {
+                      threadId: body.threadId,
+                    });
+                  }
+                } finally {
+                  await closeExternalMcpTools();
+                }
+              },
+              orgAIConfig,
+              devModelId: body.devModelId,
+              promptCacheKey: chatContext.promptCacheKey,
+              resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
+              resolveAssistantValueRefs: refRegistry.resolveAssistantValueRefs,
+              thirdPartyBoundary,
+              threadId: body.threadId,
+              tools: chatTools,
+              system,
+            });
+
+            if (!isChatStreamResponse(chatResponse)) {
+              await closeExternalMcpTools();
+            }
+
+            return chatResponse;
+          } catch (error) {
+            await closeExternalMcpTools();
+            throw error;
+          }
+        },
         catch: (cause) =>
           new HandlerError({
             status: 500,
@@ -383,6 +458,22 @@ const sendMessage = createSafeRootHandler(
 );
 
 export default sendMessage;
+
+const isChatStreamResponse = (response: Response): boolean => {
+  const contentType = response.headers.get("content-type");
+  return contentType !== null && contentType.includes("text/event-stream");
+};
+
+const messageNeedsExternalMcpValidation = (
+  message: Static<typeof sendMessageBodySchema>["message"],
+): boolean => {
+  if (message.role !== "assistant") {
+    return false;
+  }
+
+  const parts: unknown[] = Array.isArray(message.parts) ? message.parts : [];
+  return parts.some(isExternalMcpToolPart);
+};
 
 type ThreadRecord = {
   id: SafeId<"chatThread">;
@@ -603,6 +694,7 @@ const uploadMessageFilesWithRollback = async ({
 
 type PrepareChatContextProps = {
   activeDecision: IncomingActiveDecision | undefined;
+  activeExternal: IncomingActiveExternal | undefined;
   activeFile: IncomingActiveFile | undefined;
   contextMatterIds: SafeId<"workspace">[];
   messageWindow: ChatMessage[];
@@ -626,6 +718,7 @@ type PrepareChatContextResult = Result<
 
 const prepareChatContext = async ({
   activeDecision,
+  activeExternal,
   activeFile,
   contextMatterIds,
   messageWindow,
@@ -651,6 +744,7 @@ const prepareChatContext = async ({
     const [systemResult, hydratedMessagesResult] = await Promise.all([
       buildChatSystemPromptParts({
         activeDecision,
+        activeExternal,
         activeFile,
         contextMatterIds,
         practiceJurisdictions,

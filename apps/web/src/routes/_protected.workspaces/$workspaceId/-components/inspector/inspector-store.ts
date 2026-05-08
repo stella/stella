@@ -2,6 +2,11 @@ import { v7 as uuidv7 } from "uuid";
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
+import type { ChatThreadId } from "@/lib/chat-thread-ref";
+import { createChatThreadId } from "@/lib/chat-thread-ref";
+
+export type ExternalTabId = `external:${string}`;
+
 export type PdfTab = {
   type: "pdf";
   id: string;
@@ -59,7 +64,7 @@ export type TaskTab = {
 
 export type ChatTab = {
   type: "chat";
-  id: string;
+  id: ChatThreadId;
   label: string;
   /**
    * Owning workspace for the underlying chat thread. `undefined`
@@ -90,7 +95,20 @@ export type ChatTab = {
   activeDecisionId?: string | undefined;
 };
 
-export type InspectorTab = PdfTab | TaskTab | ChatTab;
+export type ExternalTab = {
+  type: "external";
+  id: ExternalTabId;
+  chatThreadId: ChatThreadId;
+  label: string;
+  url: string;
+  connectorSlug?: string | undefined;
+  provider?: string | undefined;
+  snippet?: string | undefined;
+  sourceToolName?: string | undefined;
+  text?: string | undefined;
+};
+
+export type InspectorTab = PdfTab | TaskTab | ChatTab | ExternalTab;
 
 type State = {
   tabs: InspectorTab[];
@@ -138,6 +156,15 @@ type Actions = {
    */
   openPdfForEntity: (tab: Omit<PdfTab, "type">) => void;
   openTask: (taskId: string, label?: string, isNew?: boolean) => void;
+  openExternal: (args: {
+    url: string;
+    connectorSlug?: string | undefined;
+    label?: string | undefined;
+    provider?: string | undefined;
+    snippet?: string | undefined;
+    sourceToolName?: string | undefined;
+    text?: string | undefined;
+  }) => void;
   /**
    * Open a chat tab. Without args, creates a new (local-only) chat
    * with a generated id. Pass `id` + optional `threadId` to restore
@@ -145,7 +172,7 @@ type Actions = {
    * matter context (typically the matter the user opened it in).
    */
   openChat: (args?: {
-    id?: string;
+    id?: ChatThreadId;
     label?: string;
     /**
      * Owning workspace for the thread. Omit for a global tab —
@@ -345,9 +372,53 @@ export const useInspectorStore = create<State & Actions>()(
         state.minimized = false;
       }),
 
+    openExternal: ({
+      connectorSlug,
+      label,
+      provider,
+      snippet,
+      sourceToolName,
+      text,
+      url,
+    }) =>
+      set((state) => {
+        const id: ExternalTabId = `external:${url}`;
+        let fallbackLabel = url;
+        try {
+          fallbackLabel = new URL(url).hostname;
+        } catch {
+          // Keep the raw URL as a last-resort tab label.
+        }
+        const existing = state.tabs.find((t) => t.id === id);
+        if (!existing) {
+          state.tabs.push({
+            type: "external",
+            id,
+            chatThreadId: createChatThreadId(),
+            label: label ?? fallbackLabel,
+            connectorSlug,
+            provider,
+            snippet,
+            sourceToolName,
+            text,
+            url,
+          });
+        } else if (existing.type === "external") {
+          existing.label = label ?? existing.label;
+          existing.connectorSlug = connectorSlug ?? existing.connectorSlug;
+          existing.provider = provider ?? existing.provider;
+          existing.snippet = snippet ?? existing.snippet;
+          existing.sourceToolName = sourceToolName ?? existing.sourceToolName;
+          existing.text = text ?? existing.text;
+        }
+        state.activeId = id;
+        state.activationSeq += 1;
+        state.minimized = false;
+      }),
+
     openChat: (args = {}) =>
       set((state) => {
-        const id = args.id ?? uuidv7();
+        const id = args.id ?? createChatThreadId();
         const existing = state.tabs.find((t) => t.id === id);
         if (!existing) {
           state.tabs.push({

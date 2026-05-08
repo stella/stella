@@ -1,8 +1,15 @@
+import { valibotSchema } from "@ai-sdk/valibot";
 import type { ToolSet } from "ai";
+import { tool } from "ai";
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import * as v from "valibot";
 
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
+import {
+  applyChatToolPolicy,
+  CHAT_TOOL_POLICY_KIND,
+} from "@/api/handlers/chat/tools/tool-policy";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
@@ -32,6 +39,20 @@ const createBoundary = () => {
 
   return createChatThirdPartyBoundary({
     anonymized: true,
+    anonymizeFields: anonymizeTextFieldsMock,
+    anonymizationScopeId: "workspace-A",
+    organizationId: toSafeId<"organization">(
+      "11111111-1111-4111-8111-111111111111",
+    ),
+    scopedDb,
+  });
+};
+
+const createRawBoundary = () => {
+  const { scopedDb } = createScopedDbMock({});
+
+  return createChatThirdPartyBoundary({
+    anonymized: false,
     anonymizeFields: anonymizeTextFieldsMock,
     anonymizationScopeId: "workspace-A",
     organizationId: toSafeId<"organization">(
@@ -195,6 +216,105 @@ describe("chat third-party anonymization boundary", () => {
       ids: ["person_456"],
       nationalId: "[CUSTOM_1]-123",
       text: "[CUSTOM_1] notes for [PERSON_1]",
+    });
+  });
+
+  test("allows approved external tools to inherit raw mode", async () => {
+    const boundary = createRawBoundary();
+    const tools = {
+      external_lookup: applyChatToolPolicy(
+        tool({
+          inputSchema: valibotSchema(v.strictObject({})),
+          execute: async () => ({ text: "Secret notes for Jan Novák" }),
+        }),
+        CHAT_TOOL_POLICY_KIND.external,
+      ),
+    };
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      // SAFETY: the helper only reads and wraps execute() in this unit test.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      tools: tools as unknown as ToolSet,
+    });
+    // SAFETY: the test fixture above defines this execute signature.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    const executable = prepared["external_lookup"] as
+      | { execute?: (() => Promise<unknown>) | undefined }
+      | undefined;
+
+    if (!executable?.execute) {
+      throw new Error("Expected external tool execute function");
+    }
+
+    const output = await executable.execute();
+    expect(output).toEqual({
+      text: "Secret notes for Jan Novák",
+    });
+  });
+
+  test("allows official public lookup tools without anonymized mode", async () => {
+    const boundary = createRawBoundary();
+    const tools = {
+      official_lookup: applyChatToolPolicy(
+        tool({
+          inputSchema: valibotSchema(v.strictObject({ ico: v.string() })),
+          execute: async ({ ico }) => ({ ico, name: "Alza.cz a.s." }),
+        }),
+        CHAT_TOOL_POLICY_KIND.publicOfficial,
+      ),
+    };
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      // SAFETY: the helper only reads and wraps execute() in this unit test.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      tools: tools as unknown as ToolSet,
+    });
+    // SAFETY: the test fixture above defines this execute signature.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    const executable = prepared["official_lookup"] as
+      | { execute?: ((input: { ico: string }) => Promise<unknown>) | undefined }
+      | undefined;
+
+    expect(await executable?.execute?.({ ico: "27082440" })).toEqual({
+      ico: "27082440",
+      name: "Alza.cz a.s.",
+    });
+  });
+
+  test("allows unofficial public lookup tools to inherit raw mode", async () => {
+    const boundary = createRawBoundary();
+    const tools = {
+      unofficial_lookup: applyChatToolPolicy(
+        tool({
+          inputSchema: valibotSchema(v.strictObject({ query: v.string() })),
+          execute: async ({ query }) => ({ query }),
+        }),
+        CHAT_TOOL_POLICY_KIND.publicUnofficial,
+      ),
+    };
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      // SAFETY: the helper only reads and wraps execute() in this unit test.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      tools: tools as unknown as ToolSet,
+    });
+    // SAFETY: the test fixture above defines this execute signature.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    const executable = prepared["unofficial_lookup"] as
+      | {
+          execute?:
+            | ((input: { query: string }) => Promise<unknown>)
+            | undefined;
+        }
+      | undefined;
+
+    if (!executable?.execute) {
+      throw new Error("Expected unofficial lookup execute function");
+    }
+
+    const output = await executable.execute({ query: "Jan Novák" });
+    expect(output).toEqual({
+      query: "Jan Novák",
     });
   });
 });

@@ -44,6 +44,7 @@ import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-a
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StatusMessage } from "@/components/route-components";
 import Tooltip from "@/components/tooltip";
+import { chatThreadIdFromFileFieldId } from "@/lib/chat-thread-ref";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import {
   useDocxFitZoom,
@@ -915,7 +916,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             entityId,
             fileName: previewFile.fileName,
           }}
-          chatThreadId={fieldId}
+          chatThreadId={chatThreadIdFromFileFieldId(fieldId)}
           docxEditable={isUnlocked}
           docxEditorRef={editorRef}
           requestDocxEditMode={requestEditMode}

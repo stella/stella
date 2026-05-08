@@ -19,6 +19,7 @@ import type {
   ApprovalToolName,
   AskUserOutput,
   PersistedChatMessage,
+  ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import { isApprovalPart } from "@/components/chat/chat-ui-tools";
 import { SourceChips } from "@/components/chat/source-chips";
@@ -274,7 +275,7 @@ const AssistantMessageActions = ({
   isGenerating: boolean;
   isLatestAssistantMessage: boolean;
   message: PersistedChatMessage;
-  onResend?: (() => void | PromiseLike<void>) | undefined;
+  onResend?: ((messageId?: string) => void | PromiseLike<void>) | undefined;
 }) => {
   const t = useTranslations();
   const text = useMemo(() => getMessageText(message), [message]);
@@ -315,7 +316,7 @@ const AssistantMessageActions = ({
           className="text-muted-foreground h-6 px-1.5 text-xs"
           disabled={isGenerating}
           onClick={() => {
-            void onResend?.();
+            void onResend?.(message.id);
           }}
           size="xs"
           variant="ghost"
@@ -340,10 +341,18 @@ const getRetryableAssistantMessageId = (
 };
 
 type ChatThreadMessagesProps = {
+  alwaysApprovedTools: ReadonlySet<ToolApprovalGrant>;
   approvalPendingMessageId: string | null;
-  autoApprovedTools: ReadonlySet<ApprovalToolName>;
   blockedApprovalTools?: ReadonlySet<ApprovalToolName> | undefined;
-  handleAlwaysAllow: (toolName: ApprovalToolName) => void;
+  conversationApprovedTools: ReadonlySet<ToolApprovalGrant>;
+  handleAllowInConversation: (
+    id: string,
+    toolName: ApprovalToolName,
+  ) => void | PromiseLike<void>;
+  handleAlwaysAllow: (
+    id: string,
+    toolName: ApprovalToolName,
+  ) => void | PromiseLike<void>;
   handleApprove: (
     id: string,
     toolName: ApprovalToolName,
@@ -352,13 +361,14 @@ type ChatThreadMessagesProps = {
   error?: Error | undefined;
   isGenerating?: boolean | undefined;
   messages: PersistedChatMessage[];
-  onResend?: (() => void | PromiseLike<void>) | undefined;
+  onResend?: ((messageId?: string) => void | PromiseLike<void>) | undefined;
   onAskUserSubmit: (
     toolCallId: string,
     output: AskUserOutput,
   ) => void | PromiseLike<void>;
   showThinkingIndicator?: boolean | undefined;
-  showToolCalls: boolean;
+  showToolCallDetails?: boolean | undefined;
+  showToolCalls?: boolean | undefined;
   streamdownComponents: {
     a: (props: ComponentProps<"a">) => React.ReactNode;
   };
@@ -366,9 +376,11 @@ type ChatThreadMessagesProps = {
 };
 
 export const ChatThreadMessages = ({
+  alwaysApprovedTools,
   approvalPendingMessageId,
-  autoApprovedTools,
   blockedApprovalTools,
+  conversationApprovedTools,
+  handleAllowInConversation,
   handleAlwaysAllow,
   handleApprove,
   handleDeny,
@@ -378,6 +390,7 @@ export const ChatThreadMessages = ({
   onResend,
   onAskUserSubmit,
   showThinkingIndicator = false,
+  showToolCallDetails,
   showToolCalls,
   streamdownComponents,
   workspaceId,
@@ -386,6 +399,7 @@ export const ChatThreadMessages = ({
     () => getRetryableAssistantMessageId(messages),
     [messages],
   );
+  const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
 
   return (
     <>
@@ -431,9 +445,11 @@ export const ChatThreadMessages = ({
                   if (isApprovalPart(part)) {
                     return (
                       <ToolApprovalCard
-                        autoApprovedTools={autoApprovedTools}
+                        alwaysApprovedTools={alwaysApprovedTools}
                         blockedApprovalTools={blockedApprovalTools}
+                        conversationApprovedTools={conversationApprovedTools}
                         key={part.toolCallId}
+                        onAllowInConversation={handleAllowInConversation}
                         onAlwaysAllow={handleAlwaysAllow}
                         onApprove={handleApprove}
                         onDeny={handleDeny}
@@ -443,12 +459,12 @@ export const ChatThreadMessages = ({
                     );
                   }
 
-                  if (isToolUIPart(part) && showToolCalls) {
+                  if (isToolUIPart(part) && shouldShowToolCalls) {
                     return (
                       <ToolCallCard
                         key={part.toolCallId}
                         part={part}
-                        showDetails
+                        showDetails={shouldShowToolCalls}
                       />
                     );
                   }
@@ -505,7 +521,9 @@ export const ChatThreadMessages = ({
       )}
       {showThinkingIndicator &&
         isGenerating &&
-        !hasVisibleContent(messages, showToolCalls) && <ThinkingIndicator />}
+        !hasVisibleContent(messages, shouldShowToolCalls) && (
+          <ThinkingIndicator />
+        )}
     </>
   );
 };

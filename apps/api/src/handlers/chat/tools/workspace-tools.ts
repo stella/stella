@@ -404,7 +404,6 @@ export const createWorkspaceTools = ({
         "save, update, or make a new version of an already-open document. " +
         "On success, copy the `mention` field exactly when naming the " +
         "created document in a user-facing answer.",
-      needsApproval: true,
       inputSchema: valibotSchema(
         v.strictObject({
           workspaceId: wsSchema,

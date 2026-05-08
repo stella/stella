@@ -40,6 +40,11 @@ export const knowledgeKeys = {
   clauseCategories: {
     all: ["clause-categories"] as const,
   },
+  mcp: {
+    all: ["mcp"] as const,
+    connectors: () => [...knowledgeKeys.mcp.all, "connectors"] as const,
+    connections: () => [...knowledgeKeys.mcp.all, "connections"] as const,
+  },
 };
 
 // ── Template queries ────────────────────────────────
@@ -222,6 +227,34 @@ export const shortcutsOptions = () =>
     queryKey: knowledgeKeys.shortcuts.list(),
     queryFn: async ({ signal }) => {
       const response = await api.shortcuts.get({ fetch: { signal } });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// ── MCP queries ─────────────────────────────────────
+
+export const mcpConnectorsOptions = () =>
+  queryOptions({
+    queryKey: knowledgeKeys.mcp.connectors(),
+    queryFn: async ({ signal }) => {
+      const response = await api.mcp.connectors.get({ fetch: { signal } });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+export const mcpConnectionsOptions = () =>
+  queryOptions({
+    queryKey: knowledgeKeys.mcp.connections(),
+    queryFn: async ({ signal }) => {
+      const response = await api.mcp.connections.get({ fetch: { signal } });
       if (response.error) {
         throw toAPIError(response.error);
       }

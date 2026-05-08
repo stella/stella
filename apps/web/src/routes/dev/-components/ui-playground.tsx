@@ -1290,8 +1290,12 @@ function SharedChatRendererSample() {
   return (
     <div className="bg-popover/40 flex flex-col gap-4 rounded-2xl border p-4">
       <ChatThreadMessages
+        alwaysApprovedTools={new Set()}
         approvalPendingMessageId={null}
-        autoApprovedTools={new Set()}
+        conversationApprovedTools={new Set()}
+        handleAllowInConversation={() => {
+          /* no-op in playground */
+        }}
         handleAlwaysAllow={() => {
           /* no-op in playground */
         }}

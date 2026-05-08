@@ -7,7 +7,7 @@ import {
   createEmptyChatDraftDoc,
   useChatDraftStore,
 } from "@/lib/chat-draft-store";
-import { getChatThreadKey } from "@/lib/chat-thread-ref";
+import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 
 const mention: ChatMentionOption = {
   id: "entity-1",
@@ -52,13 +52,14 @@ describe("appendMentionToDraftDoc", () => {
 
 describe("useChatDraftStore", () => {
   test("keeps drafts isolated by normalized thread key", () => {
+    const threadId = toChatThreadId("thread-1");
     const globalThreadKey = getChatThreadKey({
       scope: "global",
-      threadId: "thread-1",
+      threadId,
     });
     const workspaceThreadKey = getChatThreadKey({
       scope: "workspace",
-      threadId: "thread-1",
+      threadId,
       workspaceId: "workspace-1",
     });
 

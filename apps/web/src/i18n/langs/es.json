@@ -312,10 +312,14 @@
     },
     "approval": {
       "allow": "Permitir",
+      "allowInConversation": "Permitir en esta conversación",
+      "allowOnce": "Permitir una vez",
       "alwaysAllow": "Permitir siempre",
       "approved": "Aprobado",
       "denied": "Denegado",
-      "deny": "Denegar"
+      "deny": "Denegar",
+      "externalMcpDescription": "Only the information needed for this tool call will be sent.",
+      "externalMcpQuestion": "Can Stella send this request to {provider}?"
     },
     "askUser": {
       "custom": "Escribir propia",
@@ -339,6 +343,8 @@
     "editableFilePlaceholder": "Chat sobre {fileName} o editar",
     "editableFilePlaceholderAction": "Chat o editar",
     "editorLoading": "Loading editor…",
+    "externalSourcePlaceholder": "Chat sobre {title}",
+    "externalSourcePlaceholderAction": "Chat sobre",
     "extractingContent": "Extrayendo contenido...",
     "filePlaceholder": "Chat sobre {fileName}",
     "filePlaceholderAction": "Chat sobre",
@@ -391,6 +397,8 @@
     "threads": "Historial",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
+      "ares_lookup_company": "Consulta de empresa en ARES",
+      "ares_search_companies": "Búsqueda de empresas en ARES",
       "ask-user": "Pidiendo una aclaración",
       "create-document": "Creando documento",
       "describe-stella-api": "Inspeccionando la API de Stella",
@@ -415,6 +423,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# carácter} many {# caracteres} other {# caracteres}}",
+      "exactCall": "Llamada exacta",
       "field": "Campo",
       "input": "Entrada",
       "output": "Salida",
@@ -1027,6 +1036,13 @@
     "unsupportedDocxEditTitle": "Editing blocked"
   },
   "inspector": {
+    "external": {
+      "confirmDescription": "Estás a punto de visitar un sitio web externo.",
+      "confirmTitle": "¿Abrir enlace externo?",
+      "openLink": "Abrir enlace",
+      "openOriginal": "Abrir original",
+      "unavailable": "Este sitio no permite una vista previa segura dentro de Stella. Si la herramienta devolvió el texto del documento, aparecerá aquí; si no, abra el original."
+    },
     "facet": {
       "preview": "Preview",
       "previewInFullViewToast": "Preview is the main view here. Click the minimize button to see it alongside metadata."
@@ -1054,7 +1070,60 @@
     "showPane": "Show pane"
   },
   "knowledge": {
+    "mcp": {
+      "addAndConnect": "Añadir y conectar",
+      "addServer": "Añadir servidor",
+      "addServerCardDescription": "Pegue una URL de servidor y Stella lo conectará en un solo flujo.",
+      "addServerCardTitle": "Añadir nuevo servidor MCP",
+      "auth": {
+        "bearer": "Token Bearer",
+        "none": "Sin autenticación",
+        "oauth2": "OAuth 2.0"
+      },
+      "availableInChat": "Disponible en el chat",
+      "bearerTokenDescription": "Este servidor usa un token Bearer. Pegue el token del proveedor para terminar la conexión.",
+      "builtInBadge": "Integrado",
+      "connect": "Conectar",
+      "connected": "Conectado",
+      "connectedToast": "Conector MCP conectado",
+      "connectedWithLastUsed": "Conectado · último uso {time}",
+      "customDescription": "Pegue la URL del servidor MCP. Stella detectará cómo se conecta y continuará automáticamente.",
+      "customTitle": "Añadir servidor personalizado",
+      "description": "Gestione los servidores MCP externos que pueden añadir herramientas al chat. Los tokens se guardan por usuario.",
+      "detected": "{authType} detectado",
+      "disable": "Desactivar",
+      "disabled": "Conectado · desactivado",
+      "disconnect": "Desconectar",
+      "docsLink": "Documentación",
+      "emptyDescription": "Los conectores MCP jurídicos seleccionados aparecerán aquí cuando se habiliten para su espacio de trabajo.",
+      "emptyTitle": "Aún no hay conectores MCP",
+      "enable": "Activar",
+      "errorDescription": "No se pudo actualizar el conector.",
+      "errorTitle": "Error de conexión MCP",
+      "namePlaceholder": "Nombre visible",
+      "needsReauth": "Necesita reconexión",
+      "notConnected": "No conectado",
+      "off": "Desactivado",
+      "on": "Activado",
+      "otherTitle": "Otros conectores",
+      "probe": "Comprobar",
+      "recommendedBadge": "Recomendado",
+      "recommendedFor": "Recomendado para {jurisdictions}",
+      "recommendedTitle": "Recomendado para tus jurisdicciones",
+      "reconnect": "Reconectar",
+      "saveToken": "Guardar token",
+      "tokenHelp": "Cómo obtener un token",
+      "tokenLabel": "Token Bearer",
+      "tokenPlaceholder": "Pegar token",
+      "urlLabel": "URL del servidor MCP",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Usar en el chat"
+    },
     "sections": {
+      "agents": {
+        "description": "Asistentes configurables para trabajo repetible",
+        "title": "Agentes"
+      },
       "caseLaw": {
         "description": "Resoluciones judiciales y base de jurisprudencia",
         "title": "Jurisprudencia"
@@ -1064,12 +1133,20 @@
         "title": "Cláusulas"
       },
       "connectors": {
-        "description": "Conectar con sistemas externos",
-        "title": "Conectores"
+        "description": "Conecte Stella a servidores externos de herramientas verificados",
+        "title": "MCP"
+      },
+      "mcp": {
+        "description": "Conecte Stella a servidores externos de herramientas verificados",
+        "title": "MCP"
+      },
+      "prompts": {
+        "description": "Instrucciones reutilizables disponibles con / en el chat",
+        "title": "Prompts"
       },
       "skills": {
-        "description": "Habilidades de IA personalizadas",
-        "title": "Habilidades"
+        "description": "Capacidades de IA enfocadas para flujos de trabajo especializados",
+        "title": "Skills"
       },
       "templates": {
         "description": "Plantillas de documentos con marcadores de posición",
@@ -1077,39 +1154,39 @@
       }
     },
     "skills": {
-      "addShortcut": "Añadir skill",
-      "defaultBadge": "Predeterminado",
-      "deleteConfirmDescription": "Esta skill se eliminará de forma permanente.",
-      "deleteConfirmTitle": "¿Eliminar skill?",
-      "deleteShortcut": "Eliminar skill",
-      "editShortcut": "Editar skill",
-      "emptyDescription": "Cree prompts reutilizables para el trabajo que su equipo repite, desde resúmenes hasta instrucciones para primeros borradores.",
-      "emptyState": "Aún no hay skills. Añada la primera.",
-      "emptyTitle": "Cree su primera skill",
-      "emptyVideoLabel": "Resumen de skills",
+      "addShortcut": "Añadir prompt",
+      "defaultBadge": "Default",
+      "deleteConfirmDescription": "Este prompt se eliminará permanentemente.",
+      "deleteConfirmTitle": "¿Eliminar prompt?",
+      "deleteShortcut": "Eliminar prompt",
+      "editShortcut": "Editar prompt",
+      "emptyDescription": "Create reusable prompts for the work your team repeats, from summaries to first-pass drafting instructions.",
+      "emptyState": "Aún no hay prompts. Añada el primero.",
+      "emptyTitle": "Cree su primer prompt",
+      "emptyVideoLabel": "Resumen de prompts",
       "errors": {
-        "commandConflict": "Ya existe una skill con este nombre /",
-        "commandInvalid": "Usa solo letras minúsculas, dígitos, guiones y guiones bajos",
-        "commandReserved": "\"/{command}\" es una skill reservada"
+        "commandConflict": "Ya existe un prompt con este nombre /",
+        "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores",
+        "commandReserved": "\"/{command}\" es un prompt reservado"
       },
       "form": {
-        "command": "Skill",
-        "commandHint": "Nombre de la skill /: solo minúsculas, números, guiones y guiones bajos",
-        "commandPlaceholder": "p. ej. resumir",
+        "command": "Atajo de prompt",
+        "commandHint": "El nombre / del prompt: solo minúsculas, números, guiones y guiones bajos",
+        "commandPlaceholder": "e.g. summarize",
         "commandPrefix": "/",
-        "description": "Descripción",
-        "descriptionPlaceholder": "Descripción breve en el selector",
-        "name": "Nombre",
-        "namePlaceholder": "p. ej. Resumir documento",
+        "description": "Description",
+        "descriptionPlaceholder": "Short description shown in the picker",
+        "name": "Name",
+        "namePlaceholder": "e.g. Summarise document",
         "prompt": "Prompt",
-        "promptPlaceholder": "El texto que se inserta en el compositor de chat al usar esta skill",
-        "scope": "Visibilidad",
-        "scopePrivate": "Solo yo",
-        "scopeTeam": "Todos en la organización"
+        "promptPlaceholder": "El texto que se inserta en el redactor del chat al usar este prompt",
+        "scope": "Visibility",
+        "scopePrivate": "Only me",
+        "scopeTeam": "Everyone in the organisation"
       },
-      "privateSection": "Mis atajos",
-      "shadowed": "Eclipsado por atajo de equipo",
-      "teamSection": "Atajos de equipo"
+      "privateSection": "Sus prompts",
+      "shadowed": "Oculto por el prompt del equipo",
+      "teamSection": "Prompts del equipo"
     }
   },
   "navigation": {

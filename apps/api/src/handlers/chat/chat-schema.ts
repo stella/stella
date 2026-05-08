@@ -1,4 +1,5 @@
 import { isTextUIPart, safeValidateUIMessages } from "ai";
+import type { ToolSet } from "ai";
 import { panic, Result } from "better-result";
 import type { Static } from "elysia";
 import { t } from "elysia";
@@ -14,8 +15,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
-
-import type { ChatTools } from "./tools/chat-tools";
 
 const rawMessageSchema = t.Object(
   {
@@ -64,6 +63,16 @@ export const activeDecisionSchema = t.Object({
   decisionId: tSafeId("caseLawDecision"),
 });
 
+export const activeExternalSchema = t.Object({
+  connectorSlug: t.Optional(t.String()),
+  provider: t.Optional(t.String()),
+  snippet: t.Optional(t.String()),
+  sourceToolName: t.Optional(t.String()),
+  text: t.Optional(t.String()),
+  title: t.String(),
+  url: t.String(),
+});
+
 export const sendMessageBodySchema = t.Object({
   threadId: tSafeId("chatThread"),
   workspaceId: t.Optional(tSafeId("workspace")),
@@ -81,18 +90,27 @@ export const sendMessageBodySchema = t.Object({
   userContext: t.Optional(userContextSchema),
   activeFile: t.Optional(activeFileSchema),
   activeDecision: t.Optional(activeDecisionSchema),
+  activeExternal: t.Optional(activeExternalSchema),
+  devModelId: t.Optional(
+    t.String({
+      minLength: 1,
+      maxLength: 160,
+      pattern: "^[A-Za-z0-9._:/-]+$",
+    }),
+  ),
 });
 
 type RawIncomingMessage = Static<typeof rawMessageSchema>;
 export type IncomingUserContext = Static<typeof userContextSchema>;
 export type IncomingActiveFile = Static<typeof activeFileSchema>;
 export type IncomingActiveDecision = Static<typeof activeDecisionSchema>;
+export type IncomingActiveExternal = Static<typeof activeExternalSchema>;
 
 type ValidateMessageInput = {
   message: RawIncomingMessage;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
-  tools: Partial<ChatTools>;
+  tools: ToolSet;
   userId: SafeId<"user">;
 };
 

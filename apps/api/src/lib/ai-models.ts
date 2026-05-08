@@ -610,6 +610,27 @@ export const getModelInfoForRole = (
   };
 };
 
+export const getModelInfoById = (
+  modelId: string,
+  orgConfig?: OrgAIConfig | null,
+): ResolvedModelInfo => {
+  if (orgConfig) {
+    const providerConfig = getPrimaryOrgProvider(orgConfig);
+    return {
+      keySource: "byok",
+      provider: providerConfig.provider,
+      modelId,
+      region: providerConfig.region,
+    };
+  }
+
+  return {
+    keySource: "instance",
+    provider: getActiveProvider(),
+    modelId,
+  };
+};
+
 /**
  * Get a model instance by explicit model ID.
  *

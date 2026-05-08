@@ -312,10 +312,14 @@
     },
     "approval": {
       "allow": "Leisti",
+      "allowInConversation": "Leisti šiame pokalbyje",
+      "allowOnce": "Leisti vieną kartą",
       "alwaysAllow": "Visada leisti",
       "approved": "Patvirtinta",
       "denied": "Atmesta",
-      "deny": "Atmesti"
+      "deny": "Atmesti",
+      "externalMcpDescription": "Only the information needed for this tool call will be sent.",
+      "externalMcpQuestion": "Can Stella send this request to {provider}?"
     },
     "askUser": {
       "custom": "Rašyti savo",
@@ -339,6 +343,8 @@
     "editableFilePlaceholder": "Kalbėtis apie {fileName} arba redaguoti",
     "editableFilePlaceholderAction": "Kalbėtis arba redaguoti",
     "editorLoading": "Loading editor…",
+    "externalSourcePlaceholder": "Kalbėtis apie {title}",
+    "externalSourcePlaceholderAction": "Kalbėtis apie",
     "extractingContent": "Turinio ištraukimas...",
     "filePlaceholder": "Kalbėtis apie {fileName}",
     "filePlaceholderAction": "Kalbėtis apie",
@@ -391,6 +397,8 @@
     "threads": "Istorija",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
+      "ares_lookup_company": "ARES įmonės paieška",
+      "ares_search_companies": "ARES įmonių paieška",
       "ask-user": "Prašoma patikslinimo",
       "create-document": "Kuriamas dokumentas",
       "describe-stella-api": "Tikrinama Stella API",
@@ -415,6 +423,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# simbolis} few {# simboliai} many {# simbolių} other {# simbolio}}",
+      "exactCall": "Tikslus iškvietimas",
       "field": "Laukas",
       "input": "Įvestis",
       "output": "Išvestis",
@@ -1027,6 +1036,13 @@
     "unsupportedDocxEditTitle": "Editing blocked"
   },
   "inspector": {
+    "external": {
+      "confirmDescription": "Ketinate apsilankyti išorinėje svetainėje.",
+      "confirmTitle": "Atidaryti išorinę nuorodą?",
+      "openLink": "Atidaryti nuorodą",
+      "openOriginal": "Atidaryti originalą",
+      "unavailable": "Ši svetainė neleidžia saugios peržiūros Stella viduje. Jei įrankis grąžino dokumento tekstą, jis bus rodomas čia; kitu atveju atidarykite originalą."
+    },
     "facet": {
       "preview": "Preview",
       "previewInFullViewToast": "Preview is the main view here. Click the minimize button to see it alongside metadata."
@@ -1054,7 +1070,60 @@
     "showPane": "Show pane"
   },
   "knowledge": {
+    "mcp": {
+      "addAndConnect": "Pridėti ir prijungti",
+      "addServer": "Pridėti serverį",
+      "addServerCardDescription": "Įklijuokite serverio URL, o Stella jį prijungs vienu veiksmu.",
+      "addServerCardTitle": "Pridėti naują MCP serverį",
+      "auth": {
+        "bearer": "Bearer tokenas",
+        "none": "Be autentifikavimo",
+        "oauth2": "OAuth 2.0"
+      },
+      "availableInChat": "Pasiekiama pokalbyje",
+      "bearerTokenDescription": "Šis serveris naudoja Bearer tokeną. Įklijuokite teikėjo tokeną, kad užbaigtumėte prijungimą.",
+      "builtInBadge": "Integruota",
+      "connect": "Prijungti",
+      "connected": "Prijungta",
+      "connectedToast": "MCP jungtis prijungta",
+      "connectedWithLastUsed": "Prijungta · paskutinį kartą naudota {time}",
+      "customDescription": "Įklijuokite MCP serverio URL. Stella nustatys prisijungimo būdą ir tęs automatiškai.",
+      "customTitle": "Pridėti pasirinktinį serverį",
+      "description": "Tvarkykite išorinius MCP serverius, kurie gali pridėti įrankių į pokalbį. Tokenai saugomi kiekvienam naudotojui atskirai.",
+      "detected": "Aptikta: {authType}",
+      "disable": "Išjungti",
+      "disabled": "Prijungta · išjungta",
+      "disconnect": "Atjungti",
+      "docsLink": "Dokumentacija",
+      "emptyDescription": "Atrinktos teisinės MCP jungtys bus rodomos čia, kai jos bus įjungtos jūsų darbo srityje.",
+      "emptyTitle": "MCP jungčių dar nėra",
+      "enable": "Įjungti",
+      "errorDescription": "Nepavyko atnaujinti jungties.",
+      "errorTitle": "MCP ryšys nepavyko",
+      "namePlaceholder": "Rodomas pavadinimas",
+      "needsReauth": "Reikia prisijungti iš naujo",
+      "notConnected": "Neprijungta",
+      "off": "Išjungta",
+      "on": "Įjungta",
+      "otherTitle": "Kiti konektoriai",
+      "probe": "Patikrinti",
+      "recommendedBadge": "Rekomenduojama",
+      "recommendedFor": "Rekomenduojama: {jurisdictions}",
+      "recommendedTitle": "Rekomenduojama jūsų jurisdikcijoms",
+      "reconnect": "Prisijungti iš naujo",
+      "saveToken": "Išsaugoti tokeną",
+      "tokenHelp": "Kaip gauti tokeną",
+      "tokenLabel": "Bearer tokenas",
+      "tokenPlaceholder": "Įklijuokite tokeną",
+      "urlLabel": "MCP serverio URL",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Naudoti pokalbyje"
+    },
     "sections": {
+      "agents": {
+        "description": "Konfigūruojami asistentai pasikartojančiam darbui",
+        "title": "Agentai"
+      },
       "caseLaw": {
         "description": "Teismų sprendimai iš įvairių jurisdikcijų",
         "title": "Teismų praktika"
@@ -1064,12 +1133,20 @@
         "title": "Sąlygos"
       },
       "connectors": {
-        "description": "Prisijungimas prie išorinių sistemų",
-        "title": "Jungtys"
+        "description": "Prijunkite Stella prie patikrintų išorinių įrankių serverių",
+        "title": "MCP"
+      },
+      "mcp": {
+        "description": "Prijunkite Stella prie patikrintų išorinių įrankių serverių",
+        "title": "MCP"
+      },
+      "prompts": {
+        "description": "Pakartotinai naudojamos instrukcijos, pasiekiamos pokalbyje per /",
+        "title": "Promptai"
       },
       "skills": {
-        "description": "Individualūs AI įgūdžiai",
-        "title": "Įgūdžiai"
+        "description": "Tikslinės AI galimybės specializuotiems darbo procesams",
+        "title": "Skills"
       },
       "templates": {
         "description": "Dokumentų šablonai su vietos žymėmis",
@@ -1077,39 +1154,39 @@
       }
     },
     "skills": {
-      "addShortcut": "Pridėti įgūdį",
-      "defaultBadge": "Numatytasis",
-      "deleteConfirmDescription": "Šis įgūdis bus pašalintas visam laikui.",
-      "deleteConfirmTitle": "Ištrinti įgūdį?",
-      "deleteShortcut": "Ištrinti įgūdį",
-      "editShortcut": "Redaguoti įgūdį",
-      "emptyDescription": "Kurkite pakartotinai naudojamas užklausas darbui, kurį jūsų komanda kartoja, nuo santraukų iki pirmųjų juodraščių instrukcijų.",
-      "emptyState": "Įgūdžių dar nėra. Pridėkite pirmąjį.",
-      "emptyTitle": "Sukurkite pirmąjį įgūdį",
-      "emptyVideoLabel": "Įgūdžių apžvalga",
+      "addShortcut": "Pridėti promptą",
+      "defaultBadge": "Default",
+      "deleteConfirmDescription": "Šis promptas bus pašalintas visam laikui.",
+      "deleteConfirmTitle": "Ištrinti promptą?",
+      "deleteShortcut": "Ištrinti promptą",
+      "editShortcut": "Redaguoti promptą",
+      "emptyDescription": "Create reusable prompts for the work your team repeats, from summaries to first-pass drafting instructions.",
+      "emptyState": "Promptų dar nėra. Pridėkite pirmąjį.",
+      "emptyTitle": "Sukurkite pirmąjį promptą",
+      "emptyVideoLabel": "Promptų apžvalga",
       "errors": {
-        "commandConflict": "Įgūdis su šiuo / pavadinimu jau yra",
-        "commandInvalid": "Naudokite tik mažąsias raides, skaičius, brūkšnelius ir pabraukimus",
-        "commandReserved": "\"/{command}\" yra rezervuotas įgūdis"
+        "commandConflict": "Promptas su šiuo / pavadinimu jau yra",
+        "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores",
+        "commandReserved": "\"/{command}\" yra rezervuotas promptas"
       },
       "form": {
-        "command": "Įgūdis",
-        "commandHint": "/ įgūdžio pavadinimas: tik mažosios raidės, skaičiai, brūkšneliai ir pabraukimai",
-        "commandPlaceholder": "pvz. sutraukti",
+        "command": "Prompto spartusis pavadinimas",
+        "commandHint": "/ prompto pavadinimas: tik mažosios raidės, skaičiai, brūkšneliai ir pabraukimai",
+        "commandPlaceholder": "e.g. summarize",
         "commandPrefix": "/",
-        "description": "Aprašymas",
-        "descriptionPlaceholder": "Trumpas aprašymas rinkiklyje",
-        "name": "Pavadinimas",
-        "namePlaceholder": "pvz. Dokumento santrauka",
-        "prompt": "Užklausa",
-        "promptPlaceholder": "Tekstas, įterpiamas į pokalbio lauką naudojant šį įgūdį",
-        "scope": "Matomumas",
-        "scopePrivate": "Tik aš",
-        "scopeTeam": "Visi organizacijoje"
+        "description": "Description",
+        "descriptionPlaceholder": "Short description shown in the picker",
+        "name": "Name",
+        "namePlaceholder": "e.g. Summarise document",
+        "prompt": "Prompt",
+        "promptPlaceholder": "Tekstas, įterpiamas į pokalbio redaktorių naudojant šį promptą",
+        "scope": "Visibility",
+        "scopePrivate": "Only me",
+        "scopeTeam": "Everyone in the organisation"
       },
-      "privateSection": "Mano spartieji klavišai",
-      "shadowed": "Dengia komandos spartysis klavišas",
-      "teamSection": "Komandos spartieji klavišai"
+      "privateSection": "Jūsų promptai",
+      "shadowed": "Uždengta komandos prompto",
+      "teamSection": "Komandos promptai"
     }
   },
   "navigation": {

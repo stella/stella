@@ -6,7 +6,11 @@ import {
   stepCountIs,
   streamText,
 } from "ai";
-import type { InferUIMessageChunk, UIMessageStreamOnFinishCallback } from "ai";
+import type {
+  InferUIMessageChunk,
+  ToolSet,
+  UIMessageStreamOnFinishCallback,
+} from "ai";
 import { panic, Result } from "better-result";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
@@ -21,13 +25,14 @@ import {
   prepareToolsForThirdParty,
 } from "@/api/handlers/chat/third-party-boundary";
 import { repairActiveDocxEditToolCall } from "@/api/handlers/chat/tools/active-docx-edit-tool-repair";
-import type { ChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
 import { classifyAIError } from "@/api/lib/ai-error";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import {
+  getModelById,
+  getModelInfoById,
   getModelForRole,
   getModelInfoForRole,
   getTemperatureForRole,
@@ -54,6 +59,7 @@ type StoredUserFile = {
 
 type StreamChatProps = {
   abortSignal: AbortSignal;
+  devModelId?: string | undefined;
   messages: ChatMessage[];
   onFinish: UIMessageStreamOnFinishCallback<ChatMessage>;
   orgAIConfig: OrgAIConfig | null;
@@ -63,11 +69,12 @@ type StreamChatProps = {
   system: string;
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
-  tools: Partial<ChatTools>;
+  tools: ToolSet;
 };
 
 export const streamChat = async ({
   abortSignal,
+  devModelId,
   messages,
   onFinish,
   orgAIConfig,
@@ -141,10 +148,14 @@ export const streamChat = async ({
     onFinish,
     onError: onAiError,
     execute: ({ writer }) => {
-      const modelInfo = getModelInfoForRole("chat", orgAIConfig);
+      const modelInfo = devModelId
+        ? getModelInfoById(devModelId, orgAIConfig)
+        : getModelInfoForRole("chat", orgAIConfig);
       const result = streamText({
         abortSignal,
-        model: getModelForRole("chat", orgAIConfig),
+        model: devModelId
+          ? getModelById(devModelId, orgAIConfig)
+          : getModelForRole("chat", orgAIConfig),
         temperature: getTemperatureForRole("chat"),
         system: preparedSystem.value,
         tools: modelTools,

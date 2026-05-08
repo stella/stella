@@ -114,7 +114,7 @@ export const ChatTabPanel = ({
   const getContextMatterIds = useEffectEvent(() => tab.contextMatterIds);
   const [anonymized, setAnonymized] = useState(false);
   const getAnonymized = useEffectEvent(() => anonymized);
-  const showToolCalls = useDevStore((s) => s.showToolCalls);
+  const showToolCallDetails = useDevStore((s) => s.showToolCallDetails);
   const chatContextLabel = useChatContextLabel(tab);
 
   const { openChat, setChatContext, updateLabel } = useInspectorStore(
@@ -172,14 +172,20 @@ export const ChatTabPanel = ({
     sendMessage,
     stop,
     isGenerating,
-    autoApprovedTools,
+    alwaysApprovedTools,
+    conversationApprovedTools,
     handleApprove,
+    handleAllowInConversation,
     handleDeny,
     handleAskUserSubmit,
     handleAlwaysAllow,
     streamdownComponents,
     approvalPendingMessageId,
-  } = useChatSession({ chat, workspaceId: tabWorkspaceId });
+  } = useChatSession({
+    chat,
+    conversationId: threadRef.threadId,
+    workspaceId: tabWorkspaceId,
+  });
 
   // TipTap composer for this thread — `@`-mention chips, drafts,
   // attachments come from the same provider as the right-panel
@@ -281,9 +287,11 @@ export const ChatTabPanel = ({
             />
           ) : (
             <ChatThreadMessages
+              alwaysApprovedTools={alwaysApprovedTools}
               approvalPendingMessageId={approvalPendingMessageId}
-              autoApprovedTools={autoApprovedTools}
+              conversationApprovedTools={conversationApprovedTools}
               error={error}
+              handleAllowInConversation={handleAllowInConversation}
               handleAlwaysAllow={handleAlwaysAllow}
               handleApprove={handleApprove}
               handleDeny={handleDeny}
@@ -292,7 +300,7 @@ export const ChatTabPanel = ({
               onAskUserSubmit={handleAskUserSubmit}
               onResend={resendLatestMessage}
               showThinkingIndicator
-              showToolCalls={showToolCalls}
+              showToolCallDetails={showToolCallDetails}
               streamdownComponents={streamdownComponents}
               workspaceId={tabWorkspaceId}
             />
