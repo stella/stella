@@ -28,6 +28,7 @@ import type {
 } from "../prosemirror/utils/tabCalculator";
 import { getAuthorColorIdx, AUTHOR_COLORS } from "../utils/authorColors";
 import { resolveFontFamily } from "../utils/fontResolver";
+import { DOCX_BOLD_FONT_WEIGHT } from "../utils/fontWeights";
 import { getAutomaticTextColorForBackground } from "./documentColors";
 import { isFloatingImageRun } from "./renderUtils";
 import type { RenderContext } from "./renderUtils";
@@ -44,8 +45,6 @@ export const PARAGRAPH_CLASS_NAMES = {
   image: "layout-run-image",
   lineBreak: "layout-run-linebreak",
 };
-
-const DOCX_BOLD_FONT_WEIGHT = "800";
 
 // Text wrapping around floating images is implemented via measurement-time
 // per-line leftOffset/rightOffset. renderPage.ts re-measures paragraphs with
@@ -814,7 +813,7 @@ function createTextMeasurer(
       fontParts.push("small-caps");
     }
     if (style.bold) {
-      fontParts.push("bold");
+      fontParts.push(DOCX_BOLD_FONT_WEIGHT);
     }
     fontParts.push(`${fontSizePx}px`, cssFallback);
     ctx.font = fontParts.join(" ");

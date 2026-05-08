@@ -33,8 +33,22 @@ class FakeElement {
     return child;
   }
 
-  getContext(): null {
-    return null;
+  getContext(): {
+    font: string;
+    measureText: (text: string) => { width: number };
+  } | null {
+    if (this.tagName !== "canvas") {
+      return null;
+    }
+
+    return {
+      font: "",
+      measureText(text: string) {
+        return {
+          width: text.length * 7 + (this.font.includes("800") ? 10 : 0),
+        };
+      },
+    };
   }
 }
 
@@ -146,6 +160,33 @@ describe("renderLine text styling", () => {
 });
 
 describe("renderLine tab tracking", () => {
+  test("measures preceding bold text with the rendered DOCX bold weight", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        { kind: "text", text: "AA", bold: true },
+        { kind: "tab" },
+        { kind: "text", text: "B" },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 2,
+      toChar: 1,
+      width: 55,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const tabEl = lineEl.children[1] as HTMLElement | undefined;
+
+    expect(tabEl?.style.width).toBe("24px");
+  });
+
   test("includes preceding run letter spacing when sizing tabs", () => {
     const block: ParagraphBlock = {
       kind: "paragraph",

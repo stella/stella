@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { hashParagraphBlock } from "./cache";
-import { resetCanvasContext } from "./measureContainer";
+import { buildFontString, resetCanvasContext } from "./measureContainer";
 import { getRunCharWidths, measureParagraph } from "./measureParagraph";
 
 const PT_TO_PX = 96 / 72;
@@ -241,6 +241,17 @@ describe("paragraph indentation measurement", () => {
 });
 
 describe("all-caps paragraph measurement", () => {
+  test("builds canvas font strings with the rendered DOCX bold weight", () => {
+    const font = buildFontString({
+      fontFamily: "Arial",
+      fontSize: 12,
+      bold: true,
+    });
+
+    expect(font).toContain("800");
+    expect(font).not.toContain("bold");
+  });
+
   test("measures all-caps runs using uppercase glyph widths", () => {
     withFakeTextMeasure(() => {
       const measure = measureParagraph(

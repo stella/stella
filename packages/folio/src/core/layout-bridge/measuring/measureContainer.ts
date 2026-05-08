@@ -12,6 +12,7 @@
  */
 
 import { resolveFontFamily } from "../../utils/fontResolver";
+import { DOCX_BOLD_FONT_WEIGHT } from "../../utils/fontWeights";
 
 // Constants for OOXML unit conversions
 const TWIPS_PER_INCH = 1440;
@@ -149,7 +150,7 @@ function getResolvedFallback(fontFamily: string): string {
  *
  * @example
  * buildFontString({ fontFamily: "Arial", fontSize: 12, bold: true })
- * // Returns: "bold 16px Arial, Arimo, Helvetica, sans-serif" (12pt = 16px)
+ * // Returns: "800 16px Arial, Arimo, Helvetica, sans-serif" (12pt = 16px)
  */
 export function buildFontString(style: FontStyle): string {
   const parts: string[] = [];
@@ -161,7 +162,7 @@ export function buildFontString(style: FontStyle): string {
     parts.push(style.fontVariant);
   }
   if (style.bold) {
-    parts.push("bold");
+    parts.push(DOCX_BOLD_FONT_WEIGHT);
   }
 
   // Convert points to pixels for canvas measurement
