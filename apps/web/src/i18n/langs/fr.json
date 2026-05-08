@@ -523,6 +523,7 @@
     "connectionLostDescription": "La connexion au serveur a été perdue. Nouvelle tentative automatique.",
     "convertTo": "Convertir en",
     "copied": "Copied to clipboard",
+    "copy": "Copier",
     "copyLink": "Copier le lien",
     "createdAt": "Créé le {date}",
     "currency": "Devise",

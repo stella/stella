@@ -523,6 +523,7 @@
     "connectionLostDescription": "Zaudējām savienojumu ar serveri. Automātiska atkārtota mēģināšana.",
     "convertTo": "Pārvērst par",
     "copied": "Copied to clipboard",
+    "copy": "Kopēt",
     "copyLink": "Kopēt saiti",
     "createdAt": "Izveidots {date}",
     "currency": "Valūta",

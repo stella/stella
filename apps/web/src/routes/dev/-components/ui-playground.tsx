@@ -191,7 +191,11 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
-import { ChatErrorMessage } from "@/components/chat/chat-thread-messages";
+import {
+  ChatErrorMessage,
+  ChatThreadMessages,
+} from "@/components/chat/chat-thread-messages";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { AIKeyRequiredDialog } from "@/components/require-ai-key";
 
 type ComboboxOption = {
@@ -308,7 +312,7 @@ export function UiPlayground() {
           </p>
         </header>
 
-        <Tabs defaultValue="actions">
+        <Tabs defaultValue="chat">
           <TabsList className="bg-background/96 sticky top-0 z-20 py-2 backdrop-blur">
             <TabsTab value="actions">Actions</TabsTab>
             <TabsTab value="forms">Forms</TabsTab>
@@ -1162,6 +1166,12 @@ export function UiPlayground() {
           <TabsPanel value="chat">
             <PlaygroundGrid>
               <PlaygroundSection
+                description="Production chat renderer sample. Use this to review shared assistant response controls."
+                title="Shared renderer"
+              >
+                <SharedChatRendererSample />
+              </PlaygroundSection>
+              <PlaygroundSection
                 description="Existing assistant + user bubble types from the standalone chat panel. We need to lift each into the unified file-anchored chat (Phase C)."
                 title="Chat bubbles"
               >
@@ -1221,6 +1231,88 @@ function Metric({
         <div className="text-lg leading-none font-semibold">{value}</div>
         <div className="text-muted-foreground mt-1 text-xs">{label}</div>
       </div>
+    </div>
+  );
+}
+
+const SHARED_CHAT_RENDERER_MESSAGES = [
+  {
+    id: "dev-user-copy-1",
+    parts: [
+      {
+        type: "text",
+        text: "Give me a quick first read on indemnity exposure.",
+      },
+    ],
+    role: "user",
+  },
+  {
+    id: "dev-assistant-copy-1",
+    parts: [
+      {
+        type: "text",
+        text: "The first read is medium exposure: broad carve-outs, a short survival period, and a relatively small escrow.",
+      },
+    ],
+    role: "assistant",
+  },
+  {
+    id: "dev-user-copy-2",
+    parts: [
+      {
+        type: "text",
+        text: "Now make that client-ready.",
+      },
+    ],
+    role: "user",
+  },
+  {
+    id: "dev-assistant-copy-2",
+    parts: [
+      {
+        type: "text",
+        text: [
+          "**Indemnity position.** The draft creates a medium exposure profile.",
+          "",
+          "- Tax and environmental carve-outs sit outside the main cap.",
+          "- The survival period is 24 months, shorter than the playbook standard.",
+          "- The escrow covers only 10% of the purchase price.",
+          "",
+          "Recommended next step: ask for a 36-month survival period and bring tax claims back under a negotiated sub-cap.",
+        ].join("\n"),
+      },
+    ],
+    role: "assistant",
+  },
+] satisfies PersistedChatMessage[];
+
+function SharedChatRendererSample() {
+  return (
+    <div className="bg-popover/40 flex flex-col gap-4 rounded-2xl border p-4">
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        autoApprovedTools={new Set()}
+        handleAlwaysAllow={() => {
+          /* no-op in playground */
+        }}
+        handleApprove={() => {
+          /* no-op in playground */
+        }}
+        handleDeny={() => {
+          /* no-op in playground */
+        }}
+        messages={SHARED_CHAT_RENDERER_MESSAGES}
+        onAskUserSubmit={() => {
+          /* no-op in playground */
+        }}
+        onResend={() => {
+          /* no-op in playground */
+        }}
+        showToolCalls={false}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />
     </div>
   );
 }

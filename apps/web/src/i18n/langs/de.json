@@ -523,6 +523,7 @@
     "connectionLostDescription": "Die Verbindung zum Server wurde unterbrochen. Automatische Wiederholung.",
     "convertTo": "Konvertieren zu",
     "copied": "Copied to clipboard",
+    "copy": "Kopieren",
     "copyLink": "Link kopieren",
     "createdAt": "Erstellt am {date}",
     "currency": "Währung",
