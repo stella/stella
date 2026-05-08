@@ -61,6 +61,19 @@ const fakeDocument = {
   },
 } as unknown as Document;
 
+function collectPmAnchors(element: FakeElement): FakeElement[] {
+  const ownAnchorKeys = Object.keys(element.dataset).filter((key) =>
+    key.toLowerCase().includes("pm"),
+  );
+  const anchors = ownAnchorKeys.length > 0 ? [element] : [];
+
+  for (const child of element.children) {
+    anchors.push(...collectPmAnchors(child));
+  }
+
+  return anchors;
+}
+
 const page: Page = {
   number: 1,
   margins: { top: 72, right: 72, bottom: 72, left: 72 },
@@ -123,10 +136,12 @@ describe("page font fallback", () => {
 });
 
 describe("footnote rendering", () => {
-  test("renders structured table footnote content", () => {
+  test("renders structured table footnote content without body PM anchors", () => {
     const tableBlock: TableBlock = {
       kind: "table",
       id: "fn-table",
+      pmStart: 1,
+      pmEnd: 20,
       rows: [
         {
           id: "row-1",
@@ -137,7 +152,9 @@ describe("footnote rendering", () => {
                 {
                   kind: "paragraph",
                   id: "cell-p-1",
-                  runs: [{ kind: "text", text: "Cell" }],
+                  pmStart: 2,
+                  pmEnd: 8,
+                  runs: [{ kind: "text", text: "Cell", pmStart: 3, pmEnd: 7 }],
                 },
               ],
               padding: { top: 0, right: 7, bottom: 0, left: 7 },
@@ -199,5 +216,8 @@ describe("footnote rendering", () => {
     );
 
     expect(footnoteArea.textContent).toContain("Cell");
+    expect(collectPmAnchors(footnoteArea as unknown as FakeElement)).toEqual(
+      [],
+    );
   });
 });

@@ -17,12 +17,15 @@ import type {
   ParagraphFragment,
   ParagraphBorders,
   TableBlock,
+  TableCell,
   TableMeasure,
   TableFragment,
+  TableRow,
   ImageBlock,
   ImageMeasure,
   ImageFragment,
   ImageRun,
+  Run,
   TextBoxBlock,
   TextBoxMeasure,
   TextBoxFragment,
@@ -904,83 +907,186 @@ function renderFootnoteBlock(
   context: RenderContext,
   doc: Document,
 ): HTMLElement | null {
-  if (block.kind === "paragraph" && measure.kind === "paragraph") {
+  const renderBlock = stripFootnotePmAnchors(block);
+
+  if (renderBlock.kind === "paragraph" && measure.kind === "paragraph") {
     const fragment: ParagraphFragment = {
       kind: "paragraph",
-      blockId: block.id,
+      blockId: renderBlock.id,
       x: 0,
       y,
       width: contentWidth,
       height: measure.totalHeight,
       fromLine: 0,
       toLine: measure.lines.length,
-      ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
-      ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
     };
-    const element = renderParagraphFragment(fragment, block, measure, context, {
-      document: doc,
-    });
+    const element = renderParagraphFragment(
+      fragment,
+      renderBlock,
+      measure,
+      context,
+      {
+        document: doc,
+      },
+    );
     positionFootnoteBlock(element, y, contentWidth, measure.totalHeight);
     return element;
   }
 
-  if (block.kind === "table" && measure.kind === "table") {
+  if (renderBlock.kind === "table" && measure.kind === "table") {
     const fragment: TableFragment = {
       kind: "table",
-      blockId: block.id,
+      blockId: renderBlock.id,
       x: 0,
       y,
       width: measure.totalWidth,
       height: measure.totalHeight,
       fromRow: 0,
-      toRow: block.rows.length,
-      ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
-      ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
+      toRow: renderBlock.rows.length,
     };
-    const element = renderTableFragment(fragment, block, measure, context, {
-      document: doc,
-    });
+    const element = renderTableFragment(
+      fragment,
+      renderBlock,
+      measure,
+      context,
+      {
+        document: doc,
+      },
+    );
     positionFootnoteBlock(element, y, measure.totalWidth, measure.totalHeight);
     return element;
   }
 
-  if (block.kind === "image" && measure.kind === "image") {
+  if (renderBlock.kind === "image" && measure.kind === "image") {
     const fragment: ImageFragment = {
       kind: "image",
-      blockId: block.id,
+      blockId: renderBlock.id,
       x: 0,
       y,
       width: measure.width,
       height: measure.height,
-      ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
-      ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
     };
-    const element = renderImageFragment(fragment, block, measure, context, {
-      document: doc,
-    });
+    const element = renderImageFragment(
+      fragment,
+      renderBlock,
+      measure,
+      context,
+      {
+        document: doc,
+      },
+    );
     positionFootnoteBlock(element, y, measure.width, measure.height);
     return element;
   }
 
-  if (block.kind === "textBox" && measure.kind === "textBox") {
+  if (renderBlock.kind === "textBox" && measure.kind === "textBox") {
     const fragment: TextBoxFragment = {
       kind: "textBox",
-      blockId: block.id,
+      blockId: renderBlock.id,
       x: 0,
       y,
       width: measure.width,
       height: measure.height,
-      ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
-      ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
     };
-    const element = renderTextBoxFragment(fragment, block, measure, context, {
-      document: doc,
-    });
+    const element = renderTextBoxFragment(
+      fragment,
+      renderBlock,
+      measure,
+      context,
+      {
+        document: doc,
+      },
+    );
     positionFootnoteBlock(element, y, measure.width, measure.height);
     return element;
   }
 
   return null;
+}
+
+function stripFootnotePmAnchors(block: FlowBlock): FlowBlock {
+  switch (block.kind) {
+    case "paragraph":
+      return stripFootnoteParagraphPmAnchors(block);
+    case "table": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...table } = block;
+      return {
+        ...table,
+        rows: table.rows.map(stripFootnoteTableRowPmAnchors),
+      };
+    }
+    case "image": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...image } = block;
+      return image;
+    }
+    case "textBox": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...textBox } = block;
+      return {
+        ...textBox,
+        content: textBox.content.map(stripFootnoteParagraphPmAnchors),
+      };
+    }
+    case "pageBreak":
+    case "columnBreak": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...breakBlock } = block;
+      return breakBlock;
+    }
+    case "sectionBreak":
+      return block;
+    default:
+      return block;
+  }
+}
+
+function stripFootnoteTableRowPmAnchors(row: TableRow): TableRow {
+  return {
+    ...row,
+    cells: row.cells.map(stripFootnoteTableCellPmAnchors),
+  };
+}
+
+function stripFootnoteTableCellPmAnchors(cell: TableCell): TableCell {
+  return {
+    ...cell,
+    blocks: cell.blocks.map(stripFootnotePmAnchors),
+  };
+}
+
+function stripFootnoteParagraphPmAnchors(
+  block: ParagraphBlock,
+): ParagraphBlock {
+  const { pmStart: _pmStart, pmEnd: _pmEnd, ...paragraph } = block;
+  return {
+    ...paragraph,
+    runs: paragraph.runs.map(stripFootnoteRunPmAnchors),
+  };
+}
+
+function stripFootnoteRunPmAnchors(run: Run): Run {
+  switch (run.kind) {
+    case "text": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...textRun } = run;
+      return textRun;
+    }
+    case "tab": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...tabRun } = run;
+      return tabRun;
+    }
+    case "image": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...imageRun } = run;
+      return imageRun;
+    }
+    case "lineBreak": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...lineBreakRun } = run;
+      return lineBreakRun;
+    }
+    case "field": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...fieldRun } = run;
+      return fieldRun;
+    }
+    default:
+      return run;
+  }
 }
 
 function positionFootnoteBlock(
