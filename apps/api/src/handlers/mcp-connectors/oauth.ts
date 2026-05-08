@@ -2,7 +2,9 @@ import { Result, TaggedError } from "better-result";
 import { createHash, randomBytes } from "node:crypto";
 import * as v from "valibot";
 
+import type { McpOAuthRegistrationResponse } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { redactMcpOAuthRegistrationResponse } from "@/api/handlers/mcp-connectors/oauth-registration-response";
 import {
   authorizationServerMetadataUrls,
   mcpWellKnownProtectedResourceUrls,
@@ -78,7 +80,7 @@ export type TokenResponse = v.InferOutput<typeof tokenResponseSchema>;
 export type RegisteredOAuthClient = {
   clientId: string;
   clientSecret: string | null;
-  registrationResponse: Record<string, unknown>;
+  registrationResponse: McpOAuthRegistrationResponse;
 };
 
 type McpFetchJsonInit = {
@@ -325,7 +327,7 @@ export const registerOAuthClient = async ({
   return Result.ok({
     clientId: response.value.client_id,
     clientSecret: response.value.client_secret ?? null,
-    registrationResponse: response.value,
+    registrationResponse: redactMcpOAuthRegistrationResponse(response.value),
   });
 };
 

@@ -119,7 +119,7 @@ export const loadExternalMcpToolsForUser = async ({
         staticTokenIv: mcpUserConnections.staticTokenIv,
         expiresAt: mcpUserConnections.expiresAt,
         oauthResourceUrl: mcpUserConnections.resourceUrl,
-        oauthAuthorizationServerUrl: mcpOAuthClients.authorizationServerUrl,
+        oauthAuthorizationServerUrl: mcpUserConnections.authorizationServerUrl,
         oauthClientId: mcpOAuthClients.clientId,
         oauthClientSecretEncrypted: mcpOAuthClients.clientSecretEncrypted,
         oauthClientSecretIv: mcpOAuthClients.clientSecretIv,
@@ -134,6 +134,10 @@ export const loadExternalMcpToolsForUser = async ({
         and(
           eq(mcpOAuthClients.connectorId, mcpConnectors.id),
           eq(mcpOAuthClients.organizationId, organizationId),
+          eq(
+            mcpOAuthClients.authorizationServerUrl,
+            mcpUserConnections.authorizationServerUrl,
+          ),
         ),
       )
       .where(
@@ -439,6 +443,7 @@ const resolveAuthorizationToken = async ({
   if (
     !row.refreshTokenEncrypted ||
     !row.refreshTokenIv ||
+    !row.oauthResourceUrl ||
     !row.oauthAuthorizationServerUrl ||
     !row.oauthClientId
   ) {
@@ -469,7 +474,7 @@ const resolveAuthorizationToken = async ({
     clientId: row.oauthClientId,
     clientSecret,
     refreshToken,
-    resourceUrl: row.oauthResourceUrl ?? row.url,
+    resourceUrl: row.oauthResourceUrl,
   });
 
   if (Result.isError(refreshed)) {

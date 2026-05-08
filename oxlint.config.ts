@@ -182,6 +182,7 @@ export default defineConfig({
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
     "./.oxlint-plugins/no-raw-user-id-schema.ts",
+    "./.oxlint-plugins/mcp-security.ts",
     "./.oxlint-plugins/stella-toast.ts",
   ],
 
@@ -433,7 +434,15 @@ export default defineConfig({
     {
       files: ["apps/api/src/**/*.{ts,tsx}"],
       rules: {
+        "mcp-security/join-oauth-client-by-authorization-server": "error",
+        "mcp-security/no-oauth-resource-url-fallback": "error",
         "no-raw-error-logging/no-raw-error-logging": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/handlers/mcp-connectors/**/*.{ts,tsx}"],
+      rules: {
+        "mcp-security/redact-oauth-registration-response": "error",
       },
     },
     {

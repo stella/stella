@@ -19,6 +19,7 @@ import {
   pickRequestedScopes,
   registerOAuthClient,
 } from "@/api/handlers/mcp-connectors/oauth";
+import { redactMcpOAuthRegistrationResponse } from "@/api/handlers/mcp-connectors/oauth-registration-response";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -82,6 +83,8 @@ const connectMcpConnector = createSafeRootHandler(
                 refreshTokenIv: null,
                 staticTokenEncrypted: null,
                 staticTokenIv: null,
+                resourceUrl: null,
+                authorizationServerUrl: null,
                 updatedAt: new Date(),
               },
             }),
@@ -279,7 +282,9 @@ const ensureOAuthClient = async ({
             clientId: registered.clientId,
             clientSecretEncrypted: encryptedSecret?.ciphertext ?? null,
             clientSecretIv: encryptedSecret?.iv ?? null,
-            registrationResponse: registered.registrationResponse,
+            registrationResponse: redactMcpOAuthRegistrationResponse(
+              registered.registrationResponse,
+            ),
           })
           .onConflictDoNothing({
             target: [

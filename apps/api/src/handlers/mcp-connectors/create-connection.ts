@@ -92,6 +92,8 @@ const createMcpConnection = createSafeRootHandler(
               expiresAt: null,
               refreshTokenEncrypted: null,
               refreshTokenIv: null,
+              resourceUrl: null,
+              authorizationServerUrl: null,
               scope: null,
               staticTokenEncrypted: encrypted.ciphertext,
               staticTokenIv: encrypted.iv,

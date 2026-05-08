@@ -2477,6 +2477,7 @@ export const mcpUserConnections = p.pgTable(
     tokenType: p.varchar("token_type", { length: 40 }),
     scope: p.text(),
     resourceUrl: p.text("resource_url"),
+    authorizationServerUrl: p.text("authorization_server_url"),
     expiresAt: p.timestamp("expires_at"),
     status: p
       .text("status", { enum: MCP_CONNECTION_STATUSES })
