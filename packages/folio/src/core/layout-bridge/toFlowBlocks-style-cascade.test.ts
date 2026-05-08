@@ -281,6 +281,67 @@ describe("toFlowBlocks style cascade", () => {
     }
   });
 
+  test("default table style supplies conditional formatting when table has no style ID", () => {
+    const styles: StyleDefinitions = {
+      styles: [
+        {
+          styleId: "DefaultGrid",
+          type: "table",
+          default: true,
+          name: "Default Grid",
+          tblStylePr: [
+            {
+              type: "wholeTable",
+              tcPr: { shading: { fill: { rgb: "D9EAF7" } } },
+              rPr: { bold: true },
+            },
+          ],
+        },
+      ],
+    };
+    const table: Table = {
+      type: "table",
+      rows: [
+        {
+          type: "tableRow",
+          cells: [
+            {
+              type: "tableCell",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    {
+                      type: "run",
+                      content: [{ type: "text", text: "default styled" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const document: Document = {
+      package: {
+        document: { content: [table] },
+        styles,
+      },
+    };
+
+    const tableBlock = toFlowBlocks(toProseDoc(document, { styles }), {})[0];
+    expect(tableBlock?.kind).toBe("table");
+    if (tableBlock?.kind === "table") {
+      const cell = tableBlock.rows.at(0)?.cells.at(0);
+      const paragraph = cell?.blocks.at(0) as ParagraphBlock | undefined;
+      const run = paragraph?.runs.at(0) as TextRun | undefined;
+
+      expect(cell?.background).toBe("#D9EAF7");
+      expect(run?.bold).toBe(true);
+    }
+  });
+
   test("style-less tables use built-in TableNormal side padding", () => {
     const table: Table = {
       type: "table",

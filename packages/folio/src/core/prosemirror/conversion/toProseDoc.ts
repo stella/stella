@@ -762,6 +762,8 @@ function convertTable(
     ? styleResolver?.getStyle(tableStyleId)
     : undefined;
   const defaultTableStyle = styleResolver?.getDefaultTableStyle();
+  const conditionalTableStyleId =
+    tableStyle?.styleId ?? defaultTableStyle?.styleId;
   const resolvedTableBorders =
     table.formatting?.borders ??
     tableStyle?.tblPr?.borders ??
@@ -839,14 +841,18 @@ function convertTable(
     seCell?: CondStyle;
   } = {};
   const setCS = (key: keyof typeof conditionalStyles, type: string): void => {
-    const val = resolveTableStyleConditional(styleResolver, tableStyleId, type);
+    const val = resolveTableStyleConditional(
+      styleResolver,
+      conditionalTableStyleId,
+      type,
+    );
     if (val) {
       conditionalStyles[key] = val;
     }
   };
   setCS("wholeTable", "wholeTable");
   const wholeTableStyle = mergeConditionalStyles(
-    resolveTableBaseStyle(styleResolver, tableStyleId),
+    resolveTableBaseStyle(styleResolver, conditionalTableStyleId),
     conditionalStyles.wholeTable,
   );
   if (wholeTableStyle) {
