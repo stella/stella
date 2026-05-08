@@ -94,6 +94,7 @@ Project: root
 - cheerio 1.2.0 — MIT
 - class-variance-authority 0.7.1 — Apache-2.0
 - clsx 2.1.1 — MIT
+- cobe 2.0.1 — MIT
 - diff 8.0.4 — BSD-3-Clause
 - diff 9.0.0 — BSD-3-Clause
 - docx 9.6.1 — MIT
