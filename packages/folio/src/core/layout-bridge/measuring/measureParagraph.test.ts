@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { hashParagraphBlock } from "./cache";
 import { resetCanvasContext } from "./measureContainer";
-import { measureParagraph } from "./measureParagraph";
+import { getRunCharWidths, measureParagraph } from "./measureParagraph";
 
 const PT_TO_PX = 96 / 72;
 
@@ -13,10 +14,19 @@ function withFakeTextMeasure(runTest: () => void): void {
         getContext() {
           return {
             font: "",
-            measureText(text: string) {
+            measureText(this: { font: string }, text: string) {
               let width = 0;
+              const isSmallCaps = this.font.includes("small-caps");
               for (const char of text) {
-                width += char >= "A" && char <= "Z" ? 10 : 5;
+                const isUppercase = char >= "A" && char <= "Z";
+                const isLowercase = char >= "a" && char <= "z";
+                if (isUppercase) {
+                  width += 10;
+                } else if (isSmallCaps && isLowercase) {
+                  width += 8;
+                } else {
+                  width += 5;
+                }
               }
               return {
                 width,
@@ -233,5 +243,38 @@ describe("all-caps paragraph measurement", () => {
 
       expect(measure.lines).toHaveLength(2);
     });
+  });
+
+  test("measures small-caps runs using small-caps glyph widths", () => {
+    withFakeTextMeasure(() => {
+      const measure = measureParagraph(
+        {
+          kind: "paragraph",
+          id: "small-caps",
+          runs: [{ kind: "text", text: "iiii", smallCaps: true }],
+        },
+        25,
+      );
+
+      expect(measure.lines).toHaveLength(2);
+      expect(
+        getRunCharWidths({ kind: "text", text: "ii", smallCaps: true }),
+      ).toEqual([8, 8]);
+    });
+  });
+
+  test("includes small-caps formatting in paragraph cache keys", () => {
+    const plainHash = hashParagraphBlock({
+      kind: "paragraph",
+      id: "plain",
+      runs: [{ kind: "text", text: "iiii" }],
+    });
+    const smallCapsHash = hashParagraphBlock({
+      kind: "paragraph",
+      id: "small-caps",
+      runs: [{ kind: "text", text: "iiii", smallCaps: true }],
+    });
+
+    expect(smallCapsHash).not.toBe(plainHash);
   });
 });

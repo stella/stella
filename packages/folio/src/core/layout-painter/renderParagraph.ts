@@ -745,13 +745,29 @@ function getTextAfterTab(
  * Create a text measurement function using a temporary canvas
  * Uses the same font fallback chain as measureContainer.ts
  */
+type TextMeasureStyle = {
+  bold?: boolean;
+  italic?: boolean;
+  smallCaps?: boolean;
+};
+
 function createTextMeasurer(
   doc: Document,
-): (text: string, fontSize?: number, fontFamily?: string) => number {
+): (
+  text: string,
+  fontSize?: number,
+  fontFamily?: string,
+  style?: TextMeasureStyle,
+) => number {
   const canvas = doc.createElement("canvas");
   const ctx = canvas.getContext("2d");
 
-  return (text: string, fontSize = 11, fontFamily = "Calibri") => {
+  return (
+    text: string,
+    fontSize = 11,
+    fontFamily = "Calibri",
+    style: TextMeasureStyle = {},
+  ) => {
     if (!ctx) {
       return text.length * 7;
     } // Fallback estimate
@@ -760,7 +776,18 @@ function createTextMeasurer(
     const cssFallback = resolveFontFamily(fontFamily).cssFallback;
     // Convert pt to px for canvas (1pt = 96/72 px)
     const fontSizePx = (fontSize * 96) / 72;
-    ctx.font = `${fontSizePx}px ${cssFallback}`;
+    const fontParts: string[] = [];
+    if (style.italic) {
+      fontParts.push("italic");
+    }
+    if (style.smallCaps) {
+      fontParts.push("small-caps");
+    }
+    if (style.bold) {
+      fontParts.push("bold");
+    }
+    fontParts.push(`${fontSizePx}px`, cssFallback);
+    ctx.font = fontParts.join(" ");
     return ctx.measureText(text).width;
   };
 }
@@ -931,6 +958,11 @@ export function renderLine(
         run.allCaps ? run.text.toLocaleUpperCase() : run.text,
         fontSize,
         fontFamily,
+        {
+          ...(run.bold !== undefined ? { bold: run.bold } : {}),
+          ...(run.italic !== undefined ? { italic: run.italic } : {}),
+          ...(run.smallCaps !== undefined ? { smallCaps: run.smallCaps } : {}),
+        },
       );
       currentX += measuredWidth * ((run.horizontalScale ?? 100) / 100);
     } else if (isImageRun(run)) {
@@ -969,7 +1001,20 @@ export function renderLine(
       }
       const fontSize = run.fontSize || 11;
       const fontFamily = run.fontFamily || "Calibri";
-      currentX += measureText(fieldText, fontSize, fontFamily);
+      currentX +=
+        measureText(
+          run.allCaps ? fieldText.toLocaleUpperCase() : fieldText,
+          fontSize,
+          fontFamily,
+          {
+            ...(run.bold !== undefined ? { bold: run.bold } : {}),
+            ...(run.italic !== undefined ? { italic: run.italic } : {}),
+            ...(run.smallCaps !== undefined
+              ? { smallCaps: run.smallCaps }
+              : {}),
+          },
+        ) *
+        ((run.horizontalScale ?? 100) / 100);
     } else {
       // Fallback for unknown run types
       const runEl = renderRun(run, doc, options?.context);

@@ -151,6 +151,7 @@ function runToFontStyle(run: TextRun | TabRun): FontStyle {
       ? { letterSpacing: run.letterSpacing }
       : {}),
     ...(run.allCaps ? { textTransform: "uppercase" as const } : {}),
+    ...(run.smallCaps ? { fontVariant: "small-caps" as const } : {}),
     ...(run.horizontalScale !== undefined
       ? { horizontalScale: run.horizontalScale }
       : {}),
@@ -689,6 +690,14 @@ export function measureParagraph(
         fontSize: run.fontSize ?? DEFAULT_FONT_SIZE,
         ...(run.bold !== undefined ? { bold: run.bold } : {}),
         ...(run.italic !== undefined ? { italic: run.italic } : {}),
+        ...(run.letterSpacing !== undefined
+          ? { letterSpacing: run.letterSpacing }
+          : {}),
+        ...(run.allCaps ? { textTransform: "uppercase" as const } : {}),
+        ...(run.smallCaps ? { fontVariant: "small-caps" as const } : {}),
+        ...(run.horizontalScale !== undefined
+          ? { horizontalScale: run.horizontalScale }
+          : {}),
       };
       updateMaxFont(style);
 

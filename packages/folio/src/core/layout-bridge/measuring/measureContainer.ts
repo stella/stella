@@ -35,6 +35,7 @@ export type FontStyle = {
   italic?: boolean;
   letterSpacing?: number; // in pixels
   textTransform?: "uppercase";
+  fontVariant?: "small-caps";
   horizontalScale?: number;
 };
 
@@ -155,6 +156,9 @@ export function buildFontString(style: FontStyle): string {
 
   if (style.italic) {
     parts.push("italic");
+  }
+  if (style.fontVariant) {
+    parts.push(style.fontVariant);
   }
   if (style.bold) {
     parts.push("bold");
