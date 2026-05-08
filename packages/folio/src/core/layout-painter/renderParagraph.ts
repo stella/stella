@@ -1157,17 +1157,17 @@ export function renderParagraphFragment(
     // Track indent values for line-level application
     // For RTL paragraphs, swap left/right indentation
     if (isBidi) {
-      if (indent.left && indent.left > 0) {
+      if (indent.left !== undefined) {
         indentRight = indent.left;
       }
-      if (indent.right && indent.right > 0) {
+      if (indent.right !== undefined) {
         indentLeft = indent.right;
       }
     } else {
-      if (indent.left && indent.left > 0) {
+      if (indent.left !== undefined) {
         indentLeft = indent.left;
       }
-      if (indent.right && indent.right > 0) {
+      if (indent.right !== undefined) {
         indentRight = indent.right;
       }
     }
@@ -1358,10 +1358,14 @@ export function renderParagraphFragment(
 
     // Apply left offset from floating images (lines start after the floating image)
     // Also constrain width so text doesn't overflow into the image area
-    if (lineLeftOffset > 0 || lineRightOffset > 0) {
-      if (lineLeftOffset > 0) {
-        lineEl.style.marginLeft = `${lineLeftOffset}px`;
-      }
+    const lineMarginLeft = Math.min(indentLeft, 0) + lineLeftOffset;
+    if (
+      lineMarginLeft !== 0 ||
+      lineRightOffset > 0 ||
+      indentLeft < 0 ||
+      indentRight < 0
+    ) {
+      lineEl.style.marginLeft = `${lineMarginLeft}px`;
       if (lineRightOffset > 0) {
         lineEl.style.marginRight = `${lineRightOffset}px`;
       }
@@ -1383,13 +1387,13 @@ export function renderParagraphFragment(
 
     if (isFirstLine) {
       // First line handling
-      if (indentLeft > 0 && hasHanging) {
+      if (indentLeft !== 0 && hasHanging) {
         // Hanging indent: first line starts at (indentLeft - hanging)
-        lineEl.style.paddingLeft = `${indentLeft}px`;
+        lineEl.style.paddingLeft = `${Math.max(indentLeft, 0)}px`;
         lineEl.style.textIndent = `-${indent?.hanging ?? 0}px`;
-      } else if (indentLeft > 0 && hasFirstLine) {
+      } else if (indentLeft !== 0 && hasFirstLine) {
         // First line indent: first line starts at (indentLeft + firstLine)
-        lineEl.style.paddingLeft = `${indentLeft}px`;
+        lineEl.style.paddingLeft = `${Math.max(indentLeft, 0)}px`;
         lineEl.style.textIndent = `${indent?.firstLine ?? 0}px`;
       } else if (indentLeft > 0) {
         // Just left indent, no special first line treatment

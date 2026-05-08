@@ -1442,6 +1442,7 @@ export function renderPage(
     headerEl.style.width = `${headerContentWidth}px`;
     headerEl.style.height = `${actualHeaderHeight}px`;
     headerEl.style.minHeight = `${actualHeaderHeight}px`;
+    headerEl.style.opacity = "0.62";
 
     let shouldClipHeader = !headerOverflows;
     if (options.headerContent && options.headerContent.blocks.length > 0) {
@@ -1526,6 +1527,7 @@ export function renderPage(
     footerEl.style.width = `${footerContentWidth}px`;
     footerEl.style.height = `${actualFooterHeight}px`;
     footerEl.style.minHeight = `${actualFooterHeight}px`;
+    footerEl.style.opacity = "0.62";
 
     let shouldClipFooter = !footerOverflows;
     if (options.footerContent && options.footerContent.blocks.length > 0) {

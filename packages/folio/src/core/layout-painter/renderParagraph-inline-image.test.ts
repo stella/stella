@@ -4,8 +4,10 @@ import type {
   ImageRun,
   MeasuredLine,
   ParagraphBlock,
+  ParagraphFragment,
+  ParagraphMeasure,
 } from "../layout-engine/types";
-import { renderLine } from "./renderParagraph";
+import { renderLine, renderParagraphFragment } from "./renderParagraph";
 
 class FakeElement {
   className = "";
@@ -109,5 +111,59 @@ describe("renderLine scaled text handling", () => {
 
     expect(textEl?.style.transform).toBe("scaleX(1.5)");
     expect(textEl?.style.width).toBe("42px");
+  });
+});
+
+describe("renderParagraphFragment indentation handling", () => {
+  test("negative side indents shift and widen line boxes", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [{ kind: "text", text: "wide" }],
+      attrs: {
+        indent: {
+          left: -20,
+          right: -10,
+        },
+      },
+    };
+    const measure: ParagraphMeasure = {
+      kind: "paragraph",
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 4,
+          width: 20,
+          ascent: 10,
+          descent: 2,
+          lineHeight: 12,
+        },
+      ],
+      totalHeight: 12,
+    };
+    const fragment: ParagraphFragment = {
+      kind: "paragraph",
+      blockId: "p1",
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 12,
+      fromLine: 0,
+      toLine: 1,
+    };
+
+    const fragmentEl = renderParagraphFragment(
+      fragment,
+      block,
+      measure,
+      { pageNumber: 1, totalPages: 1, section: "body" },
+      { document: fakeDocument },
+    );
+    const lineEl = fragmentEl.children[0] as HTMLElement | undefined;
+
+    expect(lineEl?.style.marginLeft).toBe("-20px");
+    expect(lineEl?.style.width).toBe("130px");
   });
 });

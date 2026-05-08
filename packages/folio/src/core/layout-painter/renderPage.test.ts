@@ -10,6 +10,7 @@ import type { BlockLookup } from "./index";
 import {
   computePageFingerprint,
   getDefaultPageFontFamily,
+  renderPage,
   renderFootnoteArea,
 } from "./renderPage";
 
@@ -48,6 +49,10 @@ class FakeElement {
   getContext(): null {
     return null;
   }
+
+  querySelectorAll(): FakeElement[] {
+    return [];
+  }
 }
 
 const fakeDocument = {
@@ -72,6 +77,24 @@ function collectPmAnchors(element: FakeElement): FakeElement[] {
   }
 
   return anchors;
+}
+
+function findByClass(
+  element: FakeElement,
+  className: string,
+): FakeElement | undefined {
+  if (element.className.split(" ").includes(className)) {
+    return element;
+  }
+
+  for (const child of element.children) {
+    const match = findByClass(child, className);
+    if (match) {
+      return match;
+    }
+  }
+
+  return undefined;
 }
 
 const page: Page = {
@@ -132,6 +155,25 @@ describe("page font fallback", () => {
     expect(getDefaultPageFontFamily()).toBe(
       "Calibri, Carlito, Arial, Helvetica, sans-serif",
     );
+  });
+});
+
+describe("header and footer rendering", () => {
+  test("dims header and footer chrome while editing body content", () => {
+    const pageElement = renderPage(
+      { ...page, fragments: [] },
+      { pageNumber: 1, totalPages: 1, section: "body" },
+      { document: fakeDocument },
+    );
+
+    expect(
+      findByClass(pageElement as unknown as FakeElement, "layout-page-header")
+        ?.style.opacity,
+    ).toBe("0.62");
+    expect(
+      findByClass(pageElement as unknown as FakeElement, "layout-page-footer")
+        ?.style.opacity,
+    ).toBe("0.62");
   });
 });
 

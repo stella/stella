@@ -214,6 +214,32 @@ describe("inline image paragraph measurement", () => {
   });
 });
 
+describe("paragraph indentation measurement", () => {
+  test("negative side indents widen the measured line box", () => {
+    withFakeTextMeasure(() => {
+      const block = {
+        kind: "paragraph" as const,
+        id: "negative-indent",
+        runs: [
+          {
+            kind: "text" as const,
+            text: "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+            fontSize: 11,
+          },
+        ],
+        attrs: {
+          indent: {
+            left: -20,
+            right: -10,
+          },
+        },
+      };
+
+      expect(measureParagraph(block, 100).lines).toHaveLength(1);
+    });
+  });
+});
+
 describe("all-caps paragraph measurement", () => {
   test("measures all-caps runs using uppercase glyph widths", () => {
     withFakeTextMeasure(() => {
