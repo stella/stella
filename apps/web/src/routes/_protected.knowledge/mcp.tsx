@@ -12,6 +12,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
+import { Form } from "@stll/ui/components/form";
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
@@ -878,7 +879,8 @@ function AddServerDialog({
       open={open}
     >
       <DialogPopup>
-        <form
+        <Form
+          className="gap-0"
           onSubmit={(event) => {
             event.preventDefault();
             if (createdConnector) {
@@ -942,7 +944,7 @@ function AddServerDialog({
                 : t("knowledge.mcp.addAndConnect")}
             </Button>
           </DialogFooter>
-        </form>
+        </Form>
       </DialogPopup>
     </Dialog>
   );
