@@ -55,6 +55,27 @@ const PROVIDERS: readonly Provider[] = [
 const isFallbackProvider = (name: ProviderName) =>
   name === "Gmail" || name === "Outlook";
 
+const getProductIconUrl = (name: ProviderName) => {
+  if (name === "Gmail") {
+    return "https://upload.wikimedia.org/wikipedia/commons/7/7e/Gmail_icon_%282020%29.svg";
+  }
+
+  if (name === "Outlook") {
+    return "https://upload.wikimedia.org/wikipedia/commons/c/cc/Microsoft_Outlook_Icon_%282025%E2%80%93present%29.svg";
+  }
+
+  return null;
+};
+
+const ProviderIcon = ({ name }: { name: ProviderName }) => {
+  const iconUrl = getProductIconUrl(name);
+  if (!iconUrl) {
+    return null;
+  }
+
+  return <img alt="" className="size-4" src={iconUrl} />;
+};
+
 const getProvidersForEmail = (email: string): readonly Provider[] => {
   const domain = email.split("@").at(1)?.toLowerCase() ?? "";
   const exact = PROVIDERS.find((p) => p.domains.includes(domain));
@@ -78,6 +99,7 @@ export const InboxQuickJump = ({ email }: { email: string }) => {
               rel="noopener noreferrer"
               target="_blank"
             >
+              <ProviderIcon name={p.name} />
               {t("auth.openInProvider", { provider: p.name })}
             </a>
           }
