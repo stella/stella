@@ -984,6 +984,12 @@
     "loadingDocument": "Načitávanie dokumentu...",
     "loadingEditor": "Načítava sa editor...",
     "lockFile": "Zamknúť súbor",
+    "markupView": {
+      "allMarkup": "Všetky revízie",
+      "noMarkup": "Žiadna značka",
+      "original": "Pôvodný",
+      "simple": "Jednoduché označenie revízie"
+    },
     "moreFormatting": "Ďalšie formátovanie",
     "networkError": "Chyba siete. Skontrolujte internetové pripojenie a skúste znova.",
     "nextChange": "Ďalšia zmena",

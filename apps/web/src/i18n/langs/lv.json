@@ -984,6 +984,12 @@
     "loadingDocument": "Loading document...",
     "loadingEditor": "Ielādē redaktoru...",
     "lockFile": "Bloķēt failu",
+    "markupView": {
+      "allMarkup": "Visas atzīmes",
+      "noMarkup": "Bez atzīmēm",
+      "original": "Oriģināls",
+      "simple": "Vienkāršas atzīmes"
+    },
     "moreFormatting": "Papildu formatēšana",
     "networkError": "Network error. Please check your internet connection and try again.",
     "nextChange": "Next Change",

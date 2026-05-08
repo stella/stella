@@ -984,6 +984,12 @@
     "loadingDocument": "Loading document...",
     "loadingEditor": "Redaktori laadimine...",
     "lockFile": "Lukusta fail",
+    "markupView": {
+      "allMarkup": "Kogu märgistus",
+      "noMarkup": "Märgistust pole",
+      "original": "Algne",
+      "simple": "Lihtmärgistus"
+    },
     "moreFormatting": "Veel vormindust",
     "networkError": "Network error. Please check your internet connection and try again.",
     "nextChange": "Next Change",

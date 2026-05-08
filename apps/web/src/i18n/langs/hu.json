@@ -984,6 +984,12 @@
     "loadingDocument": "Loading document...",
     "loadingEditor": "Szerkesztő betöltése...",
     "lockFile": "Fájl zárolása",
+    "markupView": {
+      "allMarkup": "Az összes korrektúra",
+      "noMarkup": "Nincs korrektúra",
+      "original": "Az eredeti",
+      "simple": "Az egyszerű korrektúra"
+    },
     "moreFormatting": "További formázás",
     "networkError": "Network error. Please check your internet connection and try again.",
     "nextChange": "Next Change",

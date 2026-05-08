@@ -984,6 +984,12 @@
     "loadingDocument": "Loading document...",
     "loadingEditor": "Chargement de l’éditeur...",
     "lockFile": "Verrouiller le fichier",
+    "markupView": {
+      "allMarkup": "Toutes les marques",
+      "noMarkup": "Aucune marque",
+      "original": "Original",
+      "simple": "Le balisage simple"
+    },
     "moreFormatting": "Plus de mise en forme",
     "networkError": "Network error. Please check your internet connection and try again.",
     "nextChange": "Next Change",
