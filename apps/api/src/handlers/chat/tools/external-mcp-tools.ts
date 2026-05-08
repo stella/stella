@@ -19,15 +19,20 @@ import {
   refreshOAuthToken,
   tokenExpiresAt,
 } from "@/api/handlers/mcp-connectors/oauth";
-import { validateSafeMcpFetchUrl } from "@/api/handlers/mcp-connectors/url-safety";
+import {
+  safeMcpFetchBytes,
+  validateSafeMcpFetchUrl,
+} from "@/api/handlers/mcp-connectors/url-safety";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { SafeOutboundFetchBody } from "@/api/lib/safe-outbound-fetch";
 
 const MCP_TOOL_PREFIX = "mcp";
 const MCP_HTTP_REQUEST_TIMEOUT_MS = 10_000;
 // Chat sends load tool schemas serially before the model call. Keep the cap
 // explicit so one user cannot turn many slow MCP servers into unbounded latency.
 const MAX_ACTIVE_MCP_CONNECTIONS_PER_CHAT = 20;
+const MCP_HTTP_RESPONSE_MAX_BYTES = 10_000_000;
 const TOKEN_REFRESH_SKEW_MS = 60_000;
 
 export type LoadedExternalMcpTools = {
@@ -55,6 +60,7 @@ type ConnectionRow = {
   oauthClientId: string | null;
   oauthClientSecretEncrypted: Buffer | null;
   oauthClientSecretIv: Buffer | null;
+  oauthResourceUrl: string | null;
   oauthAuthorizationServerUrl: string | null;
   refreshTokenEncrypted: Buffer | null;
   refreshTokenIv: Buffer | null;
@@ -112,6 +118,7 @@ export const loadExternalMcpToolsForUser = async ({
         staticTokenEncrypted: mcpUserConnections.staticTokenEncrypted,
         staticTokenIv: mcpUserConnections.staticTokenIv,
         expiresAt: mcpUserConnections.expiresAt,
+        oauthResourceUrl: mcpUserConnections.resourceUrl,
         oauthAuthorizationServerUrl: mcpOAuthClients.authorizationServerUrl,
         oauthClientId: mcpOAuthClients.clientId,
         oauthClientSecretEncrypted: mcpOAuthClients.clientSecretEncrypted,
@@ -210,7 +217,7 @@ const loadConnectorTools = async ({
       type: "http" as const,
       url: safeUrl.value.toString(),
       redirect: "error" as const,
-      fetch: createMcpFetchWithTimeout(MCP_HTTP_REQUEST_TIMEOUT_MS),
+      fetch: createSafeMcpFetch(MCP_HTTP_REQUEST_TIMEOUT_MS),
       ...(token.value === null
         ? {}
         : { headers: { Authorization: `Bearer ${token.value}` } }),
@@ -252,39 +259,87 @@ const loadConnectorTools = async ({
   }
 };
 
-const createMcpFetchWithTimeout = (timeoutMs: number): FetchFunction => {
-  const timeoutFetch: FetchFunction = Object.assign(
+const createSafeMcpFetch = (timeoutMs: number): FetchFunction => {
+  const safeFetch: FetchFunction = Object.assign(
     async (
       input: Parameters<FetchFunction>[0],
       init: Parameters<FetchFunction>[1],
     ) => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
-      const upstreamSignal = init?.signal;
-      const abortFromUpstream = () => controller.abort(upstreamSignal?.reason);
-
-      if (upstreamSignal?.aborted) {
-        abortFromUpstream();
-      } else {
-        upstreamSignal?.addEventListener("abort", abortFromUpstream, {
-          once: true,
-        });
+      if (init?.signal?.aborted) {
+        throw init.signal.reason;
       }
 
-      try {
-        return await fetch(input, {
-          ...init,
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(timeout);
-        upstreamSignal?.removeEventListener("abort", abortFromUpstream);
+      const url = mcpFetchUrl(input);
+      const response = await safeMcpFetchBytes({
+        body: await mcpFetchBody(input, init),
+        headers: mcpFetchHeaders(input, init),
+        maxBytes: MCP_HTTP_RESPONSE_MAX_BYTES,
+        method:
+          init?.method ?? (input instanceof Request ? input.method : "GET"),
+        timeoutMs,
+        url,
+      });
+      if (Result.isError(response)) {
+        throw response.error;
       }
+
+      return new Response(response.value.body, {
+        headers: response.value.headers,
+        status: response.value.status,
+      });
     },
     { preconnect: fetch.preconnect },
   );
 
-  return timeoutFetch;
+  return safeFetch;
+};
+
+const mcpFetchUrl = (input: Parameters<FetchFunction>[0]): URL => {
+  if (input instanceof Request) {
+    return new URL(input.url);
+  }
+
+  return new URL(input.toString());
+};
+
+const mcpFetchHeaders = (
+  input: Parameters<FetchFunction>[0],
+  init: Parameters<FetchFunction>[1],
+): Headers => {
+  const headers = new Headers(input instanceof Request ? input.headers : {});
+  const initHeaders = new Headers(init?.headers);
+  for (const [key, value] of initHeaders.entries()) {
+    headers.set(key, value);
+  }
+  return headers;
+};
+
+const mcpFetchBody = async (
+  input: Parameters<FetchFunction>[0],
+  init: Parameters<FetchFunction>[1],
+): Promise<SafeOutboundFetchBody | undefined> => {
+  if (init?.body !== undefined && init.body !== null) {
+    return normalizeMcpFetchBody(init.body);
+  }
+
+  if (input instanceof Request && input.method !== "GET") {
+    return await input.arrayBuffer();
+  }
+
+  return undefined;
+};
+
+const normalizeMcpFetchBody = (body: unknown): SafeOutboundFetchBody => {
+  if (
+    typeof body === "string" ||
+    body instanceof URLSearchParams ||
+    body instanceof Uint8Array ||
+    body instanceof ArrayBuffer
+  ) {
+    return body;
+  }
+
+  throw new TypeError("Unsupported MCP request body type");
 };
 
 const GENERIC_CUSTOM_MCP_DESCRIPTION =
@@ -414,7 +469,7 @@ const resolveAuthorizationToken = async ({
     clientId: row.oauthClientId,
     clientSecret,
     refreshToken,
-    resourceUrl: row.url,
+    resourceUrl: row.oauthResourceUrl ?? row.url,
   });
 
   if (Result.isError(refreshed)) {
