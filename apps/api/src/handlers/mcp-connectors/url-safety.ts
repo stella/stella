@@ -3,11 +3,15 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import * as v from "valibot";
 
-import { fetchWithResolvedAddress } from "@/api/lib/safe-outbound-fetch";
+import {
+  fetchStreamWithResolvedAddress,
+  fetchWithResolvedAddress,
+} from "@/api/lib/safe-outbound-fetch";
 import type {
   SafeOutboundAddress,
   SafeOutboundFetchBody,
   SafeOutboundFetchResponse,
+  SafeOutboundFetchStreamResponse,
   SafeOutboundHeaders,
 } from "@/api/lib/safe-outbound-fetch";
 
@@ -141,6 +145,51 @@ export const safeMcpFetchBytes = async ({
     headers,
     maxBytes,
     method,
+    timeoutMs,
+    url: target.value.url,
+  });
+
+  if (Result.isError(response)) {
+    return Result.err(
+      new UnsafeMcpUrlError({
+        message: response.error.message,
+        cause: response.error,
+      }),
+    );
+  }
+
+  return Result.ok(response.value);
+};
+
+export const safeMcpFetchStream = async ({
+  body,
+  headers,
+  maxBytes,
+  method,
+  signal,
+  timeoutMs,
+  url,
+}: {
+  body?: SafeOutboundFetchBody | undefined;
+  headers?: SafeOutboundHeaders | undefined;
+  maxBytes: number;
+  method?: string | undefined;
+  signal?: AbortSignal | undefined;
+  timeoutMs: number;
+  url: URL;
+}): Promise<Result<SafeOutboundFetchStreamResponse, UnsafeMcpUrlError>> => {
+  const target = await validateSafeMcpFetchTarget(url);
+  if (Result.isError(target)) {
+    return Result.err(target.error);
+  }
+
+  const response = await fetchStreamWithResolvedAddress({
+    addresses: target.value.addresses,
+    body,
+    headers,
+    maxBytes,
+    method,
+    signal,
     timeoutMs,
     url: target.value.url,
   });

@@ -20,7 +20,7 @@ import {
   tokenExpiresAt,
 } from "@/api/handlers/mcp-connectors/oauth";
 import {
-  safeMcpFetchBytes,
+  safeMcpFetchStream,
   validateSafeMcpFetchUrl,
 } from "@/api/handlers/mcp-connectors/url-safety";
 import { captureError } from "@/api/lib/analytics";
@@ -310,12 +310,14 @@ const createSafeMcpFetch = (timeoutMs: number): FetchFunction => {
       }
 
       const url = mcpFetchUrl(input);
-      const response = await safeMcpFetchBytes({
+      const response = await safeMcpFetchStream({
         body: await mcpFetchBody(input, init),
         headers: mcpFetchHeaders(input, init),
         maxBytes: MCP_HTTP_RESPONSE_MAX_BYTES,
         method:
           init?.method ?? (input instanceof Request ? input.method : "GET"),
+        signal:
+          init?.signal ?? (input instanceof Request ? input.signal : undefined),
         timeoutMs,
         url,
       });

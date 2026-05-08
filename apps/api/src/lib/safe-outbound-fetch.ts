@@ -1,5 +1,6 @@
 import { Result, TaggedError } from "better-result";
 import { request as requestHttp } from "node:http";
+import type { IncomingMessage } from "node:http";
 import { request as requestHttps } from "node:https";
 
 export class SafeOutboundFetchError extends TaggedError(
@@ -23,6 +24,13 @@ export type SafeOutboundHeaders = Headers | Record<string, string>;
 
 export type SafeOutboundFetchResponse = {
   body: ArrayBuffer;
+  headers: Headers;
+  ok: boolean;
+  status: number;
+};
+
+export type SafeOutboundFetchStreamResponse = {
+  body: ReadableStream<Uint8Array>;
   headers: Headers;
   ok: boolean;
   status: number;
@@ -158,6 +166,141 @@ export const fetchWithResolvedAddress = async ({
   });
 };
 
+export const fetchStreamWithResolvedAddress = async ({
+  addresses,
+  body,
+  headers,
+  maxBytes,
+  method = "GET",
+  signal,
+  timeoutMs,
+  url,
+}: {
+  addresses: readonly SafeOutboundAddress[];
+  body?: SafeOutboundFetchBody | undefined;
+  headers?: SafeOutboundHeaders | undefined;
+  maxBytes: number;
+  method?: string | undefined;
+  signal?: AbortSignal | undefined;
+  timeoutMs: number;
+  url: URL;
+}): Promise<
+  Result<SafeOutboundFetchStreamResponse, SafeOutboundFetchError>
+> => {
+  const address = addresses.at(0);
+  if (!address) {
+    return Result.err(
+      new SafeOutboundFetchError({ message: "No resolved address available" }),
+    );
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return Result.err(
+      new SafeOutboundFetchError({
+        message: "Only HTTP and HTTPS URLs can be fetched",
+      }),
+    );
+  }
+
+  return await Result.tryPromise({
+    try: async () =>
+      await new Promise<SafeOutboundFetchStreamResponse>((resolve, reject) => {
+        const requestHeaders = new Headers(headers);
+        const bodyBytes = bodyToBytes(body);
+        if (bodyBytes && !requestHeaders.has("Content-Length")) {
+          requestHeaders.set("Content-Length", String(bodyBytes.byteLength));
+        }
+
+        const request = (
+          url.protocol === "https:" ? requestHttps : requestHttp
+        )(
+          {
+            headers: headersToObject(requestHeaders),
+            hostname: url.hostname,
+            lookup: (_hostname, options, callback) => {
+              if (typeof options === "object" && options?.all === true) {
+                callback(null, [address]);
+                return;
+              }
+              callback(null, address.address, address.family);
+            },
+            method,
+            path: `${url.pathname}${url.search}`,
+            port: url.port || undefined,
+            protocol: url.protocol,
+            servername: url.hostname,
+          },
+          (response) => {
+            clearTimeout(timeout);
+            const status = response.statusCode ?? 0;
+            const responseHeaders = headersFromIncoming(response.headers);
+
+            if (status >= 300 && status < 400) {
+              response.resume();
+              reject(
+                new SafeOutboundFetchError({
+                  message: "Redirects are not allowed",
+                }),
+              );
+              return;
+            }
+
+            resolve({
+              body: responseBodyToReadableStream({
+                maxBytes,
+                request,
+                response,
+              }),
+              headers: responseHeaders,
+              ok: status >= 200 && status < 300,
+              status,
+            });
+          },
+        );
+        const timeout = setTimeout(() => {
+          request.destroy(
+            new SafeOutboundFetchError({ message: "Request timed out" }),
+          );
+        }, timeoutMs);
+
+        const abort = () => {
+          request.destroy(abortReasonToError(signal?.reason));
+        };
+        if (signal?.aborted) {
+          const error = abortReasonToError(signal.reason);
+          clearTimeout(timeout);
+          request.destroy(error);
+          reject(error);
+          return;
+        }
+        signal?.addEventListener("abort", abort, { once: true });
+
+        request.on("error", (cause) => {
+          signal?.removeEventListener("abort", abort);
+          clearTimeout(timeout);
+          reject(cause);
+        });
+
+        request.on("close", () => {
+          signal?.removeEventListener("abort", abort);
+          clearTimeout(timeout);
+        });
+
+        if (bodyBytes) {
+          request.write(bodyBytes);
+        }
+        request.end();
+      }),
+    catch: (cause) =>
+      SafeOutboundFetchError.is(cause)
+        ? cause
+        : new SafeOutboundFetchError({
+            message: "Outbound request failed",
+            cause,
+          }),
+  });
+};
+
 const bodyToBytes = (
   body: SafeOutboundFetchBody | undefined,
 ): Uint8Array | null => {
@@ -218,4 +361,55 @@ const concatChunks = (
     offset += chunk.byteLength;
   }
   return merged.buffer;
+};
+
+const responseBodyToReadableStream = ({
+  maxBytes,
+  request,
+  response,
+}: {
+  maxBytes: number;
+  request: ReturnType<typeof requestHttp>;
+  response: IncomingMessage;
+}): ReadableStream<Uint8Array> => {
+  let total = 0;
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      response.on("data", (chunk: Uint8Array) => {
+        total += chunk.byteLength;
+        if (total > maxBytes) {
+          const error = new SafeOutboundFetchError({
+            message: "Response body exceeded size limit",
+          });
+          response.destroy(error);
+          controller.error(error);
+          return;
+        }
+
+        controller.enqueue(chunk);
+      });
+      response.on("error", (cause) => {
+        controller.error(cause);
+      });
+      response.on("end", () => {
+        controller.close();
+      });
+    },
+    cancel() {
+      response.destroy();
+      request.destroy();
+    },
+  });
+};
+
+const abortReasonToError = (reason: unknown): Error => {
+  if (reason instanceof Error) {
+    return reason;
+  }
+
+  return new SafeOutboundFetchError({
+    message: "Request aborted",
+    cause: reason,
+  });
 };

@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { createServer } from "node:http";
 import type { RequestListener } from "node:http";
 
-import { fetchWithResolvedAddress } from "@/api/lib/safe-outbound-fetch";
+import {
+  fetchStreamWithResolvedAddress,
+  fetchWithResolvedAddress,
+} from "@/api/lib/safe-outbound-fetch";
 
 describe("fetchWithResolvedAddress", () => {
   test("connects to the pre-resolved address while preserving the URL host", async () => {
@@ -45,6 +48,37 @@ describe("fetchWithResolvedAddress", () => {
         });
 
         expect(Result.isError(result)).toBe(true);
+      },
+    );
+  });
+
+  test("returns streaming responses before the server closes the body", async () => {
+    await withHttpServer(
+      (_request, response) => {
+        response.writeHead(200, { "Content-Type": "text/event-stream" });
+        response.write("event: ping\ndata: ready\n\n");
+      },
+      async (port) => {
+        const result = await fetchStreamWithResolvedAddress({
+          addresses: [{ address: "127.0.0.1", family: 4 }],
+          maxBytes: 1024,
+          timeoutMs: 1000,
+          url: new URL(`http://example.test:${port}/events`),
+        });
+
+        expect(Result.isOk(result)).toBe(true);
+        if (Result.isError(result)) {
+          throw result.error;
+        }
+
+        const reader = result.value.body.getReader();
+        const firstChunk = await reader.read();
+        await reader.cancel();
+
+        expect(firstChunk.done).toBe(false);
+        expect(new TextDecoder().decode(firstChunk.value)).toContain(
+          "data: ready",
+        );
       },
     );
   });
