@@ -53,10 +53,17 @@ const previewExternalSource = createSafeRootHandler(
     const previewFetch = yield* Result.await(
       fetchPreviewUrl(target, { maxBytes: MAX_PREVIEW_BYTES }),
     );
-    const { response, url } = previewFetch;
+    const { requestedUrl, response, url } = previewFetch;
     const contentType = getContentType(response.headers);
 
-    if (isPdfPreview(contentType, url)) {
+    if (
+      isPdfPreviewResponse({
+        body: response.body,
+        contentType,
+        requestedUrl,
+        responseUrl: url,
+      })
+    ) {
       const preview: ExternalPreviewResponse = {
         contentType,
         format: "pdf" as const,
@@ -122,10 +129,18 @@ export const previewExternalFile = createSafeRootHandler(
     const previewFetch = yield* Result.await(
       fetchPreviewUrl(target, { maxBytes: MAX_FILE_PREVIEW_BYTES }),
     );
-    const { response, url } = previewFetch;
+    const { requestedUrl, response, url } = previewFetch;
     const contentType = getContentType(response.headers);
+    const body = response.body;
 
-    if (!isPdfPreview(contentType, url)) {
+    if (
+      !isPdfPreviewResponse({
+        body,
+        contentType,
+        requestedUrl,
+        responseUrl: url,
+      })
+    ) {
       return Result.err(
         new HandlerError({
           status: 422,
@@ -133,8 +148,6 @@ export const previewExternalFile = createSafeRootHandler(
         }),
       );
     }
-
-    const body = response.body;
 
     if (!isPdfBytes(body)) {
       return Result.err(
@@ -369,6 +382,7 @@ type FetchPreviewUrlOptions = {
 };
 
 type FetchPreviewUrlResult = {
+  requestedUrl: URL;
   response: SafeOutboundFetchResponse;
   url: URL;
 };
@@ -440,7 +454,11 @@ const fetchPreviewUrl = async (
           });
         }
 
-        return { response: response.value, url: currentTarget.url };
+        return {
+          requestedUrl: target.url,
+          response: response.value,
+          url: currentTarget.url,
+        };
       }
 
       throw new HandlerError({
@@ -572,6 +590,21 @@ export const isPdfPreview = (contentType: string | null, url: URL): boolean =>
   (contentType !== null && PDF_CONTENT_TYPES.has(contentType)) ||
   ((contentType === null || GENERIC_BINARY_CONTENT_TYPES.has(contentType)) &&
     url.pathname.toLowerCase().endsWith(".pdf"));
+
+export const isPdfPreviewResponse = ({
+  body,
+  contentType,
+  requestedUrl,
+  responseUrl,
+}: {
+  body: ArrayBuffer;
+  contentType: string | null;
+  requestedUrl: URL;
+  responseUrl: URL;
+}): boolean =>
+  isPdfPreview(contentType, responseUrl) ||
+  isPdfPreview(contentType, requestedUrl) ||
+  isPdfBytes(body);
 
 export const isPdfBytes = (body: ArrayBuffer): boolean => {
   if (body.byteLength < PDF_MAGIC_BYTES.length) {
