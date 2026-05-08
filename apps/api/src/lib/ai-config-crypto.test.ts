@@ -82,6 +82,23 @@ describe("isOrgAIConfig", () => {
     ).toBe(true);
   });
 
+  test("accepts Mistral org AI config", () => {
+    expect(
+      isOrgAIConfig({
+        providers: [{ provider: "mistral", apiKey: "sk-test" }],
+        overrideModels: {
+          chat: { provider: "mistral", modelId: "mistral-large-latest" },
+          fast: { provider: "mistral", modelId: "mistral-small-latest" },
+          reasoning: {
+            provider: "mistral",
+            modelId: "magistral-medium-latest",
+          },
+          pdf: { provider: "mistral", modelId: "mistral-large-latest" },
+        },
+      }),
+    ).toBe(true);
+  });
+
   test("rejects Azure Foundry configs without endpoint metadata", () => {
     expect(
       isOrgAIConfig({

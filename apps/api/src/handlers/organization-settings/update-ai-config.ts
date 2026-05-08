@@ -36,6 +36,7 @@ const BYOK_PROVIDER_VALUES = [
   "openai",
   "azure_foundry",
   "anthropic",
+  "mistral",
 ] as const satisfies readonly AIProvider[];
 type BYOKProvider = (typeof BYOK_PROVIDER_VALUES)[number];
 

@@ -90,21 +90,48 @@ describe("BYOK provider and model configuration", () => {
 
   test("builds model options from the union of configured providers", () => {
     expect(
-      getAvailableModelOptions(["anthropic", "openai", "openrouter"]),
+      getAvailableModelOptions([
+        "anthropic",
+        "mistral",
+        "openai",
+        "openrouter",
+      ]),
     ).toContainEqual({
       provider: "anthropic",
       modelId: "claude-opus-4-7",
       value: "anthropic::claude-opus-4-7",
     });
     expect(
-      getAvailableModelOptions(["anthropic", "openai", "openrouter"]),
+      getAvailableModelOptions([
+        "anthropic",
+        "mistral",
+        "openai",
+        "openrouter",
+      ]),
+    ).toContainEqual({
+      provider: "mistral",
+      modelId: "mistral-large-latest",
+      value: "mistral::mistral-large-latest",
+    });
+    expect(
+      getAvailableModelOptions([
+        "anthropic",
+        "mistral",
+        "openai",
+        "openrouter",
+      ]),
     ).toContainEqual({
       provider: "openai",
       modelId: "gpt-5.4",
       value: "openai::gpt-5.4",
     });
     expect(
-      getAvailableModelOptions(["anthropic", "openai", "openrouter"]),
+      getAvailableModelOptions([
+        "anthropic",
+        "mistral",
+        "openai",
+        "openrouter",
+      ]),
     ).toContainEqual({
       provider: "openrouter",
       modelId: "google/gemini-3-flash-preview",
@@ -116,6 +143,7 @@ describe("BYOK provider and model configuration", () => {
     const modelOptions = getAvailableModelOptions([
       "anthropic",
       "google",
+      "mistral",
       "openai",
     ]);
 
@@ -128,6 +156,16 @@ describe("BYOK provider and model configuration", () => {
       provider: "google",
       modelId: "gemini-3-pro-preview",
       value: "google::gemini-3-pro-preview",
+    });
+    expect(modelOptions).toContainEqual({
+      provider: "mistral",
+      modelId: "magistral-medium-latest",
+      value: "mistral::magistral-medium-latest",
+    });
+    expect(modelOptions).toContainEqual({
+      provider: "mistral",
+      modelId: "mistral-medium-3-5",
+      value: "mistral::mistral-medium-3-5",
     });
     expect(modelOptions).toContainEqual({
       provider: "openai",
@@ -143,6 +181,16 @@ describe("BYOK provider and model configuration", () => {
       provider: "google",
       modelId: "gemini-1.5-pro",
       value: "google::gemini-1.5-pro",
+    });
+    expect(modelOptions).not.toContainEqual({
+      provider: "mistral",
+      modelId: "mistral-tiny",
+      value: "mistral::mistral-tiny",
+    });
+    expect(modelOptions).not.toContainEqual({
+      provider: "mistral",
+      modelId: "pixtral-large-latest",
+      value: "mistral::pixtral-large-latest",
     });
     expect(modelOptions).not.toContainEqual({
       provider: "openai",
@@ -272,6 +320,15 @@ describe("BYOK provider and model configuration", () => {
         },
       ]),
     ).toBe(true);
+  });
+
+  test("creates Mistral role defaults", () => {
+    expect(createDefaultRoleModels(["mistral"])).toEqual({
+      chat: { provider: "mistral", modelId: "mistral-large-latest" },
+      fast: { provider: "mistral", modelId: "mistral-small-latest" },
+      reasoning: { provider: "mistral", modelId: "magistral-medium-latest" },
+      pdf: { provider: "mistral", modelId: "mistral-large-latest" },
+    });
   });
 
   test("accepts saved provider drafts without requiring key replacement", () => {
