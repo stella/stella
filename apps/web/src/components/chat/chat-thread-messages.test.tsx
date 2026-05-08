@@ -100,6 +100,53 @@ describe("chat thread messages", () => {
     expect(html.match(/>Retry<\/button>/g)?.length).toBe(1);
   });
 
+  test("hides retry when a later user message is the final turn", () => {
+    const chatMessages: PersistedChatMessage[] = [
+      {
+        id: "message-A",
+        parts: [{ type: "text", text: "Answer before retry" }],
+        role: "assistant",
+      },
+      {
+        id: "message-B",
+        parts: [{ type: "text", text: "Follow-up prompt" }],
+        role: "user",
+      },
+    ];
+
+    const html = renderToStaticMarkup(
+      <IntlProvider
+        locale="en"
+        // SAFETY: this mirrors the app provider boundary; locale
+        // files are checked separately, while use-intl preserves
+        // English literal values in the generated Messages type.
+        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+        messages={messages as Messages}
+        timeZone="UTC"
+      >
+        <ChatThreadMessages
+          approvalPendingMessageId={null}
+          autoApprovedTools={new Set()}
+          handleAlwaysAllow={() => {}}
+          handleApprove={() => {}}
+          handleDeny={() => {}}
+          messages={chatMessages}
+          onAskUserSubmit={() => {}}
+          onResend={() => {}}
+          showToolCalls={false}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />
+      </IntlProvider>,
+    );
+
+    expect(html).toContain("Answer before retry");
+    expect(html).toContain("Follow-up prompt");
+    expect(html.match(/>Copy<\/button>/g)?.length).toBe(1);
+    expect(html).not.toContain(">Retry</button>");
+  });
+
   test("shows a resendable chat message when the chat runtime errors", () => {
     const html = renderToStaticMarkup(
       <IntlProvider

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { ComponentProps } from "react";
 
 import { Button } from "@stll/ui/components/button";
@@ -276,7 +277,7 @@ const AssistantMessageActions = ({
   onResend?: (() => void | PromiseLike<void>) | undefined;
 }) => {
   const t = useTranslations();
-  const text = getMessageText(message);
+  const text = useMemo(() => getMessageText(message), [message]);
   const canRetry = Boolean(onResend && isLatestAssistantMessage);
 
   if (!text && !canRetry) {
@@ -327,14 +328,12 @@ const AssistantMessageActions = ({
   );
 };
 
-const getLatestAssistantMessageId = (
+const getRetryableAssistantMessageId = (
   messages: readonly PersistedChatMessage[],
 ) => {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages.at(index);
-    if (message?.role === "assistant") {
-      return message.id;
-    }
+  const message = messages.at(-1);
+  if (message?.role === "assistant") {
+    return message.id;
   }
 
   return null;
@@ -383,7 +382,10 @@ export const ChatThreadMessages = ({
   streamdownComponents,
   workspaceId,
 }: ChatThreadMessagesProps) => {
-  const latestAssistantMessageId = getLatestAssistantMessageId(messages);
+  const retryableAssistantMessageId = useMemo(
+    () => getRetryableAssistantMessageId(messages),
+    [messages],
+  );
 
   return (
     <>
@@ -461,7 +463,7 @@ export const ChatThreadMessages = ({
                 <AssistantMessageActions
                   isGenerating={isGenerating}
                   isLatestAssistantMessage={
-                    message.id === latestAssistantMessageId
+                    message.id === retryableAssistantMessageId
                   }
                   message={message}
                   onResend={onResend}
