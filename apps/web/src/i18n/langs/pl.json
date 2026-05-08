@@ -384,6 +384,9 @@
     "resend": "Wyślij ponownie",
     "send": "Wyślij wiadomość",
     "sendError": "Wystąpił problem podczas wysyłania wiadomości. Jeśli błąd będzie się powtarzał, skontaktuj się z pomocą techniczną.",
+    "sendErrorInsufficientCredits": "Dostawca AI potrzebuje więcej środków. Poproś administratora obszaru roboczego o doładowanie konta.",
+    "sendErrorProviderUnavailable": "Dostawca AI jest tymczasowo niedostępny. Spróbuj ponownie za chwilę.",
+    "sendErrorQuotaExhausted": "Limit dostawcy AI został wyczerpany. Spróbuj za chwilę ponownie lub poproś administratora obszaru roboczego o ulepszenie planu.",
     "thinking": "Pracuję z kontekstem",
     "threads": "Historia",
     "tool": {

@@ -384,6 +384,9 @@
     "resend": "Odeslat znovu",
     "send": "Odeslat zprávu",
     "sendError": "Při odesílání zprávy došlo k problému. Pokud chyba přetrvává, kontaktujte podporu.",
+    "sendErrorInsufficientCredits": "AI poskytovatel potřebuje doplnit kredity. Požádejte správce pracovního prostoru o navýšení zůstatku.",
+    "sendErrorProviderUnavailable": "AI poskytovatel je dočasně nedostupný. Zkuste to prosím za chvíli znovu.",
+    "sendErrorQuotaExhausted": "Kvóta AI poskytovatele je vyčerpaná. Zkuste to za chvíli znovu nebo požádejte správce pracovního prostoru o navýšení plánu.",
     "thinking": "Pracuji s kontextem",
     "threads": "Historie",
     "tool": {

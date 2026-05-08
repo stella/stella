@@ -597,6 +597,9 @@
             "location": "apps/web/src/components/empty-screen.tsx#2"
           },
           {
+            "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/prompt-editor.tsx#2"
           },
           {
@@ -814,6 +817,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#1"
@@ -1153,6 +1159,9 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/onboarding/-components/steps/jurisdiction-step.tsx#1"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#1"
@@ -1848,6 +1857,9 @@
             "location": "apps/web/src/components/empty-screen.tsx#2"
           },
           {
+            "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/prompt-editor.tsx#2"
           },
           {
@@ -2065,6 +2077,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#1"
@@ -2404,6 +2419,9 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/onboarding/-components/steps/jurisdiction-step.tsx#1"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#1"
@@ -3924,6 +3942,9 @@
             "location": "apps/web/src/components/empty-screen.tsx#2"
           },
           {
+            "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/prompt-editor.tsx#2"
           },
           {
@@ -4141,6 +4162,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#1"
@@ -4480,6 +4504,9 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/onboarding/-components/steps/jurisdiction-step.tsx#1"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#1"
@@ -5657,6 +5684,9 @@
             "location": "apps/web/src/components/empty-screen.tsx#2"
           },
           {
+            "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/prompt-editor.tsx#2"
           },
           {
@@ -5874,6 +5904,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#1"
@@ -6213,6 +6246,9 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/onboarding/-components/steps/jurisdiction-step.tsx#1"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#1"
@@ -7306,7 +7342,7 @@
             "location": "apps/api/src/lib/workflow/ai-prompts.ts#1"
           },
           {
-            "location": "apps/api/src/lib/workflow/docx-blocks.ts#21"
+            "location": "apps/api/src/lib/workflow/docx-blocks.ts#22"
           },
           {
             "location": "apps/api/src/lib/workflow/generate-batch.ts#2"
@@ -7941,6 +7977,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#5"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#14"
           },
           {
@@ -8478,6 +8517,9 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#3"
           },
           {
+            "location": "apps/web/src/routes/onboarding/-components/steps/jurisdiction-step.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#3"
           },
           {
@@ -8563,6 +8605,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#5"
@@ -8793,6 +8838,9 @@
             "location": "apps/web/src/components/empty-screen.tsx#5"
           },
           {
+            "location": "apps/web/src/components/jurisdiction-picker.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/person-mention-label.tsx#6"
           },
           {
@@ -9015,6 +9063,9 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#5"
           },
           {
+            "location": "apps/web/src/routes/onboarding/-components/steps/jurisdiction-step.tsx#4"
+          },
+          {
             "location": "packages/ui/src/components/accordion.tsx#4"
           },
           {
@@ -9184,6 +9235,9 @@
           },
           {
             "location": "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/jurisdiction-picker.tsx#3"
           },
           {
             "location": "apps/web/src/components/search-dialog.tsx#15"
@@ -9529,6 +9583,9 @@
           },
           {
             "location": "apps/web/src/components/language-picker.tsx#7"
+          },
+          {
+            "location": "apps/web/src/components/theme-picker.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#29"
@@ -10951,6 +11008,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#15"
@@ -12932,6 +12992,9 @@
             "location": "apps/web/src/components/empty-screen.tsx#2"
           },
           {
+            "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/prompt-editor.tsx#2"
           },
           {
@@ -13149,6 +13212,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#1"
@@ -13488,6 +13554,9 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/onboarding/-components/steps/jurisdiction-step.tsx#1"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#1"
@@ -13910,6 +13979,9 @@
           },
           {
             "location": "apps/api/src/handlers/search/ai.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/ai-error.ts#9"
           },
           {
             "location": "apps/api/src/lib/ai-models.ts#25"
@@ -14565,6 +14637,9 @@
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/update-practice-jurisdictions.ts#1"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update.ts#1"
@@ -15338,6 +15413,50 @@
       "scope": "required",
       "type": "library",
       "version": "2.1.1"
+    },
+    {
+      "bom-ref": "pkg:npm/cobe@2.0.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/cobe/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/cobe/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/src/routes/onboarding/-components/steps/jurisdiction-step.tsx#5"
+          }
+        ]
+      },
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "cobe",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/cobe/package.json"
+        }
+      ],
+      "purl": "pkg:npm/cobe@2.0.1",
+      "scope": "required",
+      "type": "library",
+      "version": "2.0.1"
     },
     {
       "bom-ref": "pkg:npm/diff@8.0.4",
@@ -16874,6 +16993,9 @@
             "location": "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/organization-settings/update-practice-jurisdictions.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/organization-settings/update.ts#2"
           },
           {
@@ -17788,7 +17910,7 @@
             "location": "apps/api/src/lib/docx-stamp.ts#9"
           },
           {
-            "location": "apps/api/src/lib/workflow/docx-blocks.ts#22"
+            "location": "apps/api/src/lib/workflow/docx-blocks.ts#23"
           },
           {
             "location": "packages/docx-utils/src/zip.ts#1"
@@ -17940,6 +18062,9 @@
             "location": "apps/web/src/components/feedback-dialog.tsx#1"
           },
           {
+            "location": "apps/web/src/components/jurisdiction-picker.tsx#5"
+          },
+          {
             "location": "apps/web/src/components/language-picker.tsx#8"
           },
           {
@@ -17953,6 +18078,9 @@
           },
           {
             "location": "apps/web/src/components/sidebar.tsx#31"
+          },
+          {
+            "location": "apps/web/src/components/theme-picker.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-anonymized-toggle.tsx#2"
@@ -18322,6 +18450,9 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/onboarding/-components/steps/jurisdiction-step.tsx#6"
           },
           {
             "location": "packages/folio/src/components/CommentsSidebar.tsx#21"
@@ -20170,6 +20301,9 @@
             "location": "apps/web/src/components/empty-screen.tsx#2"
           },
           {
+            "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/prompt-editor.tsx#2"
           },
           {
@@ -20387,6 +20521,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#1"
@@ -20728,6 +20865,9 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/onboarding/-components/steps/jurisdiction-step.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#1"
           },
           {
@@ -20992,7 +21132,7 @@
             "location": "apps/api/src/handlers/entities/validate-docx-buffer.ts#2"
           },
           {
-            "location": "apps/api/src/lib/workflow/docx-blocks.ts#23"
+            "location": "apps/api/src/lib/workflow/docx-blocks.ts#24"
           }
         ]
       },
@@ -21372,6 +21512,9 @@
             "location": "apps/web/src/components/feedback-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/components/jurisdiction-picker.tsx#6"
+          },
+          {
             "location": "apps/web/src/components/matter-number-hint.tsx#3"
           },
           {
@@ -21391,6 +21534,9 @@
           },
           {
             "location": "apps/web/src/components/sidebar.tsx#32"
+          },
+          {
+            "location": "apps/web/src/components/theme-picker.tsx#9"
           },
           {
             "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#17"
@@ -21499,6 +21645,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#11"
@@ -21832,6 +21981,9 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#7"
+          },
+          {
+            "location": "apps/web/src/routes/onboarding/-components/steps/jurisdiction-step.tsx#7"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#8"

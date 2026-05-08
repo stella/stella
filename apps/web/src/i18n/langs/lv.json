@@ -384,6 +384,9 @@
     "resend": "Nosūtīt vēlreiz",
     "send": "Nosūtīt ziņu",
     "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
+    "sendErrorInsufficientCredits": "AI pakalpojumu sniedzējam ir vajadzīgi papildu kredīti. Sazinieties ar darba telpas administratoru, lai papildinātu kontu.",
+    "sendErrorProviderUnavailable": "AI pakalpojumu sniedzējs uz laiku nav pieejams. Mēģiniet vēlreiz pēc brīža.",
+    "sendErrorQuotaExhausted": "AI pakalpojumu sniedzēja kvota ir izsmelta. Mēģiniet vēlreiz pēc minūtes vai sazinieties ar darba telpas administratoru, lai uzlabotu plānu.",
     "thinking": "Strādāju ar kontekstu",
     "threads": "Vēsture",
     "tool": {

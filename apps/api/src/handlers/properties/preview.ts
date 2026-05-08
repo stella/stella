@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { isMockAI } from "@/api/consts";
 import { propertyContentSchema } from "@/api/db/schema-validators";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { aiHandlerError } from "@/api/lib/ai-error";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -208,11 +209,13 @@ const previewProperty = createSafeHandler(
       if (skipped) {
         return Result.ok({ status: "skipped" } satisfies PreviewResponse);
       }
+      // WorkflowIntegrationError carries the underlying AI provider
+      // failure (if any) on its `cause` — classify against that so
+      // quota/credits errors propagate the right status to the UI.
       return Result.err(
-        new HandlerError({
+        aiHandlerError(generateResult.error.cause, {
           status: 502,
           message: "Preview generation failed",
-          cause: generateResult.error,
         }),
       );
     }
