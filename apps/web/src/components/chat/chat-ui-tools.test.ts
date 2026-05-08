@@ -272,6 +272,29 @@ describe("hasRunningToolCallInLatestAssistantMessage", () => {
     );
   });
 
+  test("ignores ask-user prompts waiting for a user answer", () => {
+    const messages = [
+      {
+        id: "message-1",
+        parts: [
+          {
+            input: { analysis: "Need the user's answer.", questions: [] },
+            state: "input-available",
+            toolCallId: "tool-call-1",
+            type: "tool-ask-user",
+          },
+        ],
+        role: "assistant",
+      },
+    ] satisfies Parameters<
+      typeof hasRunningToolCallInLatestAssistantMessage
+    >[0]["messages"];
+
+    expect(hasRunningToolCallInLatestAssistantMessage({ messages })).toBe(
+      false,
+    );
+  });
+
   test("ignores stale running tool parts from older messages", () => {
     const messages = [
       {

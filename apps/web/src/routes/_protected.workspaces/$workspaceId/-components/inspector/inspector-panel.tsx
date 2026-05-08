@@ -2544,15 +2544,23 @@ const useExternalPdfObjectUrl = ({
 }: {
   enabled: boolean;
   url?: string | undefined;
-}): string | undefined => {
+}): {
+  objectUrl: string | undefined;
+  status: "error" | "idle" | "loading" | "ready";
+} => {
   const [objectUrl, setObjectUrl] = useState<string | undefined>();
+  const [status, setStatus] = useState<"error" | "idle" | "loading" | "ready">(
+    "idle",
+  );
 
   useEffect(() => {
     setObjectUrl(undefined);
     if (!enabled || url === undefined) {
+      setStatus("idle");
       return undefined;
     }
 
+    setStatus("loading");
     let nextObjectUrl: string | undefined;
     const controller = new AbortController();
 
@@ -2563,6 +2571,9 @@ const useExternalPdfObjectUrl = ({
       });
 
       if (!response.ok || controller.signal.aborted) {
+        if (!controller.signal.aborted) {
+          setStatus("error");
+        }
         return;
       }
 
@@ -2573,9 +2584,11 @@ const useExternalPdfObjectUrl = ({
 
       nextObjectUrl = URL.createObjectURL(blob);
       setObjectUrl(nextObjectUrl);
+      setStatus("ready");
     })().catch(() => {
       if (!controller.signal.aborted) {
         setObjectUrl(undefined);
+        setStatus("error");
       }
     });
 
@@ -2587,17 +2600,30 @@ const useExternalPdfObjectUrl = ({
     };
   }, [enabled, url]);
 
-  return objectUrl;
+  return { objectUrl, status };
 };
 
 const ExternalPdfPreview = ({
   objectUrl,
+  onOpenOriginal,
+  status,
   title,
 }: {
   objectUrl?: string | undefined;
+  onOpenOriginal: () => void;
+  status: "error" | "idle" | "loading" | "ready";
   title: string;
 }) => {
-  if (objectUrl === undefined) {
+  if (status === "error") {
+    return (
+      <ExternalPreviewUnavailable
+        canOpenOriginal
+        onOpenOriginal={onOpenOriginal}
+      />
+    );
+  }
+
+  if (objectUrl === undefined || status === "loading" || status === "idle") {
     return (
       <div className="space-y-3 p-4">
         <Skeleton className="h-4 w-2/3" />
@@ -2610,6 +2636,39 @@ const ExternalPdfPreview = ({
 
   return (
     <iframe className="min-h-0 flex-1 border-0" src={objectUrl} title={title} />
+  );
+};
+
+const ExternalPreviewUnavailable = ({
+  canOpenOriginal,
+  onOpenOriginal,
+}: {
+  canOpenOriginal: boolean;
+  onOpenOriginal: () => void;
+}) => {
+  const t = useTranslations();
+
+  return (
+    <div className="flex flex-1 items-center justify-center p-6">
+      <div className="max-w-sm text-center">
+        <ExternalLinkIcon className="text-muted-foreground mx-auto size-6" />
+        <p className="text-muted-foreground mt-3 text-sm">
+          {t("inspector.external.unavailable")}
+        </p>
+        {canOpenOriginal && (
+          <Button
+            className="mt-4"
+            aria-label={t("inspector.external.openOriginal")}
+            onClick={onOpenOriginal}
+            size="sm"
+            variant="outline"
+          >
+            <ExternalLinkIcon className="size-3.5" />
+            {t("inspector.external.openOriginal")}
+          </Button>
+        )}
+      </div>
+    </div>
   );
 };
 
@@ -2667,7 +2726,7 @@ const ExternalReferencePanel = ({
       : `${env.VITE_API_URL}/v1/external-preview/file?url=${encodeURIComponent(safeHref)}`;
   const shouldLoadExternalPdf =
     fetchedPreview?.format === "pdf" && externalFilePreviewUrl !== undefined;
-  const externalPdfObjectUrl = useExternalPdfObjectUrl({
+  const externalPdfPreview = useExternalPdfObjectUrl({
     enabled: shouldLoadExternalPdf,
     url: externalFilePreviewUrl,
   });
@@ -2736,6 +2795,13 @@ const ExternalReferencePanel = ({
   const requestOpenExternal = useCallback((href: string) => {
     setConfirmHref(href);
   }, []);
+  const requestSafeExternalOpen = useCallback(() => {
+    if (safeHref === undefined) {
+      return;
+    }
+
+    requestOpenExternal(safeHref);
+  }, [requestOpenExternal, safeHref]);
   const openConfirmedExternal = useCallback(() => {
     if (confirmHref === undefined) {
       return;
@@ -2946,7 +3012,9 @@ const ExternalReferencePanel = ({
             </div>
           ) : shouldLoadExternalPdf ? (
             <ExternalPdfPreview
-              objectUrl={externalPdfObjectUrl}
+              objectUrl={externalPdfPreview.objectUrl}
+              onOpenOriginal={requestSafeExternalOpen}
+              status={externalPdfPreview.status}
               title={tab.label}
             />
           ) : previewText || tab.snippet ? (
@@ -2974,28 +3042,10 @@ const ExternalReferencePanel = ({
               </article>
             </ScrollArea>
           ) : (
-            <div className="flex flex-1 items-center justify-center p-6">
-              <div className="max-w-sm text-center">
-                <ExternalLinkIcon className="text-muted-foreground mx-auto size-6" />
-                <p className="text-muted-foreground mt-3 text-sm">
-                  {t("inspector.external.unavailable")}
-                </p>
-                {canPreview && (
-                  <Button
-                    className="mt-4"
-                    aria-label={t("inspector.external.openOriginal")}
-                    onClick={() => {
-                      requestOpenExternal(safeHref);
-                    }}
-                    size="sm"
-                    variant="outline"
-                  >
-                    <ExternalLinkIcon className="size-3.5" />
-                    {t("inspector.external.openOriginal")}
-                  </Button>
-                )}
-              </div>
-            </div>
+            <ExternalPreviewUnavailable
+              canOpenOriginal={canPreview}
+              onOpenOriginal={requestSafeExternalOpen}
+            />
           )}
         </div>
       </FileViewerWithAI>

@@ -272,6 +272,10 @@ export const isRunningToolPart = (part: unknown): boolean => {
     return false;
   }
 
+  if (part.type === "tool-ask-user") {
+    return false;
+  }
+
   return part.type === "dynamic-tool" || part.type.startsWith("tool-");
 };
 
