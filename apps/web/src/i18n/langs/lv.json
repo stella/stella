@@ -1071,19 +1071,23 @@
   },
   "knowledge": {
     "mcp": {
+      "addAndConnect": "Pievienot un savienot",
       "addServer": "Pievienot serveri",
+      "addServerCardDescription": "Ielīmējiet servera URL, un Stella to savienos vienā plūsmā.",
+      "addServerCardTitle": "Pievienot jaunu MCP serveri",
       "auth": {
         "bearer": "Bearer tokens",
         "none": "Bez autentifikācijas",
         "oauth2": "OAuth 2.0"
       },
       "availableInChat": "Pieejams čatā",
+      "bearerTokenDescription": "Šis serveris izmanto Bearer tokenu. Ielīmējiet pakalpojuma sniedzēja tokenu, lai pabeigtu savienošanu.",
       "builtInBadge": "Iebūvēts",
       "connect": "Pievienot",
       "connected": "Pievienots",
       "connectedToast": "MCP savienotājs pievienots",
       "connectedWithLastUsed": "Pievienots · pēdoreiz izmantots {time}",
-      "customDescription": "Ielīmējiet Streamable HTTP MCP URL. Stella pirms saglabāšanas organizācijai noteiks OAuth, Bearer tokenu vai publisku piekļuvi.",
+      "customDescription": "Ielīmējiet MCP servera URL. Stella noteiks savienojuma veidu un turpinās automātiski.",
       "customTitle": "Pievienot pielāgotu serveri",
       "description": "Pārvaldiet ārējos MCP serverus, kas var pievienot rīkus čatam. Tokeni tiek glabāti katram lietotājam atsevišķi.",
       "detected": "Noteikts: {authType}",
@@ -1111,6 +1115,7 @@
       "tokenHelp": "Kā iegūt tokenu",
       "tokenLabel": "Bearer tokens",
       "tokenPlaceholder": "Ielīmējiet tokenu",
+      "urlLabel": "MCP servera URL",
       "urlPlaceholder": "https://example.com/mcp",
       "useInChat": "Izmantot čatā"
     },

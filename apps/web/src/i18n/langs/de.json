@@ -1071,19 +1071,23 @@
   },
   "knowledge": {
     "mcp": {
+      "addAndConnect": "Hinzufügen und verbinden",
       "addServer": "Server hinzufügen",
+      "addServerCardDescription": "Fügen Sie eine Server-URL ein; Stella verbindet ihn in einem Ablauf.",
+      "addServerCardTitle": "Neuen MCP-Server hinzufügen",
       "auth": {
         "bearer": "Bearer-Token",
         "none": "Keine Authentifizierung",
         "oauth2": "OAuth 2.0"
       },
       "availableInChat": "Im Chat verfügbar",
+      "bearerTokenDescription": "Dieser Server verwendet ein Bearer-Token. Fügen Sie das Token des Anbieters ein, um die Verbindung abzuschließen.",
       "builtInBadge": "Integriert",
       "connect": "Verbinden",
       "connected": "Verbunden",
       "connectedToast": "MCP-Konnektor verbunden",
       "connectedWithLastUsed": "Verbunden · zuletzt verwendet {time}",
-      "customDescription": "Fügen Sie eine Streamable-HTTP-MCP-URL ein. Stella erkennt OAuth, Bearer-Token oder öffentlichen Zugriff, bevor der Server für diese Organisation gespeichert wird.",
+      "customDescription": "Fügen Sie die MCP-Server-URL ein. Stella erkennt die Verbindungsart und fährt automatisch fort.",
       "customTitle": "Eigenen Server hinzufügen",
       "description": "Verwalten Sie externe MCP-Server, die dem Chat Werkzeuge hinzufügen können. Tokens werden pro Benutzer gespeichert.",
       "detected": "{authType} erkannt",
@@ -1111,6 +1115,7 @@
       "tokenHelp": "Token erhalten",
       "tokenLabel": "Bearer-Token",
       "tokenPlaceholder": "Token einfügen",
+      "urlLabel": "MCP-Server-URL",
       "urlPlaceholder": "https://example.com/mcp",
       "useInChat": "Im Chat verwenden"
     },

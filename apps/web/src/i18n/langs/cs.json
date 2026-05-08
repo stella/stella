@@ -1071,19 +1071,23 @@
   },
   "knowledge": {
     "mcp": {
+      "addAndConnect": "Přidat a připojit",
       "addServer": "Přidat server",
+      "addServerCardDescription": "Vložte URL serveru a Stella ho připojí v jednom kroku.",
+      "addServerCardTitle": "Přidat nový MCP server",
       "auth": {
         "bearer": "Bearer token",
         "none": "Bez přihlášení",
         "oauth2": "OAuth 2.0"
       },
       "availableInChat": "Dostupné v chatu",
+      "bearerTokenDescription": "Tento server používá bearer token. Pro dokončení připojení vložte token od poskytovatele.",
       "builtInBadge": "Vestavěné",
       "connect": "Připojit",
       "connected": "Připojeno",
       "connectedToast": "MCP konektor je připojený",
       "connectedWithLastUsed": "Připojeno · naposledy použito {time}",
-      "customDescription": "Vložte URL Streamable HTTP MCP. Stella před uložením pro organizaci rozpozná OAuth, Bearer token nebo veřejný přístup.",
+      "customDescription": "Vložte URL MCP serveru. Stella zjistí způsob připojení a bude automaticky pokračovat.",
       "customTitle": "Přidat vlastní server",
       "description": "Správa externích MCP serverů, které mohou přidat nástroje do chatu. Tokeny se ukládají pro každého uživatele zvlášť.",
       "detected": "Rozpoznáno: {authType}",
@@ -1111,6 +1115,7 @@
       "tokenHelp": "Jak získat token",
       "tokenLabel": "Bearer token",
       "tokenPlaceholder": "Vložte token",
+      "urlLabel": "URL MCP serveru",
       "urlPlaceholder": "https://example.com/mcp",
       "useInChat": "Používat v chatu"
     },

@@ -1071,19 +1071,23 @@
   },
   "knowledge": {
     "mcp": {
+      "addAndConnect": "Lisa ja ühenda",
       "addServer": "Lisa server",
+      "addServerCardDescription": "Kleepige serveri URL ja Stella ühendab selle ühe voona.",
+      "addServerCardTitle": "Lisa uus MCP server",
       "auth": {
         "bearer": "Bearer-token",
         "none": "Autentimiseta",
         "oauth2": "OAuth 2.0"
       },
       "availableInChat": "Vestluses saadaval",
+      "bearerTokenDescription": "See server kasutab bearer-tokenit. Ühenduse lõpetamiseks kleepige teenusepakkuja token.",
       "builtInBadge": "Sisseehitatud",
       "connect": "Ühenda",
       "connected": "Ühendatud",
       "connectedToast": "MCP-konnektor ühendatud",
       "connectedWithLastUsed": "Ühendatud · viimati kasutatud {time}",
-      "customDescription": "Kleepige Streamable HTTP MCP URL. Stella tuvastab enne organisatsiooni jaoks salvestamist OAuthi, Bearer-tokeni või avaliku ligipääsu.",
+      "customDescription": "Kleepige MCP serveri URL. Stella tuvastab ühendusviisi ja jätkab automaatselt.",
       "customTitle": "Lisa kohandatud server",
       "description": "Hallake väliseid MCP-servereid, mis saavad vestlusse tööriistu lisada. Tokenid salvestatakse kasutajapõhiselt.",
       "detected": "Tuvastatud: {authType}",
@@ -1111,6 +1115,7 @@
       "tokenHelp": "Kuidas token hankida",
       "tokenLabel": "Bearer-token",
       "tokenPlaceholder": "Kleepige token",
+      "urlLabel": "MCP serveri URL",
       "urlPlaceholder": "https://example.com/mcp",
       "useInChat": "Kasuta vestluses"
     },

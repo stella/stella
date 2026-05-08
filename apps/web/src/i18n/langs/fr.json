@@ -1071,19 +1071,23 @@
   },
   "knowledge": {
     "mcp": {
+      "addAndConnect": "Ajouter et connecter",
       "addServer": "Ajouter un serveur",
+      "addServerCardDescription": "Collez l’URL d’un serveur et Stella le connectera dans un seul flux.",
+      "addServerCardTitle": "Ajouter un nouveau serveur MCP",
       "auth": {
         "bearer": "Jeton Bearer",
         "none": "Sans authentification",
         "oauth2": "OAuth 2.0"
       },
       "availableInChat": "Disponible dans le chat",
+      "bearerTokenDescription": "Ce serveur utilise un jeton Bearer. Collez le jeton fourni pour terminer la connexion.",
       "builtInBadge": "Intégré",
       "connect": "Connecter",
       "connected": "Connecté",
       "connectedToast": "Connecteur MCP connecté",
       "connectedWithLastUsed": "Connecté · dernière utilisation {time}",
-      "customDescription": "Collez une URL MCP Streamable HTTP. Stella détectera OAuth, un jeton Bearer ou un accès public avant de l’enregistrer pour cette organisation.",
+      "customDescription": "Collez l’URL du serveur MCP. Stella détectera le mode de connexion et continuera automatiquement.",
       "customTitle": "Ajouter un serveur personnalisé",
       "description": "Gérez les serveurs MCP externes qui peuvent ajouter des outils au chat. Les jetons sont stockés par utilisateur.",
       "detected": "{authType} détecté",
@@ -1111,6 +1115,7 @@
       "tokenHelp": "Comment obtenir un jeton",
       "tokenLabel": "Jeton Bearer",
       "tokenPlaceholder": "Coller le jeton",
+      "urlLabel": "URL du serveur MCP",
       "urlPlaceholder": "https://example.com/mcp",
       "useInChat": "Utiliser dans le chat"
     },

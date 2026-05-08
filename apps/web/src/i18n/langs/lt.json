@@ -1071,19 +1071,23 @@
   },
   "knowledge": {
     "mcp": {
+      "addAndConnect": "Pridėti ir prijungti",
       "addServer": "Pridėti serverį",
+      "addServerCardDescription": "Įklijuokite serverio URL, o Stella jį prijungs vienu veiksmu.",
+      "addServerCardTitle": "Pridėti naują MCP serverį",
       "auth": {
         "bearer": "Bearer tokenas",
         "none": "Be autentifikavimo",
         "oauth2": "OAuth 2.0"
       },
       "availableInChat": "Pasiekiama pokalbyje",
+      "bearerTokenDescription": "Šis serveris naudoja Bearer tokeną. Įklijuokite teikėjo tokeną, kad užbaigtumėte prijungimą.",
       "builtInBadge": "Integruota",
       "connect": "Prijungti",
       "connected": "Prijungta",
       "connectedToast": "MCP jungtis prijungta",
       "connectedWithLastUsed": "Prijungta · paskutinį kartą naudota {time}",
-      "customDescription": "Įklijuokite Streamable HTTP MCP URL. Stella prieš išsaugodama organizacijai aptiks OAuth, Bearer tokeną arba viešą prieigą.",
+      "customDescription": "Įklijuokite MCP serverio URL. Stella nustatys prisijungimo būdą ir tęs automatiškai.",
       "customTitle": "Pridėti pasirinktinį serverį",
       "description": "Tvarkykite išorinius MCP serverius, kurie gali pridėti įrankių į pokalbį. Tokenai saugomi kiekvienam naudotojui atskirai.",
       "detected": "Aptikta: {authType}",
@@ -1111,6 +1115,7 @@
       "tokenHelp": "Kaip gauti tokeną",
       "tokenLabel": "Bearer tokenas",
       "tokenPlaceholder": "Įklijuokite tokeną",
+      "urlLabel": "MCP serverio URL",
       "urlPlaceholder": "https://example.com/mcp",
       "useInChat": "Naudoti pokalbyje"
     },

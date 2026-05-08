@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 
 import { Button } from "@stll/ui/components/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
@@ -10,12 +21,13 @@ import {
   CheckIcon,
   ExternalLinkIcon,
   KeyRoundIcon,
+  LoaderIcon,
   PlugZapIcon,
   PlusIcon,
   RefreshCcwIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { env } from "@/env";
 import { api } from "@/lib/api";
@@ -67,15 +79,23 @@ type NativeToolCatalogItem = {
   recommendedJurisdictions: string[];
 };
 
-type ProbeResult =
-  | {
-      authType: "oauth2";
-      authorizationServerUrl: string;
-      resourceUrl: string;
-      scopes: string[];
+type CreatedConnector = {
+  slug: string;
+  authType: McpConnector["authType"];
+};
+
+const sortCatalogItems = <
+  TItem extends { displayName: string; isRecommended: boolean },
+>(
+  items: readonly TItem[],
+) =>
+  [...items].sort((left, right) => {
+    if (left.isRecommended !== right.isRecommended) {
+      return left.isRecommended ? -1 : 1;
     }
-  | { authType: "bearer" }
-  | { authType: "none" };
+
+    return left.displayName.localeCompare(right.displayName);
+  });
 
 function McpPage() {
   const t = useTranslations();
@@ -92,18 +112,6 @@ function McpPage() {
   const connections = connectionsData?.connections ?? [];
   const canManageCustomConnectors =
     connectorsData?.canManageCustomConnectors ?? false;
-  const recommendedConnectors = connectors.filter(
-    (connector) => connector.isRecommended,
-  );
-  const recommendedNativeTools = nativeTools.filter(
-    (tool) => tool.isRecommended,
-  );
-  const otherConnectors = connectors.filter(
-    (connector) => !connector.isRecommended,
-  );
-  const otherNativeTools = nativeTools.filter((tool) => !tool.isRecommended);
-  const hasRecommendedItems =
-    recommendedConnectors.length > 0 || recommendedNativeTools.length > 0;
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -140,34 +148,32 @@ function McpPage() {
         </p>
       </div>
 
-      {hasRecommendedItems && (
-        <ConnectorSection
-          connections={connections}
-          connectors={recommendedConnectors}
-          nativeTools={recommendedNativeTools}
-          onChanged={() => {
-            void queryClient.invalidateQueries({
-              queryKey: knowledgeKeys.mcp.all,
-            });
-          }}
-          title={t("knowledge.mcp.recommendedTitle")}
-        />
-      )}
-
       <ConnectorSection
+        addServerCard={
+          canManageCustomConnectors ? (
+            <AddServerCard
+              onChanged={() => {
+                void queryClient.invalidateQueries({
+                  queryKey: knowledgeKeys.mcp.all,
+                });
+              }}
+            />
+          ) : undefined
+        }
         connections={connections}
-        connectors={otherConnectors}
-        nativeTools={otherNativeTools}
+        connectors={sortCatalogItems(connectors)}
+        nativeTools={sortCatalogItems(nativeTools)}
         onChanged={() => {
           void queryClient.invalidateQueries({
             queryKey: knowledgeKeys.mcp.all,
           });
         }}
-        title={hasRecommendedItems ? t("knowledge.mcp.otherTitle") : undefined}
+        userCanManageCustomConnectors={canManageCustomConnectors}
       />
 
       {connectors.length === 0 &&
         nativeTools.length === 0 &&
+        !canManageCustomConnectors &&
         !connectorsLoading && (
           <div className="border-border bg-muted/20 flex min-h-[260px] flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
             <PlugZapIcon className="text-muted-foreground size-8" />
@@ -179,41 +185,37 @@ function McpPage() {
             </p>
           </div>
         )}
-
-      {canManageCustomConnectors && (
-        <CustomServerPanel
-          onCreated={() => {
-            void queryClient.invalidateQueries({
-              queryKey: knowledgeKeys.mcp.all,
-            });
-          }}
-        />
-      )}
     </div>
   );
 }
 
 function ConnectorSection({
+  addServerCard,
   connections,
   connectors,
   nativeTools = [],
   onChanged,
-  title,
+  userCanManageCustomConnectors,
 }: {
+  addServerCard?: ReactNode;
   connections: McpConnection[];
   connectors: McpConnector[];
   nativeTools?: NativeToolCatalogItem[] | undefined;
   onChanged: () => void;
-  title: string | undefined;
+  userCanManageCustomConnectors: boolean;
 }) {
-  if (connectors.length === 0 && nativeTools.length === 0) {
+  if (
+    addServerCard === undefined &&
+    connectors.length === 0 &&
+    nativeTools.length === 0
+  ) {
     return null;
   }
 
   return (
     <section className="mb-6">
-      {title && <h2 className="mb-3 text-sm font-semibold">{title}</h2>}
       <div className="grid gap-3 xl:grid-cols-2">
+        {addServerCard}
         {nativeTools.map((tool) => (
           <NativeToolCard key={tool.slug} tool={tool} />
         ))}
@@ -225,6 +227,7 @@ function ConnectorSection({
               (item) => item.connectorSlug === connector.slug,
             )}
             onChanged={onChanged}
+            userCanManageCustomConnectors={userCanManageCustomConnectors}
           />
         ))}
       </div>
@@ -236,13 +239,14 @@ function ConnectorCard({
   connector,
   connection,
   onChanged,
+  userCanManageCustomConnectors,
 }: {
   connector: McpConnector;
   connection: McpConnection | undefined;
   onChanged: () => void;
+  userCanManageCustomConnectors: boolean;
 }) {
   const t = useTranslations();
-  const locale = useLocale();
   const [busy, setBusy] = useState(false);
   const [token, setToken] = useState("");
   const [showTokenInput, setShowTokenInput] = useState(
@@ -375,9 +379,30 @@ function ConnectorCard({
     onChanged();
   };
 
+  const deleteConnector = async () => {
+    setBusy(true);
+    const response = await api.mcp
+      .connectors({ slug: connector.slug })
+      .delete({ queryKey: ["mcp"] });
+    setBusy(false);
+
+    if (response.error) {
+      showApiError({
+        error: response.error,
+        fallback: t("knowledge.mcp.errorDescription"),
+        title: t("knowledge.mcp.errorTitle"),
+      });
+      return;
+    }
+
+    onChanged();
+  };
+
   const connected = connection?.status === "connected";
   const enabled = connected && connection.enabled;
   const needsReauth = connection?.status === "needs_reauth";
+  const canDeleteConnector =
+    !connector.isCurated && userCanManageCustomConnectors;
   const documentationHref =
     connector.documentationUrl === null
       ? undefined
@@ -411,7 +436,7 @@ function ConnectorCard({
             <h2 className="text-sm font-semibold">{connector.displayName}</h2>
             {connector.isRecommended && (
               <span className="bg-success/10 text-success rounded-md px-2 py-0.5 text-xs font-medium">
-                {t("knowledge.mcp.recommendedBadge")}
+                {t("knowledge.mcp.recommendedTitle")}
               </span>
             )}
             <ConnectionStatusBadge connection={connection} />
@@ -420,16 +445,6 @@ function ConnectorCard({
           <p className="text-muted-foreground mt-1 text-sm">
             {connector.description}
           </p>
-          {connector.recommendedJurisdictions.length > 0 && (
-            <p className="text-muted-foreground mt-2 text-xs">
-              {t("knowledge.mcp.recommendedFor", {
-                jurisdictions: formatJurisdictions(
-                  connector.recommendedJurisdictions,
-                  locale,
-                ),
-              })}
-            </p>
-          )}
           <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-3 text-xs">
             <span className="truncate">{connector.url}</span>
             {documentationHref && (
@@ -475,6 +490,17 @@ function ConnectorCard({
           >
             <Trash2Icon className="me-1.5 size-4" />
             {t("knowledge.mcp.disconnect")}
+          </Button>
+        )}
+        {canDeleteConnector && (
+          <Button
+            disabled={busy}
+            onClick={() => void deleteConnector()}
+            size="sm"
+            variant="ghost"
+          >
+            <Trash2Icon className="me-1.5 size-4" />
+            {t("common.delete")}
           </Button>
         )}
       </div>
@@ -524,7 +550,6 @@ function ConnectorCard({
 
 function NativeToolCard({ tool }: { tool: NativeToolCatalogItem }) {
   const t = useTranslations();
-  const locale = useLocale();
   const documentationHref =
     tool.documentationUrl === null
       ? undefined
@@ -554,7 +579,7 @@ function NativeToolCard({ tool }: { tool: NativeToolCatalogItem }) {
             <h2 className="text-sm font-semibold">{tool.displayName}</h2>
             {tool.isRecommended && (
               <span className="bg-success/10 text-success rounded-md px-2 py-0.5 text-xs font-medium">
-                {t("knowledge.mcp.recommendedBadge")}
+                {t("knowledge.mcp.recommendedTitle")}
               </span>
             )}
             <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs font-medium">
@@ -564,16 +589,6 @@ function NativeToolCard({ tool }: { tool: NativeToolCatalogItem }) {
           <p className="text-muted-foreground mt-1 text-sm">
             {tool.description}
           </p>
-          {tool.recommendedJurisdictions.length > 0 && (
-            <p className="text-muted-foreground mt-2 text-xs">
-              {t("knowledge.mcp.recommendedFor", {
-                jurisdictions: formatJurisdictions(
-                  tool.recommendedJurisdictions,
-                  locale,
-                ),
-              })}
-            </p>
-          )}
           <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-3 text-xs">
             <span className="truncate">{tool.url}</span>
             {documentationHref && (
@@ -682,18 +697,6 @@ const fallbackIconUrl = (rawUrl: string): string | undefined => {
   }
 };
 
-function formatJurisdictions(countryCodes: readonly string[], locale: string) {
-  const names = new Intl.DisplayNames([locale], { type: "region" });
-  const formatter = new Intl.ListFormat(locale, {
-    style: "long",
-    type: "conjunction",
-  });
-
-  return formatter.format(
-    countryCodes.map((countryCode) => names.of(countryCode) ?? countryCode),
-  );
-}
-
 function AuthBadge({ authType }: { authType: McpConnector["authType"] }) {
   const t = useTranslations();
 
@@ -704,25 +707,73 @@ function AuthBadge({ authType }: { authType: McpConnector["authType"] }) {
   );
 }
 
-function CustomServerPanel({ onCreated }: { onCreated: () => void }) {
+function AddServerCard({ onChanged }: { onChanged: () => void }) {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        className="bg-card hover:bg-muted/30 focus-visible:ring-ring flex min-h-[176px] flex-col items-start justify-between rounded-lg border border-dashed p-5 text-start transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        onClick={() => setOpen(true)}
+        type="button"
+      >
+        <span className="bg-muted flex size-10 items-center justify-center rounded-lg">
+          <PlusIcon className="size-5" />
+        </span>
+        <span>
+          <span className="block text-sm font-semibold">
+            {t("knowledge.mcp.addServerCardTitle")}
+          </span>
+          <span className="text-muted-foreground mt-1 block text-sm">
+            {t("knowledge.mcp.addServerCardDescription")}
+          </span>
+        </span>
+      </button>
+      <AddServerDialog
+        onChanged={onChanged}
+        onOpenChange={setOpen}
+        open={open}
+      />
+    </>
+  );
+}
+
+function AddServerDialog({
+  onChanged,
+  onOpenChange,
+  open,
+}: {
+  onChanged: () => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) {
   const t = useTranslations();
   const [url, setUrl] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [probe, setProbe] = useState<ProbeResult | undefined>();
+  const [token, setToken] = useState("");
+  const [createdConnector, setCreatedConnector] = useState<
+    CreatedConnector | undefined
+  >();
   const [busy, setBusy] = useState(false);
 
-  const probeServer = async () => {
-    const trimmedUrl = url.trim();
-    if (!trimmedUrl) {
-      return;
-    }
-
-    setBusy(true);
-    const response = await api.mcp.connectors.probe.post({ url: trimmedUrl });
+  const reset = () => {
+    setUrl("");
+    setToken("");
+    setCreatedConnector(undefined);
     setBusy(false);
+  };
+
+  const close = () => {
+    onOpenChange(false);
+    reset();
+  };
+
+  const connectConnector = async (connector: CreatedConnector) => {
+    const response = await api.mcp
+      .connectors({ slug: connector.slug })
+      .connect.post({ queryKey: ["mcp"] });
 
     if (response.error) {
-      setProbe(undefined);
       showApiError({
         error: response.error,
         fallback: t("knowledge.mcp.errorDescription"),
@@ -731,19 +782,42 @@ function CustomServerPanel({ onCreated }: { onCreated: () => void }) {
       return;
     }
 
-    setProbe(response.data);
+    if (response.data.type === "bearer") {
+      setCreatedConnector(connector);
+      return;
+    }
+
+    if (response.data.type === "oauth2") {
+      const popup = window.open(
+        response.data.authorizeUrl,
+        "_blank",
+        "width=560,height=720",
+      );
+
+      if (!popup) {
+        window.location.assign(response.data.authorizeUrl);
+      }
+      close();
+      return;
+    }
+
+    stellaToast.add({
+      title: t("knowledge.mcp.connectedToast"),
+      type: "success",
+    });
+    onChanged();
+    close();
   };
 
-  const createServer = async () => {
+  const addServer = async () => {
     const trimmedUrl = url.trim();
-    if (!trimmedUrl) {
+    if (!trimmedUrl || busy) {
       return;
     }
 
     setBusy(true);
     const response = await api.mcp.connectors.post({
       url: trimmedUrl,
-      ...(displayName.trim() ? { displayName: displayName.trim() } : {}),
       queryKey: ["mcp"],
     });
     setBusy(false);
@@ -757,65 +831,120 @@ function CustomServerPanel({ onCreated }: { onCreated: () => void }) {
       return;
     }
 
-    setUrl("");
-    setDisplayName("");
-    setProbe(undefined);
-    onCreated();
+    onChanged();
+    const connector = response.data.connector;
+    await connectConnector(connector);
+  };
+
+  const saveToken = async () => {
+    const trimmedToken = token.trim();
+    if (!createdConnector || !trimmedToken || busy) {
+      return;
+    }
+
+    setBusy(true);
+    const response = await api.mcp.connections.post({
+      connectorSlug: createdConnector.slug,
+      token: trimmedToken,
+      queryKey: ["mcp"],
+    });
+    setBusy(false);
+
+    if (response.error) {
+      showApiError({
+        error: response.error,
+        fallback: t("knowledge.mcp.errorDescription"),
+        title: t("knowledge.mcp.errorTitle"),
+      });
+      return;
+    }
+
+    stellaToast.add({
+      title: t("knowledge.mcp.connectedToast"),
+      type: "success",
+    });
+    onChanged();
+    close();
   };
 
   return (
-    <section className="border-border mt-8 border-t pt-6">
-      <div className="max-w-2xl">
-        <h2 className="text-sm font-semibold">
-          {t("knowledge.mcp.customTitle")}
-        </h2>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {t("knowledge.mcp.customDescription")}
-        </p>
+    <Dialog
+      onOpenChange={(nextOpen) => {
+        onOpenChange(nextOpen);
+        if (!nextOpen) {
+          reset();
+        }
+      }}
+      open={open}
+    >
+      <DialogPopup>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (createdConnector) {
+              void saveToken();
+              return;
+            }
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_220px_auto]">
-          <Input
-            onChange={(event) => setUrl(event.target.value)}
-            placeholder={t("knowledge.mcp.urlPlaceholder")}
-            value={url}
-          />
-          <Input
-            onChange={(event) => setDisplayName(event.target.value)}
-            placeholder={t("knowledge.mcp.namePlaceholder")}
-            value={displayName}
-          />
-          <Button
-            disabled={busy || !url.trim()}
-            onClick={() => void probeServer()}
-          >
-            {t("knowledge.mcp.probe")}
-          </Button>
-        </div>
-
-        {probe && (
-          <div className="border-border bg-muted/20 mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
-            <div>
-              <p className="text-sm font-medium">
-                {t("knowledge.mcp.detected", {
-                  authType: t(`knowledge.mcp.auth.${probe.authType}`),
-                })}
+            void addServer();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{t("knowledge.mcp.customTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("knowledge.mcp.customDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogPanel className="flex flex-col gap-4">
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-medium">
+                {createdConnector
+                  ? t("knowledge.mcp.tokenLabel")
+                  : t("knowledge.mcp.urlLabel")}
+              </span>
+              <Input
+                autoComplete={createdConnector ? "off" : "url"}
+                autoFocus
+                className={createdConnector ? "font-mono" : undefined}
+                onChange={(event) =>
+                  createdConnector
+                    ? setToken(event.target.value)
+                    : setUrl(event.target.value)
+                }
+                placeholder={
+                  createdConnector
+                    ? t("knowledge.mcp.tokenPlaceholder")
+                    : t("knowledge.mcp.urlPlaceholder")
+                }
+                type={createdConnector ? "password" : "url"}
+                value={createdConnector ? token : url}
+              />
+            </label>
+            {createdConnector && (
+              <p className="text-muted-foreground text-sm">
+                {t("knowledge.mcp.bearerTokenDescription")}
               </p>
-              <p className="text-muted-foreground mt-0.5 text-xs">
-                {probe.authType === "oauth2" ? probe.resourceUrl : url.trim()}
-              </p>
-            </div>
+            )}
+          </DialogPanel>
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="ghost" />}>
+              {t("common.cancel")}
+            </DialogClose>
             <Button
-              disabled={busy}
-              onClick={() => void createServer()}
-              size="sm"
+              disabled={
+                busy || (createdConnector ? !token.trim() : !url.trim())
+              }
+              type="submit"
             >
-              <PlusIcon className="me-1.5 size-4" />
-              {t("knowledge.mcp.addServer")}
+              {busy ? <LoaderIcon className="size-4 animate-spin" /> : null}
+              {createdConnector
+                ? t("knowledge.mcp.saveToken")
+                : t("knowledge.mcp.addAndConnect")}
             </Button>
-          </div>
-        )}
-      </div>
-    </section>
+          </DialogFooter>
+        </form>
+      </DialogPopup>
+    </Dialog>
   );
 }
 

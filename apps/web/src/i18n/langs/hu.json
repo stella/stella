@@ -1071,19 +1071,23 @@
   },
   "knowledge": {
     "mcp": {
+      "addAndConnect": "Hozzáadás és csatlakozás",
       "addServer": "Szerver hozzáadása",
+      "addServerCardDescription": "Illessze be a szerver URL-jét, és a Stella egy lépésben csatlakoztatja.",
+      "addServerCardTitle": "Új MCP-szerver hozzáadása",
       "auth": {
         "bearer": "Bearer token",
         "none": "Nincs hitelesítés",
         "oauth2": "OAuth 2.0"
       },
       "availableInChat": "Elérhető a chatben",
+      "bearerTokenDescription": "Ez a szerver Bearer tokent használ. A csatlakozás befejezéséhez illessze be a szolgáltatótól kapott tokent.",
       "builtInBadge": "Beépített",
       "connect": "Csatlakoztatás",
       "connected": "Csatlakoztatva",
       "connectedToast": "MCP-konnektor csatlakoztatva",
       "connectedWithLastUsed": "Csatlakoztatva · legutóbbi használat: {time}",
-      "customDescription": "Illesszen be egy Streamable HTTP MCP URL-t. A Stella mentés előtt felismeri az OAuthot, a Bearer tokent vagy a nyilvános hozzáférést.",
+      "customDescription": "Illessze be az MCP-szerver URL-jét. A Stella felismeri a csatlakozás módját, és automatikusan folytatja.",
       "customTitle": "Egyéni szerver hozzáadása",
       "description": "Kezelje azokat a külső MCP-szervereket, amelyek eszközöket adhatnak a chathez. A tokeneket felhasználónként tároljuk.",
       "detected": "Felismerve: {authType}",
@@ -1111,6 +1115,7 @@
       "tokenHelp": "Token beszerzése",
       "tokenLabel": "Bearer token",
       "tokenPlaceholder": "Token beillesztése",
+      "urlLabel": "MCP-szerver URL-je",
       "urlPlaceholder": "https://example.com/mcp",
       "useInChat": "Használat a chatben"
     },
