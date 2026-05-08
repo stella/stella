@@ -55,6 +55,7 @@ import type {
   CellMargins,
 } from "../../types/document";
 import { pixelsToEmu } from "../../utils/units";
+import { applyRunFormattingOverrideMark } from "../extensions/marks/RunFormattingOverrideExtension";
 import type { ShapeAttrs } from "../extensions/nodes/ShapeExtension";
 import type { TextBoxAttrs } from "../extensions/nodes/TextBoxExtension";
 import type {
@@ -1261,6 +1262,10 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
 
       case "textOutline":
         formatting.outline = true;
+        break;
+
+      case "runFormattingOverride":
+        applyRunFormattingOverrideMark(formatting, mark);
         break;
 
       // hyperlink is handled separately

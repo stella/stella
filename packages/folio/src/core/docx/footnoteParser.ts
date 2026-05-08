@@ -22,6 +22,7 @@ import type {
   Footnote,
   Endnote,
   Paragraph,
+  Table,
   Theme,
   RelationshipMap,
   MediaFile,
@@ -29,11 +30,13 @@ import type {
 import type { NumberingMap } from "./numberingParser";
 import { parseParagraph } from "./paragraphParser";
 import type { StyleMap } from "./styleParser";
+import { parseTable } from "./tableParser";
 import {
   parseXml,
   findChildren,
-  getAttribute,
-  parseNumericAttribute,
+  getChildElements,
+  getAttributes,
+  getLocalName,
 } from "./xmlParser";
 import type { XmlElement } from "./xmlParser";
 
@@ -115,9 +118,54 @@ function parseNoteType(
   }
 }
 
+function getNoteAttribute(
+  element: XmlElement,
+  localName: "id" | "type",
+): string | null {
+  for (const [name, value] of Object.entries(getAttributes(element))) {
+    if (getLocalName(name) === localName) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function parseNoteId(element: XmlElement): number {
+  const id = getNoteAttribute(element, "id");
+  if (id === null) {
+    return 0;
+  }
+
+  const parsed = Number.parseInt(id, 10);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 // ============================================================================
 // FOOTNOTE PARSING
 // ============================================================================
+
+function parseNoteBlockContent(
+  element: XmlElement,
+  styles: StyleMap | null,
+  theme: Theme | null,
+  numbering: NumberingMap | null,
+  rels: RelationshipMap | null,
+  media: Map<string, MediaFile> | null,
+): (Paragraph | Table)[] {
+  const blocks: (Paragraph | Table)[] = [];
+
+  for (const child of getChildElements(element)) {
+    const localName = getLocalName(child.name ?? "");
+    if (localName === "p") {
+      blocks.push(parseParagraph(child, styles, theme, numbering, rels));
+    } else if (localName === "tbl") {
+      blocks.push(parseTable(child, styles, theme, numbering, rels, media));
+    }
+  }
+
+  return blocks;
+}
 
 /**
  * Parse a single footnote element (w:footnote)
@@ -128,16 +176,19 @@ function parseFootnote(
   theme: Theme | null,
   numbering: NumberingMap | null,
   rels: RelationshipMap | null,
-  _media: Map<string, MediaFile> | null,
+  media: Map<string, MediaFile> | null,
 ): Footnote {
-  const id = parseNumericAttribute(element, "w", "id") ?? 0;
-  const typeAttr = getAttribute(element, "w", "type");
+  const id = parseNoteId(element);
+  const typeAttr = getNoteAttribute(element, "type");
   const noteType = parseNoteType(typeAttr);
 
-  // Parse content paragraphs
-  const paragraphElements = findChildren(element, "w", "p");
-  const content: Paragraph[] = paragraphElements.map((pEl) =>
-    parseParagraph(pEl, styles, theme, numbering, rels),
+  const content = parseNoteBlockContent(
+    element,
+    styles,
+    theme,
+    numbering,
+    rels,
+    media,
   );
 
   return {
@@ -248,16 +299,19 @@ function parseEndnote(
   theme: Theme | null,
   numbering: NumberingMap | null,
   rels: RelationshipMap | null,
-  _media: Map<string, MediaFile> | null,
+  media: Map<string, MediaFile> | null,
 ): Endnote {
-  const id = parseNumericAttribute(element, "w", "id") ?? 0;
-  const typeAttr = getAttribute(element, "w", "type");
+  const id = parseNoteId(element);
+  const typeAttr = getNoteAttribute(element, "type");
   const noteType = parseNoteType(typeAttr);
 
-  // Parse content paragraphs
-  const paragraphElements = findChildren(element, "w", "p");
-  const content: Paragraph[] = paragraphElements.map((pEl) =>
-    parseParagraph(pEl, styles, theme, numbering, rels),
+  const content = parseNoteBlockContent(
+    element,
+    styles,
+    theme,
+    numbering,
+    rels,
+    media,
   );
 
   return {
@@ -373,6 +427,9 @@ export function getFootnoteText(footnote: Footnote): string {
   const texts: string[] = [];
 
   for (const para of footnote.content) {
+    if (para.type !== "paragraph") {
+      continue;
+    }
     const paraTexts: string[] = [];
     for (const content of para.content) {
       if (content.type === "run") {
@@ -396,6 +453,9 @@ export function getEndnoteText(endnote: Endnote): string {
   const texts: string[] = [];
 
   for (const para of endnote.content) {
+    if (para.type !== "paragraph") {
+      continue;
+    }
     const paraTexts: string[] = [];
     for (const content of para.content) {
       if (content.type === "run") {

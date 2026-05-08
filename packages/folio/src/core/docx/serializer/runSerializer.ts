@@ -264,46 +264,64 @@ export function serializeTextFormatting(
   }
 
   // Caps
-  if (formatting.allCaps) {
+  if (formatting.allCaps === true) {
     parts.push("<w:caps/>");
+  } else if (formatting.allCaps === false) {
+    parts.push('<w:caps w:val="0"/>');
   }
 
-  if (formatting.smallCaps) {
+  if (formatting.smallCaps === true) {
     parts.push("<w:smallCaps/>");
+  } else if (formatting.smallCaps === false) {
+    parts.push('<w:smallCaps w:val="0"/>');
   }
 
   // Strike
-  if (formatting.strike) {
+  if (formatting.strike === true) {
     parts.push("<w:strike/>");
+  } else if (formatting.strike === false) {
+    parts.push('<w:strike w:val="0"/>');
   }
 
-  if (formatting.doubleStrike) {
+  if (formatting.doubleStrike === true) {
     parts.push("<w:dstrike/>");
+  } else if (formatting.doubleStrike === false) {
+    parts.push('<w:dstrike w:val="0"/>');
   }
 
   // Outline
-  if (formatting.outline) {
+  if (formatting.outline === true) {
     parts.push("<w:outline/>");
+  } else if (formatting.outline === false) {
+    parts.push('<w:outline w:val="0"/>');
   }
 
   // Shadow
-  if (formatting.shadow) {
+  if (formatting.shadow === true) {
     parts.push("<w:shadow/>");
+  } else if (formatting.shadow === false) {
+    parts.push('<w:shadow w:val="0"/>');
   }
 
   // Emboss
-  if (formatting.emboss) {
+  if (formatting.emboss === true) {
     parts.push("<w:emboss/>");
+  } else if (formatting.emboss === false) {
+    parts.push('<w:emboss w:val="0"/>');
   }
 
   // Imprint
-  if (formatting.imprint) {
+  if (formatting.imprint === true) {
     parts.push("<w:imprint/>");
+  } else if (formatting.imprint === false) {
+    parts.push('<w:imprint w:val="0"/>');
   }
 
   // Hidden
-  if (formatting.hidden) {
+  if (formatting.hidden === true) {
     parts.push("<w:vanish/>");
+  } else if (formatting.hidden === false) {
+    parts.push('<w:vanish w:val="0"/>');
   }
 
   // Color

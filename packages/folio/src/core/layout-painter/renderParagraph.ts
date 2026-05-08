@@ -28,6 +28,7 @@ import type {
 } from "../prosemirror/utils/tabCalculator";
 import { getAuthorColorIdx, AUTHOR_COLORS } from "../utils/authorColors";
 import { resolveFontFamily } from "../utils/fontResolver";
+import { DOCX_BOLD_FONT_WEIGHT } from "../utils/fontWeights";
 import { getAutomaticTextColorForBackground } from "./documentColors";
 import { isFloatingImageRun } from "./renderUtils";
 import type { RenderContext } from "./renderUtils";
@@ -118,7 +119,7 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     element.style.fontSize = `${fontSizePx}px`;
   }
   if (run.bold) {
-    element.style.fontWeight = "bold";
+    element.style.fontWeight = DOCX_BOLD_FONT_WEIGHT;
   }
   if (run.italic) {
     element.style.fontStyle = "italic";
@@ -137,6 +138,66 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
   // Letter spacing
   if (run.letterSpacing) {
     element.style.letterSpacing = `${run.letterSpacing}px`;
+  }
+
+  if (run.allCaps) {
+    element.style.textTransform = "uppercase";
+  }
+  if (run.smallCaps) {
+    element.style.fontVariant = "small-caps";
+  }
+  if (run.positionPx) {
+    element.style.verticalAlign = `${run.positionPx}px`;
+  }
+  if (run.horizontalScale && run.horizontalScale !== 100) {
+    element.style.display = "inline-block";
+    element.style.transform = `scaleX(${run.horizontalScale / 100})`;
+    element.style.transformOrigin = "left center";
+  }
+  if (run.kerningMinPt && run.kerningMinPt > 0) {
+    const fontSizePt = run.fontSize ?? 11;
+    if (fontSizePt >= run.kerningMinPt) {
+      element.style.fontKerning = "normal";
+    }
+  }
+  if (run.emboss) {
+    element.style.textShadow =
+      "1px 1px 1px rgba(255,255,255,0.5), -1px -1px 1px rgba(0,0,0,0.3)";
+  }
+  if (run.imprint) {
+    element.style.textShadow =
+      "-1px -1px 1px rgba(255,255,255,0.5), 1px 1px 1px rgba(0,0,0,0.3)";
+  }
+  if (run.textShadow && !run.emboss && !run.imprint) {
+    element.style.textShadow = "1px 1px 2px rgba(0,0,0,0.3)";
+  }
+  if (run.textOutline) {
+    element.style.webkitTextStroke = "1px currentColor";
+    (
+      element.style as CSSStyleDeclaration & {
+        webkitTextFillColor?: string;
+      }
+    ).webkitTextFillColor = "transparent";
+  }
+  if (run.emphasisMark) {
+    const variant =
+      run.emphasisMark === "comma"
+        ? "filled sesame"
+        : run.emphasisMark === "circle"
+          ? "filled circle"
+          : "filled dot";
+    const position =
+      run.emphasisMark === "underDot" ? "under right" : "over right";
+    element.style.textEmphasis = variant;
+    element.style.textEmphasisPosition = position;
+    (
+      element.style as CSSStyleDeclaration & { webkitTextEmphasis?: string }
+    ).webkitTextEmphasis = variant;
+    (
+      element.style as CSSStyleDeclaration & {
+        webkitTextEmphasisPosition?: string;
+      }
+    ).webkitTextEmphasisPosition = position;
   }
 
   // Highlight (background color)
@@ -243,6 +304,17 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     element.style.verticalAlign = "sub";
     element.style.fontSize = "0.75em";
   }
+}
+
+function reserveScaledAdvance(
+  element: HTMLElement,
+  unscaledWidth: number,
+  horizontalScale: number | undefined,
+): void {
+  if (horizontalScale === undefined || horizontalScale === 100) {
+    return;
+  }
+  element.style.width = `${unscaledWidth * (horizontalScale / 100)}px`;
 }
 
 /**
@@ -367,6 +439,8 @@ function renderInlineImageRun(run: ImageRun, doc: Document): HTMLElement {
   img.src = run.src;
   img.width = run.width;
   img.height = run.height;
+  img.style.width = `${run.width}px`;
+  img.style.height = `${run.height}px`;
   if (run.alt) {
     img.alt = run.alt;
   }
@@ -488,6 +562,25 @@ function renderFieldRun(
     ...(run.highlight !== undefined ? { highlight: run.highlight } : {}),
     ...(run.fontFamily !== undefined ? { fontFamily: run.fontFamily } : {}),
     ...(run.fontSize !== undefined ? { fontSize: run.fontSize } : {}),
+    ...(run.letterSpacing !== undefined
+      ? { letterSpacing: run.letterSpacing }
+      : {}),
+    ...(run.allCaps !== undefined ? { allCaps: run.allCaps } : {}),
+    ...(run.smallCaps !== undefined ? { smallCaps: run.smallCaps } : {}),
+    ...(run.positionPx !== undefined ? { positionPx: run.positionPx } : {}),
+    ...(run.horizontalScale !== undefined
+      ? { horizontalScale: run.horizontalScale }
+      : {}),
+    ...(run.kerningMinPt !== undefined
+      ? { kerningMinPt: run.kerningMinPt }
+      : {}),
+    ...(run.imprint !== undefined ? { imprint: run.imprint } : {}),
+    ...(run.emboss !== undefined ? { emboss: run.emboss } : {}),
+    ...(run.textShadow !== undefined ? { textShadow: run.textShadow } : {}),
+    ...(run.textOutline !== undefined ? { textOutline: run.textOutline } : {}),
+    ...(run.emphasisMark !== undefined
+      ? { emphasisMark: run.emphasisMark }
+      : {}),
     ...(run.pmStart !== undefined ? { pmStart: run.pmStart } : {}),
     ...(run.pmEnd !== undefined ? { pmEnd: run.pmEnd } : {}),
   };
@@ -664,23 +757,71 @@ function getTextAfterTab(
  * Create a text measurement function using a temporary canvas
  * Uses the same font fallback chain as measureContainer.ts
  */
+type TextMeasureStyle = {
+  bold?: boolean;
+  italic?: boolean;
+  letterSpacing?: number;
+  smallCaps?: boolean;
+};
+
+function applyLetterSpacingToMeasuredWidth(
+  width: number,
+  text: string,
+  letterSpacing: number | undefined,
+): number {
+  if (!letterSpacing || text.length <= 1) {
+    return width;
+  }
+
+  return width + letterSpacing * (text.length - 1);
+}
+
 function createTextMeasurer(
   doc: Document,
-): (text: string, fontSize?: number, fontFamily?: string) => number {
+): (
+  text: string,
+  fontSize?: number,
+  fontFamily?: string,
+  style?: TextMeasureStyle,
+) => number {
   const canvas = doc.createElement("canvas");
   const ctx = canvas.getContext("2d");
 
-  return (text: string, fontSize = 11, fontFamily = "Calibri") => {
+  return (
+    text: string,
+    fontSize = 11,
+    fontFamily = "Calibri",
+    style: TextMeasureStyle = {},
+  ) => {
     if (!ctx) {
-      return text.length * 7;
+      return applyLetterSpacingToMeasuredWidth(
+        text.length * 7,
+        text,
+        style.letterSpacing,
+      );
     } // Fallback estimate
     // Use font resolver for category-appropriate fallback stacks,
     // matching measureContainer.ts
     const cssFallback = resolveFontFamily(fontFamily).cssFallback;
     // Convert pt to px for canvas (1pt = 96/72 px)
     const fontSizePx = (fontSize * 96) / 72;
-    ctx.font = `${fontSizePx}px ${cssFallback}`;
-    return ctx.measureText(text).width;
+    const fontParts: string[] = [];
+    if (style.italic) {
+      fontParts.push("italic");
+    }
+    if (style.smallCaps) {
+      fontParts.push("small-caps");
+    }
+    if (style.bold) {
+      fontParts.push(DOCX_BOLD_FONT_WEIGHT);
+    }
+    fontParts.push(`${fontSizePx}px`, cssFallback);
+    ctx.font = fontParts.join(" ");
+    return applyLetterSpacingToMeasuredWidth(
+      ctx.measureText(text).width,
+      text,
+      style.letterSpacing,
+    );
   };
 }
 
@@ -710,6 +851,10 @@ export function renderLine(
 
   // Get runs for this line
   const runsForLine = sliceRunsForLine(block, line);
+  if (runsForLine.length === 1 && isImageRun(runsForLine[0]!)) {
+    lineEl.style.display = "flex";
+    lineEl.style.alignItems = "center";
+  }
 
   // Handle empty lines
   if (runsForLine.length === 0) {
@@ -842,7 +987,21 @@ export function renderLine(
       // Measure text width for accurate tab position tracking
       const fontSize = run.fontSize || 11;
       const fontFamily = run.fontFamily || "Calibri";
-      currentX += measureText(run.text, fontSize, fontFamily);
+      const measuredWidth = measureText(
+        run.allCaps ? run.text.toLocaleUpperCase() : run.text,
+        fontSize,
+        fontFamily,
+        {
+          ...(run.bold !== undefined ? { bold: run.bold } : {}),
+          ...(run.italic !== undefined ? { italic: run.italic } : {}),
+          ...(run.letterSpacing !== undefined
+            ? { letterSpacing: run.letterSpacing }
+            : {}),
+          ...(run.smallCaps !== undefined ? { smallCaps: run.smallCaps } : {}),
+        },
+      );
+      reserveScaledAdvance(runEl, measuredWidth, run.horizontalScale);
+      currentX += measuredWidth * ((run.horizontalScale ?? 100) / 100);
     } else if (isImageRun(run)) {
       // Skip floating images - they're rendered separately at page level.
       // Exception: inside table cells, floating images must render in-flow
@@ -879,7 +1038,21 @@ export function renderLine(
       }
       const fontSize = run.fontSize || 11;
       const fontFamily = run.fontFamily || "Calibri";
-      currentX += measureText(fieldText, fontSize, fontFamily);
+      const measuredWidth = measureText(
+        run.allCaps ? fieldText.toLocaleUpperCase() : fieldText,
+        fontSize,
+        fontFamily,
+        {
+          ...(run.bold !== undefined ? { bold: run.bold } : {}),
+          ...(run.italic !== undefined ? { italic: run.italic } : {}),
+          ...(run.letterSpacing !== undefined
+            ? { letterSpacing: run.letterSpacing }
+            : {}),
+          ...(run.smallCaps !== undefined ? { smallCaps: run.smallCaps } : {}),
+        },
+      );
+      reserveScaledAdvance(runEl, measuredWidth, run.horizontalScale);
+      currentX += measuredWidth * ((run.horizontalScale ?? 100) / 100);
     } else {
       // Fallback for unknown run types
       const runEl = renderRun(run, doc, options?.context);
@@ -1012,17 +1185,17 @@ export function renderParagraphFragment(
     // Track indent values for line-level application
     // For RTL paragraphs, swap left/right indentation
     if (isBidi) {
-      if (indent.left && indent.left > 0) {
+      if (indent.left !== undefined) {
         indentRight = indent.left;
       }
-      if (indent.right && indent.right > 0) {
+      if (indent.right !== undefined) {
         indentLeft = indent.right;
       }
     } else {
-      if (indent.left && indent.left > 0) {
+      if (indent.left !== undefined) {
         indentLeft = indent.left;
       }
-      if (indent.right && indent.right > 0) {
+      if (indent.right !== undefined) {
         indentRight = indent.right;
       }
     }
@@ -1213,10 +1386,14 @@ export function renderParagraphFragment(
 
     // Apply left offset from floating images (lines start after the floating image)
     // Also constrain width so text doesn't overflow into the image area
-    if (lineLeftOffset > 0 || lineRightOffset > 0) {
-      if (lineLeftOffset > 0) {
-        lineEl.style.marginLeft = `${lineLeftOffset}px`;
-      }
+    const lineMarginLeft = Math.min(indentLeft, 0) + lineLeftOffset;
+    if (
+      lineMarginLeft !== 0 ||
+      lineRightOffset > 0 ||
+      indentLeft < 0 ||
+      indentRight < 0
+    ) {
+      lineEl.style.marginLeft = `${lineMarginLeft}px`;
       if (lineRightOffset > 0) {
         lineEl.style.marginRight = `${lineRightOffset}px`;
       }
@@ -1238,13 +1415,13 @@ export function renderParagraphFragment(
 
     if (isFirstLine) {
       // First line handling
-      if (indentLeft > 0 && hasHanging) {
+      if (indentLeft !== 0 && hasHanging) {
         // Hanging indent: first line starts at (indentLeft - hanging)
-        lineEl.style.paddingLeft = `${indentLeft}px`;
+        lineEl.style.paddingLeft = `${Math.max(indentLeft, 0)}px`;
         lineEl.style.textIndent = `-${indent?.hanging ?? 0}px`;
-      } else if (indentLeft > 0 && hasFirstLine) {
+      } else if (indentLeft !== 0 && hasFirstLine) {
         // First line indent: first line starts at (indentLeft + firstLine)
-        lineEl.style.paddingLeft = `${indentLeft}px`;
+        lineEl.style.paddingLeft = `${Math.max(indentLeft, 0)}px`;
         lineEl.style.textIndent = `${indent?.firstLine ?? 0}px`;
       } else if (indentLeft > 0) {
         // Just left indent, no special first line treatment

@@ -1274,7 +1274,7 @@ export type Footnote = {
     | "continuationSeparator"
     | "continuationNotice";
   /** Content */
-  content: Paragraph[];
+  content: (Paragraph | Table)[];
 };
 
 /**
@@ -1291,7 +1291,7 @@ export type Endnote = {
     | "continuationSeparator"
     | "continuationNotice";
   /** Content */
-  content: Paragraph[];
+  content: (Paragraph | Table)[];
 };
 
 // ============================================================================

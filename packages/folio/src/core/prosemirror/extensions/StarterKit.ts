@@ -36,6 +36,7 @@ import { FootnoteRefExtension } from "./marks/FootnoteRefExtension";
 import { HighlightExtension } from "./marks/HighlightExtension";
 import { HyperlinkExtension } from "./marks/HyperlinkExtension";
 import { ItalicExtension } from "./marks/ItalicExtension";
+import { RunFormattingOverrideExtension } from "./marks/RunFormattingOverrideExtension";
 import { SmallCapsExtension } from "./marks/SmallCapsExtension";
 import { StrikeExtension } from "./marks/StrikeExtension";
 import { SubscriptExtension } from "./marks/SubscriptExtension";
@@ -131,6 +132,7 @@ export function createStarterKit(
   add("textShadow", TextShadowExtension());
   add("emphasisMark", EmphasisMarkExtension());
   add("textOutline", TextOutlineExtension());
+  add("runFormattingOverride", RunFormattingOverrideExtension());
   add("comment", CommentExtension());
   add("insertion", InsertionExtension());
   add("deletion", DeletionExtension());

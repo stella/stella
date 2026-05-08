@@ -50,3 +50,41 @@ describe("paginator forcePageBreak", () => {
     expect(state.contentBottom).toBe(nextSize.h - nextMargins.bottom);
   });
 });
+
+describe("paginator block spacing", () => {
+  test("does not carry trailing spacing to the top of a new page", () => {
+    const paginator = createPaginator({
+      pageSize: { w: 100, h: 100 },
+      margins: { top: 10, right: 10, bottom: 10, left: 10 },
+    });
+
+    paginator.addFragment({ kind: "paragraph" } as never, 70, 0, 20);
+    const result = paginator.addFragment(
+      { kind: "paragraph" } as never,
+      20,
+      0,
+      0,
+    );
+
+    expect(paginator.pages.length).toBe(2);
+    expect(result.y).toBe(10);
+  });
+
+  test("preserves explicit spaceBefore at the top of a new page", () => {
+    const paginator = createPaginator({
+      pageSize: { w: 100, h: 100 },
+      margins: { top: 10, right: 10, bottom: 10, left: 10 },
+    });
+
+    paginator.addFragment({ kind: "paragraph" } as never, 70, 0, 20);
+    const result = paginator.addFragment(
+      { kind: "paragraph" } as never,
+      20,
+      5,
+      0,
+    );
+
+    expect(paginator.pages.length).toBe(2);
+    expect(result.y).toBe(15);
+  });
+});
