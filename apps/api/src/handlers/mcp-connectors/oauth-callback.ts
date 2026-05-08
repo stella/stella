@@ -35,6 +35,9 @@ const htmlResponse = (body: string, status = 200) =>
     status,
   });
 
+const mcpSettingsUrl = () =>
+  new URL("/knowledge/mcp", env.FRONTEND_URL).toString();
+
 const callbackHtml = (message: string) => `<!doctype html>
 <html>
   <head><meta charset="utf-8"><title>MCP connection</title></head>
@@ -44,8 +47,10 @@ const callbackHtml = (message: string) => `<!doctype html>
         window.opener.postMessage(${JSON.stringify(message)}, ${JSON.stringify(
           env.FRONTEND_URL,
         )});
+        window.close();
+      } else {
+        window.location.replace(${JSON.stringify(mcpSettingsUrl())});
       }
-      window.close();
     </script>
   </body>
 </html>`;

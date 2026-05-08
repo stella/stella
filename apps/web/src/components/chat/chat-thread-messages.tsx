@@ -275,7 +275,7 @@ const AssistantMessageActions = ({
   isGenerating: boolean;
   isLatestAssistantMessage: boolean;
   message: PersistedChatMessage;
-  onResend?: (() => void | PromiseLike<void>) | undefined;
+  onResend?: ((messageId?: string) => void | PromiseLike<void>) | undefined;
 }) => {
   const t = useTranslations();
   const text = useMemo(() => getMessageText(message), [message]);
@@ -316,7 +316,7 @@ const AssistantMessageActions = ({
           className="text-muted-foreground h-6 px-1.5 text-xs"
           disabled={isGenerating}
           onClick={() => {
-            void onResend?.();
+            void onResend?.(message.id);
           }}
           size="xs"
           variant="ghost"
@@ -361,7 +361,7 @@ type ChatThreadMessagesProps = {
   error?: Error | undefined;
   isGenerating?: boolean | undefined;
   messages: PersistedChatMessage[];
-  onResend?: (() => void | PromiseLike<void>) | undefined;
+  onResend?: ((messageId?: string) => void | PromiseLike<void>) | undefined;
   onAskUserSubmit: (
     toolCallId: string,
     output: AskUserOutput,

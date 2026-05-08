@@ -9,6 +9,7 @@ import type { ComponentProps } from "react";
 
 import { useChat } from "@ai-sdk/react";
 import type { Chat } from "@ai-sdk/react";
+import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { isToolUIPart } from "ai";
 
@@ -27,12 +28,21 @@ import {
   isToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 
 type UseChatSessionOptions = {
   chat: Chat<PersistedChatMessage>;
   conversationId: string;
   workspaceId?: string | undefined;
 };
+
+type McpConnectorApprovalIdentity = {
+  id: string;
+  slug: string;
+};
+
+const EMPTY_MCP_CONNECTOR_IDENTITIES: readonly McpConnectorApprovalIdentity[] =
+  [];
 
 export const useChatSession = ({
   chat,
@@ -43,11 +53,14 @@ export const useChatSession = ({
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
   });
+  const { data: mcpCatalog } = useQuery(mcpConnectorsOptions());
+  const mcpConnectorIdentities =
+    mcpCatalog?.connectors ?? EMPTY_MCP_CONNECTOR_IDENTITIES;
   const [conversationApprovedTools, setConversationApprovedTools] = useState(
     () => readConversationApprovedTools(conversationId),
   );
   const [alwaysApprovedTools, setAlwaysApprovedTools] = useState(() =>
-    readAlwaysApprovedTools(organizationId),
+    readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities: [] }),
   );
 
   const {
@@ -68,9 +81,12 @@ export const useChatSession = ({
     [sendChatMessage],
   );
 
-  const resendLatestMessage = useCallback(async () => {
-    await regenerate();
-  }, [regenerate]);
+  const resendLatestMessage = useCallback(
+    async (messageId?: string) => {
+      await regenerate(messageId === undefined ? undefined : { messageId });
+    },
+    [regenerate],
+  );
 
   const handleApprove = useCallback(
     (id: string, _toolName?: ApprovalToolName) => {
@@ -99,7 +115,16 @@ export const useChatSession = ({
   );
   const handleAlwaysAllow = useCallback(
     (id: string, toolName: ApprovalToolName) => {
-      const approvalKey = getAlwaysApprovalKey({ organizationId, toolName });
+      const approvalKey = getAlwaysApprovalKey({
+        mcpConnectorIdentities,
+        organizationId,
+        toolName,
+      });
+      if (approvalKey === null) {
+        addToolApprovalResponse({ id, approved: true });
+        return;
+      }
+
       const nextStored = new Set(
         readStoredStrings(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
       ).add(approvalKey);
@@ -113,7 +138,12 @@ export const useChatSession = ({
       dispatchApprovedToolsChanged({ scope: "local" });
       addToolApprovalResponse({ id, approved: true });
     },
-    [addToolApprovalResponse, alwaysApprovedTools, organizationId],
+    [
+      addToolApprovalResponse,
+      alwaysApprovedTools,
+      mcpConnectorIdentities,
+      organizationId,
+    ],
   );
   const handleDeny = useCallback(
     (id: string) => addToolApprovalResponse({ id, approved: false }),
@@ -149,8 +179,10 @@ export const useChatSession = ({
 
   useEffect(() => {
     setConversationApprovedTools(readConversationApprovedTools(conversationId));
-    setAlwaysApprovedTools(readAlwaysApprovedTools(organizationId));
-  }, [conversationId, organizationId]);
+    setAlwaysApprovedTools(
+      readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
+    );
+  }, [conversationId, mcpConnectorIdentities, organizationId]);
   useEffect(() => {
     const handleApprovedToolsChanged = (event: Event) => {
       const detail = getApprovedToolsChangedDetail(event);
@@ -159,7 +191,9 @@ export const useChatSession = ({
       }
 
       if (detail.scope === "local") {
-        setAlwaysApprovedTools(readAlwaysApprovedTools(organizationId));
+        setAlwaysApprovedTools(
+          readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
+        );
         return;
       }
 
@@ -176,7 +210,9 @@ export const useChatSession = ({
         return;
       }
 
-      setAlwaysApprovedTools(readAlwaysApprovedTools(organizationId));
+      setAlwaysApprovedTools(
+        readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
+      );
     };
 
     window.addEventListener(
@@ -192,7 +228,7 @@ export const useChatSession = ({
       );
       window.removeEventListener("storage", handleStorage);
     };
-  }, [conversationId, organizationId]);
+  }, [conversationId, mcpConnectorIdentities, organizationId]);
 
   return {
     error,
@@ -237,7 +273,13 @@ const readConversationApprovedTools = (conversationId: string) =>
     getConversationApprovedToolsStorageKey(conversationId),
   );
 
-const readAlwaysApprovedTools = (organizationId: string) => {
+const readAlwaysApprovedTools = ({
+  mcpConnectorIdentities,
+  organizationId,
+}: {
+  mcpConnectorIdentities: readonly McpConnectorApprovalIdentity[];
+  organizationId: string;
+}) => {
   const stored = readStoredStrings(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY);
   const approvedTools: ToolApprovalGrant[] = [];
 
@@ -248,6 +290,7 @@ const readAlwaysApprovedTools = (organizationId: string) => {
     }
 
     const scopedMcpTool = parseScopedMcpApprovalKey({
+      mcpConnectorIdentities,
       organizationId,
       value,
     });
@@ -327,53 +370,92 @@ const writeStoredApprovedStrings = (
 };
 
 const getAlwaysApprovalKey = ({
+  mcpConnectorIdentities,
   organizationId,
   toolName,
 }: {
+  mcpConnectorIdentities: readonly McpConnectorApprovalIdentity[];
   organizationId: string;
   toolName: ApprovalToolName;
-}): string => {
+}): string | null => {
   if (!isExternalMcpToolName(toolName)) {
     return toolName;
   }
 
   const connectorSlug = getExternalMcpConnectorSlugFromToolName(toolName);
   if (!connectorSlug) {
-    return toolName;
+    return null;
+  }
+
+  const connector = findMcpConnectorIdentity({
+    connectorSlug,
+    mcpConnectorIdentities,
+  });
+  if (!connector) {
+    return null;
   }
 
   return [
     "mcp-approval",
     encodeURIComponent(organizationId),
+    encodeURIComponent(connector.id),
     encodeURIComponent(connectorSlug),
   ].join(":");
 };
 
 const parseScopedMcpApprovalKey = ({
+  mcpConnectorIdentities,
   organizationId,
   value,
 }: {
+  mcpConnectorIdentities: readonly McpConnectorApprovalIdentity[];
   organizationId: string;
   value: string;
 }): ToolApprovalGrant | null => {
-  const [kind, encodedOrganizationId, encodedConnectorSlug, extra] =
-    value.split(":");
+  const [
+    kind,
+    encodedOrganizationId,
+    encodedConnectorId,
+    encodedConnectorSlug,
+    extra,
+  ] = value.split(":");
   if (
     kind !== "mcp-approval" ||
     encodedOrganizationId !== encodeURIComponent(organizationId) ||
+    !encodedConnectorId ||
     !encodedConnectorSlug ||
     extra !== undefined
   ) {
     return null;
   }
 
+  const connectorId = safeDecodeURIComponent(encodedConnectorId);
   const connectorSlug = safeDecodeURIComponent(encodedConnectorSlug);
-  if (!connectorSlug) {
+  if (!connectorId || !connectorSlug) {
+    return null;
+  }
+
+  const connector = findMcpConnectorIdentity({
+    connectorSlug,
+    mcpConnectorIdentities,
+  });
+  if (connector?.id !== connectorId) {
     return null;
   }
 
   return getExternalMcpConnectorApprovalGrant(connectorSlug);
 };
+
+const findMcpConnectorIdentity = ({
+  connectorSlug,
+  mcpConnectorIdentities,
+}: {
+  connectorSlug: string;
+  mcpConnectorIdentities: readonly McpConnectorApprovalIdentity[];
+}) =>
+  mcpConnectorIdentities.find(
+    (connector) => connector.slug === connectorSlug,
+  ) ?? null;
 
 const safeDecodeURIComponent = (value: string) => {
   try {

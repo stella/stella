@@ -28,6 +28,7 @@ import {
   extractMentionWorkspaceIds,
 } from "@/api/handlers/chat/data-scope";
 import { ChatError } from "@/api/handlers/chat/errors";
+import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import {
   planAssistantFinishPersistence,
@@ -472,15 +473,6 @@ const messageNeedsExternalMcpValidation = (
 
   const parts: unknown[] = Array.isArray(message.parts) ? message.parts : [];
   return parts.some(isExternalMcpToolPart);
-};
-
-const isExternalMcpToolPart = (part: unknown): boolean => {
-  if (typeof part !== "object" || part === null || !("type" in part)) {
-    return false;
-  }
-
-  const type = part.type;
-  return typeof type === "string" && type.startsWith("tool-mcp__");
 };
 
 type ThreadRecord = {

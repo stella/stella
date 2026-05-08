@@ -390,6 +390,9 @@
     "resend": "Reenviar",
     "send": "Enviar mensagem",
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",
+    "sendErrorInsufficientCredits": "O provedor de IA precisa de mais créditos. Peça ao administrador do espaço de trabalho para recarregar a conta.",
+    "sendErrorProviderUnavailable": "O provedor de IA está temporariamente indisponível. Tente novamente em instantes.",
+    "sendErrorQuotaExhausted": "A cota do provedor de IA foi esgotada. Tente novamente em um minuto ou peça ao administrador do espaço de trabalho para atualizar o plano.",
     "thinking": "Trabalhando com contexto",
     "threads": "Histórico",
     "tool": {
@@ -529,6 +532,7 @@
     "connectionLostDescription": "Perdemos a conexão com o servidor. Tentando novamente automaticamente.",
     "convertTo": "Converter para",
     "copied": "Copiado para a área de transferência",
+    "copy": "Copiar",
     "copyLink": "Copiar link",
     "createdAt": "Criado em {date}",
     "currency": "Moeda",

@@ -20,8 +20,6 @@ export type NativeToolCatalogItem = {
   recommendedJurisdictions: string[];
 };
 
-const SALVIA_RECOMMENDED_JURISDICTIONS = ["CZ"] as const;
-const SALVIA_HOSTS = new Set(["mcp.slv.cz", "krajta.slv.cz"]);
 const ARES_RECOMMENDED_JURISDICTIONS = ["CZ"] as const;
 const NATIVE_TOOL_CATALOG = [
   {
@@ -37,14 +35,8 @@ const NATIVE_TOOL_CATALOG = [
 ] satisfies NativeToolCatalogItem[];
 
 export const mcpConnectorCatalogMetadata = (
-  connector: McpConnectorCatalogSource,
-): McpConnectorCatalogMetadata => {
-  if (isSalviaConnector(connector)) {
-    return { recommendedJurisdictions: [...SALVIA_RECOMMENDED_JURISDICTIONS] };
-  }
-
-  return { recommendedJurisdictions: [] };
-};
+  _connector: McpConnectorCatalogSource,
+): McpConnectorCatalogMetadata => ({ recommendedJurisdictions: [] });
 
 export const isMcpConnectorRecommendedForPractice = ({
   connector,
@@ -92,23 +84,4 @@ export const getNativeToolCatalog = ({
     slug: tool.slug,
     url: tool.url,
   }));
-};
-
-const isSalviaConnector = ({
-  displayName,
-  slug,
-  url,
-}: McpConnectorCatalogSource): boolean => {
-  const normalizedSlug = slug.toLowerCase();
-  const normalizedName = displayName.toLowerCase();
-  if (normalizedSlug.includes("salvia") || normalizedName.includes("salvia")) {
-    return true;
-  }
-
-  try {
-    const host = new URL(url).hostname.toLowerCase();
-    return SALVIA_HOSTS.has(host);
-  } catch {
-    return false;
-  }
 };

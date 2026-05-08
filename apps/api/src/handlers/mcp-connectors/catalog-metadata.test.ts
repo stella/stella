@@ -7,7 +7,7 @@ import {
 } from "@/api/handlers/mcp-connectors/catalog-metadata";
 
 describe("mcpConnectorCatalogMetadata", () => {
-  it("recommends Salvia only for Czech practice", () => {
+  it("does not recommend third-party MCP connectors by name alone", () => {
     const connector = {
       slug: "salvia",
       displayName: "Salvia",
@@ -16,13 +16,13 @@ describe("mcpConnectorCatalogMetadata", () => {
 
     expect(
       mcpConnectorCatalogMetadata(connector).recommendedJurisdictions,
-    ).toEqual(["CZ"]);
+    ).toEqual([]);
     expect(
       isMcpConnectorRecommendedForPractice({
         connector,
         practiceJurisdictions: [{ countryCode: "CZ", isPrimary: true }],
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isMcpConnectorRecommendedForPractice({
         connector,
