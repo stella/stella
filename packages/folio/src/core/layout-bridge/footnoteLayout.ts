@@ -288,9 +288,14 @@ function measureFootnoteTable(
     }
   }
 
-  const rows: TableRowMeasure[] = tableBlock.rows.map((row) => {
+  const rowSpanEnds: number[] = [];
+  const rows: TableRowMeasure[] = tableBlock.rows.map((row, rowIndex) => {
     let columnIndex = 0;
     const cells: TableCellMeasure[] = row.cells.map((cell) => {
+      while ((rowSpanEnds[columnIndex] ?? 0) > rowIndex) {
+        columnIndex++;
+      }
+
       const colSpan = cell.colSpan ?? 1;
       let cellWidth = 0;
       for (
@@ -323,6 +328,12 @@ function measureFootnoteTable(
       }
       if (cell.rowSpan !== undefined) {
         cellMeasure.rowSpan = cell.rowSpan;
+      }
+      if ((cell.rowSpan ?? 1) > 1) {
+        const rowSpanEnd = rowIndex + (cell.rowSpan ?? 1);
+        for (let offset = 0; offset < colSpan; offset++) {
+          rowSpanEnds[columnIndex - colSpan + offset] = rowSpanEnd;
+        }
       }
       return cellMeasure;
     });

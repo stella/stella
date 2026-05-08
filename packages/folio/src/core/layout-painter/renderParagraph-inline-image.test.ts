@@ -114,6 +114,37 @@ describe("renderLine scaled text handling", () => {
   });
 });
 
+describe("renderLine text styling", () => {
+  test("paints DOCX bold runs with the calibrated browser weight", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "SECURITIES ACT",
+          bold: true,
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 14,
+      width: 80,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.fontWeight).toBe("800");
+  });
+});
+
 describe("renderParagraphFragment indentation handling", () => {
   test("negative side indents shift and widen line boxes", () => {
     const block: ParagraphBlock = {

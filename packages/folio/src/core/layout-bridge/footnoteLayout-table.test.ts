@@ -66,6 +66,78 @@ const emptyFootnoteWithTable: Footnote = {
   ],
 };
 
+const footnoteWithRowSpanTable: Footnote = {
+  type: "footnote",
+  id: 9,
+  noteType: "normal",
+  content: [
+    {
+      type: "table",
+      columnWidths: [1440, 2880],
+      rows: [
+        {
+          type: "tableRow",
+          cells: [
+            {
+              type: "tableCell",
+              formatting: { vMerge: "restart" },
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    {
+                      type: "run",
+                      content: [{ type: "text", text: "A" }],
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              type: "tableCell",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    {
+                      type: "run",
+                      content: [{ type: "text", text: "B" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          type: "tableRow",
+          cells: [
+            {
+              type: "tableCell",
+              formatting: { vMerge: "continue" },
+              content: [{ type: "paragraph", content: [] }],
+            },
+            {
+              type: "tableCell",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    {
+                      type: "run",
+                      content: [{ type: "text", text: "C" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 function withFakeTextMeasure(runTest: () => void): void {
   const originalDocument = globalThis.document;
   const fakeDocument = {
@@ -157,6 +229,26 @@ describe("footnote layout", () => {
         throw new Error("Expected footnote table to have a table measure");
       }
       expect(tableMeasure.totalHeight).toBeGreaterThan(0);
+    });
+  });
+
+  test("skips row-spanned columns while measuring footnote table rows", () => {
+    withFakeTextMeasure(() => {
+      const content = convertFootnoteToContent(
+        footnoteWithRowSpanTable,
+        4,
+        400,
+      );
+      const tableMeasure = content.measures.at(1);
+
+      expect(tableMeasure?.kind).toBe("table");
+      if (tableMeasure?.kind !== "table") {
+        throw new Error("Expected footnote table to have a table measure");
+      }
+
+      expect(tableMeasure.rows.at(0)?.cells.at(0)?.rowSpan).toBe(2);
+      expect(tableMeasure.rows.at(0)?.cells.at(0)?.width).toBeCloseTo(96);
+      expect(tableMeasure.rows.at(1)?.cells.at(0)?.width).toBeCloseTo(192);
     });
   });
 

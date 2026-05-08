@@ -303,4 +303,19 @@ describe("all-caps paragraph measurement", () => {
 
     expect(smallCapsHash).not.toBe(plainHash);
   });
+
+  test("includes character spacing in paragraph cache keys", () => {
+    const plainHash = hashParagraphBlock({
+      kind: "paragraph",
+      id: "plain",
+      runs: [{ kind: "text", text: "iiii" }],
+    });
+    const spacedHash = hashParagraphBlock({
+      kind: "paragraph",
+      id: "spaced",
+      runs: [{ kind: "text", text: "iiii", letterSpacing: 1.5 }],
+    });
+
+    expect(spacedHash).not.toBe(plainHash);
+  });
 });

@@ -45,6 +45,8 @@ export const PARAGRAPH_CLASS_NAMES = {
   lineBreak: "layout-run-linebreak",
 };
 
+const DOCX_BOLD_FONT_WEIGHT = "800";
+
 // Text wrapping around floating images is implemented via measurement-time
 // per-line leftOffset/rightOffset. renderPage.ts re-measures paragraphs with
 // FloatingImageZone[] when floating images are present on the page.
@@ -118,7 +120,7 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     element.style.fontSize = `${fontSizePx}px`;
   }
   if (run.bold) {
-    element.style.fontWeight = "bold";
+    element.style.fontWeight = DOCX_BOLD_FONT_WEIGHT;
   }
   if (run.italic) {
     element.style.fontStyle = "italic";
