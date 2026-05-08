@@ -279,17 +279,24 @@ export function createPaginator(options: PaginatorOptions) {
     spaceBefore: number = 0,
     spaceAfter: number = 0,
   ): { state: PageState; x: number; y: number } {
+    const initialState = getCurrentState();
+    const initialColumnIndex = initialState.columnIndex;
+
     // Collapse space before with trailing spacing from previous block
     const effectiveSpaceBefore = Math.max(
       spaceBefore,
-      getCurrentState().trailingSpacing,
+      initialState.trailingSpacing,
     );
     const totalHeight = effectiveSpaceBefore + height;
 
     // Ensure we have space
     const state = ensureFits(totalHeight);
 
-    const actualSpaceBefore = effectiveSpaceBefore;
+    const isSameFlowRegion =
+      state === initialState && state.columnIndex === initialColumnIndex;
+    const actualSpaceBefore = isSameFlowRegion
+      ? effectiveSpaceBefore
+      : spaceBefore;
 
     // Calculate position
     const x = getColumnX(state.columnIndex);
