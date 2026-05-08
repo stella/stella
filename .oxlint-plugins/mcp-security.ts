@@ -1,18 +1,18 @@
 // MCP-specific security guardrails.
 // oxlint-disable typescript/no-unsafe-assignment, typescript/no-unsafe-member-access, typescript/no-unsafe-return, typescript/no-unsafe-argument, typescript/no-unsafe-call, typescript/strict-boolean-expressions
 //
-// These rules encode invariants that TypeScript cannot infer from Drizzle's
-// query builder alone:
+// These rules encode MCP invariants that are hard for TypeScript to infer at
+// persistence/query boundaries:
 //   1. OAuth dynamic registration responses must be redacted before JSONB
 //      persistence, because some authorization servers return client secrets or
 //      registration access tokens in the raw response.
-//   2. MCP user connections must join OAuth client credentials by the exact
-//      authorization server URL used for that connection, not only by connector.
-//   3. OAuth refresh must use the persisted protected-resource URL; falling
-//      back to connector URL can silently address the wrong resource.
+//   2. OAuth client joins must stay behind the typed chat-time MCP connection
+//      loader, which normalizes raw nullable DB rows into a discriminated union.
 
 const MCP_OAUTH_CLIENTS = "mcpOAuthClients";
-const MCP_USER_CONNECTIONS = "mcpUserConnections";
+const OAUTH_CLIENT_JOIN_ALLOWED_FILES = [
+  "apps/api/src/handlers/chat/tools/external-mcp-tools.ts",
+];
 
 const getPropertyName = (node) => {
   if (!node) {
@@ -29,12 +29,6 @@ const getPropertyName = (node) => {
 
 const isIdentifier = (node, name) =>
   node?.type === "Identifier" && node.name === name;
-
-const isMember = (node, objectName, propertyName) =>
-  node?.type === "MemberExpression" &&
-  !node.computed &&
-  isIdentifier(node.object, objectName) &&
-  isIdentifier(node.property, propertyName);
 
 const isRedactionCall = (node) =>
   node?.type === "CallExpression" &&
@@ -55,79 +49,12 @@ const isJoinCall = (node) => {
   );
 };
 
-const hasAuthorizationServerJoinPredicate = (node) => {
-  if (!node) {
-    return false;
-  }
-
-  if (
-    node.type === "CallExpression" &&
-    isIdentifier(node.callee, "eq") &&
-    hasBothAuthorizationServerMembers(node.arguments)
-  ) {
-    return true;
-  }
-
-  return childNodes(node).some(hasAuthorizationServerJoinPredicate);
+const isAllowedOAuthClientJoinFile = (context) => {
+  const filename = context.filename ?? context.getFilename?.() ?? "";
+  return OAUTH_CLIENT_JOIN_ALLOWED_FILES.some((allowedFile) =>
+    filename.endsWith(allowedFile),
+  );
 };
-
-const hasBothAuthorizationServerMembers = (nodes) => {
-  let hasClientAuthorizationServer = false;
-  let hasConnectionAuthorizationServer = false;
-
-  for (const node of nodes) {
-    if (isMember(node, MCP_OAUTH_CLIENTS, "authorizationServerUrl")) {
-      hasClientAuthorizationServer = true;
-    }
-    if (isMember(node, MCP_USER_CONNECTIONS, "authorizationServerUrl")) {
-      hasConnectionAuthorizationServer = true;
-    }
-  }
-
-  return hasClientAuthorizationServer && hasConnectionAuthorizationServer;
-};
-
-const childNodes = (node) => {
-  const children = [];
-
-  for (const [key, value] of Object.entries(node)) {
-    if (key === "parent") {
-      continue;
-    }
-    if (Array.isArray(value)) {
-      for (const child of value) {
-        if (isAstNode(child)) {
-          children.push(child);
-        }
-      }
-      continue;
-    }
-    if (isAstNode(value)) {
-      children.push(value);
-    }
-  }
-
-  return children;
-};
-
-const isAstNode = (value) =>
-  typeof value === "object" && value !== null && typeof value.type === "string";
-
-const isOAuthResourceUrlFallbackToConnectorUrl = (node) =>
-  node.type === "LogicalExpression" &&
-  node.operator === "??" &&
-  isRowOAuthResourceUrl(node.left) &&
-  isRowConnectorUrl(node.right);
-
-const isRowOAuthResourceUrl = (node) =>
-  node.type === "MemberExpression" &&
-  !node.computed &&
-  isIdentifier(node.property, "oauthResourceUrl");
-
-const isRowConnectorUrl = (node) =>
-  node.type === "MemberExpression" &&
-  !node.computed &&
-  isIdentifier(node.property, "url");
 
 export default {
   meta: { name: "mcp-security" },
@@ -160,53 +87,26 @@ export default {
       },
     },
 
-    "join-oauth-client-by-authorization-server": {
+    "no-direct-oauth-client-join": {
       meta: {
         type: "problem",
         messages: {
-          missingAuthorizationServerJoin:
-            "Join mcpOAuthClients with mcpUserConnections.authorizationServerUrl. Joining only by connector can refresh with credentials for the wrong authorization server.",
+          directOAuthClientJoin:
+            "Load mcpOAuthClients through the typed MCP connection loader. Direct joins can miss authorization-server identity and produce invalid OAuth rows.",
         },
       },
       create(context) {
+        const isAllowedFile = isAllowedOAuthClientJoinFile(context);
+
         return {
           CallExpression(node) {
-            if (!isJoinCall(node)) {
-              return;
-            }
-
-            const joinCondition = node.arguments.at(1);
-            if (hasAuthorizationServerJoinPredicate(joinCondition)) {
+            if (isAllowedFile || !isJoinCall(node)) {
               return;
             }
 
             context.report({
               node,
-              messageId: "missingAuthorizationServerJoin",
-            });
-          },
-        };
-      },
-    },
-
-    "no-oauth-resource-url-fallback": {
-      meta: {
-        type: "problem",
-        messages: {
-          resourceUrlFallback:
-            "Do not fall back from oauthResourceUrl to connector url during OAuth refresh. Mark the connection for reauth instead.",
-        },
-      },
-      create(context) {
-        return {
-          LogicalExpression(node) {
-            if (!isOAuthResourceUrlFallbackToConnectorUrl(node)) {
-              return;
-            }
-
-            context.report({
-              node,
-              messageId: "resourceUrlFallback",
+              messageId: "directOAuthClientJoin",
             });
           },
         };

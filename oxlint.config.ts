@@ -434,8 +434,7 @@ export default defineConfig({
     {
       files: ["apps/api/src/**/*.{ts,tsx}"],
       rules: {
-        "mcp-security/join-oauth-client-by-authorization-server": "error",
-        "mcp-security/no-oauth-resource-url-fallback": "error",
+        "mcp-security/no-direct-oauth-client-join": "error",
         "no-raw-error-logging/no-raw-error-logging": "error",
       },
     },

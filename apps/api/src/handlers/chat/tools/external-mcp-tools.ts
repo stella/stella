@@ -48,7 +48,7 @@ export type LoadedExternalMcpConnector = {
   toolNames: string[];
 };
 
-type ConnectionRow = {
+type RawConnectionRow = {
   accessTokenEncrypted: Buffer | null;
   accessTokenIv: Buffer | null;
   allowedTools: string[] | null;
@@ -70,6 +70,37 @@ type ConnectionRow = {
   url: string;
   userConnectionId: SafeId<"mcpUserConnection">;
 };
+
+type McpConnectionBase = {
+  allowedTools: string[] | null;
+  connectorId: SafeId<"mcpConnector">;
+  description: string;
+  displayName: string;
+  slug: string;
+  url: string;
+  userConnectionId: SafeId<"mcpUserConnection">;
+};
+
+type LoadedMcpConnection =
+  | (McpConnectionBase & { type: "none" })
+  | (McpConnectionBase & {
+      staticTokenEncrypted: Buffer;
+      staticTokenIv: Buffer;
+      type: "bearer";
+    })
+  | (McpConnectionBase & {
+      accessTokenEncrypted: Buffer;
+      accessTokenIv: Buffer;
+      expiresAt: Date | null;
+      oauthAuthorizationServerUrl: string;
+      oauthClientId: string;
+      oauthClientSecretEncrypted: Buffer | null;
+      oauthClientSecretIv: Buffer | null;
+      oauthResourceUrl: string;
+      refreshTokenEncrypted: Buffer | null;
+      refreshTokenIv: Buffer | null;
+      type: "oauth2";
+    });
 
 export const namespaceMcpToolName = ({
   connectorSlug,
@@ -156,7 +187,12 @@ export const loadExternalMcpToolsForUser = async ({
     return { close: () => undefined, connectors, tools: loadedTools };
   }
 
-  for (const row of rowsResult.value) {
+  for (const rawRow of rowsResult.value) {
+    const row = await normalizeMcpConnectionRow({ rawRow, safeDb });
+    if (!row) {
+      continue;
+    }
+
     await loadConnectorTools({
       clients,
       connectors,
@@ -194,7 +230,7 @@ const loadConnectorTools = async ({
   connectors: LoadedExternalMcpConnector[];
   loadedTools: ToolSet;
   organizationId: SafeId<"organization">;
-  row: ConnectionRow;
+  row: LoadedMcpConnection;
   safeDb: SafeDb;
   userId: SafeId<"user">;
 }) => {
@@ -393,19 +429,15 @@ const resolveAuthorizationToken = async ({
   userId,
 }: {
   organizationId: SafeId<"organization">;
-  row: ConnectionRow;
+  row: LoadedMcpConnection;
   safeDb: SafeDb;
   userId: SafeId<"user">;
 }): Promise<{ type: "ok"; value: string | null } | { type: "skip" }> => {
-  if (row.authType === "none") {
+  if (row.type === "none") {
     return { type: "ok", value: null };
   }
 
-  if (row.authType === "bearer") {
-    if (!row.staticTokenEncrypted || !row.staticTokenIv) {
-      return { type: "skip" };
-    }
-
+  if (row.type === "bearer") {
     return {
       type: "ok",
       value: await decryptMcpSecret({
@@ -417,10 +449,6 @@ const resolveAuthorizationToken = async ({
         userId,
       }),
     };
-  }
-
-  if (!row.accessTokenEncrypted || !row.accessTokenIv) {
-    return { type: "skip" };
   }
 
   if (
@@ -440,13 +468,7 @@ const resolveAuthorizationToken = async ({
     };
   }
 
-  if (
-    !row.refreshTokenEncrypted ||
-    !row.refreshTokenIv ||
-    !row.oauthResourceUrl ||
-    !row.oauthAuthorizationServerUrl ||
-    !row.oauthClientId
-  ) {
+  if (!row.refreshTokenEncrypted || !row.refreshTokenIv) {
     await markNeedsReauth({ connectionId: row.userConnectionId, safeDb });
     return { type: "skip" };
   }
@@ -516,6 +538,67 @@ const resolveAuthorizationToken = async ({
   );
 
   return { type: "ok", value: refreshed.value.access_token };
+};
+
+const normalizeMcpConnectionRow = async ({
+  rawRow,
+  safeDb,
+}: {
+  rawRow: RawConnectionRow;
+  safeDb: SafeDb;
+}): Promise<LoadedMcpConnection | null> => {
+  const base = {
+    allowedTools: rawRow.allowedTools,
+    connectorId: rawRow.connectorId,
+    description: rawRow.description,
+    displayName: rawRow.displayName,
+    slug: rawRow.slug,
+    url: rawRow.url,
+    userConnectionId: rawRow.userConnectionId,
+  } satisfies McpConnectionBase;
+
+  if (rawRow.authType === "none") {
+    return { ...base, type: "none" };
+  }
+
+  if (rawRow.authType === "bearer") {
+    if (!rawRow.staticTokenEncrypted || !rawRow.staticTokenIv) {
+      return null;
+    }
+
+    return {
+      ...base,
+      staticTokenEncrypted: rawRow.staticTokenEncrypted,
+      staticTokenIv: rawRow.staticTokenIv,
+      type: "bearer",
+    };
+  }
+
+  if (
+    !rawRow.accessTokenEncrypted ||
+    !rawRow.accessTokenIv ||
+    !rawRow.oauthAuthorizationServerUrl ||
+    !rawRow.oauthClientId ||
+    !rawRow.oauthResourceUrl
+  ) {
+    await markNeedsReauth({ connectionId: rawRow.userConnectionId, safeDb });
+    return null;
+  }
+
+  return {
+    ...base,
+    accessTokenEncrypted: rawRow.accessTokenEncrypted,
+    accessTokenIv: rawRow.accessTokenIv,
+    expiresAt: rawRow.expiresAt,
+    oauthAuthorizationServerUrl: rawRow.oauthAuthorizationServerUrl,
+    oauthClientId: rawRow.oauthClientId,
+    oauthClientSecretEncrypted: rawRow.oauthClientSecretEncrypted,
+    oauthClientSecretIv: rawRow.oauthClientSecretIv,
+    oauthResourceUrl: rawRow.oauthResourceUrl,
+    refreshTokenEncrypted: rawRow.refreshTokenEncrypted,
+    refreshTokenIv: rawRow.refreshTokenIv,
+    type: "oauth2",
+  };
 };
 
 const markNeedsReauth = async ({
