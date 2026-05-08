@@ -317,7 +317,9 @@
       "alwaysAllow": "Luba alati",
       "approved": "Lubatud",
       "denied": "Keelatud",
-      "deny": "Keela"
+      "deny": "Keela",
+      "externalMcpDescription": "Only the information needed for this tool call will be sent.",
+      "externalMcpQuestion": "Can Stella send this request to {provider}?"
     },
     "askUser": {
       "custom": "Kirjuta oma",

@@ -317,7 +317,9 @@
       "alwaysAllow": "Vienmēr atļaut",
       "approved": "Apstiprināts",
       "denied": "Noraidīts",
-      "deny": "Noraidīt"
+      "deny": "Noraidīt",
+      "externalMcpDescription": "Only the information needed for this tool call will be sent.",
+      "externalMcpQuestion": "Can Stella send this request to {provider}?"
     },
     "askUser": {
       "custom": "Rakstīt savu",

@@ -317,7 +317,9 @@
       "alwaysAllow": "Vždy povolit",
       "approved": "Povoleno",
       "denied": "Zamítnuto",
-      "deny": "Zamítnout"
+      "deny": "Zamítnout",
+      "externalMcpDescription": "Odešlou se jen informace potřebné pro tento dotaz.",
+      "externalMcpQuestion": "Může Stella odeslat tento dotaz do {provider}?"
     },
     "askUser": {
       "custom": "Napsat vlastní",

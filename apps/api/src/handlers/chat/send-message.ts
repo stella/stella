@@ -4,6 +4,7 @@ import type { Static } from "elysia";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
+import { env } from "@/api/env";
 import {
   buildChatPromptCacheKey,
   buildChatSystemPromptParts,
@@ -78,6 +79,15 @@ const sendMessage = createSafeRootHandler(
     user,
   }) {
     yield* requireAIAvailable(orgAIConfig);
+
+    if (body.devModelId && !env.isDev) {
+      return yield* Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Dev model overrides are only available locally.",
+        }),
+      );
+    }
 
     const accessibleWorkspaceIds = activeWorkspaceIds;
     /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope validates against accessibleWorkspaceIds */
@@ -401,6 +411,7 @@ const sendMessage = createSafeRootHandler(
               }
             },
             orgAIConfig,
+            devModelId: body.devModelId,
             promptCacheKey: chatContext.promptCacheKey,
             resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
             resolveAssistantValueRefs: refRegistry.resolveAssistantValueRefs,

@@ -778,7 +778,7 @@ const FileChatOverlayInner = ({
     if (toolName === "apply-active-docx-edits") {
       const part = getActiveDocxEditApprovalPart(messages, approvalId);
       if (!part) {
-        await handleApprove(approvalId, toolName);
+        handleApprove(approvalId, toolName);
         return;
       }
 
@@ -788,7 +788,7 @@ const FileChatOverlayInner = ({
       // surface the queued ids back to the LLM. The actual apply
       // (including the unlock prompt) happens when the user clicks
       // Accept on a suggestion in the panel.
-      await handleApprove(approvalId, toolName);
+      handleApprove(approvalId, toolName);
       const output = handleActiveDocxEditToolCall(part.input);
       await addToolOutput({
         output,
@@ -798,7 +798,7 @@ const FileChatOverlayInner = ({
       return;
     }
 
-    await handleApprove(approvalId, toolName);
+    handleApprove(approvalId, toolName);
   };
 
   const [panelOpen, setPanelOpen] = useState(false);

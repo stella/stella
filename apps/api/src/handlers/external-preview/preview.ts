@@ -18,7 +18,12 @@ const MAX_PREVIEW_CHARS = 80_000;
 const MIN_READABLE_TEXT_CHARS = 80;
 
 const HTML_CONTENT_TYPES = new Set(["application/xhtml+xml", "text/html"]);
+const GENERIC_BINARY_CONTENT_TYPES = new Set([
+  "application/octet-stream",
+  "binary/octet-stream",
+]);
 const PDF_CONTENT_TYPES = new Set(["application/pdf"]);
+const PDF_MAGIC_BYTES = "%PDF-";
 
 type ExternalPreviewResponse = {
   contentType: string | null;
@@ -125,12 +130,22 @@ export const previewExternalFile = createSafeRootHandler(
       readLimitedResponseBytes(response, MAX_FILE_PREVIEW_BYTES),
     );
 
+    if (!isPdfBytes(body)) {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: "This source did not return a valid PDF",
+        }),
+      );
+    }
+
     return Result.ok(
       new Response(body, {
         headers: {
           "Cache-Control": "private, max-age=600",
           "Content-Disposition": "inline",
-          "Content-Security-Policy": "sandbox",
+          "Content-Security-Policy":
+            "default-src 'none'; object-src 'none'; base-uri 'none'",
           "Content-Type": "application/pdf",
           "Referrer-Policy": "no-referrer",
           "X-Content-Type-Options": "nosniff",
@@ -508,9 +523,21 @@ const isSupportedContentType = (contentType: string | null): boolean =>
   contentType !== null &&
   (HTML_CONTENT_TYPES.has(contentType) || contentType.startsWith("text/"));
 
-const isPdfPreview = (contentType: string | null, url: URL): boolean =>
+export const isPdfPreview = (contentType: string | null, url: URL): boolean =>
   (contentType !== null && PDF_CONTENT_TYPES.has(contentType)) ||
-  url.pathname.toLowerCase().endsWith(".pdf");
+  ((contentType === null || GENERIC_BINARY_CONTENT_TYPES.has(contentType)) &&
+    url.pathname.toLowerCase().endsWith(".pdf"));
+
+export const isPdfBytes = (body: ArrayBuffer): boolean => {
+  if (body.byteLength < PDF_MAGIC_BYTES.length) {
+    return false;
+  }
+
+  const prefix = new TextDecoder().decode(
+    body.slice(0, PDF_MAGIC_BYTES.length),
+  );
+  return prefix === PDF_MAGIC_BYTES;
+};
 
 const normalizeWhitespace = (value: string): string =>
   value.replaceAll(/\s+/g, " ").trim();

@@ -91,6 +91,13 @@ export const sendMessageBodySchema = t.Object({
   activeFile: t.Optional(activeFileSchema),
   activeDecision: t.Optional(activeDecisionSchema),
   activeExternal: t.Optional(activeExternalSchema),
+  devModelId: t.Optional(
+    t.String({
+      minLength: 1,
+      maxLength: 160,
+      pattern: "^[A-Za-z0-9._:/-]+$",
+    }),
+  ),
 });
 
 type RawIncomingMessage = Static<typeof rawMessageSchema>;

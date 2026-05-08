@@ -317,7 +317,9 @@
       "alwaysAllow": "Toujours autoriser",
       "approved": "Approuvé",
       "denied": "Refusé",
-      "deny": "Refuser"
+      "deny": "Refuser",
+      "externalMcpDescription": "Only the information needed for this tool call will be sent.",
+      "externalMcpQuestion": "Can Stella send this request to {provider}?"
     },
     "askUser": {
       "custom": "Écrire la vôtre",

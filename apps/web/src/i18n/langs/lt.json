@@ -317,7 +317,9 @@
       "alwaysAllow": "Visada leisti",
       "approved": "Patvirtinta",
       "denied": "Atmesta",
-      "deny": "Atmesti"
+      "deny": "Atmesti",
+      "externalMcpDescription": "Only the information needed for this tool call will be sent.",
+      "externalMcpQuestion": "Can Stella send this request to {provider}?"
     },
     "askUser": {
       "custom": "Rašyti savo",

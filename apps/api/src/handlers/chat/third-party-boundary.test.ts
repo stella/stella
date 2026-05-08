@@ -219,7 +219,7 @@ describe("chat third-party anonymization boundary", () => {
     });
   });
 
-  test("refuses external tools when anonymized mode is disabled", async () => {
+  test("allows approved external tools to inherit raw mode", async () => {
     const boundary = createRawBoundary();
     const tools = {
       external_lookup: applyChatToolPolicy(
@@ -246,16 +246,10 @@ describe("chat third-party anonymization boundary", () => {
       throw new Error("Expected external tool execute function");
     }
 
-    const result = await Result.tryPromise({
-      try: async () => await executable.execute?.(),
-      catch: (cause) => cause,
+    const output = await executable.execute();
+    expect(output).toEqual({
+      text: "Secret notes for Jan Novák",
     });
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isOk(result)) {
-      throw new Error("Expected external tool refusal");
-    }
-
-    expect(result.error).toMatchObject({ status: 422 });
   });
 
   test("allows official public lookup tools without anonymized mode", async () => {
@@ -287,7 +281,7 @@ describe("chat third-party anonymization boundary", () => {
     });
   });
 
-  test("refuses unofficial public lookup tools without anonymized mode", async () => {
+  test("allows unofficial public lookup tools to inherit raw mode", async () => {
     const boundary = createRawBoundary();
     const tools = {
       unofficial_lookup: applyChatToolPolicy(
@@ -318,15 +312,9 @@ describe("chat third-party anonymization boundary", () => {
       throw new Error("Expected unofficial lookup execute function");
     }
 
-    const result = await Result.tryPromise({
-      try: async () => await executable.execute?.({ query: "Jan Novák" }),
-      catch: (cause) => cause,
+    const output = await executable.execute({ query: "Jan Novák" });
+    expect(output).toEqual({
+      query: "Jan Novák",
     });
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isOk(result)) {
-      throw new Error("Expected unofficial public lookup refusal");
-    }
-
-    expect(result.error).toMatchObject({ status: 422 });
   });
 });

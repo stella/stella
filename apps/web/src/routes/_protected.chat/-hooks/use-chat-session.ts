@@ -60,8 +60,9 @@ export const useChatSession = ({
   }, [regenerate]);
 
   const handleApprove = useCallback(
-    (id: string, _toolName?: ApprovalToolName) =>
-      addToolApprovalResponse({ id, approved: true }),
+    (id: string, _toolName?: ApprovalToolName) => {
+      addToolApprovalResponse({ id, approved: true });
+    },
     [addToolApprovalResponse],
   );
   const handleAllowInConversation = useCallback(

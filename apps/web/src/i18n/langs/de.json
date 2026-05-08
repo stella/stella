@@ -317,7 +317,9 @@
       "alwaysAllow": "Immer erlauben",
       "approved": "Genehmigt",
       "denied": "Abgelehnt",
-      "deny": "Ablehnen"
+      "deny": "Ablehnen",
+      "externalMcpDescription": "Only the information needed for this tool call will be sent.",
+      "externalMcpQuestion": "Can Stella send this request to {provider}?"
     },
     "askUser": {
       "custom": "Eigene Antwort",

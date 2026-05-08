@@ -13,12 +13,16 @@ import type {
   ChatUITools,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
-import { hasApprovedActiveDocxEditAwaitingClientOutput } from "@/components/chat/chat-ui-tools";
+import {
+  hasApprovalResponseAwaitingModelStep,
+  hasApprovedActiveDocxEditAwaitingClientOutput,
+} from "@/components/chat/chat-ui-tools";
 import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
+import { useDevStore } from "@/lib/dev-store";
 import { APIError, toAPIError } from "@/lib/errors";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -218,6 +222,7 @@ export const buildSendRequestBody = ({
     activeFile?: ActiveFileContext | undefined;
     anonymized?: boolean | undefined;
     contextMatterIds?: string[] | undefined;
+    devModelId?: string | undefined;
     message: PersistedChatMessage;
     threadId: string;
     userContext?: ChatUserContext | undefined;
@@ -261,6 +266,13 @@ export const buildSendRequestBody = ({
     body.anonymized = anonymized;
   }
 
+  if (import.meta.env.DEV) {
+    const devModelId = useDevStore.getState().chatModelId;
+    if (devModelId) {
+      body.devModelId = devModelId;
+    }
+  }
+
   return body;
 };
 
@@ -285,6 +297,7 @@ const createSendAutomaticallyPredicate = () => {
       return false;
     }
     const shouldFire =
+      hasApprovalResponseAwaitingModelStep({ messages }) ||
       lastAssistantMessageIsCompleteWithApprovalResponses({ messages }) ||
       lastAssistantMessageIsCompleteWithToolCalls({ messages });
     if (shouldFire) {

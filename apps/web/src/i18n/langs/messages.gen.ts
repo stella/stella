@@ -321,6 +321,8 @@ type Messages = {
       "approved": "Approved";
       "denied": "Denied";
       "deny": "Deny";
+      "externalMcpDescription": "Only the information needed for this tool call will be sent.";
+      "externalMcpQuestion": "Can Stella send this request to {provider}?";
     };
     "askUser": {
       "custom": "Write your own";

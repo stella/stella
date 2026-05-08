@@ -168,6 +168,22 @@ export const isApprovedActiveDocxEditPart = (
   part.state === "approval-responded" &&
   part.approval.approved;
 
+export const isApprovalRespondedPart = (
+  part: ChatPart,
+): part is ApprovalToolPart & {
+  approval: { approved: boolean; id: string };
+  state: "approval-responded";
+} =>
+  isApprovalPart(part) &&
+  part.state === "approval-responded" &&
+  "approval" in part &&
+  typeof part.approval === "object" &&
+  part.approval !== null &&
+  "id" in part.approval &&
+  typeof part.approval.id === "string" &&
+  "approved" in part.approval &&
+  typeof part.approval.approved === "boolean";
+
 export const hasApprovedActiveDocxEditAwaitingClientOutput = ({
   messages,
 }: {
@@ -179,6 +195,19 @@ export const hasApprovedActiveDocxEditAwaitingClientOutput = ({
   }
 
   return message.parts.some(isApprovedActiveDocxEditPart);
+};
+
+export const hasApprovalResponseAwaitingModelStep = ({
+  messages,
+}: {
+  messages: PersistedChatMessage[];
+}) => {
+  const message = messages.at(-1);
+  if (!message || message.role !== "assistant") {
+    return false;
+  }
+
+  return message.parts.some(isApprovalRespondedPart);
 };
 
 export const getUserMessageHtmlHistory = (

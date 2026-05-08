@@ -21,7 +21,7 @@ const CHAT_TOOL_POLICIES = {
   [CHAT_TOOL_POLICY_KIND.external]: {
     kind: CHAT_TOOL_POLICY_KIND.external,
     needsApproval: true,
-    requiresAnonymization: true,
+    requiresAnonymization: false,
   },
   [CHAT_TOOL_POLICY_KIND.internal]: {
     kind: CHAT_TOOL_POLICY_KIND.internal,
@@ -47,13 +47,13 @@ const CHAT_TOOL_POLICIES = {
   },
   /**
    * Unofficial public endpoints are still external services. They may
-   * be unauthenticated, but Stella must not treat them as trusted
-   * recipients for raw legal data by default.
+   * be unauthenticated, so Stella asks before sending data. The
+   * anonymization boundary is inherited from the current chat mode.
    */
   [CHAT_TOOL_POLICY_KIND.publicUnofficial]: {
     kind: CHAT_TOOL_POLICY_KIND.publicUnofficial,
     needsApproval: true,
-    requiresAnonymization: true,
+    requiresAnonymization: false,
   },
 } as const satisfies Record<ChatToolPolicyKind, ChatToolPolicy>;
 

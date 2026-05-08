@@ -31,6 +31,8 @@ import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
 import { classifyAIError } from "@/api/lib/ai-error";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import {
+  getModelById,
+  getModelInfoById,
   getModelForRole,
   getModelInfoForRole,
   getTemperatureForRole,
@@ -57,6 +59,7 @@ type StoredUserFile = {
 
 type StreamChatProps = {
   abortSignal: AbortSignal;
+  devModelId?: string | undefined;
   messages: ChatMessage[];
   onFinish: UIMessageStreamOnFinishCallback<ChatMessage>;
   orgAIConfig: OrgAIConfig | null;
@@ -71,6 +74,7 @@ type StreamChatProps = {
 
 export const streamChat = async ({
   abortSignal,
+  devModelId,
   messages,
   onFinish,
   orgAIConfig,
@@ -144,10 +148,14 @@ export const streamChat = async ({
     onFinish,
     onError: onAiError,
     execute: ({ writer }) => {
-      const modelInfo = getModelInfoForRole("chat", orgAIConfig);
+      const modelInfo = devModelId
+        ? getModelInfoById(devModelId, orgAIConfig)
+        : getModelInfoForRole("chat", orgAIConfig);
       const result = streamText({
         abortSignal,
-        model: getModelForRole("chat", orgAIConfig),
+        model: devModelId
+          ? getModelById(devModelId, orgAIConfig)
+          : getModelForRole("chat", orgAIConfig),
         temperature: getTemperatureForRole("chat"),
         system: preparedSystem.value,
         tools: modelTools,

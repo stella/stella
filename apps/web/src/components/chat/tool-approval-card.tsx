@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRightIcon,
   CheckIcon,
@@ -25,7 +25,9 @@ import type {
   ChatUITools,
 } from "@/components/chat/chat-ui-tools";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import { sanitizeHref } from "@/lib/sanitize-href";
 import type { WorkspaceProperty } from "@/lib/types";
+import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
@@ -347,6 +349,7 @@ export const ToolApprovalCard = ({
   const name = getApprovalToolName(part);
   const autoApproveRef = useRef(false);
   const autoDenyRef = useRef(false);
+  const submittedApprovalIdRef = useRef<string | null>(null);
   const [responded, setResponded] = useState(false);
 
   const isApprovalRequested = part.state === "approval-requested";
@@ -366,6 +369,20 @@ export const ToolApprovalCard = ({
    * handler can register the suggestions.
    */
   const isDocxEditBatch = name === "apply-active-docx-edits";
+  const externalMcpProviderName = getExternalMcpProviderName(name);
+  const label = externalMcpProviderName ?? t(getChatToolTitleKey(name));
+  const externalMcpConnectorSlug = getExternalMcpConnectorSlug(name);
+  const { data: mcpConnectorsData } = useQuery({
+    ...mcpConnectorsOptions(),
+    enabled: externalMcpConnectorSlug !== null,
+  });
+  const mcpIconHref =
+    externalMcpConnectorSlug === null
+      ? undefined
+      : findMcpConnectorIconHref({
+          connectorSlug: externalMcpConnectorSlug,
+          connectors: mcpConnectorsData?.connectors ?? [],
+        });
 
   useEffect(() => {
     if (!isApprovalRequested || !isBlocked || autoDenyRef.current) {
@@ -415,9 +432,16 @@ export const ToolApprovalCard = ({
     onApprove,
   ]);
 
-  const label = t(getChatToolTitleKey(name));
-
   const approvalId = isApprovalRequested ? getApprovalId(part) : null;
+  const beginManualResponse = (id: string): boolean => {
+    if (submittedApprovalIdRef.current === id) {
+      return false;
+    }
+
+    submittedApprovalIdRef.current = id;
+    setResponded(true);
+    return true;
+  };
 
   // Clicking a DOCX-edit-batch card jumps the user to the review
   // facet for the entity those edits target. The output's `queued`
@@ -482,7 +506,7 @@ export const ToolApprovalCard = ({
     >
       {/* Header: icon + label + status */}
       <div className="flex items-center gap-2 px-3 py-2">
-        <PencilIcon className="text-muted-foreground size-4 shrink-0" />
+        <ToolApprovalLeadingIcon iconHref={mcpIconHref} />
         <span className="font-medium">{label}</span>
         {isProcessing && (
           <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
@@ -518,7 +542,18 @@ export const ToolApprovalCard = ({
         part.state !== "input-streaming" &&
         "input" in part &&
         part.input !== undefined && (
-          <ExternalMcpInputSummary input={part.input} />
+          <ExternalMcpInputSummary
+            input={part.input}
+            isAwaitingDecision={
+              isApprovalRequested &&
+              !isProcessing &&
+              !isBlocked &&
+              !isPublicOfficialApproval
+            }
+            providerName={
+              externalMcpProviderName ?? t("knowledge.sections.mcp.title")
+            }
+          />
         )}
 
       {/* Actions — hidden for DOCX edit batches (reviewed in the side panel). */}
@@ -531,7 +566,9 @@ export const ToolApprovalCard = ({
             <Button
               autoFocus
               onClick={() => {
-                setResponded(true);
+                if (!beginManualResponse(approvalId)) {
+                  return;
+                }
                 onApprove(approvalId, name);
               }}
               size="xs"
@@ -541,7 +578,9 @@ export const ToolApprovalCard = ({
             {canPersistApproval && (
               <Button
                 onClick={() => {
-                  setResponded(true);
+                  if (!beginManualResponse(approvalId)) {
+                    return;
+                  }
                   onAllowInConversation(approvalId, name);
                 }}
                 size="xs"
@@ -553,7 +592,9 @@ export const ToolApprovalCard = ({
             {canPersistApproval && (
               <Button
                 onClick={() => {
-                  setResponded(true);
+                  if (!beginManualResponse(approvalId)) {
+                    return;
+                  }
                   onAlwaysAllow(approvalId, name);
                 }}
                 size="xs"
@@ -565,7 +606,9 @@ export const ToolApprovalCard = ({
             <Button
               className="ms-auto"
               onClick={() => {
-                setResponded(true);
+                if (!beginManualResponse(approvalId)) {
+                  return;
+                }
                 onDeny(approvalId);
               }}
               size="xs"
@@ -579,10 +622,211 @@ export const ToolApprovalCard = ({
   );
 };
 
-const ExternalMcpInputSummary = ({ input }: { input: unknown }) => (
-  <div className="border-border/50 border-t px-3 py-2">
-    <pre className="bg-background/70 max-h-48 overflow-auto rounded-md border px-2 py-1.5 text-[11px] leading-4 whitespace-pre-wrap">
-      {JSON.stringify(input, null, 2)}
-    </pre>
-  </div>
-);
+const ExternalMcpInputSummary = ({
+  input,
+  isAwaitingDecision,
+  providerName,
+}: {
+  input: unknown;
+  isAwaitingDecision: boolean;
+  providerName: string;
+}) => {
+  const t = useTranslations();
+  const rows = getReadableInputRows({
+    emptyLabel: t("common.empty"),
+    input,
+    requestLabel: t("chat.toolCall.input"),
+  });
+
+  return (
+    <div className="border-border/50 space-y-2 border-t px-3 py-2">
+      {isAwaitingDecision && (
+        <div>
+          <p className="text-sm font-medium">
+            {t("chat.approval.externalMcpQuestion", { provider: providerName })}
+          </p>
+          <p className="text-muted-foreground mt-0.5 text-xs">
+            {t("chat.approval.externalMcpDescription")}
+          </p>
+        </div>
+      )}
+      <details className="group">
+        <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-xs">
+          {t("folio.showDetails")}
+        </summary>
+        <div className="bg-background/60 mt-2 rounded-md border p-2">
+          <dl className="space-y-1.5">
+            {rows.map((row) => (
+              <div className="grid gap-1 sm:grid-cols-[9rem_1fr]" key={row.key}>
+                <dt className="text-muted-foreground text-xs">{row.label}</dt>
+                <dd className="text-xs break-words">{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </details>
+    </div>
+  );
+};
+
+const getExternalMcpProviderName = (
+  toolName: ApprovalToolName,
+): string | null => {
+  const connectorSlug = getExternalMcpConnectorSlug(toolName);
+  return connectorSlug ? humanizeIdentifier(connectorSlug) : null;
+};
+
+const getExternalMcpConnectorSlug = (
+  toolName: ApprovalToolName,
+): string | null => {
+  if (!isExternalMcpToolName(toolName)) {
+    return null;
+  }
+
+  const [, connectorSlug] = toolName.split("__");
+  return connectorSlug ?? null;
+};
+
+function ToolApprovalLeadingIcon({
+  iconHref,
+}: {
+  iconHref?: string | undefined;
+}) {
+  if (iconHref) {
+    return (
+      <span className="bg-background flex size-4 shrink-0 items-center justify-center rounded-sm border">
+        <img
+          alt=""
+          className="size-3 rounded-[2px] object-contain"
+          height={12}
+          src={iconHref}
+          width={12}
+        />
+      </span>
+    );
+  }
+
+  return <PencilIcon className="text-muted-foreground size-4 shrink-0" />;
+}
+
+const findMcpConnectorIconHref = ({
+  connectorSlug,
+  connectors,
+}: {
+  connectorSlug: string;
+  connectors: {
+    iconUrl: string | null;
+    slug: string;
+    url: string;
+  }[];
+}): string | undefined => {
+  const connector = connectors.find(
+    (item) => sanitizeMcpToolNamePart(item.slug) === connectorSlug,
+  );
+  if (!connector) {
+    return undefined;
+  }
+
+  const iconHref = connector.iconUrl ?? fallbackIconUrl(connector.url);
+  return iconHref === undefined ? undefined : sanitizeHref(iconHref);
+};
+
+const sanitizeMcpToolNamePart = (value: string): string =>
+  value.replace(/[^a-zA-Z0-9_-]/g, "_");
+
+const fallbackIconUrl = (rawUrl: string): string | undefined => {
+  try {
+    return new URL("/favicon.ico", rawUrl).toString();
+  } catch {
+    return undefined;
+  }
+};
+
+type ReadableInputRow = {
+  key: string;
+  label: string;
+  value: string;
+};
+
+const getReadableInputRows = ({
+  emptyLabel,
+  input,
+  requestLabel,
+}: {
+  emptyLabel: string;
+  input: unknown;
+  requestLabel: string;
+}): ReadableInputRow[] => {
+  if (input === undefined || input === null || typeof input !== "object") {
+    return [
+      {
+        key: "request",
+        label: requestLabel,
+        value: formatReadableInputValue({ emptyLabel, value: input }),
+      },
+    ];
+  }
+
+  if (Array.isArray(input)) {
+    return input.map((value, index) => ({
+      key: String(index),
+      label: String(index + 1),
+      value: formatReadableInputValue({ emptyLabel, value }),
+    }));
+  }
+
+  const rows: ReadableInputRow[] = [];
+  for (const [key, value] of Object.entries(input)) {
+    rows.push({
+      key,
+      label: humanizeIdentifier(key),
+      value: formatReadableInputValue({ emptyLabel, value }),
+    });
+  }
+
+  return rows;
+};
+
+const formatReadableInputValue = ({
+  emptyLabel,
+  value,
+}: {
+  emptyLabel: string;
+  value: unknown;
+}): string => {
+  if (value === null || value === undefined) {
+    return emptyLabel;
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((child) => formatReadableInputValue({ emptyLabel, value: child }))
+      .join(", ");
+  }
+
+  const parts: string[] = [];
+  for (const [key, child] of Object.entries(value)) {
+    parts.push(
+      `${humanizeIdentifier(key)}: ${formatReadableInputValue({
+        emptyLabel,
+        value: child,
+      })}`,
+    );
+  }
+  return parts.join("; ");
+};
+
+const humanizeIdentifier = (value: string): string =>
+  value
+    .replaceAll(/[_-]+/g, " ")
+    .replaceAll(/\s+/g, " ")
+    .trim()
+    .replace(/^\p{L}/u, (match) => match.toLocaleUpperCase());

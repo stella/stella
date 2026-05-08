@@ -317,7 +317,9 @@
       "alwaysAllow": "Mindig engedélyezés",
       "approved": "Engedélyezve",
       "denied": "Elutasítva",
-      "deny": "Elutasítás"
+      "deny": "Elutasítás",
+      "externalMcpDescription": "Only the information needed for this tool call will be sent.",
+      "externalMcpQuestion": "Can Stella send this request to {provider}?"
     },
     "askUser": {
       "custom": "Saját válasz",

@@ -5,6 +5,7 @@ import {
   getChatToolTitleKey,
   getApprovalToolName,
   getUserMessageHtmlHistory,
+  hasApprovalResponseAwaitingModelStep,
   hasApprovedActiveDocxEditAwaitingClientOutput,
   isApprovalPart,
   isPublicOfficialChatToolName,
@@ -177,6 +178,31 @@ describe("hasApprovedActiveDocxEditAwaitingClientOutput", () => {
         ],
       }),
     ).toBe(false);
+  });
+});
+
+describe("hasApprovalResponseAwaitingModelStep", () => {
+  test("recognizes dynamic MCP approval responses", () => {
+    expect(
+      hasApprovalResponseAwaitingModelStep({
+        messages: [
+          {
+            id: "message-1",
+            parts: [
+              {
+                approval: { approved: true, id: "approval-1" },
+                input: { query: "protección de datos" },
+                state: "approval-responded",
+                toolCallId: "tool-call-1",
+                toolName: "mcp__legal-data-hunter__search",
+                type: "dynamic-tool",
+              } as ChatPart,
+            ],
+            role: "assistant",
+          },
+        ],
+      }),
+    ).toBe(true);
   });
 });
 

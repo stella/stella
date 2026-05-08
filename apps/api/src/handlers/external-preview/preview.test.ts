@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
   extractReadableMarkdownFromHtml,
   extractReadableTextFromHtml,
+  isPdfBytes,
+  isPdfPreview,
 } from "@/api/handlers/external-preview/preview";
 
 describe("external source preview", () => {
@@ -54,6 +56,27 @@ describe("external source preview", () => {
         "ze dne 23. července 2009",
         "§ 24 Pravidla pro provoz letišť.",
       ].join("\n\n"),
+    );
+  });
+
+  test("does not treat HTML error pages on .pdf URLs as PDF previews", () => {
+    expect(
+      isPdfPreview("text/html", new URL("https://example.test/document.pdf")),
+    ).toBe(false);
+    expect(
+      isPdfPreview(
+        "application/octet-stream",
+        new URL("https://example.test/document.pdf"),
+      ),
+    ).toBe(true);
+  });
+
+  test("recognizes only real PDF bytes", () => {
+    expect(isPdfBytes(new TextEncoder().encode("%PDF-1.7\n").buffer)).toBe(
+      true,
+    );
+    expect(isPdfBytes(new TextEncoder().encode("<html></html>").buffer)).toBe(
+      false,
     );
   });
 });
