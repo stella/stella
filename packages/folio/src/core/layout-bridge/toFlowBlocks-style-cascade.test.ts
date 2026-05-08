@@ -112,6 +112,48 @@ describe("toFlowBlocks style cascade", () => {
     expect(firstRun(blocks).fontFamily).toBe("Arial Narrow");
   });
 
+  test("explicit run formatting toggles override paragraph style defaults", () => {
+    const styles: StyleDefinitions = {
+      styles: [
+        {
+          styleId: "Heading",
+          type: "paragraph",
+          name: "Heading",
+          rPr: {
+            bold: true,
+            italic: true,
+            allCaps: true,
+          },
+        },
+      ],
+    };
+    const paragraph: Paragraph = {
+      type: "paragraph",
+      formatting: { styleId: "Heading" },
+      content: [
+        {
+          type: "run",
+          formatting: {
+            bold: false,
+            italic: false,
+            allCaps: false,
+          },
+          content: [{ type: "text", text: "Keep mixed case" }],
+        },
+      ],
+    };
+
+    const blocks = toFlowBlocks(
+      toProseDoc(makeDoc(paragraph, styles), { styles }),
+      {},
+    );
+    const run = firstRun(blocks);
+
+    expect(run.bold).toBe(false);
+    expect(run.italic).toBe(false);
+    expect(run.allCaps).toBe(false);
+  });
+
   test("default character style reaches runs without rStyle", () => {
     const styles: StyleDefinitions = {
       docDefaults: { rPr: { fontSize: 22 } },

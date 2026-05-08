@@ -443,6 +443,10 @@ function extractRunFormatting(
         formatting.textOutline = true;
         break;
 
+      case "runFormattingOverride":
+        applyRunFormattingOverrides(formatting, mark);
+        break;
+
       case "emphasisMark": {
         const type = mark.attrs["type"] as string | undefined;
         formatting.emphasisMark =
@@ -519,6 +523,42 @@ function extractRunFormatting(
   }
 
   return formatting;
+}
+
+function applyRunFormattingOverrides(
+  formatting: RunFormatting,
+  mark: Mark,
+): void {
+  if (mark.attrs["bold"] === false) {
+    formatting.bold = false;
+  }
+  if (mark.attrs["italic"] === false) {
+    formatting.italic = false;
+  }
+  if (mark.attrs["underline"] === "none") {
+    formatting.underline = false;
+  }
+  if (mark.attrs["strike"] === false) {
+    formatting.strike = false;
+  }
+  if (mark.attrs["allCaps"] === false) {
+    formatting.allCaps = false;
+  }
+  if (mark.attrs["smallCaps"] === false) {
+    formatting.smallCaps = false;
+  }
+  if (mark.attrs["emboss"] === false) {
+    formatting.emboss = false;
+  }
+  if (mark.attrs["imprint"] === false) {
+    formatting.imprint = false;
+  }
+  if (mark.attrs["shadow"] === false) {
+    formatting.textShadow = false;
+  }
+  if (mark.attrs["outline"] === false) {
+    formatting.textOutline = false;
+  }
 }
 
 function paragraphRunDefaults(

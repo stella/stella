@@ -12,6 +12,10 @@ import type {
   UnderlineStyle,
   ThemeColorSlot,
 } from "../../../types/document";
+import {
+  applyRunFormattingOverrideMark,
+  buildRunFormattingOverrideAttrs,
+} from "./RunFormattingOverrideExtension";
 
 type MarkAttrs = Record<string, unknown>;
 
@@ -104,6 +108,9 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         break;
       case "subscript":
         formatting.vertAlign = "subscript";
+        break;
+      case "runFormattingOverride":
+        applyRunFormattingOverrideMark(formatting, mark);
         break;
       default:
         break;
@@ -297,6 +304,11 @@ export function textFormattingToMarks(
   schema: Schema,
 ): Mark[] {
   const marks: Mark[] = [];
+  const overrideAttrs = buildRunFormattingOverrideAttrs(formatting);
+
+  if (overrideAttrs && schema.marks["runFormattingOverride"]) {
+    marks.push(schema.marks["runFormattingOverride"].create(overrideAttrs));
+  }
 
   if (formatting.bold && schema.marks["bold"]) {
     marks.push(schema.marks["bold"].create());

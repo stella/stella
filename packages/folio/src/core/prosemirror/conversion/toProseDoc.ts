@@ -43,6 +43,7 @@ import type {
 } from "../../types/document";
 import { mergeTextFormatting } from "../../utils/textFormattingMerge";
 import { emuToPixels } from "../../utils/units";
+import { buildRunFormattingOverrideAttrs } from "../extensions/marks/RunFormattingOverrideExtension";
 import { schema } from "../schema";
 import type {
   ParagraphAttrs,
@@ -1792,6 +1793,11 @@ function textFormattingToMarks(
   }
 
   const marks: ReturnType<typeof schema.mark>[] = [];
+  const overrideAttrs = buildRunFormattingOverrideAttrs(formatting);
+
+  if (overrideAttrs) {
+    marks.push(schema.mark("runFormattingOverride", overrideAttrs));
+  }
 
   // Bold
   if (formatting.bold) {
