@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { LanguagePicker } from "@/components/language-picker";
 import { StellaWordmark } from "@/components/stella-wordmark";
+import { ThemePicker } from "@/components/theme-picker";
 
 const landingUrl = "https://stll.app";
 
@@ -16,6 +17,7 @@ function AuthLayout() {
   return (
     <div className="auth-gradient flex min-h-dvh flex-col">
       <div className="fixed end-4 top-4 z-20 flex items-center gap-2 lg:end-8 lg:top-6">
+        <ThemePicker />
         <LanguagePicker />
       </div>
       <style>{`
