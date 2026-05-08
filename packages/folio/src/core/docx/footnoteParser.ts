@@ -34,9 +34,9 @@ import { parseTable } from "./tableParser";
 import {
   parseXml,
   findChildren,
-  getAttribute,
   getChildElements,
-  parseNumericAttribute,
+  getAttributes,
+  getLocalName,
 } from "./xmlParser";
 import type { XmlElement } from "./xmlParser";
 
@@ -118,6 +118,29 @@ function parseNoteType(
   }
 }
 
+function getNoteAttribute(
+  element: XmlElement,
+  localName: "id" | "type",
+): string | null {
+  for (const [name, value] of Object.entries(getAttributes(element))) {
+    if (getLocalName(name) === localName) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function parseNoteId(element: XmlElement): number {
+  const id = getNoteAttribute(element, "id");
+  if (id === null) {
+    return 0;
+  }
+
+  const parsed = Number.parseInt(id, 10);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 // ============================================================================
 // FOOTNOTE PARSING
 // ============================================================================
@@ -133,9 +156,10 @@ function parseNoteBlockContent(
   const blocks: (Paragraph | Table)[] = [];
 
   for (const child of getChildElements(element)) {
-    if (child.name === "w:p") {
+    const localName = getLocalName(child.name ?? "");
+    if (localName === "p") {
       blocks.push(parseParagraph(child, styles, theme, numbering, rels));
-    } else if (child.name === "w:tbl") {
+    } else if (localName === "tbl") {
       blocks.push(parseTable(child, styles, theme, numbering, rels, media));
     }
   }
@@ -154,8 +178,8 @@ function parseFootnote(
   rels: RelationshipMap | null,
   media: Map<string, MediaFile> | null,
 ): Footnote {
-  const id = parseNumericAttribute(element, "w", "id") ?? 0;
-  const typeAttr = getAttribute(element, "w", "type");
+  const id = parseNoteId(element);
+  const typeAttr = getNoteAttribute(element, "type");
   const noteType = parseNoteType(typeAttr);
 
   const content = parseNoteBlockContent(
@@ -277,8 +301,8 @@ function parseEndnote(
   rels: RelationshipMap | null,
   media: Map<string, MediaFile> | null,
 ): Endnote {
-  const id = parseNumericAttribute(element, "w", "id") ?? 0;
-  const typeAttr = getAttribute(element, "w", "type");
+  const id = parseNoteId(element);
+  const typeAttr = getNoteAttribute(element, "type");
   const noteType = parseNoteType(typeAttr);
 
   const content = parseNoteBlockContent(
