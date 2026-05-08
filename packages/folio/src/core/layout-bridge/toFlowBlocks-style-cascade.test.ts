@@ -323,6 +323,81 @@ describe("toFlowBlocks style cascade", () => {
     }
   });
 
+  test("explicit table styles do not fall back to the default table style borders or margins", () => {
+    const gridBorder = {
+      style: "single" as const,
+      size: 4,
+      color: { rgb: "000000" },
+    };
+    const styles: StyleDefinitions = {
+      styles: [
+        {
+          styleId: "DefaultGrid",
+          type: "table",
+          default: true,
+          name: "Default Grid",
+          tblPr: {
+            borders: {
+              top: gridBorder,
+              bottom: gridBorder,
+              left: gridBorder,
+              right: gridBorder,
+              insideH: gridBorder,
+              insideV: gridBorder,
+            },
+            cellMargins: {
+              left: { value: 144, type: "dxa" },
+              right: { value: 288, type: "dxa" },
+            },
+          },
+        },
+        {
+          styleId: "Borderless",
+          type: "table",
+          name: "Borderless",
+        },
+      ],
+    };
+    const table: Table = {
+      type: "table",
+      formatting: { styleId: "Borderless" },
+      rows: [
+        {
+          type: "tableRow",
+          cells: [
+            {
+              type: "tableCell",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    {
+                      type: "run",
+                      content: [{ type: "text", text: "cell" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const document: Document = {
+      package: {
+        document: { content: [table] },
+        styles,
+      },
+    };
+
+    const tableNode = toProseDoc(document, { styles }).firstChild;
+    const rowNode = tableNode?.firstChild;
+    const cellNode = rowNode?.firstChild;
+
+    expect(tableNode?.attrs["cellMargins"]).toBeNull();
+    expect(cellNode?.attrs["borders"]).toBeNull();
+  });
+
   test("default table style supplies conditional formatting when table has no style ID", () => {
     const styles: StyleDefinitions = {
       styles: [

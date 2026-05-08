@@ -763,18 +763,19 @@ function convertTable(
     ? styleResolver?.getStyle(tableStyleId)
     : undefined;
   const defaultTableStyle = styleResolver?.getDefaultTableStyle();
+  const fallbackTableStyle = tableStyleId ? undefined : defaultTableStyle;
   const conditionalTableStyleId =
-    tableStyle?.styleId ?? defaultTableStyle?.styleId;
+    tableStyle?.styleId ?? fallbackTableStyle?.styleId;
   const resolvedTableBorders =
     table.formatting?.borders ??
     tableStyle?.tblPr?.borders ??
-    defaultTableStyle?.tblPr?.borders;
+    fallbackTableStyle?.tblPr?.borders;
 
   // Resolve default cell margins through the same table-style cascade.
   const tableCellMargins =
     table.formatting?.cellMargins ??
     tableStyle?.tblPr?.cellMargins ??
-    defaultTableStyle?.tblPr?.cellMargins;
+    fallbackTableStyle?.tblPr?.cellMargins;
   let cellMarginsAttr:
     | { top?: number; bottom?: number; left?: number; right?: number }
     | undefined;
