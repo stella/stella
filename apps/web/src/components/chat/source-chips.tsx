@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 import type {
   ChatMessage,
@@ -80,6 +80,69 @@ export const SourceChips = ({
   parts,
   workspaceId,
 }: SourceChipsProps) => {
+  const { uniqueExternalSources, uniqueSources } = useMemo(
+    () => collectSourceChipEntries(parts),
+    [parts],
+  );
+  const hasMcpExternalSources = uniqueExternalSources.some(
+    (source) => source.connectorSlug !== undefined,
+  );
+  const { data: mcpConnectorsData } = useQuery({
+    ...mcpConnectorsOptions(),
+    enabled: hasMcpExternalSources,
+  });
+  const uniqueExternalSourcesWithIcons = useMemo(
+    () =>
+      uniqueExternalSources.map((source) => {
+        if (source.connectorSlug === undefined) {
+          return source;
+        }
+
+        const iconHref = findMcpConnectorIconHref({
+          connectorSlug: source.connectorSlug,
+          connectors: mcpConnectorsData?.connectors ?? [],
+        });
+        return iconHref === undefined ? source : { ...source, iconHref };
+      }),
+    [mcpConnectorsData?.connectors, uniqueExternalSources],
+  );
+  const registerSources = useExternalSourceStore(
+    (state) => state.registerSources,
+  );
+
+  useEffect(() => {
+    registerSources(uniqueExternalSourcesWithIcons);
+  }, [registerSources, uniqueExternalSourcesWithIcons]);
+
+  if (uniqueSources.length === 0 && uniqueExternalSources.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex max-w-full flex-nowrap gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {uniqueSources.map((part) => (
+        <SourceChip
+          key={`${messageId}-source-${part.id ?? part.data.entityId}`}
+          sourceDocument={part.data}
+          workspaceId={workspaceId}
+        />
+      ))}
+      {uniqueExternalSourcesWithIcons.map((source) => (
+        <ExternalSourceChip
+          key={`${messageId}-external-source-${source.url}`}
+          source={source}
+        />
+      ))}
+    </div>
+  );
+};
+
+const collectSourceChipEntries = (
+  parts: ChatMessage["parts"],
+): {
+  uniqueExternalSources: ExternalSourceEntry[];
+  uniqueSources: SourceDocumentEntry[];
+} => {
   const sources: SourceDocumentEntry[] = [];
   const externalSources: ExternalSourceEntry[] = [];
   for (const part of parts) {
@@ -123,6 +186,7 @@ export const SourceChips = ({
       existing
         ? {
             connectorSlug: source.connectorSlug ?? existing.connectorSlug,
+            iconHref: source.iconHref ?? existing.iconHref,
             provider: source.provider ?? existing.provider,
             snippet: source.snippet ?? existing.snippet,
             sourceToolName: source.sourceToolName ?? existing.sourceToolName,
@@ -133,54 +197,11 @@ export const SourceChips = ({
         : source,
     );
   }
-  const uniqueExternalSources = Array.from(externalSourcesByUrl.values());
-  const hasMcpExternalSources = uniqueExternalSources.some(
-    (source) => source.connectorSlug !== undefined,
-  );
-  const { data: mcpConnectorsData } = useQuery({
-    ...mcpConnectorsOptions(),
-    enabled: hasMcpExternalSources,
-  });
-  const uniqueExternalSourcesWithIcons = uniqueExternalSources.map((source) => {
-    if (source.connectorSlug === undefined) {
-      return source;
-    }
 
-    const iconHref = findMcpConnectorIconHref({
-      connectorSlug: source.connectorSlug,
-      connectors: mcpConnectorsData?.connectors ?? [],
-    });
-    return iconHref === undefined ? source : { ...source, iconHref };
-  });
-  const registerSources = useExternalSourceStore(
-    (state) => state.registerSources,
-  );
-
-  useEffect(() => {
-    registerSources(uniqueExternalSourcesWithIcons);
-  }, [registerSources, uniqueExternalSourcesWithIcons]);
-
-  if (uniqueSources.length === 0 && uniqueExternalSources.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="flex max-w-full flex-nowrap gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {uniqueSources.map((part) => (
-        <SourceChip
-          key={`${messageId}-source-${part.id ?? part.data.entityId}`}
-          sourceDocument={part.data}
-          workspaceId={workspaceId}
-        />
-      ))}
-      {uniqueExternalSourcesWithIcons.map((source) => (
-        <ExternalSourceChip
-          key={`${messageId}-external-source-${source.url}`}
-          source={source}
-        />
-      ))}
-    </div>
-  );
+  return {
+    uniqueExternalSources: Array.from(externalSourcesByUrl.values()),
+    uniqueSources,
+  };
 };
 
 const cls = "size-3 shrink-0";
