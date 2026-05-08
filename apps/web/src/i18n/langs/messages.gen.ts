@@ -526,6 +526,7 @@ type Messages = {
     "connectionLostDescription": "We lost the connection to the server. Retrying automatically.";
     "convertTo": "Convert to";
     "copied": "Copied to clipboard";
+    "copy": "Copy";
     "copyLink": "Copy link";
     "createdAt": "Created at {date}";
     "currency": "Currency";

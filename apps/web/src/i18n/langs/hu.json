@@ -523,6 +523,7 @@
     "connectionLostDescription": "Megszakadt a kapcsolat a szerverrel. Automatikus újrapróbálkozás.",
     "convertTo": "Konvertálás",
     "copied": "Copied to clipboard",
+    "copy": "Másolás",
     "copyLink": "Hivatkozás másolása",
     "createdAt": "Létrehozva: {date}",
     "currency": "Pénznem",

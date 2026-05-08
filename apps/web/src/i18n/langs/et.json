@@ -523,6 +523,7 @@
     "connectionLostDescription": "Kaotasime ühenduse serveriga. Proovime automaatselt uuesti.",
     "convertTo": "Teisenda",
     "copied": "Copied to clipboard",
+    "copy": "Kopeeri",
     "copyLink": "Kopeeri link",
     "createdAt": "Loodud {date}",
     "currency": "Valuuta",

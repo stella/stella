@@ -1,10 +1,11 @@
 import type { ComponentProps } from "react";
 
 import { Button } from "@stll/ui/components/button";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { isToolUIPart } from "ai";
 import type { FileUIPart } from "ai";
-import { FileTextIcon } from "lucide-react";
+import { CopyIcon, FileTextIcon, RotateCcwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -252,6 +253,93 @@ const hasVisibleContent = (
   return false;
 };
 
+const getMessageText = (message: PersistedChatMessage) => {
+  const textParts: string[] = [];
+  for (const part of message.parts) {
+    if (part.type === "text" && part.text.trim()) {
+      textParts.push(part.text);
+    }
+  }
+
+  return textParts.join("\n\n").trim();
+};
+
+const AssistantMessageActions = ({
+  isGenerating,
+  isLatestAssistantMessage,
+  message,
+  onResend,
+}: {
+  isGenerating: boolean;
+  isLatestAssistantMessage: boolean;
+  message: PersistedChatMessage;
+  onResend?: (() => void | PromiseLike<void>) | undefined;
+}) => {
+  const t = useTranslations();
+  const text = getMessageText(message);
+  const canRetry = Boolean(onResend && isLatestAssistantMessage);
+
+  if (!text && !canRetry) {
+    return null;
+  }
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      stellaToast.add({ title: t("common.copied"), type: "success" });
+    } catch {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      {text && (
+        <Button
+          aria-label={t("common.copy")}
+          className="text-muted-foreground h-6 px-1.5 text-xs"
+          onClick={() => {
+            void handleCopy();
+          }}
+          size="xs"
+          variant="ghost"
+        >
+          <CopyIcon className="size-3.5" />
+          {t("common.copy")}
+        </Button>
+      )}
+      {canRetry && (
+        <Button
+          aria-label={t("common.retry")}
+          className="text-muted-foreground h-6 px-1.5 text-xs"
+          disabled={isGenerating}
+          onClick={() => {
+            void onResend?.();
+          }}
+          size="xs"
+          variant="ghost"
+        >
+          <RotateCcwIcon className="size-3.5" />
+          {t("common.retry")}
+        </Button>
+      )}
+    </div>
+  );
+};
+
+const getLatestAssistantMessageId = (
+  messages: readonly PersistedChatMessage[],
+) => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages.at(index);
+    if (message?.role === "assistant") {
+      return message.id;
+    }
+  }
+
+  return null;
+};
+
 type ChatThreadMessagesProps = {
   approvalPendingMessageId: string | null;
   autoApprovedTools: ReadonlySet<ApprovalToolName>;
@@ -294,116 +382,128 @@ export const ChatThreadMessages = ({
   showToolCalls,
   streamdownComponents,
   workspaceId,
-}: ChatThreadMessagesProps) => (
-  <>
-    {messages.map((message) => (
-      <Message
-        className={cn(
-          "transition-opacity duration-200",
-          approvalPendingMessageId &&
-            approvalPendingMessageId !== message.id &&
-            "opacity-40",
-        )}
-        from={message.role}
-        key={message.id}
-      >
-        <MessageContent>
-          {message.role === "assistant" ? (
-            <>
-              {message.parts.map((part, index) => {
-                if (part.type === "text") {
-                  return (
-                    <MessageResponse
-                      components={streamdownComponents}
-                      key={`${message.id}-text-${index}`}
-                    >
-                      {part.text}
-                    </MessageResponse>
-                  );
-                }
+}: ChatThreadMessagesProps) => {
+  const latestAssistantMessageId = getLatestAssistantMessageId(messages);
 
-                if (part.type === "tool-ask-user") {
-                  return (
-                    <AskUserCard
-                      key={part.toolCallId}
-                      onSubmit={(toolCallId, output) => {
-                        void onAskUserSubmit(toolCallId, output);
-                      }}
-                      part={part}
-                      workspaceId={workspaceId}
-                    />
-                  );
-                }
-
-                if (isApprovalPart(part)) {
-                  return (
-                    <ToolApprovalCard
-                      autoApprovedTools={autoApprovedTools}
-                      blockedApprovalTools={blockedApprovalTools}
-                      key={part.toolCallId}
-                      onAlwaysAllow={handleAlwaysAllow}
-                      onApprove={handleApprove}
-                      onDeny={handleDeny}
-                      part={part}
-                      workspaceId={workspaceId}
-                    />
-                  );
-                }
-
-                if (isToolUIPart(part) && showToolCalls) {
-                  return (
-                    <ToolCallCard
-                      key={part.toolCallId}
-                      part={part}
-                      showDetails
-                    />
-                  );
-                }
-
-                return null;
-              })}
-              <SourceChips
-                messageId={message.id}
-                parts={message.parts}
-                workspaceId={workspaceId}
-              />
-            </>
-          ) : (
-            <>
-              {(() => {
-                const fileParts: FileUIPart[] = [];
-                for (const part of message.parts) {
-                  if (part.type === "file") {
-                    fileParts.push(part);
-                  }
-                }
-
-                return <UserAttachments parts={fileParts} />;
-              })()}
-              {message.parts.map((part, index) =>
-                part.type === "text" ? (
-                  <MessageResponse
-                    components={USER_STREAMDOWN_COMPONENTS}
-                    key={`${message.id}-user-text-${index}`}
-                  >
-                    {normalizeUserMessageTextForDisplay(part.text)}
-                  </MessageResponse>
-                ) : null,
-              )}
-            </>
+  return (
+    <>
+      {messages.map((message) => (
+        <Message
+          className={cn(
+            "transition-opacity duration-200",
+            approvalPendingMessageId &&
+              approvalPendingMessageId !== message.id &&
+              "opacity-40",
           )}
-        </MessageContent>
-      </Message>
-    ))}
-    {error && (
-      <ChatErrorMessage
-        error={error}
-        isGenerating={isGenerating}
-        onResend={onResend}
-      />
-    )}
-    {showThinkingIndicator &&
-      isGenerating &&
-      !hasVisibleContent(messages, showToolCalls) && <ThinkingIndicator />}
-  </>
-);
+          from={message.role}
+          key={message.id}
+        >
+          <MessageContent>
+            {message.role === "assistant" ? (
+              <>
+                {message.parts.map((part, index) => {
+                  if (part.type === "text") {
+                    return (
+                      <MessageResponse
+                        components={streamdownComponents}
+                        key={`${message.id}-text-${index}`}
+                      >
+                        {part.text}
+                      </MessageResponse>
+                    );
+                  }
+
+                  if (part.type === "tool-ask-user") {
+                    return (
+                      <AskUserCard
+                        key={part.toolCallId}
+                        onSubmit={(toolCallId, output) => {
+                          void onAskUserSubmit(toolCallId, output);
+                        }}
+                        part={part}
+                        workspaceId={workspaceId}
+                      />
+                    );
+                  }
+
+                  if (isApprovalPart(part)) {
+                    return (
+                      <ToolApprovalCard
+                        autoApprovedTools={autoApprovedTools}
+                        blockedApprovalTools={blockedApprovalTools}
+                        key={part.toolCallId}
+                        onAlwaysAllow={handleAlwaysAllow}
+                        onApprove={handleApprove}
+                        onDeny={handleDeny}
+                        part={part}
+                        workspaceId={workspaceId}
+                      />
+                    );
+                  }
+
+                  if (isToolUIPart(part) && showToolCalls) {
+                    return (
+                      <ToolCallCard
+                        key={part.toolCallId}
+                        part={part}
+                        showDetails
+                      />
+                    );
+                  }
+
+                  return null;
+                })}
+                <SourceChips
+                  messageId={message.id}
+                  parts={message.parts}
+                  workspaceId={workspaceId}
+                />
+                <AssistantMessageActions
+                  isGenerating={isGenerating}
+                  isLatestAssistantMessage={
+                    message.id === latestAssistantMessageId
+                  }
+                  message={message}
+                  onResend={onResend}
+                />
+              </>
+            ) : (
+              <>
+                {(() => {
+                  const fileParts: FileUIPart[] = [];
+                  for (const part of message.parts) {
+                    if (part.type === "file") {
+                      fileParts.push(part);
+                    }
+                  }
+
+                  return <UserAttachments parts={fileParts} />;
+                })()}
+                {message.parts.map((part, index) =>
+                  part.type === "text" ? (
+                    <MessageResponse
+                      components={USER_STREAMDOWN_COMPONENTS}
+                      key={`${message.id}-user-text-${index}`}
+                    >
+                      {normalizeUserMessageTextForDisplay(part.text)}
+                    </MessageResponse>
+                  ) : null,
+                )}
+              </>
+            )}
+          </MessageContent>
+        </Message>
+      ))}
+      {error && (
+        <ChatErrorMessage
+          error={error}
+          isGenerating={isGenerating}
+          onResend={onResend}
+        />
+      )}
+      {showThinkingIndicator &&
+        isGenerating &&
+        !hasVisibleContent(messages, showToolCalls) && <ThinkingIndicator />}
+    </>
+  );
+};

@@ -523,6 +523,7 @@
     "connectionLostDescription": "Stratili sme spojenie so serverom. Automaticky opakujeme.",
     "convertTo": "Previesť na",
     "copied": "Skopírované do schránky",
+    "copy": "Kopírovať",
     "copyLink": "Kopírovať odkaz",
     "createdAt": "Vytvorené {date}",
     "currency": "Mena",
