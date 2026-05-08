@@ -51,7 +51,7 @@ const previewExternalSource = createSafeRootHandler(
     const target = yield* Result.await(validatePreviewUrl(query.url));
     const { url } = target;
     const response = yield* Result.await(
-      fetchPreviewUrl(target, { maxBytes: MAX_FILE_PREVIEW_BYTES }),
+      fetchPreviewUrl(target, { maxBytes: MAX_PREVIEW_BYTES }),
     );
     const contentType = getContentType(response.headers);
 

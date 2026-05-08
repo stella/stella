@@ -323,103 +323,126 @@ const sendMessage = createSafeRootHandler(
     const system = externalMcpSystemHint
       ? `${chatContext.system}\n\n${externalMcpSystemHint}`
       : chatContext.system;
+    let externalMcpToolsClosed = false;
+    const closeExternalMcpTools = async () => {
+      if (externalMcpToolsClosed) {
+        return;
+      }
+
+      externalMcpToolsClosed = true;
+      await externalMcpTools.close();
+    };
 
     const response = yield* Result.await(
       Result.tryPromise({
-        try: async () =>
-          await streamChat({
-            abortSignal: request.signal,
-            messages: chatContext.hydratedMessages,
-            onFinish: async ({ isAborted, responseMessage }) => {
-              try {
-                const resolvedMessages = resolveAssistantMessageRefs({
-                  messages: [responseMessage],
-                  refRegistry,
-                });
-                const resolvedResponseMessage = resolvedMessages.at(0);
-                if (!resolvedResponseMessage) {
-                  panic("Missing chat response message");
-                }
+        try: async () => {
+          try {
+            const chatResponse = await streamChat({
+              abortSignal: request.signal,
+              messages: chatContext.hydratedMessages,
+              onFinish: async ({ isAborted, responseMessage }) => {
+                try {
+                  const resolvedMessages = resolveAssistantMessageRefs({
+                    messages: [responseMessage],
+                    refRegistry,
+                  });
+                  const resolvedResponseMessage = resolvedMessages.at(0);
+                  if (!resolvedResponseMessage) {
+                    panic("Missing chat response message");
+                  }
 
-                const persistencePlan = planAssistantFinishPersistence({
-                  existingIds: latestMessagePlan.existingIds,
-                  isAborted,
-                  message: resolvedResponseMessage,
-                });
+                  const persistencePlan = planAssistantFinishPersistence({
+                    existingIds: latestMessagePlan.existingIds,
+                    isAborted,
+                    message: resolvedResponseMessage,
+                  });
 
-                // Skip scope expansion when the assistant message
-                // will not be persisted (aborted stream, planner
-                // returned `none`). Widening `data_workspace_ids`
-                // for transient parts that never land in
-                // `chat_messages` could make the thread unreadable
-                // after future access changes even though no
-                // corresponding content was saved.
-                if (persistencePlan.type === "none") {
-                  return;
-                }
+                  // Skip scope expansion when the assistant message
+                  // will not be persisted (aborted stream, planner
+                  // returned `none`). Widening `data_workspace_ids`
+                  // for transient parts that never land in
+                  // `chat_messages` could make the thread unreadable
+                  // after future access changes even though no
+                  // corresponding content was saved.
+                  if (persistencePlan.type === "none") {
+                    return;
+                  }
 
-                // Widen the thread's data scope to cover any
-                // workspace-scoped content the assistant just
-                // emitted (source-document parts from search and
-                // workspace tools). Run before persistMessage so
-                // the recorded scope already includes the
-                // workspaces when the message lands in
-                // `chat_messages`.
-                //
-                // If expansion fails (transient DB error, etc.),
-                // SKIP the message persist. Storing workspace-
-                // scoped content in `chat_messages` while the
-                // owning thread's `data_workspace_ids` stays stale
-                // would leave the new content readable after the
-                // user loses access to those workspaces — the same
-                // class of leak this whole change exists to close.
-                //
-                // Intersect with `accessibleWorkspaceIds` so a
-                // hallucinated or stale UUID from the model never
-                // lands in `data_workspace_ids`. An out-of-set ID
-                // would fail the RLS subset check on every later
-                // persist, silently breaking the thread.
-                const assistantWorkspaceIds = extractAssistantWorkspaceIds(
-                  resolvedResponseMessage.parts,
-                ).filter((id) => accessibleSet.has(id));
-                const expandResult = await expandThreadDataScope({
-                  currentDataWorkspaceIds: dataScopeAfterUserMessage,
-                  newWorkspaceIds: assistantWorkspaceIds,
-                  safeDb,
-                  threadId: body.threadId,
-                });
-                if (Result.isError(expandResult)) {
-                  captureError(expandResult.error, { threadId: body.threadId });
-                  return;
-                }
-
-                const persistResult = await persistMessage({
-                  persistencePlan,
-                  safeDb,
-                  threadId: body.threadId,
-                  userId: user.id,
-                  workspaceId,
-                });
-
-                if (Result.isError(persistResult)) {
-                  captureError(persistResult.error, {
+                  // Widen the thread's data scope to cover any
+                  // workspace-scoped content the assistant just
+                  // emitted (source-document parts from search and
+                  // workspace tools). Run before persistMessage so
+                  // the recorded scope already includes the
+                  // workspaces when the message lands in
+                  // `chat_messages`.
+                  //
+                  // If expansion fails (transient DB error, etc.),
+                  // SKIP the message persist. Storing workspace-
+                  // scoped content in `chat_messages` while the
+                  // owning thread's `data_workspace_ids` stays stale
+                  // would leave the new content readable after the
+                  // user loses access to those workspaces — the same
+                  // class of leak this whole change exists to close.
+                  //
+                  // Intersect with `accessibleWorkspaceIds` so a
+                  // hallucinated or stale UUID from the model never
+                  // lands in `data_workspace_ids`. An out-of-set ID
+                  // would fail the RLS subset check on every later
+                  // persist, silently breaking the thread.
+                  const assistantWorkspaceIds = extractAssistantWorkspaceIds(
+                    resolvedResponseMessage.parts,
+                  ).filter((id) => accessibleSet.has(id));
+                  const expandResult = await expandThreadDataScope({
+                    currentDataWorkspaceIds: dataScopeAfterUserMessage,
+                    newWorkspaceIds: assistantWorkspaceIds,
+                    safeDb,
                     threadId: body.threadId,
                   });
+                  if (Result.isError(expandResult)) {
+                    captureError(expandResult.error, {
+                      threadId: body.threadId,
+                    });
+                    return;
+                  }
+
+                  const persistResult = await persistMessage({
+                    persistencePlan,
+                    safeDb,
+                    threadId: body.threadId,
+                    userId: user.id,
+                    workspaceId,
+                  });
+
+                  if (Result.isError(persistResult)) {
+                    captureError(persistResult.error, {
+                      threadId: body.threadId,
+                    });
+                  }
+                } finally {
+                  await closeExternalMcpTools();
                 }
-              } finally {
-                await externalMcpTools.close();
-              }
-            },
-            orgAIConfig,
-            devModelId: body.devModelId,
-            promptCacheKey: chatContext.promptCacheKey,
-            resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
-            resolveAssistantValueRefs: refRegistry.resolveAssistantValueRefs,
-            thirdPartyBoundary,
-            threadId: body.threadId,
-            tools: chatTools,
-            system,
-          }),
+              },
+              orgAIConfig,
+              devModelId: body.devModelId,
+              promptCacheKey: chatContext.promptCacheKey,
+              resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
+              resolveAssistantValueRefs: refRegistry.resolveAssistantValueRefs,
+              thirdPartyBoundary,
+              threadId: body.threadId,
+              tools: chatTools,
+              system,
+            });
+
+            if (!isChatStreamResponse(chatResponse)) {
+              await closeExternalMcpTools();
+            }
+
+            return chatResponse;
+          } catch (error) {
+            await closeExternalMcpTools();
+            throw error;
+          }
+        },
         catch: (cause) =>
           new HandlerError({
             status: 500,
@@ -434,6 +457,11 @@ const sendMessage = createSafeRootHandler(
 );
 
 export default sendMessage;
+
+const isChatStreamResponse = (response: Response): boolean => {
+  const contentType = response.headers.get("content-type");
+  return contentType !== null && contentType.includes("text/event-stream");
+};
 
 const messageNeedsExternalMcpValidation = (
   message: Static<typeof sendMessageBodySchema>["message"],
