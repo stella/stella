@@ -6,11 +6,17 @@ import { env } from "@/api/env";
 import {
   authorizationServerMetadataUrls,
   mcpWellKnownProtectedResourceUrls,
+  safeMcpFetchBytes,
   validateSafeMcpFetchUrl,
 } from "@/api/handlers/mcp-connectors/url-safety";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type {
+  SafeOutboundFetchBody,
+  SafeOutboundHeaders,
+} from "@/api/lib/safe-outbound-fetch";
 
 const OAUTH_FETCH_TIMEOUT_MS = 10_000;
+const OAUTH_FETCH_MAX_BYTES = 1_000_000;
 const PKCE_VERIFIER_BYTES = 48;
 
 class McpDiscoveryError extends TaggedError("McpDiscoveryError")<{
@@ -75,44 +81,53 @@ export type RegisteredOAuthClient = {
   registrationResponse: Record<string, unknown>;
 };
 
+type McpFetchJsonInit = {
+  body?: SafeOutboundFetchBody | undefined;
+  headers?: SafeOutboundHeaders | undefined;
+  method?: string | undefined;
+};
+
 const fetchJson = async <T>({
   init,
   schema,
   url,
 }: {
-  init?: RequestInit | undefined;
+  init?: McpFetchJsonInit | undefined;
   schema: v.GenericSchema<unknown, T>;
   url: URL;
 }): Promise<Result<T, McpDiscoveryError>> =>
   await Result.tryPromise({
     try: async () => {
-      const safeUrl = await validateSafeMcpFetchUrl(url);
-      if (Result.isError(safeUrl)) {
-        throw safeUrl.error;
-      }
-
       const headers = new Headers(init?.headers);
       if (!headers.has("Accept")) {
         headers.set("Accept", "application/json");
       }
 
-      const response = await fetch(url, {
-        ...init,
+      const response = await safeMcpFetchBytes({
+        body: init?.body,
         headers,
-        redirect: "error",
-        signal: AbortSignal.timeout(OAUTH_FETCH_TIMEOUT_MS),
+        maxBytes: OAUTH_FETCH_MAX_BYTES,
+        method: init?.method,
+        timeoutMs: OAUTH_FETCH_TIMEOUT_MS,
+        url,
       });
+      if (Result.isError(response)) {
+        throw response.error;
+      }
 
-      if (!response.ok) {
-        const body = await response.text().catch(() => "");
+      if (!response.value.ok) {
+        const body = new TextDecoder().decode(response.value.body);
         throw new Error(
           body.length > 0
-            ? `HTTP ${response.status}: ${body.slice(0, 500)}`
-            : `HTTP ${response.status}`,
+            ? `HTTP ${response.value.status}: ${body.slice(0, 500)}`
+            : `HTTP ${response.value.status}`,
         );
       }
 
-      return v.parse(schema, await response.json());
+      return v.parse(
+        schema,
+        JSON.parse(new TextDecoder().decode(response.value.body)),
+      );
     },
     catch: (cause) =>
       new McpDiscoveryError({

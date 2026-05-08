@@ -268,7 +268,7 @@ const ensureOAuthClient = async ({
         })
       : null;
 
-    yield* Result.await(
+    const insertedClient = yield* Result.await(
       safeDb((tx) =>
         tx
           .insert(mcpOAuthClients)
@@ -287,9 +287,45 @@ const ensureOAuthClient = async ({
               mcpOAuthClients.connectorId,
               mcpOAuthClients.authorizationServerUrl,
             ],
+          })
+          .returning({
+            clientId: mcpOAuthClients.clientId,
           }),
       ),
     );
+
+    if (insertedClient.length === 0) {
+      const stored = yield* Result.await(
+        safeDb((tx) =>
+          tx.query.mcpOAuthClients.findFirst({
+            where: {
+              organizationId: { eq: organizationId },
+              connectorId: { eq: connectorId },
+              authorizationServerUrl: { eq: authorizationServer.issuer },
+            },
+            columns: {
+              clientId: true,
+              clientSecretEncrypted: true,
+              clientSecretIv: true,
+            },
+          }),
+        ),
+      );
+
+      if (stored) {
+        return Result.ok({
+          clientId: stored.clientId,
+          clientSecret: null,
+        });
+      }
+
+      return Result.err(
+        new HandlerError({
+          status: 502,
+          message: "MCP OAuth client registration could not be persisted",
+        }),
+      );
+    }
 
     return Result.ok({
       clientId: registered.clientId,

@@ -3,11 +3,12 @@ import * as cheerio from "cheerio";
 
 import {
   parseSafeMcpUrl,
-  validateSafeMcpFetchUrl,
+  safeMcpFetchBytes,
 } from "@/api/handlers/mcp-connectors/url-safety";
 
 const ICON_DISCOVERY_TIMEOUT_MS = 5000;
 const ICON_HTML_MAX_CHARS = 200_000;
+const ICON_HTML_MAX_BYTES = 300_000;
 
 export const discoverMcpIconUrl = async (
   rawUrl: string,
@@ -17,25 +18,22 @@ export const discoverMcpIconUrl = async (
     return null;
   }
 
-  const rootUrlResult = await validateSafeMcpFetchUrl(
-    new URL("/", parsed.value.origin),
-  );
-  if (Result.isError(rootUrlResult)) {
-    return null;
-  }
-  const rootUrl = rootUrlResult.value;
+  const rootUrl = new URL("/", parsed.value.origin);
   const htmlResult = await Result.tryPromise({
     try: async () => {
-      const response = await fetch(rootUrl, {
+      const response = await safeMcpFetchBytes({
         headers: { Accept: "text/html" },
-        redirect: "error",
-        signal: AbortSignal.timeout(ICON_DISCOVERY_TIMEOUT_MS),
+        maxBytes: ICON_HTML_MAX_BYTES,
+        timeoutMs: ICON_DISCOVERY_TIMEOUT_MS,
+        url: rootUrl,
       });
-      if (!response.ok) {
+      if (Result.isError(response) || !response.value.ok) {
         return null;
       }
 
-      return (await response.text()).slice(0, ICON_HTML_MAX_CHARS);
+      return new TextDecoder()
+        .decode(response.value.body)
+        .slice(0, ICON_HTML_MAX_CHARS);
     },
     catch: () => null,
   });

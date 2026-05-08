@@ -9,6 +9,11 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
+import { fetchWithResolvedAddress } from "@/api/lib/safe-outbound-fetch";
+import type {
+  SafeOutboundAddress,
+  SafeOutboundFetchResponse,
+} from "@/api/lib/safe-outbound-fetch";
 
 const PREVIEW_TIMEOUT_MS = 8000;
 const MAX_URL_LENGTH = 2048;
@@ -43,11 +48,12 @@ const config = {
 const previewExternalSource = createSafeRootHandler(
   config,
   async function* ({ query }) {
-    const url = yield* Result.await(validatePreviewUrl(query.url));
+    const target = yield* Result.await(validatePreviewUrl(query.url));
+    const { url } = target;
     const response = yield* Result.await(
-      fetchPreviewUrl(url, { maxBytes: MAX_FILE_PREVIEW_BYTES }),
+      fetchPreviewUrl(target, { maxBytes: MAX_FILE_PREVIEW_BYTES }),
     );
-    const contentType = getContentType(response);
+    const contentType = getContentType(response.headers);
 
     if (isPdfPreview(contentType, url)) {
       const preview: ExternalPreviewResponse = {
@@ -69,7 +75,7 @@ const previewExternalSource = createSafeRootHandler(
       );
     }
 
-    const body = yield* Result.await(readLimitedResponseText(response));
+    const body = readResponseText(response);
     const title =
       contentType !== null && HTML_CONTENT_TYPES.has(contentType)
         ? extractHtmlTitle(body)
@@ -111,11 +117,12 @@ export default previewExternalSource;
 export const previewExternalFile = createSafeRootHandler(
   config,
   async function* ({ query }) {
-    const url = yield* Result.await(validatePreviewUrl(query.url));
+    const target = yield* Result.await(validatePreviewUrl(query.url));
+    const { url } = target;
     const response = yield* Result.await(
-      fetchPreviewUrl(url, { maxBytes: MAX_FILE_PREVIEW_BYTES }),
+      fetchPreviewUrl(target, { maxBytes: MAX_FILE_PREVIEW_BYTES }),
     );
-    const contentType = getContentType(response);
+    const contentType = getContentType(response.headers);
 
     if (!isPdfPreview(contentType, url)) {
       return Result.err(
@@ -126,9 +133,7 @@ export const previewExternalFile = createSafeRootHandler(
       );
     }
 
-    const body = yield* Result.await(
-      readLimitedResponseBytes(response, MAX_FILE_PREVIEW_BYTES),
-    );
+    const body = response.body;
 
     if (!isPdfBytes(body)) {
       return Result.err(
@@ -304,7 +309,7 @@ const extractHtmlTitle = (html: string): string | null => {
 
 const validatePreviewUrl = async (
   rawUrl: string,
-): Promise<Result<URL, HandlerError>> => {
+): Promise<Result<ValidatedPreviewUrl, HandlerError>> => {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -344,7 +349,12 @@ const validatePreviewUrl = async (
   }
 
   url.hash = "";
-  return Result.ok(url);
+  return Result.ok({ addresses: resolved.value, url });
+};
+
+type ValidatedPreviewUrl = {
+  addresses: SafeOutboundAddress[];
+  url: URL;
 };
 
 type FetchPreviewUrlOptions = {
@@ -352,29 +362,34 @@ type FetchPreviewUrlOptions = {
 };
 
 const fetchPreviewUrl = async (
-  url: URL,
+  target: ValidatedPreviewUrl,
   { maxBytes }: FetchPreviewUrlOptions,
-): Promise<Result<Response, HandlerError>> =>
+): Promise<Result<SafeOutboundFetchResponse, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
-      const response = await fetch(url, {
+      const response = await fetchWithResolvedAddress({
+        addresses: target.addresses,
         headers: {
           Accept:
             "application/pdf, text/html, application/xhtml+xml, text/plain;q=0.9",
           "User-Agent": "Stella external source preview",
         },
-        redirect: "error",
-        signal: AbortSignal.timeout(PREVIEW_TIMEOUT_MS),
+        maxBytes,
+        timeoutMs: PREVIEW_TIMEOUT_MS,
+        url: target.url,
       });
+      if (Result.isError(response)) {
+        throw response.error;
+      }
 
-      if (!response.ok) {
+      if (!response.value.ok) {
         throw new HandlerError({
           status: 502,
-          message: `Source returned HTTP ${response.status}`,
+          message: `Source returned HTTP ${response.value.status}`,
         });
       }
 
-      const contentLength = response.headers.get("content-length");
+      const contentLength = response.value.headers.get("content-length");
       if (contentLength && Number(contentLength) > maxBytes) {
         throw new HandlerError({
           status: 422,
@@ -382,7 +397,7 @@ const fetchPreviewUrl = async (
         });
       }
 
-      return response;
+      return response.value;
     },
     catch: (cause) =>
       HandlerError.is(cause)
@@ -394,44 +409,12 @@ const fetchPreviewUrl = async (
           }),
   });
 
-const readLimitedResponseText = async (
-  response: Response,
-): Promise<Result<string, HandlerError>> =>
-  await Result.gen(async function* () {
-    const buffer = yield* Result.await(
-      readLimitedResponseBytes(response, MAX_PREVIEW_BYTES),
-    );
-    return Result.ok(new TextDecoder().decode(buffer));
-  });
-
-const readLimitedResponseBytes = async (
-  response: Response,
-  maxBytes: number,
-): Promise<Result<ArrayBuffer, HandlerError>> =>
-  await Result.tryPromise({
-    try: async () => {
-      const buffer = await response.arrayBuffer();
-      if (buffer.byteLength > maxBytes) {
-        throw new HandlerError({
-          status: 422,
-          message: "This source is too large to preview",
-        });
-      }
-      return buffer;
-    },
-    catch: (cause) =>
-      HandlerError.is(cause)
-        ? cause
-        : new HandlerError({
-            status: 502,
-            message: "Source body could not be read",
-            cause,
-          }),
-  });
+const readResponseText = (response: SafeOutboundFetchResponse): string =>
+  new TextDecoder().decode(response.body.slice(0, MAX_PREVIEW_BYTES));
 
 const resolvePublicAddresses = async (
   hostname: string,
-): Promise<Result<void, HandlerError>> => {
+): Promise<Result<SafeOutboundAddress[], HandlerError>> => {
   const literalFamily = isIP(hostname);
   if (literalFamily !== 0) {
     return isPrivateAddress(hostname)
@@ -441,7 +424,12 @@ const resolvePublicAddresses = async (
             message: "Source host is not allowed",
           }),
         )
-      : Result.ok(undefined);
+      : Result.ok([
+          {
+            address: hostname,
+            family: literalFamily === 6 ? 6 : 4,
+          },
+        ]);
   }
 
   const addresses = await Result.tryPromise({
@@ -467,7 +455,12 @@ const resolvePublicAddresses = async (
     );
   }
 
-  return Result.ok(undefined);
+  return Result.ok(
+    addresses.value.map(({ address, family }) => ({
+      address,
+      family: family === 6 ? 6 : 4,
+    })),
+  );
 };
 
 const isBlockedHostname = (hostname: string): boolean => {
@@ -514,8 +507,8 @@ const isPrivateAddress = (address: string): boolean => {
   );
 };
 
-const getContentType = (response: Response): string | null => {
-  const raw = response.headers.get("content-type");
+const getContentType = (headers: Headers): string | null => {
+  const raw = headers.get("content-type");
   return raw?.split(";").at(0)?.trim().toLowerCase() ?? null;
 };
 

@@ -3,6 +3,14 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import * as v from "valibot";
 
+import { fetchWithResolvedAddress } from "@/api/lib/safe-outbound-fetch";
+import type {
+  SafeOutboundAddress,
+  SafeOutboundFetchBody,
+  SafeOutboundFetchResponse,
+  SafeOutboundHeaders,
+} from "@/api/lib/safe-outbound-fetch";
+
 const MAX_MCP_URL_LENGTH = 2048;
 
 export class UnsafeMcpUrlError extends TaggedError("UnsafeMcpUrlError")<{
@@ -75,9 +83,25 @@ export const parseSafeMcpUrl = (
 export const validateSafeMcpFetchUrl = async (
   rawUrl: string | URL,
 ): Promise<Result<URL, UnsafeMcpUrlError>> => {
+  const target = await validateSafeMcpFetchTarget(rawUrl);
+  if (Result.isError(target)) {
+    return Result.err(target.error);
+  }
+
+  return Result.ok(target.value.url);
+};
+
+export type SafeMcpFetchTarget = {
+  addresses: SafeOutboundAddress[];
+  url: URL;
+};
+
+export const validateSafeMcpFetchTarget = async (
+  rawUrl: string | URL,
+): Promise<Result<SafeMcpFetchTarget, UnsafeMcpUrlError>> => {
   const parsed = parseSafeMcpUrl(rawUrl.toString());
   if (Result.isError(parsed)) {
-    return parsed;
+    return Result.err(parsed.error);
   }
 
   const publicAddresses = await resolvePublicAddresses(parsed.value.hostname);
@@ -85,7 +109,52 @@ export const validateSafeMcpFetchUrl = async (
     return Result.err(publicAddresses.error);
   }
 
-  return Result.ok(parsed.value);
+  return Result.ok({
+    addresses: publicAddresses.value,
+    url: parsed.value,
+  });
+};
+
+export const safeMcpFetchBytes = async ({
+  body,
+  headers,
+  maxBytes,
+  method,
+  timeoutMs,
+  url,
+}: {
+  body?: SafeOutboundFetchBody | undefined;
+  headers?: SafeOutboundHeaders | undefined;
+  maxBytes: number;
+  method?: string | undefined;
+  timeoutMs: number;
+  url: URL;
+}): Promise<Result<SafeOutboundFetchResponse, UnsafeMcpUrlError>> => {
+  const target = await validateSafeMcpFetchTarget(url);
+  if (Result.isError(target)) {
+    return Result.err(target.error);
+  }
+
+  const response = await fetchWithResolvedAddress({
+    addresses: target.value.addresses,
+    body,
+    headers,
+    maxBytes,
+    method,
+    timeoutMs,
+    url: target.value.url,
+  });
+
+  if (Result.isError(response)) {
+    return Result.err(
+      new UnsafeMcpUrlError({
+        message: response.error.message,
+        cause: response.error,
+      }),
+    );
+  }
+
+  return Result.ok(response.value);
 };
 
 export const mcpWellKnownProtectedResourceUrls = (mcpUrl: URL): URL[] => {
@@ -131,14 +200,19 @@ export const authorizationServerMetadataUrls = (
 
 const resolvePublicAddresses = async (
   hostname: string,
-): Promise<Result<void, UnsafeMcpUrlError>> => {
+): Promise<Result<SafeOutboundAddress[], UnsafeMcpUrlError>> => {
   const literalFamily = isIP(hostname);
   if (literalFamily !== 0) {
     return isPrivateAddress(hostname)
       ? Result.err(
           new UnsafeMcpUrlError({ message: "MCP server URL is not allowed" }),
         )
-      : Result.ok(undefined);
+      : Result.ok([
+          {
+            address: hostname,
+            family: literalFamily === 6 ? 6 : 4,
+          },
+        ]);
   }
 
   const addresses = await Result.tryPromise({
@@ -163,7 +237,12 @@ const resolvePublicAddresses = async (
     );
   }
 
-  return Result.ok(undefined);
+  return Result.ok(
+    addresses.value.map(({ address, family }) => ({
+      address,
+      family: family === 6 ? 6 : 4,
+    })),
+  );
 };
 
 const isPrivateAddress = (address: string): boolean => {

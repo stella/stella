@@ -1,10 +1,14 @@
 import { Result, TaggedError } from "better-result";
 
 import { discoverOAuthMetadata } from "@/api/handlers/mcp-connectors/oauth";
-import { validateSafeMcpFetchUrl } from "@/api/handlers/mcp-connectors/url-safety";
+import {
+  safeMcpFetchBytes,
+  validateSafeMcpFetchUrl,
+} from "@/api/handlers/mcp-connectors/url-safety";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const PROBE_TIMEOUT_MS = 10_000;
+const PROBE_MAX_BYTES = 1_000_000;
 
 class McpProbeError extends TaggedError("McpProbeError")<{
   message: string;
@@ -47,7 +51,7 @@ export const probeMcpServer = async (
 
   const anonymous = await Result.tryPromise({
     try: async () =>
-      await fetch(url, {
+      await safeMcpFetchBytes({
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: 1,
@@ -66,9 +70,10 @@ export const probeMcpServer = async (
           "Content-Type": "application/json",
           "MCP-Protocol-Version": MCP_PROTOCOL_VERSION,
         },
+        maxBytes: PROBE_MAX_BYTES,
         method: "POST",
-        redirect: "error",
-        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+        timeoutMs: PROBE_TIMEOUT_MS,
+        url,
       }),
     catch: (cause) =>
       new McpProbeError({
@@ -81,17 +86,26 @@ export const probeMcpServer = async (
     return Result.err(anonymous.error);
   }
 
-  if (anonymous.value.status === 401) {
+  if (Result.isError(anonymous.value)) {
+    return Result.err(
+      new McpProbeError({
+        message: "MCP server could not be reached",
+        cause: anonymous.value.error,
+      }),
+    );
+  }
+
+  if (anonymous.value.value.status === 401) {
     return Result.ok({ authType: "bearer" as const });
   }
 
-  if (anonymous.value.ok) {
+  if (anonymous.value.value.ok) {
     return Result.ok({ authType: "none" as const });
   }
 
   return Result.err(
     new McpProbeError({
-      message: `MCP server probe failed with HTTP ${anonymous.value.status}`,
+      message: `MCP server probe failed with HTTP ${anonymous.value.value.status}`,
     }),
   );
 };
