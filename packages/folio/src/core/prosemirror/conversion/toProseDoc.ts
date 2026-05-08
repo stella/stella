@@ -366,7 +366,6 @@ function paragraphFormattingToAttrs(
   if (styleResolver) {
     const resolved = styleResolver.resolveParagraphStyle(styleId);
     const stylePpr = resolved.paragraphFormatting;
-    const styleRpr = resolved.runFormatting;
 
     // Apply style-based values as defaults (inline overrides)
     set("alignment", formatting?.alignment ?? stylePpr?.alignment);
@@ -407,18 +406,9 @@ function paragraphFormattingToAttrs(
     // Text direction
     set("bidi", formatting?.bidi ?? stylePpr?.bidi);
 
-    // Default run properties (pPr/rPr)
-    const defaultCharStyleRpr = styleResolver.getDefaultCharacterStyle()?.rPr;
-    const styleRprWithDefaultChar = defaultCharStyleRpr
-      ? mergeTextFormatting(styleRpr, defaultCharStyleRpr)
-      : styleRpr;
-    const resolvedRunProps = resolveTextFormatting(
-      formatting?.runProperties,
-      styleResolver,
-    );
     set(
       "defaultTextFormatting",
-      mergeTextFormatting(styleRprWithDefaultChar, resolvedRunProps),
+      resolveParagraphDefaultTextFormatting(styleId, formatting, styleResolver),
     );
 
     // If style defines numPr but inline doesn't, use style's numPr
@@ -592,6 +582,32 @@ function resolveTextFormatting(
 
   const styleFormatting = styleResolver.resolveRunStyle(formatting.styleId);
   return mergeTextFormatting(styleFormatting, formatting);
+}
+
+function resolveParagraphDefaultTextFormatting(
+  styleId: string | undefined,
+  formatting: Paragraph["formatting"] | undefined,
+  styleResolver: StyleResolver,
+): TextFormatting | undefined {
+  const style = styleId
+    ? (styleResolver.getStyle(styleId) ??
+      styleResolver.getDefaultParagraphStyle())
+    : styleResolver.getDefaultParagraphStyle();
+  const paragraphStyleRpr = style?.type === "paragraph" ? style.rPr : undefined;
+  const paragraphRunProperties = formatting?.runProperties
+    ? resolveTextFormatting(formatting.runProperties, styleResolver)
+    : undefined;
+
+  return mergeTextFormatting(
+    mergeTextFormatting(
+      mergeTextFormatting(
+        styleResolver.getDocDefaults()?.rPr,
+        styleResolver.getDefaultCharacterStyle()?.rPr,
+      ),
+      paragraphStyleRpr,
+    ),
+    paragraphRunProperties,
+  );
 }
 
 /**

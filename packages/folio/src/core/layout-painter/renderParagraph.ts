@@ -305,6 +305,17 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
   }
 }
 
+function reserveScaledAdvance(
+  element: HTMLElement,
+  unscaledWidth: number,
+  horizontalScale: number | undefined,
+): void {
+  if (horizontalScale === undefined || horizontalScale === 100) {
+    return;
+  }
+  element.style.width = `${unscaledWidth * (horizontalScale / 100)}px`;
+}
+
 /**
  * Apply PM position data attributes
  */
@@ -964,6 +975,7 @@ export function renderLine(
           ...(run.smallCaps !== undefined ? { smallCaps: run.smallCaps } : {}),
         },
       );
+      reserveScaledAdvance(runEl, measuredWidth, run.horizontalScale);
       currentX += measuredWidth * ((run.horizontalScale ?? 100) / 100);
     } else if (isImageRun(run)) {
       // Skip floating images - they're rendered separately at page level.
@@ -1001,20 +1013,18 @@ export function renderLine(
       }
       const fontSize = run.fontSize || 11;
       const fontFamily = run.fontFamily || "Calibri";
-      currentX +=
-        measureText(
-          run.allCaps ? fieldText.toLocaleUpperCase() : fieldText,
-          fontSize,
-          fontFamily,
-          {
-            ...(run.bold !== undefined ? { bold: run.bold } : {}),
-            ...(run.italic !== undefined ? { italic: run.italic } : {}),
-            ...(run.smallCaps !== undefined
-              ? { smallCaps: run.smallCaps }
-              : {}),
-          },
-        ) *
-        ((run.horizontalScale ?? 100) / 100);
+      const measuredWidth = measureText(
+        run.allCaps ? fieldText.toLocaleUpperCase() : fieldText,
+        fontSize,
+        fontFamily,
+        {
+          ...(run.bold !== undefined ? { bold: run.bold } : {}),
+          ...(run.italic !== undefined ? { italic: run.italic } : {}),
+          ...(run.smallCaps !== undefined ? { smallCaps: run.smallCaps } : {}),
+        },
+      );
+      reserveScaledAdvance(runEl, measuredWidth, run.horizontalScale);
+      currentX += measuredWidth * ((run.horizontalScale ?? 100) / 100);
     } else {
       // Fallback for unknown run types
       const runEl = renderRun(run, doc, options?.context);

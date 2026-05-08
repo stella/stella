@@ -79,3 +79,35 @@ describe("renderLine inline image handling", () => {
     expect(imageEl?.style.height).toBe("29px");
   });
 });
+
+describe("renderLine scaled text handling", () => {
+  test("reserves scaled advance for horizontally scaled text runs", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "abcd",
+          horizontalScale: 150,
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 4,
+      width: 42,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.transform).toBe("scaleX(1.5)");
+    expect(textEl?.style.width).toBe("42px");
+  });
+});
