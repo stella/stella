@@ -13,6 +13,10 @@ export type SharedChatUITools = Pick<ChatUITools, "ask-user">;
 export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
 type BuiltInApprovalToolName = Exclude<keyof ChatUITools, "ask-user">;
 export type ApprovalToolName = BuiltInApprovalToolName | `mcp__${string}`;
+const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
+export type ToolApprovalGrant =
+  | ApprovalToolName
+  | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
 type DynamicApprovalToolPart = ChatPart & {
   type: "dynamic-tool";
   toolName: ApprovalToolName;
@@ -69,6 +73,38 @@ export const isExternalMcpToolName = (
   toolName: string,
 ): toolName is `mcp__${string}` => toolName.startsWith("mcp__");
 
+export const getExternalMcpConnectorSlugFromToolName = (
+  toolName: `mcp__${string}`,
+): string | null => {
+  const parts = toolName.split("__");
+  return parts.length >= 3 ? (parts.at(1) ?? null) : null;
+};
+
+export const getExternalMcpConnectorApprovalGrant = (
+  connectorSlug: string,
+): ToolApprovalGrant =>
+  `${MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${connectorSlug}`;
+
+export const getToolApprovalGrant = (
+  toolName: ApprovalToolName,
+): ToolApprovalGrant => {
+  if (!isExternalMcpToolName(toolName)) {
+    return toolName;
+  }
+
+  const connectorSlug = getExternalMcpConnectorSlugFromToolName(toolName);
+  if (!connectorSlug) {
+    return toolName;
+  }
+
+  return getExternalMcpConnectorApprovalGrant(connectorSlug);
+};
+
+export const isToolApprovedByGrant = (
+  grants: ReadonlySet<ToolApprovalGrant>,
+  toolName: ApprovalToolName,
+) => grants.has(toolName) || grants.has(getToolApprovalGrant(toolName));
+
 export const isPublicOfficialChatToolName = (
   toolName: string,
 ): toolName is PublicOfficialToolName =>
@@ -92,6 +128,12 @@ export const isApprovalToolName = (
 
   return isChatToolName(toolName) && toolName !== "ask-user";
 };
+
+export const isToolApprovalGrant = (
+  value: string,
+): value is ToolApprovalGrant =>
+  isApprovalToolName(value) ||
+  value.startsWith(MCP_CONNECTOR_APPROVAL_GRANT_PREFIX);
 
 export const getChatToolTitleKey = (toolName: string) => {
   if (isChatToolName(toolName)) {

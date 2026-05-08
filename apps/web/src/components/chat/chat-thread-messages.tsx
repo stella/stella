@@ -19,6 +19,7 @@ import type {
   ApprovalToolName,
   AskUserOutput,
   PersistedChatMessage,
+  ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import { isApprovalPart } from "@/components/chat/chat-ui-tools";
 import { SourceChips } from "@/components/chat/source-chips";
@@ -340,10 +341,10 @@ const getRetryableAssistantMessageId = (
 };
 
 type ChatThreadMessagesProps = {
-  alwaysApprovedTools: ReadonlySet<ApprovalToolName>;
+  alwaysApprovedTools: ReadonlySet<ToolApprovalGrant>;
   approvalPendingMessageId: string | null;
   blockedApprovalTools?: ReadonlySet<ApprovalToolName> | undefined;
-  conversationApprovedTools: ReadonlySet<ApprovalToolName>;
+  conversationApprovedTools: ReadonlySet<ToolApprovalGrant>;
   handleAllowInConversation: (
     id: string,
     toolName: ApprovalToolName,

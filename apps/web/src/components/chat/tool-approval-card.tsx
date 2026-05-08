@@ -18,11 +18,13 @@ import {
   getApprovalToolName,
   isExternalMcpToolName,
   isPublicOfficialChatToolName,
+  isToolApprovedByGrant,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
   ApprovalToolPart,
   ChatUITools,
+  ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { sanitizeHref } from "@/lib/sanitize-href";
@@ -314,7 +316,7 @@ const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
 // -- Main card --
 
 type ToolApprovalCardProps = {
-  alwaysApprovedTools: ReadonlySet<ApprovalToolName>;
+  alwaysApprovedTools: ReadonlySet<ToolApprovalGrant>;
   part: ApprovalToolPart;
   onAllowInConversation: (
     id: string,
@@ -329,7 +331,7 @@ type ToolApprovalCardProps = {
     toolName: ApprovalToolName,
   ) => void | PromiseLike<void>;
   onDeny: (id: string) => void | PromiseLike<void>;
-  conversationApprovedTools: ReadonlySet<ApprovalToolName>;
+  conversationApprovedTools: ReadonlySet<ToolApprovalGrant>;
   blockedApprovalTools?: ReadonlySet<ApprovalToolName> | undefined;
   workspaceId?: string | undefined;
 };
@@ -360,7 +362,8 @@ export const ToolApprovalCard = ({
     isApprovalResponded || (responded && isApprovalRequested);
   const isBlocked = blockedApprovalTools?.has(name) ?? false;
   const isExternalMcpApproval = isExternalMcpToolName(name);
-  const canPersistApproval = name !== "apply-active-docx-edits";
+  const canAllowInConversation = name !== "apply-active-docx-edits";
+  const canAlwaysAllow = canAllowInConversation;
   const isPublicOfficialApproval = isPublicOfficialChatToolName(name);
   /**
    * DOCX edit batches always go to the side review panel — never
@@ -408,8 +411,8 @@ export const ToolApprovalCard = ({
       autoApproveRef.current ||
       (!isDocxEditBatch &&
         !isPublicOfficialApproval &&
-        !conversationApprovedTools.has(name) &&
-        !alwaysApprovedTools.has(name))
+        !isToolApprovedByGrant(conversationApprovedTools, name) &&
+        (!canAlwaysAllow || !isToolApprovedByGrant(alwaysApprovedTools, name)))
     ) {
       return;
     }
@@ -425,6 +428,7 @@ export const ToolApprovalCard = ({
     isBlocked,
     alwaysApprovedTools,
     conversationApprovedTools,
+    canAlwaysAllow,
     isDocxEditBatch,
     isPublicOfficialApproval,
     name,
@@ -575,7 +579,7 @@ export const ToolApprovalCard = ({
             >
               {t("chat.approval.allowOnce")}
             </Button>
-            {canPersistApproval && (
+            {canAllowInConversation && (
               <Button
                 onClick={() => {
                   if (!beginManualResponse(approvalId)) {
@@ -589,7 +593,7 @@ export const ToolApprovalCard = ({
                 {t("chat.approval.allowInConversation")}
               </Button>
             )}
-            {canPersistApproval && (
+            {canAlwaysAllow && (
               <Button
                 onClick={() => {
                   if (!beginManualResponse(approvalId)) {

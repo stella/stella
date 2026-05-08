@@ -4,11 +4,13 @@ import type { ChatPart } from "@/components/chat/chat-ui-tools";
 import {
   getChatToolTitleKey,
   getApprovalToolName,
+  getToolApprovalGrant,
   getUserMessageHtmlHistory,
   hasApprovalResponseAwaitingModelStep,
   hasApprovedActiveDocxEditAwaitingClientOutput,
   isApprovalPart,
   isPublicOfficialChatToolName,
+  isToolApprovedByGrant,
 } from "@/components/chat/chat-ui-tools";
 
 describe("chat tool titles", () => {
@@ -130,6 +132,21 @@ describe("isApprovalPart", () => {
     };
 
     expect(isApprovalPart(part)).toBe(false);
+  });
+});
+
+describe("tool approval grants", () => {
+  test("treats external MCP approvals as connector-level grants", () => {
+    const grants = new Set([
+      getToolApprovalGrant("mcp__salvia__search_decisions"),
+    ]);
+
+    expect(isToolApprovedByGrant(grants, "mcp__salvia__fetch_document")).toBe(
+      true,
+    );
+    expect(isToolApprovedByGrant(grants, "mcp__krajta__fetch_document")).toBe(
+      false,
+    );
   });
 });
 
