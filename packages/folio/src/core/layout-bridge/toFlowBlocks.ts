@@ -41,7 +41,12 @@ import type {
   FontFamilyAttrs,
 } from "../prosemirror/schema/marks";
 import type { ParagraphAttrs as PMParagraphAttrs } from "../prosemirror/schema/nodes";
-import type { Theme, SectionProperties, NumberFormat } from "../types/document";
+import type {
+  Theme,
+  SectionProperties,
+  NumberFormat,
+  TextFormatting,
+} from "../types/document";
 import { resolveColor, resolveHighlightToCss } from "../utils/colorResolver";
 import {
   pointsToPixels,
@@ -516,21 +521,18 @@ function extractRunFormatting(
   return formatting;
 }
 
-function paragraphRunDefaults(pmAttrs: PMParagraphAttrs): {
-  fontFamily?: string;
-  fontSize?: number;
-} {
+function paragraphRunDefaults(
+  pmAttrs: PMParagraphAttrs,
+  theme?: Theme | null,
+): RunFormatting {
   const defaultTextFormatting = pmAttrs.defaultTextFormatting as
-    | {
-        fontSize?: number;
-        fontFamily?: { ascii?: string; hAnsi?: string };
-      }
+    | TextFormatting
     | undefined;
   if (!defaultTextFormatting) {
     return {};
   }
 
-  const result: { fontFamily?: string; fontSize?: number } = {};
+  const result: RunFormatting = {};
   const fontFamily =
     defaultTextFormatting.fontFamily?.ascii ??
     defaultTextFormatting.fontFamily?.hAnsi;
@@ -539,6 +541,93 @@ function paragraphRunDefaults(pmAttrs: PMParagraphAttrs): {
   }
   if (defaultTextFormatting.fontSize !== undefined) {
     result.fontSize = defaultTextFormatting.fontSize / 2;
+  }
+  if (defaultTextFormatting.bold !== undefined) {
+    result.bold = defaultTextFormatting.bold;
+  }
+  if (defaultTextFormatting.italic !== undefined) {
+    result.italic = defaultTextFormatting.italic;
+  }
+  if (
+    defaultTextFormatting.underline &&
+    defaultTextFormatting.underline.style !== "none"
+  ) {
+    result.underline = {};
+    if (defaultTextFormatting.underline.style) {
+      result.underline.style = defaultTextFormatting.underline.style;
+    }
+    if (defaultTextFormatting.underline.color) {
+      result.underline.color = resolveColor(
+        defaultTextFormatting.underline.color,
+        theme,
+      );
+    }
+  }
+  if (defaultTextFormatting.strike !== undefined) {
+    result.strike = defaultTextFormatting.strike;
+  }
+  if (defaultTextFormatting.color) {
+    result.color = resolveColor(defaultTextFormatting.color, theme);
+  }
+  if (defaultTextFormatting.highlight) {
+    const highlight = resolveHighlightToCss(defaultTextFormatting.highlight);
+    if (highlight) {
+      result.highlight = highlight;
+    }
+  }
+  if (defaultTextFormatting.vertAlign === "superscript") {
+    result.superscript = true;
+  }
+  if (defaultTextFormatting.vertAlign === "subscript") {
+    result.subscript = true;
+  }
+  if (defaultTextFormatting.allCaps !== undefined) {
+    result.allCaps = defaultTextFormatting.allCaps;
+  }
+  if (defaultTextFormatting.smallCaps !== undefined) {
+    result.smallCaps = defaultTextFormatting.smallCaps;
+  }
+  if (
+    defaultTextFormatting.spacing !== undefined &&
+    defaultTextFormatting.spacing !== 0
+  ) {
+    result.letterSpacing = twipsToPixels(defaultTextFormatting.spacing);
+  }
+  if (
+    defaultTextFormatting.position !== undefined &&
+    defaultTextFormatting.position !== 0
+  ) {
+    result.positionPx = halfPointsToPixels(defaultTextFormatting.position);
+  }
+  if (
+    defaultTextFormatting.scale !== undefined &&
+    defaultTextFormatting.scale !== 100
+  ) {
+    result.horizontalScale = defaultTextFormatting.scale;
+  }
+  if (
+    defaultTextFormatting.kerning !== undefined &&
+    defaultTextFormatting.kerning > 0
+  ) {
+    result.kerningMinPt = halfPointsToPoints(defaultTextFormatting.kerning);
+  }
+  if (defaultTextFormatting.emboss !== undefined) {
+    result.emboss = defaultTextFormatting.emboss;
+  }
+  if (defaultTextFormatting.imprint !== undefined) {
+    result.imprint = defaultTextFormatting.imprint;
+  }
+  if (defaultTextFormatting.shadow !== undefined) {
+    result.textShadow = defaultTextFormatting.shadow;
+  }
+  if (defaultTextFormatting.outline !== undefined) {
+    result.textOutline = defaultTextFormatting.outline;
+  }
+  if (
+    defaultTextFormatting.emphasisMark &&
+    defaultTextFormatting.emphasisMark !== "none"
+  ) {
+    result.emphasisMark = defaultTextFormatting.emphasisMark;
   }
   return result;
 }
@@ -605,7 +694,10 @@ function paragraphToRuns(
   const runs: Run[] = [];
   const offset = startPos + 1; // +1 for opening tag
   const theme = _options.theme;
-  const paraDefaults = paragraphRunDefaults(node.attrs as PMParagraphAttrs);
+  const paraDefaults = paragraphRunDefaults(
+    node.attrs as PMParagraphAttrs,
+    theme,
+  );
 
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   node.forEach((child, childOffset) => {

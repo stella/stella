@@ -496,11 +496,12 @@ function resolveTableStyleConditional(
     return undefined;
   }
 
-  const runPropsFromPpr = resolveTextFormatting(
-    conditional.pPr?.runProperties,
-    styleResolver,
-  );
-  const resolvedRpr = resolveTextFormatting(conditional.rPr, styleResolver);
+  const runPropsFromPpr = conditional.pPr?.runProperties
+    ? resolveTextFormatting(conditional.pPr.runProperties, styleResolver)
+    : undefined;
+  const resolvedRpr = conditional.rPr
+    ? resolveTextFormatting(conditional.rPr, styleResolver)
+    : undefined;
   const mergedRunProps = mergeTextFormatting(runPropsFromPpr, resolvedRpr);
 
   const result: { tcPr?: TableCellFormatting; rPr?: TextFormatting } = {};

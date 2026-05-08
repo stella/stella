@@ -128,6 +128,10 @@ describe("toFlowBlocks run-level OOXML marks", () => {
           defaultTextFormatting: {
             fontFamily: { ascii: "Arial Narrow", hAnsi: "Arial Narrow" },
             fontSize: 22,
+            bold: true,
+            color: { rgb: "C00000" },
+            underline: { style: "single" },
+            smallCaps: true,
           },
         },
         [schema.text("body text")],
@@ -137,5 +141,9 @@ describe("toFlowBlocks run-level OOXML marks", () => {
 
     expect(run.fontFamily).toBe("Arial Narrow");
     expect(run.fontSize).toBe(11);
+    expect(run.bold).toBe(true);
+    expect(run.color).toBe("#C00000");
+    expect(run.underline).toEqual({ style: "single" });
+    expect(run.smallCaps).toBe(true);
   });
 });

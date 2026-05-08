@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ParagraphBlock, TextRun } from "../layout-engine/types";
+import type {
+  ParagraphBlock,
+  TableBlock as LayoutTableBlock,
+  TextRun,
+} from "../layout-engine/types";
 import { toProseDoc } from "../prosemirror/conversion/toProseDoc";
 import type {
   Document,
@@ -27,6 +31,14 @@ function firstParagraph(blocks: unknown[]): ParagraphBlock {
 
 function firstRun(blocks: unknown[]): TextRun {
   return firstParagraph(blocks).runs[0] as TextRun;
+}
+
+function firstTableRun(blocks: unknown[]): TextRun {
+  const table = blocks.find(
+    (block) => (block as LayoutTableBlock).kind === "table",
+  ) as LayoutTableBlock;
+  const paragraph = table.rows[0]?.cells[0]?.blocks[0] as ParagraphBlock;
+  return paragraph.runs[0] as TextRun;
 }
 
 describe("toFlowBlocks style cascade", () => {
@@ -130,6 +142,79 @@ describe("toFlowBlocks style cascade", () => {
     );
 
     expect(firstRun(blocks).fontFamily).toBe("Cambria");
+  });
+
+  test("table conditionals without rPr do not override paragraph run defaults", () => {
+    const styles: StyleDefinitions = {
+      styles: [
+        {
+          styleId: "Normal",
+          type: "paragraph",
+          default: true,
+          name: "Normal",
+          rPr: { fontFamily: { ascii: "Arial", hAnsi: "Arial" } },
+        },
+        {
+          styleId: "FontePadrao",
+          type: "character",
+          default: true,
+          name: "Default Paragraph Font",
+          rPr: { fontFamily: { ascii: "Cambria", hAnsi: "Cambria" } },
+        },
+        {
+          styleId: "BandedTable",
+          type: "table",
+          name: "Banded Table",
+          tblStylePr: [
+            {
+              type: "firstRow",
+              tcPr: { shading: { fill: { rgb: "EEEEEE" } } },
+            },
+          ],
+        },
+      ],
+    };
+    const table: Table = {
+      type: "table",
+      formatting: { styleId: "BandedTable", look: { firstRow: true } },
+      rows: [
+        {
+          type: "tableRow",
+          cells: [
+            {
+              type: "tableCell",
+              content: [
+                {
+                  type: "paragraph",
+                  formatting: { styleId: "Normal" },
+                  content: [
+                    {
+                      type: "run",
+                      content: [{ type: "text", text: "first row" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const blocks = toFlowBlocks(
+      toProseDoc(
+        {
+          package: {
+            document: { content: [table] },
+            styles,
+          },
+        },
+        { styles },
+      ),
+      {},
+    );
+
+    expect(firstTableRun(blocks).fontFamily).toBe("Arial");
   });
 
   test("default table style supplies cell margins when table has no style ID", () => {
