@@ -2538,6 +2538,81 @@ const fallbackIconUrl = (rawUrl: string): string | undefined => {
   }
 };
 
+const useExternalPdfObjectUrl = ({
+  enabled,
+  url,
+}: {
+  enabled: boolean;
+  url?: string | undefined;
+}): string | undefined => {
+  const [objectUrl, setObjectUrl] = useState<string | undefined>();
+
+  useEffect(() => {
+    setObjectUrl(undefined);
+    if (!enabled || url === undefined) {
+      return undefined;
+    }
+
+    let nextObjectUrl: string | undefined;
+    const controller = new AbortController();
+
+    void (async () => {
+      const response = await fetch(url, {
+        credentials: "include",
+        signal: controller.signal,
+      });
+
+      if (!response.ok || controller.signal.aborted) {
+        return;
+      }
+
+      const blob = await response.blob();
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      nextObjectUrl = URL.createObjectURL(blob);
+      setObjectUrl(nextObjectUrl);
+    })().catch(() => {
+      if (!controller.signal.aborted) {
+        setObjectUrl(undefined);
+      }
+    });
+
+    return () => {
+      controller.abort();
+      if (nextObjectUrl !== undefined) {
+        URL.revokeObjectURL(nextObjectUrl);
+      }
+    };
+  }, [enabled, url]);
+
+  return objectUrl;
+};
+
+const ExternalPdfPreview = ({
+  objectUrl,
+  title,
+}: {
+  objectUrl?: string | undefined;
+  title: string;
+}) => {
+  if (objectUrl === undefined) {
+    return (
+      <div className="space-y-3 p-4">
+        <Skeleton className="h-4 w-2/3" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-5/6" />
+        <Skeleton className="h-4 w-4/5" />
+      </div>
+    );
+  }
+
+  return (
+    <iframe className="min-h-0 flex-1 border-0" src={objectUrl} title={title} />
+  );
+};
+
 const ExternalReferencePanel = ({
   onClose,
   tab,
@@ -2590,6 +2665,12 @@ const ExternalReferencePanel = ({
     safeHref === undefined
       ? undefined
       : `${env.VITE_API_URL}/v1/external-preview/file?url=${encodeURIComponent(safeHref)}`;
+  const shouldLoadExternalPdf =
+    fetchedPreview?.format === "pdf" && externalFilePreviewUrl !== undefined;
+  const externalPdfObjectUrl = useExternalPdfObjectUrl({
+    enabled: shouldLoadExternalPdf,
+    url: externalFilePreviewUrl,
+  });
   const externalChatThreadId =
     tab.chatThreadId ?? fallbackChatThreadIdRef.current;
   const hasMetadata =
@@ -2863,10 +2944,9 @@ const ExternalReferencePanel = ({
               <Skeleton className="h-4 w-5/6" />
               <Skeleton className="h-4 w-4/5" />
             </div>
-          ) : fetchedPreview?.format === "pdf" && externalFilePreviewUrl ? (
-            <iframe
-              className="min-h-0 flex-1 border-0"
-              src={externalFilePreviewUrl}
+          ) : shouldLoadExternalPdf ? (
+            <ExternalPdfPreview
+              objectUrl={externalPdfObjectUrl}
               title={tab.label}
             />
           ) : previewText || tab.snippet ? (
