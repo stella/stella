@@ -2584,6 +2584,7 @@ const ExternalReferencePanel = ({
   const previewSnippet = tab.snippet ?? storedSource?.snippet;
   const provider = tab.provider ?? storedSource?.provider;
   const connectorSlug = tab.connectorSlug ?? storedSource?.connectorSlug;
+  const storedIconHref = tab.iconHref ?? storedSource?.iconHref;
   const sourceToolName = tab.sourceToolName ?? storedSource?.sourceToolName;
   const externalFilePreviewUrl =
     safeHref === undefined
@@ -2644,12 +2645,13 @@ const ExternalReferencePanel = ({
     enabled: connectorSlug !== undefined,
   });
   const iconHref =
-    connectorSlug === undefined
+    storedIconHref ??
+    (connectorSlug === undefined
       ? undefined
       : findMcpConnectorIconHref({
           connectorSlug,
           connectors: mcpConnectorsData?.connectors ?? [],
-        });
+        }));
   const requestOpenExternal = useCallback((href: string) => {
     setConfirmHref(href);
   }, []);
@@ -2992,17 +2994,22 @@ const VerticalTab = ({
   const tabQueryClient = useQueryClient();
   const externalConnectorSlug =
     tab.type === "external" ? tab.connectorSlug : undefined;
+  const storedExternalIconHref =
+    tab.type === "external" ? tab.iconHref : undefined;
   const { data: mcpConnectorsData } = useQuery({
     ...mcpConnectorsOptions(),
-    enabled: externalConnectorSlug !== undefined,
+    enabled:
+      externalConnectorSlug !== undefined &&
+      storedExternalIconHref === undefined,
   });
   const externalIconHref =
-    externalConnectorSlug === undefined
+    storedExternalIconHref ??
+    (externalConnectorSlug === undefined
       ? undefined
       : findMcpConnectorIconHref({
           connectorSlug: externalConnectorSlug,
           connectors: mcpConnectorsData?.connectors ?? [],
-        });
+        }));
 
   const contextMenu = useTabContextMenu({
     tabId: tab.id,

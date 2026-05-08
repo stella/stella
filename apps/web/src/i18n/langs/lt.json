@@ -1041,7 +1041,7 @@
       "confirmTitle": "Atidaryti išorinę nuorodą?",
       "openLink": "Atidaryti nuorodą",
       "openOriginal": "Atidaryti originalą",
-      "unavailable": "Ši svetainė neleidžia saugios peržiūros Stella viduje. Jei įrankis grąžino dokumento tekstą, jis bus rodomas čia; kitu atveju atidarykite originalą."
+      "unavailable": "Nurodyta svetainė neleidžia saugios peržiūros. Jei įrankis grąžino dokumento tekstą, jis bus rodomas čia; kitu atveju atidarykite originalą."
     },
     "facet": {
       "preview": "Preview",

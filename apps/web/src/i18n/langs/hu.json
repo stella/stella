@@ -1041,7 +1041,7 @@
       "confirmTitle": "Külső hivatkozás megnyitása?",
       "openLink": "Hivatkozás megnyitása",
       "openOriginal": "Eredeti megnyitása",
-      "unavailable": "Ez a webhely nem engedélyez biztonságos előnézetet a Stellában. Ha az eszköz visszaadta a dokumentum szövegét, az itt jelenik meg; ellenkező esetben nyissa meg az eredetit."
+      "unavailable": "A hivatkozott webhely nem engedélyez biztonságos előnézetet. Ha az eszköz visszaadta a dokumentum szövegét, az itt jelenik meg; ellenkező esetben nyissa meg az eredetit."
     },
     "facet": {
       "preview": "Preview",

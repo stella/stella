@@ -141,13 +141,24 @@ export const SourceChips = ({
     ...mcpConnectorsOptions(),
     enabled: hasMcpExternalSources,
   });
+  const uniqueExternalSourcesWithIcons = uniqueExternalSources.map((source) => {
+    if (source.connectorSlug === undefined) {
+      return source;
+    }
+
+    const iconHref = findMcpConnectorIconHref({
+      connectorSlug: source.connectorSlug,
+      connectors: mcpConnectorsData?.connectors ?? [],
+    });
+    return iconHref === undefined ? source : { ...source, iconHref };
+  });
   const registerSources = useExternalSourceStore(
     (state) => state.registerSources,
   );
 
   useEffect(() => {
-    registerSources(uniqueExternalSources);
-  }, [registerSources, uniqueExternalSources]);
+    registerSources(uniqueExternalSourcesWithIcons);
+  }, [registerSources, uniqueExternalSourcesWithIcons]);
 
   if (uniqueSources.length === 0 && uniqueExternalSources.length === 0) {
     return null;
@@ -162,9 +173,8 @@ export const SourceChips = ({
           workspaceId={workspaceId}
         />
       ))}
-      {uniqueExternalSources.map((source) => (
+      {uniqueExternalSourcesWithIcons.map((source) => (
         <ExternalSourceChip
-          connectors={mcpConnectorsData?.connectors ?? []}
           key={`${messageId}-external-source-${source.url}`}
           source={source}
         />
@@ -191,28 +201,11 @@ const SourceIcon = ({
   return <FileTextIcon className={cn(cls, "text-muted-foreground")} />;
 };
 
-const ExternalSourceChip = ({
-  connectors,
-  source,
-}: {
-  connectors: {
-    iconUrl: string | null;
-    slug: string;
-    url: string;
-  }[];
-  source: ExternalSourceEntry;
-}) => {
-  const iconHref =
-    source.connectorSlug === undefined
-      ? undefined
-      : findMcpConnectorIconHref({
-          connectorSlug: source.connectorSlug,
-          connectors,
-        });
-
+const ExternalSourceChip = ({ source }: { source: ExternalSourceEntry }) => {
   const handleClick = () => {
     useInspectorStore.getState().openExternal({
       connectorSlug: source.connectorSlug,
+      iconHref: source.iconHref,
       label: source.title,
       provider: source.provider,
       snippet: source.snippet,
@@ -232,7 +225,7 @@ const ExternalSourceChip = ({
       onClick={handleClick}
       type="button"
     >
-      <ExternalSourceIcon iconHref={iconHref} />
+      <ExternalSourceIcon iconHref={source.iconHref} />
       <span className="max-w-[20ch] truncate">{source.title}</span>
     </button>
   );

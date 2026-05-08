@@ -1044,7 +1044,7 @@ type Messages = {
       "confirmTitle": "Open external link?";
       "openLink": "Open link";
       "openOriginal": "Open original";
-      "unavailable": "This site does not allow a safe in-app preview. If the tool returned document text, it appears here; otherwise open the original.";
+      "unavailable": "The referenced site does not allow a safe preview. If the tool returned document text, it appears here; otherwise open the original.";
     };
     "facet": {
       "preview": "Preview";

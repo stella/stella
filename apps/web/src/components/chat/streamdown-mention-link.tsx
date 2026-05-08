@@ -446,6 +446,7 @@ export const StreamdownMentionLink = ({
           useInspectorStore.getState().openExternal({
             url: httpUrl.toString(),
             connectorSlug: source?.connectorSlug,
+            iconHref: source?.iconHref,
             label: getPlainText(children) ?? source?.title ?? httpUrl.hostname,
             provider: source?.provider,
             snippet: source?.snippet,

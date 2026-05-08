@@ -72,6 +72,34 @@ describe("openChat", () => {
   });
 });
 
+describe("openExternal", () => {
+  test("preserves the source connector icon on the external tab", () => {
+    useInspectorStore.getState().openExternal({
+      connectorSlug: "salvia",
+      iconHref: "https://salvia.example/favicon.ico",
+      label: "Decision",
+      url: "https://example.test/decision",
+    });
+
+    useInspectorStore.getState().openExternal({
+      label: "Decision",
+      url: "https://example.test/decision",
+    });
+
+    const tab = useInspectorStore
+      .getState()
+      .tabs.find(
+        (item) => item.id === "external:https://example.test/decision",
+      );
+    if (tab?.type !== "external") {
+      throw new Error("expected external tab");
+    }
+
+    expect(tab.connectorSlug).toBe("salvia");
+    expect(tab.iconHref).toBe("https://salvia.example/favicon.ico");
+  });
+});
+
 describe("replacePdfFieldId", () => {
   test("re-opening an existing pdf tab refreshes the file label", () => {
     useInspectorStore.getState().openPdf({

@@ -102,6 +102,7 @@ export type ExternalTab = {
   label: string;
   url: string;
   connectorSlug?: string | undefined;
+  iconHref?: string | undefined;
   provider?: string | undefined;
   snippet?: string | undefined;
   sourceToolName?: string | undefined;
@@ -159,6 +160,7 @@ type Actions = {
   openExternal: (args: {
     url: string;
     connectorSlug?: string | undefined;
+    iconHref?: string | undefined;
     label?: string | undefined;
     provider?: string | undefined;
     snippet?: string | undefined;
@@ -374,6 +376,7 @@ export const useInspectorStore = create<State & Actions>()(
 
     openExternal: ({
       connectorSlug,
+      iconHref,
       label,
       provider,
       snippet,
@@ -397,6 +400,7 @@ export const useInspectorStore = create<State & Actions>()(
             chatThreadId: createChatThreadId(),
             label: label ?? fallbackLabel,
             connectorSlug,
+            iconHref,
             provider,
             snippet,
             sourceToolName,
@@ -406,6 +410,7 @@ export const useInspectorStore = create<State & Actions>()(
         } else if (existing.type === "external") {
           existing.label = label ?? existing.label;
           existing.connectorSlug = connectorSlug ?? existing.connectorSlug;
+          existing.iconHref = iconHref ?? existing.iconHref;
           existing.provider = provider ?? existing.provider;
           existing.snippet = snippet ?? existing.snippet;
           existing.sourceToolName = sourceToolName ?? existing.sourceToolName;

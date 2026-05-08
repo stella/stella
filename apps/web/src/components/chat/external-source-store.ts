@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 export type ExternalSourceReference = {
   connectorSlug?: string | undefined;
+  iconHref?: string | undefined;
   provider?: string | undefined;
   snippet?: string | undefined;
   sourceToolName?: string | undefined;
