@@ -4,7 +4,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type { CalendarTask } from "@/routes/_protected.workspaces/$workspaceId/-queries/calendar-tasks";
 
 import {
-  getCalendarVisibleRange,
+  getCalendarQueryRange,
   groupCalendarTasksByDate,
 } from "./calendar-view.logic";
 
@@ -22,12 +22,11 @@ const baseTask = {
 } satisfies CalendarTask;
 
 describe("calendar view logic", () => {
-  test("uses the visible day range for month and week modes", () => {
-    const range = getCalendarVisibleRange({
-      mode: "month",
+  test("uses the focused month range for month mode", () => {
+    const range = getCalendarQueryRange({
+      type: "month",
       year: 2026,
       month: 4,
-      days: [{ date: "2026-04-27" }, { date: "2026-06-07" }],
     });
 
     expect(range).toEqual({
@@ -37,16 +36,26 @@ describe("calendar view logic", () => {
   });
 
   test("uses the full year range for year mode", () => {
-    const range = getCalendarVisibleRange({
-      mode: "year",
+    const range = getCalendarQueryRange({
+      type: "year",
       year: 2026,
-      month: 4,
-      days: [],
     });
 
     expect(range).toEqual({
       dateFrom: "2026-01-01T00:00:00.000Z",
       dateTo: "2026-12-31T00:00:00.000Z",
+    });
+  });
+
+  test("uses the focused week range for week mode", () => {
+    const range = getCalendarQueryRange({
+      type: "week",
+      viewDate: new Date(Date.UTC(2026, 4, 6)),
+    });
+
+    expect(range).toEqual({
+      dateFrom: "2026-05-04T00:00:00.000Z",
+      dateTo: "2026-05-10T00:00:00.000Z",
     });
   });
 

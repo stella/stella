@@ -113,7 +113,9 @@ export const CalendarDayCell = ({
         "group/day relative flex flex-col gap-0.5",
         "overflow-hidden border-e border-b p-1",
         !day.isCurrentMonth && "bg-muted/30",
+        day.monthTone === "muted" && "bg-muted/10",
         day.isWeekend && day.isCurrentMonth && "bg-muted/15",
+        day.startsMonth && "border-s-foreground/35 border-s-2",
         mode === "week" && "min-h-[300px]",
         isDropTarget && "bg-primary/10",
       )}

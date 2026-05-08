@@ -15,6 +15,10 @@ export type CalendarDay = {
   /** Whether this day belongs to the displayed month */
   isCurrentMonth: boolean;
   isToday: boolean;
+  /** Whether this day starts a new month in continuous views. */
+  startsMonth?: boolean;
+  /** Alternating visual band for continuous month scrolling. */
+  monthTone?: "muted";
   /** Saturday (index 5) or Sunday (index 6) in Mon-first layout */
   isWeekend: boolean;
 };

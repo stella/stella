@@ -1,5 +1,9 @@
 import type { CalendarEntry } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell";
-import { TASK_DATE_IDS } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils";
+import {
+  getMonthDays,
+  getWeekDays,
+  TASK_DATE_IDS,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils";
 import type { CalendarTask } from "@/routes/_protected.workspaces/$workspaceId/-queries/calendar-tasks";
 
 export const toDayStartDateTime = (date: string): string =>
@@ -73,32 +77,56 @@ export const getCalendarTaskDate = (
   return null;
 };
 
-type VisibleRangeInput = {
-  mode: "month" | "week" | "year";
-  year: number;
-  month: number;
-  days: readonly { date: string }[];
-};
-
-export const getCalendarVisibleRange = ({
-  days,
-  mode,
-  month,
-  year,
-}: VisibleRangeInput): { dateFrom: string; dateTo: string } => {
-  if (mode === "year") {
-    return {
-      dateFrom: toDayStartDateTime(`${year}-01-01`),
-      dateTo: toDayStartDateTime(`${year}-12-31`),
+type CalendarQueryRangeInput =
+  | {
+      type: "month";
+      year: number;
+      month: number;
+    }
+  | {
+      type: "week";
+      viewDate: Date;
+    }
+  | {
+      type: "year";
+      year: number;
     };
-  }
 
-  const fallback = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-  return {
-    dateFrom: toDayStartDateTime(days.at(0)?.date ?? fallback),
-    dateTo: toDayStartDateTime(days.at(-1)?.date ?? fallback),
-  };
+export const getCalendarQueryRange = (
+  input: CalendarQueryRangeInput,
+): { dateFrom: string; dateTo: string } => {
+  switch (input.type) {
+    case "year":
+      return getBoundedCalendarRange(
+        [{ date: `${input.year}-01-01` }, { date: `${input.year}-12-31` }],
+        `${input.year}-01-01`,
+      );
+    case "month": {
+      const fallback = `${input.year}-${String(input.month + 1).padStart(2, "0")}-01`;
+      return getBoundedCalendarRange(
+        getMonthDays(input.year, input.month),
+        fallback,
+      );
+    }
+    case "week":
+      return getBoundedCalendarRange(
+        getWeekDays(input.viewDate),
+        toUTCDateKey(input.viewDate),
+      );
+    default: {
+      const exhaustive: never = input;
+      return exhaustive;
+    }
+  }
 };
+
+const getBoundedCalendarRange = (
+  days: readonly { date: string }[],
+  fallbackDate: string,
+): { dateFrom: string; dateTo: string } => ({
+  dateFrom: toDayStartDateTime(days.at(0)?.date ?? fallbackDate),
+  dateTo: toDayStartDateTime(days.at(-1)?.date ?? fallbackDate),
+});
 
 type GroupCalendarTasksInput = {
   tasks: readonly CalendarTask[];
