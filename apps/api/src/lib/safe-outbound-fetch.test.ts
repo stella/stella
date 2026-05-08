@@ -52,6 +52,51 @@ describe("fetchWithResolvedAddress", () => {
     );
   });
 
+  test("rejects redirects by default", async () => {
+    await withHttpServer(
+      (_request, response) => {
+        response.writeHead(302, { Location: "/target" });
+        response.end();
+      },
+      async (port) => {
+        const result = await fetchWithResolvedAddress({
+          addresses: [{ address: "127.0.0.1", family: 4 }],
+          maxBytes: 1024,
+          timeoutMs: 1000,
+          url: new URL(`http://example.test:${port}/redirect`),
+        });
+
+        expect(Result.isError(result)).toBe(true);
+      },
+    );
+  });
+
+  test("can return redirects for callers that revalidate each hop", async () => {
+    await withHttpServer(
+      (_request, response) => {
+        response.writeHead(302, { Location: "/target" });
+        response.end();
+      },
+      async (port) => {
+        const result = await fetchWithResolvedAddress({
+          addresses: [{ address: "127.0.0.1", family: 4 }],
+          maxBytes: 1024,
+          redirect: "manual",
+          timeoutMs: 1000,
+          url: new URL(`http://example.test:${port}/redirect`),
+        });
+
+        expect(Result.isOk(result)).toBe(true);
+        if (Result.isError(result)) {
+          throw result.error;
+        }
+
+        expect(result.value.status).toBe(302);
+        expect(result.value.headers.get("location")).toBe("/target");
+      },
+    );
+  });
+
   test("returns streaming responses before the server closes the body", async () => {
     await withHttpServer(
       (_request, response) => {

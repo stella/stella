@@ -1041,7 +1041,7 @@
       "confirmTitle": "Ouvrir le lien externe ?",
       "openLink": "Ouvrir le lien",
       "openOriginal": "Ouvrir l’original",
-      "unavailable": "Ce site n’autorise pas un aperçu sécurisé dans Stella. Si l’outil a renvoyé le texte du document, il s’affiche ici ; sinon, ouvrez l’original."
+      "unavailable": "Le site référencé n’autorise pas un aperçu sécurisé. Si l’outil a renvoyé le texte du document, il s’affiche ici ; sinon, ouvrez l’original."
     },
     "facet": {
       "preview": "Preview",

@@ -1041,7 +1041,7 @@
       "confirmTitle": "Otevřít externí odkaz?",
       "openLink": "Otevřít odkaz",
       "openOriginal": "Otevřít originál",
-      "unavailable": "Tento web nepovoluje bezpečný náhled uvnitř Stelly. Pokud nástroj vrátil text dokumentu, zobrazí se tady; jinak otevřete originál."
+      "unavailable": "Odkazovaný web nepovoluje bezpečný náhled. Pokud nástroj vrátil text dokumentu, zobrazí se tady; jinak otevřete originál."
     },
     "facet": {
       "preview": "Náhled",

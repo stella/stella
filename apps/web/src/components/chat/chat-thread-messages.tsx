@@ -279,7 +279,9 @@ const AssistantMessageActions = ({
 }) => {
   const t = useTranslations();
   const text = useMemo(() => getMessageText(message), [message]);
-  const canRetry = Boolean(onResend && isLatestAssistantMessage);
+  const canRetry = Boolean(
+    onResend && isLatestAssistantMessage && !isGenerating,
+  );
 
   if (!text && !canRetry) {
     return null;
@@ -314,7 +316,6 @@ const AssistantMessageActions = ({
         <Button
           aria-label={t("common.retry")}
           className="text-muted-foreground h-6 px-1.5 text-xs"
-          disabled={isGenerating}
           onClick={() => {
             void onResend?.(message.id);
           }}

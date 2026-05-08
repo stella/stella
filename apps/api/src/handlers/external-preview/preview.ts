@@ -20,6 +20,7 @@ const MAX_URL_LENGTH = 2048;
 const MAX_PREVIEW_BYTES = 1_000_000;
 const MAX_FILE_PREVIEW_BYTES = 20_000_000;
 const MAX_PREVIEW_CHARS = 80_000;
+const MAX_PREVIEW_REDIRECTS = 5;
 const MIN_READABLE_TEXT_CHARS = 80;
 
 const HTML_CONTENT_TYPES = new Set(["application/xhtml+xml", "text/html"]);
@@ -49,13 +50,20 @@ const previewExternalSource = createSafeRootHandler(
   config,
   async function* ({ query }) {
     const target = yield* Result.await(validatePreviewUrl(query.url));
-    const { url } = target;
-    const response = yield* Result.await(
+    const previewFetch = yield* Result.await(
       fetchPreviewUrl(target, { maxBytes: MAX_PREVIEW_BYTES }),
     );
+    const { requestedUrl, response, url } = previewFetch;
     const contentType = getContentType(response.headers);
 
-    if (isPdfPreview(contentType, url)) {
+    if (
+      isPdfPreviewResponse({
+        body: response.body,
+        contentType,
+        requestedUrl,
+        responseUrl: url,
+      })
+    ) {
       const preview: ExternalPreviewResponse = {
         contentType,
         format: "pdf" as const,
@@ -118,13 +126,21 @@ export const previewExternalFile = createSafeRootHandler(
   config,
   async function* ({ query }) {
     const target = yield* Result.await(validatePreviewUrl(query.url));
-    const { url } = target;
-    const response = yield* Result.await(
+    const previewFetch = yield* Result.await(
       fetchPreviewUrl(target, { maxBytes: MAX_FILE_PREVIEW_BYTES }),
     );
+    const { requestedUrl, response, url } = previewFetch;
     const contentType = getContentType(response.headers);
+    const body = response.body;
 
-    if (!isPdfPreview(contentType, url)) {
+    if (
+      !isPdfPreviewResponse({
+        body,
+        contentType,
+        requestedUrl,
+        responseUrl: url,
+      })
+    ) {
       return Result.err(
         new HandlerError({
           status: 422,
@@ -132,8 +148,6 @@ export const previewExternalFile = createSafeRootHandler(
         }),
       );
     }
-
-    const body = response.body;
 
     if (!isPdfBytes(body)) {
       return Result.err(
@@ -310,6 +324,12 @@ const extractHtmlTitle = (html: string): string | null => {
 const validatePreviewUrl = async (
   rawUrl: string,
 ): Promise<Result<ValidatedPreviewUrl, HandlerError>> => {
+  if (rawUrl.length > MAX_URL_LENGTH) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Source URL is too long" }),
+    );
+  }
+
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -361,43 +381,90 @@ type FetchPreviewUrlOptions = {
   maxBytes: number;
 };
 
+type FetchPreviewUrlResult = {
+  requestedUrl: URL;
+  response: SafeOutboundFetchResponse;
+  url: URL;
+};
+
 const fetchPreviewUrl = async (
   target: ValidatedPreviewUrl,
   { maxBytes }: FetchPreviewUrlOptions,
-): Promise<Result<SafeOutboundFetchResponse, HandlerError>> =>
+): Promise<Result<FetchPreviewUrlResult, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
-      const response = await fetchWithResolvedAddress({
-        addresses: target.addresses,
-        headers: {
-          Accept:
-            "application/pdf, text/html, application/xhtml+xml, text/plain;q=0.9",
-          "User-Agent": "Stella external source preview",
-        },
-        maxBytes,
-        timeoutMs: PREVIEW_TIMEOUT_MS,
-        url: target.url,
+      let currentTarget = target;
+
+      for (let redirects = 0; redirects <= MAX_PREVIEW_REDIRECTS; redirects++) {
+        const response = await fetchWithResolvedAddress({
+          addresses: currentTarget.addresses,
+          headers: {
+            Accept:
+              "application/pdf, text/html, application/xhtml+xml, text/plain;q=0.9",
+            "User-Agent": "Stella external source preview",
+          },
+          maxBytes,
+          redirect: "manual",
+          timeoutMs: PREVIEW_TIMEOUT_MS,
+          url: currentTarget.url,
+        });
+        if (Result.isError(response)) {
+          throw response.error;
+        }
+
+        if (isRedirectStatus(response.value.status)) {
+          if (redirects === MAX_PREVIEW_REDIRECTS) {
+            throw new HandlerError({
+              status: 502,
+              message: "Source redirected too many times",
+            });
+          }
+
+          const location = response.value.headers.get("location");
+          if (!location) {
+            throw new HandlerError({
+              status: 502,
+              message: "Source redirected without a location",
+            });
+          }
+
+          const nextTarget = await validatePreviewUrl(
+            new URL(location, currentTarget.url).toString(),
+          );
+          if (Result.isError(nextTarget)) {
+            throw nextTarget.error;
+          }
+
+          currentTarget = nextTarget.value;
+          continue;
+        }
+
+        if (!response.value.ok) {
+          throw new HandlerError({
+            status: 502,
+            message: `Source returned HTTP ${response.value.status}`,
+          });
+        }
+
+        const contentLength = response.value.headers.get("content-length");
+        if (contentLength && Number(contentLength) > maxBytes) {
+          throw new HandlerError({
+            status: 422,
+            message: "This source is too large to preview",
+          });
+        }
+
+        return {
+          requestedUrl: target.url,
+          response: response.value,
+          url: currentTarget.url,
+        };
+      }
+
+      throw new HandlerError({
+        status: 502,
+        message: "Source redirected too many times",
       });
-      if (Result.isError(response)) {
-        throw response.error;
-      }
-
-      if (!response.value.ok) {
-        throw new HandlerError({
-          status: 502,
-          message: `Source returned HTTP ${response.value.status}`,
-        });
-      }
-
-      const contentLength = response.value.headers.get("content-length");
-      if (contentLength && Number(contentLength) > maxBytes) {
-        throw new HandlerError({
-          status: 422,
-          message: "This source is too large to preview",
-        });
-      }
-
-      return response.value;
     },
     catch: (cause) =>
       HandlerError.is(cause)
@@ -408,6 +475,9 @@ const fetchPreviewUrl = async (
             cause,
           }),
   });
+
+const isRedirectStatus = (status: number): boolean =>
+  status >= 300 && status < 400;
 
 const readResponseText = (response: SafeOutboundFetchResponse): string =>
   new TextDecoder().decode(response.body.slice(0, MAX_PREVIEW_BYTES));
@@ -520,6 +590,21 @@ export const isPdfPreview = (contentType: string | null, url: URL): boolean =>
   (contentType !== null && PDF_CONTENT_TYPES.has(contentType)) ||
   ((contentType === null || GENERIC_BINARY_CONTENT_TYPES.has(contentType)) &&
     url.pathname.toLowerCase().endsWith(".pdf"));
+
+export const isPdfPreviewResponse = ({
+  body,
+  contentType,
+  requestedUrl,
+  responseUrl,
+}: {
+  body: ArrayBuffer;
+  contentType: string | null;
+  requestedUrl: URL;
+  responseUrl: URL;
+}): boolean =>
+  isPdfPreview(contentType, responseUrl) ||
+  isPdfPreview(contentType, requestedUrl) ||
+  isPdfBytes(body);
 
 export const isPdfBytes = (body: ArrayBuffer): boolean => {
   if (body.byteLength < PDF_MAGIC_BYTES.length) {

@@ -1041,7 +1041,7 @@
       "confirmTitle": "Otworzyć link zewnętrzny?",
       "openLink": "Otwórz link",
       "openOriginal": "Otwórz oryginał",
-      "unavailable": "Ta strona nie pozwala na bezpieczny podgląd w Stelli. Jeśli narzędzie zwróciło tekst dokumentu, pojawi się tutaj; w przeciwnym razie otwórz oryginał."
+      "unavailable": "Wskazana strona nie pozwala na bezpieczny podgląd. Jeśli narzędzie zwróciło tekst dokumentu, pojawi się tutaj; w przeciwnym razie otwórz oryginał."
     },
     "facet": {
       "preview": "Preview",

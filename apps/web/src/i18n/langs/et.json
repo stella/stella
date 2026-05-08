@@ -1041,7 +1041,7 @@
       "confirmTitle": "Ava väline link?",
       "openLink": "Ava link",
       "openOriginal": "Ava originaal",
-      "unavailable": "See sait ei luba Stellas turvalist eelvaadet. Kui tööriist tagastas dokumendi teksti, kuvatakse see siin; muul juhul avage originaal."
+      "unavailable": "Viidatud sait ei luba turvalist eelvaadet. Kui tööriist tagastas dokumendi teksti, kuvatakse see siin; muul juhul avage originaal."
     },
     "facet": {
       "preview": "Preview",

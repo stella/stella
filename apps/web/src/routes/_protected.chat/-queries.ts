@@ -281,19 +281,19 @@ export const buildSendRequestBody = ({
 // with cached prefixes on small Gemini variants), the AI SDK does
 // not append a new assistant message, so the same tool-result tail
 // keeps satisfying the predicate and useChat resubmits at ~1.5 Hz
-// until the user reloads. Tracking the id of the message that last
-// triggered an automatic send breaks the loop without affecting the
-// legitimate post-tool-result resubmit. Id is more robust than
-// length: deleting and re-adding a message reuses no id, so the
-// predicate cannot accidentally lock out a future fire.
-const createSendAutomaticallyPredicate = () => {
-  let lastFiredMessageId: string | null = null;
+// until the user reloads. Tracking the latest assistant message's
+// tool-state fingerprint breaks that loop while still allowing the
+// same assistant message to advance through multiple sequential
+// tool calls.
+export const createSendAutomaticallyPredicate = () => {
+  let lastFiredFingerprint: string | null = null;
   return ({ messages }: { messages: PersistedChatMessage[] }) => {
     if (hasApprovedActiveDocxEditAwaitingClientOutput({ messages })) {
       return false;
     }
     const lastMessage = messages.at(-1);
-    if (!lastMessage || lastMessage.id === lastFiredMessageId) {
+    const fingerprint = getAutoSendFingerprint(lastMessage);
+    if (!fingerprint || fingerprint === lastFiredFingerprint) {
       return false;
     }
     const shouldFire =
@@ -301,10 +301,45 @@ const createSendAutomaticallyPredicate = () => {
       lastAssistantMessageIsCompleteWithApprovalResponses({ messages }) ||
       lastAssistantMessageIsCompleteWithToolCalls({ messages });
     if (shouldFire) {
-      lastFiredMessageId = lastMessage.id;
+      lastFiredFingerprint = fingerprint;
     }
     return shouldFire;
   };
+};
+
+const getAutoSendFingerprint = (
+  message: PersistedChatMessage | undefined,
+): string | null => {
+  if (!message || message.role !== "assistant") {
+    return null;
+  }
+
+  const segments = [message.id];
+  for (const part of message.parts) {
+    if (typeof part !== "object" || part === null || !("type" in part)) {
+      continue;
+    }
+
+    const type = typeof part.type === "string" ? part.type : "";
+    const state =
+      "state" in part && typeof part.state === "string" ? part.state : "";
+    const toolCallId =
+      "toolCallId" in part && typeof part.toolCallId === "string"
+        ? part.toolCallId
+        : "";
+    const approved =
+      "approval" in part &&
+      typeof part.approval === "object" &&
+      part.approval !== null &&
+      "approved" in part.approval &&
+      typeof part.approval.approved === "boolean"
+        ? String(part.approval.approved)
+        : "";
+
+    segments.push(`${type}:${toolCallId}:${state}:${approved}`);
+  }
+
+  return segments.join("|");
 };
 
 export type ChatThreadFetched = {

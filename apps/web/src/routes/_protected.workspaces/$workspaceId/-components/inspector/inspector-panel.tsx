@@ -2538,6 +2538,140 @@ const fallbackIconUrl = (rawUrl: string): string | undefined => {
   }
 };
 
+const useExternalPdfObjectUrl = ({
+  enabled,
+  url,
+}: {
+  enabled: boolean;
+  url?: string | undefined;
+}): {
+  objectUrl: string | undefined;
+  status: "error" | "idle" | "loading" | "ready";
+} => {
+  const [objectUrl, setObjectUrl] = useState<string | undefined>();
+  const [status, setStatus] = useState<"error" | "idle" | "loading" | "ready">(
+    "idle",
+  );
+
+  useEffect(() => {
+    setObjectUrl(undefined);
+    if (!enabled || url === undefined) {
+      setStatus("idle");
+      return undefined;
+    }
+
+    setStatus("loading");
+    let nextObjectUrl: string | undefined;
+    const controller = new AbortController();
+
+    void (async () => {
+      const response = await fetch(url, {
+        credentials: "include",
+        signal: controller.signal,
+      });
+
+      if (!response.ok || controller.signal.aborted) {
+        if (!controller.signal.aborted) {
+          setStatus("error");
+        }
+        return;
+      }
+
+      const blob = await response.blob();
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      nextObjectUrl = URL.createObjectURL(blob);
+      setObjectUrl(nextObjectUrl);
+      setStatus("ready");
+    })().catch(() => {
+      if (!controller.signal.aborted) {
+        setObjectUrl(undefined);
+        setStatus("error");
+      }
+    });
+
+    return () => {
+      controller.abort();
+      if (nextObjectUrl !== undefined) {
+        URL.revokeObjectURL(nextObjectUrl);
+      }
+    };
+  }, [enabled, url]);
+
+  return { objectUrl, status };
+};
+
+const ExternalPdfPreview = ({
+  objectUrl,
+  onOpenOriginal,
+  status,
+  title,
+}: {
+  objectUrl?: string | undefined;
+  onOpenOriginal: () => void;
+  status: "error" | "idle" | "loading" | "ready";
+  title: string;
+}) => {
+  if (status === "error") {
+    return (
+      <ExternalPreviewUnavailable
+        canOpenOriginal
+        onOpenOriginal={onOpenOriginal}
+      />
+    );
+  }
+
+  if (objectUrl === undefined || status === "loading" || status === "idle") {
+    return (
+      <div className="space-y-3 p-4">
+        <Skeleton className="h-4 w-2/3" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-5/6" />
+        <Skeleton className="h-4 w-4/5" />
+      </div>
+    );
+  }
+
+  return (
+    <iframe className="min-h-0 flex-1 border-0" src={objectUrl} title={title} />
+  );
+};
+
+const ExternalPreviewUnavailable = ({
+  canOpenOriginal,
+  onOpenOriginal,
+}: {
+  canOpenOriginal: boolean;
+  onOpenOriginal: () => void;
+}) => {
+  const t = useTranslations();
+
+  return (
+    <div className="flex flex-1 items-center justify-center p-6">
+      <div className="max-w-sm text-center">
+        <ExternalLinkIcon className="text-muted-foreground mx-auto size-6" />
+        <p className="text-muted-foreground mt-3 text-sm">
+          {t("inspector.external.unavailable")}
+        </p>
+        {canOpenOriginal && (
+          <Button
+            className="mt-4"
+            aria-label={t("inspector.external.openOriginal")}
+            onClick={onOpenOriginal}
+            size="sm"
+            variant="outline"
+          >
+            <ExternalLinkIcon className="size-3.5" />
+            {t("inspector.external.openOriginal")}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const ExternalReferencePanel = ({
   onClose,
   tab,
@@ -2584,11 +2718,18 @@ const ExternalReferencePanel = ({
   const previewSnippet = tab.snippet ?? storedSource?.snippet;
   const provider = tab.provider ?? storedSource?.provider;
   const connectorSlug = tab.connectorSlug ?? storedSource?.connectorSlug;
+  const storedIconHref = tab.iconHref ?? storedSource?.iconHref;
   const sourceToolName = tab.sourceToolName ?? storedSource?.sourceToolName;
   const externalFilePreviewUrl =
     safeHref === undefined
       ? undefined
       : `${env.VITE_API_URL}/v1/external-preview/file?url=${encodeURIComponent(safeHref)}`;
+  const shouldLoadExternalPdf =
+    fetchedPreview?.format === "pdf" && externalFilePreviewUrl !== undefined;
+  const externalPdfPreview = useExternalPdfObjectUrl({
+    enabled: shouldLoadExternalPdf,
+    url: externalFilePreviewUrl,
+  });
   const externalChatThreadId =
     tab.chatThreadId ?? fallbackChatThreadIdRef.current;
   const hasMetadata =
@@ -2644,15 +2785,23 @@ const ExternalReferencePanel = ({
     enabled: connectorSlug !== undefined,
   });
   const iconHref =
-    connectorSlug === undefined
+    storedIconHref ??
+    (connectorSlug === undefined
       ? undefined
       : findMcpConnectorIconHref({
           connectorSlug,
           connectors: mcpConnectorsData?.connectors ?? [],
-        });
+        }));
   const requestOpenExternal = useCallback((href: string) => {
     setConfirmHref(href);
   }, []);
+  const requestSafeExternalOpen = useCallback(() => {
+    if (safeHref === undefined) {
+      return;
+    }
+
+    requestOpenExternal(safeHref);
+  }, [requestOpenExternal, safeHref]);
   const openConfirmedExternal = useCallback(() => {
     if (confirmHref === undefined) {
       return;
@@ -2861,10 +3010,11 @@ const ExternalReferencePanel = ({
               <Skeleton className="h-4 w-5/6" />
               <Skeleton className="h-4 w-4/5" />
             </div>
-          ) : fetchedPreview?.format === "pdf" && externalFilePreviewUrl ? (
-            <iframe
-              className="min-h-0 flex-1 border-0"
-              src={externalFilePreviewUrl}
+          ) : shouldLoadExternalPdf ? (
+            <ExternalPdfPreview
+              objectUrl={externalPdfPreview.objectUrl}
+              onOpenOriginal={requestSafeExternalOpen}
+              status={externalPdfPreview.status}
               title={tab.label}
             />
           ) : previewText || tab.snippet ? (
@@ -2892,28 +3042,10 @@ const ExternalReferencePanel = ({
               </article>
             </ScrollArea>
           ) : (
-            <div className="flex flex-1 items-center justify-center p-6">
-              <div className="max-w-sm text-center">
-                <ExternalLinkIcon className="text-muted-foreground mx-auto size-6" />
-                <p className="text-muted-foreground mt-3 text-sm">
-                  {t("inspector.external.unavailable")}
-                </p>
-                {canPreview && (
-                  <Button
-                    className="mt-4"
-                    aria-label={t("inspector.external.openOriginal")}
-                    onClick={() => {
-                      requestOpenExternal(safeHref);
-                    }}
-                    size="sm"
-                    variant="outline"
-                  >
-                    <ExternalLinkIcon className="size-3.5" />
-                    {t("inspector.external.openOriginal")}
-                  </Button>
-                )}
-              </div>
-            </div>
+            <ExternalPreviewUnavailable
+              canOpenOriginal={canPreview}
+              onOpenOriginal={requestSafeExternalOpen}
+            />
           )}
         </div>
       </FileViewerWithAI>
@@ -2992,17 +3124,22 @@ const VerticalTab = ({
   const tabQueryClient = useQueryClient();
   const externalConnectorSlug =
     tab.type === "external" ? tab.connectorSlug : undefined;
+  const storedExternalIconHref =
+    tab.type === "external" ? tab.iconHref : undefined;
   const { data: mcpConnectorsData } = useQuery({
     ...mcpConnectorsOptions(),
-    enabled: externalConnectorSlug !== undefined,
+    enabled:
+      externalConnectorSlug !== undefined &&
+      storedExternalIconHref === undefined,
   });
   const externalIconHref =
-    externalConnectorSlug === undefined
+    storedExternalIconHref ??
+    (externalConnectorSlug === undefined
       ? undefined
       : findMcpConnectorIconHref({
           connectorSlug: externalConnectorSlug,
           connectors: mcpConnectorsData?.connectors ?? [],
-        });
+        }));
 
   const contextMenu = useTabContextMenu({
     tabId: tab.id,

@@ -5,6 +5,7 @@ import {
   extractReadableTextFromHtml,
   isPdfBytes,
   isPdfPreview,
+  isPdfPreviewResponse,
 } from "@/api/handlers/external-preview/preview";
 
 describe("external source preview", () => {
@@ -78,5 +79,34 @@ describe("external source preview", () => {
     expect(isPdfBytes(new TextEncoder().encode("<html></html>").buffer)).toBe(
       false,
     );
+  });
+
+  test("preserves PDF detection when redirects hide the original extension", () => {
+    expect(
+      isPdfPreviewResponse({
+        body: new TextEncoder().encode("%PDF-1.4\n").buffer,
+        contentType: "application/octet-stream",
+        requestedUrl: new URL("https://example.test/document.pdf"),
+        responseUrl: new URL("https://cdn.example.test/signed-token"),
+      }),
+    ).toBe(true);
+
+    expect(
+      isPdfPreviewResponse({
+        body: new TextEncoder().encode("<html></html>").buffer,
+        contentType: "application/octet-stream",
+        requestedUrl: new URL("https://example.test/document.pdf"),
+        responseUrl: new URL("https://cdn.example.test/signed-token"),
+      }),
+    ).toBe(true);
+
+    expect(
+      isPdfPreviewResponse({
+        body: new TextEncoder().encode("<html></html>").buffer,
+        contentType: "application/octet-stream",
+        requestedUrl: new URL("https://example.test/document"),
+        responseUrl: new URL("https://cdn.example.test/signed-token"),
+      }),
+    ).toBe(false);
   });
 });

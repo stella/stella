@@ -36,12 +36,15 @@ export type SafeOutboundFetchStreamResponse = {
   status: number;
 };
 
+type SafeOutboundRedirectMode = "error" | "manual";
+
 export const fetchWithResolvedAddress = async ({
   addresses,
   body,
   headers,
   maxBytes,
   method = "GET",
+  redirect = "error",
   timeoutMs,
   url,
 }: {
@@ -50,6 +53,7 @@ export const fetchWithResolvedAddress = async ({
   headers?: SafeOutboundHeaders | undefined;
   maxBytes: number;
   method?: string | undefined;
+  redirect?: SafeOutboundRedirectMode | undefined;
   timeoutMs: number;
   url: URL;
 }): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
@@ -100,7 +104,7 @@ export const fetchWithResolvedAddress = async ({
             const status = response.statusCode ?? 0;
             const responseHeaders = headersFromIncoming(response.headers);
 
-            if (status >= 300 && status < 400) {
+            if (status >= 300 && status < 400 && redirect === "error") {
               response.resume();
               clearTimeout(timeout);
               reject(

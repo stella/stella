@@ -1041,7 +1041,7 @@
       "confirmTitle": "Atvērt ārēju saiti?",
       "openLink": "Atvērt saiti",
       "openOriginal": "Atvērt oriģinālu",
-      "unavailable": "Šī vietne neļauj drošu priekšskatījumu Stellā. Ja rīks atgrieza dokumenta tekstu, tas parādīsies šeit; pretējā gadījumā atveriet oriģinālu."
+      "unavailable": "Norādītā vietne neļauj drošu priekšskatījumu. Ja rīks atgrieza dokumenta tekstu, tas parādīsies šeit; pretējā gadījumā atveriet oriģinālu."
     },
     "facet": {
       "preview": "Preview",

@@ -1041,7 +1041,7 @@
       "confirmTitle": "Externen Link öffnen?",
       "openLink": "Link öffnen",
       "openOriginal": "Original öffnen",
-      "unavailable": "Diese Website erlaubt keine sichere Vorschau in Stella. Wenn das Tool Dokumenttext zurückgegeben hat, erscheint er hier; andernfalls öffnen Sie das Original."
+      "unavailable": "Die verlinkte Website erlaubt keine sichere Vorschau. Wenn das Tool Dokumenttext zurückgegeben hat, erscheint er hier; andernfalls öffnen Sie das Original."
     },
     "facet": {
       "preview": "Preview",

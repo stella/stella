@@ -5,6 +5,7 @@ import { toChatThreadId } from "@/lib/chat-thread-ref";
 import {
   buildSendRequestBody,
   chatKeys,
+  createSendAutomaticallyPredicate,
   matchesChatThreadAcrossScopes,
 } from "@/routes/_protected.chat/-queries";
 
@@ -105,5 +106,52 @@ describe("buildSendRequestBody", () => {
       anonymized: true,
       threadId: "thread-A",
     });
+  });
+});
+
+describe("createSendAutomaticallyPredicate", () => {
+  test("allows sequential auto sends inside the same assistant message", () => {
+    const shouldSendAutomatically = createSendAutomaticallyPredicate();
+    const baseMessage = {
+      id: "message-A",
+      role: "assistant",
+    } satisfies Pick<PersistedChatMessage, "id" | "role">;
+    const firstToolResult = {
+      ...baseMessage,
+      parts: [
+        { type: "step-start" },
+        {
+          input: {},
+          output: { content: [] },
+          state: "output-available",
+          toolCallId: "tool-call-1",
+          toolName: "mcp__legaldatahunter-com__discover_countries",
+          type: "dynamic-tool",
+        },
+      ],
+    } satisfies PersistedChatMessage;
+    const secondApprovalResponse = {
+      ...baseMessage,
+      parts: [
+        ...firstToolResult.parts,
+        { type: "step-start" },
+        {
+          approval: { approved: true, id: "approval-1" },
+          input: { query: "derecho al olvido" },
+          state: "approval-responded",
+          toolCallId: "tool-call-2",
+          toolName: "mcp__legaldatahunter-com__search",
+          type: "dynamic-tool",
+        },
+      ],
+    } satisfies PersistedChatMessage;
+
+    expect(shouldSendAutomatically({ messages: [firstToolResult] })).toBeTrue();
+    expect(
+      shouldSendAutomatically({ messages: [firstToolResult] }),
+    ).toBeFalse();
+    expect(
+      shouldSendAutomatically({ messages: [secondApprovalResponse] }),
+    ).toBeTrue();
   });
 });

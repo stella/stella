@@ -14,7 +14,10 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { getChatToolTitleKey } from "@/components/chat/chat-ui-tools";
+import {
+  getChatToolTitleKey,
+  isRunningToolPart,
+} from "@/components/chat/chat-ui-tools";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 
@@ -188,8 +191,7 @@ export const ToolCallCard = ({
     toolName: name,
   });
 
-  const isLoading =
-    part.state === "input-streaming" || part.state === "input-available";
+  const isLoading = isRunningToolPart(part);
   const hasOutput = part.state === "output-available";
   const hasError = part.state === "output-error";
   const toolInput = getToolInput(part);

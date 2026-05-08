@@ -142,6 +142,40 @@ describe("chat thread messages", () => {
     expect(html).not.toContain(">Retry</button>");
   });
 
+  test("hides retry while the latest assistant response is generating", () => {
+    const chatMessages: PersistedChatMessage[] = [
+      {
+        id: "message-A",
+        parts: [{ type: "text", text: "Streaming answer" }],
+        role: "assistant",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        alwaysApprovedTools={new Set()}
+        approvalPendingMessageId={null}
+        conversationApprovedTools={new Set()}
+        handleAllowInConversation={() => {}}
+        handleAlwaysAllow={() => {}}
+        handleApprove={() => {}}
+        handleDeny={() => {}}
+        isGenerating
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onResend={() => {}}
+        showToolCalls={false}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain("Streaming answer");
+    expect(html).toContain(">Copy</button>");
+    expect(html).not.toContain(">Retry</button>");
+  });
+
   test("shows a resendable chat message when the chat runtime errors", () => {
     const html = renderWithProviders(
       <ChatThreadMessages

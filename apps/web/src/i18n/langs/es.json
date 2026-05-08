@@ -1041,7 +1041,7 @@
       "confirmTitle": "¿Abrir enlace externo?",
       "openLink": "Abrir enlace",
       "openOriginal": "Abrir original",
-      "unavailable": "Este sitio no permite una vista previa segura dentro de Stella. Si la herramienta devolvió el texto del documento, aparecerá aquí; si no, abra el original."
+      "unavailable": "El sitio referenciado no permite una vista previa segura. Si la herramienta devolvió el texto del documento, aparecerá aquí; si no, abra el original."
     },
     "facet": {
       "preview": "Preview",
