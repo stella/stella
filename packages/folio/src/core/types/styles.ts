@@ -75,7 +75,8 @@ export type Style = {
       | "neCell"
       | "nwCell"
       | "seCell"
-      | "swCell";
+      | "swCell"
+      | "wholeTable";
     pPr?: ParagraphFormatting;
     rPr?: TextFormatting;
     tblPr?: TableFormatting;

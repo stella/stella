@@ -63,6 +63,10 @@ export type ToProseDocOptions = {
   theme?: Theme | null;
 };
 
+type RunFormattingResolver = (
+  formatting: TextFormatting | undefined,
+) => TextFormatting | undefined;
+
 /**
  * Convert a Document to a ProseMirror document
  *
@@ -146,15 +150,23 @@ function convertParagraph(
     styleRunFormatting = resolved.runFormatting;
   }
 
-  // NOTE: paragraph.formatting?.runProperties is the paragraph mark formatting (pPr/rPr).
-  // Per ECMA-376, this only applies to the paragraph mark glyph (¶), NOT to text runs.
-  // Style-level rPr (from styleResolver) already provides default run formatting.
-
-  // Merge in extra formatting (e.g., table style conditional rPr)
-  const mergedStyleRunFormatting = mergeTextFormatting(
+  const paragraphRunFormatting = paragraph.formatting?.runProperties
+    ? resolveTextFormatting(paragraph.formatting.runProperties, styleResolver)
+    : undefined;
+  const baseRunFormatting = mergeTextFormatting(
     styleRunFormatting,
     extraRunFormatting,
   );
+  const defaultRunFormatting = mergeTextFormatting(
+    baseRunFormatting,
+    paragraphRunFormatting,
+  );
+  const getInheritedRunFormatting = (
+    formatting: TextFormatting | undefined,
+  ): TextFormatting | undefined =>
+    hasDirectRunFormatting(formatting)
+      ? baseRunFormatting
+      : defaultRunFormatting;
   const emitTrackedChange = (
     change: Insertion | Deletion | MoveFrom | MoveTo,
     markType: "insertion" | "deletion",
@@ -163,7 +175,7 @@ function convertParagraph(
       convertTrackedChange(
         change,
         markType,
-        mergedStyleRunFormatting,
+        getInheritedRunFormatting,
         styleResolver,
       ),
     );
@@ -178,20 +190,24 @@ function convertParagraph(
       anchorPointComment(inlineNodes, content.id);
     } else if (content.type === "run") {
       emitInlineNodes(
-        convertRun(content, mergedStyleRunFormatting, styleResolver),
+        convertRun(
+          content,
+          getInheritedRunFormatting(content.formatting),
+          styleResolver,
+        ),
       );
     } else if (content.type === "hyperlink") {
       emitInlineNodes(
-        convertHyperlink(content, mergedStyleRunFormatting, styleResolver),
+        convertHyperlink(content, getInheritedRunFormatting, styleResolver),
       );
     } else if (
       content.type === "simpleField" ||
       content.type === "complexField"
     ) {
-      emitInlineNode(convertField(content, mergedStyleRunFormatting));
+      emitInlineNode(convertField(content, getInheritedRunFormatting));
     } else if (content.type === "inlineSdt") {
       emitInlineNode(
-        convertInlineSdt(content, mergedStyleRunFormatting, styleResolver),
+        convertInlineSdt(content, getInheritedRunFormatting, styleResolver),
       );
     } else if (content.type === "insertion" || content.type === "moveTo") {
       emitTrackedChange(content, "insertion");
@@ -261,15 +277,23 @@ function anchorPointComment(nodes: PMNode[], commentId: number): void {
 function convertTrackedChange(
   change: Insertion | Deletion | MoveFrom | MoveTo,
   markType: "insertion" | "deletion",
-  styleRunFormatting?: TextFormatting,
+  getInheritedRunFormatting: RunFormattingResolver,
   styleResolver?: StyleResolver | null,
 ): PMNode[] {
   const nodes: PMNode[] = [];
   for (const item of change.content) {
     if (item.type === "run") {
-      nodes.push(...convertRun(item, styleRunFormatting, styleResolver));
+      nodes.push(
+        ...convertRun(
+          item,
+          getInheritedRunFormatting(item.formatting),
+          styleResolver,
+        ),
+      );
     } else if (item.type === "hyperlink") {
-      nodes.push(...convertHyperlink(item, styleRunFormatting, styleResolver));
+      nodes.push(
+        ...convertHyperlink(item, getInheritedRunFormatting, styleResolver),
+      );
     }
   }
 
@@ -514,6 +538,37 @@ function resolveTableStyleConditional(
   return result;
 }
 
+function resolveTableBaseStyle(
+  styleResolver: StyleResolver | null,
+  tableStyleId: string | undefined,
+): { tcPr?: TableCellFormatting; rPr?: TextFormatting } | undefined {
+  if (!styleResolver || !tableStyleId) {
+    return undefined;
+  }
+
+  const style = styleResolver.getStyle(tableStyleId);
+  if (!style) {
+    return undefined;
+  }
+
+  const runPropsFromPpr = style.pPr?.runProperties
+    ? resolveTextFormatting(style.pPr.runProperties, styleResolver)
+    : undefined;
+  const resolvedRpr = style.rPr
+    ? resolveTextFormatting(style.rPr, styleResolver)
+    : undefined;
+  const mergedRunProps = mergeTextFormatting(runPropsFromPpr, resolvedRpr);
+
+  const result: { tcPr?: TableCellFormatting; rPr?: TextFormatting } = {};
+  if (style.tcPr) {
+    result.tcPr = style.tcPr;
+  }
+  if (mergedRunProps) {
+    result.rPr = mergedRunProps;
+  }
+  return result.tcPr || result.rPr ? result : undefined;
+}
+
 function mergeConditionalStyles(
   base?: { tcPr?: TableCellFormatting; rPr?: TextFormatting },
   override?: { tcPr?: TableCellFormatting; rPr?: TextFormatting },
@@ -568,6 +623,18 @@ function mergeConditionalStyles(
   }
 
   return merged;
+}
+
+function hasDirectRunFormatting(
+  formatting: TextFormatting | undefined,
+): boolean {
+  if (!formatting) {
+    return false;
+  }
+
+  return Object.entries(formatting).some(
+    ([key, value]) => key !== "styleId" && value !== undefined,
+  );
 }
 
 function resolveTextFormatting(
@@ -778,6 +845,13 @@ function convertTable(
     }
   };
   setCS("wholeTable", "wholeTable");
+  const wholeTableStyle = mergeConditionalStyles(
+    resolveTableBaseStyle(styleResolver, tableStyleId),
+    conditionalStyles.wholeTable,
+  );
+  if (wholeTableStyle) {
+    conditionalStyles.wholeTable = wholeTableStyle;
+  }
   setCS("firstRow", "firstRow");
   setCS("lastRow", "lastRow");
   setCS("firstCol", "firstCol");
@@ -1250,12 +1324,12 @@ function convertTableCell(
 /**
  * Convert a SimpleField or ComplexField to a ProseMirror field node.
  * Preserves run formatting (bold, fontSize, color, etc.) as PM marks.
- * Accepts styleFormatting so fields inherit paragraph-level formatting
- * (same as convertRun does for regular text runs).
+ * Accepts a run formatting resolver so fields inherit paragraph-level
+ * formatting the same way regular text runs do.
  */
 function convertField(
   field: SimpleField | ComplexField,
-  styleFormatting?: TextFormatting,
+  getInheritedRunFormatting: RunFormattingResolver,
 ): PMNode | null {
   // Extract display text and formatting from field content/result
   let displayText = "";
@@ -1278,8 +1352,9 @@ function convertField(
   }
 
   // Merge style formatting with field run formatting (inline takes precedence)
+  const inheritedFormatting = getInheritedRunFormatting(fieldFormatting);
   const mergedFormatting = mergeTextFormatting(
-    styleFormatting,
+    inheritedFormatting,
     fieldFormatting,
   );
   const marks = textFormattingToMarks(mergedFormatting);
@@ -1315,7 +1390,7 @@ function convertMathEquation(math: MathEquation): PMNode | null {
  */
 function convertInlineSdt(
   sdt: InlineSdt,
-  styleRunFormatting?: TextFormatting,
+  getInheritedRunFormatting: RunFormattingResolver,
   styleResolver?: StyleResolver | null,
 ): PMNode | null {
   const props = sdt.properties;
@@ -1323,12 +1398,16 @@ function convertInlineSdt(
 
   for (const content of sdt.content) {
     if (content.type === "run") {
-      const runNodes = convertRun(content, styleRunFormatting, styleResolver);
+      const runNodes = convertRun(
+        content,
+        getInheritedRunFormatting(content.formatting),
+        styleResolver,
+      );
       inlineNodes.push(...runNodes);
     } else if (content.type === "hyperlink") {
       const linkNodes = convertHyperlink(
         content,
-        styleRunFormatting,
+        getInheritedRunFormatting,
         styleResolver,
       );
       inlineNodes.push(...linkNodes);
@@ -1652,11 +1731,11 @@ function convertImage(image: Image): PMNode {
  * Convert a Hyperlink to ProseMirror nodes with link mark
  *
  * @param hyperlink - The hyperlink to convert
- * @param styleFormatting - Text formatting from the paragraph's style
+ * @param getInheritedRunFormatting - Formatting inherited by each child run
  */
 function convertHyperlink(
   hyperlink: Hyperlink,
-  styleFormatting?: TextFormatting,
+  getInheritedRunFormatting: RunFormattingResolver,
   styleResolver?: StyleResolver | null,
 ): PMNode[] {
   const nodes: PMNode[] = [];
@@ -1674,10 +1753,11 @@ function convertHyperlink(
     if (child.type === "run") {
       // Merge style formatting with run's inline formatting
       const runStyleFormatting = child.formatting?.styleId
-        ? styleResolver?.resolveRunStyle(child.formatting.styleId)
+        ? styleResolver?.getRunStyleOwnProperties(child.formatting.styleId)
         : undefined;
+      const inheritedFormatting = getInheritedRunFormatting(child.formatting);
       const mergedFormatting = mergeTextFormatting(
-        mergeTextFormatting(styleFormatting, runStyleFormatting),
+        mergeTextFormatting(inheritedFormatting, runStyleFormatting),
         child.formatting,
       );
       const runMarks = textFormattingToMarks(mergedFormatting);
