@@ -34,6 +34,10 @@ type PublicOfficialToolName = Extract<
   BuiltInApprovalToolName,
   "ares_lookup_company" | "ares_search_companies"
 >;
+const RUNNING_TOOL_STATES = {
+  "input-available": true,
+  "input-streaming": true,
+} as const satisfies Record<string, true>;
 
 const CHAT_TOOL_TITLE_KEYS = {
   "apply-active-docx-edits": "chat.tool.apply-active-docx-edits",
@@ -250,6 +254,38 @@ export const hasApprovalResponseAwaitingModelStep = ({
   }
 
   return message.parts.some(isApprovalRespondedPart);
+};
+
+export const isRunningToolPart = (part: unknown): boolean => {
+  if (
+    typeof part !== "object" ||
+    part === null ||
+    !("type" in part) ||
+    !("state" in part) ||
+    typeof part.type !== "string" ||
+    typeof part.state !== "string"
+  ) {
+    return false;
+  }
+
+  if (!(part.state in RUNNING_TOOL_STATES)) {
+    return false;
+  }
+
+  return part.type === "dynamic-tool" || part.type.startsWith("tool-");
+};
+
+export const hasRunningToolCallInLatestAssistantMessage = ({
+  messages,
+}: {
+  messages: PersistedChatMessage[];
+}) => {
+  const message = messages.at(-1);
+  if (!message || message.role !== "assistant") {
+    return false;
+  }
+
+  return message.parts.some(isRunningToolPart);
 };
 
 export const getUserMessageHtmlHistory = (

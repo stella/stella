@@ -8,6 +8,7 @@ import {
   getUserMessageHtmlHistory,
   hasApprovalResponseAwaitingModelStep,
   hasApprovedActiveDocxEditAwaitingClientOutput,
+  hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
   isPublicOfficialChatToolName,
   isToolApprovedByGrant,
@@ -220,6 +221,84 @@ describe("hasApprovalResponseAwaitingModelStep", () => {
         ],
       }),
     ).toBe(true);
+  });
+});
+
+describe("hasRunningToolCallInLatestAssistantMessage", () => {
+  test("treats in-flight tool input as an active assistant response", () => {
+    const messages = [
+      {
+        id: "message-1",
+        parts: [
+          {
+            input: { query: "consumer credit" },
+            state: "input-available",
+            toolCallId: "tool-call-1",
+            toolName: "mcp__salvia__search_decisions",
+            type: "dynamic-tool",
+          },
+        ],
+        role: "assistant",
+      },
+    ] satisfies Parameters<
+      typeof hasRunningToolCallInLatestAssistantMessage
+    >[0]["messages"];
+
+    expect(hasRunningToolCallInLatestAssistantMessage({ messages })).toBe(true);
+  });
+
+  test("ignores completed tool output", () => {
+    const messages = [
+      {
+        id: "message-1",
+        parts: [
+          {
+            input: { query: "consumer credit" },
+            output: { content: [] },
+            state: "output-available",
+            toolCallId: "tool-call-1",
+            toolName: "mcp__salvia__search_decisions",
+            type: "dynamic-tool",
+          },
+        ],
+        role: "assistant",
+      },
+    ] satisfies Parameters<
+      typeof hasRunningToolCallInLatestAssistantMessage
+    >[0]["messages"];
+
+    expect(hasRunningToolCallInLatestAssistantMessage({ messages })).toBe(
+      false,
+    );
+  });
+
+  test("ignores stale running tool parts from older messages", () => {
+    const messages = [
+      {
+        id: "message-1",
+        parts: [
+          {
+            input: { query: "consumer credit" },
+            state: "input-available",
+            toolCallId: "tool-call-1",
+            toolName: "mcp__salvia__search_decisions",
+            type: "dynamic-tool",
+          },
+        ],
+        role: "assistant",
+      },
+      {
+        id: "message-2",
+        parts: [{ text: "new prompt", type: "text" }],
+        role: "user",
+      },
+    ] satisfies Parameters<
+      typeof hasRunningToolCallInLatestAssistantMessage
+    >[0]["messages"];
+
+    expect(hasRunningToolCallInLatestAssistantMessage({ messages })).toBe(
+      false,
+    );
   });
 });
 

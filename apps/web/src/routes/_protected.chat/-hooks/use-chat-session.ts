@@ -23,6 +23,7 @@ import {
   getExternalMcpConnectorApprovalGrant,
   getExternalMcpConnectorSlugFromToolName,
   getToolApprovalGrant,
+  hasRunningToolCallInLatestAssistantMessage,
   isApprovalToolName,
   isExternalMcpToolName,
   isToolApprovalGrant,
@@ -175,7 +176,12 @@ export const useChatSession = ({
     [messages],
   );
 
-  const isGenerating = status === "submitted" || status === "streaming";
+  const hasRunningToolCall = useMemo(
+    () => hasRunningToolCallInLatestAssistantMessage({ messages }),
+    [messages],
+  );
+  const isGenerating =
+    status === "submitted" || status === "streaming" || hasRunningToolCall;
 
   useEffect(() => {
     setConversationApprovedTools(readConversationApprovedTools(conversationId));
