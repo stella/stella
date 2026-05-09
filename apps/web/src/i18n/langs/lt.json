@@ -994,6 +994,12 @@
     "loadingDocument": "Loading document...",
     "loadingEditor": "Įkeliamas redaktorius...",
     "lockFile": "Užrakinti failą",
+    "markupView": {
+      "allMarkup": "Visi keitimai",
+      "noMarkup": "Nėra keitimų",
+      "original": "Pradinis",
+      "simple": "Supaprastintas žymėjimas"
+    },
     "moreFormatting": "Daugiau formatavimo",
     "networkError": "Network error. Please check your internet connection and try again.",
     "nextChange": "Next Change",

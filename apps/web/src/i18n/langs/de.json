@@ -994,6 +994,12 @@
     "loadingDocument": "Loading document...",
     "loadingEditor": "Editor wird geladen...",
     "lockFile": "Datei sperren",
+    "markupView": {
+      "allMarkup": "Das gesamte Markup",
+      "noMarkup": "Kein Markup",
+      "original": "Original",
+      "simple": "Einfaches Markup"
+    },
     "moreFormatting": "Weitere Formatierung",
     "networkError": "Network error. Please check your internet connection and try again.",
     "nextChange": "Next Change",

@@ -32,7 +32,7 @@
     "lint:fix": "turbo run lint:fix",
     "lint:ws": "sherif -r unsync-similar-dependencies && bun packages/scripts/src/workspace-hygiene.ts",
     "i18n:check": "turbo run i18n:check --",
-    "i18n:sync": "turbo run i18n:check -- --sync",
+    "i18n:sync": "turbo run i18n:sync --",
     "test": "turbo run test",
     "clean": "turbo run clean && git clean -xdf node_modules",
     "sync:well-known": "cp -r .well-known apps/web/public/",

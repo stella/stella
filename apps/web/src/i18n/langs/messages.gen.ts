@@ -997,6 +997,12 @@ type Messages = {
     "loadingDocument": "Loading document...";
     "loadingEditor": "Loading editor...";
     "lockFile": "Lock file";
+    "markupView": {
+      "allMarkup": "All Markup";
+      "noMarkup": "No Markup";
+      "original": "Original";
+      "simple": "Simple Markup";
+    };
     "moreFormatting": "More formatting";
     "networkError": "Network error. Please check your internet connection and try again.";
     "nextChange": "Next Change";

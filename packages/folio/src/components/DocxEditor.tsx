@@ -3234,10 +3234,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     }
 
     const DISPLAY_MODE_LABELS = {
-      "all-markup": "All Markup",
-      "simple-markup": "Simple",
-      "no-markup": "No Markup",
-      original: "Original",
+      "all-markup": t("markupView.allMarkup"),
+      "simple-markup": t("markupView.simple"),
+      "no-markup": t("markupView.noMarkup"),
+      original: t("markupView.original"),
     } as const satisfies Record<DisplayMode, string>;
 
     const toolbarChildren = toolbarExtra ?? null;

@@ -994,6 +994,12 @@
     "loadingDocument": "Ładowanie dokumentu...",
     "loadingEditor": "Ładowanie edytora...",
     "lockFile": "Zablokuj plik",
+    "markupView": {
+      "allMarkup": "Cała adiustacja",
+      "noMarkup": "Bez adiustacji",
+      "original": "Oryginał",
+      "simple": "Prosta adiustacja"
+    },
     "moreFormatting": "Więcej formatowania",
     "networkError": "Błąd sieci. Sprawdź połączenie z internetem i spróbuj ponownie.",
     "nextChange": "Następna zmiana",

@@ -40,6 +40,10 @@
       "dependsOn": ["transit"],
       "cache": false
     },
+    "i18n:sync": {
+      "dependsOn": ["transit"],
+      "cache": false
+    },
     "test": {
       "dependsOn": [],
       "inputs": ["$TURBO_DEFAULT$"]
