@@ -1,28 +1,14 @@
 name: Deploy main to staging
 
-# Continuous deploy of every push to main into staging. The
-# tag-based path (release.yml on vX.Y.Z) still owns production;
-# this workflow exists only to give staging a fast feedback
-# loop without cutting tags.
-#
-# What's intentionally cut compared to release.yml:
-#  - multi-arch build (ECS is ARM64; staging only needs that image)
-#  - smoke test (let staging surface real boot failures)
-#  - desktop installers (irrelevant to API)
-#  - GitHub Release object (no need; we deploy by digest)
-#  - Tauri updater manifest mirror (desktop-only artefact)
-#
-# End-to-end target: push-to-staging-live in ~8-10 minutes.
+# Continuous deploy of every push to main into staging. The tagged
+# release workflow remains the production path.
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-# A newer push to main supersedes an in-flight build/deploy:
-# we only care about the latest main, never the intermediate
-# state. Cancel-in-progress also keeps the staging environment
-# from oscillating during a rapid burst of merges.
+# A newer push to main supersedes an in-flight staging deploy.
 concurrency:
   group: deploy-staging
   cancel-in-progress: true
@@ -39,15 +25,8 @@ env:
 
 jobs:
   build-and-deploy:
-    name: Build arm64 + deploy staging
+    name: Build + deploy staging
     if: github.ref == 'refs/heads/main'
-    # No staging-paused gate here: vars.STAGING_ENABLED lives in
-    # stella-infra and isn't visible to this workflow. The
-    # infra-side promote-release.yml already fail-fasts when
-    # staging is paused, so the worst case of running this
-    # workflow against a paused env is a wasted ~6 min build
-    # that ends in a one-line "::error::Staging is paused" from
-    # the dispatched run.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 75
 
@@ -58,10 +37,6 @@ jobs:
           SHA: ${{ github.sha }}
         run: |
           short="${SHA:0:7}"
-          # Synthetic ECR + image tag. The matching shape is
-          # accepted by stella-infra's promote-release.yml regex
-          # and the staging matrix tag_pattern in
-          # terraform-plan.yml. Production stays strict semver-only.
           echo "release_ref=main-${short}" >> "$GITHUB_OUTPUT"
           echo "short_sha=${short}" >> "$GITHUB_OUTPUT"
 
@@ -80,36 +55,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push (arm64)
+      - name: Build and push image
         id: build
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
           file: apps/api/Dockerfile
-          # Single-arch: the ECS task definitions run ARM64, and
-          # deploy-import-image.sh imports linux/arm64 into ECR.
           platforms: linux/arm64
           push: true
-          # Push two tags: the SHA-pinned one (immutable, used by
-          # the promote dispatch) and a moving `main-latest`
-          # convenience tag for ad-hoc pulls. The promote step
-          # only consumes the digest, so the tag is metadata.
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.ref.outputs.release_ref }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main-latest
-          # Separate cache namespace from release.yml's
-          # buildcache-{arm64,amd64} keys so this workflow's
-          # cache churn does not invalidate production builds.
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-staging-arm64
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-staging-arm64,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-staging
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-staging,mode=max
           build-args: |
             STELLA_VERSION=${{ steps.ref.outputs.release_ref }}
             STELLA_COMMIT_SHA=${{ github.sha }}
 
       - name: Attest image provenance
-        # Same defence as release.yml: GH provenance attestation
-        # makes the image's build inputs verifiable. Cheap and
-        # uniform so we keep it for staging too.
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -120,10 +83,6 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
         with:
-          # Match the convention used by release.yml's promote +
-          # promote-staging jobs: client-id from vars, private-key
-          # from secrets. Other workflows in this repo (release,
-          # tag-on-version-bump, deploy-landing) all use this pair.
           client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
@@ -138,7 +97,6 @@ jobs:
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          # Must match stella-infra/.github/workflows/promote-release.yml run-name.
           expected_title="Promote ${RELEASE_REF} → staging"
           dispatch_output="$(
             gh workflow run promote-release.yml \
