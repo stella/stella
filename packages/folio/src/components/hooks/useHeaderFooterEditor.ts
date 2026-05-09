@@ -142,7 +142,12 @@ export const useHeaderFooterEditor = ({
 
     // Resolve default headers/footers: use the last section that defines them
     // (typically the final section properties)
+    // Same title-page-section preference as footers below — pages 2+
+    // should use the body section's default header, not a later signature
+    // section's empty/different one.
     if (headers) {
+      let primaryHeaderFromTitleSection: HeaderFooter | null = null;
+      let lastHeader: HeaderFooter | null = null;
       for (const sp of allSectionProps) {
         if (!sp.headerReferences) {
           continue;
@@ -150,13 +155,40 @@ export const useHeaderFooterEditor = ({
         const defaultRef = sp.headerReferences.find(
           (r) => r.type === "default",
         );
-        if (defaultRef?.rId) {
-          header = headers.get(defaultRef.rId) ?? header;
+        if (!defaultRef?.rId) {
+          continue;
+        }
+        const candidate = headers.get(defaultRef.rId);
+        if (!candidate) {
+          continue;
+        }
+        lastHeader = candidate;
+        const hasFirstRef = sp.headerReferences.some((r) => r.type === "first");
+        if (hasFirstRef && !primaryHeaderFromTitleSection) {
+          primaryHeaderFromTitleSection = candidate;
         }
       }
+      header = primaryHeaderFromTitleSection ?? lastHeader ?? header;
     }
 
     if (footers) {
+      // Per ECMA-376 §17.10, each section has its own header/footer
+      // references. Folio's HF model is currently flat (one default per
+      // document) — the closest spec-conformant approximation is "the
+      // section that hosts the title page's first-page references". That's
+      // section 1 in NVCA-style multi-section docs (sec 1: title page +
+      // body, sec 2..N: signature pages with different / empty footers).
+      // Picking the LAST section's default (the previous behavior) silently
+      // dropped the body footer's PAGE field on pages 2+ when later
+      // sections override `default` with a stripped-down footer.
+      //
+      // Algorithm: pick the default from the FIRST section that has both
+      // a first-page reference AND a default — that's the title-page
+      // section, whose default applies to pages 2+ within that section
+      // (and, since folio's HF is flat, to pages 2+ globally). Fall back
+      // to the last default if no section has both.
+      let primaryFooterFromTitleSection: HeaderFooter | null = null;
+      let lastFooter: HeaderFooter | null = null;
       for (const sp of allSectionProps) {
         if (!sp.footerReferences) {
           continue;
@@ -164,10 +196,20 @@ export const useHeaderFooterEditor = ({
         const defaultRef = sp.footerReferences.find(
           (r) => r.type === "default",
         );
-        if (defaultRef?.rId) {
-          footer = footers.get(defaultRef.rId) ?? footer;
+        if (!defaultRef?.rId) {
+          continue;
+        }
+        const candidate = footers.get(defaultRef.rId);
+        if (!candidate) {
+          continue;
+        }
+        lastFooter = candidate;
+        const hasFirstRef = sp.footerReferences.some((r) => r.type === "first");
+        if (hasFirstRef && !primaryFooterFromTitleSection) {
+          primaryFooterFromTitleSection = candidate;
         }
       }
+      footer = primaryFooterFromTitleSection ?? lastFooter ?? footer;
     }
 
     // Resolve first-page headers/footers: find the first section with titlePg
