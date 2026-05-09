@@ -30,7 +30,6 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { env } from "@/env";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
@@ -101,7 +100,6 @@ const sortCatalogItems = <
 function McpPage() {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const apiOrigin = new URL(env.VITE_API_URL).origin;
 
   const { data: connectorsData, isLoading: connectorsLoading } = useQuery(
     mcpConnectorsOptions(),
@@ -116,27 +114,39 @@ function McpPage() {
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== apiOrigin) {
+      // Popup terminal page lives on the SPA host, so it posts back
+      // to its own origin. The previous flow posted from the API
+      // host (api.stll.app), but CloudFront's CSP blocks the inline
+      // postMessage script there.
+      if (event.origin !== window.location.origin) {
         return;
       }
 
-      if (
-        typeof event.data !== "string" ||
-        !event.data.startsWith("mcp:connected:")
-      ) {
+      if (typeof event.data !== "string") {
         return;
       }
 
-      stellaToast.add({
-        title: t("knowledge.mcp.connectedToast"),
-        type: "success",
-      });
-      void queryClient.invalidateQueries({ queryKey: knowledgeKeys.mcp.all });
+      if (event.data.startsWith("mcp:connected:")) {
+        stellaToast.add({
+          title: t("knowledge.mcp.connectedToast"),
+          type: "success",
+        });
+        void queryClient.invalidateQueries({ queryKey: knowledgeKeys.mcp.all });
+        return;
+      }
+
+      if (event.data.startsWith("mcp:error:")) {
+        stellaToast.add({
+          title: t("knowledge.mcp.errorTitle"),
+          description: t("knowledge.mcp.errorDescription"),
+          type: "error",
+        });
+      }
     };
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [apiOrigin, queryClient, t]);
+  }, [queryClient, t]);
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto p-6">

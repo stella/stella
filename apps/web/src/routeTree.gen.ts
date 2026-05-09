@@ -16,6 +16,7 @@ import { Route as OnboardingRouteRouteImport } from './routes/onboarding/route'
 import { Route as AuthRouteRouteImport } from './routes/auth/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthIndexRouteImport } from './routes/auth/index'
+import { Route as McpOauthCallbackRouteImport } from './routes/mcp.oauth-callback'
 import { Route as AuthOtpRouteImport } from './routes/auth/otp'
 import { Route as AuthOrganizationRouteImport } from './routes/auth/organization'
 import { Route as ProtectedSettingsRouteRouteImport } from './routes/_protected.settings/route'
@@ -91,6 +92,11 @@ const AuthIndexRoute = AuthIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthRouteRoute,
+} as any)
+const McpOauthCallbackRoute = McpOauthCallbackRouteImport.update({
+  id: '/mcp/oauth-callback',
+  path: '/mcp/oauth-callback',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthOtpRoute = AuthOtpRouteImport.update({
   id: '/otp',
@@ -337,6 +343,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof ProtectedSettingsRouteRouteWithChildren
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
+  '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/auth/': typeof AuthIndexRoute
   '/knowledge/case': typeof ProtectedKnowledgeCaseRouteRouteWithChildren
   '/settings/organization': typeof ProtectedSettingsOrganizationRouteRouteWithChildren
@@ -382,6 +389,7 @@ export interface FileRoutesByTo {
   '/dev': typeof DevRoute
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
+  '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/auth': typeof AuthIndexRoute
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/chat/new': typeof ProtectedChatNewRoute
@@ -429,6 +437,7 @@ export interface FileRoutesById {
   '/_protected/settings': typeof ProtectedSettingsRouteRouteWithChildren
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
+  '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/auth/': typeof AuthIndexRoute
   '/_protected/knowledge/case': typeof ProtectedKnowledgeCaseRouteRouteWithChildren
   '/_protected/settings/organization': typeof ProtectedSettingsOrganizationRouteRouteWithChildren
@@ -480,6 +489,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/auth/organization'
     | '/auth/otp'
+    | '/mcp/oauth-callback'
     | '/auth/'
     | '/knowledge/case'
     | '/settings/organization'
@@ -525,6 +535,7 @@ export interface FileRouteTypes {
     | '/dev'
     | '/auth/organization'
     | '/auth/otp'
+    | '/mcp/oauth-callback'
     | '/auth'
     | '/chat/$threadId'
     | '/chat/new'
@@ -571,6 +582,7 @@ export interface FileRouteTypes {
     | '/_protected/settings'
     | '/auth/organization'
     | '/auth/otp'
+    | '/mcp/oauth-callback'
     | '/auth/'
     | '/_protected/knowledge/case'
     | '/_protected/settings/organization'
@@ -617,6 +629,7 @@ export interface RootRouteChildren {
   ProtectedRoute: typeof ProtectedRouteWithChildren
   ConsentRoute: typeof ConsentRoute
   DevRoute: typeof DevRoute
+  McpOauthCallbackRoute: typeof McpOauthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -669,6 +682,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth/'
       preLoaderRoute: typeof AuthIndexRouteImport
       parentRoute: typeof AuthRouteRoute
+    }
+    '/mcp/oauth-callback': {
+      id: '/mcp/oauth-callback'
+      path: '/mcp/oauth-callback'
+      fullPath: '/mcp/oauth-callback'
+      preLoaderRoute: typeof McpOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/auth/otp': {
       id: '/auth/otp'
@@ -1182,6 +1202,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProtectedRoute: ProtectedRouteWithChildren,
   ConsentRoute: ConsentRoute,
   DevRoute: DevRoute,
+  McpOauthCallbackRoute: McpOauthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
