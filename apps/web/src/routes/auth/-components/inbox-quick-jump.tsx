@@ -76,6 +76,10 @@ const ProviderIcon = ({ name }: { name: ProviderName }) => {
   return <img alt="" className="size-4" src={iconUrl} />;
 };
 
+const openProviderInbox = (url: string) => {
+  window.open(url, "_blank", "noopener,noreferrer");
+};
+
 const getProvidersForEmail = (email: string): readonly Provider[] => {
   const domain = email.split("@").at(1)?.toLowerCase() ?? "";
   const exact = PROVIDERS.find((p) => p.domains.includes(domain));
@@ -90,23 +94,32 @@ export const InboxQuickJump = ({ email }: { email: string }) => {
   const providers = getProvidersForEmail(email);
   return (
     <div className="flex flex-wrap justify-center gap-2">
-      {providers.map((p) => (
-        <Button
-          key={p.name}
-          render={
-            <a
-              href={sanitizeHref(p.url)}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              <ProviderIcon name={p.name} />
-              {t("auth.openInProvider", { provider: p.name })}
-            </a>
-          }
-          size="sm"
-          variant="outline"
-        />
-      ))}
+      {providers.map((p) => {
+        const href = sanitizeHref(p.url);
+        return (
+          <Button
+            key={p.name}
+            render={
+              <a
+                href={href}
+                onClick={(event) => {
+                  event.preventDefault();
+                  if (href) {
+                    openProviderInbox(href);
+                  }
+                }}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                <ProviderIcon name={p.name} />
+                {t("auth.openInProvider", { provider: p.name })}
+              </a>
+            }
+            size="sm"
+            variant="outline"
+          />
+        );
+      })}
     </div>
   );
 };
