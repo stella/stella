@@ -1072,9 +1072,16 @@ function convertParagraphAttrs(
     }
   }
 
-  // Shading (background color)
-  if (pmAttrs.shading?.fill?.rgb) {
-    attrs.shading = `#${pmAttrs.shading.fill.rgb}`;
+  // Shading (background color). Word's `Normal` paragraph style commonly
+  // sets `<w:shd val="clear" fill="FFFFFF"/>` — semantically a no-op on
+  // a white page, but folio's dark mode draws the literal `#FFFFFF`
+  // fill as a visible white block over the dark canvas. Treat any white
+  // shading as transparent (= page background) so it renders the same as
+  // "no shading" in both modes. Other shading colors are preserved
+  // verbatim so authored highlights stay visible.
+  const shadingRgb = pmAttrs.shading?.fill?.rgb?.toUpperCase();
+  if (shadingRgb && shadingRgb !== "FFFFFF" && shadingRgb !== "FFFFFE") {
+    attrs.shading = `#${pmAttrs.shading?.fill?.rgb}`;
   }
 
   // Tab stops
