@@ -1688,7 +1688,15 @@ function convertHeaderFooterToContent(
                 | "decimal"
                 | "bar"
                 | "clear",
-              pos: twipsToPixels(tab.position),
+              // Keep twips. The layout-bridge measurer (`computeTabWidth`)
+              // and renderer treat `tabStop.pos` as twips and call
+              // `twipsToPx` themselves — body content stores tabs in twips
+              // (see `toFlowBlocks`). Pre-converting to pixels here was
+              // double-converting (4770 twips → 318 px → treated as twips →
+              // ~21 px stop), collapsing the center tab back to a default
+              // narrow tab and pushing footer content (page number,
+              // centered text) to the wrong x.
+              pos: tab.position,
             };
             if (tab.leader) {
               tabStop.leader = tab.leader as NonNullable<typeof tabStop.leader>;
