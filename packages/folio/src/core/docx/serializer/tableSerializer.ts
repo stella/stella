@@ -36,7 +36,7 @@ import type {
   Paragraph,
 } from "../../types/document";
 import { serializeParagraph } from "./paragraphSerializer";
-import { escapeXml } from "./xmlUtils";
+import { escapeXml, intAttr } from "./xmlUtils";
 
 function normalizeTrackedChangeInfo(info: {
   id: number;
@@ -96,7 +96,7 @@ function serializeMeasurement(
   }
 
   const attrs: string[] = [
-    `w:w="${measurement.value}"`,
+    `w:w="${intAttr(measurement.value)}"`,
     `w:type="${measurement.type}"`,
   ];
 
@@ -121,11 +121,11 @@ function serializeBorder(
   const attrs: string[] = [`w:val="${border.style}"`];
 
   if (border.size !== undefined) {
-    attrs.push(`w:sz="${border.size}"`);
+    attrs.push(`w:sz="${intAttr(border.size)}"`);
   }
 
   if (border.space !== undefined) {
-    attrs.push(`w:space="${border.space}"`);
+    attrs.push(`w:space="${intAttr(border.space)}"`);
   }
 
   // Color
@@ -387,7 +387,7 @@ function serializeFloatingTableProperties(
   }
 
   if (floating.tblpX !== undefined) {
-    attrs.push(`w:tblpX="${floating.tblpX}"`);
+    attrs.push(`w:tblpX="${intAttr(floating.tblpX)}"`);
   }
 
   if (floating.tblpXSpec) {
@@ -395,7 +395,7 @@ function serializeFloatingTableProperties(
   }
 
   if (floating.tblpY !== undefined) {
-    attrs.push(`w:tblpY="${floating.tblpY}"`);
+    attrs.push(`w:tblpY="${intAttr(floating.tblpY)}"`);
   }
 
   if (floating.tblpYSpec) {
@@ -403,19 +403,19 @@ function serializeFloatingTableProperties(
   }
 
   if (floating.topFromText !== undefined) {
-    attrs.push(`w:topFromText="${floating.topFromText}"`);
+    attrs.push(`w:topFromText="${intAttr(floating.topFromText)}"`);
   }
 
   if (floating.bottomFromText !== undefined) {
-    attrs.push(`w:bottomFromText="${floating.bottomFromText}"`);
+    attrs.push(`w:bottomFromText="${intAttr(floating.bottomFromText)}"`);
   }
 
   if (floating.leftFromText !== undefined) {
-    attrs.push(`w:leftFromText="${floating.leftFromText}"`);
+    attrs.push(`w:leftFromText="${intAttr(floating.leftFromText)}"`);
   }
 
   if (floating.rightFromText !== undefined) {
-    attrs.push(`w:rightFromText="${floating.rightFromText}"`);
+    attrs.push(`w:rightFromText="${intAttr(floating.rightFromText)}"`);
   }
 
   if (attrs.length === 0) {
@@ -579,7 +579,7 @@ export function serializeTableRowFormatting(
 
     // Row height
     if (formatting.height) {
-      const attrs: string[] = [`w:val="${formatting.height.value}"`];
+      const attrs: string[] = [`w:val="${intAttr(formatting.height.value)}"`];
 
       if (formatting.heightRule) {
         attrs.push(`w:hRule="${formatting.heightRule}"`);
@@ -719,7 +719,7 @@ export function serializeTableCellFormatting(
 
     // Grid span (horizontal merge)
     if (formatting.gridSpan && formatting.gridSpan > 1) {
-      parts.push(`<w:gridSpan w:val="${formatting.gridSpan}"/>`);
+      parts.push(`<w:gridSpan w:val="${intAttr(formatting.gridSpan)}"/>`);
     }
 
     // Vertical merge
@@ -841,7 +841,7 @@ function serializeTableGrid(columnWidths: number[] | undefined): string {
     return "";
   }
 
-  const cols = columnWidths.map((w) => `<w:gridCol w:w="${w}"/>`);
+  const cols = columnWidths.map((w) => `<w:gridCol w:w="${intAttr(w)}"/>`);
 
   return `<w:tblGrid>${cols.join("")}</w:tblGrid>`;
 }
