@@ -292,13 +292,18 @@ export const useHeaderFooterEditor = ({
       }
     }
 
-    // When titlePg is not set but only 'first' headers exist, use them as default
+    // When titlePg is not set but only 'first' headers exist, use them as default.
+    // Mirror the rId fallback so save/remove targets the rId actually
+    // rendered — otherwise the active default rId stays null and edits to
+    // the displayed header/footer silently no-op (Codex PR #258 review).
     if (!titlePg) {
       if (!header && firstHeader) {
         header = firstHeader;
+        resolvedHeaderRId = resolvedFirstHeaderRId;
       }
       if (!footer && firstFooter) {
         footer = firstFooter;
+        resolvedFooterRId = resolvedFirstFooterRId;
       }
     }
 
