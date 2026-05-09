@@ -1091,7 +1091,7 @@ type Messages = {
       };
       "bearerTokenDescription": "This server uses a bearer token. Paste the token from the provider to finish connecting.";
       "connect": "Connect";
-      "connectedToast": "MCP connector connected";
+      "connectedToast": "MCP connected";
       "connectedWithLastUsed": "Connected · last used {time}";
       "description": "Manage the external MCP servers that can add tools to chat. Tokens are stored per user.";
       "detected": "Detected {authType}";
@@ -1102,7 +1102,7 @@ type Messages = {
       "emptyTitle": "No MCP connectors yet";
       "enable": "Enable";
       "errorDescription": "The connector could not be updated.";
-      "errorTitle": "MCP connection failed";
+      "errorTitle": "MCP failed";
       "mcpExplainer": "MCP servers add external services to the chat that the AI can work with.";
       "namePlaceholder": "Display name";
       "needsReauth": "Needs reconnect";

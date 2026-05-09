@@ -1,20 +1,31 @@
 import * as v from "valibot";
 
 const CHANNEL_NAME = "mcp-oauth";
+const MESSAGE_KIND = "stll.mcp-oauth";
 
-export const mcpOAuthOutcomeSchema = v.union([
+// Wire schema carries a `kind` discriminator so the global
+// `window.message` listener on the opener page can't pick up
+// unrelated messages that happen to share `status`. Callers only
+// see the public `McpOAuthOutcome` (without `kind`).
+const mcpOAuthMessageSchema = v.union([
   v.strictObject({
+    kind: v.literal(MESSAGE_KIND),
     status: v.literal("connected"),
   }),
   v.strictObject({
+    kind: v.literal(MESSAGE_KIND),
     status: v.literal("error"),
     reason: v.string(),
   }),
 ]);
 
-export type McpOAuthOutcome = v.InferOutput<typeof mcpOAuthOutcomeSchema>;
+export type McpOAuthOutcome =
+  | { status: "connected" }
+  | { status: "error"; reason: string };
 
 export function broadcastMcpOAuthOutcome(outcome: McpOAuthOutcome): void {
+  const message = { kind: MESSAGE_KIND, ...outcome };
+
   // Prefer BroadcastChannel (covers same-origin tabs even when COOP
   // severs `window.opener`). Fall back to `opener.postMessage` only
   // when BroadcastChannel is unavailable, so the subscriber on the
@@ -25,7 +36,7 @@ export function broadcastMcpOAuthOutcome(outcome: McpOAuthOutcome): void {
     // confined to the same origin by the browser's BroadcastChannel
     // contract.
     // eslint-disable-next-line unicorn/require-post-message-target-origin
-    channel.postMessage(outcome);
+    channel.postMessage(message);
     channel.close();
     return;
   }
@@ -36,7 +47,7 @@ export function broadcastMcpOAuthOutcome(outcome: McpOAuthOutcome): void {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   const opener = window.opener as Pick<Window, "postMessage"> | null;
   if (opener !== null) {
-    opener.postMessage(outcome, window.location.origin);
+    opener.postMessage(message, window.location.origin);
   }
 }
 
@@ -44,10 +55,15 @@ export function subscribeToMcpOAuthOutcome(
   handler: (outcome: McpOAuthOutcome) => void,
 ): () => void {
   const onMessage = (event: MessageEvent) => {
-    const result = v.safeParse(mcpOAuthOutcomeSchema, event.data);
-    if (result.success) {
-      handler(result.output);
+    const result = v.safeParse(mcpOAuthMessageSchema, event.data);
+    if (!result.success) {
+      return;
     }
+    if (result.output.status === "connected") {
+      handler({ status: "connected" });
+      return;
+    }
+    handler({ status: "error", reason: result.output.reason });
   };
 
   const channel =

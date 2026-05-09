@@ -3,14 +3,10 @@ import { sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { organizationSettings } from "@/api/db/schema";
-import { getNativeToolCatalog } from "@/api/handlers/mcp-connectors/catalog-metadata";
+import { NATIVE_TOOL_SLUGS } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-const NATIVE_TOOL_SLUGS = getNativeToolCatalog({
-  practiceJurisdictions: [],
-}).map((tool) => tool.slug);
 
 const routeParams = t.Object({
   slug: t.String({ minLength: 1, maxLength: 64 }),
@@ -35,24 +31,24 @@ const updateNativeTool = createSafeRootHandler(
       );
     }
 
-    const existing = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.organizationSettings.findFirst({
-          where: {
-            organizationId: { eq: session.activeOrganizationId },
-          },
-          columns: { disabledNativeTools: true },
-        }),
-      ),
-    );
-
-    const current = new Set(existing?.disabledNativeTools);
-    if (body.enabled) {
-      current.delete(params.slug);
-    } else {
-      current.add(params.slug);
-    }
-    const next = [...current];
+    // Atomic upsert: the INSERT carries the post-mutation value as a
+    // one- or zero-element array; the ON CONFLICT branch derives the
+    // next list from the row's current value via JSONB operators
+    // under PG's row lock, so concurrent toggles can't overwrite
+    // each other (no read-modify-write on the application side).
+    const slug = params.slug;
+    const insertValue = body.enabled
+      ? sql`'[]'::jsonb`
+      : sql`jsonb_build_array(${slug}::text)`;
+    const updateExpr = body.enabled
+      ? sql`coalesce("organization_settings"."disabled_native_tools" - ${slug}::text, '[]'::jsonb)`
+      : sql`(
+          select coalesce(jsonb_agg(distinct value), '[]'::jsonb)
+          from jsonb_array_elements_text(
+            coalesce("organization_settings"."disabled_native_tools", '[]'::jsonb)
+            || jsonb_build_array(${slug}::text)
+          ) as value
+        )`;
 
     yield* Result.await(
       safeDb((tx) =>
@@ -60,12 +56,12 @@ const updateNativeTool = createSafeRootHandler(
           .insert(organizationSettings)
           .values({
             organizationId: session.activeOrganizationId,
-            disabledNativeTools: next,
+            disabledNativeTools: insertValue,
           })
           .onConflictDoUpdate({
             target: organizationSettings.organizationId,
             set: {
-              disabledNativeTools: sql`excluded.disabled_native_tools`,
+              disabledNativeTools: updateExpr,
               updatedAt: new Date(),
             },
           })
@@ -73,12 +69,8 @@ const updateNativeTool = createSafeRootHandler(
       ),
     );
 
-    return Result.ok({ slug: params.slug, enabled: body.enabled });
+    return Result.ok({ slug, enabled: body.enabled });
   },
 );
 
 export default updateNativeTool;
-
-// Re-export the slug list for the chat-tools gate to import without
-// pulling the rest of the handler module.
-export const knownNativeToolSlugs = NATIVE_TOOL_SLUGS;

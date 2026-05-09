@@ -34,6 +34,11 @@ const NATIVE_TOOL_CATALOG = [
   },
 ] satisfies NativeToolCatalogItem[];
 
+/** Authoritative slug list — independent of jurisdiction filtering. */
+export const NATIVE_TOOL_SLUGS: readonly string[] = NATIVE_TOOL_CATALOG.map(
+  (tool) => tool.slug,
+);
+
 export const mcpConnectorCatalogMetadata = (
   _connector: McpConnectorCatalogSource,
 ): McpConnectorCatalogMetadata => ({ recommendedJurisdictions: [] });

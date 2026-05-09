@@ -225,7 +225,12 @@ function ConnectorSection({
       <div className="grid gap-3 xl:grid-cols-2">
         {addServerCard}
         {nativeTools.map((tool) => (
-          <NativeToolCard key={tool.slug} onChanged={onChanged} tool={tool} />
+          <NativeToolCard
+            key={tool.slug}
+            canToggle={userCanManageCustomConnectors}
+            onChanged={onChanged}
+            tool={tool}
+          />
         ))}
         {connectors.map((connector) => (
           <ConnectorCard
@@ -535,9 +540,11 @@ function ConnectorCard({
 
 function NativeToolCard({
   tool,
+  canToggle,
   onChanged,
 }: {
   tool: NativeToolCatalogItem;
+  canToggle: boolean;
   onChanged: () => void;
 }) {
   const t = useTranslations();
@@ -590,11 +597,26 @@ function NativeToolCard({
         </div>
         <div className="text-muted-foreground truncate text-xs">{tool.url}</div>
       </div>
-      <ChatUseSwitchButton
-        busy={busy}
-        enabled={tool.enabled}
-        onToggle={() => void setEnabled(!tool.enabled)}
-      />
+      {canToggle ? (
+        <ChatUseSwitchButton
+          busy={busy}
+          enabled={tool.enabled}
+          onToggle={() => void setEnabled(!tool.enabled)}
+        />
+      ) : (
+        <span
+          className={cn(
+            "rounded-md px-2 py-0.5 text-xs font-medium",
+            tool.enabled
+              ? "bg-success/10 text-success"
+              : "bg-muted text-muted-foreground",
+          )}
+        >
+          {tool.enabled
+            ? t("knowledge.mcp.useInChat")
+            : t("knowledge.mcp.disabled")}
+        </span>
+      )}
     </section>
   );
 }
