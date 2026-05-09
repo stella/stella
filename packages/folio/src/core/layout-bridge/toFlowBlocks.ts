@@ -1882,47 +1882,55 @@ export function toFlowBlocks(
 function mergeRunInParagraphs(blocks: FlowBlock[]): FlowBlock[] {
   const out: FlowBlock[] = [];
   for (let i = 0; i < blocks.length; i++) {
-    const current = blocks[i];
+    let current = blocks[i];
     if (!current) {
       continue;
     }
-    if (
-      current.kind === "paragraph" &&
-      (current as ParagraphBlock).attrs?.runInWithNext
+    // Chain merge: keep folding consecutive paragraphs while the
+    // *current* (possibly already-merged) block carries
+    // `runInWithNext` and the next block is also a paragraph. Per
+    // ECMA-376 §17.3.1.32 and Word's behaviour, a sequence of
+    // `<w:specVanish/>` paragraphs flows inline through the first
+    // body paragraph that lacks it (Codex PR #258 review).
+    while (
+      current?.kind === "paragraph" &&
+      (current as ParagraphBlock).attrs?.runInWithNext &&
+      i + 1 < blocks.length
     ) {
       const next = blocks[i + 1];
-      if (next && next.kind === "paragraph") {
-        const a = current as ParagraphBlock;
-        const b = next as ParagraphBlock;
-        const mergedAttrs: ParagraphAttrs = { ...a.attrs };
-        // Heading typically has no spaceAfter; the body's spaceAfter
-        // governs the merged paragraph's trailing gap.
-        if (b.attrs?.spacing?.after !== undefined) {
-          mergedAttrs.spacing = {
-            ...mergedAttrs.spacing,
-            after: b.attrs.spacing.after,
-          };
-        }
-        // Drop the run-in flag unless the second para is also
-        // specVanish (rare); then a future iteration would chain.
-        if (b.attrs?.runInWithNext) {
-          mergedAttrs.runInWithNext = true;
-        } else {
-          delete mergedAttrs.runInWithNext;
-        }
-        const merged: ParagraphBlock = {
-          ...a,
-          runs: [...a.runs, ...b.runs],
-          attrs: mergedAttrs,
-        };
-        const mergedPmEnd = b.pmEnd ?? a.pmEnd;
-        if (mergedPmEnd !== undefined) {
-          merged.pmEnd = mergedPmEnd;
-        }
-        out.push(merged);
-        i += 1; // consumed `next`
-        continue;
+      if (!next || next.kind !== "paragraph") {
+        break;
       }
+      const a = current as ParagraphBlock;
+      const b = next as ParagraphBlock;
+      const mergedAttrs: ParagraphAttrs = { ...a.attrs };
+      // Heading typically has no spaceAfter; the body's spaceAfter
+      // governs the merged paragraph's trailing gap.
+      if (b.attrs?.spacing?.after !== undefined) {
+        mergedAttrs.spacing = {
+          ...mergedAttrs.spacing,
+          after: b.attrs.spacing.after,
+        };
+      }
+      // Carry forward `runInWithNext` only if the *consumed* second
+      // paragraph itself was specVanish — the while condition above
+      // then triggers another fold against the paragraph after it.
+      if (b.attrs?.runInWithNext) {
+        mergedAttrs.runInWithNext = true;
+      } else {
+        delete mergedAttrs.runInWithNext;
+      }
+      const merged: ParagraphBlock = {
+        ...a,
+        runs: [...a.runs, ...b.runs],
+        attrs: mergedAttrs,
+      };
+      const mergedPmEnd = b.pmEnd ?? a.pmEnd;
+      if (mergedPmEnd !== undefined) {
+        merged.pmEnd = mergedPmEnd;
+      }
+      current = merged;
+      i += 1; // consumed `next`; fold further if the merged block still has the flag
     }
     out.push(current);
   }
