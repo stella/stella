@@ -36,7 +36,7 @@ import type {
 // oxlint-disable-next-line import/no-cycle
 import { serializeRun, serializeTextFormatting } from "./runSerializer";
 import { serializeSectionProperties } from "./sectionPropertiesSerializer";
-import { escapeXml } from "./xmlUtils";
+import { escapeXml, intAttr } from "./xmlUtils";
 
 // ============================================================================
 // BORDER SERIALIZATION
@@ -56,11 +56,11 @@ function serializeBorder(
   const attrs: string[] = [`w:val="${border.style}"`];
 
   if (border.size !== undefined) {
-    attrs.push(`w:sz="${border.size}"`);
+    attrs.push(`w:sz="${intAttr(border.size)}"`);
   }
 
   if (border.space !== undefined) {
-    attrs.push(`w:space="${border.space}"`);
+    attrs.push(`w:space="${intAttr(border.space)}"`);
   }
 
   // Color
@@ -226,7 +226,7 @@ function serializeTabStops(tabs: TabStop[] | undefined): string {
   const tabElements = tabs.map((tab) => {
     const attrs: string[] = [
       `w:val="${tab.alignment}"`,
-      `w:pos="${tab.position}"`,
+      `w:pos="${intAttr(tab.position)}"`,
     ];
 
     if (tab.leader && tab.leader !== "none") {
@@ -250,15 +250,15 @@ function serializeSpacing(formatting: ParagraphFormatting): string {
   const attrs: string[] = [];
 
   if (formatting.spaceBefore !== undefined) {
-    attrs.push(`w:before="${formatting.spaceBefore}"`);
+    attrs.push(`w:before="${intAttr(formatting.spaceBefore)}"`);
   }
 
   if (formatting.spaceAfter !== undefined) {
-    attrs.push(`w:after="${formatting.spaceAfter}"`);
+    attrs.push(`w:after="${intAttr(formatting.spaceAfter)}"`);
   }
 
   if (formatting.lineSpacing !== undefined) {
-    attrs.push(`w:line="${formatting.lineSpacing}"`);
+    attrs.push(`w:line="${intAttr(formatting.lineSpacing)}"`);
   }
 
   if (formatting.lineSpacingRule) {
@@ -291,19 +291,21 @@ function serializeIndentation(formatting: ParagraphFormatting): string {
   const attrs: string[] = [];
 
   if (formatting.indentLeft !== undefined) {
-    attrs.push(`w:left="${formatting.indentLeft}"`);
+    attrs.push(`w:left="${intAttr(formatting.indentLeft)}"`);
   }
 
   if (formatting.indentRight !== undefined) {
-    attrs.push(`w:right="${formatting.indentRight}"`);
+    attrs.push(`w:right="${intAttr(formatting.indentRight)}"`);
   }
 
   if (formatting.indentFirstLine !== undefined) {
     if (formatting.hangingIndent) {
       // Hanging indent is stored as positive value but uses w:hanging attribute
-      attrs.push(`w:hanging="${Math.abs(formatting.indentFirstLine)}"`);
+      attrs.push(
+        `w:hanging="${intAttr(Math.abs(formatting.indentFirstLine))}"`,
+      );
     } else if (formatting.indentFirstLine !== 0) {
-      attrs.push(`w:firstLine="${formatting.indentFirstLine}"`);
+      attrs.push(`w:firstLine="${intAttr(formatting.indentFirstLine)}"`);
     }
   }
 
@@ -329,11 +331,11 @@ function serializeNumbering(numPr: ParagraphFormatting["numPr"]): string {
   const parts: string[] = [];
 
   if (numPr.ilvl !== undefined) {
-    parts.push(`<w:ilvl w:val="${numPr.ilvl}"/>`);
+    parts.push(`<w:ilvl w:val="${intAttr(numPr.ilvl)}"/>`);
   }
 
   if (numPr.numId !== undefined) {
-    parts.push(`<w:numId w:val="${numPr.numId}"/>`);
+    parts.push(`<w:numId w:val="${intAttr(numPr.numId)}"/>`);
   }
 
   if (parts.length === 0) {
@@ -358,11 +360,11 @@ function serializeFrameProperties(frame: ParagraphFormatting["frame"]): string {
   const attrs: string[] = [];
 
   if (frame.width !== undefined) {
-    attrs.push(`w:w="${frame.width}"`);
+    attrs.push(`w:w="${intAttr(frame.width)}"`);
   }
 
   if (frame.height !== undefined) {
-    attrs.push(`w:h="${frame.height}"`);
+    attrs.push(`w:h="${intAttr(frame.height)}"`);
   }
 
   if (frame.hAnchor) {
@@ -511,10 +513,21 @@ export function serializeParagraphFormatting(
     }
 
     // Run properties (default run formatting for paragraph)
-    if (formatting.runProperties) {
-      const rPrXml = serializeTextFormatting(formatting.runProperties);
-      if (rPrXml) {
-        parts.push(rPrXml);
+    // Round-trip `<w:specVanish/>` (run-in heading marker, ECMA-376
+    // §17.3.1.32) by injecting it into the paragraph mark's rPr.
+    // The parser populates `formatting.runInWithNext` from this
+    // element; the layout engine consumes it via toFlowBlocks'
+    // run-in merge. Without serializing it back, saving a doc
+    // through Folio loses the soft paragraph break and the heading
+    // becomes a normal separate paragraph in Word.
+    if (formatting.runProperties || formatting.runInWithNext) {
+      const innerRPr = formatting.runProperties
+        ? extractRPrInner(serializeTextFormatting(formatting.runProperties))
+        : "";
+      const specVanishXml = formatting.runInWithNext ? "<w:specVanish/>" : "";
+      const fullInner = `${innerRPr}${specVanishXml}`;
+      if (fullInner.length > 0) {
+        parts.push(`<w:rPr>${fullInner}</w:rPr>`);
       }
     }
   }
@@ -539,6 +552,18 @@ function extractPPrInner(pPrXml: string): string {
     return "";
   }
   return pPrXml.slice("<w:pPr>".length, -"</w:pPr>".length);
+}
+
+/**
+ * Strip the outer `<w:rPr>...</w:rPr>` wrapper so callers can splice
+ * additional rPr children (e.g. `<w:specVanish/>`) and re-emit a
+ * single rPr element.
+ */
+function extractRPrInner(rPrXml: string): string {
+  if (!rPrXml.startsWith("<w:rPr>") || !rPrXml.endsWith("</w:rPr>")) {
+    return "";
+  }
+  return rPrXml.slice("<w:rPr>".length, -"</w:rPr>".length);
 }
 
 function serializeParagraphPropertyChange(

@@ -424,6 +424,9 @@ function paragraphFormattingToAttrs(
       "contextualSpacing",
       formatting?.contextualSpacing ?? stylePpr?.contextualSpacing,
     );
+    // Run-in heading (`<w:specVanish/>` on the paragraph mark) — see
+    // ParagraphAttrs.runInWithNext.
+    set("runInWithNext", formatting?.runInWithNext ?? stylePpr?.runInWithNext);
 
     // Outline level (for TOC)
     set("outlineLevel", formatting?.outlineLevel ?? stylePpr?.outlineLevel);
@@ -461,6 +464,7 @@ function paragraphFormattingToAttrs(
     set("pageBreakBefore", formatting?.pageBreakBefore);
     set("keepNext", formatting?.keepNext);
     set("keepLines", formatting?.keepLines);
+    set("runInWithNext", formatting?.runInWithNext);
 
     // Outline level
     set("outlineLevel", formatting?.outlineLevel);
@@ -1605,14 +1609,26 @@ function convertImage(image: Image): PMNode {
     cssFloat = "none";
   }
 
-  // Determine display mode for CSS
+  // Determine display mode for CSS.
+  //
+  // - inline           → inline run, participates in flow
+  // - topAndBottom     → block image, takes its own line
+  // - behind / inFront → float (anchored at absolute coords; the page-level
+  //   layer paints them, so they must be lifted out of the paragraph flow
+  //   even though they don't carve a text-wrap exclusion zone)
+  // - square / tight / through with cssFloat → float
+  // - everything else (centered etc.) → block
   let displayMode: "inline" | "block" | "float" = "inline";
   if (wrapType === "inline") {
     displayMode = "inline";
+  } else if (wrapType === "topAndBottom") {
+    displayMode = "block";
+  } else if (wrapType === "behind" || wrapType === "inFront") {
+    displayMode = "float";
   } else if (cssFloat && cssFloat !== "none") {
     displayMode = "float";
   } else {
-    displayMode = "block"; // TopAndBottom or centered
+    displayMode = "block";
   }
 
   // Build transform string if needed (rotation, flip)

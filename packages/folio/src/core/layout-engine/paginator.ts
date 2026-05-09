@@ -8,6 +8,14 @@
 import type { Page, PageMargins, Fragment, ColumnLayout } from "./types";
 
 /**
+ * Height of the footnote separator (a 0.5 px divider line + 6 px top
+ * + 6 px bottom margin = 12.5 px, rounded up). Reserved once per
+ * footnote-bearing page above the fn content. Must match the painter
+ * (`renderFootnoteArea`).
+ */
+export const FOOTNOTE_SEPARATOR_HEIGHT = 13;
+
+/**
  * Current state of a page being laid out.
  */
 export type PageState = {
@@ -19,8 +27,16 @@ export type PageState = {
   columnIndex: number;
   /** Top margin of content area. */
   topMargin: number;
-  /** Bottom boundary of content area (page height - bottom margin). */
+  /**
+   * Bottom boundary of usable body content area.
+   * Equals `pageBottom - footnoteHeight`. Recomputed when footnote
+   * demand grows (a line carrying a fn ref is placed on this page).
+   */
   contentBottom: number;
+  /** Raw bottom of content area (page height - bottom margin); excludes fn area. */
+  rawContentBottom: number;
+  /** Total height reserved for footnotes on this page (grows as refs are placed). */
+  footnoteHeight: number;
   /** Accumulated trailing spacing (space after previous block). */
   trailingSpacing: number;
 };
@@ -33,6 +49,13 @@ export type PaginatorOptions = {
   pageSize: { w: number; h: number };
   /** Page margins. */
   margins: PageMargins;
+  /**
+   * Margins applied only to the very first page (page 1) of the paginator.
+   * Used when a `<w:titlePg/>`-enabled section needs different margins for
+   * its title page (typically extended top margin to clear an overflowing
+   * first-page header) vs. its body pages. Pages 2+ use `margins`.
+   */
+  firstPageMargins?: PageMargins;
   /** Column configuration (optional). */
   columns?: ColumnLayout;
   /** Per-page footnote reserved heights (pageNumber → height in pixels). */
@@ -159,10 +182,24 @@ export function createPaginator(options: PaginatorOptions) {
     }
 
     const pageNumber = pages.length + 1;
-    const topMargin = margins.top;
-    const contentBottom = getContentBottom();
+    // Page 1 of the document may use first-page margins (extended top to
+    // clear an overflowing first-page header on a titlePg section) while
+    // pages 2+ use the regular section margins. Without this distinction
+    // every page in the section would inherit page 1's title-page top
+    // margin, leaving large empty space at the top of pages 2+ on
+    // first-page-header docs (NVCA-style templates).
+    const pageMargins =
+      pageNumber === 1 && options.firstPageMargins
+        ? { ...options.firstPageMargins }
+        : { ...margins };
+    const topMargin = pageMargins.top;
+    const contentBottom = pageSize.h - pageMargins.bottom;
 
-    // Reduce content bottom by footnote reserved height for this page
+    // Reduce content bottom by footnote reserved height for this page.
+    // Used as a static reservation only when the layout engine isn't
+    // tracking footnote demand dynamically per line. The dynamic path
+    // (see `addFootnoteHeight`) starts at zero and grows as fn-ref-
+    // carrying lines are placed.
     const footnoteHeight =
       options.footnoteReservedHeights?.get(pageNumber) ?? 0;
     const pageContentBottom = contentBottom - footnoteHeight;
@@ -170,7 +207,7 @@ export function createPaginator(options: PaginatorOptions) {
     const page: Page = {
       number: pageNumber,
       fragments: [],
-      margins: { ...margins },
+      margins: pageMargins,
       size: { ...pageSize },
       ...(footnoteHeight > 0 ? { footnoteReservedHeight: footnoteHeight } : {}),
       // Set initial columns; may be overwritten by updateColumns() for continuous section breaks
@@ -183,6 +220,8 @@ export function createPaginator(options: PaginatorOptions) {
       columnIndex: 0,
       topMargin,
       contentBottom: pageContentBottom,
+      rawContentBottom: contentBottom,
+      footnoteHeight,
       trailingSpacing: 0,
     };
 
@@ -317,6 +356,55 @@ export function createPaginator(options: PaginatorOptions) {
   }
 
   /**
+   * Reserve additional footnote area on the current page.
+   *
+   * Called by the layout engine each time a body line carrying a
+   * footnote ref is placed: the page must shrink its body area by
+   * the fn content's height so the fn can render below without
+   * overflowing into the footer. Updates both `state.contentBottom`
+   * (so subsequent line-fitting checks see the reduced space) and
+   * `state.page.footnoteReservedHeight` (so the painter draws the fn
+   * area at the correct top).
+   *
+   * On the first fn added to a page, additionally reserves
+   * `FOOTNOTE_SEPARATOR_HEIGHT` for the divider line + its margins so
+   * the separator stays inside the reserved slot.
+   *
+   * Caller is responsible for ensuring the line itself fits *with*
+   * `additionalHeight` already accounted for; if the line should have
+   * advanced to the next page, the engine must check that *before*
+   * committing the line + reservation.
+   */
+  function addFootnoteHeight(
+    additionalHeight: number,
+    footnoteIds?: number[],
+  ): void {
+    if (!Number.isFinite(additionalHeight) || additionalHeight <= 0) {
+      return;
+    }
+    const state = getCurrentState();
+    const separatorOverhead =
+      state.footnoteHeight === 0 ? FOOTNOTE_SEPARATOR_HEIGHT : 0;
+    state.footnoteHeight += additionalHeight + separatorOverhead;
+    state.contentBottom = state.rawContentBottom - state.footnoteHeight;
+    state.page.footnoteReservedHeight = state.footnoteHeight;
+    // Record which fn IDs landed on *this* page. Driven by the
+    // line-level placement in the engine (not by post-layout
+    // pmRange mapping) so a fn ref in a continuation fragment of a
+    // split paragraph is correctly attributed to the page where the
+    // ref-bearing line actually lives — Codex PR #258 review.
+    if (footnoteIds && footnoteIds.length > 0) {
+      const existing = state.page.footnoteIds ?? [];
+      for (const id of footnoteIds) {
+        if (!existing.includes(id)) {
+          existing.push(id);
+        }
+      }
+      state.page.footnoteIds = existing;
+    }
+  }
+
+  /**
    * Force a page break - move to a new page.
    */
   function forcePageBreak(breakOptions: ForcePageBreakOptions = {}): PageState {
@@ -430,6 +518,8 @@ export function createPaginator(options: PaginatorOptions) {
     ensureFits,
     /** Add a fragment to current page. */
     addFragment,
+    /** Reserve additional footnote area on the current page. */
+    addFootnoteHeight,
     /** Force a page break. */
     forcePageBreak,
     /** Force a column break. */

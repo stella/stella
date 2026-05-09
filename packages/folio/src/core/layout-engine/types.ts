@@ -247,12 +247,28 @@ export type ListNumPr = {
 export type ParagraphAttrs = {
   alignment?: "left" | "center" | "right" | "justify";
   spacing?: ParagraphSpacing;
+  /**
+   * Tracks which `spacing` sides came from inline (`<w:pPr><w:spacing>`)
+   * formatting versus inherited via paragraph style. Word collapses
+   * style-inherited spacing on empty paragraphs (only direct formatting
+   * survives), so the layout engine consults this flag in
+   * `getSpacingBefore`/`getSpacingAfter`. Both sides default to false (style
+   * inheritance assumed) when the field is absent.
+   */
+  spacingExplicit?: { before?: boolean; after?: boolean };
   indent?: ParagraphIndent;
   keepNext?: boolean;
   keepLines?: boolean;
   pageBreakBefore?: boolean;
   styleId?: string;
   contextualSpacing?: boolean;
+  /**
+   * Run-in heading: paragraph mark carries `<w:specVanish/>` and the
+   * next paragraph should flow inline on the same line. The layout
+   * stage merges the next paragraph's runs into this paragraph's
+   * fragment (keeping pmStart/pmEnd intact for editing).
+   */
+  runInWithNext?: boolean;
   /** Right-to-left paragraph direction */
   bidi?: boolean;
   borders?: ParagraphBorders;
@@ -809,6 +825,13 @@ export type LayoutOptions = {
   pageSize: { w: number; h: number };
   /** Initial page margins. */
   margins: PageMargins;
+  /**
+   * Margins applied only to page 1 (the title page) when the first
+   * section has `<w:titlePg/>`. Used to extend the top margin for an
+   * overflowing first-page header without forcing pages 2+ to inherit the
+   * same extension.
+   */
+  firstPageMargins?: PageMargins;
   /** Body-level final section page size. */
   finalPageSize?: { w: number; h: number };
   /** Body-level final section margins. */
@@ -829,6 +852,18 @@ export type LayoutOptions = {
   evenAndOddHeaders?: boolean;
   /** Per-page footnote reserved heights (pageNumber → height in pixels). */
   footnoteReservedHeights?: Map<number, number>;
+  /**
+   * Footnote content heights keyed by internal footnote id (the OOXML
+   * `<w:footnoteReference w:id>`). When provided, the layout engine
+   * tracks footnote demand per body line: each line carrying a fn ref
+   * grows its page's reservation by that fn's height before the next
+   * line is fitted. This single-pass approach avoids the static-
+   * reservation + iterative-convergence loop that produced oscillation
+   * (and either body-overflow into the footer or large empty gaps
+   * above the fn area) on documents with multiple long footnotes per
+   * page.
+   */
+  footnoteHeightById?: Map<number, number>;
   /** Section break type for the body-level (final) section (for section transition logic). */
   bodyBreakType?: "continuous" | "nextPage" | "evenPage" | "oddPage";
 };

@@ -6,6 +6,7 @@ import type {
   HeaderReference,
   SectionProperties,
 } from "../../types/document";
+import { intAttr } from "./xmlUtils";
 
 function serializeBorder(
   border: BorderSpec | undefined,
@@ -18,10 +19,10 @@ function serializeBorder(
   const attrs: string[] = [`w:val="${border.style}"`];
 
   if (border.size !== undefined) {
-    attrs.push(`w:sz="${border.size}"`);
+    attrs.push(`w:sz="${intAttr(border.size)}"`);
   }
   if (border.space !== undefined) {
-    attrs.push(`w:space="${border.space}"`);
+    attrs.push(`w:space="${intAttr(border.space)}"`);
   }
   if (border.color) {
     if (border.color.auto) {
@@ -70,7 +71,7 @@ function serializeFootnoteProperties(
     parts.push(`<w:numFmt w:val="${props.numFmt}"/>`);
   }
   if (props.numStart !== undefined) {
-    parts.push(`<w:numStart w:val="${props.numStart}"/>`);
+    parts.push(`<w:numStart w:val="${intAttr(props.numStart)}"/>`);
   }
   if (props.numRestart) {
     parts.push(`<w:numRestart w:val="${props.numRestart}"/>`);
@@ -96,7 +97,7 @@ function serializeEndnoteProperties(
     parts.push(`<w:numFmt w:val="${props.numFmt}"/>`);
   }
   if (props.numStart !== undefined) {
-    parts.push(`<w:numStart w:val="${props.numStart}"/>`);
+    parts.push(`<w:numStart w:val="${intAttr(props.numStart)}"/>`);
   }
   if (props.numRestart) {
     parts.push(`<w:numRestart w:val="${props.numRestart}"/>`);
@@ -108,10 +109,10 @@ function serializeEndnoteProperties(
 function serializePageSize(props: SectionProperties): string {
   const attrs: string[] = [];
   if (props.pageWidth !== undefined) {
-    attrs.push(`w:w="${props.pageWidth}"`);
+    attrs.push(`w:w="${intAttr(props.pageWidth)}"`);
   }
   if (props.pageHeight !== undefined) {
-    attrs.push(`w:h="${props.pageHeight}"`);
+    attrs.push(`w:h="${intAttr(props.pageHeight)}"`);
   }
   if (props.orientation === "landscape") {
     attrs.push('w:orient="landscape"');
@@ -122,25 +123,25 @@ function serializePageSize(props: SectionProperties): string {
 function serializePageMargins(props: SectionProperties): string {
   const attrs: string[] = [];
   if (props.marginTop !== undefined) {
-    attrs.push(`w:top="${props.marginTop}"`);
+    attrs.push(`w:top="${intAttr(props.marginTop)}"`);
   }
   if (props.marginRight !== undefined) {
-    attrs.push(`w:right="${props.marginRight}"`);
+    attrs.push(`w:right="${intAttr(props.marginRight)}"`);
   }
   if (props.marginBottom !== undefined) {
-    attrs.push(`w:bottom="${props.marginBottom}"`);
+    attrs.push(`w:bottom="${intAttr(props.marginBottom)}"`);
   }
   if (props.marginLeft !== undefined) {
-    attrs.push(`w:left="${props.marginLeft}"`);
+    attrs.push(`w:left="${intAttr(props.marginLeft)}"`);
   }
   if (props.headerDistance !== undefined) {
-    attrs.push(`w:header="${props.headerDistance}"`);
+    attrs.push(`w:header="${intAttr(props.headerDistance)}"`);
   }
   if (props.footerDistance !== undefined) {
-    attrs.push(`w:footer="${props.footerDistance}"`);
+    attrs.push(`w:footer="${intAttr(props.footerDistance)}"`);
   }
   if (props.gutter !== undefined) {
-    attrs.push(`w:gutter="${props.gutter}"`);
+    attrs.push(`w:gutter="${intAttr(props.gutter)}"`);
   }
   return attrs.length > 0 ? `<w:pgMar ${attrs.join(" ")}/>` : "";
 }
@@ -148,10 +149,10 @@ function serializePageMargins(props: SectionProperties): string {
 function serializePaperSource(props: SectionProperties): string {
   const attrs: string[] = [];
   if (props.paperSrcFirst !== undefined) {
-    attrs.push(`w:first="${props.paperSrcFirst}"`);
+    attrs.push(`w:first="${intAttr(props.paperSrcFirst)}"`);
   }
   if (props.paperSrcOther !== undefined) {
-    attrs.push(`w:other="${props.paperSrcOther}"`);
+    attrs.push(`w:other="${intAttr(props.paperSrcOther)}"`);
   }
   return attrs.length > 0 ? `<w:paperSrc ${attrs.join(" ")}/>` : "";
 }
@@ -163,10 +164,10 @@ function serializeColumns(props: SectionProperties): string {
 
   const attrs: string[] = [];
   if (props.columnCount !== undefined && props.columnCount > 1) {
-    attrs.push(`w:num="${props.columnCount}"`);
+    attrs.push(`w:num="${intAttr(props.columnCount)}"`);
   }
   if (props.columnSpace !== undefined) {
-    attrs.push(`w:space="${props.columnSpace}"`);
+    attrs.push(`w:space="${intAttr(props.columnSpace)}"`);
   }
   if (props.equalWidth !== undefined) {
     attrs.push(`w:equalWidth="${props.equalWidth ? "1" : "0"}"`);
@@ -179,10 +180,10 @@ function serializeColumns(props: SectionProperties): string {
     .map((col) => {
       const colAttrs: string[] = [];
       if (col.width !== undefined) {
-        colAttrs.push(`w:w="${col.width}"`);
+        colAttrs.push(`w:w="${intAttr(col.width)}"`);
       }
       if (col.space !== undefined) {
-        colAttrs.push(`w:space="${col.space}"`);
+        colAttrs.push(`w:space="${intAttr(col.space)}"`);
       }
       return `<w:col ${colAttrs.join(" ")}/>`;
     })
@@ -204,13 +205,13 @@ function serializeLineNumbers(props: SectionProperties): string {
   const attrs: string[] = [];
   const ln = props.lineNumbers;
   if (ln.countBy !== undefined) {
-    attrs.push(`w:countBy="${ln.countBy}"`);
+    attrs.push(`w:countBy="${intAttr(ln.countBy)}"`);
   }
   if (ln.start !== undefined) {
-    attrs.push(`w:start="${ln.start}"`);
+    attrs.push(`w:start="${intAttr(ln.start)}"`);
   }
   if (ln.distance !== undefined) {
-    attrs.push(`w:distance="${ln.distance}"`);
+    attrs.push(`w:distance="${intAttr(ln.distance)}"`);
   }
   if (ln.restart) {
     attrs.push(`w:restart="${ln.restart}"`);
@@ -267,10 +268,10 @@ function serializeDocGrid(props: SectionProperties): string {
     attrs.push(`w:type="${dg.type}"`);
   }
   if (dg.linePitch !== undefined) {
-    attrs.push(`w:linePitch="${dg.linePitch}"`);
+    attrs.push(`w:linePitch="${intAttr(dg.linePitch)}"`);
   }
   if (dg.charSpace !== undefined) {
-    attrs.push(`w:charSpace="${dg.charSpace}"`);
+    attrs.push(`w:charSpace="${intAttr(dg.charSpace)}"`);
   }
   return attrs.length > 0 ? `<w:docGrid ${attrs.join(" ")}/>` : "";
 }

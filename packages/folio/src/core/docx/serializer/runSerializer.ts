@@ -37,7 +37,7 @@ import type {
 } from "../../types/document";
 // oxlint-disable-next-line import/no-cycle
 import { serializeParagraph } from "./paragraphSerializer";
-import { escapeXml } from "./xmlUtils";
+import { escapeXml, intAttr } from "./xmlUtils";
 
 // ============================================================================
 // CONSTANTS
@@ -332,31 +332,31 @@ export function serializeTextFormatting(
 
   // Spacing
   if (formatting.spacing !== undefined) {
-    parts.push(`<w:spacing w:val="${formatting.spacing}"/>`);
+    parts.push(`<w:spacing w:val="${intAttr(formatting.spacing)}"/>`);
   }
 
   // Scale (w:w)
   if (formatting.scale !== undefined) {
-    parts.push(`<w:w w:val="${formatting.scale}"/>`);
+    parts.push(`<w:w w:val="${intAttr(formatting.scale)}"/>`);
   }
 
   // Kerning
   if (formatting.kerning !== undefined) {
-    parts.push(`<w:kern w:val="${formatting.kerning}"/>`);
+    parts.push(`<w:kern w:val="${intAttr(formatting.kerning)}"/>`);
   }
 
   // Position
   if (formatting.position !== undefined) {
-    parts.push(`<w:position w:val="${formatting.position}"/>`);
+    parts.push(`<w:position w:val="${intAttr(formatting.position)}"/>`);
   }
 
   // Font size
   if (formatting.fontSize !== undefined) {
-    parts.push(`<w:sz w:val="${formatting.fontSize}"/>`);
+    parts.push(`<w:sz w:val="${intAttr(formatting.fontSize)}"/>`);
   }
 
   if (formatting.fontSizeCs !== undefined) {
-    parts.push(`<w:szCs w:val="${formatting.fontSizeCs}"/>`);
+    parts.push(`<w:szCs w:val="${intAttr(formatting.fontSizeCs)}"/>`);
   }
 
   // Highlight — emit valid OOXML named colors via w:highlight,
@@ -642,7 +642,7 @@ function serializeFill(fill: ShapeFill | undefined): string {
       .join("");
     const direction =
       g.type === "linear"
-        ? `<a:lin ang="${(g.angle || 0) * 60_000}" scaled="1"/>`
+        ? `<a:lin ang="${(g.angle ?? 0) * 60_000}" scaled="1"/>`
         : "";
     return `<a:gradFill><a:gsLst>${stops}</a:gsLst>${direction}</a:gradFill>`;
   }
@@ -698,7 +698,7 @@ function serializePosition(pos: ImagePosition): string {
   if (h.alignment) {
     parts.push(`<wp:align>${h.alignment}</wp:align>`);
   } else {
-    parts.push(`<wp:posOffset>${h.posOffset || 0}</wp:posOffset>`);
+    parts.push(`<wp:posOffset>${intAttr(h.posOffset)}</wp:posOffset>`);
   }
   parts.push("</wp:positionH>");
 
@@ -708,7 +708,7 @@ function serializePosition(pos: ImagePosition): string {
   if (v.alignment) {
     parts.push(`<wp:align>${v.alignment}</wp:align>`);
   } else {
-    parts.push(`<wp:posOffset>${v.posOffset || 0}</wp:posOffset>`);
+    parts.push(`<wp:posOffset>${intAttr(v.posOffset)}</wp:posOffset>`);
   }
   parts.push("</wp:positionV>");
 
@@ -771,7 +771,7 @@ function serializePicGraphic(image: Image, sharedId: string): string {
     "<pic:spPr>",
     `<a:xfrm${xfrmAttrs}>`,
     '<a:off x="0" y="0"/>',
-    `<a:ext cx="${cx}" cy="${cy}"/>`,
+    `<a:ext cx="${intAttr(cx)}" cy="${intAttr(cy)}"/>`,
     "</a:xfrm>",
     '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>',
     image.outline ? serializeOutline(image.outline) : "",
@@ -803,8 +803,8 @@ function serializeDrawingContent(content: DrawingContent): string {
     // Inline image
     return [
       "<w:drawing>",
-      `<wp:inline distT="${distT}" distB="${distB}" distL="${distL}" distR="${distR}">`,
-      `<wp:extent cx="${cx}" cy="${cy}"/>`,
+      `<wp:inline distT="${intAttr(distT)}" distB="${intAttr(distB)}" distL="${intAttr(distL)}" distR="${intAttr(distR)}">`,
+      `<wp:extent cx="${intAttr(cx)}" cy="${intAttr(cy)}"/>`,
       '<wp:effectExtent l="0" t="0" r="0" b="0"/>',
       `<wp:docPr id="${docPrId}" name="${escapeXml(docPrName)}"${image.alt ? ` descr="${escapeXml(image.alt)}"` : ""}${image.decorative ? ' hidden="1"' : ""}/>`,
       '<wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr>',
@@ -823,10 +823,10 @@ function serializeDrawingContent(content: DrawingContent): string {
 
   return [
     "<w:drawing>",
-    `<wp:anchor distT="${distT}" distB="${distB}" distL="${distL}" distR="${distR}" simplePos="0" relativeHeight="251658240" behindDoc="${behindDoc}" locked="0" layoutInCell="1" allowOverlap="1">`,
+    `<wp:anchor distT="${intAttr(distT)}" distB="${intAttr(distB)}" distL="${intAttr(distL)}" distR="${intAttr(distR)}" simplePos="0" relativeHeight="251658240" behindDoc="${behindDoc}" locked="0" layoutInCell="1" allowOverlap="1">`,
     '<wp:simplePos x="0" y="0"/>',
     position,
-    `<wp:extent cx="${cx}" cy="${cy}"/>`,
+    `<wp:extent cx="${intAttr(cx)}" cy="${intAttr(cy)}"/>`,
     '<wp:effectExtent l="0" t="0" r="0" b="0"/>',
     wrap,
     `<wp:docPr id="${docPrId}" name="${escapeXml(docPrName)}"${image.alt ? ` descr="${escapeXml(image.alt)}"` : ""}/>`,
@@ -876,7 +876,7 @@ function serializeShapeContent(content: ShapeContent): string {
     "<wps:spPr>",
     `<a:xfrm${xfrmAttrs}>`,
     '<a:off x="0" y="0"/>',
-    `<a:ext cx="${cx}" cy="${cy}"/>`,
+    `<a:ext cx="${intAttr(cx)}" cy="${intAttr(cy)}"/>`,
     "</a:xfrm>",
     `<a:prstGeom prst="${shape.shapeType === "textBox" ? "rect" : shape.shapeType}"><a:avLst/></a:prstGeom>`,
     serializeFill(shape.fill),
@@ -896,17 +896,17 @@ function serializeShapeContent(content: ShapeContent): string {
       bpAttrs.push('anchorCtr="1"');
     }
     if (tb.margins) {
-      if (tb.margins.left !== null) {
-        bpAttrs.push(`lIns="${tb.margins.left}"`);
+      if (tb.margins.left != null) {
+        bpAttrs.push(`lIns="${intAttr(tb.margins.left)}"`);
       }
-      if (tb.margins.top !== null) {
-        bpAttrs.push(`tIns="${tb.margins.top}"`);
+      if (tb.margins.top != null) {
+        bpAttrs.push(`tIns="${intAttr(tb.margins.top)}"`);
       }
-      if (tb.margins.right !== null) {
-        bpAttrs.push(`rIns="${tb.margins.right}"`);
+      if (tb.margins.right != null) {
+        bpAttrs.push(`rIns="${intAttr(tb.margins.right)}"`);
       }
-      if (tb.margins.bottom !== null) {
-        bpAttrs.push(`bIns="${tb.margins.bottom}"`);
+      if (tb.margins.bottom != null) {
+        bpAttrs.push(`bIns="${intAttr(tb.margins.bottom)}"`);
       }
     }
 
@@ -943,8 +943,8 @@ function serializeShapeContent(content: ShapeContent): string {
   if (!isFloating) {
     return [
       "<w:drawing>",
-      `<wp:inline distT="${distT}" distB="${distB}" distL="${distL}" distR="${distR}">`,
-      `<wp:extent cx="${cx}" cy="${cy}"/>`,
+      `<wp:inline distT="${intAttr(distT)}" distB="${intAttr(distB)}" distL="${intAttr(distL)}" distR="${intAttr(distR)}">`,
+      `<wp:extent cx="${intAttr(cx)}" cy="${intAttr(cy)}"/>`,
       '<wp:effectExtent l="0" t="0" r="0" b="0"/>',
       `<wp:docPr id="${docPrId}" name="${escapeXml(docPrName)}"/>`,
       "<wp:cNvGraphicFramePr/>",
@@ -966,10 +966,10 @@ function serializeShapeContent(content: ShapeContent): string {
 
   return [
     "<w:drawing>",
-    `<wp:anchor distT="${distT}" distB="${distB}" distL="${distL}" distR="${distR}" simplePos="0" relativeHeight="251658240" behindDoc="${behindDoc}" locked="0" layoutInCell="1" allowOverlap="1">`,
+    `<wp:anchor distT="${intAttr(distT)}" distB="${intAttr(distB)}" distL="${intAttr(distL)}" distR="${intAttr(distR)}" simplePos="0" relativeHeight="251658240" behindDoc="${behindDoc}" locked="0" layoutInCell="1" allowOverlap="1">`,
     '<wp:simplePos x="0" y="0"/>',
     position,
-    `<wp:extent cx="${cx}" cy="${cy}"/>`,
+    `<wp:extent cx="${intAttr(cx)}" cy="${intAttr(cy)}"/>`,
     '<wp:effectExtent l="0" t="0" r="0" b="0"/>',
     wrap,
     `<wp:docPr id="${docPrId}" name="${escapeXml(docPrName)}"/>`,

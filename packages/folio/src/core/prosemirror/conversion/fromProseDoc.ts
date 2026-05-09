@@ -893,20 +893,19 @@ function createImageRun(node: PMNode): Run {
 
   // Determine wrap type from attrs (default: inline)
   const wrapType = attrs.wrapType || "inline";
-  const PX_TO_EMU = 914_400 / 96;
 
   const wrap: ImageWrap = { type: wrapType };
   if (attrs.distTop !== undefined) {
-    wrap.distT = Math.round(attrs.distTop * PX_TO_EMU);
+    wrap.distT = pixelsToEmu(attrs.distTop);
   }
   if (attrs.distBottom !== undefined) {
-    wrap.distB = Math.round(attrs.distBottom * PX_TO_EMU);
+    wrap.distB = pixelsToEmu(attrs.distBottom);
   }
   if (attrs.distLeft !== undefined) {
-    wrap.distL = Math.round(attrs.distLeft * PX_TO_EMU);
+    wrap.distL = pixelsToEmu(attrs.distLeft);
   }
   if (attrs.distRight !== undefined) {
-    wrap.distR = Math.round(attrs.distRight * PX_TO_EMU);
+    wrap.distR = pixelsToEmu(attrs.distRight);
   }
 
   // Restore wrapText from PM attr
@@ -996,8 +995,7 @@ function createImageRun(node: PMNode): Run {
       outset: "solid",
     };
     const outline: ShapeOutline = {
-      // Convert pixels back to EMU (1 px = 914400/96 EMU)
-      width: Math.round(attrs.borderWidth * (914_400 / 96)),
+      width: pixelsToEmu(attrs.borderWidth),
       style: attrs.borderStyle
         ? (cssToOoxmlStyle[attrs.borderStyle] as ShapeOutline["style"]) ||
           "solid"
@@ -1035,8 +1033,8 @@ function createShapeRun(node: PMNode): Run {
     type: "shape",
     shapeType: (attrs.shapeType || "rect") as Shape["shapeType"],
     size: {
-      width: attrs.width ? Math.round(attrs.width * (914_400 / 96)) : 0,
-      height: attrs.height ? Math.round(attrs.height * (914_400 / 96)) : 0,
+      width: attrs.width ? pixelsToEmu(attrs.width) : 0,
+      height: attrs.height ? pixelsToEmu(attrs.height) : 0,
     },
   };
   if (attrs.shapeId) {
@@ -1091,7 +1089,7 @@ function createShapeRun(node: PMNode): Run {
       dashed: "dash",
     };
     const shapeOutline: ShapeOutline = {
-      width: Math.round(attrs.outlineWidth * (914_400 / 96)),
+      width: pixelsToEmu(attrs.outlineWidth),
       style: attrs.outlineStyle
         ? (cssToOoxml[attrs.outlineStyle] as ShapeOutline["style"]) || "solid"
         : "solid",
@@ -1743,8 +1741,8 @@ function convertPMTextBox(node: PMNode): Paragraph {
     type: "shape",
     shapeType: "rect",
     size: {
-      width: attrs.width ? Math.round(attrs.width * (914_400 / 96)) : 0,
-      height: attrs.height ? Math.round(attrs.height * (914_400 / 96)) : 0,
+      width: attrs.width ? pixelsToEmu(attrs.width) : 0,
+      height: attrs.height ? pixelsToEmu(attrs.height) : 0,
     },
     textBody: {
       content:
@@ -1759,16 +1757,16 @@ function convertPMTextBox(node: PMNode): Paragraph {
           right?: number;
         } = {};
         if (attrs.marginTop !== null && attrs.marginTop !== undefined) {
-          m.top = Math.round(attrs.marginTop * (914_400 / 96));
+          m.top = pixelsToEmu(attrs.marginTop);
         }
         if (attrs.marginBottom !== null && attrs.marginBottom !== undefined) {
-          m.bottom = Math.round(attrs.marginBottom * (914_400 / 96));
+          m.bottom = pixelsToEmu(attrs.marginBottom);
         }
         if (attrs.marginLeft !== null && attrs.marginLeft !== undefined) {
-          m.left = Math.round(attrs.marginLeft * (914_400 / 96));
+          m.left = pixelsToEmu(attrs.marginLeft);
         }
         if (attrs.marginRight !== null && attrs.marginRight !== undefined) {
-          m.right = Math.round(attrs.marginRight * (914_400 / 96));
+          m.right = pixelsToEmu(attrs.marginRight);
         }
         return m;
       })(),
@@ -1795,7 +1793,7 @@ function convertPMTextBox(node: PMNode): Paragraph {
       dashed: "dash",
     };
     const tbOutline: ShapeOutline = {
-      width: Math.round(attrs.outlineWidth * (914_400 / 96)),
+      width: pixelsToEmu(attrs.outlineWidth),
       style: attrs.outlineStyle
         ? (cssToOoxmlOutline[attrs.outlineStyle] as ShapeOutline["style"]) ||
           "solid"

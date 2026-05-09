@@ -790,7 +790,14 @@ function paragraphToRuns(
       );
       runs.push(run);
     } else if (child.type.name === "field") {
-      // Field node — convert to FieldRun for render-time substitution
+      // Field node — convert to FieldRun for render-time substitution.
+      //
+      // Marks on the field node (bold/italic/underline applied to the field
+      // result inside `<w:fldChar separate>...</w:fldChar end>`) must
+      // propagate to the run formatting, otherwise complex REF fields whose
+      // visible text was authored as underlined (e.g. cross-references like
+      // "Exhibit A" / "Section 1.3" in NVCA-style templates) render with no
+      // underline. Reuse the same extractor text runs use.
       const ft = child.attrs["fieldType"] as string;
       const mappedType: FieldRun["fieldType"] =
         ft === "PAGE"
@@ -802,12 +809,14 @@ function paragraphToRuns(
               : ft === "TIME"
                 ? "TIME"
                 : "OTHER";
+      const fieldFormatting = extractRunFormatting(child.marks, theme);
       const run: FieldRun = {
         kind: "field",
         fieldType: mappedType,
         fallback: (child.attrs["displayText"] as string) || "",
         pmStart: childPos,
         pmEnd: childPos + child.nodeSize,
+        ...fieldFormatting,
       };
       runs.push(run);
     } else if (child.type.name === "math") {
@@ -923,6 +932,25 @@ function convertParagraphAttrs(
     }
     if (typeof spaceAfter === "number") {
       attrs.spacing.after = twipsToPixels(spaceAfter);
+    }
+    // Propagate the `spacingExplicit` flag the PM schema carries — empty
+    // paragraphs inherit zero spacing unless the side was set inline (Word
+    // fidelity, eigenpal #402).
+    const pmSpacingExplicit = pmAttrs.spacingExplicit as
+      | { before?: boolean; after?: boolean }
+      | null
+      | undefined;
+    if (pmSpacingExplicit) {
+      const explicit: { before?: boolean; after?: boolean } = {};
+      if (pmSpacingExplicit.before) {
+        explicit.before = true;
+      }
+      if (pmSpacingExplicit.after) {
+        explicit.after = true;
+      }
+      if (explicit.before !== undefined || explicit.after !== undefined) {
+        attrs.spacingExplicit = explicit;
+      }
     }
     if (typeof lineSpacing === "number") {
       // Line spacing in twips - convert to multiplier or exact
@@ -1044,9 +1072,16 @@ function convertParagraphAttrs(
     }
   }
 
-  // Shading (background color)
-  if (pmAttrs.shading?.fill?.rgb) {
-    attrs.shading = `#${pmAttrs.shading.fill.rgb}`;
+  // Shading (background color). Word's `Normal` paragraph style commonly
+  // sets `<w:shd val="clear" fill="FFFFFF"/>` — semantically a no-op on
+  // a white page, but folio's dark mode draws the literal `#FFFFFF`
+  // fill as a visible white block over the dark canvas. Treat any white
+  // shading as transparent (= page background) so it renders the same as
+  // "no shading" in both modes. Other shading colors are preserved
+  // verbatim so authored highlights stay visible.
+  const shadingRgb = pmAttrs.shading?.fill?.rgb?.toUpperCase();
+  if (shadingRgb && shadingRgb !== "FFFFFF" && shadingRgb !== "FFFFFE") {
+    attrs.shading = `#${pmAttrs.shading?.fill?.rgb}`;
   }
 
   // Tab stops
@@ -1075,6 +1110,9 @@ function convertParagraphAttrs(
   }
   if (pmAttrs.contextualSpacing) {
     attrs.contextualSpacing = true;
+  }
+  if (pmAttrs.runInWithNext) {
+    attrs.runInWithNext = true;
   }
   if (pmAttrs.bidi) {
     attrs.bidi = true;
@@ -1820,5 +1858,81 @@ export function toFlowBlocks(
     }
   });
 
-  return blocks;
+  return mergeRunInParagraphs(blocks);
+}
+
+/**
+ * Merge consecutive paragraph blocks where the first carries
+ * `runInWithNext` (`<w:specVanish/>` on the paragraph mark).
+ *
+ * Word's run-in heading feature renders the next paragraph inline on
+ * the same line, so for layout we collapse the pair into one
+ * ParagraphBlock with combined runs. The merged block keeps the first
+ * paragraph's attrs (heading formatting, list marker, indent) and
+ * extends pmEnd to the second paragraph's range so click-to-position
+ * resolution still maps both ranges back to body content.
+ *
+ * Chains: runInWithNext on the merged block is dropped because the
+ * second paragraph's mark wasn't `specVanish`. If a chain of
+ * specVanish paragraphs needs collapsing (rare in practice), the loop
+ * naturally handles it by re-inspecting the merged block's flag (we
+ * preserve runInWithNext only when the second paragraph itself has
+ * specVanish).
+ */
+function mergeRunInParagraphs(blocks: FlowBlock[]): FlowBlock[] {
+  const out: FlowBlock[] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    let current = blocks[i];
+    if (!current) {
+      continue;
+    }
+    // Chain merge: keep folding consecutive paragraphs while the
+    // *current* (possibly already-merged) block carries
+    // `runInWithNext` and the next block is also a paragraph. Per
+    // ECMA-376 §17.3.1.32 and Word's behaviour, a sequence of
+    // `<w:specVanish/>` paragraphs flows inline through the first
+    // body paragraph that lacks it (Codex PR #258 review).
+    while (
+      current?.kind === "paragraph" &&
+      (current as ParagraphBlock).attrs?.runInWithNext &&
+      i + 1 < blocks.length
+    ) {
+      const next = blocks[i + 1];
+      if (!next || next.kind !== "paragraph") {
+        break;
+      }
+      const a = current as ParagraphBlock;
+      const b = next as ParagraphBlock;
+      const mergedAttrs: ParagraphAttrs = { ...a.attrs };
+      // Heading typically has no spaceAfter; the body's spaceAfter
+      // governs the merged paragraph's trailing gap.
+      if (b.attrs?.spacing?.after !== undefined) {
+        mergedAttrs.spacing = {
+          ...mergedAttrs.spacing,
+          after: b.attrs.spacing.after,
+        };
+      }
+      // Carry forward `runInWithNext` only if the *consumed* second
+      // paragraph itself was specVanish — the while condition above
+      // then triggers another fold against the paragraph after it.
+      if (b.attrs?.runInWithNext) {
+        mergedAttrs.runInWithNext = true;
+      } else {
+        delete mergedAttrs.runInWithNext;
+      }
+      const merged: ParagraphBlock = {
+        ...a,
+        runs: [...a.runs, ...b.runs],
+        attrs: mergedAttrs,
+      };
+      const mergedPmEnd = b.pmEnd ?? a.pmEnd;
+      if (mergedPmEnd !== undefined) {
+        merged.pmEnd = mergedPmEnd;
+      }
+      current = merged;
+      i += 1; // consumed `next`; fold further if the merged block still has the flag
+    }
+    out.push(current);
+  }
+  return out;
 }

@@ -75,24 +75,27 @@ export function emuToPixels(emu: number | undefined | null): number {
 }
 
 /**
- * Convert pixels to EMUs
+ * Convert pixels to EMUs.
+ *
+ * EMU coordinates in OOXML are integer-typed (xs:long); rounding here keeps
+ * floating-point drift (e.g. 52 px → 495299.99999999994) out of the document.
  */
 export function pixelsToEmu(px: number): number {
-  return (px / PIXELS_PER_INCH) * EMUS_PER_INCH;
+  return Math.round((px / PIXELS_PER_INCH) * EMUS_PER_INCH);
 }
 
 /**
- * Convert EMUs to twips
+ * Convert EMUs to twips. Twips are integer-typed in OOXML; round here.
  */
 export function emuToTwips(emu: number): number {
-  return (emu / EMUS_PER_INCH) * TWIPS_PER_INCH;
+  return Math.round((emu / EMUS_PER_INCH) * TWIPS_PER_INCH);
 }
 
 /**
- * Convert twips to EMUs
+ * Convert twips to EMUs. EMUs are integer-typed in OOXML; round here.
  */
 export function twipsToEmu(twips: number): number {
-  return (twips / TWIPS_PER_INCH) * EMUS_PER_INCH;
+  return Math.round((twips / TWIPS_PER_INCH) * EMUS_PER_INCH);
 }
 
 // ============================================================================

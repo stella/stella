@@ -42,9 +42,7 @@ import {
 } from "../core/layout-bridge/findBodyPmSpans";
 import {
   collectFootnoteRefs,
-  mapFootnotesToPages,
   buildFootnoteContentMap,
-  calculateFootnoteReservedHeights,
 } from "../core/layout-bridge/footnoteLayout";
 import {
   hitTestFragment,
@@ -90,6 +88,7 @@ import type {
   ParagraphAttrs,
   ParagraphBorders,
   ParagraphSpacing,
+  SectionBreakBlock,
   TextBoxBlock,
   FootnoteContent,
 } from "../core/layout-engine/types";
@@ -112,6 +111,8 @@ import type {
 // Table commands (for quick-action insert buttons)
 import { addRowBelow, addColumnRight } from "../core/prosemirror";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
+import { createStyleResolver } from "../core/prosemirror/styles/styleResolver";
+import type { StyleResolver } from "../core/prosemirror/styles/styleResolver";
 import type { Footnote } from "../core/types/content";
 // Types
 import type {
@@ -121,7 +122,10 @@ import type {
   SectionProperties,
   HeaderFooter,
 } from "../core/types/document";
-import { computeEffectiveHeaderFooterMargins } from "./headerFooterMargins";
+import {
+  computeFirstPageHeaderFooterMarginExtender,
+  computeHeaderFooterMarginExtender,
+} from "./headerFooterMargins";
 // Internal components
 import { HiddenProseMirror } from "./HiddenProseMirror";
 import type { HiddenProseMirrorRef } from "./HiddenProseMirror";
@@ -545,18 +549,35 @@ function getColumns(
 }
 
 /**
- * Check if an image run is a floating image (should affect text wrapping)
+ * Check if an image run is a *text-wrapping* floating image — it
+ * occupies an exclusion zone the body text should flow around.
+ *
+ * `wrapType: "behind"` and `wrapType: "inFront"` are anchored
+ * (out-of-flow) but Word's wrapNone semantics put them behind /
+ * over the text without shrinking the body. They render as
+ * `displayMode: "float"` in the prose model so the painter knows
+ * they're out of normal flow, but `extractFloatingZones` must skip
+ * them — including them here would make the line breaker wrap text
+ * around a background letterhead or a foreground overlay (Codex
+ * PR #258 review).
  */
 function isFloatingImageRun(run: ImageRun): boolean {
   const wrapType = run.wrapType;
   const displayMode = run.displayMode;
+
+  // wrapNone (behind / inFront): never an exclusion zone, regardless
+  // of displayMode.
+  if (wrapType === "behind" || wrapType === "inFront") {
+    return false;
+  }
 
   // Floating images have specific wrap types that allow text to flow around them
   if (wrapType && ["square", "tight", "through"].includes(wrapType)) {
     return true;
   }
 
-  // Or explicit float display mode
+  // Or explicit float display mode (only when no wrapNone semantics —
+  // already filtered above).
   if (displayMode === "float") {
     return true;
   }
@@ -1533,6 +1554,7 @@ function convertHeaderFooterToContent(
   headerFooter: HeaderFooter | null | undefined,
   contentWidth: number,
   metrics: HeaderFooterMetrics,
+  styleResolver?: StyleResolver | null,
 ): HeaderFooterContent | undefined {
   if (
     !headerFooter ||
@@ -1553,6 +1575,18 @@ function convertHeaderFooterToContent(
         | Record<string, unknown>
         | undefined;
       const attrs: ParagraphAttrs = {};
+
+      // Resolve the paragraph style cascade so HF paragraphs inherit
+      // spacing/alignment/etc from `Normal` (or whatever pStyle they
+      // reference). HF parsing skips this cascade — without it,
+      // spaceBefore/spaceAfter inherited from a paragraph style is silently
+      // lost in headers/footers. Reuses the same StyleResolver the body uses.
+      const styleId =
+        typeof formatting?.["styleId"] === "string"
+          ? (formatting["styleId"] as string)
+          : undefined;
+      const resolvedStyle = styleResolver?.resolveParagraphStyle(styleId);
+      const styledPpr = resolvedStyle?.paragraphFormatting;
 
       if (formatting) {
         if (formatting["alignment"]) {
@@ -1592,26 +1626,57 @@ function convertHeaderFooterToContent(
             attrs.borders = converted;
           }
         }
-        // Convert spacing for measurement.
-        // NOTE: Only convert lineSpacing (affects line height). Skip spaceBefore/
-        // spaceAfter — these are typically style-resolved artifacts (e.g., from
-        // Normal style) inlined during the PM->document round-trip, not intentional
-        // header/footer formatting. The layout painter renders header/footer
-        // paragraphs without inter-paragraph margins, so measurement must match.
-        if (formatting["lineSpacing"] !== undefined) {
+        // Convert spacing for measurement and rendering. lineSpacing affects
+        // line height; spaceBefore/spaceAfter are visualized as fragment
+        // padding by `renderHeaderFooterContent`. Word renders style-inherited
+        // paragraph spacing in headers/footers the same way as in body
+        // (NVCA-style first-page header: each paragraph has Normal's
+        // spaceAfter=240twips inherited, which produces the visible blank row
+        // above the body's first paragraph). Without these, last-paragraph
+        // spaceAfter is silently dropped and body content butts flush against
+        // the last header line.
+        // Inline pPr first, then fall back to the resolved style cascade.
+        const inlineLineSpacing = formatting["lineSpacing"];
+        const inlineSpaceBefore = formatting["spaceBefore"];
+        const inlineSpaceAfter = formatting["spaceAfter"];
+        const inlineLineRule = formatting["lineSpacingRule"] as
+          | string
+          | undefined;
+        const lineSpacing =
+          typeof inlineLineSpacing === "number"
+            ? inlineLineSpacing
+            : styledPpr?.lineSpacing;
+        const lineRule = inlineLineRule ?? styledPpr?.lineSpacingRule;
+        const spaceBeforeTwips =
+          typeof inlineSpaceBefore === "number"
+            ? inlineSpaceBefore
+            : styledPpr?.spaceBefore;
+        const spaceAfterTwips =
+          typeof inlineSpaceAfter === "number"
+            ? inlineSpaceAfter
+            : styledPpr?.spaceAfter;
+        if (
+          typeof lineSpacing === "number" ||
+          typeof spaceBeforeTwips === "number" ||
+          typeof spaceAfterTwips === "number"
+        ) {
           const spacingAttrs: ParagraphSpacing = {};
-          const rule = formatting["lineSpacingRule"] as string | undefined;
-          if (rule === "exact" || rule === "atLeast") {
-            spacingAttrs.line = twipsToPixels(
-              formatting["lineSpacing"] as number,
-            );
-            spacingAttrs.lineUnit = "px";
-            spacingAttrs.lineRule = rule;
-          } else {
-            // Auto — line spacing is in 240ths of a line
-            spacingAttrs.line = (formatting["lineSpacing"] as number) / 240;
-            spacingAttrs.lineUnit = "multiplier";
-            spacingAttrs.lineRule = "auto";
+          if (typeof lineSpacing === "number") {
+            if (lineRule === "exact" || lineRule === "atLeast") {
+              spacingAttrs.line = twipsToPixels(lineSpacing);
+              spacingAttrs.lineUnit = "px";
+              spacingAttrs.lineRule = lineRule;
+            } else {
+              spacingAttrs.line = lineSpacing / 240;
+              spacingAttrs.lineUnit = "multiplier";
+              spacingAttrs.lineRule = "auto";
+            }
+          }
+          if (typeof spaceBeforeTwips === "number") {
+            spacingAttrs.before = twipsToPixels(spaceBeforeTwips);
+          }
+          if (typeof spaceAfterTwips === "number") {
+            spacingAttrs.after = twipsToPixels(spaceAfterTwips);
           }
           attrs.spacing = spacingAttrs;
         }
@@ -1641,7 +1706,15 @@ function convertHeaderFooterToContent(
                 | "decimal"
                 | "bar"
                 | "clear",
-              pos: twipsToPixels(tab.position),
+              // Keep twips. The layout-bridge measurer (`computeTabWidth`)
+              // and renderer treat `tabStop.pos` as twips and call
+              // `twipsToPx` themselves — body content stores tabs in twips
+              // (see `toFlowBlocks`). Pre-converting to pixels here was
+              // double-converting (4770 twips → 318 px → treated as twips →
+              // ~21 px stop), collapsing the center tab back to a default
+              // narrow tab and pushing footer content (page number,
+              // centered text) to the wrong x.
+              pos: tab.position,
             };
             if (tab.leader) {
               tabStop.leader = tab.leader as NonNullable<typeof tabStop.leader>;
@@ -2098,15 +2171,20 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             pageSize,
             margins,
           };
+          const headerFooterStyleResolver = styles
+            ? createStyleResolver(styles)
+            : null;
           const headerContentForRender = convertHeaderFooterToContent(
             headerContent,
             contentWidth,
             hfMetricsHeader,
+            headerFooterStyleResolver,
           );
           const footerContentForRender = convertHeaderFooterToContent(
             footerContent,
             contentWidth,
             hfMetricsFooter,
+            headerFooterStyleResolver,
           );
           const hasTitlePg = sectionProperties?.titlePg === true;
           const firstPageHeaderForRender = hasTitlePg
@@ -2114,6 +2192,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 firstPageHeaderContent,
                 contentWidth,
                 hfMetricsHeader,
+                headerFooterStyleResolver,
               )
             : undefined;
           const firstPageFooterForRender = hasTitlePg
@@ -2121,16 +2200,49 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 firstPageFooterContent,
                 contentWidth,
                 hfMetricsFooter,
+                headerFooterStyleResolver,
               )
             : undefined;
 
-          const effectiveMargins = computeEffectiveHeaderFooterMargins({
-            margins,
+          // Default extender — applied to pages 2+ of every section. It
+          // ignores firstPage H/F so a `<w:titlePg/>` section's
+          // overflowing first-page header doesn't push body content down
+          // on every subsequent page.
+          const extendForHfOverflow = computeHeaderFooterMarginExtender({
             headerContent: headerContentForRender,
             footerContent: footerContentForRender,
             firstPageHeaderContent: firstPageHeaderForRender,
             firstPageFooterContent: firstPageFooterForRender,
           });
+          // First-page extender — used only for page 1 of a titlePg
+          // section so the title page's larger header reservation is
+          // honored without leaking onto pages 2+.
+          const extendForFirstPage = computeFirstPageHeaderFooterMarginExtender(
+            {
+              headerContent: headerContentForRender,
+              footerContent: footerContentForRender,
+              firstPageHeaderContent: firstPageHeaderForRender,
+              firstPageFooterContent: firstPageFooterForRender,
+            },
+          );
+          const effectiveMargins = extendForHfOverflow(margins);
+          const effectiveFirstPageMargins = hasTitlePg
+            ? extendForFirstPage(margins)
+            : undefined;
+          // Section-break blocks carry their own `sb.margins` from
+          // `<w:sectPr>` and the layout engine prefers those over the
+          // body-level fallback. Apply the extension to each one too,
+          // otherwise a footer that overflows on one section silently
+          // re-overlaps body text on the next. (Eigenpal #400.)
+          for (const block of newBlocks) {
+            if (block.kind !== "sectionBreak") {
+              continue;
+            }
+            const sb = block as SectionBreakBlock;
+            if (sb.margins) {
+              sb.margins = extendForHfOverflow(sb.margins);
+            }
+          }
 
           // Step 3: Layout blocks onto pages (two-pass if footnotes exist)
           let newLayout: Layout;
@@ -2149,6 +2261,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             margins: effectiveMargins,
             pageGap,
           };
+          if (effectiveFirstPageMargins !== undefined) {
+            layoutOpts.firstPageMargins = effectiveFirstPageMargins;
+          }
           if (columns !== undefined) {
             layoutOpts.columns = columns;
           }
@@ -2157,20 +2272,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
 
           if (hasFootnotes) {
-            // Pass 1: Layout without footnote space to determine page assignments
-            const pass1Layout = layoutDocument(
-              newBlocks,
-              newMeasures,
-              layoutOpts,
-            );
-
-            // Map footnote refs to pages
-            pageFootnoteMap = mapFootnotesToPages(
-              pass1Layout.pages,
-              footnoteRefs,
-            );
-
-            // Build footnote content and measure heights
+            // Build footnote content and measure heights up front. The
+            // per-fn height table feeds into the layout engine so each
+            // body line carrying an fn ref reserves space for that fn
+            // on its host page in a single pass — no convergence loop.
             footnoteContentMap = buildFootnoteContentMap(
               // oxlint-disable-next-line typescript/no-non-null-assertion
               document!.package.footnotes!,
@@ -2190,34 +2295,39 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               })(),
             );
 
-            // Calculate per-page reserved heights
-            const footnoteReservedHeights = calculateFootnoteReservedHeights(
-              pageFootnoteMap,
-              footnoteContentMap,
-            );
-
-            // Pass 2: Layout with reserved heights
-            if (footnoteReservedHeights.size > 0) {
-              newLayout = layoutDocument(newBlocks, newMeasures, {
-                ...layoutOpts,
-                footnoteReservedHeights,
-              });
-
-              // Re-map footnotes to pages (assignments may have shifted)
-              pageFootnoteMap = mapFootnotesToPages(
-                newLayout.pages,
-                footnoteRefs,
+            const footnoteHeightById = new Map<number, number>();
+            // Per-fn vertical margin applied by the painter
+            // (`renderFootnoteArea` sets `marginBottom: 4px` on each
+            // fn entry). Reserved alongside content height so the page
+            // accounts for inter-fn whitespace.
+            const FOOTNOTE_ENTRY_MARGIN = 4;
+            for (const [id, content] of footnoteContentMap) {
+              footnoteHeightById.set(
+                id,
+                content.height + FOOTNOTE_ENTRY_MARGIN,
               );
+            }
+            // Note: the layout engine adds the divider's height once
+            // per fn-bearing page (in paginator.addFootnoteHeight); we
+            // pass per-fn (content + entry margin) here.
 
-              // Store footnoteIds on each page for rendering
-              for (const [pageNum, fnIds] of pageFootnoteMap) {
-                const page = newLayout.pages.find((p) => p.number === pageNum);
-                if (page) {
-                  page.footnoteIds = fnIds;
-                }
+            newLayout = layoutDocument(newBlocks, newMeasures, {
+              ...layoutOpts,
+              footnoteHeightById,
+            });
+
+            // The layout engine assigned `page.footnoteIds` line-by-
+            // line via `paginator.addFootnoteHeight(_, ids)`, so a fn
+            // ref in a continuation fragment of a split paragraph
+            // lands on the page where the ref-bearing line actually
+            // is. Build pageFootnoteMap from those page records (not
+            // from `mapFootnotesToPages`'s pmRange scan, which can't
+            // disambiguate split-paragraph halves; Codex PR #258).
+            pageFootnoteMap = new Map<number, number[]>();
+            for (const page of newLayout.pages) {
+              if (page.footnoteIds && page.footnoteIds.length > 0) {
+                pageFootnoteMap.set(page.number, page.footnoteIds);
               }
-            } else {
-              newLayout = pass1Layout;
             }
           } else {
             // No footnotes — single pass

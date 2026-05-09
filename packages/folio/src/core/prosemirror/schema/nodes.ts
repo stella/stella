@@ -116,6 +116,14 @@ export type ParagraphAttrs = {
   // Bookmarks on this paragraph (for TOC anchors, cross-references)
   bookmarks?: { id: number; name: string }[];
 
+  /**
+   * Run-in heading flag: this paragraph's mark carries
+   * `<w:specVanish/>` and the next paragraph should flow inline on
+   * the same line (NVCA-style "6.11 Severability" → "The
+   * invalidity..." merges). Layout consumes this in toFlowBlocks.
+   */
+  runInWithNext?: boolean;
+
   /** Original inline paragraph formatting from DOCX (pre-style-resolution).
    *  Used by fromProseDoc for lossless round-trip serialization. */
   _originalFormatting?: ParagraphFormatting;

@@ -40,7 +40,11 @@ import { renderImageFragment } from "./renderImage";
 import { renderParagraphFragment } from "./renderParagraph";
 import { renderTableFragment } from "./renderTable";
 import { renderTextBoxFragment } from "./renderTextBox";
-import { emuToPixels, isFloatingImageRun } from "./renderUtils";
+import {
+  emuToPixels,
+  isFloatingImageRun,
+  isTextWrappingFloatingImageRun,
+} from "./renderUtils";
 import type { RenderContext } from "./renderUtils";
 
 /**
@@ -70,8 +74,19 @@ type PageFloatingImage = {
   pmEnd?: number;
   /** OOXML wrapText: which side(s) TEXT flows on */
   wrapText?: "bothSides" | "left" | "right" | "largest";
-  /** Wrap type (square, tight, through, topAndBottom) */
+  /** Wrap type (square, tight, through, topAndBottom, behind, inFront) */
   wrapType?: string;
+  /**
+   * Whether this image creates a text-wrap exclusion zone (line widths shrink
+   * around it). False for `behind`/`inFront` (wrapNone) and `topAndBottom`.
+   */
+  affectsTextWrap: boolean;
+  /**
+   * Whether this image paints behind body text. True only for `wrapType ===
+   * "behind"` — the page-level layer is split into a behind-text and
+   * above-text layer so wrapNone semantics survive in the DOM.
+   */
+  behindDoc: boolean;
 };
 
 /**
@@ -534,6 +549,8 @@ function extractFloatingImagesFromParagraph(
       ...(imgRun.pmEnd !== undefined ? { pmEnd: imgRun.pmEnd } : {}),
       wrapText,
       ...(imgRun.wrapType !== undefined ? { wrapType: imgRun.wrapType } : {}),
+      affectsTextWrap: isTextWrappingFloatingImageRun(imgRun),
+      behindDoc: imgRun.wrapType === "behind",
     });
   }
 
@@ -587,21 +604,33 @@ function rectsToFloatingZones(
 }
 
 /**
- * Render floating images into a page-level layer
+ * Render floating images into a page-level layer.
+ *
+ * `layerMode === "behind"` paints below body text (used for `behindDoc`
+ * wrapNone images, e.g. full-page letterhead backgrounds). `"front"` paints
+ * above text (default for `inFront` wrapNone and side-wrapping images).
  */
 function renderFloatingImagesLayer(
   floatingImages: PageFloatingImage[],
   doc: Document,
+  layerMode: "front" | "behind" = "front",
 ): HTMLElement {
   const layer = doc.createElement("div");
-  layer.className = "layout-floating-images-layer";
+  layer.className =
+    layerMode === "behind"
+      ? "layout-floating-images-layer layout-floating-images-layer-behind"
+      : "layout-floating-images-layer";
   layer.style.position = "absolute";
   layer.style.top = "0";
   layer.style.left = "0";
   layer.style.right = "0";
   layer.style.bottom = "0";
   layer.style.pointerEvents = "none"; // Allow clicks to pass through
-  layer.style.zIndex = "10";
+  // Behind layer: leave default stacking so content (rendered after) paints
+  // above. Front layer: lift above content fragments.
+  if (layerMode === "front") {
+    layer.style.zIndex = "10";
+  }
 
   for (const floatImg of floatingImages) {
     const container = doc.createElement("div");
@@ -756,9 +785,26 @@ function renderHeaderFooterContent(
         { document: doc },
       );
 
-      // Position the fragment
+      // Position the fragment in flow and visualize the paragraph's spacing
+      // as padding so HF paragraphs separate the way Word renders them.
+      // Body content gets paragraph spacing via the paginator's absolute
+      // fragment.y positioning; HF rendering uses relative-flow stacking,
+      // so without padding here the paragraph's `spaceBefore`/`spaceAfter`
+      // would advance `cursorY` for the layout-engine but never appear in
+      // the DOM (visible regression on first-page header docs whose
+      // last-paragraph spaceAfter pushes the body content's first line
+      // down by one line in Word).
       fragEl.style.position = "relative";
       fragEl.style.marginBottom = "0";
+      fragEl.style.boxSizing = "border-box";
+      const spaceBefore = paragraphBlock.attrs?.spacing?.before ?? 0;
+      const spaceAfter = paragraphBlock.attrs?.spacing?.after ?? 0;
+      if (spaceBefore > 0) {
+        fragEl.style.paddingTop = `${spaceBefore}px`;
+      }
+      if (spaceAfter > 0) {
+        fragEl.style.paddingBottom = `${spaceAfter}px`;
+      }
 
       containerEl.append(fragEl);
       cursorY += paragraphMeasure.totalHeight;
@@ -1168,8 +1214,14 @@ export function renderPage(
     }
   }
 
-  // Collect floating image exclusion rectangles
+  // Collect floating image exclusion rectangles. wrapNone images (`behind`,
+  // `inFront`) and `topAndBottom` block images do NOT shrink line widths —
+  // they're filtered out here so text measurement ignores them. Without this,
+  // a behindDoc letterhead would carve a vertical column out of body text.
   for (const img of allFloatingImages) {
+    if (!img.affectsTextWrap) {
+      continue;
+    }
     floatingRects.push({
       side: img.side,
       x: img.x,
@@ -1231,10 +1283,19 @@ export function renderPage(
       ? rectsToFloatingZones(floatingRects, contentWidth)
       : [];
 
-  // PHASE 3: Render floating images in a page-level layer
-  if (allFloatingImages.length > 0) {
-    const floatingLayer = renderFloatingImagesLayer(allFloatingImages, doc);
-    contentEl.append(floatingLayer);
+  // PHASE 3a: Render behindDoc images first so they paint below body text.
+  // Front-layer images (everything else) are appended after fragments below
+  // so they overlay content as Word does for `inFront` and side-wrapped
+  // images.
+  const behindFloatingImages = allFloatingImages.filter((img) => img.behindDoc);
+  const frontFloatingImages = allFloatingImages.filter((img) => !img.behindDoc);
+  if (behindFloatingImages.length > 0) {
+    const behindLayer = renderFloatingImagesLayer(
+      behindFloatingImages,
+      doc,
+      "behind",
+    );
+    contentEl.append(behindLayer);
   }
 
   // PHASE 4: Render each fragment with floating image awareness
@@ -1369,6 +1430,18 @@ export function renderPage(
       top: page.margins.top,
     });
     contentEl.append(fragmentEl);
+  }
+
+  // PHASE 3b: Render front-layer floating images after text fragments so
+  // wrapNone `inFront` images and side-wrapped images paint above body text
+  // — matching Word's anchor stacking semantics.
+  if (frontFloatingImages.length > 0) {
+    const frontLayer = renderFloatingImagesLayer(
+      frontFloatingImages,
+      doc,
+      "front",
+    );
+    contentEl.append(frontLayer);
   }
 
   // Render column separator lines between columns (when w:sep is set)

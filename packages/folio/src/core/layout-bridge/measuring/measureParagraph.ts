@@ -220,7 +220,21 @@ function calculateTypographyMetrics(
 }
 
 /**
- * Calculate metrics for an empty paragraph
+ * Word's "single line spacing" floor (≈ 1.15×) applied to empty paragraphs
+ * with `auto`/`atLeast` line rules. Without this, narrow-metric fonts
+ * (Arial Narrow, OS/2 ratio ≈ 1.117) collapse empty rows visibly tighter
+ * than Word renders them. See eigenpal #391/#394.
+ */
+const WORD_SINGLE_LINE_FLOOR = 1.15;
+
+/**
+ * Calculate metrics for an empty paragraph.
+ *
+ * Word renders an empty paragraph as a single readable line — its line
+ * height never collapses below 1.15 × font size, even when the doc
+ * explicitly writes `<w:line w:val="240"/>` (1.0×). The floor is scoped to
+ * `auto`/`atLeast` line rules; `exact` means exact (per OOXML §17.3.1.33)
+ * and stays untouched.
  */
 function calculateEmptyParagraphMetrics(
   fontSize: number,
@@ -231,7 +245,17 @@ function calculateEmptyParagraphMetrics(
     fontSize,
     fontFamily: fontFamily ?? DEFAULT_FONT_FAMILY,
   });
-  return calculateTypographyMetrics(fontSize, spacing, metrics);
+  const result = calculateTypographyMetrics(fontSize, spacing, metrics);
+
+  const lineRule = spacing?.lineRule ?? "auto";
+  if (lineRule === "auto" || lineRule === "atLeast") {
+    const fontSizePx = ptToPx(fontSize);
+    const floor = fontSizePx * WORD_SINGLE_LINE_FLOOR;
+    if (result.lineHeight < floor) {
+      return { ...result, lineHeight: floor };
+    }
+  }
+  return result;
 }
 
 /**
@@ -362,7 +386,39 @@ export function measureParagraph(
   const bodyContentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
   // First line offset: positive = first-line indent (less space), negative = hanging (more space)
   // Subtracting gives correct width in both cases
-  const baseFirstLineWidth = Math.max(1, bodyContentWidth - firstLineOffset);
+  let baseFirstLineWidth = Math.max(1, bodyContentWidth - firstLineOffset);
+
+  // List marker on first-line-indent paragraphs: the marker is rendered
+  // inline at the start of the first line and takes its own width. Word's
+  // measurement includes the marker in the first line's content; folio
+  // renders the marker as a separately-prepended span that's *not* in the
+  // run list, so we must subtract its width here. Without this, the line
+  // breaker thinks the first line has a full `bodyWidth - firstLine` of
+  // text room, the painter then pushes some text past the right margin,
+  // and a trailing run (e.g. ". The Company...") wraps to the next line.
+  // Hanging-indent lists already account for the marker via the hanging
+  // gap (see baseFirstLineWidth shrinking through firstLineOffset).
+  if (
+    attrs?.listMarker &&
+    !attrs.listMarkerHidden &&
+    !((indent?.hanging ?? 0) > 0)
+  ) {
+    const markerFontSize =
+      attrs.listMarkerFontSize ?? attrs.defaultFontSize ?? DEFAULT_FONT_SIZE;
+    const markerFontFamily =
+      attrs.listMarkerFontFamily ??
+      attrs.defaultFontFamily ??
+      DEFAULT_FONT_FAMILY;
+    const markerStyle: FontStyle = {
+      fontFamily: markerFontFamily,
+      fontSize: markerFontSize,
+    };
+    const markerTextWidth = measureTextWidth(attrs.listMarker, markerStyle);
+    // 12 px tab-after gap, matching the painter's `paddingRight: 12px`
+    // on the marker box for first-line-indent lists.
+    const markerSlotWidth = markerTextWidth + 12;
+    baseFirstLineWidth = Math.max(1, baseFirstLineWidth - markerSlotWidth);
+  }
 
   // Track cumulative height for floating zone calculations
   let cumulativeHeight = 0;
@@ -624,13 +680,25 @@ export function measureParagraph(
 
     if (isImageRun(run)) {
       const wrapType = run.wrapType;
+      // Match the painter's `isFloatingImageRun` classification —
+      // including `behind` / `inFront` (wrapNone). These images are
+      // anchored at absolute coordinates and the painter lifts them
+      // out of the paragraph flow, so the measurer must also skip
+      // them: otherwise the line reserves the image's inline width
+      // and height while the painter renders it as an overlay,
+      // leaving phantom gaps in the body text (Codex PR #258 review).
+      // Drop the `run.position` precondition too — wrapNone images
+      // can be authored without an explicit `<wp:positionH>` and
+      // still shouldn't contribute to inline metrics.
       const isFloating =
         run.displayMode === "float" ||
-        (wrapType && ["square", "tight", "through"].includes(wrapType));
+        wrapType === "square" ||
+        wrapType === "tight" ||
+        wrapType === "through" ||
+        wrapType === "behind" ||
+        wrapType === "inFront";
 
-      // Skip truly floating images - they don't contribute to line height
-      // (they are positioned absolutely and text wraps around them)
-      if (run.position && isFloating) {
+      if (isFloating) {
         currentLine.toRun = runIndex;
         currentLine.toChar = 1;
         continue;

@@ -10,7 +10,7 @@ import {
   getMidChainIndices,
   hasPageBreakBefore,
 } from "./keep-together";
-import { createPaginator } from "./paginator";
+import { FOOTNOTE_SEPARATOR_HEIGHT, createPaginator } from "./paginator";
 import type {
   FlowBlock,
   Measure,
@@ -88,17 +88,45 @@ export function collectSectionConfigs(
 }
 
 /**
- * Get spacing before a paragraph block.
+ * Whether a paragraph block has no visible content (no runs, or a single
+ * empty text run). Word collapses style-inherited spacing on empty
+ * paragraphs (only direct `<w:pPr><w:spacing>` formatting survives) — see
+ * eigenpal #402.
  */
-function getSpacingBefore(block: ParagraphBlock): number {
-  return block.attrs?.spacing?.before ?? 0;
+function isEmptyParagraph(block: ParagraphBlock): boolean {
+  if (block.runs.length === 0) {
+    return true;
+  }
+  if (block.runs.length !== 1) {
+    return false;
+  }
+  const r = block.runs[0];
+  return r?.kind === "text" && ((r as { text?: string }).text ?? "") === "";
 }
 
 /**
- * Get spacing after a paragraph block.
+ * Get spacing before a paragraph block. Empty paragraphs whose
+ * `before` was inherited from a paragraph style (not set inline) collapse
+ * to zero — Word fidelity for incidental empty separators.
+ */
+function getSpacingBefore(block: ParagraphBlock): number {
+  const value = block.attrs?.spacing?.before ?? 0;
+  if (isEmptyParagraph(block) && !block.attrs?.spacingExplicit?.before) {
+    return 0;
+  }
+  return value;
+}
+
+/**
+ * Get spacing after a paragraph block. Same empty-paragraph collapse rule
+ * as `getSpacingBefore`.
  */
 function getSpacingAfter(block: ParagraphBlock): number {
-  return block.attrs?.spacing?.after ?? 0;
+  const value = block.attrs?.spacing?.after ?? 0;
+  if (isEmptyParagraph(block) && !block.attrs?.spacingExplicit?.after) {
+    return 0;
+  }
+  return value;
 }
 
 /**
@@ -221,6 +249,9 @@ export function layoutDocument(
   const paginator = createPaginator({
     pageSize: initialConfig.pageSize,
     margins: initialConfig.margins,
+    ...(options.firstPageMargins !== undefined
+      ? { firstPageMargins: options.firstPageMargins }
+      : {}),
     columns: initialConfig.columns ?? DEFAULT_COLUMNS,
     ...(options.footnoteReservedHeights !== undefined
       ? { footnoteReservedHeights: options.footnoteReservedHeights }
@@ -275,6 +306,7 @@ export function layoutDocument(
           measure as ParagraphMeasure,
           paginator,
           paginator.getContentWidth(),
+          options.footnoteHeightById,
         );
         break;
 
@@ -344,13 +376,60 @@ export function layoutDocument(
 }
 
 /**
+ * Footnote refs whose run sits in line `[fromRun..toRun]`, with their
+ * pre-measured content heights. Empty when the engine isn't tracking
+ * dynamic fn demand. Used by `layoutParagraph` to (a) reserve fn
+ * height per line and (b) record the IDs on the host page so the
+ * painter renders the fn on the page where the ref-bearing line
+ * actually landed — even when the paragraph splits across pages
+ * (fragment pmStart/pmEnd is paragraph-wide and cannot disambiguate
+ * between split halves).
+ */
+function getLineFootnoteRefs(
+  block: ParagraphBlock,
+  fromRun: number,
+  toRun: number,
+  fnHeights: Map<number, number> | undefined,
+): { ids: number[]; height: number } {
+  if (!fnHeights) {
+    return { ids: [], height: 0 };
+  }
+  const ids: number[] = [];
+  let height = 0;
+  for (let r = fromRun; r <= toRun; r++) {
+    const run = block.runs[r];
+    if (!run || run.kind !== "text") {
+      continue;
+    }
+    const id = (run as { footnoteRefId?: number }).footnoteRefId;
+    if (id === undefined) {
+      continue;
+    }
+    const h = fnHeights.get(id);
+    if (h !== undefined) {
+      ids.push(id);
+      height += h;
+    }
+  }
+  return { ids, height };
+}
+
+/**
  * Layout a paragraph block onto pages.
+ *
+ * When `footnoteHeightById` is provided, each line carrying a footnote
+ * ref additionally reserves space on its host page for the fn's
+ * content. Pagination decisions look at the line's effective height
+ * (`lineHeight + lineFnHeight`) so a line cannot land on a page that
+ * lacks room for both — preventing footnote overflow without the
+ * static-reservation iteration loop.
  */
 function layoutParagraph(
   block: ParagraphBlock,
   measure: ParagraphMeasure,
   paginator: ReturnType<typeof createPaginator>,
   contentWidth: number,
+  footnoteHeightById?: Map<number, number>,
 ): void {
   if (measure.kind !== "paragraph") {
     throw new Error(`layoutParagraph: expected paragraph measure`);
@@ -393,20 +472,44 @@ function layoutParagraph(
 
     // Calculate how many lines fit
     let linesHeight = 0;
+    let linesFnHeight = 0;
+    const linesFnIds: number[] = [];
     let fittingLines = 0;
 
-    for (let j = currentLineIndex; j < lines.length; j++) {
-      const lineHeight = lines[j]!.lineHeight; // SAFETY: j < lines.length
-      const totalWithLine = linesHeight + lineHeight;
+    // The first fragment of a paragraph eats `spaceBefore` from the
+    // available height for *every* line check, not only the first one.
+    // Pre-fix the loop checked `linesHeight + lineHeight + spaceBefore`
+    // only when `j === currentLineIndex`; subsequent lines compared bare
+    // line totals against the full available height. That let the loop
+    // claim more lines than would actually fit, then `addFragment` (which
+    // correctly sums `spaceBefore + linesHeight`) refused the placement
+    // and bumped the *whole* fragment to the next page. Result: page-end
+    // paragraphs with multi-line content didn't split — they jumped the
+    // page boundary, leaving a chunk of empty space above.
+    const firstFragmentSpaceBefore = currentLineIndex === 0 ? spaceBefore : 0;
 
-      // Add space before only for first fragment
+    for (let j = currentLineIndex; j < lines.length; j++) {
+      const line = lines[j]!; // SAFETY: j < lines.length
+      const lineHeight = line.lineHeight;
+      const lineRefs = getLineFootnoteRefs(
+        block,
+        line.fromRun,
+        line.toRun,
+        footnoteHeightById,
+      );
+      const totalWithLine = linesHeight + lineHeight;
       const withSpacing =
-        currentLineIndex === 0 && j === currentLineIndex
-          ? totalWithLine + spaceBefore
-          : totalWithLine;
+        totalWithLine +
+        firstFragmentSpaceBefore +
+        linesFnHeight +
+        lineRefs.height;
 
       if (withSpacing <= availableHeight || fittingLines === 0) {
         linesHeight = totalWithLine;
+        linesFnHeight += lineRefs.height;
+        for (const id of lineRefs.ids) {
+          linesFnIds.push(id);
+        }
         fittingLines++;
       } else {
         break;
@@ -434,6 +537,40 @@ function layoutParagraph(
       ...(!isLastFragment ? { continuesOnNext: true } : {}),
     };
 
+    // Ensure the page can accommodate body lines + footnote demand
+    // *together* before placing. Without this, the `fittingLines === 0`
+    // fallback in the loop above may force a line carrying a fn ref
+    // onto a page that has only a hair of body space left — body fits
+    // by itself but `addFootnoteHeight` afterwards drops contentBottom
+    // below cursorY, producing an overlap with the fn area.
+    //
+    // Two-phase check (Codex PR #258 reviews — both edges):
+    //
+    // 1. Try without the separator overhead. The current page may
+    //    already host a footnote — in that case `addFootnoteHeight`
+    //    will *not* reserve another separator, so adding 13 px here
+    //    would force an unnecessary page advance and split the
+    //    paragraph between pages even though the line + fn still fit.
+    //
+    // 2. After the first `ensureFits`, re-read the page state. If we
+    //    landed on a *fresh* page (`footnoteHeight === 0`), the next
+    //    `addFootnoteHeight` call *will* reserve a separator — so we
+    //    need to verify the line + fn + separator all still fit on
+    //    that page. Otherwise the post-commit `addFootnoteHeight`
+    //    drops contentBottom past the just-committed line.
+    if (linesFnHeight > 0) {
+      paginator.ensureFits(effectiveSpaceBefore + linesHeight + linesFnHeight);
+      const stateAfter = paginator.getCurrentState();
+      if (stateAfter.footnoteHeight === 0) {
+        paginator.ensureFits(
+          effectiveSpaceBefore +
+            linesHeight +
+            linesFnHeight +
+            FOOTNOTE_SEPARATOR_HEIGHT,
+        );
+      }
+    }
+
     const result = paginator.addFragment(
       fragment,
       linesHeight,
@@ -441,6 +578,17 @@ function layoutParagraph(
       effectiveSpaceAfter,
     );
     fragment.y = result.y;
+
+    // Now that the lines have committed to this page, grow the page's
+    // footnote reservation for any fn refs they carry, and record the
+    // IDs on the host page directly. Page → fn-ID mapping is driven by
+    // line-level placement here (not by post-layout pmRange mapping)
+    // so a fn ref that lives in a continuation fragment of a split
+    // paragraph is correctly attributed to the page where the
+    // ref-bearing line landed (Codex PR #258 review).
+    if (linesFnHeight > 0) {
+      paginator.addFootnoteHeight(linesFnHeight, linesFnIds);
+    }
 
     currentLineIndex += fittingLines;
 
