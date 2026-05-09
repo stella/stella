@@ -67,6 +67,10 @@ Object.defineProperty(globalThis, "__APP_VERSION__", {
   configurable: true,
   value: "test",
 });
+Object.defineProperty(globalThis, "__APP_COMMIT_SHA__", {
+  configurable: true,
+  value: "abc123",
+});
 
 void mock.module("@/env", () => ({
   env: {

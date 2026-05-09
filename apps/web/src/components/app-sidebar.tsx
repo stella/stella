@@ -1201,7 +1201,7 @@ export function AppSidebar(props: AppSidebarProps) {
                   {t("common.signOut")}
                 </MenuItem>
                 <div className="text-foreground-ghost px-2 pt-1.5 pb-1 text-[0.6875rem] tabular-nums">
-                  v{__APP_VERSION__}
+                  v{__APP_VERSION__} · {__APP_COMMIT_SHA__.slice(0, 12)}
                 </div>
               </MenuPopup>
             </Menu>
