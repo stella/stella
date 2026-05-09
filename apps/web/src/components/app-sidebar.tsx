@@ -110,6 +110,7 @@ import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/crea
 const isDev = import.meta.env.DEV;
 const RECENTS_LIMIT = 5;
 const HOLD_DELAY_MS = 500;
+const CHANGELOG_URL = "https://stll.app/changelog";
 // TODO: Persist pinned workspaces on the backend (user
 // preference or a `pinned` flag on the workspace member).
 
@@ -1201,7 +1202,15 @@ export function AppSidebar(props: AppSidebarProps) {
                   {t("common.signOut")}
                 </MenuItem>
                 <div className="text-foreground-ghost px-2 pt-1.5 pb-1 text-[0.6875rem] tabular-nums">
-                  v{__APP_VERSION__} · {__APP_COMMIT_SHA__.slice(0, 12)}
+                  <a
+                    className="hover:text-foreground hover:underline"
+                    href={CHANGELOG_URL}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    v{__APP_VERSION__}
+                  </a>{" "}
+                  · {__APP_COMMIT_SHA__.slice(0, 12)}
                 </div>
               </MenuPopup>
             </Menu>
