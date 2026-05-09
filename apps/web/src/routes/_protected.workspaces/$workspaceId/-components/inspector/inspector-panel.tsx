@@ -2540,29 +2540,30 @@ const fallbackIconUrl = (rawUrl: string): string | undefined => {
   }
 };
 
+type ExternalPdfState =
+  | {
+      status: "idle" | "loading" | "error";
+      buffer?: undefined;
+      token?: undefined;
+    }
+  | { status: "ready"; buffer: ArrayBuffer; token: string };
+
 const useExternalPdfBuffer = ({
   enabled,
   url,
 }: {
   enabled: boolean;
   url?: string | undefined;
-}): {
-  buffer: ArrayBuffer | undefined;
-  status: "error" | "idle" | "loading" | "ready";
-} => {
-  const [buffer, setBuffer] = useState<ArrayBuffer | undefined>();
-  const [status, setStatus] = useState<"error" | "idle" | "loading" | "ready">(
-    "idle",
-  );
+}): ExternalPdfState => {
+  const [state, setState] = useState<ExternalPdfState>({ status: "idle" });
 
   useEffect(() => {
-    setBuffer(undefined);
     if (!enabled || url === undefined) {
-      setStatus("idle");
+      setState({ status: "idle" });
       return undefined;
     }
 
-    setStatus("loading");
+    setState({ status: "loading" });
     const controller = new AbortController();
 
     void (async () => {
@@ -2573,7 +2574,7 @@ const useExternalPdfBuffer = ({
 
       if (!response.ok || controller.signal.aborted) {
         if (!controller.signal.aborted) {
-          setStatus("error");
+          setState({ status: "error" });
         }
         return;
       }
@@ -2583,12 +2584,15 @@ const useExternalPdfBuffer = ({
         return;
       }
 
-      setBuffer(next);
-      setStatus("ready");
+      // The PDF document cache (`usePDFDocument`) keys only by
+      // `fileId` and ignores the buffer, so a same-URL refetch with
+      // new bytes would otherwise return the stale parsed document.
+      // The token rotates per buffer fetch and is folded into the
+      // `fileId` so each new buffer parses from scratch.
+      setState({ status: "ready", buffer: next, token: crypto.randomUUID() });
     })().catch(() => {
       if (!controller.signal.aborted) {
-        setBuffer(undefined);
-        setStatus("error");
+        setState({ status: "error" });
       }
     });
 
@@ -2597,30 +2601,30 @@ const useExternalPdfBuffer = ({
     };
   }, [enabled, url]);
 
-  return { buffer, status };
+  return state;
 };
 
-const externalPdfFallback: PDFPageFallback = {
-  suspense: (
-    <div className="space-y-3 p-4">
-      <Skeleton className="h-4 w-2/3" />
-      <Skeleton className="h-4 w-full" />
-      <Skeleton className="h-4 w-5/6" />
-      <Skeleton className="h-4 w-4/5" />
-    </div>
-  ),
-};
+const externalPdfSuspenseFallback = (
+  <div className="space-y-3 p-4">
+    <Skeleton className="h-4 w-2/3" />
+    <Skeleton className="h-4 w-full" />
+    <Skeleton className="h-4 w-5/6" />
+    <Skeleton className="h-4 w-4/5" />
+  </div>
+);
 
 const ExternalPdfPreview = ({
   buffer,
-  fileId,
   onOpenOriginal,
   status,
+  url,
+  token,
 }: {
   buffer: ArrayBuffer | undefined;
-  fileId: string;
   onOpenOriginal: () => void;
   status: "error" | "idle" | "loading" | "ready";
+  url: string;
+  token: string | undefined;
 }) => {
   if (status === "error") {
     return (
@@ -2631,21 +2635,29 @@ const ExternalPdfPreview = ({
     );
   }
 
-  if (buffer === undefined || status === "loading" || status === "idle") {
-    return (
-      <div className="space-y-3 p-4">
-        <Skeleton className="h-4 w-2/3" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-5/6" />
-        <Skeleton className="h-4 w-4/5" />
-      </div>
-    );
+  if (buffer === undefined || token === undefined || status !== "ready") {
+    return externalPdfSuspenseFallback;
   }
+
+  // Token rotates per buffer fetch so the PDF document cache (which
+  // keys by fileId only) parses fresh bytes instead of returning the
+  // stale parsed document. The `key` on MeasuredPdfProvider forces
+  // the underlying store to remount whenever a new buffer arrives.
+  const fileId = `external:${url}:${token}`;
+  const fallback: PDFPageFallback = {
+    suspense: externalPdfSuspenseFallback,
+    error: (
+      <ExternalPreviewUnavailable
+        canOpenOriginal
+        onOpenOriginal={onOpenOriginal}
+      />
+    ),
+  };
 
   return (
     <MeasuredPdfProvider
       active
-      fallback={externalPdfFallback}
+      fallback={fallback}
       fieldId={fileId}
       initialScaleOffset={0}
       key={fileId}
@@ -3035,9 +3047,10 @@ const ExternalReferencePanel = ({
           ) : shouldLoadExternalPdf && externalFilePreviewUrl !== undefined ? (
             <ExternalPdfPreview
               buffer={externalPdfPreview.buffer}
-              fileId={`external:${externalFilePreviewUrl}`}
               onOpenOriginal={requestSafeExternalOpen}
               status={externalPdfPreview.status}
+              token={externalPdfPreview.token}
+              url={externalFilePreviewUrl}
             />
           ) : previewText || tab.snippet ? (
             <ScrollArea className="min-h-0 flex-1">
