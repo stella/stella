@@ -283,10 +283,18 @@ export function calculateHeaderFooterVisualBounds(
       cursorY = paragraphBottomY;
     } else {
       // Tables / images / textBoxes contribute their measured height as a
-      // single block (they don't reflow within the HF area).
+      // single block (they don't reflow within the HF area). Floating
+      // tables (`<w:tblpPr>`) anchor at (tblpX, tblpY) and don't
+      // participate in the cursorY flow — they're positioned absolutely by
+      // the renderer and can overlap surrounding HF content (Word
+      // semantics for unwrapped floating tables).
       let blockHeight = 0;
+      let advancesCursor = true;
       if (block.kind === "table" && measure.kind === "table") {
         blockHeight = measure.totalHeight;
+        if (block.floating) {
+          advancesCursor = false;
+        }
       } else if (block.kind === "image" && measure.kind === "image") {
         blockHeight = measure.height;
       } else if (block.kind === "textBox" && measure.kind === "textBox") {
@@ -294,10 +302,12 @@ export function calculateHeaderFooterVisualBounds(
       } else {
         continue;
       }
-      const blockBottomY = cursorY + blockHeight;
-      visualTop = Math.min(visualTop, cursorY);
-      visualBottom = Math.max(visualBottom, blockBottomY);
-      cursorY = blockBottomY;
+      if (advancesCursor) {
+        const blockBottomY = cursorY + blockHeight;
+        visualTop = Math.min(visualTop, cursorY);
+        visualBottom = Math.max(visualBottom, blockBottomY);
+        cursorY = blockBottomY;
+      }
     }
   }
 
@@ -362,11 +372,20 @@ export function convertHeaderFooterToContent(
   const blocksForMeasure = normalizeHeaderFooterMeasureBlocks(blocks);
   const measures = options.measureBlocks(blocksForMeasure, contentWidth);
   let totalHeight = 0;
-  for (const m of measures) {
+  for (let i = 0; i < measures.length; i++) {
+    const m = measures[i];
+    const b = blocks[i];
+    if (!m || !b) {
+      continue;
+    }
     if (m.kind === "paragraph") {
       totalHeight += m.totalHeight;
     } else if (m.kind === "table") {
-      totalHeight += m.totalHeight;
+      // Floating tables (`<w:tblpPr>`) anchor at (tblpX, tblpY) and don't
+      // contribute to the in-flow height that drives body push-down.
+      if (!(b.kind === "table" && b.floating)) {
+        totalHeight += m.totalHeight;
+      }
     } else if (m.kind === "image") {
       totalHeight += m.height;
     } else if (m.kind === "textBox") {

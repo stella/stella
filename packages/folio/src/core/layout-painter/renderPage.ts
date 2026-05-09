@@ -359,34 +359,46 @@ function resolveHeaderFooterFloatingTablePosition(
   measure: TableMeasure,
   layout: HeaderFooterLayoutInfo,
 ): { left: number; top: number } {
+  // Anchor-aware spec resolution: "right"/"bottom"/"center" are computed
+  // relative to whichever frame the anchor selects (page vs margin).
+  // Coordinates are returned relative to the HF container, so the page
+  // anchor subtracts the HF flow origin (`flowLeft` / `flowTop`).
+  const horzAnchor = floating.horzAnchor ?? "margin";
+  const vertAnchor = floating.vertAnchor ?? "margin";
+  const horzFrameWidth =
+    horzAnchor === "page" ? layout.pageWidth : layout.contentWidth;
+  const horzFrameOffset = horzAnchor === "page" ? -layout.flowLeft : 0;
+  const vertFrameHeight =
+    vertAnchor === "page"
+      ? layout.pageHeight
+      : layout.pageHeight - layout.margins.top - layout.margins.bottom;
+  const vertFrameOffset =
+    vertAnchor === "page"
+      ? -layout.flowTop
+      : layout.margins.top - layout.flowTop;
+
   // Horizontal
   let left = 0;
   if (floating.tblpXSpec === "left") {
-    left = 0;
+    left = horzFrameOffset;
   } else if (floating.tblpXSpec === "right") {
-    left = layout.contentWidth - measure.totalWidth;
+    left = horzFrameOffset + horzFrameWidth - measure.totalWidth;
   } else if (floating.tblpXSpec === "center") {
-    left = (layout.contentWidth - measure.totalWidth) / 2;
+    left = horzFrameOffset + (horzFrameWidth - measure.totalWidth) / 2;
   } else if (floating.tblpX !== undefined) {
-    left =
-      floating.horzAnchor === "page"
-        ? floating.tblpX - layout.flowLeft
-        : floating.tblpX;
+    left = horzFrameOffset + floating.tblpX;
   }
 
   // Vertical
   let top = 0;
   if (floating.tblpYSpec === "top") {
-    top = 0;
+    top = vertFrameOffset;
   } else if (floating.tblpYSpec === "bottom") {
-    top = layout.pageHeight - measure.totalHeight - layout.flowTop;
+    top = vertFrameOffset + vertFrameHeight - measure.totalHeight;
   } else if (floating.tblpYSpec === "center") {
-    top = (layout.pageHeight - measure.totalHeight) / 2 - layout.flowTop;
+    top = vertFrameOffset + (vertFrameHeight - measure.totalHeight) / 2;
   } else if (floating.tblpY !== undefined) {
-    top =
-      floating.vertAnchor === "page"
-        ? floating.tblpY - layout.flowTop
-        : floating.tblpY;
+    top = vertFrameOffset + floating.tblpY;
   }
 
   return { left, top };
@@ -848,12 +860,17 @@ function renderHeaderFooterContent(
       // Floating tables (`<w:tblpPr>`) opt out of the cursorY flow. They
       // anchor at (tblpX, tblpY) per ECMA-376 §17.4.57 and don't advance
       // cursorY. Inline tables stack within the HF container at cursorY.
+      // `renderTableFragment` already sets `position: absolute` on its
+      // returned element; we re-assert it here for parity with the
+      // paragraph branch and so future changes to renderTableFragment
+      // don't silently break HF positioning.
       if (block.floating) {
         const { left, top } = resolveHeaderFooterFloatingTablePosition(
           block.floating,
           measure,
           layout,
         );
+        fragEl.style.position = "absolute";
         fragEl.style.top = `${top}px`;
         fragEl.style.left = `${left}px`;
         containerEl.append(fragEl);
@@ -861,6 +878,7 @@ function renderHeaderFooterContent(
         // floating table weren't there (Word semantics for unwrapped
         // floating tables).
       } else {
+        fragEl.style.position = "absolute";
         fragEl.style.top = `${cursorY}px`;
         fragEl.style.left = "0";
         containerEl.append(fragEl);
