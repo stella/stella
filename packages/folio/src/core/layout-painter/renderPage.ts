@@ -884,6 +884,31 @@ function renderHeaderFooterContent(
         containerEl.append(fragEl);
         cursorY += measure.totalHeight;
       }
+    } else if (block.kind === "textBox" && measure.kind === "textBox") {
+      // The unified pipeline extracts top-level text boxes inside H/F as
+      // their own block. `renderTextBoxFragment` sets `position: absolute`
+      // internally; we only supply top/left so it stacks at cursorY.
+      const syntheticFragment: TextBoxFragment = {
+        kind: "textBox",
+        blockId: block.id,
+        x: 0,
+        y: cursorY,
+        width: contentWidth,
+        height: measure.height,
+        ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
+        ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
+      };
+      const fragEl = renderTextBoxFragment(
+        syntheticFragment,
+        block,
+        measure,
+        hfContext,
+        { document: doc },
+      );
+      fragEl.style.top = `${cursorY}px`;
+      fragEl.style.left = "0";
+      containerEl.append(fragEl);
+      cursorY += measure.height;
     }
   }
 
