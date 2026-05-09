@@ -25,7 +25,7 @@ describe("buildCallbackRedirectUrl", () => {
     );
   });
 
-  test("preserves trailing path segments and percent-encodes slug", () => {
+  test("percent-encodes slugs that contain whitespace", () => {
     const url = buildCallbackRedirectUrl("https://example.test/", {
       status: "connected",
       slug: "with space",
