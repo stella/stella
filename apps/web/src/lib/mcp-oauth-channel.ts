@@ -15,18 +15,21 @@ export const mcpOAuthOutcomeSchema = v.union([
 export type McpOAuthOutcome = v.InferOutput<typeof mcpOAuthOutcomeSchema>;
 
 export function broadcastMcpOAuthOutcome(outcome: McpOAuthOutcome): void {
-  const channel = new BroadcastChannel(CHANNEL_NAME);
-  // BroadcastChannel.postMessage takes no targetOrigin; messages are
-  // confined to the same origin by the browser's BroadcastChannel
-  // contract.
-  // eslint-disable-next-line unicorn/require-post-message-target-origin
-  channel.postMessage(outcome);
-  channel.close();
+  // Prefer BroadcastChannel (covers same-origin tabs even when COOP
+  // severs `window.opener`). Fall back to `opener.postMessage` only
+  // when BroadcastChannel is unavailable, so the subscriber on the
+  // opener page receives the outcome exactly once.
+  if (typeof BroadcastChannel !== "undefined") {
+    const channel = new BroadcastChannel(CHANNEL_NAME);
+    // BroadcastChannel.postMessage takes no targetOrigin; messages are
+    // confined to the same origin by the browser's BroadcastChannel
+    // contract.
+    // eslint-disable-next-line unicorn/require-post-message-target-origin
+    channel.postMessage(outcome);
+    channel.close();
+    return;
+  }
 
-  // Belt-and-braces: some browsers preserve `window.opener` across
-  // the OAuth round-trip, others sever it via COOP. BroadcastChannel
-  // covers same-origin tabs regardless; postMessage is a fallback
-  // for environments without BroadcastChannel support.
   // SAFETY: lib.dom types `window.opener` as `any` because the
   // opener may be a Window from any origin. We post to our own
   // origin only, so narrowing to the postMessage surface is safe.
@@ -47,8 +50,11 @@ export function subscribeToMcpOAuthOutcome(
     }
   };
 
-  const channel = new BroadcastChannel(CHANNEL_NAME);
-  channel.addEventListener("message", onMessage);
+  const channel =
+    typeof BroadcastChannel === "undefined"
+      ? null
+      : new BroadcastChannel(CHANNEL_NAME);
+  channel?.addEventListener("message", onMessage);
 
   const onWindowMessage = (event: MessageEvent) => {
     if (event.origin !== window.location.origin) {
@@ -59,8 +65,8 @@ export function subscribeToMcpOAuthOutcome(
   window.addEventListener("message", onWindowMessage);
 
   return () => {
-    channel.removeEventListener("message", onMessage);
-    channel.close();
+    channel?.removeEventListener("message", onMessage);
+    channel?.close();
     window.removeEventListener("message", onWindowMessage);
   };
 }
