@@ -19,6 +19,15 @@ export type RenderContext = {
   contentWidth?: number;
   /** When true, floating images render in-flow instead of being skipped (for table cells) */
   insideTableCell?: boolean;
+  /**
+   * How the renderer should position its outer element. The body lays
+   * fragments at absolute (x, y) on the page (`'absolute'`), while
+   * headers/footers stack blocks vertically inside their own container
+   * (`'absolute'` with caller-supplied top/left). The default is
+   * undefined; renderers fall back to `position: relative` and let the
+   * caller override styles.
+   */
+  positioning?: "absolute" | "flow";
 };
 
 /**

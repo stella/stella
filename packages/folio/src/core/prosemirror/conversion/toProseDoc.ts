@@ -2186,7 +2186,11 @@ function convertTextBox(
 
 /**
  * Convert HeaderFooter content (array of Paragraph/Table blocks) to a ProseMirror document.
- * Used for editing headers/footers in their own ProseMirror editor.
+ * Used for editing headers/footers in their own ProseMirror editor and for
+ * the unified header/footer render pipeline (see
+ * `core/layout-bridge/headerFooterLayout.ts`). `theme` lives in
+ * `ToProseDocOptions` for future themeColor cell-shading resolution; folio's
+ * `convertTable` does not yet thread it (orthogonal upstream divergence).
  */
 export function headerFooterToProseDoc(
   content: (Paragraph | Table)[],

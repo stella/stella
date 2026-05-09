@@ -44,6 +44,8 @@ import {
   collectFootnoteRefs,
   buildFootnoteContentMap,
 } from "../core/layout-bridge/footnoteLayout";
+import { convertHeaderFooterToContent } from "../core/layout-bridge/headerFooterLayout";
+import type { HeaderFooterMetrics } from "../core/layout-bridge/headerFooterLayout";
 import {
   hitTestFragment,
   hitTestTableCell,
@@ -66,10 +68,7 @@ import type {
   CaretPosition,
 } from "../core/layout-bridge/selectionRects";
 // Layout bridge
-import {
-  toFlowBlocks,
-  convertBorderSpecToLayout,
-} from "../core/layout-bridge/toFlowBlocks";
+import { toFlowBlocks } from "../core/layout-bridge/toFlowBlocks";
 // Layout engine
 import { layoutDocument } from "../core/layout-engine";
 import type { ColumnLayout, SectionLayoutConfig } from "../core/layout-engine";
@@ -83,11 +82,6 @@ import type {
   ImageBlock,
   ImageRun,
   PageMargins,
-  Run,
-  RunFormatting,
-  ParagraphAttrs,
-  ParagraphBorders,
-  ParagraphSpacing,
   SectionBreakBlock,
   TextBoxBlock,
   FootnoteContent,
@@ -105,14 +99,11 @@ import {
 } from "../core/layout-painter/renderPage";
 import type {
   RenderPageOptions,
-  HeaderFooterContent,
   FootnoteRenderItem,
 } from "../core/layout-painter/renderPage";
 // Table commands (for quick-action insert buttons)
 import { addRowBelow, addColumnRight } from "../core/prosemirror";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
-import { createStyleResolver } from "../core/prosemirror/styles/styleResolver";
-import type { StyleResolver } from "../core/prosemirror/styles/styleResolver";
 import type { Footnote } from "../core/types/content";
 // Types
 import type {
@@ -1164,644 +1155,6 @@ function measureSingleBlockWithoutFloatingZones(
   return measureBlock(block, blockWidth);
 }
 
-/**
- * Convert document Run content to FlowBlock runs.
- * Handles text, tabs, fields (PAGE, NUMPAGES), etc.
- *
- * Fields like PAGE and NUMPAGES are converted to FieldRun which gets
- * substituted with actual values at render time (in renderParagraph).
- *
- * @param content - Array of ParagraphContent from document
- */
-function convertDocumentRunsToFlowRuns(content: unknown[]): Run[] {
-  const runs: Run[] = [];
-
-  for (const item of content) {
-    const itemObj = item as Record<string, unknown>;
-
-    // Handle Run type (from Document)
-    if (itemObj["type"] === "run" && Array.isArray(itemObj["content"])) {
-      const formatting = itemObj["formatting"] as
-        | Record<string, unknown>
-        | undefined;
-      const runFormatting: RunFormatting = {};
-
-      if (formatting) {
-        if (formatting["bold"]) {
-          runFormatting.bold = true;
-        }
-        if (formatting["italic"]) {
-          runFormatting.italic = true;
-        }
-        if (formatting["underline"]) {
-          runFormatting.underline = true;
-        }
-        if (formatting["strike"]) {
-          runFormatting.strike = true;
-        }
-        if (formatting["color"]) {
-          const color = formatting["color"] as Record<string, unknown>;
-          if (color["val"]) {
-            runFormatting.color = `#${color["val"]}`;
-          } else if (color["rgb"]) {
-            runFormatting.color = `#${color["rgb"]}`;
-          }
-        }
-        if (formatting["fontSize"]) {
-          runFormatting.fontSize = (formatting["fontSize"] as number) / 2; // half-points to points
-        }
-        if (formatting["fontFamily"]) {
-          const ff = formatting["fontFamily"] as Record<string, unknown>;
-          runFormatting.fontFamily = (ff["ascii"] || ff["hAnsi"]) as string;
-        }
-      }
-
-      // Process run content
-      for (const runContent of itemObj["content"] as unknown[]) {
-        const rc = runContent as Record<string, unknown>;
-
-        if (rc["type"] === "text" && typeof rc["text"] === "string") {
-          runs.push({
-            kind: "text",
-            text: rc["text"],
-            ...runFormatting,
-          });
-        } else if (rc["type"] === "tab") {
-          runs.push({
-            kind: "tab",
-            ...runFormatting,
-          });
-        } else if (rc["type"] === "break") {
-          runs.push({
-            kind: "lineBreak",
-          });
-        } else if (rc["type"] === "drawing" && rc["image"]) {
-          // Handle images/drawings
-          const image = rc["image"] as Record<string, unknown>;
-          const size = image["size"] as
-            | { width: number; height: number }
-            | undefined;
-          // EMU to pixels: 1 inch = 914400 EMU, 1 inch = 96 pixels
-          const emuToPx = (emu: number) => Math.round((emu / 914_400) * 96);
-          const widthPx = size?.width ? emuToPx(size.width) : 100;
-          const heightPx = size?.height ? emuToPx(size.height) : 100;
-
-          // Check for position (floating/anchored images)
-          const position = image["position"] as
-            | {
-                horizontal?: {
-                  relativeTo?: string;
-                  posOffset?: number;
-                  align?: string;
-                };
-                vertical?: {
-                  relativeTo?: string;
-                  posOffset?: number;
-                  align?: string;
-                };
-              }
-            | undefined;
-
-          // Check for behindDoc (full-page background images)
-          const wrap = image["wrap"] as { type?: string } | undefined;
-          const behindDoc = wrap?.type === "behind";
-
-          runs.push({
-            kind: "image",
-            src: (image["src"] as string) || "",
-            width: widthPx,
-            height: heightPx,
-            alt: (image["alt"] as string) || undefined,
-            // Include position for floating images
-            position: position
-              ? {
-                  horizontal: position.horizontal,
-                  vertical: position.vertical,
-                }
-              : undefined,
-            behindDoc,
-          } as Run);
-        }
-      }
-    }
-
-    // Handle SimpleField (w:fldSimple) - PAGE, NUMPAGES, etc.
-    if (itemObj["type"] === "simpleField") {
-      const fieldType = itemObj["fieldType"] as string;
-
-      // Extract formatting from content runs (same approach as ComplexField)
-      const fieldFormatting: RunFormatting = {};
-      if (Array.isArray(itemObj["content"]) && itemObj["content"].length > 0) {
-        const firstRun = itemObj["content"][0] as Record<string, unknown>;
-        if (firstRun?.["type"] === "run" && firstRun["formatting"]) {
-          const formatting = firstRun["formatting"] as Record<string, unknown>;
-          if (formatting["fontSize"]) {
-            fieldFormatting.fontSize = (formatting["fontSize"] as number) / 2;
-          }
-          if (formatting["fontFamily"]) {
-            const ff = formatting["fontFamily"] as Record<string, unknown>;
-            fieldFormatting.fontFamily = (ff["ascii"] || ff["hAnsi"]) as string;
-          }
-          if (formatting["bold"]) {
-            fieldFormatting.bold = true;
-          }
-          if (formatting["italic"]) {
-            fieldFormatting.italic = true;
-          }
-          if (formatting["color"]) {
-            const c = formatting["color"] as Record<string, unknown>;
-            const val = (c["rgb"] || c["val"]) as string | undefined;
-            if (val) {
-              fieldFormatting.color = val.startsWith("#") ? val : `#${val}`;
-            }
-          }
-        }
-      }
-
-      if (fieldType === "PAGE") {
-        runs.push({
-          kind: "field",
-          fieldType: "PAGE",
-          fallback: "1",
-          ...fieldFormatting,
-        });
-      } else if (fieldType === "NUMPAGES") {
-        runs.push({
-          kind: "field",
-          fieldType: "NUMPAGES",
-          fallback: "1",
-          ...fieldFormatting,
-        });
-      } else if (Array.isArray(itemObj["content"])) {
-        // Use the display content for other fields
-        const displayRuns = convertDocumentRunsToFlowRuns(
-          itemObj["content"] as unknown[],
-        );
-        runs.push(...displayRuns);
-      }
-      continue;
-    }
-
-    // Handle ComplexField (fldChar sequence)
-    if (itemObj["type"] === "complexField") {
-      const fieldType = itemObj["fieldType"] as string;
-
-      // Extract formatting from fieldResult runs if available
-      const fieldFormatting: RunFormatting = {};
-      if (
-        Array.isArray(itemObj["fieldResult"]) &&
-        itemObj["fieldResult"].length > 0
-      ) {
-        const firstRun = itemObj["fieldResult"][0] as Record<string, unknown>;
-        if (firstRun?.["type"] === "run" && firstRun["formatting"]) {
-          const formatting = firstRun["formatting"] as Record<string, unknown>;
-          if (formatting["fontSize"]) {
-            fieldFormatting.fontSize = (formatting["fontSize"] as number) / 2;
-          }
-          if (formatting["fontFamily"]) {
-            const ff = formatting["fontFamily"] as Record<string, unknown>;
-            fieldFormatting.fontFamily = (ff["ascii"] || ff["hAnsi"]) as string;
-          }
-          if (formatting["bold"]) {
-            fieldFormatting.bold = true;
-          }
-          if (formatting["italic"]) {
-            fieldFormatting.italic = true;
-          }
-          if (formatting["color"]) {
-            const c = formatting["color"] as Record<string, unknown>;
-            const val = (c["rgb"] || c["val"]) as string | undefined;
-            if (val) {
-              fieldFormatting.color = val.startsWith("#") ? val : `#${val}`;
-            }
-          }
-        }
-      }
-
-      if (fieldType === "PAGE") {
-        runs.push({
-          kind: "field",
-          fieldType: "PAGE",
-          fallback: "1",
-          ...fieldFormatting,
-        });
-      } else if (fieldType === "NUMPAGES") {
-        runs.push({
-          kind: "field",
-          fieldType: "NUMPAGES",
-          fallback: "1",
-          ...fieldFormatting,
-        });
-      } else if (Array.isArray(itemObj["fieldResult"])) {
-        // Use the fieldResult for other fields
-        const displayRuns = convertDocumentRunsToFlowRuns(
-          itemObj["fieldResult"] as unknown[],
-        );
-        runs.push(...displayRuns);
-      }
-    }
-
-    // Handle Hyperlink
-    if (itemObj["type"] === "hyperlink" && Array.isArray(itemObj["children"])) {
-      const childRuns = convertDocumentRunsToFlowRuns(
-        itemObj["children"] as unknown[],
-      );
-      runs.push(...childRuns);
-    }
-  }
-
-  return runs;
-}
-
-type HeaderFooterMetrics = {
-  section: "header" | "footer";
-  pageSize: { w: number; h: number };
-  margins: PageMargins;
-};
-
-type PositionedAxis = {
-  relativeTo?: string;
-  posOffset?: number;
-  align?: string;
-  alignment?: string;
-};
-
-function getPositionAlignment(
-  axis: PositionedAxis | undefined,
-): string | undefined {
-  return axis?.align ?? axis?.alignment;
-}
-
-function resolveHeaderFooterVisualTop(
-  run: ImageRun,
-  paragraphY: number,
-  flowHeight: number,
-  metrics: HeaderFooterMetrics,
-): number {
-  const flowTop =
-    metrics.section === "header"
-      ? (metrics.margins.header ?? 48)
-      : metrics.pageSize.h - (metrics.margins.footer ?? 48) - flowHeight;
-  const vertical = run.position?.vertical;
-
-  if (!vertical) {
-    return paragraphY;
-  }
-
-  const align = getPositionAlignment(vertical);
-  const offsetPx =
-    vertical.posOffset !== undefined
-      ? emuToPixels(vertical.posOffset)
-      : undefined;
-
-  if (vertical.relativeTo === "page") {
-    if (offsetPx !== undefined) {
-      return offsetPx - flowTop;
-    }
-    if (align === "top") {
-      return -flowTop;
-    }
-    if (align === "bottom") {
-      return metrics.pageSize.h - run.height - flowTop;
-    }
-    if (align === "center") {
-      return (metrics.pageSize.h - run.height) / 2 - flowTop;
-    }
-  }
-
-  if (vertical.relativeTo === "margin") {
-    const marginTop = metrics.margins.top;
-    const marginHeight =
-      metrics.pageSize.h - metrics.margins.top - metrics.margins.bottom;
-    if (offsetPx !== undefined) {
-      return marginTop + offsetPx - flowTop;
-    }
-    if (align === "top") {
-      return marginTop - flowTop;
-    }
-    if (align === "bottom") {
-      return marginTop + marginHeight - run.height - flowTop;
-    }
-    if (align === "center") {
-      return marginTop + (marginHeight - run.height) / 2 - flowTop;
-    }
-  }
-
-  if (offsetPx !== undefined) {
-    return paragraphY + offsetPx;
-  }
-
-  return paragraphY;
-}
-
-function calculateHeaderFooterVisualBounds(
-  blocks: FlowBlock[],
-  measures: Measure[],
-  flowHeight: number,
-  metrics: HeaderFooterMetrics,
-): { visualTop: number; visualBottom: number } {
-  let visualTop = 0;
-  let visualBottom = flowHeight;
-  let cursorY = 0;
-
-  for (let i = 0; i < blocks.length; i++) {
-    const block = blocks[i];
-    const measure = measures[i];
-    if (block?.kind !== "paragraph" || measure?.kind !== "paragraph") {
-      continue;
-    }
-
-    const paragraphBlock = block as ParagraphBlock;
-    const paragraphStartY = cursorY;
-    const paragraphBottomY = paragraphStartY + measure.totalHeight;
-    visualTop = Math.min(visualTop, paragraphStartY);
-    visualBottom = Math.max(visualBottom, paragraphBottomY);
-
-    for (const run of paragraphBlock.runs) {
-      if (run.kind !== "image" || !run.position) {
-        continue;
-      }
-      const imageRun = run as ImageRun;
-      const runTop = resolveHeaderFooterVisualTop(
-        imageRun,
-        paragraphStartY,
-        flowHeight,
-        metrics,
-      );
-      visualTop = Math.min(visualTop, runTop);
-      visualBottom = Math.max(visualBottom, runTop + imageRun.height);
-    }
-
-    cursorY = paragraphBottomY;
-  }
-
-  return { visualTop, visualBottom };
-}
-
-/**
- * Convert HeaderFooter (document type) to HeaderFooterContent (render type).
- *
- * This converts parsed header/footer content into FlowBlocks that can be
- * rendered by the layout painter.
- *
- * Fields like PAGE and NUMPAGES are converted to FieldRun which gets
- * substituted with actual values at render time.
- *
- * @param headerFooter - The header/footer document content
- * @param contentWidth - Available width for content
- */
-function convertHeaderFooterToContent(
-  headerFooter: HeaderFooter | null | undefined,
-  contentWidth: number,
-  metrics: HeaderFooterMetrics,
-  styleResolver?: StyleResolver | null,
-): HeaderFooterContent | undefined {
-  if (
-    !headerFooter ||
-    !headerFooter.content ||
-    headerFooter.content.length === 0
-  ) {
-    return undefined;
-  }
-
-  const blocks: FlowBlock[] = [];
-
-  for (const item of headerFooter.content) {
-    const itemObj = item as unknown as Record<string, unknown>;
-
-    // Check for Document Paragraph type
-    if (itemObj["type"] === "paragraph" && Array.isArray(itemObj["content"])) {
-      const formatting = itemObj["formatting"] as
-        | Record<string, unknown>
-        | undefined;
-      const attrs: ParagraphAttrs = {};
-
-      // Resolve the paragraph style cascade so HF paragraphs inherit
-      // spacing/alignment/etc from `Normal` (or whatever pStyle they
-      // reference). HF parsing skips this cascade — without it,
-      // spaceBefore/spaceAfter inherited from a paragraph style is silently
-      // lost in headers/footers. Reuses the same StyleResolver the body uses.
-      const styleId =
-        typeof formatting?.["styleId"] === "string"
-          ? (formatting["styleId"] as string)
-          : undefined;
-      const resolvedStyle = styleResolver?.resolveParagraphStyle(styleId);
-      const styledPpr = resolvedStyle?.paragraphFormatting;
-
-      if (formatting) {
-        if (formatting["alignment"]) {
-          const align = formatting["alignment"] as string;
-          if (align === "both") {
-            attrs.alignment = "justify";
-          } else if (["left", "center", "right", "justify"].includes(align)) {
-            attrs.alignment = align as "left" | "center" | "right" | "justify";
-          }
-        }
-        // Convert paragraph borders (e.g., header bottom line, footer top line)
-        if (formatting["borders"]) {
-          const borders = formatting["borders"] as Record<string, unknown>;
-          const converted: ParagraphBorders = {};
-          for (const side of [
-            "top",
-            "bottom",
-            "left",
-            "right",
-            "between",
-          ] as const) {
-            const b = borders[side] as
-              | {
-                  style?: string;
-                  size?: number;
-                  color?: Record<string, string>;
-                }
-              | undefined;
-            if (b) {
-              const layoutBorder = convertBorderSpecToLayout(b);
-              if (layoutBorder) {
-                converted[side] = layoutBorder;
-              }
-            }
-          }
-          if (Object.keys(converted).length > 0) {
-            attrs.borders = converted;
-          }
-        }
-        // Convert spacing for measurement and rendering. lineSpacing affects
-        // line height; spaceBefore/spaceAfter are visualized as fragment
-        // padding by `renderHeaderFooterContent`. Word renders style-inherited
-        // paragraph spacing in headers/footers the same way as in body
-        // (NVCA-style first-page header: each paragraph has Normal's
-        // spaceAfter=240twips inherited, which produces the visible blank row
-        // above the body's first paragraph). Without these, last-paragraph
-        // spaceAfter is silently dropped and body content butts flush against
-        // the last header line.
-        // Inline pPr first, then fall back to the resolved style cascade.
-        const inlineLineSpacing = formatting["lineSpacing"];
-        const inlineSpaceBefore = formatting["spaceBefore"];
-        const inlineSpaceAfter = formatting["spaceAfter"];
-        const inlineLineRule = formatting["lineSpacingRule"] as
-          | string
-          | undefined;
-        const lineSpacing =
-          typeof inlineLineSpacing === "number"
-            ? inlineLineSpacing
-            : styledPpr?.lineSpacing;
-        const lineRule = inlineLineRule ?? styledPpr?.lineSpacingRule;
-        const spaceBeforeTwips =
-          typeof inlineSpaceBefore === "number"
-            ? inlineSpaceBefore
-            : styledPpr?.spaceBefore;
-        const spaceAfterTwips =
-          typeof inlineSpaceAfter === "number"
-            ? inlineSpaceAfter
-            : styledPpr?.spaceAfter;
-        if (
-          typeof lineSpacing === "number" ||
-          typeof spaceBeforeTwips === "number" ||
-          typeof spaceAfterTwips === "number"
-        ) {
-          const spacingAttrs: ParagraphSpacing = {};
-          if (typeof lineSpacing === "number") {
-            if (lineRule === "exact" || lineRule === "atLeast") {
-              spacingAttrs.line = twipsToPixels(lineSpacing);
-              spacingAttrs.lineUnit = "px";
-              spacingAttrs.lineRule = lineRule;
-            } else {
-              spacingAttrs.line = lineSpacing / 240;
-              spacingAttrs.lineUnit = "multiplier";
-              spacingAttrs.lineRule = "auto";
-            }
-          }
-          if (typeof spaceBeforeTwips === "number") {
-            spacingAttrs.before = twipsToPixels(spaceBeforeTwips);
-          }
-          if (typeof spaceAfterTwips === "number") {
-            spacingAttrs.after = twipsToPixels(spaceAfterTwips);
-          }
-          attrs.spacing = spacingAttrs;
-        }
-        // Convert tab stops (needed for center/right tab alignment in headers/footers)
-        if (
-          Array.isArray(formatting["tabs"]) &&
-          formatting["tabs"].length > 0
-        ) {
-          attrs.tabs = (
-            formatting["tabs"] as {
-              position: number;
-              alignment: string;
-              leader?: string;
-            }[]
-          ).map((tab) => {
-            const align =
-              tab.alignment === "left"
-                ? "start"
-                : tab.alignment === "right"
-                  ? "end"
-                  : tab.alignment;
-            const tabStop: import("../core/layout-engine/types").TabStop = {
-              val: align as
-                | "start"
-                | "end"
-                | "center"
-                | "decimal"
-                | "bar"
-                | "clear",
-              // Keep twips. The layout-bridge measurer (`computeTabWidth`)
-              // and renderer treat `tabStop.pos` as twips and call
-              // `twipsToPx` themselves — body content stores tabs in twips
-              // (see `toFlowBlocks`). Pre-converting to pixels here was
-              // double-converting (4770 twips → 318 px → treated as twips →
-              // ~21 px stop), collapsing the center tab back to a default
-              // narrow tab and pushing footer content (page number,
-              // centered text) to the wrong x.
-              pos: tab.position,
-            };
-            if (tab.leader) {
-              tabStop.leader = tab.leader as NonNullable<typeof tabStop.leader>;
-            }
-            return tabStop;
-          });
-        }
-      }
-
-      const runs = convertDocumentRunsToFlowRuns(
-        itemObj["content"] as unknown[],
-      );
-
-      // Empty paragraphs (blank lines) should still measure — add empty text run
-      if (runs.length === 0) {
-        runs.push({ kind: "text" as const, text: "" });
-      }
-      const paragraphBlock: ParagraphBlock = {
-        kind: "paragraph",
-        id: String(blocks.length),
-        runs,
-      };
-      if (Object.keys(attrs).length > 0) {
-        paragraphBlock.attrs = attrs;
-      }
-      blocks.push(paragraphBlock);
-    }
-  }
-
-  if (blocks.length === 0) {
-    return undefined;
-  }
-
-  // Build blocks for measurement that exclude floating images
-  // (floating images are positioned absolutely, don't affect paragraph height)
-  const blocksForMeasure: FlowBlock[] = blocks.map((block) => {
-    if (block.kind !== "paragraph") {
-      return block;
-    }
-    const pb = block as ParagraphBlock;
-    const hasFloating = pb.runs.some(
-      (r) =>
-        r.kind === "image" &&
-        "position" in r &&
-        (r as Record<string, unknown>)["position"],
-    );
-    if (!hasFloating) {
-      return block;
-    }
-    const inlineRuns = pb.runs.filter(
-      (r) =>
-        !(
-          r.kind === "image" &&
-          "position" in r &&
-          (r as Record<string, unknown>)["position"]
-        ),
-    );
-    // If only floating images remain, add an empty text run so the paragraph still measures
-    if (inlineRuns.length === 0) {
-      inlineRuns.push({ kind: "text" as const, text: "" });
-    }
-    return { ...pb, runs: inlineRuns };
-  });
-
-  const measures = measureBlocks(blocksForMeasure, contentWidth);
-  let totalHeight = 0;
-  for (const measure of measures) {
-    if (measure.kind === "paragraph") {
-      totalHeight += measure.totalHeight;
-    }
-  }
-  const { visualTop, visualBottom } = calculateHeaderFooterVisualBounds(
-    blocks,
-    measures,
-    totalHeight,
-    metrics,
-  );
-
-  return {
-    blocks,
-    measures,
-    height: totalHeight,
-    visualTop,
-    visualBottom,
-  };
-}
-
 // =============================================================================
 // FOOTNOTE HELPERS
 // =============================================================================
@@ -2161,30 +1514,32 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
           // Step 2.75: Prepare header/footer content for rendering (needed before layout
           // to compute effective margins when header content exceeds available space)
-          const hfMetricsHeader = {
-            section: "header" as const,
+          const hfMetricsHeader: HeaderFooterMetrics = {
+            section: "header",
             pageSize,
             margins,
           };
-          const hfMetricsFooter = {
-            section: "footer" as const,
+          const hfMetricsFooter: HeaderFooterMetrics = {
+            section: "footer",
             pageSize,
             margins,
           };
-          const headerFooterStyleResolver = styles
-            ? createStyleResolver(styles)
-            : null;
+          const hfOptions = {
+            ...(styles ? { styles } : {}),
+            ...(_theme !== undefined ? { theme: _theme } : {}),
+            measureBlocks,
+          };
           const headerContentForRender = convertHeaderFooterToContent(
             headerContent,
             contentWidth,
             hfMetricsHeader,
-            headerFooterStyleResolver,
+            hfOptions,
           );
           const footerContentForRender = convertHeaderFooterToContent(
             footerContent,
             contentWidth,
             hfMetricsFooter,
-            headerFooterStyleResolver,
+            hfOptions,
           );
           const hasTitlePg = sectionProperties?.titlePg === true;
           const firstPageHeaderForRender = hasTitlePg
@@ -2192,7 +1547,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 firstPageHeaderContent,
                 contentWidth,
                 hfMetricsHeader,
-                headerFooterStyleResolver,
+                hfOptions,
               )
             : undefined;
           const firstPageFooterForRender = hasTitlePg
@@ -2200,7 +1555,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 firstPageFooterContent,
                 contentWidth,
                 hfMetricsFooter,
-                headerFooterStyleResolver,
+                hfOptions,
               )
             : undefined;
 
