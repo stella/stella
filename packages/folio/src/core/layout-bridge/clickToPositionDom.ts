@@ -287,10 +287,17 @@ function findNearestSpan(
   _zoom: number,
 ): number | null {
   // Get all text spans on this page
-  const spans = pageEl.querySelectorAll("span[data-pm-start][data-pm-end]");
+  // Scope to body content — `pageEl` is the whole `.layout-page` and
+  // includes header/footer subtrees whose `data-pm-start` collides with body
+  // PM positions (HF content is a separate ProseMirror doc). Without scoping,
+  // a click outside any body span could resolve to an HF position.
+  const spans = pageEl.querySelectorAll(
+    ".layout-page-content span[data-pm-start][data-pm-end]",
+  );
   if (spans.length === 0) {
-    // No text spans - return position based on paragraph
-    const paragraphs = pageEl.querySelectorAll(".layout-paragraph");
+    const paragraphs = pageEl.querySelectorAll(
+      ".layout-page-content .layout-paragraph",
+    );
     if (paragraphs.length > 0) {
       const firstP = paragraphs[0] as HTMLElement;
       return Number(firstP.dataset["pmStart"]) || 0;
@@ -299,7 +306,7 @@ function findNearestSpan(
   }
 
   // Find the closest line to the click Y
-  const lines = pageEl.querySelectorAll(".layout-line");
+  const lines = pageEl.querySelectorAll(".layout-page-content .layout-line");
   let closestLine: HTMLElement | null = null;
   let closestLineDistance = Infinity;
 
@@ -396,7 +403,14 @@ export function getSelectionRectsFromDom(
   const rects: DomSelectionRect[] = [];
 
   // Find all spans that intersect with the selection
-  const spans = container.querySelectorAll("span[data-pm-start][data-pm-end]");
+  // Scope the query to body content. Headers and footers go through a
+  // separate ProseMirror document whose positions also start at 1, so an
+  // HF span can carry the same `data-pm-start` as a body run — without the
+  // scope, body selections paint phantom rects on HF text and clicks in
+  // body coords could resolve to HF positions.
+  const spans = container.querySelectorAll(
+    ".layout-page-content span[data-pm-start][data-pm-end]",
+  );
 
   for (const span of Array.from(spans)) {
     const spanEl = span as HTMLElement;
@@ -476,7 +490,14 @@ export function getCaretPositionFromDom(
   overlayRect: DOMRect,
 ): DomCaretPosition | null {
   // Find span containing this position
-  const spans = container.querySelectorAll("span[data-pm-start][data-pm-end]");
+  // Scope the query to body content. Headers and footers go through a
+  // separate ProseMirror document whose positions also start at 1, so an
+  // HF span can carry the same `data-pm-start` as a body run — without the
+  // scope, body selections paint phantom rects on HF text and clicks in
+  // body coords could resolve to HF positions.
+  const spans = container.querySelectorAll(
+    ".layout-page-content span[data-pm-start][data-pm-end]",
+  );
 
   for (const span of Array.from(spans)) {
     const spanEl = span as HTMLElement;
