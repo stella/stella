@@ -101,22 +101,42 @@ describe("loadDocxArchive", () => {
     });
   });
 
-  test("streaming read enforces per-entry cap when pre-flight passes", async () => {
-    // Pre-flight will pass (entry is 8 bytes, under maxEntryBytes 16),
-    // but the stream-time cap is set lower so the streaming guard
-    // takes over and rejects mid-read.
+  test("streaming read rejects an entry that exceeds the per-entry cap", async () => {
     const buffer = await buildArchive([
       { path: "word/document.xml", content: "<doc/>" },
       { path: "word/comments.xml", content: "X".repeat(8) },
     ]);
-    const archive = await loadDocxArchive(buffer, {
-      maxEntryBytes: 16,
+    const archive = await loadDocxArchive(buffer, { maxEntryBytes: 4 });
+    const error = await captureRejection(
+      archive.readEntryString("word/comments.xml"),
+    );
+    expect(error).toMatchObject({
+      _tag: "DocxArchiveError",
+      reason: "entry-too-large",
     });
-    // Override per-read by re-reading via low-level path: the public
-    // surface only takes the load-time options, so we instead simulate
-    // a tighter cap by reading a known entry that exceeds a hand-rolled
-    // expectation. (Documented as a smoke test for the streaming path.)
-    const xml = await archive.readEntryString("word/comments.xml");
-    expect(xml).toBe("XXXXXXXX");
+  });
+
+  test("serialised reads keep the cumulative budget consistent under concurrency", async () => {
+    // One 6-byte entry; pre-flight passes against an 8-byte budget.
+    // Reading the same entry twice in parallel costs 12 actual bytes,
+    // which must exceed the cap. Without serialisation both concurrent
+    // calls could observe `remaining=8` before either updates the
+    // running counter and slip 4 bytes past the budget.
+    const buffer = await buildArchive([
+      { path: "shared.txt", content: "X".repeat(6) },
+    ]);
+    const archive = await loadDocxArchive(buffer, { maxTotalBytes: 8 });
+    const [first, second] = await Promise.allSettled([
+      archive.readEntryString("shared.txt"),
+      archive.readEntryString("shared.txt"),
+    ]);
+    expect(first.status).toBe("fulfilled");
+    expect(second.status).toBe("rejected");
+    if (second.status === "rejected") {
+      expect(second.reason).toMatchObject({
+        _tag: "DocxArchiveError",
+        reason: "total-too-large",
+      });
+    }
   });
 });

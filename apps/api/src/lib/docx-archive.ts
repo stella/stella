@@ -62,6 +62,7 @@ const collectStreamBounded = async (
   stream: NodeJS.ReadableStream,
   perEntryMax: number,
   remainingBudget: number,
+  totalBudget: number,
   path: string,
 ): Promise<Buffer> =>
   await new Promise<Buffer>((resolve, reject) => {
@@ -89,7 +90,7 @@ const collectStreamBounded = async (
       if (entryRead > remainingBudget) {
         fail(
           "total-too-large",
-          `DOCX archive exceeded the ${remainingBudget + entryRead - piece.length}-byte cumulative decompression budget while reading "${path}"`,
+          `DOCX archive exceeded the ${totalBudget}-byte cumulative decompression budget while reading "${path}"`,
         );
         return;
       }
@@ -157,21 +158,37 @@ export const loadDocxArchive = async (
   }
 
   let totalRead = 0;
+  // Reads are serialised through this chain so the cumulative-budget
+  // check and the `totalRead` increment are observed atomically by
+  // each subsequent read. Concurrent callers each await the previous
+  // read's outcome before attempting their own decompression. A
+  // previous read failing must not break the chain for later reads —
+  // they should still get a consistent budget snapshot.
+  let readChain: Promise<unknown> = Promise.resolve();
 
   const readEntry = async (path: string): Promise<Buffer | null> => {
-    const entry = zip.file(path);
-    if (!entry) {
-      return null;
-    }
-    const remaining = maxTotalBytes - totalRead;
-    const buf = await collectStreamBounded(
-      entry.nodeStream("nodebuffer"),
-      maxEntryBytes,
-      remaining,
-      path,
+    const work = async (): Promise<Buffer | null> => {
+      const entry = zip.file(path);
+      if (!entry) {
+        return null;
+      }
+      const remaining = maxTotalBytes - totalRead;
+      const buf = await collectStreamBounded(
+        entry.nodeStream("nodebuffer"),
+        maxEntryBytes,
+        remaining,
+        maxTotalBytes,
+        path,
+      );
+      totalRead += buf.length;
+      return buf;
+    };
+    const next = readChain.then(work, work);
+    readChain = next.then(
+      () => undefined,
+      () => undefined,
     );
-    totalRead += buf.length;
-    return buf;
+    return await next;
   };
 
   return {
