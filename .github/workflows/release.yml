@@ -444,7 +444,7 @@ jobs:
         run: |
           if ! gh release view "$RELEASE_REF" >/dev/null 2>&1; then
             extra_args=()
-            if [[ "$RELEASE_REF" == *-rc.* ]]; then
+            if [[ "$RELEASE_REF" == *-* ]]; then
               extra_args+=(--prerelease)
             else
               # Defer the "latest" flag until release-desktop.yml has
