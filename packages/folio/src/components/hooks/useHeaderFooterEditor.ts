@@ -9,6 +9,7 @@ import type { RefObject } from "react";
 import { proseDocToBlocks } from "../../core/prosemirror/conversion/fromProseDoc";
 import type {
   Document,
+  DocumentBody,
   HeaderFooter,
   SectionProperties,
   Paragraph,
@@ -60,6 +61,21 @@ type UseHeaderFooterEditorReturn = {
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
+
+export function resolveEffectiveSectionProperties(
+  documentBody: DocumentBody | undefined,
+  hasTitlePg: boolean,
+): SectionProperties | undefined {
+  const firstContentSection = documentBody?.sections?.find(
+    (section) => section.content.length > 0,
+  );
+  const base =
+    firstContentSection?.properties ?? documentBody?.finalSectionProperties;
+  if (!hasTitlePg || base?.titlePg) {
+    return base;
+  }
+  return base ? { ...base, titlePg: true } : base;
+}
 
 export const useHeaderFooterEditor = ({
   history,
@@ -215,13 +231,14 @@ export const useHeaderFooterEditor = ({
   // Effective section properties (titlePg merged)
   // -------------------------------------------------------------------------
 
-  const effectiveSectionProperties = useMemo(() => {
-    const final = history.state?.package.document?.finalSectionProperties;
-    if (!hasTitlePg || final?.titlePg) {
-      return final;
-    }
-    return final ? { ...final, titlePg: true } : final;
-  }, [history.state?.package.document?.finalSectionProperties, hasTitlePg]);
+  const effectiveSectionProperties = useMemo(
+    () =>
+      resolveEffectiveSectionProperties(
+        history.state?.package.document,
+        hasTitlePg,
+      ),
+    [history.state?.package.document, hasTitlePg],
+  );
 
   // -------------------------------------------------------------------------
   // Callbacks

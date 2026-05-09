@@ -939,7 +939,7 @@ const TypeChipsRow = ({
           showSeparator && "border-t pt-2",
         )}
       >
-        <span className="text-muted-foreground/72 shrink-0 px-1.5 text-[11px] font-medium">
+        <span className="text-foreground-label shrink-0 px-1.5 text-[11px] font-medium">
           {t("workspaces.properties.returnsLabel")}
         </span>
         {chipDefs.map(({ type, icon: Icon, label }) => {
@@ -1011,7 +1011,7 @@ const ReadingFromRow = ({
           <PopoverTrigger
             render={
               <Button
-                className="text-muted-foreground/72 hover:text-foreground gap-0.5 px-1 text-[11.5px]"
+                className="text-foreground-label hover:text-foreground gap-0.5 px-1 text-[11.5px]"
                 size="xs"
                 type="button"
                 variant="ghost"
@@ -1060,7 +1060,7 @@ const ReadingChip = ({ label, onRemove }: ReadingChipProps) => (
     {onRemove && (
       <button
         aria-label="Remove"
-        className="text-muted-foreground/64 hover:text-foreground ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100"
+        className="text-foreground-placeholder hover:text-foreground ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100"
         onClick={onRemove}
         type="button"
       >
@@ -1079,7 +1079,7 @@ const SuggestionsList = ({ onPick }: SuggestionsListProps) => {
   const suggestions = useSuggestionTexts();
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="text-muted-foreground/72 px-0.5 text-[11px] font-medium tracking-[0.08em] uppercase">
+      <div className="text-foreground-label px-0.5 text-[11px] font-medium tracking-[0.08em] uppercase">
         {t("workspaces.properties.suggestionsLabel")}
       </div>
       {suggestions.map((text) => (
@@ -1089,9 +1089,9 @@ const SuggestionsList = ({ onPick }: SuggestionsListProps) => {
           onClick={() => onPick(text)}
           type="button"
         >
-          <WandSparklesIcon className="text-muted-foreground/72 size-3 shrink-0" />
+          <WandSparklesIcon className="text-foreground-label size-3 shrink-0" />
           <span className="flex-1">{text}</span>
-          <ArrowUpRightIcon className="text-muted-foreground/72 size-3 shrink-0" />
+          <ArrowUpRightIcon className="text-foreground-label size-3 shrink-0" />
         </button>
       ))}
     </div>

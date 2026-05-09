@@ -17,11 +17,13 @@ import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import type { MentionCategory } from "@/components/chat/chat-mention-href";
 import { parseStellaMentionHref } from "@/components/chat/chat-mention-href";
 import { openEntityInInspector } from "@/components/chat/entity-open";
+import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME } from "@/lib/consts";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 import { getMatterColor } from "@/lib/matter-colors";
+import { sanitizeHref } from "@/lib/sanitize-href";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -94,6 +96,20 @@ const getPlainText = (node: React.ReactNode): string | null => {
   }
 
   return parts.join("");
+};
+
+const getHttpUrl = (href: string): URL | null => {
+  const safeHref = sanitizeHref(href);
+  if (!safeHref) {
+    return null;
+  }
+
+  try {
+    const url = new URL(safeHref);
+    return url.protocol === "https:" || url.protocol === "http:" ? url : null;
+  } catch {
+    return null;
+  }
 };
 
 const getDocumentMimeFromLabel = (label: string): string | null => {
@@ -411,6 +427,37 @@ export const StreamdownMentionLink = ({
       <a href={href} {...props}>
         {children}
       </a>
+    );
+  }
+
+  const httpUrl = getHttpUrl(href);
+  if (httpUrl) {
+    return (
+      <button
+        className={cn(
+          "text-foreground decoration-border underline",
+          "underline-offset-2 transition-colors",
+          "hover:decoration-foreground cursor-pointer",
+        )}
+        onClick={() => {
+          const source = useExternalSourceStore
+            .getState()
+            .getSource(httpUrl.toString());
+          useInspectorStore.getState().openExternal({
+            url: httpUrl.toString(),
+            connectorSlug: source?.connectorSlug,
+            iconHref: source?.iconHref,
+            label: getPlainText(children) ?? source?.title ?? httpUrl.hostname,
+            provider: source?.provider,
+            snippet: source?.snippet,
+            sourceToolName: source?.sourceToolName,
+            text: source?.text,
+          });
+        }}
+        type="button"
+      >
+        {children}
+      </button>
     );
   }
 

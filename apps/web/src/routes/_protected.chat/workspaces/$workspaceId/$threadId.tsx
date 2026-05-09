@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
 import { useWorkspaceChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration";
 
@@ -12,7 +13,7 @@ export const Route = createFileRoute(
 function WorkspaceThreadRoute() {
   const { threadId, workspaceId } = Route.useParams({
     select: (params) => ({
-      threadId: params.threadId,
+      threadId: toChatThreadId(params.threadId),
       workspaceId: params.workspaceId,
     }),
   });

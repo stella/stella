@@ -13,12 +13,16 @@ import type {
   ChatUITools,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
-import { hasApprovedActiveDocxEditAwaitingClientOutput } from "@/components/chat/chat-ui-tools";
+import {
+  hasApprovalResponseAwaitingModelStep,
+  hasApprovedActiveDocxEditAwaitingClientOutput,
+} from "@/components/chat/chat-ui-tools";
 import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
+import { useDevStore } from "@/lib/dev-store";
 import { APIError, toAPIError } from "@/lib/errors";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -44,6 +48,16 @@ type ActiveDecisionContext = {
   decisionId: string;
 };
 
+type ActiveExternalContext = {
+  connectorSlug?: string | undefined;
+  provider?: string | undefined;
+  snippet?: string | undefined;
+  sourceToolName?: string | undefined;
+  text?: string | undefined;
+  title: string;
+  url: string;
+};
+
 type ChatThreadKey = ChatThreadRef;
 
 type GroupedChatThreads = Awaited<ReturnType<typeof fetchGroupedChatThreads>>;
@@ -60,6 +74,7 @@ export type ApplyActiveDocxEditsOutput =
 type ChatThreadOptionsContext = {
   allowMissingThread?: boolean | undefined;
   getActiveDecision?: (() => ActiveDecisionContext | undefined) | undefined;
+  getActiveExternal?: (() => ActiveExternalContext | undefined) | undefined;
   getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
   /**
    * Matters this chat draws context from. The transport sends the
@@ -88,7 +103,11 @@ type ChatThreadOptionsInput = QueryOptionsInput<
   ChatThreadOptionsContext
 >;
 
-type ChatRuntimeContextKind = "active-docx-edit" | "active-file" | "plain";
+type ChatRuntimeContextKind =
+  | "active-docx-edit"
+  | "active-external"
+  | "active-file"
+  | "plain";
 
 const getChatRuntimeContextKind = (
   context: ChatThreadOptionsContext | undefined,
@@ -99,6 +118,10 @@ const getChatRuntimeContextKind = (
 
   if (context?.getActiveFile) {
     return "active-file";
+  }
+
+  if (context?.getActiveExternal) {
+    return "active-external";
   }
 
   return "plain";
@@ -195,9 +218,11 @@ export const buildSendRequestBody = ({
 
   const body: {
     activeDecision?: ActiveDecisionContext | undefined;
+    activeExternal?: ActiveExternalContext | undefined;
     activeFile?: ActiveFileContext | undefined;
     anonymized?: boolean | undefined;
     contextMatterIds?: string[] | undefined;
+    devModelId?: string | undefined;
     message: PersistedChatMessage;
     threadId: string;
     userContext?: ChatUserContext | undefined;
@@ -226,6 +251,11 @@ export const buildSendRequestBody = ({
     body.activeDecision = activeDecision;
   }
 
+  const activeExternal = context?.getActiveExternal?.();
+  if (activeExternal) {
+    body.activeExternal = activeExternal;
+  }
+
   const contextMatterIds = context?.getContextMatterIds?.();
   if (contextMatterIds !== undefined) {
     body.contextMatterIds = contextMatterIds;
@@ -236,6 +266,13 @@ export const buildSendRequestBody = ({
     body.anonymized = anonymized;
   }
 
+  if (import.meta.env.DEV) {
+    const devModelId = useDevStore.getState().chatModelId;
+    if (devModelId) {
+      body.devModelId = devModelId;
+    }
+  }
+
   return body;
 };
 
@@ -244,29 +281,65 @@ export const buildSendRequestBody = ({
 // with cached prefixes on small Gemini variants), the AI SDK does
 // not append a new assistant message, so the same tool-result tail
 // keeps satisfying the predicate and useChat resubmits at ~1.5 Hz
-// until the user reloads. Tracking the id of the message that last
-// triggered an automatic send breaks the loop without affecting the
-// legitimate post-tool-result resubmit. Id is more robust than
-// length: deleting and re-adding a message reuses no id, so the
-// predicate cannot accidentally lock out a future fire.
-const createSendAutomaticallyPredicate = () => {
-  let lastFiredMessageId: string | null = null;
+// until the user reloads. Tracking the latest assistant message's
+// tool-state fingerprint breaks that loop while still allowing the
+// same assistant message to advance through multiple sequential
+// tool calls.
+export const createSendAutomaticallyPredicate = () => {
+  let lastFiredFingerprint: string | null = null;
   return ({ messages }: { messages: PersistedChatMessage[] }) => {
     if (hasApprovedActiveDocxEditAwaitingClientOutput({ messages })) {
       return false;
     }
     const lastMessage = messages.at(-1);
-    if (!lastMessage || lastMessage.id === lastFiredMessageId) {
+    const fingerprint = getAutoSendFingerprint(lastMessage);
+    if (!fingerprint || fingerprint === lastFiredFingerprint) {
       return false;
     }
     const shouldFire =
+      hasApprovalResponseAwaitingModelStep({ messages }) ||
       lastAssistantMessageIsCompleteWithApprovalResponses({ messages }) ||
       lastAssistantMessageIsCompleteWithToolCalls({ messages });
     if (shouldFire) {
-      lastFiredMessageId = lastMessage.id;
+      lastFiredFingerprint = fingerprint;
     }
     return shouldFire;
   };
+};
+
+const getAutoSendFingerprint = (
+  message: PersistedChatMessage | undefined,
+): string | null => {
+  if (!message || message.role !== "assistant") {
+    return null;
+  }
+
+  const segments = [message.id];
+  for (const part of message.parts) {
+    if (typeof part !== "object" || part === null || !("type" in part)) {
+      continue;
+    }
+
+    const type = typeof part.type === "string" ? part.type : "";
+    const state =
+      "state" in part && typeof part.state === "string" ? part.state : "";
+    const toolCallId =
+      "toolCallId" in part && typeof part.toolCallId === "string"
+        ? part.toolCallId
+        : "";
+    const approved =
+      "approval" in part &&
+      typeof part.approval === "object" &&
+      part.approval !== null &&
+      "approved" in part.approval &&
+      typeof part.approval.approved === "boolean"
+        ? String(part.approval.approved)
+        : "";
+
+    segments.push(`${type}:${toolCallId}:${state}:${approved}`);
+  }
+
+  return segments.join("|");
 };
 
 export type ChatThreadFetched = {
@@ -377,7 +450,7 @@ export const invalidateChatThread = async ({
  */
 export const matchesChatThreadAcrossScopes = (
   queryKey: readonly unknown[],
-  threadId: string,
+  threadId: ChatThreadId,
 ): boolean => {
   if (queryKey.at(0) !== "chat" || queryKey.at(1) !== "thread") {
     return false;
@@ -406,7 +479,7 @@ export const invalidateChatThreadAcrossScopes = async ({
   threadId,
 }: {
   queryClient: QueryClient;
-  threadId: string;
+  threadId: ChatThreadId;
 }) =>
   await queryClient.invalidateQueries({
     predicate: (query) =>

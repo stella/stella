@@ -228,7 +228,6 @@ Project: desktop-tauri
 - inotify-sys 0.1.5 — ISC
 - inout 0.1.4 — Apache-2.0 OR MIT
 - ipnet 2.12.0 — Apache-2.0 OR MIT
-- iri-string 0.7.12 — Apache-2.0 OR MIT
 - is-docker 0.2.0 — MIT
 - is-wsl 0.4.0 — MIT
 - itoa 1.0.18 — Apache-2.0 OR MIT
@@ -278,7 +277,7 @@ Project: desktop-tauri
 - ndk-sys 0.6.0+11769913 — Apache-2.0 OR MIT
 - new_debug_unreachable 1.0.6 — MIT
 - nom 8.0.0 — MIT
-- normpath 1.5.0 — Apache-2.0 OR MIT
+- normpath 1.5.1 — Apache-2.0 OR MIT
 - notify 8.2.0 — CC0-1.0
 - notify-rust 4.17.0 — MIT/Apache-2.0
 - notify-types 2.1.0 — Apache-2.0 OR MIT
@@ -328,14 +327,10 @@ Project: desktop-tauri
 - pathdiff 0.2.3 — MIT/Apache-2.0
 - percent-encoding 2.3.2 — Apache-2.0 OR MIT
 - petgraph 0.8.3 — Apache-2.0 OR MIT
-- phf 0.11.3 — MIT
 - phf 0.13.1 — MIT
 - phf_codegen 0.13.1 — MIT
-- phf_generator 0.11.3 — MIT
 - phf_generator 0.13.1 — MIT
-- phf_macros 0.11.3 — MIT
 - phf_macros 0.13.1 — MIT
-- phf_shared 0.11.3 — MIT
 - phf_shared 0.13.1 — MIT
 - pin-project-lite 0.2.17 — Apache-2.0 OR MIT
 - piper 0.2.5 — Apache-2.0 OR MIT
@@ -366,10 +361,8 @@ Project: desktop-tauri
 - quote 1.0.45 — Apache-2.0 OR MIT
 - r-efi 5.3.0 — Apache-2.0 OR LGPL-2.1-or-later OR MIT
 - r-efi 6.0.0 — Apache-2.0 OR LGPL-2.1-or-later OR MIT
-- rand 0.8.6 — Apache-2.0 OR MIT
 - rand 0.9.4 — Apache-2.0 OR MIT
 - rand_chacha 0.9.0 — Apache-2.0 OR MIT
-- rand_core 0.6.4 — Apache-2.0 OR MIT
 - rand_core 0.9.5 — Apache-2.0 OR MIT
 - raw-window-handle 0.6.2 — Apache-2.0 OR MIT OR Zlib
 - redox_syscall 0.5.18 — MIT
@@ -456,11 +449,11 @@ Project: desktop-tauri
 - tao-macros 0.1.3 — Apache-2.0 OR MIT
 - tar 0.4.45 — Apache-2.0 OR MIT
 - target-lexicon 0.12.16 — Apache-2.0 WITH LLVM-exception
-- tauri 2.11.0 — Apache-2.0 OR MIT
-- tauri-build 2.6.0 — Apache-2.0 OR MIT
-- tauri-codegen 2.6.0 — Apache-2.0 OR MIT
-- tauri-macros 2.6.0 — Apache-2.0 OR MIT
-- tauri-plugin 2.6.0 — Apache-2.0 OR MIT
+- tauri 2.11.1 — Apache-2.0 OR MIT
+- tauri-build 2.6.1 — Apache-2.0 OR MIT
+- tauri-codegen 2.6.1 — Apache-2.0 OR MIT
+- tauri-macros 2.6.1 — Apache-2.0 OR MIT
+- tauri-plugin 2.6.1 — Apache-2.0 OR MIT
 - tauri-plugin-autostart 2.5.1 — Apache-2.0 OR MIT
 - tauri-plugin-clipboard-manager 2.3.2 — Apache-2.0 OR MIT
 - tauri-plugin-deep-link 2.4.9 — Apache-2.0 OR MIT
@@ -468,9 +461,9 @@ Project: desktop-tauri
 - tauri-plugin-opener 2.5.4 — Apache-2.0 OR MIT
 - tauri-plugin-process 2.3.1 — Apache-2.0 OR MIT
 - tauri-plugin-updater 2.10.1 — Apache-2.0 OR MIT
-- tauri-runtime 2.11.0 — Apache-2.0 OR MIT
-- tauri-runtime-wry 2.11.0 — Apache-2.0 OR MIT
-- tauri-utils 2.9.0 — Apache-2.0 OR MIT
+- tauri-runtime 2.11.1 — Apache-2.0 OR MIT
+- tauri-runtime-wry 2.11.1 — Apache-2.0 OR MIT
+- tauri-utils 2.9.1 — Apache-2.0 OR MIT
 - tauri-winres 0.3.6 — MIT
 - tauri-winrt-notification 0.7.2 — Apache-2.0 OR MIT
 - tempfile 3.27.0 — Apache-2.0 OR MIT
@@ -504,7 +497,7 @@ Project: desktop-tauri
 - toml_parser 1.1.2+spec-1.1.0 — Apache-2.0 OR MIT
 - toml_writer 1.1.1+spec-1.1.0 — Apache-2.0 OR MIT
 - tower 0.5.3 — MIT
-- tower-http 0.6.8 — MIT
+- tower-http 0.6.10 — MIT
 - tower-layer 0.3.3 — MIT
 - tower-service 0.3.3 — MIT
 - tracing 0.1.44 — MIT

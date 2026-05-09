@@ -4,19 +4,20 @@ Rules for maintaining consistent translations across all locales.
 
 ## Supported Languages
 
-| Code | Language   | Plural forms                |
-| ---- | ---------- | --------------------------- |
-| en   | English    | one, other                  |
-| cs   | Czech      | one, few (2–4), other       |
-| de   | German     | one, other                  |
-| es   | Spanish    | one, many, other            |
-| et   | Estonian   | one, other                  |
-| fr   | French     | one, many, other            |
-| hu   | Hungarian  | one, other                  |
-| lt   | Lithuanian | one, few (2–9), many, other |
-| lv   | Latvian    | zero, one, other            |
-| pl   | Polish     | one, few (2–4), many, other |
-| sk   | Slovak     | one, few (2–4), other       |
+| Code  | Language            | Plural forms                |
+| ----- | ------------------- | --------------------------- |
+| en    | English             | one, other                  |
+| cs    | Czech               | one, few (2–4), other       |
+| de    | German              | one, other                  |
+| es    | Spanish             | one, many, other            |
+| et    | Estonian            | one, other                  |
+| fr    | French              | one, many, other            |
+| hu    | Hungarian           | one, other                  |
+| lt    | Lithuanian          | one, few (2–9), many, other |
+| lv    | Latvian             | zero, one, other            |
+| pl    | Polish              | one, few (2–4), many, other |
+| pt-BR | Portuguese (Brazil) | one, many, other            |
+| sk    | Slovak              | one, few (2–4), other       |
 
 ## Writing for an International Audience
 
@@ -94,6 +95,8 @@ German, Hungarian, Estonian, and English use `one` and `other`.
 Spanish and French use `one`, `many`, and `other`.
 Lithuanian uses `one`, `few` (2–9), `many`, and `other`.
 Latvian uses `zero`, `one`, and `other`.
+Brazilian Portuguese uses `one`, `many`, and `other`; in normal UI
+counts, `many` usually shares the `other` wording.
 
 Use `#` inside plural branches (standard ICU placeholder).
 Use `{count}` outside of plural branches for simple interpolation.
@@ -149,3 +152,20 @@ knowledge. When in doubt, leave the English term in parentheses:
 
 This ensures clarity while we build proper legal glossaries per
 jurisdiction.
+
+### Brazilian Portuguese
+
+Use Brazilian legal and law-firm terminology, not generic Portuguese:
+
+| English          | pt-BR                       | Notes                                                                                  |
+| ---------------- | --------------------------- | -------------------------------------------------------------------------------------- |
+| Matter           | Caso                        | Product workspace for client/legal work; use `processo` only for judicial proceedings. |
+| Matters          | Casos                       | Avoid `assuntos`, which reads like generic topics.                                     |
+| Case law         | Jurisprudência              | Use for precedent/court decision databases.                                            |
+| Case number      | Número do processo          | Use when referring to court decisions or judicial proceedings.                         |
+| Court            | Tribunal                    | Use for court metadata; `vara` is too specific.                                        |
+| Party            | Parte                       | Legal party in a matter/process.                                                       |
+| Opposing party   | Parte contrária             | Standard adversarial role.                                                             |
+| Opposing counsel | Advogado da parte contrária | Clearer than literal `conselho oposto`.                                                |
+| Expert witness   | Perito                      | Brazilian procedural role; avoid literal `testemunha especialista`.                    |
+| Tracked changes  | Controle de alterações      | Microsoft Word UI term in Brazilian Portuguese.                                        |

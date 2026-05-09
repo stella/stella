@@ -13,6 +13,7 @@ export const OnboardingProgress = ({
   const t = useTranslations();
   const labels = [
     t("onboarding.stepOrganization"),
+    t("onboarding.stepJurisdiction"),
     t("onboarding.stepAi"),
     t("onboarding.stepTeam"),
     t("onboarding.stepDesktop"),
@@ -33,7 +34,7 @@ export const OnboardingProgress = ({
               "text-[11px] transition-colors duration-300",
               i <= currentStep
                 ? "text-muted-foreground"
-                : "text-muted-foreground/40",
+                : "text-foreground-disabled",
             )}
           >
             {labels[i]}

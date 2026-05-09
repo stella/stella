@@ -168,6 +168,7 @@ export default defineConfig({
     "eslint-plugin-drizzle",
     "eslint-plugin-sonarjs",
     "./.oxlint-plugins/no-raw-colors.ts",
+    "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
@@ -181,6 +182,7 @@ export default defineConfig({
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
     "./.oxlint-plugins/no-raw-user-id-schema.ts",
+    "./.oxlint-plugins/mcp-security.ts",
     "./.oxlint-plugins/stella-toast.ts",
   ],
 
@@ -242,6 +244,7 @@ export default defineConfig({
       ],
       rules: {
         "no-raw-colors/no-raw-colors": "error",
+        "no-raw-foreground-opacity/no-raw-foreground-opacity": "error",
         "no-inline-style-colors/no-inline-style-colors": "error",
         "no-physical-properties/no-physical-properties": "error",
       },
@@ -431,7 +434,14 @@ export default defineConfig({
     {
       files: ["apps/api/src/**/*.{ts,tsx}"],
       rules: {
+        "mcp-security/no-direct-oauth-client-join": "error",
         "no-raw-error-logging/no-raw-error-logging": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/handlers/mcp-connectors/**/*.{ts,tsx}"],
+      rules: {
+        "mcp-security/redact-oauth-registration-response": "error",
       },
     },
     {

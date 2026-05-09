@@ -235,7 +235,7 @@ export const WorkspaceBreadcrumb = ({
     />
   ) : workspace.reference ? (
     <button
-      className="text-muted-foreground/60 hover:text-muted-foreground cursor-text text-sm"
+      className="text-foreground-muted hover:text-muted-foreground cursor-text text-sm"
       onClick={() => {
         setRefValue(workspace.reference ?? "");
         setRefError("");
@@ -328,7 +328,7 @@ export const WorkspaceBreadcrumb = ({
               <span className="truncate">{displayName}</span>
               {workspace.reference && !isEditingRef ? (
                 <span
-                  className="text-muted-foreground/60 shrink-0 text-sm"
+                  className="text-foreground-muted shrink-0 text-sm"
                   onContextMenu={(e) => {
                     e.preventDefault();
                     e.stopPropagation();

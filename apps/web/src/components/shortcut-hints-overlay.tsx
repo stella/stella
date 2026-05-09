@@ -197,7 +197,7 @@ const HotkeyHint = ({ hint, setIsVisible }: HotkeyHintProps) => {
           ? "bg-accent text-accent-foreground"
           : isActive
             ? "text-foreground"
-            : "text-muted-foreground/40",
+            : "text-foreground-disabled",
       )}
       key={hint.hotkey}
       onClick={() => handleActivateHotkey(hint.hotkey)}
@@ -213,7 +213,7 @@ const HotkeyHint = ({ hint, setIsVisible }: HotkeyHintProps) => {
             ? "border-border bg-background text-foreground"
             : isActive
               ? "border-border bg-muted text-muted-foreground"
-              : "bg-muted/40 text-muted-foreground/40 border-transparent",
+              : "bg-muted/40 text-foreground-disabled border-transparent",
         )}
       >
         {formatHintKey(hint.hotkey)}

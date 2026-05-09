@@ -35,6 +35,12 @@ import { getFootnoteText } from "../core/docx/footnoteParser";
 import { clickToPosition } from "../core/layout-bridge/clickToPosition";
 import { clickToPositionDom } from "../core/layout-bridge/clickToPositionDom";
 import {
+  findBodyEmptyRuns,
+  findBodyPmAnchor,
+  findBodyPmAnchors,
+  findBodyPmSpans,
+} from "../core/layout-bridge/findBodyPmSpans";
+import {
   collectFootnoteRefs,
   mapFootnotesToPages,
   buildFootnoteContentMap,
@@ -68,7 +74,7 @@ import {
 } from "../core/layout-bridge/toFlowBlocks";
 // Layout engine
 import { layoutDocument } from "../core/layout-engine";
-import type { ColumnLayout } from "../core/layout-engine";
+import type { ColumnLayout, SectionLayoutConfig } from "../core/layout-engine";
 import type {
   Layout,
   FlowBlock,
@@ -85,7 +91,7 @@ import type {
   ParagraphBorders,
   ParagraphSpacing,
   TextBoxBlock,
-  SectionBreakBlock,
+  FootnoteContent,
 } from "../core/layout-engine/types";
 import {
   DEFAULT_TEXTBOX_MARGINS,
@@ -137,6 +143,7 @@ import {
   getPageScrollTarget,
   isValidPmScrollPosition,
 } from "./scrollNavigation";
+import { computePerBlockWidths } from "./sectionBlockWidths";
 import { SelectionOverlay } from "./SelectionOverlay";
 import { getTransactionDirtyRange } from "./transactionDirtyRange";
 import { useDragAutoScroll } from "./useDragAutoScroll";
@@ -535,57 +542,6 @@ function getColumns(
     cols.separator = sectionProps.separator;
   }
   return cols;
-}
-
-/**
- * Compute per-block measurement widths by scanning for section breaks.
- * Blocks in multi-column sections must be measured at column width, not full content width.
- *
- * OOXML note: Each section break carries the CURRENT section's properties.
- * Section N's blocks use config from sectionBreak[N].
- * The final section (after all breaks) uses defaultColumns (body-level).
- */
-function computePerBlockWidths(
-  blocks: FlowBlock[],
-  defaultContentWidth: number,
-  defaultColumns: ColumnLayout | undefined,
-): number[] {
-  function colWidth(cw: number, cols: ColumnLayout): number {
-    if (cols.count <= 1) {
-      return cw;
-    }
-    return Math.floor((cw - (cols.count - 1) * cols.gap) / cols.count);
-  }
-
-  // Collect section break indices and their column configs
-  const breakIndices: number[] = [];
-  const sectionConfigs: ColumnLayout[] = [];
-  for (let i = 0; i < blocks.length; i++) {
-    const block = blocks[i]!; // SAFETY: i < blocks.length
-    if (block.kind === "sectionBreak") {
-      breakIndices.push(i);
-      const sb = block as SectionBreakBlock;
-      sectionConfigs.push(sb.columns ?? { count: 1, gap: 0 });
-    }
-  }
-  // Final section uses body-level columns
-  sectionConfigs.push(defaultColumns ?? { count: 1, gap: 0 });
-
-  // Assign widths: section N's blocks use sectionConfigs[N]
-  let sectionIdx = 0;
-  const widths: number[] = [];
-
-  for (let i = 0; i < blocks.length; i++) {
-    const cols = sectionConfigs[sectionIdx]!; // SAFETY: sectionIdx tracks section boundaries within sectionConfigs
-    widths.push(colWidth(defaultContentWidth, cols));
-
-    // After this section break, move to next section
-    if (sectionIdx < breakIndices.length && i === breakIndices[sectionIdx]) {
-      sectionIdx++;
-    }
-  }
-
-  return widths;
 }
 
 /**
@@ -1782,7 +1738,7 @@ function convertHeaderFooterToContent(
  */
 function buildFootnoteRenderItems(
   pageFootnoteMap: Map<number, number[]>,
-  footnoteContentMap: Map<number, { displayNumber: number }>,
+  footnoteContentMap: Map<number, FootnoteContent>,
   doc: Document | null,
 ): Map<number, FootnoteRenderItem[]> {
   const result = new Map<number, FootnoteRenderItem[]>();
@@ -1815,6 +1771,15 @@ function buildFootnoteRenderItems(
       items.push({
         displayNumber: String(displayNum),
         text,
+        ...(content
+          ? {
+              content: {
+                blocks: content.blocks,
+                measures: content.measures,
+                height: content.height,
+              },
+            }
+          : {}),
       });
     }
 
@@ -2080,11 +2045,18 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           setBlocks(newBlocks);
 
           // Compute per-block widths accounting for section breaks with different column configs
-          const blockWidths = computePerBlockWidths(
-            newBlocks,
-            contentWidth,
-            columns,
-          );
+          const bodyLayoutConfig: SectionLayoutConfig = {
+            pageSize,
+            margins,
+          };
+          if (columns !== undefined) {
+            bodyLayoutConfig.columns = columns;
+          }
+          const blockWidths = computePerBlockWidths({
+            blocks: newBlocks,
+            bodyConfig: bodyLayoutConfig,
+            finalConfig: bodyLayoutConfig,
+          });
           const incrementalResult =
             options.dirtyRange &&
             !options.forceFull &&
@@ -2163,10 +2135,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // Step 3: Layout blocks onto pages (two-pass if footnotes exist)
           let newLayout: Layout;
           let pageFootnoteMap = new Map<number, number[]>();
-          let footnoteContentMap = new Map<
-            number,
-            { displayNumber: number; height: number }
-          >();
+          let footnoteContentMap = new Map<number, FootnoteContent>();
 
           // Common layout options for all passes
           const bodyBreakType = sectionProperties?.sectionStart as
@@ -2207,6 +2176,18 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               document!.package.footnotes!,
               footnoteRefs,
               contentWidth,
+              (() => {
+                const footnoteOptions: Parameters<
+                  typeof buildFootnoteContentMap
+                >[3] = { measureBlocks };
+                if (styles) {
+                  footnoteOptions.styles = styles;
+                }
+                if (_theme !== undefined) {
+                  footnoteOptions.theme = _theme;
+                }
+                return footnoteOptions;
+              })(),
             );
 
             // Calculate per-page reserved heights
@@ -2480,12 +2461,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         const overlayRect = overlay.getBoundingClientRect();
 
         // Find spans with PM position data
-        const spans = pagesContainerRef.current.querySelectorAll(
-          "span[data-pm-start][data-pm-end]",
-        );
+        const spans = findBodyPmSpans(pagesContainerRef.current);
 
-        for (const span of Array.from(spans)) {
-          const spanEl = span as HTMLElement;
+        for (const spanEl of spans) {
           const pmStart = Number(spanEl.dataset["pmStart"]);
           const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
@@ -2540,9 +2518,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           if (
             pmPos >= pmStart &&
             pmPos <= pmEnd &&
-            span.firstChild?.nodeType === Node.TEXT_NODE
+            spanEl.firstChild?.nodeType === Node.TEXT_NODE
           ) {
-            const textNode = span.firstChild as Text;
+            const textNode = spanEl.firstChild as Text;
             const charIndex = Math.min(pmPos - pmStart, textNode.length);
 
             // Create a range at the exact character position
@@ -2606,9 +2584,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         }
 
         // Fallback: try to find position in empty paragraphs (they have empty runs)
-        const emptyRuns =
-          pagesContainerRef.current.querySelectorAll(".layout-empty-run");
-        for (const emptyRun of Array.from(emptyRuns)) {
+        const emptyRuns = findBodyEmptyRuns(pagesContainerRef.current);
+        for (const emptyRun of emptyRuns) {
           const paragraph = emptyRun.closest(
             ".layout-paragraph",
           ) as HTMLElement;
@@ -2752,12 +2729,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             const domRects: SelectionRect[] = [];
 
             // Find spans that intersect with the selection range
-            const spans = pagesContainerRef.current.querySelectorAll(
-              "span[data-pm-start][data-pm-end]",
-            );
+            const spans = findBodyPmSpans(pagesContainerRef.current);
 
-            for (const span of Array.from(spans)) {
-              const spanEl = span as HTMLElement;
+            for (const spanEl of spans) {
               const pmStart = Number(spanEl.dataset["pmStart"]);
               const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
@@ -2783,14 +2757,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
                 // Find the text node — may be a direct child or inside an <a> for hyperlinks
                 let textNode: Text | null = null;
-                if (span.firstChild?.nodeType === Node.TEXT_NODE) {
-                  textNode = span.firstChild as Text;
+                if (spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
+                  textNode = spanEl.firstChild as Text;
                 } else if (
-                  span.firstChild?.nodeType === Node.ELEMENT_NODE &&
-                  (span.firstChild as HTMLElement).tagName === "A" &&
-                  span.firstChild.firstChild?.nodeType === Node.TEXT_NODE
+                  spanEl.firstChild?.nodeType === Node.ELEMENT_NODE &&
+                  (spanEl.firstChild as HTMLElement).tagName === "A" &&
+                  spanEl.firstChild.firstChild?.nodeType === Node.TEXT_NODE
                 ) {
-                  textNode = span.firstChild.firstChild as Text;
+                  textNode = spanEl.firstChild.firstChild as Text;
                 }
                 if (!textNode) {
                   continue;
@@ -2975,9 +2949,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           const { selection: sel } = view.state;
           if (sel instanceof NodeSelection && sel.node.type.name === "image") {
             const pmPos = sel.from;
-            const imgEl = pagesContainerRef.current?.querySelector(
-              `[data-pm-start="${pmPos}"]`,
-            ) as HTMLElement | null;
+            const imgEl = pagesContainerRef.current
+              ? findBodyPmAnchor(pagesContainerRef.current, pmPos)
+              : null;
             if (imgEl) {
               setSelectedImageInfo(buildImageSelectionInfo(imgEl, pmPos));
               return;
@@ -3157,9 +3131,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       // virtualized doc only sees runs in the currently-rendered
       // buffer, so each click stepped one buffer-width forward
       // instead of jumping straight to the target.
-      const exact: HTMLElement | null = pageContainer.querySelector(
-        `[data-pm-start="${pmPos}"]`,
-      );
+      const exact = findBodyPmAnchor(pageContainer, pmPos);
       if (exact) {
         exact.scrollIntoView({ behavior: "smooth", block: "center" });
         return;
@@ -3169,9 +3141,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       // inside one of them (block-node positions never match
       // exactly but usually live inside a known run).
       let runMatch: HTMLElement | null = null;
-      for (const el of pageContainer.querySelectorAll<HTMLElement>(
-        "[data-pm-start]",
-      )) {
+      for (const el of findBodyPmAnchors(pageContainer)) {
         const start = Number(el.dataset["pmStart"]);
         if (Number.isNaN(start)) {
           continue;
@@ -3208,18 +3178,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       let attempts = 0;
       const refine = () => {
         attempts++;
-        const exactInShell = shell.querySelector<HTMLElement>(
-          `[data-pm-start="${pmPos}"]`,
-        );
+        const exactInShell = findBodyPmAnchor(shell, pmPos);
         if (exactInShell) {
           exactInShell.scrollIntoView({ behavior: "smooth", block: "center" });
           return;
         }
         let bestEl: HTMLElement | null = null;
         let bestStart = Number.NEGATIVE_INFINITY;
-        for (const el of shell.querySelectorAll<HTMLElement>(
-          "[data-pm-start]",
-        )) {
+        for (const el of findBodyPmAnchors(shell)) {
           const start = Number(el.dataset["pmStart"]);
           if (Number.isNaN(start)) {
             continue;

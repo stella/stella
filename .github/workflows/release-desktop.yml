@@ -328,7 +328,7 @@ jobs:
       # short-circuit the ~5 min source compile.
       - name: Install trusted-signing-cli (Windows only)
         if: matrix.os == 'windows'
-        uses: baptiste0928/cargo-install@916aa2c680eb54f322199a9756e0699f98f10638 # v3.4.0
+        uses: baptiste0928/cargo-install@f204293d9709061b7bc1756fec3ec4e2cd57dec0 # v3.4.0
         with:
           crate: trusted-signing-cli
           version: "0.10.0"
@@ -413,7 +413,7 @@ jobs:
 
       - name: Sign Windows installers via Azure Trusted Signing
         if: matrix.os == 'windows'
-        uses: azure/trusted-signing-action@bb15ca63eb5548cc306f4f335c5617bb414abcad # v0.5.9
+        uses: azure/trusted-signing-action@b443cf8ea4124818d2ea9f043cba29fc3ec47b16 # v1.2.0
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}

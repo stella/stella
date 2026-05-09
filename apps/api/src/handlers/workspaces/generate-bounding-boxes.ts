@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { isMockAI } from "@/api/consts";
 import { justifications } from "@/api/db/schema";
+import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -55,7 +56,7 @@ const generateBoundingBoxes = createSafeHandler(
     const boxes: BoundingBox[] = [];
 
     for (const pageNumber of preparedData.pageNumbers) {
-      const pageBoxes = await generateFn({
+      const pageBoxesResult = await generateFn({
         abortSignal: AbortSignal.timeout(60_000),
         justificationId,
         organizationId,
@@ -70,7 +71,25 @@ const generateBoundingBoxes = createSafeHandler(
         },
       });
 
-      boxes.push(...pageBoxes);
+      if (Result.isError(pageBoxesResult)) {
+        captureError(pageBoxesResult.error, {
+          feature: "bbox.generate",
+          workspaceId,
+          organizationId,
+        });
+        // `WorkflowIntegrationError.cause` carries the underlying AI
+        // provider failure (APICallError / RetryError) — classify
+        // against that so quota/credits map to 429/402 instead of
+        // bubbling up as an uncaught Panic and returning 500.
+        return Result.err(
+          aiHandlerError(pageBoxesResult.error.cause, {
+            status: 502,
+            message: "Bounding box generation failed",
+          }),
+        );
+      }
+
+      boxes.push(...pageBoxesResult.value);
 
       yield* Result.await(
         safeDb((tx) =>

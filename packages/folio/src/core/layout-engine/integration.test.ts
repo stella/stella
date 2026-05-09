@@ -160,6 +160,22 @@ describe("Layout Engine - Page Production", () => {
       expect(fragment.blockId).toBe(0);
     });
 
+    test("first paragraph on a page honors explicit spaceBefore", () => {
+      const blocks: FlowBlock[] = [
+        {
+          ...makeParagraphBlock(0, "Starts lower", 1),
+          attrs: { spacing: { before: 18, after: 0 } },
+        },
+      ];
+      const measures: Measure[] = [
+        makeParagraphMeasure([makeLine(0, 0, 0, 12, 100, 24)]),
+      ];
+
+      const layout = layoutDocument(blocks, measures, makeLayoutOptions());
+
+      expect(layout.pages[0].fragments[0]?.y).toBe(DEFAULT_MARGINS.top + 18);
+    });
+
     test("multiple paragraphs fit on one page", () => {
       const blocks: FlowBlock[] = [
         makeParagraphBlock(0, "First paragraph", 1),
@@ -240,6 +256,27 @@ describe("Layout Engine - Page Production", () => {
       expect(layout.pages[1].fragments.length).toBe(1);
     });
 
+    test("consecutive explicit page breaks preserve a blank page", () => {
+      const blocks: FlowBlock[] = [
+        makeParagraphBlock(0, "Before break", 1),
+        { kind: "pageBreak", id: 1, pmStart: 15, pmEnd: 16 },
+        { kind: "pageBreak", id: 2, pmStart: 16, pmEnd: 17 },
+        makeParagraphBlock(3, "After blank page", 18),
+      ];
+      const measures: Measure[] = [
+        makeParagraphMeasure([makeLine(0, 0, 0, 12, 100, 24)]),
+        { kind: "pageBreak" },
+        { kind: "pageBreak" },
+        makeParagraphMeasure([makeLine(0, 0, 0, 16, 90, 24)]),
+      ];
+
+      const layout = layoutDocument(blocks, measures, makeLayoutOptions());
+
+      expect(layout.pages.length).toBe(3);
+      expect(layout.pages[1].fragments).toEqual([]);
+      expect(layout.pages[2].fragments[0].blockId).toBe(3);
+    });
+
     test("pageBreakBefore attribute creates new page", () => {
       const blocks: FlowBlock[] = [
         makeParagraphBlock(0, "First paragraph", 1),
@@ -257,6 +294,27 @@ describe("Layout Engine - Page Production", () => {
       expect(layout.pages.length).toBe(2);
       expect(layout.pages[0].fragments[0].blockId).toBe(0);
       expect(layout.pages[1].fragments[0].blockId).toBe(1);
+    });
+
+    test("pageBreakBefore after an explicit page break preserves a blank page", () => {
+      const blocks: FlowBlock[] = [
+        makeParagraphBlock(0, "Before break", 1),
+        { kind: "pageBreak", id: 1, pmStart: 15, pmEnd: 16 },
+        makeParagraphBlock(2, "After blank page", 17, {
+          pageBreakBefore: true,
+        }),
+      ];
+      const measures: Measure[] = [
+        makeParagraphMeasure([makeLine(0, 0, 0, 12, 100, 24)]),
+        { kind: "pageBreak" },
+        makeParagraphMeasure([makeLine(0, 0, 0, 16, 90, 24)]),
+      ];
+
+      const layout = layoutDocument(blocks, measures, makeLayoutOptions());
+
+      expect(layout.pages.length).toBe(3);
+      expect(layout.pages[1].fragments).toEqual([]);
+      expect(layout.pages[2].fragments[0].blockId).toBe(2);
     });
   });
 
@@ -863,6 +921,30 @@ describe("Section Breaks", () => {
 
     expect(layout.pages.length).toBe(1);
     expect(layout.pages[0].fragments.length).toBe(2);
+  });
+
+  test("evenPage section break preserves the blank parity page", () => {
+    const pageContentHeight =
+      DEFAULT_PAGE_SIZE.h - DEFAULT_MARGINS.top - DEFAULT_MARGINS.bottom;
+    const blocks: FlowBlock[] = [
+      makeParagraphBlock(0, "Before section", 1),
+      { kind: "sectionBreak", id: 1, type: "evenPage" },
+      makeParagraphBlock(2, "After section", 18),
+    ];
+    const measures: Measure[] = [
+      makeParagraphMeasure([
+        makeLine(0, 0, 0, 7, 120, pageContentHeight),
+        makeLine(0, 7, 0, 14, 120, pageContentHeight),
+      ]),
+      { kind: "sectionBreak" },
+      makeParagraphMeasure([makeLine(0, 0, 0, 13, 110, 24)]),
+    ];
+
+    const layout = layoutDocument(blocks, measures, makeLayoutOptions());
+
+    expect(layout.pages.length).toBe(4);
+    expect(layout.pages[2].fragments).toEqual([]);
+    expect(layout.pages[3].fragments.some((f) => f.blockId === 2)).toBe(true);
   });
 });
 

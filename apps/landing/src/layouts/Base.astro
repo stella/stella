@@ -3,15 +3,19 @@ import "../styles/global.css";
 type Props = {
   title?: string;
   description?: string;
+  socialImage?: string;
+  socialImageAlt?: string;
 };
 
 const {
   title = "stella | open source legal workspace",
   description = "Open source legal workspace for documents, matters, review, and research. Self-host or use our cloud. Usage-based AI, no lock-in.",
+  socialImage = "/images/og-card.png",
+  socialImageAlt = description,
 } = Astro.props;
 
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
-const socialImageUrl = new URL("/images/og-card.png", Astro.site);
+const socialImageUrl = new URL(socialImage, Astro.site);
 ---
 
 <!--
@@ -46,7 +50,7 @@ const socialImageUrl = new URL("/images/og-card.png", Astro.site);
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={socialImageUrl.href} />
-    <meta name="twitter:image:alt" content={description} />
+    <meta name="twitter:image:alt" content={socialImageAlt} />
 
     <!-- Favicons -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />

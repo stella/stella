@@ -1,4 +1,4 @@
-import { useEffectEvent, useState } from "react";
+import { useEffectEvent, useMemo, useState } from "react";
 
 import { Button, buttonVariants } from "@stll/ui/components/button";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
@@ -15,6 +15,7 @@ import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import { getUserMessageHtmlHistory } from "@/components/chat/chat-ui-tools";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
@@ -50,8 +51,7 @@ export const ChatThreadPage = ({
   const { ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
   const getUserContext = useEffectEvent(() => userContext);
-  const showToolCalls = useDevStore((state) => state.showToolCalls);
-  const controller = useChatEditor({ threadRef });
+  const showToolCallDetails = useDevStore((state) => state.showToolCallDetails);
   const prompts = useSavedPrompts();
 
   // Local copy of the persisted contextMatterIds, seeded from the
@@ -102,14 +102,24 @@ export const ChatThreadPage = ({
     sendMessage,
     stop,
     isGenerating,
-    autoApprovedTools,
+    alwaysApprovedTools,
+    conversationApprovedTools,
     handleApprove,
+    handleAllowInConversation,
     handleDeny,
     handleAskUserSubmit,
     handleAlwaysAllow,
     streamdownComponents,
     approvalPendingMessageId,
-  } = useChatSession({ chat, workspaceId });
+  } = useChatSession({ chat, conversationId: threadRef.threadId, workspaceId });
+  const sentMessageHistoryHtml = useMemo(
+    () => getUserMessageHtmlHistory(messages),
+    [messages],
+  );
+  const controller = useChatEditor({
+    sentMessageHistoryHtml,
+    threadRef,
+  });
 
   const openInspectorChat = useInspectorStore((s) => s.openChat);
   const navigate = useNavigate();
@@ -157,7 +167,7 @@ export const ChatThreadPage = ({
   };
 
   return (
-    <div className="flex w-full max-w-2xl flex-1 flex-col overflow-hidden">
+    <div className="flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between gap-2 px-4 py-2">
         <div className="flex min-w-0 items-center gap-2">
           {threadRef.scope === "workspace" ? (
@@ -213,9 +223,11 @@ export const ChatThreadPage = ({
             </div>
           ) : (
             <ChatThreadMessages
+              alwaysApprovedTools={alwaysApprovedTools}
               approvalPendingMessageId={approvalPendingMessageId}
-              autoApprovedTools={autoApprovedTools}
+              conversationApprovedTools={conversationApprovedTools}
               error={error}
+              handleAllowInConversation={handleAllowInConversation}
               handleAlwaysAllow={handleAlwaysAllow}
               handleApprove={handleApprove}
               handleDeny={handleDeny}
@@ -224,7 +236,7 @@ export const ChatThreadPage = ({
               onAskUserSubmit={handleAskUserSubmit}
               onResend={resendLatestMessage}
               showThinkingIndicator
-              showToolCalls={showToolCalls}
+              showToolCallDetails={showToolCallDetails}
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
             />

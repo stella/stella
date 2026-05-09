@@ -16,6 +16,7 @@ import { Route as OnboardingRouteRouteImport } from './routes/onboarding/route'
 import { Route as AuthRouteRouteImport } from './routes/auth/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthIndexRouteImport } from './routes/auth/index'
+import { Route as McpOauthCallbackRouteImport } from './routes/mcp.oauth-callback'
 import { Route as AuthOtpRouteImport } from './routes/auth/otp'
 import { Route as AuthOrganizationRouteImport } from './routes/auth/organization'
 import { Route as ProtectedSettingsRouteRouteImport } from './routes/_protected.settings/route'
@@ -30,6 +31,7 @@ import { Route as ProtectedChatIndexRouteImport } from './routes/_protected.chat
 import { Route as AuthAcceptInvitationInvitationIdRouteImport } from './routes/auth/accept-invitation.$invitationId'
 import { Route as ProtectedKnowledgeTemplatesRouteImport } from './routes/_protected.knowledge/templates'
 import { Route as ProtectedKnowledgeSkillsRouteImport } from './routes/_protected.knowledge/skills'
+import { Route as ProtectedKnowledgeMcpRouteImport } from './routes/_protected.knowledge/mcp'
 import { Route as ProtectedKnowledgeClausesRouteImport } from './routes/_protected.knowledge/clauses'
 import { Route as ProtectedContactsContactIdRouteImport } from './routes/_protected.contacts/$contactId'
 import { Route as ProtectedChatNewRouteImport } from './routes/_protected.chat/new'
@@ -90,6 +92,11 @@ const AuthIndexRoute = AuthIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthRouteRoute,
+} as any)
+const McpOauthCallbackRoute = McpOauthCallbackRouteImport.update({
+  id: '/mcp/oauth-callback',
+  path: '/mcp/oauth-callback',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthOtpRoute = AuthOtpRouteImport.update({
   id: '/otp',
@@ -165,6 +172,11 @@ const ProtectedKnowledgeSkillsRoute =
     path: '/skills',
     getParentRoute: () => ProtectedKnowledgeRouteRoute,
   } as any)
+const ProtectedKnowledgeMcpRoute = ProtectedKnowledgeMcpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => ProtectedKnowledgeRouteRoute,
+} as any)
 const ProtectedKnowledgeClausesRoute =
   ProtectedKnowledgeClausesRouteImport.update({
     id: '/clauses',
@@ -331,6 +343,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof ProtectedSettingsRouteRouteWithChildren
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
+  '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/auth/': typeof AuthIndexRoute
   '/knowledge/case': typeof ProtectedKnowledgeCaseRouteRouteWithChildren
   '/settings/organization': typeof ProtectedSettingsOrganizationRouteRouteWithChildren
@@ -339,6 +352,7 @@ export interface FileRoutesByFullPath {
   '/chat/new': typeof ProtectedChatNewRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
+  '/knowledge/mcp': typeof ProtectedKnowledgeMcpRoute
   '/knowledge/skills': typeof ProtectedKnowledgeSkillsRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
@@ -375,11 +389,13 @@ export interface FileRoutesByTo {
   '/dev': typeof DevRoute
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
+  '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/auth': typeof AuthIndexRoute
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/chat/new': typeof ProtectedChatNewRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
+  '/knowledge/mcp': typeof ProtectedKnowledgeMcpRoute
   '/knowledge/skills': typeof ProtectedKnowledgeSkillsRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
@@ -421,6 +437,7 @@ export interface FileRoutesById {
   '/_protected/settings': typeof ProtectedSettingsRouteRouteWithChildren
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
+  '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/auth/': typeof AuthIndexRoute
   '/_protected/knowledge/case': typeof ProtectedKnowledgeCaseRouteRouteWithChildren
   '/_protected/settings/organization': typeof ProtectedSettingsOrganizationRouteRouteWithChildren
@@ -429,6 +446,7 @@ export interface FileRoutesById {
   '/_protected/chat/new': typeof ProtectedChatNewRoute
   '/_protected/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/_protected/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
+  '/_protected/knowledge/mcp': typeof ProtectedKnowledgeMcpRoute
   '/_protected/knowledge/skills': typeof ProtectedKnowledgeSkillsRoute
   '/_protected/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
@@ -471,6 +489,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/auth/organization'
     | '/auth/otp'
+    | '/mcp/oauth-callback'
     | '/auth/'
     | '/knowledge/case'
     | '/settings/organization'
@@ -479,6 +498,7 @@ export interface FileRouteTypes {
     | '/chat/new'
     | '/contacts/$contactId'
     | '/knowledge/clauses'
+    | '/knowledge/mcp'
     | '/knowledge/skills'
     | '/knowledge/templates'
     | '/auth/accept-invitation/$invitationId'
@@ -515,11 +535,13 @@ export interface FileRouteTypes {
     | '/dev'
     | '/auth/organization'
     | '/auth/otp'
+    | '/mcp/oauth-callback'
     | '/auth'
     | '/chat/$threadId'
     | '/chat/new'
     | '/contacts/$contactId'
     | '/knowledge/clauses'
+    | '/knowledge/mcp'
     | '/knowledge/skills'
     | '/knowledge/templates'
     | '/auth/accept-invitation/$invitationId'
@@ -560,6 +582,7 @@ export interface FileRouteTypes {
     | '/_protected/settings'
     | '/auth/organization'
     | '/auth/otp'
+    | '/mcp/oauth-callback'
     | '/auth/'
     | '/_protected/knowledge/case'
     | '/_protected/settings/organization'
@@ -568,6 +591,7 @@ export interface FileRouteTypes {
     | '/_protected/chat/new'
     | '/_protected/contacts/$contactId'
     | '/_protected/knowledge/clauses'
+    | '/_protected/knowledge/mcp'
     | '/_protected/knowledge/skills'
     | '/_protected/knowledge/templates'
     | '/auth/accept-invitation/$invitationId'
@@ -605,6 +629,7 @@ export interface RootRouteChildren {
   ProtectedRoute: typeof ProtectedRouteWithChildren
   ConsentRoute: typeof ConsentRoute
   DevRoute: typeof DevRoute
+  McpOauthCallbackRoute: typeof McpOauthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -657,6 +682,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth/'
       preLoaderRoute: typeof AuthIndexRouteImport
       parentRoute: typeof AuthRouteRoute
+    }
+    '/mcp/oauth-callback': {
+      id: '/mcp/oauth-callback'
+      path: '/mcp/oauth-callback'
+      fullPath: '/mcp/oauth-callback'
+      preLoaderRoute: typeof McpOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/auth/otp': {
       id: '/auth/otp'
@@ -754,6 +786,13 @@ declare module '@tanstack/react-router' {
       path: '/skills'
       fullPath: '/knowledge/skills'
       preLoaderRoute: typeof ProtectedKnowledgeSkillsRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    }
+    '/_protected/knowledge/mcp': {
+      id: '/_protected/knowledge/mcp'
+      path: '/mcp'
+      fullPath: '/knowledge/mcp'
+      preLoaderRoute: typeof ProtectedKnowledgeMcpRouteImport
       parentRoute: typeof ProtectedKnowledgeRouteRoute
     }
     '/_protected/knowledge/clauses': {
@@ -1000,6 +1039,7 @@ const ProtectedKnowledgeCaseRouteRouteWithChildren =
 interface ProtectedKnowledgeRouteRouteChildren {
   ProtectedKnowledgeCaseRouteRoute: typeof ProtectedKnowledgeCaseRouteRouteWithChildren
   ProtectedKnowledgeClausesRoute: typeof ProtectedKnowledgeClausesRoute
+  ProtectedKnowledgeMcpRoute: typeof ProtectedKnowledgeMcpRoute
   ProtectedKnowledgeSkillsRoute: typeof ProtectedKnowledgeSkillsRoute
   ProtectedKnowledgeTemplatesRoute: typeof ProtectedKnowledgeTemplatesRoute
   ProtectedKnowledgeIndexRoute: typeof ProtectedKnowledgeIndexRoute
@@ -1010,6 +1050,7 @@ const ProtectedKnowledgeRouteRouteChildren: ProtectedKnowledgeRouteRouteChildren
     ProtectedKnowledgeCaseRouteRoute:
       ProtectedKnowledgeCaseRouteRouteWithChildren,
     ProtectedKnowledgeClausesRoute: ProtectedKnowledgeClausesRoute,
+    ProtectedKnowledgeMcpRoute: ProtectedKnowledgeMcpRoute,
     ProtectedKnowledgeSkillsRoute: ProtectedKnowledgeSkillsRoute,
     ProtectedKnowledgeTemplatesRoute: ProtectedKnowledgeTemplatesRoute,
     ProtectedKnowledgeIndexRoute: ProtectedKnowledgeIndexRoute,
@@ -1161,6 +1202,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProtectedRoute: ProtectedRouteWithChildren,
   ConsentRoute: ConsentRoute,
   DevRoute: DevRoute,
+  McpOauthCallbackRoute: McpOauthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

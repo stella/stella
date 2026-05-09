@@ -41,9 +41,18 @@ import type {
   FontFamilyAttrs,
 } from "../prosemirror/schema/marks";
 import type { ParagraphAttrs as PMParagraphAttrs } from "../prosemirror/schema/nodes";
-import type { Theme, SectionProperties, NumberFormat } from "../types/document";
+import type {
+  Theme,
+  SectionProperties,
+  NumberFormat,
+  TextFormatting,
+} from "../types/document";
 import { resolveColor, resolveHighlightToCss } from "../utils/colorResolver";
-import { pointsToPixels } from "../utils/units";
+import {
+  pointsToPixels,
+  halfPointsToPixels,
+  halfPointsToPoints,
+} from "../utils/units";
 
 /**
  * Options for the conversion.
@@ -59,9 +68,20 @@ export type ToFlowBlocksOptions = {
   pageContentHeight?: number;
   /** Shared list counters for nested containers. */
   listCounters?: Map<number, number[]>;
+  /** Latest concrete counters by abstract numbering definition. */
+  listAbstractCounters?: Map<number, number[]>;
+  /** Shared startOverride state for nested containers. */
+  listSeenNumIds?: Set<string>;
 };
 
 const DEFAULT_FONT = "Calibri";
+const DEFAULT_TABLE_CELL_MARGIN_TWIPS = {
+  top: 0,
+  right: 108,
+  bottom: 0,
+  left: 108,
+} as const;
+type TablePaddingSide = keyof typeof DEFAULT_TABLE_CELL_MARGIN_TWIPS;
 
 /**
  * Constrain image dimensions to fit within the page content area.
@@ -214,6 +234,8 @@ function getLastListCounters(
 function computeListMarker(
   pmAttrs: PMParagraphAttrs,
   listCounters: Map<number, number[]>,
+  abstractCounters: Map<number, number[]>,
+  seenNumIds: Set<string>,
 ): string | null {
   const numId = pmAttrs.numPr?.numId;
   if (numId === null || numId === undefined || numId === 0) {
@@ -238,11 +260,35 @@ function computeListMarker(
   const level = pmAttrs.numPr?.ilvl ?? 0;
   const counters =
     listCounters.get(numId) ?? (Array.from({ length: 9 }, () => 0) as number[]);
+  const abstractNumId = pmAttrs.listAbstractNumId;
+  if (abstractNumId !== undefined && level > 0) {
+    const latestAbstractCounters = abstractCounters.get(abstractNumId);
+    const missingParentCounters = counters
+      .slice(0, level)
+      .every((value) => value === 0);
+    if (latestAbstractCounters && missingParentCounters) {
+      for (let i = 0; i < level; i += 1) {
+        counters[i] = latestAbstractCounters[i] ?? 0;
+      }
+    }
+  }
+
+  const seenKey = `${numId}:${level}`;
+  if (!seenNumIds.has(seenKey)) {
+    seenNumIds.add(seenKey);
+    if (pmAttrs.listStartOverride != null) {
+      counters[level] = pmAttrs.listStartOverride - 1;
+    }
+  }
+
   counters[level] = (counters[level] ?? 0) + 1;
   for (let i = level + 1; i < counters.length; i += 1) {
     counters[i] = 0;
   }
   listCounters.set(numId, counters);
+  if (abstractNumId !== undefined) {
+    abstractCounters.set(abstractNumId, [...counters]);
+  }
 
   const levelFormats =
     pmAttrs.listLevelNumFmts ??
@@ -351,6 +397,68 @@ function extractRunFormatting(
         break;
       }
 
+      case "characterSpacing": {
+        const attrs = mark.attrs as {
+          spacing: number | null;
+          position: number | null;
+          scale: number | null;
+          kerning: number | null;
+        };
+        if (attrs.spacing != null && attrs.spacing !== 0) {
+          formatting.letterSpacing = twipsToPixels(attrs.spacing);
+        }
+        if (attrs.position != null && attrs.position !== 0) {
+          formatting.positionPx = halfPointsToPixels(attrs.position);
+        }
+        if (attrs.scale != null && attrs.scale !== 100) {
+          formatting.horizontalScale = attrs.scale;
+        }
+        if (attrs.kerning != null && attrs.kerning > 0) {
+          formatting.kerningMinPt = halfPointsToPoints(attrs.kerning);
+        }
+        break;
+      }
+
+      case "allCaps":
+        formatting.allCaps = true;
+        break;
+
+      case "smallCaps":
+        formatting.smallCaps = true;
+        break;
+
+      case "emboss":
+        formatting.emboss = true;
+        break;
+
+      case "imprint":
+        formatting.imprint = true;
+        break;
+
+      case "textShadow":
+        formatting.textShadow = true;
+        break;
+
+      case "textOutline":
+        formatting.textOutline = true;
+        break;
+
+      case "runFormattingOverride":
+        applyRunFormattingOverrides(formatting, mark);
+        break;
+
+      case "emphasisMark": {
+        const type = mark.attrs["type"] as string | undefined;
+        formatting.emphasisMark =
+          type === "dot" ||
+          type === "comma" ||
+          type === "circle" ||
+          type === "underDot"
+            ? type
+            : "dot";
+        break;
+      }
+
       case "superscript":
         formatting.superscript = true;
         break;
@@ -417,6 +525,153 @@ function extractRunFormatting(
   return formatting;
 }
 
+function applyRunFormattingOverrides(
+  formatting: RunFormatting,
+  mark: Mark,
+): void {
+  if (mark.attrs["bold"] === false) {
+    formatting.bold = false;
+  }
+  if (mark.attrs["italic"] === false) {
+    formatting.italic = false;
+  }
+  if (mark.attrs["underline"] === "none") {
+    formatting.underline = false;
+  }
+  if (mark.attrs["strike"] === false) {
+    formatting.strike = false;
+  }
+  if (mark.attrs["allCaps"] === false) {
+    formatting.allCaps = false;
+  }
+  if (mark.attrs["smallCaps"] === false) {
+    formatting.smallCaps = false;
+  }
+  if (mark.attrs["emboss"] === false) {
+    formatting.emboss = false;
+  }
+  if (mark.attrs["imprint"] === false) {
+    formatting.imprint = false;
+  }
+  if (mark.attrs["shadow"] === false) {
+    formatting.textShadow = false;
+  }
+  if (mark.attrs["outline"] === false) {
+    formatting.textOutline = false;
+  }
+}
+
+function paragraphRunDefaults(
+  pmAttrs: PMParagraphAttrs,
+  theme?: Theme | null,
+): RunFormatting {
+  const defaultTextFormatting = pmAttrs.defaultTextFormatting as
+    | TextFormatting
+    | undefined;
+  if (!defaultTextFormatting) {
+    return {};
+  }
+
+  const result: RunFormatting = {};
+  const fontFamily =
+    defaultTextFormatting.fontFamily?.ascii ??
+    defaultTextFormatting.fontFamily?.hAnsi;
+  if (fontFamily) {
+    result.fontFamily = fontFamily;
+  }
+  if (defaultTextFormatting.fontSize !== undefined) {
+    result.fontSize = defaultTextFormatting.fontSize / 2;
+  }
+  if (defaultTextFormatting.bold !== undefined) {
+    result.bold = defaultTextFormatting.bold;
+  }
+  if (defaultTextFormatting.italic !== undefined) {
+    result.italic = defaultTextFormatting.italic;
+  }
+  if (
+    defaultTextFormatting.underline &&
+    defaultTextFormatting.underline.style !== "none"
+  ) {
+    result.underline = {};
+    if (defaultTextFormatting.underline.style) {
+      result.underline.style = defaultTextFormatting.underline.style;
+    }
+    if (defaultTextFormatting.underline.color) {
+      result.underline.color = resolveColor(
+        defaultTextFormatting.underline.color,
+        theme,
+      );
+    }
+  }
+  if (defaultTextFormatting.strike !== undefined) {
+    result.strike = defaultTextFormatting.strike;
+  }
+  if (defaultTextFormatting.color) {
+    result.color = resolveColor(defaultTextFormatting.color, theme);
+  }
+  if (defaultTextFormatting.highlight) {
+    const highlight = resolveHighlightToCss(defaultTextFormatting.highlight);
+    if (highlight) {
+      result.highlight = highlight;
+    }
+  }
+  if (defaultTextFormatting.vertAlign === "superscript") {
+    result.superscript = true;
+  }
+  if (defaultTextFormatting.vertAlign === "subscript") {
+    result.subscript = true;
+  }
+  if (defaultTextFormatting.allCaps !== undefined) {
+    result.allCaps = defaultTextFormatting.allCaps;
+  }
+  if (defaultTextFormatting.smallCaps !== undefined) {
+    result.smallCaps = defaultTextFormatting.smallCaps;
+  }
+  if (
+    defaultTextFormatting.spacing !== undefined &&
+    defaultTextFormatting.spacing !== 0
+  ) {
+    result.letterSpacing = twipsToPixels(defaultTextFormatting.spacing);
+  }
+  if (
+    defaultTextFormatting.position !== undefined &&
+    defaultTextFormatting.position !== 0
+  ) {
+    result.positionPx = halfPointsToPixels(defaultTextFormatting.position);
+  }
+  if (
+    defaultTextFormatting.scale !== undefined &&
+    defaultTextFormatting.scale !== 100
+  ) {
+    result.horizontalScale = defaultTextFormatting.scale;
+  }
+  if (
+    defaultTextFormatting.kerning !== undefined &&
+    defaultTextFormatting.kerning > 0
+  ) {
+    result.kerningMinPt = halfPointsToPoints(defaultTextFormatting.kerning);
+  }
+  if (defaultTextFormatting.emboss !== undefined) {
+    result.emboss = defaultTextFormatting.emboss;
+  }
+  if (defaultTextFormatting.imprint !== undefined) {
+    result.imprint = defaultTextFormatting.imprint;
+  }
+  if (defaultTextFormatting.shadow !== undefined) {
+    result.textShadow = defaultTextFormatting.shadow;
+  }
+  if (defaultTextFormatting.outline !== undefined) {
+    result.textOutline = defaultTextFormatting.outline;
+  }
+  if (
+    defaultTextFormatting.emphasisMark &&
+    defaultTextFormatting.emphasisMark !== "none"
+  ) {
+    result.emphasisMark = defaultTextFormatting.emphasisMark;
+  }
+  return result;
+}
+
 /**
  * Build an ImageRun from ProseMirror node attrs, applying conditional property assignment
  * to satisfy exactOptionalPropertyTypes.
@@ -479,6 +734,10 @@ function paragraphToRuns(
   const runs: Run[] = [];
   const offset = startPos + 1; // +1 for opening tag
   const theme = _options.theme;
+  const paraDefaults = paragraphRunDefaults(
+    node.attrs as PMParagraphAttrs,
+    theme,
+  );
 
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   node.forEach((child, childOffset) => {
@@ -490,6 +749,7 @@ function paragraphToRuns(
       const run: TextRun = {
         kind: "text",
         text: child.text,
+        ...paraDefaults,
         ...formatting,
         pmStart: childPos,
         pmEnd: childPos + child.nodeSize,
@@ -508,6 +768,7 @@ function paragraphToRuns(
       const formatting = extractRunFormatting(child.marks, theme);
       const run: TabRun = {
         kind: "tab",
+        ...paraDefaults,
         ...formatting,
         pmStart: childPos,
         pmEnd: childPos + child.nodeSize,
@@ -573,6 +834,7 @@ function paragraphToRuns(
           const run: TextRun = {
             kind: "text",
             text: sdtChild.text,
+            ...paraDefaults,
             ...formatting,
             pmStart: sdtChildPos,
             pmEnd: sdtChildPos + sdtChild.nodeSize,
@@ -589,6 +851,7 @@ function paragraphToRuns(
           const formatting = extractRunFormatting(sdtChild.marks, theme);
           const run: TabRun = {
             kind: "tab",
+            ...paraDefaults,
             ...formatting,
             pmStart: sdtChildPos,
             pmEnd: sdtChildPos + sdtChild.nodeSize,
@@ -623,6 +886,8 @@ function convertParagraphAttrs(
   pmAttrs: PMParagraphAttrs,
   theme?: Theme | null,
   listCounters?: Map<number, number[]>,
+  listAbstractCounters?: Map<number, number[]>,
+  listSeenNumIds?: Set<string>,
 ): ParagraphAttrs {
   const attrs: ParagraphAttrs = {};
 
@@ -830,7 +1095,12 @@ function convertParagraphAttrs(
     attrs.numPr = numPr;
   }
   const resolvedMarker = listCounters
-    ? computeListMarker(pmAttrs, listCounters)
+    ? computeListMarker(
+        pmAttrs,
+        listCounters,
+        listAbstractCounters ?? new Map(),
+        listSeenNumIds ?? new Set(),
+      )
     : null;
   if (resolvedMarker !== null) {
     attrs.listMarker = resolvedMarker;
@@ -910,6 +1180,8 @@ function convertParagraph(
     pmAttrs,
     options.theme,
     options.listCounters,
+    options.listAbstractCounters,
+    options.listSeenNumIds,
   );
 
   return {
@@ -1037,6 +1309,12 @@ function convertTableCell(
   node: PMNode,
   startPos: number,
   options: ToFlowBlocksOptions,
+  tableCellMargins?: {
+    top?: number;
+    bottom?: number;
+    left?: number;
+    right?: number;
+  },
 ): TableCell {
   const blocks: FlowBlock[] = [];
   let offset = startPos + 1; // +1 for opening tag
@@ -1059,11 +1337,31 @@ function convertTableCell(
   const margins = attrs["margins"] as
     | { top?: number; bottom?: number; left?: number; right?: number }
     | undefined;
+  const resolvePaddingSide = (
+    side: TablePaddingSide,
+    cellTwips: number | undefined,
+    tableTwips: number | undefined,
+  ): number => {
+    if (cellTwips !== undefined) {
+      const px = twipsToPixels(cellTwips);
+      if (px > 0) {
+        return px;
+      }
+    }
+    if (tableTwips !== undefined) {
+      return twipsToPixels(tableTwips);
+    }
+    return twipsToPixels(DEFAULT_TABLE_CELL_MARGIN_TWIPS[side]);
+  };
   const padding = {
-    top: margins?.top !== undefined ? twipsToPixels(margins.top) : 0,
-    right: margins?.right !== undefined ? twipsToPixels(margins.right) : 7,
-    bottom: margins?.bottom !== undefined ? twipsToPixels(margins.bottom) : 0,
-    left: margins?.left !== undefined ? twipsToPixels(margins.left) : 7,
+    top: resolvePaddingSide("top", margins?.top, tableCellMargins?.top),
+    right: resolvePaddingSide("right", margins?.right, tableCellMargins?.right),
+    bottom: resolvePaddingSide(
+      "bottom",
+      margins?.bottom,
+      tableCellMargins?.bottom,
+    ),
+    left: resolvePaddingSide("left", margins?.left, tableCellMargins?.left),
   };
 
   const cell: TableCell = {
@@ -1099,6 +1397,12 @@ function convertTableRow(
   node: PMNode,
   startPos: number,
   options: ToFlowBlocksOptions,
+  tableCellMargins?: {
+    top?: number;
+    bottom?: number;
+    left?: number;
+    right?: number;
+  },
 ): TableRow {
   const cells: TableCell[] = [];
   let offset = startPos + 1; // +1 for opening tag
@@ -1106,7 +1410,7 @@ function convertTableRow(
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   node.forEach((child) => {
     if (child.type.name === "tableCell" || child.type.name === "tableHeader") {
-      cells.push(convertTableCell(child, offset, options));
+      cells.push(convertTableCell(child, offset, options, tableCellMargins));
     }
     offset += child.nodeSize;
   });
@@ -1138,11 +1442,14 @@ function convertTable(
 ): TableBlock {
   const rows: TableRow[] = [];
   let offset = startPos + 1; // +1 for opening tag
+  const tableCellMargins = node.attrs["cellMargins"] as
+    | { top?: number; bottom?: number; left?: number; right?: number }
+    | undefined;
 
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   node.forEach((child) => {
     if (child.type.name === "tableRow") {
-      rows.push(convertTableRow(child, offset, options));
+      rows.push(convertTableRow(child, offset, options, tableCellMargins));
     }
     offset += child.nodeSize;
   });
@@ -1395,10 +1702,19 @@ export function toFlowBlocks(
     defaultFont: options.defaultFont ?? DEFAULT_FONT,
     defaultSize: options.defaultSize ?? DEFAULT_SIZE,
     listCounters: options.listCounters ?? new Map<number, number[]>(),
+    listAbstractCounters:
+      options.listAbstractCounters ?? new Map<number, number[]>(),
+    listSeenNumIds: options.listSeenNumIds ?? new Set<string>(),
   };
 
   const blocks: FlowBlock[] = [];
   const offset = 0; // Start at document beginning
+  let lastSectionMarginsTwips = {
+    top: 1440,
+    bottom: 1440,
+    left: 1440,
+    right: 1440,
+  };
 
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   doc.forEach((node, nodeOffset) => {
@@ -1438,13 +1754,21 @@ export function toFlowBlocks(
             // Populate margins
             if (
               secProps.marginTop !== undefined ||
-              secProps.marginLeft !== undefined
+              secProps.marginBottom !== undefined ||
+              secProps.marginLeft !== undefined ||
+              secProps.marginRight !== undefined
             ) {
+              lastSectionMarginsTwips = {
+                top: secProps.marginTop ?? lastSectionMarginsTwips.top,
+                bottom: secProps.marginBottom ?? lastSectionMarginsTwips.bottom,
+                left: secProps.marginLeft ?? lastSectionMarginsTwips.left,
+                right: secProps.marginRight ?? lastSectionMarginsTwips.right,
+              };
               sectionBreak.margins = {
-                top: twipsToPixels(secProps.marginTop ?? 1440),
-                bottom: twipsToPixels(secProps.marginBottom ?? 1440),
-                left: twipsToPixels(secProps.marginLeft ?? 1440),
-                right: twipsToPixels(secProps.marginRight ?? 1440),
+                top: twipsToPixels(lastSectionMarginsTwips.top),
+                bottom: twipsToPixels(lastSectionMarginsTwips.bottom),
+                left: twipsToPixels(lastSectionMarginsTwips.left),
+                right: twipsToPixels(lastSectionMarginsTwips.right),
               };
             }
             // Populate columns

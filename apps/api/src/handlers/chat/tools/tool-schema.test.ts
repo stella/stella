@@ -4,6 +4,7 @@ import type { SafeDb, ScopedDb } from "@/api/db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import { createOrgTools } from "./org-tools";
@@ -87,6 +88,64 @@ describe("chat tool schemas", () => {
     expect(tools).not.toHaveProperty("search-across-matters");
     expect(tools).not.toHaveProperty("read-content-across-matters");
     expect(tools).not.toHaveProperty("read-contact");
+  });
+
+  test("applies approval and anonymization policies by tool risk", () => {
+    const tools = getChatTools({
+      organizationId,
+      refRegistry: createChatRefRegistry(),
+      safeDb: unusedSafeDb,
+      scopedDb: unusedScopedDb,
+      userId,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [workspaceId],
+      }),
+      workspaceId,
+      hasActiveFileChat: false,
+    });
+
+    const aresLookup = tools["ares_lookup_company"];
+    const aresSearch = tools["ares_search_companies"];
+    const updateEntityFields = tools["update-entity-fields"];
+    const createDocument = tools["create-document"];
+    const runStellaQuery = tools["run-stella-query"];
+
+    expect(aresLookup).toBeDefined();
+    expect(aresSearch).toBeDefined();
+    expect(updateEntityFields).toBeDefined();
+    expect(createDocument).toBeDefined();
+    expect(runStellaQuery).toBeDefined();
+
+    if (!aresLookup || !aresSearch || !updateEntityFields || !createDocument) {
+      throw new Error("Expected chat tools to be registered");
+    }
+
+    expect(aresLookup.needsApproval).toBeUndefined();
+    expect(getChatToolPolicy(aresLookup)).toEqual({
+      kind: "public_official",
+      needsApproval: false,
+      requiresAnonymization: false,
+    });
+    expect(aresSearch.needsApproval).toBeUndefined();
+    expect(getChatToolPolicy(aresSearch)).toEqual({
+      kind: "public_official",
+      needsApproval: false,
+      requiresAnonymization: false,
+    });
+    expect(updateEntityFields.needsApproval).toBe(true);
+    expect(getChatToolPolicy(updateEntityFields)).toEqual({
+      kind: "mutation",
+      needsApproval: true,
+      requiresAnonymization: false,
+    });
+    expect(createDocument.needsApproval).toBeUndefined();
+    expect(getChatToolPolicy(createDocument)).toEqual({
+      kind: "internal",
+      needsApproval: false,
+      requiresAnonymization: false,
+    });
+    expect(runStellaQuery?.needsApproval).toBeUndefined();
   });
 
   test("created document output includes the canonical entity mention", () => {

@@ -520,6 +520,78 @@ const areSharedDockerPortsFree = async (infraPorts: InfraPorts) => {
   return availability.every(Boolean);
 };
 
+export type ForeignPortOwner = {
+  composeProject: string;
+  containerName: string;
+  hostPort: number;
+};
+
+export const parseForeignPortOwners = ({
+  expectedProject,
+  output,
+  sharedPorts,
+}: {
+  expectedProject: string;
+  output: string;
+  sharedPorts: readonly number[];
+}): ForeignPortOwner[] => {
+  const portSet = new Set(sharedPorts);
+  const foreign: ForeignPortOwner[] = [];
+
+  for (const line of output.split("\n")) {
+    if (!line) {
+      continue;
+    }
+    const [containerName, composeProject, portsField] = line.split("\t");
+    if (!containerName || composeProject === expectedProject) {
+      continue;
+    }
+
+    const seen = new Set<number>();
+    for (const match of (portsField ?? "").matchAll(/:(\d+)->/g)) {
+      const hostPort = Number.parseInt(match[1] ?? "", 10);
+      if (
+        Number.isNaN(hostPort) ||
+        !portSet.has(hostPort) ||
+        seen.has(hostPort)
+      ) {
+        continue;
+      }
+      seen.add(hostPort);
+      foreign.push({
+        composeProject: composeProject ?? "",
+        containerName,
+        hostPort,
+      });
+    }
+  }
+
+  return foreign;
+};
+
+const findForeignContainersOnSharedPorts = ({
+  infraOffset,
+  infraPorts,
+  rootDir,
+}: {
+  infraOffset: number;
+  infraPorts: InfraPorts;
+  rootDir: string;
+}) =>
+  parseForeignPortOwners({
+    expectedProject: dockerProjectName(infraOffset),
+    output: runCommandText({
+      cmd: [
+        resolveCommandPath("docker"),
+        "ps",
+        "--format",
+        '{{.Names}}\t{{.Label "com.docker.compose.project"}}\t{{.Ports}}',
+      ],
+      cwd: rootDir,
+    }),
+    sharedPorts: sharedInfraPortList(infraPorts),
+  });
+
 const dockerComposeEnv = (infraPorts: InfraPorts) => ({
   ...process.env,
   STELLA_GOTENBERG_HOST_PORT: String(infraPorts.gotenberg),
@@ -718,6 +790,23 @@ const ensureDockerServices = async ({
   infraPorts: InfraPorts;
   rootDir: string;
 }) => {
+  const foreignOwners = findForeignContainersOnSharedPorts({
+    infraOffset,
+    infraPorts,
+    rootDir,
+  });
+  if (foreignOwners.length > 0) {
+    const detail = foreignOwners
+      .map(
+        ({ composeProject, containerName, hostPort }) =>
+          `  - host port ${String(hostPort)}: ${containerName} (project ${composeProject || "<none>"})`,
+      )
+      .join("\n");
+    throw new Error(
+      `Shared Docker ports are held by containers from another Compose project:\n${detail}\nStop the conflicting stack, or use --infra-offset to shift Stella's infra ports.`,
+    );
+  }
+
   if (await areSharedDockerServicesHealthy(infraPorts)) {
     const currentFailure = getSharedDockerServicesWaitFailure(
       readSharedDockerServiceStatuses({
@@ -1198,7 +1287,7 @@ const createGitContext = (cwd: string): GitContext => {
   };
 };
 
-const buildPreparationSteps = ({
+export const buildPreparationSteps = ({
   infraOffset,
   infraPorts,
   mode,
@@ -1231,7 +1320,7 @@ const buildPreparationSteps = ({
       envFilePath: pathResolve(rootDir, "apps/api/.env"),
     });
     steps.push({
-      cmd: [resolveCommandPath("bun"), "run", "db:push"],
+      cmd: [resolveCommandPath("bun"), "run", "db:migrate"],
       cwd: pathResolve(rootDir, "apps/api"),
       env: createApiEnv({
         baseEnv: apiBaseEnv,
@@ -1239,7 +1328,7 @@ const buildPreparationSteps = ({
         infraPorts,
         ports,
       }),
-      label: "Pushing database schema",
+      label: "Applying database migrations",
     });
   }
 

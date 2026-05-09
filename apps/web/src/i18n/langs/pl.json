@@ -312,10 +312,14 @@
     },
     "approval": {
       "allow": "Zezwól",
-      "alwaysAllow": "Zawsze zezwalaj w tym wątku",
+      "allowInConversation": "Zezwól w tej rozmowie",
+      "allowOnce": "Zezwól raz",
+      "alwaysAllow": "Zawsze zezwalaj",
       "approved": "Zatwierdzono",
       "denied": "Odrzucono",
-      "deny": "Odmów"
+      "deny": "Odmów",
+      "externalMcpDescription": "Only the information needed for this tool call will be sent.",
+      "externalMcpQuestion": "Can Stella send this request to {provider}?"
     },
     "askUser": {
       "custom": "Napisz własną",
@@ -339,6 +343,8 @@
     "editableFilePlaceholder": "Czat o {fileName} lub edycja",
     "editableFilePlaceholderAction": "Czat lub edycja",
     "editorLoading": "Loading editor…",
+    "externalSourcePlaceholder": "Czat o {title}",
+    "externalSourcePlaceholderAction": "Czat o",
     "extractingContent": "Wyodrębnianie treści...",
     "filePlaceholder": "Czat o {fileName}",
     "filePlaceholderAction": "Czat o",
@@ -384,10 +390,15 @@
     "resend": "Wyślij ponownie",
     "send": "Wyślij wiadomość",
     "sendError": "Wystąpił problem podczas wysyłania wiadomości. Jeśli błąd będzie się powtarzał, skontaktuj się z pomocą techniczną.",
+    "sendErrorInsufficientCredits": "Dostawca AI potrzebuje więcej środków. Poproś administratora obszaru roboczego o doładowanie konta.",
+    "sendErrorProviderUnavailable": "Dostawca AI jest tymczasowo niedostępny. Spróbuj ponownie za chwilę.",
+    "sendErrorQuotaExhausted": "Limit dostawcy AI został wyczerpany. Spróbuj za chwilę ponownie lub poproś administratora obszaru roboczego o ulepszenie planu.",
     "thinking": "Pracuję z kontekstem",
     "threads": "Historia",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
+      "ares_lookup_company": "Wyszukiwanie firmy w ARES",
+      "ares_search_companies": "Wyszukiwanie firm w ARES",
       "ask-user": "Prośba o wyjaśnienie",
       "create-document": "Tworzenie dokumentu",
       "describe-stella-api": "Sprawdzanie API Stella",
@@ -412,6 +423,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# znak} few {# znaki} many {# znaków} other {# znaku}}",
+      "exactCall": "Dokładne wywołanie",
       "field": "Pole",
       "input": "Dane wejściowe",
       "output": "Wynik",
@@ -520,6 +532,7 @@
     "connectionLostDescription": "Utracono połączenie z serwerem. Automatyczne ponowne łączenie.",
     "convertTo": "Konwertuj na",
     "copied": "Skopiowano do schowka",
+    "copy": "Kopiuj",
     "copyLink": "Kopiuj link",
     "createdAt": "Utworzono {date}",
     "currency": "Waluta",
@@ -1023,6 +1036,13 @@
     "unsupportedDocxEditTitle": "Editing blocked"
   },
   "inspector": {
+    "external": {
+      "confirmDescription": "Za chwilę przejdziesz do zewnętrznej strony internetowej.",
+      "confirmTitle": "Otworzyć link zewnętrzny?",
+      "openLink": "Otwórz link",
+      "openOriginal": "Otwórz oryginał",
+      "unavailable": "Wskazana strona nie pozwala na bezpieczny podgląd. Jeśli narzędzie zwróciło tekst dokumentu, pojawi się tutaj; w przeciwnym razie otwórz oryginał."
+    },
     "facet": {
       "preview": "Preview",
       "previewInFullViewToast": "Preview is the main view here. Click the minimize button to see it alongside metadata."
@@ -1050,7 +1070,60 @@
     "showPane": "Pokaż panel"
   },
   "knowledge": {
+    "mcp": {
+      "addAndConnect": "Dodaj i połącz",
+      "addServer": "Dodaj serwer",
+      "addServerCardDescription": "Wklej URL serwera, a Stella połączy go w jednym kroku.",
+      "addServerCardTitle": "Dodaj nowy serwer MCP",
+      "auth": {
+        "bearer": "Token Bearer",
+        "none": "Bez uwierzytelniania",
+        "oauth2": "OAuth 2.0"
+      },
+      "availableInChat": "Dostępne w czacie",
+      "bearerTokenDescription": "Ten serwer używa tokenu Bearer. Wklej token od dostawcy, aby zakończyć łączenie.",
+      "builtInBadge": "Wbudowane",
+      "connect": "Połącz",
+      "connected": "Połączono",
+      "connectedToast": "Połączono konektor MCP",
+      "connectedWithLastUsed": "Połączono · ostatnio użyto {time}",
+      "customDescription": "Wklej URL serwera MCP. Stella wykryje sposób połączenia i automatycznie przejdzie dalej.",
+      "customTitle": "Dodaj własny serwer",
+      "description": "Zarządzaj zewnętrznymi serwerami MCP, które mogą dodawać narzędzia do czatu. Tokeny są przechowywane osobno dla każdego użytkownika.",
+      "detected": "Wykryto {authType}",
+      "disable": "Wyłącz",
+      "disabled": "Połączono · wyłączone",
+      "disconnect": "Rozłącz",
+      "docsLink": "Dokumentacja",
+      "emptyDescription": "Wybrane prawnicze konektory MCP pojawią się tutaj po włączeniu ich dla Twojej przestrzeni roboczej.",
+      "emptyTitle": "Brak konektorów MCP",
+      "enable": "Włącz",
+      "errorDescription": "Nie udało się zaktualizować konektora.",
+      "errorTitle": "Połączenie MCP nie powiodło się",
+      "namePlaceholder": "Nazwa wyświetlana",
+      "needsReauth": "Wymaga ponownego połączenia",
+      "notConnected": "Nie połączono",
+      "off": "Wył.",
+      "on": "Wł.",
+      "otherTitle": "Pozostałe konektory",
+      "probe": "Sprawdź",
+      "recommendedBadge": "Rekomendowane",
+      "recommendedFor": "Rekomendowane dla {jurisdictions}",
+      "recommendedTitle": "Rekomendowane dla Twoich jurysdykcji",
+      "reconnect": "Połącz ponownie",
+      "saveToken": "Zapisz token",
+      "tokenHelp": "Jak uzyskać token",
+      "tokenLabel": "Token Bearer",
+      "tokenPlaceholder": "Wklej token",
+      "urlLabel": "URL serwera MCP",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Używaj w czacie"
+    },
     "sections": {
+      "agents": {
+        "description": "Konfigurowalni asystenci do powtarzalnej pracy",
+        "title": "Agenci"
+      },
       "caseLaw": {
         "description": "Orzeczenia sądowe i baza orzecznictwa",
         "title": "Orzecznictwo"
@@ -1060,12 +1133,20 @@
         "title": "Klauzule"
       },
       "connectors": {
-        "description": "Połączenia z systemami zewnętrznymi",
-        "title": "Konektory"
+        "description": "Połącz Stellę ze zweryfikowanymi zewnętrznymi serwerami narzędzi",
+        "title": "MCP"
+      },
+      "mcp": {
+        "description": "Połącz Stellę ze zweryfikowanymi zewnętrznymi serwerami narzędzi",
+        "title": "MCP"
+      },
+      "prompts": {
+        "description": "Instrukcje wielokrotnego użytku dostępne w czacie przez /",
+        "title": "Prompty"
       },
       "skills": {
-        "description": "Niestandardowe umiejętności AI",
-        "title": "Umiejętności"
+        "description": "Skupione możliwości AI dla specjalistycznych przepływów pracy",
+        "title": "Skills"
       },
       "templates": {
         "description": "Szablony dokumentów z symbolami zastępczymi",
@@ -1073,39 +1154,39 @@
       }
     },
     "skills": {
-      "addShortcut": "Dodaj umiejętność",
-      "defaultBadge": "Domyślny",
-      "deleteConfirmDescription": "Ta umiejętność zostanie trwale usunięta.",
-      "deleteConfirmTitle": "Usunąć umiejętność?",
-      "deleteShortcut": "Usuń umiejętność",
-      "editShortcut": "Edytuj umiejętność",
-      "emptyDescription": "Twórz prompty wielokrotnego użytku dla pracy, którą zespół powtarza, od podsumowań po instrukcje do pierwszych wersji.",
-      "emptyState": "Nie ma jeszcze umiejętności. Dodaj pierwszą.",
-      "emptyTitle": "Utwórz pierwszą umiejętność",
-      "emptyVideoLabel": "Przegląd umiejętności",
+      "addShortcut": "Dodaj prompt",
+      "defaultBadge": "Default",
+      "deleteConfirmDescription": "Ten prompt zostanie trwale usunięty.",
+      "deleteConfirmTitle": "Usunąć prompt?",
+      "deleteShortcut": "Usuń prompt",
+      "editShortcut": "Edytuj prompt",
+      "emptyDescription": "Create reusable prompts for the work your team repeats, from summaries to first-pass drafting instructions.",
+      "emptyState": "Brak promptów. Dodaj pierwszy.",
+      "emptyTitle": "Utwórz pierwszy prompt",
+      "emptyVideoLabel": "Przegląd promptów",
       "errors": {
-        "commandConflict": "Umiejętność o tej nazwie / już istnieje",
-        "commandInvalid": "Używaj tylko małych liter, cyfr, myślników i podkreśleń",
-        "commandReserved": "\"/{command}\" jest zarezerwowaną umiejętnością"
+        "commandConflict": "Prompt o tej nazwie / już istnieje",
+        "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores",
+        "commandReserved": "\"/{command}\" to zarezerwowany prompt"
       },
       "form": {
-        "command": "Umiejętność",
-        "commandHint": "Nazwa umiejętności /: tylko małe litery, cyfry, myślniki i podkreślenia",
-        "commandPlaceholder": "np. podsumuj",
+        "command": "Skrót promptu",
+        "commandHint": "Nazwa / promptu: tylko małe litery, cyfry, łączniki i podkreślenia",
+        "commandPlaceholder": "e.g. summarize",
         "commandPrefix": "/",
-        "description": "Opis",
-        "descriptionPlaceholder": "Krótki opis widoczny w selektorze",
-        "name": "Nazwa",
-        "namePlaceholder": "np. Podsumuj dokument",
+        "description": "Description",
+        "descriptionPlaceholder": "Short description shown in the picker",
+        "name": "Name",
+        "namePlaceholder": "e.g. Summarise document",
         "prompt": "Prompt",
-        "promptPlaceholder": "Tekst wstawiany do kompozytora chatu po użyciu tej umiejętności",
-        "scope": "Widoczność",
-        "scopePrivate": "Tylko ja",
-        "scopeTeam": "Wszyscy w organizacji"
+        "promptPlaceholder": "Tekst wstawiany do pola czatu po użyciu tego promptu",
+        "scope": "Visibility",
+        "scopePrivate": "Only me",
+        "scopeTeam": "Everyone in the organisation"
       },
-      "privateSection": "Moje skróty",
-      "shadowed": "Przysłonięty przez skrót zespołu",
-      "teamSection": "Skróty zespołu"
+      "privateSection": "Twoje prompty",
+      "shadowed": "Przesłonięte przez prompt zespołu",
+      "teamSection": "Prompty zespołu"
     }
   },
   "navigation": {
@@ -1157,6 +1238,16 @@
     "inviteInvalidEmail": "Nieprawidłowy e-mail: {value}",
     "inviteSubtitle": "Otrzymają e-mail z linkiem do dołączenia.",
     "inviteTitle": "Zaproś swój zespół",
+    "jurisdictionGlobeLabel": "Wybrane jurysdykcje praktyki na globusie",
+    "jurisdictionMakePrimary": "Ustaw {name} jako główną",
+    "jurisdictionPrimary": "Główna",
+    "jurisdictionRemove": "Usuń {name}",
+    "jurisdictionSaveFailed": "Nie udało się zapisać jurysdykcji. Możesz dokończyć to w ustawieniach.",
+    "jurisdictionSearchLabel": "Szukaj krajów",
+    "jurisdictionSearchPlaceholder": "Szukaj krajów",
+    "jurisdictionSubtitle": "Wybierz kraje, z którymi regularnie współpracujesz. Stella użyje tego do dostosowania Twojego środowiska.",
+    "jurisdictionSuggested": "Sugerowane",
+    "jurisdictionTitle": "Wybierz jurysdykcje swojej praktyki",
     "orgNameLabel": "Nazwa zespołu",
     "orgSubtitle": "Tak Cię znajdą Twoi koledzy.",
     "orgTitle": "Nazwij swój zespół",
@@ -1164,6 +1255,7 @@
     "someInvitesFailed": "{count, plural, one {# zaproszenie nie zostało wysłane} few {# zaproszenia nie zostały wysłane} many {# zaproszeń nie zostało wysłanych} other {# zaproszeń nie zostało wysłanych}}",
     "stepAi": "AI",
     "stepDesktop": "Aplikacja",
+    "stepJurisdiction": "Jurysdykcja",
     "stepOrganization": "Zespół",
     "stepTeam": "Zaproszenia",
     "termsNotice": "Kontynuując, akceptujesz nasze <terms>Warunki korzystania z usługi</terms>.",
@@ -1388,6 +1480,7 @@
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",
       "membersDescription": "Manage who has access to this organization",
       "pendingInvitations": "Pending invitations",
+      "practiceJurisdictions": "Jurysdykcje praktyki",
       "profile": "Profile",
       "profileDescription": "Update name and slug",
       "renameAction": "Rename",

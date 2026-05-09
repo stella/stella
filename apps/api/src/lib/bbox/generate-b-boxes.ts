@@ -25,24 +25,28 @@ export const generateBBoxes = async ({
 
   const { height, width } = page;
 
-  const result = Result.unwrap(
-    await generateBBoxData({
-      pdfData,
-      prompt,
-      fieldContent,
-      justificationText,
-      abortSignal,
-      justificationId,
-      organizationId,
-      orgAIConfig: orgAIConfig ?? null,
+  const dataResult = await generateBBoxData({
+    pdfData,
+    prompt,
+    fieldContent,
+    justificationText,
+    abortSignal,
+    justificationId,
+    organizationId,
+    orgAIConfig: orgAIConfig ?? null,
+    pageNumber,
+    workspaceId,
+  });
+
+  if (Result.isError(dataResult)) {
+    return Result.err(dataResult.error);
+  }
+
+  return Result.ok(
+    parseGeminiBBoxes(dataResult.value, {
       pageNumber,
-      workspaceId,
+      width,
+      height,
     }),
   );
-
-  return parseGeminiBBoxes(result, {
-    pageNumber,
-    width,
-    height,
-  });
 };

@@ -15,6 +15,10 @@ type GuardedRule = {
   matches?: (statement: string) => boolean;
 };
 
+type InvariantRule = GuardedRule & {
+  guidance: string;
+};
+
 type SingleQuoteScanInput = {
   char: string;
   nextChar: string;
@@ -87,6 +91,16 @@ const GUARDED_RULES: GuardedRule[] = [
     id: "disable-row-level-security",
     description: "disables row-level security",
     pattern: /\bALTER\s+TABLE\b[\s\S]*\bDISABLE\s+ROW\s+LEVEL\s+SECURITY\b/i,
+  },
+];
+
+const INVARIANT_RULES: InvariantRule[] = [
+  {
+    id: "on-conflict-column-target",
+    description: "uses a column-target ON CONFLICT clause",
+    pattern: /\bON\s+CONFLICT\s*\([^)]*\)/i,
+    guidance:
+      "Use ON CONFLICT ON CONSTRAINT for a named table constraint, or use WHERE NOT EXISTS when the arbiter is a partial unique index.",
   },
 ];
 
@@ -478,7 +492,34 @@ const main = () => {
 
   for (const file of files) {
     const source = readFileSync(file, "utf-8");
-    const findings = parseStatements(source).flatMap((statement) =>
+    const statements = parseStatements(source);
+    const invariantFindings = statements.flatMap((statement) =>
+      INVARIANT_RULES.filter((rule) =>
+        rule.matches
+          ? rule.matches(statement.text)
+          : (rule.pattern?.test(statement.text) ?? false),
+      ).map((rule) => ({
+        file,
+        line: statement.line,
+        rule,
+      })),
+    );
+
+    if (invariantFindings.length > 0) {
+      violations += invariantFindings.length;
+      console.error(
+        `ERROR: ${file} contains migration operations that are structurally unsafe:`,
+      );
+
+      for (const finding of invariantFindings) {
+        console.error(
+          `  ${finding.file}:${finding.line} [${finding.rule.id}] ${finding.rule.description}`,
+        );
+        console.error(`    ${finding.rule.guidance}`);
+      }
+    }
+
+    const guardedFindings = statements.flatMap((statement) =>
       GUARDED_RULES.filter((rule) =>
         rule.matches
           ? rule.matches(statement.text)
@@ -490,7 +531,7 @@ const main = () => {
       })),
     );
 
-    if (findings.length === 0) {
+    if (guardedFindings.length === 0) {
       continue;
     }
 
@@ -498,12 +539,12 @@ const main = () => {
       continue;
     }
 
-    violations += findings.length;
+    violations += guardedFindings.length;
     console.error(
       `ERROR: ${file} contains migration operations that need explicit review:`,
     );
 
-    for (const finding of findings) {
+    for (const finding of guardedFindings) {
       console.error(
         `  ${finding.file}:${finding.line} [${finding.rule.id}] ${finding.rule.description}`,
       );

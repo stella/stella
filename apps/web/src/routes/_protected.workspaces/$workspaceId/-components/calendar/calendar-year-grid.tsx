@@ -115,8 +115,8 @@ const MiniMonth = ({
           <span
             className={cn(
               "text-center text-[10px] leading-4",
-              "text-muted-foreground/60",
-              i >= 5 && "text-muted-foreground/40",
+              "text-foreground-muted",
+              i >= 5 && "text-foreground-disabled",
             )}
             key={wd}
           >
@@ -161,7 +161,7 @@ const MiniDay = ({
         "text-[11px] leading-none",
         day.isToday &&
           "bg-primary text-primary-foreground rounded-full font-bold",
-        day.isWeekend && !day.isToday && "text-muted-foreground/60",
+        day.isWeekend && !day.isToday && "text-foreground-muted",
       )}
     >
       {dayNum}

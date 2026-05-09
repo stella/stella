@@ -279,7 +279,7 @@ export function hashParagraphBlock(block: ParagraphBlock): string {
   for (const run of block.runs) {
     if (run.kind === "text") {
       parts.push(
-        `t:${run.text}|${run.fontFamily}|${run.fontSize}|${run.bold}|${run.italic}`,
+        `t:${run.text}|${run.fontFamily}|${run.fontSize}|${run.bold}|${run.italic}|${run.allCaps}|${run.smallCaps}|${run.horizontalScale}|${run.letterSpacing}`,
       );
     } else if (run.kind === "tab") {
       parts.push(`tab:${run.width}`);
@@ -313,6 +313,25 @@ export function hashParagraphBlock(block: ParagraphBlock): string {
     }
     if (attrs.defaultFontFamily != null) {
       parts.push(`dff:${attrs.defaultFontFamily}`);
+    }
+    if (attrs.suppressEmptyParagraphHeight) {
+      parts.push("sup");
+    }
+    const borders = attrs.borders;
+    if (borders) {
+      const signature = (border?: {
+        width?: number;
+        style?: string;
+        color?: string;
+      }): string =>
+        border
+          ? `${border.width ?? ""},${border.style ?? ""},${border.color ?? ""}`
+          : "";
+      parts.push(
+        `bdr:${signature(borders.top)}|${signature(borders.bottom)}|${signature(
+          borders.left,
+        )}|${signature(borders.right)}`,
+      );
     }
   }
 

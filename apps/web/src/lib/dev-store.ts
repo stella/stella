@@ -7,7 +7,7 @@ type State = {
   tanstackDevtools: boolean;
   sourceInspector: boolean;
   chatModelId: string | null;
-  showToolCalls: boolean;
+  showToolCallDetails: boolean;
   reactGrab: boolean;
 };
 
@@ -15,7 +15,7 @@ type Actions = {
   setTanstackDevtools: (value: boolean) => void;
   setSourceInspector: (value: boolean) => void;
   setChatModelId: (value: string | null) => void;
-  setShowToolCalls: (value: boolean) => void;
+  setShowToolCallDetails: (value: boolean) => void;
   setReactGrab: (value: boolean) => void;
 };
 
@@ -25,7 +25,7 @@ export const useDevStore = create<State & Actions>()(
       tanstackDevtools: false,
       sourceInspector: false,
       chatModelId: null,
-      showToolCalls: false,
+      showToolCallDetails: false,
       reactGrab: false,
 
       setTanstackDevtools: (tanstackDevtools) => {
@@ -37,8 +37,8 @@ export const useDevStore = create<State & Actions>()(
       setChatModelId: (chatModelId) => {
         void set({ chatModelId });
       },
-      setShowToolCalls: (showToolCalls) => {
-        void set({ showToolCalls });
+      setShowToolCallDetails: (showToolCallDetails) => {
+        void set({ showToolCallDetails });
       },
       setReactGrab: (reactGrab) => {
         void set({ reactGrab });

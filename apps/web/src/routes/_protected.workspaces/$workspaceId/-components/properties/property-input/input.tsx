@@ -131,12 +131,12 @@ export const PropertyPromptInput = ({
           variant === "minimal"
             ? cn(
                 PROMPT_EDITOR_SELECTION_CLASS,
-                "placeholder:text-muted-foreground/64 min-h-15 w-full text-sm leading-[1.55] focus-visible:outline-none",
+                "placeholder:text-foreground-placeholder min-h-15 w-full text-sm leading-[1.55] focus-visible:outline-none",
                 aiEditAction !== undefined && "pe-10",
               )
             : cn(
                 PROMPT_EDITOR_SELECTION_CLASS,
-                "bg-muted placeholder:text-muted-foreground/64 min-h-32 w-full rounded-md p-2 text-sm focus-visible:outline-none",
+                "bg-muted placeholder:text-foreground-placeholder min-h-32 w-full rounded-md p-2 text-sm focus-visible:outline-none",
                 aiEditAction !== undefined && "pe-10",
               ),
       },

@@ -135,7 +135,7 @@ function SkillsPage() {
     <div className="flex flex-1 flex-col overflow-y-auto p-6">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-foreground text-xl font-semibold">
-          {t("knowledge.sections.skills.title")}
+          {t("knowledge.sections.prompts.title")}
         </h1>
         <Button onClick={openCreate} size="sm">
           <PlusIcon className="me-1.5 size-4" />

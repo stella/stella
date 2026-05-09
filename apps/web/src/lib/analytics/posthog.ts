@@ -11,6 +11,56 @@ const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
   event === WEB_ANALYTICS_EVENTS.identify ||
   event === WEB_ANALYTICS_EVENTS.pageViewed;
 
+// Browser-noise patterns we drop client-side before they hit
+// PostHog ingest. PostHog has no built-in `ignoreErrors` analogue
+// to Sentry's, so the canonical filter point is `before_send`.
+//
+// - `ResizeObserver loop ...`: benign Chromium/Firefox quirk that
+//   fires when a ResizeObserver callback queues another resize.
+// - `Script error.`: W3C-mandated cross-origin sanitization with
+//   no payload — not actionable.
+// - Empty / `undefined` rejection values: produced by
+//   `capture_unhandled_rejections: true` catching a
+//   `Promise.reject()` that carries no reason. No stack, no
+//   message — filtering loses zero debuggable signal.
+const EXCEPTION_NOISE_PATTERNS: readonly RegExp[] = [
+  /^ResizeObserver loop/i,
+  /^Script error\.?$/i,
+  /^(?:Error: )?undefined$/i,
+  // Match only the empty form, not rejections that carry a useful
+  // string (e.g. `Promise.reject("API_TIMEOUT")`) which we want to
+  // keep capturing.
+  /^Non-Error promise rejection captured with value: (?:undefined|null)$/i,
+];
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const readStringField = (entry: unknown, key: string): string => {
+  if (!isRecord(entry)) {
+    return "";
+  }
+  const value = entry[key];
+  return typeof value === "string" ? value : "";
+};
+
+const isNoiseException = (event: {
+  properties?: Record<string, unknown>;
+}): boolean => {
+  const list = event.properties?.["$exception_list"];
+  if (!Array.isArray(list) || list.length === 0) {
+    return false;
+  }
+  const entries: unknown[] = list;
+  return entries.some((entry) => {
+    const value = readStringField(entry, "value");
+    const type = readStringField(entry, "type");
+    return EXCEPTION_NOISE_PATTERNS.some(
+      (pattern) => pattern.test(value) || pattern.test(type),
+    );
+  });
+};
+
 /**
  * Initialize PostHog and return an Analytics adapter.
  *
@@ -55,18 +105,37 @@ export const createPostHogAnalytics = (
       if (import.meta.env.DEV && !localDebugEnabled) {
         return null;
       }
-
-      return event && isWebAnalyticsEvent(event.event) ? event : null;
+      if (!event || !isWebAnalyticsEvent(event.event)) {
+        return null;
+      }
+      if (
+        event.event === WEB_ANALYTICS_EVENTS.exception &&
+        isNoiseException(event)
+      ) {
+        return null;
+      }
+      return event;
     },
   });
 
-  // Attach app_version as a super-property so every captured event
-  // carries the build's version. Set once here so call sites don't have to.
-  posthog.register({ app_version: __APP_VERSION__ });
+  // Attach build metadata as super-properties so every captured
+  // event carries the exact deployed build.
+  posthog.register({
+    app_commit: __APP_COMMIT_SHA__,
+    app_version: __APP_VERSION__,
+  });
 
   const analytics: Analytics = {
     captureError: (error) => {
-      if (error instanceof CancelledError) {
+      // Cheap guards before the SDK call: a stray `captureError(null)`
+      // or `captureError(undefined)` would otherwise reach PostHog as
+      // `Error: "undefined"` noise that the `before_send` filter then
+      // has to clean up.
+      if (
+        error === null ||
+        error === undefined ||
+        error instanceof CancelledError
+      ) {
         return;
       }
       logDevError(error);

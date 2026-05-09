@@ -38,6 +38,7 @@ export type ParagraphAttrs = {
   spaceAfter?: number;
   lineSpacing?: number;
   lineSpacingRule?: LineSpacingRule;
+  spacingExplicit?: import("../../types/formatting").SpacingExplicit;
 
   // Indentation (in twips)
   indentLeft?: number;
@@ -66,6 +67,10 @@ export type ParagraphAttrs = {
   listMarkerFontSize?: number;
   /** Number format for each level used by multi-level marker templates. */
   listLevelNumFmts?: NumberFormat[];
+  /** Abstract numbering ID shared by numbering instances. */
+  listAbstractNumId?: number;
+  /** Numbering start override for this numId/level. */
+  listStartOverride?: number;
 
   // Style reference
   styleId?: string;
@@ -88,6 +93,8 @@ export type ParagraphAttrs = {
 
   // Page break control
   pageBreakBefore?: boolean;
+  /** Word's cached rendered-page-break marker; preserved for round-trip only. */
+  renderedPageBreakBefore?: boolean;
   keepNext?: boolean;
   keepLines?: boolean;
   /** Contextual spacing — suppress space between same-style paragraphs */

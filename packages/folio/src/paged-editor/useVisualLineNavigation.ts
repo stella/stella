@@ -16,6 +16,11 @@ import { useCallback, useRef } from "react";
 import { Selection, TextSelection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 
+import {
+  findBodyEmptyRuns,
+  findBodyPmSpans,
+} from "../core/layout-bridge/findBodyPmSpans";
+
 /** Only match lines inside page body content, skipping header/footer lines. */
 const CONTENT_LINE_SELECTOR = ".layout-page-content .layout-line";
 
@@ -77,11 +82,8 @@ export function useVisualLineNavigation({
         return null;
       }
 
-      const spans = pagesContainerRef.current.querySelectorAll(
-        "span[data-pm-start][data-pm-end]",
-      );
-      for (const span of Array.from(spans)) {
-        const spanEl = span as HTMLElement;
+      const spans = findBodyPmSpans(pagesContainerRef.current);
+      for (const spanEl of spans) {
         const pmStart = Number(spanEl.dataset["pmStart"]);
         const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
@@ -95,9 +97,9 @@ export function useVisualLineNavigation({
         if (
           pmPos >= pmStart &&
           pmPos <= pmEnd &&
-          span.firstChild?.nodeType === Node.TEXT_NODE
+          spanEl.firstChild?.nodeType === Node.TEXT_NODE
         ) {
-          const textNode = span.firstChild as Text;
+          const textNode = spanEl.firstChild as Text;
           const charIndex = Math.min(pmPos - pmStart, textNode.length);
           const ownerDoc = spanEl.ownerDocument;
           if (!ownerDoc) {
@@ -115,9 +117,8 @@ export function useVisualLineNavigation({
       }
 
       // Check empty paragraphs
-      const emptyRuns =
-        pagesContainerRef.current.querySelectorAll(".layout-empty-run");
-      for (const emptyRun of Array.from(emptyRuns)) {
+      const emptyRuns = findBodyEmptyRuns(pagesContainerRef.current);
+      for (const emptyRun of emptyRuns) {
         const paragraph = emptyRun.closest(".layout-paragraph") as HTMLElement;
         if (!paragraph) {
           continue;

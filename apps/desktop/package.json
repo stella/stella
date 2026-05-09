@@ -2,7 +2,7 @@
   "name": "@stll/desktop",
   "version": "0.0.1",
   "private": true,
-  "license": "AGPL-3.0-only",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "build": "tauri build",
@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@stll/ui": "workspace:*",
-    "@tauri-apps/api": "^2.5.0",
+    "@tauri-apps/api": "^2.11.0",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "use-intl": "catalog:"
@@ -26,7 +26,7 @@
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
-    "@tauri-apps/cli": "^2.0.0",
+    "@tauri-apps/cli": "^2.11.0",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "@vitejs/plugin-react": "catalog:",

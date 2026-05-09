@@ -41,6 +41,10 @@ export type PaginatorOptions = {
   onNewPage?: (state: PageState) => void;
 };
 
+type ForcePageBreakOptions = {
+  coalesceBlankPage?: boolean;
+};
+
 /**
  * Calculate the width of a single column.
  */
@@ -55,22 +59,60 @@ function calculateColumnWidth(
   return (contentWidth - totalGaps) / columns.count;
 }
 
+function arePageSizesEqual(
+  left: { w: number; h: number },
+  right: { w: number; h: number },
+): boolean {
+  return left.w === right.w && left.h === right.h;
+}
+
+function areMarginsEqual(left: PageMargins, right: PageMargins): boolean {
+  return (
+    left.top === right.top &&
+    left.right === right.right &&
+    left.bottom === right.bottom &&
+    left.left === right.left &&
+    left.header === right.header &&
+    left.footer === right.footer
+  );
+}
+
 /**
  * Creates a paginator for managing page layout state.
  */
 export function createPaginator(options: PaginatorOptions) {
-  const { pageSize, margins } = options;
+  let pageSize = { ...options.pageSize };
+  let margins = { ...options.margins };
   let columns: ColumnLayout = options.columns ?? { count: 1, gap: 0 };
+  let pendingPageSize: { w: number; h: number } | undefined;
+  let pendingMargins: PageMargins | undefined;
 
   const pages: Page[] = [];
   const states: PageState[] = [];
 
-  // Calculate content boundaries
-  const topMargin = margins.top;
-  const contentBottom = pageSize.h - margins.bottom;
-  const contentHeight = contentBottom - topMargin;
+  function getContentBottom(): number {
+    return pageSize.h - margins.bottom;
+  }
 
-  if (contentHeight <= 0) {
+  function getContentHeight(): number {
+    return getContentBottom() - margins.top;
+  }
+
+  function getContentWidth(): number {
+    return pageSize.w - margins.left - margins.right;
+  }
+
+  function currentPageUsesActiveLayout(state: PageState): boolean {
+    if (pendingPageSize || pendingMargins) {
+      return false;
+    }
+    return (
+      arePageSizesEqual(state.page.size, pageSize) &&
+      areMarginsEqual(state.page.margins, margins)
+    );
+  }
+
+  if (getContentHeight() <= 0) {
     throw new Error("Paginator: page size and margins yield no content area");
   }
 
@@ -86,7 +128,7 @@ export function createPaginator(options: PaginatorOptions) {
   // Defaults to topMargin but gets updated when columns change mid-page
   // (continuous section break). When advanceColumn moves to the next column,
   // it resets cursorY to this value instead of topMargin.
-  let columnRegionTop = topMargin;
+  let columnRegionTop = margins.top;
 
   /**
    * Get X position for a given column index.
@@ -99,7 +141,26 @@ export function createPaginator(options: PaginatorOptions) {
    * Create a new page and add it to the list.
    */
   function createNewPage(): PageState {
+    if (pendingPageSize || pendingMargins) {
+      if (pendingPageSize) {
+        pageSize = pendingPageSize;
+      }
+      if (pendingMargins) {
+        margins = pendingMargins;
+      }
+      pendingPageSize = undefined;
+      pendingMargins = undefined;
+      columnWidth = calculateColumnWidth(
+        pageSize.w,
+        margins.left,
+        margins.right,
+        columns,
+      );
+    }
+
     const pageNumber = pages.length + 1;
+    const topMargin = margins.top;
+    const contentBottom = getContentBottom();
 
     // Reduce content bottom by footnote reserved height for this page
     const footnoteHeight =
@@ -193,19 +254,15 @@ export function createPaginator(options: PaginatorOptions) {
     let state = getCurrentState();
     const safeHeight = Number.isFinite(height) && height > 0 ? height : 0;
 
-    // Oversized fragment guard: if a single fragment is taller than the
-    // available content area on an empty column/page, place it there and allow
-    // overflow instead of looping forever creating new pages.
-    const columnCapacity = state.contentBottom - state.topMargin;
-    if (safeHeight > columnCapacity) {
-      if (state.cursorY !== state.topMargin) {
-        state = advanceColumn(state);
-      }
-      return state;
-    }
-
     // Keep advancing until we have space
     while (!fits(safeHeight, state)) {
+      const columnCapacity = state.contentBottom - state.topMargin;
+      if (safeHeight > columnCapacity) {
+        if (state.cursorY !== state.topMargin) {
+          state = advanceColumn(state);
+        }
+        return state;
+      }
       state = advanceColumn(state);
     }
 
@@ -222,19 +279,24 @@ export function createPaginator(options: PaginatorOptions) {
     spaceBefore: number = 0,
     spaceAfter: number = 0,
   ): { state: PageState; x: number; y: number } {
+    const initialState = getCurrentState();
+    const initialColumnIndex = initialState.columnIndex;
+
     // Collapse space before with trailing spacing from previous block
     const effectiveSpaceBefore = Math.max(
       spaceBefore,
-      getCurrentState().trailingSpacing,
+      initialState.trailingSpacing,
     );
     const totalHeight = effectiveSpaceBefore + height;
 
     // Ensure we have space
     const state = ensureFits(totalHeight);
 
-    // If we moved to a new page/column, no space before needed
-    const isAtTop = state.cursorY === state.topMargin;
-    const actualSpaceBefore = isAtTop ? 0 : effectiveSpaceBefore;
+    const isSameFlowRegion =
+      state === initialState && state.columnIndex === initialColumnIndex;
+    const actualSpaceBefore = isSameFlowRegion
+      ? effectiveSpaceBefore
+      : spaceBefore;
 
     // Calculate position
     const x = getColumnX(state.columnIndex);
@@ -257,7 +319,17 @@ export function createPaginator(options: PaginatorOptions) {
   /**
    * Force a page break - move to a new page.
    */
-  function forcePageBreak(): PageState {
+  function forcePageBreak(breakOptions: ForcePageBreakOptions = {}): PageState {
+    const current = states.at(-1);
+    if (
+      breakOptions.coalesceBlankPage &&
+      current &&
+      current.page.fragments.length === 0 &&
+      current.cursorY === current.topMargin &&
+      currentPageUsesActiveLayout(current)
+    ) {
+      return current;
+    }
     return createNewPage();
   }
 
@@ -301,6 +373,38 @@ export function createPaginator(options: PaginatorOptions) {
     state.columnIndex = 0;
   }
 
+  function updatePageLayout(
+    newPageSize?: { w: number; h: number },
+    newMargins?: PageMargins,
+    applyImmediately = true,
+  ): void {
+    if (!applyImmediately) {
+      pendingPageSize = newPageSize ? { ...newPageSize } : pendingPageSize;
+      pendingMargins = newMargins ? { ...newMargins } : pendingMargins;
+      return;
+    }
+
+    if (newPageSize) {
+      pageSize = { ...newPageSize };
+    }
+    if (newMargins) {
+      margins = { ...newMargins };
+    }
+    if (getContentHeight() <= 0) {
+      throw new Error(
+        "Paginator: section page size and margins yield no content area",
+      );
+    }
+    columnWidth = calculateColumnWidth(
+      pageSize.w,
+      margins.left,
+      margins.right,
+      columns,
+    );
+    pendingPageSize = undefined;
+    pendingMargins = undefined;
+  }
+
   return {
     /** All pages created so far. */
     pages,
@@ -318,6 +422,8 @@ export function createPaginator(options: PaginatorOptions) {
     getCurrentState,
     /** Get available height in current column. */
     getAvailableHeight: () => getAvailableHeight(getCurrentState()),
+    /** Get content width for the active section. */
+    getContentWidth,
     /** Check if height fits in current column. */
     fits: (height: number) => fits(height),
     /** Ensure height fits, advancing if needed. */
@@ -332,6 +438,8 @@ export function createPaginator(options: PaginatorOptions) {
     getColumnX,
     /** Update column layout (for section breaks). */
     updateColumns,
+    /** Update page size/margins for subsequent pages. */
+    updatePageLayout,
   };
 }
 

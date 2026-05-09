@@ -17,6 +17,7 @@ import type { Mark } from "prosemirror-model";
 import type { Command, Transaction } from "prosemirror-state";
 
 import type { TextFormatting } from "../../../types/document";
+import { mergeFontFamily } from "../../../utils/fontFamilyMerge";
 import { createExtension } from "../create";
 import { textFormattingToMarks } from "../marks/markUtils";
 import { Priority } from "../types";
@@ -202,11 +203,17 @@ const splitBlockClearBorders: Command = (state, dispatch, view) => {
                 ascii &&
                 (!dtf.fontFamily || dtf.fontFamily.ascii !== ascii)
               ) {
-                dtf.fontFamily = {
-                  ...dtf.fontFamily,
-                  ascii,
-                  hAnsi: m.attrs["hAnsi"],
-                };
+                const nextFontFamily: NonNullable<
+                  TextFormatting["fontFamily"]
+                > = { ascii };
+                const hAnsi = m.attrs["hAnsi"] as string | undefined;
+                if (hAnsi !== undefined) {
+                  nextFontFamily.hAnsi = hAnsi;
+                }
+                dtf.fontFamily = mergeFontFamily(
+                  dtf.fontFamily,
+                  nextFontFamily,
+                );
                 dtfChanged = true;
               }
             }

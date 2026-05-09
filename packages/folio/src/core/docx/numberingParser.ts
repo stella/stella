@@ -43,6 +43,8 @@ export type NumberingMap = {
   getAbstractNumId: (numId: number) => number | null;
   /** Get abstract numbering by ID */
   getAbstract: (abstractNumId: number) => AbstractNumbering | null;
+  /** Get the concrete numbering instance for a numId */
+  getInstance: (numId: number) => NumberingInstance | null;
   /** Check if numId exists */
   hasNumbering: (numId: number) => boolean;
 };
@@ -441,14 +443,18 @@ function parseLevelParagraphProps(pPr: XmlElement): ParagraphFormatting {
   if (indEl) {
     const left = parseNumericAttribute(indEl, "w", "left");
     const right = parseNumericAttribute(indEl, "w", "right");
+    const start = parseNumericAttribute(indEl, "w", "start");
+    const end = parseNumericAttribute(indEl, "w", "end");
     const firstLine = parseNumericAttribute(indEl, "w", "firstLine");
     const hanging = parseNumericAttribute(indEl, "w", "hanging");
 
-    if (left !== undefined) {
-      formatting.indentLeft = left;
+    const resolvedLeft = left ?? start;
+    const resolvedRight = right ?? end;
+    if (resolvedLeft !== undefined) {
+      formatting.indentLeft = resolvedLeft;
     }
-    if (right !== undefined) {
-      formatting.indentRight = right;
+    if (resolvedRight !== undefined) {
+      formatting.indentRight = resolvedRight;
     }
 
     if (hanging !== undefined) {
@@ -693,6 +699,10 @@ function createNumberingMap(definitions: NumberingDefinitions): NumberingMap {
 
     getAbstract(abstractNumId: number): AbstractNumbering | null {
       return abstractMap.get(abstractNumId) ?? null;
+    },
+
+    getInstance(numId: number): NumberingInstance | null {
+      return numMap.get(numId) ?? null;
     },
 
     hasNumbering(numId: number): boolean {

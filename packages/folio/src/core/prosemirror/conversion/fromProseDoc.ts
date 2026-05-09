@@ -55,6 +55,7 @@ import type {
   CellMargins,
 } from "../../types/document";
 import { pixelsToEmu } from "../../utils/units";
+import { applyRunFormattingOverrideMark } from "../extensions/marks/RunFormattingOverrideExtension";
 import type { ShapeAttrs } from "../extensions/nodes/ShapeExtension";
 import type { TextBoxAttrs } from "../extensions/nodes/TextBoxExtension";
 import type {
@@ -186,6 +187,9 @@ function convertPMParagraph(
   if (pFormatting) {
     paragraph.formatting = pFormatting;
   }
+  if (attrs.renderedPageBreakBefore) {
+    paragraph.renderedPageBreakBefore = true;
+  }
 
   // Restore full section properties (round-trip) or fallback to break type only
   if (attrs._sectionProperties) {
@@ -248,6 +252,13 @@ function paragraphAttrsToFormatting(
         delete result.pageBreakBefore;
       }
     }
+    if (attrs.spacingExplicit !== orig.spacingExplicit) {
+      if (attrs.spacingExplicit) {
+        result.spacingExplicit = attrs.spacingExplicit;
+      } else {
+        delete result.spacingExplicit;
+      }
+    }
     if (attrs.bidi !== (orig.bidi ?? undefined)) {
       if (attrs.bidi) {
         result.bidi = attrs.bidi;
@@ -276,6 +287,7 @@ function paragraphAttrsToFormatting(
     attrs.tabs ||
     attrs.outlineLevel !== null ||
     attrs.contextualSpacing ||
+    attrs.spacingExplicit ||
     attrs.bidi;
 
   if (!hasFormatting) {
@@ -297,6 +309,9 @@ function paragraphAttrsToFormatting(
   }
   if (attrs.lineSpacingRule) {
     f.lineSpacingRule = attrs.lineSpacingRule;
+  }
+  if (attrs.spacingExplicit) {
+    f.spacingExplicit = attrs.spacingExplicit;
   }
   if (attrs.indentLeft) {
     f.indentLeft = attrs.indentLeft;
@@ -1247,6 +1262,10 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
 
       case "textOutline":
         formatting.outline = true;
+        break;
+
+      case "runFormattingOverride":
+        applyRunFormattingOverrideMark(formatting, mark);
         break;
 
       // hyperlink is handled separately

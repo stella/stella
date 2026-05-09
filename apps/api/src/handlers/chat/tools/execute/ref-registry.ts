@@ -51,6 +51,8 @@ type RefState<TTarget> = {
   targetToRef: Map<string, string>;
 };
 
+type ResolveRefsResult<TTarget> = Result<TTarget[], ChatToolError>;
+
 const createRefState = <TTarget>(prefix: string): RefState<TTarget> => ({
   counter: 0,
   prefix,
@@ -87,7 +89,7 @@ const resolveRefs = <TTarget>({
   kind: string;
   refs: string[];
   state: RefState<TTarget>;
-}) => {
+}): ResolveRefsResult<TTarget> => {
   const targets: TTarget[] = [];
 
   for (const ref of refs) {
@@ -127,9 +129,38 @@ const isUnknownArray = (value: unknown): value is unknown[] =>
 const isUuidString = (value: unknown): value is string =>
   typeof value === "string" && UUID_REGEX.test(value);
 
-export type ChatRefRegistry = ReturnType<typeof createChatRefRegistry>;
+export type ChatRefRegistry = {
+  hydrateAssistantTextRefs: (text: string) => string;
+  hydrateAssistantValueRefs: (value: unknown) => unknown;
+  resolveAssistantTextRefs: (text: string) => string;
+  resolveAssistantValueRefs: (value: unknown) => unknown;
+  resolveContactRefs: (
+    refs: string[],
+  ) => Result<SafeId<"contact">[], ChatToolError>;
+  resolveEntityRefs: (
+    refs: string[],
+  ) => Result<SafeId<"entity">[], ChatToolError>;
+  resolveMatterRefs: (
+    refs: string[],
+  ) => Result<SafeId<"workspace">[], ChatToolError>;
+  resolveParentRef: (
+    ref: string | undefined,
+  ) => Result<SafeId<"entity"> | undefined, ChatToolError>;
+  resolvePropertyRefs: (
+    refs: string[],
+  ) => Result<SafeId<"property">[], ChatToolError>;
+  toContactRef: (contactId: SafeId<"contact">) => string;
+  toEntityMention: (props: EntityTarget & { label: string }) => string;
+  toEntityRef: (target: EntityTarget) => string;
+  toMatterMention: (props: {
+    label: string;
+    workspaceId: SafeId<"workspace">;
+  }) => string;
+  toMatterRef: (workspaceId: SafeId<"workspace">) => string;
+  toPropertyRef: (propertyId: SafeId<"property">) => string;
+};
 
-export const createChatRefRegistry = () => {
+export const createChatRefRegistry = (): ChatRefRegistry => {
   const contactState = createRefState<SafeId<"contact">>("contact");
   const matterState = createRefState<SafeId<"workspace">>("mat");
   const propertyState = createRefState<SafeId<"property">>("prop");
@@ -396,12 +427,19 @@ export const createChatRefRegistry = () => {
     hydrateAssistantValueRefs,
     resolveAssistantTextRefs,
     resolveAssistantValueRefs,
-    resolveEntityRefs: (refs: string[]) =>
-      resolveRefs({
+    resolveEntityRefs: (refs: string[]) => {
+      const resolved = resolveRefs({
         kind: "entity",
         refs,
         state: entityState,
-      }).map((targets) => targets.map(({ entityId }) => entityId)),
+      });
+
+      if (Result.isError(resolved)) {
+        return Result.err(resolved.error);
+      }
+
+      return Result.ok(resolved.value.map(({ entityId }) => entityId));
+    },
     resolveContactRefs: (refs: string[]) =>
       resolveRefs({
         kind: "contact",
@@ -419,11 +457,17 @@ export const createChatRefRegistry = () => {
         return Result.ok(undefined);
       }
 
-      return resolveRefs({
+      const resolved = resolveRefs({
         kind: "entity",
         refs: [ref],
         state: entityState,
-      }).map((targets) => targets.at(0)?.entityId);
+      });
+
+      if (Result.isError(resolved)) {
+        return Result.err(resolved.error);
+      }
+
+      return Result.ok(resolved.value.at(0)?.entityId);
     },
     resolvePropertyRefs: (refs: string[]) =>
       resolveRefs({

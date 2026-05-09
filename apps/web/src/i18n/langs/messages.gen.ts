@@ -315,10 +315,14 @@ type Messages = {
     };
     "approval": {
       "allow": "Allow";
-      "alwaysAllow": "Always allow in this thread";
+      "allowInConversation": "Allow in this conversation";
+      "allowOnce": "Allow once";
+      "alwaysAllow": "Always allow";
       "approved": "Approved";
       "denied": "Denied";
       "deny": "Deny";
+      "externalMcpDescription": "Only the information needed for this tool call will be sent.";
+      "externalMcpQuestion": "Can Stella send this request to {provider}?";
     };
     "askUser": {
       "custom": "Write your own";
@@ -342,6 +346,8 @@ type Messages = {
     "editableFilePlaceholder": "Chat about or edit {fileName}";
     "editableFilePlaceholderAction": "Chat about or edit";
     "editorLoading": "Loading editor…";
+    "externalSourcePlaceholder": "Chat about {title}";
+    "externalSourcePlaceholderAction": "Chat about";
     "extractingContent": "Extracting content...";
     "filePlaceholder": "Chat about {fileName}";
     "filePlaceholderAction": "Chat about";
@@ -387,10 +393,15 @@ type Messages = {
     "resend": "Resend";
     "send": "Send message";
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
+    "sendErrorInsufficientCredits": "The AI provider needs more credits. Contact your workspace admin to top up the account.";
+    "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.";
+    "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin to upgrade the plan.";
     "thinking": "Working with context";
     "threads": "History";
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits";
+      "ares_lookup_company": "ARES company lookup";
+      "ares_search_companies": "ARES company search";
       "ask-user": "Asking for clarification";
       "create-document": "Creating document";
       "describe-stella-api": "Inspecting Stella API";
@@ -415,6 +426,7 @@ type Messages = {
     };
     "toolCall": {
       "characterCount": "{count, plural, one {# character} other {# characters}}";
+      "exactCall": "Exact call";
       "field": "Field";
       "input": "Input";
       "output": "Output";
@@ -523,6 +535,7 @@ type Messages = {
     "connectionLostDescription": "We lost the connection to the server. Retrying automatically.";
     "convertTo": "Convert to";
     "copied": "Copied to clipboard";
+    "copy": "Copy";
     "copyLink": "Copy link";
     "createdAt": "Created at {date}";
     "currency": "Currency";
@@ -1026,6 +1039,13 @@ type Messages = {
     "unsupportedDocxEditTitle": "Editing blocked";
   };
   "inspector": {
+    "external": {
+      "confirmDescription": "You're about to visit an external website.";
+      "confirmTitle": "Open external link?";
+      "openLink": "Open link";
+      "openOriginal": "Open original";
+      "unavailable": "The referenced site does not allow a safe preview. If the tool returned document text, it appears here; otherwise open the original.";
+    };
     "facet": {
       "preview": "Preview";
       "previewInFullViewToast": "Preview is the main view here. Click the minimize button to see it alongside metadata.";
@@ -1053,7 +1073,60 @@ type Messages = {
     "showPane": "Show pane";
   };
   "knowledge": {
+    "mcp": {
+      "addAndConnect": "Add and connect";
+      "addServer": "Add server";
+      "addServerCardDescription": "Paste a server URL and Stella will connect it in one flow.";
+      "addServerCardTitle": "Add new MCP server";
+      "auth": {
+        "bearer": "Bearer token";
+        "none": "No auth";
+        "oauth2": "OAuth 2.0";
+      };
+      "availableInChat": "Available in chat";
+      "bearerTokenDescription": "This server uses a bearer token. Paste the token from the provider to finish connecting.";
+      "builtInBadge": "Built-in";
+      "connect": "Connect";
+      "connected": "Connected";
+      "connectedToast": "MCP connector connected";
+      "connectedWithLastUsed": "Connected · last used {time}";
+      "customDescription": "Paste the MCP server URL. Stella will detect how it connects and continue automatically.";
+      "customTitle": "Add custom server";
+      "description": "Manage the external MCP servers that can add tools to chat. Tokens are stored per user.";
+      "detected": "Detected {authType}";
+      "disable": "Disable";
+      "disabled": "Connected · disabled";
+      "disconnect": "Disconnect";
+      "docsLink": "Docs";
+      "emptyDescription": "Curated legal MCP connectors will appear here as they are enabled for your workspace.";
+      "emptyTitle": "No MCP connectors yet";
+      "enable": "Enable";
+      "errorDescription": "The connector could not be updated.";
+      "errorTitle": "MCP connection failed";
+      "namePlaceholder": "Display name";
+      "needsReauth": "Needs reconnect";
+      "notConnected": "Not connected";
+      "off": "Off";
+      "on": "On";
+      "otherTitle": "Other connectors";
+      "probe": "Probe";
+      "recommendedBadge": "Recommended";
+      "recommendedFor": "Recommended for {jurisdictions}";
+      "recommendedTitle": "Recommended for your jurisdictions";
+      "reconnect": "Reconnect";
+      "saveToken": "Save token";
+      "tokenHelp": "How to get a token";
+      "tokenLabel": "Bearer token";
+      "tokenPlaceholder": "Paste token";
+      "urlLabel": "MCP server URL";
+      "urlPlaceholder": "https://example.com/mcp";
+      "useInChat": "Use in chat";
+    };
     "sections": {
+      "agents": {
+        "description": "Configurable assistants for repeatable work";
+        "title": "Agents";
+      };
       "caseLaw": {
         "description": "Court decisions and case law database";
         "title": "Case Law";
@@ -1063,11 +1136,19 @@ type Messages = {
         "title": "Clauses";
       };
       "connectors": {
-        "description": "Connect to external systems";
-        "title": "Connectors";
+        "description": "Connect Stella to vetted external tool servers";
+        "title": "MCP";
+      };
+      "mcp": {
+        "description": "Connect Stella to vetted external tool servers";
+        "title": "MCP";
+      };
+      "prompts": {
+        "description": "Reusable instructions available from / in chat";
+        "title": "Prompts";
       };
       "skills": {
-        "description": "Custom AI skills";
+        "description": "Focused AI capabilities for specialist workflows";
         "title": "Skills";
       };
       "templates": {
@@ -1076,24 +1157,24 @@ type Messages = {
       };
     };
     "skills": {
-      "addShortcut": "Add skill";
+      "addShortcut": "Add prompt";
       "defaultBadge": "Default";
-      "deleteConfirmDescription": "This skill will be permanently removed.";
-      "deleteConfirmTitle": "Delete skill?";
-      "deleteShortcut": "Delete skill";
-      "editShortcut": "Edit skill";
+      "deleteConfirmDescription": "This prompt will be permanently removed.";
+      "deleteConfirmTitle": "Delete prompt?";
+      "deleteShortcut": "Delete prompt";
+      "editShortcut": "Edit prompt";
       "emptyDescription": "Create reusable prompts for the work your team repeats, from summaries to first-pass drafting instructions.";
-      "emptyState": "No skills yet. Add your first one.";
-      "emptyTitle": "Create your first skill";
-      "emptyVideoLabel": "Skills overview";
+      "emptyState": "No prompts yet. Add your first one.";
+      "emptyTitle": "Create your first prompt";
+      "emptyVideoLabel": "Prompts overview";
       "errors": {
-        "commandConflict": "A skill with this / name already exists";
+        "commandConflict": "A prompt with this / name already exists";
         "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores";
-        "commandReserved": "\"/{command}\" is a reserved skill";
+        "commandReserved": "\"/{command}\" is a reserved prompt";
       };
       "form": {
-        "command": "Skill";
-        "commandHint": "The / skill name: lowercase letters, numbers, hyphens, and underscores only";
+        "command": "Prompt shortcut";
+        "commandHint": "The / prompt name: lowercase letters, numbers, hyphens, and underscores only";
         "commandPlaceholder": "e.g. summarize";
         "commandPrefix": "/";
         "description": "Description";
@@ -1101,14 +1182,14 @@ type Messages = {
         "name": "Name";
         "namePlaceholder": "e.g. Summarise document";
         "prompt": "Prompt";
-        "promptPlaceholder": "The text inserted into the chat composer when this skill is used";
+        "promptPlaceholder": "The text inserted into the chat composer when this prompt is used";
         "scope": "Visibility";
         "scopePrivate": "Only me";
         "scopeTeam": "Everyone in the organisation";
       };
-      "privateSection": "Your shortcuts";
-      "shadowed": "Shadowed by team shortcut";
-      "teamSection": "Team shortcuts";
+      "privateSection": "Your prompts";
+      "shadowed": "Shadowed by team prompt";
+      "teamSection": "Team prompts";
     };
   };
   "navigation": {
@@ -1160,6 +1241,16 @@ type Messages = {
     "inviteInvalidEmail": "Not a valid email: {value}";
     "inviteSubtitle": "They'll receive an email with a link to join.";
     "inviteTitle": "Invite your team";
+    "jurisdictionGlobeLabel": "Selected practice jurisdictions on a globe";
+    "jurisdictionMakePrimary": "Make {name} primary";
+    "jurisdictionPrimary": "Primary";
+    "jurisdictionRemove": "Remove {name}";
+    "jurisdictionSaveFailed": "Couldn't save your jurisdictions. You can finish this from settings.";
+    "jurisdictionSearchLabel": "Search countries";
+    "jurisdictionSearchPlaceholder": "Search countries";
+    "jurisdictionSubtitle": "Choose the countries you commonly work with. Stella will use this to customize your experience.";
+    "jurisdictionSuggested": "Suggested";
+    "jurisdictionTitle": "Pick your practice jurisdictions";
     "orgNameLabel": "Team name";
     "orgSubtitle": "This is how your colleagues will find you.";
     "orgTitle": "Name your team";
@@ -1167,6 +1258,7 @@ type Messages = {
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}";
     "stepAi": "AI";
     "stepDesktop": "Desktop";
+    "stepJurisdiction": "Jurisdiction";
     "stepOrganization": "Team";
     "stepTeam": "Invite";
     "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms>.";
@@ -1391,6 +1483,7 @@ type Messages = {
       "matterNumberingDescription": "Configure how new matter reference numbers are generated";
       "membersDescription": "Manage who has access to this organization and any pending invitations";
       "pendingInvitations": "Pending invitations";
+      "practiceJurisdictions": "Practice jurisdictions";
       "profile": "Profile";
       "profileDescription": "Update organization name";
       "renameAction": "Rename";

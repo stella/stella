@@ -17,8 +17,8 @@
 
 import { PDF } from "@libpdf/core";
 
-import { extractText as extractDocxText } from "@/api/handlers/docx/extract-text";
 import { LIMITS } from "@/api/lib/limits";
+import { extractFolioBlockTextFromDocxBuffer } from "@/api/lib/workflow/docx-blocks";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const extractPdfPlaintext = async (pdfBytes: Uint8Array): Promise<string> => {
@@ -50,8 +50,7 @@ const extract = async (
   if (mimeType === PDF_MIME_TYPE) {
     text = await extractPdfPlaintext(fileBytes);
   } else if (mimeType === DOCX_MIME_TYPE) {
-    const doc = await extractDocxText(fileBytes);
-    text = doc.paragraphs.map((p) => p.text).join("\n");
+    text = await extractFolioBlockTextFromDocxBuffer(fileBytes);
   }
 
   if (!text || text.trim().length === 0) {

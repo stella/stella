@@ -312,10 +312,14 @@
     },
     "approval": {
       "allow": "Atļaut",
+      "allowInConversation": "Atļaut šajā sarunā",
+      "allowOnce": "Atļaut vienreiz",
       "alwaysAllow": "Vienmēr atļaut",
       "approved": "Apstiprināts",
       "denied": "Noraidīts",
-      "deny": "Noraidīt"
+      "deny": "Noraidīt",
+      "externalMcpDescription": "Only the information needed for this tool call will be sent.",
+      "externalMcpQuestion": "Can Stella send this request to {provider}?"
     },
     "askUser": {
       "custom": "Rakstīt savu",
@@ -339,6 +343,8 @@
     "editableFilePlaceholder": "Tērzēt par {fileName} vai rediģēt",
     "editableFilePlaceholderAction": "Tērzēt vai rediģēt",
     "editorLoading": "Loading editor…",
+    "externalSourcePlaceholder": "Tērzēt par {title}",
+    "externalSourcePlaceholderAction": "Tērzēt par",
     "extractingContent": "Satura izgūšana...",
     "filePlaceholder": "Tērzēt par {fileName}",
     "filePlaceholderAction": "Tērzēt par",
@@ -384,10 +390,15 @@
     "resend": "Nosūtīt vēlreiz",
     "send": "Nosūtīt ziņu",
     "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
+    "sendErrorInsufficientCredits": "AI pakalpojumu sniedzējam ir vajadzīgi papildu kredīti. Sazinieties ar darba telpas administratoru, lai papildinātu kontu.",
+    "sendErrorProviderUnavailable": "AI pakalpojumu sniedzējs uz laiku nav pieejams. Mēģiniet vēlreiz pēc brīža.",
+    "sendErrorQuotaExhausted": "AI pakalpojumu sniedzēja kvota ir izsmelta. Mēģiniet vēlreiz pēc minūtes vai sazinieties ar darba telpas administratoru, lai uzlabotu plānu.",
     "thinking": "Strādāju ar kontekstu",
     "threads": "Vēsture",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
+      "ares_lookup_company": "ARES uzņēmuma meklēšana",
+      "ares_search_companies": "ARES uzņēmumu meklēšana",
       "ask-user": "Precizējuma pieprasīšana",
       "create-document": "Dokumenta izveide",
       "describe-stella-api": "Stella API pārbaude",
@@ -412,6 +423,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, zero {# rakstzīmju} one {# rakstzīme} other {# rakstzīmes}}",
+      "exactCall": "Precīzs izsaukums",
       "field": "Lauks",
       "input": "Ievade",
       "output": "Izvade",
@@ -520,6 +532,7 @@
     "connectionLostDescription": "Zaudējām savienojumu ar serveri. Automātiska atkārtota mēģināšana.",
     "convertTo": "Pārvērst par",
     "copied": "Copied to clipboard",
+    "copy": "Kopēt",
     "copyLink": "Kopēt saiti",
     "createdAt": "Izveidots {date}",
     "currency": "Valūta",
@@ -1023,6 +1036,13 @@
     "unsupportedDocxEditTitle": "Editing blocked"
   },
   "inspector": {
+    "external": {
+      "confirmDescription": "Jūs tūlīt apmeklēsiet ārēju tīmekļa vietni.",
+      "confirmTitle": "Atvērt ārēju saiti?",
+      "openLink": "Atvērt saiti",
+      "openOriginal": "Atvērt oriģinālu",
+      "unavailable": "Norādītā vietne neļauj drošu priekšskatījumu. Ja rīks atgrieza dokumenta tekstu, tas parādīsies šeit; pretējā gadījumā atveriet oriģinālu."
+    },
     "facet": {
       "preview": "Preview",
       "previewInFullViewToast": "Preview is the main view here. Click the minimize button to see it alongside metadata."
@@ -1050,7 +1070,60 @@
     "showPane": "Show pane"
   },
   "knowledge": {
+    "mcp": {
+      "addAndConnect": "Pievienot un savienot",
+      "addServer": "Pievienot serveri",
+      "addServerCardDescription": "Ielīmējiet servera URL, un Stella to savienos vienā plūsmā.",
+      "addServerCardTitle": "Pievienot jaunu MCP serveri",
+      "auth": {
+        "bearer": "Bearer tokens",
+        "none": "Bez autentifikācijas",
+        "oauth2": "OAuth 2.0"
+      },
+      "availableInChat": "Pieejams čatā",
+      "bearerTokenDescription": "Šis serveris izmanto Bearer tokenu. Ielīmējiet pakalpojuma sniedzēja tokenu, lai pabeigtu savienošanu.",
+      "builtInBadge": "Iebūvēts",
+      "connect": "Pievienot",
+      "connected": "Pievienots",
+      "connectedToast": "MCP savienotājs pievienots",
+      "connectedWithLastUsed": "Pievienots · pēdoreiz izmantots {time}",
+      "customDescription": "Ielīmējiet MCP servera URL. Stella noteiks savienojuma veidu un turpinās automātiski.",
+      "customTitle": "Pievienot pielāgotu serveri",
+      "description": "Pārvaldiet ārējos MCP serverus, kas var pievienot rīkus čatam. Tokeni tiek glabāti katram lietotājam atsevišķi.",
+      "detected": "Noteikts: {authType}",
+      "disable": "Izslēgt",
+      "disabled": "Pievienots · izslēgts",
+      "disconnect": "Atvienot",
+      "docsLink": "Dokumentācija",
+      "emptyDescription": "Atlasītie juridiskie MCP savienotāji parādīsies šeit, kad tie būs iespējoti jūsu darbvietai.",
+      "emptyTitle": "MCP savienotāju vēl nav",
+      "enable": "Ieslēgt",
+      "errorDescription": "Savienotāju neizdevās atjaunināt.",
+      "errorTitle": "MCP savienojums neizdevās",
+      "namePlaceholder": "Rādāmais nosaukums",
+      "needsReauth": "Nepieciešama atkārtota pievienošana",
+      "notConnected": "Nav pievienots",
+      "off": "Izslēgts",
+      "on": "Ieslēgts",
+      "otherTitle": "Citi savienotāji",
+      "probe": "Pārbaudīt",
+      "recommendedBadge": "Ieteicams",
+      "recommendedFor": "Ieteicams: {jurisdictions}",
+      "recommendedTitle": "Ieteicams jūsu jurisdikcijām",
+      "reconnect": "Pievienot vēlreiz",
+      "saveToken": "Saglabāt tokenu",
+      "tokenHelp": "Kā iegūt tokenu",
+      "tokenLabel": "Bearer tokens",
+      "tokenPlaceholder": "Ielīmējiet tokenu",
+      "urlLabel": "MCP servera URL",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Izmantot čatā"
+    },
     "sections": {
+      "agents": {
+        "description": "Konfigurējami asistenti atkārtojamam darbam",
+        "title": "Aģenti"
+      },
       "caseLaw": {
         "description": "Tiesas lēmumi no dažādām jurisdikcijām",
         "title": "Tiesu prakse"
@@ -1060,12 +1133,20 @@
         "title": "Klauzulas"
       },
       "connectors": {
-        "description": "Savienojums ar ārējām sistēmām",
-        "title": "Savienotāji"
+        "description": "Savienojiet Stella ar pārbaudītiem ārējiem rīku serveriem",
+        "title": "MCP"
+      },
+      "mcp": {
+        "description": "Savienojiet Stella ar pārbaudītiem ārējiem rīku serveriem",
+        "title": "MCP"
+      },
+      "prompts": {
+        "description": "Atkārtoti izmantojamas instrukcijas, kas čatā pieejamas ar /",
+        "title": "Prompti"
       },
       "skills": {
-        "description": "Pielāgotas AI prasmes",
-        "title": "Prasmes"
+        "description": "Mērķētas AI iespējas specializētām darbplūsmām",
+        "title": "Skills"
       },
       "templates": {
         "description": "Dokumentu veidnes ar vietturiem",
@@ -1073,39 +1154,39 @@
       }
     },
     "skills": {
-      "addShortcut": "Pievienot prasmi",
-      "defaultBadge": "Noklusējuma",
-      "deleteConfirmDescription": "Šī prasme tiks neatgriezeniski noņemta.",
-      "deleteConfirmTitle": "Dzēst prasmi?",
-      "deleteShortcut": "Dzēst prasmi",
-      "editShortcut": "Rediģēt prasmi",
-      "emptyDescription": "Izveidojiet atkārtoti izmantojamus promptus darbam, ko jūsu komanda atkārto, no kopsavilkumiem līdz pirmo melnrakstu norādījumiem.",
-      "emptyState": "Prasmju vēl nav. Pievienojiet pirmo.",
-      "emptyTitle": "Izveidojiet pirmo prasmi",
-      "emptyVideoLabel": "Prasmju pārskats",
+      "addShortcut": "Pievienot promptu",
+      "defaultBadge": "Default",
+      "deleteConfirmDescription": "Šis prompts tiks neatgriezeniski noņemts.",
+      "deleteConfirmTitle": "Dzēst promptu?",
+      "deleteShortcut": "Dzēst promptu",
+      "editShortcut": "Rediģēt promptu",
+      "emptyDescription": "Create reusable prompts for the work your team repeats, from summaries to first-pass drafting instructions.",
+      "emptyState": "Promptu vēl nav. Pievienojiet pirmo.",
+      "emptyTitle": "Izveidojiet pirmo promptu",
+      "emptyVideoLabel": "Promptu pārskats",
       "errors": {
-        "commandConflict": "Prasme ar šo / nosaukumu jau pastāv",
-        "commandInvalid": "Izmantojiet tikai mazos burtus, ciparus, defises un pasvītrojumus",
-        "commandReserved": "\"/{command}\" ir rezervēta prasme"
+        "commandConflict": "Prompts ar šo / nosaukumu jau pastāv",
+        "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores",
+        "commandReserved": "\"/{command}\" ir rezervēts prompts"
       },
       "form": {
-        "command": "Prasme",
-        "commandHint": "/ prasmes nosaukums: tikai mazie burti, cipari, defises un pasvītras",
-        "commandPlaceholder": "piem. kopsavilkums",
+        "command": "Prompta saīsne",
+        "commandHint": "/ prompta nosaukums: tikai mazie burti, cipari, defises un pasvītras",
+        "commandPlaceholder": "e.g. summarize",
         "commandPrefix": "/",
-        "description": "Apraksts",
-        "descriptionPlaceholder": "Īss apraksts atlasītājā",
-        "name": "Nosaukums",
-        "namePlaceholder": "piem. Dokumenta kopsavilkums",
-        "prompt": "Uzvedne",
-        "promptPlaceholder": "Teksts, kas tiek ievietots čata kompozitorā, kad tiek izmantota šī prasme",
-        "scope": "Redzamība",
-        "scopePrivate": "Tikai es",
-        "scopeTeam": "Visi organizācijā"
+        "description": "Description",
+        "descriptionPlaceholder": "Short description shown in the picker",
+        "name": "Name",
+        "namePlaceholder": "e.g. Summarise document",
+        "prompt": "Prompt",
+        "promptPlaceholder": "Teksts, kas tiek ievietots čata rakstīšanas laukā, izmantojot šo promptu",
+        "scope": "Visibility",
+        "scopePrivate": "Only me",
+        "scopeTeam": "Everyone in the organisation"
       },
-      "privateSection": "Manas saīsnes",
-      "shadowed": "Pārklāts ar komandas saīsni",
-      "teamSection": "Komandas saīsnes"
+      "privateSection": "Jūsu prompti",
+      "shadowed": "Aizstāts ar komandas promptu",
+      "teamSection": "Komandas prompti"
     }
   },
   "navigation": {
@@ -1157,6 +1238,16 @@
     "inviteInvalidEmail": "Nederīgs e-pasts: {value}",
     "inviteSubtitle": "Viņi saņems e-pastu ar pievienošanās saiti.",
     "inviteTitle": "Uzaiciniet savu komandu",
+    "jurisdictionGlobeLabel": "Atlasītās prakses jurisdikcijas uz globusa",
+    "jurisdictionMakePrimary": "Iestatīt {name} kā primāro",
+    "jurisdictionPrimary": "Primārā",
+    "jurisdictionRemove": "Noņemt {name}",
+    "jurisdictionSaveFailed": "Neizdevās saglabāt jurisdikcijas. Varat to pabeigt iestatījumos.",
+    "jurisdictionSearchLabel": "Meklēt valstis",
+    "jurisdictionSearchPlaceholder": "Meklēt valstis",
+    "jurisdictionSubtitle": "Izvēlieties valstis, ar kurām regulāri strādājat. Stella to izmantos, lai pielāgotu jūsu pieredzi.",
+    "jurisdictionSuggested": "Ieteikts",
+    "jurisdictionTitle": "Izvēlieties savas prakses jurisdikcijas",
     "orgNameLabel": "Komandas nosaukums",
     "orgSubtitle": "Tā kolēģi jūs atradīs.",
     "orgTitle": "Nosauciet savu komandu",
@@ -1164,6 +1255,7 @@
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
     "stepAi": "MI",
     "stepDesktop": "Datora",
+    "stepJurisdiction": "Jurisdikcija",
     "stepOrganization": "Komanda",
     "stepTeam": "Uzaicināt",
     "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms>.",
@@ -1388,6 +1480,7 @@
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",
       "membersDescription": "Manage who has access to this organization",
       "pendingInvitations": "Pending invitations",
+      "practiceJurisdictions": "Prakses jurisdikcijas",
       "profile": "Profile",
       "profileDescription": "Update name and slug",
       "renameAction": "Rename",

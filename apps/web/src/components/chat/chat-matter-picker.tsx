@@ -4,7 +4,6 @@ import {
   Menu,
   MenuCheckboxItem,
   MenuGroup,
-  MenuGroupLabel,
   MenuPopup,
   MenuTrigger,
 } from "@stll/ui/components/menu";
@@ -37,6 +36,11 @@ type ChatMatterPickerProps = {
 };
 
 const NO_CLIENT_KEY = "__no_client__";
+const ALL_MATTERS_STACK_COLORS = [
+  "var(--option-red)",
+  "var(--option-blue)",
+  "var(--option-green)",
+] as const;
 
 type Matter = {
   id: string;
@@ -49,6 +53,7 @@ type Matter = {
 type Group = {
   key: string;
   label: string;
+  allMatters: Matter[];
   matters: Matter[];
 };
 
@@ -112,12 +117,30 @@ export const ChatMatterPicker = ({
     );
   }, [matters, deferredSearch]);
 
+  const mattersByClient = useMemo(() => {
+    const map = new Map<string, Matter[]>();
+    for (const m of matters) {
+      const clientMatters = map.get(m.clientKey);
+      if (clientMatters) {
+        clientMatters.push(m);
+      } else {
+        map.set(m.clientKey, [m]);
+      }
+    }
+    return map;
+  }, [matters]);
+
   const groups = useMemo<Group[]>(() => {
     const map = new Map<string, Group>();
     for (const m of filtered) {
       let group = map.get(m.clientKey);
       if (!group) {
-        group = { key: m.clientKey, label: m.clientLabel, matters: [] };
+        group = {
+          key: m.clientKey,
+          label: m.clientLabel,
+          allMatters: mattersByClient.get(m.clientKey) ?? [],
+          matters: [],
+        };
         map.set(m.clientKey, group);
       }
       group.matters.push(m);
@@ -133,9 +156,10 @@ export const ChatMatterPicker = ({
       }
       return a.label.localeCompare(b.label);
     });
-  }, [filtered]);
+  }, [filtered, mattersByClient]);
 
   const allSelected = matters.length > 0 && selected.length === matters.length;
+  const selectedIdSet = useMemo(() => new Set(matterIds), [matterIds]);
   const triggerLabel =
     selected.length === 0
       ? t("inspector.matterPicker.noMatter")
@@ -155,11 +179,30 @@ export const ChatMatterPicker = ({
     : undefined;
 
   const toggle = (matterId: string) => {
-    if (matterIds.includes(matterId)) {
+    if (selectedIdSet.has(matterId)) {
       onChange(matterIds.filter((id) => id !== matterId));
     } else {
       onChange([...matterIds, matterId]);
     }
+  };
+
+  const toggleGroup = (group: Group) => {
+    const groupIds = group.allMatters.map((m) => m.id);
+    const groupIdSet = new Set(groupIds);
+    const groupAllSelected = groupIds.every((id) => selectedIdSet.has(id));
+
+    if (groupAllSelected) {
+      onChange(matterIds.filter((id) => !groupIdSet.has(id)));
+      return;
+    }
+
+    const nextMatterIds = [...matterIds];
+    for (const matterId of groupIds) {
+      if (!selectedIdSet.has(matterId)) {
+        nextMatterIds.push(matterId);
+      }
+    }
+    onChange(nextMatterIds);
   };
 
   return (
@@ -182,11 +225,15 @@ export const ChatMatterPicker = ({
             : triggerLabel
         }
       >
-        <LayersIcon
-          aria-hidden="true"
-          className="size-3 shrink-0"
-          style={triggerSwatch ? { color: triggerSwatch } : undefined}
-        />
+        {allSelected ? (
+          <MatterStackIcon aria-hidden="true" className="size-3 shrink-0" />
+        ) : (
+          <LayersIcon
+            aria-hidden="true"
+            className="size-3 shrink-0"
+            style={triggerSwatch ? { color: triggerSwatch } : undefined}
+          />
+        )}
         <span className="truncate">{triggerLabel}</span>
         {extraCount > 0 && (
           <span
@@ -215,7 +262,7 @@ export const ChatMatterPicker = ({
               className="text-muted-foreground size-3.5 shrink-0"
             />
             <input
-              className="placeholder:text-muted-foreground/80 h-7 w-full min-w-0 bg-transparent text-xs outline-none"
+              className="placeholder:text-foreground-placeholder h-7 w-full min-w-0 bg-transparent text-xs outline-none"
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
                 // base-ui's Menu listens for keystrokes (typeahead
@@ -256,9 +303,9 @@ export const ChatMatterPicker = ({
               }}
             >
               <span className="flex min-w-0 items-center gap-2">
-                <LayersIcon
+                <MatterStackIcon
                   aria-hidden="true"
-                  className="text-muted-foreground size-3.5 shrink-0"
+                  className="size-3.5 shrink-0"
                 />
                 <span className="truncate text-xs font-medium">
                   {t("inspector.matterPicker.allMatters")}
@@ -279,9 +326,13 @@ export const ChatMatterPicker = ({
           ) : (
             groups.map((group) => (
               <MenuGroup key={group.key}>
-                <MenuGroupLabel>{group.label}</MenuGroupLabel>
+                <ClientMatterToggle
+                  group={group}
+                  isSelected={(matterId) => selectedIdSet.has(matterId)}
+                  onToggle={() => toggleGroup(group)}
+                />
                 {group.matters.map((m) => {
-                  const isOn = matterIds.includes(m.id);
+                  const isOn = selectedIdSet.has(m.id);
                   const swatch = resolveMatterColor(m.id, m.color);
                   return (
                     <MenuCheckboxItem
@@ -309,3 +360,77 @@ export const ChatMatterPicker = ({
     </Menu>
   );
 };
+
+type ClientMatterToggleProps = {
+  group: Group;
+  isSelected: (matterId: string) => boolean;
+  onToggle: () => void;
+};
+
+const ClientMatterToggle = ({
+  group,
+  isSelected,
+  onToggle,
+}: ClientMatterToggleProps) => {
+  const groupAllSelected = group.allMatters.every((m) => isSelected(m.id));
+  const groupSelectedCount = group.allMatters.filter((m) =>
+    isSelected(m.id),
+  ).length;
+
+  return (
+    <MenuCheckboxItem
+      checked={groupAllSelected}
+      className="text-muted-foreground data-[checked]:text-foreground data-highlighted:text-foreground min-h-7 py-0.5 pe-2 text-xs font-medium"
+      closeOnClick={false}
+      onClick={onToggle}
+    >
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="min-w-0 truncate">{group.label}</span>
+        {groupSelectedCount > 0 && !groupAllSelected && (
+          <span className="text-muted-foreground ms-auto shrink-0 text-[10px] tabular-nums">
+            {groupSelectedCount}/{group.allMatters.length}
+          </span>
+        )}
+      </span>
+    </MenuCheckboxItem>
+  );
+};
+
+type MatterStackIconProps = {
+  className?: string;
+  "aria-hidden"?: "true";
+};
+
+const MatterStackIcon = ({
+  className,
+  "aria-hidden": ariaHidden,
+}: MatterStackIconProps) => (
+  <svg
+    aria-hidden={ariaHidden}
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+  >
+    <path
+      d="m12 3 8 4-8 4-8-4 8-4Z"
+      stroke={ALL_MATTERS_STACK_COLORS[0]}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    />
+    <path
+      d="m4 12 8 4 8-4"
+      stroke={ALL_MATTERS_STACK_COLORS[1]}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    />
+    <path
+      d="m4 17 8 4 8-4"
+      stroke={ALL_MATTERS_STACK_COLORS[2]}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    />
+  </svg>
+);

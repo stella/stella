@@ -17,15 +17,19 @@ import type {
   ParagraphFragment,
   ParagraphBorders,
   TableBlock,
+  TableCell,
   TableMeasure,
   TableFragment,
+  TableRow,
   ImageBlock,
   ImageMeasure,
   ImageFragment,
   ImageRun,
+  Run,
   TextBoxBlock,
   TextBoxMeasure,
   TextBoxFragment,
+  FootnoteContent,
 } from "../layout-engine/types";
 import type { BorderSpec, Theme } from "../types/document";
 import { resolveFontFamily } from "../utils/fontResolver";
@@ -133,7 +137,9 @@ export type FootnoteRenderItem = {
   /** Display number (e.g. "1", "2") */
   displayNumber: string;
   /** Plain text content */
-  text: string;
+  text?: string;
+  /** Pre-measured structured footnote content. */
+  content?: Pick<FootnoteContent, "blocks" | "measures" | "height">;
 };
 
 /**
@@ -797,10 +803,11 @@ function renderHeaderFooterContent(
  * Render the footnote area at the bottom of a page.
  * Includes a separator line (33% width) and footnote entries.
  */
-function renderFootnoteArea(
+export function renderFootnoteArea(
   footnotes: FootnoteRenderItem[],
   contentWidth: number,
   doc: Document,
+  context?: RenderContext,
 ): HTMLElement {
   const container = doc.createElement("div");
   container.className = "layout-footnote-area";
@@ -818,24 +825,293 @@ function renderFootnoteArea(
   // Render each footnote
   for (const fn of footnotes) {
     const fnEl = doc.createElement("div");
-    fnEl.style.fontSize = "10px";
-    fnEl.style.lineHeight = "1.3";
     fnEl.style.marginBottom = "4px";
     fnEl.style.color = "var(--doc-canvas-text, #000)";
 
-    const sup = doc.createElement("sup");
-    sup.textContent = fn.displayNumber;
-    sup.style.fontSize = "7px";
-    sup.style.marginRight = "2px";
-    fnEl.append(sup);
+    if (fn.content) {
+      const contentEl = renderFootnoteContent(fn, contentWidth, doc, context);
+      fnEl.append(contentEl);
+    } else {
+      fnEl.style.fontSize = "10px";
+      fnEl.style.lineHeight = "1.3";
 
-    const textNode = doc.createTextNode(` ${fn.text}`);
-    fnEl.append(textNode);
+      const sup = doc.createElement("sup");
+      sup.textContent = fn.displayNumber;
+      sup.style.fontSize = "7px";
+      sup.style.marginRight = "2px";
+      fnEl.append(sup);
+
+      const textNode = doc.createTextNode(` ${fn.text ?? ""}`);
+      fnEl.append(textNode);
+    }
 
     container.append(fnEl);
   }
 
   return container;
+}
+
+function renderFootnoteContent(
+  footnote: FootnoteRenderItem,
+  contentWidth: number,
+  doc: Document,
+  context?: RenderContext,
+): HTMLElement {
+  const content = footnote.content;
+  if (!content) {
+    throw new Error("Missing structured footnote content");
+  }
+
+  const wrapper = doc.createElement("div");
+  wrapper.className = "layout-footnote-content";
+  wrapper.style.position = "relative";
+  wrapper.style.width = `${contentWidth}px`;
+  wrapper.style.height = `${content.height}px`;
+
+  const renderContext: RenderContext = {
+    pageNumber: context?.pageNumber ?? 0,
+    totalPages: context?.totalPages ?? 0,
+    section: context?.section ?? "body",
+    contentWidth,
+  };
+
+  let y = 0;
+  for (let index = 0; index < content.blocks.length; index++) {
+    const block = content.blocks[index];
+    const measure = content.measures[index];
+    if (!block || !measure) {
+      continue;
+    }
+
+    const blockEl = renderFootnoteBlock(
+      block,
+      measure,
+      contentWidth,
+      y,
+      renderContext,
+      doc,
+    );
+    if (!blockEl) {
+      continue;
+    }
+    wrapper.append(blockEl);
+    y += getFootnoteMeasureHeight(measure);
+  }
+
+  return wrapper;
+}
+
+function renderFootnoteBlock(
+  block: FlowBlock,
+  measure: Measure,
+  contentWidth: number,
+  y: number,
+  context: RenderContext,
+  doc: Document,
+): HTMLElement | null {
+  const renderBlock = stripFootnotePmAnchors(block);
+
+  if (renderBlock.kind === "paragraph" && measure.kind === "paragraph") {
+    const fragment: ParagraphFragment = {
+      kind: "paragraph",
+      blockId: renderBlock.id,
+      x: 0,
+      y,
+      width: contentWidth,
+      height: measure.totalHeight,
+      fromLine: 0,
+      toLine: measure.lines.length,
+    };
+    const element = renderParagraphFragment(
+      fragment,
+      renderBlock,
+      measure,
+      context,
+      {
+        document: doc,
+      },
+    );
+    positionFootnoteBlock(element, y, contentWidth, measure.totalHeight);
+    return element;
+  }
+
+  if (renderBlock.kind === "table" && measure.kind === "table") {
+    const fragment: TableFragment = {
+      kind: "table",
+      blockId: renderBlock.id,
+      x: 0,
+      y,
+      width: measure.totalWidth,
+      height: measure.totalHeight,
+      fromRow: 0,
+      toRow: renderBlock.rows.length,
+    };
+    const element = renderTableFragment(
+      fragment,
+      renderBlock,
+      measure,
+      context,
+      {
+        document: doc,
+      },
+    );
+    positionFootnoteBlock(element, y, measure.totalWidth, measure.totalHeight);
+    return element;
+  }
+
+  if (renderBlock.kind === "image" && measure.kind === "image") {
+    const fragment: ImageFragment = {
+      kind: "image",
+      blockId: renderBlock.id,
+      x: 0,
+      y,
+      width: measure.width,
+      height: measure.height,
+    };
+    const element = renderImageFragment(
+      fragment,
+      renderBlock,
+      measure,
+      context,
+      {
+        document: doc,
+      },
+    );
+    positionFootnoteBlock(element, y, measure.width, measure.height);
+    return element;
+  }
+
+  if (renderBlock.kind === "textBox" && measure.kind === "textBox") {
+    const fragment: TextBoxFragment = {
+      kind: "textBox",
+      blockId: renderBlock.id,
+      x: 0,
+      y,
+      width: measure.width,
+      height: measure.height,
+    };
+    const element = renderTextBoxFragment(
+      fragment,
+      renderBlock,
+      measure,
+      context,
+      {
+        document: doc,
+      },
+    );
+    positionFootnoteBlock(element, y, measure.width, measure.height);
+    return element;
+  }
+
+  return null;
+}
+
+function stripFootnotePmAnchors(block: FlowBlock): FlowBlock {
+  switch (block.kind) {
+    case "paragraph":
+      return stripFootnoteParagraphPmAnchors(block);
+    case "table": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...table } = block;
+      return {
+        ...table,
+        rows: table.rows.map(stripFootnoteTableRowPmAnchors),
+      };
+    }
+    case "image": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...image } = block;
+      return image;
+    }
+    case "textBox": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...textBox } = block;
+      return {
+        ...textBox,
+        content: textBox.content.map(stripFootnoteParagraphPmAnchors),
+      };
+    }
+    case "pageBreak":
+    case "columnBreak": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...breakBlock } = block;
+      return breakBlock;
+    }
+    case "sectionBreak":
+      return block;
+    default:
+      return block;
+  }
+}
+
+function stripFootnoteTableRowPmAnchors(row: TableRow): TableRow {
+  return {
+    ...row,
+    cells: row.cells.map(stripFootnoteTableCellPmAnchors),
+  };
+}
+
+function stripFootnoteTableCellPmAnchors(cell: TableCell): TableCell {
+  return {
+    ...cell,
+    blocks: cell.blocks.map(stripFootnotePmAnchors),
+  };
+}
+
+function stripFootnoteParagraphPmAnchors(
+  block: ParagraphBlock,
+): ParagraphBlock {
+  const { pmStart: _pmStart, pmEnd: _pmEnd, ...paragraph } = block;
+  return {
+    ...paragraph,
+    runs: paragraph.runs.map(stripFootnoteRunPmAnchors),
+  };
+}
+
+function stripFootnoteRunPmAnchors(run: Run): Run {
+  switch (run.kind) {
+    case "text": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...textRun } = run;
+      return textRun;
+    }
+    case "tab": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...tabRun } = run;
+      return tabRun;
+    }
+    case "image": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...imageRun } = run;
+      return imageRun;
+    }
+    case "lineBreak": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...lineBreakRun } = run;
+      return lineBreakRun;
+    }
+    case "field": {
+      const { pmStart: _pmStart, pmEnd: _pmEnd, ...fieldRun } = run;
+      return fieldRun;
+    }
+    default:
+      return run;
+  }
+}
+
+function positionFootnoteBlock(
+  element: HTMLElement,
+  top: number,
+  width: number,
+  height: number,
+): void {
+  element.style.position = "absolute";
+  element.style.left = "0";
+  element.style.top = `${top}px`;
+  element.style.width = `${width}px`;
+  element.style.height = `${height}px`;
+}
+
+function getFootnoteMeasureHeight(measure: Measure): number {
+  if (measure.kind === "paragraph" || measure.kind === "table") {
+    return measure.totalHeight;
+  }
+  if (measure.kind === "image" || measure.kind === "textBox") {
+    return measure.height;
+  }
+  return 0;
 }
 
 /**
@@ -1122,6 +1398,7 @@ export function renderPage(
       options.footnoteArea,
       contentWidth,
       doc,
+      context,
     );
     fnAreaEl.style.position = "absolute";
     // Position at page bottom minus bottom margin (bottom of content area)
@@ -1168,6 +1445,7 @@ export function renderPage(
     headerEl.style.width = `${headerContentWidth}px`;
     headerEl.style.height = `${actualHeaderHeight}px`;
     headerEl.style.minHeight = `${actualHeaderHeight}px`;
+    headerEl.style.opacity = "0.62";
 
     let shouldClipHeader = !headerOverflows;
     if (options.headerContent && options.headerContent.blocks.length > 0) {
@@ -1252,6 +1530,7 @@ export function renderPage(
     footerEl.style.width = `${footerContentWidth}px`;
     footerEl.style.height = `${actualFooterHeight}px`;
     footerEl.style.minHeight = `${actualFooterHeight}px`;
+    footerEl.style.opacity = "0.62";
 
     let shouldClipFooter = !footerOverflows;
     if (options.footerContent && options.footerContent.blocks.length > 0) {

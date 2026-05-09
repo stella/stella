@@ -312,10 +312,14 @@
     },
     "approval": {
       "allow": "Luba",
+      "allowInConversation": "Luba selles vestluses",
+      "allowOnce": "Luba üks kord",
       "alwaysAllow": "Luba alati",
       "approved": "Lubatud",
       "denied": "Keelatud",
-      "deny": "Keela"
+      "deny": "Keela",
+      "externalMcpDescription": "Only the information needed for this tool call will be sent.",
+      "externalMcpQuestion": "Can Stella send this request to {provider}?"
     },
     "askUser": {
       "custom": "Kirjuta oma",
@@ -339,6 +343,8 @@
     "editableFilePlaceholder": "Vestle või muuda: {fileName}",
     "editableFilePlaceholderAction": "Vestle või muuda",
     "editorLoading": "Loading editor…",
+    "externalSourcePlaceholder": "Vestle teemal {title}",
+    "externalSourcePlaceholderAction": "Vestle teemal",
     "extractingContent": "Sisu ekstraktimine...",
     "filePlaceholder": "Vestle teemal {fileName}",
     "filePlaceholderAction": "Vestle teemal",
@@ -384,10 +390,15 @@
     "resend": "Saada uuesti",
     "send": "Saada sõnum",
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
+    "sendErrorInsufficientCredits": "AI-teenusepakkujal on vaja rohkem krediiti. Palu töökoha administraatoril kontot täiendada.",
+    "sendErrorProviderUnavailable": "AI-teenusepakkuja pole hetkel saadaval. Proovi hetke pärast uuesti.",
+    "sendErrorQuotaExhausted": "AI-teenusepakkuja kvoot on otsas. Proovi minuti pärast uuesti või palu töökoha administraatoril paketti uuendada.",
     "thinking": "Töötan kontekstiga",
     "threads": "Ajalugu",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
+      "ares_lookup_company": "ARES-i ettevõtte päring",
+      "ares_search_companies": "ARES-i ettevõtete otsing",
       "ask-user": "Täpsustuse küsimine",
       "create-document": "Dokumendi loomine",
       "describe-stella-api": "Stella API kontrollimine",
@@ -412,6 +423,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# märk} other {# märki}}",
+      "exactCall": "Täpne kutse",
       "field": "Väli",
       "input": "Sisend",
       "output": "Väljund",
@@ -520,6 +532,7 @@
     "connectionLostDescription": "Kaotasime ühenduse serveriga. Proovime automaatselt uuesti.",
     "convertTo": "Teisenda",
     "copied": "Copied to clipboard",
+    "copy": "Kopeeri",
     "copyLink": "Kopeeri link",
     "createdAt": "Loodud {date}",
     "currency": "Valuuta",
@@ -1023,6 +1036,13 @@
     "unsupportedDocxEditTitle": "Editing blocked"
   },
   "inspector": {
+    "external": {
+      "confirmDescription": "Oled avamas välist veebisaiti.",
+      "confirmTitle": "Ava väline link?",
+      "openLink": "Ava link",
+      "openOriginal": "Ava originaal",
+      "unavailable": "Viidatud sait ei luba turvalist eelvaadet. Kui tööriist tagastas dokumendi teksti, kuvatakse see siin; muul juhul avage originaal."
+    },
     "facet": {
       "preview": "Preview",
       "previewInFullViewToast": "Preview is the main view here. Click the minimize button to see it alongside metadata."
@@ -1050,7 +1070,60 @@
     "showPane": "Show pane"
   },
   "knowledge": {
+    "mcp": {
+      "addAndConnect": "Lisa ja ühenda",
+      "addServer": "Lisa server",
+      "addServerCardDescription": "Kleepige serveri URL ja Stella ühendab selle ühe voona.",
+      "addServerCardTitle": "Lisa uus MCP server",
+      "auth": {
+        "bearer": "Bearer-token",
+        "none": "Autentimiseta",
+        "oauth2": "OAuth 2.0"
+      },
+      "availableInChat": "Vestluses saadaval",
+      "bearerTokenDescription": "See server kasutab bearer-tokenit. Ühenduse lõpetamiseks kleepige teenusepakkuja token.",
+      "builtInBadge": "Sisseehitatud",
+      "connect": "Ühenda",
+      "connected": "Ühendatud",
+      "connectedToast": "MCP-konnektor ühendatud",
+      "connectedWithLastUsed": "Ühendatud · viimati kasutatud {time}",
+      "customDescription": "Kleepige MCP serveri URL. Stella tuvastab ühendusviisi ja jätkab automaatselt.",
+      "customTitle": "Lisa kohandatud server",
+      "description": "Hallake väliseid MCP-servereid, mis saavad vestlusse tööriistu lisada. Tokenid salvestatakse kasutajapõhiselt.",
+      "detected": "Tuvastatud: {authType}",
+      "disable": "Lülita välja",
+      "disabled": "Ühendatud · välja lülitatud",
+      "disconnect": "Katkesta ühendus",
+      "docsLink": "Dokumentatsioon",
+      "emptyDescription": "Kureeritud juriidilised MCP-konnektorid kuvatakse siin, kui need on teie tööruumis lubatud.",
+      "emptyTitle": "MCP-konnektoreid veel pole",
+      "enable": "Lülita sisse",
+      "errorDescription": "Konnektorit ei saanud uuendada.",
+      "errorTitle": "MCP-ühendus ebaõnnestus",
+      "namePlaceholder": "Kuvatav nimi",
+      "needsReauth": "Vajab taasühendamist",
+      "notConnected": "Pole ühendatud",
+      "off": "Väljas",
+      "on": "Sees",
+      "otherTitle": "Muud konnektorid",
+      "probe": "Kontrolli",
+      "recommendedBadge": "Soovitatud",
+      "recommendedFor": "Soovitatud: {jurisdictions}",
+      "recommendedTitle": "Soovitatud teie jurisdiktsioonide jaoks",
+      "reconnect": "Ühenda uuesti",
+      "saveToken": "Salvesta token",
+      "tokenHelp": "Kuidas token hankida",
+      "tokenLabel": "Bearer-token",
+      "tokenPlaceholder": "Kleepige token",
+      "urlLabel": "MCP serveri URL",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Kasuta vestluses"
+    },
     "sections": {
+      "agents": {
+        "description": "Seadistatavad assistendid korduvaks tööks",
+        "title": "Agendid"
+      },
       "caseLaw": {
         "description": "Kohtulahendid erinevatest jurisdiktsioonidest",
         "title": "Kohtupraktika"
@@ -1060,12 +1133,20 @@
         "title": "Klauslid"
       },
       "connectors": {
-        "description": "Ühendus väliste süsteemidega",
-        "title": "Konnektorid"
+        "description": "Ühendage Stella kontrollitud väliste tööriistaserveritega",
+        "title": "MCP"
+      },
+      "mcp": {
+        "description": "Ühendage Stella kontrollitud väliste tööriistaserveritega",
+        "title": "MCP"
+      },
+      "prompts": {
+        "description": "Taaskasutatavad juhised, mis on vestluses saadaval / kaudu",
+        "title": "Promptid"
       },
       "skills": {
-        "description": "Kohandatud tehisintellekti oskused",
-        "title": "Oskused"
+        "description": "Fookustatud AI-võimekused erialaste töövoogude jaoks",
+        "title": "Skills"
       },
       "templates": {
         "description": "Dokumendimallid kohatäitjatega",
@@ -1073,39 +1154,39 @@
       }
     },
     "skills": {
-      "addShortcut": "Lisa oskus",
-      "defaultBadge": "Vaikimisi",
-      "deleteConfirmDescription": "See oskus eemaldatakse jäädavalt.",
-      "deleteConfirmTitle": "Kas kustutada oskus?",
-      "deleteShortcut": "Kustuta oskus",
-      "editShortcut": "Muuda oskust",
-      "emptyDescription": "Looge korduvkasutatavaid juhiseid töö jaoks, mida teie meeskond kordab, alates kokkuvõtetest kuni esimeste mustandite suunisteni.",
-      "emptyState": "Oskusi veel pole. Lisage esimene.",
-      "emptyTitle": "Looge esimene oskus",
-      "emptyVideoLabel": "Oskuste ülevaade",
+      "addShortcut": "Lisa prompt",
+      "defaultBadge": "Default",
+      "deleteConfirmDescription": "See prompt eemaldatakse jäädavalt.",
+      "deleteConfirmTitle": "Kustutada prompt?",
+      "deleteShortcut": "Kustuta prompt",
+      "editShortcut": "Muuda prompti",
+      "emptyDescription": "Create reusable prompts for the work your team repeats, from summaries to first-pass drafting instructions.",
+      "emptyState": "Prompte veel pole. Lisage esimene.",
+      "emptyTitle": "Looge esimene prompt",
+      "emptyVideoLabel": "Promptide ülevaade",
       "errors": {
-        "commandConflict": "Selle / nimega oskus on juba olemas",
-        "commandInvalid": "Kasuta ainult väiketähti, numbreid, sidekriipse ja allkriipse",
-        "commandReserved": "\"/{command}\" on reserveeritud oskus"
+        "commandConflict": "Selle / nimega prompt on juba olemas",
+        "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores",
+        "commandReserved": "\"/{command}\" on reserveeritud prompt"
       },
       "form": {
-        "command": "Oskus",
-        "commandHint": "/ oskuse nimi: ainult väiketähed, numbrid, sidekriipsud ja alakriipsud",
-        "commandPlaceholder": "nt. kokkuvõte",
+        "command": "Prompti otsetee",
+        "commandHint": "/ prompti nimi: ainult väiketähed, numbrid, sidekriipsud ja allkriipsud",
+        "commandPlaceholder": "e.g. summarize",
         "commandPrefix": "/",
-        "description": "Kirjeldus",
-        "descriptionPlaceholder": "Lühike kirjeldus valijas",
-        "name": "Nimi",
-        "namePlaceholder": "nt. Dokumendi kokkuvõte",
+        "description": "Description",
+        "descriptionPlaceholder": "Short description shown in the picker",
+        "name": "Name",
+        "namePlaceholder": "e.g. Summarise document",
         "prompt": "Prompt",
-        "promptPlaceholder": "Tekst, mis lisatakse vestluse koostajasse selle oskuse kasutamisel",
-        "scope": "Nähtavus",
-        "scopePrivate": "Ainult mina",
-        "scopeTeam": "Kõik organisatsioonis"
+        "promptPlaceholder": "Tekst, mis lisatakse vestluse koostajasse selle prompti kasutamisel",
+        "scope": "Visibility",
+        "scopePrivate": "Only me",
+        "scopeTeam": "Everyone in the organisation"
       },
-      "privateSection": "Minu otseteed",
-      "shadowed": "Varjatud meeskonna otsteega",
-      "teamSection": "Meeskonna otseteed"
+      "privateSection": "Teie promptid",
+      "shadowed": "Meeskonna prompt varjutab",
+      "teamSection": "Meeskonna promptid"
     }
   },
   "navigation": {
@@ -1157,6 +1238,16 @@
     "inviteInvalidEmail": "Kehtetu e-post: {value}",
     "inviteSubtitle": "Nad saavad e-kirja liitumislingiga.",
     "inviteTitle": "Kutsuge oma meeskond",
+    "jurisdictionGlobeLabel": "Valitud praktikajurisdiktsioonid gloobusel",
+    "jurisdictionMakePrimary": "Määra {name} peamiseks",
+    "jurisdictionPrimary": "Peamine",
+    "jurisdictionRemove": "Eemalda {name}",
+    "jurisdictionSaveFailed": "Jurisdiktsioonide salvestamine ebaõnnestus. Saate selle lõpetada seadetes.",
+    "jurisdictionSearchLabel": "Otsi riike",
+    "jurisdictionSearchPlaceholder": "Otsi riike",
+    "jurisdictionSubtitle": "Valige riigid, millega regulaarselt töötate. Stella kasutab seda teie kogemuse kohandamiseks.",
+    "jurisdictionSuggested": "Soovitatud",
+    "jurisdictionTitle": "Valige oma praktika jurisdiktsioonid",
     "orgNameLabel": "Meeskonna nimi",
     "orgSubtitle": "Nii leiavad teid kolleegid.",
     "orgTitle": "Nimetage oma meeskond",
@@ -1164,6 +1255,7 @@
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
     "stepAi": "AI",
     "stepDesktop": "Töölaud",
+    "stepJurisdiction": "Jurisdiktsioon",
     "stepOrganization": "Meeskond",
     "stepTeam": "Kutsu",
     "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms>.",
@@ -1388,6 +1480,7 @@
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",
       "membersDescription": "Manage who has access to this organization",
       "pendingInvitations": "Pending invitations",
+      "practiceJurisdictions": "Praktika jurisdiktsioonid",
       "profile": "Profile",
       "profileDescription": "Update name and slug",
       "renameAction": "Rename",

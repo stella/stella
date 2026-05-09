@@ -31,6 +31,7 @@ import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
 import { env } from "@/env";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { chatThreadIdFromFileFieldId } from "@/lib/chat-thread-ref";
 import { DOCX_MIME } from "@/lib/consts";
 import { APIError } from "@/lib/errors";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
@@ -143,7 +144,7 @@ const PeekPdfViewerContent = ({
   return (
     <FileViewerWithAI
       activeFile={{ entityId, fileName: file.fileName }}
-      chatThreadId={fieldId}
+      chatThreadId={chatThreadIdFromFileFieldId(fieldId)}
       workspaceId={workspaceId}
     >
       <PDFViewport
@@ -176,7 +177,7 @@ const PeekViewerErrorFallback = ({ onRetry }: { onRetry: () => void }) => {
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-      <AlertTriangleIcon className="text-muted-foreground/40 size-8" />
+      <AlertTriangleIcon className="text-foreground-disabled size-8" />
       <p className="text-muted-foreground text-sm">
         {t("common.somethingWentWrong")}
       </p>

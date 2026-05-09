@@ -3,6 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { visualizer } from "rollup-plugin-visualizer";
@@ -15,12 +16,31 @@ const APP_VERSION = readFileSync(
   "utf-8",
 ).trim();
 
+const readCommitSha = () => {
+  const explicitSha = process.env["STELLA_COMMIT_SHA"];
+  if (explicitSha) {
+    return explicitSha;
+  }
+
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: resolve(APP_ROOT, "../.."),
+      encoding: "utf-8",
+    }).trim();
+  } catch {
+    return "dev";
+  }
+};
+
+const APP_COMMIT_SHA = readCommitSha();
+
 export default defineConfig(({ mode }) => {
   const shouldAnalyze = mode === ANALYZE_MODE || process.env["ANALYZE"] === "1";
 
   return {
     root: APP_ROOT,
     define: {
+      __APP_COMMIT_SHA__: JSON.stringify(APP_COMMIT_SHA),
       __APP_VERSION__: JSON.stringify(APP_VERSION),
     },
     server: {

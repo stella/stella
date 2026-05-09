@@ -1,14 +1,21 @@
+import type { ToolSet } from "ai";
+
 import type { SafeDb, ScopedDb } from "@/api/db";
 import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
 import {
   APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME,
   createActiveDocxEditTool,
 } from "@/api/handlers/chat/tools/active-docx-edit-tool";
+import { createAresTools } from "@/api/handlers/chat/tools/ares-tools";
 import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { createChatExecutionTools } from "@/api/handlers/chat/tools/execute/chat-execution-tools";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { createSkillTools } from "@/api/handlers/chat/tools/skill-tools";
+import {
+  applyChatToolPolicies,
+  CHAT_TOOL_POLICY_KIND,
+} from "@/api/handlers/chat/tools/tool-policy";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -16,13 +23,17 @@ type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
 type OrgTools = ReturnType<typeof createOrgTools>;
 type ChatExecutionTools = ReturnType<typeof createChatExecutionTools>;
 type SkillTools = ReturnType<typeof createSkillTools>;
+type AresTools = ReturnType<typeof createAresTools>;
 type ActiveDocxEditTools = ReturnType<typeof createActiveDocxEditTools>;
 
-export type ChatTools = OrgTools &
+type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
   SkillTools &
+  AresTools &
   WorkspaceTools &
   ActiveDocxEditTools;
+
+export type ChatTools = BuiltInChatTools;
 
 type GetChatToolsProps = {
   safeDb: SafeDb;
@@ -44,11 +55,28 @@ type GetChatToolsProps = {
    * client never calls `addToolOutput`, and the call would hang.
    */
   hasActiveFileChat: boolean;
+  externalTools?: ToolSet | undefined;
 };
 
 const createActiveDocxEditTools = () => ({
   [APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME]: createActiveDocxEditTool(),
 });
+
+const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
+  [APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
+  ares_lookup_company: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  ares_search_companies: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  "ask-user": CHAT_TOOL_POLICY_KIND.internal,
+  "create-document": CHAT_TOOL_POLICY_KIND.internal,
+  "describe-stella-api": CHAT_TOOL_POLICY_KIND.internal,
+  "load-skill": CHAT_TOOL_POLICY_KIND.internal,
+  "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
+  "run-stella-query": CHAT_TOOL_POLICY_KIND.internal,
+  "update-entity-fields": CHAT_TOOL_POLICY_KIND.mutation,
+} as const satisfies Record<
+  keyof BuiltInChatTools,
+  (typeof CHAT_TOOL_POLICY_KIND)[keyof typeof CHAT_TOOL_POLICY_KIND]
+>;
 
 export const getChatTools = ({
   safeDb,
@@ -59,7 +87,8 @@ export const getChatTools = ({
   refRegistry,
   workspaceId,
   hasActiveFileChat,
-}: GetChatToolsProps): Partial<ChatTools> => {
+  externalTools = {},
+}: GetChatToolsProps): ToolSet => {
   const orgTools = createOrgTools({
     accessibleWorkspaceIds: toolWorkspaceIds,
     organizationId,
@@ -75,17 +104,27 @@ export const getChatTools = ({
   const skillTools = createSkillTools({
     skills: getChatSkillMetadata(),
   });
+  const aresTools = createAresTools();
   const activeDocxEditTools = hasActiveFileChat
     ? createActiveDocxEditTools()
     : {};
+  const externalChatTools = applyChatToolPolicies({
+    defaultPolicyKind: CHAT_TOOL_POLICY_KIND.external,
+    tools: externalTools,
+  });
 
   if (!workspaceId) {
-    return {
-      ...orgTools,
-      ...executionTools,
-      ...skillTools,
-      ...activeDocxEditTools,
-    };
+    return applyChatToolPolicies({
+      policyKinds: BUILT_IN_CHAT_TOOL_POLICY_KINDS,
+      tools: {
+        ...orgTools,
+        ...executionTools,
+        ...skillTools,
+        ...aresTools,
+        ...activeDocxEditTools,
+        ...externalChatTools,
+      },
+    });
   }
 
   const workspaceTools = createWorkspaceTools({
@@ -96,11 +135,16 @@ export const getChatTools = ({
     scopedDb,
   });
 
-  return {
-    ...orgTools,
-    ...executionTools,
-    ...skillTools,
-    ...workspaceTools,
-    ...activeDocxEditTools,
-  };
+  return applyChatToolPolicies({
+    policyKinds: BUILT_IN_CHAT_TOOL_POLICY_KINDS,
+    tools: {
+      ...orgTools,
+      ...executionTools,
+      ...skillTools,
+      ...aresTools,
+      ...workspaceTools,
+      ...activeDocxEditTools,
+      ...externalChatTools,
+    },
+  });
 };

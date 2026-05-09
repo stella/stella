@@ -126,7 +126,7 @@ export const InspectorTabHeader = ({
       )}
       {matter !== undefined && !rename?.active && (
         <>
-          <span aria-hidden="true" className="text-muted-foreground/50 text-xs">
+          <span aria-hidden="true" className="text-foreground-subtle text-xs">
             ·
           </span>
           {matter}

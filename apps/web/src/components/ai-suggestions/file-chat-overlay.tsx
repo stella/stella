@@ -53,7 +53,8 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import { useAIKeyGate } from "@/components/require-ai-key";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
+import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
@@ -73,6 +74,16 @@ type ActiveFile = {
   entityId: string;
   editable?: boolean | undefined;
   fileName: string;
+};
+
+type ActiveExternal = {
+  connectorSlug?: string | undefined;
+  provider?: string | undefined;
+  snippet?: string | undefined;
+  sourceToolName?: string | undefined;
+  text?: string | undefined;
+  title: string;
+  url: string;
 };
 
 type ToolInputOperation = ApplyActiveDocxEditsInput["operations"][number];
@@ -457,15 +468,15 @@ const getActiveDocxEditApprovalPart = (
 const ACTIVE_FILE_BLOCKED_APPROVAL_TOOLS = new Set<ApprovalToolName>();
 
 type FileChatOverlayProps = {
-  /** Workspace this file belongs to. Scopes the thread + mention sources. */
-  workspaceId: string;
+  /** Workspace this viewer belongs to. Scopes the thread + mention sources. */
+  workspaceId?: string | undefined;
   /**
    * Stable identifier for this file's chat thread. Use the file's
    * entity id (or any per-file unique string) so drafts + history
    * persist across mounts and stay isolated from other files'
    * chats.
    */
-  chatThreadId: string;
+  chatThreadId: ChatThreadId;
   /**
    * Surfaced to the model via the chat transport so prompts can
    * reference "the file you're looking at" and tools can resolve
@@ -473,6 +484,7 @@ type FileChatOverlayProps = {
    * fine but loses the file-context hint.
    */
   activeFile?: ActiveFile | undefined;
+  activeExternal?: ActiveExternal | undefined;
   docxEditorRef?: RefObject<DocxEditorRef | null> | undefined;
   docxEditable?: boolean | undefined;
   requestDocxEditMode?: (() => boolean | Promise<boolean>) | undefined;
@@ -482,6 +494,7 @@ export const FileChatOverlay = ({
   workspaceId,
   chatThreadId,
   activeFile,
+  activeExternal,
   docxEditable,
   docxEditorRef,
   requestDocxEditMode,
@@ -508,6 +521,7 @@ export const FileChatOverlay = ({
     >
       <FileChatOverlayInner
         activeFile={activeFile}
+        activeExternal={activeExternal}
         chatThreadId={currentChatThreadId}
         docxEditable={docxEditable}
         docxEditorRef={docxEditorRef}
@@ -520,7 +534,7 @@ export const FileChatOverlay = ({
           if (activeFile) {
             useReviewStore.getState().resetSession(activeFile.entityId);
           }
-          setCurrentChatThreadId(uuidv7());
+          setCurrentChatThreadId(createChatThreadId());
         }}
         requestDocxEditMode={requestDocxEditMode}
         workspaceId={workspaceId}
@@ -537,6 +551,7 @@ const FileChatOverlayInner = ({
   workspaceId,
   chatThreadId,
   activeFile,
+  activeExternal,
   docxEditable,
   docxEditorRef,
   onNewThread,
@@ -608,6 +623,7 @@ const FileChatOverlayInner = ({
       },
     };
   });
+  const getActiveExternal = useEffectEvent(() => activeExternal);
   const handleActiveDocxEditToolCall = useEffectEvent(
     (input: ApplyActiveDocxEditsInput): ApplyActiveDocxEditsOutput => {
       // All edit batches — single direct edits and structured
@@ -650,17 +666,23 @@ const FileChatOverlayInner = ({
       };
     },
   );
-  const showToolCalls = useDevStore((s) => s.showToolCalls);
+  const showToolCallDetails = useDevStore((s) => s.showToolCallDetails);
   const blockedApprovalTools = activeFile
     ? ACTIVE_FILE_BLOCKED_APPROVAL_TOOLS
     : undefined;
 
   const threadRef = useMemo<ChatThreadRef>(
-    () => ({
-      scope: "workspace",
-      threadId: chatThreadId,
-      workspaceId,
-    }),
+    () =>
+      workspaceId === undefined
+        ? {
+            scope: "global",
+            threadId: chatThreadId,
+          }
+        : {
+            scope: "workspace",
+            threadId: chatThreadId,
+            workspaceId,
+          },
     [chatThreadId, workspaceId],
   );
 
@@ -670,7 +692,10 @@ const FileChatOverlayInner = ({
       context: {
         allowMissingThread: true,
         getUserContext,
-        getActiveFile: () => getActiveFile(),
+        ...(activeExternal
+          ? { getActiveExternal: () => getActiveExternal() }
+          : {}),
+        ...(activeFile ? { getActiveFile: () => getActiveFile() } : {}),
         handleActiveDocxEditToolCall: (input) =>
           handleActiveDocxEditToolCall(input),
       },
@@ -685,15 +710,17 @@ const FileChatOverlayInner = ({
     sendMessage,
     stop,
     isGenerating,
-    autoApprovedTools,
+    alwaysApprovedTools,
+    conversationApprovedTools,
     handleApprove,
+    handleAllowInConversation,
     handleDeny,
     handleAskUserSubmit,
     handleAlwaysAllow,
     addToolOutput,
     streamdownComponents,
     approvalPendingMessageId,
-  } = useChatSession({ chat, workspaceId });
+  } = useChatSession({ chat, conversationId: threadRef.threadId, workspaceId });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
 
   useEffect(() => {
@@ -702,7 +729,11 @@ const FileChatOverlayInner = ({
 
   const filePlaceholder =
     activeFile === undefined
-      ? undefined
+      ? activeExternal
+        ? t("chat.externalSourcePlaceholder", {
+            title: activeExternal.title,
+          })
+        : undefined
       : t(
           activeFile.editable
             ? "chat.editableFilePlaceholder"
@@ -711,7 +742,9 @@ const FileChatOverlayInner = ({
         );
   const filePlaceholderAction =
     activeFile === undefined
-      ? undefined
+      ? activeExternal
+        ? t("chat.externalSourcePlaceholderAction")
+        : undefined
       : t(
           activeFile.editable
             ? "chat.editableFilePlaceholderAction"
@@ -745,7 +778,7 @@ const FileChatOverlayInner = ({
     if (toolName === "apply-active-docx-edits") {
       const part = getActiveDocxEditApprovalPart(messages, approvalId);
       if (!part) {
-        await handleApprove(approvalId, toolName);
+        handleApprove(approvalId, toolName);
         return;
       }
 
@@ -755,7 +788,7 @@ const FileChatOverlayInner = ({
       // surface the queued ids back to the LLM. The actual apply
       // (including the unlock prompt) happens when the user clicks
       // Accept on a suggestion in the panel.
-      await handleApprove(approvalId, toolName);
+      handleApprove(approvalId, toolName);
       const output = handleActiveDocxEditToolCall(part.input);
       await addToolOutput({
         output,
@@ -765,7 +798,7 @@ const FileChatOverlayInner = ({
       return;
     }
 
-    await handleApprove(approvalId, toolName);
+    handleApprove(approvalId, toolName);
   };
 
   const [panelOpen, setPanelOpen] = useState(false);
@@ -803,12 +836,12 @@ const FileChatOverlayInner = ({
             // / 380px so the panel doesn't dominate the file
             // viewer. No min-height — short threads stay short.
             "absolute start-1/2 bottom-[88px] z-40 flex max-h-[min(45dvh,380px)] min-h-0 w-[min(560px,calc(100%-2rem))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border",
-            "bg-popover/35 border-border/50 text-popover-foreground",
-            "[backdrop-filter:blur(28px)_saturate(180%)] [-webkit-backdrop-filter:blur(28px)_saturate(180%)]",
+            "bg-popover/90 border-border text-popover-foreground",
+            "[backdrop-filter:blur(18px)_saturate(160%)] [-webkit-backdrop-filter:blur(18px)_saturate(160%)]",
             "before:bg-foreground/[0.06] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px",
-            "hover:bg-popover/92 focus-within:bg-popover/92 hover:border-border focus-within:border-border",
+            "hover:bg-popover focus-within:bg-popover",
             "transition-[background-color,border-color] duration-200 ease-out",
-            "shadow-[0_1px_2px_rgb(0_0_0/0.04),0_16px_48px_rgb(0_0_0/0.10)]",
+            "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_20px_64px_rgb(0_0_0/0.18)]",
             "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1",
           )}
           role="dialog"
@@ -824,10 +857,12 @@ const FileChatOverlayInner = ({
             style={{ scrollbarGutter: "stable" }}
           >
             <ChatThreadMessages
+              alwaysApprovedTools={alwaysApprovedTools}
               approvalPendingMessageId={approvalPendingMessageId}
-              autoApprovedTools={autoApprovedTools}
               blockedApprovalTools={blockedApprovalTools}
+              conversationApprovedTools={conversationApprovedTools}
               error={error}
+              handleAllowInConversation={handleAllowInConversation}
               handleAlwaysAllow={handleAlwaysAllow}
               handleApprove={handleApproveWithDocxUnlock}
               handleDeny={handleDeny}
@@ -836,7 +871,7 @@ const FileChatOverlayInner = ({
               onAskUserSubmit={handleAskUserSubmit}
               onResend={resendLatestMessage}
               showThinkingIndicator
-              showToolCalls={showToolCalls}
+              showToolCallDetails={showToolCallDetails}
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
             />
@@ -849,11 +884,11 @@ const FileChatOverlayInner = ({
         canSubmitNow={canSubmitWithCurrentDocxSnapshot}
         editorController={editorController}
         emptyPlaceholder={
-          activeFile && filePlaceholderAction ? (
-            <span className="text-muted-foreground/70 flex min-w-0 items-center gap-1.5 text-[13px] leading-5">
+          (activeFile || activeExternal) && filePlaceholderAction ? (
+            <span className="text-foreground-ghost flex min-w-0 items-center gap-1.5 text-[13px] leading-5">
               <span className="shrink-0">{filePlaceholderAction}</span>
-              <span className="text-foreground/75 max-w-64 truncate">
-                {activeFile.fileName}
+              <span className="text-foreground-label max-w-64 truncate">
+                {activeFile?.fileName ?? activeExternal?.title}
               </span>
             </span>
           ) : undefined

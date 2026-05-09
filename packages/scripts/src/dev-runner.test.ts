@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 import {
+  buildPreparationSteps,
   checkPortAvailabilityOnHosts,
   createApiEnv,
   createDesktopEnv,
@@ -15,6 +16,7 @@ import {
   isWorktreeCheckout,
   parseDockerComposePsJson,
   parseArgs,
+  parseForeignPortOwners,
   portsForOffset,
   requiredPortsForMode,
   resolveMainRootFromCommonDir,
@@ -308,6 +310,106 @@ describe("shared Docker service readiness", () => {
   });
 });
 
+describe("parseForeignPortOwners", () => {
+  const sharedPorts = [5432, 6379, 9000, 9001, 3003] as const;
+
+  test("returns nothing when output is empty", () => {
+    expect(
+      parseForeignPortOwners({
+        expectedProject: "stella-dev",
+        output: "",
+        sharedPorts,
+      }),
+    ).toEqual([]);
+  });
+
+  test("ignores containers from the expected compose project", () => {
+    const output = [
+      "stella-dev-postgres-1\tstella-dev\t0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp",
+      "stella-dev-valkey-1\tstella-dev\t0.0.0.0:6379->6379/tcp",
+    ].join("\n");
+
+    expect(
+      parseForeignPortOwners({
+        expectedProject: "stella-dev",
+        output,
+        sharedPorts,
+      }),
+    ).toEqual([]);
+  });
+
+  test("flags foreign compose project containers holding shared ports", () => {
+    const output = [
+      "stella-1-table-export-postgres-1\tstella-1-table-export\t0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp",
+      "stella-1-table-export-valkey-1\tstella-1-table-export\t0.0.0.0:6379->6379/tcp",
+      "stella-1-table-export-gotenberg-1\tstella-1-table-export\t0.0.0.0:3003->3000/tcp",
+      "snoopy-brewing-music-db-1\tsnoopy-brewing-music\t127.0.0.1:5434->5432/tcp",
+    ].join("\n");
+
+    expect(
+      parseForeignPortOwners({
+        expectedProject: "stella-dev",
+        output,
+        sharedPorts,
+      }),
+    ).toEqual([
+      {
+        composeProject: "stella-1-table-export",
+        containerName: "stella-1-table-export-postgres-1",
+        hostPort: 5432,
+      },
+      {
+        composeProject: "stella-1-table-export",
+        containerName: "stella-1-table-export-valkey-1",
+        hostPort: 6379,
+      },
+      {
+        composeProject: "stella-1-table-export",
+        containerName: "stella-1-table-export-gotenberg-1",
+        hostPort: 3003,
+      },
+    ]);
+  });
+
+  test("flags containers without a compose project label", () => {
+    const output =
+      "rogue-postgres\t\t0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp";
+
+    expect(
+      parseForeignPortOwners({
+        expectedProject: "stella-dev",
+        output,
+        sharedPorts,
+      }),
+    ).toEqual([
+      {
+        composeProject: "",
+        containerName: "rogue-postgres",
+        hostPort: 5432,
+      },
+    ]);
+  });
+
+  test("only counts each host port once per container even with dual-stack mappings", () => {
+    const output =
+      "other-pg\tother-project\t0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp";
+
+    expect(
+      parseForeignPortOwners({
+        expectedProject: "stella-dev",
+        output,
+        sharedPorts,
+      }),
+    ).toEqual([
+      {
+        composeProject: "other-project",
+        containerName: "other-pg",
+        hostPort: 5432,
+      },
+    ]);
+  });
+});
+
 describe("requiredPortsForMode", () => {
   test("uses only the relevant ports for each mode", () => {
     const ports = portsForOffset(5);
@@ -523,6 +625,29 @@ describe("worktree helpers", () => {
 });
 
 describe("dev env factories", () => {
+  test("prepares API databases by applying migrations", () => {
+    const rootDir = createTempDir();
+    mkdirSync(resolve(rootDir, "apps/api"), { recursive: true });
+
+    const steps = buildPreparationSteps({
+      infraOffset: 10,
+      infraPorts: infraPortsForOffset(10),
+      mode: "dev",
+      ports: portsForOffset(10),
+      rootDir,
+      skipDbPush: false,
+      skipInstall: true,
+    });
+
+    expect(steps).toHaveLength(1);
+    expect(steps.at(0)?.cmd.slice(1)).toEqual(["run", "db:migrate"]);
+    expect(steps.at(0)?.cwd).toBe(resolve(rootDir, "apps/api"));
+    expect(steps.at(0)?.env).toMatchObject({
+      DATABASE_URL: "postgres://postgres:postgres@localhost:5442/stella",
+    });
+    expect(steps.at(0)?.label).toBe("Applying database migrations");
+  });
+
   test("threads computed ports into the API env without infra overrides at offset 0", () => {
     const result = createApiEnv({
       baseEnv: { KEEP_ME: "1" },

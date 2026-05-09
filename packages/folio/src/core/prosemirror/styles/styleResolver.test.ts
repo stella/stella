@@ -237,6 +237,88 @@ describe("StyleResolver", () => {
       expect(result?.fontSize).toBe(22); // From docDefaults
       expect(result?.bold).toBe(true); // From Strong style
     });
+
+    test("applies the default character style when no style ID is given", () => {
+      const styleDefinitions: StyleDefinitions = {
+        docDefaults: {
+          rPr: { fontSize: 22 },
+        },
+        styles: [
+          {
+            styleId: "FontePadrao",
+            type: "character",
+            default: true,
+            rPr: { fontFamily: { ascii: "Cambria", hAnsi: "Cambria" } },
+          },
+        ],
+      };
+
+      const resolver = createStyleResolver(styleDefinitions);
+      const result = resolver.resolveRunStyle(null);
+
+      expect(result?.fontSize).toBe(22);
+      expect(result?.fontFamily?.ascii).toBe("Cambria");
+    });
+
+    test("explicit character style overrides the default character style", () => {
+      const styleDefinitions: StyleDefinitions = {
+        docDefaults: { rPr: { fontSize: 22 } },
+        styles: [
+          {
+            styleId: "FontePadrao",
+            type: "character",
+            default: true,
+            rPr: { fontFamily: { ascii: "Cambria", hAnsi: "Cambria" } },
+          },
+          {
+            styleId: "Code",
+            type: "character",
+            rPr: { fontFamily: { ascii: "Consolas", hAnsi: "Consolas" } },
+          },
+        ],
+      };
+
+      const resolver = createStyleResolver(styleDefinitions);
+      const result = resolver.resolveRunStyle("Code");
+
+      expect(result?.fontSize).toBe(22);
+      expect(result?.fontFamily?.ascii).toBe("Consolas");
+    });
+
+    test("exposes the default character style", () => {
+      const styleDefinitions: StyleDefinitions = {
+        styles: [
+          {
+            styleId: "FontePadrao",
+            type: "character",
+            default: true,
+            rPr: {},
+          },
+          { styleId: "Code", type: "character", rPr: {} },
+        ],
+      };
+
+      const resolver = createStyleResolver(styleDefinitions);
+
+      expect(resolver.getDefaultCharacterStyle()?.styleId).toBe("FontePadrao");
+    });
+
+    test("exposes the default table style", () => {
+      const styleDefinitions: StyleDefinitions = {
+        styles: [
+          {
+            styleId: "TableNormal",
+            type: "table",
+            default: true,
+            tblPr: {},
+          },
+        ],
+      };
+
+      const resolver = createStyleResolver(styleDefinitions);
+
+      expect(resolver.getDefaultTableStyle()?.styleId).toBe("TableNormal");
+    });
   });
 
   describe("getParagraphStyles", () => {

@@ -39,6 +39,7 @@ export const LIMITS = {
   contactRelationshipsCount: 50,
   workspaceContactsCount: 100,
   workspaceMembersCount: 500,
+  practiceJurisdictionsPerOrganization: 12,
   entityNameMaxLength: 255,
   workspaceContributors: 5,
   searchQueryMaxLength: 500,

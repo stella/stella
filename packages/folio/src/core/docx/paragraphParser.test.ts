@@ -118,3 +118,89 @@ describe("parseParagraph tracked-change hardening", () => {
     });
   });
 });
+
+describe("parseParagraph rendered page break markers", () => {
+  test("marks a paragraph when Word rendered-page-break appears before visible text", () => {
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:proofErr w:type="spellStart"/>
+        <w:r>
+          <w:lastRenderedPageBreak/>
+          <w:t>Moved to next page</w:t>
+        </w:r>
+      </w:p>
+    `);
+
+    expect(paragraph.renderedPageBreakBefore).toBe(true);
+  });
+
+  test("marks a paragraph when a page break appears before visible text", () => {
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:r>
+          <w:br w:type="page"/>
+          <w:t>After hard break</w:t>
+        </w:r>
+      </w:p>
+    `);
+
+    expect(paragraph.renderedPageBreakBefore).toBe(true);
+  });
+
+  test("does not mark a paragraph when rendered page break follows visible text", () => {
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:r>
+          <w:t>Previous page text</w:t>
+          <w:lastRenderedPageBreak/>
+        </w:r>
+      </w:p>
+    `);
+
+    expect(paragraph.renderedPageBreakBefore).toBeUndefined();
+  });
+
+  test("lastRenderedPageBreak inside a hyperlink wrapper is honored", () => {
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:hyperlink>
+          <w:r><w:lastRenderedPageBreak/><w:t>Hyper</w:t></w:r>
+        </w:hyperlink>
+      </w:p>
+    `);
+
+    expect(paragraph.renderedPageBreakBefore).toBe(true);
+  });
+});
+
+describe("parseParagraph spacing explicit flags", () => {
+  test("inline w:before is flagged", () => {
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:pPr><w:spacing w:before="200"/></w:pPr>
+      </w:p>
+    `);
+
+    expect(paragraph.formatting?.spacingExplicit).toEqual({ before: true });
+  });
+
+  test("inline w:after only is flagged", () => {
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:pPr><w:spacing w:after="100"/></w:pPr>
+      </w:p>
+    `);
+
+    expect(paragraph.formatting?.spacingExplicit).toEqual({ after: true });
+  });
+
+  test("paragraph without inline w:spacing has no explicit flags", () => {
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:pPr><w:pStyle w:val="Normal"/></w:pPr>
+      </w:p>
+    `);
+
+    expect(paragraph.formatting?.spacingExplicit).toBeUndefined();
+  });
+});

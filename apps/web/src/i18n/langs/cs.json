@@ -312,10 +312,14 @@
     },
     "approval": {
       "allow": "Povolit",
-      "alwaysAllow": "Vždy povolit v tomto vlákně",
+      "allowInConversation": "Povolit v této konverzaci",
+      "allowOnce": "Povolit jednou",
+      "alwaysAllow": "Vždy povolit",
       "approved": "Povoleno",
       "denied": "Zamítnuto",
-      "deny": "Zamítnout"
+      "deny": "Zamítnout",
+      "externalMcpDescription": "Odešlou se jen informace potřebné pro tento dotaz.",
+      "externalMcpQuestion": "Může Stella odeslat tento dotaz do {provider}?"
     },
     "askUser": {
       "custom": "Napsat vlastní",
@@ -339,6 +343,8 @@
     "editableFilePlaceholder": "Chatovat nebo upravit {fileName}",
     "editableFilePlaceholderAction": "Chatovat nebo upravit",
     "editorLoading": "Načítám editor…",
+    "externalSourcePlaceholder": "Chatovat o {title}",
+    "externalSourcePlaceholderAction": "Chatovat o",
     "extractingContent": "Extrahování obsahu...",
     "filePlaceholder": "Chatovat o {fileName}",
     "filePlaceholderAction": "Chatovat o",
@@ -384,10 +390,15 @@
     "resend": "Odeslat znovu",
     "send": "Odeslat zprávu",
     "sendError": "Při odesílání zprávy došlo k problému. Pokud chyba přetrvává, kontaktujte podporu.",
+    "sendErrorInsufficientCredits": "AI poskytovatel potřebuje doplnit kredity. Požádejte správce pracovního prostoru o navýšení zůstatku.",
+    "sendErrorProviderUnavailable": "AI poskytovatel je dočasně nedostupný. Zkuste to prosím za chvíli znovu.",
+    "sendErrorQuotaExhausted": "Kvóta AI poskytovatele je vyčerpaná. Zkuste to za chvíli znovu nebo požádejte správce pracovního prostoru o navýšení plánu.",
     "thinking": "Pracuji s kontextem",
     "threads": "Historie",
     "tool": {
       "apply-active-docx-edits": "Používám úpravy DOCX",
+      "ares_lookup_company": "ARES vyhledání firmy",
+      "ares_search_companies": "ARES hledání firem",
       "ask-user": "Žádost o upřesnění",
       "create-document": "Vytváření dokumentu",
       "describe-stella-api": "Kontrola Stella API",
@@ -412,6 +423,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znaků}}",
+      "exactCall": "Přesné volání",
       "field": "Pole",
       "input": "Vstup",
       "output": "Výstup",
@@ -520,6 +532,7 @@
     "connectionLostDescription": "Ztratili jsme spojení se serverem. Automaticky opakujeme.",
     "convertTo": "Převést na",
     "copied": "Zkopírováno do schránky",
+    "copy": "Kopírovat",
     "copyLink": "Kopírovat odkaz",
     "createdAt": "Vytvořeno {date}",
     "currency": "Měna",
@@ -1023,6 +1036,13 @@
     "unsupportedDocxEditTitle": "Úpravy zablokovány"
   },
   "inspector": {
+    "external": {
+      "confirmDescription": "Chystáte se navštívit externí web.",
+      "confirmTitle": "Otevřít externí odkaz?",
+      "openLink": "Otevřít odkaz",
+      "openOriginal": "Otevřít originál",
+      "unavailable": "Odkazovaný web nepovoluje bezpečný náhled. Pokud nástroj vrátil text dokumentu, zobrazí se tady; jinak otevřete originál."
+    },
     "facet": {
       "preview": "Náhled",
       "previewInFullViewToast": "Náhled je zde hlavní zobrazení. Klikni na tlačítko minimalizace pro zobrazení vedle metadat."
@@ -1050,7 +1070,60 @@
     "showPane": "Zobrazit panel"
   },
   "knowledge": {
+    "mcp": {
+      "addAndConnect": "Přidat a připojit",
+      "addServer": "Přidat server",
+      "addServerCardDescription": "Vložte URL serveru a Stella ho připojí v jednom kroku.",
+      "addServerCardTitle": "Přidat nový MCP server",
+      "auth": {
+        "bearer": "Bearer token",
+        "none": "Bez přihlášení",
+        "oauth2": "OAuth 2.0"
+      },
+      "availableInChat": "Dostupné v chatu",
+      "bearerTokenDescription": "Tento server používá bearer token. Pro dokončení připojení vložte token od poskytovatele.",
+      "builtInBadge": "Vestavěné",
+      "connect": "Připojit",
+      "connected": "Připojeno",
+      "connectedToast": "MCP konektor je připojený",
+      "connectedWithLastUsed": "Připojeno · naposledy použito {time}",
+      "customDescription": "Vložte URL MCP serveru. Stella zjistí způsob připojení a bude automaticky pokračovat.",
+      "customTitle": "Přidat vlastní server",
+      "description": "Správa externích MCP serverů, které mohou přidat nástroje do chatu. Tokeny se ukládají pro každého uživatele zvlášť.",
+      "detected": "Rozpoznáno: {authType}",
+      "disable": "Vypnout",
+      "disabled": "Připojeno · vypnuto",
+      "disconnect": "Odpojit",
+      "docsLink": "Dokumentace",
+      "emptyDescription": "Ověřené právní MCP konektory se zde zobrazí po zapnutí pro váš workspace.",
+      "emptyTitle": "Zatím žádné MCP konektory",
+      "enable": "Zapnout",
+      "errorDescription": "Konektor se nepodařilo upravit.",
+      "errorTitle": "Připojení MCP selhalo",
+      "namePlaceholder": "Zobrazovaný název",
+      "needsReauth": "Vyžaduje opětovné připojení",
+      "notConnected": "Nepřipojeno",
+      "off": "Vypnuto",
+      "on": "Zapnuto",
+      "otherTitle": "Ostatní konektory",
+      "probe": "Ověřit",
+      "recommendedBadge": "Doporučeno",
+      "recommendedFor": "Doporučeno pro {jurisdictions}",
+      "recommendedTitle": "Doporučeno pro vaše jurisdikce",
+      "reconnect": "Připojit znovu",
+      "saveToken": "Uložit token",
+      "tokenHelp": "Jak získat token",
+      "tokenLabel": "Bearer token",
+      "tokenPlaceholder": "Vložte token",
+      "urlLabel": "URL MCP serveru",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Používat v chatu"
+    },
     "sections": {
+      "agents": {
+        "description": "Konfigurovatelní asistenti pro opakovanou práci",
+        "title": "Agenti"
+      },
       "caseLaw": {
         "description": "Rozhodnutí soudů a databáze judikatury",
         "title": "Judikatura"
@@ -1060,11 +1133,19 @@
         "title": "Vzorová ustanovení"
       },
       "connectors": {
-        "description": "Připojení k externím systémům",
-        "title": "Konektory"
+        "description": "Připojení Stelly k ověřeným externím nástrojům",
+        "title": "MCP"
+      },
+      "mcp": {
+        "description": "Připojení Stelly k ověřeným externím nástrojům",
+        "title": "MCP"
+      },
+      "prompts": {
+        "description": "Opakovaně použitelné instrukce dostupné přes / v chatu",
+        "title": "Prompty"
       },
       "skills": {
-        "description": "Vlastní AI dovednosti",
+        "description": "Specializované AI schopnosti pro konkrétní pracovní postupy",
         "title": "Dovednosti"
       },
       "templates": {
@@ -1073,24 +1154,24 @@
       }
     },
     "skills": {
-      "addShortcut": "Přidat dovednost",
+      "addShortcut": "Přidat prompt",
       "defaultBadge": "Výchozí",
-      "deleteConfirmDescription": "Tato dovednost bude trvale odstraněna.",
-      "deleteConfirmTitle": "Smazat dovednost?",
-      "deleteShortcut": "Smazat dovednost",
-      "editShortcut": "Upravit dovednost",
+      "deleteConfirmDescription": "Tento prompt bude trvale odstraněn.",
+      "deleteConfirmTitle": "Smazat prompt?",
+      "deleteShortcut": "Smazat prompt",
+      "editShortcut": "Upravit prompt",
       "emptyDescription": "Vytvářejte opakovaně použitelné prompty pro práci, kterou váš tým opakuje, od shrnutí po první návrhy pokynů.",
-      "emptyState": "Žádné dovednosti. Přidejte první.",
-      "emptyTitle": "Vytvořte první dovednost",
-      "emptyVideoLabel": "Přehled dovedností",
+      "emptyState": "Žádné prompty. Přidejte první.",
+      "emptyTitle": "Vytvořte první prompt",
+      "emptyVideoLabel": "Přehled promptů",
       "errors": {
-        "commandConflict": "Dovednost s tímto / názvem již existuje",
+        "commandConflict": "Prompt s tímto / názvem již existuje",
         "commandInvalid": "Používejte pouze malá písmena, číslice, pomlčky a podtržítka",
-        "commandReserved": "\"/{command}\" je rezervovaná dovednost"
+        "commandReserved": "\"/{command}\" je rezervovaný prompt"
       },
       "form": {
-        "command": "Dovednost",
-        "commandHint": "Název / dovednosti: pouze malá písmena, číslice, pomlčky a podtržítka",
+        "command": "Zkratka promptu",
+        "commandHint": "Název / promptu: pouze malá písmena, číslice, pomlčky a podtržítka",
         "commandPlaceholder": "např. shrnout",
         "commandPrefix": "/",
         "description": "Popis",
@@ -1098,14 +1179,14 @@
         "name": "Název",
         "namePlaceholder": "např. Shrnout dokument",
         "prompt": "Prompt",
-        "promptPlaceholder": "Text vložený do kompozéru chatu při použití této dovednosti",
+        "promptPlaceholder": "Text vložený do kompozéru chatu při použití tohoto promptu",
         "scope": "Viditelnost",
         "scopePrivate": "Pouze já",
         "scopeTeam": "Všichni v organizaci"
       },
-      "privateSection": "Moje zkratky",
-      "shadowed": "Překryto týmovou zkratkou",
-      "teamSection": "Týmové zkratky"
+      "privateSection": "Moje prompty",
+      "shadowed": "Překryto týmovým promptem",
+      "teamSection": "Týmové prompty"
     }
   },
   "navigation": {
@@ -1157,6 +1238,16 @@
     "inviteInvalidEmail": "Neplatný e-mail: {value}",
     "inviteSubtitle": "Kolegové dostanou e-mail s odkazem pro připojení.",
     "inviteTitle": "Pozvěte své kolegy",
+    "jurisdictionGlobeLabel": "Vybrané jurisdikce praxe na glóbu",
+    "jurisdictionMakePrimary": "Nastavit {name} jako hlavní",
+    "jurisdictionPrimary": "Hlavní",
+    "jurisdictionRemove": "Odebrat {name}",
+    "jurisdictionSaveFailed": "Jurisdikce se nepodařilo uložit. Můžete je doplnit v nastavení.",
+    "jurisdictionSearchLabel": "Hledat země",
+    "jurisdictionSearchPlaceholder": "Hledat země",
+    "jurisdictionSubtitle": "Vyberte země, se kterými běžně pracujete. Stella podle toho přizpůsobí vaše prostředí.",
+    "jurisdictionSuggested": "Doporučeno",
+    "jurisdictionTitle": "Vyberte jurisdikce své praxe",
     "orgNameLabel": "Název týmu",
     "orgSubtitle": "Tak vás najdou vaši kolegové.",
     "orgTitle": "Pojmenujte svůj tým",
@@ -1164,6 +1255,7 @@
     "someInvitesFailed": "{count, plural, one {# pozvánka se nezdařila} few {# pozvánky se nezdařily} other {# pozvánek se nezdařilo}}",
     "stepAi": "AI",
     "stepDesktop": "Aplikace",
+    "stepJurisdiction": "Jurisdikce",
     "stepOrganization": "Tým",
     "stepTeam": "Pozvánky",
     "termsNotice": "Pokračováním souhlasíte s <terms>Podmínkami služby</terms>.",
@@ -1388,6 +1480,7 @@
       "matterNumberingDescription": "Nastavte, jak se generují referenční čísla nových spisů",
       "membersDescription": "Spravujte, kdo má přístup k této organizaci, a čekající pozvánky",
       "pendingInvitations": "Čekající pozvánky",
+      "practiceJurisdictions": "Jurisdikce praxe",
       "profile": "Profil",
       "profileDescription": "Upravte název organizace",
       "renameAction": "Rename",

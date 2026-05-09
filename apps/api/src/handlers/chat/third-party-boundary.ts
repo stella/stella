@@ -7,6 +7,7 @@ import {
   CHAT_MAX_FILE_BYTES,
   TEXT_PLAIN_MIME_TYPE,
 } from "@/api/handlers/chat/attachment-validation";
+import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -522,7 +523,10 @@ export const prepareToolsForThirdParty = <TTools extends ToolSet>({
   boundary: ChatThirdPartyBoundary;
   tools: TTools;
 }): TTools => {
-  if (boundary.type === "raw") {
+  const hasExternalTool = Object.values(tools).some(
+    (toolDefinition) => getChatToolPolicy(toolDefinition).requiresAnonymization,
+  );
+  if (boundary.type === "raw" && !hasExternalTool) {
     return tools;
   }
 
@@ -536,9 +540,23 @@ export const prepareToolsForThirdParty = <TTools extends ToolSet>({
     }
 
     const execute = current.execute;
+    const policy = getChatToolPolicy(current);
     wrapped[key] = {
       ...current,
       execute: async (...args: Parameters<typeof execute>) => {
+        if (policy.requiresAnonymization && boundary.type === "raw") {
+          throw new HandlerError({
+            status: 422,
+            message:
+              "External chat tools require anonymized mode before Stella can call them.",
+          });
+        }
+
+        if (boundary.type === "raw") {
+          const rawOutput: unknown = await execute(...args);
+          return rawOutput;
+        }
+
         const replacements: TextReplacement[] = [];
         let outputValue: unknown = await execute(...args);
         const anonymizedOutput = anonymizeUnknownStrings({

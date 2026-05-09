@@ -51,6 +51,7 @@ describe("PostHog server analytics adapter", () => {
       event: SERVER_ANALYTICS_EVENTS.exception,
       properties: {
         $exception_type: "HandlerError",
+        app_commit: "dev",
         app_version: "dev",
         organization_id: "org_123",
       },

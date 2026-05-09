@@ -199,7 +199,7 @@ export const TimesheetWeekView = ({
                       className={cn(
                         "px-2 py-2 text-center tabular-nums",
                         day === today && "bg-primary/5",
-                        mins === 0 && "text-muted-foreground/40",
+                        mins === 0 && "text-foreground-disabled",
                       )}
                       key={day}
                     >

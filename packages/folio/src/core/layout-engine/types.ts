@@ -30,6 +30,21 @@ export type RunFormatting = {
   letterSpacing?: number;
   superscript?: boolean;
   subscript?: boolean;
+  /** Render glyphs as uppercase regardless of source case. */
+  allCaps?: boolean;
+  /** Render lowercase glyphs as small uppercase. */
+  smallCaps?: boolean;
+  /** Vertical baseline shift in CSS pixels. */
+  positionPx?: number;
+  /** Horizontal text scale as a percentage. */
+  horizontalScale?: number;
+  /** Minimum font size in points at which kerning is enabled. */
+  kerningMinPt?: number;
+  imprint?: boolean;
+  emboss?: boolean;
+  textShadow?: boolean;
+  textOutline?: boolean;
+  emphasisMark?: "dot" | "comma" | "circle" | "underDot";
   /** Hyperlink info if this run is a link */
   hyperlink?: { href: string; tooltip?: string };
   /** Footnote reference ID (if this run contains a footnote reference) */
@@ -243,6 +258,8 @@ export type ParagraphAttrs = {
   borders?: ParagraphBorders;
   shading?: string; // CSS background color
   tabs?: TabStop[]; // Custom tab stops
+  /** Render structural empty paragraphs as zero-height anchors. */
+  suppressEmptyParagraphHeight?: boolean;
   // List properties
   numPr?: ListNumPr;
   listMarker?: string; // Pre-computed marker text (e.g., "1.", "•", "a)")
@@ -788,10 +805,14 @@ export type FootnoteContent = {
  * Options for the layout engine.
  */
 export type LayoutOptions = {
-  /** Default page size. */
+  /** Initial page size. */
   pageSize: { w: number; h: number };
-  /** Default page margins. */
+  /** Initial page margins. */
   margins: PageMargins;
+  /** Body-level final section page size. */
+  finalPageSize?: { w: number; h: number };
+  /** Body-level final section margins. */
+  finalMargins?: PageMargins;
   /** Column configuration. */
   columns?: ColumnLayout;
   /** Gap between rendered pages (for UI). */

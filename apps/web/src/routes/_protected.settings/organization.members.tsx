@@ -56,6 +56,7 @@ import {
   organizationOptions,
 } from "@/routes/_protected.organization/-queries";
 import { formatDate } from "@/routes/_protected.organization/-utils";
+import { OrganizationJurisdictionsCard } from "@/routes/_protected.settings/-components/organization/jurisdictions-card";
 import { OrganizationListToolbar } from "@/routes/_protected.settings/-components/organization/list-toolbar";
 import { OrganizationProfileCard } from "@/routes/_protected.settings/-components/organization/profile-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
@@ -148,6 +149,13 @@ function Members() {
           {t("settings.organization.profile")}
         </h2>
         <OrganizationProfileCard />
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
+          {t("settings.organization.practiceJurisdictions")}
+        </h2>
+        <OrganizationJurisdictionsCard />
       </section>
 
       <section className="flex flex-col gap-2">
@@ -497,7 +505,7 @@ type SortableHeadProps = {
 const SortableHead = ({ label, active, onClick }: SortableHeadProps) => (
   <TableHead>
     <button
-      className="text-foreground hover:text-foreground/80 group inline-flex items-center gap-1 text-start"
+      className="text-foreground hover:text-foreground-strong-muted group inline-flex items-center gap-1 text-start"
       onClick={onClick}
       type="button"
     >

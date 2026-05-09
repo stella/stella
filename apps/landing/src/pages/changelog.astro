@@ -1,9 +1,11 @@
 ---
 import Base from "../layouts/Base.astro";
 import ThemeToggle from "../components/ThemeToggle.astro";
+import { getChangelogReleases } from "../lib/changelog";
 
 const githubUrl = "https://github.com/stella/stella";
 const releasesUrl = `${githubUrl}/releases`;
+const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug);
 ---
 
 <Base
@@ -116,6 +118,7 @@ const releasesUrl = `${githubUrl}/releases`;
           stella labs, s.r.o.
         </a>
         <nav class="flex flex-wrap items-center justify-center gap-4" aria-label="Footer">
+          <a href="/blog" class="transition-opacity hover:opacity-70">Blog</a>
           <a href="/changelog" class="transition-opacity hover:opacity-70">Changelog</a>
           <a href="/security" class="transition-opacity hover:opacity-70">Security</a>
           <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
@@ -132,6 +135,13 @@ const releasesUrl = `${githubUrl}/releases`;
       </div>
     </footer>
   </div>
+
+  <script
+    is:inline
+    id="changelog-preview-release-slugs"
+    type="application/json"
+    set:html={JSON.stringify(previewReleaseSlugs)}
+  />
 
   <style>
     :global(.changelog-entry) {
@@ -232,6 +242,22 @@ const releasesUrl = `${githubUrl}/releases`;
       `${releasesApiBase}?per_page=${GITHUB_RELEASES_PER_PAGE}`;
     const releasesContainer = document.getElementById("changelog-releases");
     const paginationContainer = document.getElementById("changelog-pagination");
+    const previewReleaseSlugsElement = document.getElementById(
+      "changelog-preview-release-slugs",
+    );
+    const readPreviewReleaseSlugs = () => {
+      if (!previewReleaseSlugsElement?.textContent) {
+        return [];
+      }
+
+      const parsed = JSON.parse(previewReleaseSlugsElement.textContent);
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+
+      return parsed.filter((value): value is string => typeof value === "string");
+    };
+    const previewReleaseSlugs = new Set<string>(readPreviewReleaseSlugs());
 
     let currentPage = (() => {
       const page = Number(new URLSearchParams(window.location.search).get("page"));
@@ -445,11 +471,23 @@ const releasesUrl = `${githubUrl}/releases`;
 
       const title = document.createElement("h2");
       const titleLink = document.createElement("a");
-      titleLink.href = `#${article.id}`;
+      const hasPreviewPage = previewReleaseSlugs.has(article.id);
+      titleLink.href = hasPreviewPage ? `/changelog/${article.id}` : `#${article.id}`;
       titleLink.className =
         "font-display text-3xl font-medium transition-opacity hover:opacity-70 sm:text-4xl";
       titleLink.style.color = "var(--foreground)";
       titleLink.textContent = release.name || release.tag_name;
+      if (hasPreviewPage) {
+        titleLink.addEventListener("click", (event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+            return;
+          }
+
+          event.preventDefault();
+          window.history.pushState(null, "", `#${article.id}`);
+          article.scrollIntoView({ block: "start", behavior: "smooth" });
+        });
+      }
       title.append(titleLink);
       meta.append(title);
 
@@ -535,6 +573,7 @@ const releasesUrl = `${githubUrl}/releases`;
 
     const updatePageUrl = () => {
       const url = new URL(window.location.href);
+      url.pathname = "/changelog";
       if (currentPage === 1) {
         url.searchParams.delete("page");
       } else {
@@ -660,6 +699,7 @@ const releasesUrl = `${githubUrl}/releases`;
         releasesContainer.replaceChildren(
           ...releasePage.releases.map(renderRelease),
         );
+        scrollToCurrentHash();
       } catch {
         hasNextPage = false;
         renderPagination();
@@ -667,6 +707,13 @@ const releasesUrl = `${githubUrl}/releases`;
           renderMessage("Release notes could not be loaded right now. Read them directly on"),
         );
       }
+    };
+
+    const scrollToCurrentHash = () => {
+      const id = decodeURIComponent(window.location.hash.slice(1));
+      if (!id) return;
+
+      document.getElementById(id)?.scrollIntoView({ block: "start" });
     };
 
     loadReleases();

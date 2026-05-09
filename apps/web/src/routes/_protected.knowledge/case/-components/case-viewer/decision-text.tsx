@@ -386,7 +386,7 @@ const EditorialSupplement = ({
           <h4 className="text-muted-foreground mb-2 text-[0.75rem] font-semibold tracking-wide uppercase">
             {t("caseLaw.viewer.abstract")}
           </h4>
-          <p className="text-muted-foreground/80 reader-justify">
+          <p className="text-foreground-strong-muted reader-justify">
             <HighlightedText
               activeMatchIndex={activeMatchIndex}
               pieceId={SUPPLEMENT_ABSTRACT_ID}

@@ -1,0 +1,211 @@
+---
+import { getCollection, render } from "astro:content";
+import type { CollectionEntry } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import ThemeToggle from "../../components/ThemeToggle.astro";
+
+export async function getStaticPaths() {
+  const posts = await getCollection("blog", ({ data }) =>
+    import.meta.env.PROD ? !data.draft : true,
+  );
+  return posts.map((post) => ({
+    params: { slug: post.id },
+    props: { post },
+  }));
+}
+
+type Props = { post: CollectionEntry<"blog"> };
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+const dateFormatter = new Intl.DateTimeFormat("en", { dateStyle: "long" });
+const publishedAtIso = post.data.publishedAt.toISOString();
+---
+
+<Base title={`stella | ${post.data.title}`} description={post.data.description}>
+  <div class="flex min-h-dvh flex-col">
+    <nav class="mx-auto flex w-full max-w-300 items-center justify-between px-6 py-5">
+      <a href="/" aria-label="stella home">
+        <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
+      </a>
+      <ThemeToggle />
+    </nav>
+
+    <main class="flex-1 px-6">
+      <article class="mx-auto max-w-3xl py-12 lg:py-16">
+        <a
+          href="/blog"
+          class="inline-flex items-center gap-2 text-sm transition-opacity hover:opacity-70"
+          style="color: var(--muted-foreground)"
+        >
+          <span aria-hidden="true">&larr;</span> Back to blog
+        </a>
+
+        <header class="mt-8">
+          <div
+            class="flex flex-wrap items-center gap-3 text-sm font-medium"
+            style="color: var(--muted-foreground)"
+          >
+            <time datetime={publishedAtIso}>
+              {dateFormatter.format(post.data.publishedAt)}
+            </time>
+            <span aria-hidden="true">·</span>
+            <span>{post.data.author}</span>
+          </div>
+          <h1
+            class="mt-4 font-display text-4xl font-medium tracking-tight sm:text-5xl"
+          >
+            {post.data.title}
+          </h1>
+          <p
+            class="mt-4 text-lg leading-[1.7]"
+            style="color: var(--muted-foreground)"
+          >
+            {post.data.description}
+          </p>
+        </header>
+
+        <div class="post-body mt-10">
+          <Content />
+        </div>
+      </article>
+    </main>
+
+    <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
+      <div
+        class="mx-auto flex max-w-300 flex-col items-center justify-between gap-4 text-sm sm:flex-row"
+        style="color: var(--muted-foreground)"
+      >
+        <a href="/imprint" class="transition-opacity hover:opacity-70">
+          stella labs, s.r.o.
+        </a>
+        <nav class="flex flex-wrap items-center justify-center gap-4" aria-label="Footer">
+          <a href="/blog" class="transition-opacity hover:opacity-70">Blog</a>
+          <a href="/changelog" class="transition-opacity hover:opacity-70">Changelog</a>
+          <a href="/security" class="transition-opacity hover:opacity-70">Security</a>
+          <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
+          <a href="/imprint" class="transition-opacity hover:opacity-70">Imprint</a>
+          <a href="mailto:contact@stll.app" class="transition-opacity hover:opacity-70">
+            Contact
+          </a>
+        </nav>
+      </div>
+      <div
+        class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
+        style="background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--auth-gradient-end) 42%, transparent))"
+      >
+      </div>
+    </footer>
+  </div>
+
+  <style>
+    :global(.post-body) {
+      color: var(--muted-foreground);
+      font-size: 1rem;
+      line-height: 1.8;
+    }
+
+    :global(.post-body > * + *) {
+      margin-top: 1.25rem;
+    }
+
+    :global(.post-body h2),
+    :global(.post-body h3) {
+      color: var(--foreground);
+      font-family: "Cabinet Grotesk", system-ui, sans-serif;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      margin-top: 2.25rem;
+    }
+
+    :global(.post-body h2) {
+      font-size: 1.75rem;
+      line-height: 1.2;
+    }
+
+    :global(.post-body h3) {
+      font-size: 1.25rem;
+      line-height: 1.35;
+    }
+
+    :global(.post-body p),
+    :global(.post-body li) {
+      color: var(--muted-foreground);
+    }
+
+    :global(.post-body strong) {
+      color: var(--foreground);
+      font-weight: 600;
+    }
+
+    :global(.post-body a) {
+      color: var(--foreground);
+      font-weight: 500;
+      text-decoration: underline;
+      text-decoration-color: color-mix(in srgb, var(--foreground) 30%, transparent);
+      text-underline-offset: 3px;
+    }
+
+    :global(.post-body a:hover) {
+      text-decoration-color: var(--foreground);
+    }
+
+    :global(.post-body ul) {
+      list-style: disc;
+      padding-left: 1.25rem;
+    }
+
+    :global(.post-body ol) {
+      list-style: decimal;
+      padding-left: 1.25rem;
+    }
+
+    :global(.post-body li + li) {
+      margin-top: 0.4rem;
+    }
+
+    :global(.post-body blockquote) {
+      border-left: 2px solid var(--border);
+      color: var(--muted-foreground);
+      font-style: italic;
+      padding-left: 1rem;
+    }
+
+    :global(.post-body code) {
+      background: var(--muted);
+      border-radius: 0.25rem;
+      color: var(--foreground);
+      font-size: 0.9em;
+      padding: 0.1rem 0.35rem;
+    }
+
+    :global(.post-body pre) {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      line-height: 1.6;
+      overflow-x: auto;
+      padding: 1rem 1.25rem;
+    }
+
+    :global(.post-body pre code) {
+      background: transparent;
+      padding: 0;
+    }
+
+    :global(.post-body img),
+    :global(.post-body video) {
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      display: block;
+      max-width: 100%;
+    }
+
+    :global(.post-body hr) {
+      border: 0;
+      border-top: 1px solid var(--border);
+      margin: 2.5rem 0;
+    }
+  </style>
+</Base>

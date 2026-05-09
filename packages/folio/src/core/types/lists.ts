@@ -170,6 +170,10 @@ export type ListRendering = {
   markerFontSize?: number;
   /** Number format for each level from 0 through this paragraph's level. */
   levelNumFmts?: NumberFormat[];
+  /** Abstract numbering definition shared by one or more numIds. */
+  abstractNumId?: number;
+  /** Start override for this numId/level, if the numbering instance defines one. */
+  startOverride?: number;
 };
 
 /**

@@ -13,6 +13,7 @@ import {
   entityVersionAiSummaries,
   searchDocuments,
 } from "@/api/db/schema";
+import { aiHandlerError } from "@/api/lib/ai-error";
 import {
   getModelForRole,
   getModelInfoForRole,
@@ -285,7 +286,7 @@ const organizeSuggestionsHandler = async function* ({
       organizationId,
     });
     return Result.err(
-      new HandlerError({
+      aiHandlerError(result.error, {
         status: 502,
         message: "Failed to generate organization suggestions",
       }),
@@ -706,7 +707,7 @@ const generateMissingSummaries = async ({
       organizationId,
     });
     return Result.err(
-      new HandlerError({
+      aiHandlerError(result.error, {
         status: 502,
         message: "Failed to generate document summaries",
       }),

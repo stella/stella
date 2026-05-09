@@ -39,8 +39,11 @@ import type {
   MoveFrom,
   MoveTo,
   MathEquation,
+  Theme,
 } from "../../types/document";
+import { mergeTextFormatting } from "../../utils/textFormattingMerge";
 import { emuToPixels } from "../../utils/units";
+import { buildRunFormattingOverrideAttrs } from "../extensions/marks/RunFormattingOverrideExtension";
 import { schema } from "../schema";
 import type {
   ParagraphAttrs,
@@ -57,7 +60,13 @@ import type { StyleResolver } from "../styles";
 export type ToProseDocOptions = {
   /** Style definitions for resolving paragraph styles */
   styles?: StyleDefinitions;
+  /** Theme used when converting themed table/cell values in nested content. */
+  theme?: Theme | null;
 };
+
+type RunFormattingResolver = (
+  formatting: TextFormatting | undefined,
+) => TextFormatting | undefined;
 
 /**
  * Convert a Document to a ProseMirror document
@@ -142,15 +151,23 @@ function convertParagraph(
     styleRunFormatting = resolved.runFormatting;
   }
 
-  // NOTE: paragraph.formatting?.runProperties is the paragraph mark formatting (pPr/rPr).
-  // Per ECMA-376, this only applies to the paragraph mark glyph (¶), NOT to text runs.
-  // Style-level rPr (from styleResolver) already provides default run formatting.
-
-  // Merge in extra formatting (e.g., table style conditional rPr)
-  const mergedStyleRunFormatting = mergeTextFormatting(
+  const paragraphRunFormatting = paragraph.formatting?.runProperties
+    ? resolveTextFormatting(paragraph.formatting.runProperties, styleResolver)
+    : undefined;
+  const baseRunFormatting = mergeTextFormatting(
     styleRunFormatting,
     extraRunFormatting,
   );
+  const defaultRunFormatting = mergeTextFormatting(
+    baseRunFormatting,
+    paragraphRunFormatting,
+  );
+  const getInheritedRunFormatting = (
+    formatting: TextFormatting | undefined,
+  ): TextFormatting | undefined =>
+    hasDirectRunFormatting(formatting)
+      ? baseRunFormatting
+      : defaultRunFormatting;
   const emitTrackedChange = (
     change: Insertion | Deletion | MoveFrom | MoveTo,
     markType: "insertion" | "deletion",
@@ -159,7 +176,7 @@ function convertParagraph(
       convertTrackedChange(
         change,
         markType,
-        mergedStyleRunFormatting,
+        getInheritedRunFormatting,
         styleResolver,
       ),
     );
@@ -174,20 +191,24 @@ function convertParagraph(
       anchorPointComment(inlineNodes, content.id);
     } else if (content.type === "run") {
       emitInlineNodes(
-        convertRun(content, mergedStyleRunFormatting, styleResolver),
+        convertRun(
+          content,
+          getInheritedRunFormatting(content.formatting),
+          styleResolver,
+        ),
       );
     } else if (content.type === "hyperlink") {
       emitInlineNodes(
-        convertHyperlink(content, mergedStyleRunFormatting, styleResolver),
+        convertHyperlink(content, getInheritedRunFormatting, styleResolver),
       );
     } else if (
       content.type === "simpleField" ||
       content.type === "complexField"
     ) {
-      emitInlineNode(convertField(content, mergedStyleRunFormatting));
+      emitInlineNode(convertField(content, getInheritedRunFormatting));
     } else if (content.type === "inlineSdt") {
       emitInlineNode(
-        convertInlineSdt(content, mergedStyleRunFormatting, styleResolver),
+        convertInlineSdt(content, getInheritedRunFormatting, styleResolver),
       );
     } else if (content.type === "insertion" || content.type === "moveTo") {
       emitTrackedChange(content, "insertion");
@@ -257,15 +278,23 @@ function anchorPointComment(nodes: PMNode[], commentId: number): void {
 function convertTrackedChange(
   change: Insertion | Deletion | MoveFrom | MoveTo,
   markType: "insertion" | "deletion",
-  styleRunFormatting?: TextFormatting,
+  getInheritedRunFormatting: RunFormattingResolver,
   styleResolver?: StyleResolver | null,
 ): PMNode[] {
   const nodes: PMNode[] = [];
   for (const item of change.content) {
     if (item.type === "run") {
-      nodes.push(...convertRun(item, styleRunFormatting, styleResolver));
+      nodes.push(
+        ...convertRun(
+          item,
+          getInheritedRunFormatting(item.formatting),
+          styleResolver,
+        ),
+      );
     } else if (item.type === "hyperlink") {
-      nodes.push(...convertHyperlink(item, styleRunFormatting, styleResolver));
+      nodes.push(
+        ...convertHyperlink(item, getInheritedRunFormatting, styleResolver),
+      );
     }
   }
 
@@ -337,6 +366,12 @@ function paragraphFormattingToAttrs(
   if (paragraph.listRendering?.levelNumFmts) {
     attrs.listLevelNumFmts = paragraph.listRendering.levelNumFmts;
   }
+  if (paragraph.listRendering?.abstractNumId !== undefined) {
+    attrs.listAbstractNumId = paragraph.listRendering.abstractNumId;
+  }
+  if (paragraph.listRendering?.startOverride !== undefined) {
+    attrs.listStartOverride = paragraph.listRendering.startOverride;
+  }
   // Store original inline formatting for lossless serialization round-trip
   if (formatting) {
     attrs._originalFormatting = formatting;
@@ -356,7 +391,6 @@ function paragraphFormattingToAttrs(
   if (styleResolver) {
     const resolved = styleResolver.resolveParagraphStyle(styleId);
     const stylePpr = resolved.paragraphFormatting;
-    const styleRpr = resolved.runFormatting;
 
     // Apply style-based values as defaults (inline overrides)
     set("alignment", formatting?.alignment ?? stylePpr?.alignment);
@@ -367,6 +401,7 @@ function paragraphFormattingToAttrs(
       "lineSpacingRule",
       formatting?.lineSpacingRule ?? stylePpr?.lineSpacingRule,
     );
+    set("spacingExplicit", formatting?.spacingExplicit);
     set("indentLeft", formatting?.indentLeft ?? stylePpr?.indentLeft);
     set("indentRight", formatting?.indentRight ?? stylePpr?.indentRight);
     set(
@@ -396,14 +431,9 @@ function paragraphFormattingToAttrs(
     // Text direction
     set("bidi", formatting?.bidi ?? stylePpr?.bidi);
 
-    // Default run properties (pPr/rPr)
-    const resolvedRunProps = resolveTextFormatting(
-      formatting?.runProperties,
-      styleResolver,
-    );
     set(
       "defaultTextFormatting",
-      mergeTextFormatting(styleRpr, resolvedRunProps),
+      resolveParagraphDefaultTextFormatting(styleId, formatting, styleResolver),
     );
 
     // If style defines numPr but inline doesn't, use style's numPr
@@ -418,6 +448,7 @@ function paragraphFormattingToAttrs(
     set("spaceAfter", formatting?.spaceAfter);
     set("lineSpacing", formatting?.lineSpacing);
     set("lineSpacingRule", formatting?.lineSpacingRule);
+    set("spacingExplicit", formatting?.spacingExplicit);
     set("indentLeft", formatting?.indentLeft);
     set("indentRight", formatting?.indentRight);
     set("indentFirstLine", formatting?.indentFirstLine);
@@ -457,6 +488,9 @@ function paragraphFormattingToAttrs(
       attrs.sectionBreakType = st;
     }
   }
+  if (paragraph.renderedPageBreakBefore) {
+    attrs.renderedPageBreakBefore = true;
+  }
 
   return attrs;
 }
@@ -487,11 +521,12 @@ function resolveTableStyleConditional(
     return undefined;
   }
 
-  const runPropsFromPpr = resolveTextFormatting(
-    conditional.pPr?.runProperties,
-    styleResolver,
-  );
-  const resolvedRpr = resolveTextFormatting(conditional.rPr, styleResolver);
+  const runPropsFromPpr = conditional.pPr?.runProperties
+    ? resolveTextFormatting(conditional.pPr.runProperties, styleResolver)
+    : undefined;
+  const resolvedRpr = conditional.rPr
+    ? resolveTextFormatting(conditional.rPr, styleResolver)
+    : undefined;
   const mergedRunProps = mergeTextFormatting(runPropsFromPpr, resolvedRpr);
 
   const result: { tcPr?: TableCellFormatting; rPr?: TextFormatting } = {};
@@ -502,6 +537,37 @@ function resolveTableStyleConditional(
     result.rPr = mergedRunProps;
   }
   return result;
+}
+
+function resolveTableBaseStyle(
+  styleResolver: StyleResolver | null,
+  tableStyleId: string | undefined,
+): { tcPr?: TableCellFormatting; rPr?: TextFormatting } | undefined {
+  if (!styleResolver || !tableStyleId) {
+    return undefined;
+  }
+
+  const style = styleResolver.getStyle(tableStyleId);
+  if (!style) {
+    return undefined;
+  }
+
+  const runPropsFromPpr = style.pPr?.runProperties
+    ? resolveTextFormatting(style.pPr.runProperties, styleResolver)
+    : undefined;
+  const resolvedRpr = style.rPr
+    ? resolveTextFormatting(style.rPr, styleResolver)
+    : undefined;
+  const mergedRunProps = mergeTextFormatting(runPropsFromPpr, resolvedRpr);
+
+  const result: { tcPr?: TableCellFormatting; rPr?: TextFormatting } = {};
+  if (style.tcPr) {
+    result.tcPr = style.tcPr;
+  }
+  if (mergedRunProps) {
+    result.rPr = mergedRunProps;
+  }
+  return result.tcPr || result.rPr ? result : undefined;
 }
 
 function mergeConditionalStyles(
@@ -560,19 +626,57 @@ function mergeConditionalStyles(
   return merged;
 }
 
+function hasDirectRunFormatting(
+  formatting: TextFormatting | undefined,
+): boolean {
+  if (!formatting) {
+    return false;
+  }
+
+  return Object.entries(formatting).some(
+    ([key, value]) => key !== "styleId" && value !== undefined,
+  );
+}
+
 function resolveTextFormatting(
   formatting: TextFormatting | undefined,
   styleResolver: StyleResolver | null,
 ): TextFormatting | undefined {
   if (!formatting) {
-    return undefined;
+    return styleResolver?.resolveRunStyle(null);
   }
-  if (!formatting.styleId || !styleResolver) {
+  if (!styleResolver) {
     return formatting;
   }
 
   const styleFormatting = styleResolver.resolveRunStyle(formatting.styleId);
   return mergeTextFormatting(styleFormatting, formatting);
+}
+
+function resolveParagraphDefaultTextFormatting(
+  styleId: string | undefined,
+  formatting: Paragraph["formatting"] | undefined,
+  styleResolver: StyleResolver,
+): TextFormatting | undefined {
+  const style = styleId
+    ? (styleResolver.getStyle(styleId) ??
+      styleResolver.getDefaultParagraphStyle())
+    : styleResolver.getDefaultParagraphStyle();
+  const paragraphStyleRpr = style?.type === "paragraph" ? style.rPr : undefined;
+  const paragraphRunProperties = formatting?.runProperties
+    ? resolveTextFormatting(formatting.runProperties, styleResolver)
+    : undefined;
+
+  return mergeTextFormatting(
+    mergeTextFormatting(
+      mergeTextFormatting(
+        styleResolver.getDocDefaults()?.rPr,
+        styleResolver.getDefaultCharacterStyle()?.rPr,
+      ),
+      paragraphStyleRpr,
+    ),
+    paragraphRunProperties,
+  );
 }
 
 /**
@@ -654,16 +758,24 @@ function convertTable(
   const tableStyleId = table.formatting?.styleId;
   const look = table.formatting?.look;
 
-  // Resolve table borders: prefer table's own borders, fall back to table style's borders
+  // Resolve table borders through inline style, table style, then default table style.
   const tableStyle = tableStyleId
     ? styleResolver?.getStyle(tableStyleId)
     : undefined;
+  const defaultTableStyle = styleResolver?.getDefaultTableStyle();
+  const fallbackTableStyle = tableStyleId ? undefined : defaultTableStyle;
+  const conditionalTableStyleId =
+    tableStyle?.styleId ?? fallbackTableStyle?.styleId;
   const resolvedTableBorders =
-    table.formatting?.borders ?? tableStyle?.tblPr?.borders;
+    table.formatting?.borders ??
+    tableStyle?.tblPr?.borders ??
+    fallbackTableStyle?.tblPr?.borders;
 
-  // Resolve default cell margins: table's own cellMargins > table style's cellMargins
+  // Resolve default cell margins through the same table-style cascade.
   const tableCellMargins =
-    table.formatting?.cellMargins ?? tableStyle?.tblPr?.cellMargins;
+    table.formatting?.cellMargins ??
+    tableStyle?.tblPr?.cellMargins ??
+    fallbackTableStyle?.tblPr?.cellMargins;
   let cellMarginsAttr:
     | { top?: number; bottom?: number; left?: number; right?: number }
     | undefined;
@@ -731,12 +843,23 @@ function convertTable(
     seCell?: CondStyle;
   } = {};
   const setCS = (key: keyof typeof conditionalStyles, type: string): void => {
-    const val = resolveTableStyleConditional(styleResolver, tableStyleId, type);
+    const val = resolveTableStyleConditional(
+      styleResolver,
+      conditionalTableStyleId,
+      type,
+    );
     if (val) {
       conditionalStyles[key] = val;
     }
   };
   setCS("wholeTable", "wholeTable");
+  const wholeTableStyle = mergeConditionalStyles(
+    resolveTableBaseStyle(styleResolver, conditionalTableStyleId),
+    conditionalStyles.wholeTable,
+  );
+  if (wholeTableStyle) {
+    conditionalStyles.wholeTable = wholeTableStyle;
+  }
   setCS("firstRow", "firstRow");
   setCS("lastRow", "lastRow");
   setCS("firstCol", "firstCol");
@@ -1209,12 +1332,12 @@ function convertTableCell(
 /**
  * Convert a SimpleField or ComplexField to a ProseMirror field node.
  * Preserves run formatting (bold, fontSize, color, etc.) as PM marks.
- * Accepts styleFormatting so fields inherit paragraph-level formatting
- * (same as convertRun does for regular text runs).
+ * Accepts a run formatting resolver so fields inherit paragraph-level
+ * formatting the same way regular text runs do.
  */
 function convertField(
   field: SimpleField | ComplexField,
-  styleFormatting?: TextFormatting,
+  getInheritedRunFormatting: RunFormattingResolver,
 ): PMNode | null {
   // Extract display text and formatting from field content/result
   let displayText = "";
@@ -1237,8 +1360,9 @@ function convertField(
   }
 
   // Merge style formatting with field run formatting (inline takes precedence)
+  const inheritedFormatting = getInheritedRunFormatting(fieldFormatting);
   const mergedFormatting = mergeTextFormatting(
-    styleFormatting,
+    inheritedFormatting,
     fieldFormatting,
   );
   const marks = textFormattingToMarks(mergedFormatting);
@@ -1274,7 +1398,7 @@ function convertMathEquation(math: MathEquation): PMNode | null {
  */
 function convertInlineSdt(
   sdt: InlineSdt,
-  styleRunFormatting?: TextFormatting,
+  getInheritedRunFormatting: RunFormattingResolver,
   styleResolver?: StyleResolver | null,
 ): PMNode | null {
   const props = sdt.properties;
@@ -1282,12 +1406,16 @@ function convertInlineSdt(
 
   for (const content of sdt.content) {
     if (content.type === "run") {
-      const runNodes = convertRun(content, styleRunFormatting, styleResolver);
+      const runNodes = convertRun(
+        content,
+        getInheritedRunFormatting(content.formatting),
+        styleResolver,
+      );
       inlineNodes.push(...runNodes);
     } else if (content.type === "hyperlink") {
       const linkNodes = convertHyperlink(
         content,
-        styleRunFormatting,
+        getInheritedRunFormatting,
         styleResolver,
       );
       inlineNodes.push(...linkNodes);
@@ -1346,74 +1474,6 @@ function convertRun(
   }
 
   return nodes;
-}
-
-/**
- * Merge two TextFormatting objects (source overrides target)
- */
-function mergeTextFormatting(
-  target: TextFormatting | undefined,
-  source: TextFormatting | undefined,
-): TextFormatting | undefined {
-  if (!source && !target) {
-    return undefined;
-  }
-  if (!source) {
-    return target;
-  }
-  if (!target) {
-    return source;
-  }
-
-  // Start with target (style formatting), then overlay source (inline formatting)
-  const result: TextFormatting = { ...target };
-
-  // Merge each property - source (inline) takes precedence
-  if (source.bold !== undefined) {
-    result.bold = source.bold;
-  }
-  if (source.italic !== undefined) {
-    result.italic = source.italic;
-  }
-  if (source.underline !== undefined) {
-    result.underline = source.underline;
-  }
-  if (source.strike !== undefined) {
-    result.strike = source.strike;
-  }
-  if (source.doubleStrike !== undefined) {
-    result.doubleStrike = source.doubleStrike;
-  }
-  if (source.color !== undefined) {
-    const hasExplicitColor =
-      source.color.rgb ||
-      source.color.themeColor ||
-      source.color.themeTint ||
-      source.color.themeShade;
-    if (!source.color.auto || hasExplicitColor) {
-      result.color = source.color;
-    }
-  }
-  if (source.highlight !== undefined) {
-    result.highlight = source.highlight;
-  }
-  if (source.fontSize !== undefined) {
-    result.fontSize = source.fontSize;
-  }
-  if (source.fontFamily !== undefined) {
-    result.fontFamily = source.fontFamily;
-  }
-  if (source.vertAlign !== undefined) {
-    result.vertAlign = source.vertAlign;
-  }
-  if (source.allCaps !== undefined) {
-    result.allCaps = source.allCaps;
-  }
-  if (source.smallCaps !== undefined) {
-    result.smallCaps = source.smallCaps;
-  }
-
-  return result;
 }
 
 /**
@@ -1679,11 +1739,11 @@ function convertImage(image: Image): PMNode {
  * Convert a Hyperlink to ProseMirror nodes with link mark
  *
  * @param hyperlink - The hyperlink to convert
- * @param styleFormatting - Text formatting from the paragraph's style
+ * @param getInheritedRunFormatting - Formatting inherited by each child run
  */
 function convertHyperlink(
   hyperlink: Hyperlink,
-  styleFormatting?: TextFormatting,
+  getInheritedRunFormatting: RunFormattingResolver,
   styleResolver?: StyleResolver | null,
 ): PMNode[] {
   const nodes: PMNode[] = [];
@@ -1701,10 +1761,11 @@ function convertHyperlink(
     if (child.type === "run") {
       // Merge style formatting with run's inline formatting
       const runStyleFormatting = child.formatting?.styleId
-        ? styleResolver?.resolveRunStyle(child.formatting.styleId)
+        ? styleResolver?.getRunStyleOwnProperties(child.formatting.styleId)
         : undefined;
+      const inheritedFormatting = getInheritedRunFormatting(child.formatting);
       const mergedFormatting = mergeTextFormatting(
-        mergeTextFormatting(styleFormatting, runStyleFormatting),
+        mergeTextFormatting(inheritedFormatting, runStyleFormatting),
         child.formatting,
       );
       const runMarks = textFormattingToMarks(mergedFormatting);
@@ -1733,6 +1794,11 @@ function textFormattingToMarks(
   }
 
   const marks: ReturnType<typeof schema.mark>[] = [];
+  const overrideAttrs = buildRunFormattingOverrideAttrs(formatting);
+
+  if (overrideAttrs) {
+    marks.push(schema.mark("runFormattingOverride", overrideAttrs));
+  }
 
   // Bold
   if (formatting.bold) {
@@ -2128,6 +2194,13 @@ export function headerFooterToProseDoc(
   }
 
   return schema.node("doc", null, nodes);
+}
+
+export function footnoteToProseDoc(
+  content: (Paragraph | Table)[],
+  options?: ToProseDocOptions,
+): PMNode {
+  return headerFooterToProseDoc(content, options);
 }
 
 /**

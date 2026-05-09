@@ -312,10 +312,14 @@
     },
     "approval": {
       "allow": "Engedélyezés",
-      "alwaysAllow": "Mindig engedélyezze ebben a szálban",
+      "allowInConversation": "Engedélyezés ebben a beszélgetésben",
+      "allowOnce": "Engedélyezés egyszer",
+      "alwaysAllow": "Mindig engedélyezés",
       "approved": "Engedélyezve",
       "denied": "Elutasítva",
-      "deny": "Elutasítás"
+      "deny": "Elutasítás",
+      "externalMcpDescription": "Only the information needed for this tool call will be sent.",
+      "externalMcpQuestion": "Can Stella send this request to {provider}?"
     },
     "askUser": {
       "custom": "Saját válasz",
@@ -339,6 +343,8 @@
     "editableFilePlaceholder": "Csevegés vagy szerkesztés: {fileName}",
     "editableFilePlaceholderAction": "Csevegés vagy szerkesztés",
     "editorLoading": "Loading editor…",
+    "externalSourcePlaceholder": "Csevegés erről: {title}",
+    "externalSourcePlaceholderAction": "Csevegés erről:",
     "extractingContent": "Tartalom kinyerése...",
     "filePlaceholder": "Csevegés erről: {fileName}",
     "filePlaceholderAction": "Csevegés erről:",
@@ -384,10 +390,15 @@
     "resend": "Újraküldés",
     "send": "Üzenet küldése",
     "sendError": "Probléma történt az üzenet elküldésekor. Ha a hiba továbbra is fennáll, vedd fel a kapcsolatot a támogatással.",
+    "sendErrorInsufficientCredits": "Az AI-szolgáltatónak további kreditre van szüksége. Kérd a munkaterület adminisztrátorát, hogy töltse fel a fiókot.",
+    "sendErrorProviderUnavailable": "Az AI-szolgáltató átmenetileg nem elérhető. Próbáld újra egy pillanat múlva.",
+    "sendErrorQuotaExhausted": "Az AI-szolgáltató kvótája kimerült. Próbáld újra egy perc múlva, vagy kérd a munkaterület adminisztrátorát, hogy bővítse a csomagot.",
     "thinking": "Kontextussal dolgozom",
     "threads": "Előzmények",
     "tool": {
       "apply-active-docx-edits": "Applying DOCX edits",
+      "ares_lookup_company": "ARES cég lekérdezése",
+      "ares_search_companies": "ARES cégkeresés",
       "ask-user": "Pontosítás kérése",
       "create-document": "Dokumentum létrehozása",
       "describe-stella-api": "Stella API ellenőrzése",
@@ -412,6 +423,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# karakter} other {# karakter}}",
+      "exactCall": "Pontos hívás",
       "field": "Mező",
       "input": "Bemenet",
       "output": "Kimenet",
@@ -520,6 +532,7 @@
     "connectionLostDescription": "Megszakadt a kapcsolat a szerverrel. Automatikus újrapróbálkozás.",
     "convertTo": "Konvertálás",
     "copied": "Copied to clipboard",
+    "copy": "Másolás",
     "copyLink": "Hivatkozás másolása",
     "createdAt": "Létrehozva: {date}",
     "currency": "Pénznem",
@@ -1023,6 +1036,13 @@
     "unsupportedDocxEditTitle": "Editing blocked"
   },
   "inspector": {
+    "external": {
+      "confirmDescription": "Külső webhelyet készülsz megnyitni.",
+      "confirmTitle": "Külső hivatkozás megnyitása?",
+      "openLink": "Hivatkozás megnyitása",
+      "openOriginal": "Eredeti megnyitása",
+      "unavailable": "A hivatkozott webhely nem engedélyez biztonságos előnézetet. Ha az eszköz visszaadta a dokumentum szövegét, az itt jelenik meg; ellenkező esetben nyissa meg az eredetit."
+    },
     "facet": {
       "preview": "Preview",
       "previewInFullViewToast": "Preview is the main view here. Click the minimize button to see it alongside metadata."
@@ -1050,7 +1070,60 @@
     "showPane": "Show pane"
   },
   "knowledge": {
+    "mcp": {
+      "addAndConnect": "Hozzáadás és csatlakozás",
+      "addServer": "Szerver hozzáadása",
+      "addServerCardDescription": "Illessze be a szerver URL-jét, és a Stella egy lépésben csatlakoztatja.",
+      "addServerCardTitle": "Új MCP-szerver hozzáadása",
+      "auth": {
+        "bearer": "Bearer token",
+        "none": "Nincs hitelesítés",
+        "oauth2": "OAuth 2.0"
+      },
+      "availableInChat": "Elérhető a chatben",
+      "bearerTokenDescription": "Ez a szerver Bearer tokent használ. A csatlakozás befejezéséhez illessze be a szolgáltatótól kapott tokent.",
+      "builtInBadge": "Beépített",
+      "connect": "Csatlakoztatás",
+      "connected": "Csatlakoztatva",
+      "connectedToast": "MCP-konnektor csatlakoztatva",
+      "connectedWithLastUsed": "Csatlakoztatva · legutóbbi használat: {time}",
+      "customDescription": "Illessze be az MCP-szerver URL-jét. A Stella felismeri a csatlakozás módját, és automatikusan folytatja.",
+      "customTitle": "Egyéni szerver hozzáadása",
+      "description": "Kezelje azokat a külső MCP-szervereket, amelyek eszközöket adhatnak a chathez. A tokeneket felhasználónként tároljuk.",
+      "detected": "Felismerve: {authType}",
+      "disable": "Kikapcsolás",
+      "disabled": "Csatlakoztatva · kikapcsolva",
+      "disconnect": "Leválasztás",
+      "docsLink": "Dokumentáció",
+      "emptyDescription": "A válogatott jogi MCP-konnektorok itt jelennek meg, miután engedélyezve lettek a munkaterületén.",
+      "emptyTitle": "Még nincsenek MCP-konnektorok",
+      "enable": "Bekapcsolás",
+      "errorDescription": "A konnektort nem sikerült frissíteni.",
+      "errorTitle": "Az MCP-kapcsolat sikertelen",
+      "namePlaceholder": "Megjelenítési név",
+      "needsReauth": "Újracsatlakozás szükséges",
+      "notConnected": "Nincs csatlakoztatva",
+      "off": "Ki",
+      "on": "Be",
+      "otherTitle": "További csatlakozók",
+      "probe": "Ellenőrzés",
+      "recommendedBadge": "Ajánlott",
+      "recommendedFor": "Ajánlott: {jurisdictions}",
+      "recommendedTitle": "Ajánlott az Ön joghatóságaihoz",
+      "reconnect": "Újracsatlakozás",
+      "saveToken": "Token mentése",
+      "tokenHelp": "Token beszerzése",
+      "tokenLabel": "Bearer token",
+      "tokenPlaceholder": "Token beillesztése",
+      "urlLabel": "MCP-szerver URL-je",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Használat a chatben"
+    },
     "sections": {
+      "agents": {
+        "description": "Konfigurálható asszisztensek ismételhető munkákhoz",
+        "title": "Ügynökök"
+      },
       "caseLaw": {
         "description": "Bírósági határozatok és joggyakorlati adatbázis",
         "title": "Joggyakorlat"
@@ -1060,12 +1133,20 @@
         "title": "Kikötések"
       },
       "connectors": {
-        "description": "Csatlakozás külső rendszerekhez",
-        "title": "Csatlakozók"
+        "description": "A Stella összekapcsolása ellenőrzött külső eszközszerverekkel",
+        "title": "MCP"
+      },
+      "mcp": {
+        "description": "A Stella összekapcsolása ellenőrzött külső eszközszerverekkel",
+        "title": "MCP"
+      },
+      "prompts": {
+        "description": "Újrahasználható utasítások, amelyek / paranccsal érhetők el a chatben",
+        "title": "Promptok"
       },
       "skills": {
-        "description": "Egyéni MI-skillek",
-        "title": "Képességek"
+        "description": "Célzott AI-képességek speciális munkafolyamatokhoz",
+        "title": "Skills"
       },
       "templates": {
         "description": "Dokumentumsablonok helyőrzőkkel",
@@ -1073,39 +1154,39 @@
       }
     },
     "skills": {
-      "addShortcut": "Skill hozzáadása",
-      "defaultBadge": "Alapértelmezett",
-      "deleteConfirmDescription": "Ez a skill véglegesen törlődik.",
-      "deleteConfirmTitle": "Skill törlése?",
-      "deleteShortcut": "Skill törlése",
-      "editShortcut": "Skill szerkesztése",
-      "emptyDescription": "Hozzon létre újrahasználható promptokat az ismétlődő csapatmunkához, az összefoglalóktól az első vázlatok utasításaiig.",
-      "emptyState": "Még nincsenek skillek. Adja hozzá az elsőt.",
-      "emptyTitle": "Hozza létre az első skillt",
-      "emptyVideoLabel": "Skillek áttekintése",
+      "addShortcut": "Prompt hozzáadása",
+      "defaultBadge": "Default",
+      "deleteConfirmDescription": "Ez a prompt véglegesen törlődik.",
+      "deleteConfirmTitle": "Prompt törlése?",
+      "deleteShortcut": "Prompt törlése",
+      "editShortcut": "Prompt szerkesztése",
+      "emptyDescription": "Create reusable prompts for the work your team repeats, from summaries to first-pass drafting instructions.",
+      "emptyState": "Még nincsenek promptok. Adja hozzá az elsőt.",
+      "emptyTitle": "Első prompt létrehozása",
+      "emptyVideoLabel": "Promptok áttekintése",
       "errors": {
-        "commandConflict": "Már létezik skill ezzel a / névvel",
-        "commandInvalid": "Csak kisbetűket, számokat, kötőjeleket és aláhúzásokat használjon",
-        "commandReserved": "\"/{command}\" fenntartott skill"
+        "commandConflict": "Már létezik prompt ezzel a / névvel",
+        "commandInvalid": "Use only lowercase letters, digits, hyphens and underscores",
+        "commandReserved": "A(z) \"/{command}\" fenntartott prompt"
       },
       "form": {
-        "command": "Skill",
-        "commandHint": "A / skill neve: csak kisbetűk, számok, kötőjelek és aláhúzások",
-        "commandPlaceholder": "pl. összefoglalás",
+        "command": "Prompt parancsikon",
+        "commandHint": "A / prompt neve: csak kisbetűk, számok, kötőjelek és aláhúzások",
+        "commandPlaceholder": "e.g. summarize",
         "commandPrefix": "/",
-        "description": "Leírás",
-        "descriptionPlaceholder": "Rövid leírás a kiválasztóban",
-        "name": "Név",
-        "namePlaceholder": "pl. Dokumentum összefoglalása",
+        "description": "Description",
+        "descriptionPlaceholder": "Short description shown in the picker",
+        "name": "Name",
+        "namePlaceholder": "e.g. Summarise document",
         "prompt": "Prompt",
-        "promptPlaceholder": "A chat szerkesztőbe beszúrt szöveg, amikor ezt a skillt használják",
-        "scope": "Láthatóság",
-        "scopePrivate": "Csak én",
-        "scopeTeam": "Mindenki a szervezetben"
+        "promptPlaceholder": "A chat szerkesztőjébe beszúrt szöveg a prompt használatakor",
+        "scope": "Visibility",
+        "scopePrivate": "Only me",
+        "scopeTeam": "Everyone in the organisation"
       },
-      "privateSection": "Saját parancsikonok",
-      "shadowed": "Csapat parancsikon takarja",
-      "teamSection": "Csapat parancsikonok"
+      "privateSection": "Saját promptok",
+      "shadowed": "A csapat promptja felülírja",
+      "teamSection": "Csapat promptjai"
     }
   },
   "navigation": {
@@ -1157,6 +1238,16 @@
     "inviteInvalidEmail": "Érvénytelen e-mail: {value}",
     "inviteSubtitle": "E-mailt kapnak egy csatlakozási linkkel.",
     "inviteTitle": "Hívja meg csapatát",
+    "jurisdictionGlobeLabel": "Kiválasztott gyakorlati joghatóságok a földgömbön",
+    "jurisdictionMakePrimary": "{name} beállítása elsődlegesként",
+    "jurisdictionPrimary": "Elsődleges",
+    "jurisdictionRemove": "{name} eltávolítása",
+    "jurisdictionSaveFailed": "Nem sikerült menteni a joghatóságokat. Ezt a beállításokban fejezheti be.",
+    "jurisdictionSearchLabel": "Országok keresése",
+    "jurisdictionSearchPlaceholder": "Országok keresése",
+    "jurisdictionSubtitle": "Válassza ki azokat az országokat, amelyekkel rendszeresen dolgozik. A Stella ennek alapján szabja személyre az élményét.",
+    "jurisdictionSuggested": "Javasolt",
+    "jurisdictionTitle": "Válassza ki gyakorlati joghatóságait",
     "orgNameLabel": "Csapat neve",
     "orgSubtitle": "Így találnak meg Önt a kollégái.",
     "orgTitle": "Nevezze el csapatát",
@@ -1164,6 +1255,7 @@
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
     "stepAi": "MI",
     "stepDesktop": "Asztali",
+    "stepJurisdiction": "Joghatóság",
     "stepOrganization": "Csapat",
     "stepTeam": "Meghívás",
     "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms>.",
@@ -1388,6 +1480,7 @@
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",
       "membersDescription": "Manage who has access to this organization",
       "pendingInvitations": "Pending invitations",
+      "practiceJurisdictions": "Praxis joghatóságai",
       "profile": "Profile",
       "profileDescription": "Update name and slug",
       "renameAction": "Rename",

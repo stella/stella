@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 import {
   buildSendRequestBody,
   chatKeys,
+  createSendAutomaticallyPredicate,
   matchesChatThreadAcrossScopes,
 } from "@/routes/_protected.chat/-queries";
 
@@ -15,10 +17,11 @@ const createMessage = (): PersistedChatMessage => ({
 
 describe("chatKeys", () => {
   test("separates plain chat transports from active DOCX edit transports", () => {
+    const threadId = toChatThreadId("thread-A");
     const base = {
       allowMissingThread: true,
       scope: "workspace",
-      threadId: "thread-A",
+      threadId,
       workspaceId: "ws-1",
     } as const;
 
@@ -32,7 +35,8 @@ describe("chatKeys", () => {
 });
 
 describe("matchesChatThreadAcrossScopes", () => {
-  const threadId = "thread-A";
+  const threadId = toChatThreadId("thread-A");
+  const otherThreadId = toChatThreadId("thread-B");
 
   test("matches the global scope's key for the same thread", () => {
     const key = chatKeys.thread({ scope: "global", threadId });
@@ -51,7 +55,7 @@ describe("matchesChatThreadAcrossScopes", () => {
   test("rejects keys for other threads", () => {
     expect(
       matchesChatThreadAcrossScopes(
-        chatKeys.thread({ scope: "global", threadId: "thread-B" }),
+        chatKeys.thread({ scope: "global", threadId: otherThreadId }),
         threadId,
       ),
     ).toBe(false);
@@ -60,7 +64,7 @@ describe("matchesChatThreadAcrossScopes", () => {
         chatKeys.thread({
           scope: "workspace",
           workspaceId: "ws-1",
-          threadId: "thread-B",
+          threadId: otherThreadId,
         }),
         threadId,
       ),
@@ -91,15 +95,63 @@ describe("matchesChatThreadAcrossScopes", () => {
 
 describe("buildSendRequestBody", () => {
   test("includes anonymized mode when the chat surface enables it", () => {
+    const threadId = toChatThreadId("thread-A");
     expect(
       buildSendRequestBody({
         context: { getAnonymized: () => true },
-        key: { scope: "global", threadId: "thread-A" },
+        key: { scope: "global", threadId },
         messages: [createMessage()],
       }),
     ).toMatchObject({
       anonymized: true,
       threadId: "thread-A",
     });
+  });
+});
+
+describe("createSendAutomaticallyPredicate", () => {
+  test("allows sequential auto sends inside the same assistant message", () => {
+    const shouldSendAutomatically = createSendAutomaticallyPredicate();
+    const baseMessage = {
+      id: "message-A",
+      role: "assistant",
+    } satisfies Pick<PersistedChatMessage, "id" | "role">;
+    const firstToolResult = {
+      ...baseMessage,
+      parts: [
+        { type: "step-start" },
+        {
+          input: {},
+          output: { content: [] },
+          state: "output-available",
+          toolCallId: "tool-call-1",
+          toolName: "mcp__legaldatahunter-com__discover_countries",
+          type: "dynamic-tool",
+        },
+      ],
+    } satisfies PersistedChatMessage;
+    const secondApprovalResponse = {
+      ...baseMessage,
+      parts: [
+        ...firstToolResult.parts,
+        { type: "step-start" },
+        {
+          approval: { approved: true, id: "approval-1" },
+          input: { query: "derecho al olvido" },
+          state: "approval-responded",
+          toolCallId: "tool-call-2",
+          toolName: "mcp__legaldatahunter-com__search",
+          type: "dynamic-tool",
+        },
+      ],
+    } satisfies PersistedChatMessage;
+
+    expect(shouldSendAutomatically({ messages: [firstToolResult] })).toBeTrue();
+    expect(
+      shouldSendAutomatically({ messages: [firstToolResult] }),
+    ).toBeFalse();
+    expect(
+      shouldSendAutomatically({ messages: [secondApprovalResponse] }),
+    ).toBeTrue();
   });
 });

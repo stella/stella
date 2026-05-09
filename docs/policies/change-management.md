@@ -68,8 +68,9 @@ skipped.
 
 6. **Dependency review.** The `dependency-review.yml` workflow
    runs on every PR and blocks introduction of dependencies
-   with high-severity CVEs or incompatible licenses (GPL,
-   AGPL, LGPL, SSPL, BUSL, Elastic, CPAL).
+   with high-severity CVEs or copyleft licenses incompatible
+   with Apache-2.0 distribution (GPL, AGPL, LGPL, SSPL, BUSL,
+   Elastic, CPAL).
 
 7. **Automated updates.** Dependabot submits PRs for outdated
    dependencies daily (Bun packages), weekly (GitHub Actions,

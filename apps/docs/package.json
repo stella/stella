@@ -2,7 +2,7 @@
   "name": "@stll/docs",
   "version": "0.0.1",
   "private": true,
-  "license": "AGPL-3.0-only",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "bun --bun astro dev",
@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@astrojs/starlight": "^0.38.4",
-    "astro": "^6.1.10"
+    "astro": "^6.2.1"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",

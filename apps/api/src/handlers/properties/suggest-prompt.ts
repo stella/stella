@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { aiHandlerError } from "@/api/lib/ai-error";
 import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -165,10 +166,9 @@ const suggestPrompt = createSafeHandler(
 
     if (Result.isError(generateResult)) {
       return Result.err(
-        new HandlerError({
+        aiHandlerError(generateResult.error, {
           status: 502,
           message: "Suggest prompt failed",
-          cause: generateResult.error,
         }),
       );
     }

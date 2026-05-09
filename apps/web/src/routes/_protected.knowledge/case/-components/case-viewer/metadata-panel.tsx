@@ -239,7 +239,7 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
       )}
 
       {decision.court === "Ústavní soud" && (
-        <p className="text-muted-foreground/70 mt-3 text-[0.7rem] leading-snug italic">
+        <p className="text-foreground-ghost mt-3 text-[0.7rem] leading-snug italic">
           {t("caseLaw.viewer.nalusDisclaimer")}
         </p>
       )}

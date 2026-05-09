@@ -13,7 +13,6 @@ import {
   PinIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
-import { v7 as uuidv7 } from "uuid";
 
 import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
@@ -28,6 +27,7 @@ import {
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
@@ -57,7 +57,7 @@ function ChatIndex() {
   const queryClient = useQueryClient();
   const userContext = useChatUserContext();
   const getUserContext = useEffectEvent(() => userContext);
-  const threadIdRef = useRef(uuidv7());
+  const threadIdRef = useRef(createChatThreadId());
   const threadRef: ChatThreadRef = {
     scope: "global",
     threadId: threadIdRef.current,
@@ -459,7 +459,7 @@ const LandingRowIcon = ({ children, tone = "muted" }: LandingRowIconProps) => (
     className={cn(
       "mt-0.5 flex size-4 shrink-0 items-center justify-center transition-colors",
       tone === "muted" &&
-        "text-muted-foreground/55 group-hover:text-muted-foreground",
+        "text-foreground-muted group-hover:text-muted-foreground",
     )}
   >
     {children}

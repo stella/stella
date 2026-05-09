@@ -201,7 +201,7 @@ export const InviteStep = ({
         {error ? (
           <p className="text-destructive text-xs">{error}</p>
         ) : (
-          <p className="text-muted-foreground/50 text-xs">
+          <p className="text-foreground-subtle text-xs">
             {t("onboarding.inviteHint")}
           </p>
         )}

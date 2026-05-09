@@ -11,28 +11,28 @@
 /* Calibri → Carlito */
 @font-face {
   font-family: "Calibri";
-  src: local("Carlito"), local("Calibri");
+  src: local("Carlito"), local("Carlito Regular"), local("Calibri");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Calibri";
-  src: local("Carlito"), local("Calibri");
+  src: local("Carlito Italic"), local("Calibri Italic");
   font-weight: 400;
   font-style: italic;
   font-display: swap;
 }
 @font-face {
   font-family: "Calibri";
-  src: local("Carlito"), local("Calibri");
+  src: local("Carlito Bold"), local("Calibri Bold");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Calibri";
-  src: local("Carlito"), local("Calibri");
+  src: local("Carlito Bold Italic"), local("Calibri Bold Italic");
   font-weight: 700;
   font-style: italic;
   font-display: swap;
@@ -41,28 +41,28 @@
 /* Cambria → Caladea */
 @font-face {
   font-family: "Cambria";
-  src: local("Caladea"), local("Cambria");
+  src: local("Caladea"), local("Caladea Regular"), local("Cambria");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Cambria";
-  src: local("Caladea"), local("Cambria");
+  src: local("Caladea Italic"), local("Cambria Italic");
   font-weight: 400;
   font-style: italic;
   font-display: swap;
 }
 @font-face {
   font-family: "Cambria";
-  src: local("Caladea"), local("Cambria");
+  src: local("Caladea Bold"), local("Cambria Bold");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Cambria";
-  src: local("Caladea"), local("Cambria");
+  src: local("Caladea Bold Italic"), local("Cambria Bold Italic");
   font-weight: 700;
   font-style: italic;
   font-display: swap;
@@ -71,28 +71,28 @@
 /* Arial → Arimo */
 @font-face {
   font-family: "Arial";
-  src: local("Arimo"), local("Arial");
+  src: local("Arimo"), local("Arimo Regular"), local("Arial");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Arial";
-  src: local("Arimo"), local("Arial");
+  src: local("Arimo Italic"), local("Arial Italic");
   font-weight: 400;
   font-style: italic;
   font-display: swap;
 }
 @font-face {
   font-family: "Arial";
-  src: local("Arimo"), local("Arial");
+  src: local("Arimo Bold"), local("Arial Bold");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Arial";
-  src: local("Arimo"), local("Arial");
+  src: local("Arimo Bold Italic"), local("Arial Bold Italic");
   font-weight: 700;
   font-style: italic;
   font-display: swap;
@@ -101,28 +101,28 @@
 /* Times New Roman → Tinos */
 @font-face {
   font-family: "Times New Roman";
-  src: local("Tinos"), local("Times New Roman");
+  src: local("Tinos"), local("Tinos Regular"), local("Times New Roman");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Times New Roman";
-  src: local("Tinos"), local("Times New Roman");
+  src: local("Tinos Italic"), local("Times New Roman Italic");
   font-weight: 400;
   font-style: italic;
   font-display: swap;
 }
 @font-face {
   font-family: "Times New Roman";
-  src: local("Tinos"), local("Times New Roman");
+  src: local("Tinos Bold"), local("Times New Roman Bold");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Times New Roman";
-  src: local("Tinos"), local("Times New Roman");
+  src: local("Tinos Bold Italic"), local("Times New Roman Bold Italic");
   font-weight: 700;
   font-style: italic;
   font-display: swap;
@@ -131,28 +131,28 @@
 /* Courier New → Cousine */
 @font-face {
   font-family: "Courier New";
-  src: local("Cousine"), local("Courier New");
+  src: local("Cousine"), local("Cousine Regular"), local("Courier New");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Courier New";
-  src: local("Cousine"), local("Courier New");
+  src: local("Cousine Italic"), local("Courier New Italic");
   font-weight: 400;
   font-style: italic;
   font-display: swap;
 }
 @font-face {
   font-family: "Courier New";
-  src: local("Cousine"), local("Courier New");
+  src: local("Cousine Bold"), local("Courier New Bold");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: "Courier New";
-  src: local("Cousine"), local("Courier New");
+  src: local("Cousine Bold Italic"), local("Courier New Bold Italic");
   font-weight: 700;
   font-style: italic;
   font-display: swap;

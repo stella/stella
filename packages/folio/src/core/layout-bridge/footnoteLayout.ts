@@ -12,18 +12,38 @@ import type {
   Page,
   ParagraphBlock,
   Run,
+  TableBlock,
+  TableCellMeasure,
+  TableMeasure,
+  TableRowMeasure,
   TextRun,
-  RunFormatting,
   FootnoteContent,
 } from "../layout-engine/types";
-import type { Footnote } from "../types/document";
+import {
+  DEFAULT_TEXTBOX_MARGINS as TEXTBOX_MARGINS,
+  DEFAULT_TEXTBOX_WIDTH as TEXTBOX_WIDTH,
+} from "../layout-engine/types";
+import { footnoteToProseDoc } from "../prosemirror/conversion/toProseDoc";
+import type { Footnote, StyleDefinitions, Theme } from "../types/document";
 import { measureParagraph } from "./measuring";
+import { toFlowBlocks } from "./toFlowBlocks";
 
 /** Separator line height + padding in pixels */
 const SEPARATOR_HEIGHT = 12;
 
 /** Default footnote font size in points */
 const FOOTNOTE_FONT_SIZE = 8;
+
+export type MeasureBlocksFn = (
+  blocks: FlowBlock[],
+  contentWidth: number,
+) => Measure[];
+
+export type ConvertFootnoteOptions = {
+  styles?: StyleDefinitions | null;
+  theme?: Theme | null;
+  measureBlocks?: MeasureBlocksFn;
+};
 
 // ============================================================================
 // 1. Scan FlowBlocks for footnote references
@@ -119,126 +139,37 @@ export function convertFootnoteToContent(
   footnote: Footnote,
   displayNumber: number,
   contentWidth: number,
+  options: ConvertFootnoteOptions = {},
 ): FootnoteContent {
-  const blocks: FlowBlock[] = [];
-
-  for (let i = 0; i < footnote.content.length; i++) {
-    // SAFETY: i < footnote.content.length in for loop
-    const para = footnote.content[i]!;
-    const runs: Run[] = [];
-
-    // For the first paragraph, prepend the footnote number
-    if (i === 0) {
-      const numberRun: TextRun = {
-        kind: "text",
-        text: `${displayNumber}  `,
-        fontSize: FOOTNOTE_FONT_SIZE,
-        superscript: true,
-      };
-      runs.push(numberRun);
-    }
-
-    // Convert paragraph content to runs
-    for (const content of para.content) {
-      const contentObj = content as unknown as Record<string, unknown>;
-
-      if (
-        contentObj["type"] === "run" &&
-        Array.isArray(contentObj["content"])
-      ) {
-        const formatting = contentObj["formatting"] as
-          | Record<string, unknown>
-          | undefined;
-        const runFormatting: RunFormatting = {};
-
-        if (formatting) {
-          if (formatting["bold"]) {
-            runFormatting.bold = true;
-          }
-          if (formatting["italic"]) {
-            runFormatting.italic = true;
-          }
-          if (formatting["underline"]) {
-            runFormatting.underline = true;
-          }
-          if (formatting["strike"]) {
-            runFormatting.strike = true;
-          }
-          if (formatting["color"]) {
-            const color = formatting["color"] as Record<string, unknown>;
-            if (color["val"]) {
-              runFormatting.color = `#${color["val"]}`;
-            } else if (color["rgb"]) {
-              runFormatting.color = `#${color["rgb"]}`;
-            }
-          }
-          if (formatting["fontSize"]) {
-            runFormatting.fontSize = (formatting["fontSize"] as number) / 2; // half-points to points
-          }
-          if (formatting["fontFamily"]) {
-            const ff = formatting["fontFamily"] as Record<string, unknown>;
-            runFormatting.fontFamily = (ff["ascii"] || ff["hAnsi"]) as string;
-          }
-        }
-
-        // If no fontSize specified, use footnote default
-        if (!runFormatting.fontSize) {
-          runFormatting.fontSize = FOOTNOTE_FONT_SIZE;
-        }
-
-        for (const rc of contentObj["content"] as unknown[]) {
-          const rcObj = rc as Record<string, unknown>;
-          if (rcObj["type"] === "text" && typeof rcObj["text"] === "string") {
-            runs.push({
-              kind: "text",
-              text: rcObj["text"],
-              ...runFormatting,
-            });
-          } else if (rcObj["type"] === "tab") {
-            runs.push({ kind: "tab", ...runFormatting });
-          } else if (rcObj["type"] === "break") {
-            runs.push({ kind: "lineBreak" });
-          } else if (rcObj["type"] === "footnoteRef") {
-            // Self-reference marker - skip (we prepend the number ourselves)
-          }
-        }
-      }
-    }
-
-    // If no runs were generated, add an empty text run to ensure the paragraph renders
-    if (runs.length === 0) {
-      runs.push({ kind: "text", text: "", fontSize: FOOTNOTE_FONT_SIZE });
-    }
-
-    const paragraphBlock: ParagraphBlock = {
-      kind: "paragraph",
-      id: `fn-${footnote.id}-p${i}`,
-      runs,
-    };
-    blocks.push(paragraphBlock);
+  const proseOptions: Parameters<typeof footnoteToProseDoc>[1] = {};
+  if (options.styles) {
+    proseOptions.styles = options.styles;
   }
-
-  if (blocks.length === 0) {
-    blocks.push({
-      kind: "paragraph",
-      id: `fn-${footnote.id}-empty`,
-      runs: [{ kind: "text", text: "", fontSize: FOOTNOTE_FONT_SIZE }],
-    });
+  if (options.theme !== undefined) {
+    proseOptions.theme = options.theme;
   }
-
-  // Measure blocks
-  const measures: Measure[] = [];
-  for (const block of blocks) {
-    if (block.kind === "paragraph") {
-      const m = measureParagraph(block, contentWidth);
-      measures.push(m);
-    }
+  const pmDoc = footnoteToProseDoc(footnote.content, proseOptions);
+  const flowOptions: Parameters<typeof toFlowBlocks>[1] = {};
+  if (options.theme !== undefined) {
+    flowOptions.theme = options.theme;
   }
+  const blocks = applyFootnotePresentation(
+    toFlowBlocks(pmDoc, flowOptions),
+    displayNumber,
+  );
+
+  const measures = options.measureBlocks
+    ? options.measureBlocks(blocks, contentWidth)
+    : measureFootnoteBlocks(blocks, contentWidth);
 
   let totalHeight = 0;
   for (const measure of measures) {
     if (measure.kind === "paragraph") {
       totalHeight += measure.totalHeight;
+    } else if (measure.kind === "table") {
+      totalHeight += measure.totalHeight;
+    } else if (measure.kind === "image" || measure.kind === "textBox") {
+      totalHeight += measure.height;
     }
   }
 
@@ -249,6 +180,306 @@ export function convertFootnoteToContent(
     measures,
     height: totalHeight,
   };
+}
+
+function measureFootnoteBlocks(
+  blocks: FlowBlock[],
+  contentWidth: number,
+): Measure[] {
+  return blocks.map((block) => measureFootnoteBlock(block, contentWidth));
+}
+
+function measureFootnoteBlock(block: FlowBlock, contentWidth: number): Measure {
+  switch (block.kind) {
+    case "paragraph":
+      return measureParagraph(block, contentWidth);
+
+    case "table":
+      return measureFootnoteTable(block, contentWidth);
+
+    case "image":
+      return {
+        kind: "image",
+        width: block.width,
+        height: block.height,
+      };
+
+    case "textBox": {
+      const margins = block.margins ?? TEXTBOX_MARGINS;
+      const width = block.width ?? TEXTBOX_WIDTH;
+      const innerWidth = Math.max(1, width - margins.left - margins.right);
+      const innerMeasures = block.content.map((paragraph) =>
+        measureParagraph(paragraph, innerWidth),
+      );
+      let contentHeight = 0;
+      for (const measure of innerMeasures) {
+        contentHeight += measure.totalHeight;
+      }
+
+      return {
+        kind: "textBox",
+        width,
+        height: block.height ?? contentHeight + margins.top + margins.bottom,
+        innerMeasures,
+      };
+    }
+
+    case "pageBreak":
+      return { kind: "pageBreak" };
+
+    case "columnBreak":
+      return { kind: "columnBreak" };
+
+    case "sectionBreak":
+      return { kind: "sectionBreak" };
+
+    default: {
+      const exhaustive: never = block;
+      return exhaustive;
+    }
+  }
+}
+
+function resolveFootnoteTableWidth(
+  width: number | undefined,
+  widthType: string | undefined,
+  contentWidth: number,
+): number | undefined {
+  if (!width) {
+    return undefined;
+  }
+  if (widthType === "pct") {
+    return (contentWidth * width) / 5000;
+  }
+  if (widthType === "dxa" || !widthType || widthType === "auto") {
+    return (width / 1440) * 96;
+  }
+  return undefined;
+}
+
+function measureFootnoteTable(
+  tableBlock: TableBlock,
+  contentWidth: number,
+): TableMeasure {
+  let columnWidths = tableBlock.columnWidths ?? [];
+  const explicitWidth = resolveFootnoteTableWidth(
+    tableBlock.width,
+    tableBlock.widthType,
+    contentWidth,
+  );
+
+  if (columnWidths.length === 0) {
+    const firstRow = tableBlock.rows.at(0);
+    let colCount = 0;
+    for (const cell of firstRow?.cells ?? []) {
+      colCount += cell.colSpan ?? 1;
+    }
+    const totalWidth = explicitWidth ?? contentWidth;
+    const equalWidth = totalWidth / Math.max(1, colCount);
+    columnWidths = Array.from(
+      { length: Math.max(1, colCount) },
+      () => equalWidth,
+    );
+  } else if (explicitWidth) {
+    const totalWidth = sumColumnWidths(columnWidths);
+    if (totalWidth > 0 && Math.abs(totalWidth - explicitWidth) > 1) {
+      const scale = explicitWidth / totalWidth;
+      columnWidths = columnWidths.map((width) => width * scale);
+    }
+  }
+
+  const rowSpanEnds: number[] = [];
+  const rows: TableRowMeasure[] = tableBlock.rows.map((row, rowIndex) => {
+    let columnIndex = 0;
+    const cells: TableCellMeasure[] = row.cells.map((cell) => {
+      while ((rowSpanEnds[columnIndex] ?? 0) > rowIndex) {
+        columnIndex++;
+      }
+
+      const colSpan = cell.colSpan ?? 1;
+      let cellWidth = 0;
+      for (
+        let offset = 0;
+        offset < colSpan && columnIndex + offset < columnWidths.length;
+        offset++
+      ) {
+        cellWidth += columnWidths[columnIndex + offset] ?? 0;
+      }
+      if (cellWidth === 0) {
+        cellWidth = cell.width ?? 100;
+      }
+      columnIndex += colSpan;
+
+      const padding = cell.padding ?? { top: 0, right: 7, bottom: 0, left: 7 };
+      const innerWidth = Math.max(1, cellWidth - padding.left - padding.right);
+      const blocks = measureFootnoteBlocks(cell.blocks, innerWidth);
+      let height = padding.top + padding.bottom;
+      for (const measure of blocks) {
+        height += getMeasureHeight(measure);
+      }
+
+      const cellMeasure: TableCellMeasure = {
+        blocks,
+        width: cellWidth,
+        height,
+      };
+      if (cell.colSpan !== undefined) {
+        cellMeasure.colSpan = cell.colSpan;
+      }
+      if (cell.rowSpan !== undefined) {
+        cellMeasure.rowSpan = cell.rowSpan;
+      }
+      if ((cell.rowSpan ?? 1) > 1) {
+        const rowSpanEnd = rowIndex + (cell.rowSpan ?? 1);
+        for (let offset = 0; offset < colSpan; offset++) {
+          rowSpanEnds[columnIndex - colSpan + offset] = rowSpanEnd;
+        }
+      }
+      return cellMeasure;
+    });
+
+    let contentHeight = 0;
+    for (const cell of cells) {
+      contentHeight = Math.max(contentHeight, cell.height);
+    }
+    const explicitHeight = row.height;
+    let height = contentHeight;
+    if (explicitHeight !== undefined && row.heightRule === "exact") {
+      height = explicitHeight;
+    } else if (explicitHeight !== undefined) {
+      height = Math.max(contentHeight, explicitHeight);
+    }
+
+    return { cells, height };
+  });
+
+  let totalHeight = 0;
+  for (const row of rows) {
+    totalHeight += row.height;
+  }
+
+  return {
+    kind: "table",
+    rows,
+    columnWidths,
+    totalWidth: sumColumnWidths(columnWidths) || explicitWidth || contentWidth,
+    totalHeight,
+  };
+}
+
+function sumColumnWidths(columnWidths: number[]): number {
+  let total = 0;
+  for (const width of columnWidths) {
+    total += width;
+  }
+  return total;
+}
+
+function getMeasureHeight(measure: Measure): number {
+  if (measure.kind === "paragraph" || measure.kind === "table") {
+    return measure.totalHeight;
+  }
+  if (measure.kind === "image" || measure.kind === "textBox") {
+    return measure.height;
+  }
+  return 0;
+}
+
+export function applyFootnotePresentation(
+  blocks: FlowBlock[],
+  displayNumber: number,
+): FlowBlock[] {
+  if (blocks.length === 0) {
+    return [
+      {
+        kind: "paragraph",
+        id: `fn-empty-${displayNumber}`,
+        runs: [
+          {
+            kind: "text",
+            text: `${displayNumber}  `,
+            fontSize: FOOTNOTE_FONT_SIZE,
+            superscript: true,
+          },
+        ],
+      } satisfies ParagraphBlock,
+    ];
+  }
+
+  const output = blocks.map(applyFootnoteBlockPresentation);
+
+  const first = output[0];
+  if (first?.kind === "paragraph") {
+    const numberRun: TextRun = {
+      kind: "text",
+      text: `${displayNumber}  `,
+      fontSize: FOOTNOTE_FONT_SIZE,
+      superscript: true,
+    };
+    output[0] = {
+      ...first,
+      runs: [numberRun, ...first.runs],
+    };
+  } else {
+    output.unshift({
+      kind: "paragraph",
+      id: `fn-number-${displayNumber}`,
+      runs: [
+        {
+          kind: "text",
+          text: `${displayNumber}  `,
+          fontSize: FOOTNOTE_FONT_SIZE,
+          superscript: true,
+        },
+      ],
+    });
+  }
+
+  return output;
+}
+
+function applyFootnoteBlockPresentation(block: FlowBlock): FlowBlock {
+  if (block.kind === "paragraph") {
+    return applyFootnoteParagraphPresentation(block);
+  }
+  if (block.kind === "table") {
+    return {
+      ...block,
+      rows: block.rows.map((row) => ({
+        ...row,
+        cells: row.cells.map((cell) => ({
+          ...cell,
+          blocks: cell.blocks.map(applyFootnoteBlockPresentation),
+        })),
+      })),
+    };
+  }
+  if (block.kind === "textBox") {
+    return {
+      ...block,
+      content: block.content.map(applyFootnoteParagraphPresentation),
+    };
+  }
+  return block;
+}
+
+function applyFootnoteParagraphPresentation(
+  block: ParagraphBlock,
+): ParagraphBlock {
+  return {
+    ...block,
+    runs: block.runs.map(applyFootnoteRunPresentation),
+  };
+}
+
+function applyFootnoteRunPresentation(run: Run): Run {
+  if (
+    (run.kind === "text" || run.kind === "tab" || run.kind === "field") &&
+    run.fontSize === undefined
+  ) {
+    return { ...run, fontSize: FOOTNOTE_FONT_SIZE };
+  }
+  return run;
 }
 
 // ============================================================================
@@ -263,6 +494,7 @@ export function buildFootnoteContentMap(
   footnotes: Footnote[],
   footnoteRefs: { footnoteId: number }[],
   contentWidth: number,
+  options: ConvertFootnoteOptions = {},
 ): Map<number, FootnoteContent> {
   const contentMap = new Map<number, FootnoteContent>();
   const footnoteById = new Map<number, Footnote>();
@@ -292,6 +524,7 @@ export function buildFootnoteContentMap(
       footnote,
       displayNumber,
       contentWidth,
+      options,
     );
     contentMap.set(ref.footnoteId, content);
     displayNumber++;

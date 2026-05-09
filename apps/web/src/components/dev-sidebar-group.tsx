@@ -114,8 +114,8 @@ export const DevSidebarGroup = () => {
       setSourceInspector: s.setSourceInspector,
       chatModelId: s.chatModelId,
       setChatModelId: s.setChatModelId,
-      showToolCalls: s.showToolCalls,
-      setShowToolCalls: s.setShowToolCalls,
+      showToolCallDetails: s.showToolCallDetails,
+      setShowToolCallDetails: s.setShowToolCallDetails,
       reactGrab: s.reactGrab,
       setReactGrab: s.setReactGrab,
     })),
@@ -227,11 +227,11 @@ export const DevSidebarGroup = () => {
           Source Inspector
         </MenuCheckboxItem>
         <MenuCheckboxItem
-          checked={dev.showToolCalls}
-          onClick={() => dev.setShowToolCalls(!dev.showToolCalls)}
+          checked={dev.showToolCallDetails}
+          onClick={() => dev.setShowToolCallDetails(!dev.showToolCallDetails)}
           variant="switch"
         >
-          Show Tool Calls
+          Detailed Tool Calls
         </MenuCheckboxItem>
         <MenuCheckboxItem
           checked={dev.reactGrab}

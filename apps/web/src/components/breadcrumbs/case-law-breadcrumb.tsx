@@ -49,7 +49,7 @@ export const CaseLawBreadcrumb = ({
     <BreadcrumbItem className="flex items-center gap-1.5">
       <BookOpenTextIcon className="size-3.5 shrink-0" style={{ color }} />
       <span>{decision.court}</span>
-      <span className="text-muted-foreground/60 text-sm">{displayRef}</span>
+      <span className="text-foreground-muted text-sm">{displayRef}</span>
     </BreadcrumbItem>
   );
 };

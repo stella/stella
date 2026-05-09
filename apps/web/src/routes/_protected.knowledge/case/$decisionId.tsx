@@ -238,7 +238,7 @@ function DecisionViewer() {
                 </div>
               )}
 
-              <div className="text-muted-foreground/40 sticky bottom-3 flex items-center gap-1 px-2 pt-4">
+              <div className="text-foreground-disabled sticky bottom-3 flex items-center gap-1 px-2 pt-4">
                 <SparklesIcon className="size-3" />
                 <span className="text-[0.6rem] font-medium tracking-wider uppercase">
                   AI
@@ -298,8 +298,8 @@ function AnalysisLoader() {
   return (
     <div className="flex flex-col gap-4 px-2 pt-4">
       <div className="flex items-center gap-2">
-        <Loader2Icon className="text-muted-foreground/60 size-3.5 animate-spin" />
-        <span className="text-muted-foreground/80 text-xs font-medium">
+        <Loader2Icon className="text-foreground-muted size-3.5 animate-spin" />
+        <span className="text-foreground-strong-muted text-xs font-medium">
           Analyzing...
         </span>
       </div>

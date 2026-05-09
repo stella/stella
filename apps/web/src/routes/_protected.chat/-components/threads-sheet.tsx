@@ -18,7 +18,8 @@ import { MessageSquareIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toAPIError } from "@/lib/errors";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
@@ -53,12 +54,12 @@ export const ThreadsSheet = ({
     ? {
         scope: "workspace",
         workspaceId: workspaceThreadMatch.params.workspaceId,
-        threadId: workspaceThreadMatch.params.threadId,
+        threadId: toChatThreadId(workspaceThreadMatch.params.threadId),
       }
     : globalThreadMatch
       ? {
           scope: "global",
-          threadId: globalThreadMatch.params.threadId,
+          threadId: toChatThreadId(globalThreadMatch.params.threadId),
         }
       : null;
 
@@ -146,7 +147,7 @@ const DeleteThreadButton = ({
       threadId,
       workspaceId,
     }: {
-      threadId: string;
+      threadId: ChatThreadId;
       workspaceId: SafeId<"workspace"> | undefined;
     }) => {
       const response = await api.chat.threads({ threadId }).delete(
@@ -257,12 +258,12 @@ const ThreadGroup = ({
           scope === "workspace"
             ? {
                 scope,
-                threadId: thread.id,
+                threadId: toChatThreadId(thread.id),
                 workspaceId,
               }
             : {
                 scope,
-                threadId: thread.id,
+                threadId: toChatThreadId(thread.id),
               };
         return (
           <div

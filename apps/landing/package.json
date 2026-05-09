@@ -2,7 +2,7 @@
   "name": "@stll/landing",
   "version": "0.0.1",
   "private": true,
-  "license": "AGPL-3.0-only",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "bun --bun astro dev",
@@ -18,7 +18,7 @@
     "@astrojs/sitemap": "^3.7.2",
     "@stll/ui": "workspace:*",
     "@tailwindcss/postcss": "catalog:",
-    "astro": "^6.1.10",
+    "astro": "^6.2.1",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "tailwindcss": "catalog:"

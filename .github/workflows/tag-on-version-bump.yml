@@ -63,6 +63,10 @@ jobs:
             exit 1
           fi
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Require release changelog file
+        run: bash scripts/check-release-changelog.sh --version "${{ steps.version.outputs.value }}"
 
       - name: Skip if tag already exists
         env:

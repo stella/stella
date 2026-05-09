@@ -18,6 +18,7 @@ import type {
   ParagraphFormatting,
   TextFormatting,
 } from "../../types/document";
+import { mergeTextFormatting } from "../../utils/textFormattingMerge";
 
 /**
  * Resolved style properties ready for rendering
@@ -53,6 +54,8 @@ export class StyleResolver {
   private readonly stylesById: Map<string, Style>;
   private readonly docDefaults: DocDefaults | undefined;
   private readonly defaultParagraphStyle: Style | undefined;
+  private readonly defaultCharacterStyle: Style | undefined;
+  private readonly defaultTableStyle: Style | undefined;
 
   constructor(styleDefinitions: StyleDefinitions | undefined) {
     this.stylesById = new Map();
@@ -69,6 +72,8 @@ export class StyleResolver {
 
     // Find default paragraph style
     this.defaultParagraphStyle = this.findDefaultStyle("paragraph");
+    this.defaultCharacterStyle = this.findDefaultStyle("character");
+    this.defaultTableStyle = this.findDefaultStyle("table");
   }
 
   /**
@@ -177,19 +182,19 @@ export class StyleResolver {
       result = { ...this.docDefaults.rPr };
     }
 
-    // If no styleId, return defaults
-    if (!styleId) {
-      return Object.keys(result).length > 0 ? result : undefined;
+    const defaultCharacterRpr = this.defaultCharacterStyle?.rPr;
+    if (defaultCharacterRpr) {
+      result = mergeTextFormatting(result, defaultCharacterRpr) ?? {};
     }
 
     // Get the requested style
-    const style = this.stylesById.get(styleId);
+    const style = styleId ? this.stylesById.get(styleId) : undefined;
     if (!style?.rPr) {
       return Object.keys(result).length > 0 ? result : undefined;
     }
 
     // Merge style's run properties
-    const merged = this.mergeTextFormatting(result, style.rPr);
+    const merged = mergeTextFormatting(result, style.rPr);
 
     return merged && Object.keys(merged).length > 0 ? merged : undefined;
   }
@@ -229,6 +234,20 @@ export class StyleResolver {
   }
 
   /**
+   * Get default character style.
+   */
+  getDefaultCharacterStyle(): Style | undefined {
+    return this.defaultCharacterStyle;
+  }
+
+  /**
+   * Get default table style.
+   */
+  getDefaultTableStyle(): Style | undefined {
+    return this.defaultTableStyle;
+  }
+
+  /**
    * Check if a style exists
    */
   hasStyle(styleId: string): boolean {
@@ -239,7 +258,9 @@ export class StyleResolver {
   // Private helpers
   // ============================================================================
 
-  private findDefaultStyle(type: "paragraph" | "character"): Style | undefined {
+  private findDefaultStyle(
+    type: "paragraph" | "character" | "table",
+  ): Style | undefined {
     // First try to find explicitly marked default
     for (const style of this.stylesById.values()) {
       if (style.type === type && style.default) {
@@ -267,7 +288,7 @@ export class StyleResolver {
       }
     }
     if (style.rPr) {
-      const merged = this.mergeTextFormatting(result.runFormatting, style.rPr);
+      const merged = mergeTextFormatting(result.runFormatting, style.rPr);
       if (merged !== undefined) {
         result.runFormatting = merged;
       }
@@ -294,7 +315,7 @@ export class StyleResolver {
       const value = source[key];
       if (value !== undefined) {
         if (key === "runProperties") {
-          const mergedRPr = this.mergeTextFormatting(
+          const mergedRPr = mergeTextFormatting(
             result.runProperties,
             source.runProperties,
           );
@@ -311,40 +332,6 @@ export class StyleResolver {
         } else if (key === "tabs" && Array.isArray(value)) {
           // Tabs from higher priority source replace lower priority
           result.tabs = [...value];
-        } else {
-          (result as Record<string, unknown>)[key] = value;
-        }
-      }
-    }
-
-    return result;
-  }
-
-  /**
-   * Merge text formatting (source overrides target)
-   */
-  private mergeTextFormatting(
-    target: TextFormatting | undefined,
-    source: TextFormatting | undefined,
-  ): TextFormatting | undefined {
-    if (!source) {
-      return target;
-    }
-    if (!target) {
-      return source ? { ...source } : undefined;
-    }
-
-    const result = { ...target };
-
-    for (const key of Object.keys(source) as (keyof TextFormatting)[]) {
-      const value = source[key];
-      if (value !== undefined) {
-        if (typeof value === "object" && value !== null) {
-          // Deep merge for objects like fontFamily, color, underline
-          (result as Record<string, unknown>)[key] = {
-            ...(result[key] as Record<string, unknown>),
-            ...(value as Record<string, unknown>),
-          };
         } else {
           (result as Record<string, unknown>)[key] = value;
         }

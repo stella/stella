@@ -362,6 +362,14 @@ export const SearchDialog = ({
     summarizeSearchMutation.reset();
   };
 
+  const handleEscapeAction = () => {
+    if (query.trim() || debouncedQuery.trim()) {
+      clearSearchQuery();
+      return;
+    }
+    onOpenChange(false);
+  };
+
   const handleSummarizeResults = () => {
     const trimmedQuery = searchQuery.trim();
     if (!trimmedQuery || summarizeSearchMutation.isPending) {
@@ -605,7 +613,7 @@ export const SearchDialog = ({
     if (e.key === "Escape" && (query.trim() || debouncedQuery.trim())) {
       e.preventDefault();
       e.stopPropagation();
-      clearSearchQuery();
+      handleEscapeAction();
     }
   };
 
@@ -712,9 +720,16 @@ export const SearchDialog = ({
                 <WandSparklesIcon className="size-4" />
               )}
             </Button>
-            <kbd className="bg-muted text-muted-foreground hidden rounded border px-1.5 py-0.5 text-[0.625rem] sm:inline-flex">
+            <Button
+              aria-keyshortcuts="Escape"
+              aria-label={t("search.escKey")}
+              className="border-border bg-muted text-muted-foreground hover:bg-muted/80 hidden h-auto rounded border px-1.5 py-0.5 text-[0.625rem] leading-none sm:inline-flex"
+              onClick={handleEscapeAction}
+              title={t("search.escKey")}
+              variant="ghost"
+            >
               {t("search.escKey")}
-            </kbd>
+            </Button>
           </div>
 
           {/* Content area */}
@@ -1542,7 +1557,7 @@ const SearchResultItem = ({
           />
         )}
       </div>
-      <span className="text-muted-foreground/45 mt-0.5 shrink-0 px-1 text-xs tabular-nums">
+      <span className="text-foreground-subtle mt-0.5 shrink-0 px-1 text-xs tabular-nums">
         {resultNumber}
       </span>
     </CommandItem>

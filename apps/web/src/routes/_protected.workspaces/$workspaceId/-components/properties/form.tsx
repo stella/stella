@@ -29,7 +29,7 @@ export const PropertyTextInput = ({
   <PropertyFormField name={field.name}>
     <input
       autoComplete="off"
-      className="group-data-invalid:border-destructive/36 placeholder:text-muted-foreground/72 w-full rounded-md px-1.5 py-1 text-sm font-semibold group-data-invalid:border focus-visible:outline-none"
+      className="group-data-invalid:border-destructive/36 placeholder:text-foreground-placeholder w-full rounded-md px-1.5 py-1 text-sm font-semibold group-data-invalid:border focus-visible:outline-none"
       data-1p-ignore
       onBlur={field.handleBlur}
       onChange={(e) => field.handleChange(e.target.value)}

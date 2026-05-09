@@ -47,7 +47,7 @@ export const CreatingStep = ({ currentPhase, progress }: CreatingStepProps) => {
           {currentPhase === "done" && t("onboarding.creating.done")}
         </p>
 
-        <p className="text-muted-foreground/50 mt-8 text-xs">
+        <p className="text-foreground-subtle mt-8 text-xs">
           {t("onboarding.creatingTrust")}
         </p>
       </div>

@@ -1583,7 +1583,7 @@ const EditableRow = ({
         }}
         type="button"
       >
-        {value || <span className="text-muted-foreground/50">—</span>}
+        {value || <span className="text-foreground-subtle">—</span>}
       </button>
     </div>
   );
