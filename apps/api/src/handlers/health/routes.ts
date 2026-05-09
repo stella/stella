@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import Elysia from "elysia";
 
 import { HealthCheckError } from "@/api/lib/errors/tagged-errors";
+import { createProbeCache } from "@/api/lib/health/probe-cache";
+import type { ProbeOutcome } from "@/api/lib/health/probe-cache";
 import { probeDatabase } from "@/api/lib/health/probe-database";
 
 const APP_VERSION = process.env["STELLA_VERSION"] ?? "dev";
@@ -11,19 +13,42 @@ const BUILD_METADATA = {
   commit: APP_COMMIT_SHA,
 };
 
-export const healthRoute = new Elysia().get("/health", async ({ set }) => {
-  const probe = probeDatabase();
-  const timeout = new Promise((_resolve, reject) => {
+const PROBE_TIMEOUT_MS = 5000;
+// Coalesces concurrent /health calls onto a single in-flight probe and
+// reuses the outcome for this window, so liveness checks (k8s, ALB) and
+// any drive-by traffic don't translate one-to-one into DB round-trips.
+const PROBE_CACHE_TTL_MS = 5000;
+
+const runDatabaseProbe = async (): Promise<ProbeOutcome<HealthCheckError>> => {
+  const timeout = new Promise<never>((_resolve, reject) => {
     setTimeout(
       () => reject(new HealthCheckError({ message: "DB probe timeout" })),
-      5000,
+      PROBE_TIMEOUT_MS,
     );
   });
   const result = await Result.tryPromise(
-    async () => await Promise.race([probe, timeout]),
+    async () => await Promise.race([probeDatabase(), timeout]),
   );
-
   if (result.isErr()) {
+    const cause = result.error;
+    return {
+      ok: false,
+      error: HealthCheckError.is(cause)
+        ? cause
+        : new HealthCheckError({ message: "DB probe failed", cause }),
+    };
+  }
+  return { ok: true };
+};
+
+const probeCache = createProbeCache(runDatabaseProbe, {
+  ttlMs: PROBE_CACHE_TTL_MS,
+});
+
+export const healthRoute = new Elysia().get("/health", async ({ set }) => {
+  const outcome = await probeCache.run();
+
+  if (!outcome.ok) {
     set.status = 503;
     return {
       status: "error" as const,
