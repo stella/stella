@@ -8,13 +8,16 @@ import {
   FramePanel,
   FrameTitle,
 } from "@stll/ui/components/frame";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import type { McpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { broadcastMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { pageTitle } from "@/lib/page-title";
+
+const KNOWLEDGE_MCP_PATH = "/knowledge/mcp";
+const FALLBACK_NAVIGATE_DELAY_MS = 150;
 
 const searchSchema = v.object({
   status: v.picklist(["connected", "error"]),
@@ -32,6 +35,7 @@ export const Route = createFileRoute("/mcp/oauth-callback")({
 
 function McpOAuthCallbackPage() {
   const t = useTranslations();
+  const navigate = useNavigate();
   const status = Route.useSearch({ select: (search) => search.status });
   const reason = Route.useSearch({ select: (search) => search.reason });
 
@@ -42,7 +46,15 @@ function McpOAuthCallbackPage() {
         : { status: "error", reason: reason ?? "unexpected" };
     broadcastMcpOAuthOutcome(outcome);
     window.close();
-  }, [status, reason]);
+    // `window.close()` is a no-op for tabs the user navigated to
+    // themselves (the popup-blocked fallback path uses
+    // `window.location.assign`). If we're still here after a tick,
+    // route back to the MCP settings page so the user is not stranded.
+    const fallback = window.setTimeout(() => {
+      void navigate({ to: KNOWLEDGE_MCP_PATH });
+    }, FALLBACK_NAVIGATE_DELAY_MS);
+    return () => window.clearTimeout(fallback);
+  }, [status, reason, navigate]);
 
   const isError = status === "error";
 
@@ -64,7 +76,10 @@ function McpOAuthCallbackPage() {
         <FramePanel>
           <Button
             className="w-full"
-            onClick={() => window.close()}
+            onClick={() => {
+              window.close();
+              void navigate({ to: KNOWLEDGE_MCP_PATH });
+            }}
             type="button"
           >
             {t("common.close")}
