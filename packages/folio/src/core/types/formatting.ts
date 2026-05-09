@@ -343,6 +343,16 @@ export type ParagraphFormatting = {
   // Default run properties for this paragraph
   /** Run properties to apply to all runs (w:rPr) */
   runProperties?: TextFormatting;
+
+  /**
+   * Run-in heading: this paragraph's mark carries `<w:specVanish/>`
+   * (ECMA-376 §17.3.1.32) and the paragraph break should be treated
+   * as a soft break — Word renders the next paragraph inline on the
+   * same line. Used by NVCA-style legal templates where heading
+   * paragraphs (e.g. "6.11 Severability") visually merge into the
+   * body paragraph that follows.
+   */
+  runInWithNext?: boolean;
 };
 
 // ============================================================================

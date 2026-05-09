@@ -262,6 +262,13 @@ export type ParagraphAttrs = {
   pageBreakBefore?: boolean;
   styleId?: string;
   contextualSpacing?: boolean;
+  /**
+   * Run-in heading: paragraph mark carries `<w:specVanish/>` and the
+   * next paragraph should flow inline on the same line. The layout
+   * stage merges the next paragraph's runs into this paragraph's
+   * fragment (keeping pmStart/pmEnd intact for editing).
+   */
+  runInWithNext?: boolean;
   /** Right-to-left paragraph direction */
   bidi?: boolean;
   borders?: ParagraphBorders;

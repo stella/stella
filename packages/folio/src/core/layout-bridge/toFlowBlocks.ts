@@ -1111,6 +1111,9 @@ function convertParagraphAttrs(
   if (pmAttrs.contextualSpacing) {
     attrs.contextualSpacing = true;
   }
+  if (pmAttrs.runInWithNext) {
+    attrs.runInWithNext = true;
+  }
   if (pmAttrs.bidi) {
     attrs.bidi = true;
   }
@@ -1855,5 +1858,73 @@ export function toFlowBlocks(
     }
   });
 
-  return blocks;
+  return mergeRunInParagraphs(blocks);
+}
+
+/**
+ * Merge consecutive paragraph blocks where the first carries
+ * `runInWithNext` (`<w:specVanish/>` on the paragraph mark).
+ *
+ * Word's run-in heading feature renders the next paragraph inline on
+ * the same line, so for layout we collapse the pair into one
+ * ParagraphBlock with combined runs. The merged block keeps the first
+ * paragraph's attrs (heading formatting, list marker, indent) and
+ * extends pmEnd to the second paragraph's range so click-to-position
+ * resolution still maps both ranges back to body content.
+ *
+ * Chains: runInWithNext on the merged block is dropped because the
+ * second paragraph's mark wasn't `specVanish`. If a chain of
+ * specVanish paragraphs needs collapsing (rare in practice), the loop
+ * naturally handles it by re-inspecting the merged block's flag (we
+ * preserve runInWithNext only when the second paragraph itself has
+ * specVanish).
+ */
+function mergeRunInParagraphs(blocks: FlowBlock[]): FlowBlock[] {
+  const out: FlowBlock[] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const current = blocks[i];
+    if (!current) {
+      continue;
+    }
+    if (
+      current.kind === "paragraph" &&
+      (current as ParagraphBlock).attrs?.runInWithNext
+    ) {
+      const next = blocks[i + 1];
+      if (next && next.kind === "paragraph") {
+        const a = current as ParagraphBlock;
+        const b = next as ParagraphBlock;
+        const mergedAttrs: ParagraphAttrs = { ...a.attrs };
+        // Heading typically has no spaceAfter; the body's spaceAfter
+        // governs the merged paragraph's trailing gap.
+        if (b.attrs?.spacing?.after !== undefined) {
+          mergedAttrs.spacing = {
+            ...mergedAttrs.spacing,
+            after: b.attrs.spacing.after,
+          };
+        }
+        // Drop the run-in flag unless the second para is also
+        // specVanish (rare); then a future iteration would chain.
+        if (b.attrs?.runInWithNext) {
+          mergedAttrs.runInWithNext = true;
+        } else {
+          delete mergedAttrs.runInWithNext;
+        }
+        const merged: ParagraphBlock = {
+          ...a,
+          runs: [...a.runs, ...b.runs],
+          attrs: mergedAttrs,
+        };
+        const mergedPmEnd = b.pmEnd ?? a.pmEnd;
+        if (mergedPmEnd !== undefined) {
+          merged.pmEnd = mergedPmEnd;
+        }
+        out.push(merged);
+        i += 1; // consumed `next`
+        continue;
+      }
+    }
+    out.push(current);
+  }
+  return out;
 }

@@ -732,6 +732,15 @@ export function parseParagraphProperties(
     if (runPropsResult !== undefined) {
       formatting.runProperties = runPropsResult;
     }
+    // Run-in heading marker: `<w:specVanish/>` on the paragraph
+    // mark's rPr (ECMA-376 §17.3.1.32). Word treats the paragraph
+    // break as a soft break and flows the next paragraph inline on
+    // the same line — used by run-in heading styles in legal
+    // templates (NVCA "6.11 Severability" → body merges).
+    const specVanish = findChild(rPr, "w", "specVanish");
+    if (specVanish && parseBooleanElement(specVanish)) {
+      formatting.runInWithNext = true;
+    }
   }
 
   return Object.keys(formatting).length > 0 ? formatting : undefined;

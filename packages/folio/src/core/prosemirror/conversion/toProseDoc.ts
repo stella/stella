@@ -424,6 +424,9 @@ function paragraphFormattingToAttrs(
       "contextualSpacing",
       formatting?.contextualSpacing ?? stylePpr?.contextualSpacing,
     );
+    // Run-in heading (`<w:specVanish/>` on the paragraph mark) — see
+    // ParagraphAttrs.runInWithNext.
+    set("runInWithNext", formatting?.runInWithNext ?? stylePpr?.runInWithNext);
 
     // Outline level (for TOC)
     set("outlineLevel", formatting?.outlineLevel ?? stylePpr?.outlineLevel);
@@ -461,6 +464,7 @@ function paragraphFormattingToAttrs(
     set("pageBreakBefore", formatting?.pageBreakBefore);
     set("keepNext", formatting?.keepNext);
     set("keepLines", formatting?.keepLines);
+    set("runInWithNext", formatting?.runInWithNext);
 
     // Outline level
     set("outlineLevel", formatting?.outlineLevel);

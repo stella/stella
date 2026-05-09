@@ -335,6 +335,7 @@ const paragraphNodeSpec: NodeSpec = {
     keepNext: { default: null },
     keepLines: { default: null },
     contextualSpacing: { default: null },
+    runInWithNext: { default: null },
     defaultTextFormatting: { default: null },
     sectionBreakType: { default: null },
     bidi: { default: null },
