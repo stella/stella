@@ -8,7 +8,16 @@ import type {
 } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
 import { Separator } from "@stll/ui/components/separator";
-import { PenLineIcon, EyeIcon } from "lucide-react";
+import { EyeIcon, MinusIcon, PenLineIcon, PlusIcon } from "lucide-react";
+
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 2;
+const ZOOM_STEP = 0.1;
+const ZOOM_INITIAL = 1;
+
+function clampZoom(zoom: number): number {
+  return Math.min(Math.max(zoom, ZOOM_MIN), ZOOM_MAX);
+}
 
 declare global {
   var __folioPlayground:
@@ -64,6 +73,7 @@ export function App() {
   const [fileName, setFileName] = useState("Untitled.docx");
   const [status, setStatus] = useState("");
   const [editorMode, setEditorMode] = useState<EditorMode>("editing");
+  const [zoom, setZoom] = useState(ZOOM_INITIAL);
 
   // Load fixture from ?file= query param (for visual regression tests)
   // or from /fixtures/*.docx (served by Vite's public dir)
@@ -158,6 +168,24 @@ export function App() {
     setStatus(`Error: ${error.message}`);
   }, []);
 
+  const applyZoom = useCallback((next: number) => {
+    const clamped = clampZoom(next);
+    setZoom(clamped);
+    editorRef.current?.setZoom(clamped);
+  }, []);
+  const handleZoomIn = useCallback(
+    () => applyZoom(zoom + ZOOM_STEP),
+    [applyZoom, zoom],
+  );
+  const handleZoomOut = useCallback(
+    () => applyZoom(zoom - ZOOM_STEP),
+    [applyZoom, zoom],
+  );
+  const handleZoomReset = useCallback(
+    () => applyZoom(ZOOM_INITIAL),
+    [applyZoom],
+  );
+
   const toggleDarkMode = useCallback(() => {
     document.documentElement.classList.toggle("dark");
   }, []);
@@ -183,6 +211,7 @@ export function App() {
           author="Folio User"
           onError={handleError}
           showToolbar={true}
+          initialZoom={ZOOM_INITIAL}
           mode={editorMode}
           onModeChange={setEditorMode}
         />
@@ -226,14 +255,44 @@ export function App() {
           id="file-input"
           type="file"
           accept=".docx"
-          onChange={handleFileSelect}
+          onChange={(e) => void handleFileSelect(e)}
           className="hidden"
         />
         <Button variant="ghost" size="sm" onClick={handleNewDocument}>
           New
         </Button>
-        <Button variant="ghost" size="sm" onClick={handleSave}>
+        <Button variant="ghost" size="sm" onClick={() => void handleSave()}>
           Save
+        </Button>
+
+        <Separator orientation="vertical" className="h-5" />
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleZoomOut}
+          disabled={zoom <= ZOOM_MIN}
+          title="Zoom out"
+        >
+          <MinusIcon />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleZoomReset}
+          title="Reset zoom"
+          className="min-w-12 font-mono text-xs"
+        >
+          {Math.round(zoom * 100)}%
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleZoomIn}
+          disabled={zoom >= ZOOM_MAX}
+          title="Zoom in"
+        >
+          <PlusIcon />
         </Button>
 
         <Separator orientation="vertical" className="h-5" />
