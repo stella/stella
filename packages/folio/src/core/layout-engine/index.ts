@@ -544,17 +544,21 @@ function layoutParagraph(
     // by itself but `addFootnoteHeight` afterwards drops contentBottom
     // below cursorY, producing an overlap with the fn area.
     //
-    // If this would be the *first* footnote on the host page, also
-    // include `FOOTNOTE_SEPARATOR_HEIGHT` in the fit check —
-    // `addFootnoteHeight` reserves it on the first call, and missing
-    // it here lets a boundary-case line slip onto a page where the
-    // separator's 13 px shrinks contentBottom past cursorY (Codex
-    // PR #258 — same overlap class as the linesFnHeight gap).
+    // Always include `FOOTNOTE_SEPARATOR_HEIGHT` in the fit check.
+    // We can't gate on the *current* page's `isFirstFnOnPage` flag —
+    // `ensureFits` may advance to a fresh page where this would be
+    // the first footnote, and the separator that `addFootnoteHeight`
+    // then reserves would push contentBottom past the just-committed
+    // line (Codex PR #258 review). Over-reserving 13 px on a page
+    // that already has a footnote is harmless; under-reserving on a
+    // freshly-advanced page reintroduces the overlap class this
+    // preflight is meant to prevent.
     if (linesFnHeight > 0) {
-      const isFirstFnOnPage = paginator.getCurrentState().footnoteHeight === 0;
-      const separatorOverhead = isFirstFnOnPage ? FOOTNOTE_SEPARATOR_HEIGHT : 0;
       paginator.ensureFits(
-        effectiveSpaceBefore + linesHeight + linesFnHeight + separatorOverhead,
+        effectiveSpaceBefore +
+          linesHeight +
+          linesFnHeight +
+          FOOTNOTE_SEPARATOR_HEIGHT,
       );
     }
 
