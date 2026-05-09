@@ -257,6 +257,11 @@ type InspectorBroadcastSession = {
   scopeKey: string;
 };
 
+type InspectorBroadcastClock = {
+  senderId: string;
+  updatedAt: number;
+};
+
 const INSPECTOR_TABS_CHANNEL_PREFIX = "stella:inspector-tabs:v1";
 const noopInspectorBroadcastCleanup = () => undefined;
 
@@ -270,6 +275,35 @@ const postInspectorBroadcastMessage = (
   channel.postMessage(message);
 };
 /* eslint-enable unicorn/require-post-message-target-origin */
+
+const compareInspectorBroadcastClocks = (
+  left: InspectorBroadcastClock,
+  right: InspectorBroadcastClock,
+) => {
+  if (left.updatedAt !== right.updatedAt) {
+    return left.updatedAt - right.updatedAt;
+  }
+
+  return left.senderId.localeCompare(right.senderId);
+};
+
+const getNextInspectorBroadcastClock = (
+  previousClock: InspectorBroadcastClock | null,
+  senderId: string,
+): InspectorBroadcastClock => {
+  const now = Date.now();
+  if (previousClock === null) {
+    return { senderId, updatedAt: now };
+  }
+
+  const updatedAt = Math.max(now, previousClock.updatedAt);
+  const nextClock = { senderId, updatedAt };
+  if (compareInspectorBroadcastClocks(nextClock, previousClock) > 0) {
+    return nextClock;
+  }
+
+  return { senderId, updatedAt: previousClock.updatedAt + 1 };
+};
 
 export const getInspectorTabsBroadcastChannelName = ({
   userId,
@@ -307,19 +341,20 @@ const createInspectorBroadcastSession = (
   const clientId = uuidv7();
   let consumers = 1;
   let applyingRemote = false;
-  let lastTabsUpdatedAt = 0;
+  let lastTabsClock: InspectorBroadcastClock | null = null;
 
   const postTabs = (recipientId?: string) => {
     const tabs = useInspectorStore.getState().tabs;
     if (recipientId !== undefined && tabs.length === 0) {
       return;
     }
+    const clock = lastTabsClock ?? { senderId: clientId, updatedAt: 0 };
 
     postInspectorBroadcastMessage(channel, {
       type: "inspector-tabs:sync",
       senderId: clientId,
       recipientId,
-      updatedAt: lastTabsUpdatedAt,
+      updatedAt: clock.updatedAt,
       tabs,
     });
   };
@@ -329,7 +364,7 @@ const createInspectorBroadcastSession = (
       return;
     }
 
-    lastTabsUpdatedAt = Date.now();
+    lastTabsClock = getNextInspectorBroadcastClock(lastTabsClock, clientId);
     postTabs();
   });
 
@@ -351,13 +386,20 @@ const createInspectorBroadcastSession = (
       return;
     }
 
-    if (message.updatedAt < lastTabsUpdatedAt) {
+    const messageClock = {
+      senderId: message.senderId,
+      updatedAt: message.updatedAt,
+    };
+    if (
+      lastTabsClock !== null &&
+      compareInspectorBroadcastClocks(messageClock, lastTabsClock) <= 0
+    ) {
       return;
     }
 
     applyingRemote = true;
     try {
-      lastTabsUpdatedAt = message.updatedAt;
+      lastTabsClock = messageClock;
       applySharedInspectorTabs(message.tabs);
     } finally {
       applyingRemote = false;

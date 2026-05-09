@@ -8,11 +8,16 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 let cleanupInspectorBroadcast: (() => void) | null = null;
+let previousDateNow: (() => number) | undefined;
 let previousWindowDescriptor: PropertyDescriptor | undefined;
 
 afterEach(() => {
   cleanupInspectorBroadcast?.();
   cleanupInspectorBroadcast = null;
+  if (previousDateNow !== undefined) {
+    Date.now = previousDateNow;
+    previousDateNow = undefined;
+  }
   FakeBroadcastChannel.reset();
   if (previousWindowDescriptor) {
     Object.defineProperty(globalThis, "window", previousWindowDescriptor);
@@ -114,6 +119,11 @@ const installFakeBroadcastChannel = () => {
     configurable: true,
     value: { BroadcastChannel: FakeBroadcastChannel },
   });
+};
+
+const freezeDateNow = (updatedAt: number) => {
+  previousDateNow = Date.now;
+  Date.now = () => updatedAt;
 };
 
 describe("openChat", () => {
@@ -460,6 +470,85 @@ describe("Inspector tab broadcast", () => {
         type: "chat",
         id: localThreadId,
         label: "Local chat renamed elsewhere",
+        contextMatterIds: [],
+      },
+    ]);
+  });
+
+  test("uses sender id as deterministic tie-breaker for same-ms updates", () => {
+    freezeDateNow(100);
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const peer = new FakeBroadcastChannel(
+      getInspectorTabsBroadcastChannelName(scope),
+    );
+    const received: unknown[] = [];
+    peer.addEventListener("message", (event) => {
+      received.push(event.data);
+    });
+
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    const localThreadId = toChatThreadId("thread-local");
+    useInspectorStore.getState().openChat({
+      id: localThreadId,
+      label: "Local chat",
+    });
+
+    const syncMessage = received.findLast(
+      (message) =>
+        typeof message === "object" &&
+        message !== null &&
+        Reflect.get(message, "type") === "inspector-tabs:sync",
+    );
+    const localSenderId = Reflect.get(syncMessage ?? {}, "senderId");
+    expect(typeof localSenderId).toBe("string");
+    if (typeof localSenderId !== "string") {
+      throw new TypeError("expected local sender id");
+    }
+
+    const lowerPeerThreadId = toChatThreadId("thread-lower-peer");
+    peer.emit({
+      type: "inspector-tabs:sync",
+      senderId: "00000000-0000-0000-0000-000000000000",
+      updatedAt: 100,
+      tabs: [
+        {
+          type: "chat",
+          id: lowerPeerThreadId,
+          label: "Lower peer chat",
+          contextMatterIds: [],
+        },
+      ],
+    });
+    expect(useInspectorStore.getState().tabs).toEqual([
+      {
+        type: "chat",
+        id: localThreadId,
+        label: "Local chat",
+        contextMatterIds: [],
+      },
+    ]);
+
+    const higherPeerThreadId = toChatThreadId("thread-higher-peer");
+    peer.emit({
+      type: "inspector-tabs:sync",
+      senderId: "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz",
+      updatedAt: 100,
+      tabs: [
+        {
+          type: "chat",
+          id: higherPeerThreadId,
+          label: "Higher peer chat",
+          contextMatterIds: [],
+        },
+      ],
+    });
+    expect(useInspectorStore.getState().tabs).toEqual([
+      {
+        type: "chat",
+        id: higherPeerThreadId,
+        label: "Higher peer chat",
         contextMatterIds: [],
       },
     ]);
