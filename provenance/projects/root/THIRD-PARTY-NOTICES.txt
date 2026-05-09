@@ -11,7 +11,9 @@ Project: root
 - @ai-sdk/devtools 0.0.16 — Apache-2.0
 - @ai-sdk/google 3.0.67 — Apache-2.0
 - @ai-sdk/google-vertex 4.0.118 — Apache-2.0
+- @ai-sdk/mcp 1.0.39 — Apache-2.0
 - @ai-sdk/openai 3.0.58 — Apache-2.0
+- @ai-sdk/provider-utils 4.0.26 — Apache-2.0
 - @ai-sdk/react 3.0.176 — Apache-2.0
 - @ai-sdk/valibot 2.0.27 — Apache-2.0
 - @astrojs/react 5.0.4 — MIT

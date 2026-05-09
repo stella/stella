@@ -242,6 +242,66 @@
       "version": "3.0.67"
     },
     {
+      "bom-ref": "pkg:npm/@ai-sdk/mcp@1.0.39",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@ai-sdk/mcp/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@ai-sdk/mcp/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#2"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://ai-sdk.dev/docs"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/vercel/ai"
+        }
+      ],
+      "group": "@ai-sdk",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "mcp",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@ai-sdk/mcp/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40ai-sdk/mcp@1.0.39",
+      "scope": "required",
+      "tags": [
+        "framework"
+      ],
+      "type": "framework",
+      "version": "1.0.39"
+    },
+    {
       "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.58",
       "evidence": {
         "identity": [
@@ -298,6 +358,63 @@
       ],
       "type": "framework",
       "version": "3.0.58"
+    },
+    {
+      "bom-ref": "pkg:npm/@ai-sdk/provider-utils@4.0.26",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@ai-sdk/provider-utils/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@ai-sdk/provider-utils/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#3"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://ai-sdk.dev/docs"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/vercel/ai"
+        }
+      ],
+      "group": "@ai-sdk",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "provider-utils",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@ai-sdk/provider-utils/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40ai-sdk/provider-utils@4.0.26",
+      "scope": "required",
+      "tags": [
+        "framework"
+      ],
+      "type": "framework",
+      "version": "4.0.26"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/react@3.0.176",
@@ -372,10 +489,10 @@
             "location": "apps/web/src/lib/sse.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#1"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#2"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-global-chat-mention-registration.ts#1"
@@ -549,7 +666,13 @@
             "location": "apps/web/src/components/chat/chat-thread-messages.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/chat/prompt-slash-list.tsx#7"
+          },
+          {
+            "location": "apps/web/src/components/chat/source-chips.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#1"
@@ -801,6 +924,12 @@
             "location": "apps/web/src/routes/_protected.knowledge/clauses.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#1"
           },
           {
@@ -892,6 +1021,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
@@ -1398,6 +1530,9 @@
             "location": "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts#4"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/ares-tools.ts#5"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#5"
           },
           {
@@ -1426,6 +1561,12 @@
           },
           {
             "location": "apps/api/src/handlers/entities/organize-suggestions.ts#8"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/oauth.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/url-safety.ts#4"
           },
           {
             "location": "apps/api/src/handlers/search/ai.ts#8"
@@ -1632,10 +1773,10 @@
             "location": "apps/web/src/lib/sse.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#1"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#2"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-global-chat-mention-registration.ts#1"
@@ -1809,7 +1950,13 @@
             "location": "apps/web/src/components/chat/chat-thread-messages.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/chat/prompt-slash-list.tsx#7"
+          },
+          {
+            "location": "apps/web/src/components/chat/source-chips.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#1"
@@ -2061,6 +2208,12 @@
             "location": "apps/web/src/routes/_protected.knowledge/clauses.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#1"
           },
           {
@@ -2152,6 +2305,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
@@ -3717,10 +3873,10 @@
             "location": "apps/web/src/lib/sse.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#1"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#2"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-global-chat-mention-registration.ts#1"
@@ -3894,7 +4050,13 @@
             "location": "apps/web/src/components/chat/chat-thread-messages.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/chat/prompt-slash-list.tsx#7"
+          },
+          {
+            "location": "apps/web/src/components/chat/source-chips.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#1"
@@ -4146,6 +4308,12 @@
             "location": "apps/web/src/routes/_protected.knowledge/clauses.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#1"
           },
           {
@@ -4237,6 +4405,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
@@ -5459,10 +5630,10 @@
             "location": "apps/web/src/lib/sse.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#1"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#2"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-global-chat-mention-registration.ts#1"
@@ -5636,7 +5807,13 @@
             "location": "apps/web/src/components/chat/chat-thread-messages.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/chat/prompt-slash-list.tsx#7"
+          },
+          {
+            "location": "apps/web/src/components/chat/source-chips.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#1"
@@ -5888,6 +6065,12 @@
             "location": "apps/web/src/routes/_protected.knowledge/clauses.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#1"
           },
           {
@@ -5979,6 +6162,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
@@ -6811,7 +6997,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/chat/use-request-chat-about.ts#3"
+            "location": "apps/web/src/lib/chat-thread-ref.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-queries.ts#10"
@@ -6821,15 +7007,6 @@
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#37"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#16"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/new.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/workspaces/$workspaceId/new.tsx#2"
           }
         ]
       },
@@ -7015,7 +7192,10 @@
             "location": "apps/web/src/components/chat/chat-ui-tools.ts#6"
           },
           {
-            "location": "apps/web/src/components/chat/chat-ui-tools.ts#11"
+            "location": "apps/web/src/components/chat/chat-ui-tools.ts#10"
+          },
+          {
+            "location": "apps/web/src/components/chat/source-chips.logic.ts#1"
           },
           {
             "location": "apps/web/src/lib/api.ts#2"
@@ -7042,7 +7222,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-mutations/properties.ts#1"
           },
           {
-            "location": "apps/web/src/components/chat/source-chips.tsx#5"
+            "location": "apps/web/src/components/chat/source-chips.tsx#7"
           },
           {
             "location": "apps/web/src/components/search-dialog.tsx#3"
@@ -7123,6 +7303,9 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "apps/api/src/handlers/chat/tools/ares-tools.ts#2"
+          },
           {
             "location": "apps/api/src/handlers/contacts/ares-lookup.ts#8"
           }
@@ -7896,6 +8079,9 @@
             "location": "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx#14"
           },
           {
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#5"
+          },
+          {
             "location": "apps/web/src/components/dev-sidebar-group.tsx#15"
           },
           {
@@ -7962,6 +8148,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/index.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#17"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#13"
           },
           {
@@ -8025,7 +8214,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-day-view.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#3"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#10"
@@ -8049,7 +8238,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#29"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#26"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#11"
@@ -8184,7 +8373,10 @@
             "location": "apps/web/src/components/chat/chat-draft-attachment-chips.tsx#1"
           },
           {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#3"
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#3"
           },
           {
             "location": "apps/web/src/components/chat-input-surface.tsx#4"
@@ -8284,6 +8476,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/case/index.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#3"
@@ -8676,7 +8871,7 @@
             "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx#28"
@@ -8802,7 +8997,7 @@
             "location": "apps/web/src/components/chat/chat-draft-attachment-chips.tsx#2"
           },
           {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#4"
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#6"
           },
           {
             "location": "apps/web/src/components/chat/entity-link.tsx#1"
@@ -8814,13 +9009,13 @@
             "location": "apps/web/src/components/chat/prompt-suggestions.tsx#1"
           },
           {
-            "location": "apps/web/src/components/chat/source-chips.tsx#6"
+            "location": "apps/web/src/components/chat/source-chips.tsx#8"
           },
           {
             "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat/tool-approval-card.tsx#3"
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#4"
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#3"
@@ -8892,6 +9087,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/index.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#18"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#14"
           },
           {
@@ -8937,9 +9135,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#4"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-week-header.tsx#1"
           },
           {
@@ -8970,7 +9165,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#17"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#27"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header.tsx#4"
@@ -9285,6 +9480,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/decision-filters.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#16"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#4"
           },
           {
@@ -9328,6 +9526,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#19"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#23"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet.tsx#5"
@@ -9744,6 +9945,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx#14"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#14"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#12"
           },
           {
@@ -9778,6 +9982,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#18"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#22"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/members-section.tsx#15"
@@ -9873,7 +10080,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#20"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#25"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx#6"
@@ -9964,6 +10171,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#17"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#17"
@@ -10728,6 +10938,9 @@
             "location": "apps/web/src/routes/_protected.account/-queries.ts#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#12"
+          },
+          {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration.ts#3"
           },
           {
@@ -10899,10 +11112,16 @@
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#10"
           },
           {
+            "location": "apps/web/src/components/chat/source-chips.tsx#9"
+          },
+          {
             "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#5"
           },
           {
-            "location": "apps/web/src/components/chat/tool-approval-card.tsx#4"
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#4"
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#13"
@@ -10993,6 +11212,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/clauses.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#19"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#15"
@@ -11097,7 +11319,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#22"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#32"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/versions-facet.tsx#11"
@@ -11382,6 +11604,9 @@
             "location": "apps/web/src/hooks/use-sign-out.ts#3"
           },
           {
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#13"
+          },
+          {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-user-context.ts#1"
           },
           {
@@ -11430,7 +11655,7 @@
             "location": "apps/web/src/components/chat/entity-link.tsx#2"
           },
           {
-            "location": "apps/web/src/components/chat/source-chips.tsx#7"
+            "location": "apps/web/src/components/chat/source-chips.tsx#10"
           },
           {
             "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#6"
@@ -11508,6 +11733,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/index.tsx#3"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#20"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/route.tsx#1"
           },
           {
@@ -11577,7 +11805,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#27"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#23"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#33"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/versions-facet.tsx#12"
@@ -12767,10 +12995,10 @@
             "location": "apps/web/src/lib/sse.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#1"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#2"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-global-chat-mention-registration.ts#1"
@@ -12944,7 +13172,13 @@
             "location": "apps/web/src/components/chat/chat-thread-messages.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/chat/prompt-slash-list.tsx#7"
+          },
+          {
+            "location": "apps/web/src/components/chat/source-chips.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#1"
@@ -13196,6 +13430,12 @@
             "location": "apps/web/src/routes/_protected.knowledge/clauses.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#1"
           },
           {
@@ -13287,6 +13527,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
@@ -13936,10 +14179,13 @@
             "location": "apps/api/src/handlers/chat/chat-schema.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/stream-chat.ts#8"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#9"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#13"
           },
           {
             "location": "apps/api/src/handlers/chat/third-party-boundary.ts#1"
@@ -13951,13 +14197,25 @@
             "location": "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/ares-tools.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-tools.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#4"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/org-tools.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#5"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/tool-policy.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#3"
@@ -14005,10 +14263,7 @@
             "location": "apps/api/src/mcp/tool-utils.ts#2"
           },
           {
-            "location": "apps/web/src/components/chat/chat-ui-tools.ts#7"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#6"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-lib/build-chat-request-message.ts#1"
@@ -14023,19 +14278,19 @@
             "location": "apps/web/src/components/chat/ask-user-card.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#5"
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#7"
           },
           {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#6"
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#8"
           },
           {
-            "location": "apps/web/src/components/chat/source-chips.tsx#8"
+            "location": "apps/web/src/components/chat/source-chips.tsx#11"
           },
           {
-            "location": "apps/web/src/components/chat/source-chips.tsx#9"
+            "location": "apps/web/src/components/chat/source-chips.tsx#12"
           },
           {
-            "location": "apps/web/src/components/chat/tool-call-card.tsx#4"
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#5"
           }
         ]
       },
@@ -14336,7 +14591,7 @@
             "location": "apps/api/src/handlers/chat/chat-prompt.ts#9"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#2"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-scope.ts#1"
@@ -14360,7 +14615,7 @@
             "location": "apps/api/src/handlers/chat/send-message.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#10"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#14"
           },
           {
             "location": "apps/api/src/handlers/chat/third-party-boundary.ts#3"
@@ -14400,6 +14655,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/execute/workspace-manifest.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#5"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#4"
@@ -14576,6 +14834,9 @@
             "location": "apps/api/src/handlers/expenses/update.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/external-preview/preview.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/fields/update-cell-metadata.ts#1"
           },
           {
@@ -14622,6 +14883,51 @@
           },
           {
             "location": "apps/api/src/handlers/invoices/update.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/connect.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/create-connection.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/create-connector.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/delete-connection.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/delete-connector.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/icons.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/list-connections.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/list-connectors.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/oauth-callback.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/oauth.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/probe-connector.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/probe.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/update-connection.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/url-normalization.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/url-safety.ts#1"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/preview.ts#1"
@@ -14978,6 +15284,9 @@
             "location": "apps/api/src/lib/matter-reference.ts#1"
           },
           {
+            "location": "apps/api/src/lib/safe-outbound-fetch.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/scheduler/runner.ts#1"
           },
           {
@@ -15243,6 +15552,12 @@
           },
           {
             "location": "apps/api/src/handlers/chat/chat-prompt.ts#10"
+          },
+          {
+            "location": "apps/api/src/handlers/external-preview/preview.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/icons.ts#2"
           },
           {
             "location": "apps/api/src/lib/markdown/ai-tool.ts#1"
@@ -15700,6 +16015,9 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts#14"
           },
           {
+            "location": "apps/api/src/handlers/external-preview/preview.ts#3"
+          },
+          {
             "location": "apps/api/src/lib/markdown/html-to-markdown.ts#2"
           },
           {
@@ -15801,6 +16119,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts#14"
+          },
+          {
+            "location": "apps/api/src/handlers/external-preview/preview.ts#3"
           },
           {
             "location": "apps/api/src/lib/markdown/html-to-markdown.ts#2"
@@ -15989,6 +16310,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/execute/org-function-registry.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#6"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#5"
@@ -16190,6 +16514,33 @@
           },
           {
             "location": "apps/api/src/handlers/invoices/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/connect.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/create-connection.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/create-connector.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/delete-connection.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/delete-connector.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/list-connections.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/list-connectors.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/oauth-callback.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/update-connection.ts#2"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/read-anonymization-blacklist.ts#2"
@@ -16699,10 +17050,10 @@
             "location": "apps/api/src/handlers/case-law/routes.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#3"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#4"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#5"
           },
           {
             "location": "apps/api/src/handlers/chat/delete-thread.ts#3"
@@ -16712,6 +17063,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/send-message.ts#3"
           },
           {
             "location": "apps/api/src/handlers/clauses/categories-delete.ts#1"
@@ -16939,6 +17293,12 @@
             "location": "apps/api/src/handlers/expenses/update.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/external-preview/preview.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/external-preview/routes.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/fields/routes.ts#1"
           },
           {
@@ -16979,6 +17339,33 @@
           },
           {
             "location": "apps/api/src/handlers/mcp/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/connect.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/create-connection.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/create-connector.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/delete-connection.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/delete-connector.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/oauth-callback.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/probe-connector.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/update-connection.ts#3"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/preview.ts#2"
@@ -18017,22 +18404,22 @@
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#11"
           },
           {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#7"
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#9"
           },
           {
             "location": "apps/web/src/components/chat/entity-link.tsx#8"
           },
           {
-            "location": "apps/web/src/components/chat/source-chips.tsx#10"
+            "location": "apps/web/src/components/chat/source-chips.tsx#13"
           },
           {
             "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#13"
           },
           {
-            "location": "apps/web/src/components/chat/tool-approval-card.tsx#11"
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#12"
           },
           {
-            "location": "apps/web/src/components/chat/tool-call-card.tsx#13"
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#14"
           },
           {
             "location": "apps/web/src/components/chat-input-surface.tsx#6"
@@ -18152,10 +18539,13 @@
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/decision-metadata-sheet.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#4"
+            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#5"
+            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#10"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#30"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#17"
@@ -18281,7 +18671,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#39"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#52"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header.tsx#5"
@@ -19367,6 +19757,9 @@
             "location": "packages/folio/src/core/prosemirror/extensions/features/BaseKeymapExtension.ts#16"
           },
           {
+            "location": "packages/folio/src/core/prosemirror/extensions/marks/RunFormattingOverrideExtension.ts#9"
+          },
+          {
             "location": "packages/folio/src/core/prosemirror/extensions/marks/markUtils.ts#7"
           },
           {
@@ -20076,10 +20469,10 @@
             "location": "apps/web/src/lib/sse.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#1"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#2"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-global-chat-mention-registration.ts#1"
@@ -20253,7 +20646,13 @@
             "location": "apps/web/src/components/chat/chat-thread-messages.tsx#1"
           },
           {
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/chat/prompt-slash-list.tsx#7"
+          },
+          {
+            "location": "apps/web/src/components/chat/source-chips.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#1"
@@ -20505,6 +20904,12 @@
             "location": "apps/web/src/routes/_protected.knowledge/clauses.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#1"
           },
           {
@@ -20596,6 +21001,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
@@ -21357,9 +21765,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#16"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#7"
           }
         ]
       },
@@ -21476,7 +21881,7 @@
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#12"
           },
           {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#8"
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#10"
           },
           {
             "location": "apps/web/src/components/chat/prompt-slash-list.tsx#12"
@@ -21488,10 +21893,10 @@
             "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#14"
           },
           {
-            "location": "apps/web/src/components/chat/tool-approval-card.tsx#12"
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#13"
           },
           {
-            "location": "apps/web/src/components/chat/tool-call-card.tsx#14"
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#15"
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#25"
@@ -21629,7 +22034,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/clauses.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#6"
+            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#11"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#31"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#18"
@@ -21746,7 +22154,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-header.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-year-grid.tsx#2"
@@ -21794,7 +22202,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#40"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#53"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-rail-context-menu.tsx#3"
@@ -22065,7 +22473,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/chat/use-request-chat-about.ts#3"
+            "location": "apps/web/src/lib/chat-thread-ref.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-queries.ts#10"
@@ -22075,15 +22483,6 @@
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#37"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#16"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/new.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/workspaces/$workspaceId/new.tsx#2"
           }
         ]
       },
@@ -22134,7 +22533,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/chat/use-request-chat-about.ts#3"
+            "location": "apps/web/src/lib/chat-thread-ref.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-queries.ts#10"
@@ -22144,15 +22543,6 @@
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#37"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#16"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/new.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/workspaces/$workspaceId/new.tsx#2"
           }
         ]
       },
@@ -22226,6 +22616,9 @@
             "location": "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts#4"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/ares-tools.ts#5"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#5"
           },
           {
@@ -22254,6 +22647,12 @@
           },
           {
             "location": "apps/api/src/handlers/entities/organize-suggestions.ts#8"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/oauth.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/url-safety.ts#4"
           },
           {
             "location": "apps/api/src/handlers/search/ai.ts#8"
@@ -22409,6 +22808,9 @@
             "location": "apps/web/src/components/ai-suggestions/review-store.ts#18"
           },
           {
+            "location": "apps/web/src/components/chat/external-source-store.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/anonymize/use-overlay-rects.ts#3"
           },
           {
@@ -22493,7 +22895,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#30"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#41"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#54"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/suggestions-facet.tsx#26"
@@ -22586,7 +22988,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state.ts#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#41"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#54"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-components/create-matter-dialog.tsx#36"
