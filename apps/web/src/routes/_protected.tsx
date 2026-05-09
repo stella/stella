@@ -57,7 +57,10 @@ import { roleOptions } from "@/routes/-queries";
 import { useGlobalChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-global-chat-mention-registration";
 import { CaseSearchTrigger } from "@/routes/_protected.knowledge/case/-components/case-viewer/case-search-trigger";
 import { DecisionMetadataSheet } from "@/routes/_protected.knowledge/case/-components/case-viewer/decision-metadata-sheet";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import {
+  initializeInspectorTabBroadcast,
+  useInspectorStore,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type { InspectorTab } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { MatterMetadataSheet } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
 import { CreateMatterDialog } from "@/routes/_protected.workspaces/-components/create-matter-dialog";
@@ -113,6 +116,12 @@ export const Route = createFileRoute("/_protected")({
 });
 
 function ProtectedComponent() {
+  const inspectorBroadcastUserId = Route.useRouteContext({
+    select: (ctx) => ctx.user.id,
+  });
+  const inspectorBroadcastOrganizationId = Route.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
   const workspaceMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId",
     shouldThrow: false,
@@ -124,6 +133,15 @@ function ProtectedComponent() {
     shouldThrow: false,
   });
   const activeDecisionId = decisionMatch?.params.decisionId;
+
+  useEffect(
+    () =>
+      initializeInspectorTabBroadcast({
+        organizationId: inspectorBroadcastOrganizationId,
+        userId: inspectorBroadcastUserId,
+      }),
+    [inspectorBroadcastOrganizationId, inspectorBroadcastUserId],
+  );
 
   // Mod+J — toggles the inspector pane. With tabs already open it
   // restores or hides the pane regardless of route, so users can

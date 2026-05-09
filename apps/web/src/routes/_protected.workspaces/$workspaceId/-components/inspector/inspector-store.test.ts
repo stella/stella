@@ -1,17 +1,130 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { toChatThreadId } from "@/lib/chat-thread-ref";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import {
+  getInspectorTabsBroadcastChannelName,
+  initializeInspectorTabBroadcast,
+  useInspectorStore,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+
+let cleanupInspectorBroadcast: (() => void) | null = null;
+let previousDateNow: (() => number) | undefined;
+let previousWindowDescriptor: PropertyDescriptor | undefined;
 
 afterEach(() => {
+  cleanupInspectorBroadcast?.();
+  cleanupInspectorBroadcast = null;
+  if (previousDateNow !== undefined) {
+    Date.now = previousDateNow;
+    previousDateNow = undefined;
+  }
+  FakeBroadcastChannel.reset();
+  if (previousWindowDescriptor) {
+    Object.defineProperty(globalThis, "window", previousWindowDescriptor);
+    previousWindowDescriptor = undefined;
+  } else {
+    Reflect.deleteProperty(globalThis, "window");
+  }
   useInspectorStore.setState({
     tabs: [],
     activeId: null,
     activationSeq: 0,
     pendingRenameTabId: null,
     minimized: false,
+    pendingBlockScroll: null,
   });
 });
+
+class FakeBroadcastChannel {
+  static channels = new Map<string, Set<FakeBroadcastChannel>>();
+
+  readonly name: string;
+
+  private readonly listeners = new Set<
+    (event: MessageEvent<unknown>) => void
+  >();
+
+  constructor(name: string) {
+    this.name = name;
+    const peers = FakeBroadcastChannel.channels.get(name) ?? new Set();
+    peers.add(this);
+    FakeBroadcastChannel.channels.set(name, peers);
+  }
+
+  postMessage(message: unknown) {
+    this.dispatchToPeers(message);
+  }
+
+  emit(message: unknown) {
+    this.dispatchToPeers(message);
+  }
+
+  addEventListener(
+    type: "message",
+    listener: (event: MessageEvent<unknown>) => void,
+  ) {
+    if (type === "message") {
+      this.listeners.add(listener);
+    }
+  }
+
+  removeEventListener(
+    type: "message",
+    listener: (event: MessageEvent<unknown>) => void,
+  ) {
+    if (type === "message") {
+      this.listeners.delete(listener);
+    }
+  }
+
+  private dispatchToPeers(message: unknown) {
+    const peers = FakeBroadcastChannel.channels.get(this.name);
+    if (!peers) {
+      return;
+    }
+
+    for (const peer of peers) {
+      if (peer === this) {
+        continue;
+      }
+      peer.dispatch(message);
+    }
+  }
+
+  private dispatch(message: unknown) {
+    const event = new MessageEvent("message", {
+      data: structuredClone(message),
+    });
+    for (const listener of this.listeners) {
+      listener(event);
+    }
+  }
+
+  close() {
+    const peers = FakeBroadcastChannel.channels.get(this.name);
+    peers?.delete(this);
+  }
+
+  static reset() {
+    FakeBroadcastChannel.channels.clear();
+  }
+}
+
+const installFakeBroadcastChannel = () => {
+  previousWindowDescriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "window",
+  );
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { BroadcastChannel: FakeBroadcastChannel },
+  });
+};
+
+const freezeDateNow = (updatedAt: number) => {
+  previousDateNow = Date.now;
+  Date.now = () => updatedAt;
+};
 
 describe("openChat", () => {
   test("creates a workspace-scoped tab when workspaceId is provided", () => {
@@ -221,5 +334,308 @@ describe("replacePdfFieldId", () => {
 
     expect(after.renderId).toBe(before.renderId);
     expect(useInspectorStore.getState().activeId).toBe("field-new");
+  });
+});
+
+describe("Inspector tab broadcast", () => {
+  test("publishes tab set metadata without sharing local active state", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const peer = new FakeBroadcastChannel(
+      getInspectorTabsBroadcastChannelName(scope),
+    );
+    const received: unknown[] = [];
+    peer.addEventListener("message", (event) => {
+      received.push(event.data);
+    });
+
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    useInspectorStore.getState().openPdf({
+      id: "field-1",
+      entityId: "entity-1",
+      label: "Contract.docx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+    useInspectorStore.getState().setPdfFacet("field-1", "versions", {
+      pulse: true,
+    });
+
+    const syncMessage = received.findLast(
+      (message) =>
+        typeof message === "object" &&
+        message !== null &&
+        Reflect.get(message, "type") === "inspector-tabs:sync",
+    );
+    expect(syncMessage).toBeDefined();
+    expect(Reflect.get(syncMessage ?? {}, "tabs")).toEqual(
+      useInspectorStore.getState().tabs,
+    );
+    expect(Reflect.get(syncMessage ?? {}, "activeId")).toBeUndefined();
+    expect(Reflect.get(syncMessage ?? {}, "minimized")).toBeUndefined();
+  });
+
+  test("hydrates tab set from another browser tab and chooses a local active tab", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const peer = new FakeBroadcastChannel(
+      getInspectorTabsBroadcastChannelName(scope),
+    );
+
+    peer.addEventListener("message", (event) => {
+      const message = event.data;
+      if (
+        typeof message !== "object" ||
+        message === null ||
+        Reflect.get(message, "type") !== "inspector-tabs:request"
+      ) {
+        return;
+      }
+
+      peer.emit({
+        type: "inspector-tabs:sync",
+        senderId: "peer-tab",
+        recipientId: Reflect.get(message, "senderId"),
+        updatedAt: 1,
+        tabs: [
+          {
+            type: "chat",
+            id: toChatThreadId("thread-1"),
+            label: "Shared chat",
+            workspaceId: "workspace-1",
+            contextMatterIds: ["workspace-1"],
+          },
+        ],
+      });
+    });
+
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    expect(useInspectorStore.getState().tabs).toEqual([
+      {
+        type: "chat",
+        id: toChatThreadId("thread-1"),
+        label: "Shared chat",
+        workspaceId: "workspace-1",
+        contextMatterIds: ["workspace-1"],
+      },
+    ]);
+    expect(useInspectorStore.getState().activeId).toBe("thread-1");
+  });
+
+  test("keeps local active tab when the shared tab set still contains it", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const peer = new FakeBroadcastChannel(
+      getInspectorTabsBroadcastChannelName(scope),
+    );
+
+    const localThreadId = toChatThreadId("thread-local");
+    useInspectorStore.getState().openChat({ id: localThreadId });
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    peer.emit({
+      type: "inspector-tabs:sync",
+      senderId: "peer-tab",
+      updatedAt: 1,
+      tabs: [
+        {
+          type: "chat",
+          id: toChatThreadId("thread-remote"),
+          label: "Remote chat",
+          contextMatterIds: [],
+        },
+        {
+          type: "chat",
+          id: localThreadId,
+          label: "Local chat renamed elsewhere",
+          contextMatterIds: [],
+        },
+      ],
+    });
+
+    expect(useInspectorStore.getState().activeId).toBe(localThreadId);
+    expect(useInspectorStore.getState().tabs).toEqual([
+      {
+        type: "chat",
+        id: toChatThreadId("thread-remote"),
+        label: "Remote chat",
+        contextMatterIds: [],
+      },
+      {
+        type: "chat",
+        id: localThreadId,
+        label: "Local chat renamed elsewhere",
+        contextMatterIds: [],
+      },
+    ]);
+  });
+
+  test("uses sender id as deterministic tie-breaker for same-ms updates", () => {
+    freezeDateNow(100);
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const peer = new FakeBroadcastChannel(
+      getInspectorTabsBroadcastChannelName(scope),
+    );
+    const received: unknown[] = [];
+    peer.addEventListener("message", (event) => {
+      received.push(event.data);
+    });
+
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    const localThreadId = toChatThreadId("thread-local");
+    useInspectorStore.getState().openChat({
+      id: localThreadId,
+      label: "Local chat",
+    });
+
+    const syncMessage = received.findLast(
+      (message) =>
+        typeof message === "object" &&
+        message !== null &&
+        Reflect.get(message, "type") === "inspector-tabs:sync",
+    );
+    const localSenderId = Reflect.get(syncMessage ?? {}, "senderId");
+    expect(typeof localSenderId).toBe("string");
+    if (typeof localSenderId !== "string") {
+      throw new TypeError("expected local sender id");
+    }
+
+    const lowerPeerThreadId = toChatThreadId("thread-lower-peer");
+    peer.emit({
+      type: "inspector-tabs:sync",
+      senderId: "00000000-0000-0000-0000-000000000000",
+      updatedAt: 100,
+      tabs: [
+        {
+          type: "chat",
+          id: lowerPeerThreadId,
+          label: "Lower peer chat",
+          contextMatterIds: [],
+        },
+      ],
+    });
+    expect(useInspectorStore.getState().tabs).toEqual([
+      {
+        type: "chat",
+        id: localThreadId,
+        label: "Local chat",
+        contextMatterIds: [],
+      },
+    ]);
+
+    const higherPeerThreadId = toChatThreadId("thread-higher-peer");
+    peer.emit({
+      type: "inspector-tabs:sync",
+      senderId: "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz",
+      updatedAt: 100,
+      tabs: [
+        {
+          type: "chat",
+          id: higherPeerThreadId,
+          label: "Higher peer chat",
+          contextMatterIds: [],
+        },
+      ],
+    });
+    expect(useInspectorStore.getState().tabs).toEqual([
+      {
+        type: "chat",
+        id: higherPeerThreadId,
+        label: "Higher peer chat",
+        contextMatterIds: [],
+      },
+    ]);
+  });
+
+  test("hydrates external tabs from another browser tab", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const peer = new FakeBroadcastChannel(
+      getInspectorTabsBroadcastChannelName(scope),
+    );
+    const chatThreadId = toChatThreadId("thread-external");
+
+    peer.addEventListener("message", (event) => {
+      const message = event.data;
+      if (
+        typeof message !== "object" ||
+        message === null ||
+        Reflect.get(message, "type") !== "inspector-tabs:request"
+      ) {
+        return;
+      }
+
+      peer.emit({
+        type: "inspector-tabs:sync",
+        senderId: "peer-tab",
+        recipientId: Reflect.get(message, "senderId"),
+        updatedAt: 1,
+        tabs: [
+          {
+            type: "external",
+            id: "external:https://example.test/decision",
+            chatThreadId,
+            label: "External decision",
+            url: "https://example.test/decision",
+            connectorSlug: "salvia",
+            iconHref: "https://example.test/favicon.ico",
+            provider: "example",
+            snippet: "Holding excerpt",
+            sourceToolName: "search_decisions",
+            text: "Decision text",
+          },
+        ],
+      });
+    });
+
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+    expect(useInspectorStore.getState().tabs).toEqual([
+      {
+        type: "external",
+        id: "external:https://example.test/decision",
+        chatThreadId,
+        label: "External decision",
+        url: "https://example.test/decision",
+        connectorSlug: "salvia",
+        iconHref: "https://example.test/favicon.ico",
+        provider: "example",
+        snippet: "Holding excerpt",
+        sourceToolName: "search_decisions",
+        text: "Decision text",
+      },
+    ]);
+    expect(useInspectorStore.getState().activeId).toBe(
+      "external:https://example.test/decision",
+    );
+  });
+
+  test("does not exchange tabs across organization scopes", () => {
+    installFakeBroadcastChannel();
+    const peer = new FakeBroadcastChannel(
+      getInspectorTabsBroadcastChannelName({
+        organizationId: "org-2",
+        userId: "user-1",
+      }),
+    );
+    const received: unknown[] = [];
+    peer.addEventListener("message", (event) => {
+      received.push(event.data);
+    });
+
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
+      organizationId: "org-1",
+      userId: "user-1",
+    });
+    useInspectorStore.getState().openChat({ id: toChatThreadId("thread-1") });
+
+    expect(received).toEqual([]);
   });
 });
