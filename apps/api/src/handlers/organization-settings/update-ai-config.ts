@@ -391,6 +391,12 @@ const getValidationRole = (
     `validateProviderKey called for ${provider} but no role is bound to it`,
   );
 
+// Provider first-call latency can exceed 10 s and we don't want a
+// healthy key flagged invalid by a slow upstream. Validations run in
+// parallel, so the worst-case settings-save wait is bounded by this
+// single ceiling regardless of how many providers are configured.
+const VALIDATION_TIMEOUT_MS = 20_000;
+
 /**
  * Validate a provider API key by making a minimal API call.
  * Uses a tiny prompt to minimize cost. Always exercises a
@@ -415,7 +421,7 @@ const validateProviderKey = async (
         temperature: getTemperatureForRole(role),
         prompt: "Say OK",
         maxOutputTokens: 3,
-        abortSignal: AbortSignal.timeout(10_000),
+        abortSignal: AbortSignal.timeout(VALIDATION_TIMEOUT_MS),
       });
     },
     catch: (error: unknown) =>
