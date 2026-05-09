@@ -136,6 +136,10 @@ jobs:
         if: steps.changed-files.outputs.package_checks_required == 'true'
         run: bun run i18n:check
 
+      - name: Release changelog guard
+        if: github.event_name == 'pull_request'
+        run: bash scripts/check-release-changelog.sh --base "origin/${{ github.base_ref || 'main' }}"
+
       - name: Lint
         if: steps.changed-files.outputs.package_checks_required == 'true'
         run: bun run lint -- ${{ steps.affected.outputs.flag }}
@@ -215,7 +219,7 @@ jobs:
           run=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              apps/landing/*|packages/*|bun.lock|package.json|.github/workflows/ci.yml)
+              apps/landing/*|docs/changelog/*|VERSION|packages/*|bun.lock|package.json|.github/workflows/ci.yml)
                 run=true
                 break
                 ;;

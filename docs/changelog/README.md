@@ -1,7 +1,9 @@
 # Manual Changelog Notes
 
-Add one Markdown file per release when the generated git-cliff notes need a
-human-written summary. Commit it together with the matching `VERSION` bump:
+Add one Markdown file per release and commit it together with the matching
+`VERSION` bump. The file may be blank for minor releases with no handwritten
+notes; the landing site still uses its presence to generate release-specific
+link preview pages and version-only fallback images.
 
 ```text
 docs/changelog/vX.Y.Z.md
@@ -10,14 +12,15 @@ docs/changelog/vX.Y.Z-rc.N.md
 
 ```bash
 printf "X.Y.Z\n" > VERSION
-$EDITOR docs/changelog/vX.Y.Z.md
+touch docs/changelog/vX.Y.Z.md
 git add VERSION docs/changelog/vX.Y.Z.md
 git commit -m "chore: release vX.Y.Z"
 ```
 
-The release workflow prepends the matching file to the generated release notes,
-adds a `## Changes` heading, then appends the categorized git-cliff commit list
-below it. Keep the manual section short and product-facing.
+When the file contains manual notes, the release workflow prepends the matching
+file to the generated release notes, adds a `## Changes` heading, then appends
+the categorized git-cliff commit list below it. Keep the manual section short
+and product-facing.
 
 Example:
 
