@@ -68,7 +68,7 @@ import type { Citation } from "@/lib/citations";
 import { iterateJustificationCitations } from "@/lib/citations";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
-import { isUnauthorizedError, toAPIError } from "@/lib/errors";
+import { APIError, isUnauthorizedError, toAPIError } from "@/lib/errors";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import {
@@ -2695,7 +2695,11 @@ const ExternalReferencePanel = ({
       tab.sourceToolName !== undefined ||
       storedSource?.connectorSlug !== undefined ||
       storedSource?.sourceToolName !== undefined);
-  const { data: fetchedPreview, isLoading: previewLoading } = useQuery({
+  const {
+    data: fetchedPreview,
+    isLoading: previewLoading,
+    error: previewError,
+  } = useQuery({
     queryKey: ["external-preview", tab.url],
     queryFn: async ({ signal }) => {
       const response = await api["external-preview"].get({
@@ -2713,6 +2717,21 @@ const ExternalReferencePanel = ({
     retry: false,
     staleTime: 1000 * 60 * 10,
   });
+
+  // Surface upstream-induced failures (e.g. the source returned 5xx)
+  // as a toast — without this the panel just falls through to the
+  // generic "preview unavailable" view and the user has no signal
+  // that anything went wrong.
+  useEffect(() => {
+    if (!previewError || !APIError.is(previewError)) {
+      return;
+    }
+    stellaToast.add({
+      title: t("common.somethingWentWrong"),
+      description: previewError.message,
+      type: "error",
+    });
+  }, [previewError, t]);
   const previewTitle = fetchedPreview?.title ?? storedSource?.title;
   const previewText = tab.text ?? storedSource?.text ?? fetchedPreview?.text;
   const previewSnippet = tab.snippet ?? storedSource?.snippet;
