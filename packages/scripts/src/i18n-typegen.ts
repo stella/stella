@@ -5,7 +5,11 @@
  * use-intl to parse ICU variables at the type level and
  * enforce interpolation parameters.
  *
- * Usage: i18n-typegen <langs-dir>
+ * Usage: i18n-typegen <langs-dir> [--check]
+ *
+ * --check  Verify the on-disk messages.gen.ts matches what
+ *          would be generated from en.json. Exits non-zero on
+ *          drift without writing.
  */
 import { resolve } from "node:path";
 
@@ -35,10 +39,12 @@ const parseMessages = (json: string): JsonObject => {
   return parsed;
 };
 
-const langsDir = process.argv[2];
+const args = process.argv.slice(2);
+const langsDir = args.find((a) => !a.startsWith("--"));
+const checkOnly = args.includes("--check");
 
 if (!langsDir) {
-  console.error("Usage: i18n-typegen <langs-dir>");
+  console.error("Usage: i18n-typegen <langs-dir> [--check]");
   process.exit(1);
 }
 
@@ -81,6 +87,18 @@ type Messages = ${toLiteral(messages, 0)};
 export type { Messages as default };
 `;
 
-await Bun.write(outputPath, declaration);
-
-console.log(`Generated ${outputPath} (${keyCount} keys)`);
+if (checkOnly) {
+  const existing = await Bun.file(outputPath)
+    .text()
+    .catch(() => "");
+  if (existing !== declaration) {
+    console.error(
+      `Error: ${outputPath} is out of sync with en.json. Run \`bun run typegen\`.`,
+    );
+    process.exit(1);
+  }
+  console.log(`${outputPath} is in sync (${keyCount} keys)`);
+} else {
+  await Bun.write(outputPath, declaration);
+  console.log(`Generated ${outputPath} (${keyCount} keys)`);
+}
