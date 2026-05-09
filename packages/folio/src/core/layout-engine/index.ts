@@ -426,15 +426,22 @@ function layoutParagraph(
     let linesHeight = 0;
     let fittingLines = 0;
 
+    // The first fragment of a paragraph eats `spaceBefore` from the
+    // available height for *every* line check, not only the first one.
+    // Pre-fix the loop checked `linesHeight + lineHeight + spaceBefore`
+    // only when `j === currentLineIndex`; subsequent lines compared bare
+    // line totals against the full available height. That let the loop
+    // claim more lines than would actually fit, then `addFragment` (which
+    // correctly sums `spaceBefore + linesHeight`) refused the placement
+    // and bumped the *whole* fragment to the next page. Result: page-end
+    // paragraphs with multi-line content didn't split — they jumped the
+    // page boundary, leaving a chunk of empty space above.
+    const firstFragmentSpaceBefore = currentLineIndex === 0 ? spaceBefore : 0;
+
     for (let j = currentLineIndex; j < lines.length; j++) {
       const lineHeight = lines[j]!.lineHeight; // SAFETY: j < lines.length
       const totalWithLine = linesHeight + lineHeight;
-
-      // Add space before only for first fragment
-      const withSpacing =
-        currentLineIndex === 0 && j === currentLineIndex
-          ? totalWithLine + spaceBefore
-          : totalWithLine;
+      const withSpacing = totalWithLine + firstFragmentSpaceBefore;
 
       if (withSpacing <= availableHeight || fittingLines === 0) {
         linesHeight = totalWithLine;
