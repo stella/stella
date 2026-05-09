@@ -32,6 +32,7 @@ import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
+import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { toSafeId } from "@/lib/safe-id";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import {
@@ -112,41 +113,27 @@ function McpPage() {
   const canManageCustomConnectors =
     connectorsData?.canManageCustomConnectors ?? false;
 
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      // Popup terminal page lives on the SPA host, so it posts back
-      // to its own origin. The previous flow posted from the API
-      // host (api.stll.app), but CloudFront's CSP blocks the inline
-      // postMessage script there.
-      if (event.origin !== window.location.origin) {
-        return;
-      }
-
-      if (typeof event.data !== "string") {
-        return;
-      }
-
-      if (event.data.startsWith("mcp:connected:")) {
-        stellaToast.add({
-          title: t("knowledge.mcp.connectedToast"),
-          type: "success",
-        });
-        void queryClient.invalidateQueries({ queryKey: knowledgeKeys.mcp.all });
-        return;
-      }
-
-      if (event.data.startsWith("mcp:error:")) {
+  useEffect(
+    () =>
+      subscribeToMcpOAuthOutcome((outcome) => {
+        if (outcome.status === "connected") {
+          stellaToast.add({
+            title: t("knowledge.mcp.connectedToast"),
+            type: "success",
+          });
+          void queryClient.invalidateQueries({
+            queryKey: knowledgeKeys.mcp.all,
+          });
+          return;
+        }
         stellaToast.add({
           title: t("knowledge.mcp.errorTitle"),
           description: t("knowledge.mcp.errorDescription"),
           type: "error",
         });
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, [queryClient, t]);
+      }),
+    [queryClient, t],
+  );
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto p-6">

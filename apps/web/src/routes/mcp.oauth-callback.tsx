@@ -8,10 +8,12 @@ import {
   FramePanel,
   FrameTitle,
 } from "@stll/ui/components/frame";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import type { McpOAuthOutcome } from "@/lib/mcp-oauth-channel";
+import { broadcastMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { pageTitle } from "@/lib/page-title";
 
 const searchSchema = v.object({
@@ -31,25 +33,16 @@ export const Route = createFileRoute("/mcp/oauth-callback")({
 function McpOAuthCallbackPage() {
   const t = useTranslations();
   const status = Route.useSearch({ select: (search) => search.status });
-  const slug = Route.useSearch({ select: (search) => search.slug });
   const reason = Route.useSearch({ select: (search) => search.reason });
 
   useEffect(() => {
-    const message =
+    const outcome: McpOAuthOutcome =
       status === "connected"
-        ? `mcp:connected:${slug ?? ""}`
-        : `mcp:error:${reason ?? "unexpected"}`;
-
-    // SAFETY: lib.dom types `window.opener` as `any` because the
-    // opener may be a Window from any origin. We post to our own
-    // origin only, so narrowing to the postMessage surface is safe.
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-    const opener = window.opener as Pick<Window, "postMessage"> | null;
-    if (opener !== null) {
-      opener.postMessage(message, window.location.origin);
-      window.close();
-    }
-  }, [status, slug, reason]);
+        ? { status: "connected" }
+        : { status: "error", reason: reason ?? "unexpected" };
+    broadcastMcpOAuthOutcome(outcome);
+    window.close();
+  }, [status, reason]);
 
   const isError = status === "error";
 
@@ -69,11 +62,13 @@ function McpOAuthCallbackPage() {
           ) : null}
         </FrameHeader>
         <FramePanel>
-          <Link to="/knowledge/mcp">
-            <Button className="w-full" type="button">
-              {t("common.close")}
-            </Button>
-          </Link>
+          <Button
+            className="w-full"
+            onClick={() => window.close()}
+            type="button"
+          >
+            {t("common.close")}
+          </Button>
         </FramePanel>
       </Frame>
     </div>
