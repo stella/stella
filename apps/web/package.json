@@ -15,6 +15,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/web",
     "format": "oxfmt -c ../../.oxfmtrc.json .",
     "i18n:check": "bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs --check && bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs",
+    "i18n:sync": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --sync && bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs",
     "test": "bun test"
   },
   "dependencies": {
