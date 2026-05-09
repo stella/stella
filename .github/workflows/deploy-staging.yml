@@ -40,6 +40,7 @@ env:
 jobs:
   build-and-deploy:
     name: Build arm64 + deploy staging
+    if: github.ref == 'refs/heads/main'
     # No staging-paused gate here: vars.STAGING_ENABLED lives in
     # stella-infra and isn't visible to this workflow. The
     # infra-side promote-release.yml already fail-fasts when
