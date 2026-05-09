@@ -10,7 +10,7 @@ import {
   getMidChainIndices,
   hasPageBreakBefore,
 } from "./keep-together";
-import { createPaginator } from "./paginator";
+import { FOOTNOTE_SEPARATOR_HEIGHT, createPaginator } from "./paginator";
 import type {
   FlowBlock,
   Measure,
@@ -528,8 +528,19 @@ function layoutParagraph(
     // onto a page that has only a hair of body space left — body fits
     // by itself but `addFootnoteHeight` afterwards drops contentBottom
     // below cursorY, producing an overlap with the fn area.
+    //
+    // If this would be the *first* footnote on the host page, also
+    // include `FOOTNOTE_SEPARATOR_HEIGHT` in the fit check —
+    // `addFootnoteHeight` reserves it on the first call, and missing
+    // it here lets a boundary-case line slip onto a page where the
+    // separator's 13 px shrinks contentBottom past cursorY (Codex
+    // PR #258 — same overlap class as the linesFnHeight gap).
     if (linesFnHeight > 0) {
-      paginator.ensureFits(effectiveSpaceBefore + linesHeight + linesFnHeight);
+      const isFirstFnOnPage = paginator.getCurrentState().footnoteHeight === 0;
+      const separatorOverhead = isFirstFnOnPage ? FOOTNOTE_SEPARATOR_HEIGHT : 0;
+      paginator.ensureFits(
+        effectiveSpaceBefore + linesHeight + linesFnHeight + separatorOverhead,
+      );
     }
 
     const result = paginator.addFragment(

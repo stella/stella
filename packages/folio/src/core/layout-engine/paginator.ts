@@ -13,7 +13,7 @@ import type { Page, PageMargins, Fragment, ColumnLayout } from "./types";
  * footnote-bearing page above the fn content. Must match the painter
  * (`renderFootnoteArea`).
  */
-const FOOTNOTE_SEPARATOR_HEIGHT = 13;
+export const FOOTNOTE_SEPARATOR_HEIGHT = 13;
 
 /**
  * Current state of a page being laid out.
