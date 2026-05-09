@@ -212,13 +212,15 @@ fn sanitize_file_name(name: &str) -> String {
 /// Reduces a string to a single safe path segment so callers can't widen the
 /// scope of a `Path::join` by accident. Operates on the raw string (no
 /// `Path::new`) so the result is identical on Linux, macOS and Windows even
-/// when the input contains either separator.
+/// when the input contains either separator. Replaces every ASCII control
+/// character so a sneaky `\u{1}` or DEL can't slip through.
 fn sanitize_path_segment(value: &str) -> String {
   let replaced = value
     .replace(
-      [
-        '/', '"', '\\', '<', '>', '\r', '\n', '\0', '|', '*', '?', ':',
-      ],
+      |c: char| {
+        c.is_ascii_control()
+          || ['/', '"', '\\', '<', '>', '|', '*', '?', ':'].contains(&c)
+      },
       "_",
     )
     .replace("..", "__");
@@ -2196,6 +2198,16 @@ mod tests {
     assert_eq!(sanitize_path_segment("foo."), "foo");
     assert_eq!(sanitize_path_segment("foo "), "foo");
     assert_eq!(sanitize_path_segment("foo. . "), "foo");
+  }
+
+  #[test]
+  fn sanitize_path_segment_replaces_all_ascii_control_chars() {
+    // Windows forbids every ASCII control character (0x00–0x1F, 0x7F)
+    // in filenames, not just the obvious newline/tab/null.
+    assert_eq!(sanitize_path_segment("a\u{1}b"), "a_b");
+    assert_eq!(sanitize_path_segment("a\u{7f}b"), "a_b");
+    assert_eq!(sanitize_path_segment("\tfoo\nbar\r"), "_foo_bar_");
+    assert_eq!(sanitize_path_segment("a\u{0}b"), "a_b");
   }
 
   #[test]
