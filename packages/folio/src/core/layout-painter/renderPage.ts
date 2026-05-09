@@ -826,10 +826,15 @@ function renderHeaderFooterContent(
         { document: doc },
       );
 
-      // Stack HF fragments by absolute top within the container.
-      // `paragraphMeasure.totalHeight` already includes spaceBefore/spaceAfter.
+      // `paragraphMeasure.totalHeight` includes `spaceBefore + lines +
+      // spaceAfter`, but `renderParagraphFragment` paints its first line at
+      // the fragment top. The body's layout engine compensates by setting
+      // `fragment.y = cursorY + spaceBefore` (see core/layout-engine
+      // `addFragment`). Mirror that here so authored `w:spacing w:before`
+      // visually pushes the first line down instead of being swallowed.
+      const spaceBefore = paragraphBlock.attrs?.spacing?.before ?? 0;
       fragEl.style.position = "absolute";
-      fragEl.style.top = `${cursorY}px`;
+      fragEl.style.top = `${cursorY + spaceBefore}px`;
       fragEl.style.left = "0";
       fragEl.style.width = `${contentWidth}px`;
 

@@ -307,6 +307,17 @@ export function calculateHeaderFooterVisualBounds(
         visualTop = Math.min(visualTop, cursorY);
         visualBottom = Math.max(visualBottom, blockBottomY);
         cursorY = blockBottomY;
+      } else {
+        // Floating table: expand visualBounds conservatively at the
+        // current cursorY, since most floating HF tables anchor near
+        // their source position. Exact (tblpX, tblpY)-resolved bounds
+        // would require duplicating `resolveHeaderFooterFloatingTablePosition`
+        // here; for tables anchored far from the in-flow stream the
+        // bound undercounts. Without this, a floating-table-only
+        // header would have `height = 0` and the table could be lost
+        // from the body push-down calculation entirely.
+        visualTop = Math.min(visualTop, cursorY);
+        visualBottom = Math.max(visualBottom, cursorY + blockHeight);
       }
     }
   }
