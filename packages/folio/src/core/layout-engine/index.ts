@@ -376,18 +376,25 @@ export function layoutDocument(
 }
 
 /**
- * Sum of footnote content heights for refs whose run sits in line `j`.
- * Empty when the engine isn't tracking dynamic fn demand.
+ * Footnote refs whose run sits in line `[fromRun..toRun]`, with their
+ * pre-measured content heights. Empty when the engine isn't tracking
+ * dynamic fn demand. Used by `layoutParagraph` to (a) reserve fn
+ * height per line and (b) record the IDs on the host page so the
+ * painter renders the fn on the page where the ref-bearing line
+ * actually landed — even when the paragraph splits across pages
+ * (fragment pmStart/pmEnd is paragraph-wide and cannot disambiguate
+ * between split halves).
  */
-function getLineFootnoteHeight(
+function getLineFootnoteRefs(
   block: ParagraphBlock,
   fromRun: number,
   toRun: number,
   fnHeights: Map<number, number> | undefined,
-): number {
+): { ids: number[]; height: number } {
   if (!fnHeights) {
-    return 0;
+    return { ids: [], height: 0 };
   }
+  const ids: number[] = [];
   let height = 0;
   for (let r = fromRun; r <= toRun; r++) {
     const run = block.runs[r];
@@ -400,10 +407,11 @@ function getLineFootnoteHeight(
     }
     const h = fnHeights.get(id);
     if (h !== undefined) {
+      ids.push(id);
       height += h;
     }
   }
-  return height;
+  return { ids, height };
 }
 
 /**
@@ -465,6 +473,7 @@ function layoutParagraph(
     // Calculate how many lines fit
     let linesHeight = 0;
     let linesFnHeight = 0;
+    const linesFnIds: number[] = [];
     let fittingLines = 0;
 
     // The first fragment of a paragraph eats `spaceBefore` from the
@@ -482,7 +491,7 @@ function layoutParagraph(
     for (let j = currentLineIndex; j < lines.length; j++) {
       const line = lines[j]!; // SAFETY: j < lines.length
       const lineHeight = line.lineHeight;
-      const lineFnHeight = getLineFootnoteHeight(
+      const lineRefs = getLineFootnoteRefs(
         block,
         line.fromRun,
         line.toRun,
@@ -490,11 +499,17 @@ function layoutParagraph(
       );
       const totalWithLine = linesHeight + lineHeight;
       const withSpacing =
-        totalWithLine + firstFragmentSpaceBefore + linesFnHeight + lineFnHeight;
+        totalWithLine +
+        firstFragmentSpaceBefore +
+        linesFnHeight +
+        lineRefs.height;
 
       if (withSpacing <= availableHeight || fittingLines === 0) {
         linesHeight = totalWithLine;
-        linesFnHeight += lineFnHeight;
+        linesFnHeight += lineRefs.height;
+        for (const id of lineRefs.ids) {
+          linesFnIds.push(id);
+        }
         fittingLines++;
       } else {
         break;
@@ -552,11 +567,14 @@ function layoutParagraph(
     fragment.y = result.y;
 
     // Now that the lines have committed to this page, grow the page's
-    // footnote reservation for any fn refs they carry. Subsequent body
-    // (in this paragraph or the next block) will see the reduced
-    // `getAvailableHeight()` and split correctly.
+    // footnote reservation for any fn refs they carry, and record the
+    // IDs on the host page directly. Page → fn-ID mapping is driven by
+    // line-level placement here (not by post-layout pmRange mapping)
+    // so a fn ref that lives in a continuation fragment of a split
+    // paragraph is correctly attributed to the page where the
+    // ref-bearing line landed (Codex PR #258 review).
     if (linesFnHeight > 0) {
-      paginator.addFootnoteHeight(linesFnHeight);
+      paginator.addFootnoteHeight(linesFnHeight, linesFnIds);
     }
 
     currentLineIndex += fittingLines;

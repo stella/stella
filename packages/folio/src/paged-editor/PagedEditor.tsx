@@ -42,7 +42,6 @@ import {
 } from "../core/layout-bridge/findBodyPmSpans";
 import {
   collectFootnoteRefs,
-  mapFootnotesToPages,
   buildFootnoteContentMap,
 } from "../core/layout-bridge/footnoteLayout";
 import {
@@ -2317,19 +2316,17 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               footnoteHeightById,
             });
 
-            pageFootnoteMap = mapFootnotesToPages(
-              newLayout.pages,
-              footnoteRefs,
-            );
-
-            // Store footnoteIds on each page for rendering. The page's
-            // `footnoteReservedHeight` was already set incrementally by
-            // the engine via `addFootnoteHeight` and matches the actual
-            // fns that landed on the page.
-            for (const [pageNum, fnIds] of pageFootnoteMap) {
-              const page = newLayout.pages.find((p) => p.number === pageNum);
-              if (page) {
-                page.footnoteIds = fnIds;
+            // The layout engine assigned `page.footnoteIds` line-by-
+            // line via `paginator.addFootnoteHeight(_, ids)`, so a fn
+            // ref in a continuation fragment of a split paragraph
+            // lands on the page where the ref-bearing line actually
+            // is. Build pageFootnoteMap from those page records (not
+            // from `mapFootnotesToPages`'s pmRange scan, which can't
+            // disambiguate split-paragraph halves; Codex PR #258).
+            pageFootnoteMap = new Map<number, number[]>();
+            for (const page of newLayout.pages) {
+              if (page.footnoteIds && page.footnoteIds.length > 0) {
+                pageFootnoteMap.set(page.number, page.footnoteIds);
               }
             }
           } else {

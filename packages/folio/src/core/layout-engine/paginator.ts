@@ -375,7 +375,10 @@ export function createPaginator(options: PaginatorOptions) {
    * advanced to the next page, the engine must check that *before*
    * committing the line + reservation.
    */
-  function addFootnoteHeight(additionalHeight: number): void {
+  function addFootnoteHeight(
+    additionalHeight: number,
+    footnoteIds?: number[],
+  ): void {
     if (!Number.isFinite(additionalHeight) || additionalHeight <= 0) {
       return;
     }
@@ -385,6 +388,20 @@ export function createPaginator(options: PaginatorOptions) {
     state.footnoteHeight += additionalHeight + separatorOverhead;
     state.contentBottom = state.rawContentBottom - state.footnoteHeight;
     state.page.footnoteReservedHeight = state.footnoteHeight;
+    // Record which fn IDs landed on *this* page. Driven by the
+    // line-level placement in the engine (not by post-layout
+    // pmRange mapping) so a fn ref in a continuation fragment of a
+    // split paragraph is correctly attributed to the page where the
+    // ref-bearing line actually lives — Codex PR #258 review.
+    if (footnoteIds && footnoteIds.length > 0) {
+      const existing = state.page.footnoteIds ?? [];
+      for (const id of footnoteIds) {
+        if (!existing.includes(id)) {
+          existing.push(id);
+        }
+      }
+      state.page.footnoteIds = existing;
+    }
   }
 
   /**
