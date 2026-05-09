@@ -986,9 +986,9 @@
     "lockFile": "Zamknúť súbor",
     "markupView": {
       "allMarkup": "Všetky revízie",
-      "noMarkup": "Žiadna značka",
+      "noMarkup": "Bez revízií",
       "original": "Pôvodný",
-      "simple": "Jednoduché označenie revízie"
+      "simple": "Jednoduché revízie"
     },
     "moreFormatting": "Ďalšie formátovanie",
     "networkError": "Chyba siete. Skontrolujte internetové pripojenie a skúste znova.",

@@ -989,9 +989,9 @@ type Messages = {
     "lockFile": "Lock file";
     "markupView": {
       "allMarkup": "All Markup";
-      "simple": "Simple";
       "noMarkup": "No Markup";
       "original": "Original";
+      "simple": "Simple Markup";
     };
     "moreFormatting": "More formatting";
     "networkError": "Network error. Please check your internet connection and try again.";
