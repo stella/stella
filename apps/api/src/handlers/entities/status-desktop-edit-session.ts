@@ -12,19 +12,38 @@ export const statusDesktopEditSessionParamsSchema = t.Object({
   sessionId: tSafeId("desktopEditSession"),
 });
 
-export const statusDesktopEditSessionQuerySchema = t.Object({
-  sessionToken: t.String({ minLength: 64, maxLength: 64 }),
+const SESSION_TOKEN_LENGTH = 64;
+const BEARER_PREFIX = "Bearer ";
+
+export const statusDesktopEditSessionHeadersSchema = t.Object({
+  authorization: t.String({
+    pattern: `^Bearer [a-f0-9]{${SESSION_TOKEN_LENGTH}}$`,
+  }),
 });
 
 type StatusDesktopEditSessionHandlerProps = {
-  query: { sessionToken: string };
+  headers: { authorization: string };
   sessionId: SafeId<"desktopEditSession">;
 };
 
 export const statusDesktopEditSessionHandler = async ({
-  query: { sessionToken },
+  headers: { authorization },
   sessionId,
 }: StatusDesktopEditSessionHandlerProps) => {
+  // The schema's regex enforces this shape, but we re-check at runtime
+  // so a future schema change can't silently widen what reaches the
+  // authorization step.
+  if (
+    !authorization.startsWith(BEARER_PREFIX) ||
+    authorization.length !== BEARER_PREFIX.length + SESSION_TOKEN_LENGTH
+  ) {
+    return status(401, {
+      code: "desktop_edit_session_token_missing",
+      message: "Desktop edit session token missing or malformed.",
+    });
+  }
+  const sessionToken = authorization.slice(BEARER_PREFIX.length);
+
   const authorizedSession = await authorizeDesktopEditSession({
     sessionId,
     sessionToken,

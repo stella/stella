@@ -22,8 +22,8 @@ import {
 } from "@/api/handlers/entities/respond-desktop-edit-takeover";
 import {
   statusDesktopEditSessionHandler,
+  statusDesktopEditSessionHeadersSchema,
   statusDesktopEditSessionParamsSchema,
-  statusDesktopEditSessionQuerySchema,
 } from "@/api/handlers/entities/status-desktop-edit-session";
 
 export const desktopEditSessionsRoute = new Elysia({
@@ -31,14 +31,14 @@ export const desktopEditSessionsRoute = new Elysia({
 })
   .get(
     "/:sessionId/status",
-    async ({ params, query }) =>
+    async ({ headers, params }) =>
       await statusDesktopEditSessionHandler({
-        query,
+        headers,
         sessionId: params.sessionId,
       }),
     {
+      headers: statusDesktopEditSessionHeadersSchema,
       params: statusDesktopEditSessionParamsSchema,
-      query: statusDesktopEditSessionQuerySchema,
     },
   )
   .get(

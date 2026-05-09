@@ -193,11 +193,15 @@ async fn probe_remote_session_status(
   };
 
   let base = api_base_url.replace("localhost", "127.0.0.1");
-  let url = format!(
-    "{base}/v1/desktop-edit-sessions/{session_id}/status?sessionToken={session_token}"
-  );
+  let url = format!("{base}/v1/desktop-edit-sessions/{session_id}/status");
 
-  let response = match client.get(&url).timeout(STATUS_PROBE_TIMEOUT).send().await {
+  let response = match client
+    .get(&url)
+    .bearer_auth(&session_token)
+    .timeout(STATUS_PROBE_TIMEOUT)
+    .send()
+    .await
+  {
     Ok(response) => response,
     Err(error) => {
       tracing::debug!(
