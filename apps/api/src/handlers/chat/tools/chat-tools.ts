@@ -56,6 +56,13 @@ type GetChatToolsProps = {
    */
   hasActiveFileChat: boolean;
   externalTools?: ToolSet | undefined;
+  /**
+   * Native tool slugs (e.g. "ares") the org has disabled in chat.
+   * Validation tool sets ignore this — past tool messages must still
+   * pass schema validation — so callers should only narrow on the
+   * live execution path.
+   */
+  disabledNativeToolSlugs?: readonly string[] | undefined;
 };
 
 const createActiveDocxEditTools = () => ({
@@ -88,6 +95,7 @@ export const getChatTools = ({
   workspaceId,
   hasActiveFileChat,
   externalTools = {},
+  disabledNativeToolSlugs,
 }: GetChatToolsProps): ToolSet => {
   const orgTools = createOrgTools({
     accessibleWorkspaceIds: toolWorkspaceIds,
@@ -104,7 +112,8 @@ export const getChatTools = ({
   const skillTools = createSkillTools({
     skills: getChatSkillMetadata(),
   });
-  const aresTools = createAresTools();
+  const aresDisabled = disabledNativeToolSlugs?.includes("ares") ?? false;
+  const aresTools = aresDisabled ? {} : createAresTools();
   const activeDocxEditTools = hasActiveFileChat
     ? createActiveDocxEditTools()
     : {};

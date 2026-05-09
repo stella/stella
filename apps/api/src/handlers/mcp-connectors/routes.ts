@@ -10,6 +10,7 @@ import listMcpConnectors from "@/api/handlers/mcp-connectors/list-connectors";
 import mcpOAuthCallback from "@/api/handlers/mcp-connectors/oauth-callback";
 import probeMcpConnector from "@/api/handlers/mcp-connectors/probe-connector";
 import updateMcpConnection from "@/api/handlers/mcp-connectors/update-connection";
+import updateNativeTool from "@/api/handlers/mcp-connectors/update-native-tool";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
@@ -49,6 +50,11 @@ const authenticatedMcpConnectorsRoute = new Elysia({ prefix: "/mcp" })
   })
   .delete("/connections/:connectionId", deleteMcpConnection.handler, {
     params: deleteMcpConnection.config.params,
+    invalidateQuery: true,
+  })
+  .patch("/native-tools/:slug", updateNativeTool.handler, {
+    params: updateNativeTool.config.params,
+    body: updateNativeTool.config.body,
     invalidateQuery: true,
   });
 

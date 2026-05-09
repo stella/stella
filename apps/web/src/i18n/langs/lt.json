@@ -427,7 +427,8 @@
       "field": "Laukas",
       "input": "Įvestis",
       "output": "Išvestis",
-      "sourceCode": "Pradinis kodas"
+      "sourceCode": "Pradinis kodas",
+      "toggleDetails": "Perjungti detales"
     },
     "unsupportedFileType": "Nepalaikomas failo tipas",
     "uploadFailed": "Nepavyko apdoroti failo"
@@ -1079,43 +1080,35 @@
     "mcp": {
       "addAndConnect": "Pridėti ir prijungti",
       "addServer": "Pridėti serverį",
-      "addServerCardDescription": "Įklijuokite serverio URL, o Stella jį prijungs vienu veiksmu.",
       "addServerCardTitle": "Pridėti naują MCP serverį",
       "auth": {
         "bearer": "Bearer tokenas",
         "none": "Be autentifikavimo",
         "oauth2": "OAuth 2.0"
       },
-      "availableInChat": "Pasiekiama pokalbyje",
       "bearerTokenDescription": "Šis serveris naudoja Bearer tokeną. Įklijuokite teikėjo tokeną, kad užbaigtumėte prijungimą.",
-      "builtInBadge": "Integruota",
       "connect": "Prijungti",
-      "connected": "Prijungta",
       "connectedToast": "MCP jungtis prijungta",
       "connectedWithLastUsed": "Prijungta · paskutinį kartą naudota {time}",
-      "customDescription": "Įklijuokite MCP serverio URL. Stella nustatys prisijungimo būdą ir tęs automatiškai.",
-      "customTitle": "Pridėti pasirinktinį serverį",
       "description": "Tvarkykite išorinius MCP serverius, kurie gali pridėti įrankių į pokalbį. Tokenai saugomi kiekvienam naudotojui atskirai.",
       "detected": "Aptikta: {authType}",
       "disable": "Išjungti",
       "disabled": "Prijungta · išjungta",
       "disconnect": "Atjungti",
-      "docsLink": "Dokumentacija",
       "emptyDescription": "Atrinktos teisinės MCP jungtys bus rodomos čia, kai jos bus įjungtos jūsų darbo srityje.",
       "emptyTitle": "MCP jungčių dar nėra",
       "enable": "Įjungti",
       "errorDescription": "Nepavyko atnaujinti jungties.",
       "errorTitle": "MCP ryšys nepavyko",
+      "mcpExplainer": "MCP serveriai prideda prie pokalbio išorinių paslaugų, su kuriomis gali dirbti DI.",
       "namePlaceholder": "Rodomas pavadinimas",
       "needsReauth": "Reikia prisijungti iš naujo",
-      "notConnected": "Neprijungta",
       "off": "Išjungta",
       "on": "Įjungta",
       "otherTitle": "Kiti konektoriai",
       "probe": "Patikrinti",
       "recommendedBadge": "Rekomenduojama",
       "recommendedFor": "Rekomenduojama: {jurisdictions}",
-      "recommendedTitle": "Rekomenduojama jūsų jurisdikcijoms",
       "reconnect": "Prisijungti iš naujo",
       "saveToken": "Išsaugoti tokeną",
       "tokenHelp": "Kaip gauti tokeną",
@@ -1123,7 +1116,8 @@
       "tokenPlaceholder": "Įklijuokite tokeną",
       "urlLabel": "MCP serverio URL",
       "urlPlaceholder": "https://example.com/mcp",
-      "useInChat": "Naudoti pokalbyje"
+      "useInChat": "Naudoti pokalbyje",
+      "whatIsAnMcpServer": "Kas yra MCP serveris?"
     },
     "sections": {
       "agents": {

@@ -1,5 +1,10 @@
 import { useState } from "react";
 
+import {
+  Popover,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { getToolName } from "ai";
@@ -114,7 +119,6 @@ const getToolSubtitle = ({
 
 type McpToolInfo = {
   connectorSlug: string;
-  label: string;
 };
 
 const getMcpToolInfo = (toolName: string): McpToolInfo | null => {
@@ -128,18 +132,13 @@ const getMcpToolInfo = (toolName: string): McpToolInfo | null => {
     return null;
   }
 
-  return {
-    connectorSlug: connector,
-    label: `${humanizeIdentifier(connector)} > ${humanizeIdentifier(tool)}`,
-  };
+  return { connectorSlug: connector };
 };
 
-const humanizeIdentifier = (value: string): string =>
-  value
-    .replaceAll(/[_-]+/g, " ")
-    .replaceAll(/\s+/g, " ")
-    .trim()
-    .replace(/^\p{L}/u, (match) => match.toLocaleUpperCase());
+const NATIVE_TOOL_BRANDS: Record<string, { slug: string; brand: string }> = {
+  ares_lookup_company: { slug: "ares", brand: "ARES" },
+  ares_search_companies: { slug: "ares", brand: "ARES" },
+};
 
 const TOOL_ICONS: Record<string, typeof SearchIcon> = {
   "ask-user": CircleHelpIcon,
@@ -150,6 +149,60 @@ const TOOL_ICONS: Record<string, typeof SearchIcon> = {
   "load-skill": LibraryIcon,
   "read-contact": UserIcon,
   "read-skill-resource": FileTextIcon,
+};
+
+type CatalogEntry = {
+  brand: string;
+  iconHref: string | undefined;
+};
+
+type CatalogItem = {
+  slug: string;
+  displayName: string;
+  description: string;
+  url: string;
+  iconUrl: string | null;
+};
+
+const findCatalogEntry = ({
+  toolName,
+  mcpToolInfo,
+  connectors,
+  nativeTools,
+}: {
+  toolName: string;
+  mcpToolInfo: McpToolInfo | null;
+  connectors: CatalogItem[];
+  nativeTools: CatalogItem[];
+}): CatalogEntry | null => {
+  if (mcpToolInfo !== null) {
+    const connector = connectors.find(
+      (item) =>
+        sanitizeMcpToolNamePart(item.slug) === mcpToolInfo.connectorSlug,
+    );
+    if (!connector) {
+      return null;
+    }
+    return {
+      brand: connector.displayName,
+      iconHref: resolveIconHref(connector),
+    };
+  }
+
+  const native = NATIVE_TOOL_BRANDS[toolName];
+  if (native === undefined) {
+    return null;
+  }
+  const tool = nativeTools.find((item) => item.slug === native.slug);
+  return {
+    brand: native.brand,
+    iconHref: tool === undefined ? undefined : resolveIconHref(tool),
+  };
+};
+
+const resolveIconHref = (item: CatalogItem): string | undefined => {
+  const raw = item.iconUrl ?? fallbackIconUrl(item.url);
+  return raw === undefined ? undefined : sanitizeHref(raw);
 };
 
 export const ToolCallCard = ({
@@ -163,9 +216,17 @@ export const ToolCallCard = ({
   const t = useTranslations();
   const name = getToolName(part);
   const mcpToolInfo = getMcpToolInfo(name);
-  const { data: mcpConnectorsData } = useQuery({
+  const hasCatalogEntry =
+    mcpToolInfo !== null || NATIVE_TOOL_BRANDS[name] !== undefined;
+  const { data: catalogData } = useQuery({
     ...mcpConnectorsOptions(),
-    enabled: mcpToolInfo !== null,
+    enabled: hasCatalogEntry,
+  });
+  const catalogEntry = findCatalogEntry({
+    toolName: name,
+    mcpToolInfo,
+    connectors: catalogData?.connectors ?? [],
+    nativeTools: catalogData?.nativeTools ?? [],
   });
   const [expanded, setExpanded] = useState(() =>
     Boolean(
@@ -176,14 +237,7 @@ export const ToolCallCard = ({
     ),
   );
   const Icon = TOOL_ICONS[name] ?? SearchIcon;
-  const label = mcpToolInfo?.label ?? t(getChatToolTitleKey(name));
-  const mcpIconHref =
-    mcpToolInfo === null
-      ? undefined
-      : findMcpConnectorIconHref({
-          connectorSlug: mcpToolInfo.connectorSlug,
-          connectors: mcpConnectorsData?.connectors ?? [],
-        });
+  const label = catalogEntry?.brand ?? t(getChatToolTitleKey(name));
   const subtitle = getToolSubtitle({
     formatCharacterCount: (count) =>
       t("chat.toolCall.characterCount", { count }),
@@ -206,41 +260,72 @@ export const ToolCallCard = ({
     (showDetails && hasOutput);
 
   return (
-    <div className="bg-muted/40 my-1 rounded-md border text-xs">
-      <button
+    <div className="my-1 text-xs">
+      <div
         className={cn(
-          "flex w-full items-center gap-1.5 px-2 py-1.5 text-start",
-          !canExpand && "cursor-default",
+          "bg-muted/30 inline-flex max-w-full items-center gap-1.5 rounded-md px-2 py-1 align-top",
+          hasError && "border-destructive/40 border",
         )}
-        onClick={() => {
-          if (canExpand) {
-            setExpanded((e) => !e);
-          }
-        }}
-        type="button"
       >
-        <ToolCallLeadingIcon
-          Icon={Icon}
-          iconHref={mcpIconHref}
-          isLoading={isLoading}
-        />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate font-medium">{label}</span>
-          {subtitle && (
-            <span className="text-muted-foreground block truncate">
-              {subtitle}
-            </span>
+        <button
+          className={cn(
+            "flex min-w-0 items-center gap-1.5 text-start",
+            !canExpand && "cursor-default",
           )}
-        </span>
-        {canExpand && (
-          <ChevronDownIcon
-            className={cn(
-              "text-muted-foreground size-3 shrink-0 transition-transform",
-              expanded && "rotate-180",
-            )}
+          onClick={() => {
+            if (canExpand) {
+              setExpanded((e) => !e);
+            }
+          }}
+          type="button"
+        >
+          <ToolCallLeadingIcon
+            Icon={Icon}
+            iconHref={catalogEntry?.iconHref}
+            isLoading={isLoading}
           />
+          <span className="min-w-0 truncate">
+            <span className="font-medium">{label}</span>
+            {subtitle && (
+              <span className="text-muted-foreground ms-1.5">{subtitle}</span>
+            )}
+          </span>
+        </button>
+        {mcpToolInfo !== null && (
+          <Popover>
+            <PopoverTrigger
+              aria-label={t("knowledge.mcp.whatIsAnMcpServer")}
+              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 shrink-0 rounded focus-visible:ring-2 focus-visible:outline-none"
+            >
+              <CircleHelpIcon className="size-3" />
+            </PopoverTrigger>
+            <PopoverPopup
+              align="start"
+              className="max-w-xs text-xs"
+              sideOffset={6}
+            >
+              {t("knowledge.mcp.mcpExplainer")}
+            </PopoverPopup>
+          </Popover>
         )}
-      </button>
+        {canExpand && (
+          <button
+            aria-label={t("chat.toolCall.toggleDetails")}
+            className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 shrink-0 rounded focus-visible:ring-2 focus-visible:outline-none"
+            onClick={() => {
+              setExpanded((e) => !e);
+            }}
+            type="button"
+          >
+            <ChevronDownIcon
+              className={cn(
+                "size-3 transition-transform",
+                expanded && "rotate-180",
+              )}
+            />
+          </button>
+        )}
+      </div>
       {expanded &&
         (showMcpExactCall ||
           codeToolSource !== undefined ||
@@ -338,28 +423,6 @@ function ToolCallLeadingIcon({
 
   return <Icon className="text-muted-foreground size-3 shrink-0" />;
 }
-
-const findMcpConnectorIconHref = ({
-  connectorSlug,
-  connectors,
-}: {
-  connectorSlug: string;
-  connectors: {
-    iconUrl: string | null;
-    slug: string;
-    url: string;
-  }[];
-}): string | undefined => {
-  const connector = connectors.find(
-    (item) => sanitizeMcpToolNamePart(item.slug) === connectorSlug,
-  );
-  if (!connector) {
-    return undefined;
-  }
-
-  const iconHref = connector.iconUrl ?? fallbackIconUrl(connector.url);
-  return iconHref === undefined ? undefined : sanitizeHref(iconHref);
-};
 
 const sanitizeMcpToolNamePart = (value: string): string =>
   value.replace(/[^a-zA-Z0-9_-]/g, "_");

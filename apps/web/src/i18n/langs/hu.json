@@ -427,7 +427,8 @@
       "field": "Mező",
       "input": "Bemenet",
       "output": "Kimenet",
-      "sourceCode": "Forráskód"
+      "sourceCode": "Forráskód",
+      "toggleDetails": "Részletek megjelenítése"
     },
     "unsupportedFileType": "Nem támogatott fájltípus",
     "uploadFailed": "A fájl feldolgozása sikertelen"
@@ -1079,43 +1080,35 @@
     "mcp": {
       "addAndConnect": "Hozzáadás és csatlakozás",
       "addServer": "Szerver hozzáadása",
-      "addServerCardDescription": "Illessze be a szerver URL-jét, és a Stella egy lépésben csatlakoztatja.",
       "addServerCardTitle": "Új MCP-szerver hozzáadása",
       "auth": {
         "bearer": "Bearer token",
         "none": "Nincs hitelesítés",
         "oauth2": "OAuth 2.0"
       },
-      "availableInChat": "Elérhető a chatben",
       "bearerTokenDescription": "Ez a szerver Bearer tokent használ. A csatlakozás befejezéséhez illessze be a szolgáltatótól kapott tokent.",
-      "builtInBadge": "Beépített",
       "connect": "Csatlakoztatás",
-      "connected": "Csatlakoztatva",
       "connectedToast": "MCP-konnektor csatlakoztatva",
       "connectedWithLastUsed": "Csatlakoztatva · legutóbbi használat: {time}",
-      "customDescription": "Illessze be az MCP-szerver URL-jét. A Stella felismeri a csatlakozás módját, és automatikusan folytatja.",
-      "customTitle": "Egyéni szerver hozzáadása",
       "description": "Kezelje azokat a külső MCP-szervereket, amelyek eszközöket adhatnak a chathez. A tokeneket felhasználónként tároljuk.",
       "detected": "Felismerve: {authType}",
       "disable": "Kikapcsolás",
       "disabled": "Csatlakoztatva · kikapcsolva",
       "disconnect": "Leválasztás",
-      "docsLink": "Dokumentáció",
       "emptyDescription": "A válogatott jogi MCP-konnektorok itt jelennek meg, miután engedélyezve lettek a munkaterületén.",
       "emptyTitle": "Még nincsenek MCP-konnektorok",
       "enable": "Bekapcsolás",
       "errorDescription": "A konnektort nem sikerült frissíteni.",
       "errorTitle": "Az MCP-kapcsolat sikertelen",
+      "mcpExplainer": "Az MCP-szerverek olyan külső szolgáltatásokat adnak a chathez, amelyekkel az MI dolgozhat.",
       "namePlaceholder": "Megjelenítési név",
       "needsReauth": "Újracsatlakozás szükséges",
-      "notConnected": "Nincs csatlakoztatva",
       "off": "Ki",
       "on": "Be",
       "otherTitle": "További csatlakozók",
       "probe": "Ellenőrzés",
       "recommendedBadge": "Ajánlott",
       "recommendedFor": "Ajánlott: {jurisdictions}",
-      "recommendedTitle": "Ajánlott az Ön joghatóságaihoz",
       "reconnect": "Újracsatlakozás",
       "saveToken": "Token mentése",
       "tokenHelp": "Token beszerzése",
@@ -1123,7 +1116,8 @@
       "tokenPlaceholder": "Token beillesztése",
       "urlLabel": "MCP-szerver URL-je",
       "urlPlaceholder": "https://example.com/mcp",
-      "useInChat": "Használat a chatben"
+      "useInChat": "Használat a chatben",
+      "whatIsAnMcpServer": "Mi az az MCP-szerver?"
     },
     "sections": {
       "agents": {

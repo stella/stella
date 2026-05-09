@@ -2,24 +2,18 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import { Button } from "@stll/ui/components/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "@stll/ui/components/dialog";
-import { Form } from "@stll/ui/components/form";
 import { Input } from "@stll/ui/components/input";
+import {
+  Popover,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stll/ui/components/popover";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  CheckIcon,
+  CircleHelpIcon,
   ExternalLinkIcon,
   KeyRoundIcon,
   LoaderIcon,
@@ -27,6 +21,7 @@ import {
   PlusIcon,
   RefreshCcwIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -78,6 +73,7 @@ type NativeToolCatalogItem = {
   iconUrl: string | null;
   isRecommended: boolean;
   recommendedJurisdictions: string[];
+  enabled: boolean;
 };
 
 type CreatedConnector = {
@@ -138,12 +134,26 @@ function McpPage() {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto p-6">
       <div className="mb-6">
-        <h1 className="text-foreground text-xl font-semibold">
-          {t("knowledge.sections.mcp.title")}
-        </h1>
-        <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-          {t("knowledge.mcp.description")}
-        </p>
+        <div className="flex items-center gap-2">
+          <h1 className="text-foreground text-xl font-semibold">
+            {t("knowledge.sections.mcp.title")}
+          </h1>
+          <Popover>
+            <PopoverTrigger
+              aria-label={t("knowledge.mcp.whatIsAnMcpServer")}
+              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 inline-flex size-5 items-center justify-center rounded-full focus-visible:ring-2 focus-visible:outline-none"
+            >
+              <CircleHelpIcon className="size-4" />
+            </PopoverTrigger>
+            <PopoverPopup
+              align="start"
+              className="max-w-sm text-xs"
+              sideOffset={6}
+            >
+              {t("knowledge.mcp.mcpExplainer")}
+            </PopoverPopup>
+          </Popover>
+        </div>
       </div>
 
       <ConnectorSection
@@ -215,7 +225,7 @@ function ConnectorSection({
       <div className="grid gap-3 xl:grid-cols-2">
         {addServerCard}
         {nativeTools.map((tool) => (
-          <NativeToolCard key={tool.slug} tool={tool} />
+          <NativeToolCard key={tool.slug} onChanged={onChanged} tool={tool} />
         ))}
         {connectors.map((connector) => (
           <ConnectorCard
@@ -325,7 +335,7 @@ function ConnectorCard({
   };
 
   const disconnect = async () => {
-    if (!connection) {
+    if (!connection || busy) {
       return;
     }
 
@@ -350,7 +360,7 @@ function ConnectorCard({
   };
 
   const setEnabled = async (enabled: boolean) => {
-    if (!connection) {
+    if (!connection || busy) {
       return;
     }
 
@@ -378,6 +388,9 @@ function ConnectorCard({
   };
 
   const deleteConnector = async () => {
+    if (busy) {
+      return;
+    }
     setBusy(true);
     const response = await api.mcp
       .connectors({ slug: connector.slug })
@@ -401,10 +414,6 @@ function ConnectorCard({
   const needsReauth = connection?.status === "needs_reauth";
   const canDeleteConnector =
     !connector.isCurated && userCanManageCustomConnectors;
-  const documentationHref =
-    connector.documentationUrl === null
-      ? undefined
-      : sanitizeHref(connector.documentationUrl);
   const tokenHelpHref =
     connector.tokenHelpUrl === null
       ? undefined
@@ -414,93 +423,71 @@ function ConnectorCard({
     iconHref === undefined ? undefined : sanitizeHref(iconHref);
 
   return (
-    <section className="bg-card rounded-lg border p-5">
-      <div className="flex items-start gap-4">
-        <div className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-lg">
+    <section className="bg-card rounded-lg border">
+      <div className="flex items-center gap-3 p-3">
+        <div className="shrink-0">
           {safeIconHref ? (
             <img
               alt=""
-              className="size-5 rounded-sm object-contain"
-              height={20}
+              className="size-6 rounded-sm object-contain ring-1 ring-black/5 dark:ring-white/10"
+              height={24}
               src={safeIconHref}
-              width={20}
+              width={24}
             />
           ) : (
-            <PlugZapIcon className="size-5" />
+            <PlugZapIcon className="text-muted-foreground size-5" />
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold">{connector.displayName}</h2>
-            {connector.isRecommended && (
-              <span className="bg-success/10 text-success rounded-md px-2 py-0.5 text-xs font-medium">
-                {t("knowledge.mcp.recommendedTitle")}
-              </span>
-            )}
-            <ConnectionStatusBadge connection={connection} />
-            <AuthBadge authType={connector.authType} />
+          <div className="truncate text-sm leading-tight font-medium">
+            {connector.displayName}
           </div>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {connector.description}
-          </p>
-          <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-3 text-xs">
-            <span className="truncate">{connector.url}</span>
-            {documentationHref && (
-              <a
-                className="hover:text-foreground inline-flex items-center gap-1"
-                href={documentationHref}
-                rel="noreferrer"
-                target="_blank"
-              >
-                {t("knowledge.mcp.docsLink")}
-                <ExternalLinkIcon className="size-3" />
-              </a>
-            )}
+          <div className="text-muted-foreground truncate text-xs">
+            {connector.url}
           </div>
         </div>
-      </div>
-
-      <div className="mt-5 flex flex-wrap items-center gap-2">
-        {connected ? (
-          <ChatUseSwitchButton
-            busy={busy}
-            enabled={enabled}
-            onToggle={() => void setEnabled(!enabled)}
-          />
-        ) : (
-          <Button disabled={busy} onClick={() => void connect()} size="sm">
-            {needsReauth ? (
-              <RefreshCcwIcon className="me-1.5 size-4" />
-            ) : (
-              <PlugZapIcon className="me-1.5 size-4" />
-            )}
-            {needsReauth
-              ? t("knowledge.mcp.reconnect")
-              : t("knowledge.mcp.connect")}
-          </Button>
-        )}
-        {connection && (
-          <Button
-            disabled={busy}
-            onClick={() => void disconnect()}
-            size="sm"
-            variant="ghost"
-          >
-            <Trash2Icon className="me-1.5 size-4" />
-            {t("knowledge.mcp.disconnect")}
-          </Button>
-        )}
-        {canDeleteConnector && (
-          <Button
-            disabled={busy}
-            onClick={() => void deleteConnector()}
-            size="sm"
-            variant="ghost"
-          >
-            <Trash2Icon className="me-1.5 size-4" />
-            {t("common.delete")}
-          </Button>
-        )}
+        <div className="flex shrink-0 items-center gap-1">
+          {connected ? (
+            <ChatUseSwitchButton
+              busy={busy}
+              enabled={enabled}
+              onToggle={() => void setEnabled(!enabled)}
+            />
+          ) : (
+            <Button disabled={busy} onClick={() => void connect()} size="sm">
+              {needsReauth ? (
+                <RefreshCcwIcon className="me-1.5 size-4" />
+              ) : (
+                <PlugZapIcon className="me-1.5 size-4" />
+              )}
+              {needsReauth
+                ? t("knowledge.mcp.reconnect")
+                : t("knowledge.mcp.connect")}
+            </Button>
+          )}
+          {connection && !canDeleteConnector && (
+            <Button
+              aria-busy={busy}
+              aria-label={t("knowledge.mcp.disconnect")}
+              onClick={() => void disconnect()}
+              size="sm"
+              variant="ghost"
+            >
+              <Trash2Icon className="size-4" />
+            </Button>
+          )}
+          {canDeleteConnector && (
+            <Button
+              aria-busy={busy}
+              aria-label={t("common.delete")}
+              onClick={() => void deleteConnector()}
+              size="sm"
+              variant="ghost"
+            >
+              <Trash2Icon className="size-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {showTokenInput && (
@@ -546,70 +533,68 @@ function ConnectorCard({
   );
 }
 
-function NativeToolCard({ tool }: { tool: NativeToolCatalogItem }) {
+function NativeToolCard({
+  tool,
+  onChanged,
+}: {
+  tool: NativeToolCatalogItem;
+  onChanged: () => void;
+}) {
   const t = useTranslations();
-  const documentationHref =
-    tool.documentationUrl === null
-      ? undefined
-      : sanitizeHref(tool.documentationUrl);
+  const [busy, setBusy] = useState(false);
   const iconHref = tool.iconUrl ?? fallbackIconUrl(tool.url);
   const safeIconHref =
     iconHref === undefined ? undefined : sanitizeHref(iconHref);
 
-  return (
-    <section className="bg-card rounded-lg border p-5">
-      <div className="flex items-start gap-4">
-        <div className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-lg">
-          {safeIconHref ? (
-            <img
-              alt=""
-              className="size-5 rounded-sm object-contain"
-              height={20}
-              src={safeIconHref}
-              width={20}
-            />
-          ) : (
-            <PlugZapIcon className="size-5" />
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold">{tool.displayName}</h2>
-            {tool.isRecommended && (
-              <span className="bg-success/10 text-success rounded-md px-2 py-0.5 text-xs font-medium">
-                {t("knowledge.mcp.recommendedTitle")}
-              </span>
-            )}
-            <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs font-medium">
-              {t("knowledge.mcp.builtInBadge")}
-            </span>
-          </div>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {tool.description}
-          </p>
-          <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-3 text-xs">
-            <span className="truncate">{tool.url}</span>
-            {documentationHref && (
-              <a
-                className="hover:text-foreground inline-flex items-center gap-1"
-                href={documentationHref}
-                rel="noreferrer"
-                target="_blank"
-              >
-                {t("knowledge.mcp.docsLink")}
-                <ExternalLinkIcon className="size-3" />
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
+  const setEnabled = async (enabled: boolean) => {
+    if (busy) {
+      return;
+    }
+    setBusy(true);
+    const response = await api.mcp["native-tools"]({ slug: tool.slug }).patch({
+      enabled,
+      queryKey: ["mcp"],
+    });
+    setBusy(false);
 
-      <div className="mt-5">
-        <span className="bg-success/10 text-success inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium">
-          <CheckIcon className="size-4" />
-          {t("knowledge.mcp.availableInChat")}
-        </span>
+    if (response.error) {
+      showApiError({
+        error: response.error,
+        fallback: t("knowledge.mcp.errorDescription"),
+        title: t("knowledge.mcp.errorTitle"),
+      });
+      return;
+    }
+
+    onChanged();
+  };
+
+  return (
+    <section className="bg-card flex items-center gap-3 rounded-lg border p-3">
+      <div className="shrink-0">
+        {safeIconHref ? (
+          <img
+            alt=""
+            className="size-6 rounded-sm object-contain ring-1 ring-black/5 dark:ring-white/10"
+            height={24}
+            src={safeIconHref}
+            width={24}
+          />
+        ) : (
+          <PlugZapIcon className="text-muted-foreground size-5" />
+        )}
       </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm leading-tight font-medium">
+          {tool.displayName}
+        </div>
+        <div className="text-muted-foreground truncate text-xs">{tool.url}</div>
+      </div>
+      <ChatUseSwitchButton
+        busy={busy}
+        enabled={tool.enabled}
+        onToggle={() => void setEnabled(!tool.enabled)}
+      />
     </section>
   );
 }
@@ -627,8 +612,8 @@ function ChatUseSwitchButton({
 
   return (
     <Button
+      aria-busy={busy}
       aria-checked={enabled}
-      disabled={busy}
       onClick={onToggle}
       role="switch"
       size="sm"
@@ -650,40 +635,7 @@ function ChatUseSwitchButton({
           )}
         />
       </span>
-      <span className={enabled ? "text-success" : "text-muted-foreground"}>
-        {enabled ? t("knowledge.mcp.on") : t("knowledge.mcp.off")}
-      </span>
     </Button>
-  );
-}
-
-function ConnectionStatusBadge({
-  connection,
-}: {
-  connection: McpConnection | undefined;
-}) {
-  const t = useTranslations();
-
-  if (!connection) {
-    return (
-      <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs font-medium">
-        {t("knowledge.mcp.notConnected")}
-      </span>
-    );
-  }
-
-  if (connection.status === "needs_reauth") {
-    return (
-      <span className="bg-warning/10 text-warning rounded-md px-2 py-0.5 text-xs font-medium">
-        {t("knowledge.mcp.needsReauth")}
-      </span>
-    );
-  }
-
-  return (
-    <span className="bg-success/10 text-success rounded-md px-2 py-0.5 text-xs font-medium">
-      {t("knowledge.mcp.connected")}
-    </span>
   );
 }
 
@@ -695,58 +647,9 @@ const fallbackIconUrl = (rawUrl: string): string | undefined => {
   }
 };
 
-function AuthBadge({ authType }: { authType: McpConnector["authType"] }) {
-  const t = useTranslations();
-
-  return (
-    <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs font-medium">
-      {t(`knowledge.mcp.auth.${authType}`)}
-    </span>
-  );
-}
-
 function AddServerCard({ onChanged }: { onChanged: () => void }) {
   const t = useTranslations();
-  const [open, setOpen] = useState(false);
-
-  return (
-    <>
-      <button
-        className="bg-card hover:bg-muted/30 focus-visible:ring-ring flex min-h-[176px] flex-col items-start justify-between rounded-lg border border-dashed p-5 text-start transition-colors focus-visible:ring-2 focus-visible:outline-none"
-        onClick={() => setOpen(true)}
-        type="button"
-      >
-        <span className="bg-muted flex size-10 items-center justify-center rounded-lg">
-          <PlusIcon className="size-5" />
-        </span>
-        <span>
-          <span className="block text-sm font-semibold">
-            {t("knowledge.mcp.addServerCardTitle")}
-          </span>
-          <span className="text-muted-foreground mt-1 block text-sm">
-            {t("knowledge.mcp.addServerCardDescription")}
-          </span>
-        </span>
-      </button>
-      <AddServerDialog
-        onChanged={onChanged}
-        onOpenChange={setOpen}
-        open={open}
-      />
-    </>
-  );
-}
-
-function AddServerDialog({
-  onChanged,
-  onOpenChange,
-  open,
-}: {
-  onChanged: () => void;
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
-}) {
-  const t = useTranslations();
+  const [step, setStep] = useState<"idle" | "url" | "token">("idle");
   const [url, setUrl] = useState("");
   const [token, setToken] = useState("");
   const [createdConnector, setCreatedConnector] = useState<
@@ -755,15 +658,11 @@ function AddServerDialog({
   const [busy, setBusy] = useState(false);
 
   const reset = () => {
+    setStep("idle");
     setUrl("");
     setToken("");
     setCreatedConnector(undefined);
     setBusy(false);
-  };
-
-  const close = () => {
-    onOpenChange(false);
-    reset();
   };
 
   const connectConnector = async (connector: CreatedConnector) => {
@@ -782,6 +681,7 @@ function AddServerDialog({
 
     if (response.data.type === "bearer") {
       setCreatedConnector(connector);
+      setStep("token");
       return;
     }
 
@@ -795,7 +695,7 @@ function AddServerDialog({
       if (!popup) {
         window.location.assign(response.data.authorizeUrl);
       }
-      close();
+      reset();
       return;
     }
 
@@ -804,7 +704,7 @@ function AddServerDialog({
       type: "success",
     });
     onChanged();
-    close();
+    reset();
   };
 
   const addServer = async () => {
@@ -830,8 +730,7 @@ function AddServerDialog({
     }
 
     onChanged();
-    const connector = response.data.connector;
-    await connectConnector(connector);
+    await connectConnector(response.data.connector);
   };
 
   const saveToken = async () => {
@@ -862,88 +761,109 @@ function AddServerDialog({
       type: "success",
     });
     onChanged();
-    close();
+    reset();
   };
 
-  return (
-    <Dialog
-      onOpenChange={(nextOpen) => {
-        onOpenChange(nextOpen);
-        if (!nextOpen) {
-          reset();
-        }
-      }}
-      open={open}
-    >
-      <DialogPopup>
-        <Form
-          className="gap-0"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (createdConnector) {
-              void saveToken();
-              return;
-            }
+  if (step === "idle") {
+    return (
+      <button
+        className="bg-card hover:bg-muted/30 focus-visible:ring-ring flex items-center gap-3 rounded-lg border border-dashed p-3 text-start transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        onClick={() => setStep("url")}
+        type="button"
+      >
+        <PlusIcon className="text-muted-foreground size-5 shrink-0" />
+        <span className="text-sm font-medium">
+          {t("knowledge.mcp.addServerCardTitle")}
+        </span>
+      </button>
+    );
+  }
 
-            void addServer();
+  if (step === "url") {
+    return (
+      <form
+        className="bg-card flex items-center gap-2 rounded-lg border p-2 ps-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void addServer();
+        }}
+      >
+        <PlusIcon className="text-muted-foreground size-5 shrink-0" />
+        <Input
+          aria-label={t("knowledge.mcp.urlLabel")}
+          autoComplete="url"
+          autoFocus
+          className="border-0 shadow-none focus-visible:ring-0"
+          onChange={(event) => setUrl(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              reset();
+            }
           }}
+          placeholder={t("knowledge.mcp.urlPlaceholder")}
+          type="url"
+          value={url}
+        />
+        <Button disabled={busy || !url.trim()} size="sm" type="submit">
+          {busy ? <LoaderIcon className="me-1.5 size-4 animate-spin" /> : null}
+          {t("knowledge.mcp.addAndConnect")}
+        </Button>
+        <Button
+          aria-label={t("common.cancel")}
+          onClick={reset}
+          size="sm"
+          type="button"
+          variant="ghost"
         >
-          <DialogHeader>
-            <DialogTitle>{t("knowledge.mcp.customTitle")}</DialogTitle>
-            <DialogDescription>
-              {t("knowledge.mcp.customDescription")}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogPanel className="flex flex-col gap-4">
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium">
-                {createdConnector
-                  ? t("knowledge.mcp.tokenLabel")
-                  : t("knowledge.mcp.urlLabel")}
-              </span>
-              <Input
-                autoComplete={createdConnector ? "off" : "url"}
-                autoFocus
-                className={createdConnector ? "font-mono" : undefined}
-                onChange={(event) =>
-                  createdConnector
-                    ? setToken(event.target.value)
-                    : setUrl(event.target.value)
-                }
-                placeholder={
-                  createdConnector
-                    ? t("knowledge.mcp.tokenPlaceholder")
-                    : t("knowledge.mcp.urlPlaceholder")
-                }
-                type={createdConnector ? "password" : "url"}
-                value={createdConnector ? token : url}
-              />
-            </label>
-            {createdConnector && (
-              <p className="text-muted-foreground text-sm">
-                {t("knowledge.mcp.bearerTokenDescription")}
-              </p>
-            )}
-          </DialogPanel>
-          <DialogFooter>
-            <DialogClose render={<Button type="button" variant="ghost" />}>
-              {t("common.cancel")}
-            </DialogClose>
-            <Button
-              disabled={
-                busy || (createdConnector ? !token.trim() : !url.trim())
-              }
-              type="submit"
-            >
-              {busy ? <LoaderIcon className="size-4 animate-spin" /> : null}
-              {createdConnector
-                ? t("knowledge.mcp.saveToken")
-                : t("knowledge.mcp.addAndConnect")}
-            </Button>
-          </DialogFooter>
-        </Form>
-      </DialogPopup>
-    </Dialog>
+          <XIcon className="size-4" />
+        </Button>
+      </form>
+    );
+  }
+
+  return (
+    <div className="bg-card rounded-lg border p-2 ps-3">
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void saveToken();
+        }}
+      >
+        <KeyRoundIcon className="text-muted-foreground size-5 shrink-0" />
+        <Input
+          aria-label={t("knowledge.mcp.tokenLabel")}
+          autoComplete="off"
+          autoFocus
+          className="border-0 font-mono shadow-none focus-visible:ring-0"
+          onChange={(event) => setToken(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              reset();
+            }
+          }}
+          placeholder={t("knowledge.mcp.tokenPlaceholder")}
+          type="password"
+          value={token}
+        />
+        <Button disabled={busy || !token.trim()} size="sm" type="submit">
+          {busy ? <LoaderIcon className="me-1.5 size-4 animate-spin" /> : null}
+          {t("knowledge.mcp.saveToken")}
+        </Button>
+        <Button
+          aria-label={t("common.cancel")}
+          onClick={reset}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <XIcon className="size-4" />
+        </Button>
+      </form>
+      <p className="text-muted-foreground mt-2 ps-7 text-xs">
+        {t("knowledge.mcp.bearerTokenDescription")}
+      </p>
+    </div>
   );
 }
 

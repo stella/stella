@@ -296,6 +296,18 @@ const sendMessage = createSafeRootHandler(
       safeDb,
       userId: user.id,
     });
+    const orgSettingsForChat = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.organizationSettings.findFirst({
+          where: {
+            organizationId: { eq: session.activeOrganizationId },
+          },
+          columns: { disabledNativeTools: true },
+        }),
+      ),
+    );
+    const disabledNativeToolSlugs =
+      orgSettingsForChat?.disabledNativeTools ?? [];
     // Streaming tools mirror the surface the user is on: only the
     // file-overlay client knows how to satisfy
     // apply-active-docx-edits (it queues into the review store and
@@ -316,6 +328,7 @@ const sendMessage = createSafeRootHandler(
       workspaceId,
       hasActiveFileChat: body.activeFile !== undefined,
       externalTools: externalMcpTools.tools,
+      disabledNativeToolSlugs,
     });
 
     const externalMcpSystemHint = buildExternalMcpSystemHint(

@@ -427,7 +427,8 @@
       "field": "Pole",
       "input": "Dane wejściowe",
       "output": "Wynik",
-      "sourceCode": "Kod źródłowy"
+      "sourceCode": "Kod źródłowy",
+      "toggleDetails": "Przełącz szczegóły"
     },
     "unsupportedFileType": "Nieobsługiwany typ pliku",
     "uploadFailed": "Przetwarzanie pliku nie powiodło się"
@@ -1079,43 +1080,35 @@
     "mcp": {
       "addAndConnect": "Dodaj i połącz",
       "addServer": "Dodaj serwer",
-      "addServerCardDescription": "Wklej URL serwera, a Stella połączy go w jednym kroku.",
       "addServerCardTitle": "Dodaj nowy serwer MCP",
       "auth": {
         "bearer": "Token Bearer",
         "none": "Bez uwierzytelniania",
         "oauth2": "OAuth 2.0"
       },
-      "availableInChat": "Dostępne w czacie",
       "bearerTokenDescription": "Ten serwer używa tokenu Bearer. Wklej token od dostawcy, aby zakończyć łączenie.",
-      "builtInBadge": "Wbudowane",
       "connect": "Połącz",
-      "connected": "Połączono",
       "connectedToast": "Połączono konektor MCP",
       "connectedWithLastUsed": "Połączono · ostatnio użyto {time}",
-      "customDescription": "Wklej URL serwera MCP. Stella wykryje sposób połączenia i automatycznie przejdzie dalej.",
-      "customTitle": "Dodaj własny serwer",
       "description": "Zarządzaj zewnętrznymi serwerami MCP, które mogą dodawać narzędzia do czatu. Tokeny są przechowywane osobno dla każdego użytkownika.",
       "detected": "Wykryto {authType}",
       "disable": "Wyłącz",
       "disabled": "Połączono · wyłączone",
       "disconnect": "Rozłącz",
-      "docsLink": "Dokumentacja",
       "emptyDescription": "Wybrane prawnicze konektory MCP pojawią się tutaj po włączeniu ich dla Twojej przestrzeni roboczej.",
       "emptyTitle": "Brak konektorów MCP",
       "enable": "Włącz",
       "errorDescription": "Nie udało się zaktualizować konektora.",
       "errorTitle": "Połączenie MCP nie powiodło się",
+      "mcpExplainer": "Serwery MCP dodają do czatu usługi zewnętrzne, z którymi może pracować AI.",
       "namePlaceholder": "Nazwa wyświetlana",
       "needsReauth": "Wymaga ponownego połączenia",
-      "notConnected": "Nie połączono",
       "off": "Wył.",
       "on": "Wł.",
       "otherTitle": "Pozostałe konektory",
       "probe": "Sprawdź",
       "recommendedBadge": "Rekomendowane",
       "recommendedFor": "Rekomendowane dla {jurisdictions}",
-      "recommendedTitle": "Rekomendowane dla Twoich jurysdykcji",
       "reconnect": "Połącz ponownie",
       "saveToken": "Zapisz token",
       "tokenHelp": "Jak uzyskać token",
@@ -1123,7 +1116,8 @@
       "tokenPlaceholder": "Wklej token",
       "urlLabel": "URL serwera MCP",
       "urlPlaceholder": "https://example.com/mcp",
-      "useInChat": "Używaj w czacie"
+      "useInChat": "Używaj w czacie",
+      "whatIsAnMcpServer": "Co to jest serwer MCP?"
     },
     "sections": {
       "agents": {

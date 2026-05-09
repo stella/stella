@@ -54,11 +54,15 @@ const listMcpConnectors = createSafeRootHandler(
           where: {
             organizationId: { eq: session.activeOrganizationId },
           },
-          columns: { practiceJurisdictions: true },
+          columns: {
+            practiceJurisdictions: true,
+            disabledNativeTools: true,
+          },
         }),
       ),
     );
     const practiceJurisdictions = settings?.practiceJurisdictions ?? [];
+    const disabledNativeTools = new Set(settings?.disabledNativeTools);
 
     return Result.ok({
       canManageCustomConnectors: ["admin", "owner"].includes(memberRole.role),
@@ -85,7 +89,22 @@ const listMcpConnectors = createSafeRootHandler(
           recommendedJurisdictions: metadata.recommendedJurisdictions,
         };
       }),
-      nativeTools: getNativeToolCatalog({ practiceJurisdictions }),
+      nativeTools: getNativeToolCatalog({ practiceJurisdictions }).map(
+        (tool) => {
+          const enabled = !disabledNativeTools.has(tool.slug);
+          return {
+            description: tool.description,
+            displayName: tool.displayName,
+            documentationUrl: tool.documentationUrl,
+            enabled,
+            iconUrl: tool.iconUrl,
+            isRecommended: tool.isRecommended,
+            recommendedJurisdictions: tool.recommendedJurisdictions,
+            slug: tool.slug,
+            url: tool.url,
+          };
+        },
+      ),
     });
   },
 );

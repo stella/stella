@@ -229,7 +229,6 @@ export const ChatErrorMessage = ({
 
 const hasVisibleContent = (
   messages: readonly PersistedChatMessage[],
-  showToolCalls: boolean,
 ): boolean => {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
@@ -246,7 +245,7 @@ const hasVisibleContent = (
         return true;
       }
 
-      if (isToolUIPart(part) && showToolCalls) {
+      if (isToolUIPart(part)) {
         return true;
       }
     }
@@ -460,7 +459,7 @@ export const ChatThreadMessages = ({
                     );
                   }
 
-                  if (isToolUIPart(part) && shouldShowToolCalls) {
+                  if (isToolUIPart(part)) {
                     return (
                       <ToolCallCard
                         key={part.toolCallId}
@@ -522,9 +521,7 @@ export const ChatThreadMessages = ({
       )}
       {showThinkingIndicator &&
         isGenerating &&
-        !hasVisibleContent(messages, shouldShowToolCalls) && (
-          <ThinkingIndicator />
-        )}
+        !hasVisibleContent(messages) && <ThinkingIndicator />}
     </>
   );
 };
