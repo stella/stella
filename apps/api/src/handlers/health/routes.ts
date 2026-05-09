@@ -20,15 +20,22 @@ const PROBE_TIMEOUT_MS = 5000;
 const PROBE_CACHE_TTL_MS = 5000;
 
 const runDatabaseProbe = async (): Promise<ProbeOutcome<HealthCheckError>> => {
+  let timerId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
-    setTimeout(
+    timerId = setTimeout(
       () => reject(new HealthCheckError({ message: "DB probe timeout" })),
       PROBE_TIMEOUT_MS,
     );
   });
-  const result = await Result.tryPromise(
-    async () => await Promise.race([probeDatabase(), timeout]),
-  );
+  const result = await Result.tryPromise(async () => {
+    try {
+      return await Promise.race([probeDatabase(), timeout]);
+    } finally {
+      // Whichever side of the race wins, the loser's timer or the
+      // timeout's setTimeout would otherwise hold the event loop open.
+      clearTimeout(timerId);
+    }
+  });
   if (result.isErr()) {
     const cause = result.error;
     return {
