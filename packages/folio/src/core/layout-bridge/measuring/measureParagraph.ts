@@ -220,7 +220,21 @@ function calculateTypographyMetrics(
 }
 
 /**
- * Calculate metrics for an empty paragraph
+ * Word's "single line spacing" floor (≈ 1.15×) applied to empty paragraphs
+ * with `auto`/`atLeast` line rules. Without this, narrow-metric fonts
+ * (Arial Narrow, OS/2 ratio ≈ 1.117) collapse empty rows visibly tighter
+ * than Word renders them. See eigenpal #391/#394.
+ */
+const WORD_SINGLE_LINE_FLOOR = 1.15;
+
+/**
+ * Calculate metrics for an empty paragraph.
+ *
+ * Word renders an empty paragraph as a single readable line — its line
+ * height never collapses below 1.15 × font size, even when the doc
+ * explicitly writes `<w:line w:val="240"/>` (1.0×). The floor is scoped to
+ * `auto`/`atLeast` line rules; `exact` means exact (per OOXML §17.3.1.33)
+ * and stays untouched.
  */
 function calculateEmptyParagraphMetrics(
   fontSize: number,
@@ -231,7 +245,17 @@ function calculateEmptyParagraphMetrics(
     fontSize,
     fontFamily: fontFamily ?? DEFAULT_FONT_FAMILY,
   });
-  return calculateTypographyMetrics(fontSize, spacing, metrics);
+  const result = calculateTypographyMetrics(fontSize, spacing, metrics);
+
+  const lineRule = spacing?.lineRule ?? "auto";
+  if (lineRule === "auto" || lineRule === "atLeast") {
+    const fontSizePx = ptToPx(fontSize);
+    const floor = fontSizePx * WORD_SINGLE_LINE_FLOOR;
+    if (result.lineHeight < floor) {
+      return { ...result, lineHeight: floor };
+    }
+  }
+  return result;
 }
 
 /**
