@@ -68,7 +68,7 @@ import type { Citation } from "@/lib/citations";
 import { iterateJustificationCitations } from "@/lib/citations";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
-import { isUnauthorizedError, toAPIError } from "@/lib/errors";
+import { APIError, isUnauthorizedError, toAPIError } from "@/lib/errors";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import {
@@ -145,6 +145,14 @@ const ZOOM_STEP = 0.2;
 const MIN_OFFSET = -0.8;
 const MAX_OFFSET = 2;
 const PINCH_ZOOM_SENSITIVITY = 0.005;
+
+// Only treat 5xx as a "something is broken upstream" toast trigger.
+// 4xx (e.g. 422 unsupported content type) is an expected fallback.
+const SERVER_PREVIEW_ERROR_THRESHOLD = 500;
+
+// Module-scoped so dedupe survives the inspector tab unmount/remount
+// cycle that happens when users flip between sources.
+const toastedPreviewFailures = new Set<string>();
 
 const hasInAppHistoryEntry = (): boolean => {
   const state: unknown = window.history.state;
@@ -2695,7 +2703,11 @@ const ExternalReferencePanel = ({
       tab.sourceToolName !== undefined ||
       storedSource?.connectorSlug !== undefined ||
       storedSource?.sourceToolName !== undefined);
-  const { data: fetchedPreview, isLoading: previewLoading } = useQuery({
+  const {
+    data: fetchedPreview,
+    isLoading: previewLoading,
+    error: previewError,
+  } = useQuery({
     queryKey: ["external-preview", tab.url],
     queryFn: async ({ signal }) => {
       const response = await api["external-preview"].get({
@@ -2713,6 +2725,36 @@ const ExternalReferencePanel = ({
     retry: false,
     staleTime: 1000 * 60 * 10,
   });
+
+  // Surface upstream-induced failures (e.g. the source returned 5xx)
+  // as a toast — without this the panel just falls through to the
+  // generic "preview unavailable" view and the user has no signal
+  // that anything went wrong.
+  //
+  // Two filters keep this from being noisy:
+  // 1. Only 5xx — 4xx errors (422 unsupported content type / too
+  //    little readable text) are expected outcomes the fallback
+  //    already handles.
+  // 2. Dedupe by (url, status) across the inspector's lifetime so
+  //    flipping between tabs doesn't re-toast a cached error.
+  useEffect(() => {
+    if (!previewError || !APIError.is(previewError)) {
+      return;
+    }
+    if (previewError.status < SERVER_PREVIEW_ERROR_THRESHOLD) {
+      return;
+    }
+    const key = `${tab.url}|${previewError.status}`;
+    if (toastedPreviewFailures.has(key)) {
+      return;
+    }
+    toastedPreviewFailures.add(key);
+    stellaToast.add({
+      title: t("common.somethingWentWrong"),
+      description: previewError.message,
+      type: "error",
+    });
+  }, [previewError, tab.url, t]);
   const previewTitle = fetchedPreview?.title ?? storedSource?.title;
   const previewText = tab.text ?? storedSource?.text ?? fetchedPreview?.text;
   const previewSnippet = tab.snippet ?? storedSource?.snippet;
