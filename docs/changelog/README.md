@@ -1,13 +1,15 @@
 # Manual Changelog Notes
 
-Add one Markdown file per release and commit it together with the matching
-`VERSION` bump. The file may be blank for minor releases with no handwritten
-notes; the landing site still uses its presence to generate release-specific
-link preview pages and version-only fallback images.
+Add one Markdown file per stable release and commit it together with the
+matching `VERSION` bump. The file may be blank for minor releases with no
+handwritten notes; the landing site still uses its presence to generate
+release-specific link preview pages and version-only fallback images.
+
+Prereleases (`vX.Y.Z-rc.N`, `vX.Y.Z-beta.N`, `vX.Y.Z-alpha.N`) stay off the
+public changelog page. Their generated GitHub release notes are enough.
 
 ```text
 docs/changelog/vX.Y.Z.md
-docs/changelog/vX.Y.Z-rc.N.md
 ```
 
 ```bash
@@ -43,6 +45,5 @@ PR comment, or release description draft, then copy the generated
 Keep videos short and compressed; the website embeds the file responsively.
 
 Stable releases (`vX.Y.Z`) generate their commit list from the previous stable
-tag, so the first non-RC release includes the changes shipped through earlier
-RC tags for that version. RC releases continue to use the latest tag as their
-base.
+tag, so the stable release includes the changes shipped through earlier
+prerelease tags for that version.

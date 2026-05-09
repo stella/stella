@@ -10,7 +10,7 @@ export type ChangelogRelease = {
 };
 
 const CHANGELOG_DIR = resolveRepoPath("docs", "changelog");
-const CHANGELOG_FILE_PATTERN = /^v[\w.-]+\.md$/;
+const STABLE_CHANGELOG_FILE_PATTERN = /^v\d+\.\d+\.\d+\.md$/;
 
 export const releaseAnchorId = (tagName: string) =>
   tagName
@@ -26,7 +26,7 @@ export const getChangelogReleases = (): ChangelogRelease[] => {
   }
 
   return readdirSync(CHANGELOG_DIR)
-    .filter((fileName) => CHANGELOG_FILE_PATTERN.test(fileName))
+    .filter((fileName) => STABLE_CHANGELOG_FILE_PATTERN.test(fileName))
     .map((fileName) => {
       const tagName = fileName.replace(/\.md$/, "");
       const markdown = readFileSync(join(CHANGELOG_DIR, fileName), "utf-8");

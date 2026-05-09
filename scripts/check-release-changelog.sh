@@ -42,6 +42,11 @@ if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$ ]]; th
   exit 1
 fi
 
+if [[ "$version" == *-* ]]; then
+  echo "VERSION $version is a prerelease; public changelog preview file not required."
+  exit 0
+fi
+
 changelog_file="docs/changelog/v${version}.md"
 if [[ ! -f "$changelog_file" ]]; then
   cat >&2 <<EOF
