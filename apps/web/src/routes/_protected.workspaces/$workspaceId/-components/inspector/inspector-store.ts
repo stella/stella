@@ -228,6 +228,322 @@ type Actions = {
   clearPendingBlockScroll: () => void;
 };
 
+type InspectorBroadcastScope = {
+  userId: string;
+  organizationId: string;
+};
+
+type InspectorTabsRequestMessage = {
+  type: "inspector-tabs:request";
+  senderId: string;
+};
+
+type InspectorTabsSyncMessage = {
+  type: "inspector-tabs:sync";
+  senderId: string;
+  recipientId?: string | undefined;
+  updatedAt: number;
+  tabs: InspectorTab[];
+};
+
+type InspectorBroadcastMessage =
+  | InspectorTabsRequestMessage
+  | InspectorTabsSyncMessage;
+
+type InspectorBroadcastSession = {
+  dispose: () => void;
+  release: () => void;
+  retain: () => void;
+  scopeKey: string;
+};
+
+const INSPECTOR_TABS_CHANNEL_PREFIX = "stella:inspector-tabs:v1";
+const noopInspectorBroadcastCleanup = () => undefined;
+
+let inspectorBroadcastSession: InspectorBroadcastSession | null = null;
+
+/* eslint-disable unicorn/require-post-message-target-origin -- BroadcastChannel.postMessage does not accept targetOrigin. */
+const postInspectorBroadcastMessage = (
+  channel: BroadcastChannel,
+  message: InspectorBroadcastMessage,
+) => {
+  channel.postMessage(message);
+};
+/* eslint-enable unicorn/require-post-message-target-origin */
+
+export const getInspectorTabsBroadcastChannelName = ({
+  userId,
+  organizationId,
+}: InspectorBroadcastScope) =>
+  `${INSPECTOR_TABS_CHANNEL_PREFIX}:${organizationId}:${userId}`;
+
+export const initializeInspectorTabBroadcast = (
+  scope: InspectorBroadcastScope,
+) => {
+  if (
+    typeof window === "undefined" ||
+    typeof window.BroadcastChannel !== "function"
+  ) {
+    return noopInspectorBroadcastCleanup;
+  }
+
+  const scopeKey = `${scope.organizationId}:${scope.userId}`;
+  if (inspectorBroadcastSession?.scopeKey === scopeKey) {
+    inspectorBroadcastSession.retain();
+    return inspectorBroadcastSession.release;
+  }
+
+  inspectorBroadcastSession?.dispose();
+  inspectorBroadcastSession = createInspectorBroadcastSession(scope);
+  return inspectorBroadcastSession.release;
+};
+
+const createInspectorBroadcastSession = (
+  scope: InspectorBroadcastScope,
+): InspectorBroadcastSession => {
+  const channel = new window.BroadcastChannel(
+    getInspectorTabsBroadcastChannelName(scope),
+  );
+  const clientId = uuidv7();
+  let consumers = 1;
+  let applyingRemote = false;
+  let lastTabsUpdatedAt = 0;
+
+  const postTabs = (recipientId?: string) => {
+    const tabs = useInspectorStore.getState().tabs;
+    if (recipientId !== undefined && tabs.length === 0) {
+      return;
+    }
+
+    postInspectorBroadcastMessage(channel, {
+      type: "inspector-tabs:sync",
+      senderId: clientId,
+      recipientId,
+      updatedAt: lastTabsUpdatedAt,
+      tabs,
+    });
+  };
+
+  const unsubscribe = useInspectorStore.subscribe((state, previousState) => {
+    if (applyingRemote || state.tabs === previousState.tabs) {
+      return;
+    }
+
+    lastTabsUpdatedAt = Date.now();
+    postTabs();
+  });
+
+  const handleMessage = (event: MessageEvent<unknown>) => {
+    const message = event.data;
+    if (
+      !isInspectorBroadcastMessage(message) ||
+      message.senderId === clientId
+    ) {
+      return;
+    }
+
+    if (message.type === "inspector-tabs:request") {
+      postTabs(message.senderId);
+      return;
+    }
+
+    if (message.recipientId !== undefined && message.recipientId !== clientId) {
+      return;
+    }
+
+    if (message.updatedAt < lastTabsUpdatedAt) {
+      return;
+    }
+
+    applyingRemote = true;
+    try {
+      lastTabsUpdatedAt = message.updatedAt;
+      applySharedInspectorTabs(message.tabs);
+    } finally {
+      applyingRemote = false;
+    }
+  };
+  channel.addEventListener("message", handleMessage);
+
+  postInspectorBroadcastMessage(channel, {
+    type: "inspector-tabs:request",
+    senderId: clientId,
+  });
+
+  const dispose = () => {
+    unsubscribe();
+    channel.removeEventListener("message", handleMessage);
+    channel.close();
+    if (inspectorBroadcastSession?.scopeKey === scopeKey) {
+      inspectorBroadcastSession = null;
+    }
+  };
+
+  const scopeKey = `${scope.organizationId}:${scope.userId}`;
+  return {
+    scopeKey,
+    dispose,
+    retain: () => {
+      consumers += 1;
+    },
+    release: () => {
+      consumers -= 1;
+      if (consumers > 0) {
+        return;
+      }
+      dispose();
+    },
+  };
+};
+
+const applySharedInspectorTabs = (tabs: InspectorTab[]) => {
+  const current = useInspectorStore.getState();
+  const activeId =
+    current.activeId !== null && tabs.some((tab) => tab.id === current.activeId)
+      ? current.activeId
+      : (tabs.at(0)?.id ?? null);
+  const pendingRenameTabId =
+    current.pendingRenameTabId !== null &&
+    tabs.some((tab) => tab.id === current.pendingRenameTabId)
+      ? current.pendingRenameTabId
+      : null;
+  const pendingBlockScroll =
+    current.pendingBlockScroll !== null &&
+    tabs.some((tab) => tab.id === current.pendingBlockScroll?.tabId)
+      ? current.pendingBlockScroll
+      : null;
+
+  useInspectorStore.setState({
+    tabs,
+    activeId,
+    pendingRenameTabId,
+    pendingBlockScroll,
+    activationSeq:
+      activeId === current.activeId
+        ? current.activationSeq
+        : current.activationSeq + 1,
+  });
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
+const isOptionalString = (value: unknown): value is string | undefined =>
+  value === undefined || typeof value === "string";
+
+const isOptionalNumber = (value: unknown): value is number | undefined =>
+  value === undefined || typeof value === "number";
+
+const isPdfFacet = (
+  value: unknown,
+): value is NonNullable<PdfTab["facet"]> | undefined =>
+  value === undefined ||
+  value === "preview" ||
+  value === "metadata" ||
+  value === "versions" ||
+  value === "suggestions";
+
+const isMetadataLane = (value: unknown): value is PdfTab["metadataLane"] =>
+  value === undefined || value === "closed" || value === "expanded";
+
+const isInspectorTab = (value: unknown): value is InspectorTab => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const type = value["type"];
+  const id = value["id"];
+  const label = value["label"];
+
+  if (typeof type !== "string" || typeof id !== "string") {
+    return false;
+  }
+
+  if (type === "task") {
+    const status = value["status"];
+    return (
+      typeof label === "string" &&
+      typeof value["isNew"] === "boolean" &&
+      (status === undefined || status === null || typeof status === "string")
+    );
+  }
+
+  if (type === "chat") {
+    return (
+      typeof label === "string" &&
+      isOptionalString(value["workspaceId"]) &&
+      isStringArray(value["contextMatterIds"]) &&
+      isOptionalString(value["activeDecisionId"])
+    );
+  }
+
+  if (type === "external") {
+    return (
+      typeof label === "string" &&
+      typeof value["chatThreadId"] === "string" &&
+      typeof value["url"] === "string" &&
+      isOptionalString(value["connectorSlug"]) &&
+      isOptionalString(value["iconHref"]) &&
+      isOptionalString(value["provider"]) &&
+      isOptionalString(value["snippet"]) &&
+      isOptionalString(value["sourceToolName"]) &&
+      isOptionalString(value["text"])
+    );
+  }
+
+  if (type !== "pdf") {
+    return false;
+  }
+
+  const pdfFileId = value["pdfFileId"];
+  return (
+    typeof label === "string" &&
+    typeof value["entityId"] === "string" &&
+    typeof value["workspaceId"] === "string" &&
+    (pdfFileId === null || typeof pdfFileId === "string") &&
+    isOptionalString(value["renderId"]) &&
+    isOptionalString(value["mimeType"]) &&
+    isOptionalString(value["justificationFieldId"]) &&
+    isOptionalString(value["propertyId"]) &&
+    isMetadataLane(value["metadataLane"]) &&
+    isPdfFacet(value["facet"]) &&
+    isOptionalNumber(value["facetPulseSeq"])
+  );
+};
+
+const isInspectorBroadcastMessage = (
+  value: unknown,
+): value is InspectorBroadcastMessage => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const type = value["type"];
+  const senderId = value["senderId"];
+  if (typeof type !== "string" || typeof senderId !== "string") {
+    return false;
+  }
+
+  if (type === "inspector-tabs:request") {
+    return true;
+  }
+
+  if (type !== "inspector-tabs:sync") {
+    return false;
+  }
+
+  const tabs = value["tabs"];
+  return (
+    isOptionalString(value["recipientId"]) &&
+    typeof value["updatedAt"] === "number" &&
+    Array.isArray(tabs) &&
+    tabs.every(isInspectorTab)
+  );
+};
+
 export const useInspectorStore = create<State & Actions>()(
   immer((set) => ({
     tabs: [],
