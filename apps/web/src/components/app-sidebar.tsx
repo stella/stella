@@ -1201,17 +1201,22 @@ export function AppSidebar(props: AppSidebarProps) {
                   <LogOutIcon />
                   {t("common.signOut")}
                 </MenuItem>
-                <div className="text-foreground-ghost px-2 pt-1.5 pb-1 text-[0.6875rem] tabular-nums">
-                  <a
-                    className="hover:text-foreground hover:underline"
-                    href={CHANGELOG_URL}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    v{__APP_VERSION__}
-                  </a>{" "}
-                  · {__APP_COMMIT_SHA__.slice(0, 12)}
-                </div>
+                <MenuItem
+                  aria-label={t("selfhost.viewReleaseNotes")}
+                  className="text-foreground-ghost data-highlighted:text-foreground min-h-0 px-2 pt-1.5 pb-1 text-[0.6875rem] tabular-nums"
+                  label={t("selfhost.viewReleaseNotes")}
+                  nativeButton={false}
+                  render={
+                    <a
+                      aria-label={t("selfhost.viewReleaseNotes")}
+                      href={CHANGELOG_URL}
+                      rel="noopener"
+                      target="_blank"
+                    />
+                  }
+                >
+                  v{__APP_VERSION__} · {__APP_COMMIT_SHA__.slice(0, 12)}
+                </MenuItem>
               </MenuPopup>
             </Menu>
           </SidebarMenuItem>
