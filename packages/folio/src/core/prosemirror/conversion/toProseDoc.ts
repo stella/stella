@@ -1605,14 +1605,26 @@ function convertImage(image: Image): PMNode {
     cssFloat = "none";
   }
 
-  // Determine display mode for CSS
+  // Determine display mode for CSS.
+  //
+  // - inline           → inline run, participates in flow
+  // - topAndBottom     → block image, takes its own line
+  // - behind / inFront → float (anchored at absolute coords; the page-level
+  //   layer paints them, so they must be lifted out of the paragraph flow
+  //   even though they don't carve a text-wrap exclusion zone)
+  // - square / tight / through with cssFloat → float
+  // - everything else (centered etc.) → block
   let displayMode: "inline" | "block" | "float" = "inline";
   if (wrapType === "inline") {
     displayMode = "inline";
+  } else if (wrapType === "topAndBottom") {
+    displayMode = "block";
+  } else if (wrapType === "behind" || wrapType === "inFront") {
+    displayMode = "float";
   } else if (cssFloat && cssFloat !== "none") {
     displayMode = "float";
   } else {
-    displayMode = "block"; // TopAndBottom or centered
+    displayMode = "block";
   }
 
   // Build transform string if needed (rotation, flip)
