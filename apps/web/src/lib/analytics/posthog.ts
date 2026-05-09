@@ -118,9 +118,12 @@ export const createPostHogAnalytics = (
     },
   });
 
-  // Attach app_version as a super-property so every captured event
-  // carries the build's version. Set once here so call sites don't have to.
-  posthog.register({ app_version: __APP_VERSION__ });
+  // Attach build metadata as super-properties so every captured
+  // event carries the exact deployed build.
+  posthog.register({
+    app_commit: __APP_COMMIT_SHA__,
+    app_version: __APP_VERSION__,
+  });
 
   const analytics: Analytics = {
     captureError: (error) => {

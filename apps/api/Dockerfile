@@ -49,10 +49,12 @@ RUN mkdir -p /app/runtime-workers && \
 # node_modules at runtime.
 FROM deps AS runner
 # Stamp the running container with the release version so the API can
-# return it from /health and tag PostHog events with `app_version`.
+# return it from /health and tag PostHog events with build metadata.
 # Defaults to "dev" for local `docker build` outside the release flow.
 ARG STELLA_VERSION=dev
+ARG STELLA_COMMIT_SHA=dev
 ENV STELLA_VERSION=${STELLA_VERSION}
+ENV STELLA_COMMIT_SHA=${STELLA_COMMIT_SHA}
 ENV STELLA_WORKER_DIR=/\$bunfs/root/workers
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
