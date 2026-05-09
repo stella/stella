@@ -8,6 +8,14 @@
 import type { Page, PageMargins, Fragment, ColumnLayout } from "./types";
 
 /**
+ * Height of the footnote separator (a 0.5 px divider line + 6 px top
+ * + 6 px bottom margin = 12.5 px, rounded up). Reserved once per
+ * footnote-bearing page above the fn content. Must match the painter
+ * (`renderFootnoteArea`).
+ */
+const FOOTNOTE_SEPARATOR_HEIGHT = 13;
+
+/**
  * Current state of a page being laid out.
  */
 export type PageState = {
@@ -19,8 +27,16 @@ export type PageState = {
   columnIndex: number;
   /** Top margin of content area. */
   topMargin: number;
-  /** Bottom boundary of content area (page height - bottom margin). */
+  /**
+   * Bottom boundary of usable body content area.
+   * Equals `pageBottom - footnoteHeight`. Recomputed when footnote
+   * demand grows (a line carrying a fn ref is placed on this page).
+   */
   contentBottom: number;
+  /** Raw bottom of content area (page height - bottom margin); excludes fn area. */
+  rawContentBottom: number;
+  /** Total height reserved for footnotes on this page (grows as refs are placed). */
+  footnoteHeight: number;
   /** Accumulated trailing spacing (space after previous block). */
   trailingSpacing: number;
 };
@@ -179,7 +195,11 @@ export function createPaginator(options: PaginatorOptions) {
     const topMargin = pageMargins.top;
     const contentBottom = pageSize.h - pageMargins.bottom;
 
-    // Reduce content bottom by footnote reserved height for this page
+    // Reduce content bottom by footnote reserved height for this page.
+    // Used as a static reservation only when the layout engine isn't
+    // tracking footnote demand dynamically per line. The dynamic path
+    // (see `addFootnoteHeight`) starts at zero and grows as fn-ref-
+    // carrying lines are placed.
     const footnoteHeight =
       options.footnoteReservedHeights?.get(pageNumber) ?? 0;
     const pageContentBottom = contentBottom - footnoteHeight;
@@ -200,6 +220,8 @@ export function createPaginator(options: PaginatorOptions) {
       columnIndex: 0,
       topMargin,
       contentBottom: pageContentBottom,
+      rawContentBottom: contentBottom,
+      footnoteHeight,
       trailingSpacing: 0,
     };
 
@@ -334,6 +356,38 @@ export function createPaginator(options: PaginatorOptions) {
   }
 
   /**
+   * Reserve additional footnote area on the current page.
+   *
+   * Called by the layout engine each time a body line carrying a
+   * footnote ref is placed: the page must shrink its body area by
+   * the fn content's height so the fn can render below without
+   * overflowing into the footer. Updates both `state.contentBottom`
+   * (so subsequent line-fitting checks see the reduced space) and
+   * `state.page.footnoteReservedHeight` (so the painter draws the fn
+   * area at the correct top).
+   *
+   * On the first fn added to a page, additionally reserves
+   * `FOOTNOTE_SEPARATOR_HEIGHT` for the divider line + its margins so
+   * the separator stays inside the reserved slot.
+   *
+   * Caller is responsible for ensuring the line itself fits *with*
+   * `additionalHeight` already accounted for; if the line should have
+   * advanced to the next page, the engine must check that *before*
+   * committing the line + reservation.
+   */
+  function addFootnoteHeight(additionalHeight: number): void {
+    if (!Number.isFinite(additionalHeight) || additionalHeight <= 0) {
+      return;
+    }
+    const state = getCurrentState();
+    const separatorOverhead =
+      state.footnoteHeight === 0 ? FOOTNOTE_SEPARATOR_HEIGHT : 0;
+    state.footnoteHeight += additionalHeight + separatorOverhead;
+    state.contentBottom = state.rawContentBottom - state.footnoteHeight;
+    state.page.footnoteReservedHeight = state.footnoteHeight;
+  }
+
+  /**
    * Force a page break - move to a new page.
    */
   function forcePageBreak(breakOptions: ForcePageBreakOptions = {}): PageState {
@@ -447,6 +501,8 @@ export function createPaginator(options: PaginatorOptions) {
     ensureFits,
     /** Add a fragment to current page. */
     addFragment,
+    /** Reserve additional footnote area on the current page. */
+    addFootnoteHeight,
     /** Force a page break. */
     forcePageBreak,
     /** Force a column break. */

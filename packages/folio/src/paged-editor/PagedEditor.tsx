@@ -44,7 +44,6 @@ import {
   collectFootnoteRefs,
   mapFootnotesToPages,
   buildFootnoteContentMap,
-  calculateFootnoteReservedHeights,
 } from "../core/layout-bridge/footnoteLayout";
 import {
   hitTestFragment,
@@ -2257,20 +2256,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
 
           if (hasFootnotes) {
-            // Pass 1: Layout without footnote space to determine page assignments
-            const pass1Layout = layoutDocument(
-              newBlocks,
-              newMeasures,
-              layoutOpts,
-            );
-
-            // Map footnote refs to pages
-            pageFootnoteMap = mapFootnotesToPages(
-              pass1Layout.pages,
-              footnoteRefs,
-            );
-
-            // Build footnote content and measure heights
+            // Build footnote content and measure heights up front. The
+            // per-fn height table feeds into the layout engine so each
+            // body line carrying an fn ref reserves space for that fn
+            // on its host page in a single pass — no convergence loop.
             footnoteContentMap = buildFootnoteContentMap(
               // oxlint-disable-next-line typescript/no-non-null-assertion
               document!.package.footnotes!,
@@ -2290,108 +2279,41 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               })(),
             );
 
-            // Calculate per-page reserved heights
-            const footnoteReservedHeights = calculateFootnoteReservedHeights(
-              pageFootnoteMap,
-              footnoteContentMap,
+            const footnoteHeightById = new Map<number, number>();
+            // Per-fn vertical margin applied by the painter
+            // (`renderFootnoteArea` sets `marginBottom: 4px` on each
+            // fn entry). Reserved alongside content height so the page
+            // accounts for inter-fn whitespace.
+            const FOOTNOTE_ENTRY_MARGIN = 4;
+            for (const [id, content] of footnoteContentMap) {
+              footnoteHeightById.set(
+                id,
+                content.height + FOOTNOTE_ENTRY_MARGIN,
+              );
+            }
+            // Note: the layout engine adds the divider's height once
+            // per fn-bearing page (in paginator.addFootnoteHeight); we
+            // pass per-fn (content + entry margin) here.
+
+            newLayout = layoutDocument(newBlocks, newMeasures, {
+              ...layoutOpts,
+              footnoteHeightById,
+            });
+
+            pageFootnoteMap = mapFootnotesToPages(
+              newLayout.pages,
+              footnoteRefs,
             );
 
-            // Pass 2: Layout with reserved heights. Then iterate until
-            // the footnote-to-page mapping is stable (or we hit the
-            // convergence cap). Word's algorithm iterates similarly: on a
-            // page where reserving footnote space pushes its triggering
-            // body content to the next page, the next pass un-reserves
-            // that footnote, opening up room for more body — so a fresh
-            // pass may pull subsequent body up. Stops when the per-page
-            // footnote ID set stops changing (or after 4 iterations to
-            // bound worst-case cost on pathological docs).
-            if (footnoteReservedHeights.size > 0) {
-              let reservedHeights = footnoteReservedHeights;
-              // Per-page upper bound: the largest reservation seen for
-              // each page across all convergence passes. Used to seed
-              // the final pass when the loop oscillates so that body
-              // content cannot grow past what the final fn area
-              // requires. Without this, hitting the convergence cap
-              // produced layouts where page.footnoteReservedHeight
-              // recorded a smaller-than-needed value (the last pass's
-              // input), but the final pageFootnoteMap mapped more
-              // footnotes onto that page — the painter then drew a tall
-              // fn area on top of body content (NVCA page 3: fn 9 + 10
-              // overflowed past contentBottom into the footer).
-              const upperBound = new Map<number, number>(
-                footnoteReservedHeights,
-              );
-              const mergeUpper = (m: Map<number, number>) => {
-                for (const [pageNum, h] of m) {
-                  const prev = upperBound.get(pageNum) ?? 0;
-                  if (h > prev) {
-                    upperBound.set(pageNum, h);
-                  }
-                }
-              };
-
-              let prevMapKey = "";
-              const MAX_PASSES = 4;
-              newLayout = pass1Layout;
-              let stable = false;
-              for (let pass = 0; pass < MAX_PASSES; pass += 1) {
-                newLayout = layoutDocument(newBlocks, newMeasures, {
-                  ...layoutOpts,
-                  footnoteReservedHeights: reservedHeights,
-                });
-
-                pageFootnoteMap = mapFootnotesToPages(
-                  newLayout.pages,
-                  footnoteRefs,
-                );
-
-                // Stable when (page → footnoteIds) hasn't changed since
-                // last pass.
-                const mapKey = [...pageFootnoteMap.entries()]
-                  .map(([p, ids]) => `${p}:${ids.join(",")}`)
-                  .sort()
-                  .join("|");
-                if (mapKey === prevMapKey) {
-                  stable = true;
-                  break;
-                }
-                prevMapKey = mapKey;
-
-                reservedHeights = calculateFootnoteReservedHeights(
-                  pageFootnoteMap,
-                  footnoteContentMap,
-                );
-                mergeUpper(reservedHeights);
+            // Store footnoteIds on each page for rendering. The page's
+            // `footnoteReservedHeight` was already set incrementally by
+            // the engine via `addFootnoteHeight` and matches the actual
+            // fns that landed on the page.
+            for (const [pageNum, fnIds] of pageFootnoteMap) {
+              const page = newLayout.pages.find((p) => p.number === pageNum);
+              if (page) {
+                page.footnoteIds = fnIds;
               }
-
-              // If the convergence loop hit MAX_PASSES without
-              // stabilising, do one final layout pass with the
-              // per-page upper bound. Body content is conservatively
-              // sized so that whatever footnotes the final mapping
-              // assigns to a page always fit in its reserved area —
-              // never overflowing into the footer. Word's heuristic is
-              // the same: in pathological cases it prefers a slightly
-              // shorter body to a footnote that breaks the page frame.
-              if (!stable) {
-                newLayout = layoutDocument(newBlocks, newMeasures, {
-                  ...layoutOpts,
-                  footnoteReservedHeights: upperBound,
-                });
-                pageFootnoteMap = mapFootnotesToPages(
-                  newLayout.pages,
-                  footnoteRefs,
-                );
-              }
-
-              // Store footnoteIds on each page for rendering
-              for (const [pageNum, fnIds] of pageFootnoteMap) {
-                const page = newLayout.pages.find((p) => p.number === pageNum);
-                if (page) {
-                  page.footnoteIds = fnIds;
-                }
-              }
-            } else {
-              newLayout = pass1Layout;
             }
           } else {
             // No footnotes — single pass

@@ -306,6 +306,7 @@ export function layoutDocument(
           measure as ParagraphMeasure,
           paginator,
           paginator.getContentWidth(),
+          options.footnoteHeightById,
         );
         break;
 
@@ -375,13 +376,52 @@ export function layoutDocument(
 }
 
 /**
+ * Sum of footnote content heights for refs whose run sits in line `j`.
+ * Empty when the engine isn't tracking dynamic fn demand.
+ */
+function getLineFootnoteHeight(
+  block: ParagraphBlock,
+  fromRun: number,
+  toRun: number,
+  fnHeights: Map<number, number> | undefined,
+): number {
+  if (!fnHeights) {
+    return 0;
+  }
+  let height = 0;
+  for (let r = fromRun; r <= toRun; r++) {
+    const run = block.runs[r];
+    if (!run || run.kind !== "text") {
+      continue;
+    }
+    const id = (run as { footnoteRefId?: number }).footnoteRefId;
+    if (id === undefined) {
+      continue;
+    }
+    const h = fnHeights.get(id);
+    if (h !== undefined) {
+      height += h;
+    }
+  }
+  return height;
+}
+
+/**
  * Layout a paragraph block onto pages.
+ *
+ * When `footnoteHeightById` is provided, each line carrying a footnote
+ * ref additionally reserves space on its host page for the fn's
+ * content. Pagination decisions look at the line's effective height
+ * (`lineHeight + lineFnHeight`) so a line cannot land on a page that
+ * lacks room for both — preventing footnote overflow without the
+ * static-reservation iteration loop.
  */
 function layoutParagraph(
   block: ParagraphBlock,
   measure: ParagraphMeasure,
   paginator: ReturnType<typeof createPaginator>,
   contentWidth: number,
+  footnoteHeightById?: Map<number, number>,
 ): void {
   if (measure.kind !== "paragraph") {
     throw new Error(`layoutParagraph: expected paragraph measure`);
@@ -424,6 +464,7 @@ function layoutParagraph(
 
     // Calculate how many lines fit
     let linesHeight = 0;
+    let linesFnHeight = 0;
     let fittingLines = 0;
 
     // The first fragment of a paragraph eats `spaceBefore` from the
@@ -439,12 +480,21 @@ function layoutParagraph(
     const firstFragmentSpaceBefore = currentLineIndex === 0 ? spaceBefore : 0;
 
     for (let j = currentLineIndex; j < lines.length; j++) {
-      const lineHeight = lines[j]!.lineHeight; // SAFETY: j < lines.length
+      const line = lines[j]!; // SAFETY: j < lines.length
+      const lineHeight = line.lineHeight;
+      const lineFnHeight = getLineFootnoteHeight(
+        block,
+        line.fromRun,
+        line.toRun,
+        footnoteHeightById,
+      );
       const totalWithLine = linesHeight + lineHeight;
-      const withSpacing = totalWithLine + firstFragmentSpaceBefore;
+      const withSpacing =
+        totalWithLine + firstFragmentSpaceBefore + linesFnHeight + lineFnHeight;
 
       if (withSpacing <= availableHeight || fittingLines === 0) {
         linesHeight = totalWithLine;
+        linesFnHeight += lineFnHeight;
         fittingLines++;
       } else {
         break;
@@ -472,6 +522,16 @@ function layoutParagraph(
       ...(!isLastFragment ? { continuesOnNext: true } : {}),
     };
 
+    // Ensure the page can accommodate body lines + footnote demand
+    // *together* before placing. Without this, the `fittingLines === 0`
+    // fallback in the loop above may force a line carrying a fn ref
+    // onto a page that has only a hair of body space left — body fits
+    // by itself but `addFootnoteHeight` afterwards drops contentBottom
+    // below cursorY, producing an overlap with the fn area.
+    if (linesFnHeight > 0) {
+      paginator.ensureFits(effectiveSpaceBefore + linesHeight + linesFnHeight);
+    }
+
     const result = paginator.addFragment(
       fragment,
       linesHeight,
@@ -479,6 +539,14 @@ function layoutParagraph(
       effectiveSpaceAfter,
     );
     fragment.y = result.y;
+
+    // Now that the lines have committed to this page, grow the page's
+    // footnote reservation for any fn refs they carry. Subsequent body
+    // (in this paragraph or the next block) will see the reduced
+    // `getAvailableHeight()` and split correctly.
+    if (linesFnHeight > 0) {
+      paginator.addFootnoteHeight(linesFnHeight);
+    }
 
     currentLineIndex += fittingLines;
 

@@ -845,6 +845,18 @@ export type LayoutOptions = {
   evenAndOddHeaders?: boolean;
   /** Per-page footnote reserved heights (pageNumber → height in pixels). */
   footnoteReservedHeights?: Map<number, number>;
+  /**
+   * Footnote content heights keyed by internal footnote id (the OOXML
+   * `<w:footnoteReference w:id>`). When provided, the layout engine
+   * tracks footnote demand per body line: each line carrying a fn ref
+   * grows its page's reservation by that fn's height before the next
+   * line is fitted. This single-pass approach avoids the static-
+   * reservation + iterative-convergence loop that produced oscillation
+   * (and either body-overflow into the footer or large empty gaps
+   * above the fn area) on documents with multiple long footnotes per
+   * page.
+   */
+  footnoteHeightById?: Map<number, number>;
   /** Section break type for the body-level (final) section (for section transition logic). */
   bodyBreakType?: "continuous" | "nextPage" | "evenPage" | "oddPage";
 };
