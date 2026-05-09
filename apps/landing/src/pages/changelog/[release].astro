@@ -1,0 +1,48 @@
+---
+import Base from "../../layouts/Base.astro";
+import { getChangelogReleases } from "../../lib/changelog";
+
+export const getStaticPaths = () =>
+  getChangelogReleases().map((release, index) => ({
+    params: { release: release.slug },
+    props: { page: Math.floor(index / 5) + 1, release },
+  }));
+
+const { page, release } = Astro.props;
+const changelogHref =
+  page === 1 ? `/changelog#${release.slug}` : `/changelog?page=${page}#${release.slug}`;
+const pageTitle = release.heading
+  ? `${release.displayName}: ${release.heading}`
+  : release.displayName;
+const socialImage = `/images/changelog/${release.slug}.png`;
+---
+
+<Base
+  title={pageTitle}
+  description={release.description}
+  socialImage={socialImage}
+  socialImageAlt={pageTitle}
+>
+  <main
+    class="grid min-h-dvh place-items-center px-6 text-center"
+    style="background: var(--background); color: var(--foreground)"
+  >
+    <div class="max-w-xl">
+      <p class="font-display text-3xl font-medium">{pageTitle}</p>
+      <p class="mt-4 text-sm leading-[1.8]" style="color: var(--muted-foreground)">
+        Redirecting to the changelog entry.
+      </p>
+      <a
+        href={changelogHref}
+        class="mt-6 inline-flex h-10 items-center justify-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-80"
+        style="background: var(--card); border: 1px solid var(--border); color: var(--foreground)"
+      >
+        Open changelog
+      </a>
+    </div>
+  </main>
+
+  <script is:inline define:vars={{ changelogHref }}>
+    window.location.replace(changelogHref);
+  </script>
+</Base>
