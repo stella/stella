@@ -818,6 +818,13 @@ export type LayoutOptions = {
   pageSize: { w: number; h: number };
   /** Initial page margins. */
   margins: PageMargins;
+  /**
+   * Margins applied only to page 1 (the title page) when the first
+   * section has `<w:titlePg/>`. Used to extend the top margin for an
+   * overflowing first-page header without forcing pages 2+ to inherit the
+   * same extension.
+   */
+  firstPageMargins?: PageMargins;
   /** Body-level final section page size. */
   finalPageSize?: { w: number; h: number };
   /** Body-level final section margins. */

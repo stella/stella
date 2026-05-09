@@ -124,7 +124,10 @@ import type {
   SectionProperties,
   HeaderFooter,
 } from "../core/types/document";
-import { computeHeaderFooterMarginExtender } from "./headerFooterMargins";
+import {
+  computeFirstPageHeaderFooterMarginExtender,
+  computeHeaderFooterMarginExtender,
+} from "./headerFooterMargins";
 // Internal components
 import { HiddenProseMirror } from "./HiddenProseMirror";
 import type { HiddenProseMirrorRef } from "./HiddenProseMirror";
@@ -2186,13 +2189,31 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               )
             : undefined;
 
+          // Default extender — applied to pages 2+ of every section. It
+          // ignores firstPage H/F so a `<w:titlePg/>` section's
+          // overflowing first-page header doesn't push body content down
+          // on every subsequent page.
           const extendForHfOverflow = computeHeaderFooterMarginExtender({
             headerContent: headerContentForRender,
             footerContent: footerContentForRender,
             firstPageHeaderContent: firstPageHeaderForRender,
             firstPageFooterContent: firstPageFooterForRender,
           });
+          // First-page extender — used only for page 1 of a titlePg
+          // section so the title page's larger header reservation is
+          // honored without leaking onto pages 2+.
+          const extendForFirstPage = computeFirstPageHeaderFooterMarginExtender(
+            {
+              headerContent: headerContentForRender,
+              footerContent: footerContentForRender,
+              firstPageHeaderContent: firstPageHeaderForRender,
+              firstPageFooterContent: firstPageFooterForRender,
+            },
+          );
           const effectiveMargins = extendForHfOverflow(margins);
+          const effectiveFirstPageMargins = hasTitlePg
+            ? extendForFirstPage(margins)
+            : undefined;
           // Section-break blocks carry their own `sb.margins` from
           // `<w:sectPr>` and the layout engine prefers those over the
           // body-level fallback. Apply the extension to each one too,
@@ -2225,6 +2246,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             margins: effectiveMargins,
             pageGap,
           };
+          if (effectiveFirstPageMargins !== undefined) {
+            layoutOpts.firstPageMargins = effectiveFirstPageMargins;
+          }
           if (columns !== undefined) {
             layoutOpts.columns = columns;
           }

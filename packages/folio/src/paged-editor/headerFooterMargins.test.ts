@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { HeaderFooterContent } from "../core/layout-painter/renderPage";
 import {
   computeEffectiveHeaderFooterMargins,
+  computeFirstPageHeaderFooterMarginExtender,
   computeHeaderFooterMarginExtender,
 } from "./headerFooterMargins";
 
@@ -14,7 +15,35 @@ const content = (height: number): HeaderFooterContent => ({
 });
 
 describe("header and footer margin reservation", () => {
-  test("reserves body space for a tall first-page header", () => {
+  test("default mode IGNORES first-page header (page 2+ margins)", () => {
+    // Page 2+ of a `<w:titlePg/>` section must not inherit the
+    // first-page header's reservation — only the regular header
+    // counts. Otherwise body content sits artificially low on every
+    // page that follows the title page.
+    const margins = {
+      top: 96,
+      right: 72,
+      bottom: 96,
+      left: 72,
+      header: 48,
+      footer: 48,
+    };
+
+    // Regular header (20 px) fits within the 96 - 48 = 48 px slot, so
+    // top stays 96. The first-page header (78 px) must NOT be considered.
+    expect(
+      computeEffectiveHeaderFooterMargins({
+        margins,
+        headerContent: content(20),
+        firstPageHeaderContent: content(78),
+      }).top,
+    ).toBe(96);
+  });
+
+  test("first-page extender RESPECTS first-page header (page 1 margins)", () => {
+    // Page 1 of a titlePg section uses the larger of regular and
+    // first-page header heights — the first-page extender is applied
+    // only to that page's margins.
     const margins = {
       top: 96,
       right: 72,
@@ -25,11 +54,10 @@ describe("header and footer margin reservation", () => {
     };
 
     expect(
-      computeEffectiveHeaderFooterMargins({
-        margins,
+      computeFirstPageHeaderFooterMarginExtender({
         headerContent: content(20),
         firstPageHeaderContent: content(78),
-      }).top,
+      })(margins).top,
     ).toBe(126);
   });
 

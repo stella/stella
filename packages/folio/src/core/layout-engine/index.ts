@@ -249,6 +249,9 @@ export function layoutDocument(
   const paginator = createPaginator({
     pageSize: initialConfig.pageSize,
     margins: initialConfig.margins,
+    ...(options.firstPageMargins !== undefined
+      ? { firstPageMargins: options.firstPageMargins }
+      : {}),
     columns: initialConfig.columns ?? DEFAULT_COLUMNS,
     ...(options.footnoteReservedHeights !== undefined
       ? { footnoteReservedHeights: options.footnoteReservedHeights }

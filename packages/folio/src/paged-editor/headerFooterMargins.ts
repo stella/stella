@@ -45,20 +45,45 @@ function footerHeight(content: HeaderFooterContent | undefined): number {
  * paragraph's section margins), not the body's, so each section's authored
  * `w:header`/`w:footer` distances are honored.
  */
-export function computeHeaderFooterMarginExtender({
+/**
+ * Build an extender that pushes body margins clear of HF content.
+ *
+ * `mode === "default"` ignores `firstPageHeaderContent` /
+ * `firstPageFooterContent`. The first-page H/F only renders on page 1 of
+ * a `<w:titlePg/>`-enabled section, so margins for pages 2+ within the
+ * same section must NOT be extended for first-page overflow — extending
+ * them would push body content down on every page even though only page
+ * 1 actually carries the overflowing header. This produced visible
+ * regressions on NVCA-style first-page-header docs, where pages 2+
+ * inherited page 1's title-page header reservation.
+ *
+ * `mode === "firstPage"` uses the larger of the default and first-page
+ * H/F heights — applied only to the first-page margins of a titlePg
+ * section.
+ */
+function buildExtender({
   headerContent,
   footerContent,
   firstPageHeaderContent,
   firstPageFooterContent,
-}: Omit<EffectiveHeaderFooterMarginsInput, "margins">): PageMarginsExtender {
-  const headerContentHeight = Math.max(
-    headerHeight(headerContent),
-    headerHeight(firstPageHeaderContent),
-  );
-  const footerContentHeight = Math.max(
-    footerHeight(footerContent),
-    footerHeight(firstPageFooterContent),
-  );
+  mode,
+}: Omit<EffectiveHeaderFooterMarginsInput, "margins"> & {
+  mode: "default" | "firstPage";
+}): PageMarginsExtender {
+  const headerContentHeight =
+    mode === "firstPage"
+      ? Math.max(
+          headerHeight(headerContent),
+          headerHeight(firstPageHeaderContent),
+        )
+      : headerHeight(headerContent);
+  const footerContentHeight =
+    mode === "firstPage"
+      ? Math.max(
+          footerHeight(footerContent),
+          footerHeight(firstPageFooterContent),
+        )
+      : footerHeight(footerContent);
 
   return (margins: PageMargins): PageMargins => {
     const headerDistance = margins.header ?? 48;
@@ -85,6 +110,23 @@ export function computeHeaderFooterMarginExtender({
     }
     return out;
   };
+}
+
+export function computeHeaderFooterMarginExtender(
+  input: Omit<EffectiveHeaderFooterMarginsInput, "margins">,
+): PageMarginsExtender {
+  return buildExtender({ ...input, mode: "default" });
+}
+
+/**
+ * Like `computeHeaderFooterMarginExtender` but also accounts for the
+ * first-page header/footer content. Apply this only to the margins used
+ * for page 1 of a `<w:titlePg/>`-enabled section.
+ */
+export function computeFirstPageHeaderFooterMarginExtender(
+  input: Omit<EffectiveHeaderFooterMarginsInput, "margins">,
+): PageMarginsExtender {
+  return buildExtender({ ...input, mode: "firstPage" });
 }
 
 export function computeEffectiveHeaderFooterMargins({

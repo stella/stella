@@ -33,6 +33,13 @@ export type PaginatorOptions = {
   pageSize: { w: number; h: number };
   /** Page margins. */
   margins: PageMargins;
+  /**
+   * Margins applied only to the very first page (page 1) of the paginator.
+   * Used when a `<w:titlePg/>`-enabled section needs different margins for
+   * its title page (typically extended top margin to clear an overflowing
+   * first-page header) vs. its body pages. Pages 2+ use `margins`.
+   */
+  firstPageMargins?: PageMargins;
   /** Column configuration (optional). */
   columns?: ColumnLayout;
   /** Per-page footnote reserved heights (pageNumber → height in pixels). */
@@ -159,8 +166,18 @@ export function createPaginator(options: PaginatorOptions) {
     }
 
     const pageNumber = pages.length + 1;
-    const topMargin = margins.top;
-    const contentBottom = getContentBottom();
+    // Page 1 of the document may use first-page margins (extended top to
+    // clear an overflowing first-page header on a titlePg section) while
+    // pages 2+ use the regular section margins. Without this distinction
+    // every page in the section would inherit page 1's title-page top
+    // margin, leaving large empty space at the top of pages 2+ on
+    // first-page-header docs (NVCA-style templates).
+    const pageMargins =
+      pageNumber === 1 && options.firstPageMargins
+        ? { ...options.firstPageMargins }
+        : { ...margins };
+    const topMargin = pageMargins.top;
+    const contentBottom = pageSize.h - pageMargins.bottom;
 
     // Reduce content bottom by footnote reserved height for this page
     const footnoteHeight =
@@ -170,7 +187,7 @@ export function createPaginator(options: PaginatorOptions) {
     const page: Page = {
       number: pageNumber,
       fragments: [],
-      margins: { ...margins },
+      margins: pageMargins,
       size: { ...pageSize },
       ...(footnoteHeight > 0 ? { footnoteReservedHeight: footnoteHeight } : {}),
       // Set initial columns; may be overwritten by updateColumns() for continuous section breaks
