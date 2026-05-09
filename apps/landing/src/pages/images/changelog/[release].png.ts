@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 
+import type { ChangelogRelease } from "../../../lib/changelog";
 import { getChangelogReleases } from "../../../lib/changelog";
 import { renderChangelogOgImage } from "../../../lib/changelog-og";
 
@@ -9,16 +10,12 @@ export const getStaticPaths = () =>
     props: { release },
   }));
 
-export const GET: APIRoute = ({ params }) => {
-  const release = getChangelogReleases().find(
-    (changelogRelease) => changelogRelease.slug === params.release,
-  );
-
-  if (!release) {
+export const GET: APIRoute<{ release?: ChangelogRelease }> = ({ props }) => {
+  if (props.release === undefined) {
     return new Response(null, { status: 404 });
   }
 
-  return new Response(new Uint8Array(renderChangelogOgImage(release)), {
+  return new Response(new Uint8Array(renderChangelogOgImage(props.release)), {
     headers: {
       "Cache-Control": "public, max-age=31536000, immutable",
       "Content-Type": "image/png",

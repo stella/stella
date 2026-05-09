@@ -471,13 +471,23 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
 
       const title = document.createElement("h2");
       const titleLink = document.createElement("a");
-      titleLink.href = previewReleaseSlugs.has(article.id)
-        ? `/changelog/${article.id}`
-        : `#${article.id}`;
+      const hasPreviewPage = previewReleaseSlugs.has(article.id);
+      titleLink.href = hasPreviewPage ? `/changelog/${article.id}` : `#${article.id}`;
       titleLink.className =
         "font-display text-3xl font-medium transition-opacity hover:opacity-70 sm:text-4xl";
       titleLink.style.color = "var(--foreground)";
       titleLink.textContent = release.name || release.tag_name;
+      if (hasPreviewPage) {
+        titleLink.addEventListener("click", (event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+            return;
+          }
+
+          event.preventDefault();
+          window.history.pushState(null, "", `#${article.id}`);
+          article.scrollIntoView({ block: "start", behavior: "smooth" });
+        });
+      }
       title.append(titleLink);
       meta.append(title);
 
