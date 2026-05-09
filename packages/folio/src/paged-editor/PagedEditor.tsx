@@ -2307,9 +2307,33 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             // bound worst-case cost on pathological docs).
             if (footnoteReservedHeights.size > 0) {
               let reservedHeights = footnoteReservedHeights;
+              // Per-page upper bound: the largest reservation seen for
+              // each page across all convergence passes. Used to seed
+              // the final pass when the loop oscillates so that body
+              // content cannot grow past what the final fn area
+              // requires. Without this, hitting the convergence cap
+              // produced layouts where page.footnoteReservedHeight
+              // recorded a smaller-than-needed value (the last pass's
+              // input), but the final pageFootnoteMap mapped more
+              // footnotes onto that page — the painter then drew a tall
+              // fn area on top of body content (NVCA page 3: fn 9 + 10
+              // overflowed past contentBottom into the footer).
+              const upperBound = new Map<number, number>(
+                footnoteReservedHeights,
+              );
+              const mergeUpper = (m: Map<number, number>) => {
+                for (const [pageNum, h] of m) {
+                  const prev = upperBound.get(pageNum) ?? 0;
+                  if (h > prev) {
+                    upperBound.set(pageNum, h);
+                  }
+                }
+              };
+
               let prevMapKey = "";
               const MAX_PASSES = 4;
               newLayout = pass1Layout;
+              let stable = false;
               for (let pass = 0; pass < MAX_PASSES; pass += 1) {
                 newLayout = layoutDocument(newBlocks, newMeasures, {
                   ...layoutOpts,
@@ -2328,6 +2352,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                   .sort()
                   .join("|");
                 if (mapKey === prevMapKey) {
+                  stable = true;
                   break;
                 }
                 prevMapKey = mapKey;
@@ -2335,6 +2360,26 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 reservedHeights = calculateFootnoteReservedHeights(
                   pageFootnoteMap,
                   footnoteContentMap,
+                );
+                mergeUpper(reservedHeights);
+              }
+
+              // If the convergence loop hit MAX_PASSES without
+              // stabilising, do one final layout pass with the
+              // per-page upper bound. Body content is conservatively
+              // sized so that whatever footnotes the final mapping
+              // assigns to a page always fit in its reserved area —
+              // never overflowing into the footer. Word's heuristic is
+              // the same: in pathological cases it prefers a slightly
+              // shorter body to a footnote that breaks the page frame.
+              if (!stable) {
+                newLayout = layoutDocument(newBlocks, newMeasures, {
+                  ...layoutOpts,
+                  footnoteReservedHeights: upperBound,
+                });
+                pageFootnoteMap = mapFootnotesToPages(
+                  newLayout.pages,
+                  footnoteRefs,
                 );
               }
 
