@@ -151,7 +151,6 @@ const sendMessage = createSafeRootHandler(
         pinnedIds: [],
         accessibleWorkspaceIds,
       }),
-      workspaceId,
       hasActiveFileChat: true,
       externalTools: validationExternalMcpTools?.tools,
     });
@@ -325,7 +324,6 @@ const sendMessage = createSafeRootHandler(
         pinnedIds: effectiveContextMatterIds,
         accessibleWorkspaceIds,
       }),
-      workspaceId,
       hasActiveFileChat: body.activeFile !== undefined,
       externalTools: externalMcpTools.tools,
       disabledNativeToolSlugs,

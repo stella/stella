@@ -13,7 +13,7 @@ import * as slimdom from "slimdom";
 import { HEADER_FOOTER_RE, paragraphText, W_NS } from "./ooxml";
 import type { DiscoveredPlaceholder } from "./types";
 
-export const PLACEHOLDER_RE = /\{\{([\p{L}\p{N}_.@:]+)\}\}/gu;
+export const PLACEHOLDER_RE = /\{\{([\p{L}\p{N}_.@:-]+)\}\}/gu;
 
 /**
  * Scan all `w:p` paragraphs in a parsed XML document and
@@ -41,8 +41,8 @@ const scanParagraphs = (
  * Discover all `{{placeholder}}` tags in a DOCX template.
  *
  * Scans `word/document.xml` plus all `word/header*.xml` and
- * `word/footer*.xml` entries. `patchDocument` patches across
- * all parts, so this ensures discovery matches fill coverage.
+ * `word/footer*.xml` entries. Value replacement mutates the
+ * same parts, so discovery matches fill coverage.
  *
  * @returns {Promise<DiscoveredPlaceholder[]>} Deduplicated list
  *   with occurrence counts, sorted alphabetically by name.

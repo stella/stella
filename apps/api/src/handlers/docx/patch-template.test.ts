@@ -3,7 +3,7 @@ import JSZip from "jszip";
 
 import { fillTemplate } from "./patch-template";
 
-// SPA fixture is ~177KB; patchDocument needs time
+// SPA fixture is ~177KB; template filling needs time.
 setDefaultTimeout(15_000);
 
 const SPA_FIXTURE = new URL(

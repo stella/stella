@@ -334,6 +334,17 @@
     "caseLawGreeting": "Kérdezz erről a határozatról — a teljes szöveg itt elérhető.",
     "chatAbout": "Beszúrás az AI chatbe",
     "contextPlaceholder": "Chat erről: {context}, / a skillekhez, @ kontextus hozzáadásához",
+    "createDocument": {
+      "continue": "Create document",
+      "created": "Document created",
+      "failedHeader": "Could not create document",
+      "headerReady": "Document ready",
+      "headerStreaming": "Document being created",
+      "openInFolio": "Open in editor",
+      "pickMatterPrompt": "Choose a matter to save this document into.",
+      "previewName": "Document: {name}",
+      "previewWaiting": "Waiting for content…"
+    },
     "deleteThread": "Beszélgetés törlése",
     "documentView": {
       "original": "Eredeti",

@@ -11,7 +11,13 @@ export type { ChatMessage, ChatPart, ChatUITools } from "@stll/api/types";
 export type PersistedChatMessage = ChatMessage;
 export type SharedChatUITools = Pick<ChatUITools, "ask-user">;
 export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
-type BuiltInApprovalToolName = Exclude<keyof ChatUITools, "ask-user">;
+// `create-document` is client-executed and uses the matter-pick UI as
+// its gate, not the approval flow. Keep it out of the approval set so
+// `NeedsMatterCard` renders instead of `ToolApprovalCard`.
+type BuiltInApprovalToolName = Exclude<
+  keyof ChatUITools,
+  "ask-user" | "create-document"
+>;
 export type ApprovalToolName = BuiltInApprovalToolName | `mcp__${string}`;
 const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
 export type ToolApprovalGrant =
@@ -130,7 +136,11 @@ export const isApprovalToolName = (
     return true;
   }
 
-  return isChatToolName(toolName) && toolName !== "ask-user";
+  return (
+    isChatToolName(toolName) &&
+    toolName !== "ask-user" &&
+    toolName !== "create-document"
+  );
 };
 
 export const isToolApprovalGrant = (

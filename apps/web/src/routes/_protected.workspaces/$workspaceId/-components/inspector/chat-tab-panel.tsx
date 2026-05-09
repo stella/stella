@@ -180,6 +180,10 @@ export const ChatTabPanel = ({
     handleDeny,
     handleAskUserSubmit,
     handleAlwaysAllow,
+    handleCreateDocumentResolve,
+    handleOpenCreatedDocument,
+    createDocumentMatters,
+    isLoadingCreateDocumentMatters,
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
@@ -299,6 +303,10 @@ export const ChatTabPanel = ({
               isGenerating={isGenerating}
               messages={messages}
               onAskUserSubmit={handleAskUserSubmit}
+              onCreateDocumentResolve={handleCreateDocumentResolve}
+              onOpenCreatedDocument={handleOpenCreatedDocument}
+              createDocumentMatters={createDocumentMatters}
+              isLoadingCreateDocumentMatters={isLoadingCreateDocumentMatters}
               onResend={resendLatestMessage}
               showThinkingIndicator
               showToolCallDetails={showToolCallDetails}

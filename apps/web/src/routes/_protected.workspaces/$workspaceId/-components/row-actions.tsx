@@ -155,7 +155,7 @@ export const RowActions = ({
       }
       if (file && isFileDisplayable(file)) {
         return () =>
-          useInspectorStore.getState().openPdf({
+          useInspectorStore.getState().openFile({
             id: file.fieldId,
             entityId: file.entityId,
             label: name,

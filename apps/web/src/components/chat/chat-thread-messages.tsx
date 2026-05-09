@@ -19,10 +19,13 @@ import { AskUserCard } from "@/components/chat/ask-user-card";
 import type {
   ApprovalToolName,
   AskUserOutput,
+  ChatUITools,
   PersistedChatMessage,
   ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import { isApprovalPart } from "@/components/chat/chat-ui-tools";
+import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
+import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import { SourceChips } from "@/components/chat/source-chips";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
@@ -242,7 +245,11 @@ const hasVisibleContent = (
         return true;
       }
 
-      if (isApprovalPart(part) || part.type === "tool-ask-user") {
+      if (
+        isApprovalPart(part) ||
+        part.type === "tool-ask-user" ||
+        part.type === "tool-create-document"
+      ) {
         return true;
       }
 
@@ -367,6 +374,19 @@ type ChatThreadMessagesProps = {
     toolCallId: string,
     output: AskUserOutput,
   ) => void | PromiseLike<void>;
+  onCreateDocumentResolve: (
+    toolCallId: string,
+    matterId: string,
+    input: ChatUITools["create-document"]["input"],
+  ) => Promise<void> | void;
+  onOpenCreatedDocument: (
+    output: Extract<
+      ChatUITools["create-document"]["output"],
+      { success: true }
+    >,
+  ) => Promise<void> | void;
+  createDocumentMatters: readonly NeedsMatterMatter[];
+  isLoadingCreateDocumentMatters: boolean;
   showThinkingIndicator?: boolean | undefined;
   showToolCallDetails?: boolean | undefined;
   showToolCalls?: boolean | undefined;
@@ -390,6 +410,10 @@ export const ChatThreadMessages = ({
   messages,
   onResend,
   onAskUserSubmit,
+  onCreateDocumentResolve,
+  onOpenCreatedDocument,
+  createDocumentMatters,
+  isLoadingCreateDocumentMatters,
   showThinkingIndicator = false,
   showToolCallDetails,
   showToolCalls,
@@ -439,6 +463,19 @@ export const ChatThreadMessages = ({
                         }}
                         part={part}
                         workspaceId={workspaceId}
+                      />
+                    );
+                  }
+
+                  if (part.type === "tool-create-document") {
+                    return (
+                      <NeedsMatterCard
+                        isLoadingMatters={isLoadingCreateDocumentMatters}
+                        key={part.toolCallId}
+                        matters={createDocumentMatters}
+                        onOpenCreated={onOpenCreatedDocument}
+                        onResolve={onCreateDocumentResolve}
+                        part={part}
                       />
                     );
                   }

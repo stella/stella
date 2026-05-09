@@ -34,7 +34,7 @@ const openDisplayableFile = ({
       continue;
     }
 
-    useInspectorStore.getState().openPdf({
+    useInspectorStore.getState().openFile({
       id: field.id,
       entityId,
       label,

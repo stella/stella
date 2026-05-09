@@ -110,6 +110,10 @@ export const ChatThreadPage = ({
     handleDeny,
     handleAskUserSubmit,
     handleAlwaysAllow,
+    handleCreateDocumentResolve,
+    handleOpenCreatedDocument,
+    createDocumentMatters,
+    isLoadingCreateDocumentMatters,
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({ chat, conversationId: threadRef.threadId, workspaceId });
@@ -235,6 +239,10 @@ export const ChatThreadPage = ({
               isGenerating={isGenerating}
               messages={messages}
               onAskUserSubmit={handleAskUserSubmit}
+              onCreateDocumentResolve={handleCreateDocumentResolve}
+              onOpenCreatedDocument={handleOpenCreatedDocument}
+              createDocumentMatters={createDocumentMatters}
+              isLoadingCreateDocumentMatters={isLoadingCreateDocumentMatters}
               onResend={resendLatestMessage}
               showThinkingIndicator
               showToolCallDetails={showToolCallDetails}

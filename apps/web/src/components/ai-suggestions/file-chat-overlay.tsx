@@ -413,7 +413,7 @@ const queueReviewSuggestions = ({
     (candidate) => candidate.type === "pdf" && candidate.entityId === entityId,
   );
   if (tab) {
-    inspectorState.setPdfFacet(tab.id, "suggestions", { pulse: true });
+    inspectorState.setFileFacet(tab.id, "suggestions", { pulse: true });
   }
 };
 
@@ -718,6 +718,10 @@ const FileChatOverlayInner = ({
     handleDeny,
     handleAskUserSubmit,
     handleAlwaysAllow,
+    handleCreateDocumentResolve,
+    handleOpenCreatedDocument,
+    createDocumentMatters,
+    isLoadingCreateDocumentMatters,
     addToolOutput,
     streamdownComponents,
     approvalPendingMessageId,
@@ -870,6 +874,10 @@ const FileChatOverlayInner = ({
               isGenerating={isGenerating}
               messages={messages}
               onAskUserSubmit={handleAskUserSubmit}
+              onCreateDocumentResolve={handleCreateDocumentResolve}
+              onOpenCreatedDocument={handleOpenCreatedDocument}
+              createDocumentMatters={createDocumentMatters}
+              isLoadingCreateDocumentMatters={isLoadingCreateDocumentMatters}
               onResend={resendLatestMessage}
               showThinkingIndicator
               showToolCallDetails={showToolCallDetails}

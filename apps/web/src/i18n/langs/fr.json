@@ -334,6 +334,17 @@
     "caseLawGreeting": "Pose des questions sur cette décision — le texte complet est disponible ici.",
     "chatAbout": "Insérer dans le chat IA",
     "contextPlaceholder": "Chat sur {context}, / pour les skills, @ pour ajouter du contexte",
+    "createDocument": {
+      "continue": "Create document",
+      "created": "Document created",
+      "failedHeader": "Could not create document",
+      "headerReady": "Document ready",
+      "headerStreaming": "Document being created",
+      "openInFolio": "Open in editor",
+      "pickMatterPrompt": "Choose a matter to save this document into.",
+      "previewName": "Document: {name}",
+      "previewWaiting": "Waiting for content…"
+    },
     "deleteThread": "Supprimer la conversation",
     "documentView": {
       "original": "Original",

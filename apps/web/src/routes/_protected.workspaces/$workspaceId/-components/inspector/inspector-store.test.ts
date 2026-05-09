@@ -213,9 +213,9 @@ describe("openExternal", () => {
   });
 });
 
-describe("replacePdfFieldId", () => {
+describe("replaceFileFieldId", () => {
   test("re-opening an existing pdf tab refreshes the file label", () => {
-    useInspectorStore.getState().openPdf({
+    useInspectorStore.getState().openFile({
       id: "field-1",
       entityId: "entity-1",
       label: "Document 4",
@@ -225,7 +225,7 @@ describe("replacePdfFieldId", () => {
       workspaceId: "workspace-1",
     });
 
-    useInspectorStore.getState().openPdf({
+    useInspectorStore.getState().openFile({
       id: "field-1",
       entityId: "entity-1",
       label: "0041_Pleadings_draft.pdf",
@@ -245,8 +245,8 @@ describe("replacePdfFieldId", () => {
     expect(tab.label).toBe("0041_Pleadings_draft.pdf");
   });
 
-  test("openPdf with a different fieldId for the same entity keeps a single tab", () => {
-    useInspectorStore.getState().openPdf({
+  test("openFile with a different fieldId for the same entity keeps a single tab", () => {
+    useInspectorStore.getState().openFile({
       id: "field-v1",
       entityId: "entity-1",
       label: "Contract.docx",
@@ -257,7 +257,7 @@ describe("replacePdfFieldId", () => {
       workspaceId: "workspace-1",
     });
 
-    useInspectorStore.getState().openPdf({
+    useInspectorStore.getState().openFile({
       id: "field-v2",
       entityId: "entity-1",
       label: "Contract.docx",
@@ -276,8 +276,8 @@ describe("replacePdfFieldId", () => {
     expect(useInspectorStore.getState().activeId).toBe("field-v2");
   });
 
-  test("openPdfForEntity drops a stale tab whose id collides with the new field", () => {
-    useInspectorStore.getState().openPdf({
+  test("openFileForEntity drops a stale tab whose id collides with the new field", () => {
+    useInspectorStore.getState().openFile({
       id: "field-shared",
       entityId: "entity-A",
       label: "A.docx",
@@ -287,7 +287,7 @@ describe("replacePdfFieldId", () => {
       workspaceId: "workspace-1",
     });
 
-    useInspectorStore.getState().openPdfForEntity({
+    useInspectorStore.getState().openFileForEntity({
       id: "field-shared",
       entityId: "entity-B",
       label: "B.docx",
@@ -305,7 +305,7 @@ describe("replacePdfFieldId", () => {
   });
 
   test("preserves the pdf tab render id across version replacement", () => {
-    useInspectorStore.getState().openPdf({
+    useInspectorStore.getState().openFile({
       id: "field-old",
       entityId: "entity-1",
       label: "Contract.docx",
@@ -323,7 +323,7 @@ describe("replacePdfFieldId", () => {
       throw new Error("expected pdf tab");
     }
 
-    useInspectorStore.getState().replacePdfFieldId("field-old", "field-new");
+    useInspectorStore.getState().replaceFileFieldId("field-old", "field-new");
 
     const after = useInspectorStore
       .getState()
@@ -351,7 +351,7 @@ describe("Inspector tab broadcast", () => {
 
     cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
 
-    useInspectorStore.getState().openPdf({
+    useInspectorStore.getState().openFile({
       id: "field-1",
       entityId: "entity-1",
       label: "Contract.docx",
@@ -361,7 +361,7 @@ describe("Inspector tab broadcast", () => {
       propertyId: "property-1",
       workspaceId: "workspace-1",
     });
-    useInspectorStore.getState().setPdfFacet("field-1", "versions", {
+    useInspectorStore.getState().setFileFacet("field-1", "versions", {
       pulse: true,
     });
 

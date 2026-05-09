@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 /**
  * Test script: fills the SPA template with mock values
- * using patchDocument to verify the template filling flow.
+ * to verify the template filling flow.
  *
  * Run: bun apps/api/src/handlers/docx/generate-spa-filled.ts
  */

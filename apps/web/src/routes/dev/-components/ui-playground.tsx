@@ -1310,6 +1310,14 @@ function SharedChatRendererSample() {
         onAskUserSubmit={() => {
           /* no-op in playground */
         }}
+        onCreateDocumentResolve={() => {
+          /* no-op in playground */
+        }}
+        onOpenCreatedDocument={() => {
+          /* no-op in playground */
+        }}
+        createDocumentMatters={[]}
+        isLoadingCreateDocumentMatters={false}
         onResend={() => {
           /* no-op in playground */
         }}

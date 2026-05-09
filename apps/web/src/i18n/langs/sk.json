@@ -334,6 +334,17 @@
     "caseLawGreeting": "Spýtajte sa na toto rozhodnutie — plný text je k dispozícii.",
     "chatAbout": "Vložiť do AI chatu",
     "contextPlaceholder": "Chat o {context}, / pre zručnosti, @ na pridanie kontextu",
+    "createDocument": {
+      "continue": "Create document",
+      "created": "Document created",
+      "failedHeader": "Could not create document",
+      "headerReady": "Document ready",
+      "headerStreaming": "Document being created",
+      "openInFolio": "Open in editor",
+      "pickMatterPrompt": "Choose a matter to save this document into.",
+      "previewName": "Document: {name}",
+      "previewWaiting": "Waiting for content…"
+    },
     "deleteThread": "Zmazať konverzáciu",
     "documentView": {
       "original": "Originál",

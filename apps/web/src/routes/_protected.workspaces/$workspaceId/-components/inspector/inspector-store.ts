@@ -7,7 +7,7 @@ import { createChatThreadId } from "@/lib/chat-thread-ref";
 
 export type ExternalTabId = `external:${string}`;
 
-export type PdfTab = {
+export type FileTab = {
   type: "pdf";
   id: string;
   renderId?: string | undefined;
@@ -119,7 +119,7 @@ export type ExternalTab = {
   text?: string | undefined;
 };
 
-export type InspectorTab = PdfTab | TaskTab | ChatTab | MatterTab | ExternalTab;
+export type InspectorTab = FileTab | TaskTab | ChatTab | MatterTab | ExternalTab;
 
 type State = {
   tabs: InspectorTab[];
@@ -150,22 +150,30 @@ type State = {
    * if the user just opened the file via the citation).
    */
   pendingBlockScroll: { tabId: string; blockId: string } | null;
+  /**
+   * One-shot edit-mode request for a DOCX tab. Set by callers that
+   * open a DOCX file and want the user to land directly in the
+   * folio editor (e.g. the chat's "Open in editor" affordance).
+   * The inspector panel reads this on tab mount, kicks off
+   * `handleStartDocxEdit`, and clears it.
+   */
+  pendingDocxEditTabId: string | null;
 };
 
 type Actions = {
-  openPdf: (tab: Omit<PdfTab, "type">) => void;
+  openFile: (tab: Omit<FileTab, "type">) => void;
   /**
    * Open or update the inspector tab pinned to a given entity. If a
-   * PdfTab for this entity already exists, its `id` (the file
+   * FileTab for this entity already exists, its `id` (the file
    * field) and content fields are swapped in place — the user sees
    * one continuous tab even when paging through the file's
-   * versions. If no such tab exists, behaves like `openPdf` and
+   * versions. If no such tab exists, behaves like `openFile` and
    * creates one. The canonical entrypoint for "show this file in
    * the inspector"; routes that surface different versions of the
    * same file (the document route, the version facet) call this so
    * version switches don't multiply tabs.
    */
-  openPdfForEntity: (tab: Omit<PdfTab, "type">) => void;
+  openFileForEntity: (tab: Omit<FileTab, "type">) => void;
   openTask: (taskId: string, label?: string, isNew?: boolean) => void;
   openExternal: (args: {
     url: string;
@@ -214,11 +222,15 @@ type Actions = {
   requestRename: (id: string) => void;
   /** Clear the rename flag once the ribbon has consumed it. */
   clearRenameRequest: () => void;
+  /** Ask the inspector panel to enter folio edit mode for this DOCX tab on mount. */
+  requestDocxEdit: (tabId: string) => void;
+  /** Clear the docx-edit flag once the inspector panel has consumed it. */
+  clearDocxEditRequest: () => void;
   clearTaskNewFlag: (taskId: string) => void;
-  replacePdfFieldId: (oldFieldId: string, newFieldId: string) => void;
-  setPdfMetadataLane: (
+  replaceFileFieldId: (oldFieldId: string, newFieldId: string) => void;
+  setFileMetadataLane: (
     tabId: string,
-    metadataLane: PdfTab["metadataLane"],
+    metadataLane: FileTab["metadataLane"],
   ) => void;
   /**
    * Set the active facet for a fullscreen-bound file tab. Pass
@@ -226,9 +238,9 @@ type Actions = {
    * queued suggestions) so the facet bar plays its teaching pulse;
    * leave it false for plain user clicks.
    */
-  setPdfFacet: (
+  setFileFacet: (
     tabId: string,
-    facet: NonNullable<PdfTab["facet"]>,
+    facet: NonNullable<FileTab["facet"]>,
     options?: { pulse?: boolean },
   ) => void;
   updateLabel: (tabId: string, label: string) => void;
@@ -496,14 +508,14 @@ const isOptionalNumber = (value: unknown): value is number | undefined =>
 
 const isPdfFacet = (
   value: unknown,
-): value is NonNullable<PdfTab["facet"]> | undefined =>
+): value is NonNullable<FileTab["facet"]> | undefined =>
   value === undefined ||
   value === "preview" ||
   value === "metadata" ||
   value === "versions" ||
   value === "suggestions";
 
-const isMetadataLane = (value: unknown): value is PdfTab["metadataLane"] =>
+const isMetadataLane = (value: unknown): value is FileTab["metadataLane"] =>
   value === undefined || value === "closed" || value === "expanded";
 
 const isInspectorTab = (value: unknown): value is InspectorTab => {
@@ -618,8 +630,9 @@ export const useInspectorStore = create<State & Actions>()(
     pendingRenameTabId: null,
     minimized: false,
     pendingBlockScroll: null,
+    pendingDocxEditTabId: null,
 
-    openPdf: (tab) =>
+    openFile: (tab) =>
       set((state) => {
         // One inspector tab per file. Match by entity (canonical:
         // any version of the same file) or by id (e.g. a tab the
@@ -681,9 +694,9 @@ export const useInspectorStore = create<State & Actions>()(
         state.minimized = false;
       }),
 
-    openPdfForEntity: (tab) =>
+    openFileForEntity: (tab) =>
       set((state) => {
-        // Same single-tab-per-file invariant as openPdf, but
+        // Same single-tab-per-file invariant as openFile, but
         // entity-first: callers (versions facet) hand us a fieldId
         // for a different version of the same file and expect the
         // existing tab to swap in place. Always bumps renderId so
@@ -908,6 +921,16 @@ export const useInspectorStore = create<State & Actions>()(
         state.pendingRenameTabId = null;
       }),
 
+    requestDocxEdit: (tabId) =>
+      set((state) => {
+        state.pendingDocxEditTabId = tabId;
+      }),
+
+    clearDocxEditRequest: () =>
+      set((state) => {
+        state.pendingDocxEditTabId = null;
+      }),
+
     closeAll: () =>
       set((state) => {
         state.tabs = [];
@@ -922,7 +945,7 @@ export const useInspectorStore = create<State & Actions>()(
         }
       }),
 
-    replacePdfFieldId: (oldFieldId, newFieldId) =>
+    replaceFileFieldId: (oldFieldId, newFieldId) =>
       set((state) => {
         const tab = state.tabs.find(
           (t) => t.type === "pdf" && t.id === oldFieldId,
@@ -944,7 +967,7 @@ export const useInspectorStore = create<State & Actions>()(
         }
       }),
 
-    setPdfMetadataLane: (tabId, metadataLane) =>
+    setFileMetadataLane: (tabId, metadataLane) =>
       set((state) => {
         const tab = state.tabs.find((t) => t.id === tabId);
         if (tab?.type === "pdf") {
@@ -952,7 +975,7 @@ export const useInspectorStore = create<State & Actions>()(
         }
       }),
 
-    setPdfFacet: (tabId, facet, options) =>
+    setFileFacet: (tabId, facet, options) =>
       set((state) => {
         const tab = state.tabs.find((t) => t.id === tabId);
         if (tab?.type !== "pdf") {

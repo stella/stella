@@ -8,6 +8,10 @@ import {
 } from "@/api/handlers/chat/tools/active-docx-edit-tool";
 import { createAresTools } from "@/api/handlers/chat/tools/ares-tools";
 import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import {
+  CREATE_DOCUMENT_TOOL_NAME,
+  createCreateDocumentTool,
+} from "@/api/handlers/chat/tools/create-document-tool";
 import { createChatExecutionTools } from "@/api/handlers/chat/tools/execute/chat-execution-tools";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
@@ -25,13 +29,15 @@ type ChatExecutionTools = ReturnType<typeof createChatExecutionTools>;
 type SkillTools = ReturnType<typeof createSkillTools>;
 type AresTools = ReturnType<typeof createAresTools>;
 type ActiveDocxEditTools = ReturnType<typeof createActiveDocxEditTools>;
+type CreateDocumentTools = ReturnType<typeof createCreateDocumentTools>;
 
 type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
   SkillTools &
   AresTools &
   WorkspaceTools &
-  ActiveDocxEditTools;
+  ActiveDocxEditTools &
+  CreateDocumentTools;
 
 export type ChatTools = BuiltInChatTools;
 
@@ -46,7 +52,6 @@ type GetChatToolsProps = {
   // authorization.
   toolWorkspaceIds: AuthorizedToolWorkspaceIds;
   refRegistry: ChatRefRegistry;
-  workspaceId: SafeId<"workspace"> | null;
   /**
    * `true` when the request comes from a surface that has the
    * apply-active-docx-edits client executor mounted (the file
@@ -67,6 +72,10 @@ type GetChatToolsProps = {
 
 const createActiveDocxEditTools = () => ({
   [APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME]: createActiveDocxEditTool(),
+});
+
+const createCreateDocumentTools = () => ({
+  [CREATE_DOCUMENT_TOOL_NAME]: createCreateDocumentTool(),
 });
 
 const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
@@ -92,7 +101,6 @@ export const getChatTools = ({
   userId,
   toolWorkspaceIds,
   refRegistry,
-  workspaceId,
   hasActiveFileChat,
   externalTools = {},
   disabledNativeToolSlugs,
@@ -122,27 +130,20 @@ export const getChatTools = ({
     tools: externalTools,
   });
 
-  if (!workspaceId) {
-    return applyChatToolPolicies({
-      policyKinds: BUILT_IN_CHAT_TOOL_POLICY_KINDS,
-      tools: {
-        ...orgTools,
-        ...executionTools,
-        ...skillTools,
-        ...aresTools,
-        ...activeDocxEditTools,
-        ...externalChatTools,
-      },
-    });
-  }
-
+  // Workspace tools are always registered. When the chat is not
+  // pinned to any specific matter, `toolWorkspaceIds` is the user's
+  // full accessible set; the matter is resolved per-call by the
+  // chat client (sticky thread-local matter or matter-pick UI).
   const workspaceTools = createWorkspaceTools({
     allowedWorkspaceIds: toolWorkspaceIds,
-    organizationId,
-    refRegistry,
-    userId,
     scopedDb,
   });
+
+  // create-document is client-executed (no server `execute`) — the
+  // chat client picks the destination matter and posts the result
+  // via the AI SDK's addToolOutput. It is always registered so the
+  // model can see and call it from any chat surface.
+  const createDocumentTools = createCreateDocumentTools();
 
   return applyChatToolPolicies({
     policyKinds: BUILT_IN_CHAT_TOOL_POLICY_KINDS,
@@ -152,6 +153,7 @@ export const getChatTools = ({
       ...skillTools,
       ...aresTools,
       ...workspaceTools,
+      ...createDocumentTools,
       ...activeDocxEditTools,
       ...externalChatTools,
     },

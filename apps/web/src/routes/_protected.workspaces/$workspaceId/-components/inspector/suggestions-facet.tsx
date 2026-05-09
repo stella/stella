@@ -78,7 +78,7 @@ export const SuggestionsFacet = ({
 
   // Inspector PDF tabs reuse the same component instance when
   // the user navigates between entities (the store swaps
-  // `entityId` and content fields in place; see PdfTab docs in
+  // `entityId` and content fields in place; see FileTab docs in
   // inspector-store.ts). Reset the dispatch latch whenever the
   // entity changes so a previous entity's "already redirected"
   // state doesn't suppress the redirect for the new one. Per

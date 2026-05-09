@@ -46,10 +46,7 @@ describe("chat tool schemas", () => {
     expect(() =>
       createWorkspaceTools({
         allowedWorkspaceIds: [workspaceId],
-        organizationId,
-        refRegistry: createChatRefRegistry(),
         scopedDb: unusedScopedDb,
-        userId,
       }),
     ).not.toThrow();
   });
@@ -79,12 +76,13 @@ describe("chat tool schemas", () => {
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
       }),
-      workspaceId: null,
       hasActiveFileChat: false,
     });
 
     expect(tools).toHaveProperty("ask-user");
     expect(tools).toHaveProperty("run-stella-query");
+    expect(tools).toHaveProperty("create-document");
+    expect(tools).toHaveProperty("update-entity-fields");
     expect(tools).not.toHaveProperty("search-across-matters");
     expect(tools).not.toHaveProperty("read-content-across-matters");
     expect(tools).not.toHaveProperty("read-contact");
@@ -101,7 +99,6 @@ describe("chat tool schemas", () => {
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
       }),
-      workspaceId,
       hasActiveFileChat: false,
     });
 

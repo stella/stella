@@ -4,7 +4,7 @@
  * Scans OOXML body paragraphs for block directives
  * ({{#if}}, {{#each}}, etc.), evaluates conditions, expands
  * loops, and strips directive paragraphs — all before
- * `patchDocument()` runs for value substitution.
+ * value substitution.
  *
  * Templates without block directives skip all processing
  * (fast-path check via regex on raw XML).
@@ -419,7 +419,7 @@ export const processBlockDirectives = (
   const patchValues: Record<string, RichPatchValue> = {};
   const allErrors: TemplateStructureError[] = [];
 
-  // Flatten top-level nested objects for patchDocument
+  // Flatten top-level nested objects for value substitution.
   Object.assign(patchValues, flattenTemplateData(data));
 
   const process = (

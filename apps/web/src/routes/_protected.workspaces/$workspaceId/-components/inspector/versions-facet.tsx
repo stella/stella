@@ -1,7 +1,7 @@
 /**
  * VersionsFacet — version history rendered inside the inspector
  * tab. Switching versions swaps the file shown in the SAME
- * inspector tab via `openPdfForEntity`; we never navigate routes
+ * inspector tab via `openFileForEntity`; we never navigate routes
  * or push a new tab. When the user is on the document route,
  * the route URL is also updated so the URL stays in sync with the
  * version actually being viewed (back/forward + reload preserve
@@ -30,7 +30,7 @@ export const VersionsFacet = ({
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
-  const openPdfForEntity = useInspectorStore((s) => s.openPdfForEntity);
+  const openFileForEntity = useInspectorStore((s) => s.openFileForEntity);
   const { data } = useQuery(entityVersionsOptions({ workspaceId, entityId }));
 
   if (!data) {
@@ -54,7 +54,7 @@ export const VersionsFacet = ({
           if (!target?.file) {
             return;
           }
-          openPdfForEntity({
+          openFileForEntity({
             id: fieldId,
             entityId,
             label: target.file.fileName,

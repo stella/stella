@@ -1,6 +1,6 @@
 import { valibotSchema } from "@ai-sdk/valibot";
 import { tool } from "ai";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -9,18 +9,14 @@ import { entities, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { CHAT_ENTITY_REF_PREFIX } from "@/api/handlers/chat/tools/execute/ref-registry";
-import { markdownToDocx } from "@/api/handlers/docx/markdown-to-docx";
-import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
-import { ChatToolError, unreachable } from "@/api/lib/errors/tagged-errors";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   brandPersistedEntityId,
   brandPersistedPropertyId,
 } from "@/api/lib/safe-id-boundaries";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { getSearchProvider } from "@/api/lib/search/provider";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const idSchema = (description: string) =>
   v.pipe(v.string(), v.uuid(), v.description(description));
@@ -74,10 +70,7 @@ const formatFieldValue = (content: FieldContent): string => {
 
 type WorkspaceToolsContext = {
   allowedWorkspaceIds: readonly SafeId<"workspace">[];
-  organizationId: SafeId<"organization">;
-  refRegistry: ChatRefRegistry;
   scopedDb: ScopedDb;
-  userId: SafeId<"user">;
 };
 
 type CreatedDocumentToolOutputProps = {
@@ -153,10 +146,7 @@ const requireAllowedWorkspaceId = ({
 
 export const createWorkspaceTools = ({
   allowedWorkspaceIds,
-  organizationId,
-  refRegistry,
   scopedDb,
-  userId,
 }: WorkspaceToolsContext) => {
   if (allowedWorkspaceIds.length === 0) {
     return {};
@@ -390,74 +380,6 @@ export const createWorkspaceTools = ({
           propertyId,
           newValue: isEmpty ? "" : formatFieldValue(content),
         };
-      },
-    }),
-
-    "create-document": tool({
-      description:
-        "Create a brand-new simple DOCX document in the matter from " +
-        "markdown content. Write the document body as markdown; it is " +
-        "converted to a styled DOCX file and stored in the matter. This " +
-        "does not edit, convert, clone, or preserve formatting from an " +
-        "existing DOCX. Never use it when the user asks to edit, rewrite, " +
-        "save, update, or make a new version of an already-open document. " +
-        "On success, copy the `mention` field exactly when naming the " +
-        "created document in a user-facing answer.",
-      inputSchema: valibotSchema(
-        v.strictObject({
-          workspaceId: wsSchema,
-          name: v.pipe(
-            v.string(),
-            v.maxLength(256),
-            v.description("Document file name (without .docx extension)"),
-          ),
-          markdown: v.pipe(
-            v.string(),
-            v.description("Document content as markdown"),
-          ),
-        }),
-      ),
-      execute: async ({ workspaceId, name, markdown }) => {
-        const allowedWorkspaceId = requireAllowedWorkspaceId({
-          allowedIdsByValue: allowedWorkspaceIdsByValue,
-          workspaceId,
-        });
-        const buffer = await markdownToDocx(markdown);
-        const fileName = sanitizeFilename(`${name}.docx`);
-
-        const result = await createEntityFromBuffer({
-          scopedDb,
-          organizationId,
-          workspaceId: allowedWorkspaceId,
-          userId,
-          buffer,
-          fileName,
-          mimeType: DOCX_MIME_TYPE,
-        });
-
-        if (Result.isOk(result)) {
-          return buildCreatedDocumentToolOutput({
-            entityId: result.value.entityId,
-            fileName: result.value.fileName,
-            refRegistry,
-            workspaceId: allowedWorkspaceId,
-          });
-        }
-
-        switch (result.error._tag) {
-          case "EntityLimitError":
-            throw new ChatToolError({
-              message:
-                "This matter has reached the entity limit, so the document could not be created.",
-            });
-          case "MissingFilePropertyError":
-            throw new ChatToolError({
-              message:
-                "This matter is missing a file property, so the document could not be created.",
-            });
-          default:
-            return unreachable("Unhandled createEntityFromBuffer error tag");
-        }
       },
     }),
   };

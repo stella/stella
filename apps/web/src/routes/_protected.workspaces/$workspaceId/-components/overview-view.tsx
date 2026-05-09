@@ -1148,7 +1148,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
           useInspectorStore.getState().openTask(entity.entityId, entity.name)
       : navigable && fieldId
         ? () =>
-            useInspectorStore.getState().openPdf({
+            useInspectorStore.getState().openFile({
               id: fieldId,
               entityId: entity.entityId,
               label: entity.name,
