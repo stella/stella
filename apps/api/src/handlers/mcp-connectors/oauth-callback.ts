@@ -29,39 +29,41 @@ const config = {
   query: requestQuery,
 } satisfies HandlerConfig;
 
-const htmlResponse = (body: string, status = 200) =>
-  new Response(body, {
-    headers: { "Content-Type": "text/html; charset=utf-8" },
-    status,
+type CallbackRedirectInput =
+  | { status: "connected"; slug: string }
+  | { status: "error"; reason: string };
+
+// The popup lands on a SPA route that does the postMessage + close.
+// Returning HTML with an inline <script> from api.stll.app is blocked
+// by the API's CSP (`script-src 'self' 'unsafe-eval'`) and its
+// `Cross-Origin-Opener-Policy: same-origin` would also detach
+// `window.opener`, so the SPA host is the only place the terminal
+// page can run.
+export const buildCallbackRedirectUrl = (
+  frontendUrl: string,
+  input: CallbackRedirectInput,
+): string => {
+  const url = new URL("/mcp/oauth-callback", frontendUrl);
+  url.searchParams.set("status", input.status);
+  if (input.status === "connected") {
+    url.searchParams.set("slug", input.slug);
+  } else {
+    url.searchParams.set("reason", input.reason);
+  }
+  return url.toString();
+};
+
+const redirect = (input: CallbackRedirectInput) =>
+  new Response(null, {
+    status: 302,
+    headers: { Location: buildCallbackRedirectUrl(env.FRONTEND_URL, input) },
   });
-
-const mcpSettingsUrl = () =>
-  new URL("/knowledge/mcp", env.FRONTEND_URL).toString();
-
-const callbackHtml = (message: string) => `<!doctype html>
-<html>
-  <head><meta charset="utf-8"><title>MCP connection</title></head>
-  <body>
-    <script>
-      if (window.opener) {
-        window.opener.postMessage(${JSON.stringify(message)}, ${JSON.stringify(
-          env.FRONTEND_URL,
-        )});
-        window.close();
-      } else {
-        window.location.replace(${JSON.stringify(mcpSettingsUrl())});
-      }
-    </script>
-  </body>
-</html>`;
 
 const mcpOAuthCallback = createSafeRootHandler(
   config,
   async function* ({ query: input, safeDb, session, user }) {
     if (!input.code || !input.state) {
-      return Result.ok(
-        htmlResponse(callbackHtml("mcp:error:missing-code"), 400),
-      );
+      return Result.ok(redirect({ status: "error", reason: "missing-code" }));
     }
     const code = input.code;
     const state = input.state;
@@ -87,12 +89,12 @@ const mcpOAuthCallback = createSafeRootHandler(
 
       if (!row || row.createdAt < cutoff) {
         return Result.ok(
-          htmlResponse(callbackHtml("mcp:error:expired-state"), 400),
+          redirect({ status: "error", reason: "expired-state" }),
         );
       }
       if (!row.connector) {
         return Result.ok(
-          htmlResponse(callbackHtml("mcp:error:missing-connector"), 400),
+          redirect({ status: "error", reason: "missing-connector" }),
         );
       }
       if (
@@ -100,7 +102,7 @@ const mcpOAuthCallback = createSafeRootHandler(
         row.userId !== user.id
       ) {
         return Result.ok(
-          htmlResponse(callbackHtml("mcp:error:user-mismatch"), 403),
+          redirect({ status: "error", reason: "user-mismatch" }),
         );
       }
 
@@ -123,7 +125,7 @@ const mcpOAuthCallback = createSafeRootHandler(
 
       if (!client) {
         return Result.ok(
-          htmlResponse(callbackHtml("mcp:error:missing-client"), 400),
+          redirect({ status: "error", reason: "missing-client" }),
         );
       }
 
@@ -150,7 +152,7 @@ const mcpOAuthCallback = createSafeRootHandler(
 
       if (Result.isError(token)) {
         return Result.ok(
-          htmlResponse(callbackHtml("mcp:error:token-exchange"), 400),
+          redirect({ status: "error", reason: "token-exchange" }),
         );
       }
 
@@ -228,16 +230,16 @@ const mcpOAuthCallback = createSafeRootHandler(
       );
 
       return Result.ok(
-        htmlResponse(callbackHtml(`mcp:connected:${row.connector.slug}`)),
+        redirect({ status: "connected", slug: row.connector.slug }),
       );
     } catch (error) {
       if (HandlerError.is(error)) {
         return Result.ok(
-          htmlResponse(callbackHtml("mcp:error:invalid-secret"), 400),
+          redirect({ status: "error", reason: "invalid-secret" }),
         );
       }
 
-      return Result.ok(htmlResponse(callbackHtml("mcp:error:unexpected"), 500));
+      return Result.ok(redirect({ status: "error", reason: "unexpected" }));
     }
   },
 );
