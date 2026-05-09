@@ -1,7 +1,9 @@
 /** Extract plain-text and Markdown content from a DOCX for AI context. */
 
-import JSZip from "jszip";
 import * as slimdom from "slimdom";
+
+import type { DocxArchive } from "@/api/lib/docx-archive";
+import { loadDocxArchive } from "@/api/lib/docx-archive";
 
 import { HEADER_FOOTER_RE, isElement, W_NS } from "./ooxml";
 import type {
@@ -221,10 +223,10 @@ const extractParagraphsFromContainer = (
 
 /**
  * Extract paragraphs from all header/footer XML entries in
- * the ZIP, sorted by file name for deterministic ordering.
+ * the archive, sorted by file name for deterministic ordering.
  */
 const extractHeaderFooterParagraphs = async (
-  zip: JSZip,
+  archive: DocxArchive,
   source: ParagraphSource,
   rootTag: string,
   startIndex: number,
@@ -234,17 +236,16 @@ const extractHeaderFooterParagraphs = async (
   let index = startIndex;
 
   const prefix = `word/${source === "header" ? "header" : "footer"}`;
-  const entries = Object.keys(zip.files)
+  const entries = Object.keys(archive.zip.files)
     .filter((path) => HEADER_FOOTER_RE.test(path) && path.startsWith(prefix))
     .toSorted();
 
   for (const path of entries) {
-    const entry = zip.file(path);
-    if (!entry) {
+    const xml = await archive.readEntryString(path);
+    if (xml === null) {
       continue;
     }
 
-    const xml = await entry.async("string");
     const doc = slimdom.parseXmlDocument(xml);
     const container = doc.getElementsByTagNameNS(W_NS, rootTag).at(0);
 
@@ -266,19 +267,18 @@ const extractHeaderFooterParagraphs = async (
 export const extractText = async (
   docxBytes: Uint8Array,
 ): Promise<ExtractedDocument> => {
-  const zip = await JSZip.loadAsync(docxBytes);
+  const archive = await loadDocxArchive(docxBytes);
   const emptyResult: ExtractedDocument = {
     paragraphs: [],
     charCount: 0,
     view: "accepted",
   };
 
-  const docEntry = zip.file("word/document.xml");
-  if (!docEntry) {
+  const xml = await archive.readEntryString("word/document.xml");
+  if (xml === null) {
     return emptyResult;
   }
 
-  const xml = await docEntry.async("string");
   const doc = slimdom.parseXmlDocument(xml);
 
   const body = doc.getElementsByTagNameNS(W_NS, "body").at(0);
@@ -287,7 +287,12 @@ export const extractText = async (
   }
 
   // Extract headers (before body)
-  const headers = await extractHeaderFooterParagraphs(zip, "header", "hdr", 0);
+  const headers = await extractHeaderFooterParagraphs(
+    archive,
+    "header",
+    "hdr",
+    0,
+  );
 
   // Extract body
   const bodyResult = extractParagraphsFromContainer(
@@ -298,7 +303,7 @@ export const extractText = async (
 
   // Extract footers (after body)
   const footers = await extractHeaderFooterParagraphs(
-    zip,
+    archive,
     "footer",
     "ftr",
     headers.paragraphs.length + bodyResult.paragraphs.length,
@@ -685,17 +690,16 @@ const containerToMarkdown = (
 export const extractMarkdown = async (
   docxBytes: Uint8Array,
 ): Promise<string> => {
-  const zip = await JSZip.loadAsync(docxBytes);
+  const archive = await loadDocxArchive(docxBytes);
 
-  const docEntry = zip.file("word/document.xml");
-  if (!docEntry) {
+  const xml = await archive.readEntryString("word/document.xml");
+  if (xml === null) {
     return "";
   }
 
-  const xml = await docEntry.async("string");
   const doc = slimdom.parseXmlDocument(xml);
   const numbering = readNumberingMetadata(
-    (await zip.file("word/numbering.xml")?.async("string")) ?? null,
+    await archive.readEntryString("word/numbering.xml"),
   );
 
   const body = doc.getElementsByTagNameNS(W_NS, "body").at(0);

@@ -6,8 +6,9 @@
  * JSZip to manipulate the OOXML package; XML is handled
  * via string operations for simplicity and robustness.
  */
-import JSZip from "jszip";
+import type JSZip from "jszip";
 
+import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { LIMITS } from "@/api/lib/limits";
 
 const STAMP_BOOKMARK = "stella_dms_ref";
@@ -90,7 +91,7 @@ export const fillPlaceholders = async (
 ): Promise<ArrayBuffer | null> => {
   let zip: JSZip;
   try {
-    zip = await JSZip.loadAsync(docxBuffer);
+    ({ zip } = await loadDocxArchive(docxBuffer));
   } catch {
     return null;
   }
@@ -126,7 +127,7 @@ export const injectStamp = async (
 ): Promise<ArrayBuffer> => {
   let zip: JSZip;
   try {
-    zip = await JSZip.loadAsync(docxBuffer);
+    ({ zip } = await loadDocxArchive(docxBuffer));
   } catch {
     // Corrupt or non-DOCX buffer; return original unchanged
     return docxBuffer;
@@ -164,7 +165,7 @@ export const extractStamp = async (
 }> => {
   let zip: JSZip;
   try {
-    zip = await JSZip.loadAsync(docxBuffer);
+    ({ zip } = await loadDocxArchive(docxBuffer));
   } catch {
     // Malformed or corrupt DOCX; treat as no stamp
     return { verificationCode: null, stamp: null };

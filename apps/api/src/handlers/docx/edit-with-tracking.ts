@@ -7,9 +7,9 @@
  */
 
 import { Result } from "better-result";
-import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { DocxEditError } from "@/api/lib/errors/tagged-errors";
 
 import { applyEdits } from "./apply-edits";
@@ -90,17 +90,17 @@ export const editWithTracking = async (
 ): Promise<Result<EditWithTrackingResult, DocxEditError>> =>
   await Result.tryPromise({
     try: async () => {
-      const zip = await JSZip.loadAsync(docxBuffer);
+      const archive = await loadDocxArchive(docxBuffer);
+      const { zip } = archive;
 
       // 1. Read document.xml
-      const docEntry = zip.file("word/document.xml");
-      if (!docEntry) {
+      let documentXml = await archive.readEntryString("word/document.xml");
+      if (documentXml === null) {
         throw new DocxEditError({
           message: "Invalid DOCX: missing word/document.xml",
           cause: null,
         });
       }
-      let documentXml = await docEntry.async("string");
 
       // 2. Collect existing IDs, count paragraphs
       const doc = slimdom.parseXmlDocument(documentXml);
@@ -156,7 +156,7 @@ export const editWithTracking = async (
       const hasComments = validComments.length > 0;
       if (hasComments) {
         const existingComments =
-          (await zip.file("word/comments.xml")?.async("string")) ?? null;
+          await archive.readEntryString("word/comments.xml");
 
         const result = injectComments(
           documentXml,
@@ -177,23 +177,22 @@ export const editWithTracking = async (
       zip.file("word/document.xml", documentXml);
 
       // 8. Enable track revisions in settings
-      const settingsEntry = zip.file("word/settings.xml");
-      if (settingsEntry) {
-        const settingsXml = await settingsEntry.async("string");
+      const settingsXml = await archive.readEntryString("word/settings.xml");
+      if (settingsXml !== null) {
         zip.file("word/settings.xml", ensureTrackRevisions(settingsXml));
       }
 
       // 9. Update content types and rels for comments
       if (hasComments) {
-        const ctEntry = zip.file("[Content_Types].xml");
-        if (ctEntry) {
-          const ctXml = await ctEntry.async("string");
+        const ctXml = await archive.readEntryString("[Content_Types].xml");
+        if (ctXml !== null) {
           zip.file("[Content_Types].xml", ensureCommentsContentType(ctXml));
         }
 
-        const relsEntry = zip.file("word/_rels/document.xml.rels");
-        if (relsEntry) {
-          const relsXml = await relsEntry.async("string");
+        const relsXml = await archive.readEntryString(
+          "word/_rels/document.xml.rels",
+        );
+        if (relsXml !== null) {
           zip.file("word/_rels/document.xml.rels", ensureCommentsRel(relsXml));
         }
       }
