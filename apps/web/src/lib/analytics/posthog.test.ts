@@ -153,6 +153,24 @@ describe("PostHog browser analytics adapter", () => {
     }
   });
 
+  test("keeps non-Error promise rejections that carry a useful value", () => {
+    createPostHogAnalytics("phc_test", "https://posthog.test");
+
+    const event = {
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $exception_list: [
+          {
+            type: "UnhandledRejection",
+            value:
+              "Non-Error promise rejection captured with value: API_TIMEOUT",
+          },
+        ],
+      },
+    };
+    expect(initOptions?.before_send(event)).toEqual(event);
+  });
+
   test("keeps real exceptions with messages and stacks", () => {
     createPostHogAnalytics("phc_test", "https://posthog.test");
 

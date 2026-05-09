@@ -27,7 +27,10 @@ const EXCEPTION_NOISE_PATTERNS: readonly RegExp[] = [
   /^ResizeObserver loop/i,
   /^Script error\.?$/i,
   /^(?:Error: )?undefined$/i,
-  /Non-Error promise rejection/i,
+  // Match only the empty form, not rejections that carry a useful
+  // string (e.g. `Promise.reject("API_TIMEOUT")`) which we want to
+  // keep capturing.
+  /^Non-Error promise rejection captured with value: (?:undefined|null)$/i,
 ];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
