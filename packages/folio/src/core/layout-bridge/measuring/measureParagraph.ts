@@ -680,13 +680,25 @@ export function measureParagraph(
 
     if (isImageRun(run)) {
       const wrapType = run.wrapType;
+      // Match the painter's `isFloatingImageRun` classification —
+      // including `behind` / `inFront` (wrapNone). These images are
+      // anchored at absolute coordinates and the painter lifts them
+      // out of the paragraph flow, so the measurer must also skip
+      // them: otherwise the line reserves the image's inline width
+      // and height while the painter renders it as an overlay,
+      // leaving phantom gaps in the body text (Codex PR #258 review).
+      // Drop the `run.position` precondition too — wrapNone images
+      // can be authored without an explicit `<wp:positionH>` and
+      // still shouldn't contribute to inline metrics.
       const isFloating =
         run.displayMode === "float" ||
-        (wrapType && ["square", "tight", "through"].includes(wrapType));
+        wrapType === "square" ||
+        wrapType === "tight" ||
+        wrapType === "through" ||
+        wrapType === "behind" ||
+        wrapType === "inFront";
 
-      // Skip truly floating images - they don't contribute to line height
-      // (they are positioned absolutely and text wraps around them)
-      if (run.position && isFloating) {
+      if (isFloating) {
         currentLine.toRun = runIndex;
         currentLine.toChar = 1;
         continue;
