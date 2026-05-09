@@ -134,6 +134,53 @@ describe("PostHog browser analytics adapter", () => {
     expect(initOptions?.before_send({ event: "$heatmap" })).toBeNull();
   });
 
+  test("drops known browser-noise exceptions", () => {
+    createPostHogAnalytics("phc_test", "https://posthog.test");
+
+    const noise = [
+      "ResizeObserver loop completed with undelivered notifications.",
+      "Script error.",
+      "undefined",
+      "Non-Error promise rejection captured with value: undefined",
+    ];
+    for (const value of noise) {
+      expect(
+        initOptions?.before_send({
+          event: WEB_ANALYTICS_EVENTS.exception,
+          properties: { $exception_list: [{ type: "Error", value }] },
+        }),
+      ).toBeNull();
+    }
+  });
+
+  test("keeps real exceptions with messages and stacks", () => {
+    createPostHogAnalytics("phc_test", "https://posthog.test");
+
+    const event = {
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $exception_list: [
+          {
+            type: "TypeError",
+            value: "Cannot read properties of undefined (reading 'foo')",
+            stacktrace: { frames: [{ filename: "app.js", lineno: 42 }] },
+          },
+        ],
+      },
+    };
+    expect(initOptions?.before_send(event)).toEqual(event);
+  });
+
+  test("captureError ignores null and undefined", () => {
+    const { analytics } = createPostHogAnalytics(
+      "phc_test",
+      "https://posthog.test",
+    );
+    analytics.captureError(null);
+    analytics.captureError(undefined);
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+  });
+
   test("captures sanitized page view payloads", () => {
     const { analytics } = createPostHogAnalytics(
       "phc_test",
