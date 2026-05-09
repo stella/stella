@@ -431,6 +431,7 @@ type Messages = {
       "input": "Input";
       "output": "Output";
       "sourceCode": "Source code";
+      "toggleDetails": "Toggle details";
     };
     "unsupportedFileType": "Unsupported file type";
     "uploadFailed": "Failed to process file";
@@ -1082,43 +1083,35 @@ type Messages = {
     "mcp": {
       "addAndConnect": "Add and connect";
       "addServer": "Add server";
-      "addServerCardDescription": "Paste a server URL and Stella will connect it in one flow.";
       "addServerCardTitle": "Add new MCP server";
       "auth": {
         "bearer": "Bearer token";
         "none": "No auth";
         "oauth2": "OAuth 2.0";
       };
-      "availableInChat": "Available in chat";
       "bearerTokenDescription": "This server uses a bearer token. Paste the token from the provider to finish connecting.";
-      "builtInBadge": "Built-in";
       "connect": "Connect";
-      "connected": "Connected";
-      "connectedToast": "MCP connector connected";
+      "connectedToast": "MCP connected";
       "connectedWithLastUsed": "Connected · last used {time}";
-      "customDescription": "Paste the MCP server URL. Stella will detect how it connects and continue automatically.";
-      "customTitle": "Add custom server";
       "description": "Manage the external MCP servers that can add tools to chat. Tokens are stored per user.";
       "detected": "Detected {authType}";
       "disable": "Disable";
       "disabled": "Connected · disabled";
       "disconnect": "Disconnect";
-      "docsLink": "Docs";
       "emptyDescription": "Curated legal MCP connectors will appear here as they are enabled for your workspace.";
       "emptyTitle": "No MCP connectors yet";
       "enable": "Enable";
       "errorDescription": "The connector could not be updated.";
-      "errorTitle": "MCP connection failed";
+      "errorTitle": "MCP failed";
+      "mcpExplainer": "MCP servers add external services to the chat that the AI can work with.";
       "namePlaceholder": "Display name";
       "needsReauth": "Needs reconnect";
-      "notConnected": "Not connected";
       "off": "Off";
       "on": "On";
       "otherTitle": "Other connectors";
       "probe": "Probe";
       "recommendedBadge": "Recommended";
       "recommendedFor": "Recommended for {jurisdictions}";
-      "recommendedTitle": "Recommended for your jurisdictions";
       "reconnect": "Reconnect";
       "saveToken": "Save token";
       "tokenHelp": "How to get a token";
@@ -1127,6 +1120,7 @@ type Messages = {
       "urlLabel": "MCP server URL";
       "urlPlaceholder": "https://example.com/mcp";
       "useInChat": "Use in chat";
+      "whatIsAnMcpServer": "What is an MCP server?";
     };
     "sections": {
       "agents": {

@@ -74,9 +74,7 @@ const createMcpConnector = createSafeRootHandler(
             slug,
             organizationId: session.activeOrganizationId,
             displayName,
-            description:
-              input.description?.trim() ||
-              "Custom MCP server added by your organization.",
+            description: input.description?.trim() ?? "",
             url: normalizedUrl,
             authType: probe.authType,
             isCurated: false,

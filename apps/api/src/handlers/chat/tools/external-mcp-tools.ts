@@ -384,9 +384,6 @@ const normalizeMcpFetchBody = (body: unknown): SafeOutboundFetchBody => {
   throw new TypeError("Unsupported MCP request body type");
 };
 
-const GENERIC_CUSTOM_MCP_DESCRIPTION =
-  "Custom MCP server added by your organization.";
-
 export const buildExternalMcpSystemHint = (
   connectors: readonly LoadedExternalMcpConnector[],
 ): string => {
@@ -397,9 +394,7 @@ export const buildExternalMcpSystemHint = (
   const lines = connectors.map((connector) => {
     const toolSummary = summarizeExternalMcpToolNames(connector.toolNames);
     const description =
-      connector.description === GENERIC_CUSTOM_MCP_DESCRIPTION && toolSummary
-        ? toolSummary
-        : connector.description;
+      connector.description.trim() || toolSummary || connector.displayName;
 
     return `- ${connector.displayName} (\`mcp__${connector.slug}__*\`): ${description}`;
   });

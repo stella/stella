@@ -427,7 +427,8 @@
       "field": "Väli",
       "input": "Sisend",
       "output": "Väljund",
-      "sourceCode": "Lähtekood"
+      "sourceCode": "Lähtekood",
+      "toggleDetails": "Üksikasjade lülitamine"
     },
     "unsupportedFileType": "Toetamata failitüüp",
     "uploadFailed": "Faili töötlemine ebaõnnestus"
@@ -1079,43 +1080,35 @@
     "mcp": {
       "addAndConnect": "Lisa ja ühenda",
       "addServer": "Lisa server",
-      "addServerCardDescription": "Kleepige serveri URL ja Stella ühendab selle ühe voona.",
       "addServerCardTitle": "Lisa uus MCP server",
       "auth": {
         "bearer": "Bearer-token",
         "none": "Autentimiseta",
         "oauth2": "OAuth 2.0"
       },
-      "availableInChat": "Vestluses saadaval",
       "bearerTokenDescription": "See server kasutab bearer-tokenit. Ühenduse lõpetamiseks kleepige teenusepakkuja token.",
-      "builtInBadge": "Sisseehitatud",
       "connect": "Ühenda",
-      "connected": "Ühendatud",
-      "connectedToast": "MCP-konnektor ühendatud",
+      "connectedToast": "MCP ühendatud",
       "connectedWithLastUsed": "Ühendatud · viimati kasutatud {time}",
-      "customDescription": "Kleepige MCP serveri URL. Stella tuvastab ühendusviisi ja jätkab automaatselt.",
-      "customTitle": "Lisa kohandatud server",
       "description": "Hallake väliseid MCP-servereid, mis saavad vestlusse tööriistu lisada. Tokenid salvestatakse kasutajapõhiselt.",
       "detected": "Tuvastatud: {authType}",
       "disable": "Lülita välja",
       "disabled": "Ühendatud · välja lülitatud",
       "disconnect": "Katkesta ühendus",
-      "docsLink": "Dokumentatsioon",
       "emptyDescription": "Kureeritud juriidilised MCP-konnektorid kuvatakse siin, kui need on teie tööruumis lubatud.",
       "emptyTitle": "MCP-konnektoreid veel pole",
       "enable": "Lülita sisse",
       "errorDescription": "Konnektorit ei saanud uuendada.",
-      "errorTitle": "MCP-ühendus ebaõnnestus",
+      "errorTitle": "MCP ebaõnnestus",
+      "mcpExplainer": "MCP serverid lisavad vestlusele väliseid teenuseid, millega tehisintellekt saab töötada.",
       "namePlaceholder": "Kuvatav nimi",
       "needsReauth": "Vajab taasühendamist",
-      "notConnected": "Pole ühendatud",
       "off": "Väljas",
       "on": "Sees",
       "otherTitle": "Muud konnektorid",
       "probe": "Kontrolli",
       "recommendedBadge": "Soovitatud",
       "recommendedFor": "Soovitatud: {jurisdictions}",
-      "recommendedTitle": "Soovitatud teie jurisdiktsioonide jaoks",
       "reconnect": "Ühenda uuesti",
       "saveToken": "Salvesta token",
       "tokenHelp": "Kuidas token hankida",
@@ -1123,7 +1116,8 @@
       "tokenPlaceholder": "Kleepige token",
       "urlLabel": "MCP serveri URL",
       "urlPlaceholder": "https://example.com/mcp",
-      "useInChat": "Kasuta vestluses"
+      "useInChat": "Kasuta vestluses",
+      "whatIsAnMcpServer": "Mis on MCP server?"
     },
     "sections": {
       "agents": {

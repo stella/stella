@@ -427,7 +427,8 @@
       "field": "Lauks",
       "input": "Ievade",
       "output": "Izvade",
-      "sourceCode": "Pirmkods"
+      "sourceCode": "Pirmkods",
+      "toggleDetails": "Pārslēgt detaļas"
     },
     "unsupportedFileType": "Neatbalstīts faila tips",
     "uploadFailed": "Neizdevās apstrādāt failu"
@@ -1079,43 +1080,35 @@
     "mcp": {
       "addAndConnect": "Pievienot un savienot",
       "addServer": "Pievienot serveri",
-      "addServerCardDescription": "Ielīmējiet servera URL, un Stella to savienos vienā plūsmā.",
       "addServerCardTitle": "Pievienot jaunu MCP serveri",
       "auth": {
         "bearer": "Bearer tokens",
         "none": "Bez autentifikācijas",
         "oauth2": "OAuth 2.0"
       },
-      "availableInChat": "Pieejams čatā",
       "bearerTokenDescription": "Šis serveris izmanto Bearer tokenu. Ielīmējiet pakalpojuma sniedzēja tokenu, lai pabeigtu savienošanu.",
-      "builtInBadge": "Iebūvēts",
       "connect": "Pievienot",
-      "connected": "Pievienots",
-      "connectedToast": "MCP savienotājs pievienots",
+      "connectedToast": "MCP pievienots",
       "connectedWithLastUsed": "Pievienots · pēdoreiz izmantots {time}",
-      "customDescription": "Ielīmējiet MCP servera URL. Stella noteiks savienojuma veidu un turpinās automātiski.",
-      "customTitle": "Pievienot pielāgotu serveri",
       "description": "Pārvaldiet ārējos MCP serverus, kas var pievienot rīkus čatam. Tokeni tiek glabāti katram lietotājam atsevišķi.",
       "detected": "Noteikts: {authType}",
       "disable": "Izslēgt",
       "disabled": "Pievienots · izslēgts",
       "disconnect": "Atvienot",
-      "docsLink": "Dokumentācija",
       "emptyDescription": "Atlasītie juridiskie MCP savienotāji parādīsies šeit, kad tie būs iespējoti jūsu darbvietai.",
       "emptyTitle": "MCP savienotāju vēl nav",
       "enable": "Ieslēgt",
       "errorDescription": "Savienotāju neizdevās atjaunināt.",
-      "errorTitle": "MCP savienojums neizdevās",
+      "errorTitle": "MCP neizdevās",
+      "mcpExplainer": "MCP serveri pievieno tērzēšanai ārējus pakalpojumus, ar kuriem var strādāt MI.",
       "namePlaceholder": "Rādāmais nosaukums",
       "needsReauth": "Nepieciešama atkārtota pievienošana",
-      "notConnected": "Nav pievienots",
       "off": "Izslēgts",
       "on": "Ieslēgts",
       "otherTitle": "Citi savienotāji",
       "probe": "Pārbaudīt",
       "recommendedBadge": "Ieteicams",
       "recommendedFor": "Ieteicams: {jurisdictions}",
-      "recommendedTitle": "Ieteicams jūsu jurisdikcijām",
       "reconnect": "Pievienot vēlreiz",
       "saveToken": "Saglabāt tokenu",
       "tokenHelp": "Kā iegūt tokenu",
@@ -1123,7 +1116,8 @@
       "tokenPlaceholder": "Ielīmējiet tokenu",
       "urlLabel": "MCP servera URL",
       "urlPlaceholder": "https://example.com/mcp",
-      "useInChat": "Izmantot čatā"
+      "useInChat": "Izmantot čatā",
+      "whatIsAnMcpServer": "Kas ir MCP serveris?"
     },
     "sections": {
       "agents": {

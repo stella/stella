@@ -427,7 +427,8 @@
       "field": "Campo",
       "input": "Entrada",
       "output": "Salida",
-      "sourceCode": "Código fuente"
+      "sourceCode": "Código fuente",
+      "toggleDetails": "Mostrar detalles"
     },
     "unsupportedFileType": "Tipo de archivo no compatible",
     "uploadFailed": "Error al procesar el archivo"
@@ -1079,43 +1080,35 @@
     "mcp": {
       "addAndConnect": "Añadir y conectar",
       "addServer": "Añadir servidor",
-      "addServerCardDescription": "Pegue una URL de servidor y Stella lo conectará en un solo flujo.",
       "addServerCardTitle": "Añadir nuevo servidor MCP",
       "auth": {
         "bearer": "Token Bearer",
         "none": "Sin autenticación",
         "oauth2": "OAuth 2.0"
       },
-      "availableInChat": "Disponible en el chat",
       "bearerTokenDescription": "Este servidor usa un token Bearer. Pegue el token del proveedor para terminar la conexión.",
-      "builtInBadge": "Integrado",
       "connect": "Conectar",
-      "connected": "Conectado",
-      "connectedToast": "Conector MCP conectado",
+      "connectedToast": "MCP conectado",
       "connectedWithLastUsed": "Conectado · último uso {time}",
-      "customDescription": "Pegue la URL del servidor MCP. Stella detectará cómo se conecta y continuará automáticamente.",
-      "customTitle": "Añadir servidor personalizado",
       "description": "Gestione los servidores MCP externos que pueden añadir herramientas al chat. Los tokens se guardan por usuario.",
       "detected": "{authType} detectado",
       "disable": "Desactivar",
       "disabled": "Conectado · desactivado",
       "disconnect": "Desconectar",
-      "docsLink": "Documentación",
       "emptyDescription": "Los conectores MCP jurídicos seleccionados aparecerán aquí cuando se habiliten para su espacio de trabajo.",
       "emptyTitle": "Aún no hay conectores MCP",
       "enable": "Activar",
       "errorDescription": "No se pudo actualizar el conector.",
-      "errorTitle": "Error de conexión MCP",
+      "errorTitle": "MCP falló",
+      "mcpExplainer": "Los servidores MCP añaden al chat servicios externos con los que la IA puede trabajar.",
       "namePlaceholder": "Nombre visible",
       "needsReauth": "Necesita reconexión",
-      "notConnected": "No conectado",
       "off": "Desactivado",
       "on": "Activado",
       "otherTitle": "Otros conectores",
       "probe": "Comprobar",
       "recommendedBadge": "Recomendado",
       "recommendedFor": "Recomendado para {jurisdictions}",
-      "recommendedTitle": "Recomendado para tus jurisdicciones",
       "reconnect": "Reconectar",
       "saveToken": "Guardar token",
       "tokenHelp": "Cómo obtener un token",
@@ -1123,7 +1116,8 @@
       "tokenPlaceholder": "Pegar token",
       "urlLabel": "URL del servidor MCP",
       "urlPlaceholder": "https://example.com/mcp",
-      "useInChat": "Usar en el chat"
+      "useInChat": "Usar en el chat",
+      "whatIsAnMcpServer": "¿Qué es un servidor MCP?"
     },
     "sections": {
       "agents": {

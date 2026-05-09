@@ -427,7 +427,8 @@
       "field": "Pole",
       "input": "Vstup",
       "output": "Výstup",
-      "sourceCode": "Zdrojový kód"
+      "sourceCode": "Zdrojový kód",
+      "toggleDetails": "Prepnúť podrobnosti"
     },
     "unsupportedFileType": "Nepodporovaný typ súboru",
     "uploadFailed": "Spracovanie súboru zlyhalo"
@@ -1079,43 +1080,35 @@
     "mcp": {
       "addAndConnect": "Pridať a pripojiť",
       "addServer": "Pridať server",
-      "addServerCardDescription": "Vložte URL servera a Stella ho pripojí v jednom kroku.",
       "addServerCardTitle": "Pridať nový MCP server",
       "auth": {
         "bearer": "Bearer token",
         "none": "Bez prihlásenia",
         "oauth2": "OAuth 2.0"
       },
-      "availableInChat": "Dostupné v chate",
       "bearerTokenDescription": "Tento server používa bearer token. Na dokončenie pripojenia vložte token od poskytovateľa.",
-      "builtInBadge": "Vstavané",
       "connect": "Pripojiť",
-      "connected": "Pripojené",
-      "connectedToast": "MCP konektor je pripojený",
+      "connectedToast": "MCP pripojené",
       "connectedWithLastUsed": "Pripojené · naposledy použité {time}",
-      "customDescription": "Vložte URL MCP servera. Stella zistí spôsob pripojenia a bude automaticky pokračovať.",
-      "customTitle": "Pridať vlastný server",
       "description": "Spravujte externé MCP servery, ktoré môžu pridať nástroje do chatu. Tokeny sa ukladajú pre každého používateľa zvlášť.",
       "detected": "Rozpoznané: {authType}",
       "disable": "Vypnúť",
       "disabled": "Pripojené · vypnuté",
       "disconnect": "Odpojiť",
-      "docsLink": "Dokumentácia",
       "emptyDescription": "Overené právne MCP konektory sa tu zobrazia po zapnutí pre váš pracovný priestor.",
       "emptyTitle": "Zatiaľ žiadne MCP konektory",
       "enable": "Zapnúť",
       "errorDescription": "Konektor sa nepodarilo upraviť.",
-      "errorTitle": "Pripojenie MCP zlyhalo",
+      "errorTitle": "MCP zlyhalo",
+      "mcpExplainer": "MCP servery pridávajú do chatu externé služby, s ktorými môže AI pracovať.",
       "namePlaceholder": "Zobrazovaný názov",
       "needsReauth": "Vyžaduje opätovné pripojenie",
-      "notConnected": "Nepripojené",
       "off": "Vypnuté",
       "on": "Zapnuté",
       "otherTitle": "Ostatné konektory",
       "probe": "Overiť",
       "recommendedBadge": "Odporúčané",
       "recommendedFor": "Odporúčané pre {jurisdictions}",
-      "recommendedTitle": "Odporúčané pre vaše jurisdikcie",
       "reconnect": "Pripojiť znova",
       "saveToken": "Uložiť token",
       "tokenHelp": "Ako získať token",
@@ -1123,7 +1116,8 @@
       "tokenPlaceholder": "Vložte token",
       "urlLabel": "URL MCP servera",
       "urlPlaceholder": "https://example.com/mcp",
-      "useInChat": "Používať v chate"
+      "useInChat": "Používať v chate",
+      "whatIsAnMcpServer": "Čo je MCP server?"
     },
     "sections": {
       "agents": {

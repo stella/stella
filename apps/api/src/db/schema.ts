@@ -1685,6 +1685,11 @@ export const organizationSettings = p.pgTable(
       .$type<PracticeJurisdiction[]>()
       .notNull()
       .default([]),
+    /** Native tool slugs the org has disabled in chat. */
+    disabledNativeTools: jsonb("disabled_native_tools")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
     /** Encrypted OrgAIConfig JSON (AES-256-GCM). */
     aiConfigEncrypted: bytea("ai_config_encrypted"),
     /** AES-GCM initialization vector for aiConfigEncrypted. */
