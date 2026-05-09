@@ -76,7 +76,9 @@ import {
   getPDFPageIdByNumber,
   useOptionalPDFStore,
 } from "@/lib/pdf/pdf-context";
+import { PDFPage } from "@/lib/pdf/pdf-page";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
+import { PDFViewport } from "@/lib/pdf/pdf-viewport";
 import { renderJustificationContent } from "@/lib/render-justification-content";
 import { toSafeId } from "@/lib/safe-id";
 import { sanitizeHref } from "@/lib/sanitize-href";
@@ -2538,30 +2540,29 @@ const fallbackIconUrl = (rawUrl: string): string | undefined => {
   }
 };
 
-const useExternalPdfObjectUrl = ({
+const useExternalPdfBuffer = ({
   enabled,
   url,
 }: {
   enabled: boolean;
   url?: string | undefined;
 }): {
-  objectUrl: string | undefined;
+  buffer: ArrayBuffer | undefined;
   status: "error" | "idle" | "loading" | "ready";
 } => {
-  const [objectUrl, setObjectUrl] = useState<string | undefined>();
+  const [buffer, setBuffer] = useState<ArrayBuffer | undefined>();
   const [status, setStatus] = useState<"error" | "idle" | "loading" | "ready">(
     "idle",
   );
 
   useEffect(() => {
-    setObjectUrl(undefined);
+    setBuffer(undefined);
     if (!enabled || url === undefined) {
       setStatus("idle");
       return undefined;
     }
 
     setStatus("loading");
-    let nextObjectUrl: string | undefined;
     const controller = new AbortController();
 
     void (async () => {
@@ -2577,42 +2578,49 @@ const useExternalPdfObjectUrl = ({
         return;
       }
 
-      const blob = await response.blob();
+      const next = await response.arrayBuffer();
       if (controller.signal.aborted) {
         return;
       }
 
-      nextObjectUrl = URL.createObjectURL(blob);
-      setObjectUrl(nextObjectUrl);
+      setBuffer(next);
       setStatus("ready");
     })().catch(() => {
       if (!controller.signal.aborted) {
-        setObjectUrl(undefined);
+        setBuffer(undefined);
         setStatus("error");
       }
     });
 
     return () => {
       controller.abort();
-      if (nextObjectUrl !== undefined) {
-        URL.revokeObjectURL(nextObjectUrl);
-      }
     };
   }, [enabled, url]);
 
-  return { objectUrl, status };
+  return { buffer, status };
+};
+
+const externalPdfFallback: PDFPageFallback = {
+  suspense: (
+    <div className="space-y-3 p-4">
+      <Skeleton className="h-4 w-2/3" />
+      <Skeleton className="h-4 w-full" />
+      <Skeleton className="h-4 w-5/6" />
+      <Skeleton className="h-4 w-4/5" />
+    </div>
+  ),
 };
 
 const ExternalPdfPreview = ({
-  objectUrl,
+  buffer,
+  fileId,
   onOpenOriginal,
   status,
-  title,
 }: {
-  objectUrl?: string | undefined;
+  buffer: ArrayBuffer | undefined;
+  fileId: string;
   onOpenOriginal: () => void;
   status: "error" | "idle" | "loading" | "ready";
-  title: string;
 }) => {
   if (status === "error") {
     return (
@@ -2623,7 +2631,7 @@ const ExternalPdfPreview = ({
     );
   }
 
-  if (objectUrl === undefined || status === "loading" || status === "idle") {
+  if (buffer === undefined || status === "loading" || status === "idle") {
     return (
       <div className="space-y-3 p-4">
         <Skeleton className="h-4 w-2/3" />
@@ -2635,7 +2643,21 @@ const ExternalPdfPreview = ({
   }
 
   return (
-    <iframe className="min-h-0 flex-1 border-0" src={objectUrl} title={title} />
+    <MeasuredPdfProvider
+      active
+      fallback={externalPdfFallback}
+      fieldId={fileId}
+      initialScaleOffset={0}
+      key={fileId}
+    >
+      <PDFViewport
+        buffer={buffer}
+        className="document-preview-surface h-full"
+        contentClassName="relative space-y-2 px-2 pt-2"
+        fileId={fileId}
+        renderPage={(props) => <PDFPage {...props} />}
+      />
+    </MeasuredPdfProvider>
   );
 };
 
@@ -2726,7 +2748,7 @@ const ExternalReferencePanel = ({
       : `${env.VITE_API_URL}/v1/external-preview/file?url=${encodeURIComponent(safeHref)}`;
   const shouldLoadExternalPdf =
     fetchedPreview?.format === "pdf" && externalFilePreviewUrl !== undefined;
-  const externalPdfPreview = useExternalPdfObjectUrl({
+  const externalPdfPreview = useExternalPdfBuffer({
     enabled: shouldLoadExternalPdf,
     url: externalFilePreviewUrl,
   });
@@ -3010,12 +3032,12 @@ const ExternalReferencePanel = ({
               <Skeleton className="h-4 w-5/6" />
               <Skeleton className="h-4 w-4/5" />
             </div>
-          ) : shouldLoadExternalPdf ? (
+          ) : shouldLoadExternalPdf && externalFilePreviewUrl !== undefined ? (
             <ExternalPdfPreview
-              objectUrl={externalPdfPreview.objectUrl}
+              buffer={externalPdfPreview.buffer}
+              fileId={`external:${externalFilePreviewUrl}`}
               onOpenOriginal={requestSafeExternalOpen}
               status={externalPdfPreview.status}
-              title={tab.label}
             />
           ) : previewText || tab.snippet ? (
             <ScrollArea className="min-h-0 flex-1">
