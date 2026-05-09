@@ -392,6 +392,10 @@ jobs:
           AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
           AZURE_CODE_SIGNING_ACCOUNT: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
           AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
+          # SPA origins the shipped distribution build trusts at runtime.
+          # Read at compile time by config.rs via option_env!(); builds
+          # without this variable default to loopback-only.
+          STELLA_DESKTOP_DEFAULT_ORIGINS: "https://my.stll.app,https://app.stll.app"
         # `--verbose --verbose` surfaces the per-line stdout/stderr
         # Tauri captures from signCommand but otherwise hides behind
         # log::debug. Without it, a trusted-signing-cli failure
@@ -472,6 +476,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY }}
+          # SPA origins the shipped distribution build trusts at runtime.
+          # Read at compile time by config.rs via option_env!(); builds
+          # without this variable default to loopback-only.
+          STELLA_DESKTOP_DEFAULT_ORIGINS: "https://my.stll.app,https://app.stll.app"
         # `--verbose --verbose` surfaces signing/notarization log
         # lines (Tauri otherwise hides them behind log::debug). Same
         # rationale as the Windows build step above.

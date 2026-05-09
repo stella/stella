@@ -209,6 +209,28 @@ fn sanitize_file_name(name: &str) -> String {
   }
 }
 
+/// Reduces a string to a single safe path segment so callers can't widen the
+/// scope of a `Path::join` by accident. Operates on the raw string (no
+/// `Path::new`) so the result is identical on Linux, macOS and Windows even
+/// when the input contains either separator.
+fn sanitize_path_segment(value: &str) -> String {
+  let replaced = value
+    .replace(
+      [
+        '/', '"', '\\', '<', '>', '\r', '\n', '\0', '|', '*', '?', ':',
+      ],
+      "_",
+    )
+    .replace("..", "__");
+
+  let trimmed = replaced.trim_matches(|c: char| c == '.' || c == ' ');
+  if trimmed.is_empty() {
+    "session".to_string()
+  } else {
+    trimmed.to_string()
+  }
+}
+
 fn hash_bytes(data: &[u8]) -> String {
   hex::encode(Sha256::digest(data))
 }
@@ -1676,7 +1698,8 @@ impl SessionManager {
     file_name: &str,
     buffer: &[u8],
   ) -> Result<String, String> {
-    let session_folder = self.edit_root.join(folder_name);
+    let safe_folder = sanitize_path_segment(folder_name);
+    let session_folder = self.edit_root.join(&safe_folder);
     tokio::fs::create_dir_all(&session_folder)
       .await
       .map_err(|e| format!("Failed to create editing folder: {e}"))?;
@@ -2142,5 +2165,43 @@ mod tests {
       "document.docx",
       "document.docx"
     ));
+  }
+
+  #[test]
+  fn sanitize_path_segment_replaces_separators_consistently() {
+    // Pure-string semantics — identical on Linux, macOS and Windows.
+    assert_eq!(sanitize_path_segment("a/b"), "a_b");
+    assert_eq!(sanitize_path_segment("a\\b"), "a_b");
+    assert_eq!(sanitize_path_segment("a..b"), "a__b");
+    assert_eq!(sanitize_path_segment("session-1234"), "session-1234");
+  }
+
+  #[test]
+  fn sanitize_path_segment_neutralises_traversal_and_absolute_paths() {
+    let traversal = sanitize_path_segment("../foo");
+    assert!(!traversal.contains(".."));
+    assert!(!traversal.contains('/'));
+
+    let absolute = sanitize_path_segment("/etc/passwd");
+    assert!(!absolute.starts_with('/'));
+    assert!(!absolute.contains('/'));
+
+    let dotdot = sanitize_path_segment("..");
+    assert!(!dotdot.contains('.'));
+  }
+
+  #[test]
+  fn sanitize_path_segment_strips_trailing_dots_and_spaces() {
+    // Windows treats trailing dots and spaces as if absent.
+    assert_eq!(sanitize_path_segment("foo."), "foo");
+    assert_eq!(sanitize_path_segment("foo "), "foo");
+    assert_eq!(sanitize_path_segment("foo. . "), "foo");
+  }
+
+  #[test]
+  fn sanitize_path_segment_falls_back_when_input_strips_to_empty() {
+    assert_eq!(sanitize_path_segment(""), "session");
+    assert_eq!(sanitize_path_segment("."), "session");
+    assert_eq!(sanitize_path_segment("   "), "session");
   }
 }

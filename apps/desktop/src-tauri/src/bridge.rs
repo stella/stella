@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::session_manager::SessionManager;
-use crate::types::OpenDocxRequest;
+use crate::types::{is_safe_session_id, OpenDocxRequest};
 
 #[derive(Clone)]
 pub struct BridgeState {
@@ -129,6 +129,16 @@ async fn open_docx(
     }
   };
 
+  if !is_safe_session_id(&request.remote_session.session_id) {
+    return json_response(
+      StatusCode::BAD_REQUEST,
+      serde_json::json!({ "message": "Invalid open-docx payload" }),
+      origin_ref,
+      true,
+    )
+    .into_response();
+  }
+
   // Clone the HTTP client while briefly holding the lock, then download
   // outside the lock to avoid blocking health checks during network I/O.
   let http_client = {
@@ -205,18 +215,8 @@ async fn not_found(
   .into_response()
 }
 
-pub async fn start_bridge(
-  bridge_port: u16,
-  allowed_origins: HashSet<String>,
-  manager: Arc<Mutex<SessionManager>>,
-) {
-  let state = BridgeState {
-    manager,
-    allowed_origins,
-    bridge_port,
-  };
-
-  let app = Router::new()
+fn build_router(state: BridgeState) -> Router {
+  Router::new()
     .route("/health", get(health))
     .route("/v1/open-docx", post(open_docx))
     .fallback(not_found)
@@ -238,7 +238,21 @@ pub async fn start_bridge(
         Ok(next.run(req).await)
       },
     ))
-    .with_state(state);
+    .with_state(state)
+}
+
+pub async fn start_bridge(
+  bridge_port: u16,
+  allowed_origins: HashSet<String>,
+  manager: Arc<Mutex<SessionManager>>,
+) {
+  let state = BridgeState {
+    manager,
+    allowed_origins,
+    bridge_port,
+  };
+
+  let app = build_router(state);
 
   let addr = std::net::SocketAddr::from(([127, 0, 0, 1], bridge_port));
   tracing::info!(port = bridge_port, "HTTP bridge starting");
@@ -253,5 +267,83 @@ pub async fn start_bridge(
 
   if let Err(e) = axum::serve(listener, app).await {
     tracing::error!(error = %e, "bridge server error");
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use axum::body::{to_bytes, Body};
+  use axum::http::Request;
+  use tower::ServiceExt;
+
+  fn test_state() -> BridgeState {
+    let mut allowed = HashSet::new();
+    allowed.insert("http://localhost:3000".to_string());
+    BridgeState {
+      manager: Arc::new(Mutex::new(SessionManager::new())),
+      allowed_origins: allowed,
+      bridge_port: 0,
+    }
+  }
+
+  fn open_docx_body(session_id: &str) -> serde_json::Value {
+    serde_json::json!({
+      "apiBaseUrl": "https://api.example.com",
+      "entityId": "11111111-1111-1111-1111-111111111111",
+      "linkedAccount": null,
+      "propertyId": "22222222-2222-2222-2222-222222222222",
+      "remoteSession": {
+        "baseVersionNumber": 1,
+        "downloadUrl": "https://example.com/doc.docx",
+        "fileName": "doc.docx",
+        "lastCheckpointAt": null,
+        "resumedFromCheckpoint": false,
+        "sessionId": session_id,
+        "sessionToken": "token",
+        "tookOverExistingSession": false,
+      },
+      "workspaceId": "33333333-3333-3333-3333-333333333333",
+    })
+  }
+
+  async fn post_open_docx(state: BridgeState, body: serde_json::Value) -> StatusCode {
+    let app = build_router(state);
+    let request = Request::builder()
+      .method("POST")
+      .uri("/v1/open-docx")
+      .header("origin", "http://localhost:3000")
+      .header("content-type", "application/json")
+      .body(Body::from(serde_json::to_vec(&body).unwrap()))
+      .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    // Drain the body so tracing/log lines for the response complete.
+    let _ = to_bytes(response.into_body(), 65_536).await.unwrap();
+    status
+  }
+
+  #[tokio::test]
+  async fn open_docx_rejects_invalid_session_id() {
+    let status = post_open_docx(test_state(), open_docx_body("../etc/passwd")).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+  }
+
+  #[tokio::test]
+  async fn open_docx_rejects_disallowed_origin() {
+    let app = build_router(test_state());
+    let request = Request::builder()
+      .method("POST")
+      .uri("/v1/open-docx")
+      .header("origin", "https://evil.example")
+      .header("content-type", "application/json")
+      .body(Body::from(
+        serde_json::to_vec(&open_docx_body("e8400e29-1d4a-4716-8a3a-2c83de7ab2e6"))
+          .unwrap(),
+      ))
+      .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
   }
 }

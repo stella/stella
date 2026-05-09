@@ -148,6 +148,31 @@ pub struct OpenDocxRequest {
   pub workspace_id: String,
 }
 
+/// Server-issued session identifiers are UUIDs. Locking the predicate to UUID
+/// shape — 8-4-4-4-12 ASCII hex, total 36 characters — keeps the rest of the
+/// desktop pipeline free of platform-specific escaping concerns (Windows
+/// reserved device names, trailing dot/space normalization, mixed-case
+/// collisions on case-insensitive filesystems).
+pub const SESSION_ID_LEN: usize = 36;
+const UUID_HYPHEN_POSITIONS: &[usize] = &[8, 13, 18, 23];
+
+pub fn is_safe_session_id(value: &str) -> bool {
+  if value.len() != SESSION_ID_LEN {
+    return false;
+  }
+  for (idx, ch) in value.char_indices() {
+    let must_be_hyphen = UUID_HYPHEN_POSITIONS.contains(&idx);
+    if must_be_hyphen {
+      if ch != '-' {
+        return false;
+      }
+    } else if !ch.is_ascii_hexdigit() {
+      return false;
+    }
+  }
+  true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenDocxResponse {
@@ -325,6 +350,40 @@ mod tests {
     assert!(deserialized.already_open);
     assert_eq!(deserialized.session_id, "sess-99");
     assert_eq!(deserialized.file_path, "/tmp/motion.docx");
+  }
+
+  // -- session id validation --
+
+  #[test]
+  fn is_safe_session_id_accepts_lowercase_uuid() {
+    assert!(is_safe_session_id("e8400e29-1d4a-4716-8a3a-2c83de7ab2e6"));
+    assert!(is_safe_session_id("00000000-0000-0000-0000-000000000000"));
+  }
+
+  #[test]
+  fn is_safe_session_id_accepts_uppercase_hex() {
+    assert!(is_safe_session_id("E8400E29-1D4A-4716-8A3A-2C83DE7AB2E6"));
+  }
+
+  #[test]
+  fn is_safe_session_id_rejects_path_traversal_and_separators() {
+    assert!(!is_safe_session_id(
+      "../e8400e29-1d4a-4716-8a3a-2c83de7ab2e6"
+    ));
+    assert!(!is_safe_session_id("e8400e29/1d4a/4716/8a3a/2c83de7ab2e6"));
+    assert!(!is_safe_session_id("e8400e29\\1d4a-4716-8a3a-2c83de7ab2e6"));
+    assert!(!is_safe_session_id(".."));
+    assert!(!is_safe_session_id("a:b"));
+  }
+
+  #[test]
+  fn is_safe_session_id_rejects_wrong_length_or_shape() {
+    assert!(!is_safe_session_id(""));
+    assert!(!is_safe_session_id("e8400e29-1d4a-4716-8a3a-2c83de7ab2e"));
+    assert!(!is_safe_session_id("e8400e29-1d4a-4716-8a3a-2c83de7ab2e60"));
+    assert!(!is_safe_session_id("e8400e2901d4a47168a3a2c83de7ab2e60000"));
+    assert!(!is_safe_session_id("g8400e29-1d4a-4716-8a3a-2c83de7ab2e6"));
+    assert!(!is_safe_session_id("e8400e29 1d4a 4716 8a3a 2c83de7ab2e6"));
   }
 
   // -- camelCase field naming --
