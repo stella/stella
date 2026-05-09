@@ -790,7 +790,14 @@ function paragraphToRuns(
       );
       runs.push(run);
     } else if (child.type.name === "field") {
-      // Field node — convert to FieldRun for render-time substitution
+      // Field node — convert to FieldRun for render-time substitution.
+      //
+      // Marks on the field node (bold/italic/underline applied to the field
+      // result inside `<w:fldChar separate>...</w:fldChar end>`) must
+      // propagate to the run formatting, otherwise complex REF fields whose
+      // visible text was authored as underlined (e.g. cross-references like
+      // "Exhibit A" / "Section 1.3" in NVCA-style templates) render with no
+      // underline. Reuse the same extractor text runs use.
       const ft = child.attrs["fieldType"] as string;
       const mappedType: FieldRun["fieldType"] =
         ft === "PAGE"
@@ -802,12 +809,14 @@ function paragraphToRuns(
               : ft === "TIME"
                 ? "TIME"
                 : "OTHER";
+      const fieldFormatting = extractRunFormatting(child.marks, theme);
       const run: FieldRun = {
         kind: "field",
         fieldType: mappedType,
         fallback: (child.attrs["displayText"] as string) || "",
         pmStart: childPos,
         pmEnd: childPos + child.nodeSize,
+        ...fieldFormatting,
       };
       runs.push(run);
     } else if (child.type.name === "math") {
