@@ -1,0 +1,148 @@
+name: Deploy main to staging
+
+# Continuous deploy of every push to main into staging. The tagged
+# release workflow remains the production path.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push to main supersedes an in-flight staging deploy.
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/stella-api
+
+jobs:
+  build-and-deploy:
+    name: Build + deploy staging
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 75
+
+    steps:
+      - name: Resolve synthetic ref
+        id: ref
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          short="${SHA:0:7}"
+          echo "release_ref=main-${short}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${short}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Login to GHCR
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.ref.outputs.release_ref }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main-latest
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-staging
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-staging,mode=max
+          build-args: |
+            STELLA_VERSION=${{ steps.ref.outputs.release_ref }}
+            STELLA_COMMIT_SHA=${{ github.sha }}
+
+      - name: Attest image provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Mint App token for the infra repo
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: stella-infra
+
+      - name: Dispatch and watch staging promote
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          INFRA_REPO: ${{ github.repository_owner }}/stella-infra
+          RELEASE_REF: ${{ steps.ref.outputs.release_ref }}
+          GIT_SHA: ${{ github.sha }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          expected_title="Promote ${RELEASE_REF} → staging"
+          dispatch_output="$(
+            gh workflow run promote-release.yml \
+              --repo "$INFRA_REPO" \
+              --field release_ref="$RELEASE_REF" \
+              --field target_environment=staging \
+              --field image_digest="$IMAGE_DIGEST" \
+              --field git_sha="$GIT_SHA" \
+              --field run_migrations=true \
+              --field frontend=true 2>&1
+          )"
+          printf '%s\n' "$dispatch_output"
+
+          run_id="$(
+            printf '%s\n' "$dispatch_output" \
+              | sed -nE 's#.*https://github.com/[^/]+/[^/]+/actions/runs/([0-9]+).*#\1#p' \
+              | head -n 1
+          )"
+
+          for _ in {1..30}; do
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+
+            run_id="$(
+              gh run list \
+                --repo "$INFRA_REPO" \
+                --workflow promote-release.yml \
+                --event workflow_dispatch \
+                --json databaseId,createdAt,displayTitle \
+                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle == \"$expected_title\") | .databaseId" \
+                --limit 10 \
+                | head -n 1
+            )"
+
+            if [[ -z "$run_id" ]]; then
+              sleep 2
+            fi
+          done
+
+          if [[ -z "$run_id" ]]; then
+            echo "Could not find the dispatched staging promotion workflow run." >&2
+            exit 1
+          fi
+
+          gh run watch "$run_id" \
+            --repo "$INFRA_REPO" \
+            --compact \
+            --exit-status
