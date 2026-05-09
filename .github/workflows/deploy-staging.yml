@@ -6,7 +6,7 @@ name: Deploy main to staging
 # loop without cutting tags.
 #
 # What's intentionally cut compared to release.yml:
-#  - multi-arch build (Fargate is amd64-only; saves ~50% time)
+#  - multi-arch build (ECS is ARM64; staging only needs that image)
 #  - smoke test (let staging surface real boot failures)
 #  - desktop installers (irrelevant to API)
 #  - GitHub Release object (no need; we deploy by digest)
@@ -17,12 +17,6 @@ name: Deploy main to staging
 on:
   push:
     branches: [main]
-    paths-ignore:
-      # Skip pushes that can't change runtime behaviour.
-      - "**.md"
-      - "apps/desktop/**"
-      - "docs/**"
-      - "LICENSE"
   workflow_dispatch:
 
 # A newer push to main supersedes an in-flight build/deploy:
@@ -45,7 +39,7 @@ env:
 
 jobs:
   build-and-deploy:
-    name: Build amd64 + dispatch staging promote
+    name: Build arm64 + deploy staging
     # No staging-paused gate here: vars.STAGING_ENABLED lives in
     # stella-infra and isn't visible to this workflow. The
     # infra-side promote-release.yml already fail-fasts when
@@ -53,8 +47,8 @@ jobs:
     # workflow against a paused env is a wasted ~6 min build
     # that ends in a one-line "::error::Staging is paused" from
     # the dispatched run.
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 75
 
     steps:
       - name: Resolve synthetic ref
@@ -85,16 +79,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push (amd64)
+      - name: Build and push (arm64)
         id: build
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
           file: apps/api/Dockerfile
-          # Single-arch — Fargate runs amd64. Cuts build time
-          # roughly in half versus release.yml's parallel
-          # arm64+amd64 multi-arch.
-          platforms: linux/amd64
+          # Single-arch: the ECS task definitions run ARM64, and
+          # deploy-import-image.sh imports linux/arm64 into ECR.
+          platforms: linux/arm64
           push: true
           # Push two tags: the SHA-pinned one (immutable, used by
           # the promote dispatch) and a moving `main-latest`
@@ -106,10 +99,11 @@ jobs:
           # Separate cache namespace from release.yml's
           # buildcache-{arm64,amd64} keys so this workflow's
           # cache churn does not invalidate production builds.
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-staging
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-staging,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-staging-arm64
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-staging-arm64,mode=max
           build-args: |
             STELLA_VERSION=${{ steps.ref.outputs.release_ref }}
+            STELLA_COMMIT_SHA=${{ github.sha }}
 
       - name: Attest image provenance
         # Same defence as release.yml: GH provenance attestation
@@ -134,14 +128,7 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: stella-infra
 
-      - name: Dispatch staging promote (fire-and-forget)
-        # Fire-and-forget: we don't wait for the staging deploy
-        # to settle. release.yml waits for prod because a failed
-        # prod deploy is a tag-level event the operator needs to
-        # see synchronously; staging is meant to be best-effort
-        # and rapidly iterated. The infra workflow's own logs +
-        # SNS alarms surface failures; this workflow's job is
-        # done once the dispatch is accepted.
+      - name: Dispatch and watch staging promote
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           INFRA_REPO: ${{ github.repository_owner }}/stella-infra
@@ -149,12 +136,54 @@ jobs:
           GIT_SHA: ${{ github.sha }}
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          gh workflow run promote-release.yml \
+          dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # Must match stella-infra/.github/workflows/promote-release.yml run-name.
+          expected_title="Promote ${RELEASE_REF} → staging"
+          dispatch_output="$(
+            gh workflow run promote-release.yml \
+              --repo "$INFRA_REPO" \
+              --field release_ref="$RELEASE_REF" \
+              --field target_environment=staging \
+              --field image_digest="$IMAGE_DIGEST" \
+              --field git_sha="$GIT_SHA" \
+              --field run_migrations=true \
+              --field frontend=true 2>&1
+          )"
+          printf '%s\n' "$dispatch_output"
+
+          run_id="$(
+            printf '%s\n' "$dispatch_output" \
+              | sed -nE 's#.*https://github.com/[^/]+/[^/]+/actions/runs/([0-9]+).*#\1#p' \
+              | head -n 1
+          )"
+
+          for _ in {1..30}; do
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+
+            run_id="$(
+              gh run list \
+                --repo "$INFRA_REPO" \
+                --workflow promote-release.yml \
+                --event workflow_dispatch \
+                --json databaseId,createdAt,displayTitle \
+                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle == \"$expected_title\") | .databaseId" \
+                --limit 10 \
+                | head -n 1
+            )"
+
+            if [[ -z "$run_id" ]]; then
+              sleep 2
+            fi
+          done
+
+          if [[ -z "$run_id" ]]; then
+            echo "Could not find the dispatched staging promotion workflow run." >&2
+            exit 1
+          fi
+
+          gh run watch "$run_id" \
             --repo "$INFRA_REPO" \
-            --field release_ref="$RELEASE_REF" \
-            --field target_environment=staging \
-            --field image_digest="$IMAGE_DIGEST" \
-            --field git_sha="$GIT_SHA" \
-            --field run_migrations=true \
-            --field frontend=true
-          echo "Dispatched promote-release.yml for $RELEASE_REF (sha=$GIT_SHA, digest=$IMAGE_DIGEST)"
+            --compact \
+            --exit-status
