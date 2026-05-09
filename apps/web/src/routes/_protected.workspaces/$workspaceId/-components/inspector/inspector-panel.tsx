@@ -146,6 +146,14 @@ const MIN_OFFSET = -0.8;
 const MAX_OFFSET = 2;
 const PINCH_ZOOM_SENSITIVITY = 0.005;
 
+// Only treat 5xx as a "something is broken upstream" toast trigger.
+// 4xx (e.g. 422 unsupported content type) is an expected fallback.
+const SERVER_PREVIEW_ERROR_THRESHOLD = 500;
+
+// Module-scoped so dedupe survives the inspector tab unmount/remount
+// cycle that happens when users flip between sources.
+const toastedPreviewFailures = new Set<string>();
+
 const hasInAppHistoryEntry = (): boolean => {
   const state: unknown = window.history.state;
   if (typeof state !== "object" || state === null) {
@@ -2722,16 +2730,31 @@ const ExternalReferencePanel = ({
   // as a toast — without this the panel just falls through to the
   // generic "preview unavailable" view and the user has no signal
   // that anything went wrong.
+  //
+  // Two filters keep this from being noisy:
+  // 1. Only 5xx — 4xx errors (422 unsupported content type / too
+  //    little readable text) are expected outcomes the fallback
+  //    already handles.
+  // 2. Dedupe by (url, status) across the inspector's lifetime so
+  //    flipping between tabs doesn't re-toast a cached error.
   useEffect(() => {
     if (!previewError || !APIError.is(previewError)) {
       return;
     }
+    if (previewError.status < SERVER_PREVIEW_ERROR_THRESHOLD) {
+      return;
+    }
+    const key = `${tab.url}|${previewError.status}`;
+    if (toastedPreviewFailures.has(key)) {
+      return;
+    }
+    toastedPreviewFailures.add(key);
     stellaToast.add({
       title: t("common.somethingWentWrong"),
       description: previewError.message,
       type: "error",
     });
-  }, [previewError, t]);
+  }, [previewError, tab.url, t]);
   const previewTitle = fetchedPreview?.title ?? storedSource?.title;
   const previewText = tab.text ?? storedSource?.text ?? fetchedPreview?.text;
   const previewSnippet = tab.snippet ?? storedSource?.snippet;
