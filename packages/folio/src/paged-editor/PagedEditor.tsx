@@ -90,6 +90,7 @@ import type {
   ParagraphAttrs,
   ParagraphBorders,
   ParagraphSpacing,
+  SectionBreakBlock,
   TextBoxBlock,
   FootnoteContent,
 } from "../core/layout-engine/types";
@@ -121,7 +122,7 @@ import type {
   SectionProperties,
   HeaderFooter,
 } from "../core/types/document";
-import { computeEffectiveHeaderFooterMargins } from "./headerFooterMargins";
+import { computeHeaderFooterMarginExtender } from "./headerFooterMargins";
 // Internal components
 import { HiddenProseMirror } from "./HiddenProseMirror";
 import type { HiddenProseMirrorRef } from "./HiddenProseMirror";
@@ -2124,13 +2125,27 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               )
             : undefined;
 
-          const effectiveMargins = computeEffectiveHeaderFooterMargins({
-            margins,
+          const extendForHfOverflow = computeHeaderFooterMarginExtender({
             headerContent: headerContentForRender,
             footerContent: footerContentForRender,
             firstPageHeaderContent: firstPageHeaderForRender,
             firstPageFooterContent: firstPageFooterForRender,
           });
+          const effectiveMargins = extendForHfOverflow(margins);
+          // Section-break blocks carry their own `sb.margins` from
+          // `<w:sectPr>` and the layout engine prefers those over the
+          // body-level fallback. Apply the extension to each one too,
+          // otherwise a footer that overflows on one section silently
+          // re-overlaps body text on the next. (Eigenpal #400.)
+          for (const block of newBlocks) {
+            if (block.kind !== "sectionBreak") {
+              continue;
+            }
+            const sb = block as SectionBreakBlock;
+            if (sb.margins) {
+              sb.margins = extendForHfOverflow(sb.margins);
+            }
+          }
 
           // Step 3: Layout blocks onto pages (two-pass if footnotes exist)
           let newLayout: Layout;
