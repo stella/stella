@@ -21,6 +21,7 @@ import {
   PlusIcon,
   RefreshCcwIcon,
   Trash2Icon,
+  UnplugIcon,
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -470,7 +471,7 @@ function ConnectorCard({
                 : t("knowledge.mcp.connect")}
             </Button>
           )}
-          {connection && !canDeleteConnector && (
+          {connection && (
             <Button
               aria-busy={busy}
               aria-label={t("knowledge.mcp.disconnect")}
@@ -478,7 +479,7 @@ function ConnectorCard({
               size="sm"
               variant="ghost"
             >
-              <Trash2Icon className="size-4" />
+              <UnplugIcon className="size-4" />
             </Button>
           )}
           {canDeleteConnector && (
