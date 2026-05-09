@@ -785,9 +785,26 @@ function renderHeaderFooterContent(
         { document: doc },
       );
 
-      // Position the fragment
+      // Position the fragment in flow and visualize the paragraph's spacing
+      // as padding so HF paragraphs separate the way Word renders them.
+      // Body content gets paragraph spacing via the paginator's absolute
+      // fragment.y positioning; HF rendering uses relative-flow stacking,
+      // so without padding here the paragraph's `spaceBefore`/`spaceAfter`
+      // would advance `cursorY` for the layout-engine but never appear in
+      // the DOM (visible regression on first-page header docs whose
+      // last-paragraph spaceAfter pushes the body content's first line
+      // down by one line in Word).
       fragEl.style.position = "relative";
       fragEl.style.marginBottom = "0";
+      fragEl.style.boxSizing = "border-box";
+      const spaceBefore = paragraphBlock.attrs?.spacing?.before ?? 0;
+      const spaceAfter = paragraphBlock.attrs?.spacing?.after ?? 0;
+      if (spaceBefore > 0) {
+        fragEl.style.paddingTop = `${spaceBefore}px`;
+      }
+      if (spaceAfter > 0) {
+        fragEl.style.paddingBottom = `${spaceAfter}px`;
+      }
 
       containerEl.append(fragEl);
       cursorY += paragraphMeasure.totalHeight;

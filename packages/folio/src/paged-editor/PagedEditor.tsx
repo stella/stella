@@ -113,6 +113,8 @@ import type {
 // Table commands (for quick-action insert buttons)
 import { addRowBelow, addColumnRight } from "../core/prosemirror";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
+import { createStyleResolver } from "../core/prosemirror/styles/styleResolver";
+import type { StyleResolver } from "../core/prosemirror/styles/styleResolver";
 import type { Footnote } from "../core/types/content";
 // Types
 import type {
@@ -1534,6 +1536,7 @@ function convertHeaderFooterToContent(
   headerFooter: HeaderFooter | null | undefined,
   contentWidth: number,
   metrics: HeaderFooterMetrics,
+  styleResolver?: StyleResolver | null,
 ): HeaderFooterContent | undefined {
   if (
     !headerFooter ||
@@ -1554,6 +1557,18 @@ function convertHeaderFooterToContent(
         | Record<string, unknown>
         | undefined;
       const attrs: ParagraphAttrs = {};
+
+      // Resolve the paragraph style cascade so HF paragraphs inherit
+      // spacing/alignment/etc from `Normal` (or whatever pStyle they
+      // reference). HF parsing skips this cascade — without it,
+      // spaceBefore/spaceAfter inherited from a paragraph style is silently
+      // lost in headers/footers. Reuses the same StyleResolver the body uses.
+      const styleId =
+        typeof formatting?.["styleId"] === "string"
+          ? (formatting["styleId"] as string)
+          : undefined;
+      const resolvedStyle = styleResolver?.resolveParagraphStyle(styleId);
+      const styledPpr = resolvedStyle?.paragraphFormatting;
 
       if (formatting) {
         if (formatting["alignment"]) {
@@ -1593,26 +1608,57 @@ function convertHeaderFooterToContent(
             attrs.borders = converted;
           }
         }
-        // Convert spacing for measurement.
-        // NOTE: Only convert lineSpacing (affects line height). Skip spaceBefore/
-        // spaceAfter — these are typically style-resolved artifacts (e.g., from
-        // Normal style) inlined during the PM->document round-trip, not intentional
-        // header/footer formatting. The layout painter renders header/footer
-        // paragraphs without inter-paragraph margins, so measurement must match.
-        if (formatting["lineSpacing"] !== undefined) {
+        // Convert spacing for measurement and rendering. lineSpacing affects
+        // line height; spaceBefore/spaceAfter are visualized as fragment
+        // padding by `renderHeaderFooterContent`. Word renders style-inherited
+        // paragraph spacing in headers/footers the same way as in body
+        // (NVCA-style first-page header: each paragraph has Normal's
+        // spaceAfter=240twips inherited, which produces the visible blank row
+        // above the body's first paragraph). Without these, last-paragraph
+        // spaceAfter is silently dropped and body content butts flush against
+        // the last header line.
+        // Inline pPr first, then fall back to the resolved style cascade.
+        const inlineLineSpacing = formatting["lineSpacing"];
+        const inlineSpaceBefore = formatting["spaceBefore"];
+        const inlineSpaceAfter = formatting["spaceAfter"];
+        const inlineLineRule = formatting["lineSpacingRule"] as
+          | string
+          | undefined;
+        const lineSpacing =
+          typeof inlineLineSpacing === "number"
+            ? inlineLineSpacing
+            : styledPpr?.lineSpacing;
+        const lineRule = inlineLineRule ?? styledPpr?.lineSpacingRule;
+        const spaceBeforeTwips =
+          typeof inlineSpaceBefore === "number"
+            ? inlineSpaceBefore
+            : styledPpr?.spaceBefore;
+        const spaceAfterTwips =
+          typeof inlineSpaceAfter === "number"
+            ? inlineSpaceAfter
+            : styledPpr?.spaceAfter;
+        if (
+          typeof lineSpacing === "number" ||
+          typeof spaceBeforeTwips === "number" ||
+          typeof spaceAfterTwips === "number"
+        ) {
           const spacingAttrs: ParagraphSpacing = {};
-          const rule = formatting["lineSpacingRule"] as string | undefined;
-          if (rule === "exact" || rule === "atLeast") {
-            spacingAttrs.line = twipsToPixels(
-              formatting["lineSpacing"] as number,
-            );
-            spacingAttrs.lineUnit = "px";
-            spacingAttrs.lineRule = rule;
-          } else {
-            // Auto — line spacing is in 240ths of a line
-            spacingAttrs.line = (formatting["lineSpacing"] as number) / 240;
-            spacingAttrs.lineUnit = "multiplier";
-            spacingAttrs.lineRule = "auto";
+          if (typeof lineSpacing === "number") {
+            if (lineRule === "exact" || lineRule === "atLeast") {
+              spacingAttrs.line = twipsToPixels(lineSpacing);
+              spacingAttrs.lineUnit = "px";
+              spacingAttrs.lineRule = lineRule;
+            } else {
+              spacingAttrs.line = lineSpacing / 240;
+              spacingAttrs.lineUnit = "multiplier";
+              spacingAttrs.lineRule = "auto";
+            }
+          }
+          if (typeof spaceBeforeTwips === "number") {
+            spacingAttrs.before = twipsToPixels(spaceBeforeTwips);
+          }
+          if (typeof spaceAfterTwips === "number") {
+            spacingAttrs.after = twipsToPixels(spaceAfterTwips);
           }
           attrs.spacing = spacingAttrs;
         }
@@ -2099,15 +2145,20 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             pageSize,
             margins,
           };
+          const headerFooterStyleResolver = styles
+            ? createStyleResolver(styles)
+            : null;
           const headerContentForRender = convertHeaderFooterToContent(
             headerContent,
             contentWidth,
             hfMetricsHeader,
+            headerFooterStyleResolver,
           );
           const footerContentForRender = convertHeaderFooterToContent(
             footerContent,
             contentWidth,
             hfMetricsFooter,
+            headerFooterStyleResolver,
           );
           const hasTitlePg = sectionProperties?.titlePg === true;
           const firstPageHeaderForRender = hasTitlePg
@@ -2115,6 +2166,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 firstPageHeaderContent,
                 contentWidth,
                 hfMetricsHeader,
+                headerFooterStyleResolver,
               )
             : undefined;
           const firstPageFooterForRender = hasTitlePg
@@ -2122,6 +2174,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 firstPageFooterContent,
                 contentWidth,
                 hfMetricsFooter,
+                headerFooterStyleResolver,
               )
             : undefined;
 
