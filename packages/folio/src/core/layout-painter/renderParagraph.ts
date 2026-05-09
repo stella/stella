@@ -1453,9 +1453,31 @@ export function renderParagraphFragment(
       block.attrs?.listMarker &&
       !block.attrs?.listMarkerHidden
     ) {
-      // Override padding for list first lines
-      // Marker position = indentLeft - hanging (where first line content starts)
-      const markerPos = Math.max(0, indentLeft - (indent?.hanging ?? 0));
+      // Override padding for list first lines.
+      //
+      // Two list-indent shapes are common in OOXML:
+      //
+      // 1. Hanging — `<w:ind w:left="X" w:hanging="Y"/>`. Body text
+      //    wraps at X, marker sits at X-Y (further left). The marker
+      //    box fills the Y-px hanging space and the body text picks
+      //    up at indentLeft.
+      //
+      // 2. First-line — `<w:ind w:left="X" w:firstLine="Y"/>`. Body
+      //    text wraps at X, the FIRST line is shifted right by Y.
+      //    Marker sits at X+Y; body text on subsequent lines wraps to
+      //    the page margin (indentLeft). NVCA-style legal templates
+      //    use this shape — the body of "(i) Tranche Closing..."
+      //    wraps to the page margin, only the first line's marker is
+      //    indented.
+      const markerHasHanging =
+        indent?.hanging !== undefined && indent.hanging > 0;
+      const markerHasFirstLine =
+        indent?.firstLine !== undefined && indent.firstLine > 0;
+      const markerPos = markerHasHanging
+        ? Math.max(0, indentLeft - (indent?.hanging ?? 0))
+        : markerHasFirstLine
+          ? indentLeft + (indent?.firstLine ?? 0)
+          : indentLeft;
       lineEl.style.paddingLeft = `${markerPos}px`;
       lineEl.style.textIndent = "0"; // Don't use textIndent for lists
 
@@ -1532,19 +1554,31 @@ function renderListMarker(
     span.style.fontSize = `${fontSizePx}px`;
   }
 
-  // In Word, the marker character is followed by a tab that extends to the
-  // text indent position. We emulate this by left-aligning the marker within
-  // the hanging indent box — the marker sits at the start and the remaining
-  // space acts as the tab gap, just like Word.
   span.textContent = marker;
-
-  // The marker box fills the hanging indent space
-  const hanging = indent?.hanging ?? 24; // Default 24px if not specified
-
-  // min-width so short markers fill the space; long markers can extend
-  span.style.minWidth = `${hanging}px`;
   span.style.textAlign = "left";
   span.style.boxSizing = "border-box";
+
+  // ECMA-376 §17.9.30: `<w:suff>` selects what follows the marker —
+  // `tab` (default), `space`, or `nothing`. We don't currently parse
+  // `<w:suff>` and fall back to the default (tab) behaviour.
+  //
+  // Hanging-indent lists bake the tab gap into the hanging space:
+  // marker fills `[indentLeft - hanging, indentLeft]`, body text
+  // picks up at `indentLeft`. Set `min-width: hanging` so short
+  // markers don't collapse against the body text.
+  //
+  // First-line-indent lists (`firstLine > 0` and no hanging) place
+  // the marker at `indentLeft + firstLine` with body text wrapping
+  // at `indentLeft`; the marker box has no implicit gap, so we add
+  // an explicit padding-right to emulate the marker's tab-after.
+  // Without this, NVCA-style lists rendered "(i)Tranche Closing"
+  // and "4.10Voting Agreement" with the marker flush against the
+  // text.
+  if (indent?.hanging !== undefined && indent.hanging > 0) {
+    span.style.minWidth = `${indent.hanging}px`;
+  } else if (indent?.firstLine !== undefined && indent.firstLine > 0) {
+    span.style.paddingRight = "12px";
+  }
 
   return span;
 }

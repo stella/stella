@@ -386,7 +386,39 @@ export function measureParagraph(
   const bodyContentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
   // First line offset: positive = first-line indent (less space), negative = hanging (more space)
   // Subtracting gives correct width in both cases
-  const baseFirstLineWidth = Math.max(1, bodyContentWidth - firstLineOffset);
+  let baseFirstLineWidth = Math.max(1, bodyContentWidth - firstLineOffset);
+
+  // List marker on first-line-indent paragraphs: the marker is rendered
+  // inline at the start of the first line and takes its own width. Word's
+  // measurement includes the marker in the first line's content; folio
+  // renders the marker as a separately-prepended span that's *not* in the
+  // run list, so we must subtract its width here. Without this, the line
+  // breaker thinks the first line has a full `bodyWidth - firstLine` of
+  // text room, the painter then pushes some text past the right margin,
+  // and a trailing run (e.g. ". The Company...") wraps to the next line.
+  // Hanging-indent lists already account for the marker via the hanging
+  // gap (see baseFirstLineWidth shrinking through firstLineOffset).
+  if (
+    attrs?.listMarker &&
+    !attrs.listMarkerHidden &&
+    !((indent?.hanging ?? 0) > 0)
+  ) {
+    const markerFontSize =
+      attrs.listMarkerFontSize ?? attrs.defaultFontSize ?? DEFAULT_FONT_SIZE;
+    const markerFontFamily =
+      attrs.listMarkerFontFamily ??
+      attrs.defaultFontFamily ??
+      DEFAULT_FONT_FAMILY;
+    const markerStyle: FontStyle = {
+      fontFamily: markerFontFamily,
+      fontSize: markerFontSize,
+    };
+    const markerTextWidth = measureTextWidth(attrs.listMarker, markerStyle);
+    // 12 px tab-after gap, matching the painter's `paddingRight: 12px`
+    // on the marker box for first-line-indent lists.
+    const markerSlotWidth = markerTextWidth + 12;
+    baseFirstLineWidth = Math.max(1, baseFirstLineWidth - markerSlotWidth);
+  }
 
   // Track cumulative height for floating zone calculations
   let cumulativeHeight = 0;
