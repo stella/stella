@@ -832,7 +832,16 @@ function renderHeaderFooterContent(
       // `fragment.y = cursorY + spaceBefore` (see core/layout-engine
       // `addFragment`). Mirror that here so authored `w:spacing w:before`
       // visually pushes the first line down instead of being swallowed.
-      const spaceBefore = paragraphBlock.attrs?.spacing?.before ?? 0;
+      // Only honor *explicit* spaceBefore: `normalizeHeaderFooterMeasureBlocks`
+      // strips inherited (style-only) spacing from the measurement copy
+      // (#380), so totalHeight already excludes it; offsetting by inherited
+      // spaceBefore would shift the line below its reserved space and break
+      // cursorY accumulation for following paragraphs.
+      const explicitBefore =
+        paragraphBlock.attrs?.spacingExplicit?.before === true;
+      const spaceBefore = explicitBefore
+        ? (paragraphBlock.attrs?.spacing?.before ?? 0)
+        : 0;
       fragEl.style.position = "absolute";
       fragEl.style.top = `${cursorY + spaceBefore}px`;
       fragEl.style.left = "0";
