@@ -2272,18 +2272,47 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               footnoteContentMap,
             );
 
-            // Pass 2: Layout with reserved heights
+            // Pass 2: Layout with reserved heights. Then iterate until
+            // the footnote-to-page mapping is stable (or we hit the
+            // convergence cap). Word's algorithm iterates similarly: on a
+            // page where reserving footnote space pushes its triggering
+            // body content to the next page, the next pass un-reserves
+            // that footnote, opening up room for more body — so a fresh
+            // pass may pull subsequent body up. Stops when the per-page
+            // footnote ID set stops changing (or after 4 iterations to
+            // bound worst-case cost on pathological docs).
             if (footnoteReservedHeights.size > 0) {
-              newLayout = layoutDocument(newBlocks, newMeasures, {
-                ...layoutOpts,
-                footnoteReservedHeights,
-              });
+              let reservedHeights = footnoteReservedHeights;
+              let prevMapKey = "";
+              const MAX_PASSES = 4;
+              newLayout = pass1Layout;
+              for (let pass = 0; pass < MAX_PASSES; pass += 1) {
+                newLayout = layoutDocument(newBlocks, newMeasures, {
+                  ...layoutOpts,
+                  footnoteReservedHeights: reservedHeights,
+                });
 
-              // Re-map footnotes to pages (assignments may have shifted)
-              pageFootnoteMap = mapFootnotesToPages(
-                newLayout.pages,
-                footnoteRefs,
-              );
+                pageFootnoteMap = mapFootnotesToPages(
+                  newLayout.pages,
+                  footnoteRefs,
+                );
+
+                // Stable when (page → footnoteIds) hasn't changed since
+                // last pass.
+                const mapKey = [...pageFootnoteMap.entries()]
+                  .map(([p, ids]) => `${p}:${ids.join(",")}`)
+                  .sort()
+                  .join("|");
+                if (mapKey === prevMapKey) {
+                  break;
+                }
+                prevMapKey = mapKey;
+
+                reservedHeights = calculateFootnoteReservedHeights(
+                  pageFootnoteMap,
+                  footnoteContentMap,
+                );
+              }
 
               // Store footnoteIds on each page for rendering
               for (const [pageNum, fnIds] of pageFootnoteMap) {
