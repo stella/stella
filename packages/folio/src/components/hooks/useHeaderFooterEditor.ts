@@ -163,7 +163,14 @@ export const useHeaderFooterEditor = ({
           continue;
         }
         lastHeader = candidate;
-        const hasFirstRef = sp.headerReferences.some((r) => r.type === "first");
+        // Word only honors `first` references when `<w:titlePg/>` is
+        // set on the section (ECMA-376 §17.10.6). A stale `first`
+        // reference on a section without titlePg should be ignored —
+        // gating on `sp.titlePg` keeps this resolution consistent with
+        // the first-page resolution below and with Word's behavior.
+        const hasFirstRef =
+          sp.titlePg === true &&
+          sp.headerReferences.some((r) => r.type === "first");
         if (hasFirstRef && !primaryHeaderFromTitleSection) {
           primaryHeaderFromTitleSection = candidate;
         }
@@ -204,7 +211,11 @@ export const useHeaderFooterEditor = ({
           continue;
         }
         lastFooter = candidate;
-        const hasFirstRef = sp.footerReferences.some((r) => r.type === "first");
+        // Same titlePg gate as headers above — ignore `first` refs in
+        // sections that don't enable title-page mode.
+        const hasFirstRef =
+          sp.titlePg === true &&
+          sp.footerReferences.some((r) => r.type === "first");
         if (hasFirstRef && !primaryFooterFromTitleSection) {
           primaryFooterFromTitleSection = candidate;
         }
