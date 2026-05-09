@@ -544,22 +544,31 @@ function layoutParagraph(
     // by itself but `addFootnoteHeight` afterwards drops contentBottom
     // below cursorY, producing an overlap with the fn area.
     //
-    // Always include `FOOTNOTE_SEPARATOR_HEIGHT` in the fit check.
-    // We can't gate on the *current* page's `isFirstFnOnPage` flag —
-    // `ensureFits` may advance to a fresh page where this would be
-    // the first footnote, and the separator that `addFootnoteHeight`
-    // then reserves would push contentBottom past the just-committed
-    // line (Codex PR #258 review). Over-reserving 13 px on a page
-    // that already has a footnote is harmless; under-reserving on a
-    // freshly-advanced page reintroduces the overlap class this
-    // preflight is meant to prevent.
+    // Two-phase check (Codex PR #258 reviews — both edges):
+    //
+    // 1. Try without the separator overhead. The current page may
+    //    already host a footnote — in that case `addFootnoteHeight`
+    //    will *not* reserve another separator, so adding 13 px here
+    //    would force an unnecessary page advance and split the
+    //    paragraph between pages even though the line + fn still fit.
+    //
+    // 2. After the first `ensureFits`, re-read the page state. If we
+    //    landed on a *fresh* page (`footnoteHeight === 0`), the next
+    //    `addFootnoteHeight` call *will* reserve a separator — so we
+    //    need to verify the line + fn + separator all still fit on
+    //    that page. Otherwise the post-commit `addFootnoteHeight`
+    //    drops contentBottom past the just-committed line.
     if (linesFnHeight > 0) {
-      paginator.ensureFits(
-        effectiveSpaceBefore +
-          linesHeight +
-          linesFnHeight +
-          FOOTNOTE_SEPARATOR_HEIGHT,
-      );
+      paginator.ensureFits(effectiveSpaceBefore + linesHeight + linesFnHeight);
+      const stateAfter = paginator.getCurrentState();
+      if (stateAfter.footnoteHeight === 0) {
+        paginator.ensureFits(
+          effectiveSpaceBefore +
+            linesHeight +
+            linesFnHeight +
+            FOOTNOTE_SEPARATOR_HEIGHT,
+        );
+      }
     }
 
     const result = paginator.addFragment(
