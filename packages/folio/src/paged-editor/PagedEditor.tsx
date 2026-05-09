@@ -550,18 +550,35 @@ function getColumns(
 }
 
 /**
- * Check if an image run is a floating image (should affect text wrapping)
+ * Check if an image run is a *text-wrapping* floating image — it
+ * occupies an exclusion zone the body text should flow around.
+ *
+ * `wrapType: "behind"` and `wrapType: "inFront"` are anchored
+ * (out-of-flow) but Word's wrapNone semantics put them behind /
+ * over the text without shrinking the body. They render as
+ * `displayMode: "float"` in the prose model so the painter knows
+ * they're out of normal flow, but `extractFloatingZones` must skip
+ * them — including them here would make the line breaker wrap text
+ * around a background letterhead or a foreground overlay (Codex
+ * PR #258 review).
  */
 function isFloatingImageRun(run: ImageRun): boolean {
   const wrapType = run.wrapType;
   const displayMode = run.displayMode;
+
+  // wrapNone (behind / inFront): never an exclusion zone, regardless
+  // of displayMode.
+  if (wrapType === "behind" || wrapType === "inFront") {
+    return false;
+  }
 
   // Floating images have specific wrap types that allow text to flow around them
   if (wrapType && ["square", "tight", "through"].includes(wrapType)) {
     return true;
   }
 
-  // Or explicit float display mode
+  // Or explicit float display mode (only when no wrapNone semantics —
+  // already filtered above).
   if (displayMode === "float") {
     return true;
   }
