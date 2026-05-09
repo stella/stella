@@ -77,7 +77,7 @@ const ProviderIcon = ({ name }: { name: ProviderName }) => {
 };
 
 const openProviderInbox = (url: string) => {
-  window.open(url, "_blank", "noopener,noreferrer");
+  window.open(url, "_blank", "noopener,noreferrer,width=1120,height=820");
 };
 
 const getProvidersForEmail = (email: string): readonly Provider[] => {
@@ -103,6 +103,17 @@ export const InboxQuickJump = ({ email }: { email: string }) => {
               <a
                 href={href}
                 onClick={(event) => {
+                  if (
+                    event.defaultPrevented ||
+                    event.button !== 0 ||
+                    event.metaKey ||
+                    event.ctrlKey ||
+                    event.shiftKey ||
+                    event.altKey
+                  ) {
+                    return;
+                  }
+
                   event.preventDefault();
                   if (href) {
                     openProviderInbox(href);
