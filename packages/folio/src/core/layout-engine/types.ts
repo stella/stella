@@ -247,6 +247,15 @@ export type ListNumPr = {
 export type ParagraphAttrs = {
   alignment?: "left" | "center" | "right" | "justify";
   spacing?: ParagraphSpacing;
+  /**
+   * Tracks which `spacing` sides came from inline (`<w:pPr><w:spacing>`)
+   * formatting versus inherited via paragraph style. Word collapses
+   * style-inherited spacing on empty paragraphs (only direct formatting
+   * survives), so the layout engine consults this flag in
+   * `getSpacingBefore`/`getSpacingAfter`. Both sides default to false (style
+   * inheritance assumed) when the field is absent.
+   */
+  spacingExplicit?: { before?: boolean; after?: boolean };
   indent?: ParagraphIndent;
   keepNext?: boolean;
   keepLines?: boolean;

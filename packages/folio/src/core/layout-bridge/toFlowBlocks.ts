@@ -924,6 +924,25 @@ function convertParagraphAttrs(
     if (typeof spaceAfter === "number") {
       attrs.spacing.after = twipsToPixels(spaceAfter);
     }
+    // Propagate the `spacingExplicit` flag the PM schema carries — empty
+    // paragraphs inherit zero spacing unless the side was set inline (Word
+    // fidelity, eigenpal #402).
+    const pmSpacingExplicit = pmAttrs.spacingExplicit as
+      | { before?: boolean; after?: boolean }
+      | null
+      | undefined;
+    if (pmSpacingExplicit) {
+      const explicit: { before?: boolean; after?: boolean } = {};
+      if (pmSpacingExplicit.before) {
+        explicit.before = true;
+      }
+      if (pmSpacingExplicit.after) {
+        explicit.after = true;
+      }
+      if (explicit.before !== undefined || explicit.after !== undefined) {
+        attrs.spacingExplicit = explicit;
+      }
+    }
     if (typeof lineSpacing === "number") {
       // Line spacing in twips - convert to multiplier or exact
       if (

@@ -88,17 +88,45 @@ export function collectSectionConfigs(
 }
 
 /**
- * Get spacing before a paragraph block.
+ * Whether a paragraph block has no visible content (no runs, or a single
+ * empty text run). Word collapses style-inherited spacing on empty
+ * paragraphs (only direct `<w:pPr><w:spacing>` formatting survives) — see
+ * eigenpal #402.
  */
-function getSpacingBefore(block: ParagraphBlock): number {
-  return block.attrs?.spacing?.before ?? 0;
+function isEmptyParagraph(block: ParagraphBlock): boolean {
+  if (block.runs.length === 0) {
+    return true;
+  }
+  if (block.runs.length !== 1) {
+    return false;
+  }
+  const r = block.runs[0];
+  return r?.kind === "text" && ((r as { text?: string }).text ?? "") === "";
 }
 
 /**
- * Get spacing after a paragraph block.
+ * Get spacing before a paragraph block. Empty paragraphs whose
+ * `before` was inherited from a paragraph style (not set inline) collapse
+ * to zero — Word fidelity for incidental empty separators.
+ */
+function getSpacingBefore(block: ParagraphBlock): number {
+  const value = block.attrs?.spacing?.before ?? 0;
+  if (isEmptyParagraph(block) && !block.attrs?.spacingExplicit?.before) {
+    return 0;
+  }
+  return value;
+}
+
+/**
+ * Get spacing after a paragraph block. Same empty-paragraph collapse rule
+ * as `getSpacingBefore`.
  */
 function getSpacingAfter(block: ParagraphBlock): number {
-  return block.attrs?.spacing?.after ?? 0;
+  const value = block.attrs?.spacing?.after ?? 0;
+  if (isEmptyParagraph(block) && !block.attrs?.spacingExplicit?.after) {
+    return 0;
+  }
+  return value;
 }
 
 /**
