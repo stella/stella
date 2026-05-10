@@ -58,6 +58,9 @@ const fakeDocument = {
   },
 } as unknown as Document;
 
+const TEST_HIGHLIGHT_COLOR = "#FFFF00";
+const TEST_EXPLICIT_TEXT_COLOR = "#C00000";
+
 describe("renderLine inline image handling", () => {
   test("pins image dimensions and centers an image-only line", () => {
     const imageRun: ImageRun = {
@@ -156,6 +159,67 @@ describe("renderLine text styling", () => {
     const textEl = lineEl.children[0] as HTMLElement | undefined;
 
     expect(textEl?.style.fontWeight).toBe("800");
+  });
+
+  test("keeps automatic text readable on bright DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Highlighted text",
+          highlight: TEST_HIGHLIGHT_COLOR,
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 16,
+      width: 112,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.backgroundColor).toBe(TEST_HIGHLIGHT_COLOR);
+    expect(textEl?.style.color).toBe("#000000");
+  });
+
+  test("preserves explicit text colors on DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Highlighted text",
+          color: TEST_EXPLICIT_TEXT_COLOR,
+          highlight: TEST_HIGHLIGHT_COLOR,
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 16,
+      width: 112,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.backgroundColor).toBe(TEST_HIGHLIGHT_COLOR);
+    expect(textEl?.style.color).toBe(TEST_EXPLICIT_TEXT_COLOR);
   });
 });
 

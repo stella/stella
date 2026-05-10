@@ -101,6 +101,17 @@ function isFieldRun(run: Run): run is FieldRun {
   return run.kind === "field";
 }
 
+const DEFAULT_TEXT_COLOR_VALUES = new Set([
+  "000000",
+  "000",
+  "auto",
+  "windowtext",
+]);
+
+function isAutomaticOrDefaultTextColor(color: string): boolean {
+  return DEFAULT_TEXT_COLOR_VALUES.has(color.toLowerCase().replace(/^#/, ""));
+}
+
 /**
  * Apply text run styles to an element
  */
@@ -126,13 +137,10 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
   }
 
   // Color — skip black/auto so the CSS variable --doc-canvas-text can adapt to dark mode
-  if (run.color) {
-    const c = run.color.toLowerCase().replace(/^#/, "");
-    const isBlackOrDefault =
-      c === "000000" || c === "000" || c === "auto" || c === "windowtext";
-    if (!isBlackOrDefault) {
-      element.style.color = run.color;
-    }
+  let hasExplicitTextColor = false;
+  if (run.color && !isAutomaticOrDefaultTextColor(run.color)) {
+    element.style.color = run.color;
+    hasExplicitTextColor = true;
   }
 
   // Letter spacing
@@ -203,6 +211,12 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
   // Highlight (background color)
   if (run.highlight) {
     element.style.backgroundColor = run.highlight;
+    const automaticTextColor = hasExplicitTextColor
+      ? undefined
+      : getAutomaticTextColorForBackground(run.highlight);
+    if (automaticTextColor) {
+      element.style.color = automaticTextColor;
+    }
   }
 
   // Text decorations
