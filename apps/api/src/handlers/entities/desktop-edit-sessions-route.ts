@@ -7,8 +7,8 @@ import {
 } from "@/api/handlers/entities/checkpoint-desktop-edit-session";
 import {
   desktopEditSessionEventsHandler,
+  desktopEditSessionEventsHeadersSchema,
   desktopEditSessionEventsParamsSchema,
-  desktopEditSessionEventsQuerySchema,
 } from "@/api/handlers/entities/desktop-edit-session-events";
 import {
   finalizeDesktopEditSessionBodySchema,
@@ -43,13 +43,14 @@ export const desktopEditSessionsRoute = new Elysia({
   )
   .get(
     "/:sessionId/events",
-    async ({ params }) =>
+    async ({ headers, params }) =>
       await desktopEditSessionEventsHandler({
+        headers,
         sessionId: params.sessionId,
       }),
     {
+      headers: desktopEditSessionEventsHeadersSchema,
       params: desktopEditSessionEventsParamsSchema,
-      query: desktopEditSessionEventsQuerySchema,
     },
   )
   .post(

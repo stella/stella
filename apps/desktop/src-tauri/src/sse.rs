@@ -39,7 +39,7 @@ pub fn spawn_sse_listener(
 ) -> tokio::task::JoinHandle<()> {
   tokio::spawn(async move {
     loop {
-      let Some((client, current_api_base_url, _)) = ({
+      let Some((client, current_api_base_url, session_token)) = ({
         let mgr = manager.lock().await;
         mgr.remote_status_probe_details(&session_id)
       }) else {
@@ -59,6 +59,7 @@ pub fn spawn_sse_listener(
       tracing::debug!(session_id = %session_id, "SSE sending request");
       let response = match client
         .get(&url)
+        .bearer_auth(&session_token)
         .header("Accept", "text/event-stream")
         .send()
         .await
