@@ -19,10 +19,12 @@
 
 import type {
   FlowBlock,
+  FloatingTablePosition,
   ImageRun,
   Measure,
   PageMargins,
   Run,
+  TableMeasure,
 } from "../layout-engine/types";
 import type { HeaderFooterContent } from "../layout-painter/renderPage";
 import { isFloatingImageRun } from "../layout-painter/renderUtils";
@@ -257,6 +259,41 @@ export function resolveHeaderFooterVisualTop(
   return paragraphY;
 }
 
+function resolveHeaderFooterFloatingTableVisualTop(
+  floating: FloatingTablePosition,
+  measure: TableMeasure,
+  sourceY: number,
+  flowHeight: number,
+  metrics: HeaderFooterMetrics,
+): number {
+  const flowTop =
+    metrics.section === "header"
+      ? (metrics.margins.header ?? 48)
+      : metrics.pageSize.h - (metrics.margins.footer ?? 48) - flowHeight;
+  const vertAnchor = floating.vertAnchor ?? "margin";
+  const vertFrameHeight =
+    vertAnchor === "page"
+      ? metrics.pageSize.h
+      : metrics.pageSize.h - metrics.margins.top - metrics.margins.bottom;
+  const vertFrameOffset =
+    vertAnchor === "page" ? -flowTop : metrics.margins.top - flowTop;
+
+  if (floating.tblpYSpec === "top") {
+    return vertFrameOffset;
+  }
+  if (floating.tblpYSpec === "bottom") {
+    return vertFrameOffset + vertFrameHeight - measure.totalHeight;
+  }
+  if (floating.tblpYSpec === "center") {
+    return vertFrameOffset + (vertFrameHeight - measure.totalHeight) / 2;
+  }
+  if (floating.tblpY !== undefined) {
+    return vertFrameOffset + floating.tblpY;
+  }
+
+  return sourceY;
+}
+
 export function calculateHeaderFooterVisualBounds(
   blocks: FlowBlock[],
   measures: Measure[],
@@ -332,17 +369,20 @@ export function calculateHeaderFooterVisualBounds(
         visualTop = Math.min(visualTop, cursorY);
         visualBottom = Math.max(visualBottom, blockBottomY);
         cursorY = blockBottomY;
-      } else {
-        // Floating table: expand visualBounds conservatively at the
-        // current cursorY, since most floating HF tables anchor near
-        // their source position. Exact (tblpX, tblpY)-resolved bounds
-        // would require duplicating `resolveHeaderFooterFloatingTablePosition`
-        // here; for tables anchored far from the in-flow stream the
-        // bound undercounts. Without this, a floating-table-only
-        // header would have `height = 0` and the table could be lost
-        // from the body push-down calculation entirely.
-        visualTop = Math.min(visualTop, cursorY);
-        visualBottom = Math.max(visualBottom, cursorY + blockHeight);
+      } else if (
+        block.kind === "table" &&
+        block.floating &&
+        measure.kind === "table"
+      ) {
+        const blockTop = resolveHeaderFooterFloatingTableVisualTop(
+          block.floating,
+          measure,
+          cursorY,
+          flowHeight,
+          metrics,
+        );
+        visualTop = Math.min(visualTop, blockTop);
+        visualBottom = Math.max(visualBottom, blockTop + blockHeight);
       }
     }
   }

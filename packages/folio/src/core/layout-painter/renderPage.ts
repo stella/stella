@@ -358,6 +358,7 @@ function resolveHeaderFooterFloatingTablePosition(
   floating: NonNullable<TableBlock["floating"]>,
   measure: TableMeasure,
   layout: HeaderFooterLayoutInfo,
+  sourceY: number,
 ): { left: number; top: number } {
   // Anchor-aware spec resolution: "right"/"bottom"/"center" are computed
   // relative to whichever frame the anchor selects (page vs margin).
@@ -394,7 +395,7 @@ function resolveHeaderFooterFloatingTablePosition(
   }
 
   // Vertical
-  let top = 0;
+  let top = sourceY;
   if (floating.tblpYSpec === "top") {
     top = vertFrameOffset;
   } else if (floating.tblpYSpec === "bottom") {
@@ -895,6 +896,7 @@ function renderHeaderFooterContent(
           block.floating,
           measure,
           layout,
+          cursorY,
         );
         fragEl.style.position = "absolute";
         fragEl.style.top = `${top}px`;
