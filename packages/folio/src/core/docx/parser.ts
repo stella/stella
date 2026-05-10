@@ -33,6 +33,10 @@ import type {
 import { toArrayBuffer } from "../utils/docxInput";
 import type { DocxInput } from "../utils/docxInput";
 import { loadFontsWithMapping } from "../utils/fontLoader";
+import {
+  convertTiffToPngDataUrl,
+  isTiffMimeType,
+} from "../utils/tiffConverter";
 import { parseComments } from "./commentParser";
 import {
   parseDocumentBody,
@@ -338,6 +342,31 @@ function buildMediaMap(
   for (const [path, data] of raw.media.entries()) {
     const filename = path.split("/").pop() || path;
     const mimeType = getMediaMimeType(path);
+
+    // TIFF: browsers don't render TIFF in <img>, so decode + re-encode as
+    // PNG eagerly. This also flips `mimeType` so consumers see the
+    // effective format. On re-export, the image is written as PNG. If
+    // conversion fails (e.g. headless / no Canvas), fall through to lazy
+    // attachment with the original TIFF mimeType — the round-trip survives
+    // even if the in-browser preview is broken.
+    if (isTiffMimeType(mimeType)) {
+      const pngDataUrl = convertTiffToPngDataUrl(data);
+      if (pngDataUrl) {
+        const mediaFile: MediaFile = {
+          path,
+          filename,
+          mimeType: "image/png",
+          data,
+          dataUrl: pngDataUrl,
+        };
+        media.set(path, mediaFile);
+        const normalizedPath = path.replace(/^word\//, "");
+        if (normalizedPath !== path) {
+          media.set(normalizedPath, mediaFile);
+        }
+        continue;
+      }
+    }
 
     const mediaFile: MediaFile = {
       path,
