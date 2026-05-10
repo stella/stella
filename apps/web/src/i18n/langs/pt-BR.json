@@ -377,6 +377,12 @@
     "moveToSide": "Mover para o painel lateral",
     "newChat": "Novo bate-papo",
     "noThreads": "Ainda não há conversas",
+    "pastedText": {
+      "expand": "Mostrar texto completo",
+      "fromClipboard": "{count, plural, one {# caractere colado} other {# caracteres colados}}",
+      "fromPromptFallback": "Habilidade",
+      "remove": "Remover"
+    },
     "placeholder": "Digite sua pergunta aqui, / para habilidades, @ para adicionar contexto",
     "prompts": {
       "noResults": "Sem habilidades correspondentes",

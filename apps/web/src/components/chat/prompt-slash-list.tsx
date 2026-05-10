@@ -101,7 +101,9 @@ export const PromptSlashList = forwardRef<
         setSelectedIndex((current) => (current + 1) % items.length);
         return true;
       }
-      if (event.key === "Enter") {
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        event.stopPropagation();
         select(safeIndex);
         return true;
       }

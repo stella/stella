@@ -377,6 +377,12 @@
     "moveToSide": "Przenieś do panelu bocznego",
     "newChat": "Nowy czat",
     "noThreads": "Brak rozmów",
+    "pastedText": {
+      "expand": "Pokaż pełny tekst",
+      "fromClipboard": "Wklejono {count, plural, one {# znak} few {# znaki} other {# znaków}}",
+      "fromPromptFallback": "Umiejętność",
+      "remove": "Usuń"
+    },
     "placeholder": "Wpisz pytanie tutaj, / dla umiejętności, @ aby dodać kontekst",
     "prompts": {
       "noResults": "Brak pasujących umiejętności",

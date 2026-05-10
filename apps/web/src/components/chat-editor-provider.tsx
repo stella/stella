@@ -35,6 +35,11 @@ import {
   CHAT_MENTION_SEARCH_DEBOUNCE_MS,
   getMentionViewScope,
 } from "@/components/chat-mention-helpers";
+import { shouldChipPaste } from "@/components/chat-pasted-text";
+import {
+  insertPastedTextChip,
+  PastedText,
+} from "@/components/chat-pasted-text-extension";
 import {
   createPromptSlashSuggestion,
   PromptSlash,
@@ -730,6 +735,7 @@ export const useChatEditor = ({
       PromptSlash.configure({
         suggestion: createPromptSlashSuggestion(() => promptsRef.current),
       }),
+      PastedText,
     ],
     onCreate: ({ editor: nextEditor }) => {
       editorRef.current = nextEditor;
@@ -742,6 +748,41 @@ export const useChatEditor = ({
       attributes: {
         class:
           "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm focus-visible:outline-none",
+      },
+      handlePaste: (_view, event) => {
+        // ProseMirror processes paste before any React `onPaste`
+        // handler, so the chip-on-large-paste logic has to live
+        // here — by the time the React handler fires, the text is
+        // already in the editor.
+        const clipboardData = event.clipboardData;
+        if (clipboardData === null) {
+          return false;
+        }
+
+        const hasFiles = Array.from(clipboardData.items).some(
+          (item) => item.kind === "file",
+        );
+        if (hasFiles) {
+          return false;
+        }
+
+        const pastedText = clipboardData.getData("text/plain");
+        if (!pastedText || !shouldChipPaste(pastedText)) {
+          return false;
+        }
+
+        const targetEditor = editorRef.current;
+        if (targetEditor === null) {
+          return false;
+        }
+
+        event.preventDefault();
+        insertPastedTextChip(targetEditor, {
+          label: "",
+          source: "paste",
+          text: pastedText,
+        });
+        return true;
       },
       handleKeyDown: (view, event) => {
         if (handleMessageHistoryKeyDown(view.state, event)) {
@@ -959,6 +1000,9 @@ export const useChatEditor = ({
       }
 
       if (files.length === 0) {
+        // Plain-text paste collapsing happens earlier inside
+        // ProseMirror via `editorProps.handlePaste`; nothing to do
+        // at the React layer here.
         return;
       }
 

@@ -377,6 +377,12 @@
     "moveToSide": "In Seitenleiste verschieben",
     "newChat": "Neuer Chat",
     "noThreads": "Noch keine Konversationen",
+    "pastedText": {
+      "expand": "Vollständigen Text anzeigen",
+      "fromClipboard": "{count, plural, one {# Zeichen eingefügt} other {# Zeichen eingefügt}}",
+      "fromPromptFallback": "Skill",
+      "remove": "Entfernen"
+    },
     "placeholder": "Geben Sie hier Ihre Frage ein, / für Skills, @ für Kontext",
     "prompts": {
       "noResults": "Keine passenden Skills",

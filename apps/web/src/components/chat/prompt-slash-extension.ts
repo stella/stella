@@ -1,10 +1,28 @@
 import { Extension } from "@tiptap/core";
+import type { Editor } from "@tiptap/core";
 import { ReactRenderer } from "@tiptap/react";
 import { Suggestion } from "@tiptap/suggestion";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 
+import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
 import { PromptSlashList } from "@/components/chat/prompt-slash-list";
 import type { ChatPrompt } from "@/lib/prompts/types";
+
+const insertPromptAsChip = (
+  editor: Editor,
+  range: { from: number; to: number },
+  prompt: ChatPrompt,
+) => {
+  insertPastedTextChip(
+    editor,
+    {
+      label: prompt.name,
+      source: "prompt",
+      text: prompt.body,
+    },
+    { replaceRange: range },
+  );
+};
 
 const PLUGIN_NAME = "promptSlash";
 
@@ -14,11 +32,13 @@ type PromptSlashOptions = {
 
 /**
  * `/`-triggered TipTap extension that lets the user pick a saved
- * prompt and drop its body into the composer. Triggers when `/`
- * is typed at the start of a paragraph or after whitespace, so a
- * `/` inside a URL (e.g. `https://...`) is just a slash. Selection
- * inserts the prompt's `body` as plain text and removes the trigger
- * range.
+ * prompt and drop it into the composer as a collapsible chip.
+ * Triggers when `/` is typed at the start of a paragraph or after
+ * whitespace, so a `/` inside a URL (e.g. `https://...`) is just a
+ * slash. Selection inserts a `pastedText` chip carrying the prompt
+ * name as the label and the body as the underlying text — same
+ * visual treatment as a long paste, so a multi-paragraph skill
+ * doesn't dump a wall of text into the input.
  */
 export const PromptSlash = Extension.create<PromptSlashOptions>({
   name: PLUGIN_NAME,
@@ -30,12 +50,7 @@ export const PromptSlash = Extension.create<PromptSlashOptions>({
         allowSpaces: false,
         items: () => [],
         command: ({ editor, range, props }) => {
-          editor
-            .chain()
-            .focus()
-            .deleteRange(range)
-            .insertContent(props.body)
-            .run();
+          insertPromptAsChip(editor, range, props);
         },
       },
     };
@@ -77,7 +92,7 @@ export const createPromptSlashSuggestion = (
   items: ({ query }) => filterPrompts(getPrompts(), query),
 
   command: ({ editor, range, props }) => {
-    editor.chain().focus().deleteRange(range).insertContent(props.body).run();
+    insertPromptAsChip(editor, range, props);
   },
 
   render: () => {
