@@ -1512,7 +1512,8 @@
     "roleUpdated": "Roll uuendatud",
     "sessionRevoked": "Seanss lõpetatud",
     "taskCreated": "Ülesanne loodud",
-    "workspaceDeletedSuccessfully": "Toimik edukalt kustutatud"
+    "workspaceDeletedSuccessfully": "Toimik edukalt kustutatud",
+    "workspaceDuplicatedSuccessfully": "Matter duplicated successfully"
   },
   "tasks": {
     "addAssignee": "Lisa isik",
@@ -1669,7 +1670,11 @@
     "deletingWorkspace": "Toimiku kustutamine",
     "documentsCount": "{count, plural, one {# dokument} other {# dokumenti}}",
     "dropToUploadFiles": "Lohistage failid üleslaadimiseks siia",
+    "duplicateMatter": "Duplicate matter",
+    "duplicateMatterDescription": "You will duplicate the matter, its name, client, team members, parties, and views.",
+    "duplicateMatterWithContentDescription": "You will duplicate the matter, its name, client, team members, parties, views, and content.",
     "duplicateWithContent": "Dubleeri koos sisuga",
+    "duplicatingWorkspace": "Duplicating matter",
     "emptyDocuments": {
       "description": "Laadige dokumendid üles, et võimaldada tabelite eraldamist, dokumentide korrastamist, brauseris redigeerimist ja otsingut selles asjas.",
       "title": "Laadige üles esimesed dokumendid",

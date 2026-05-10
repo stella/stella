@@ -209,3 +209,42 @@ export const useDeleteWorkspace = () => {
     },
   });
 };
+
+type DuplicateWorkspaceVars = {
+  workspaceId: string;
+  includeContent: boolean;
+};
+
+export const useDuplicateWorkspace = () => {
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      includeContent,
+      workspaceId,
+    }: DuplicateWorkspaceVars) => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .duplicate.post({
+          includeContent,
+          queryKey: workspacesKeys.all,
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: workspacesKeys.all });
+      void queryClient.invalidateQueries({
+        queryKey: workspacesKeys.navigation(),
+      });
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+};

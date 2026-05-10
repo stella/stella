@@ -23,6 +23,7 @@ import {
   CopyIcon,
   ExternalLinkIcon,
   FileTextIcon,
+  LayersIcon,
   LoaderCircleIcon,
   LockOpenIcon,
   LaptopIcon,
@@ -109,6 +110,7 @@ import { SuggestionsFacet } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { useRailContextMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-rail-context-menu";
 import { useTabContextMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-tab-context-menu";
 import { VersionsFacet } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/versions-facet";
+import { MatterMetadataPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
 import {
   PeekPdfControls,
   PeekPdfViewer,
@@ -244,6 +246,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const pdfRouteJustification = pdfRouteMatch?.search.justification ?? null;
 
   const activeTab = tabs.find((tab) => tab.id === activeId);
+  const activeMatterPanelColor =
+    activeTab?.type === "matter"
+      ? resolveMatterColor(activeTab.workspaceId, activeTab.color ?? null)
+      : matterColor;
 
   // -- PDF zoom --
   const [scaleOffsets, setScaleOffsets] = useState<Map<string, number>>(
@@ -792,7 +798,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           }
         >
           <ChatTabPanel
-            matterColor={matterColor}
+            matterColor={activeMatterPanelColor}
             onClose={() => handleCloseTab(activeTab.id)}
             onLabelContextMenu={ribbonContextMenu.openAt}
             tab={activeTab}
@@ -806,6 +812,35 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           tab={activeTab}
           workspaceId={workspaceId}
         />
+      )}
+
+      {!minimized && activeTab?.type === "matter" && (
+        <div className="bg-background flex flex-1 flex-col overflow-hidden">
+          <InspectorTabHeader
+            label={t("workspaces.matterInfo")}
+            matter={
+              <MatterOriginLink
+                color={activeTab.color ?? null}
+                id={activeTab.workspaceId}
+                name={activeTab.label}
+                onClick={() => {
+                  void navigate({
+                    to: "/workspaces/$workspaceId",
+                    params: { workspaceId: activeTab.workspaceId },
+                  });
+                }}
+              />
+            }
+            matterColor={activeMatterPanelColor}
+            onClose={() => handleCloseTab(activeTab.id)}
+          />
+          <Suspense fallback={<MetadataPanelSkeleton />}>
+            <MatterMetadataPanel
+              onDeleted={() => handleCloseTab(activeTab.id)}
+              workspaceId={activeTab.workspaceId}
+            />
+          </Suspense>
+        </div>
       )}
 
       {/* Document content — render all open document tabs, show only the active one.
@@ -3183,6 +3218,56 @@ const getTabAbbrev = (label: string): string => {
   return stem.slice(0, 3);
 };
 
+type VerticalTabIconProps = {
+  tab: InspectorTab;
+  active: boolean;
+  externalIconHref?: string | undefined;
+};
+
+const VerticalTabIcon = ({
+  tab,
+  active,
+  externalIconHref,
+}: VerticalTabIconProps) => {
+  if (tab.type === "task") {
+    return (
+      <EntityKindIcon className="size-3.5" kind="task" status={tab.status} />
+    );
+  }
+
+  if (tab.type === "chat") {
+    return <MessageSquareIcon className="size-3.5" />;
+  }
+
+  if (tab.type === "matter") {
+    const swatch = resolveMatterColor(tab.workspaceId, tab.color ?? null);
+    return <LayersIcon className="size-3.5" style={{ color: swatch }} />;
+  }
+
+  if (tab.type === "external") {
+    return (
+      <ExternalSourceLogo
+        className="size-3.5 border-0"
+        iconHref={externalIconHref}
+      />
+    );
+  }
+
+  if (active && tab.mimeType) {
+    return <DocumentIcon className="size-3.5" mimeType={tab.mimeType} />;
+  }
+
+  if (active) {
+    return <FileTextIcon className="size-3.5" />;
+  }
+
+  return (
+    <span className="text-[9px] leading-none font-semibold tracking-tight uppercase">
+      {getTabAbbrev(tab.label)}
+    </span>
+  );
+};
+
 type VerticalTabProps = {
   tab: InspectorTab;
   active: boolean;
@@ -3220,6 +3305,7 @@ const VerticalTab = ({
         }));
 
   const contextMenu = useTabContextMenu({
+    canRename: tab.type !== "matter",
     tabId: tab.id,
     onClose,
     onMaximize: buildMaximizeTabAction(tab, {
@@ -3278,28 +3364,11 @@ const VerticalTab = ({
         }
         side="left"
       >
-        {tab.type === "task" ? (
-          <EntityKindIcon
-            className="size-3.5"
-            kind="task"
-            status={tab.status}
-          />
-        ) : tab.type === "chat" ? (
-          <MessageSquareIcon className="size-3.5" />
-        ) : tab.type === "external" ? (
-          <ExternalSourceLogo
-            className="size-3.5 border-0"
-            iconHref={externalIconHref}
-          />
-        ) : active && tab.mimeType ? (
-          <DocumentIcon className="size-3.5" mimeType={tab.mimeType} />
-        ) : active ? (
-          <FileTextIcon className="size-3.5" />
-        ) : (
-          <span className="text-[9px] leading-none font-semibold tracking-tight uppercase">
-            {getTabAbbrev(tab.label)}
-          </span>
-        )}
+        <VerticalTabIcon
+          active={active}
+          externalIconHref={externalIconHref}
+          tab={tab}
+        />
       </Tooltip>
       {contextMenu.element}
     </>

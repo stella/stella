@@ -25,10 +25,12 @@ import { useAnchoredMenu } from "@/routes/_protected.workspaces/$workspaceId/-co
  * gesture is reachable from either entry point.
  */
 export const useTabContextMenu = ({
+  canRename = true,
   tabId,
   onClose,
   onMaximize,
 }: {
+  canRename?: boolean;
   tabId: string;
   onClose: () => void;
   onMaximize?: (() => void) | undefined;
@@ -55,10 +57,12 @@ export const useTabContextMenu = ({
           </MenuItem>
         )}
         <MenuSeparator />
-        <MenuItem onClick={() => requestRename(tabId)}>
-          <PenLineIcon />
-          {t("common.rename")}
-        </MenuItem>
+        {canRename && (
+          <MenuItem onClick={() => requestRename(tabId)}>
+            <PenLineIcon />
+            {t("common.rename")}
+          </MenuItem>
+        )}
         <MenuItem onClick={onClose}>
           <XIcon />
           {t("common.close")}

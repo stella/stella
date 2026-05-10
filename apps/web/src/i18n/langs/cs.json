@@ -1512,7 +1512,8 @@
     "roleUpdated": "Role aktualizována",
     "sessionRevoked": "Sezení odhlášeno",
     "taskCreated": "Úkol vytvořen",
-    "workspaceDeletedSuccessfully": "Spis úspěšně smazán"
+    "workspaceDeletedSuccessfully": "Spis úspěšně smazán",
+    "workspaceDuplicatedSuccessfully": "Matter duplicated successfully"
   },
   "tasks": {
     "addAssignee": "Přidat osobu",
@@ -1669,7 +1670,11 @@
     "deletingWorkspace": "Mazání spisu",
     "documentsCount": "{count, plural, one {# dokument} few {# dokumenty} other {# dokumentů}}",
     "dropToUploadFiles": "Přetáhněte soubory pro nahrání",
+    "duplicateMatter": "Duplicate matter",
+    "duplicateMatterDescription": "You will duplicate the matter, its name, client, team members, parties, and views.",
+    "duplicateMatterWithContentDescription": "You will duplicate the matter, its name, client, team members, parties, views, and content.",
     "duplicateWithContent": "Duplikovat s obsahem",
+    "duplicatingWorkspace": "Duplicating matter",
     "emptyDocuments": {
       "description": "Nahrajte dokumenty a získejte extrakci tabulek, organizaci dokumentů, úpravy přímo v prohlížeči a vyhledávání napříč tímto spisem.",
       "title": "Nahrajte první dokumenty",

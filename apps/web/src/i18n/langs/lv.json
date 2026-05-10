@@ -1512,7 +1512,8 @@
     "roleUpdated": "Loma atjaunināta",
     "sessionRevoked": "Sesija beigta",
     "taskCreated": "Uzdevums izveidots",
-    "workspaceDeletedSuccessfully": "Lieta veiksmīgi dzēsta"
+    "workspaceDeletedSuccessfully": "Lieta veiksmīgi dzēsta",
+    "workspaceDuplicatedSuccessfully": "Matter duplicated successfully"
   },
   "tasks": {
     "addAssignee": "Pievienot atbildīgo",
@@ -1669,7 +1670,11 @@
     "deletingWorkspace": "Dzēš lietu",
     "documentsCount": "{count, plural, zero {# dokumentu} one {# dokuments} other {# dokumenti}}",
     "dropToUploadFiles": "Nometiet, lai augšupielādētu failus",
+    "duplicateMatter": "Duplicate matter",
+    "duplicateMatterDescription": "You will duplicate the matter, its name, client, team members, parties, and views.",
+    "duplicateMatterWithContentDescription": "You will duplicate the matter, its name, client, team members, parties, views, and content.",
     "duplicateWithContent": "Dublēt ar saturu",
+    "duplicatingWorkspace": "Duplicating matter",
     "emptyDocuments": {
       "description": "Augšupielādējiet dokumentus, lai iespējotu tabulu izguvi, dokumentu kārtošanu, rediģēšanu pārlūkā un meklēšanu šajā lietā.",
       "title": "Augšupielādējiet pirmos dokumentus",

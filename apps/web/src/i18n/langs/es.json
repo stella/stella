@@ -1512,7 +1512,8 @@
     "roleUpdated": "Rol actualizado",
     "sessionRevoked": "Sesión cerrada",
     "taskCreated": "Tarea creada",
-    "workspaceDeletedSuccessfully": "Asunto eliminado correctamente"
+    "workspaceDeletedSuccessfully": "Asunto eliminado correctamente",
+    "workspaceDuplicatedSuccessfully": "Matter duplicated successfully"
   },
   "tasks": {
     "addAssignee": "Añadir asignado",
@@ -1669,7 +1670,11 @@
     "deletingWorkspace": "Eliminando asunto",
     "documentsCount": "{count, plural, one {# documento} other {# documentos}}",
     "dropToUploadFiles": "Suelte para subir archivos",
+    "duplicateMatter": "Duplicate matter",
+    "duplicateMatterDescription": "You will duplicate the matter, its name, client, team members, parties, and views.",
+    "duplicateMatterWithContentDescription": "You will duplicate the matter, its name, client, team members, parties, views, and content.",
     "duplicateWithContent": "Duplicar con contenido",
+    "duplicatingWorkspace": "Duplicating matter",
     "emptyDocuments": {
       "description": "Suba documentos para habilitar la extracción de tablas, la organización de documentos, la edición en el navegador y la búsqueda en este asunto.",
       "title": "Suba sus primeros documentos",

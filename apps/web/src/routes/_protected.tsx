@@ -17,6 +17,7 @@ import {
   useMatch,
 } from "@tanstack/react-router";
 import {
+  LayersIcon,
   MessageSquarePlusIcon,
   PanelRightIcon,
   PinIcon,
@@ -63,7 +64,6 @@ import {
   useInspectorStore,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type { InspectorTab } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-import { MatterMetadataSheet } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
 import { CreateMatterDialog } from "@/routes/_protected.workspaces/-components/create-matter-dialog";
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 
@@ -246,6 +246,7 @@ function ProtectedContent({
   const inspectorTabsCount = useInspectorStore((s) => s.tabs.length);
   const toggleInspector = useInspectorStore((s) => s.toggleMinimized);
   const openInspectorChat = useInspectorStore((s) => s.openChat);
+  const openMatterInspector = useInspectorStore((s) => s.openMatter);
   const handleInspectorButtonClick = () => {
     if (inspectorTabsCount === 0) {
       // No tabs yet — open a new chat. With a matter context the
@@ -323,9 +324,23 @@ function ProtectedContent({
               <PinIcon className="size-4" />
             )}
           </Button>
-          <Suspense>
-            <MatterMetadataSheet workspaceId={workspaceId} />
-          </Suspense>
+          <Button
+            onClick={() => {
+              openMatterInspector({
+                workspaceId,
+                label: workspace?.name ?? t("workspaces.matterInfo"),
+                color: workspace?.color ?? null,
+              });
+            }}
+            size="icon-sm"
+            title={t("workspaces.matterInfo")}
+            variant="ghost"
+          >
+            <LayersIcon
+              className="size-4"
+              style={matterColor ? { color: matterColor } : undefined}
+            />
+          </Button>
         </>
       )}
       {activeDecisionId && (
@@ -437,8 +452,8 @@ function WorkspaceInspectorSidePanel() {
   // matter they came from, even after the user navigates away
   // to another matter (or to a non-workspace route like the
   // knowledge / case-law viewer). Resolution order:
-  //   1. Active tab's origin (PDF.workspaceId or started-chat
-  //      contextMatterIds[0])
+  //   1. Active tab's origin (PDF.workspaceId, Matter.workspaceId,
+  //      or started-chat contextMatterIds[0])
   //   2. The current route's matter (for blank chats or task
   //      tabs while inside a workspace)
   //   3. Any other tab's stored workspaceId — keeps the pane
@@ -449,16 +464,23 @@ function WorkspaceInspectorSidePanel() {
   const tabOriginWorkspaceId =
     activeTab?.type === "pdf"
       ? activeTab.workspaceId
-      : activeTab?.type === "chat"
-        ? (activeTab.contextMatterIds.at(0) ?? null)
-        : null;
+      : activeTab?.type === "matter"
+        ? activeTab.workspaceId
+        : activeTab?.type === "chat"
+          ? (activeTab.contextMatterIds.at(0) ?? null)
+          : null;
   // Last-resort: pick *any* tab's stored workspace so the inspector
   // mounts even when the active tab can't dictate one (a task tab,
   // or a chat that hasn't been pinned to a matter yet) and the
   // route is also non-workspace. PDF tabs carry workspaceId
-  // directly; chat tabs surface theirs via contextMatterIds[0].
+  // directly; matter tabs carry workspaceId directly; chat tabs
+  // surface theirs via contextMatterIds[0].
   const fallbackPdfTab = tabs.find(
     (tab): tab is Extract<InspectorTab, { type: "pdf" }> => tab.type === "pdf",
+  );
+  const fallbackMatterTab = tabs.find(
+    (tab): tab is Extract<InspectorTab, { type: "matter" }> =>
+      tab.type === "matter",
   );
   const fallbackChatTab = tabs.find(
     (tab): tab is Extract<InspectorTab, { type: "chat" }> =>
@@ -466,6 +488,7 @@ function WorkspaceInspectorSidePanel() {
   );
   const fallbackTabWorkspaceId =
     fallbackPdfTab?.workspaceId ??
+    fallbackMatterTab?.workspaceId ??
     fallbackChatTab?.contextMatterIds.at(0) ??
     null;
   const activeWorkspaceId =
