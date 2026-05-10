@@ -1,33 +1,12 @@
--- Table/sequence grants for the `stella` RLS runtime role. RLS
--- predicates evaluate after privilege checks, so without these the
--- per-tenant policies never fire. Grants are intentionally limited to
--- RLS-enabled tables because `public` also contains Better Auth secret
--- tables; future migrations that add RLS tables must grant privileges
--- in that migration instead of relying on blanket default privileges.
+-- Bootstrap `stella`, the NOLOGIN role used by scoped transactions.
+-- RLS runs after privilege checks, so grants stay limited to RLS-enabled
+-- tables. Future RLS tables must grant access in their own migration,
+-- not through blanket defaults.
 --
--- The guarded revokes remove legacy bootstrap memberships from
--- docker/postgres/init.sql. Those built-in roles grant database-wide
--- read/write access, which bypasses the least-privilege boundary this
--- migration establishes. If an upgraded environment still has those
--- memberships but the migration role cannot revoke them, fail fast:
--- leaving `stella` over-privileged is not a safe partial success.
---
--- Better Auth owns login/session/OAuth state and normally runs before
--- scoped app handlers switch to `stella`. Metadata needed by scoped
--- handlers gets narrow RLS policies below; token/secret tables get
--- explicit deny policies so table grants cannot expose them.
---
--- Case-law source data is global, not tenant-owned. It still receives
--- an explicit RLS policy so `stella` access is codified table-by-table
--- instead of inherited from blanket public-schema grants.
---
--- The guarded membership grant lets the migration's connection role
--- run `SET LOCAL ROLE stella` at runtime; assumes one DATABASE_URL is
--- shared by migrations and the app. It skips CI/local setups that
--- already connect as `stella` and skips roles that already have
--- membership. If `stella` was created with provider-managed ownership
--- (e.g. via a managed DB dashboard), grant it to the migration role
--- there once before running this.
+-- This also removes legacy all-data memberships, denies Better Auth
+-- secret tables, keeps narrow auth metadata access, makes global
+-- case-law access explicit, and grants the migration connection role
+-- membership in `stella` for SET ROLE.
 
 GRANT USAGE ON SCHEMA public TO stella;
 
