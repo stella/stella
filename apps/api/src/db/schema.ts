@@ -1748,7 +1748,23 @@ export const organizationSettings = p.pgTable(
       .$type<PracticeJurisdiction[]>()
       .notNull()
       .default([]),
-    /** Native tool slugs the org has disabled in chat. */
+    /**
+     * Per-slug overrides for built-in native tools (e.g. ARES). The
+     * effective state of a tool is `overrides[slug] ?? jurisdictionDefault`,
+     * where the jurisdiction default is whether the tool's
+     * recommended jurisdictions intersect the org's practice
+     * jurisdictions. Absent entries mean "use the default".
+     */
+    nativeToolOverrides: jsonb("native_tool_overrides")
+      .$type<Record<string, boolean>>()
+      .notNull()
+      .default({}),
+    /**
+     * Legacy disable list kept for rolling deploy compatibility. New
+     * code reads nativeToolOverrides; keep writes in sync until a later
+     * migration can drop this column after all deployed versions no
+     * longer read it.
+     */
     disabledNativeTools: jsonb("disabled_native_tools")
       .$type<string[]>()
       .notNull()

@@ -39,6 +39,83 @@ export const NATIVE_TOOL_SLUGS: readonly string[] = NATIVE_TOOL_CATALOG.map(
   (tool) => tool.slug,
 );
 
+const intersectsJurisdictions = (
+  recommendedJurisdictions: readonly string[],
+  practiceJurisdictions: readonly PracticeJurisdiction[],
+): boolean => {
+  if (recommendedJurisdictions.length === 0) {
+    return true;
+  }
+  const practiceCountryCodes = new Set(
+    practiceJurisdictions.map((jurisdiction) =>
+      jurisdiction.countryCode.toUpperCase(),
+    ),
+  );
+  return recommendedJurisdictions.some((countryCode) =>
+    practiceCountryCodes.has(countryCode),
+  );
+};
+
+/**
+ * Default-on iff the tool's recommended jurisdictions intersect the
+ * org's practice jurisdictions (or the tool has no jurisdiction
+ * recommendation, meaning it's globally relevant).
+ */
+const isNativeToolDefaultEnabled = ({
+  slug,
+  practiceJurisdictions,
+}: {
+  slug: string;
+  practiceJurisdictions: readonly PracticeJurisdiction[];
+}): boolean => {
+  const tool = NATIVE_TOOL_CATALOG.find((entry) => entry.slug === slug);
+  if (!tool) {
+    return false;
+  }
+  return intersectsJurisdictions(
+    tool.recommendedJurisdictions,
+    practiceJurisdictions,
+  );
+};
+
+/**
+ * Effective enabled state for a native tool. Explicit per-slug
+ * overrides win over the jurisdiction-derived default, so a Czech
+ * lawyer can still disable ARES and a Spanish lawyer can still
+ * enable it on demand.
+ */
+export const isNativeToolEnabledForOrg = ({
+  slug,
+  practiceJurisdictions,
+  nativeToolOverrides,
+}: {
+  slug: string;
+  practiceJurisdictions: readonly PracticeJurisdiction[];
+  nativeToolOverrides: Readonly<Record<string, boolean>>;
+}): boolean => {
+  const override = nativeToolOverrides[slug];
+  if (typeof override === "boolean") {
+    return override;
+  }
+  return isNativeToolDefaultEnabled({ slug, practiceJurisdictions });
+};
+
+export const getDisabledNativeToolSlugs = ({
+  practiceJurisdictions,
+  nativeToolOverrides,
+}: {
+  practiceJurisdictions: readonly PracticeJurisdiction[];
+  nativeToolOverrides: Readonly<Record<string, boolean>>;
+}): readonly string[] =>
+  NATIVE_TOOL_CATALOG.filter(
+    (tool) =>
+      !isNativeToolEnabledForOrg({
+        slug: tool.slug,
+        practiceJurisdictions,
+        nativeToolOverrides,
+      }),
+  ).map((tool) => tool.slug);
+
 export const mcpConnectorCatalogMetadata = (
   _connector: McpConnectorCatalogSource,
 ): McpConnectorCatalogMetadata => ({ recommendedJurisdictions: [] });

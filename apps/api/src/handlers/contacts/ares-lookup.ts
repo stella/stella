@@ -10,8 +10,11 @@ import {
   searchByName,
 } from "@stll/ares";
 
+import { isNativeToolEnabledForOrg } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+const ARES_NATIVE_TOOL_SLUG = "ares";
 
 const aresQuerySchema = t.Object({
   ico: t.Optional(t.String({ minLength: 1, maxLength: 11 })),
@@ -23,7 +26,7 @@ const aresLookup = createSafeRootHandler(
     permissions: { workspace: ["read"] },
     query: aresQuerySchema,
   },
-  async function* ({ query }) {
+  async function* ({ query, safeDb, session }) {
     const { ico, name } = query;
 
     if (!ico && !name) {
@@ -40,6 +43,31 @@ const aresLookup = createSafeRootHandler(
         new HandlerError({
           status: 400,
           message: "Provide either 'ico' or 'name', not both",
+        }),
+      );
+    }
+
+    const settings = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.organizationSettings.findFirst({
+          where: { organizationId: { eq: session.activeOrganizationId } },
+          columns: {
+            practiceJurisdictions: true,
+            nativeToolOverrides: true,
+          },
+        }),
+      ),
+    );
+    const aresEnabled = isNativeToolEnabledForOrg({
+      slug: ARES_NATIVE_TOOL_SLUG,
+      practiceJurisdictions: settings?.practiceJurisdictions ?? [],
+      nativeToolOverrides: settings?.nativeToolOverrides ?? {},
+    });
+    if (!aresEnabled) {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          message: "ARES lookup is disabled for this organization",
         }),
       );
     }

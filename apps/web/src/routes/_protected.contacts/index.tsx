@@ -67,6 +67,9 @@ import {
   contactsKeys,
   contactsOptions,
 } from "@/routes/_protected.contacts/-queries";
+import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
+
+const ARES_NATIVE_TOOL_SLUG = "ares";
 
 type ContactFilter = "all" | "person" | "organization";
 
@@ -474,6 +477,10 @@ const CreateContactDialog = ({
     useState<BillingAddress | null>(null);
   const createContact = useCreateContact();
   const schema = createContactSchema(t("common.required"));
+  const { data: mcpCatalog } = useQuery(mcpConnectorsOptions());
+  const isAresEnabled =
+    mcpCatalog?.nativeTools.find((tool) => tool.slug === ARES_NATIVE_TOOL_SLUG)
+      ?.enabled ?? false;
 
   const form = useForm({
     defaultValues: {
@@ -729,59 +736,77 @@ const CreateContactDialog = ({
                   )}
                 </form.Field>
 
-                <div className="bg-muted/20 flex flex-col gap-3 rounded-md border p-3">
-                  <div>
-                    <p className="text-sm font-medium">
-                      {t("contacts.create.aresTitle")}
-                    </p>
-                    <p className="text-muted-foreground text-xs">
-                      {t("contacts.create.aresHint")}
-                    </p>
+                {isAresEnabled ? (
+                  <div className="bg-muted/20 flex flex-col gap-3 rounded-md border p-3">
+                    <div>
+                      <p className="text-sm font-medium">
+                        {t("contacts.create.aresTitle")}
+                      </p>
+                      <p className="text-muted-foreground text-xs">
+                        {t("contacts.create.aresHint")}
+                      </p>
+                    </div>
+                    <form.Field name="registrationNumber">
+                      {(field) => (
+                        <Field name={field.name}>
+                          <div className="flex gap-2">
+                            <Input
+                              inputMode="numeric"
+                              onBlur={field.handleBlur}
+                              onChange={(e) => {
+                                field.handleChange(
+                                  normalizeIcoInput(e.target.value),
+                                );
+                                setAresBillingAddress(null);
+                              }}
+                              placeholder={t("contacts.create.icoPlaceholder")}
+                              value={field.state.value}
+                            />
+                            <Button
+                              loading={isAresLoading}
+                              onClick={() => {
+                                void handleAresLookup();
+                              }}
+                              type="button"
+                              variant="outline"
+                            >
+                              {t("contacts.create.aresLookup")}
+                            </Button>
+                          </div>
+                          <FieldError />
+                        </Field>
+                      )}
+                    </form.Field>
+                    {aresBillingAddress?.line1 && (
+                      <p className="text-muted-foreground text-xs">
+                        {[
+                          aresBillingAddress.line1,
+                          aresBillingAddress.city,
+                          aresBillingAddress.postalCode,
+                          aresBillingAddress.country,
+                        ]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </p>
+                    )}
                   </div>
+                ) : (
                   <form.Field name="registrationNumber">
                     {(field) => (
                       <Field name={field.name}>
-                        <div className="flex gap-2">
-                          <Input
-                            inputMode="numeric"
-                            onBlur={field.handleBlur}
-                            onChange={(e) => {
-                              field.handleChange(
-                                normalizeIcoInput(e.target.value),
-                              );
-                              setAresBillingAddress(null);
-                            }}
-                            placeholder={t("contacts.create.icoPlaceholder")}
-                            value={field.state.value}
-                          />
-                          <Button
-                            loading={isAresLoading}
-                            onClick={() => {
-                              void handleAresLookup();
-                            }}
-                            type="button"
-                            variant="outline"
-                          >
-                            {t("contacts.create.aresLookup")}
-                          </Button>
-                        </div>
+                        <FieldLabel>
+                          {t("contacts.fields.registrationNumber")}
+                        </FieldLabel>
+                        <Input
+                          onBlur={field.handleBlur}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                          value={field.state.value}
+                        />
                         <FieldError />
                       </Field>
                     )}
                   </form.Field>
-                  {aresBillingAddress?.line1 && (
-                    <p className="text-muted-foreground text-xs">
-                      {[
-                        aresBillingAddress.line1,
-                        aresBillingAddress.city,
-                        aresBillingAddress.postalCode,
-                        aresBillingAddress.country,
-                      ]
-                        .filter(Boolean)
-                        .join(", ")}
-                    </p>
-                  )}
-                </div>
+                )}
               </>
             )}
 

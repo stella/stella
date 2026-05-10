@@ -5,6 +5,7 @@ import { mcpConnectors } from "@/api/db/schema";
 import {
   getNativeToolCatalog,
   isMcpConnectorRecommendedForPractice,
+  isNativeToolEnabledForOrg,
   mcpConnectorCatalogMetadata,
 } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { mcpConnectorUrlIdentity } from "@/api/handlers/mcp-connectors/url-normalization";
@@ -56,13 +57,13 @@ const listMcpConnectors = createSafeRootHandler(
           },
           columns: {
             practiceJurisdictions: true,
-            disabledNativeTools: true,
+            nativeToolOverrides: true,
           },
         }),
       ),
     );
     const practiceJurisdictions = settings?.practiceJurisdictions ?? [];
-    const disabledNativeTools = new Set(settings?.disabledNativeTools);
+    const nativeToolOverrides = settings?.nativeToolOverrides ?? {};
 
     return Result.ok({
       canManageCustomConnectors: ["admin", "owner"].includes(memberRole.role),
@@ -91,7 +92,11 @@ const listMcpConnectors = createSafeRootHandler(
       }),
       nativeTools: getNativeToolCatalog({ practiceJurisdictions }).map(
         (tool) => {
-          const enabled = !disabledNativeTools.has(tool.slug);
+          const enabled = isNativeToolEnabledForOrg({
+            slug: tool.slug,
+            practiceJurisdictions,
+            nativeToolOverrides,
+          });
           return {
             description: tool.description,
             displayName: tool.displayName,
