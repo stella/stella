@@ -372,7 +372,7 @@ const selfHostingDocsUrl =
 
   <!-- ——— Footer ——— -->
   <footer
-    class="relative px-6 py-12"
+    class="relative overflow-hidden px-6 py-12"
     style="border-top: 1px solid var(--border)"
   >
     <div class="mx-auto max-w-300">
@@ -397,19 +397,10 @@ const selfHostingDocsUrl =
           <a href="/security" class="transition-opacity hover:opacity-70"
             >Security</a
           >
+          <a href="/press" class="transition-opacity hover:opacity-70">Press</a>
           <a href="/blog" class="transition-opacity hover:opacity-70">Blog</a>
           <a href="/changelog" class="transition-opacity hover:opacity-70"
             >Changelog</a
-          >
-          <a
-            href="https://status.stll.app"
-            class="transition-opacity hover:opacity-70"
-            target="_blank"
-            rel="noopener noreferrer">Status</a
-          >
-          <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
-          <a href="/imprint" class="transition-opacity hover:opacity-70"
-            >Imprint</a
           >
           <a
             href="mailto:contact@stll.app"
@@ -481,14 +472,22 @@ const selfHostingDocsUrl =
           </a>
         </div>
       </div>
-      <p
-        class="mt-6 text-center text-sm sm:text-left"
+      <nav
+        class="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm sm:justify-start"
         style="color: var(--muted-foreground)"
+        aria-label="Footer secondary"
       >
+        <a
+          href="https://status.stll.app"
+          class="transition-opacity hover:opacity-70"
+          target="_blank"
+          rel="noopener noreferrer">Status</a
+        >
+        <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
         <a href="/imprint" class="transition-opacity hover:opacity-70"
           >stella labs, s.r.o.</a
         >
-      </p>
+      </nav>
     </div>
     <div
       class="pointer-events-none absolute inset-x-0 bottom-0 h-32"

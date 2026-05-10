@@ -1,0 +1,433 @@
+---
+import Base from "../layouts/Base.astro";
+import ThemeToggle from "../components/ThemeToggle.astro";
+
+const contactEmail = "jan.kubica@stll.app";
+
+const boilerplate =
+  "stella is an open-source legal workspace. Built for law firms and in-house teams, it brings matters, documents, review, and AI assistance into one place, grounded in citations and traceable to source material. Self-hosting and full data export are first-class: there is no lock-in, and privileged work stays under the customer's control. Currently in beta, built with and for the legal community.";
+
+const facts = [
+  { label: "Category", value: "Legal workspace" },
+  { label: "Stage", value: "Beta" },
+  { label: "Licence", value: "Open-source, Apache 2.0" },
+  { label: "Headquarters", value: "Czechia, EU" },
+  { label: "Website", value: "stll.app", href: "https://stll.app" },
+  { label: "Source", value: "github.com/stella/stella", href: "https://github.com/stella/stella" },
+];
+
+type LogoTile = {
+  label: string;
+  variant: "wordmark" | "symbol";
+  background: "light" | "dark";
+  svg: string;
+  png: string;
+};
+
+const logoTiles: LogoTile[] = [
+  {
+    label: "Wordmark on light",
+    variant: "wordmark",
+    background: "light",
+    svg: "/brand/stella-wordmark.svg",
+    png: "/brand/stella-wordmark-black.png",
+  },
+  {
+    label: "Wordmark on dark",
+    variant: "wordmark",
+    background: "dark",
+    svg: "/brand/stella-wordmark-white.svg",
+    png: "/brand/stella-wordmark-white.png",
+  },
+  {
+    label: "Symbol on light",
+    variant: "symbol",
+    background: "light",
+    svg: "/brand/stella-symbol.svg",
+    png: "/brand/stella-symbol-black.png",
+  },
+  {
+    label: "Symbol on dark",
+    variant: "symbol",
+    background: "dark",
+    svg: "/brand/stella-symbol-white.svg",
+    png: "/brand/stella-symbol-white.png",
+  },
+];
+
+type Swatch = {
+  name: string;
+  description: string;
+  hex: string;
+};
+
+const swatches: Swatch[] = [
+  { name: "Soft Blue", hex: "#CFE1F9", description: "Hero washes, headers, supporting accent." },
+  { name: "Pale Blue", hex: "#E6F6FC", description: "Backgrounds, surfaces, light callouts." },
+  { name: "Blue Accent", hex: "#6B9FD0", description: "Primary accent — buttons, links, focus." },
+  { name: "Black", hex: "#000000", description: "Wordmark, primary text, highest contrast." },
+];
+
+const gradients = [
+  "/brand/stella-gradient-1.png",
+  "/brand/stella-gradient-2.png",
+  "/brand/stella-gradient-3.png",
+  "/brand/stella-gradient-4.png",
+];
+
+---
+
+<Base
+  title="stella | press & brand"
+  description="Press kit for stella: logos, colours, typography, and a short company description for media and partners."
+>
+  <div class="flex min-h-dvh flex-col">
+    <nav class="mx-auto flex w-full max-w-300 items-center justify-between px-6 py-5">
+      <a href="/">
+        <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
+      </a>
+      <div class="flex items-center gap-4">
+        <ThemeToggle />
+        <a
+          href={`mailto:${contactEmail}`}
+          class="inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90"
+          style="background: var(--primary); color: var(--primary-foreground)"
+        >
+          Contact
+        </a>
+      </div>
+    </nav>
+
+    <main class="flex-1">
+      <!-- ——— Hero ——— -->
+      <section class="px-6 pt-16 pb-8 lg:pt-24 lg:pb-10">
+        <div class="mx-auto max-w-300">
+          <div class="max-w-4xl">
+            <h1 class="font-display text-4xl font-medium tracking-tight sm:text-5xl">
+              Press &amp; brand
+            </h1>
+            <p class="mt-6 text-lg leading-[1.8]" style="color: var(--muted-foreground)">
+              Logos, colours, typography, and a short company description.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ——— About stella ——— -->
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-300">
+          <div class="mb-6 flex items-center justify-between gap-4">
+            <h2 class="text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">About stella</h2>
+            <button
+              type="button"
+              data-copy-target="boilerplate"
+              class="copy-btn inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-opacity hover:opacity-70"
+              style="color: var(--muted-foreground)"
+            >
+              <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect x="9" y="9" width="13" height="13" rx="2" />
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+              </svg>
+              <span class="copy-label">Copy</span>
+            </button>
+          </div>
+          <div
+            class="rounded-2xl p-7"
+            style="background: var(--card); border: 1px solid var(--border)"
+          >
+            <p
+              id="boilerplate"
+              class="text-base leading-[1.8]"
+              style="color: var(--foreground)"
+            >
+              {boilerplate}
+            </p>
+            <p
+              class="mt-5 text-sm"
+              style="color: var(--muted-foreground); border-top: 1px solid var(--border); padding-top: 1.25rem"
+            >
+              Looking for product footage? Recent releases on the
+              <a href="/changelog" style="color: var(--foreground)" class="transition-opacity hover:opacity-70">changelog</a>
+              include short videos walking through new features.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ——— At a glance ——— -->
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-300">
+          <h2 class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">At a glance</h2>
+          <dl class="grid grid-cols-1 gap-x-12 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+            {facts.map((fact) => (
+              <div class="flex flex-col gap-1" style="border-top: 1px solid var(--border); padding-top: 0.875rem">
+                <dt class="text-xs font-medium uppercase tracking-[0.15em]" style="color: var(--muted-foreground)">{fact.label}</dt>
+                <dd class="text-base">
+                  {fact.href ? (
+                    <a href={fact.href} class="transition-opacity hover:opacity-70" style="color: var(--foreground)">{fact.value}</a>
+                  ) : (
+                    <span style="color: var(--foreground)">{fact.value}</span>
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
+
+      <!-- ——— Contact ——— -->
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-300">
+          <h2 class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Contact</h2>
+          <div
+            class="relative flex flex-col items-stretch overflow-hidden rounded-2xl sm:flex-row sm:items-stretch"
+            style="background: var(--card); border: 1px solid var(--border)"
+          >
+            <div
+              class="absolute inset-x-0 top-0 h-px"
+              style="background: linear-gradient(to right, transparent, var(--auth-gradient-end), transparent)"
+              aria-hidden="true"
+            ></div>
+            <img
+              src="/brand/jan-kubica.jpg"
+              alt="Jan Kubica"
+              class="aspect-square h-40 w-full shrink-0 object-cover sm:h-auto sm:w-40"
+              loading="lazy"
+            />
+            <div class="flex flex-1 flex-col justify-center gap-2 px-6 py-5">
+              <p class="font-display text-xl font-medium tracking-tight">Jan Kubica</p>
+              <div class="flex flex-col gap-1.5 text-sm">
+                <a
+                  href={`mailto:${contactEmail}`}
+                  class="inline-flex items-center gap-2.5 transition-opacity hover:opacity-70"
+                  style="color: var(--foreground)"
+                >
+                  <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 7l9 6 9-6" />
+                  </svg>
+                  {contactEmail}
+                </a>
+                <a
+                  href="https://www.linkedin.com/in/kubicajan/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-2.5 transition-opacity hover:opacity-70"
+                  style="color: var(--foreground)"
+                >
+                  <svg class="h-4 w-4 shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                  </svg>
+                  LinkedIn
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ——— Logo ——— -->
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-300">
+          <div class="mb-6 flex items-center justify-between gap-4">
+            <h2 class="text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Logo</h2>
+            <a
+              href="/brand/stella-logos.zip"
+              download
+              class="inline-flex h-9 items-center gap-2 rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90"
+              style="background: var(--primary); color: var(--primary-foreground)"
+            >
+              <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" />
+              </svg>
+              Download logos
+            </a>
+          </div>
+          <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            {logoTiles.map((tile) => (
+              <div class="flex flex-col overflow-hidden rounded-2xl" style="border: 1px solid var(--border)">
+                <div
+                  class="flex h-48 items-center justify-center px-8"
+                  style={tile.background === "light" ? "background: #ffffff" : "background: #0c0a09"}
+                >
+                  <img
+                    src={tile.png}
+                    alt={tile.label}
+                    class={tile.variant === "symbol" ? "max-h-20" : "max-h-10"}
+                    loading="lazy"
+                  />
+                </div>
+                <div class="flex items-center justify-between gap-4 px-5 py-4" style="background: var(--card); border-top: 1px solid var(--border)">
+                  <span class="text-sm font-medium">{tile.label}</span>
+                  <div class="flex items-center gap-3 text-xs" style="color: var(--muted-foreground)">
+                    <a href={tile.svg} download class="transition-opacity hover:opacity-70">SVG</a>
+                    <span aria-hidden="true">·</span>
+                    <a href={tile.png} download class="transition-opacity hover:opacity-70">PNG</a>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p class="mt-5 text-xs" style="color: var(--muted-foreground)">
+            Designed by
+            <a href="https://www.miklashevska.com/" target="_blank" rel="noopener noreferrer" style="color: var(--foreground)" class="transition-opacity hover:opacity-70">Dariya Miklashevska</a>.
+          </p>
+        </div>
+      </section>
+
+      <!-- ——— Colours ——— -->
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-300">
+          <div class="mb-6 flex items-baseline justify-between gap-4">
+            <h2 class="text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Colours</h2>
+            <p class="text-xs" style="color: var(--muted-foreground)">Click a hex to copy</p>
+          </div>
+          <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {swatches.map((s) => (
+              <div class="flex flex-col overflow-hidden rounded-2xl" style="border: 1px solid var(--border)">
+                <div class="h-32" style={`background: ${s.hex}`}></div>
+                <div class="flex flex-col gap-1 px-4 py-3" style="background: var(--card); border-top: 1px solid var(--border)">
+                  <span class="font-display text-base font-medium">{s.name}</span>
+                  <button
+                    type="button"
+                    class="copy-hex group flex items-center gap-2 text-left text-xs tabular-nums transition-opacity hover:opacity-70"
+                    data-hex={s.hex}
+                    style="color: var(--muted-foreground)"
+                  >
+                    <span>{s.hex}</span>
+                    <span class="copy-hex-feedback opacity-0 transition-opacity">copied</span>
+                  </button>
+                  <p class="mt-1 text-xs leading-snug" style="color: var(--muted-foreground)">{s.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <!-- ——— Typography ——— -->
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-300">
+          <h2 class="mb-6 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Typography</h2>
+          <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <div class="rounded-2xl p-7" style="background: var(--card); border: 1px solid var(--border)">
+              <p class="text-xs" style="color: var(--muted-foreground)">Display</p>
+              <p class="font-display text-7xl font-medium tracking-tight">Aa</p>
+              <p class="mt-3 font-display text-lg">Cabinet Grotesk</p>
+              <p class="mt-1 text-sm leading-[1.7]" style="color: var(--muted-foreground)">
+                Used for headings and the wordmark. Variable weight 100–900.
+                Distributed under the Fontshare Free Font EULA — please download
+                directly from
+                <a href="https://www.fontshare.com/fonts/cabinet-grotesk" target="_blank" rel="noopener noreferrer" style="color: var(--foreground)" class="transition-opacity hover:opacity-70">fontshare.com</a>
+                rather than redistributing the files.
+              </p>
+            </div>
+            <div class="rounded-2xl p-7" style="background: var(--card); border: 1px solid var(--border)">
+              <p class="text-xs" style="color: var(--muted-foreground)">Body</p>
+              <p class="text-7xl font-medium">Aa</p>
+              <p class="mt-3 text-lg">DM Sans</p>
+              <p class="mt-1 text-sm leading-[1.7]" style="color: var(--muted-foreground)">
+                Used for running copy, UI labels, and tabular content. Open
+                Font License via
+                <a href="https://fonts.google.com/specimen/DM+Sans" target="_blank" rel="noopener noreferrer" style="color: var(--foreground)" class="transition-opacity hover:opacity-70">Google Fonts</a>.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ——— Gradients ——— -->
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-300">
+          <div class="mb-6 flex items-baseline justify-between gap-4">
+            <h2 class="text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">Gradients</h2>
+            <p class="text-xs" style="color: var(--muted-foreground)">PNG, full resolution</p>
+          </div>
+          <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {gradients.map((src, i) => (
+              <a
+                href={src}
+                download
+                class="group relative block overflow-hidden rounded-2xl transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5"
+                style="border: 1px solid var(--border)"
+                aria-label={`Download gradient ${i + 1}`}
+              >
+                <img
+                  src={src}
+                  alt={`stella gradient ${i + 1}`}
+                  class="aspect-square w-full object-cover"
+                  loading="lazy"
+                />
+                <span
+                  class="absolute right-2 bottom-2 inline-flex h-7 items-center rounded-md px-2.5 text-xs font-medium opacity-0 transition-opacity group-hover:opacity-100"
+                  style="background: var(--primary); color: var(--primary-foreground)"
+                >
+                  Download
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ——— Footer ——— -->
+    <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
+      <div class="mx-auto max-w-300 text-center">
+        <p class="text-sm" style="color: var(--muted-foreground)">
+          <a href="/imprint" class="transition-opacity hover:opacity-70">stella labs, s.r.o.</a>
+          <span aria-hidden="true"> · </span>
+          <a href="/security" class="transition-opacity hover:opacity-70">Security</a>
+          <span aria-hidden="true"> · </span>
+          <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
+          <span aria-hidden="true"> · </span>
+          <a href="/changelog" class="transition-opacity hover:opacity-70">Changelog</a>
+        </p>
+      </div>
+      <div
+        class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
+        style="background: linear-gradient(to bottom, transparent, var(--auth-gradient-end))"
+      ></div>
+    </footer>
+  </div>
+
+  <script is:inline>
+    // Copy boilerplate paragraph
+    document.querySelectorAll(".copy-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const targetId = btn.getAttribute("data-copy-target");
+        if (!targetId) return;
+        const el = document.getElementById(targetId);
+        if (!el?.textContent) return;
+        navigator.clipboard.writeText(el.textContent.trim()).then(() => {
+          const label = btn.querySelector(".copy-label");
+          if (!label) return;
+          const original = label.textContent;
+          label.textContent = "Copied";
+          setTimeout(() => {
+            label.textContent = original;
+          }, 1500);
+        });
+      });
+    });
+
+    // Copy hex on click
+    document.querySelectorAll(".copy-hex").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const hex = btn.getAttribute("data-hex");
+        if (!hex) return;
+        navigator.clipboard.writeText(hex).then(() => {
+          const fb = btn.querySelector(".copy-hex-feedback");
+          if (!fb) return;
+          fb.classList.remove("opacity-0");
+          fb.classList.add("opacity-100");
+          setTimeout(() => {
+            fb.classList.add("opacity-0");
+            fb.classList.remove("opacity-100");
+          }, 1200);
+        });
+      });
+    });
+  </script>
+</Base>
