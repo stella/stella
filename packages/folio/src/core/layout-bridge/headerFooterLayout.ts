@@ -25,6 +25,7 @@ import type {
   Run,
 } from "../layout-engine/types";
 import type { HeaderFooterContent } from "../layout-painter/renderPage";
+import { isFloatingImageRun } from "../layout-painter/renderUtils";
 import { headerFooterToProseDoc } from "../prosemirror/conversion/toProseDoc";
 import type { HeaderFooter, StyleDefinitions, Theme } from "../types/document";
 import { emuToPixels } from "../utils/units";
@@ -71,7 +72,19 @@ export type HeaderFooterMetrics = {
 //    side effect, not just as a structural anchor.
 
 function isAnchoredImageRun(run: Run): boolean {
-  return run.kind === "image" && !!run.position;
+  if (run.kind !== "image") {
+    return false;
+  }
+  // Match the renderer's classification: explicit `<wp:positionH>` /
+  // `<wp:positionV>` OR `wrapType` / `displayMode` that the body's
+  // `isFloatingImageRun` recognizes (square, tight, through, behind,
+  // inFront, or `displayMode: "float"`). Without the second arm,
+  // wrapped header images that omit explicit positioning would still
+  // be measured as in-flow, inflating header height.
+  if (run.position) {
+    return true;
+  }
+  return isFloatingImageRun(run);
 }
 
 function hasAuthoredVisualContent(block: FlowBlock): boolean {

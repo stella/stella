@@ -785,10 +785,18 @@ function renderHeaderFooterContent(
       // Track the Y position where this paragraph starts
       const paragraphStartY = cursorY;
 
-      // Extract floating images and filter them from runs
+      // Extract floating images and filter them from runs. Match the
+      // body's classification (`isFloatingImageRun`) so images that are
+      // floating by `wrapType`/`displayMode` alone — without an explicit
+      // `<wp:positionH>`/`<wp:positionV>` — are still lifted out.
+      // `renderParagraphFragment` skips them inline; without the matching
+      // extraction here, a wrapped or behind header image without
+      // explicit positioning would never render. Synthesize an empty
+      // `position` for those runs; the float helpers fall through to a
+      // paragraph-relative default.
       const inlineRuns: typeof paragraphBlock.runs = [];
       for (const run of paragraphBlock.runs) {
-        if (run.kind === "image" && "position" in run && run.position) {
+        if (run.kind === "image" && (isFloatingImageRun(run) || run.position)) {
           floatingImages.push({
             src: run.src,
             width: run.width,
@@ -796,7 +804,7 @@ function renderHeaderFooterContent(
             ...(run.alt !== undefined ? { alt: run.alt } : {}),
             paragraphY: paragraphStartY,
             behindDoc: run.wrapType === "behind",
-            position: run.position,
+            position: run.position ?? {},
           });
         } else {
           // Keep non-floating runs for inline rendering
