@@ -94,23 +94,24 @@ function hasAuthoredVisualContent(block: FlowBlock): boolean {
 export function normalizeHeaderFooterMeasureBlocks(
   blocks: FlowBlock[],
 ): FlowBlock[] {
+  // Only the *canonical trailing* OOXML paragraph after the LAST block
+  // qualifies for height suppression. Empty paragraphs used as authored
+  // spacers in the middle of an HF (e.g. `[table, blank, paragraph,
+  // blank, table]`) carry intentional vertical space and must not be
+  // collapsed.
   const trailingEmptyAfterTable = new Set<number>();
-  for (let i = 1; i < blocks.length; i++) {
-    const prev = blocks[i - 1];
-    const cur = blocks[i];
-    if (prev?.kind !== "table") {
-      continue;
+  const lastIndex = blocks.length - 1;
+  if (lastIndex > 0) {
+    const cur = blocks[lastIndex];
+    const prev = blocks[lastIndex - 1];
+    if (
+      prev?.kind === "table" &&
+      cur?.kind === "paragraph" &&
+      cur.runs.length === 0 &&
+      !hasAuthoredVisualContent(cur)
+    ) {
+      trailingEmptyAfterTable.add(lastIndex);
     }
-    if (cur?.kind !== "paragraph") {
-      continue;
-    }
-    if (cur.runs.length > 0) {
-      continue;
-    }
-    if (hasAuthoredVisualContent(cur)) {
-      continue;
-    }
-    trailingEmptyAfterTable.add(i);
   }
 
   return blocks.map((block, index) => {
