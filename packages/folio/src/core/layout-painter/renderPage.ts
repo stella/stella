@@ -348,6 +348,67 @@ function resolveHeaderFooterFloatTop(
   return floatImg.paragraphY;
 }
 
+/**
+ * Resolve the on-page position of a floating header/footer table
+ * (`<w:tbl><w:tblpPr ...>`). ECMA-376 §17.4.57. Returns coordinates
+ * relative to the HF container (which itself is positioned at the page's
+ * header or footer slot).
+ */
+function resolveHeaderFooterFloatingTablePosition(
+  floating: NonNullable<TableBlock["floating"]>,
+  measure: TableMeasure,
+  layout: HeaderFooterLayoutInfo,
+  sourceY: number,
+): { left: number; top: number } {
+  // Anchor-aware spec resolution: "right"/"bottom"/"center" are computed
+  // relative to whichever frame the anchor selects (page vs margin).
+  // Coordinates are returned relative to the HF container, so the page
+  // anchor subtracts the HF flow origin (`flowLeft` / `flowTop`).
+  const horzAnchor = floating.horzAnchor ?? "margin";
+  const vertAnchor = floating.vertAnchor ?? "margin";
+  const horzFrameWidth =
+    horzAnchor === "page" ? layout.pageWidth : layout.contentWidth;
+  const horzFrameOffset = horzAnchor === "page" ? -layout.flowLeft : 0;
+  const vertFrameHeight =
+    vertAnchor === "page"
+      ? layout.pageHeight
+      : layout.pageHeight - layout.margins.top - layout.margins.bottom;
+  const vertFrameOffset =
+    vertAnchor === "page"
+      ? -layout.flowTop
+      : layout.margins.top - layout.flowTop;
+
+  // Horizontal. Match the body's `inside`/`outside` handling
+  // (core/layout-engine: `inside` aliases left, `outside` aliases right).
+  // We don't have facing-page context in HF rendering, so the simple
+  // alias is the closest sensible match.
+  let left = 0;
+  const xSpec = floating.tblpXSpec;
+  if (xSpec === "left" || xSpec === "inside") {
+    left = horzFrameOffset;
+  } else if (xSpec === "right" || xSpec === "outside") {
+    left = horzFrameOffset + horzFrameWidth - measure.totalWidth;
+  } else if (xSpec === "center") {
+    left = horzFrameOffset + (horzFrameWidth - measure.totalWidth) / 2;
+  } else if (floating.tblpX !== undefined) {
+    left = horzFrameOffset + floating.tblpX;
+  }
+
+  // Vertical
+  let top = sourceY;
+  if (floating.tblpYSpec === "top") {
+    top = vertFrameOffset;
+  } else if (floating.tblpYSpec === "bottom") {
+    top = vertFrameOffset + vertFrameHeight - measure.totalHeight;
+  } else if (floating.tblpYSpec === "center") {
+    top = vertFrameOffset + (vertFrameHeight - measure.totalHeight) / 2;
+  } else if (floating.tblpY !== undefined) {
+    top = vertFrameOffset + floating.tblpY;
+  }
+
+  return { left, top };
+}
+
 function applyHeaderFooterFloatHorizontalPosition(
   img: HTMLImageElement,
   floatImg: {
@@ -706,51 +767,45 @@ function renderHeaderFooterContent(
   }[] = [];
 
   let cursorY = 0;
+  // Pass `positioning: 'absolute'` so renderers (and downstream readers of
+  // RenderContext) know the HF caller is supplying its own top/left, rather
+  // than the body case where the layout engine assigns fragment coordinates.
+  const hfContext: RenderContext = { ...context, positioning: "absolute" };
 
   for (let i = 0; i < content.blocks.length; i++) {
     const block = content.blocks[i];
     const measure = content.measures[i];
+    if (!block || !measure) {
+      continue;
+    }
 
-    if (block?.kind === "paragraph" && measure?.kind === "paragraph") {
-      const paragraphBlock = block as ParagraphBlock;
-      const paragraphMeasure = measure as ParagraphMeasure;
+    if (block.kind === "paragraph" && measure.kind === "paragraph") {
+      const paragraphBlock = block;
+      const paragraphMeasure = measure;
 
       // Track the Y position where this paragraph starts
       const paragraphStartY = cursorY;
 
-      // Extract floating images and filter them from runs
+      // Extract floating images and filter them from runs. Match the
+      // body's classification (`isFloatingImageRun`) so images that are
+      // floating by `wrapType`/`displayMode` alone — without an explicit
+      // `<wp:positionH>`/`<wp:positionV>` — are still lifted out.
+      // `renderParagraphFragment` skips them inline; without the matching
+      // extraction here, a wrapped or behind header image without
+      // explicit positioning would never render. Synthesize an empty
+      // `position` for those runs; the float helpers fall through to a
+      // paragraph-relative default.
       const inlineRuns: typeof paragraphBlock.runs = [];
       for (const run of paragraphBlock.runs) {
-        if (run.kind === "image" && "position" in run && run.position) {
-          const imgRun = run as {
-            kind: "image";
-            src: string;
-            width: number;
-            height: number;
-            alt?: string;
-            position: {
-              horizontal?: {
-                relativeTo?: string;
-                posOffset?: number;
-                align?: string;
-                alignment?: string;
-              };
-              vertical?: {
-                relativeTo?: string;
-                posOffset?: number;
-                align?: string;
-                alignment?: string;
-              };
-            };
-          };
+        if (run.kind === "image" && (isFloatingImageRun(run) || run.position)) {
           floatingImages.push({
-            src: imgRun.src,
-            width: imgRun.width,
-            height: imgRun.height,
-            ...(imgRun.alt !== undefined ? { alt: imgRun.alt } : {}),
-            paragraphY: paragraphStartY, // Store where this paragraph starts
-            behindDoc: (run as Record<string, unknown>)["behindDoc"] === true,
-            position: imgRun.position,
+            src: run.src,
+            width: run.width,
+            height: run.height,
+            ...(run.alt !== undefined ? { alt: run.alt } : {}),
+            paragraphY: paragraphStartY,
+            behindDoc: run.wrapType === "behind",
+            position: run.position ?? {},
           });
         } else {
           // Keep non-floating runs for inline rendering
@@ -776,38 +831,127 @@ function renderHeaderFooterContent(
         toLine: paragraphMeasure.lines.length,
       };
 
-      // Render paragraph fragment (with floating images filtered out)
       const fragEl = renderParagraphFragment(
         syntheticFragment,
         inlineBlock,
         paragraphMeasure,
-        context,
+        hfContext,
         { document: doc },
       );
 
-      // Position the fragment in flow and visualize the paragraph's spacing
-      // as padding so HF paragraphs separate the way Word renders them.
-      // Body content gets paragraph spacing via the paginator's absolute
-      // fragment.y positioning; HF rendering uses relative-flow stacking,
-      // so without padding here the paragraph's `spaceBefore`/`spaceAfter`
-      // would advance `cursorY` for the layout-engine but never appear in
-      // the DOM (visible regression on first-page header docs whose
-      // last-paragraph spaceAfter pushes the body content's first line
-      // down by one line in Word).
-      fragEl.style.position = "relative";
-      fragEl.style.marginBottom = "0";
-      fragEl.style.boxSizing = "border-box";
-      const spaceBefore = paragraphBlock.attrs?.spacing?.before ?? 0;
-      const spaceAfter = paragraphBlock.attrs?.spacing?.after ?? 0;
-      if (spaceBefore > 0) {
-        fragEl.style.paddingTop = `${spaceBefore}px`;
-      }
-      if (spaceAfter > 0) {
-        fragEl.style.paddingBottom = `${spaceAfter}px`;
-      }
+      // `paragraphMeasure.totalHeight` includes `spaceBefore + lines +
+      // spaceAfter`, but `renderParagraphFragment` paints its first line at
+      // the fragment top. The body's layout engine compensates by setting
+      // `fragment.y = cursorY + spaceBefore` (see core/layout-engine
+      // `addFragment`). Mirror that here so authored `w:spacing w:before`
+      // visually pushes the first line down instead of being swallowed.
+      // Only honor *explicit* spaceBefore: `normalizeHeaderFooterMeasureBlocks`
+      // strips inherited (style-only) spacing from the measurement copy
+      // (#380), so totalHeight already excludes it; offsetting by inherited
+      // spaceBefore would shift the line below its reserved space and break
+      // cursorY accumulation for following paragraphs.
+      const explicitBefore =
+        paragraphBlock.attrs?.spacingExplicit?.before === true;
+      const spaceBefore = explicitBefore
+        ? (paragraphBlock.attrs?.spacing?.before ?? 0)
+        : 0;
+      fragEl.style.position = "absolute";
+      fragEl.style.top = `${cursorY + spaceBefore}px`;
+      fragEl.style.left = "0";
+      fragEl.style.width = `${contentWidth}px`;
 
       containerEl.append(fragEl);
       cursorY += paragraphMeasure.totalHeight;
+    } else if (block.kind === "table" && measure.kind === "table") {
+      // HF tables don't paginate — synthetic fragment covers all rows.
+      const syntheticFragment: TableFragment = {
+        kind: "table",
+        blockId: block.id,
+        x: 0,
+        y: cursorY,
+        width: measure.totalWidth,
+        height: measure.totalHeight,
+        fromRow: 0,
+        toRow: measure.rows.length,
+        ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
+        ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
+      };
+      const fragEl = renderTableFragment(
+        syntheticFragment,
+        block,
+        measure,
+        hfContext,
+        { document: doc },
+      );
+
+      // Floating tables (`<w:tblpPr>`) opt out of the cursorY flow. They
+      // anchor at (tblpX, tblpY) per ECMA-376 §17.4.57 and don't advance
+      // cursorY. Inline tables stack within the HF container at cursorY.
+      // `renderTableFragment` already sets `position: absolute` on its
+      // returned element; we re-assert it here for parity with the
+      // paragraph branch and so future changes to renderTableFragment
+      // don't silently break HF positioning.
+      if (block.floating) {
+        const { left, top } = resolveHeaderFooterFloatingTablePosition(
+          block.floating,
+          measure,
+          layout,
+          cursorY,
+        );
+        fragEl.style.position = "absolute";
+        fragEl.style.top = `${top}px`;
+        fragEl.style.left = `${left}px`;
+        containerEl.append(fragEl);
+        // No cursorY advance — surrounding HF blocks flow as if the
+        // floating table weren't there (Word semantics for unwrapped
+        // floating tables).
+      } else {
+        // Honor `w:jc` / `w:tblInd` for inline HF tables, matching the body
+        // pagination path (see core/layout-engine `desiredX` computation).
+        let inlineLeft = 0;
+        if (block.justification === "center") {
+          inlineLeft = (contentWidth - measure.totalWidth) / 2;
+        } else if (block.justification === "right") {
+          inlineLeft = contentWidth - measure.totalWidth;
+        } else if (block.indent) {
+          inlineLeft = block.indent;
+        }
+        fragEl.style.position = "absolute";
+        fragEl.style.top = `${cursorY}px`;
+        fragEl.style.left = `${inlineLeft}px`;
+        containerEl.append(fragEl);
+        cursorY += measure.totalHeight;
+      }
+    } else if (block.kind === "textBox" && measure.kind === "textBox") {
+      // The unified pipeline extracts top-level text boxes inside H/F as
+      // their own block. `renderTextBoxFragment` sets `position: absolute`
+      // internally; we only supply top/left so it stacks at cursorY.
+      // Use the *measured* width (not contentWidth): measureBlocks computed
+      // `measure.width` and the cached `innerMeasures` against the authored
+      // text box width, so passing contentWidth would cause the outer box
+      // to be the wrong size and force inner re-wrap inconsistent with the
+      // measure cache.
+      const syntheticFragment: TextBoxFragment = {
+        kind: "textBox",
+        blockId: block.id,
+        x: 0,
+        y: cursorY,
+        width: measure.width,
+        height: measure.height,
+        ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
+        ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
+      };
+      const fragEl = renderTextBoxFragment(
+        syntheticFragment,
+        block,
+        measure,
+        hfContext,
+        { document: doc },
+      );
+      fragEl.style.top = `${cursorY}px`;
+      fragEl.style.left = "0";
+      containerEl.append(fragEl);
+      cursorY += measure.height;
     }
   }
 
@@ -1585,19 +1729,29 @@ export function renderPage(
       page.margins.bottom - footerDistance,
       48,
     );
+    const footerFlowHeight = options.footerContent?.height ?? 0;
     const footerVisualTop = options.footerContent?.visualTop ?? 0;
     const footerVisualBottom =
-      options.footerContent?.visualBottom ?? options.footerContent?.height ?? 0;
+      options.footerContent?.visualBottom ?? footerFlowHeight;
     const actualFooterHeight = Math.max(
       footerVisualBottom - footerVisualTop,
       24,
     );
     const footerOverflows = actualFooterHeight > availableFooterHeight;
 
+    // Anchor the footer container at the *flow* origin, then let it stretch
+    // upward (above-flow image overflow via negative visualTop) and downward
+    // (below-flow floating-table overflow via visualBottom > flowHeight).
+    // Anchoring at the flow origin keeps in-flow content rendered at the
+    // natural footer line (page.h - footerDistance - flowHeight) and keeps
+    // the resolver's `flowTop` consistent with where the in-flow first
+    // paragraph actually paints.
+    const footerNaturalTop = page.size.h - footerDistance - footerFlowHeight;
+    const footerContainerTop = footerNaturalTop + footerVisualTop;
     const footerEl = doc.createElement("div");
     footerEl.className = PAGE_CLASS_NAMES.footer;
     footerEl.style.position = "absolute";
-    footerEl.style.top = `${page.size.h - footerDistance - actualFooterHeight}px`;
+    footerEl.style.top = `${footerContainerTop}px`;
     footerEl.style.left = `${page.margins.left}px`;
     footerEl.style.right = `${page.margins.right}px`;
     footerEl.style.width = `${footerContentWidth}px`;
@@ -1612,8 +1766,7 @@ export function renderPage(
         { ...context, section: "footer", contentWidth: footerContentWidth },
         options,
         {
-          flowTop:
-            page.size.h - footerDistance - (options.footerContent?.height ?? 0),
+          flowTop: footerNaturalTop,
           flowLeft: page.margins.left,
           contentWidth: footerContentWidth,
           pageWidth: page.size.w,
