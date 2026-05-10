@@ -32,6 +32,28 @@ const userCheck = sql`user_id =
     '${sql.raw(SETTING_USER_ID)}', true
   ))`;
 
+const authOrganizationCheck = sql`id =
+  (SELECT current_setting(
+    '${sql.raw(SETTING_ORGANIZATION_ID)}', true
+  ))`;
+
+const authUserVisibleCheck = sql`(
+  id = (SELECT current_setting(
+    '${sql.raw(SETTING_USER_ID)}', true
+  ))
+  OR EXISTS (
+    SELECT 1
+    FROM member m
+    WHERE m.user_id = "user".id
+      AND m.organization_id = (SELECT current_setting(
+        '${sql.raw(SETTING_ORGANIZATION_ID)}', true
+      ))
+  )
+)`;
+
+const allowAllRows = sql`true`;
+const denyAllRows = sql`false`;
+
 // `data_workspace_ids` records every workspace whose content is
 // embedded in the thread (citations, document excerpts, etc.). The
 // empty default means "no workspace data embedded" — true global
@@ -136,6 +158,54 @@ export const userPolicies = () => [
     for: "delete",
     to: stella,
     using: userCheck,
+  }),
+];
+
+export const authUserPolicies = () => [
+  p.pgPolicy("auth_user_select", {
+    for: "select",
+    to: stella,
+    using: authUserVisibleCheck,
+  }),
+];
+
+export const authOrganizationPolicies = () => [
+  p.pgPolicy("auth_organization_select", {
+    for: "select",
+    to: stella,
+    using: authOrganizationCheck,
+  }),
+];
+
+export const authMemberPolicies = () => [
+  p.pgPolicy("auth_member_select", {
+    for: "select",
+    to: stella,
+    using: organizationCheck,
+  }),
+  p.pgPolicy("auth_member_update_last_active_workspace", {
+    for: "update",
+    to: stella,
+    using: organizationCheck,
+    withCheck: organizationCheck,
+  }),
+];
+
+export const denyStellaAccessPolicies = () => [
+  p.pgPolicy("auth_no_stella_access", {
+    for: "all",
+    to: stella,
+    using: denyAllRows,
+    withCheck: denyAllRows,
+  }),
+];
+
+export const globalCaseLawPolicies = () => [
+  p.pgPolicy("case_law_global_access", {
+    for: "all",
+    to: stella,
+    using: allowAllRows,
+    withCheck: allowAllRows,
   }),
 ];
 
