@@ -9,6 +9,7 @@ import {
   desktopEditSessionEventsHandler,
   desktopEditSessionEventsHeadersSchema,
   desktopEditSessionEventsParamsSchema,
+  desktopEditSessionEventsQuerySchema,
 } from "@/api/handlers/entities/desktop-edit-session-events";
 import {
   finalizeDesktopEditSessionBodySchema,
@@ -24,6 +25,7 @@ import {
   statusDesktopEditSessionHandler,
   statusDesktopEditSessionHeadersSchema,
   statusDesktopEditSessionParamsSchema,
+  statusDesktopEditSessionQuerySchema,
 } from "@/api/handlers/entities/status-desktop-edit-session";
 
 export const desktopEditSessionsRoute = new Elysia({
@@ -31,26 +33,30 @@ export const desktopEditSessionsRoute = new Elysia({
 })
   .get(
     "/:sessionId/status",
-    async ({ headers, params }) =>
+    async ({ headers, params, query }) =>
       await statusDesktopEditSessionHandler({
         headers,
+        query,
         sessionId: params.sessionId,
       }),
     {
       headers: statusDesktopEditSessionHeadersSchema,
       params: statusDesktopEditSessionParamsSchema,
+      query: statusDesktopEditSessionQuerySchema,
     },
   )
   .get(
     "/:sessionId/events",
-    async ({ headers, params }) =>
+    async ({ headers, params, query }) =>
       await desktopEditSessionEventsHandler({
         headers,
+        query,
         sessionId: params.sessionId,
       }),
     {
       headers: desktopEditSessionEventsHeadersSchema,
       params: desktopEditSessionEventsParamsSchema,
+      query: desktopEditSessionEventsQuerySchema,
     },
   )
   .post(
