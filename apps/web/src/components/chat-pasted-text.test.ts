@@ -6,6 +6,7 @@ import {
   PASTED_TEXT_CHIP_MIN_LINE_BREAKS,
   shouldChipPaste,
 } from "@/components/chat-pasted-text";
+import { buildPastedTextRenderChildren } from "@/components/chat-pasted-text-extension";
 
 describe("shouldChipPaste", () => {
   test("leaves a single sentence as raw text", () => {
@@ -37,5 +38,34 @@ describe("shouldChipPaste", () => {
 
   test("leaves a multi-line paste alone when total length is small even with many newlines", () => {
     expect(shouldChipPaste("a\nb\nc\nd\ne\nf\ng")).toBe(false);
+  });
+});
+
+describe("buildPastedTextRenderChildren", () => {
+  test("returns the text as a single child for single-line content", () => {
+    expect(buildPastedTextRenderChildren("hello")).toEqual(["hello"]);
+  });
+
+  test("inserts <br>s between lines so newlines survive html-to-markdown", () => {
+    expect(buildPastedTextRenderChildren("line1\nline2\nline3")).toEqual([
+      "line1",
+      ["br"],
+      "line2",
+      ["br"],
+      "line3",
+    ]);
+  });
+
+  test("represents blank lines as bare <br>s without an empty text node", () => {
+    expect(buildPastedTextRenderChildren("a\n\nb")).toEqual([
+      "a",
+      ["br"],
+      ["br"],
+      "b",
+    ]);
+  });
+
+  test("emits an empty children array for empty text", () => {
+    expect(buildPastedTextRenderChildren("")).toEqual([]);
   });
 });

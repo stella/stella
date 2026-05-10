@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import { ClipboardPasteIcon, SparklesIcon, XIcon } from "lucide-react";
@@ -23,6 +25,20 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
     text: string;
     label: string;
     source: PastedTextSource;
+  };
+
+  // Local-state-only edits keep the textarea responsive on large
+  // pastes; we commit back to the node attrs on blur (which fires
+  // when the popover closes), so each keystroke doesn't dispatch a
+  // ProseMirror transaction + draft re-sync.
+  const [draftText, setDraftText] = useState(attrs.text);
+  useEffect(() => {
+    setDraftText(attrs.text);
+  }, [attrs.text]);
+  const commitDraft = () => {
+    if (draftText !== attrs.text) {
+      props.updateAttributes({ text: draftText });
+    }
   };
 
   const fallbackLabel =
@@ -74,11 +90,12 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
             <textarea
               aria-label={t("common.edit")}
               className="bg-muted/40 focus-visible:ring-ring max-h-60 min-h-32 resize-none overflow-auto rounded-md border p-2 font-mono text-[11px] whitespace-pre-wrap focus-visible:ring-2 focus-visible:outline-none"
+              onBlur={commitDraft}
               onChange={(event) => {
-                props.updateAttributes({ text: event.target.value });
+                setDraftText(event.target.value);
               }}
               spellCheck={false}
-              value={attrs.text}
+              value={draftText}
             />
           </div>
         </PopoverPopup>
