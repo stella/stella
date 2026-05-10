@@ -1513,7 +1513,7 @@
     "sessionRevoked": "Munkamenet visszavonva",
     "taskCreated": "Feladat létrehozva",
     "workspaceDeletedSuccessfully": "Ügy sikeresen törölve",
-    "workspaceDuplicatedSuccessfully": "Matter duplicated successfully"
+    "workspaceDuplicatedSuccessfully": "Ügy sikeresen másolva"
   },
   "tasks": {
     "addAssignee": "Felelős hozzáadása",
@@ -1670,11 +1670,11 @@
     "deletingWorkspace": "Ügy törlése folyamatban",
     "documentsCount": "{count, plural, one {# dokumentum} other {# dokumentum}}",
     "dropToUploadFiles": "Húzza ide a fájlokat a feltöltéshez",
-    "duplicateMatter": "Duplicate matter",
-    "duplicateMatterDescription": "You will duplicate the matter, its name, client, team members, parties, and views.",
-    "duplicateMatterWithContentDescription": "You will duplicate the matter, its name, client, team members, parties, views, and content.",
+    "duplicateMatter": "Ügy másolása",
+    "duplicateMatterDescription": "Másolni fogja az ügyet, annak nevét, ügyfelét, csapattagjait, feleit és nézeteit.",
+    "duplicateMatterWithContentDescription": "Másolni fogja az ügyet, annak nevét, ügyfelét, csapattagjait, feleit, nézeteit és tartalmát.",
     "duplicateWithContent": "Másolás tartalommal",
-    "duplicatingWorkspace": "Duplicating matter",
+    "duplicatingWorkspace": "Ügy másolása folyamatban",
     "emptyDocuments": {
       "description": "Töltsön fel dokumentumokat a táblázatok kinyeréséhez, a dokumentumok rendszerezéséhez, a böngészőn belüli szerkesztéshez és az ügyön belüli kereséshez.",
       "title": "Töltse fel az első dokumentumokat",

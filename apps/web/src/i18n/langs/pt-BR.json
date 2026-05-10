@@ -1513,7 +1513,7 @@
     "sessionRevoked": "Sessão revogada",
     "taskCreated": "Tarefa criada",
     "workspaceDeletedSuccessfully": "Caso excluído com sucesso",
-    "workspaceDuplicatedSuccessfully": "Matter duplicated successfully"
+    "workspaceDuplicatedSuccessfully": "Caso duplicado com sucesso"
   },
   "tasks": {
     "addAssignee": "Adicionar responsável",
@@ -1670,11 +1670,11 @@
     "deletingWorkspace": "Excluindo caso",
     "documentsCount": "{count, plural, one {# documento} many {# documentos} other {# documentos}}",
     "dropToUploadFiles": "Solte para fazer upload de arquivos",
-    "duplicateMatter": "Duplicate matter",
-    "duplicateMatterDescription": "You will duplicate the matter, its name, client, team members, parties, and views.",
-    "duplicateMatterWithContentDescription": "You will duplicate the matter, its name, client, team members, parties, views, and content.",
+    "duplicateMatter": "Duplicar caso",
+    "duplicateMatterDescription": "Você duplicará o caso, seu nome, cliente, membros da equipe, partes e visualizações.",
+    "duplicateMatterWithContentDescription": "Você duplicará o caso, seu nome, cliente, membros da equipe, partes, visualizações e conteúdo.",
     "duplicateWithContent": "Duplicar com conteúdo",
-    "duplicatingWorkspace": "Duplicating matter",
+    "duplicatingWorkspace": "Duplicando caso",
     "emptyDocuments": {
       "description": "Envie documentos para habilitar extração de tabelas, organização de documentos, edição no navegador e pesquisa neste caso.",
       "title": "Envie seus primeiros documentos",

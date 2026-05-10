@@ -1513,7 +1513,7 @@
     "sessionRevoked": "Sesija baigta",
     "taskCreated": "Užduotis sukurta",
     "workspaceDeletedSuccessfully": "Byla sėkmingai ištrinta",
-    "workspaceDuplicatedSuccessfully": "Matter duplicated successfully"
+    "workspaceDuplicatedSuccessfully": "Byla sėkmingai dubliuota"
   },
   "tasks": {
     "addAssignee": "Priskirti asmenį",
@@ -1670,11 +1670,11 @@
     "deletingWorkspace": "Byla trinama",
     "documentsCount": "{count, plural, one {# dokumentas} few {# dokumentai} many {# dokumento} other {# dokumentų}}",
     "dropToUploadFiles": "Vilkite failus norėdami įkelti",
-    "duplicateMatter": "Duplicate matter",
-    "duplicateMatterDescription": "You will duplicate the matter, its name, client, team members, parties, and views.",
-    "duplicateMatterWithContentDescription": "You will duplicate the matter, its name, client, team members, parties, views, and content.",
+    "duplicateMatter": "Dubliuoti bylą",
+    "duplicateMatterDescription": "Dubliuosite bylą, jos pavadinimą, klientą, komandos narius, šalis ir rodinius.",
+    "duplicateMatterWithContentDescription": "Dubliuosite bylą, jos pavadinimą, klientą, komandos narius, šalis, rodinius ir turinį.",
     "duplicateWithContent": "Dubliuoti su turiniu",
-    "duplicatingWorkspace": "Duplicating matter",
+    "duplicatingWorkspace": "Byla dubliuojama",
     "emptyDocuments": {
       "description": "Įkelkite dokumentus, kad galėtumėte išgauti lenteles, tvarkyti dokumentus, redaguoti naršyklėje ir ieškoti šioje byloje.",
       "title": "Įkelkite pirmuosius dokumentus",

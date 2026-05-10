@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { Result } from "better-result";
 import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -50,6 +50,8 @@ const config = {
     includeContent: t.Boolean(),
   }),
 } satisfies HandlerConfig;
+
+const FILE_COPY_CONCURRENCY = 4;
 
 type FileCopy = {
   sourceFileId: string;
@@ -269,9 +271,52 @@ const copyWorkspaceFile = async ({
     fileId: copy.targetFileId,
     mimeType: copy.mimeType,
   });
-  const bytes = await getS3().file(sourceKey).arrayBuffer();
-  await getS3().write(targetKey, new Uint8Array(bytes));
+  await getS3().write(targetKey, getS3().file(sourceKey), {
+    type: copy.mimeType,
+  });
   return targetKey;
+};
+
+const copyWorkspaceFiles = async ({
+  copies,
+  organizationId,
+  sourceWorkspaceId,
+  targetWorkspaceId,
+}: {
+  copies: FileCopy[];
+  organizationId: SafeId<"organization">;
+  sourceWorkspaceId: SafeId<"workspace">;
+  targetWorkspaceId: SafeId<"workspace">;
+}) => {
+  const copiedS3Keys: string[] = [];
+  let nextIndex = 0;
+
+  const copyNext = async () => {
+    while (nextIndex < copies.length) {
+      const copy = copies[nextIndex];
+      nextIndex++;
+      if (!copy) {
+        return;
+      }
+
+      const key = await copyWorkspaceFile({
+        copy,
+        organizationId,
+        sourceWorkspaceId,
+        targetWorkspaceId,
+      });
+      copiedS3Keys.push(key);
+    }
+  };
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(FILE_COPY_CONCURRENCY, copies.length) },
+      copyNext,
+    ),
+  );
+
+  return copiedS3Keys;
 };
 
 const duplicateWorkspace = createSafeHandler(
@@ -379,15 +424,14 @@ const duplicateWorkspace = createSafeHandler(
 
     if (includeContent) {
       const copyResult = await Result.tryPromise(async () => {
-        for (const copy of fileCopies) {
-          const key = await copyWorkspaceFile({
-            copy,
+        copiedS3Keys.push(
+          ...(await copyWorkspaceFiles({
+            copies: fileCopies,
             organizationId,
             sourceWorkspaceId,
             targetWorkspaceId,
-          });
-          copiedS3Keys.push(key);
-        }
+          })),
+        );
       });
 
       if (Result.isError(copyResult)) {
@@ -492,7 +536,11 @@ const duplicateWorkspace = createSafeHandler(
           .then((rows) => rows.at(0));
 
         if (!counter) {
-          panic("Failed to create matter counter");
+          return {
+            ok: false as const,
+            status: 500 as const,
+            message: "Failed to create matter counter",
+          };
         }
 
         const reference = toReference({
@@ -640,7 +688,7 @@ const duplicateWorkspace = createSafeHandler(
               parentId: newParentId,
               name: source.name,
               createdBy: user.id,
-              lastEditedBy: source.lastEditedBy,
+              lastEditedBy: user.id,
               docSequence: entityStamp?.docSequence ?? null,
               status: source.status,
               priority: source.priority,
