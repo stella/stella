@@ -42,6 +42,7 @@ import type {
 } from "../prosemirror/schema/marks";
 import type { ParagraphAttrs as PMParagraphAttrs } from "../prosemirror/schema/nodes";
 import type {
+  ColorValue,
   Theme,
   SectionProperties,
   NumberFormat,
@@ -357,7 +358,7 @@ function extractRunFormatting(
       case "textColor": {
         const attrs = mark.attrs as TextColorAttrs;
         if (attrs.themeColor || attrs.rgb) {
-          const colorArg: Parameters<typeof resolveColor>[0] = {};
+          const colorArg: ColorValue = {};
           if (attrs.rgb) {
             colorArg.rgb = attrs.rgb;
           }
@@ -370,7 +371,9 @@ function extractRunFormatting(
           if (attrs.themeShade) {
             colorArg.themeShade = attrs.themeShade;
           }
-          formatting.color = resolveColor(colorArg, theme);
+          if (!isAutomaticTextColorValue(colorArg)) {
+            formatting.color = resolveColor(colorArg, theme);
+          }
         }
         break;
       }
@@ -525,6 +528,11 @@ function extractRunFormatting(
   return formatting;
 }
 
+function isAutomaticTextColorValue(color: ColorValue): boolean {
+  const rgb = color.rgb?.trim().toLowerCase();
+  return color.auto === true || rgb === "auto" || (!rgb && !color.themeColor);
+}
+
 function applyRunFormattingOverrides(
   formatting: RunFormatting,
   mark: Mark,
@@ -606,7 +614,10 @@ function paragraphRunDefaults(
   if (defaultTextFormatting.strike !== undefined) {
     result.strike = defaultTextFormatting.strike;
   }
-  if (defaultTextFormatting.color) {
+  if (
+    defaultTextFormatting.color &&
+    !isAutomaticTextColorValue(defaultTextFormatting.color)
+  ) {
     result.color = resolveColor(defaultTextFormatting.color, theme);
   }
   if (defaultTextFormatting.highlight) {

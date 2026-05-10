@@ -146,4 +146,23 @@ describe("toFlowBlocks run-level OOXML marks", () => {
     expect(run.underline).toEqual({ style: "single" });
     expect(run.smallCaps).toBe(true);
   });
+
+  test("omits automatic paragraph default text colors from runs", () => {
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          defaultTextFormatting: {
+            color: { auto: true },
+            highlight: "darkBlue",
+          },
+        },
+        [schema.text("body text")],
+      ),
+    ]);
+    const run = firstRun(toFlowBlocks(doc, {}));
+
+    expect(run.color).toBeUndefined();
+    expect(run.highlight).toBe("#00008B");
+  });
 });

@@ -199,6 +199,36 @@ describe("renderLine text styling", () => {
     expect(textEl?.style.color).toBe("#000000");
   });
 
+  test("keeps automatic text readable on dark DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Highlighted text",
+          highlight: TEST_DARK_HIGHLIGHT_COLOR,
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 16,
+      width: 112,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.backgroundColor).toBe(TEST_DARK_HIGHLIGHT_COLOR);
+    expect(textEl?.style.color).toBe("#FFFFFF");
+  });
+
   test("preserves explicit text colors on DOCX highlights", () => {
     const block: ParagraphBlock = {
       kind: "paragraph",
