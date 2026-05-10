@@ -11,15 +11,14 @@ import {
 
 const SESSION_TOKEN_LENGTH = 64;
 const BEARER_PREFIX = "Bearer ";
+const SESSION_TOKEN_PATTERN = /^[a-f0-9]{64}$/;
 
 export const desktopEditSessionEventsParamsSchema = t.Object({
   sessionId: tSafeId("desktopEditSession"),
 });
 
 export const desktopEditSessionEventsHeadersSchema = t.Object({
-  authorization: t.String({
-    pattern: `^Bearer [a-f0-9]{${SESSION_TOKEN_LENGTH}}$`,
-  }),
+  authorization: t.Optional(t.String()),
 });
 
 type SessionEventConnection = {
@@ -85,7 +84,7 @@ export const closeSessionConnections = (
 };
 
 type DesktopEditSessionEventsHandlerProps = {
-  headers: { authorization: string };
+  headers: { authorization?: string };
   sessionId: SafeId<"desktopEditSession">;
 };
 
@@ -93,11 +92,11 @@ export const desktopEditSessionEventsHandler = async ({
   headers: { authorization },
   sessionId,
 }: DesktopEditSessionEventsHandlerProps) => {
-  // Match the schema regex defensively so a future schema change
-  // can't widen the input that reaches the authorization step.
   if (
+    !authorization ||
     !authorization.startsWith(BEARER_PREFIX) ||
-    authorization.length !== BEARER_PREFIX.length + SESSION_TOKEN_LENGTH
+    authorization.length !== BEARER_PREFIX.length + SESSION_TOKEN_LENGTH ||
+    !SESSION_TOKEN_PATTERN.test(authorization.slice(BEARER_PREFIX.length))
   ) {
     return status(401, {
       code: "desktop_edit_session_token_missing",

@@ -14,15 +14,14 @@ export const statusDesktopEditSessionParamsSchema = t.Object({
 
 const SESSION_TOKEN_LENGTH = 64;
 const BEARER_PREFIX = "Bearer ";
+const SESSION_TOKEN_PATTERN = /^[a-f0-9]{64}$/;
 
 export const statusDesktopEditSessionHeadersSchema = t.Object({
-  authorization: t.String({
-    pattern: `^Bearer [a-f0-9]{${SESSION_TOKEN_LENGTH}}$`,
-  }),
+  authorization: t.Optional(t.String()),
 });
 
 type StatusDesktopEditSessionHandlerProps = {
-  headers: { authorization: string };
+  headers: { authorization?: string };
   sessionId: SafeId<"desktopEditSession">;
 };
 
@@ -30,12 +29,11 @@ export const statusDesktopEditSessionHandler = async ({
   headers: { authorization },
   sessionId,
 }: StatusDesktopEditSessionHandlerProps) => {
-  // The schema's regex enforces this shape, but we re-check at runtime
-  // so a future schema change can't silently widen what reaches the
-  // authorization step.
   if (
+    !authorization ||
     !authorization.startsWith(BEARER_PREFIX) ||
-    authorization.length !== BEARER_PREFIX.length + SESSION_TOKEN_LENGTH
+    authorization.length !== BEARER_PREFIX.length + SESSION_TOKEN_LENGTH ||
+    !SESSION_TOKEN_PATTERN.test(authorization.slice(BEARER_PREFIX.length))
   ) {
     return status(401, {
       code: "desktop_edit_session_token_missing",
