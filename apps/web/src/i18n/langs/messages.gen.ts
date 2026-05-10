@@ -459,6 +459,12 @@ type Messages = {
       "ares_lookup_company": "Searching company records";
       "ares_search_companies": "Searching company records";
       "ask-user": "Asking for clarification";
+      "boe_find_related_laws": "BOE related laws";
+      "boe_get_law": "BOE law lookup";
+      "boe_get_law_block": "BOE law block";
+      "boe_get_law_structure": "BOE law structure";
+      "boe_search_legislation": "BOE legislation search";
+      "borme_get_summary": "BORME daily summary";
       "create-document": "Preparing document";
       "describe-stella-api": "Preparing data lookup";
       "describe-stella-function": "Preparing data lookup";

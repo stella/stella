@@ -43,7 +43,14 @@ export type ActiveDocxEditApprovalPart = Extract<
 export type AskUserInput = SharedChatUITools["ask-user"]["input"];
 type PublicOfficialToolName = Extract<
   BuiltInApprovalToolName,
-  "ares_lookup_company" | "ares_search_companies"
+  | "ares_lookup_company"
+  | "ares_search_companies"
+  | "boe_find_related_laws"
+  | "boe_get_law"
+  | "boe_get_law_block"
+  | "boe_get_law_structure"
+  | "boe_search_legislation"
+  | "borme_get_summary"
 >;
 const RUNNING_TOOL_STATES = {
   "input-available": true,
@@ -59,6 +66,12 @@ const CHAT_TOOL_TITLE_KEYS = {
   ares_lookup_company: "chat.tool.ares_lookup_company",
   ares_search_companies: "chat.tool.ares_search_companies",
   "ask-user": "chat.tool.ask-user",
+  boe_find_related_laws: "chat.tool.boe_find_related_laws",
+  boe_get_law: "chat.tool.boe_get_law",
+  boe_get_law_block: "chat.tool.boe_get_law_block",
+  boe_get_law_structure: "chat.tool.boe_get_law_structure",
+  boe_search_legislation: "chat.tool.boe_search_legislation",
+  borme_get_summary: "chat.tool.borme_get_summary",
   "create-document": "chat.tool.create-document",
   "describe-stella-api": "chat.tool.describe-stella-api",
   "run-stella-query": "chat.tool.run-stella-query",
@@ -86,6 +99,12 @@ const UNKNOWN_CHAT_TOOL_TITLE_KEY =
 const PUBLIC_OFFICIAL_CHAT_TOOL_NAMES = {
   ares_lookup_company: true,
   ares_search_companies: true,
+  boe_find_related_laws: true,
+  boe_get_law: true,
+  boe_get_law_block: true,
+  boe_get_law_structure: true,
+  boe_search_legislation: true,
+  borme_get_summary: true,
 } as const satisfies Record<PublicOfficialToolName, true>;
 
 export const isExternalMcpToolName = (
