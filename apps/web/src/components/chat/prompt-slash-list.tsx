@@ -6,10 +6,11 @@ import {
   useState,
 } from "react";
 
-import { Popover, PopoverPopup } from "@stll/ui/components/popover";
-import { cn } from "@stll/ui/lib/utils";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { useTranslations } from "use-intl";
+
+import { Popover, PopoverPopup } from "@stll/ui/components/popover";
+import { cn } from "@stll/ui/lib/utils";
 
 import type { TranslationKey } from "@/i18n/types";
 import type { ChatPrompt, PromptScope } from "@/lib/prompts/types";

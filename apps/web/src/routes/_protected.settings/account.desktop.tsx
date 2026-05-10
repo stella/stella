@@ -1,8 +1,9 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+
 import { buttonVariants } from "@stll/ui/components/button";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
 import { cn } from "@stll/ui/lib/utils";
-import { createFileRoute } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 
 import {
   detectDesktopPlatform,

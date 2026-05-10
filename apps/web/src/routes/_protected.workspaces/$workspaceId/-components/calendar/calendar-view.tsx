@@ -1,10 +1,11 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { UIEvent } from "react";
 
-import { stellaToast } from "@stll/ui/components/toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
+
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";

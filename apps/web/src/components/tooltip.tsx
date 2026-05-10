@@ -1,6 +1,7 @@
 import type { PropsWithChildren } from "react";
 
 import type { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
+
 import {
   TooltipPopup,
   Tooltip as TooltipRoot,

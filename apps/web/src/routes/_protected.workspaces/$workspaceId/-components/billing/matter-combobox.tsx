@@ -1,3 +1,6 @@
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
+
 import {
   Combobox,
   ComboboxInput,
@@ -5,8 +8,6 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/components/combobox";
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { useTranslations } from "use-intl";
 
 import { entitySummariesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 

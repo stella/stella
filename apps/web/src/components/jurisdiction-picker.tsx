@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 
-import { Input } from "@stll/ui/components/input";
-import { cn } from "@stll/ui/lib/utils";
 import { CheckIcon, SearchIcon, StarIcon } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
+
+import { Input } from "@stll/ui/components/input";
+import { cn } from "@stll/ui/lib/utils";
 
 import { createCountryOptions, removeJurisdiction } from "@/lib/jurisdictions";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";

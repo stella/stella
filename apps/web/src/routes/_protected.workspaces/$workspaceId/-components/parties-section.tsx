@@ -1,5 +1,21 @@
 import { useState } from "react";
 
+import {
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import {
+  BuildingIcon,
+  LockIcon,
+  PlusIcon,
+  TrashIcon,
+  UserIcon,
+  XIcon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
@@ -20,21 +36,6 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
-import {
-  useQuery,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import {
-  BuildingIcon,
-  LockIcon,
-  PlusIcon,
-  TrashIcon,
-  UserIcon,
-  XIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { ContactPicker } from "@/components/contact-picker";
 import { toSafeId } from "@/lib/safe-id";

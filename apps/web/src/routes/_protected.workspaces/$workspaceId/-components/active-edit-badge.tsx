@@ -1,3 +1,5 @@
+import { LockIcon } from "lucide-react";
+
 import {
   Avatar,
   AvatarFallback,
@@ -9,7 +11,6 @@ import {
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
 import { cn } from "@stll/ui/lib/utils";
-import { LockIcon } from "lucide-react";
 
 type ActiveEditBadgeProps = {
   name: string;

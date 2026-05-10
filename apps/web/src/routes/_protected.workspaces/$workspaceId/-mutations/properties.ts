@@ -1,5 +1,6 @@
-import type { PropertyContentType } from "@stll/api/types";
 import { useMutation } from "@tanstack/react-query";
+
+import type { PropertyContentType } from "@stll/api/types";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";

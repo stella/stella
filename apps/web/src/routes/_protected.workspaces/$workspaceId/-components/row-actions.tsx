@@ -1,3 +1,22 @@
+import { useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
+import {
+  ArchiveIcon,
+  CopyIcon,
+  DownloadIcon,
+  EllipsisVerticalIcon,
+  EyeIcon,
+  FileOutputIcon,
+  FolderPlusIcon,
+  LaptopIcon,
+  LockOpenIcon,
+  Maximize2Icon,
+  MessageSquareIcon,
+  PencilIcon,
+  Trash2Icon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import {
   AlertDialog,
   AlertDialogClose,
@@ -20,24 +39,6 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
-import { useNavigate } from "@tanstack/react-router";
-import { Result } from "better-result";
-import {
-  ArchiveIcon,
-  CopyIcon,
-  DownloadIcon,
-  EllipsisVerticalIcon,
-  EyeIcon,
-  FileOutputIcon,
-  FolderPlusIcon,
-  LaptopIcon,
-  LockOpenIcon,
-  Maximize2Icon,
-  MessageSquareIcon,
-  PencilIcon,
-  Trash2Icon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
 import Tooltip from "@/components/tooltip";

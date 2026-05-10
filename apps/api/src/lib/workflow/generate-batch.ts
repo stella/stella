@@ -1,6 +1,7 @@
 import { PDF, rgb, Standard14Font, StandardFonts } from "@libpdf/core";
-import type { FolioAIBlock } from "@stll/folio/server";
 import { Result } from "better-result";
+
+import type { FolioAIBlock } from "@stll/folio/server";
 
 import { createFileKey } from "@/api/handlers/files/utils";
 import { createSafeId } from "@/api/lib/branded-types";

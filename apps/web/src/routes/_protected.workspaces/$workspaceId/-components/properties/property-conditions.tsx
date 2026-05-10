@@ -1,5 +1,9 @@
 import { Fragment } from "react";
 
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { RouteIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import type { PropertyCondition } from "@stll/api/types";
 import { Button } from "@stll/ui/components/button";
 import {
@@ -20,9 +24,6 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { Separator } from "@stll/ui/components/separator";
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { RouteIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { getTranslator } from "@/i18n/i18n-store";
 import type {

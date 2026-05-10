@@ -1,5 +1,9 @@
 import { useEffect } from "react";
 
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
+
 import { Button } from "@stll/ui/components/button";
 import {
   Frame,
@@ -8,9 +12,6 @@ import {
   FramePanel,
   FrameTitle,
 } from "@stll/ui/components/frame";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
-import * as v from "valibot";
 
 import type { McpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { broadcastMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";

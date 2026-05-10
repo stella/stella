@@ -24,6 +24,11 @@ import {
 } from "react";
 import type { RefObject } from "react";
 
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { LoaderCircleIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+import { v7 as uuidv7 } from "uuid";
+
 import type {
   DocxEditorRef,
   FolioAIEditOperation,
@@ -31,10 +36,6 @@ import type {
   FolioAIEditSnapshot,
 } from "@stll/folio";
 import { cn } from "@stll/ui/lib/utils";
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { LoaderCircleIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-import { v7 as uuidv7 } from "uuid";
 
 import { PromptBar } from "@/components/ai-suggestions/host";
 import {

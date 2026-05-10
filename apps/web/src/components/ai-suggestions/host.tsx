@@ -18,6 +18,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
 import {
+  ArrowUpIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  LoaderCircleIcon,
+  SquareIcon,
+  SquarePenIcon,
+} from "lucide-react";
+import type { EditorView } from "prosemirror-view";
+import { useTranslations } from "use-intl";
+
+import {
   applySuggestions,
   resolveSuggestionAnchor,
   setActiveCitationMeta,
@@ -42,16 +53,6 @@ import {
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
 import { cn } from "@stll/ui/lib/utils";
-import {
-  ArrowUpIcon,
-  CheckIcon,
-  ChevronDownIcon,
-  LoaderCircleIcon,
-  SquareIcon,
-  SquarePenIcon,
-} from "lucide-react";
-import type { EditorView } from "prosemirror-view";
-import { useTranslations } from "use-intl";
 
 import {
   Message,

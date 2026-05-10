@@ -1,7 +1,6 @@
 import type React from "react";
 import { Children } from "react";
 
-import { cn } from "@stll/ui/lib/utils";
 import { skipToken, useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
@@ -12,6 +11,8 @@ import {
   ListTodoIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { cn } from "@stll/ui/lib/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import type { MentionCategory } from "@/components/chat/chat-mention-href";

@@ -11,8 +11,9 @@
 
 import { createRef } from "react";
 
-import type { DocxEditorRef } from "@stll/folio";
 import { beforeEach, describe, expect, test } from "bun:test";
+
+import type { DocxEditorRef } from "@stll/folio";
 
 import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
 

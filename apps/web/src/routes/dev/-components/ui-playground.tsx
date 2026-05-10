@@ -2,6 +2,26 @@ import { useState } from "react";
 import type * as React from "react";
 
 import {
+  ArchiveIcon,
+  BellIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  ClockIcon,
+  CopyIcon,
+  FileTextIcon,
+  FilterIcon,
+  LinkIcon,
+  LoaderIcon,
+  MailIcon,
+  SearchIcon,
+  SettingsIcon,
+  ShieldIcon,
+  SquarePenIcon,
+  Trash2Icon,
+  UserIcon,
+} from "lucide-react";
+
+import {
   Accordion,
   AccordionItem,
   AccordionPanel,
@@ -166,25 +186,6 @@ import {
   TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
-import {
-  ArchiveIcon,
-  BellIcon,
-  CheckIcon,
-  ChevronDownIcon,
-  ClockIcon,
-  CopyIcon,
-  FileTextIcon,
-  FilterIcon,
-  LinkIcon,
-  LoaderIcon,
-  MailIcon,
-  SearchIcon,
-  SettingsIcon,
-  ShieldIcon,
-  SquarePenIcon,
-  Trash2Icon,
-  UserIcon,
-} from "lucide-react";
 
 import {
   Message,

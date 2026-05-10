@@ -1,22 +1,5 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
-import { Button } from "@stll/ui/components/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogPopup,
-  DialogTrigger,
-} from "@stll/ui/components/dialog";
-import { Input } from "@stll/ui/components/input";
-import {
-  Popover,
-  PopoverClose,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
 import {
@@ -35,6 +18,24 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogPopup,
+  DialogTrigger,
+} from "@stll/ui/components/dialog";
+import { Input } from "@stll/ui/components/input";
+import {
+  Popover,
+  PopoverClose,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stll/ui/components/popover";
+import { Skeleton } from "@stll/ui/components/skeleton";
+import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import type {
   PropertyDependency,

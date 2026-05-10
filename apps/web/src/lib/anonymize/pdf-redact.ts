@@ -1,4 +1,5 @@
 import { PDF, rgb, Standard14Font, StandardFonts, white } from "@libpdf/core";
+
 import type {
   Entity,
   OperatorConfig,

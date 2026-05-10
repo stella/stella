@@ -1,5 +1,3 @@
-import { Button } from "@stll/ui/components/button";
-import { stellaToast } from "@stll/ui/components/toast";
 import {
   CheckCheckIcon,
   CircleOffIcon,
@@ -8,6 +6,9 @@ import {
   UndoIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import {

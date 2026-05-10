@@ -1,5 +1,6 @@
-import { Button } from "@stll/ui/components/button";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
 
 import { sanitizeHref } from "@/lib/sanitize-href";
 

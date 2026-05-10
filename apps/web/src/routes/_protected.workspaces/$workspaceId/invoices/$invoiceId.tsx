@@ -1,5 +1,24 @@
 import { Suspense, useState } from "react";
 
+import { useForm, useStore } from "@tanstack/react-form";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  ArrowLeftIcon,
+  CheckIcon,
+  EditIcon,
+  SendIcon,
+  Trash2Icon,
+  UndoIcon,
+  XCircleIcon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
+
 import { applyMarkupCents, prorateHourlyCents } from "@stll/money";
 import {
   AlertDialog,
@@ -20,24 +39,6 @@ import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
-import { useForm, useStore } from "@tanstack/react-form";
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import {
-  ArrowLeftIcon,
-  CheckIcon,
-  EditIcon,
-  SendIcon,
-  Trash2Icon,
-  UndoIcon,
-  XCircleIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-import * as v from "valibot";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";

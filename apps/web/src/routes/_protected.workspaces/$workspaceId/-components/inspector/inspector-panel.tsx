@@ -9,22 +9,6 @@ import {
 } from "react";
 import type { PropsWithChildren, RefObject } from "react";
 
-import type { DocxCompatibility } from "@stll/folio";
-import { Button } from "@stll/ui/components/button";
-import {
-  Dialog,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "@stll/ui/components/dialog";
-import { Input } from "@stll/ui/components/input";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
 import {
   useQuery,
   useQueryClient,
@@ -52,6 +36,23 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
+
+import type { DocxCompatibility } from "@stll/folio";
+import { Button } from "@stll/ui/components/button";
+import {
+  Dialog,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/components/dialog";
+import { Input } from "@stll/ui/components/input";
+import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { Skeleton } from "@stll/ui/components/skeleton";
+import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { MessageResponse } from "@/components/ai-elements/message";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";

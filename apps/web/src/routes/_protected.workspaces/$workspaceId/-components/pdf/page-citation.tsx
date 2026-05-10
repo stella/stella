@@ -1,7 +1,8 @@
 import { useRef } from "react";
 
-import type { BoundingBox } from "@stll/api/types";
 import { useShallow } from "zustand/react/shallow";
+
+import type { BoundingBox } from "@stll/api/types";
 
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";

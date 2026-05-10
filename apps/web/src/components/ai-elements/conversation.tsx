@@ -3,9 +3,10 @@
 import { useCallback } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
+import { ArrowDownIcon, DownloadIcon } from "lucide-react";
+
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
-import { ArrowDownIcon, DownloadIcon } from "lucide-react";
 
 import {
   StickToBottomContext,

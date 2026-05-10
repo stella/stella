@@ -1,6 +1,12 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { PlusIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+import { useShallow } from "zustand/shallow";
+
 import {
   Menu,
   MenuItem,
@@ -8,11 +14,6 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { Skeleton } from "@stll/ui/components/skeleton";
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { PlusIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-import { useShallow } from "zustand/shallow";
 
 import {
   EMPTY_SCREEN_MATTERS_VIDEO,

@@ -12,18 +12,6 @@ import {
   containsFiles,
   getFiles,
 } from "@atlaskit/pragmatic-drag-and-drop/external/file";
-import type { DocxEditorRef } from "@stll/folio";
-import { Button } from "@stll/ui/components/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPopup,
-  DialogTitle,
-} from "@stll/ui/components/dialog";
-import { cn } from "@stll/ui/lib/utils";
 import {
   keepPreviousData,
   useQuery,
@@ -37,8 +25,21 @@ import {
 } from "@tanstack/react-router";
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
-import "@stll/folio/editor.css";
 import * as v from "valibot";
+
+import type { DocxEditorRef } from "@stll/folio";
+import { Button } from "@stll/ui/components/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/components/dialog";
+import "@stll/folio/editor.css";
+import { cn } from "@stll/ui/lib/utils";
 
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";

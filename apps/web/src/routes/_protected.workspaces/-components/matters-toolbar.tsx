@@ -1,15 +1,3 @@
-import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
-import {
-  Menu,
-  MenuGroup,
-  MenuGroupLabel,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stll/ui/components/menu";
-import { Separator } from "@stll/ui/components/separator";
-import { cn } from "@stll/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import {
@@ -23,6 +11,19 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
+
+import { Button } from "@stll/ui/components/button";
+import { Input } from "@stll/ui/components/input";
+import {
+  Menu,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import { Separator } from "@stll/ui/components/separator";
+import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";

@@ -1,11 +1,12 @@
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { useLocale, useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import {
   Popover,
   PopoverPopup,
   PopoverTrigger,
 } from "@stll/ui/components/popover";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
 
 import { getMonthLabels } from "./calendar-utils";
 

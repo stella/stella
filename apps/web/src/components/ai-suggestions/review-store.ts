@@ -8,6 +8,8 @@
  * reset".
  */
 
+import { create } from "zustand";
+
 import type {
   FolioAIBlockPreviewRun,
   FolioAIEditApplyMode,
@@ -15,7 +17,6 @@ import type {
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
 } from "@stll/folio";
-import { create } from "zustand";
 
 export const REVIEW_UNSPECIFIED_AREA = "Unspecified";
 export type ReviewSeverityKey = FolioAIEditSeverity | "unspecified";

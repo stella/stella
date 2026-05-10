@@ -1,8 +1,9 @@
 import type { MouseEvent, ReactNode } from "react";
 
+import { LayersIcon, XIcon } from "lucide-react";
+
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
-import { LayersIcon, XIcon } from "lucide-react";
 
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";

@@ -1,4 +1,3 @@
-import { MenuItem, MenuSeparator } from "@stll/ui/components/menu";
 import {
   ListXIcon,
   Maximize2Icon,
@@ -8,6 +7,8 @@ import {
   XSquareIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { MenuItem, MenuSeparator } from "@stll/ui/components/menu";
 
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { useAnchoredMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-anchored-menu";

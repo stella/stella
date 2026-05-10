@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
-import { useTranslations } from "use-intl";
 
 import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor";
 import type { ProviderRowStatus } from "@/components/ai-config-providers-editor";

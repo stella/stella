@@ -1,10 +1,11 @@
 import { useEffectEvent, useMemo, useState } from "react";
 
-import { Button, buttonVariants } from "@stll/ui/components/button";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Maximize2Icon, PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button, buttonVariants } from "@stll/ui/components/button";
 
 import {
   Conversation,

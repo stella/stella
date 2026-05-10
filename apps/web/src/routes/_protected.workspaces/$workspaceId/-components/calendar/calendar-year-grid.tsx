@@ -1,5 +1,6 @@
-import { cn } from "@stll/ui/lib/utils";
 import { useLocale } from "use-intl";
+
+import { cn } from "@stll/ui/lib/utils";
 
 import type { CalendarDay } from "./calendar-utils";
 import {

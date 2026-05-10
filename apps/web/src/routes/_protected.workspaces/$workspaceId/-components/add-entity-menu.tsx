@@ -1,5 +1,14 @@
 import React, { useRef } from "react";
 
+import { useSuspenseQuery } from "@tanstack/react-query";
+import {
+  FolderPlusIcon,
+  PlusIcon,
+  SquareCheckIcon,
+  UploadIcon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import {
   Menu,
@@ -9,14 +18,6 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
-import { useSuspenseQuery } from "@tanstack/react-query";
-import {
-  FolderPlusIcon,
-  PlusIcon,
-  SquareCheckIcon,
-  UploadIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";

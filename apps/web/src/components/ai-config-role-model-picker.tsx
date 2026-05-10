@@ -1,3 +1,5 @@
+import { useTranslations } from "use-intl";
+
 import {
   Combobox,
   ComboboxEmpty,
@@ -15,7 +17,6 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { cn } from "@stll/ui/lib/utils";
-import { useTranslations } from "use-intl";
 
 import {
   getDefaultModelSelection,

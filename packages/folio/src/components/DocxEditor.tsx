@@ -23,6 +23,21 @@ import {
 } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
+import {
+  CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  EyeIcon,
+  PenLineIcon,
+  SquarePenIcon,
+  StickyNoteIcon,
+  XIcon,
+} from "lucide-react";
+import { Selection } from "prosemirror-state";
+// Paginated editor
+import type { EditorView } from "prosemirror-view";
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import {
   Menu,
@@ -41,20 +56,6 @@ import {
   SelectTrigger as StSelectTrigger,
   SelectValue as StSelectValue,
 } from "@stll/ui/components/select";
-import {
-  CheckIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  EyeIcon,
-  PenLineIcon,
-  SquarePenIcon,
-  StickyNoteIcon,
-  XIcon,
-} from "lucide-react";
-import { Selection } from "prosemirror-state";
-// Paginated editor
-import type { EditorView } from "prosemirror-view";
-import { useTranslations } from "use-intl";
 
 import {
   applyFolioAIEditOperations,

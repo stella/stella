@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 
-import { Button, buttonVariants } from "@stll/ui/components/button";
-import { cn } from "@stll/ui/lib/utils";
 import {
   CircleHelpIcon,
   ExternalLinkIcon,
@@ -11,6 +9,9 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button, buttonVariants } from "@stll/ui/components/button";
+import { cn } from "@stll/ui/lib/utils";
 
 import { env } from "@/env";
 import { sanitizeHref } from "@/lib/sanitize-href";

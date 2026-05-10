@@ -1,6 +1,4 @@
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
-import { ac, roles } from "@stll/permissions";
-import { stellaToast } from "@stll/ui/components/toast";
 import type { BetterAuthClientPlugin } from "better-auth/client";
 import {
   emailOTPClient,
@@ -9,6 +7,9 @@ import {
   organizationClient,
 } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
+
+import { ac, roles } from "@stll/permissions";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { env } from "@/env";
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";

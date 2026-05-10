@@ -6,18 +6,19 @@
 import type { CSSProperties } from "react";
 
 import {
-  Popover,
-  PopoverClose,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import {
   AlignCenterIcon,
   AlignJustifyIcon,
   AlignLeftIcon,
   AlignRightIcon,
   ChevronDownIcon,
 } from "lucide-react";
+
+import {
+  Popover,
+  PopoverClose,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stll/ui/components/popover";
 
 import type { ParagraphAlignment } from "../../core/types/document";
 import { cn } from "../../lib/utils";

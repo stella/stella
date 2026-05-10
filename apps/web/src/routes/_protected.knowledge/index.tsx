@@ -1,5 +1,3 @@
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   BotIcon,
@@ -9,6 +7,9 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 export const Route = createFileRoute("/_protected/knowledge/")({
   component: KnowledgeLanding,

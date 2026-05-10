@@ -1,3 +1,5 @@
+import { useTranslations } from "use-intl";
+
 import {
   Select,
   SelectItem,
@@ -5,7 +7,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
-import { useTranslations } from "use-intl";
 
 import type { WorkspacePropertyOption } from "@/lib/types";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";

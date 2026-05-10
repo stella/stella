@@ -14,6 +14,17 @@ import {
 } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  CheckCircle2Icon,
+  EyeIcon,
+  LockIcon,
+  LockOpenIcon,
+  PenLineIcon,
+  RefreshCwIcon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import { FormattingBar } from "@stll/folio";
 import type { DocxCompatibility, DocxEditorRef, EditorMode } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
@@ -26,16 +37,6 @@ import {
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import {
-  CheckCircle2Icon,
-  EyeIcon,
-  LockIcon,
-  LockOpenIcon,
-  PenLineIcon,
-  RefreshCwIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
 import "@stll/folio/editor.css";
 
 import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";

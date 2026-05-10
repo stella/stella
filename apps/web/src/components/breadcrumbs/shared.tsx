@@ -1,7 +1,8 @@
 import type { PropsWithChildren } from "react";
 
-import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
 import { Link } from "@tanstack/react-router";
+
+import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
 
 import type { RouterToPath } from "@/lib/types";
 

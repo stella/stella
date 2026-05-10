@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { PlusIcon, SquareCheckIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import {
   Menu,
   MenuItem,
@@ -8,8 +11,6 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { cn } from "@stll/ui/lib/utils";
-import { PlusIcon, SquareCheckIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import type { EntityKind } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";

@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 
-import { prorateHourlyCents } from "@stll/money";
-import { cn } from "@stll/ui/lib/utils";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
+
+import { prorateHourlyCents } from "@stll/money";
+import { cn } from "@stll/ui/lib/utils";
 
 import {
   formatDecimalHours,

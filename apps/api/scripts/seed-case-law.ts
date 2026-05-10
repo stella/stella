@@ -16,12 +16,13 @@
  *   bun apps/api/scripts/seed-case-law.ts
  */
 
-import type { PersistedDecisionAnalysis } from "@stll/case-law/analysis";
-import type { DocumentAst } from "@stll/case-law/document-ast";
 import { and, eq, sql } from "drizzle-orm";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import * as v from "valibot";
+
+import type { PersistedDecisionAnalysis } from "@stll/case-law/analysis";
+import type { DocumentAst } from "@stll/case-law/document-ast";
 
 import { createScopedDb } from "@/api/db";
 import { db } from "@/api/db/root";

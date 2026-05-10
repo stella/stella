@@ -1,5 +1,8 @@
 import { useCallback } from "react";
 
+import { useDebouncedCallback } from "use-debounce";
+import { useTranslations } from "use-intl";
+
 import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
 import { Input } from "@stll/ui/components/input";
 import {
@@ -9,8 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
-import { useDebouncedCallback } from "use-debounce";
-import { useTranslations } from "use-intl";
 
 import type {
   DecisionListFilters,

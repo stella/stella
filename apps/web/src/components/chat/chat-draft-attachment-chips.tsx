@@ -1,6 +1,7 @@
+import { XIcon } from "lucide-react";
+
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
-import { XIcon } from "lucide-react";
 
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";

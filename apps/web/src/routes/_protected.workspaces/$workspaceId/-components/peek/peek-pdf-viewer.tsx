@@ -9,8 +9,6 @@ import {
 } from "react";
 import type { ReactNode, RefObject } from "react";
 
-import type { DocxEditorRef } from "@stll/folio";
-import { Button } from "@stll/ui/components/button";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   AlertTriangleIcon,
@@ -21,6 +19,9 @@ import {
   UnfoldHorizontalIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import type { DocxEditorRef } from "@stll/folio";
+import { Button } from "@stll/ui/components/button";
 import "@stll/folio/editor.css";
 
 import "./peek-docx.css";

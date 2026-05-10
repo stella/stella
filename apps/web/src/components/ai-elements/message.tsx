@@ -3,12 +3,13 @@
 import { memo } from "react";
 import type { ComponentProps, HTMLAttributes } from "react";
 
-import { cn } from "@stll/ui/lib/utils";
 import { cjk } from "@streamdown/cjk";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
 import type { UIMessage } from "ai";
 import { Streamdown } from "streamdown";
+
+import { cn } from "@stll/ui/lib/utils";
 
 type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"] | "system";

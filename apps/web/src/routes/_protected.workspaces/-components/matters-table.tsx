@@ -1,3 +1,8 @@
+import { Link, useNavigate } from "@tanstack/react-router";
+import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+import { useShallow } from "zustand/shallow";
+
 import { Frame } from "@stll/ui/components/frame";
 import {
   Table,
@@ -8,10 +13,6 @@ import {
   TableRow,
 } from "@stll/ui/components/table";
 import { cn } from "@stll/ui/lib/utils";
-import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-import { useShallow } from "zustand/shallow";
 
 import { useI18nStore } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";

@@ -1,8 +1,9 @@
 import { useState } from "react";
 
+import { useTranslations } from "use-intl";
+
 import { getDocumentAstMetadata } from "@stll/case-law/document-ast";
 import { Button } from "@stll/ui/components/button";
-import { useTranslations } from "use-intl";
 
 import { sanitizeHref } from "@/lib/sanitize-href";
 

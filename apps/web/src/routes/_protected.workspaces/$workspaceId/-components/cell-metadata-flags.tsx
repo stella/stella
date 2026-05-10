@@ -1,14 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Button } from "@stll/ui/components/button";
-import {
-  MenuGroup,
-  MenuGroupLabel,
-  MenuItem,
-  MenuSeparator,
-} from "@stll/ui/components/menu";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -20,6 +11,16 @@ import {
   StarIcon,
 } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
+import {
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuSeparator,
+} from "@stll/ui/components/menu";
+import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";

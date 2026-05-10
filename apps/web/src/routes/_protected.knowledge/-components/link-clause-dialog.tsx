@@ -1,5 +1,9 @@
 import { useCallback, useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
+import { SearchIcon, TextQuoteIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
@@ -12,9 +16,6 @@ import {
 } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
-import { useQuery } from "@tanstack/react-query";
-import { SearchIcon, TextQuoteIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";

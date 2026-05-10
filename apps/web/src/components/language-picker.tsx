@@ -1,3 +1,5 @@
+import { GlobeIcon } from "lucide-react";
+
 import {
   Menu,
   MenuPopup,
@@ -5,7 +7,6 @@ import {
   MenuRadioItem,
   MenuTrigger,
 } from "@stll/ui/components/menu";
-import { GlobeIcon } from "lucide-react";
 
 import {
   LANG_ENDONYMS,

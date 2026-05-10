@@ -1,5 +1,6 @@
-import type { FolioAIBlock } from "@stll/folio/server";
 import * as v from "valibot";
+
+import type { FolioAIBlock } from "@stll/folio/server";
 
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import { Unreachable } from "@/api/lib/errors/tagged-errors";

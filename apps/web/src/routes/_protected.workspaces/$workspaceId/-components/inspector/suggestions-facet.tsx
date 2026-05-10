@@ -22,8 +22,9 @@
 
 import { useEffect, useRef } from "react";
 
-import type { DocxEditorRef } from "@stll/folio";
 import { useShallow } from "zustand/react/shallow";
+
+import type { DocxEditorRef } from "@stll/folio";
 
 import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
 import { ReviewPanel } from "@/components/ai-suggestions/review-panel";

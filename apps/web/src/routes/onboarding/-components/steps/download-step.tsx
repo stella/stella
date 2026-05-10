@@ -1,6 +1,7 @@
+import { useTranslations } from "use-intl";
+
 import { Button, buttonVariants } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
-import { useTranslations } from "use-intl";
 
 import {
   detectDesktopPlatform,

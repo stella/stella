@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 
+import { getRouteApi } from "@tanstack/react-router";
+import { SearchIcon } from "lucide-react";
+import { useDebouncedCallback } from "use-debounce";
+import { useTranslations } from "use-intl";
+
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
 } from "@stll/ui/components/input-group";
-import { getRouteApi } from "@tanstack/react-router";
-import { SearchIcon } from "lucide-react";
-import { useDebouncedCallback } from "use-debounce";
-import { useTranslations } from "use-intl";
 
 import { InviteMemberDialog } from "@/routes/_protected.organization/-components/invite-member-dialog";
 

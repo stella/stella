@@ -19,9 +19,10 @@
  *  - tracked insertions/deletions and comments are preserved as inline tags
  */
 
-import type { FolioAIBlock } from "@stll/folio/server";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
+
+import type { FolioAIBlock } from "@stll/folio/server";
 
 import {
   escapeDocxReviewText,
