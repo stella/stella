@@ -21,6 +21,7 @@ export type NativeToolCatalogItem = {
 };
 
 const ARES_RECOMMENDED_JURISDICTIONS = ["CZ"] as const;
+const BOE_RECOMMENDED_JURISDICTIONS = ["ES"] as const;
 const NATIVE_TOOL_CATALOG = [
   {
     slug: "ares",
@@ -31,6 +32,16 @@ const NATIVE_TOOL_CATALOG = [
     documentationUrl: "https://ares.gov.cz/stranky/vyvojar-info",
     iconUrl: "https://ares.gov.cz/logo-ares-new.ico",
     recommendedJurisdictions: [...ARES_RECOMMENDED_JURISDICTIONS],
+  },
+  {
+    slug: "boe",
+    displayName: "BOE",
+    description:
+      "Spanish consolidated legislation, daily gazette, and BORME (commercial registry gazette) from the official Boletín Oficial del Estado open-data API.",
+    url: "https://www.boe.es",
+    documentationUrl: "https://www.boe.es/datosabiertos/",
+    iconUrl: null,
+    recommendedJurisdictions: [...BOE_RECOMMENDED_JURISDICTIONS],
   },
 ] satisfies NativeToolCatalogItem[];
 
