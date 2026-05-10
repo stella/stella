@@ -38,21 +38,23 @@ sort_commits = "newest"
 #   - First matching parser wins (so put more specific patterns first,
 #     e.g. `chore(deps)` before `chore`).
 #   - Rendered section order follows the lexicographic order of `group`.
-#     The `N:` prefix below pins the order (0 → 8); the body template
-#     above strips everything before the colon, so the prefix never
-#     reaches the rendered markdown — keeps GitHub release notes,
-#     stll.app/changelog, and any other downstream renderer clean.
+#     The two-digit `NN:` prefix pins the order (00 → 99); the body
+#     template above strips everything before the colon, so the prefix
+#     never reaches the rendered markdown — keeps GitHub release notes,
+#     stll.app/changelog, and any other downstream renderer clean. Two
+#     digits leave headroom for new sections without breaking sort
+#     (single-digit `10` would otherwise sort before `2`).
 commit_parsers = [
-  { message = "^feat",            group = "0:🚀 Features" },
-  { message = "^fix",             group = "1:🐛 Bug Fixes" },
-  { message = "^perf",            group = "2:⚡ Performance" },
-  { message = "^refactor",        group = "3:♻️ Refactor" },
-  { message = "^docs",            group = "4:📚 Documentation" },
-  { message = "^test",            group = "5:🧪 Tests" },
-  { message = "^chore\\(deps\\)", group = "6:📦 Dependencies" },
-  { message = "^chore",           group = "7:⚙️ Miscellaneous" },
+  { message = "^feat",            group = "00:🚀 Features" },
+  { message = "^fix",             group = "01:🐛 Bug Fixes" },
+  { message = "^perf",            group = "02:⚡ Performance" },
+  { message = "^refactor",        group = "03:♻️ Refactor" },
+  { message = "^docs",            group = "04:📚 Documentation" },
+  { message = "^test",            group = "05:🧪 Tests" },
+  { message = "^chore\\(deps\\)", group = "06:📦 Dependencies" },
+  { message = "^chore",           group = "07:⚙️ Miscellaneous" },
   { message = "^style",           skip  = true },
   { message = "^ci",              skip  = true },
   { message = "^build",           skip  = true },
-  { message = "^revert",          group = "8:⏪ Reverts" },
+  { message = "^revert",          group = "08:⏪ Reverts" },
 ]
