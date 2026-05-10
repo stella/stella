@@ -10,11 +10,28 @@
 
 import * as UTIF from "utif2";
 
+/**
+ * Hard cap on the pixel count we'll attempt to decode. Each pixel costs 4 B
+ * for the intermediate RGBA buffer plus another canvas-managed bitmap, so
+ * 64 MP ≈ 256 MB before counting the PNG re-encode. A crafted TIFF whose
+ * declared dimensions exceed this is rejected without allocating the
+ * RGBA buffer, which would otherwise hang or OOM the tab.
+ */
+const MAX_TIFF_PIXELS = 64_000_000;
+
 export function isTiffMimeType(mimeType: string): boolean {
-  return mimeType === "image/tiff" || mimeType === "image/tif";
+  const lower = mimeType.toLowerCase();
+  return lower === "image/tiff" || lower === "image/tif";
 }
 
-export function convertTiffToPngDataUrl(tiffData: ArrayBuffer): string | null {
+export type ConvertedTiff = {
+  dataUrl: string;
+  data: ArrayBuffer;
+};
+
+export function convertTiffToPngDataUrl(
+  tiffData: ArrayBuffer,
+): ConvertedTiff | null {
   try {
     const ifds = UTIF.decode(tiffData);
     const firstImage = ifds[0];
@@ -22,12 +39,19 @@ export function convertTiffToPngDataUrl(tiffData: ArrayBuffer): string | null {
       return null;
     }
 
-    UTIF.decodeImage(tiffData, firstImage);
-    const rgba = UTIF.toRGBA8(firstImage);
-
+    // Validate dimensions BEFORE the eager RGBA allocation.
     const width = firstImage.width;
     const height = firstImage.height;
-    if (!width || !height || rgba.length === 0) {
+    if (!width || !height) {
+      return null;
+    }
+    if (width * height > MAX_TIFF_PIXELS) {
+      return null;
+    }
+
+    UTIF.decodeImage(tiffData, firstImage);
+    const rgba = UTIF.toRGBA8(firstImage);
+    if (rgba.length === 0) {
       return null;
     }
 
@@ -51,7 +75,29 @@ export function convertTiffToPngDataUrl(tiffData: ArrayBuffer): string | null {
     const imageData = new ImageData(clamped, width, height);
     ctx.putImageData(imageData, 0, 0);
 
-    return canvas.toDataURL("image/png");
+    const dataUrl = canvas.toDataURL("image/png");
+    const data = dataUrlToArrayBuffer(dataUrl);
+    if (!data) {
+      return null;
+    }
+    return { dataUrl, data };
+  } catch {
+    return null;
+  }
+}
+
+function dataUrlToArrayBuffer(dataUrl: string): ArrayBuffer | null {
+  const base64 = dataUrl.split(",", 2)[1];
+  if (!base64) {
+    return null;
+  }
+  try {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.codePointAt(i) ?? 0;
+    }
+    return bytes.buffer;
   } catch {
     return null;
   }

@@ -344,20 +344,21 @@ function buildMediaMap(
     const mimeType = getMediaMimeType(path);
 
     // TIFF: browsers don't render TIFF in <img>, so decode + re-encode as
-    // PNG eagerly. This also flips `mimeType` so consumers see the
-    // effective format. On re-export, the image is written as PNG. If
-    // conversion fails (e.g. headless / no Canvas), fall through to lazy
-    // attachment with the original TIFF mimeType — the round-trip survives
-    // even if the in-browser preview is broken.
+    // PNG eagerly. The mimeType, data, and filename extension are all
+    // updated together so re-export writes a PNG file matching its
+    // declared type. If conversion fails (e.g. headless / no Canvas, or
+    // dimensions exceed the safety cap), fall through to lazy attachment
+    // with the original TIFF data — the round-trip survives even if the
+    // in-browser preview is broken.
     if (isTiffMimeType(mimeType)) {
-      const pngDataUrl = convertTiffToPngDataUrl(data);
-      if (pngDataUrl) {
+      const converted = convertTiffToPngDataUrl(data);
+      if (converted) {
         const mediaFile: MediaFile = {
           path,
-          filename,
+          filename: filename.replace(/\.tiff?$/i, ".png"),
           mimeType: "image/png",
-          data,
-          dataUrl: pngDataUrl,
+          data: converted.data,
+          dataUrl: converted.dataUrl,
         };
         media.set(path, mediaFile);
         const normalizedPath = path.replace(/^word\//, "");
