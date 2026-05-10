@@ -377,6 +377,12 @@
     "moveToSide": "Perkelti į šoninį skydelį",
     "newChat": "Naujas pokalbis",
     "noThreads": "Pokalbių dar nėra",
+    "pastedText": {
+      "expand": "Rodyti visą tekstą",
+      "fromClipboard": "Įklijuota {count, plural, one {# simbolis} few {# simboliai} other {# simbolių}}",
+      "fromPromptFallback": "Įgūdis",
+      "remove": "Pašalinti"
+    },
     "placeholder": "Čia įveskite klausimą, / įgūdžiams, @ kontekstui pridėti",
     "prompts": {
       "noResults": "Nėra atitinkančių įgūdžių",

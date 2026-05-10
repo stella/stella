@@ -377,6 +377,12 @@
     "moveToSide": "Déplacer vers le panneau latéral",
     "newChat": "Nouvelle conversation",
     "noThreads": "Aucune conversation",
+    "pastedText": {
+      "expand": "Afficher le texte complet",
+      "fromClipboard": "Collé : {count, plural, one {# caractère} other {# caractères}}",
+      "fromPromptFallback": "Compétence",
+      "remove": "Supprimer"
+    },
     "placeholder": "Saisissez votre question ici, / pour les skills, @ pour ajouter du contexte",
     "prompts": {
       "noResults": "Aucun skill correspondant",

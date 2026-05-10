@@ -377,6 +377,12 @@
     "moveToSide": "Áthelyezés az oldalsó panelbe",
     "newChat": "Új csevegés",
     "noThreads": "Még nincsenek beszélgetések",
+    "pastedText": {
+      "expand": "Teljes szöveg megjelenítése",
+      "fromClipboard": "Beillesztve: {count, plural, one {# karakter} other {# karakter}}",
+      "fromPromptFallback": "Készség",
+      "remove": "Eltávolítás"
+    },
     "placeholder": "Írja ide a kérdését, / a skillekhez, @ kontextus hozzáadásához",
     "prompts": {
       "noResults": "Nincs egyező skill",

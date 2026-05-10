@@ -377,6 +377,12 @@
     "moveToSide": "Presunúť do bočného panela",
     "newChat": "Nový chat",
     "noThreads": "Zatiaľ žiadne konverzácie",
+    "pastedText": {
+      "expand": "Zobraziť celý text",
+      "fromClipboard": "Vložené {count, plural, one {# znak} few {# znaky} other {# znakov}}",
+      "fromPromptFallback": "Zručnosť",
+      "remove": "Odstrániť"
+    },
     "placeholder": "Sem napíšte svoju otázku, / pre zručnosti, @ na pridanie kontextu",
     "prompts": {
       "noResults": "Žiadne zhodné zručnosti",

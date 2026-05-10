@@ -377,6 +377,12 @@
     "moveToSide": "Vii külgpaneeli",
     "newChat": "Uus vestlus",
     "noThreads": "Vestlusi pole veel",
+    "pastedText": {
+      "expand": "Näita kogu teksti",
+      "fromClipboard": "Kleebitud {count, plural, one {# märk} other {# märki}}",
+      "fromPromptFallback": "Oskus",
+      "remove": "Eemalda"
+    },
     "placeholder": "Kirjutage oma küsimus siia, / oskuste jaoks, @ konteksti lisamiseks",
     "prompts": {
       "noResults": "Sobivaid oskusi pole",

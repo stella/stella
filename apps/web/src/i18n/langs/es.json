@@ -377,6 +377,12 @@
     "moveToSide": "Mover al panel lateral",
     "newChat": "Nueva conversación",
     "noThreads": "Aún no hay conversaciones",
+    "pastedText": {
+      "expand": "Mostrar texto completo",
+      "fromClipboard": "Pegado: {count, plural, one {# carácter} other {# caracteres}}",
+      "fromPromptFallback": "Habilidad",
+      "remove": "Eliminar"
+    },
     "placeholder": "Escriba su pregunta aquí, / para skills, @ para añadir contexto",
     "prompts": {
       "noResults": "Sin habilidades coincidentes",

@@ -377,6 +377,12 @@
     "moveToSide": "Pārvietot uz sānu paneli",
     "newChat": "Jauna saruna",
     "noThreads": "Sarunu vēl nav",
+    "pastedText": {
+      "expand": "Rādīt pilnu tekstu",
+      "fromClipboard": "Ielīmēti {count, plural, one {# rakstzīme} other {# rakstzīmes}}",
+      "fromPromptFallback": "Prasme",
+      "remove": "Noņemt"
+    },
     "placeholder": "Ierakstiet jautājumu šeit, / prasmēm, @ konteksta pievienošanai",
     "prompts": {
       "noResults": "Nav atbilstošu prasmju",

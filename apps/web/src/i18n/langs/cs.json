@@ -377,6 +377,12 @@
     "moveToSide": "Přesunout do bočního panelu",
     "newChat": "Nový chat",
     "noThreads": "Zatím žádné konverzace",
+    "pastedText": {
+      "expand": "Zobrazit celý text",
+      "fromClipboard": "Vloženo {count, plural, one {# znak} few {# znaky} other {# znaků}}",
+      "fromPromptFallback": "Dovednost",
+      "remove": "Odstranit"
+    },
     "placeholder": "Zde napište svůj dotaz, / pro dovednosti, @ pro přidání kontextu",
     "prompts": {
       "noResults": "Žádné odpovídající dovednosti",

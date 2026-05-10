@@ -380,6 +380,12 @@ type Messages = {
     "moveToSide": "Move to side panel";
     "newChat": "New chat";
     "noThreads": "No conversations yet";
+    "pastedText": {
+      "expand": "Show full text";
+      "fromClipboard": "Pasted {count, plural, one {# character} other {# characters}}";
+      "fromPromptFallback": "Skill";
+      "remove": "Remove";
+    };
     "placeholder": "Type your question here, / for skills, @ to add context";
     "prompts": {
       "noResults": "No matching skills";
