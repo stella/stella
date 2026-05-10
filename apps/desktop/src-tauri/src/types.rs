@@ -113,7 +113,7 @@ impl Default for DesktopUpdateSnapshot {
 /// new bridge endpoint or backwards-compatible field is added so
 /// the web side can gate features on `snapshot.bridgeVersion >= N`
 /// without coupling to the desktop's literal app version.
-pub const BRIDGE_VERSION: u32 = 1;
+pub const BRIDGE_VERSION: u32 = 2;
 
 /// Feature flags advertised to the web app. Add a string here
 /// whenever a new capability lands on the bridge so the web app
