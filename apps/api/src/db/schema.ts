@@ -11,6 +11,7 @@ import { jsonb } from "@/api/db/columns";
 import {
   chatMessagePolicies,
   chatThreadPolicies,
+  globalCaseLawPolicies,
   mcpConnectorPolicies,
   mcpOAuthStatePolicies,
   mcpOAuthClientPolicies,
@@ -1984,7 +1985,10 @@ export const caseLawSources = p.pgTable(
       .notNull()
       .$onUpdate(() => new Date()),
   },
-  (t) => [p.uniqueIndex("case_law_sources_adapter_key_idx").on(t.adapterKey)],
+  (t) => [
+    p.uniqueIndex("case_law_sources_adapter_key_idx").on(t.adapterKey),
+    ...globalCaseLawPolicies(),
+  ],
 );
 
 export const caseLawDecisions = p.pgTable(
@@ -2056,6 +2060,7 @@ export const caseLawDecisions = p.pgTable(
       .on(t.languageGroupKey)
       .where(isNotNull(t.languageGroupKey)),
     p.index("case_law_decisions_created_at_idx").on(t.createdAt),
+    ...globalCaseLawPolicies(),
   ],
 );
 
@@ -2095,6 +2100,7 @@ export const caseLawCitations = p.pgTable(
       "citations_polarity_values",
       sql`${t.polarity} IN ('positive','supportive','neutral','negative','unknown')`,
     ),
+    ...globalCaseLawPolicies(),
   ],
 );
 
@@ -2129,6 +2135,7 @@ export const caseLawPolarityRules = p.pgTable(
       "polarity_rules_source_values",
       sql`${t.source} IN ('manual','llm-proposed','llm-promoted')`,
     ),
+    ...globalCaseLawPolicies(),
   ],
 );
 
@@ -2182,14 +2189,19 @@ export const caseLawCourtWeights = p.pgTable(
       .uniqueIndex("case_law_court_weights_country_pattern_idx")
       .on(t.country, t.courtPattern),
     p.index("case_law_court_weights_country_idx").on(t.country),
+    ...globalCaseLawPolicies(),
   ],
 );
 
-export const caseLawFtsConfigs = p.pgTable("case_law_fts_configs", {
-  language: p.varchar({ length: 8 }).primaryKey(),
-  regconfig: p.varchar({ length: 64 }).notNull(),
-  useUnaccent: p.boolean("use_unaccent").notNull().default(true),
-});
+export const caseLawFtsConfigs = p.pgTable(
+  "case_law_fts_configs",
+  {
+    language: p.varchar({ length: 8 }).primaryKey(),
+    regconfig: p.varchar({ length: 64 }).notNull(),
+    useUnaccent: p.boolean("use_unaccent").notNull().default(true),
+  },
+  () => [...globalCaseLawPolicies()],
+);
 
 export const caseLawSearchDocuments = p.pgTable(
   "case_law_search_documents",
@@ -2206,7 +2218,10 @@ export const caseLawSearchDocuments = p.pgTable(
     tsv: tsvector(),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
-  (table) => [p.index("case_law_search_docs_tsv_idx").using("gin", table.tsv)],
+  (table) => [
+    p.index("case_law_search_docs_tsv_idx").using("gin", table.tsv),
+    ...globalCaseLawPolicies(),
+  ],
 );
 
 // ---------------------------------------------------------------------------
@@ -2238,6 +2253,7 @@ export const caseLawIngestionEvents = p.pgTable(
   (t) => [
     p.index("case_law_ingestion_events_source_idx").on(t.sourceId),
     p.index("case_law_ingestion_events_finished_idx").on(t.finishedAt),
+    ...globalCaseLawPolicies(),
   ],
 );
 
@@ -2259,6 +2275,7 @@ export const caseLawIngestionFailures = p.pgTable(
     p.index("case_law_ingestion_failures_source_idx").on(t.sourceId),
     p.index("case_law_ingestion_failures_error_type_idx").on(t.errorType),
     p.index("case_law_ingestion_failures_created_idx").on(t.createdAt),
+    ...globalCaseLawPolicies(),
   ],
 );
 

@@ -1046,6 +1046,11 @@ type PolicyRow = {
   check_expr: string | null;
 };
 
+type TablePrivilegeRow = {
+  table_name: string;
+  privilege: "DELETE" | "INSERT" | "SELECT" | "UPDATE";
+};
+
 /**
  * Fetch all RLS policies for the `stella` role.
  * Returns table name, policy name, and command type
@@ -1069,6 +1074,28 @@ export const fetchStellaPolicies = async (
        WHERE rolname = ${stella.name})
     ]::oid[]
     ORDER BY c.relname, p.polname
+  `);
+  return rows.rows;
+};
+
+export const fetchStellaTablePrivileges = async (
+  db: TestDatabase,
+): Promise<TablePrivilegeRow[]> => {
+  const rows = await db.execute<TablePrivilegeRow>(sql`
+    SELECT c.relname AS table_name,
+           privilege.value AS privilege
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    CROSS JOIN (VALUES
+      ('SELECT'),
+      ('INSERT'),
+      ('UPDATE'),
+      ('DELETE')
+    ) AS privilege(value)
+    WHERE n.nspname = 'public'
+      AND c.relkind IN ('r', 'p')
+      AND has_table_privilege(${stella.name}, c.oid, privilege.value)
+    ORDER BY c.relname, privilege.value
   `);
   return rows.rows;
 };

@@ -9,22 +9,32 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { jsonb } from "@/api/db/columns";
+import {
+  authMemberPolicies,
+  authOrganizationPolicies,
+  authUserPolicies,
+  denyStellaAccessPolicies,
+} from "@/api/db/rls";
 
-export const user = pgTable("user", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  emailVerified: boolean("email_verified").default(false).notNull(),
-  image: text("image"),
-  timezoneId: text("timezone_id").default("UTC").notNull(),
-  preferredName: text("preferred_name"),
-  wordEditShortcut: text("word_edit_shortcut"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at")
-    .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
-    .notNull(),
-});
+export const user = pgTable(
+  "user",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    email: text("email").notNull().unique(),
+    emailVerified: boolean("email_verified").default(false).notNull(),
+    image: text("image"),
+    timezoneId: text("timezone_id").default("UTC").notNull(),
+    preferredName: text("preferred_name"),
+    wordEditShortcut: text("word_edit_shortcut"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  () => [...authUserPolicies()],
+);
 
 export const session = pgTable(
   "session",
@@ -48,6 +58,7 @@ export const session = pgTable(
       table.userId,
       table.activeOrganizationId,
     ),
+    ...denyStellaAccessPolicies(),
   ],
 );
 
@@ -72,7 +83,10 @@ export const account = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("account_userId_idx").on(table.userId)],
+  (table) => [
+    index("account_userId_idx").on(table.userId),
+    ...denyStellaAccessPolicies(),
+  ],
 );
 
 export const verification = pgTable(
@@ -88,7 +102,10 @@ export const verification = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("verification_identifier_idx").on(table.identifier)],
+  (table) => [
+    index("verification_identifier_idx").on(table.identifier),
+    ...denyStellaAccessPolicies(),
+  ],
 );
 
 export const organization = pgTable(
@@ -101,7 +118,10 @@ export const organization = pgTable(
     createdAt: timestamp("created_at").notNull(),
     metadata: text("metadata"),
   },
-  (table) => [uniqueIndex("organization_slug_uidx").on(table.slug)],
+  (table) => [
+    uniqueIndex("organization_slug_uidx").on(table.slug),
+    ...authOrganizationPolicies(),
+  ],
 );
 
 export const member = pgTable(
@@ -122,6 +142,7 @@ export const member = pgTable(
     index("member_organizationId_idx").on(table.organizationId),
     index("member_userId_idx").on(table.userId),
     index("member_lastActiveWorkspaceId_idx").on(table.lastActiveWorkspaceId),
+    ...authMemberPolicies(),
   ],
 );
 
@@ -144,18 +165,23 @@ export const invitation = pgTable(
   (table) => [
     index("invitation_organizationId_idx").on(table.organizationId),
     index("invitation_email_idx").on(table.email),
+    ...denyStellaAccessPolicies(),
   ],
 );
 
-export const jwks = pgTable("jwks", {
-  id: text("id").primaryKey(),
-  alg: text("alg"),
-  crv: text("crv"),
-  publicKey: text("public_key").notNull(),
-  privateKey: text("private_key").notNull(),
-  createdAt: timestamp("created_at").notNull(),
-  expiresAt: timestamp("expires_at"),
-});
+export const jwks = pgTable(
+  "jwks",
+  {
+    id: text("id").primaryKey(),
+    alg: text("alg"),
+    crv: text("crv"),
+    publicKey: text("public_key").notNull(),
+    privateKey: text("private_key").notNull(),
+    createdAt: timestamp("created_at").notNull(),
+    expiresAt: timestamp("expires_at"),
+  },
+  () => [...denyStellaAccessPolicies()],
+);
 
 export const oauthClient = pgTable(
   "oauth_client",
@@ -200,6 +226,7 @@ export const oauthClient = pgTable(
     uniqueIndex("oauth_client_client_id_uidx").on(table.clientId),
     index("oauth_client_user_id_idx").on(table.userId),
     index("oauth_client_reference_id_idx").on(table.referenceId),
+    ...denyStellaAccessPolicies(),
   ],
 );
 
@@ -233,6 +260,7 @@ export const oauthRefreshToken = pgTable(
     index("oauth_refresh_token_session_id_idx").on(table.sessionId),
     index("oauth_refresh_token_user_id_idx").on(table.userId),
     index("oauth_refresh_token_reference_id_idx").on(table.referenceId),
+    ...denyStellaAccessPolicies(),
   ],
 );
 
@@ -266,6 +294,7 @@ export const oauthAccessToken = pgTable(
     index("oauth_access_token_user_id_idx").on(table.userId),
     index("oauth_access_token_reference_id_idx").on(table.referenceId),
     index("oauth_access_token_refresh_id_idx").on(table.refreshId),
+    ...denyStellaAccessPolicies(),
   ],
 );
 
@@ -293,6 +322,7 @@ export const oauthConsent = pgTable(
     index("oauth_consent_client_id_idx").on(table.clientId),
     index("oauth_consent_user_id_idx").on(table.userId),
     index("oauth_consent_reference_id_idx").on(table.referenceId),
+    ...denyStellaAccessPolicies(),
   ],
 );
 

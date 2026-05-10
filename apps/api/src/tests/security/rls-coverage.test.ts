@@ -11,6 +11,7 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import {
   fetchScopedTables,
+  fetchStellaTablePrivileges,
   fetchStellaPolicies,
 } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -39,6 +40,17 @@ describe("policy coverage", () => {
     "member", // auth table, no RLS
   ]);
   const APPEND_ONLY = new Set(["audit_logs"]);
+  const GLOBAL_CASE_LAW_TABLES = [
+    "case_law_citations",
+    "case_law_court_weights",
+    "case_law_decisions",
+    "case_law_fts_configs",
+    "case_law_ingestion_events",
+    "case_law_ingestion_failures",
+    "case_law_polarity_rules",
+    "case_law_search_documents",
+    "case_law_sources",
+  ];
 
   test("every table with workspace_id has workspace policies", async () => {
     const scoped = await fetchScopedTables(testDb);
@@ -138,6 +150,65 @@ describe("policy coverage", () => {
       const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
       expect(expr).toContain("user_id");
       expect(expr).toContain(SETTING_USER_ID);
+    }
+  });
+
+  test("auth and global case-law tables have explicit stella policy boundaries", async () => {
+    const policies = await fetchStellaPolicies(testDb);
+    const commandsFor = (table: string) =>
+      policies
+        .filter((p) => p.table_name === table)
+        .map((p) => p.command)
+        .sort();
+
+    expect(commandsFor("user")).toEqual(["r"]);
+    expect(commandsFor("organization")).toEqual(["r"]);
+    expect(commandsFor("member")).toEqual(["r", "w"]);
+
+    const memberUpdate = policies.find(
+      (p) =>
+        p.table_name === "member" &&
+        p.policy_name === "auth_member_update_last_active_workspace",
+    );
+    expect(memberUpdate?.using_expr).toContain(SETTING_ORGANIZATION_ID);
+    expect(memberUpdate?.check_expr).toContain(SETTING_ORGANIZATION_ID);
+
+    for (const table of [
+      "account",
+      "invitation",
+      "jwks",
+      "oauth_access_token",
+      "oauth_client",
+      "oauth_consent",
+      "oauth_refresh_token",
+      "session",
+      "verification",
+    ]) {
+      const denyPolicy = policies.find(
+        (p) =>
+          p.table_name === table && p.policy_name === "auth_no_stella_access",
+      );
+      expect(denyPolicy?.command).toBe("*");
+      expect(denyPolicy?.using_expr).toBe("false");
+      expect(denyPolicy?.check_expr).toBe("false");
+    }
+
+    const tablePrivileges = await fetchStellaTablePrivileges(testDb);
+    const privilegesFor = (table: string) =>
+      tablePrivileges
+        .filter((p) => p.table_name === table)
+        .map((p) => p.privilege)
+        .sort();
+
+    for (const table of GLOBAL_CASE_LAW_TABLES) {
+      const globalPolicy = policies.find(
+        (p) =>
+          p.table_name === table && p.policy_name === "case_law_global_access",
+      );
+      expect(globalPolicy?.command).toBe("r");
+      expect(globalPolicy?.using_expr).toBe("true");
+      expect(globalPolicy?.check_expr).toBeNull();
+      expect(privilegesFor(table)).toEqual(["SELECT"]);
     }
   });
 });
