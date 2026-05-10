@@ -287,30 +287,43 @@ describe("property: compound condition inference per sub-expression", () => {
     // Bug: SUB_EXPR_SPLIT_RE split on and/or inside string
     // literals, producing malformed sub-expressions.
 
+    // Constants for the literal so the identifier filter below can
+    // reference them: if `varName` happened to equal one of these, a
+    // legitimate field for the variable would also satisfy the
+    // "literal substrings must not become fields" assertion and the
+    // test would fail spuriously.
+    const LITERAL_LEFT = "red";
+    const LITERAL_RIGHT = "blue";
+
     await fc.assert(
-      fc.asyncProperty(identifier, async (varName) => {
-        // Condition: `varName == "red and blue"`
-        // The "and" inside the string must NOT split
-        const condition = `${varName} == "red and blue"`;
+      fc.asyncProperty(
+        identifier.filter((s) => s !== LITERAL_LEFT && s !== LITERAL_RIGHT),
+        async (varName) => {
+          // Condition: `varName == "red and blue"`
+          // The "and" inside the string must NOT split
+          const condition = `${varName} == "${LITERAL_LEFT} and ${LITERAL_RIGHT}"`;
 
-        const xml = WRAP(
-          [P(`{{#if ${condition}}}`), P("Content"), P("{{/if}}")].join(""),
-        );
-        const docx = await makeDocx(xml);
-        const result = await discoverTemplate(docx);
+          const xml = WRAP(
+            [P(`{{#if ${condition}}}`), P("Content"), P("{{/if}}")].join(""),
+          );
+          const docx = await makeDocx(xml);
+          const result = await discoverTemplate(docx);
 
-        const field = result.fields.find((f) => f.path === varName);
-        // varName is used in a comparison — should be "string"
-        if (field) {
-          expect(field.kind).toBe("string");
-        }
+          const field = result.fields.find((f) => f.path === varName);
+          // varName is used in a comparison — should be "string"
+          if (field) {
+            expect(field.kind).toBe("string");
+          }
 
-        // "red" and "blue" should NOT appear as fields
-        const redField = result.fields.find((f) => f.path === "red");
-        const blueField = result.fields.find((f) => f.path === "blue");
-        expect(redField).toBeUndefined();
-        expect(blueField).toBeUndefined();
-      }),
+          // The literal's substrings must NOT appear as fields
+          const leftField = result.fields.find((f) => f.path === LITERAL_LEFT);
+          const rightField = result.fields.find(
+            (f) => f.path === LITERAL_RIGHT,
+          );
+          expect(leftField).toBeUndefined();
+          expect(rightField).toBeUndefined();
+        },
+      ),
       { numRuns: 30 },
     );
   });
