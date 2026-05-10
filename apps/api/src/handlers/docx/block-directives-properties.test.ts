@@ -309,11 +309,13 @@ describe("property: compound condition inference per sub-expression", () => {
           const docx = await makeDocx(xml);
           const result = await discoverTemplate(docx);
 
+          // varName is on the left of a comparison, so the parser
+          // must discover it as a string field. Asserting `toBeDefined`
+          // catches a regression that drops it entirely; the previous
+          // `if (field)` would have passed silently in that case.
           const field = result.fields.find((f) => f.path === varName);
-          // varName is used in a comparison — should be "string"
-          if (field) {
-            expect(field.kind).toBe("string");
-          }
+          expect(field).toBeDefined();
+          expect(field?.kind).toBe("string");
 
           // The literal's substrings must NOT appear as fields
           const leftField = result.fields.find((f) => f.path === LITERAL_LEFT);
