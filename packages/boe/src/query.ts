@@ -32,7 +32,7 @@ export const buildSearchQuery = (input: BoeSearchQuery): string => {
     parts.push(`(titulo:(${terms}) OR texto:(${terms}))`);
   }
   if (input.title) {
-    parts.push(`titulo:"${input.title}"`);
+    parts.push(`titulo:"${input.title.replaceAll('"', '\\"')}"`);
   }
   if (input.departmentCode) {
     parts.push(`departamento@codigo:${input.departmentCode}`);

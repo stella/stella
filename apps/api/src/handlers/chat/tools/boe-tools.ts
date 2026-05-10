@@ -8,7 +8,6 @@ import {
   RELATION_TYPES,
   searchConsolidatedLegislation,
 } from "@stll/boe";
-// oxlint-disable-next-line no-restricted-imports
 import { tool } from "ai";
 import * as v from "valibot";
 
@@ -207,22 +206,10 @@ export const createBoeTools = () => ({
   borme_get_summary: tool({
     description:
       "Fetch the daily BORME (Boletín Oficial del Registro Mercantil) — Spain's commercial registry gazette. Use this for due diligence: company formations, director changes, capital increases, dissolutions published on a given day. The Spanish business registry has no real-time API, so this is the canonical source for recent corporate events.",
-    inputSchema: valibotSchema(
-      v.strictObject({
-        date: dateSchema,
-        provinceCode: v.optional(
-          v.pipe(
-            v.string(),
-            v.description(
-              "Optional province code filter (e.g. M for Madrid, B for Barcelona).",
-            ),
-          ),
-        ),
-      }),
-    ),
-    execute: async ({ date, provinceCode }) => ({
+    inputSchema: valibotSchema(v.strictObject({ date: dateSchema })),
+    execute: async ({ date }) => ({
       date,
-      summary: await getBormeSummary(date, { provinceCode }),
+      summary: await getBormeSummary(date),
     }),
   }),
 });

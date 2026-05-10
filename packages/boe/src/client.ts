@@ -51,12 +51,15 @@ const parseErrorBody = (value: unknown): BoeErrorResponse => {
   return result;
 };
 
-const boeGet = async <T>(url: string): Promise<T | null> => {
+const boeFetch = async (
+  url: string,
+  accept: string,
+): Promise<Response | null> => {
   let response: Response;
   try {
     response = await fetch(url, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { Accept: "application/json" },
+      headers: { Accept: accept },
     });
   } catch (error) {
     throw new BoeRequestError(url, "BOE request failed", { cause: error });
@@ -80,11 +83,28 @@ const boeGet = async <T>(url: string): Promise<T | null> => {
     });
   }
 
+  return response;
+};
+
+const boeGet = async <T>(url: string): Promise<T | null> => {
+  const response = await boeFetch(url, "application/json");
+  if (response === null) {
+    return null;
+  }
   // SAFETY: we trust the BOE open-data API to return the documented JSON shape;
   // runtime validation across every nested branch is impractical for this
   // undocumented-but-stable public API.
   // oxlint-disable-next-line no-unsafe-type-assertion
   return response.json() as Promise<T>;
+};
+
+// The BOE API serves /texto and /texto/bloque/{id} as application/xml only.
+const boeGetText = async (url: string): Promise<string | null> => {
+  const response = await boeFetch(url, "application/xml");
+  if (response === null) {
+    return null;
+  }
+  return await response.text();
 };
 
 // ---------------------------------------------------------------------------
@@ -145,16 +165,31 @@ const lawSectionUrl = (lawId: string, section?: string): string => {
   return section ? `${base}/${section}` : base;
 };
 
-const fetchLawSection = async (
+const fetchLawJsonSection = async (
   lawId: string,
   section: string,
 ): Promise<unknown> => {
   const envelope = await boeGet<BoeLawEnvelope>(lawSectionUrl(lawId, section));
-  if (!envelope) {
+  if (envelope === null) {
     throw new BoeNotFoundError(`${lawId}/${section}`);
   }
   return envelope.data ?? null;
 };
+
+// Returns null on 404 instead of throwing — used for optional sections of a law
+// that may be missing without invalidating the rest of the response.
+const fetchOptionalLawJsonSection = async (
+  lawId: string,
+  section: string,
+): Promise<unknown> => {
+  const envelope = await boeGet<BoeLawEnvelope>(lawSectionUrl(lawId, section));
+  return envelope === null ? null : (envelope.data ?? null);
+};
+
+const fetchOptionalLawXmlSection = async (
+  lawId: string,
+  section: string,
+): Promise<string | null> => await boeGetText(lawSectionUrl(lawId, section));
 
 export type GetConsolidatedLawOptions = {
   metadata?: boolean | undefined;
@@ -187,16 +222,21 @@ export const getConsolidatedLaw = async (
     eli: options?.eli ?? false,
   };
 
+  // metadatos is the canonical "does this law exist" probe; the others can
+  // legitimately be missing for older or partially-published laws and must
+  // not fail the whole request.
   const [metadata, analysis, fullText, eli] = await Promise.all([
     sections.metadata
-      ? fetchLawSection(lawId, "metadatos")
+      ? fetchLawJsonSection(lawId, "metadatos")
       : Promise.resolve(null),
     sections.analysis
-      ? fetchLawSection(lawId, "analisis")
+      ? fetchOptionalLawJsonSection(lawId, "analisis")
       : Promise.resolve(null),
-    sections.fullText ? fetchLawSection(lawId, "texto") : Promise.resolve(null),
+    sections.fullText
+      ? fetchOptionalLawXmlSection(lawId, "texto")
+      : Promise.resolve(null),
     sections.eli
-      ? fetchLawSection(lawId, "metadata-eli")
+      ? fetchOptionalLawJsonSection(lawId, "metadata-eli")
       : Promise.resolve(null),
   ]);
 
@@ -213,7 +253,7 @@ export const getLawStructure = async (lawId: string): Promise<unknown> => {
   if (!validateLawId(lawId)) {
     throw new BoeValidationError(`Invalid BOE law id: ${lawId}`);
   }
-  return await fetchLawSection(lawId, "texto/indice");
+  return await fetchLawJsonSection(lawId, "texto/indice");
 };
 
 /**
@@ -225,17 +265,20 @@ export const getLawStructure = async (lawId: string): Promise<unknown> => {
 export const getLawTextBlock = async (
   lawId: string,
   blockId: string,
-): Promise<unknown> => {
+): Promise<string> => {
   if (!validateLawId(lawId)) {
     throw new BoeValidationError(`Invalid BOE law id: ${lawId}`);
   }
   if (!blockId.trim()) {
     throw new BoeValidationError("Block id must not be empty");
   }
-  return await fetchLawSection(
-    lawId,
-    `texto/bloque/${encodeURIComponent(blockId)}`,
+  const xml = await boeGetText(
+    lawSectionUrl(lawId, `texto/bloque/${encodeURIComponent(blockId)}`),
   );
+  if (xml === null) {
+    throw new BoeNotFoundError(`${lawId}/texto/bloque/${blockId}`);
+  }
+  return xml;
 };
 
 export const RELATION_TYPES = {
@@ -268,18 +311,13 @@ export const findRelatedLaws = async (
   if (!validateLawId(lawId)) {
     throw new BoeValidationError(`Invalid BOE law id: ${lawId}`);
   }
-  const analysis = await fetchLawSection(lawId, "analisis");
+  const analysis = await fetchLawJsonSection(lawId, "analisis");
   return { lawId, relationType, analysis };
 };
 
 // ---------------------------------------------------------------------------
 // BORME daily summary
 // ---------------------------------------------------------------------------
-
-export type GetBormeSummaryOptions = {
-  /** Optional province code filter (e.g. "M" for Madrid). */
-  provinceCode?: string | undefined;
-};
 
 /**
  * Fetch the BORME (commercial registry gazette) summary for a given date.
@@ -290,7 +328,6 @@ export type GetBormeSummaryOptions = {
  */
 export const getBormeSummary = async (
   date: string,
-  _options?: GetBormeSummaryOptions,
 ): Promise<BormeSummaryResponse> => {
   if (!validateBoeDate(date)) {
     throw new BoeValidationError(
@@ -299,7 +336,7 @@ export const getBormeSummary = async (
   }
   const url = `${BORME_SUMMARY_ENDPOINT}/${date}`;
   const data = await boeGet<BormeSummaryResponse>(url);
-  if (!data) {
+  if (data === null) {
     throw new BoeNotFoundError(`borme/${date}`);
   }
   return data;

@@ -1,4 +1,4 @@
-import { searchConsolidatedLegislation } from "@stll/boe";
+import { BoeValidationError, searchConsolidatedLegislation } from "@stll/boe";
 import { Result } from "better-result";
 import { t } from "elysia";
 
@@ -34,7 +34,7 @@ const boeSearch = createSafeRootHandler(
 
     if (!hasFilter) {
       return Result.err(
-        mapBoeError(new Error("At least one filter is required")),
+        mapBoeError(new BoeValidationError("At least one filter is required")),
       );
     }
 

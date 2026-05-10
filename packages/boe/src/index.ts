@@ -9,7 +9,6 @@ export {
   searchConsolidatedLegislation,
 } from "./client.js";
 export type {
-  GetBormeSummaryOptions,
   GetConsolidatedLawOptions,
   RelatedLawsResult,
   RelationType,

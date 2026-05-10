@@ -33,5 +33,4 @@ export const legislationRoute = new Elysia({ prefix: "/legislation" })
   })
   .get("/borme/:date", bormeSummary.handler, {
     params: bormeSummary.config.params,
-    query: bormeSummary.config.query,
   });

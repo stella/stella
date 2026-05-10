@@ -9,20 +9,15 @@ const paramsSchema = t.Object({
   date: t.String({ pattern: "^\\d{8}$" }),
 });
 
-const querySchema = t.Object({
-  provinceCode: t.Optional(t.String({ minLength: 1, maxLength: 8 })),
-});
-
 const bormeSummary = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
     params: paramsSchema,
-    query: querySchema,
   },
-  async function* ({ params: { date }, query }) {
+  async function* ({ params: { date } }) {
     const result = yield* Result.await(
       Result.tryPromise({
-        try: async () => await getBormeSummary(date, query),
+        try: async () => await getBormeSummary(date),
         catch: mapBoeError,
       }),
     );
