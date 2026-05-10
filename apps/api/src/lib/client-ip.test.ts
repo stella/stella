@@ -38,9 +38,13 @@ describe("parseTrustedProxies", () => {
   });
 
   test("skips malformed entries without crashing", () => {
-    const trusted = parseTrustedProxies("not-an-ip, 10.0.0.0/8, /99");
+    const trusted = parseTrustedProxies(
+      "not-an-ip, 10.0.0.0/8, /24, 1.2.3.4/, 192.168.0.0 / 16",
+    );
     expect(isTrustedProxy("10.1.2.3", trusted)).toBe(true);
+    expect(isTrustedProxy("192.168.1.1", trusted)).toBe(true);
     expect(isTrustedProxy("0.0.0.0", trusted)).toBe(false);
+    expect(isTrustedProxy("8.8.8.8", trusted)).toBe(false);
   });
 });
 
@@ -97,7 +101,7 @@ describe("resolveClientIp", () => {
     ).toBe("8.8.8.8");
   });
 
-  test("falls back to x-real-ip then x-forwarded-for first hop", () => {
+  test("falls back to x-real-ip then the first untrusted x-forwarded-for hop", () => {
     const trusted = parseTrustedProxies("10.0.0.0/8");
     expect(
       resolveClientIp(
@@ -108,11 +112,42 @@ describe("resolveClientIp", () => {
     ).toBe("9.9.9.9");
     expect(
       resolveClientIp(
-        request({ "x-forwarded-for": "8.8.8.8, 10.0.0.1" }),
+        request({ "x-forwarded-for": "9.9.9.9, 198.51.100.23" }),
         fakeServer("10.1.2.3"),
         { trusted },
       ),
-    ).toBe("8.8.8.8");
+    ).toBe("198.51.100.23");
+  });
+
+  test("walks x-forwarded-for backwards through trusted proxies", () => {
+    const trusted = parseTrustedProxies("10.0.0.0/8, 192.168.0.0/16");
+    expect(
+      resolveClientIp(
+        request({
+          "x-forwarded-for": "203.0.113.9, 192.168.1.20, 10.2.3.4",
+        }),
+        fakeServer("10.1.2.3"),
+        { trusted },
+      ),
+    ).toBe("203.0.113.9");
+  });
+
+  test("ignores malformed forwarded header values", () => {
+    const trusted = parseTrustedProxies("10.0.0.0/8");
+    expect(
+      resolveClientIp(
+        request({ "cf-connecting-ip": "not-an-ip", "x-real-ip": "also-bad" }),
+        fakeServer("10.1.2.3"),
+        { trusted },
+      ),
+    ).toBe("10.1.2.3");
+    expect(
+      resolveClientIp(
+        request({ "x-forwarded-for": "203.0.113.9, not-an-ip" }),
+        fakeServer("10.1.2.3"),
+        { trusted },
+      ),
+    ).toBe("10.1.2.3");
   });
 
   test("returns the trusted-proxy peer when all forwarded headers are missing", () => {

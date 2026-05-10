@@ -15,7 +15,7 @@
  * front of the API). When the variable is unset, no proxy is
  * trusted: forwarded headers are ignored.
  */
-import { BlockList, isIPv6 } from "node:net";
+import { BlockList, isIP, isIPv6 } from "node:net";
 
 import { env } from "@/api/env";
 
@@ -38,12 +38,20 @@ export const parseTrustedProxies = (
     .map((part) => part.trim())
     .filter((part) => part.length > 0)) {
     const slashIndex = entry.indexOf("/");
-    const ip = slashIndex === -1 ? entry : entry.slice(0, slashIndex);
-    const prefixText = slashIndex === -1 ? null : entry.slice(slashIndex + 1);
-    const family: "ipv4" | "ipv6" = isIPv6(ip) ? "ipv6" : "ipv4";
+    const ip = (slashIndex === -1 ? entry : entry.slice(0, slashIndex)).trim();
+    const prefixText =
+      slashIndex === -1 ? null : entry.slice(slashIndex + 1).trim();
+    if (ip.length === 0 || prefixText === "") {
+      continue;
+    }
+    const ipVersion = isIP(ip);
+    if (ipVersion === 0) {
+      continue;
+    }
+    const family: "ipv4" | "ipv6" = ipVersion === 6 ? "ipv6" : "ipv4";
     const defaultPrefix = family === "ipv6" ? 128 : 32;
     const prefix = prefixText === null ? defaultPrefix : Number(prefixText);
-    if (!Number.isFinite(prefix) || prefix < 0 || prefix > defaultPrefix) {
+    if (!Number.isInteger(prefix) || prefix < 0 || prefix > defaultPrefix) {
       continue;
     }
     try {
@@ -77,12 +85,44 @@ const getTrustedProxies = (): TrustedProxies => {
   return cachedTrustedProxies;
 };
 
-const firstForwardedIp = (forwardedFor: string | null): string | null => {
+const nullableIpHeader = (headers: Headers, name: string): string | null => {
+  const value = headers.get(name)?.trim();
+  if (!value || isIP(value) === 0) {
+    return null;
+  }
+  return value;
+};
+
+const clientIpFromForwardedFor = (
+  forwardedFor: string | null,
+  peer: string,
+  trusted: TrustedProxies,
+): string | null => {
   if (!forwardedFor) {
     return null;
   }
-  const first = forwardedFor.split(",").at(0)?.trim();
-  return first && first.length > 0 ? first : null;
+  const ips = forwardedFor
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (ips.length === 0) {
+    return null;
+  }
+
+  let clientIp = peer;
+  for (let index = ips.length - 1; index >= 0; index -= 1) {
+    if (!isTrustedProxy(clientIp, trusted)) {
+      break;
+    }
+
+    const nextIp = ips.at(index);
+    if (!nextIp || isIP(nextIp) === 0) {
+      return null;
+    }
+    clientIp = nextIp;
+  }
+
+  return clientIp === peer ? null : clientIp;
 };
 
 /**
@@ -103,15 +143,19 @@ export const resolveClientIp = (
   if (!isTrustedProxy(peer, trusted)) {
     return peer;
   }
-  const cf = request.headers.get("cf-connecting-ip")?.trim();
+  const cf = nullableIpHeader(request.headers, "cf-connecting-ip");
   if (cf) {
     return cf;
   }
-  const real = request.headers.get("x-real-ip")?.trim();
+  const real = nullableIpHeader(request.headers, "x-real-ip");
   if (real) {
     return real;
   }
-  const xff = firstForwardedIp(request.headers.get("x-forwarded-for"));
+  const xff = clientIpFromForwardedFor(
+    request.headers.get("x-forwarded-for"),
+    peer,
+    trusted,
+  );
   if (xff) {
     return xff;
   }
