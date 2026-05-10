@@ -215,7 +215,6 @@ async function readRelsOrStub(zip: JSZip, relsPath: string): Promise<string> {
 
 function findMaxImageNum(zip: JSZip): number {
   let maxImageNum = 0;
-  // oxlint-disable-next-line unicorn/no-array-for-each -- JSZip.forEach is not Array.forEach
   zip.forEach((relativePath) => {
     const m = relativePath.match(/^word\/media\/image(\d+)\./);
     if (m) {

@@ -203,7 +203,6 @@ const extractCrossReferences = ($: cheerio.CheerioAPI): CrossReference[] => {
 
 // ── Inline walking (HTML fallback) ────────────────────────
 
-// oxlint-disable-next-line no-unused-vars -- kept for HTML fallback path
 const _walkInlines = (
   $: cheerio.CheerioAPI,
   el: cheerio.Cheerio<AnyNode>,

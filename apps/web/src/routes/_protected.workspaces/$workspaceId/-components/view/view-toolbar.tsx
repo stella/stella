@@ -1,6 +1,24 @@
 import type { ComponentType } from "react";
 import { useMemo, useState } from "react";
 
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { Result } from "better-result";
+import {
+  AlignJustifyIcon,
+  CalendarIcon,
+  ClockIcon,
+  DownloadIcon,
+  EyeIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  HashIcon,
+  Rows3Icon,
+  SparklesIcon,
+  UserIcon,
+  WrapTextIcon,
+} from "lucide-react";
+import { useLocale, useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import {
   Menu,
@@ -20,23 +38,6 @@ import {
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { Result } from "better-result";
-import {
-  AlignJustifyIcon,
-  CalendarIcon,
-  ClockIcon,
-  DownloadIcon,
-  EyeIcon,
-  FolderIcon,
-  FolderOpenIcon,
-  HashIcon,
-  Rows3Icon,
-  SparklesIcon,
-  UserIcon,
-  WrapTextIcon,
-} from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
 
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
@@ -82,7 +83,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
       viewId: view.id,
       // SAFETY: callers pass subsets matching the current layout
       // discriminant; TS can't verify spread preserves a union.
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
       layout: { ...view.layout, ...changes } as ViewLayout,
     });
   };

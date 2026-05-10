@@ -18,7 +18,6 @@ export const ClauseDiffView = ({ diffs }: ClauseDiffViewProps) => (
     {diffs.map((para, i) => (
       <p
         className={cn("text-sm leading-relaxed", statusBorder[para.status])}
-        // eslint-disable-next-line react/no-array-index-key
         key={i}
       >
         {para.segments.map((seg, j) => (
@@ -28,7 +27,6 @@ export const ClauseDiffView = ({ diffs }: ClauseDiffViewProps) => (
               seg.type === "removed" &&
                 "bg-red-100 line-through dark:bg-red-900/30",
             )}
-            // eslint-disable-next-line react/no-array-index-key
             key={j}
           >
             {seg.text}

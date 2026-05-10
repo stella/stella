@@ -42,7 +42,7 @@ export const sanitizeFilename = (name: string): SanitizedFileName => {
   const sanitizedWithoutEdgeDots = stripLeadingAndTrailingDots(sanitized);
 
   // SAFETY: the sanitization above guarantees the result is safe
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
   return (sanitizedWithoutEdgeDots.slice(0, 255) ||
     "file") as SanitizedFileName;
 };

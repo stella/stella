@@ -1,6 +1,5 @@
 import { useCallback, useEffect } from "react";
 
-import { Button } from "@stll/ui/components/button";
 import Bold from "@tiptap/extension-bold";
 import Document from "@tiptap/extension-document";
 import Heading from "@tiptap/extension-heading";
@@ -18,6 +17,8 @@ import {
   Heading3Icon,
   ItalicIcon,
 } from "lucide-react";
+
+import { Button } from "@stll/ui/components/button";
 
 import "./clause-editor.css";
 import type { ClauseParagraph, ClauseRun } from "./clause-editor-types";
@@ -143,7 +144,6 @@ export const ClauseEditor = ({
   // Sync content when the dialog resets
   const contentKey = content.map((p) => p.text).join("\n");
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const currentText = editor.getText();
     if (currentText !== contentKey) {
@@ -170,7 +170,6 @@ export const ClauseEditor = ({
   return (
     // Stop modifier key combos from propagating to global
     // hotkeys (e.g., Cmd+B toggles sidebar otherwise).
-    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       className="clause-editor rounded-md border"

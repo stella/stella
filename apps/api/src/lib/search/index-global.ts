@@ -496,7 +496,6 @@ const buildSearchFilterFragments = ({
   };
 };
 
-// oxlint-disable-next-line sonarjs/cognitive-complexity -- global search composes parallel scoped result queries and facets in one bounded round-trip
 export const searchGlobal = async ({
   query,
   organizationId,

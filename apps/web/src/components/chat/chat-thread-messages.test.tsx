@@ -22,7 +22,7 @@ const renderWithProviders = (children: ReactNode) =>
         // SAFETY: this mirrors the app provider boundary; locale
         // files are checked separately, while use-intl preserves
         // English literal values in the generated Messages type.
-        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+        // eslint-disable-next-line typescript/no-unsafe-type-assertion
         messages={messages as Messages}
         timeZone="UTC"
       >

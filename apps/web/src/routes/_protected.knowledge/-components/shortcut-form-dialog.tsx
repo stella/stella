@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
@@ -21,7 +23,6 @@ import {
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
-import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
@@ -287,7 +288,7 @@ export const ShortcutFormDialog = ({
               <Select
                 value={form.scope}
                 onValueChange={(v) =>
-                  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+                  // eslint-disable-next-line typescript/no-unsafe-type-assertion
                   setForm((f) => ({ ...f, scope: v as ShortcutScope }))
                 }
               >

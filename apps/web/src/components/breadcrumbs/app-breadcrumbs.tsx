@@ -1,14 +1,15 @@
 import { Fragment, useId, useMemo } from "react";
 
+import { Link, useMatches } from "@tanstack/react-router";
+import type { ResolveParams } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "@stll/ui/components/breadcrumb";
-import { Link, useMatches } from "@tanstack/react-router";
-import type { ResolveParams } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 
 import { CaseLawBreadcrumb } from "@/components/breadcrumbs/case-law-breadcrumb";
 import { ContactBreadcrumb } from "@/components/breadcrumbs/contact-breadcrumb";
@@ -23,7 +24,7 @@ const serializeKey = (paths: readonly RouterFullPath[]) =>
   paths.join(PATH_SEPARATOR);
 // SAFETY: key comes from breadcrumbMap keys built from RouterFullPath[]
 const deserializeKey = (key: string) =>
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
   key.split(PATH_SEPARATOR) as RouterFullPath[];
 
 type BreadcrumbComponent<TPath extends RouterFullPath> = (
@@ -146,7 +147,7 @@ export const AppBreadcrumbs = () => {
         if (parsedKey.some((path) => match.fullPath.startsWith(path))) {
           // SAFETY: match.params from TanStack Router for known route
           const result = breadcrumbMap[key]?.(
-            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+            // eslint-disable-next-line typescript/no-unsafe-type-assertion
             match.params as ResolveParams<RouterFullPath>,
           );
 
@@ -164,12 +165,7 @@ export const AppBreadcrumbs = () => {
     <Breadcrumb className="min-w-0">
       <BreadcrumbList className="flex-nowrap overflow-hidden">
         {breadcrumbs.map((breadcrumb, index) => (
-          <Fragment
-            key={`${id}-${
-              // eslint-disable-next-line react/no-array-index-key
-              index
-            }`}
-          >
+          <Fragment key={`${id}-${index}`}>
             {index !== 0 && <BreadcrumbSeparator className="shrink-0" />}
             {breadcrumb}
           </Fragment>

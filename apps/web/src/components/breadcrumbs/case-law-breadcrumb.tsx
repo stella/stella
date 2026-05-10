@@ -1,7 +1,8 @@
-import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type { ResolveParams } from "@tanstack/react-router";
 import { BookOpenTextIcon } from "lucide-react";
+
+import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
 
 import { getCourtColor } from "@/lib/court-colors";
 import type { SafeId } from "@/lib/safe-id";
@@ -18,12 +19,12 @@ const extractFullRef = (raw: unknown, fallback: string): string => {
   if (raw === null || raw === undefined) {
     return fallback;
   }
-  /* eslint-disable typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion -- SAFETY: raw is either a JSON string or a parsed AST object from the API */
+  /* eslint-disable typescript/no-unsafe-type-assertion -- SAFETY: raw is either a JSON string or a parsed AST object from the API */
   const ast =
     typeof raw === "string"
       ? (JSON.parse(raw) as { blocks?: AstBlock[] })
       : (raw as { blocks?: AstBlock[] });
-  /* eslint-enable typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion */
+  /* eslint-enable typescript/no-unsafe-type-assertion */
   const block = ast.blocks?.find(
     (b) => b.type === "paragraph" && b.role === "case-number",
   );

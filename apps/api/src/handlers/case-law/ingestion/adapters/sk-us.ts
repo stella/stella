@@ -275,7 +275,6 @@ const parseDocument = async (
   // Fetch and parse PDF
   const pdfBytes = await fetchPdfBytes(doc.documentId, signal);
 
-  // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- AST container
   let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
   let fulltext: string | undefined;
 

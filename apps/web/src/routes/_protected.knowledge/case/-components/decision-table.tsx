@@ -60,7 +60,6 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
               {headline && (
                 <p
                   className="text-muted-foreground [&_mark]:text-foreground mt-0.5 line-clamp-2 text-xs [&_mark]:bg-yellow-200/50 [&_mark]:font-medium dark:[&_mark]:bg-yellow-500/20"
-                  // eslint-disable-next-line react/no-danger
                   dangerouslySetInnerHTML={{ __html: headline }}
                 />
               )}

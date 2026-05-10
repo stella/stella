@@ -89,7 +89,6 @@ export const useCreateBBoxes = ({
   const mutateRef = useRef(mutation.mutate);
   mutateRef.current = mutation.mutate;
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   return useCallback(() => {
     if (!aiAvailability?.available) {
       return;

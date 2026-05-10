@@ -519,7 +519,6 @@ export class HistoryManager<T> {
       return undefined;
     }
 
-    // oxlint-disable-next-line typescript/no-non-null-assertion
     const prevEntry = this.undoStack.pop()!;
 
     this.redoStack.push({
@@ -536,7 +535,6 @@ export class HistoryManager<T> {
       return undefined;
     }
 
-    // oxlint-disable-next-line typescript/no-non-null-assertion
     const nextEntry = this.redoStack.pop()!;
 
     this.undoStack.push({

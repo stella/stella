@@ -7,8 +7,6 @@ import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/clo
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import type { OptionColor } from "@stll/api/types";
-import { stellaToast } from "@stll/ui/components/toast";
 import {
   useMutation,
   useInfiniteQuery,
@@ -17,6 +15,9 @@ import {
 } from "@tanstack/react-query";
 import { KanbanIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import type { OptionColor } from "@stll/api/types";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -251,7 +252,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     ? Object.fromEntries(
         TASK_STATUS_ORDER.map((s) => [
           s,
-          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+          // eslint-disable-next-line typescript/no-unsafe-type-assertion
           t(`tasks.statusValues.${s}` as "tasks.statusValues.open"),
         ]),
       )
@@ -515,7 +516,6 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
               });
             }}
             onDrop={(entityId) => handleDrop(value, entityId)}
-            // eslint-disable-next-line typescript/no-misused-promises
             onFileUpload={(files) => {
               void (async () => await handleFileUpload(value, files))();
             }}

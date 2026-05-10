@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 
-import { Button } from "@stll/ui/components/button";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
 
 import { DecisionFilters } from "@/routes/_protected.knowledge/case/-components/decision-filters";
 import { DecisionTable } from "@/routes/_protected.knowledge/case/-components/decision-table";
@@ -30,17 +31,13 @@ function CaseLawIndex() {
 
   // SAFETY: Both list and search branches return the same Decision shape.
   const decisions = useMemo<Decision[]>(
-    () =>
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-      (data?.pages.flatMap((page) => page.decisions) ?? []) as Decision[],
+    () => (data?.pages.flatMap((page) => page.decisions) ?? []) as Decision[],
     [data],
   );
 
   // SAFETY: facets shape matches SearchFacets across the union.
   const facets = useMemo(
-    () =>
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-      (data?.pages.at(0)?.facets ?? null) as SearchFacets,
+    () => (data?.pages.at(0)?.facets ?? null) as SearchFacets,
     [data],
   );
 
@@ -62,7 +59,6 @@ function CaseLawIndex() {
         <div className="flex justify-center py-4">
           <Button
             disabled={isFetchingNextPage}
-            // eslint-disable-next-line typescript/no-misused-promises
             onClick={() => {
               void (async () => await fetchNextPage())();
             }}

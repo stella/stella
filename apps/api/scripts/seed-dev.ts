@@ -4070,7 +4070,6 @@ export async function seed(organizationId?: string, userId?: string) {
   //      - `fields` table (file field + status/date/notes)
   const IV_BYTES = 12;
   let fileCount = 0;
-  // eslint-disable-next-line -- kept for logging
   const pdfTwinCount = 0;
   let extractedCount = 0;
 
@@ -4182,7 +4181,6 @@ export async function seed(organizationId?: string, userId?: string) {
     const ws = at(seedWorkspaces, i);
     const wsLabel = at(WS_LABELS, i);
     const docNames = workspaceDocNames[wsLabel];
-    // oxlint-disable-next-line typescript/strict-boolean-expressions -- docNames may be undefined
     if (docNames) {
       docPlans.push({ wsId: ws.id, wsLabel, docNames });
     }

@@ -1,13 +1,5 @@
 import { useMemo, useState } from "react";
 
-import { Button } from "@stll/ui/components/button";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stll/ui/components/menu";
-import { cn } from "@stll/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -25,6 +17,15 @@ import {
   PlusIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import { cn } from "@stll/ui/lib/utils";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
@@ -169,7 +170,6 @@ function MyTodosPage() {
               {workspaces.workspaces.map((ws) => (
                 <MenuItem
                   key={ws.id}
-                  // eslint-disable-next-line typescript/no-misused-promises
                   onClick={() => {
                     void (async () => {
                       await handleCreateTask(ws.id);
@@ -224,7 +224,6 @@ function MyTodosPage() {
                 {workspaces.workspaces.map((ws) => (
                   <MenuItem
                     key={ws.id}
-                    // eslint-disable-next-line typescript/no-misused-promises
                     onClick={() => {
                       void (async () => {
                         await handleCreateTask(ws.id);

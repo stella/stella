@@ -1,20 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { GlobalSearchHit, GlobalSearchResultType } from "@stll/api/types";
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import {
-  Command,
-  CommandDialog,
-  CommandDialogPopup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@stll/ui/components/command";
-import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
-import { Input } from "@stll/ui/components/input";
-import { Skeleton } from "@stll/ui/components/skeleton";
-import { stellaToast } from "@stll/ui/components/toast";
 import type { UseMutationResult } from "@tanstack/react-query";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
@@ -34,6 +19,22 @@ import {
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useLocale, useTranslations } from "use-intl";
+
+import type { GlobalSearchHit, GlobalSearchResultType } from "@stll/api/types";
+import { Button } from "@stll/ui/components/button";
+import { Checkbox } from "@stll/ui/components/checkbox";
+import {
+  Command,
+  CommandDialog,
+  CommandDialogPopup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@stll/ui/components/command";
+import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
+import { Input } from "@stll/ui/components/input";
+import { Skeleton } from "@stll/ui/components/skeleton";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { UserAvatar } from "@/components/user-avatar";
 import type { TranslationKey } from "@/i18n/types";
@@ -842,7 +843,6 @@ export const SearchDialog = ({
               {hasTypedQuery && !hasResults && (!hasQuery || isLoading) && (
                 <div className="space-y-3 px-4 py-3">
                   {Array.from({ length: 4 }).map((_, i) => (
-                    // eslint-disable-next-line react/no-array-index-key
                     <div className="space-y-2" key={`skeleton-${i}`}>
                       <Skeleton className="h-4 w-3/4" />
                       <Skeleton className="h-3 w-1/2" />
@@ -1550,7 +1550,6 @@ const SearchResultItem = ({
         {hit.headline && (
           <p
             className="text-muted-foreground [&_mark]:bg-highlight [&_mark]:text-highlight-foreground mt-0.5 line-clamp-2 text-xs font-normal [&_mark]:font-medium"
-            // eslint-disable-next-line react/no-danger
             dangerouslySetInnerHTML={{
               __html: hit.headline,
             }}

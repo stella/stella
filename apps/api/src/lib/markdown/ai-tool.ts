@@ -112,7 +112,6 @@ const ATTR_LABEL = "data-label";
 const ATTR_SUGGESTION_CHAR = "data-mention-suggestion-char";
 
 const replaceMentionsWithAnchors = (html: string): string => {
-  // eslint-disable-next-line no-undef
   const unsafeHtml = new HTMLRewriter()
     .on(MENTION_TAG, {
       element(el) {

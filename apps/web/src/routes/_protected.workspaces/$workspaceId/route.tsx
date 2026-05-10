@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
 
-import { stellaToast } from "@stll/ui/components/toast";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import type { QueryClient } from "@tanstack/react-query";
 import {
@@ -10,6 +9,8 @@ import {
   redirect,
   useMatch,
 } from "@tanstack/react-router";
+
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -220,7 +221,6 @@ function RouteComponent() {
   // they left them. PDF tabs from another matter will refetch
   // with their own workspaceId; chat tabs are workspace-tagged
   // so they only render under the matter they belong to.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(
     () => () => {
       for (const timer of previewClearTimersRef.current.values()) {

@@ -1,5 +1,17 @@
 import type { PropsWithChildren, ReactNode } from "react";
 
+import type { LucideIcon } from "lucide-react";
+import {
+  CircleDotIcon,
+  FileTextIcon,
+  FilterIcon,
+  FolderIcon,
+  SignalIcon,
+  SquareCheckIcon,
+  XIcon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import {
@@ -15,17 +27,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
-import type { LucideIcon } from "lucide-react";
-import {
-  CircleDotIcon,
-  FileTextIcon,
-  FilterIcon,
-  FolderIcon,
-  SignalIcon,
-  SquareCheckIcon,
-  XIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import type { ViewFilterCondition, WorkspaceProperty } from "@/lib/types";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
@@ -298,9 +299,9 @@ const BuiltinFilterChip = ({
 
   const resolveLabel = (val: string) =>
     isStatus
-      ? // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+      ? // eslint-disable-next-line typescript/no-unsafe-type-assertion
         t(`tasks.statusValues.${val}` as "tasks.statusValues.open")
-      : // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+      : // eslint-disable-next-line typescript/no-unsafe-type-assertion
         t(`tasks.priorityValues.${val}` as "tasks.priorityValues.none");
 
   const opOptions = [

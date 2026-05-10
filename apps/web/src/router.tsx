@@ -1,13 +1,14 @@
 import type { PropsWithChildren } from "react";
 
-import { ToastProvider } from "@stll/ui/components/toast";
-import { TooltipProvider } from "@stll/ui/components/tooltip";
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
 import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { enableMapSet } from "immer";
 import { IntlProvider } from "use-intl";
+
+import { ToastProvider } from "@stll/ui/components/toast";
+import { TooltipProvider } from "@stll/ui/components/tooltip";
 
 import {
   DefaultErrorComponent,
@@ -43,7 +44,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
       // this cast is only at the provider boundary because use-intl's
       // Messages type preserves English literal message values while
       // translated locale JSONs necessarily contain different strings.
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
       messages={messages as Messages}
       timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
     >

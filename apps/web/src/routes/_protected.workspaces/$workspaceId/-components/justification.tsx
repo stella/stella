@@ -1,6 +1,7 @@
-import { cn } from "@stll/ui/lib/utils";
 import { useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
+
+import { cn } from "@stll/ui/lib/utils";
 
 import type { Citation } from "@/lib/citations";
 import {
@@ -90,7 +91,6 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
         CITATION_CHIP_CLASSES,
         isActive && "bg-primary/25 hover:bg-primary/25",
       )}
-      // eslint-disable-next-line typescript/no-misused-promises
       onClick={() => {
         void (async () => {
           createBoundingBoxes();

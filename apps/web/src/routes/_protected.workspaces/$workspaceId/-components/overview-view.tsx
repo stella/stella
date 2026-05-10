@@ -4,6 +4,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
+import {
+  CalendarClockIcon,
+  ClockIcon,
+  FolderTreeIcon,
+  PlusIcon,
+  SquareCheckIcon,
+  UploadIcon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+
+import {
   Avatar,
   AvatarFallback,
   AvatarImage,
@@ -33,22 +50,6 @@ import {
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
 import { cn } from "@stll/ui/lib/utils";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
-import {
-  CalendarClockIcon,
-  ClockIcon,
-  FolderTreeIcon,
-  PlusIcon,
-  SquareCheckIcon,
-  UploadIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { renderDragPreview } from "@/components/drag-preview";
 import {
@@ -672,7 +673,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                 {Array.from({ length: 7 }, (_, i) => (
                   <span
                     className="text-muted-foreground w-7 text-center text-[0.625rem]"
-                    // eslint-disable-next-line react/no-array-index-key
                     key={i}
                   >
                     {getLocaleDayLabel(i, lang)}
@@ -737,7 +737,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                             return (
                               <div
                                 className="flex w-7 justify-center"
-                                // eslint-disable-next-line react/no-array-index-key
                                 key={dayIdx}
                               >
                                 {cell}
@@ -748,7 +747,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                           return (
                             <div
                               className="flex w-7 justify-center"
-                              // eslint-disable-next-line react/no-array-index-key
                               key={dayIdx}
                             >
                               <Popover>
@@ -1244,7 +1242,6 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
     // Use a <div> instead of <button> to avoid invalid
     // nested <button> elements (RowActions renders a
     // <button> menu trigger inside).
-    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       className={cn(

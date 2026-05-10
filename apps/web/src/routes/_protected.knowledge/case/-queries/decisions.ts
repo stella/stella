@@ -136,7 +136,6 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
     },
     // SAFETY: TanStack Query needs the initial param typed as
     // string | null; `null` alone infers `null`.
-    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
   });

@@ -14,20 +14,6 @@ import {
   monitorForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbList,
-  BreadcrumbSeparator,
-} from "@stll/ui/components/breadcrumb";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stll/ui/components/menu";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
@@ -42,6 +28,21 @@ import {
   FolderOpenIcon,
 } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
+
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbSeparator,
+} from "@stll/ui/components/breadcrumb";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import {
   renderDragPreview,
@@ -570,7 +571,6 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       updateView.mutate({
         viewId: view.id,
         // SAFETY: hiddenProperties is part of every layout discriminant.
-        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
         layout: {
           ...view.layout,
           hiddenProperties: [...new Set([...hiddenProperties, propertyId])],
@@ -1516,7 +1516,6 @@ const FilesystemRow = ({
   );
 
   return (
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       className="group/row relative h-full"
       data-entity-row

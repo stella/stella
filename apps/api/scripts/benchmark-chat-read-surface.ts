@@ -10,7 +10,6 @@
  */
 
 import { valibotSchema } from "@ai-sdk/valibot";
-// oxlint-disable-next-line no-restricted-imports
 import { generateText, stepCountIs, tool } from "ai";
 import type { LanguageModel, LanguageModelUsage } from "ai";
 import * as v from "valibot";

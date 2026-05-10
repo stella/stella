@@ -6,6 +6,13 @@ import {
   useState,
 } from "react";
 
+import { useHotkey } from "@tanstack/react-hotkeys";
+import { panic } from "better-result";
+import { cva } from "class-variance-authority";
+import type { VariantProps } from "class-variance-authority";
+import { PanelLeftIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import { Separator } from "@stll/ui/components/separator";
@@ -24,12 +31,6 @@ import {
 } from "@stll/ui/components/tooltip";
 import { useIsMobile } from "@stll/ui/hooks/use-mobile";
 import { cn } from "@stll/ui/lib/utils";
-import { useHotkey } from "@tanstack/react-hotkeys";
-import { panic } from "better-result";
-import { cva } from "class-variance-authority";
-import type { VariantProps } from "class-variance-authority";
-import { PanelLeftIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { HOTKEYS } from "@/lib/hotkeys";
 import { Slot } from "@/lib/slot";
@@ -147,7 +148,6 @@ function SidebarProvider({
         style={
           // SAFETY: CSS custom properties are valid but
           // not in React's CSSProperties type defs.
-          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
           {
             "--sidebar-width": SIDEBAR_WIDTH,
             "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
@@ -203,7 +203,6 @@ function Sidebar({
           side={side}
           style={
             // SAFETY: CSS custom properties need CSSWithVars.
-            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
             } as CSSWithVars
@@ -643,7 +642,6 @@ function SidebarMenuSkeleton({
         data-sidebar="menu-skeleton-text"
         style={
           // SAFETY: CSS custom properties need CSSWithVars.
-          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
           {
             "--skeleton-width": width,
           } as CSSWithVars

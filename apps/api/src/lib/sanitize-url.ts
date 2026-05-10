@@ -35,11 +35,11 @@ export const sanitizeUrl = (
   }
 
   // SAFETY: URL has been validated as http/https
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
   return trimmed as SafeHref;
 };
 
 /** Empty-string sentinel typed as `SafeHref` for fallback cases. */
 // SAFETY: empty string is trivially safe (renders as no-op href)
-// eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+// eslint-disable-next-line typescript/no-unsafe-type-assertion
 export const SAFE_HREF_EMPTY = "" as SafeHref;

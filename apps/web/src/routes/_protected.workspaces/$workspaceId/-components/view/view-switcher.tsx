@@ -5,6 +5,22 @@ import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import {
+  CalendarIcon,
+  CopyIcon,
+  EllipsisVerticalIcon,
+  FolderTreeIcon,
+  GanttChartIcon,
+  KanbanIcon,
+  LayoutDashboardIcon,
+  PencilIcon,
+  PlusIcon,
+  TableIcon,
+  Trash2Icon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import type { ViewLayout, ViewLayoutType } from "@stll/api/types";
 import {
   AlertDialog,
@@ -30,21 +46,6 @@ import {
 import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
-import { useSuspenseQuery } from "@tanstack/react-query";
-import {
-  CalendarIcon,
-  CopyIcon,
-  EllipsisVerticalIcon,
-  FolderTreeIcon,
-  GanttChartIcon,
-  KanbanIcon,
-  LayoutDashboardIcon,
-  PencilIcon,
-  PlusIcon,
-  TableIcon,
-  Trash2Icon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import type { TranslationKey } from "@/i18n/types";
@@ -327,7 +328,7 @@ const ViewTab = ({
           setIsDropTarget(false);
           // SAFETY: viewId from our draggable getInitialData
           onReorderRef.current(
-            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+            // eslint-disable-next-line typescript/no-unsafe-type-assertion
             source.data["viewId"] as string,
             id,
           );

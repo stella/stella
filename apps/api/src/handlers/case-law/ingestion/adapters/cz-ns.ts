@@ -322,7 +322,6 @@ export const czNsAdapter: SourceAdapter = {
               const raw = `${caseNumber}|${meta["ecli"] ?? ""}|${meta["decisionDate"] ?? ""}`;
 
               // Parse AST from the print page (rich HTML)
-              // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- AST container, not a DB update
               let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
               let fulltext = meta["fulltext"];
 

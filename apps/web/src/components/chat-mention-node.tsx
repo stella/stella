@@ -1,4 +1,3 @@
-import { cn } from "@stll/ui/lib/utils";
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import {
@@ -7,6 +6,8 @@ import {
   LandmarkIcon,
   LayersIcon,
 } from "lucide-react";
+
+import { cn } from "@stll/ui/lib/utils";
 
 import type { ChatReferenceCategory } from "@/components/chat-mention-extension";
 import { getMatterColor } from "@/lib/matter-colors";
@@ -50,7 +51,7 @@ const CategoryIcon = ({
 
 export const ChatMentionNode = (props: NodeViewProps) => {
   // SAFETY: attrs from our own mention extension schema
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
   const attrs = props.node.attrs as {
     id: string;
     label: string;

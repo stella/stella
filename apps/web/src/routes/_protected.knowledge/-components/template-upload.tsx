@@ -1,9 +1,10 @@
 import { useCallback, useRef, useState } from "react";
 
-import { Button } from "@stll/ui/components/button";
-import { stellaToast } from "@stll/ui/components/toast";
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
@@ -107,8 +108,6 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
 
   return (
     <div className="flex flex-1 items-center justify-center p-8">
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <div
         className={`flex w-full max-w-md flex-col items-center gap-4 rounded-xl border-2 border-dashed p-10 transition-[border-color,background-color,box-shadow] duration-200 ${
           isDragOver

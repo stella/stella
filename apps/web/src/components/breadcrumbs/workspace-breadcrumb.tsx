@@ -1,5 +1,11 @@
 import { useRef, useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
+import { Link, useMatch } from "@tanstack/react-router";
+import type { ResolveParams } from "@tanstack/react-router";
+import { LayersIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import {
   BreadcrumbItem,
   BreadcrumbSeparator,
@@ -12,11 +18,6 @@ import {
 import { Input } from "@stll/ui/components/input";
 import { Popover, PopoverPopup } from "@stll/ui/components/popover";
 import { stellaToast } from "@stll/ui/components/toast";
-import { useQuery } from "@tanstack/react-query";
-import { Link, useMatch } from "@tanstack/react-router";
-import type { ResolveParams } from "@tanstack/react-router";
-import { LayersIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
 import { MatterNumberHint } from "@/components/matter-number-hint";
@@ -173,7 +174,7 @@ export const WorkspaceBreadcrumb = ({
               const parsed: unknown = raw ? JSON.parse(raw) : null;
               const config: Record<string, unknown> =
                 typeof parsed === "object" && parsed !== null
-                  ? // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+                  ? // eslint-disable-next-line typescript/no-unsafe-type-assertion
                     (parsed as Record<string, unknown>)
                   : {};
               config["clientFilter"] = workspace.client?.id ?? null;

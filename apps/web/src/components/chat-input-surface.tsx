@@ -1,10 +1,11 @@
 import "./chat-editor.css";
 import { useCallback, useEffect, useRef } from "react";
 
-import { Button } from "@stll/ui/components/button";
-import { cn } from "@stll/ui/lib/utils";
 import { ArrowUpIcon, PaperclipIcon, SquareIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
+import { cn } from "@stll/ui/lib/utils";
 
 import type {
   ChatEditorController,
@@ -114,7 +115,6 @@ export const ChatInputSurface = ({
   );
 
   return (
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/no-noninteractive-element-interactions
     <div
       className={cn(
         "bg-background rounded-lg border",

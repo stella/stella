@@ -1,5 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 
+import { UploadIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
@@ -11,8 +14,6 @@ import {
   DialogTitle,
 } from "@stll/ui/components/dialog";
 import { stellaToast } from "@stll/ui/components/toast";
-import { UploadIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
@@ -62,14 +63,14 @@ export const ClauseImportDialog = ({
             "clauses" in parsed &&
             // SAFETY: `"clauses" in parsed` narrows; Record cast
             // reads the key for Array.isArray and .length.
-            /* eslint-disable typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion */
+            /* eslint-disable typescript/no-unsafe-type-assertion */
             Array.isArray((parsed as Record<string, unknown>)["clauses"])
           ) {
             setPreviewCount(
               ((parsed as Record<string, unknown>)["clauses"] as unknown[])
                 .length,
             );
-            /* eslint-enable typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion */
+            /* eslint-enable typescript/no-unsafe-type-assertion */
           } else {
             setPreviewCount(0);
           }

@@ -16,6 +16,19 @@ import {
   containsFiles,
   getFiles,
 } from "@atlaskit/pragmatic-drag-and-drop/external/file";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+  EllipsisVerticalIcon,
+  EyeOffIcon,
+  FileUpIcon,
+  GripVerticalIcon,
+  PaletteIcon,
+  PlusIcon,
+  SquareCheckIcon,
+  Trash2Icon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import type { OptionColor } from "@stll/api/types";
 import {
   AlertDialog,
@@ -45,18 +58,6 @@ import {
   PopoverTrigger,
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-  EllipsisVerticalIcon,
-  EyeOffIcon,
-  FileUpIcon,
-  GripVerticalIcon,
-  PaletteIcon,
-  PlusIcon,
-  SquareCheckIcon,
-  Trash2Icon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import type {
   EntityKind,
@@ -244,7 +245,7 @@ export const KanbanColumn = ({
           // monitor (forgiving: works even if dropped in gap).
           if (source.data["type"] === ENTITY_DRAG_TYPE) {
             // SAFETY: entityId is always a string; set by our own draggable getInitialData.
-            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+            // eslint-disable-next-line typescript/no-unsafe-type-assertion
             const entityId = source.data["entityId"] as string;
             onDropRef.current(entityId);
           }

@@ -354,7 +354,6 @@ export type ChatThreadFetched = {
 };
 
 export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- runtime getter callbacks configure the Chat transport but are intentionally not part of cache identity.
   queryOptions({
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     gcTime: STALE_TIME.FIVETEEN.MINUTES,

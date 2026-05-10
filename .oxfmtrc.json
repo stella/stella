@@ -10,7 +10,7 @@
       },
       {
         "groupName": "stella",
-        "elementNamePattern": ["@stella/**"]
+        "elementNamePattern": ["@stll/**"]
       },
       {
         "groupName": "aliases",

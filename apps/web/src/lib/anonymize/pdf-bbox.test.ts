@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 import { describe, expect, it } from "bun:test";
 
 import type { MeasureWidthFn } from "./pdf-bbox";

@@ -11,7 +11,7 @@
     "dev": "tauri dev",
     "dev:view": "vite --host 127.0.0.1 --strictPort",
     "format": "oxfmt -c ../../.oxfmtrc.json .",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware apps/desktop",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware apps/desktop",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/desktop",
     "test": "bun test --pass-with-no-tests",
     "typecheck": "tsgo --noEmit"

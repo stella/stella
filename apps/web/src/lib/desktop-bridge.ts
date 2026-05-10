@@ -82,7 +82,6 @@ const launchViaDeepLink = async (): Promise<boolean> => {
 
   // Poll for up to ~6 seconds (the app needs time to start)
   for (let i = 0; i < 6; i++) {
-    // eslint-disable-next-line no-restricted-syntax
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 1000);
     });

@@ -1,9 +1,10 @@
 import { Suspense, use, useDeferredValue } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
-import { Skeleton } from "@stll/ui/components/skeleton";
 import { Result } from "better-result";
 import { useShallow } from "zustand/react/shallow";
+
+import { Skeleton } from "@stll/ui/components/skeleton";
 
 import { PAGE_ID_ATTRIBUTE, TEXT_LAYER_ATTRIBUTE } from "@/lib/pdf/consts";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
@@ -62,7 +63,6 @@ export const PDFPage = ({ pageId, renderOverlay, fallback }: PDFPageProps) => {
           backgroundColor: "var(--document-preview-page, var(--background))",
           width: `round(down, var(--total-scale-factor) * ${page?.originalWidth ?? 0}px, var(--scale-round-x))`,
           height: `round(down, var(--total-scale-factor) * ${page?.originalHeight ?? 0}px, var(--scale-round-y))`,
-          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
         } as CSSProperties
       }
     >

@@ -52,7 +52,7 @@ export const installPDFDocumentCleanup = (queryClient: QueryClient) => {
       return;
     }
     // SAFETY: only usePDFDocument registers this key
-    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
     const data = rawData as PDFDocumentQueryData;
     if (!Result.isOk(data)) {
       return;

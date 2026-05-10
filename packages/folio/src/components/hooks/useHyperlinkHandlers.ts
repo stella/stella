@@ -231,7 +231,6 @@ export const useHyperlinkHandlers = ({
       const nodeEnd = nodeStart + node.nodeSize;
       const hlMark = node.isText
         ? node.marks.find(
-            // oxlint-disable-next-line typescript/no-non-null-assertion
             (m) =>
               m.type === hlType && m.attrs["href"] === linkMark!.attrs["href"],
           )

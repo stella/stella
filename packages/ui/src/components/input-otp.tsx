@@ -2,9 +2,10 @@
 
 import * as React from "react";
 
-import { cn } from "@stll/ui/lib/utils";
 import { OTPInput, OTPInputContext } from "input-otp";
 import { MinusIcon } from "lucide-react";
+
+import { cn } from "@stll/ui/lib/utils";
 
 function InputOTP({
   className,
@@ -68,9 +69,6 @@ function InputOTPSlot({
 
 function InputOTPSeparator({ ...props }: React.ComponentProps<"div">) {
   return (
-    // eslint-disable-next-line jsx-a11y/interactive-supports-focus
-    // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
-    // eslint-disable-next-line jsx-a11y/role-has-required-aria-props
     <div data-slot="input-otp-separator" role="separator" {...props}>
       <MinusIcon />
     </div>

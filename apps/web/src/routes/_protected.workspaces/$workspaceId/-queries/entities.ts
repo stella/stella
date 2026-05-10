@@ -173,7 +173,6 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
 
       return { ...rest, entities };
     },
-    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
@@ -217,7 +216,6 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
 
       return { ...rest, entities };
     },
-    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
