@@ -39,19 +39,31 @@ export function convertTiffToPngDataUrl(
       return null;
     }
 
-    // Validate dimensions BEFORE the eager RGBA allocation.
-    const width = firstImage.width;
-    const height = firstImage.height;
-    if (!width || !height) {
+    // `UTIF.decode()` returns IFDs where dimensions are stored as raw
+    // tags (`t256` = ImageWidth, `t257` = ImageLength); the `width` /
+    // `height` properties on the IFD are populated only after
+    // `UTIF.decodeImage()`. Read from the tags so we can enforce the
+    // pixel cap BEFORE the eager `toRGBA8` allocation runs.
+    const declaredWidth = readTiffTagNumber(firstImage["t256"]);
+    const declaredHeight = readTiffTagNumber(firstImage["t257"]);
+    if (!declaredWidth || !declaredHeight) {
       return null;
     }
-    if (width * height > MAX_TIFF_PIXELS) {
+    if (declaredWidth * declaredHeight > MAX_TIFF_PIXELS) {
       return null;
     }
 
     UTIF.decodeImage(tiffData, firstImage);
     const rgba = UTIF.toRGBA8(firstImage);
     if (rgba.length === 0) {
+      return null;
+    }
+
+    // Use the post-decodeImage dimensions for the canvas — they may
+    // differ from the IFD tags after orientation/strip handling.
+    const width = firstImage.width;
+    const height = firstImage.height;
+    if (!width || !height) {
       return null;
     }
 
@@ -84,6 +96,28 @@ export function convertTiffToPngDataUrl(
   } catch {
     return null;
   }
+}
+
+/**
+ * Read a numeric TIFF tag value. utif2 stores tag values as arrays
+ * (typed or plain), so the cap-check helpers only need the first element.
+ */
+function readTiffTagNumber(tag: unknown): number | undefined {
+  if (typeof tag === "number") {
+    return tag;
+  }
+  if (
+    Array.isArray(tag) ||
+    tag instanceof Uint8Array ||
+    tag instanceof Uint16Array ||
+    tag instanceof Uint32Array
+  ) {
+    const first = tag[0];
+    if (typeof first === "number") {
+      return first;
+    }
+  }
+  return undefined;
 }
 
 function dataUrlToArrayBuffer(dataUrl: string): ArrayBuffer | null {
