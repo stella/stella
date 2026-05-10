@@ -66,7 +66,16 @@ export type AIGenerationFailedProperties = SafeAIAnalyticsMetadata & {
   region?: string;
 };
 
-export type ExceptionProperties = Record<string, string | undefined> & {
+export type ExceptionListEntry = {
+  mechanism: { handled: boolean; synthetic: boolean; type: string };
+  type: string;
+  value: string;
+};
+
+export type ExceptionProperties = {
+  [key: string]: ExceptionListEntry[] | string | undefined;
+  $exception_level: string;
+  $exception_list: ExceptionListEntry[];
   $exception_type: string;
   organization_id?: string;
   session_id?: string;

@@ -29,10 +29,18 @@ describe("PostHog server analytics adapter", () => {
       "https://posthog.test",
     );
 
+    const exceptionListEntry = {
+      mechanism: { handled: true, synthetic: false, type: "generic" },
+      type: "HandlerError",
+      value: "",
+    } as const;
+
     analytics.capture({
       distinctId: "user_123",
       event: SERVER_ANALYTICS_EVENTS.exception,
       properties: {
+        $exception_level: "error",
+        $exception_list: [exceptionListEntry],
         $exception_type: "HandlerError",
         organization_id: "org_123",
       },
@@ -47,9 +55,12 @@ describe("PostHog server analytics adapter", () => {
 
     expect(clientCaptureMock).toHaveBeenCalledTimes(1);
     expect(clientCaptureMock).toHaveBeenCalledWith({
+      _originatedFromCaptureException: true,
       distinctId: "user_123",
       event: SERVER_ANALYTICS_EVENTS.exception,
       properties: {
+        $exception_level: "error",
+        $exception_list: [exceptionListEntry],
         $exception_type: "HandlerError",
         app_commit: "dev",
         app_version: "dev",
