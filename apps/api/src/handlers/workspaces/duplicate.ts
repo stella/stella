@@ -40,6 +40,7 @@ import {
   toScopeKey,
 } from "@/api/lib/matter-reference";
 import { getS3 } from "@/api/lib/s3";
+import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -826,6 +827,10 @@ const duplicateWorkspace = createSafeHandler(
         }),
       );
     }
+
+    upsertWorkspaceSearchDocument(txResult.value.workspaceId).catch(
+      captureError,
+    );
 
     for (const entityId of txResult.value.entityIds) {
       processExtraction(entityId).catch(captureError);

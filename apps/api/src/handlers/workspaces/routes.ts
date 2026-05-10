@@ -200,7 +200,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         .post("/duplicate", duplicateWorkspace.handler, {
           body: duplicateWorkspace.config.body,
           permissions: duplicateWorkspace.config.permissions,
-          invalidateQuery: true,
+          invalidateOrganizationQuery: true,
         })
         .post("/active", updateActiveWorkspace.handler)
         .delete("/", deleteWorkspace.handler, {
