@@ -14,7 +14,7 @@ body = """
 ## Unreleased
 {% endif %}\
 {% for group, commits in commits | group_by(attribute="group") %}
-### {{ group }}
+### {{ group | split(pat=":") | last }}
 {% for commit in commits %}
 - {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message | split(pat="\\n") | first | trim }}\
 {% endfor %}
@@ -37,21 +37,22 @@ sort_commits = "newest"
 # Order matters twice over:
 #   - First matching parser wins (so put more specific patterns first,
 #     e.g. `chore(deps)` before `chore`).
-#   - Section order in the rendered notes follows the lexicographic
-#     order of `group`. The `<!-- N -->` HTML-comment prefix below sorts
-#     deterministically (0 → 8) but is stripped by GitHub's markdown
-#     renderer, so the visible heading is just the emoji + label.
+#   - Rendered section order follows the lexicographic order of `group`.
+#     The `N:` prefix below pins the order (0 → 8); the body template
+#     above strips everything before the colon, so the prefix never
+#     reaches the rendered markdown — keeps GitHub release notes,
+#     stll.app/changelog, and any other downstream renderer clean.
 commit_parsers = [
-  { message = "^feat",            group = "<!-- 0 -->🚀 Features" },
-  { message = "^fix",             group = "<!-- 1 -->🐛 Bug Fixes" },
-  { message = "^perf",            group = "<!-- 2 -->⚡ Performance" },
-  { message = "^refactor",        group = "<!-- 3 -->♻️ Refactor" },
-  { message = "^docs",            group = "<!-- 4 -->📚 Documentation" },
-  { message = "^test",            group = "<!-- 5 -->🧪 Tests" },
-  { message = "^chore\\(deps\\)", group = "<!-- 6 -->📦 Dependencies" },
-  { message = "^chore",           group = "<!-- 7 -->⚙️ Miscellaneous" },
+  { message = "^feat",            group = "0:🚀 Features" },
+  { message = "^fix",             group = "1:🐛 Bug Fixes" },
+  { message = "^perf",            group = "2:⚡ Performance" },
+  { message = "^refactor",        group = "3:♻️ Refactor" },
+  { message = "^docs",            group = "4:📚 Documentation" },
+  { message = "^test",            group = "5:🧪 Tests" },
+  { message = "^chore\\(deps\\)", group = "6:📦 Dependencies" },
+  { message = "^chore",           group = "7:⚙️ Miscellaneous" },
   { message = "^style",           skip  = true },
   { message = "^ci",              skip  = true },
   { message = "^build",           skip  = true },
-  { message = "^revert",          group = "<!-- 8 -->⏪ Reverts" },
+  { message = "^revert",          group = "8:⏪ Reverts" },
 ]
