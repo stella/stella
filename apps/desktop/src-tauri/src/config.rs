@@ -4,7 +4,13 @@ use crate::types::DEFAULT_BRIDGE_PORT;
 
 const DEFAULT_WEB_PORT: u16 = 3000;
 
-const DEFAULT_PROD_ORIGINS: &[&str] = &["https://my.stll.app", "https://app.stll.app"];
+// Comma-separated origins baked into the binary at compile time. Distribution
+// builds set STELLA_DESKTOP_DEFAULT_ORIGINS so the shipped client trusts the
+// matching SPA out of the box; builds without the variable default to
+// loopback-only, and any additional origins must be supplied explicitly via
+// the runtime STELLA_DESKTOP_ALLOWED_ORIGINS variable.
+const BUILD_TIME_DEFAULT_ORIGINS: Option<&str> =
+  option_env!("STELLA_DESKTOP_DEFAULT_ORIGINS");
 
 fn parse_port(value: Option<String>, fallback: u16) -> u16 {
   value
@@ -36,8 +42,8 @@ pub fn resolve_allowed_origins() -> HashSet<String> {
   origins.insert(format!("http://127.0.0.1:{web_port}"));
   origins.insert(format!("http://localhost:{web_port}"));
 
-  for origin in DEFAULT_PROD_ORIGINS {
-    origins.insert((*origin).to_string());
+  for origin in parse_origins(BUILD_TIME_DEFAULT_ORIGINS.map(str::to_string)) {
+    origins.insert(origin);
   }
 
   for origin in parse_origins(std::env::var("STELLA_DESKTOP_ALLOWED_ORIGINS").ok()) {
