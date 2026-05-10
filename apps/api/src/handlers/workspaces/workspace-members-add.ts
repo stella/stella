@@ -27,7 +27,15 @@ const config = {
 
 const addWorkspaceMember = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, user, request, body }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    user,
+    request,
+    server,
+    body,
+  }) {
     // Verify user is a member of the organization.
     // `member` is an org-level auth table (no RLS policy);
     // safeDb works for querying it.
@@ -98,6 +106,7 @@ const addWorkspaceMember = createSafeHandler(
             workspaceId,
             userId: user.id,
             request,
+            server,
           }),
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,

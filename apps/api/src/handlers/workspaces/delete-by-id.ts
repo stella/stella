@@ -66,7 +66,15 @@ const config = {
 const deleteWorkspace = createSafeHandler(
   config,
   // eslint-disable-next-line require-yield -- manual Result.isError checks preserve rollback semantics
-  async function* ({ scopedDb, safeDb, workspaceId, session, user, request }) {
+  async function* ({
+    scopedDb,
+    safeDb,
+    workspaceId,
+    session,
+    user,
+    request,
+    server,
+  }) {
     const organizationId = session.activeOrganizationId;
 
     // Seal workspace: no new uploads.
@@ -228,6 +236,7 @@ const deleteWorkspace = createSafeHandler(
             workspaceId,
             userId: user.id,
             request,
+            server,
           }),
           action: AUDIT_ACTION.DELETE,
           resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,

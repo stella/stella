@@ -28,6 +28,7 @@ const deleteProperty = createSafeHandler(
     workspaceId,
     user,
     request,
+    server,
     params: { propertyId },
   }) {
     const deleteResult = await safeDb(async (tx) => {
@@ -90,6 +91,7 @@ const deleteProperty = createSafeHandler(
             workspaceId,
             userId: user.id,
             request,
+            server,
           }),
           action: AUDIT_ACTION.DELETE,
           resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,

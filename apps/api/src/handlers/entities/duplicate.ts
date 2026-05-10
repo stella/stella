@@ -455,7 +455,15 @@ const config = {
 
 const duplicateEntity = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, user, request, body }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    user,
+    request,
+    server,
+    body,
+  }) {
     return yield* duplicateEntityHandler({
       safeDb,
       workspaceId,
@@ -465,6 +473,7 @@ const duplicateEntity = createSafeHandler(
         workspaceId,
         userId: user.id,
         request,
+        server,
       }),
       body,
     });

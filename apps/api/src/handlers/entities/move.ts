@@ -247,7 +247,15 @@ const config = {
 
 const moveEntity = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, user, request, body }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    user,
+    request,
+    server,
+    body,
+  }) {
     return yield* moveEntityHandler({
       safeDb,
       workspaceId,
@@ -256,6 +264,7 @@ const moveEntity = createSafeHandler(
         workspaceId,
         userId: user.id,
         request,
+        server,
       }),
       body,
     });

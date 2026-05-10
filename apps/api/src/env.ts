@@ -110,6 +110,16 @@ const envApi = createEnv({
     ),
     EXTENSION_ORIGIN: v.optional(v.string()),
 
+    /**
+     * Comma-separated CIDRs of proxies the API may trust to set
+     * `cf-connecting-ip`, `x-real-ip`, or `x-forwarded-for` headers.
+     * Typical value covers Cloudflare's published IP ranges and any
+     * load balancers in front of the API. Unset (the default) means
+     * no proxy is trusted and the audit log records the socket peer
+     * directly.
+     */
+    STELLA_TRUSTED_PROXY_CIDRS: v.optional(v.string()),
+
     // Social login — Google
     GOOGLE_AUTH_CLIENT_ID: v.optional(v.string()),
     GOOGLE_AUTH_CLIENT_SECRET: v.optional(v.string()),

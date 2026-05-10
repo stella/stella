@@ -332,7 +332,15 @@ const config = {
 
 const uploadEntity = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, user, request, body }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    user,
+    request,
+    server,
+    body,
+  }) {
     return yield* uploadEntityHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
@@ -343,6 +351,7 @@ const uploadEntity = createSafeHandler(
         workspaceId,
         userId: user.id,
         request,
+        server,
       }),
       body,
     });
