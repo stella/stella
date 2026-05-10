@@ -59,7 +59,7 @@
       "version": "3.0.74"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/devtools@0.0.16",
+      "bom-ref": "pkg:npm/@ai-sdk/devtools@0.0.17",
       "evidence": {
         "identity": [
           {
@@ -107,13 +107,13 @@
           "value": "node_modules/@ai-sdk/devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/devtools@0.0.16",
+      "purl": "pkg:npm/%40ai-sdk/devtools@0.0.17",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "0.0.16"
+      "version": "0.0.17"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.118",
@@ -1269,6 +1269,9 @@
             "location": "apps/web/src/routes/dev.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/mcp.oauth-callback.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/onboarding/-components/onboarding-layout.tsx#1"
           },
           {
@@ -1587,6 +1590,9 @@
             "location": "apps/web/src/env.ts#2"
           },
           {
+            "location": "apps/web/src/lib/mcp-oauth-channel.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/pdf/parse-attachments.ts#1"
           },
           {
@@ -1651,6 +1657,9 @@
           },
           {
             "location": "apps/web/src/routes/consent.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/mcp.oauth-callback.tsx#13"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#9"
@@ -2551,6 +2560,9 @@
           },
           {
             "location": "apps/web/src/routes/dev.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/mcp.oauth-callback.tsx#1"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/onboarding-layout.tsx#1"
@@ -4653,6 +4665,9 @@
             "location": "apps/web/src/routes/dev.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/mcp.oauth-callback.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/onboarding/-components/onboarding-layout.tsx#1"
           },
           {
@@ -5227,7 +5242,7 @@
       "version": "0.3.4"
     },
     {
-      "bom-ref": "pkg:npm/@litko/yara-x@0.5.0",
+      "bom-ref": "pkg:npm/@litko/yara-x@0.5.1",
       "evidence": {
         "identity": [
           {
@@ -5278,10 +5293,10 @@
           "value": "node_modules/@litko/yara-x/package.json"
         }
       ],
-      "purl": "pkg:npm/%40litko/yara-x@0.5.0",
+      "purl": "pkg:npm/%40litko/yara-x@0.5.1",
       "scope": "required",
       "type": "library",
-      "version": "0.5.0"
+      "version": "0.5.1"
     },
     {
       "authors": [
@@ -6410,6 +6425,9 @@
             "location": "apps/web/src/routes/dev.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/mcp.oauth-callback.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/onboarding/-components/onboarding-layout.tsx#1"
           },
           {
@@ -6880,6 +6898,9 @@
         "occurrences": [
           {
             "location": "apps/landing/scripts/render-og-card.mjs#1"
+          },
+          {
+            "location": "apps/landing/src/lib/changelog-og.ts#1"
           }
         ]
       },
@@ -8148,7 +8169,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/index.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#17"
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#13"
@@ -8703,6 +8724,9 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#35"
           },
           {
+            "location": "apps/web/src/routes/mcp.oauth-callback.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/onboarding/-components/steps/ai-step.tsx#3"
           },
           {
@@ -8836,6 +8860,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#76"
+          },
+          {
+            "location": "apps/web/src/routes/mcp.oauth-callback.tsx#10"
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#7"
@@ -9018,7 +9045,7 @@
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat/tool-call-card.tsx#3"
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#8"
           },
           {
             "location": "apps/web/src/components/chat-input-surface.tsx#5"
@@ -9087,7 +9114,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/index.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#18"
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#14"
@@ -9480,7 +9507,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/decision-filters.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#16"
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#4"
@@ -9729,10 +9756,16 @@
             "location": "apps/web/src/components/chat/prompt-slash-list.tsx#9"
           },
           {
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#7"
+          },
+          {
             "location": "apps/web/src/components/chat-mention-list.tsx#11"
           },
           {
             "location": "apps/web/src/components/matter-number-hint.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#10"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-header.tsx#6"
@@ -9943,9 +9976,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx#14"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#12"
@@ -10171,9 +10201,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#17"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#17"
@@ -10814,7 +10841,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.100.7",
+      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.100.9",
       "description": "Developer tools to interact with and visualize the TanStack/react-query cache",
       "evidence": {
         "identity": [
@@ -10863,13 +10890,13 @@
           "value": "node_modules/@tanstack/react-query-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.100.7",
+      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.100.9",
       "scope": "required",
       "tags": [
         "tools"
       ],
       "type": "library",
-      "version": "5.100.7"
+      "version": "5.100.9"
     },
     {
       "authors": [
@@ -10877,7 +10904,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query@5.100.7",
+      "bom-ref": "pkg:npm/@tanstack/react-query@5.100.9",
       "description": "Hooks for managing, caching and syncing asynchronous and remote data in React",
       "evidence": {
         "identity": [
@@ -11121,7 +11148,7 @@
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#5"
           },
           {
-            "location": "apps/web/src/components/chat/tool-call-card.tsx#4"
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#9"
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#13"
@@ -11214,7 +11241,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/clauses.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#19"
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#13"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#15"
@@ -11445,10 +11472,10 @@
           "value": "node_modules/@tanstack/react-query/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query@5.100.7",
+      "purl": "pkg:npm/%40tanstack/react-query@5.100.9",
       "scope": "required",
       "type": "library",
-      "version": "5.100.7"
+      "version": "5.100.9"
     },
     {
       "authors": [
@@ -11733,7 +11760,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/index.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#20"
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/route.tsx#1"
@@ -11899,6 +11926,9 @@
           },
           {
             "location": "apps/web/src/routes/index.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/mcp.oauth-callback.tsx#11"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx#5"
@@ -13775,6 +13805,9 @@
             "location": "apps/web/src/routes/dev.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/mcp.oauth-callback.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/onboarding/-components/onboarding-layout.tsx#1"
           },
           {
@@ -14290,7 +14323,7 @@
             "location": "apps/web/src/components/chat/source-chips.tsx#12"
           },
           {
-            "location": "apps/web/src/components/chat/tool-call-card.tsx#5"
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#10"
           }
         ]
       },
@@ -14357,6 +14390,9 @@
           },
           {
             "location": "apps/landing/astro.config.mjs#3"
+          },
+          {
+            "location": "apps/landing/src/pages/images/changelog/[release].png.ts#1"
           }
         ]
       },
@@ -14924,6 +14960,9 @@
             "location": "apps/api/src/handlers/mcp-connectors/update-connection.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/mcp-connectors/update-native-tool.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/mcp-connectors/url-normalization.ts#1"
           },
           {
@@ -15448,7 +15487,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@5.76.4",
+      "bom-ref": "pkg:npm/bullmq@5.76.5",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -15503,10 +15542,10 @@
           "value": "node_modules/bullmq/package.json"
         }
       ],
-      "purl": "pkg:npm/bullmq@5.76.4",
+      "purl": "pkg:npm/bullmq@5.76.5",
       "scope": "required",
       "type": "library",
-      "version": "5.76.4"
+      "version": "5.76.5"
     },
     {
       "authors": [
@@ -16543,6 +16582,9 @@
             "location": "apps/api/src/handlers/mcp-connectors/update-connection.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/mcp-connectors/update-native-tool.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/organization-settings/read-anonymization-blacklist.ts#2"
           },
           {
@@ -17366,6 +17408,9 @@
           },
           {
             "location": "apps/api/src/handlers/mcp-connectors/update-connection.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/update-native-tool.ts#3"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/preview.ts#2"
@@ -18419,7 +18464,7 @@
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#12"
           },
           {
-            "location": "apps/web/src/components/chat/tool-call-card.tsx#14"
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#19"
           },
           {
             "location": "apps/web/src/components/chat-input-surface.tsx#6"
@@ -18545,7 +18590,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/index.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#30"
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#26"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#17"
@@ -19411,7 +19456,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.32.1",
+      "bom-ref": "pkg:npm/posthog-node@5.33.0",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -19456,10 +19501,10 @@
           "value": "node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.32.1",
+      "purl": "pkg:npm/posthog-node@5.33.0",
       "scope": "required",
       "type": "library",
-      "version": "5.32.1"
+      "version": "5.33.0"
     },
     {
       "bom-ref": "pkg:npm/prosemirror-commands@1.7.1",
@@ -21249,6 +21294,9 @@
             "location": "apps/web/src/routes/dev.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/mcp.oauth-callback.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/onboarding/-components/onboarding-layout.tsx#1"
           },
           {
@@ -21896,7 +21944,7 @@
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#13"
           },
           {
-            "location": "apps/web/src/components/chat/tool-call-card.tsx#15"
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#20"
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#25"
@@ -22037,7 +22085,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/index.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#31"
+            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#27"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#18"
@@ -22367,6 +22415,9 @@
             "location": "apps/web/src/routes/consent.tsx#14"
           },
           {
+            "location": "apps/web/src/routes/mcp.oauth-callback.tsx#12"
+          },
+          {
             "location": "apps/web/src/routes/onboarding/-components/onboarding-progress.tsx#2"
           },
           {
@@ -22673,6 +22724,9 @@
             "location": "apps/web/src/env.ts#2"
           },
           {
+            "location": "apps/web/src/lib/mcp-oauth-channel.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/pdf/parse-attachments.ts#1"
           },
           {
@@ -22737,6 +22791,9 @@
           },
           {
             "location": "apps/web/src/routes/consent.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/mcp.oauth-callback.tsx#13"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#9"
