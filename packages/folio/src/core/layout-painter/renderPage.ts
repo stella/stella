@@ -892,9 +892,19 @@ function renderHeaderFooterContent(
         // floating table weren't there (Word semantics for unwrapped
         // floating tables).
       } else {
+        // Honor `w:jc` / `w:tblInd` for inline HF tables, matching the body
+        // pagination path (see core/layout-engine `desiredX` computation).
+        let inlineLeft = 0;
+        if (block.justification === "center") {
+          inlineLeft = (contentWidth - measure.totalWidth) / 2;
+        } else if (block.justification === "right") {
+          inlineLeft = contentWidth - measure.totalWidth;
+        } else if (block.indent) {
+          inlineLeft = block.indent;
+        }
         fragEl.style.position = "absolute";
         fragEl.style.top = `${cursorY}px`;
-        fragEl.style.left = "0";
+        fragEl.style.left = `${inlineLeft}px`;
         containerEl.append(fragEl);
         cursorY += measure.totalHeight;
       }
@@ -902,12 +912,17 @@ function renderHeaderFooterContent(
       // The unified pipeline extracts top-level text boxes inside H/F as
       // their own block. `renderTextBoxFragment` sets `position: absolute`
       // internally; we only supply top/left so it stacks at cursorY.
+      // Use the *measured* width (not contentWidth): measureBlocks computed
+      // `measure.width` and the cached `innerMeasures` against the authored
+      // text box width, so passing contentWidth would cause the outer box
+      // to be the wrong size and force inner re-wrap inconsistent with the
+      // measure cache.
       const syntheticFragment: TextBoxFragment = {
         kind: "textBox",
         blockId: block.id,
         x: 0,
         y: cursorY,
-        width: contentWidth,
+        width: measure.width,
         height: measure.height,
         ...(block.pmStart !== undefined ? { pmStart: block.pmStart } : {}),
         ...(block.pmEnd !== undefined ? { pmEnd: block.pmEnd } : {}),
