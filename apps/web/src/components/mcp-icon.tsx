@@ -6,7 +6,8 @@ export const McpIcon = (props: SVGProps<SVGSVGElement>) => (
     fill="none"
     stroke="currentColor"
     strokeLinecap="round"
-    strokeWidth={11.0667}
+    strokeLinejoin="round"
+    strokeWidth={15}
     viewBox="0 0 180 180"
     xmlns="http://www.w3.org/2000/svg"
     {...props}
