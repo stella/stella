@@ -64,6 +64,7 @@ export const MatterMetadataPanel = ({
   const { data: workspace } = useSuspenseQuery(workspaceOptions(workspaceId));
   const deleteWorkspace = useDeleteWorkspace();
   const duplicateWorkspace = useDuplicateWorkspace();
+  const canCreateWorkspace = usePermissions({ workspace: ["create"] });
   const canDeleteWorkspace = usePermissions({ workspace: ["delete"] });
   const updateWorkspace = useUpdateWorkspace();
 
@@ -176,7 +177,11 @@ export const MatterMetadataPanel = ({
   };
 
   const handleDuplicateWorkspace = () => {
-    if (duplicateMode === null || duplicateWorkspace.isPending) {
+    if (
+      !canCreateWorkspace ||
+      duplicateMode === null ||
+      duplicateWorkspace.isPending
+    ) {
       return;
     }
 
@@ -301,34 +306,36 @@ export const MatterMetadataPanel = ({
 
         <div className="mt-auto">
           {/* Actions */}
-          <div className="flex flex-col">
-            <Button
-              className={cn(
-                "w-full justify-start rounded-none px-3",
-                TOOLBAR_ROW_HEIGHT,
-              )}
-              onClick={() => setDuplicateMode("metadata")}
-              variant="ghost"
-            >
-              <span className={MATTER_INFO_ICON_SLOT_CLASS}>
-                <CopyIcon className="size-4" />
-              </span>
-              {t("common.duplicate")}
-            </Button>
-            <Button
-              className={cn(
-                "w-full justify-start rounded-none px-3",
-                TOOLBAR_ROW_HEIGHT,
-              )}
-              onClick={() => setDuplicateMode("content")}
-              variant="ghost"
-            >
-              <span className={MATTER_INFO_ICON_SLOT_CLASS}>
-                <CopyPlusIcon className="size-4" />
-              </span>
-              {t("workspaces.duplicateWithContent")}
-            </Button>
-          </div>
+          {canCreateWorkspace && (
+            <div className="flex flex-col">
+              <Button
+                className={cn(
+                  "w-full justify-start rounded-none px-3",
+                  TOOLBAR_ROW_HEIGHT,
+                )}
+                onClick={() => setDuplicateMode("metadata")}
+                variant="ghost"
+              >
+                <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+                  <CopyIcon className="size-4" />
+                </span>
+                {t("common.duplicate")}
+              </Button>
+              <Button
+                className={cn(
+                  "w-full justify-start rounded-none px-3",
+                  TOOLBAR_ROW_HEIGHT,
+                )}
+                onClick={() => setDuplicateMode("content")}
+                variant="ghost"
+              >
+                <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+                  <CopyPlusIcon className="size-4" />
+                </span>
+                {t("workspaces.duplicateWithContent")}
+              </Button>
+            </div>
+          )}
 
           {/* Danger zone */}
           {canDeleteWorkspace && (

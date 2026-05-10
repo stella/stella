@@ -310,12 +310,17 @@ const copyWorkspaceFiles = async ({
     }
   };
 
-  await Promise.all(
+  const copyResults = await Promise.allSettled(
     Array.from(
       { length: Math.min(FILE_COPY_CONCURRENCY, copies.length) },
       copyNext,
     ),
   );
+  const failedCopy = copyResults.find((result) => result.status === "rejected");
+
+  if (failedCopy) {
+    throw failedCopy.reason;
+  }
 };
 
 const cleanupCopiedS3Keys = async ({
