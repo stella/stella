@@ -281,7 +281,18 @@ export function calculateHeaderFooterVisualBounds(
       visualBottom = Math.max(visualBottom, paragraphBottomY);
 
       for (const run of block.runs) {
-        if (run.kind !== "image" || !run.position) {
+        if (run.kind !== "image") {
+          continue;
+        }
+        // Match the extraction/normalization classification: any image
+        // floating by `position` OR by `wrapType`/`displayMode` is
+        // rendered absolutely and stripped from paragraph measurement,
+        // so its extent must be factored into the visual bounds. Without
+        // this, a wrap-type-only header image would be visible but
+        // `visualBottom` would still equal the stripped paragraph height,
+        // and `computeHeaderFooterMarginExtender` wouldn't reserve enough
+        // body push-down — the image would overlap body text.
+        if (!run.position && !isFloatingImageRun(run)) {
           continue;
         }
         const runTop = resolveHeaderFooterVisualTop(
