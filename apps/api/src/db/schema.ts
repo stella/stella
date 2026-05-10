@@ -1,11 +1,10 @@
+import type { PersistedDecisionAnalysis } from "@stll/case-law/analysis";
+import type { DocumentAst } from "@stll/case-law/document-ast";
 import { panic } from "better-result";
 import { defineRelations, isNotNull, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import * as p from "drizzle-orm/pg-core";
 import { customType } from "drizzle-orm/pg-core";
-
-import type { PersistedDecisionAnalysis } from "@stll/case-law/analysis";
-import type { DocumentAst } from "@stll/case-law/document-ast";
 
 import { organization, user } from "@/api/db/auth-schema";
 import { jsonb } from "@/api/db/columns";
