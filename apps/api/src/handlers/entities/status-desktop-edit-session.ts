@@ -12,19 +12,37 @@ export const statusDesktopEditSessionParamsSchema = t.Object({
   sessionId: tSafeId("desktopEditSession"),
 });
 
+const SESSION_TOKEN_LENGTH = 64;
+const BEARER_PREFIX = "Bearer ";
+const SESSION_TOKEN_PATTERN = /^[a-f0-9]{64}$/;
+
+export const statusDesktopEditSessionHeadersSchema = t.Object({
+  authorization: t.Optional(t.String()),
+});
+
 export const statusDesktopEditSessionQuerySchema = t.Object({
-  sessionToken: t.String({ minLength: 64, maxLength: 64 }),
+  sessionToken: t.Optional(t.String()),
 });
 
 type StatusDesktopEditSessionHandlerProps = {
-  query: { sessionToken: string };
+  headers: { authorization?: string };
+  query: { sessionToken?: string };
   sessionId: SafeId<"desktopEditSession">;
 };
 
 export const statusDesktopEditSessionHandler = async ({
-  query: { sessionToken },
+  headers: { authorization },
+  query: { sessionToken: legacySessionToken },
   sessionId,
 }: StatusDesktopEditSessionHandlerProps) => {
+  const sessionToken = getSessionToken({ authorization, legacySessionToken });
+  if (!sessionToken) {
+    return status(401, {
+      code: "desktop_edit_session_token_missing",
+      message: "Desktop edit session token missing or malformed.",
+    });
+  }
+
   const authorizedSession = await authorizeDesktopEditSession({
     sessionId,
     sessionToken,
@@ -60,4 +78,31 @@ export const statusDesktopEditSessionHandler = async ({
   }
 
   return { status: "open" };
+};
+
+type GetSessionTokenOptions = {
+  authorization: string | undefined;
+  legacySessionToken: string | undefined;
+};
+
+const getSessionToken = ({
+  authorization,
+  legacySessionToken,
+}: GetSessionTokenOptions): string | null => {
+  if (authorization) {
+    if (
+      !authorization.startsWith(BEARER_PREFIX) ||
+      authorization.length !== BEARER_PREFIX.length + SESSION_TOKEN_LENGTH
+    ) {
+      return null;
+    }
+    const bearerToken = authorization.slice(BEARER_PREFIX.length);
+    return SESSION_TOKEN_PATTERN.test(bearerToken) ? bearerToken : null;
+  }
+
+  if (legacySessionToken && SESSION_TOKEN_PATTERN.test(legacySessionToken)) {
+    return legacySessionToken;
+  }
+
+  return null;
 };
