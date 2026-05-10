@@ -4,6 +4,7 @@ import Elysia, { t } from "elysia";
 import archiveWorkspace from "@/api/handlers/workspaces/archive";
 import createWorkspaces from "@/api/handlers/workspaces/create";
 import deleteWorkspace from "@/api/handlers/workspaces/delete-by-id";
+import duplicateWorkspace from "@/api/handlers/workspaces/duplicate";
 import generateBoundingBoxes from "@/api/handlers/workspaces/generate-bounding-boxes";
 import infosoudCourts from "@/api/handlers/workspaces/infosoud-courts";
 import infosoudImportAgenda from "@/api/handlers/workspaces/infosoud-import-agenda";
@@ -195,6 +196,11 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         .post("/", updateWorkspace.handler, {
           body: updateWorkspace.config.body,
           invalidateQuery: true,
+        })
+        .post("/duplicate", duplicateWorkspace.handler, {
+          body: duplicateWorkspace.config.body,
+          permissions: duplicateWorkspace.config.permissions,
+          invalidateOrganizationQuery: true,
         })
         .post("/active", updateActiveWorkspace.handler)
         .delete("/", deleteWorkspace.handler, {

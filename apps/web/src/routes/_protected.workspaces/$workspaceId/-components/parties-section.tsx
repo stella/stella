@@ -36,11 +36,14 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { ContactPicker } from "@/components/contact-picker";
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateContact } from "@/routes/_protected.contacts/-mutations";
 import { contactsKeys } from "@/routes/_protected.contacts/-queries";
+import { MATTER_INFO_ICON_SLOT_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-info-layout";
 import {
   useAddParty,
   useRemoveParty,
@@ -124,8 +127,8 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   const { client } = workspace;
   if (!client) {
     return (
-      <div className="flex flex-1 flex-col gap-6 overflow-auto p-4">
-        <section className="bg-muted/30 flex flex-col gap-3 rounded-md border p-4">
+      <div className="flex flex-col p-3">
+        <section className="bg-muted/30 flex flex-col gap-2 rounded-md border p-3">
           <div className="flex items-center gap-2">
             <LockIcon className="text-muted-foreground size-4" />
             <h3 className="text-sm font-medium">
@@ -142,45 +145,58 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 overflow-auto p-4">
+    <div className="flex flex-col">
       {/* Client sub-section */}
       <section>
-        <h3 className="text-muted-foreground mb-3 text-sm font-medium">
-          {t("workspaces.parties.client")}
-        </h3>
-        <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+        <div
+          className={cn(
+            "flex items-center justify-between gap-2 px-3",
+            TOOLBAR_ROW_HEIGHT,
+          )}
+        >
+          <h3 className="text-muted-foreground text-sm font-medium">
+            {t("workspaces.parties.client")}
+          </h3>
+          <ChangeClientDialog
+            onCreate={handleCreateAndSetClient}
+            onSelect={handleSetClient}
+          />
+        </div>
+        <div className={cn("flex items-center gap-2 px-3", TOOLBAR_ROW_HEIGHT)}>
           {client.type === "person" ? (
-            <UserIcon className="text-muted-foreground size-4" />
+            <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+              <UserIcon className="text-muted-foreground size-4" />
+            </span>
           ) : (
-            <BuildingIcon className="text-muted-foreground size-4" />
+            <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+              <BuildingIcon className="text-muted-foreground size-4" />
+            </span>
           )}
           <Link
-            className="text-sm font-medium hover:underline"
+            className="min-w-0 truncate text-sm font-medium hover:underline"
             params={{ contactId: client.id }}
             to="/contacts/$contactId"
           >
             {client.displayName}
           </Link>
         </div>
-        <div className="mt-2">
-          <ContactPicker
-            onCreate={handleCreateAndSetClient}
-            onSelect={handleSetClient}
-            placeholder={t("workspaces.parties.changeClient")}
-          />
-        </div>
       </section>
 
       {/* Parties sub-section */}
       <section>
-        <div className="mb-3 flex items-center justify-between">
+        <div
+          className={cn(
+            "flex items-center justify-between gap-2 px-3",
+            TOOLBAR_ROW_HEIGHT,
+          )}
+        >
           <h3 className="text-muted-foreground text-sm font-medium">
             {t("workspaces.sections.parties")}
           </h3>
-          <AddPartyDialog workspaceId={workspaceId} />
+          <AddPartyDialog showTriggerLabel={false} workspaceId={workspaceId} />
         </div>
         {parties.length > 0 ? (
-          <ul className="space-y-1">
+          <ul>
             {parties.map((party) => (
               <PartyRow
                 key={party.id}
@@ -190,12 +206,67 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
             ))}
           </ul>
         ) : (
-          <p className="text-muted-foreground text-sm">
+          <p
+            className={cn(
+              "text-muted-foreground flex items-center px-3 text-sm italic",
+              TOOLBAR_ROW_HEIGHT,
+            )}
+          >
             {t("workspaces.parties.noParties")}
           </p>
         )}
       </section>
     </div>
+  );
+};
+
+type ChangeClientDialogProps = {
+  onCreate: (name: string, type: "person" | "organization") => void;
+  onSelect: (contact: { id: string; displayName: string }) => void;
+};
+
+const ChangeClientDialog = ({
+  onCreate,
+  onSelect,
+}: ChangeClientDialogProps) => {
+  const t = useTranslations();
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <Dialog onOpenChange={setIsOpen} open={isOpen}>
+      <DialogTrigger
+        render={
+          <Button
+            aria-label={t("workspaces.parties.changeClient")}
+            size="icon-xs"
+            title={t("workspaces.parties.changeClient")}
+            variant="ghost"
+          />
+        }
+      >
+        <PlusIcon className="size-3.5" />
+      </DialogTrigger>
+      <DialogPopup>
+        <DialogHeader>
+          <DialogTitle>{t("workspaces.parties.changeClient")}</DialogTitle>
+          <DialogDescription />
+        </DialogHeader>
+        <DialogPanel>
+          <ContactPicker
+            autoFocus
+            onCreate={(name, type) => {
+              onCreate(name, type);
+              setIsOpen(false);
+            }}
+            onSelect={(contact) => {
+              onSelect(contact);
+              setIsOpen(false);
+            }}
+            placeholder={t("workspaces.parties.changeClient")}
+          />
+        </DialogPanel>
+      </DialogPopup>
+    </Dialog>
   );
 };
 
@@ -406,11 +477,15 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
     : PARTY_ROLE_LABEL_KEYS.other;
 
   return (
-    <li className="flex items-center gap-2 rounded-md border px-3 py-2">
+    <li className={cn("flex items-center gap-2 px-3", TOOLBAR_ROW_HEIGHT)}>
       {contact.type === "person" ? (
-        <UserIcon className="text-muted-foreground size-4" />
+        <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+          <UserIcon className="text-muted-foreground size-4" />
+        </span>
       ) : (
-        <BuildingIcon className="text-muted-foreground size-4" />
+        <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+          <BuildingIcon className="text-muted-foreground size-4" />
+        </span>
       )}
       <Link
         className="text-sm font-medium hover:underline"
@@ -438,9 +513,13 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
 
 type AddPartyDialogProps = {
   workspaceId: string;
+  showTriggerLabel?: boolean | undefined;
 };
 
-const AddPartyDialog = ({ workspaceId }: AddPartyDialogProps) => {
+const AddPartyDialog = ({
+  workspaceId,
+  showTriggerLabel = true,
+}: AddPartyDialogProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const addParty = useAddParty();
@@ -506,9 +585,18 @@ const AddPartyDialog = ({ workspaceId }: AddPartyDialogProps) => {
       }}
       open={isOpen}
     >
-      <DialogTrigger render={<Button size="sm" variant="outline" />}>
+      <DialogTrigger
+        render={
+          <Button
+            aria-label={t("workspaces.parties.addParty")}
+            size={showTriggerLabel ? "sm" : "icon-xs"}
+            title={t("workspaces.parties.addParty")}
+            variant={showTriggerLabel ? "outline" : "ghost"}
+          />
+        }
+      >
         <PlusIcon className="size-3.5" />
-        {t("workspaces.parties.addParty")}
+        {showTriggerLabel ? t("workspaces.parties.addParty") : null}
       </DialogTrigger>
       <DialogPopup>
         <DialogHeader>

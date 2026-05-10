@@ -1516,6 +1516,7 @@ type Messages = {
     "sessionRevoked": "Session revoked";
     "taskCreated": "Task created";
     "workspaceDeletedSuccessfully": "Matter deleted successfully";
+    "workspaceDuplicatedSuccessfully": "Matter duplicated successfully";
   };
   "tasks": {
     "addAssignee": "Add assignee";
@@ -1672,7 +1673,11 @@ type Messages = {
     "deletingWorkspace": "Deleting matter";
     "documentsCount": "{count, plural, one {# document} other {# documents}}";
     "dropToUploadFiles": "Drop to upload files";
+    "duplicateMatter": "Duplicate matter";
+    "duplicateMatterDescription": "You will duplicate the matter, its name, client, team members, parties, and views.";
+    "duplicateMatterWithContentDescription": "You will duplicate the matter, its name, client, team members, parties, views, and content.";
     "duplicateWithContent": "Duplicate with content";
+    "duplicatingWorkspace": "Duplicating matter";
     "emptyDocuments": {
       "description": "Upload documents to enable table extraction, document organization, in-browser editing, and search across this matter.";
       "title": "Upload your first documents";

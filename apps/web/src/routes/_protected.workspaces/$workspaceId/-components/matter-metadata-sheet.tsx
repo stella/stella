@@ -1,38 +1,36 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  CopyIcon,
-  CopyPlusIcon,
-  EllipsisIcon,
-  LockIcon,
-  TrashIcon,
-} from "lucide-react";
+import { CopyIcon, CopyPlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
+import {
+  Dialog,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
 import { Separator } from "@stll/ui/components/separator";
-import {
-  Sheet,
-  SheetDescription,
-  SheetHeader,
-  SheetPanel,
-  SheetPopup,
-  SheetTitle,
-  SheetTrigger,
-} from "@stll/ui/components/sheet";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { MatterNumberHint } from "@/components/matter-number-hint";
 import { usePermissions } from "@/hooks/use-permissions";
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { APIError } from "@/lib/errors";
+import { MATTER_INFO_ICON_SLOT_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-info-layout";
 import { MembersSection } from "@/routes/_protected.workspaces/$workspaceId/-components/members-section";
 import { PartiesSection } from "@/routes/_protected.workspaces/$workspaceId/-components/parties-section";
 import {
   useDeleteWorkspace,
+  useDuplicateWorkspace,
   useUpdateWorkspace,
 } from "@/routes/_protected.workspaces/-mutations";
 import {
@@ -40,25 +38,24 @@ import {
   workspacesKeys,
 } from "@/routes/_protected.workspaces/-queries";
 
-const comingSoon = (label: string) => {
-  stellaToast.add({
-    title: label,
-    type: "neutral",
-  });
-};
-
-type MatterMetadataSheetProps = {
+type MatterMetadataPanelProps = {
   workspaceId: string;
+  onDeleted?: () => void;
 };
 
-export const MatterMetadataSheet = ({
+type DuplicateMode = "metadata" | "content";
+
+export const MatterMetadataPanel = ({
   workspaceId,
-}: MatterMetadataSheetProps) => {
+  onDeleted,
+}: MatterMetadataPanelProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [isOpen, setIsOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [duplicateMode, setDuplicateMode] = useState<DuplicateMode | null>(
+    null,
+  );
   const [nameValue, setNameValue] = useState("");
   const escapedNameRef = useRef(false);
   const [referenceValue, setReferenceValue] = useState("");
@@ -66,8 +63,17 @@ export const MatterMetadataSheet = ({
 
   const { data: workspace } = useSuspenseQuery(workspaceOptions(workspaceId));
   const deleteWorkspace = useDeleteWorkspace();
+  const duplicateWorkspace = useDuplicateWorkspace();
+  const canCreateWorkspace = usePermissions({ workspace: ["create"] });
   const canDeleteWorkspace = usePermissions({ workspace: ["delete"] });
   const updateWorkspace = useUpdateWorkspace();
+
+  useEffect(() => {
+    escapedNameRef.current = false;
+    setNameValue(workspace.name);
+    setReferenceValue(workspace.reference ?? "");
+    setReferenceError("");
+  }, [workspace.name, workspace.reference]);
 
   const handleSaveName = () => {
     if (escapedNameRef.current) {
@@ -162,6 +168,7 @@ export const MatterMetadataSheet = ({
               title: t("success.workspaceDeletedSuccessfully"),
               type: "success",
             });
+            onDeleted?.();
             await navigate({ to: "/workspaces" });
           })();
         },
@@ -169,155 +176,216 @@ export const MatterMetadataSheet = ({
     );
   };
 
+  const handleDuplicateWorkspace = () => {
+    if (
+      !canCreateWorkspace ||
+      duplicateMode === null ||
+      duplicateWorkspace.isPending
+    ) {
+      return;
+    }
+
+    const toastId = stellaToast.add({
+      title: t("workspaces.duplicatingWorkspace"),
+      type: "loading",
+      timeout: Number.POSITIVE_INFINITY,
+    });
+
+    duplicateWorkspace.mutate(
+      {
+        workspaceId,
+        includeContent: duplicateMode === "content",
+      },
+      {
+        onError: () => {
+          stellaToast.update(toastId, {
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        },
+        onSuccess: (data) => {
+          stellaToast.update(toastId, {
+            title: t("success.workspaceDuplicatedSuccessfully"),
+            type: "success",
+          });
+          setDuplicateMode(null);
+          void navigate({
+            to: "/workspaces/$workspaceId",
+            params: { workspaceId: data.workspaceId },
+          });
+        },
+      },
+    );
+  };
+
   return (
     <>
-      <Sheet
-        onOpenChange={(open) => {
-          setIsOpen(open);
-          if (open) {
-            escapedNameRef.current = false;
-            setNameValue(workspace.name);
-            setReferenceValue(workspace.reference ?? "");
-          }
-        }}
-        open={isOpen}
-      >
-        <SheetTrigger render={<Button size="icon-sm" variant="ghost" />}>
-          <EllipsisIcon className="size-5" />
-        </SheetTrigger>
-        <SheetPopup side="right">
-          <SheetHeader>
-            <SheetTitle>{t("workspaces.matterInfo")}</SheetTitle>
-            <SheetDescription />
-          </SheetHeader>
-          <SheetPanel className="flex flex-1 flex-col gap-4">
-            {/* Name */}
-            <section className="px-4">
-              <span className="text-muted-foreground mb-1.5 block text-sm font-medium">
-                {t("common.name")}
-              </span>
-              <Input
-                disabled={updateWorkspace.isPending}
-                onBlur={handleSaveName}
-                onChange={(e) => setNameValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.currentTarget.blur();
-                  }
-                  if (e.key === "Escape") {
-                    escapedNameRef.current = true;
-                    e.currentTarget.blur();
-                  }
-                }}
-                value={nameValue}
-              />
-            </section>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {/* Name */}
+        <section
+          className={cn(
+            "grid shrink-0 grid-cols-[8rem_minmax(0,1fr)] items-center gap-3 border-b px-3",
+            TOOLBAR_ROW_HEIGHT,
+          )}
+        >
+          <span className="text-muted-foreground truncate text-sm font-medium">
+            {t("common.name")}
+          </span>
+          <Input
+            className="rounded-md shadow-none"
+            disabled={updateWorkspace.isPending}
+            onBlur={handleSaveName}
+            onChange={(e) => setNameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.currentTarget.blur();
+              }
+              if (e.key === "Escape") {
+                escapedNameRef.current = true;
+                e.currentTarget.blur();
+              }
+            }}
+            size="sm"
+            value={nameValue}
+          />
+        </section>
 
-            <Separator />
+        {/* Reference */}
+        <section
+          className={cn(
+            "grid shrink-0 grid-cols-[8rem_minmax(0,1fr)] items-center gap-3 border-b px-3",
+            TOOLBAR_ROW_HEIGHT,
+          )}
+        >
+          <span className="text-muted-foreground truncate text-sm font-medium">
+            {t("workspaces.reference")}
+          </span>
+          <div className="flex min-w-0 items-center gap-2">
+            <Input
+              className="w-36 shrink-0 rounded-md shadow-none"
+              onBlur={handleSaveReference}
+              onChange={(e) => {
+                setReferenceValue(e.target.value);
+                setReferenceError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.currentTarget.blur();
+                }
+              }}
+              placeholder={t("workspaces.referencePlaceholder")}
+              size="sm"
+              value={referenceValue}
+            />
+            <MatterNumberHint
+              className="mt-0 min-w-0 flex-1"
+              error={referenceError}
+              value={referenceValue}
+              variant="inline"
+            />
+          </div>
+        </section>
 
-            {/* Reference */}
-            <section className="px-4">
-              <span className="text-muted-foreground mb-1.5 block text-sm font-medium">
-                {t("workspaces.reference")}
-              </span>
-              <Input
-                onBlur={handleSaveReference}
-                onChange={(e) => {
-                  setReferenceValue(e.target.value);
-                  setReferenceError("");
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.currentTarget.blur();
-                  }
-                }}
-                placeholder={t("workspaces.referencePlaceholder")}
-                value={referenceValue}
-              />
-              <MatterNumberHint
-                error={referenceError}
-                value={referenceValue}
-                variant="inline"
-              />
-            </section>
-
-            <Separator />
-
-            {/* InfoSoud */}
-            {/* TODO: add with proper localization support for CS-only
+        {/* InfoSoud */}
+        {/* TODO: add with proper localization support for CS-only
                 customers. The component is wired and works, but the
                 surface (CZ court IDs, sp. zn. labels, etc.) is
                 Czech-only by design — we hide it from the UX until
                 we have a locale gate that only shows it to CS users
                 or surfaces an EN explainer for non-CS users. */}
-            {/* <InfoSoudSection active={isOpen} workspaceId={workspaceId} /> */}
-            {/* <Separator /> */}
+        {/* <InfoSoudSection active workspaceId={workspaceId} /> */}
+        {/* <Separator /> */}
 
-            {/* Members */}
-            <MembersSection workspaceId={workspaceId} />
+        {/* Members */}
+        <MembersSection workspaceId={workspaceId} />
 
-            <Separator />
+        <Separator />
 
-            {/* Parties */}
-            <PartiesSection workspaceId={workspaceId} />
+        {/* Parties */}
+        <PartiesSection workspaceId={workspaceId} />
 
-            <Separator />
-
-            {/* Actions */}
-            <div className="flex flex-col gap-0.5 px-2">
+        <div className="mt-auto">
+          {/* Actions */}
+          {canCreateWorkspace && (
+            <div className="flex flex-col">
               <Button
-                className="justify-start"
-                onClick={() => comingSoon(t("common.comingSoon"))}
-                size="sm"
+                className={cn(
+                  "w-full justify-start rounded-none px-3",
+                  TOOLBAR_ROW_HEIGHT,
+                )}
+                onClick={() => setDuplicateMode("metadata")}
                 variant="ghost"
               >
-                <CopyIcon className="size-4" />
+                <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+                  <CopyIcon className="size-4" />
+                </span>
                 {t("common.duplicate")}
               </Button>
               <Button
-                className="justify-start"
-                onClick={() => comingSoon(t("common.comingSoon"))}
-                size="sm"
+                className={cn(
+                  "w-full justify-start rounded-none px-3",
+                  TOOLBAR_ROW_HEIGHT,
+                )}
+                onClick={() => setDuplicateMode("content")}
                 variant="ghost"
               >
-                <CopyPlusIcon className="size-4" />
+                <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+                  <CopyPlusIcon className="size-4" />
+                </span>
                 {t("workspaces.duplicateWithContent")}
               </Button>
             </div>
+          )}
 
-            <Separator />
-
-            {/* Status actions */}
-            <div className="flex flex-col gap-0.5 px-2">
-              <Button
-                className="justify-start"
-                onClick={() => comingSoon(t("common.comingSoon"))}
-                size="sm"
-                variant="ghost"
-              >
-                <LockIcon className="size-4" />
-                {t("workspaces.lockMatter")}
-              </Button>
-            </div>
-
-            {/* Danger zone */}
-            {canDeleteWorkspace && (
-              <div className="mt-auto border-t px-2 pt-4">
-                <Button
-                  className="text-destructive justify-start"
-                  disabled={deleteWorkspace.isPending}
-                  onClick={() => setDeleteDialogOpen(true)}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <TrashIcon className="size-4" />
-                  {t("workspaces.deleteWorkspace")}
-                </Button>
-              </div>
-            )}
-          </SheetPanel>
-        </SheetPopup>
-      </Sheet>
+          {/* Danger zone */}
+          {canDeleteWorkspace && (
+            <button
+              className={cn(
+                "text-destructive hover:bg-accent flex w-full shrink-0 items-center gap-2 border-t px-3 text-sm font-medium transition-colors",
+                TOOLBAR_ROW_HEIGHT,
+              )}
+              disabled={deleteWorkspace.isPending}
+              onClick={() => setDeleteDialogOpen(true)}
+              type="button"
+            >
+              <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+                <TrashIcon className="size-4" />
+              </span>
+              {t("workspaces.deleteWorkspace")}
+            </button>
+          )}
+        </div>
+      </div>
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setDuplicateMode(null);
+          }
+        }}
+        open={duplicateMode !== null}
+      >
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>{t("workspaces.duplicateMatter")}</DialogTitle>
+            <DialogDescription>
+              {duplicateMode === "content"
+                ? t("workspaces.duplicateMatterWithContentDescription")
+                : t("workspaces.duplicateMatterDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>
+              {t("common.cancel")}
+            </DialogClose>
+            <Button
+              loading={duplicateWorkspace.isPending}
+              onClick={handleDuplicateWorkspace}
+            >
+              {t("common.duplicate")}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
       <DestructiveConfirmDialog
         cancelLabel={t("common.cancel")}
         confirmLabel={t("common.delete")}

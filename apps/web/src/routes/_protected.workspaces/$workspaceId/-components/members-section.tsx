@@ -29,10 +29,13 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { UserIdentity } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
+import { MATTER_INFO_ICON_SLOT_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-info-layout";
 import {
   useAddWorkspaceMember,
   useRemoveWorkspaceMember,
@@ -53,14 +56,26 @@ export const MembersSection = ({ workspaceId }: MembersSectionProps) => {
 
   return (
     <section>
-      <div className="mb-3 flex items-center justify-between">
+      <div
+        className={cn(
+          "flex items-center justify-between gap-2 px-3",
+          TOOLBAR_ROW_HEIGHT,
+        )}
+      >
         <h3 className="text-muted-foreground text-sm font-medium">
           {t("workspaces.sections.members")}
         </h3>
-        {canUpdate && <AddMemberDialog workspaceId={workspaceId} />}
+        {canUpdate && (
+          <AddMemberDialog
+            showTriggerLabel={false}
+            triggerSize="icon-xs"
+            triggerVariant="ghost"
+            workspaceId={workspaceId}
+          />
+        )}
       </div>
       {members.length > 0 ? (
-        <ul className="space-y-1">
+        <ul>
           {members.map((member) => (
             <MemberRow
               canUpdate={canUpdate}
@@ -130,12 +145,14 @@ const MemberRow = ({
   };
 
   return (
-    <li className="flex items-center gap-2 rounded-md border px-3 py-2">
+    <li className={cn("flex items-center gap-2 px-3", TOOLBAR_ROW_HEIGHT)}>
       <UserIdentity
-        avatarClassName="size-8 shrink-0 text-[0.625rem]"
+        avatarClassName={cn(MATTER_INFO_ICON_SLOT_CLASS, "text-[0.5625rem]")}
         className="min-w-0 flex-1"
         image={member.user?.image}
         name={member.user?.name ?? member.userId}
+        nameClassName="text-sm"
+        secondaryClassName="text-xs"
         secondaryText={member.user?.email ?? null}
       />
       {canUpdate && membersCount > 1 && (
@@ -183,6 +200,7 @@ type AddMemberDialogProps = {
   triggerClassName?: string | undefined;
   triggerSize?: ComponentProps<typeof Button>["size"] | undefined;
   triggerVariant?: ComponentProps<typeof Button>["variant"] | undefined;
+  showTriggerLabel?: boolean | undefined;
 };
 
 export const AddMemberDialog = ({
@@ -190,6 +208,7 @@ export const AddMemberDialog = ({
   triggerClassName,
   triggerSize = "sm",
   triggerVariant = "outline",
+  showTriggerLabel = true,
 }: AddMemberDialogProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -256,14 +275,16 @@ export const AddMemberDialog = ({
       <DialogTrigger
         render={
           <Button
+            aria-label={t("workspaces.members.addMember")}
             className={triggerClassName}
             size={triggerSize}
+            title={t("workspaces.members.addMember")}
             variant={triggerVariant}
           />
         }
       >
         <PlusIcon className="size-3.5" />
-        {t("workspaces.members.addMember")}
+        {showTriggerLabel ? t("workspaces.members.addMember") : null}
       </DialogTrigger>
       <DialogPopup>
         <DialogHeader>

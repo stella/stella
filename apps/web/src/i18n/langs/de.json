@@ -1512,7 +1512,8 @@
     "roleUpdated": "Rolle aktualisiert",
     "sessionRevoked": "Sitzung beendet",
     "taskCreated": "Aufgabe erstellt",
-    "workspaceDeletedSuccessfully": "Akte erfolgreich gelöscht"
+    "workspaceDeletedSuccessfully": "Akte erfolgreich gelöscht",
+    "workspaceDuplicatedSuccessfully": "Akte erfolgreich dupliziert"
   },
   "tasks": {
     "addAssignee": "Person zuweisen",
@@ -1669,7 +1670,11 @@
     "deletingWorkspace": "Akte wird gelöscht",
     "documentsCount": "{count, plural, one {# Dokument} other {# Dokumente}}",
     "dropToUploadFiles": "Dateien zum Hochladen ablegen",
+    "duplicateMatter": "Akte duplizieren",
+    "duplicateMatterDescription": "Sie duplizieren die Akte, ihren Namen, Mandanten, Teammitglieder, Beteiligte und Ansichten.",
+    "duplicateMatterWithContentDescription": "Sie duplizieren die Akte, ihren Namen, Mandanten, Teammitglieder, Beteiligte, Ansichten und Inhalt.",
     "duplicateWithContent": "Mit Inhalt duplizieren",
+    "duplicatingWorkspace": "Akte wird dupliziert",
     "emptyDocuments": {
       "description": "Laden Sie Dokumente hoch, um Tabellenextraktion, Dokumentorganisation, Bearbeitung im Browser und Suche in dieser Akte zu ermöglichen.",
       "title": "Laden Sie Ihre ersten Dokumente hoch",

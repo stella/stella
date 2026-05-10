@@ -1512,7 +1512,8 @@
     "roleUpdated": "Rôle mis à jour",
     "sessionRevoked": "Session révoquée",
     "taskCreated": "Tâche créée",
-    "workspaceDeletedSuccessfully": "Dossier supprimé avec succès"
+    "workspaceDeletedSuccessfully": "Dossier supprimé avec succès",
+    "workspaceDuplicatedSuccessfully": "Dossier dupliqué avec succès"
   },
   "tasks": {
     "addAssignee": "Ajouter un assigné",
@@ -1669,7 +1670,11 @@
     "deletingWorkspace": "Suppression du dossier",
     "documentsCount": "{count, plural, one {# document} other {# documents}}",
     "dropToUploadFiles": "Déposez pour importer des fichiers",
+    "duplicateMatter": "Dupliquer le dossier",
+    "duplicateMatterDescription": "Vous allez dupliquer le dossier, son nom, son client, les membres de l'équipe, les parties et les vues.",
+    "duplicateMatterWithContentDescription": "Vous allez dupliquer le dossier, son nom, son client, les membres de l'équipe, les parties, les vues et son contenu.",
     "duplicateWithContent": "Dupliquer avec le contenu",
+    "duplicatingWorkspace": "Duplication du dossier",
     "emptyDocuments": {
       "description": "Importez des documents pour activer l’extraction de tableaux, l’organisation des documents, la modification dans le navigateur et la recherche dans ce dossier.",
       "title": "Importez vos premiers documents",

@@ -1512,7 +1512,8 @@
     "roleUpdated": "Rola aktualizovaná",
     "sessionRevoked": "Relácia bola odhlásená",
     "taskCreated": "Úloha vytvorená",
-    "workspaceDeletedSuccessfully": "Spis úspešne vymazaný"
+    "workspaceDeletedSuccessfully": "Spis úspešne vymazaný",
+    "workspaceDuplicatedSuccessfully": "Spis úspešne duplikovaný"
   },
   "tasks": {
     "addAssignee": "Pridať osobu",
@@ -1669,7 +1670,11 @@
     "deletingWorkspace": "Mazanie spisu",
     "documentsCount": "{count, plural, one {# dokument} few {# dokumenty} other {# dokumentov}}",
     "dropToUploadFiles": "Presuňte súbory pre nahranie",
+    "duplicateMatter": "Duplikovať spis",
+    "duplicateMatterDescription": "Duplikujete spis, jeho názov, klienta, členov tímu, strany a zobrazenia.",
+    "duplicateMatterWithContentDescription": "Duplikujete spis, jeho názov, klienta, členov tímu, strany, zobrazenia a obsah.",
     "duplicateWithContent": "Duplikovať s obsahom",
+    "duplicatingWorkspace": "Duplikovanie spisu",
     "emptyDocuments": {
       "description": "Nahrajte dokumenty, aby ste mohli extrahovať tabuľky, organizovať dokumenty, upravovať ich priamo v prehliadači a vyhľadávať v tomto spise.",
       "title": "Nahrajte prvé dokumenty",

@@ -95,6 +95,16 @@ export type ChatTab = {
   activeDecisionId?: string | undefined;
 };
 
+export type MatterTabId = `matter:${string}`;
+
+export type MatterTab = {
+  type: "matter";
+  id: MatterTabId;
+  label: string;
+  workspaceId: string;
+  color?: string | null | undefined;
+};
+
 export type ExternalTab = {
   type: "external";
   id: ExternalTabId;
@@ -109,7 +119,7 @@ export type ExternalTab = {
   text?: string | undefined;
 };
 
-export type InspectorTab = PdfTab | TaskTab | ChatTab | ExternalTab;
+export type InspectorTab = PdfTab | TaskTab | ChatTab | MatterTab | ExternalTab;
 
 type State = {
   tabs: InspectorTab[];
@@ -166,6 +176,11 @@ type Actions = {
     snippet?: string | undefined;
     sourceToolName?: string | undefined;
     text?: string | undefined;
+  }) => void;
+  openMatter: (args: {
+    workspaceId: string;
+    label: string;
+    color?: string | null | undefined;
   }) => void;
   /**
    * Open a chat tab. Without args, creates a new (local-only) chat
@@ -536,6 +551,15 @@ const isInspectorTab = (value: unknown): value is InspectorTab => {
     );
   }
 
+  if (type === "matter") {
+    const color = value["color"];
+    return (
+      typeof label === "string" &&
+      typeof value["workspaceId"] === "string" &&
+      (color === undefined || color === null || typeof color === "string")
+    );
+  }
+
   if (type !== "pdf") {
     return false;
   }
@@ -773,6 +797,28 @@ export const useInspectorStore = create<State & Actions>()(
           existing.snippet = snippet ?? existing.snippet;
           existing.sourceToolName = sourceToolName ?? existing.sourceToolName;
           existing.text = text ?? existing.text;
+        }
+        state.activeId = id;
+        state.activationSeq += 1;
+        state.minimized = false;
+      }),
+
+    openMatter: ({ workspaceId, label, color }) =>
+      set((state) => {
+        const id: MatterTabId = `matter:${workspaceId}`;
+        const existing = state.tabs.find((t) => t.id === id);
+        if (!existing) {
+          state.tabs.push({
+            type: "matter",
+            id,
+            label,
+            workspaceId,
+            color,
+          });
+        } else if (existing.type === "matter") {
+          existing.label = label;
+          existing.workspaceId = workspaceId;
+          existing.color = color;
         }
         state.activeId = id;
         state.activationSeq += 1;

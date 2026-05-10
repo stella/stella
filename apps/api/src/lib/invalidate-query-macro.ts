@@ -1,6 +1,7 @@
 import Elysia, { t } from "elysia";
 
 import { authMacro } from "@/api/lib/auth";
+import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { broadcast, broadcastToOrganization } from "@/api/lib/sse";
 
@@ -12,6 +13,18 @@ const invalidateQueryBodySchema = t.Object({
 
 const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
 
+const createInvalidateQueryEvent = (queryKey: string[]) => ({
+  type: INVALIDATE_QUERY_EVENT_TYPE,
+  data: queryKey,
+});
+
+export const broadcastQueryInvalidationToOrganization = (
+  organizationId: SafeId<"organization">,
+  queryKey: string[],
+) => {
+  broadcastToOrganization(organizationId, createInvalidateQueryEvent(queryKey));
+};
+
 export const invalidateQuery = new Elysia({ name: "invalidateQueryMacro" })
   .use(authMacro)
   .macro("invalidateQuery", {
@@ -22,11 +35,7 @@ export const invalidateQuery = new Elysia({ name: "invalidateQueryMacro" })
         return;
       }
 
-      const event = {
-        type: INVALIDATE_QUERY_EVENT_TYPE,
-        data: ctx.body.queryKey,
-      };
-
+      const event = createInvalidateQueryEvent(ctx.body.queryKey);
       const workspaceId =
         "workspaceId" in ctx ? String(ctx.workspaceId) : undefined;
 
@@ -35,5 +44,19 @@ export const invalidateQuery = new Elysia({ name: "invalidateQueryMacro" })
       } else {
         broadcastToOrganization(ctx.session.activeOrganizationId, event);
       }
+    },
+  })
+  .macro("invalidateOrganizationQuery", {
+    validateAuth: true,
+    body: invalidateQueryBodySchema,
+    afterHandle: (ctx) => {
+      if (ctx.session === null || ctx.session === undefined) {
+        return;
+      }
+
+      broadcastQueryInvalidationToOrganization(
+        ctx.session.activeOrganizationId,
+        ctx.body.queryKey,
+      );
     },
   });

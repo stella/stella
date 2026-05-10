@@ -1512,7 +1512,8 @@
     "roleUpdated": "Função atualizada",
     "sessionRevoked": "Sessão revogada",
     "taskCreated": "Tarefa criada",
-    "workspaceDeletedSuccessfully": "Caso excluído com sucesso"
+    "workspaceDeletedSuccessfully": "Caso excluído com sucesso",
+    "workspaceDuplicatedSuccessfully": "Caso duplicado com sucesso"
   },
   "tasks": {
     "addAssignee": "Adicionar responsável",
@@ -1669,7 +1670,11 @@
     "deletingWorkspace": "Excluindo caso",
     "documentsCount": "{count, plural, one {# documento} many {# documentos} other {# documentos}}",
     "dropToUploadFiles": "Solte para fazer upload de arquivos",
+    "duplicateMatter": "Duplicar caso",
+    "duplicateMatterDescription": "Você duplicará o caso, seu nome, cliente, membros da equipe, partes e visualizações.",
+    "duplicateMatterWithContentDescription": "Você duplicará o caso, seu nome, cliente, membros da equipe, partes, visualizações e conteúdo.",
     "duplicateWithContent": "Duplicar com conteúdo",
+    "duplicatingWorkspace": "Duplicando caso",
     "emptyDocuments": {
       "description": "Envie documentos para habilitar extração de tabelas, organização de documentos, edição no navegador e pesquisa neste caso.",
       "title": "Envie seus primeiros documentos",

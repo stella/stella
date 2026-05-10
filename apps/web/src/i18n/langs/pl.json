@@ -1512,7 +1512,8 @@
     "roleUpdated": "Rola zaktualizowana",
     "sessionRevoked": "Sesja zakończona",
     "taskCreated": "Zadanie utworzone",
-    "workspaceDeletedSuccessfully": "Sprawa usunięta pomyślnie"
+    "workspaceDeletedSuccessfully": "Sprawa usunięta pomyślnie",
+    "workspaceDuplicatedSuccessfully": "Sprawa została pomyślnie zduplikowana"
   },
   "tasks": {
     "addAssignee": "Przypisz osobę",
@@ -1669,7 +1670,11 @@
     "deletingWorkspace": "Usuwanie sprawy",
     "documentsCount": "{count, plural, one {# dokument} few {# dokumenty} many {# dokumentów} other {# dokumentu}}",
     "dropToUploadFiles": "Upuść pliki, aby je przesłać",
+    "duplicateMatter": "Duplikuj sprawę",
+    "duplicateMatterDescription": "Zduplikujesz sprawę, jej nazwę, klienta, członków zespołu, strony i widoki.",
+    "duplicateMatterWithContentDescription": "Zduplikujesz sprawę, jej nazwę, klienta, członków zespołu, strony, widoki i treść.",
     "duplicateWithContent": "Duplikuj z zawartością",
+    "duplicatingWorkspace": "Duplikowanie sprawy",
     "emptyDocuments": {
       "description": "Prześlij dokumenty, aby włączyć wyodrębnianie tabel, porządkowanie dokumentów, edycję w przeglądarce i wyszukiwanie w tej sprawie.",
       "title": "Prześlij pierwsze dokumenty",
