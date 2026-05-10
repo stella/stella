@@ -144,19 +144,19 @@ export const createCollabServer = async ({
 
       applyUpdate(document, Buffer.from(result.snapshotBase64, "base64"));
     },
-    async onStoreDocument({ document, lastContext }) {
-      if (!lastContext.canEdit) {
+    async onStoreDocument({ document, lastContext: context }) {
+      if (!context.canEdit) {
         return;
       }
 
       await postJson({
         apiUrl,
         body: {
-          sessionId: lastContext.sessionId,
+          sessionId: context.sessionId,
           snapshotBase64: Buffer.from(encodeStateAsUpdate(document)).toString(
             "base64",
           ),
-          token: lastContext.token,
+          token: context.token,
         },
         path: "/folio-collab-sessions/snapshot/store",
         schema: storeSnapshotResponseSchema,

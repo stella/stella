@@ -5,6 +5,7 @@ import type { Static } from "elysia";
 
 import { folioCollabSessions } from "@/api/db/schema";
 import { createFileKey } from "@/api/handlers/files/utils";
+import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { scanFile } from "@/api/lib/file-scan/scan";
@@ -134,7 +135,20 @@ export const checkpointFolioCollabSessionHandler = async ({
       workspaceId: authorizedSession.value.workspaceId,
     });
 
-    await getS3().write(key, new Uint8Array(buffer));
+    const s3WriteResult = await Result.tryPromise(
+      async () => await getS3().write(key, new Uint8Array(buffer)),
+    );
+
+    if (Result.isError(s3WriteResult)) {
+      captureError(s3WriteResult.error, {
+        sessionId,
+        workspaceId: authorizedSession.value.workspaceId,
+      });
+
+      return status(500, {
+        message: "Failed to persist collaborative checkpoint.",
+      });
+    }
 
     const checkpointedAt = new Date();
     await tx
