@@ -229,6 +229,38 @@ describe("renderLine text styling", () => {
     expect(textEl?.style.color).toBe("#FFFFFF");
   });
 
+  test("keeps automatic comment text readable when comment styling overrides a DOCX highlight", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Highlighted text",
+          highlight: TEST_DARK_HIGHLIGHT_COLOR,
+          commentIds: [42],
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 16,
+      width: 112,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.backgroundColor).toBe("rgba(255, 212, 0, 0.08)");
+    expect(textEl?.style.color).toBeUndefined();
+    expect(textEl?.dataset.commentId).toBe("42");
+  });
+
   test("preserves explicit text colors on DOCX highlights", () => {
     const block: ParagraphBlock = {
       kind: "paragraph",

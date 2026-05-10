@@ -232,8 +232,10 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
   if (run.highlight) {
     element.style.backgroundColor = run.highlight;
     const hasTrackedChangeColor = run.isInsertion || run.isDeletion;
+    const hasCommentHighlight =
+      run.commentIds !== undefined && run.commentIds.length > 0;
     const automaticTextColor =
-      hasExplicitTextColor || hasTrackedChangeColor
+      hasExplicitTextColor || hasTrackedChangeColor || hasCommentHighlight
         ? undefined
         : getAutomaticTextColorForBackground(run.highlight);
     if (automaticTextColor) {
