@@ -1,15 +1,13 @@
+import type { ComponentType, SVGProps } from "react";
+
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  BotIcon,
-  LightbulbIcon,
-  PlugZapIcon,
-  SparklesIcon,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { BotIcon, LightbulbIcon, SparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
+
+import { McpIcon } from "@/components/mcp-icon";
 
 export const Route = createFileRoute("/_protected/knowledge/")({
   component: KnowledgeLanding,
@@ -17,14 +15,14 @@ export const Route = createFileRoute("/_protected/knowledge/")({
 
 type KnowledgeSection = {
   key: "agents" | "mcp" | "prompts" | "skills";
-  icon: LucideIcon;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
   to?: "/knowledge/mcp" | "/knowledge/skills";
 };
 
 export const knowledgeSections: readonly KnowledgeSection[] = [
   { key: "prompts", icon: LightbulbIcon, to: "/knowledge/skills" },
   { key: "skills", icon: SparklesIcon },
-  { key: "mcp", icon: PlugZapIcon, to: "/knowledge/mcp" },
+  { key: "mcp", icon: McpIcon, to: "/knowledge/mcp" },
   { key: "agents", icon: BotIcon },
 ];
 

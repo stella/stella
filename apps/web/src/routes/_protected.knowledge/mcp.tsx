@@ -27,6 +27,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { McpIcon } from "@/components/mcp-icon";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
@@ -186,7 +187,7 @@ function McpPage() {
         !canManageCustomConnectors &&
         !connectorsLoading && (
           <div className="border-border bg-muted/20 flex min-h-[260px] flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
-            <PlugZapIcon className="text-muted-foreground size-8" />
+            <McpIcon className="text-muted-foreground size-8" />
             <h2 className="mt-3 text-sm font-semibold">
               {t("knowledge.mcp.emptyTitle")}
             </h2>
@@ -442,7 +443,7 @@ function ConnectorCard({
               width={24}
             />
           ) : (
-            <PlugZapIcon className="text-muted-foreground size-5" />
+            <McpIcon className="text-muted-foreground size-5" />
           )}
         </div>
         <div className="min-w-0 flex-1">
@@ -590,7 +591,7 @@ function NativeToolCard({
             width={24}
           />
         ) : (
-          <PlugZapIcon className="text-muted-foreground size-5" />
+          <McpIcon className="text-muted-foreground size-5" />
         )}
       </div>
       <div className="min-w-0 flex-1">
