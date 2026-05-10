@@ -100,7 +100,15 @@ const createDefaultTool = ({
 
 const createProperty = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, user, request, body }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    user,
+    request,
+    server,
+    body,
+  }) {
     let content: PropertyContent | null = null;
     let tool: PropertyTool | null = null;
     const defaultTool = () =>
@@ -255,6 +263,7 @@ const createProperty = createSafeHandler(
               workspaceId,
               userId: user.id,
               request,
+              server,
             }),
             action: AUDIT_ACTION.CREATE,
             resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,

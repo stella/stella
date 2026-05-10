@@ -163,6 +163,7 @@ const updateProperty = createSafeHandler(
     workspaceId,
     user,
     request,
+    server,
     params: { propertyId },
     body,
   }) {
@@ -324,6 +325,7 @@ const updateProperty = createSafeHandler(
               workspaceId,
               userId: user.id,
               request,
+              server,
             }),
             action: AUDIT_ACTION.UPDATE,
             resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,

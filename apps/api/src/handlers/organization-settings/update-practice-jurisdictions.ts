@@ -68,7 +68,7 @@ const normalizePracticeJurisdictions = (
 
 const updatePracticeJurisdictions = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user, request, body }) {
+  async function* ({ safeDb, session, user, request, server, body }) {
     const primaryCount = body.practiceJurisdictions.filter(
       (jurisdiction) => jurisdiction.isPrimary,
     ).length;
@@ -114,6 +114,7 @@ const updatePracticeJurisdictions = createSafeRootHandler(
               organizationId: session.activeOrganizationId,
               userId: user.id,
               request,
+              server,
             }),
             action: AUDIT_ACTION.UPDATE,
             resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,

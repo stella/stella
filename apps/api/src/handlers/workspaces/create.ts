@@ -55,7 +55,7 @@ const config = {
 
 const createWorkspaces = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user, request, body }) {
+  async function* ({ safeDb, session, user, request, server, body }) {
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
         const organizationId = session.activeOrganizationId;
@@ -247,6 +247,7 @@ const createWorkspaces = createSafeRootHandler(
               workspaceId,
               userId: user.id,
               request,
+              server,
             }),
             action: AUDIT_ACTION.CREATE,
             resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,

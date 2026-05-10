@@ -200,7 +200,15 @@ const config = {
 
 const createEntities = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, user, request, body }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    user,
+    request,
+    server,
+    body,
+  }) {
     return yield* createEntitiesHandler({
       safeDb,
       workspaceId,
@@ -210,6 +218,7 @@ const createEntities = createSafeHandler(
         workspaceId,
         userId: user.id,
         request,
+        server,
       }),
       body,
     });

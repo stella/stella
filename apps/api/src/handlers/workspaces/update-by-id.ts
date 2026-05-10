@@ -47,7 +47,15 @@ const config = {
 
 const updateWorkspace = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, user, request, body }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    user,
+    request,
+    server,
+    body,
+  }) {
     const txResult = await safeDb(async (tx) => {
       const workspaceRows = await tx
         .select({
@@ -223,6 +231,7 @@ const updateWorkspace = createSafeHandler(
             workspaceId,
             userId: user.id,
             request,
+            server,
           }),
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,

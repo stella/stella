@@ -178,7 +178,15 @@ const config = {
 
 const deleteEntities = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, user, request, body }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    user,
+    request,
+    server,
+    body,
+  }) {
     return yield* deleteEntitiesHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
@@ -188,6 +196,7 @@ const deleteEntities = createSafeHandler(
         workspaceId,
         userId: user.id,
         request,
+        server,
       }),
       body,
     });

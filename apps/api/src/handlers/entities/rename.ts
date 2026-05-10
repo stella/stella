@@ -155,7 +155,15 @@ const config = {
 
 const renameEntity = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, user, request, body }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    user,
+    request,
+    server,
+    body,
+  }) {
     return yield* renameEntityHandler({
       safeDb,
       workspaceId,
@@ -164,6 +172,7 @@ const renameEntity = createSafeHandler(
         workspaceId,
         userId: user.id,
         request,
+        server,
       }),
       body,
     });
