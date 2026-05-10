@@ -278,17 +278,18 @@ const copyWorkspaceFile = async ({
 };
 
 const copyWorkspaceFiles = async ({
+  copiedS3Keys,
   copies,
   organizationId,
   sourceWorkspaceId,
   targetWorkspaceId,
 }: {
+  copiedS3Keys: string[];
   copies: FileCopy[];
   organizationId: SafeId<"organization">;
   sourceWorkspaceId: SafeId<"workspace">;
   targetWorkspaceId: SafeId<"workspace">;
 }) => {
-  const copiedS3Keys: string[] = [];
   let nextIndex = 0;
 
   const copyNext = async () => {
@@ -315,8 +316,6 @@ const copyWorkspaceFiles = async ({
       copyNext,
     ),
   );
-
-  return copiedS3Keys;
 };
 
 const cleanupCopiedS3Keys = async ({
@@ -446,14 +445,13 @@ const duplicateWorkspace = createSafeHandler(
 
     if (includeContent) {
       const copyResult = await Result.tryPromise(async () => {
-        copiedS3Keys.push(
-          ...(await copyWorkspaceFiles({
-            copies: fileCopies,
-            organizationId,
-            sourceWorkspaceId,
-            targetWorkspaceId,
-          })),
-        );
+        await copyWorkspaceFiles({
+          copiedS3Keys,
+          copies: fileCopies,
+          organizationId,
+          sourceWorkspaceId,
+          targetWorkspaceId,
+        });
       });
 
       if (Result.isError(copyResult)) {
