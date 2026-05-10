@@ -66,16 +66,44 @@ export const parseTrustedProxies = (
   return { blockList };
 };
 
+const IPV4_MAPPED_PREFIX = "::ffff:";
+
+/**
+ * Strips the `::ffff:` prefix from an IPv4-mapped IPv6 address and
+ * returns the embedded IPv4. Bun's dual-stack socket reports IPv4
+ * connections in this form (e.g. `::ffff:203.0.113.7`); operators
+ * write proxy CIDRs as plain IPv4, so we fall back to matching the
+ * embedded address when the IPv6 form does not match.
+ */
+const ipv4FromMappedIpv6 = (address: string): string | null => {
+  if (!address.toLowerCase().startsWith(IPV4_MAPPED_PREFIX)) {
+    return null;
+  }
+  const candidate = address.slice(IPV4_MAPPED_PREFIX.length);
+  return isIP(candidate) === 4 ? candidate : null;
+};
+
 export const isTrustedProxy = (
   address: string,
   trusted: TrustedProxies,
 ): boolean => {
   const family: "ipv4" | "ipv6" = isIPv6(address) ? "ipv6" : "ipv4";
   try {
-    return trusted.blockList.check(address, family);
+    if (trusted.blockList.check(address, family)) {
+      return true;
+    }
   } catch {
-    return false;
+    // Fall through to the mapped-v4 check below.
   }
+  const mappedV4 = ipv4FromMappedIpv6(address);
+  if (mappedV4 !== null) {
+    try {
+      return trusted.blockList.check(mappedV4, "ipv4");
+    } catch {
+      return false;
+    }
+  }
+  return false;
 };
 
 let cachedTrustedProxies: TrustedProxies | null = null;

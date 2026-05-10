@@ -46,6 +46,15 @@ describe("parseTrustedProxies", () => {
     expect(isTrustedProxy("0.0.0.0", trusted)).toBe(false);
     expect(isTrustedProxy("8.8.8.8", trusted)).toBe(false);
   });
+
+  test("matches IPv4-mapped IPv6 peers against IPv4 CIDRs", () => {
+    // Dual-stack sockets report IPv4 clients as `::ffff:1.2.3.4`;
+    // operators write proxy CIDRs as plain IPv4.
+    const trusted = parseTrustedProxies("203.0.113.0/24");
+    expect(isTrustedProxy("::ffff:203.0.113.7", trusted)).toBe(true);
+    expect(isTrustedProxy("::ffff:203.0.113.255", trusted)).toBe(true);
+    expect(isTrustedProxy("::ffff:8.8.8.8", trusted)).toBe(false);
+  });
 });
 
 describe("resolveClientIp", () => {
