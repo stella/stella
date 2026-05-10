@@ -101,15 +101,34 @@ function isFieldRun(run: Run): run is FieldRun {
   return run.kind === "field";
 }
 
-const DEFAULT_TEXT_COLOR_VALUES = new Set([
-  "000000",
-  "000",
-  "auto",
-  "windowtext",
-]);
+const AUTOMATIC_TEXT_COLOR_VALUES = new Set(["auto", "windowtext"]);
+const DEFAULT_BLACK_TEXT_COLOR_VALUES = new Set(["000000", "000"]);
 
-function isAutomaticOrDefaultTextColor(color: string): boolean {
-  return DEFAULT_TEXT_COLOR_VALUES.has(color.toLowerCase().replace(/^#/, ""));
+function normalizeTextColorValue(color: string): string {
+  return color.trim().toLowerCase().replace(/^#/, "");
+}
+
+function isAutomaticTextColor(color: string): boolean {
+  return AUTOMATIC_TEXT_COLOR_VALUES.has(normalizeTextColorValue(color));
+}
+
+function isDefaultBlackTextColor(color: string): boolean {
+  return DEFAULT_BLACK_TEXT_COLOR_VALUES.has(normalizeTextColorValue(color));
+}
+
+function shouldRenderTextColor(
+  color: string,
+  highlight: string | undefined,
+): boolean {
+  if (isAutomaticTextColor(color)) {
+    return false;
+  }
+
+  if (highlight) {
+    return true;
+  }
+
+  return !isDefaultBlackTextColor(color);
 }
 
 /**
@@ -138,8 +157,9 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
 
   // Color — skip black/auto so the CSS variable --doc-canvas-text can adapt to dark mode
   let hasExplicitTextColor = false;
-  if (run.color && !isAutomaticOrDefaultTextColor(run.color)) {
-    element.style.color = run.color;
+  const textColor = run.color;
+  if (textColor && shouldRenderTextColor(textColor, run.highlight)) {
+    element.style.color = textColor.trim();
     hasExplicitTextColor = true;
   }
 
@@ -211,9 +231,11 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
   // Highlight (background color)
   if (run.highlight) {
     element.style.backgroundColor = run.highlight;
-    const automaticTextColor = hasExplicitTextColor
-      ? undefined
-      : getAutomaticTextColorForBackground(run.highlight);
+    const hasTrackedChangeColor = run.isInsertion || run.isDeletion;
+    const automaticTextColor =
+      hasExplicitTextColor || hasTrackedChangeColor
+        ? undefined
+        : getAutomaticTextColorForBackground(run.highlight);
     if (automaticTextColor) {
       element.style.color = automaticTextColor;
     }
