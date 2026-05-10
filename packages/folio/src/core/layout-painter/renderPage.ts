@@ -377,13 +377,17 @@ function resolveHeaderFooterFloatingTablePosition(
       ? -layout.flowTop
       : layout.margins.top - layout.flowTop;
 
-  // Horizontal
+  // Horizontal. Match the body's `inside`/`outside` handling
+  // (core/layout-engine: `inside` aliases left, `outside` aliases right).
+  // We don't have facing-page context in HF rendering, so the simple
+  // alias is the closest sensible match.
   let left = 0;
-  if (floating.tblpXSpec === "left") {
+  const xSpec = floating.tblpXSpec;
+  if (xSpec === "left" || xSpec === "inside") {
     left = horzFrameOffset;
-  } else if (floating.tblpXSpec === "right") {
+  } else if (xSpec === "right" || xSpec === "outside") {
     left = horzFrameOffset + horzFrameWidth - measure.totalWidth;
-  } else if (floating.tblpXSpec === "center") {
+  } else if (xSpec === "center") {
     left = horzFrameOffset + (horzFrameWidth - measure.totalWidth) / 2;
   } else if (floating.tblpX !== undefined) {
     left = horzFrameOffset + floating.tblpX;
