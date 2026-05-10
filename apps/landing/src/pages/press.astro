@@ -36,7 +36,7 @@ const logoTiles: LogoTile[] = [
     label: "Wordmark on dark",
     variant: "wordmark",
     background: "dark",
-    svg: "/brand/stella-wordmark.svg",
+    svg: "/brand/stella-wordmark-white.svg",
     png: "/brand/stella-wordmark-white.png",
   },
   {
@@ -50,7 +50,7 @@ const logoTiles: LogoTile[] = [
     label: "Symbol on dark",
     variant: "symbol",
     background: "dark",
-    svg: "/brand/stella-symbol.svg",
+    svg: "/brand/stella-symbol-white.svg",
     png: "/brand/stella-symbol-white.png",
   },
 ];
@@ -251,7 +251,7 @@ const gradients = [
                   style={tile.background === "light" ? "background: #ffffff" : "background: #0c0a09"}
                 >
                   <img
-                    src={tile.background === "light" ? tile.png : tile.png}
+                    src={tile.png}
                     alt={tile.label}
                     class={tile.variant === "symbol" ? "max-h-20" : "max-h-10"}
                     loading="lazy"
