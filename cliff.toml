@@ -34,18 +34,24 @@ filter_commits = false
 tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+(-rc\\.[0-9]+)?$"
 sort_commits = "newest"
 
-# Order matters: first matching parser wins.
+# Order matters twice over:
+#   - First matching parser wins (so put more specific patterns first,
+#     e.g. `chore(deps)` before `chore`).
+#   - Section order in the rendered notes follows the lexicographic
+#     order of `group`. The `<!-- N -->` HTML-comment prefix below sorts
+#     deterministically (0 → 8) but is stripped by GitHub's markdown
+#     renderer, so the visible heading is just the emoji + label.
 commit_parsers = [
-  { message = "^feat",            group = "🚀 Features" },
-  { message = "^fix",             group = "🐛 Bug Fixes" },
-  { message = "^perf",            group = "⚡ Performance" },
-  { message = "^refactor",        group = "♻️ Refactor" },
-  { message = "^docs",            group = "📚 Documentation" },
-  { message = "^test",            group = "🧪 Tests" },
-  { message = "^chore\\(deps\\)", group = "📦 Dependencies" },
-  { message = "^chore",           group = "⚙️ Miscellaneous" },
+  { message = "^feat",            group = "<!-- 0 -->🚀 Features" },
+  { message = "^fix",             group = "<!-- 1 -->🐛 Bug Fixes" },
+  { message = "^perf",            group = "<!-- 2 -->⚡ Performance" },
+  { message = "^refactor",        group = "<!-- 3 -->♻️ Refactor" },
+  { message = "^docs",            group = "<!-- 4 -->📚 Documentation" },
+  { message = "^test",            group = "<!-- 5 -->🧪 Tests" },
+  { message = "^chore\\(deps\\)", group = "<!-- 6 -->📦 Dependencies" },
+  { message = "^chore",           group = "<!-- 7 -->⚙️ Miscellaneous" },
   { message = "^style",           skip  = true },
   { message = "^ci",              skip  = true },
   { message = "^build",           skip  = true },
-  { message = "^revert",          group = "⏪ Reverts" },
+  { message = "^revert",          group = "<!-- 8 -->⏪ Reverts" },
 ]
