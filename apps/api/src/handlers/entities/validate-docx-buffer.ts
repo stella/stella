@@ -1,5 +1,6 @@
-import JSZip from "jszip";
 import * as slimdom from "slimdom";
+
+import { loadDocxArchive } from "@/api/lib/docx-archive";
 
 export type ValidateDocxBufferResult =
   | { valid: true }
@@ -7,22 +8,19 @@ export type ValidateDocxBufferResult =
 
 /**
  * Validate that a buffer is a structurally valid DOCX file.
- * Checks that the ZIP archive can be parsed, that it contains
- * the required `word/document.xml` entry, and that document XML
- * is well-formed.
+ * Checks that the ZIP archive can be parsed within the bounded-decompression
+ * envelope, that it contains the required `word/document.xml` entry, and
+ * that document XML is well-formed.
  */
 export const validateDocxBuffer = async (
   buffer: ArrayBuffer,
 ): Promise<ValidateDocxBufferResult> => {
   try {
-    const zip = await JSZip.loadAsync(buffer);
-
-    const documentXml = zip.file("word/document.xml");
-    if (!documentXml) {
+    const archive = await loadDocxArchive(buffer);
+    const xml = await archive.readEntryString("word/document.xml");
+    if (xml === null) {
       return { valid: false, error: "Missing word/document.xml" };
     }
-
-    const xml = await documentXml.async("text");
 
     let document: slimdom.Document;
     try {

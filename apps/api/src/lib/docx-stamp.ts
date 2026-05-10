@@ -6,8 +6,8 @@
  * JSZip to manipulate the OOXML package; XML is handled
  * via string operations for simplicity and robustness.
  */
-import JSZip from "jszip";
-
+import type { DocxArchive } from "@/api/lib/docx-archive";
+import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { LIMITS } from "@/api/lib/limits";
 
 const STAMP_BOOKMARK = "stella_dms_ref";
@@ -88,22 +88,22 @@ export const fillPlaceholders = async (
   stamp: string,
   verificationCode: string,
 ): Promise<ArrayBuffer | null> => {
-  let zip: JSZip;
+  let archive: DocxArchive;
   try {
-    zip = await JSZip.loadAsync(docxBuffer);
+    archive = await loadDocxArchive(docxBuffer);
   } catch {
     return null;
   }
 
-  const replaced = await replacePlaceholders(zip, stamp, verificationCode);
+  const replaced = await replacePlaceholders(archive, stamp, verificationCode);
   if (!replaced) {
     return null;
   }
 
   // Also inject custom properties so round-trip extraction works
-  await injectCustomProperties(zip, stamp, verificationCode);
+  await injectCustomProperties(archive, stamp, verificationCode);
 
-  return zip.generateAsync({
+  return archive.zip.generateAsync({
     type: "arraybuffer",
     compression: "DEFLATE",
   });
@@ -124,28 +124,28 @@ export const injectStamp = async (
   verificationCode: string,
   baseUrl: string,
 ): Promise<ArrayBuffer> => {
-  let zip: JSZip;
+  let archive: DocxArchive;
   try {
-    zip = await JSZip.loadAsync(docxBuffer);
+    archive = await loadDocxArchive(docxBuffer);
   } catch {
     // Corrupt or non-DOCX buffer; return original unchanged
     return docxBuffer;
   }
 
-  await injectCustomProperties(zip, stamp, verificationCode);
+  await injectCustomProperties(archive, stamp, verificationCode);
 
   const placeholdersReplaced = await replacePlaceholders(
-    zip,
+    archive,
     stamp,
     verificationCode,
   );
 
   // Skip auto-footer when the user placed their own references
   if (!placeholdersReplaced) {
-    await injectFooter(zip, stamp, verificationCode, baseUrl);
+    await injectFooter(archive, stamp, verificationCode, baseUrl);
   }
 
-  return zip.generateAsync({
+  return archive.zip.generateAsync({
     type: "arraybuffer",
     compression: "DEFLATE",
   });
@@ -162,16 +162,16 @@ export const extractStamp = async (
   verificationCode: string | null;
   stamp: string | null;
 }> => {
-  let zip: JSZip;
+  let archive: DocxArchive;
   try {
-    zip = await JSZip.loadAsync(docxBuffer);
+    archive = await loadDocxArchive(docxBuffer);
   } catch {
     // Malformed or corrupt DOCX; treat as no stamp
     return { verificationCode: null, stamp: null };
   }
 
   // 1. Try custom properties (fast, reliable)
-  const customXml = await zip.file(CUSTOM_PROPS_PATH)?.async("string");
+  const customXml = await archive.readEntryString(CUSTOM_PROPS_PATH);
 
   if (customXml) {
     const code = parseCustomProperty(customXml, "stella-code");
@@ -182,20 +182,20 @@ export const extractStamp = async (
   }
 
   // 2. Fallback: parse footer for bookmark
-  return parseFooterStamp(zip);
+  return parseFooterStamp(archive);
 };
 
 // ── Custom Properties ───────────────────────────────────
 
 const injectCustomProperties = async (
-  zip: JSZip,
+  archive: DocxArchive,
   stamp: string,
   verificationCode: string,
 ): Promise<void> => {
-  const existingXml = await zip.file(CUSTOM_PROPS_PATH)?.async("string");
+  const existingXml = await archive.readEntryString(CUSTOM_PROPS_PATH);
 
   if (existingXml) {
-    zip.file(
+    archive.zip.file(
       CUSTOM_PROPS_PATH,
       updateCustomProperties(existingXml, stamp, verificationCode),
     );
@@ -203,16 +203,16 @@ const injectCustomProperties = async (
   }
 
   // Create new custom.xml
-  zip.file(
+  archive.zip.file(
     CUSTOM_PROPS_PATH,
     buildCustomPropertiesXml(stamp, verificationCode),
   );
 
   // Ensure Content_Types includes custom properties
-  await ensureContentType(zip);
+  await ensureContentType(archive);
 
   // Ensure .rels includes custom properties relationship
-  await ensureCustomPropsRelationship(zip);
+  await ensureCustomPropsRelationship(archive);
 };
 
 const buildCustomPropertiesXml = (
@@ -275,8 +275,8 @@ const upsertProperty = (xml: string, name: string, value: string): string => {
   return xml.replace("</Properties>", `${prop}\n</Properties>`);
 };
 
-const ensureContentType = async (zip: JSZip): Promise<void> => {
-  const ct = await zip.file(CONTENT_TYPES_PATH)?.async("string");
+const ensureContentType = async (archive: DocxArchive): Promise<void> => {
+  const ct = await archive.readEntryString(CONTENT_TYPES_PATH);
   if (!ct || ct.includes(CUSTOM_PROPS_PATH)) {
     return;
   }
@@ -284,15 +284,20 @@ const ensureContentType = async (zip: JSZip): Promise<void> => {
   const override =
     `<Override PartName="/${CUSTOM_PROPS_PATH}"` +
     ` ContentType="${CUSTOM_PROPS_CONTENT_TYPE}"/>`;
-  zip.file(CONTENT_TYPES_PATH, ct.replace("</Types>", `${override}\n</Types>`));
+  archive.zip.file(
+    CONTENT_TYPES_PATH,
+    ct.replace("</Types>", `${override}\n</Types>`),
+  );
 };
 
-const ensureCustomPropsRelationship = async (zip: JSZip): Promise<void> => {
+const ensureCustomPropsRelationship = async (
+  archive: DocxArchive,
+): Promise<void> => {
   const relsPath = "_rels/.rels";
-  const rels = await zip.file(relsPath)?.async("string");
+  const rels = await archive.readEntryString(relsPath);
 
   if (!rels) {
-    zip.file(
+    archive.zip.file(
       relsPath,
       [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -314,7 +319,7 @@ const ensureCustomPropsRelationship = async (zip: JSZip): Promise<void> => {
     '"rIdCustomProps"' +
     ` Type="${CUSTOM_PROPS_REL_TYPE}"` +
     ` Target="${CUSTOM_PROPS_PATH}"/>`;
-  zip.file(
+  archive.zip.file(
     relsPath,
     rels.replace(
       "</Relationships>",
@@ -332,18 +337,18 @@ const ensureCustomPropsRelationship = async (zip: JSZip): Promise<void> => {
  * formatting. Returns true if any replacements were made.
  */
 const replacePlaceholders = async (
-  zip: JSZip,
+  archive: DocxArchive,
   stamp: string,
   verificationCode: string,
 ): Promise<boolean> => {
-  const xmlPaths = Object.keys(zip.files).filter(
+  const xmlPaths = Object.keys(archive.zip.files).filter(
     (p) => p.startsWith("word/") && p.endsWith(".xml") && !p.includes("_rels/"),
   );
 
   let replaced = false;
 
   for (const path of xmlPaths) {
-    const xml = await zip.file(path)?.async("string");
+    const xml = await archive.readEntryString(path);
     if (!xml) {
       continue;
     }
@@ -377,7 +382,7 @@ const replacePlaceholders = async (
       );
     }
 
-    zip.file(path, result);
+    archive.zip.file(path, result);
     replaced = true;
   }
 
@@ -420,25 +425,25 @@ const buildStampParagraph = (
   ].join("\n");
 
 const injectFooter = async (
-  zip: JSZip,
+  archive: DocxArchive,
   stamp: string,
   verificationCode: string,
   baseUrl: string,
 ): Promise<void> => {
-  const docXml = await zip.file("word/document.xml")?.async("string");
+  const docXml = await archive.readEntryString("word/document.xml");
   if (!docXml) {
     return;
   }
 
   const docRelsPath = "word/_rels/document.xml.rels";
-  const docRels = (await zip.file(docRelsPath)?.async("string")) ?? "";
+  const docRels = (await archive.readEntryString(docRelsPath)) ?? "";
 
   const verifyUrl = `${baseUrl}/v/${verificationCode}`;
   const footerMatch = findExistingFooter(docXml, docRels);
 
   if (footerMatch) {
     await updateExistingFooter(
-      zip,
+      archive,
       footerMatch.path,
       footerMatch.relsPath,
       stamp,
@@ -447,7 +452,7 @@ const injectFooter = async (
     );
   } else {
     await createNewFooter(
-      zip,
+      archive,
       docXml,
       docRelsPath,
       docRels,
@@ -503,27 +508,27 @@ const findExistingFooter = (
 };
 
 const updateExistingFooter = async (
-  zip: JSZip,
+  archive: DocxArchive,
   footerPath: string,
   footerRelsPath: string,
   stamp: string,
   verificationCode: string,
   verifyUrl: string,
 ): Promise<void> => {
-  const footerXml = (await zip.file(footerPath)?.async("string")) ?? "";
-  const footerRels = (await zip.file(footerRelsPath)?.async("string")) ?? "";
+  const footerXml = (await archive.readEntryString(footerPath)) ?? "";
+  const footerRels = (await archive.readEntryString(footerRelsPath)) ?? "";
 
   const hyperlinkRId = "rId_stella_vcode";
 
   // Ensure hyperlink relationship exists
-  zip.file(
+  archive.zip.file(
     footerRelsPath,
     ensureHyperlinkRel(footerRels, hyperlinkRId, verifyUrl),
   );
 
   if (footerXml.includes(STAMP_BOOKMARK)) {
     // Replace existing stamp paragraph
-    zip.file(
+    archive.zip.file(
       footerPath,
       replaceStampParagraph(footerXml, stamp, verificationCode, hyperlinkRId),
     );
@@ -536,7 +541,7 @@ const updateExistingFooter = async (
       hyperlinkRId,
       bookmarkId,
     );
-    zip.file(
+    archive.zip.file(
       footerPath,
       footerXml.replace(CLOSING_FTR_RE, `${stampPara}\n</w:ftr>`),
     );
@@ -544,7 +549,7 @@ const updateExistingFooter = async (
 };
 
 const createNewFooter = async (
-  zip: JSZip,
+  archive: DocxArchive,
   docXml: string,
   docRelsPath: string,
   docRels: string,
@@ -552,7 +557,7 @@ const createNewFooter = async (
   verificationCode: string,
   verifyUrl: string,
 ): Promise<void> => {
-  const footerFileName = findAvailableFooterName(zip);
+  const footerFileName = findAvailableFooterName(archive);
   const footerPath = `word/${footerFileName}`;
   const footerRelsPath = `word/_rels/${footerFileName}.rels`;
   const footerRId = "rId_stella_footer";
@@ -573,10 +578,10 @@ const createNewFooter = async (
     body,
     "</w:ftr>",
   ].join("\n");
-  zip.file(footerPath, footerXml);
+  archive.zip.file(footerPath, footerXml);
 
   // Create footer rels with hyperlink
-  zip.file(
+  archive.zip.file(
     footerRelsPath,
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -596,12 +601,12 @@ const createNewFooter = async (
     ` Target="${footerFileName}"/>`;
 
   if (docRels) {
-    zip.file(
+    archive.zip.file(
       docRelsPath,
       docRels.replace("</Relationships>", `${footerRel}\n</Relationships>`),
     );
   } else {
-    zip.file(
+    archive.zip.file(
       docRelsPath,
       [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -613,17 +618,17 @@ const createNewFooter = async (
   }
 
   // Reference footer in document.xml section properties
-  zip.file("word/document.xml", addFooterReference(docXml, footerRId));
+  archive.zip.file("word/document.xml", addFooterReference(docXml, footerRId));
 
   // Ensure Content_Types knows about the footer
-  await ensureFooterContentType(zip, footerFileName);
+  await ensureFooterContentType(archive, footerFileName);
 };
 
 // ── Footer Helpers ──────────────────────────────────────
 
-const findAvailableFooterName = (zip: JSZip): string => {
+const findAvailableFooterName = (archive: DocxArchive): string => {
   let n = 1;
-  while (zip.file(`word/footer${n}.xml`)) {
+  while (archive.zip.file(`word/footer${n}.xml`)) {
     n++;
   }
   return `footer${n}.xml`;
@@ -710,10 +715,10 @@ const addFooterReference = (docXml: string, footerRId: string): string => {
 };
 
 const ensureFooterContentType = async (
-  zip: JSZip,
+  archive: DocxArchive,
   footerFileName: string,
 ): Promise<void> => {
-  const ct = await zip.file(CONTENT_TYPES_PATH)?.async("string");
+  const ct = await archive.readEntryString(CONTENT_TYPES_PATH);
   if (!ct || ct.includes(footerFileName)) {
     return;
   }
@@ -721,23 +726,26 @@ const ensureFooterContentType = async (
   const override =
     `<Override PartName="/word/${footerFileName}"` +
     ` ContentType="${FOOTER_CONTENT_TYPE}"/>`;
-  zip.file(CONTENT_TYPES_PATH, ct.replace("</Types>", `${override}\n</Types>`));
+  archive.zip.file(
+    CONTENT_TYPES_PATH,
+    ct.replace("</Types>", `${override}\n</Types>`),
+  );
 };
 
 // ── Footer Extraction (fallback) ────────────────────────
 
 const parseFooterStamp = async (
-  zip: JSZip,
+  archive: DocxArchive,
 ): Promise<{
   verificationCode: string | null;
   stamp: string | null;
 }> => {
-  const footerFiles = Object.keys(zip.files).filter((path) =>
+  const footerFiles = Object.keys(archive.zip.files).filter((path) =>
     FOOTER_FILE_RE.test(path),
   );
 
   for (const path of footerFiles) {
-    const xml = await zip.file(path)?.async("string");
+    const xml = await archive.readEntryString(path);
     if (!xml || !xml.includes(STAMP_BOOKMARK)) {
       continue;
     }
