@@ -18,12 +18,26 @@
 -- privileges and does not need to be updated as the schema grows.
 --
 -- The final `GRANT stella TO CURRENT_USER` makes `SET LOCAL ROLE
--- stella` work for non-superuser connection users on managed
--- providers; it is a no-op for superuser connections (local docker
--- `postgres`, RDS master via `rds_superuser`) but is required when
--- the migration runs as a non-superuser app role on, e.g., Neon.
--- Assumes the migration role and the application connection role
--- are the same (true for `bun run db:migrate` against `DATABASE_URL`).
+-- stella` work for non-superuser connection roles. It grants
+-- membership to whichever role runs the migration; this is
+-- intentional today because Stella's setup uses a single
+-- DATABASE_URL for both `bun run db:migrate` and runtime, so the
+-- migration role and the application connection role are the same.
+--
+-- Caveats worth knowing if you operate this:
+--   - No-op for superuser connections (local docker `postgres`,
+--     RDS master via `rds_superuser`); they can `SET ROLE`
+--     regardless of explicit membership.
+--   - If you ever split the migration and runtime roles, this
+--     grant will target the migration role; you must also issue
+--     `GRANT stella TO <runtime_role>` separately so the app can
+--     activate the role at request time.
+--   - On managed providers where `stella` was created out of band
+--     by the provider's dashboard with provider-managed ownership,
+--     the migration role may lack admin rights on `stella` and
+--     this statement will fail with `permission denied`. In that
+--     case run `GRANT stella TO <migration_role>` once via the
+--     same dashboard before running migrations.
 --
 -- Idempotent: re-granting an existing privilege is a no-op in
 -- Postgres, so this migration applies cleanly to environments where
