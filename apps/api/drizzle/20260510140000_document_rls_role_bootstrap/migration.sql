@@ -5,7 +5,7 @@
 --
 -- This also removes legacy all-data memberships, denies Better Auth
 -- secret tables, keeps narrow auth metadata access, makes global
--- case-law access explicit, and grants the migration connection role
+-- case-law read access explicit, and grants the migration connection role
 -- membership in `stella` for SET ROLE.
 
 GRANT USAGE ON SCHEMA public TO stella;
@@ -56,15 +56,15 @@ ALTER TABLE "case_law_search_documents" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "case_law_ingestion_events" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "case_law_ingestion_failures" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "case_law_global_access" ON "case_law_sources" AS PERMISSIVE FOR ALL TO "stella" USING (true) WITH CHECK (true);
-CREATE POLICY "case_law_global_access" ON "case_law_decisions" AS PERMISSIVE FOR ALL TO "stella" USING (true) WITH CHECK (true);
-CREATE POLICY "case_law_global_access" ON "case_law_citations" AS PERMISSIVE FOR ALL TO "stella" USING (true) WITH CHECK (true);
-CREATE POLICY "case_law_global_access" ON "case_law_polarity_rules" AS PERMISSIVE FOR ALL TO "stella" USING (true) WITH CHECK (true);
-CREATE POLICY "case_law_global_access" ON "case_law_court_weights" AS PERMISSIVE FOR ALL TO "stella" USING (true) WITH CHECK (true);
-CREATE POLICY "case_law_global_access" ON "case_law_fts_configs" AS PERMISSIVE FOR ALL TO "stella" USING (true) WITH CHECK (true);
-CREATE POLICY "case_law_global_access" ON "case_law_search_documents" AS PERMISSIVE FOR ALL TO "stella" USING (true) WITH CHECK (true);
-CREATE POLICY "case_law_global_access" ON "case_law_ingestion_events" AS PERMISSIVE FOR ALL TO "stella" USING (true) WITH CHECK (true);
-CREATE POLICY "case_law_global_access" ON "case_law_ingestion_failures" AS PERMISSIVE FOR ALL TO "stella" USING (true) WITH CHECK (true);
+CREATE POLICY "case_law_global_access" ON "case_law_sources" AS PERMISSIVE FOR SELECT TO "stella" USING (true);
+CREATE POLICY "case_law_global_access" ON "case_law_decisions" AS PERMISSIVE FOR SELECT TO "stella" USING (true);
+CREATE POLICY "case_law_global_access" ON "case_law_citations" AS PERMISSIVE FOR SELECT TO "stella" USING (true);
+CREATE POLICY "case_law_global_access" ON "case_law_polarity_rules" AS PERMISSIVE FOR SELECT TO "stella" USING (true);
+CREATE POLICY "case_law_global_access" ON "case_law_court_weights" AS PERMISSIVE FOR SELECT TO "stella" USING (true);
+CREATE POLICY "case_law_global_access" ON "case_law_fts_configs" AS PERMISSIVE FOR SELECT TO "stella" USING (true);
+CREATE POLICY "case_law_global_access" ON "case_law_search_documents" AS PERMISSIVE FOR SELECT TO "stella" USING (true);
+CREATE POLICY "case_law_global_access" ON "case_law_ingestion_events" AS PERMISSIVE FOR SELECT TO "stella" USING (true);
+CREATE POLICY "case_law_global_access" ON "case_law_ingestion_failures" AS PERMISSIVE FOR SELECT TO "stella" USING (true);
 
 DO $$
 DECLARE
@@ -77,6 +77,17 @@ BEGIN
     WHERE n.nspname = 'public'
       AND c.relkind IN ('r', 'p')
       AND c.relrowsecurity
+      AND c.relname NOT IN (
+        'case_law_sources',
+        'case_law_decisions',
+        'case_law_citations',
+        'case_law_polarity_rules',
+        'case_law_court_weights',
+        'case_law_fts_configs',
+        'case_law_search_documents',
+        'case_law_ingestion_events',
+        'case_law_ingestion_failures'
+      )
   LOOP
     EXECUTE format(
       'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE %s TO stella',
@@ -101,10 +112,33 @@ BEGIN
       AND seq.relkind = 'S'
       AND dep.deptype IN ('a', 'i')
       AND tbl.relrowsecurity
+      AND tbl.relname NOT IN (
+        'case_law_sources',
+        'case_law_decisions',
+        'case_law_citations',
+        'case_law_polarity_rules',
+        'case_law_court_weights',
+        'case_law_fts_configs',
+        'case_law_search_documents',
+        'case_law_ingestion_events',
+        'case_law_ingestion_failures'
+      )
   LOOP
     EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %s TO stella', target_sequence);
   END LOOP;
 END $$;
+
+GRANT SELECT ON TABLE
+  "case_law_sources",
+  "case_law_decisions",
+  "case_law_citations",
+  "case_law_polarity_rules",
+  "case_law_court_weights",
+  "case_law_fts_configs",
+  "case_law_search_documents",
+  "case_law_ingestion_events",
+  "case_law_ingestion_failures"
+TO stella;
 
 REVOKE ALL PRIVILEGES ON TABLE
   "user",

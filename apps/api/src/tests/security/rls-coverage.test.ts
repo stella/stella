@@ -11,6 +11,7 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import {
   fetchScopedTables,
+  fetchStellaTablePrivileges,
   fetchStellaPolicies,
 } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -39,6 +40,17 @@ describe("policy coverage", () => {
     "member", // auth table, no RLS
   ]);
   const APPEND_ONLY = new Set(["audit_logs"]);
+  const GLOBAL_CASE_LAW_TABLES = [
+    "case_law_citations",
+    "case_law_court_weights",
+    "case_law_decisions",
+    "case_law_fts_configs",
+    "case_law_ingestion_events",
+    "case_law_ingestion_failures",
+    "case_law_polarity_rules",
+    "case_law_search_documents",
+    "case_law_sources",
+  ];
 
   test("every table with workspace_id has workspace policies", async () => {
     const scoped = await fetchScopedTables(testDb);
@@ -181,24 +193,22 @@ describe("policy coverage", () => {
       expect(denyPolicy?.check_expr).toBe("false");
     }
 
-    for (const table of [
-      "case_law_citations",
-      "case_law_court_weights",
-      "case_law_decisions",
-      "case_law_fts_configs",
-      "case_law_ingestion_events",
-      "case_law_ingestion_failures",
-      "case_law_polarity_rules",
-      "case_law_search_documents",
-      "case_law_sources",
-    ]) {
+    const tablePrivileges = await fetchStellaTablePrivileges(testDb);
+    const privilegesFor = (table: string) =>
+      tablePrivileges
+        .filter((p) => p.table_name === table)
+        .map((p) => p.privilege)
+        .sort();
+
+    for (const table of GLOBAL_CASE_LAW_TABLES) {
       const globalPolicy = policies.find(
         (p) =>
           p.table_name === table && p.policy_name === "case_law_global_access",
       );
-      expect(globalPolicy?.command).toBe("*");
+      expect(globalPolicy?.command).toBe("r");
       expect(globalPolicy?.using_expr).toBe("true");
-      expect(globalPolicy?.check_expr).toBe("true");
+      expect(globalPolicy?.check_expr).toBeNull();
+      expect(privilegesFor(table)).toEqual(["SELECT"]);
     }
   });
 });

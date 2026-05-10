@@ -202,10 +202,9 @@ export const denyStellaAccessPolicies = () => [
 
 export const globalCaseLawPolicies = () => [
   p.pgPolicy("case_law_global_access", {
-    for: "all",
+    for: "select",
     to: stella,
     using: allowAllRows,
-    withCheck: allowAllRows,
   }),
 ];
 

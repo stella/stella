@@ -46,6 +46,21 @@ const createTestDb = async (): Promise<TestDatabase> => {
         ON ALL TABLES IN SCHEMA public TO stella
     `),
   );
+  await testDb.execute(
+    sql.raw(`
+      REVOKE INSERT, UPDATE, DELETE ON TABLE
+        "case_law_sources",
+        "case_law_decisions",
+        "case_law_citations",
+        "case_law_polarity_rules",
+        "case_law_court_weights",
+        "case_law_fts_configs",
+        "case_law_search_documents",
+        "case_law_ingestion_events",
+        "case_law_ingestion_failures"
+      FROM stella
+    `),
+  );
 
   return testDb;
 };

@@ -4,6 +4,7 @@ import { eq, getTableName, sql } from "drizzle-orm";
 import { stella } from "@/api/db/rls";
 import {
   billingCodes,
+  caseLawDecisions,
   caseLawMatterLinks,
   chatMessages,
   chatThreads,
@@ -203,6 +204,54 @@ describe("chat SELECT — wrong user or workspace", () => {
       ids.userA1,
     );
     expect(c).toBe(0);
+  });
+});
+
+describe("global case-law corpus mutations", () => {
+  test("scoped stella can read global decisions", async () => {
+    const count = await scopedQuery([ids.wsA1], ids.orgA, (tx) =>
+      tx.$count(caseLawDecisions),
+    );
+    expect(count).toBeGreaterThan(0);
+  });
+
+  test("scoped stella cannot insert global decisions", async () => {
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+        await tx.insert(caseLawDecisions).values({
+          id: testId(),
+          sourceId: ids.caseLawSourceId,
+          caseNumber: "FORBIDDEN-INSERT",
+          court: "Forbidden Court",
+          country: "CZE",
+          language: "cs",
+        });
+      }),
+    );
+    expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
+  });
+
+  test("scoped stella cannot update global decisions", async () => {
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+        await tx
+          .update(caseLawDecisions)
+          .set({ court: "Forbidden Court" })
+          .where(eq(caseLawDecisions.id, ids.caseLawDecisionA));
+      }),
+    );
+    expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
+  });
+
+  test("scoped stella cannot delete global decisions", async () => {
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) => {
+        await tx
+          .delete(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, ids.caseLawDecisionA));
+      }),
+    );
+    expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
   });
 });
 
