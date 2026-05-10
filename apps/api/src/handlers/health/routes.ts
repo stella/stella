@@ -14,6 +14,7 @@ const BUILD_METADATA = {
 };
 
 const PROBE_TIMEOUT_MS = 5000;
+
 // Coalesces concurrent /health calls onto a single in-flight probe and
 // reuses the outcome for this window, so liveness checks (k8s, ALB) and
 // any drive-by traffic don't translate one-to-one into DB round-trips.
@@ -26,13 +27,15 @@ const runDatabaseProbe = async (): Promise<ProbeOutcome<HealthCheckError>> => {
       () => reject(new HealthCheckError({ message: "DB probe timeout" })),
       PROBE_TIMEOUT_MS,
     );
+    // `unref` keeps a still-pending timeout from holding the event
+    // loop open at shutdown if the race resolves before we reach the
+    // clearTimeout below.
+    timerId.unref();
   });
   const result = await Result.tryPromise(async () => {
     try {
       return await Promise.race([probeDatabase(), timeout]);
     } finally {
-      // Whichever side of the race wins, the loser's timer or the
-      // timeout's setTimeout would otherwise hold the event loop open.
       clearTimeout(timerId);
     }
   });
