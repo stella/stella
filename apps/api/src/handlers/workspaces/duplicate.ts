@@ -319,6 +319,28 @@ const copyWorkspaceFiles = async ({
   return copiedS3Keys;
 };
 
+const cleanupCopiedS3Keys = async ({
+  copiedS3Keys,
+  targetWorkspaceId,
+}: {
+  copiedS3Keys: string[];
+  targetWorkspaceId: SafeId<"workspace">;
+}) => {
+  if (copiedS3Keys.length === 0) {
+    return;
+  }
+
+  const cleanupResult = await Result.tryPromise(async () => {
+    await Promise.all(
+      copiedS3Keys.map(async (key) => await getS3().delete(key)),
+    );
+  });
+
+  if (Result.isError(cleanupResult)) {
+    captureError(cleanupResult.error, { targetWorkspaceId });
+  }
+};
+
 const duplicateWorkspace = createSafeHandler(
   config,
   async function* ({
@@ -435,10 +457,9 @@ const duplicateWorkspace = createSafeHandler(
       });
 
       if (Result.isError(copyResult)) {
-        await Result.tryPromise(async () => {
-          await Promise.all(
-            copiedS3Keys.map(async (key) => await getS3().delete(key)),
-          );
+        await cleanupCopiedS3Keys({
+          copiedS3Keys,
+          targetWorkspaceId,
         });
         return Result.err(
           new HandlerError({
@@ -450,118 +471,117 @@ const duplicateWorkspace = createSafeHandler(
       }
     }
 
-    const txResult = yield* Result.await(
-      safeDb(async (tx) => {
-        const [countResult, duplicatedNames, settings, orgMembers] =
-          await Promise.all([
-            tx
-              .select({ total: count() })
-              .from(workspaces)
-              .where(eq(workspaces.organizationId, organizationId)),
-            tx
-              .select({ name: workspaces.name })
-              .from(workspaces)
-              .where(
-                and(
-                  eq(workspaces.organizationId, organizationId),
-                  ilike(
-                    workspaces.name,
-                    `${escapeLike(snapshot.workspace.name)}%`,
-                  ),
+    const txResult = await safeDb(async (tx) => {
+      const [countResult, duplicatedNames, settings, orgMembers] =
+        await Promise.all([
+          tx
+            .select({ total: count() })
+            .from(workspaces)
+            .where(eq(workspaces.organizationId, organizationId)),
+          tx
+            .select({ name: workspaces.name })
+            .from(workspaces)
+            .where(
+              and(
+                eq(workspaces.organizationId, organizationId),
+                ilike(
+                  workspaces.name,
+                  `${escapeLike(snapshot.workspace.name)}%`,
                 ),
               ),
-            tx.query.organizationSettings.findFirst({
-              where: { organizationId: { eq: organizationId } },
-              columns: {
-                matterNumberPattern: true,
-                matterNumberPadding: true,
-              },
-            }),
-            snapshot.members.length > 0
-              ? tx
-                  .select({ userId: member.userId })
-                  .from(member)
-                  .where(
-                    and(
-                      eq(member.organizationId, organizationId),
-                      inArray(
-                        member.userId,
-                        snapshot.members.map((m) => m.userId),
-                      ),
+            ),
+          tx.query.organizationSettings.findFirst({
+            where: { organizationId: { eq: organizationId } },
+            columns: {
+              matterNumberPattern: true,
+              matterNumberPadding: true,
+            },
+          }),
+          snapshot.members.length > 0
+            ? tx
+                .select({ userId: member.userId })
+                .from(member)
+                .where(
+                  and(
+                    eq(member.organizationId, organizationId),
+                    inArray(
+                      member.userId,
+                      snapshot.members.map((m) => m.userId),
                     ),
-                  )
-              : Promise.resolve([]),
-          ]);
+                  ),
+                )
+            : Promise.resolve([]),
+        ]);
 
-        const activeCount = countResult.at(0)?.total ?? 0;
-        if (activeCount >= LIMITS.workspacesCount) {
-          return {
-            ok: false as const,
-            status: 400 as const,
-            message: "Workspaces limit reached",
-          };
-        }
+      const activeCount = countResult.at(0)?.total ?? 0;
+      if (activeCount >= LIMITS.workspacesCount) {
+        return {
+          ok: false as const,
+          status: 400 as const,
+          message: "Workspaces limit reached",
+        };
+      }
 
-        if (orgMembers.length !== snapshot.members.length) {
-          return {
-            ok: false as const,
-            status: 400 as const,
-            message: "Some users are not members of this organization",
-          };
-        }
+      if (orgMembers.length !== snapshot.members.length) {
+        return {
+          ok: false as const,
+          status: 400 as const,
+          message: "Some users are not members of this organization",
+        };
+      }
 
-        const newName =
-          duplicatedNames.length > 0
-            ? `${snapshot.workspace.name} (${duplicatedNames.length})`
-            : snapshot.workspace.name;
-        const pattern =
-          settings?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN;
-        const padding =
-          settings?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING;
-        const now = new Date();
-        const scopeKey = toScopeKey(pattern, now);
-        const counter = await tx
-          .insert(matterCounters)
-          .values({
-            id: createSafeId<"matterCounter">(),
-            organizationId,
-            scopeKey,
-            lastValue: 1,
-          })
-          .onConflictDoUpdate({
-            target: [matterCounters.organizationId, matterCounters.scopeKey],
-            set: { lastValue: sql`${matterCounters.lastValue} + 1` },
-          })
-          .returning({ lastValue: matterCounters.lastValue })
-          .then((rows) => rows.at(0));
-
-        if (!counter) {
-          return {
-            ok: false as const,
-            status: 500 as const,
-            message: "Failed to create matter counter",
-          };
-        }
-
-        const reference = toReference({
-          pattern,
-          now,
-          seq: counter.lastValue,
-          padding,
-        });
-
-        await tx.insert(workspaces).values({
-          id: targetWorkspaceId,
+      const newName =
+        duplicatedNames.length > 0
+          ? `${snapshot.workspace.name} (${duplicatedNames.length})`
+          : snapshot.workspace.name;
+      const pattern =
+        settings?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN;
+      const padding =
+        settings?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING;
+      const now = new Date();
+      const scopeKey = toScopeKey(pattern, now);
+      const counter = await tx
+        .insert(matterCounters)
+        .values({
+          id: createSafeId<"matterCounter">(),
           organizationId,
-          clientId: snapshot.workspace.clientId,
-          billingReference: snapshot.workspace.billingReference,
-          color: snapshot.workspace.color,
-          name: newName,
-          reference,
-        });
+          scopeKey,
+          lastValue: 1,
+        })
+        .onConflictDoUpdate({
+          target: [matterCounters.organizationId, matterCounters.scopeKey],
+          set: { lastValue: sql`${matterCounters.lastValue} + 1` },
+        })
+        .returning({ lastValue: matterCounters.lastValue })
+        .then((rows) => rows.at(0));
 
-        await tx.execute(
-          sql`SELECT set_config(
+      if (!counter) {
+        return {
+          ok: false as const,
+          status: 500 as const,
+          message: "Failed to create matter counter",
+        };
+      }
+
+      const reference = toReference({
+        pattern,
+        now,
+        seq: counter.lastValue,
+        padding,
+      });
+
+      await tx.insert(workspaces).values({
+        id: targetWorkspaceId,
+        organizationId,
+        clientId: snapshot.workspace.clientId,
+        billingReference: snapshot.workspace.billingReference,
+        color: snapshot.workspace.color,
+        name: newName,
+        reference,
+      });
+
+      await tx.execute(
+        sql`SELECT set_config(
             ${SETTING_WORKSPACE_IDS},
             array_append(
               current_setting(${SETTING_WORKSPACE_IDS}, true)::text[],
@@ -569,242 +589,246 @@ const duplicateWorkspace = createSafeHandler(
             )::text,
             true
           )`,
+      );
+
+      if (snapshot.members.length > 0) {
+        await tx.insert(workspaceMembers).values(
+          snapshot.members.map((workspaceMember) => ({
+            workspaceId: targetWorkspaceId,
+            userId: workspaceMember.userId,
+          })),
         );
+      }
 
-        if (snapshot.members.length > 0) {
-          await tx.insert(workspaceMembers).values(
-            snapshot.members.map((workspaceMember) => ({
-              workspaceId: targetWorkspaceId,
-              userId: workspaceMember.userId,
-            })),
+      const propertyIdMap = new Map<string, SafeId<"property">>();
+      if (snapshot.properties.length > 0) {
+        const newProperties = snapshot.properties.map((property) => {
+          const id = createSafeId<"property">();
+          propertyIdMap.set(property.id, id);
+          return {
+            id,
+            workspaceId: targetWorkspaceId,
+            name: property.name,
+            status: property.status,
+            content: property.content,
+            tool: property.tool,
+            system: property.system,
+            kinds: property.kinds,
+          };
+        });
+        await tx.insert(properties).values(newProperties);
+      }
+
+      const newDependencies = snapshot.dependencies
+        .map((dependency) => {
+          const propertyId = propertyIdMap.get(dependency.propertyId);
+          const dependsOnPropertyId = propertyIdMap.get(
+            dependency.dependsOnPropertyId,
           );
-        }
+          if (!propertyId || !dependsOnPropertyId) {
+            return null;
+          }
+          return {
+            id: createSafeId<"propertyDependency">(),
+            workspaceId: targetWorkspaceId,
+            propertyId,
+            dependsOnPropertyId,
+            condition: dependency.condition,
+          };
+        })
+        .filter((dependency) => dependency !== null);
+      if (newDependencies.length > 0) {
+        await tx.insert(propertyDependencies).values(newDependencies);
+      }
 
-        const propertyIdMap = new Map<string, SafeId<"property">>();
-        if (snapshot.properties.length > 0) {
-          const newProperties = snapshot.properties.map((property) => {
-            const id = createSafeId<"property">();
-            propertyIdMap.set(property.id, id);
-            return {
-              id,
-              workspaceId: targetWorkspaceId,
-              name: property.name,
-              status: property.status,
-              content: property.content,
-              tool: property.tool,
-              system: property.system,
-              kinds: property.kinds,
-            };
-          });
-          await tx.insert(properties).values(newProperties);
-        }
-
-        const newDependencies = snapshot.dependencies
-          .map((dependency) => {
-            const propertyId = propertyIdMap.get(dependency.propertyId);
-            const dependsOnPropertyId = propertyIdMap.get(
-              dependency.dependsOnPropertyId,
-            );
-            if (!propertyId || !dependsOnPropertyId) {
-              return null;
-            }
-            return {
-              id: createSafeId<"propertyDependency">(),
-              workspaceId: targetWorkspaceId,
-              propertyId,
-              dependsOnPropertyId,
-              condition: dependency.condition,
-            };
-          })
-          .filter((dependency) => dependency !== null);
-        if (newDependencies.length > 0) {
-          await tx.insert(propertyDependencies).values(newDependencies);
-        }
-
-        if (snapshot.views.length > 0) {
-          await tx.insert(workspaceViews).values(
-            snapshot.views.map((view) => ({
-              id: createSafeId<"workspaceView">(),
-              workspaceId: targetWorkspaceId,
-              name: view.name,
-              layout: remapLayout(view.layout, propertyIdMap),
-              position: view.position,
-            })),
-          );
-        }
-
-        if (snapshot.contacts.length > 0) {
-          await tx.insert(workspaceContacts).values(
-            snapshot.contacts.map((contact) => ({
-              id: createSafeId<"workspaceContact">(),
-              organizationId,
-              workspaceId: targetWorkspaceId,
-              contactId: contact.contactId,
-              role: contact.role,
-              isPrimary: contact.isPrimary,
-              notes: contact.notes,
-            })),
-          );
-        }
-
-        const entityIdMap = new Map<string, SafeId<"entity">>();
-        const duplicatedEntityIds: SafeId<"entity">[] = [];
-        const entitiesToDuplicate = orderEntitiesForDuplicate(
-          snapshot.entities,
+      if (snapshot.views.length > 0) {
+        await tx.insert(workspaceViews).values(
+          snapshot.views.map((view) => ({
+            id: createSafeId<"workspaceView">(),
+            workspaceId: targetWorkspaceId,
+            name: view.name,
+            layout: remapLayout(view.layout, propertyIdMap),
+            position: view.position,
+          })),
         );
+      }
 
-        if (includeContent && entitiesToDuplicate.length > 0) {
-          if (entitiesToDuplicate.length > LIMITS.entitiesCount) {
+      if (snapshot.contacts.length > 0) {
+        await tx.insert(workspaceContacts).values(
+          snapshot.contacts.map((contact) => ({
+            id: createSafeId<"workspaceContact">(),
+            organizationId,
+            workspaceId: targetWorkspaceId,
+            contactId: contact.contactId,
+            role: contact.role,
+            isPrimary: contact.isPrimary,
+            notes: contact.notes,
+          })),
+        );
+      }
+
+      const entityIdMap = new Map<string, SafeId<"entity">>();
+      const duplicatedEntityIds: SafeId<"entity">[] = [];
+      const entitiesToDuplicate = orderEntitiesForDuplicate(snapshot.entities);
+
+      if (includeContent && entitiesToDuplicate.length > 0) {
+        if (entitiesToDuplicate.length > LIMITS.entitiesCount) {
+          return {
+            ok: false as const,
+            status: 400 as const,
+            message: "Entities limit reached",
+          };
+        }
+
+        for (const source of entitiesToDuplicate) {
+          if (!source.currentVersion) {
             return {
               ok: false as const,
               status: 400 as const,
-              message: "Entities limit reached",
+              message: "Entity has no current version",
             };
           }
 
-          for (const source of entitiesToDuplicate) {
-            if (!source.currentVersion) {
-              return {
-                ok: false as const,
-                status: 400 as const,
-                message: "Entity has no current version",
-              };
-            }
-
-            const newEntityId = createSafeId<"entity">();
-            const newVersionId = createSafeId<"entityVersion">();
-            const entityStamp =
-              source.kind === "document"
-                ? await allocateEntityStamp(tx, targetWorkspaceId)
-                : null;
-            const newParentId = source.parentId
-              ? (entityIdMap.get(source.parentId) ?? null)
+          const newEntityId = createSafeId<"entity">();
+          const newVersionId = createSafeId<"entityVersion">();
+          const entityStamp =
+            source.kind === "document"
+              ? await allocateEntityStamp(tx, targetWorkspaceId)
               : null;
+          const newParentId = source.parentId
+            ? (entityIdMap.get(source.parentId) ?? null)
+            : null;
 
-            await tx.insert(entities).values({
-              id: newEntityId,
-              workspaceId: targetWorkspaceId,
-              kind: source.kind,
-              parentId: newParentId,
-              name: source.name,
-              createdBy: user.id,
-              lastEditedBy: user.id,
-              docSequence: entityStamp?.docSequence ?? null,
-              status: source.status,
-              priority: source.priority,
-              dueDate: source.dueDate,
-              agendaKind: source.agendaKind,
-              startAt: source.startAt,
-              endAt: source.endAt,
-              occurredAt: source.occurredAt,
-              remindAt: source.remindAt,
-              allDay: source.allDay,
-              timeZone: source.timeZone,
-              location: source.location,
-              onlineMeetingUrl: source.onlineMeetingUrl,
-              availability: source.availability,
-              sensitivity: source.sensitivity,
-              organizer: source.organizer,
-              attendees: source.attendees,
-              recurrence: source.recurrence,
-              agendaSource: source.agendaSource,
-              externalSource: null,
-              externalId: null,
-              externalChangeKey: null,
-              externalICalUid: null,
-              externalData: null,
-              readOnly: false,
-              sortOrder: source.sortOrder,
-              metadata: source.metadata,
-            });
+          await tx.insert(entities).values({
+            id: newEntityId,
+            workspaceId: targetWorkspaceId,
+            kind: source.kind,
+            parentId: newParentId,
+            name: source.name,
+            createdBy: user.id,
+            lastEditedBy: user.id,
+            docSequence: entityStamp?.docSequence ?? null,
+            status: source.status,
+            priority: source.priority,
+            dueDate: source.dueDate,
+            agendaKind: source.agendaKind,
+            startAt: source.startAt,
+            endAt: source.endAt,
+            occurredAt: source.occurredAt,
+            remindAt: source.remindAt,
+            allDay: source.allDay,
+            timeZone: source.timeZone,
+            location: source.location,
+            onlineMeetingUrl: source.onlineMeetingUrl,
+            availability: source.availability,
+            sensitivity: source.sensitivity,
+            organizer: source.organizer,
+            attendees: source.attendees,
+            recurrence: source.recurrence,
+            agendaSource: source.agendaSource,
+            externalSource: null,
+            externalId: null,
+            externalChangeKey: null,
+            externalICalUid: null,
+            externalData: null,
+            readOnly: false,
+            sortOrder: source.sortOrder,
+            metadata: source.metadata,
+          });
 
-            await tx.insert(entityVersions).values({
-              id: newVersionId,
-              workspaceId: targetWorkspaceId,
-              entityId: newEntityId,
-              versionNumber: 1,
-              stamp: entityStamp?.stamp ?? null,
-              verificationCode: entityStamp?.verificationCode ?? null,
-              createdBy: user.id,
-            });
+          await tx.insert(entityVersions).values({
+            id: newVersionId,
+            workspaceId: targetWorkspaceId,
+            entityId: newEntityId,
+            versionNumber: 1,
+            stamp: entityStamp?.stamp ?? null,
+            verificationCode: entityStamp?.verificationCode ?? null,
+            createdBy: user.id,
+          });
 
-            await tx
-              .update(entities)
-              .set({ currentVersionId: newVersionId })
-              .where(eq(entities.id, newEntityId));
+          await tx
+            .update(entities)
+            .set({ currentVersionId: newVersionId })
+            .where(eq(entities.id, newEntityId));
 
-            const newFields = source.currentVersion.fields.flatMap((field) => {
-              const propertyId = propertyIdMap.get(field.propertyId);
-              if (!propertyId) {
-                return [];
-              }
-              return [
-                {
-                  workspaceId: targetWorkspaceId,
-                  propertyId,
-                  entityVersionId: newVersionId,
-                  content: remapFieldContent(field.content, fileIdMap),
-                },
-              ];
-            });
-            if (newFields.length > 0) {
-              await tx.insert(fields).values(newFields);
+          const newFields = source.currentVersion.fields.flatMap((field) => {
+            const propertyId = propertyIdMap.get(field.propertyId);
+            if (!propertyId) {
+              return [];
             }
-
-            entityIdMap.set(source.id, newEntityId);
-            duplicatedEntityIds.push(newEntityId);
-          }
-        }
-
-        await writeAuditLog(
-          {
-            ...createAuditContext({
-              organizationId,
-              workspaceId: targetWorkspaceId,
-              userId: user.id,
-              request,
-              server,
-            }),
-            action: AUDIT_ACTION.CREATE,
-            resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
-            resourceId: targetWorkspaceId,
-            changes: {
-              created: {
-                old: { sourceWorkspaceId, includeContent },
-                new: { name: newName, reference },
+            return [
+              {
+                workspaceId: targetWorkspaceId,
+                propertyId,
+                entityVersionId: newVersionId,
+                content: remapFieldContent(field.content, fileIdMap),
               },
+            ];
+          });
+          if (newFields.length > 0) {
+            await tx.insert(fields).values(newFields);
+          }
+
+          entityIdMap.set(source.id, newEntityId);
+          duplicatedEntityIds.push(newEntityId);
+        }
+      }
+
+      await writeAuditLog(
+        {
+          ...createAuditContext({
+            organizationId,
+            workspaceId: targetWorkspaceId,
+            userId: user.id,
+            request,
+            server,
+          }),
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+          resourceId: targetWorkspaceId,
+          changes: {
+            created: {
+              old: { sourceWorkspaceId, includeContent },
+              new: { name: newName, reference },
             },
           },
-          tx,
-        );
+        },
+        tx,
+      );
 
-        return {
-          ok: true as const,
-          workspaceId: targetWorkspaceId,
-          entityIds: duplicatedEntityIds,
-        };
-      }),
-    );
+      return {
+        ok: true as const,
+        workspaceId: targetWorkspaceId,
+        entityIds: duplicatedEntityIds,
+      };
+    });
 
-    if (!txResult.ok) {
-      await Result.tryPromise(async () => {
-        await Promise.all(
-          copiedS3Keys.map(async (key) => await getS3().delete(key)),
-        );
+    if (Result.isError(txResult)) {
+      await cleanupCopiedS3Keys({
+        copiedS3Keys,
+        targetWorkspaceId,
+      });
+      return Result.err(txResult.error);
+    }
+
+    if (!txResult.value.ok) {
+      await cleanupCopiedS3Keys({
+        copiedS3Keys,
+        targetWorkspaceId,
       });
       return Result.err(
         new HandlerError({
-          status: txResult.status,
-          message: txResult.message,
+          status: txResult.value.status,
+          message: txResult.value.message,
         }),
       );
     }
 
-    for (const entityId of txResult.entityIds) {
+    for (const entityId of txResult.value.entityIds) {
       processExtraction(entityId).catch(captureError);
     }
 
-    return Result.ok({ workspaceId: txResult.workspaceId });
+    return Result.ok({ workspaceId: txResult.value.workspaceId });
   },
 );
 
