@@ -351,6 +351,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       onAnonymizationTermClick,
       selectedAnonymizationCanonical = null,
       anonymizationSelectionSeq,
+      collaboration,
     },
     ref,
   ) {
@@ -650,12 +651,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     );
     const editorPlugins = useMemo(
       () => [
+        ...(collaboration?.plugins ?? []),
         suggestionPlugin,
         aiSuggestionPlugin,
         aiCitationPlugin,
         anonymizationDecorationsPlugin,
       ],
       [
+        collaboration?.plugins,
         suggestionPlugin,
         aiSuggestionPlugin,
         aiCitationPlugin,
@@ -2998,6 +3001,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                           ? { onSelectionTextChange }
                           : {})}
                         externalPlugins={editorPlugins}
+                        {...(collaboration !== undefined
+                          ? { collaboration }
+                          : {})}
                         onHyperlinkClick={handleHyperlinkClick}
                         onContextMenu={handleContextMenu}
                         commentsSidebarOpen={showCommentsSidebar}

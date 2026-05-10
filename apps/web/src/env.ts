@@ -21,6 +21,7 @@ export const env = createEnv({
       "false",
     ),
     VITE_API_URL: v.pipe(v.string(), v.url()),
+    VITE_COLLAB_URL: v.optional(v.pipe(v.string(), v.url())),
     VITE_DESKTOP_BRIDGE_PORT: v.optional(
       v.pipe(
         v.string(),
@@ -67,6 +68,7 @@ export const env = createEnv({
     VITE_FEATURE_TODOS: featureFlagSchema,
     VITE_FEATURE_MCP: featureFlagSchema,
     VITE_FEATURE_DESKTOP_EDITING: featureFlagSchema,
+    VITE_FEATURE_FOLIO_COLLAB: featureFlagSchema,
     VITE_FEEDBACK_EMAIL_TO: v.optional(v.pipe(v.string(), v.email())),
     VITE_TERMS_URL: v.optional(linkUrlSchema, "/terms"),
     VITE_EMPTY_STATE_MATTERS_VIDEO_URL: v.optional(v.pipe(v.string(), v.url())),

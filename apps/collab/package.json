@@ -1,0 +1,30 @@
+{
+  "name": "@stll/collab",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "bun build --target=bun --packages=external --outfile dist/index.js src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "typecheck": "tsgo --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware apps/collab",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/collab",
+    "format": "oxfmt .",
+    "test": "bun test --pass-with-no-tests"
+  },
+  "dependencies": {
+    "@hocuspocus/server": "^4.0.0",
+    "@t3-oss/env-core": "catalog:",
+    "crossws": "^0.4.5",
+    "valibot": "catalog:",
+    "yjs": "^13.6.30"
+  },
+  "devDependencies": {
+    "@hocuspocus/provider": "^4.0.0",
+    "@stll/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

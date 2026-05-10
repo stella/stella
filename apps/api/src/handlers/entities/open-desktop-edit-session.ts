@@ -4,7 +4,11 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb, Transaction } from "@/api/db";
-import { desktopEditSessions, entityVersions } from "@/api/db/schema";
+import {
+  desktopEditSessions,
+  entityVersions,
+  folioCollabSessions,
+} from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -286,6 +290,29 @@ export const openDesktopEditSessionHandler = async function* ({
           error: {
             message: "Target property is not an editable DOCX field.",
             statusCode: 400 as const,
+          },
+        } as const;
+      }
+
+      const collabSessions = await tx
+        .select({ id: folioCollabSessions.id })
+        .from(folioCollabSessions)
+        .where(
+          and(
+            eq(folioCollabSessions.entityId, entityId),
+            eq(folioCollabSessions.propertyId, propertyId),
+            eq(folioCollabSessions.workspaceId, workspaceId),
+            eq(folioCollabSessions.status, "open"),
+          ),
+        )
+        .limit(1);
+
+      if (collabSessions.at(0)) {
+        return {
+          error: {
+            message:
+              "This document already has a collaborative edit session open.",
+            statusCode: 409 as const,
           },
         } as const;
       }

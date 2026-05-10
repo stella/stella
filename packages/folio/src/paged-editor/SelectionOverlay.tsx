@@ -120,7 +120,9 @@ const Caret: React.FC<{
     }
 
     // Only blink when focused and interval is set
-    if (isFocused && blinkInterval > 0) {
+    if (isFocused && blinkInterval === 0) {
+      setVisible(true);
+    } else if (isFocused && blinkInterval > 0) {
       setVisible(true);
       blinkTimerRef.current = window.setInterval(() => {
         setVisible((v) => !v);
@@ -148,6 +150,9 @@ const Caret: React.FC<{
     // Restart blink timer from this moment
     if (blinkTimerRef.current) {
       window.clearInterval(blinkTimerRef.current);
+    }
+    if (blinkInterval === 0) {
+      return undefined;
     }
     if (blinkInterval > 0) {
       blinkTimerRef.current = window.setInterval(() => {

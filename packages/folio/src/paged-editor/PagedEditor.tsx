@@ -128,7 +128,11 @@ import {
   computeHeaderFooterMarginExtender,
 } from "./headerFooterMargins";
 import { HiddenProseMirror } from "./HiddenProseMirror";
-import type { HiddenProseMirrorRef } from "./HiddenProseMirror";
+import type {
+  HiddenProseMirrorCollaboration,
+  HiddenProseMirrorRemoteSelection,
+  HiddenProseMirrorRef,
+} from "./HiddenProseMirror";
 import { ImageSelectionOverlay } from "./ImageSelectionOverlay";
 import type { ImageSelectionInfo } from "./ImageSelectionOverlay";
 import {
@@ -204,6 +208,8 @@ export type PagedEditorProps = {
   }) => void;
   /** External ProseMirror plugins. */
   externalPlugins?: Plugin[];
+  /** Optional Yjs collaboration owner for the hidden ProseMirror state. */
+  collaboration?: HiddenProseMirrorCollaboration | undefined;
   /** Extension manager for plugins/schema/commands (optional — falls back to default) */
   extensionManager?: ExtensionManager;
   /** Callback when header or footer is double-clicked for editing. */
@@ -377,6 +383,106 @@ const viewportStyles: CSSProperties = {
   paddingTop: VIEWPORT_PADDING_TOP,
   paddingBottom: 24,
   backgroundColor: "transparent",
+};
+
+type RemoteSelectionOverlayProps = {
+  blocks: FlowBlock[];
+  layout: Layout;
+  measures: Measure[];
+  pagesContainer: HTMLDivElement | null;
+  remoteSelection: HiddenProseMirrorRemoteSelection;
+  zoom: number;
+};
+
+const getPageOverlayOffset = (pagesContainer: HTMLDivElement, zoom: number) => {
+  const overlay = pagesContainer.parentElement?.querySelector(
+    '[data-testid="selection-overlay"]',
+  );
+  const firstPage = pagesContainer.querySelector(".layout-page");
+  if (!overlay || !firstPage) {
+    return null;
+  }
+
+  const overlayRect = overlay.getBoundingClientRect();
+  const pageRect = firstPage.getBoundingClientRect();
+  return {
+    x: (pageRect.left - overlayRect.left) / zoom,
+    y: (pageRect.top - overlayRect.top) / zoom,
+  };
+};
+
+const RemoteSelectionOverlay = ({
+  blocks,
+  layout,
+  measures,
+  pagesContainer,
+  remoteSelection,
+  zoom,
+}: RemoteSelectionOverlayProps) => {
+  if (!pagesContainer) {
+    return null;
+  }
+
+  const offset = getPageOverlayOffset(pagesContainer, zoom);
+  if (!offset) {
+    return null;
+  }
+
+  const from = Math.min(remoteSelection.anchor, remoteSelection.head);
+  const to = Math.max(remoteSelection.anchor, remoteSelection.head);
+  const selectionRects = selectionToRects(
+    layout,
+    blocks,
+    measures,
+    from,
+    to,
+  ).map((rect) => ({
+    height: rect.height,
+    pageIndex: rect.pageIndex,
+    width: rect.width,
+    x: rect.x + offset.x,
+    y: rect.y + offset.y,
+  }));
+  const caretBase = getCaretPosition(
+    layout,
+    blocks,
+    measures,
+    remoteSelection.head,
+  );
+  const caretPosition = caretBase
+    ? {
+        ...caretBase,
+        x: caretBase.x + offset.x,
+        y: caretBase.y + offset.y,
+      }
+    : null;
+
+  return (
+    <>
+      <SelectionOverlay
+        blinkInterval={0}
+        caretColor={remoteSelection.color}
+        caretPosition={caretPosition}
+        caretWidth={2}
+        isFocused
+        selectionColor={`color-mix(in srgb, ${remoteSelection.color} 24%, transparent)`}
+        selectionRects={selectionRects}
+      />
+      {caretPosition && (
+        <div
+          className="pointer-events-none absolute z-20 rounded-sm px-1 py-0.5 text-[10px] leading-none shadow-sm"
+          style={{
+            backgroundColor: remoteSelection.color,
+            color: "var(--background)",
+            left: caretPosition.x,
+            top: Math.max(0, caretPosition.y - 18),
+          }}
+        >
+          {remoteSelection.name}
+        </div>
+      )}
+    </>
+  );
 };
 
 const pagesContainerStyles: CSSProperties = {
@@ -1388,6 +1494,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onSelectionChange,
       onSelectionTextChange,
       externalPlugins = EMPTY_PLUGINS,
+      collaboration,
       extensionManager,
       onHeaderFooterDoubleClick,
       hfEditMode,
@@ -1468,6 +1575,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     // doesn't depend on a state setter callback that would trigger
     // its own re-run.
     const anonymizationMatchesRef = useRef<readonly AnonymizationMatch[]>([]);
+    const [remoteSelections, setRemoteSelections] = useState<
+      HiddenProseMirrorRemoteSelection[]
+    >([]);
     const suppressSelectionOverlayRef = useRef(false);
     const revealSelectionOverlayTimerRef = useRef<number | null>(null);
 
@@ -4631,10 +4741,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           readOnly={readOnly}
           onTransaction={handleTransaction}
           onSelectionChange={handleSelectionChange}
+          onRemoteSelectionsChange={setRemoteSelections}
           onEditorViewReady={handleEditorViewReady}
           onKeyDown={handlePMKeyDown}
           {...(styles !== undefined ? { styles } : {})}
           externalPlugins={externalPlugins}
+          {...(collaboration !== undefined ? { collaboration } : {})}
           {...(extensionManager !== undefined ? { extensionManager } : {})}
           {...(onReadOnlyEditAttempt !== undefined
             ? { onReadOnlyEditAttempt }
@@ -4677,6 +4789,18 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               isFocused={isFocused}
               pageGap={pageGap}
             />
+            {layout &&
+              remoteSelections.map((remoteSelection) => (
+                <RemoteSelectionOverlay
+                  key={remoteSelection.clientId}
+                  blocks={blocks}
+                  layout={layout}
+                  measures={measures}
+                  pagesContainer={pagesContainerRef.current}
+                  remoteSelection={remoteSelection}
+                  zoom={zoom}
+                />
+              ))}
 
             {/* Image selection overlay */}
             {!readOnly && (

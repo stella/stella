@@ -1,6 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
 
+import type { Plugin } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
+import type { XmlFragment } from "yjs";
 
 import type {
   FolioAIEditApplyMode,
@@ -132,6 +134,8 @@ export type DocxEditorProps = {
    * (decoration meta, apply, scroll-to) from outside the editor.
    */
   onEditorViewReady?: (view: EditorView | null) => void;
+  /** Yjs-backed collaboration owner. Experimental and opt-in. */
+  collaboration?: DocxEditorCollaboration | undefined;
   /**
    * Fires with the current anonymization match list every time
    * the decoration plugin recomputes it (initial mount, term
@@ -160,6 +164,21 @@ export type DocxEditorProps = {
   selectedAnonymizationCanonical?: string | null | undefined;
   /** Monotonic counter from the bridge store; drives the re-scroll. */
   anonymizationSelectionSeq?: number | undefined;
+};
+
+export type DocxEditorCollaboration = {
+  awareness?:
+    | {
+        clientID: number;
+        getStates(): Map<number, unknown>;
+        off(event: "change" | "update", handler: () => void): void;
+        on(event: "change" | "update", handler: () => void): void;
+      }
+    | undefined;
+  onSeeded?: (() => void) | undefined;
+  plugins?: Plugin[] | undefined;
+  shouldSeed?: boolean | undefined;
+  yXmlFragment: XmlFragment;
 };
 
 /**

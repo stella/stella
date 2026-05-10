@@ -1030,6 +1030,16 @@ export const DESKTOP_EDIT_SESSION_STATUSES = [
   "cancelled",
 ] as const;
 
+export const FOLIO_COLLAB_SESSION_STATUSES = [
+  "open",
+  "finalized",
+  "cancelled",
+] as const;
+
+export type FolioCollabTokenPermissions = {
+  canEdit: boolean;
+};
+
 export const desktopEditSessions = p.pgTable(
   "desktop_edit_sessions",
   {
@@ -1132,8 +1142,9 @@ export const desktopEditHandoffs = p.pgTable(
     forceTakeover: p.boolean("force_takeover").notNull().default(false),
     expiresAt: p.timestamp("expires_at").notNull(),
     consumedAt: p.timestamp("consumed_at"),
-    desktopSessionId: safeUuid<"desktopEditSession">("desktop_session_id")
-      .references(() => desktopEditSessions.id, { onDelete: "set null" }),
+    desktopSessionId: safeUuid<"desktopEditSession">(
+      "desktop_session_id",
+    ).references(() => desktopEditSessions.id, { onDelete: "set null" }),
     openedAt: p.timestamp("opened_at"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p
@@ -1163,6 +1174,118 @@ export const desktopEditHandoffs = p.pgTable(
         foreignColumns: [properties.id, properties.workspaceId],
       })
       .onDelete("cascade"),
+    ...wsPolicies(),
+  ],
+);
+
+export const folioCollabSessions = p.pgTable(
+  "folio_collab_sessions",
+  {
+    id: pUuid<"folioCollabSession">().primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    entityId: safeUuid<"entity">("entity_id").notNull(),
+    propertyId: safeUuid<"property">("property_id").notNull(),
+    baseVersionId: safeUuid<"entityVersion">("base_version_id")
+      .notNull()
+      .references(() => entityVersions.id, { onDelete: "cascade" }),
+    finalizedVersionId: safeUuid<"entityVersion">(
+      "finalized_version_id",
+    ).references(() => entityVersions.id, { onDelete: "set null" }),
+    createdBy: p
+      .text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    status: p
+      .text("status", { enum: FOLIO_COLLAB_SESSION_STATUSES })
+      .notNull()
+      .default("open"),
+    fileName: p.varchar("file_name", { length: 256 }).notNull(),
+    yjsSnapshotFileId: safeUuid<"userFile">("yjs_snapshot_file_id").notNull(),
+    yjsSnapshotSizeBytes: p.integer("yjs_snapshot_size_bytes"),
+    yjsSnapshotUpdatedAt: p.timestamp("yjs_snapshot_updated_at"),
+    docxCheckpointFileId: safeUuid<"userFile">(
+      "docx_checkpoint_file_id",
+    ).notNull(),
+    docxCheckpointSha256Hex: p.varchar("docx_checkpoint_sha256_hex", {
+      length: 64,
+    }),
+    docxCheckpointSizeBytes: p.integer("docx_checkpoint_size_bytes"),
+    docxCheckpointScanWarnings: jsonb(
+      "docx_checkpoint_scan_warnings",
+    ).$type<string[] | null>(),
+    docxCheckpointUpdatedAt: p.timestamp("docx_checkpoint_updated_at"),
+    seedClaimedBy: p.text("seed_claimed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    seedClaimedAt: p.timestamp("seed_claimed_at"),
+    seededAt: p.timestamp("seeded_at"),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    closedAt: p.timestamp("closed_at"),
+  },
+  (table) => [
+    p.index("folio_collab_sessions_workspace_id_idx").on(table.workspaceId),
+    p.index("folio_collab_sessions_entity_id_idx").on(table.entityId),
+    p.index("folio_collab_sessions_property_id_idx").on(table.propertyId),
+    p
+      .index("folio_collab_sessions_base_version_id_idx")
+      .on(table.baseVersionId),
+    p
+      .uniqueIndex("folio_collab_sessions_open_uidx")
+      .on(table.workspaceId, table.entityId, table.propertyId)
+      .where(sql`${table.status} = 'open'`),
+    p
+      .foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.propertyId, table.workspaceId],
+        foreignColumns: [properties.id, properties.workspaceId],
+      })
+      .onDelete("cascade"),
+    ...wsPolicies(),
+  ],
+);
+
+export const folioCollabSessionTokens = p.pgTable(
+  "folio_collab_session_tokens",
+  {
+    id: pUuid<"folioCollabSessionToken">().primaryKey(),
+    sessionId: safeUuid<"folioCollabSession">("session_id")
+      .notNull()
+      .references(() => folioCollabSessions.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    tokenHash: p.varchar("token_hash", { length: 64 }).notNull(),
+    permissions: jsonb("permissions")
+      .$type<FolioCollabTokenPermissions>()
+      .notNull(),
+    expiresAt: p.timestamp("expires_at").notNull(),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("folio_collab_session_tokens_workspace_id_idx").on(
+      table.workspaceId,
+    ),
+    p.index("folio_collab_session_tokens_session_id_idx").on(table.sessionId),
+    p.index("folio_collab_session_tokens_expires_at_idx").on(table.expiresAt),
+    p
+      .uniqueIndex("folio_collab_session_tokens_token_hash_uidx")
+      .on(table.tokenHash),
     ...wsPolicies(),
   ],
 );
@@ -3029,6 +3152,8 @@ export const relations = defineRelations(
     entityVersionAiSummaries,
     desktopEditSessions,
     desktopEditHandoffs,
+    folioCollabSessions,
+    folioCollabSessionTokens,
     fields,
     justifications,
     templates,
@@ -3190,6 +3315,10 @@ export const relations = defineRelations(
         from: r.workspaces.id,
         to: r.workspaceViews.workspaceId,
       }),
+      folioCollabSessions: r.many.folioCollabSessions({
+        from: r.workspaces.id,
+        to: r.folioCollabSessions.workspaceId,
+      }),
     },
     workspaceMembers: {
       workspace: r.one.workspaces({
@@ -3257,6 +3386,10 @@ export const relations = defineRelations(
       desktopEditSessions: r.many.desktopEditSessions({
         from: r.entities.id,
         to: r.desktopEditSessions.entityId,
+      }),
+      folioCollabSessions: r.many.folioCollabSessions({
+        from: r.entities.id,
+        to: r.folioCollabSessions.entityId,
       }),
       currentVersion: r.one.entityVersions({
         from: r.entities.currentVersionId,
@@ -3390,6 +3523,52 @@ export const relations = defineRelations(
       }),
       createdByUser: r.one.user({
         from: r.desktopEditHandoffs.createdBy,
+        to: r.user.id,
+      }),
+    },
+    folioCollabSessions: {
+      workspace: r.one.workspaces({
+        from: r.folioCollabSessions.workspaceId,
+        to: r.workspaces.id,
+      }),
+      entity: r.one.entities({
+        from: r.folioCollabSessions.entityId,
+        to: r.entities.id,
+      }),
+      property: r.one.properties({
+        from: r.folioCollabSessions.propertyId,
+        to: r.properties.id,
+      }),
+      baseVersion: r.one.entityVersions({
+        from: r.folioCollabSessions.baseVersionId,
+        to: r.entityVersions.id,
+        alias: "folioCollabSessionBaseVersion",
+      }),
+      finalizedVersion: r.one.entityVersions({
+        from: r.folioCollabSessions.finalizedVersionId,
+        to: r.entityVersions.id,
+        alias: "folioCollabSessionFinalizedVersion",
+      }),
+      createdByUser: r.one.user({
+        from: r.folioCollabSessions.createdBy,
+        to: r.user.id,
+      }),
+      tokens: r.many.folioCollabSessionTokens({
+        from: r.folioCollabSessions.id,
+        to: r.folioCollabSessionTokens.sessionId,
+      }),
+    },
+    folioCollabSessionTokens: {
+      session: r.one.folioCollabSessions({
+        from: r.folioCollabSessionTokens.sessionId,
+        to: r.folioCollabSessions.id,
+      }),
+      workspace: r.one.workspaces({
+        from: r.folioCollabSessionTokens.workspaceId,
+        to: r.workspaces.id,
+      }),
+      user: r.one.user({
+        from: r.folioCollabSessionTokens.userId,
         to: r.user.id,
       }),
     },

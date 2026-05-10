@@ -19,7 +19,7 @@ import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queri
 
 import { selectStableArrayBuffer } from "./array-buffer-utils";
 
-type EditSessionState =
+export type EditSessionState =
   | { status: "idle" }
   | { status: "opening" }
   | {
