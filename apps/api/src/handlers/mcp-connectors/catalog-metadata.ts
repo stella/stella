@@ -39,18 +39,22 @@ export const NATIVE_TOOL_SLUGS: readonly string[] = NATIVE_TOOL_CATALOG.map(
   (tool) => tool.slug,
 );
 
-const intersectsJurisdictions = (
-  recommendedJurisdictions: readonly string[],
+const toPracticeCountryCodeSet = (
   practiceJurisdictions: readonly PracticeJurisdiction[],
-): boolean => {
-  if (recommendedJurisdictions.length === 0) {
-    return true;
-  }
-  const practiceCountryCodes = new Set(
+): ReadonlySet<string> =>
+  new Set(
     practiceJurisdictions.map((jurisdiction) =>
       jurisdiction.countryCode.toUpperCase(),
     ),
   );
+
+const intersectsJurisdictions = (
+  recommendedJurisdictions: readonly string[],
+  practiceCountryCodes: ReadonlySet<string>,
+): boolean => {
+  if (recommendedJurisdictions.length === 0) {
+    return true;
+  }
   return recommendedJurisdictions.some((countryCode) =>
     practiceCountryCodes.has(countryCode.toUpperCase()),
   );
@@ -61,21 +65,30 @@ const intersectsJurisdictions = (
  * org's practice jurisdictions (or the tool has no jurisdiction
  * recommendation, meaning it's globally relevant).
  */
-const isNativeToolDefaultEnabled = ({
-  slug,
-  practiceJurisdictions,
-}: {
-  slug: string;
-  practiceJurisdictions: readonly PracticeJurisdiction[];
-}): boolean => {
+const isNativeToolDefaultEnabledForCodes = (
+  slug: string,
+  practiceCountryCodes: ReadonlySet<string>,
+): boolean => {
   const tool = NATIVE_TOOL_CATALOG.find((entry) => entry.slug === slug);
   if (!tool) {
     return false;
   }
   return intersectsJurisdictions(
     tool.recommendedJurisdictions,
-    practiceJurisdictions,
+    practiceCountryCodes,
   );
+};
+
+const isNativeToolEnabledForCodes = (
+  slug: string,
+  practiceCountryCodes: ReadonlySet<string>,
+  nativeToolOverrides: Readonly<Record<string, boolean>>,
+): boolean => {
+  const override = nativeToolOverrides[slug];
+  if (typeof override === "boolean") {
+    return override;
+  }
+  return isNativeToolDefaultEnabledForCodes(slug, practiceCountryCodes);
 };
 
 /**
@@ -92,13 +105,12 @@ export const isNativeToolEnabledForOrg = ({
   slug: string;
   practiceJurisdictions: readonly PracticeJurisdiction[];
   nativeToolOverrides: Readonly<Record<string, boolean>>;
-}): boolean => {
-  const override = nativeToolOverrides[slug];
-  if (typeof override === "boolean") {
-    return override;
-  }
-  return isNativeToolDefaultEnabled({ slug, practiceJurisdictions });
-};
+}): boolean =>
+  isNativeToolEnabledForCodes(
+    slug,
+    toPracticeCountryCodeSet(practiceJurisdictions),
+    nativeToolOverrides,
+  );
 
 export const getDisabledNativeToolSlugs = ({
   practiceJurisdictions,
@@ -106,15 +118,17 @@ export const getDisabledNativeToolSlugs = ({
 }: {
   practiceJurisdictions: readonly PracticeJurisdiction[];
   nativeToolOverrides: Readonly<Record<string, boolean>>;
-}): readonly string[] =>
-  NATIVE_TOOL_CATALOG.filter(
+}): readonly string[] => {
+  const practiceCountryCodes = toPracticeCountryCodeSet(practiceJurisdictions);
+  return NATIVE_TOOL_CATALOG.filter(
     (tool) =>
-      !isNativeToolEnabledForOrg({
-        slug: tool.slug,
-        practiceJurisdictions,
+      !isNativeToolEnabledForCodes(
+        tool.slug,
+        practiceCountryCodes,
         nativeToolOverrides,
-      }),
+      ),
   ).map((tool) => tool.slug);
+};
 
 export const mcpConnectorCatalogMetadata = (
   _connector: McpConnectorCatalogSource,
@@ -132,14 +146,10 @@ export const isMcpConnectorRecommendedForPractice = ({
     return false;
   }
 
-  const practiceCountryCodes = new Set(
-    practiceJurisdictions.map((jurisdiction) =>
-      jurisdiction.countryCode.toUpperCase(),
-    ),
-  );
+  const practiceCountryCodes = toPracticeCountryCodeSet(practiceJurisdictions);
 
   return metadata.recommendedJurisdictions.some((countryCode) =>
-    practiceCountryCodes.has(countryCode),
+    practiceCountryCodes.has(countryCode.toUpperCase()),
   );
 };
 
@@ -148,11 +158,7 @@ export const getNativeToolCatalog = ({
 }: {
   practiceJurisdictions: readonly PracticeJurisdiction[];
 }) => {
-  const practiceCountryCodes = new Set(
-    practiceJurisdictions.map((jurisdiction) =>
-      jurisdiction.countryCode.toUpperCase(),
-    ),
-  );
+  const practiceCountryCodes = toPracticeCountryCodeSet(practiceJurisdictions);
 
   return NATIVE_TOOL_CATALOG.map((tool) => ({
     description: tool.description,
@@ -160,7 +166,7 @@ export const getNativeToolCatalog = ({
     documentationUrl: tool.documentationUrl,
     iconUrl: tool.iconUrl,
     isRecommended: tool.recommendedJurisdictions.some((countryCode) =>
-      practiceCountryCodes.has(countryCode),
+      practiceCountryCodes.has(countryCode.toUpperCase()),
     ),
     recommendedJurisdictions: tool.recommendedJurisdictions,
     slug: tool.slug,
