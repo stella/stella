@@ -66,6 +66,7 @@ const fakeDocument = {
 
 const TEST_HIGHLIGHT_COLOR = "#FFFF00";
 const TEST_DARK_HIGHLIGHT_COLOR = "#000080";
+const TEST_MID_HIGHLIGHT_COLOR = "#A9A9A9";
 const TEST_EXPLICIT_BLACK_COLOR = " #000000 ";
 const TEST_EXPLICIT_TEXT_COLOR = "#C00000";
 
@@ -227,6 +228,36 @@ describe("renderLine text styling", () => {
 
     expect(textEl?.style.backgroundColor).toBe(TEST_DARK_HIGHLIGHT_COLOR);
     expect(textEl?.style.color).toBe("#FFFFFF");
+  });
+
+  test("uses the higher-contrast text color on mid-tone DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Highlighted text",
+          highlight: TEST_MID_HIGHLIGHT_COLOR,
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 16,
+      width: 112,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.backgroundColor).toBe(TEST_MID_HIGHLIGHT_COLOR);
+    expect(textEl?.style.color).toBe("#000000");
   });
 
   test("keeps automatic comment text readable when comment styling overrides a DOCX highlight", () => {
