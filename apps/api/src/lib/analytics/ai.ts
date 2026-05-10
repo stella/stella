@@ -199,9 +199,6 @@ const findInErrorCauseChain = <T>(
   return undefined;
 };
 
-const sanitizeProviderMessage = (message: string, maxLength: number): string =>
-  String(sanitizeForAIAnalytics(message.trim())).slice(0, maxLength);
-
 const getResponseBodyText = (error: unknown): string | undefined => {
   if (!isRecord(error) || !("responseBody" in error)) {
     return undefined;
@@ -249,15 +246,44 @@ const isBYOKGeminiQuotaError = (
     isGeminiQuotaError(candidate) ? true : undefined,
   ) === true;
 
-// Provider error messages we feel safe surfacing as raw text.
-// Google Generative AI and most other AI gateways return errors
-// prefixed with an UPPER_SNAKE_CASE code (PERMISSION_DENIED,
-// RESOURCE_EXHAUSTED, INVALID_ARGUMENT, ...). Anything else may
-// echo request bodies, prompt fragments, or file names, so we
-// drop the message text and only keep the bucketed reason.
-// Wrapped provider errors are common, so we look for that enum-style
-// code in the cause chain without broadening the allowlist.
-const SAFE_PROVIDER_MESSAGE_PATTERN = /^[A-Z][A-Z_]+(:|\s)/;
+// Provider error codes we accept as safe to surface as-is. Google
+// Generative AI / Vertex AI return errors prefixed with one of these
+// canonical gRPC codes (e.g. `INVALID_ARGUMENT: ...`); we keep just
+// the prefix and drop the trailing text, which can include request
+// bodies, prompt fragments, file names, or other user-controlled
+// content that we do not want in telemetry.
+const SAFE_PROVIDER_CODES: ReadonlySet<string> = new Set([
+  "ABORTED",
+  "ALREADY_EXISTS",
+  "CANCELLED",
+  "DATA_LOSS",
+  "DEADLINE_EXCEEDED",
+  "FAILED_PRECONDITION",
+  "INTERNAL",
+  "INVALID_ARGUMENT",
+  "NOT_FOUND",
+  "OUT_OF_RANGE",
+  "PERMISSION_DENIED",
+  "RESOURCE_EXHAUSTED",
+  "UNAUTHENTICATED",
+  "UNAVAILABLE",
+  "UNIMPLEMENTED",
+  "UNKNOWN",
+]);
+
+const SAFE_PROVIDER_CODE_PREFIX = /^([A-Z][A-Z_]+)(?::|\s|$)/;
+
+const extractSafeProviderCode = (message: string): string | undefined => {
+  const match = SAFE_PROVIDER_CODE_PREFIX.exec(message);
+  if (!match) {
+    return undefined;
+  }
+  const code = match[1];
+  if (code === undefined || !SAFE_PROVIDER_CODES.has(code)) {
+    return undefined;
+  }
+  return code;
+};
 
 type ClassifiedErrorMessage =
   | { kind: "safe"; message: string }
@@ -265,21 +291,17 @@ type ClassifiedErrorMessage =
 
 const classifyErrorMessage = (
   error: unknown,
-  maxLength: number,
 ): ClassifiedErrorMessage | undefined => {
   if (!(error instanceof Error)) {
     return undefined;
   }
 
-  const trimmed = error.message.trim();
-  if (SAFE_PROVIDER_MESSAGE_PATTERN.test(trimmed)) {
-    return {
-      kind: "safe",
-      message: sanitizeProviderMessage(trimmed, maxLength),
-    };
+  const directCode = extractSafeProviderCode(error.message.trim());
+  if (directCode !== undefined) {
+    return { kind: "safe", message: directCode };
   }
 
-  let safeCauseMessage: string | undefined;
+  let safeCauseCode: string | undefined;
   let candidate = getErrorCause(error);
   let remainingCauseDepth = ERROR_CAUSE_MAX_DEPTH;
   const seen = new WeakSet<object>();
@@ -294,9 +316,9 @@ const classifyErrorMessage = (
     }
 
     if (candidate instanceof Error) {
-      const causeMessage = candidate.message.trim();
-      if (SAFE_PROVIDER_MESSAGE_PATTERN.test(causeMessage)) {
-        safeCauseMessage = causeMessage;
+      const causeCode = extractSafeProviderCode(candidate.message.trim());
+      if (causeCode !== undefined) {
+        safeCauseCode = causeCode;
       }
     }
 
@@ -304,11 +326,8 @@ const classifyErrorMessage = (
     remainingCauseDepth -= 1;
   }
 
-  if (safeCauseMessage) {
-    return {
-      kind: "safe",
-      message: sanitizeProviderMessage(safeCauseMessage, maxLength),
-    };
+  if (safeCauseCode !== undefined) {
+    return { kind: "safe", message: safeCauseCode };
   }
 
   return { kind: "non_standard" };
@@ -676,7 +695,7 @@ export const createAIAnalyticsCallbacks = ({
     const modelKeySource = resolvedModelInfo?.keySource;
     const failureReason = classifyFailureReason(error, modelKeySource);
 
-    const cwMessage = classifyErrorMessage(error, 256);
+    const cwMessage = classifyErrorMessage(error);
     logger.error("ai.generation.failed", {
       "error.type": errorTag(error),
       "ai.feature": config.feature,
@@ -693,7 +712,7 @@ export const createAIAnalyticsCallbacks = ({
     });
 
     if (!debugEnabled) {
-      const phMessage = classifyErrorMessage(error, 512);
+      const phMessage = classifyErrorMessage(error);
       analytics.capture({
         distinctId,
         event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,

@@ -513,8 +513,42 @@ describe("createAIAnalyticsCallbacks", () => {
     if (event?.event !== SERVER_ANALYTICS_EVENTS.aiGenerationFailed) {
       throw new Error("Expected aggregate AI failure event");
     }
-    expect(event.properties.error_message).toStartWith("RESOURCE_EXHAUSTED");
+    expect(event.properties.error_message).toBe("RESOURCE_EXHAUSTED");
     expect(event.properties).not.toHaveProperty("error_message_kind");
+    expect(JSON.stringify(event.properties)).not.toContain("Quota exceeded");
+    expect(JSON.stringify(event.properties)).not.toContain("for metric");
+  });
+
+  test("buckets messages whose UPPER prefix is not on the provider allowlist", async () => {
+    const aiAnalyticsModule = await loadAIAnalytics();
+
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => void 0,
+    };
+
+    const callbacks = aiAnalyticsModule.createAIAnalyticsCallbacks({
+      analytics,
+      feature: "analysis.basic",
+      traceId: "trace_unknown_prefix",
+    });
+
+    callbacks.captureError(
+      new Error("API: rejected '<<client memo trailing fragment>>'"),
+    );
+
+    const event = events.at(0);
+    expect(event?.event).toBe(SERVER_ANALYTICS_EVENTS.aiGenerationFailed);
+    if (event?.event !== SERVER_ANALYTICS_EVENTS.aiGenerationFailed) {
+      throw new Error("Expected aggregate AI failure event");
+    }
+    expect(event.properties.error_message_kind).toBe("non_standard");
+    expect(event.properties).not.toHaveProperty("error_message");
+    expect(JSON.stringify(event.properties)).not.toContain("client memo");
   });
 
   test("captures the deepest safe provider message within three cause levels", async () => {
@@ -558,9 +592,7 @@ describe("createAIAnalyticsCallbacks", () => {
     if (event?.event !== SERVER_ANALYTICS_EVENTS.aiGenerationFailed) {
       throw new Error("Expected aggregate AI failure event");
     }
-    expect(event.properties.error_message).toBe(
-      "INVALID_ARGUMENT: deepest captured message",
-    );
+    expect(event.properties.error_message).toBe("INVALID_ARGUMENT");
   });
 
   test("ignores safe provider messages beyond three cause levels", async () => {
