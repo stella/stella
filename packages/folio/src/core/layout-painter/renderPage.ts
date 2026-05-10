@@ -1700,19 +1700,29 @@ export function renderPage(
       page.margins.bottom - footerDistance,
       48,
     );
+    const footerFlowHeight = options.footerContent?.height ?? 0;
     const footerVisualTop = options.footerContent?.visualTop ?? 0;
     const footerVisualBottom =
-      options.footerContent?.visualBottom ?? options.footerContent?.height ?? 0;
+      options.footerContent?.visualBottom ?? footerFlowHeight;
     const actualFooterHeight = Math.max(
       footerVisualBottom - footerVisualTop,
       24,
     );
     const footerOverflows = actualFooterHeight > availableFooterHeight;
 
+    // Anchor the footer container at the *flow* origin, then let it stretch
+    // upward (above-flow image overflow via negative visualTop) and downward
+    // (below-flow floating-table overflow via visualBottom > flowHeight).
+    // Anchoring at the flow origin keeps in-flow content rendered at the
+    // natural footer line (page.h - footerDistance - flowHeight) and keeps
+    // the resolver's `flowTop` consistent with where the in-flow first
+    // paragraph actually paints.
+    const footerNaturalTop = page.size.h - footerDistance - footerFlowHeight;
+    const footerContainerTop = footerNaturalTop + footerVisualTop;
     const footerEl = doc.createElement("div");
     footerEl.className = PAGE_CLASS_NAMES.footer;
     footerEl.style.position = "absolute";
-    footerEl.style.top = `${page.size.h - footerDistance - actualFooterHeight}px`;
+    footerEl.style.top = `${footerContainerTop}px`;
     footerEl.style.left = `${page.margins.left}px`;
     footerEl.style.right = `${page.margins.right}px`;
     footerEl.style.width = `${footerContentWidth}px`;
@@ -1727,8 +1737,7 @@ export function renderPage(
         { ...context, section: "footer", contentWidth: footerContentWidth },
         options,
         {
-          flowTop:
-            page.size.h - footerDistance - (options.footerContent?.height ?? 0),
+          flowTop: footerNaturalTop,
           flowLeft: page.margins.left,
           contentWidth: footerContentWidth,
           pageWidth: page.size.w,
