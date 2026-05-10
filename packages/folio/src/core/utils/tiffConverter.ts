@@ -32,6 +32,16 @@ export type ConvertedTiff = {
 export function convertTiffToPngDataUrl(
   tiffData: ArrayBuffer,
 ): ConvertedTiff | null {
+  // Bail out before any decode if Canvas isn't available — without it we
+  // can't produce a PNG anyway, and `UTIF.decodeImage` + `toRGBA8` would
+  // allocate hundreds of MB and burn CPU for nothing in headless parses.
+  if (
+    typeof document === "undefined" ||
+    typeof document.createElement !== "function"
+  ) {
+    return null;
+  }
+
   try {
     const ifds = UTIF.decode(tiffData);
     const firstImage = ifds[0];
@@ -64,13 +74,6 @@ export function convertTiffToPngDataUrl(
     const width = firstImage.width;
     const height = firstImage.height;
     if (!width || !height) {
-      return null;
-    }
-
-    if (
-      typeof document === "undefined" ||
-      typeof document.createElement !== "function"
-    ) {
       return null;
     }
 
