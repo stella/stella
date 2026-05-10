@@ -32,6 +32,14 @@ export const createPostHogAnalytics = (
           app_commit: APP_COMMIT_SHA,
           app_version: APP_VERSION,
         },
+        // Mark `$exception` events as originating from a deliberate capture
+        // path so posthog-node skips its built-in warning about
+        // `capture('$exception')`. We intentionally avoid `captureException`
+        // because it would extract the message and stack, violating the
+        // redaction contract enforced by `captureError`.
+        ...(event === SERVER_ANALYTICS_EVENTS.exception
+          ? { _originatedFromCaptureException: true }
+          : {}),
       });
     },
     // eslint-disable-next-line promise-function-async

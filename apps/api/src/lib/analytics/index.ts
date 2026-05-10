@@ -2,6 +2,7 @@ import { errorTag, logDevError } from "@/api/lib/errors/utils";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 
 import { getAnalytics } from "./client";
+import type { ExceptionProperties } from "./types";
 import { SERVER_ANALYTICS_EVENTS } from "./types";
 
 export { getAnalytics } from "./client";
@@ -45,7 +46,18 @@ const captureErrorWithOptions = (
   options: CaptureErrorOptions,
 ) => {
   const tag = errorTag(error);
-  const properties = {
+  // PostHog ingestion drops `$exception` events that lack `$exception_list`,
+  // so the entry is required even though we deliberately keep it empty —
+  // the redaction contract above forbids shipping the message or stack.
+  const properties: ExceptionProperties = {
+    $exception_level: "error",
+    $exception_list: [
+      {
+        mechanism: { handled: true, synthetic: false, type: "generic" },
+        type: tag,
+        value: "",
+      },
+    ],
     $exception_type: tag,
     ...options.context,
     ...(options.organizationId
