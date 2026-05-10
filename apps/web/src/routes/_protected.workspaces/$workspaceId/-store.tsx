@@ -1,6 +1,7 @@
-import type { BoundingBox } from "@stll/api/types";
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
+
+import type { BoundingBox } from "@stll/api/types";
 
 import type { WorkspaceJustification } from "@/lib/types";
 

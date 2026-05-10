@@ -1,6 +1,7 @@
-import { Popover, PopoverPopup } from "@stll/ui/components/popover";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
+
+import { Popover, PopoverPopup } from "@stll/ui/components/popover";
 
 import { matchesPattern, previewReference } from "@/lib/matter-reference";
 import { organizationSettingsOptions } from "@/routes/_protected.organization/-settings-queries";

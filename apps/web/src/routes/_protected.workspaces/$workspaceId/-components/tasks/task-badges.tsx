@@ -1,4 +1,3 @@
-import { cn } from "@stll/ui/lib/utils";
 import {
   AlertCircleIcon,
   ArrowDownIcon,
@@ -7,6 +6,8 @@ import {
   MinusIcon,
 } from "lucide-react";
 import { useLocale } from "use-intl";
+
+import { cn } from "@stll/ui/lib/utils";
 
 import type { WorkspaceEntity } from "@/lib/types";
 
@@ -66,7 +67,6 @@ export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
       )}
       {entity.dueDate && (
         <span
-          // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
           className={cn(
             "flex items-center gap-0.5",
             overdue && "text-red-500 dark:text-red-400",

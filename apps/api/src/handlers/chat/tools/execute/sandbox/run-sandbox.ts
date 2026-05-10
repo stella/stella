@@ -63,7 +63,6 @@ const dumpVmError = (
       );
       return { message };
     },
-    // oxlint-disable-next-line unicorn/no-useless-undefined
     err: () => undefined,
   });
 

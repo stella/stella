@@ -1,5 +1,16 @@
 import { useRef, useState } from "react";
 
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
+import {
+  CopyIcon,
+  CopyPlusIcon,
+  EllipsisIcon,
+  LockIcon,
+  TrashIcon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
 import { Input } from "@stll/ui/components/input";
@@ -14,16 +25,6 @@ import {
   SheetTrigger,
 } from "@stll/ui/components/sheet";
 import { stellaToast } from "@stll/ui/components/toast";
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
-import {
-  CopyIcon,
-  CopyPlusIcon,
-  EllipsisIcon,
-  LockIcon,
-  TrashIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { MatterNumberHint } from "@/components/matter-number-hint";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -155,7 +156,6 @@ export const MatterMetadataSheet = ({
             type: "error",
           });
         },
-        // eslint-disable-next-line typescript/no-misused-promises
         onSuccess: () => {
           void (async () => {
             stellaToast.update(toastId, {

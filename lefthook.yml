@@ -18,7 +18,7 @@ pre-commit:
       stage_fixed: true
     format:
       glob: "**/*.{ts,tsx,js,jsx,json,css}"
-      run: bun --bun oxfmt -c .oxfmtrc.json {staged_files}
+      run: bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
     i18n:
       glob: "apps/web/src/i18n/langs/*.{json,ts}"

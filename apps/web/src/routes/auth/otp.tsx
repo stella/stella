@@ -1,5 +1,10 @@
 import { useState } from "react";
 
+import { useMutation } from "@tanstack/react-query";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
+
 import { Button } from "@stll/ui/components/button";
 import {
   Frame,
@@ -14,10 +19,6 @@ import {
   InputOTPSlot,
 } from "@stll/ui/components/input-otp";
 import { stellaToast } from "@stll/ui/components/toast";
-import { useMutation } from "@tanstack/react-query";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
-import * as v from "valibot";
 
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";

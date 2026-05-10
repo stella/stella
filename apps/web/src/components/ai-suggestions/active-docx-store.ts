@@ -12,8 +12,9 @@
 
 import type { RefObject } from "react";
 
-import type { DocxEditorRef } from "@stll/folio";
 import { create } from "zustand";
+
+import type { DocxEditorRef } from "@stll/folio";
 
 export type ActiveDocxRegistration = {
   editorRef: RefObject<DocxEditorRef | null>;

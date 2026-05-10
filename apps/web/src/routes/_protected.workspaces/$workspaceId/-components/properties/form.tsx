@@ -1,8 +1,9 @@
 import type { ComponentProps } from "react";
 
+import type { AnyFieldApi } from "@tanstack/react-form";
+
 import { Field, FieldError } from "@stll/ui/components/field";
 import { cn } from "@stll/ui/lib/utils";
-import type { AnyFieldApi } from "@tanstack/react-form";
 
 type PropertyFormFieldProps = ComponentProps<typeof Field>;
 

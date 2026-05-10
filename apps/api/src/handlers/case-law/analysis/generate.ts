@@ -7,6 +7,9 @@
  */
 
 import { valibotSchema } from "@ai-sdk/valibot";
+import { Output, streamText } from "ai";
+import { and, eq, isNull } from "drizzle-orm";
+
 import type {
   AnalysisHeading,
   AnalysisInProgress,
@@ -22,8 +25,6 @@ import {
 } from "@stll/case-law/analysis";
 import type { DocumentAst } from "@stll/case-law/document-ast";
 import { hasUsableAst } from "@stll/case-law/document-ast";
-import { Output, streamText } from "ai";
-import { and, eq, isNull } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
 // SAFETY: rootDb is used only inside runGeneration, which runs in

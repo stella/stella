@@ -1,10 +1,11 @@
+import { t } from "elysia";
+
 import {
   InfoSoudAPIError,
   InfoSoudClient,
   InfoSoudParseError,
   InfoSoudRequestError,
 } from "@stll/infosoud";
-import { t } from "elysia";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 

@@ -14,7 +14,7 @@ describe("DOCX ZIP helpers", () => {
     const buffer = await repackZip(zip);
     const loaded = await loadDocx(buffer);
 
-    await expect(extractText(loaded, "word/document.xml")).resolves.toBe(
+    expect(await extractText(loaded, "word/document.xml")).toBe(
       "<w:document>Hello</w:document>",
     );
 
@@ -26,7 +26,7 @@ describe("DOCX ZIP helpers", () => {
   test("returns null for missing text and binary parts", async () => {
     const loaded = await loadDocx(await repackZip(new JSZip()));
 
-    await expect(extractText(loaded, "word/missing.xml")).resolves.toBeNull();
-    await expect(extractBinary(loaded, "word/missing.bin")).resolves.toBeNull();
+    expect(await extractText(loaded, "word/missing.xml")).toBeNull();
+    expect(await extractBinary(loaded, "word/missing.bin")).toBeNull();
   });
 });

@@ -1,9 +1,5 @@
 import { useState } from "react";
 
-import { prorateHourlyCents } from "@stll/money";
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { cn } from "@stll/ui/lib/utils";
 import {
   CheckCheckIcon,
   PencilIcon,
@@ -12,6 +8,11 @@ import {
   UndoIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { prorateHourlyCents } from "@stll/money";
+import { Button } from "@stll/ui/components/button";
+import { Checkbox } from "@stll/ui/components/checkbox";
+import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { formatMinutes } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";

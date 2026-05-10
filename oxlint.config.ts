@@ -49,6 +49,8 @@ export default defineConfig({
     "sonarjs/array-callback-without-return": "error",
     "sonarjs/anchor-precedence": "error",
     "sonarjs/code-eval": "error",
+    "sonarjs/no-array-delete": "error",
+    "sonarjs/no-alphabetical-sort": "error",
     "sonarjs/confidential-information-logging": "error",
     "sonarjs/cognitive-complexity": ["error", 30],
     "sonarjs/existing-groups": "error",

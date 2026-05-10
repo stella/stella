@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 /* eslint-disable typescript-eslint/no-unsafe-type-assertion */
 /* eslint-disable typescript-eslint/promise-function-async */
-/* eslint-disable unicorn/no-array-sort */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {

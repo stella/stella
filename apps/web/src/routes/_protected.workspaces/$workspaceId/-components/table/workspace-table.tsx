@@ -21,9 +21,6 @@ import {
   monitorForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
 import { flexRender } from "@tanstack/react-table";
 import type {
   Cell,
@@ -42,6 +39,10 @@ import {
   MinusIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Checkbox } from "@stll/ui/components/checkbox";
+import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { renderDragPreview } from "@/components/drag-preview";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";

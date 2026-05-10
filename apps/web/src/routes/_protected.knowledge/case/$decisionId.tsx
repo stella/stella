@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { parseDocumentAst } from "@stll/case-law/document-ast";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Loader2Icon, SparklesIcon } from "lucide-react";
 import * as v from "valibot";
 import { useShallow } from "zustand/react/shallow";
+
+import { parseDocumentAst } from "@stll/case-law/document-ast";
 
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { useCaseSearchStore } from "@/lib/case-search-store";

@@ -1,6 +1,7 @@
-import type { OperatorType } from "@stll/anonymize-wasm";
 import { openDB } from "idb";
 import type { DBSchema, IDBPDatabase } from "idb";
+
+import type { OperatorType } from "@stll/anonymize-wasm";
 
 const DB_NAME = "stella-redaction-maps";
 const DB_VERSION = 1;

@@ -1,8 +1,9 @@
 import type { PropsWithChildren } from "react";
 
-import { Button } from "@stll/ui/components/button";
 import { EyeIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
 
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 
+import { EyeOffIcon, PencilLineIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import { Popover, PopoverPopup } from "@stll/ui/components/popover";
 import { Separator } from "@stll/ui/components/separator";
 import { stellaToast } from "@stll/ui/components/toast";
-import { EyeOffIcon, PencilLineIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import type { PropertyDependency, WorkspaceProperty } from "@/lib/types";
 import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";

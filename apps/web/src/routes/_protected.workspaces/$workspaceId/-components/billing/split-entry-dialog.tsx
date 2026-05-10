@@ -1,12 +1,13 @@
 import { useState } from "react";
 
+import { PlusIcon, TrashIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import { stellaToast } from "@stll/ui/components/toast";
-import { PlusIcon, TrashIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 import { useSplitTimeEntry } from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";

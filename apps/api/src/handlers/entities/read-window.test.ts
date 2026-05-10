@@ -139,7 +139,6 @@ describe("entity read handlers", () => {
 
   test("page query unwraps the shared entity query result before building pagination", async () => {
     const result = await readEntities.handler(
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- read and window handlers use the same safe handler context shape for this test
       createContext({
         body: {
           page: 1,

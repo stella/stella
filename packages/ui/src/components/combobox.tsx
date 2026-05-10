@@ -3,10 +3,11 @@
 import * as React from "react";
 
 import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
+import { ChevronsUpDownIcon, XIcon } from "lucide-react";
+
 import { Input } from "@stll/ui/components/input";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { cn } from "@stll/ui/lib/utils";
-import { ChevronsUpDownIcon, XIcon } from "lucide-react";
 
 const ComboboxContext = React.createContext<{
   chipsRef: React.RefObject<Element | null> | null;
@@ -352,7 +353,7 @@ function ComboboxChips({
       data-slot="combobox-chips"
       onMouseDown={(e) => {
         // SAFETY: DOM mouse event target is Element for UI interaction
-        // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+        // eslint-disable-next-line typescript/no-unsafe-type-assertion
         const target = e.target as HTMLElement;
         const isChip = target.closest('[data-slot="combobox-chip"]');
         if (isChip || !chipsRef?.current) {
@@ -366,7 +367,7 @@ function ComboboxChips({
         }
       }}
       // SAFETY: chipsRef is HTMLDivElement from ComboboxPrimitive.Chips
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
       ref={chipsRef as React.Ref<HTMLDivElement> | null}
       {...props}
     >

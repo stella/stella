@@ -736,7 +736,6 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     replyKey: number,
     submitFn?: (id: number, text: string) => void,
   ) => (
-    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
     <div
       onClick={(e) => e.stopPropagation()}
       role="presentation"
@@ -851,7 +850,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       lastKnownCardPositionsRef.current.get(cardId);
 
     return (
-      // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
+      // oxlint-disable-next-line jsx-a11y/no-static-element-interactions
       <div
         key={comment.id}
         ref={(el) => {

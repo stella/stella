@@ -17,7 +17,7 @@
     "typegen": "bun ../scripts/src/i18n-typegen.ts i18n/langs",
     "i18n:check": "bun ../scripts/src/i18n-typegen.ts i18n/langs --check && bun ../scripts/src/i18n-check.ts i18n/langs",
     "i18n:sync": "bun ../scripts/src/i18n-check.ts i18n/langs --sync && bun ../scripts/src/i18n-typegen.ts i18n/langs",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware packages/transactional",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware packages/transactional",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/transactional",
     "format": "oxfmt ."
   },

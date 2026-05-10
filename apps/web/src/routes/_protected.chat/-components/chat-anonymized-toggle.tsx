@@ -1,6 +1,7 @@
-import { Button } from "@stll/ui/components/button";
 import { ShieldCheckIcon, ShieldIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
 
 import Tooltip from "@/components/tooltip";
 

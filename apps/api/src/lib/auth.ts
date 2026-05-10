@@ -1,6 +1,4 @@
 import { oauthProvider } from "@better-auth/oauth-provider";
-import { ac, roles } from "@stll/permissions";
-import type { PermissionInput } from "@stll/permissions";
 import type { BetterAuthPlugin } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -16,6 +14,9 @@ import { Result } from "better-result";
 import { and, eq, isNotNull, or } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import Elysia, { t } from "elysia";
+
+import { ac, roles } from "@stll/permissions";
+import type { PermissionInput } from "@stll/permissions";
 
 import { createSafeDb, createScopedDb } from "@/api/db";
 import { authSchema, session as sessionTable } from "@/api/db/auth-schema";
@@ -373,7 +374,6 @@ const createAuth = () => {
       // SAFETY: The oauth-provider plugin's generated OpenAPI metadata
       // is still slightly too wide for Better Auth's plugin type here.
       // The runtime plugin value is valid for betterAuth().
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       oauthProvider({
         loginPage: "/auth",
         consentPage: "/consent",

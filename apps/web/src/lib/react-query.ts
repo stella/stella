@@ -34,7 +34,6 @@ export const ensureCriticalQueryData = async <
 
   return await Promise.race([
     queryClient.ensureQueryData(options),
-    // eslint-disable-next-line no-restricted-syntax
     new Promise<never>((_resolve, reject) => {
       signal.addEventListener(
         "abort",

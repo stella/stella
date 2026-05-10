@@ -1,7 +1,5 @@
 /* eslint-disable typescript-eslint/no-unsafe-type-assertion */
 /* eslint-disable typescript-eslint/promise-function-async */
-/* eslint-disable typescript-eslint/no-unsafe-assignment */
-/* eslint-disable typescript-eslint/no-unsafe-member-access */
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
@@ -271,7 +269,6 @@ describe("czUsAdapter.fetchPage", () => {
       (d) => d.caseNumber === "IV.ÚS 1/25",
     );
     expect(decision).toBeDefined();
-    // eslint-disable-next-line unicorn/no-useless-undefined
     expect(decision?.metadata["abstract"]).toEqual(undefined);
   });
 

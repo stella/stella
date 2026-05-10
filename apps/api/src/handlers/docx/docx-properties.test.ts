@@ -1324,7 +1324,6 @@ const assertRoundtrip = (oldText: string, newText: string) => {
   const idGen = createIdGenerator(new Set());
   const result = applyEdits(xml, edits, AUTHOR, idGen);
   const accepted = extractAcceptedText(result);
-  // eslint-disable-next-line vitest/no-standalone-expect
   expect(accepted[0]).toBe(newText);
 };
 

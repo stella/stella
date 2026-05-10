@@ -1,5 +1,6 @@
-import { createPipelineContext } from "@stll/anonymize-wasm";
 import { describe, expect, mock, test } from "bun:test";
+
+import { createPipelineContext } from "@stll/anonymize-wasm";
 
 import type { ScopedDb } from "@/api/db";
 import { toSafeId } from "@/api/lib/branded-types";

@@ -1,11 +1,5 @@
 import { useState } from "react";
 
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-import { cn } from "@stll/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { getToolName } from "ai";
 import {
@@ -18,6 +12,13 @@ import {
   UserIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import {
+  Popover,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stll/ui/components/popover";
+import { cn } from "@stll/ui/lib/utils";
 
 import {
   getChatToolTitleKey,

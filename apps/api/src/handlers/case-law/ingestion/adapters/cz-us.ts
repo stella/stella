@@ -228,7 +228,6 @@ const parseDecisionPage = (
       ? buildEcli(parsed.caseNumber, decisionYear, ecliCounter)
       : undefined;
 
-  // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- AST container, not a DB update
   let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
   let resolvedFulltext = fulltext;
 

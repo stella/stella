@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   DEFAULT_ENTITY_LABELS,
   DEFAULT_OPERATOR_CONFIG,
@@ -9,7 +11,6 @@ import type {
   PipelineContext,
   RedactionResult,
 } from "@stll/anonymize-wasm";
-import { panic } from "better-result";
 
 import type { ScopedDb } from "@/api/db";
 import type { SafeId } from "@/api/lib/branded-types";

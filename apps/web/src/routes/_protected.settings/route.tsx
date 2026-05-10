@@ -1,4 +1,3 @@
-import { cn } from "@stll/ui/lib/utils";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import {
@@ -10,6 +9,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { cn } from "@stll/ui/lib/utils";
 
 import type { TranslationKey } from "@/i18n/types";
 import { pageTitle } from "@/lib/page-title";

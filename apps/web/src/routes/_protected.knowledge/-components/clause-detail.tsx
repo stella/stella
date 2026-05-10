@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  ArrowLeftIcon,
+  Loader2Icon,
+  MoreHorizontalIcon,
+  PlusIcon,
+  Trash2Icon,
+} from "lucide-react";
+import { useFormatter, useTranslations } from "use-intl";
+
+import {
   AlertDialog,
   AlertDialogClose,
   AlertDialogDescription,
@@ -30,14 +39,6 @@ import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
-import {
-  ArrowLeftIcon,
-  Loader2Icon,
-  MoreHorizontalIcon,
-  PlusIcon,
-  Trash2Icon,
-} from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
@@ -171,7 +172,7 @@ export const ClauseDetailView = ({
 
     // SAFETY: The API returns body as ClauseParagraph[]
     // but Eden types it as unknown due to JSONB.
-    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
     const detail = data as unknown as ClauseDetail;
     setState({ kind: "ready", detail });
   }, [clauseId, t]);

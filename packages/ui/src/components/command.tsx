@@ -4,9 +4,10 @@ import type * as React from "react";
 
 import { Autocomplete as AutocompletePrimitive } from "@base-ui/react/autocomplete";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
+import { SearchIcon } from "lucide-react";
+
 import { DialogPopup } from "@stll/ui/components/dialog";
 import { cn } from "@stll/ui/lib/utils";
-import { SearchIcon } from "lucide-react";
 
 type CommandProps<ItemValue> = Omit<
   AutocompletePrimitive.Root.Props<ItemValue>,

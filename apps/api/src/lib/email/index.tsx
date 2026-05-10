@@ -1,8 +1,9 @@
 import { render } from "@react-email/render";
+import { panic } from "better-result";
+
 import * as BetterAuthOTP from "@stll/transactional/emails/better-auth-otp";
 import * as NewDeviceLogin from "@stll/transactional/emails/new-device-login";
 import * as OrganizationInvitation from "@stll/transactional/emails/organization-invitation";
-import { panic } from "better-result";
 
 import { env } from "@/api/env";
 import type { SupportedLang } from "@/api/lib/locale";

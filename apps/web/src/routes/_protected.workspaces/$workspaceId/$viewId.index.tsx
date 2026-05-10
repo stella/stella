@@ -33,7 +33,7 @@ function RouteComponent() {
       return (
         <TableLayout
           // SAFETY: the switch narrows activeView.layout.type to "table".
-          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+          // eslint-disable-next-line typescript/no-unsafe-type-assertion
           view={activeView as WorkspaceView<"table">}
           workspaceId={workspaceId}
         />
@@ -44,7 +44,7 @@ function RouteComponent() {
       return (
         <FilesystemView
           // SAFETY: the switch narrows activeView.layout.type to "filesystem".
-          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+          // eslint-disable-next-line typescript/no-unsafe-type-assertion
           view={activeView as WorkspaceView<"filesystem">}
           workspaceId={workspaceId}
         />
@@ -55,7 +55,7 @@ function RouteComponent() {
       return (
         <CalendarView
           // SAFETY: the switch narrows activeView.layout.type to "calendar".
-          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+          // eslint-disable-next-line typescript/no-unsafe-type-assertion
           view={activeView as WorkspaceView<"calendar">}
           workspaceId={workspaceId}
         />

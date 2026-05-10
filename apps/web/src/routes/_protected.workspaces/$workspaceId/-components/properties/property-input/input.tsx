@@ -1,21 +1,22 @@
 import { useEffect, useRef } from "react";
 import type React from "react";
 
-import { Button } from "@stll/ui/components/button";
-import { FieldError } from "@stll/ui/components/field";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { cn } from "@stll/ui/lib/utils";
-
-import "./tiptap.css";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
+
+import "./tiptap.css";
 import Text from "@tiptap/extension-text";
 import { useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { Loader2Icon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
+import { FieldError } from "@stll/ui/components/field";
+import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { cn } from "@stll/ui/lib/utils";
 
 import {
   createPromptEditorDocument,

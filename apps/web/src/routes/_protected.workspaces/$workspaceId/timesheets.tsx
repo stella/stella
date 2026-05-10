@@ -1,5 +1,15 @@
 import { Suspense, useMemo, useState } from "react";
 
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CodeIcon,
+  DownloadIcon,
+  SettingsIcon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import {
   Select,
@@ -10,15 +20,6 @@ import {
 } from "@stll/ui/components/select";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
 import { stellaToast } from "@stll/ui/components/toast";
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  CodeIcon,
-  DownloadIcon,
-  SettingsIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors";
@@ -177,7 +178,7 @@ function TimesheetsPage() {
       }
       // SAFETY: PDF endpoint returns binary; Eden types it
       // as unknown but the response body is an ArrayBuffer
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
       const pdfData = response.data as unknown as ArrayBuffer;
       const blob = new Blob([pdfData], {
         type: "application/pdf",

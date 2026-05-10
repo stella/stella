@@ -669,7 +669,6 @@ function measureTableBlock(
           if (!occupiedColumnsPerRow.has(r)) {
             occupiedColumnsPerRow.set(r, new Set());
           }
-          // oxlint-disable-next-line typescript/no-non-null-assertion
           const occSet = occupiedColumnsPerRow.get(r)!;
           for (let c = 0; c < colSpan; c++) {
             occSet.add(colIdx + c);
@@ -2277,7 +2276,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             // body line carrying an fn ref reserves space for that fn
             // on its host page in a single pass — no convergence loop.
             footnoteContentMap = buildFootnoteContentMap(
-              // oxlint-disable-next-line typescript/no-non-null-assertion
               document!.package.footnotes!,
               footnoteRefs,
               contentWidth,
@@ -4980,7 +4978,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     };
 
     return (
-      // oxlint-disable-next-line jsx-a11y/no-static-element-interactions
       <div
         ref={containerRef}
         className={`folio-root paged-editor ${className ?? ""}`}

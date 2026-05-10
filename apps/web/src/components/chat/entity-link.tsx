@@ -1,4 +1,3 @@
-import { cn } from "@stll/ui/lib/utils";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   FileTextIcon,
@@ -6,6 +5,8 @@ import {
   LandmarkIcon,
   LayersIcon,
 } from "lucide-react";
+
+import { cn } from "@stll/ui/lib/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import type { MentionCategory } from "@/components/chat/chat-mention-href";

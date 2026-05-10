@@ -1,12 +1,13 @@
 import { useCallback, useRef } from "react";
 
+import { useForm, useStore } from "@tanstack/react-form";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
+
 import { Button } from "@stll/ui/components/button";
 import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
 import { Form } from "@stll/ui/components/form";
 import { Input } from "@stll/ui/components/input";
-import { useForm, useStore } from "@tanstack/react-form";
-import { useTranslations } from "use-intl";
-import * as v from "valibot";
 
 import { toFormErrors } from "@/lib/schema";
 import { createSlug } from "@/routes/_protected.organization/-utils";

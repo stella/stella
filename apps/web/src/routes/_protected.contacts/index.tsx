@@ -1,5 +1,19 @@
 import { useState } from "react";
 
+import { useForm, useStore } from "@tanstack/react-form";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  BuildingIcon,
+  EllipsisVerticalIcon,
+  PlusIcon,
+  SearchIcon,
+  UserIcon,
+} from "lucide-react";
+import { useDebouncedCallback } from "use-debounce";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
+
 import { Button } from "@stll/ui/components/button";
 import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
 import {
@@ -36,19 +50,6 @@ import {
   TableRow,
 } from "@stll/ui/components/table";
 import { stellaToast } from "@stll/ui/components/toast";
-import { useForm, useStore } from "@tanstack/react-form";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import {
-  BuildingIcon,
-  EllipsisVerticalIcon,
-  PlusIcon,
-  SearchIcon,
-  UserIcon,
-} from "lucide-react";
-import { useDebouncedCallback } from "use-debounce";
-import { useTranslations } from "use-intl";
-import * as v from "valibot";
 
 import { EmptyScreen } from "@/components/empty-screen";
 import Tooltip from "@/components/tooltip";
@@ -477,7 +478,6 @@ const CreateContactDialog = ({
   const form = useForm({
     defaultValues: {
       // SAFETY: widening literal for form discriminant union
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
       type: "person" as "person" | "organization",
       displayName: "",
       firstName: "",

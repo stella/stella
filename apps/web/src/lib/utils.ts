@@ -28,7 +28,7 @@ export const stripUndefined = <T extends Record<string, unknown>>(
   }
   // SAFETY: result mirrors input with undefined-valued keys
   // removed; the mapped return type reflects this invariant.
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
   return result as { [K in keyof T]: Exclude<T[K], undefined> };
 };
 
@@ -41,9 +41,7 @@ export const stripUndefined = <T extends Record<string, unknown>>(
 export const includesValue = <T extends string>(
   arr: readonly T[],
   value: string,
-): value is T =>
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
-  (arr as readonly string[]).includes(value);
+): value is T => (arr as readonly string[]).includes(value);
 
 export const shuffleArray = <T>(originalArray: readonly T[]): T[] => {
   const array = [...originalArray];
@@ -53,9 +51,9 @@ export const shuffleArray = <T>(originalArray: readonly T[]): T[] => {
 
     // SAFETY: i is in [1, array.length-1] and randomIndex
     // is in [0, i]; both always in bounds.
-    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
     const a = array[i] as T;
-    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
     const b = array[randomIndex] as T;
     array[randomIndex] = a;
     array[i] = b;

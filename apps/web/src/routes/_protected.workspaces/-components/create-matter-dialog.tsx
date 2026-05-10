@@ -1,5 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
+import {
+  BuildingIcon,
+  PlusIcon,
+  SearchIcon,
+  UserIcon,
+  XIcon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+import { useShallow } from "zustand/shallow";
+
 import { Button } from "@stll/ui/components/button";
 import {
   Combobox,
@@ -22,18 +35,6 @@ import { Field, FieldLabel } from "@stll/ui/components/field";
 import { Input } from "@stll/ui/components/input";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { stellaToast } from "@stll/ui/components/toast";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getRouteApi, useNavigate } from "@tanstack/react-router";
-import { Result } from "better-result";
-import {
-  BuildingIcon,
-  PlusIcon,
-  SearchIcon,
-  UserIcon,
-  XIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-import { useShallow } from "zustand/shallow";
 
 import { ContactPicker } from "@/components/contact-picker";
 import { UserIdentity } from "@/components/user-avatar";

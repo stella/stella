@@ -12,9 +12,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import type { CSSProperties, KeyboardEvent, ChangeEvent } from "react";
 
-import { Button } from "@stll/ui/components/button";
-import { Checkbox } from "@stll/ui/components/checkbox";
-import { Input } from "@stll/ui/components/input";
 import {
   ChevronDownIcon,
   ChevronUpIcon,
@@ -22,6 +19,10 @@ import {
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
+import { Checkbox } from "@stll/ui/components/checkbox";
+import { Input } from "@stll/ui/components/input";
 
 import { getFindReplaceOverlayStyle } from "./findReplaceDialogLayout";
 import { getFindEnterAction } from "./findReplaceInteraction";

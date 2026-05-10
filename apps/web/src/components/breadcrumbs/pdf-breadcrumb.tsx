@@ -1,6 +1,7 @@
-import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useMatch } from "@tanstack/react-router";
+
+import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
 
 import { fileMetadataOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 

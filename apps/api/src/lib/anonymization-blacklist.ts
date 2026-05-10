@@ -1,6 +1,7 @@
-import type { GazetteerEntry } from "@stll/anonymize-wasm";
 import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
+
+import type { GazetteerEntry } from "@stll/anonymize-wasm";
 
 import type { ScopedDb } from "@/api/db";
 import { anonymizationBlacklistEntries } from "@/api/db/schema";

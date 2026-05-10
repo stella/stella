@@ -3,12 +3,13 @@
 import * as React from "react";
 
 import { Select as SelectPrimitive } from "@base-ui/react/select";
-import { cn } from "@stll/ui/lib/utils";
 import {
   ChevronDownIcon,
   ChevronsUpDownIcon,
   ChevronUpIcon,
 } from "lucide-react";
+
+import { cn } from "@stll/ui/lib/utils";
 
 type SelectItemProps = SelectPrimitive.Item.Props & {
   label?: string;

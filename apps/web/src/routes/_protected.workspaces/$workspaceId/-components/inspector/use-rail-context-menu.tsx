@@ -1,6 +1,7 @@
-import { MenuItem } from "@stll/ui/components/menu";
 import { MessageSquarePlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { MenuItem } from "@stll/ui/components/menu";
 
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { useAnchoredMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-anchored-menu";

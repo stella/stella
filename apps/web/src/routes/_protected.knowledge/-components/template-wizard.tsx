@@ -1,5 +1,14 @@
 import { useCallback, useRef, useState } from "react";
 
+import {
+  AlertTriangleIcon,
+  ArrowLeftIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  XIcon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/components/field";
@@ -12,14 +21,6 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
-import {
-  AlertTriangleIcon,
-  ArrowLeftIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  XIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
@@ -208,7 +209,6 @@ export const ConfigureStep = ({
           </div>
         )}
 
-        {/* eslint-disable-next-line typescript/no-misused-promises */}
         <form
           className="flex flex-col gap-5"
           onSubmit={(...args) => {

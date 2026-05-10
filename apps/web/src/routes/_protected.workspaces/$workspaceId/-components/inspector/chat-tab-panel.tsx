@@ -18,7 +18,6 @@
 import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 
-import { Button } from "@stll/ui/components/button";
 import {
   useQuery,
   useQueryClient,
@@ -28,6 +27,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { ArrowUpIcon, Maximize2Icon, SquarePenIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
+
+import { Button } from "@stll/ui/components/button";
 
 import {
   Conversation,

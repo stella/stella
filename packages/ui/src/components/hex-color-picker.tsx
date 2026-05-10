@@ -304,7 +304,6 @@ const InteractiveArea = ({
     win.addEventListener(endType, handleEnd);
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup only
   useEffect(() => detachListeners, []);
 
   const handleStart = (e: React.MouseEvent | React.TouchEvent) => {

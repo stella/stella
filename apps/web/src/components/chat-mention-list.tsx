@@ -7,9 +7,6 @@ import {
   useState,
 } from "react";
 
-import { Button } from "@stll/ui/components/button";
-import { Popover, PopoverPopup } from "@stll/ui/components/popover";
-import { cn } from "@stll/ui/lib/utils";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import {
   ArrowLeftIcon,
@@ -21,6 +18,10 @@ import {
   LoaderIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
+import { Popover, PopoverPopup } from "@stll/ui/components/popover";
+import { cn } from "@stll/ui/lib/utils";
 
 import type {
   ChatMentionOption,
@@ -222,7 +223,6 @@ export const ChatMentionList = forwardRef<
   }, [safeIndex]);
 
   const selectItem = (index: number) => {
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
     const item = activeItems.at(index);
     if (item !== undefined) {
       command(item);
@@ -298,7 +298,6 @@ export const ChatMentionList = forwardRef<
 
       // ArrowRight on a workspace item drills down
       if (event.key === "ArrowRight" && !drillDown) {
-        // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment
         const item = activeItems.at(safeIndex);
         if (item?.category === "workspace") {
           handleDrillDown(item);
@@ -435,7 +434,6 @@ export const ChatMentionList = forwardRef<
               );
             })}
 
-          {/* oxlint-disable typescript-eslint/no-unsafe-assignment */}
           {drillDown &&
             !entitiesLoading &&
             drillDownItems?.map((item, i) => (
@@ -459,7 +457,6 @@ export const ChatMentionList = forwardRef<
                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
               </Button>
             ))}
-          {/* oxlint-enable typescript-eslint/no-unsafe-assignment */}
         </div>
       </PopoverPopup>
     </Popover>

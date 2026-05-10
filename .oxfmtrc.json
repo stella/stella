@@ -1,6 +1,15 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "ignorePatterns": ["**/*.gen.*", "**/*.min.*", "sbom.cdx.json", "**/.cache/**", "**/.oxlintrc.json", "**/dist/**", "**/.react-email/**"],
+  "ignorePatterns": [
+    "**/*.gen.*",
+    "**/*.min.*",
+    "sbom.cdx.json",
+    "**/.cache/**",
+    "**/.oxlintrc.json",
+    "**/dist/**",
+    "**/.react-email/**",
+    "apps/api/src/db/schema.ts"
+  ],
   "printWidth": 80,
   "sortImports": {
     "customGroups": [
@@ -10,7 +19,7 @@
       },
       {
         "groupName": "stella",
-        "elementNamePattern": ["@stella/**"]
+        "elementNamePattern": ["@stll/**"]
       },
       {
         "groupName": "aliases",

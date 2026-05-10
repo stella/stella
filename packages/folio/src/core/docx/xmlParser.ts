@@ -19,8 +19,9 @@
  * - pic: Pictures
  */
 
-import { OOXML_NS } from "@stll/docx-utils";
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
+
+import { OOXML_NS } from "@stll/docx-utils";
 
 /**
  * XML element tree node — drop-in replacement for the `Element` type

@@ -1,5 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 
+import { AlertTriangleIcon, EyeIcon, PlusIcon, TrashIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import { evaluateCondition } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
@@ -24,8 +27,6 @@ import {
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
-import { AlertTriangleIcon, EyeIcon, PlusIcon, TrashIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
@@ -259,7 +260,7 @@ const FieldRenderer = ({
             value === ""
               ? undefined
               : // SAFETY: inputType discriminates; value is string for select
-                // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+                // eslint-disable-next-line typescript/no-unsafe-type-assertion
                 (value as string)
           }
         >
@@ -294,7 +295,7 @@ const FieldRenderer = ({
               onChange={(e) => onChange(field.path, e.target.value)}
               value={
                 // SAFETY: inputType discriminates; value is string for textarea
-                // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+                // eslint-disable-next-line typescript/no-unsafe-type-assertion
                 (value as string) ?? ""
               }
             />
@@ -321,7 +322,7 @@ const FieldRenderer = ({
               type="number"
               value={
                 // SAFETY: inputType discriminates; value is string for number input
-                // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+                // eslint-disable-next-line typescript/no-unsafe-type-assertion
                 (value as string) ?? ""
               }
             />
@@ -347,7 +348,7 @@ const FieldRenderer = ({
             type={inputType === "date" ? "date" : "text"}
             value={
               // SAFETY: inputType discriminates; value is string for text/date
-              // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+              // eslint-disable-next-line typescript/no-unsafe-type-assertion
               (value as string) ?? ""
             }
           />
@@ -380,7 +381,7 @@ const ArrayFieldRenderer = ({
   const arrayKey = `__array_${field.path}`;
   // SAFETY: __array_* keys hold number[] from form state
   const items =
-    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
     (values[arrayKey] as number[] | undefined) ?? [];
 
   const addItem = () => {
@@ -495,7 +496,7 @@ const buildSubmitValues = (
     if (field.kind === "array") {
       const arrayKey = `__array_${field.path}`;
       // SAFETY: __array_* keys hold number[] from form state
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
       const items = (values[arrayKey] as number[] | undefined) ?? [];
       const itemFields: ResolvedField[] = field.itemFields ?? [];
       const arrayValues: Record<string, unknown>[] = [];
@@ -553,7 +554,7 @@ const setNestedValue = (
       current[part] = {};
     }
     // SAFETY: guarded by typeof current[part] === "object" above
-    // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
     current = current[part] as Record<string, unknown>;
   }
 
@@ -579,7 +580,7 @@ const collectValidatableFields = (
     if (field.kind === "array") {
       const arrayKey = `__array_${field.path}`;
       // SAFETY: __array_* keys hold number[] from form state
-      // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
       const items = (values[arrayKey] as number[] | undefined) ?? [];
       const itemFields: ResolvedField[] = field.itemFields ?? [];
 
@@ -840,7 +841,7 @@ export const TemplateForm = ({
             {
               // SAFETY: the discriminated union guarantees `file`
               // is defined when `templateId` is absent.
-              // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+              // eslint-disable-next-line typescript/no-unsafe-type-assertion
               file: file as File,
               values: valuesJson,
             },
@@ -873,7 +874,7 @@ export const TemplateForm = ({
           : // SAFETY: Eden returns a typed object for the fill
             // endpoint, but the actual response is binary
             // data; the double cast bridges the type mismatch.
-            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+            // eslint-disable-next-line typescript/no-unsafe-type-assertion
             new Blob([data as unknown as BlobPart], {
               type: mimeType,
             });

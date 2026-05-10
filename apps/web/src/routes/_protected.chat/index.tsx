@@ -1,8 +1,6 @@
 import { useEffectEvent, useMemo, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
-import { Button } from "@stll/ui/components/button";
-import { cn } from "@stll/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -13,6 +11,9 @@ import {
   PinIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
+import { cn } from "@stll/ui/lib/utils";
 
 import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";

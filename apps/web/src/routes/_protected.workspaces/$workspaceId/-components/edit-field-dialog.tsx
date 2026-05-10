@@ -1,5 +1,11 @@
 import { useState } from "react";
 
+import { revalidateLogic, useForm } from "@tanstack/react-form";
+import type { AnyFieldApi } from "@tanstack/react-form";
+import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+import * as v from "valibot";
+
 import { Button } from "@stll/ui/components/button";
 import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
 import {
@@ -16,11 +22,6 @@ import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
 import { Form } from "@stll/ui/components/form";
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
-import { revalidateLogic, useForm } from "@tanstack/react-form";
-import type { AnyFieldApi } from "@tanstack/react-form";
-import { panic } from "better-result";
-import { useTranslations } from "use-intl";
-import * as v from "valibot";
 
 import { toFormErrors } from "@/lib/schema";
 import type {
@@ -224,7 +225,7 @@ export const EditFieldDialog = ({
                           type="single-select"
                           value={
                             // SAFETY: guarded by fieldContent.type check
-                            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+                            // eslint-disable-next-line typescript/no-unsafe-type-assertion
                             field.state.value as FieldFormValue<"single-select">
                           }
                         />
@@ -244,7 +245,7 @@ export const EditFieldDialog = ({
                           type="multi-select"
                           value={
                             // SAFETY: guarded by fieldContent.type check
-                            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+                            // eslint-disable-next-line typescript/no-unsafe-type-assertion
                             field.state.value as FieldFormValue<"multi-select">
                           }
                         />
@@ -264,7 +265,7 @@ export const EditFieldDialog = ({
                           onChange={(val) => field.handleChange(val)}
                           value={
                             // SAFETY: guarded by fieldContent.type check
-                            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+                            // eslint-disable-next-line typescript/no-unsafe-type-assertion
                             (field.state.value as FieldFormValue<"date">) ?? ""
                           }
                         />
@@ -296,7 +297,7 @@ export const EditFieldDialog = ({
                             )}
                             type="number"
                             // SAFETY: guarded by fieldContent.type check
-                            // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+                            // eslint-disable-next-line typescript/no-unsafe-type-assertion
                             value={field.state.value as FieldFormValue<"int">}
                           />
                           <FieldError />

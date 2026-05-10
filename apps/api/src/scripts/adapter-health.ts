@@ -1,4 +1,3 @@
-/* eslint-disable no-console -- CLI script */
 /**
  * Case law adapter health report.
  *

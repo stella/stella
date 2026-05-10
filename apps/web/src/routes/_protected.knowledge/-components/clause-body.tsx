@@ -37,7 +37,6 @@ export const ClauseBody = ({
   return (
     <div className="space-y-0.5 py-2 text-sm">
       {paragraphs.map((p, i) => (
-        // eslint-disable-next-line react/no-array-index-key
         <ClauseParagraphRow key={i} paragraph={p} />
       ))}
     </div>
@@ -83,10 +82,7 @@ const ClauseParagraphRow = ({ paragraph }: { paragraph: ClauseParagraph }) => {
           if (run.italic) {
             content = <em>{content}</em>;
           }
-          return (
-            // eslint-disable-next-line react/no-array-index-key
-            <span key={ri}>{content}</span>
-          );
+          return <span key={ri}>{content}</span>;
         })}
       </p>
     );

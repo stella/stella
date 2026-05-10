@@ -5,8 +5,9 @@
  * ones and generate new IDs above the max.
  */
 
-import { OOXML_NS } from "@stll/docx-utils";
 import type * as slimdom from "slimdom";
+
+import { OOXML_NS } from "@stll/docx-utils";
 
 export const W_NS = OOXML_NS.w;
 

@@ -1,6 +1,7 @@
-import { cn } from "@stll/ui/lib/utils";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronRightIcon } from "lucide-react";
+
+import { cn } from "@stll/ui/lib/utils";
 
 import type { WorkspaceGroup } from "@/routes/_protected.workspaces/-types";
 

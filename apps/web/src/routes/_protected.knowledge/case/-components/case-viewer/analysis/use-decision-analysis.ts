@@ -7,12 +7,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
+
 import type { DecisionAnalysis } from "@stll/case-law/analysis";
 import {
   isAnalysisInProgress,
   isDecisionAnalysis,
 } from "@stll/case-law/analysis";
-import { useQueryClient } from "@tanstack/react-query";
 
 import { env } from "@/env";
 

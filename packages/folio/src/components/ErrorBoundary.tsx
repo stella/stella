@@ -16,7 +16,6 @@ import React, {
 } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 
-import { Button } from "@stll/ui/components/button";
 import {
   AlertCircleIcon,
   AlertTriangleIcon,
@@ -25,6 +24,8 @@ import {
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
 
 import { ErrorManager } from "../core/managers/ErrorManager";
 import type { ErrorNotification } from "../core/managers/types";
@@ -302,7 +303,6 @@ export class ErrorBoundary extends Component<
   }
 
   override componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    // oxlint-disable-next-line react/no-set-state
     this.setState({ errorInfo });
 
     // Call callback
@@ -312,7 +312,6 @@ export class ErrorBoundary extends Component<
   }
 
   resetError = (): void => {
-    // oxlint-disable-next-line react/no-set-state
     this.setState({
       hasError: false,
       error: null,
@@ -328,7 +327,6 @@ export class ErrorBoundary extends Component<
       // Custom fallback
       if (fallback) {
         if (typeof fallback === "function") {
-          // oxlint-disable-next-line typescript/no-non-null-assertion
           return fallback(error!, this.resetError);
         }
         return fallback;
@@ -337,7 +335,6 @@ export class ErrorBoundary extends Component<
       // Default fallback UI
       return (
         <DefaultErrorFallback
-          // oxlint-disable-next-line typescript/no-non-null-assertion
           error={error!}
           errorInfo={errorInfo}
           showDetails={showDetails}

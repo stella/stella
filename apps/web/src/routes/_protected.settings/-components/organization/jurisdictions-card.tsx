@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 
-import { Frame, FramePanel } from "@stll/ui/components/frame";
-import { stellaToast } from "@stll/ui/components/toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
+
+import { Frame, FramePanel } from "@stll/ui/components/frame";
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { JurisdictionPicker } from "@/components/jurisdiction-picker";
 import { useAnalytics } from "@/lib/analytics/provider";

@@ -1,7 +1,6 @@
 import type { PropsWithChildren } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { cn } from "@stll/ui/lib/utils";
 import {
   useQuery,
   useQueryClient,
@@ -9,6 +8,8 @@ import {
 } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
+
+import { cn } from "@stll/ui/lib/utils";
 
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";

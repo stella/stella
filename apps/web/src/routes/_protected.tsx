@@ -8,15 +8,6 @@ import {
 } from "react";
 import type { MouseEvent } from "react";
 
-import { Button } from "@stll/ui/components/button";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "@stll/ui/components/menu";
-import { Separator } from "@stll/ui/components/separator";
-import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/components/toast";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -32,6 +23,16 @@ import {
   PinOffIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import { Separator } from "@stll/ui/components/separator";
+import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/components/toast";
 
 import { ApiVersionMismatchBanner } from "@/components/api-version-mismatch-banner";
 import { AppSidebar } from "@/components/app-sidebar";

@@ -1,10 +1,11 @@
+import { and, eq, inArray, sql } from "drizzle-orm";
+
 import {
   getEventLabel,
   parseInfoSoudDate,
   parseInfoSoudDateTime,
 } from "@stll/infosoud";
 import type { CaseEvent, CaseSearchResult, HearingEvent } from "@stll/infosoud";
-import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";

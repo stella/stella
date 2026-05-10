@@ -1,3 +1,10 @@
+import {
+  ArrowDownIcon,
+  ArrowUpDownIcon,
+  ArrowUpIcon,
+  XIcon,
+} from "lucide-react";
+
 import { Button } from "@stll/ui/components/button";
 import {
   Menu,
@@ -5,12 +12,6 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "@stll/ui/components/menu";
-import {
-  ArrowDownIcon,
-  ArrowUpDownIcon,
-  ArrowUpIcon,
-  XIcon,
-} from "lucide-react";
 
 import type { ViewLayout, WorkspaceProperty } from "@/lib/types";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";

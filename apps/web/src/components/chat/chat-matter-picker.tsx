@@ -1,5 +1,9 @@
 import { useDeferredValue, useMemo, useRef, useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
+import { ChevronDownIcon, LayersIcon, SearchIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import {
   Menu,
   MenuCheckboxItem,
@@ -7,9 +11,6 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "@stll/ui/components/menu";
-import { useQuery } from "@tanstack/react-query";
-import { ChevronDownIcon, LayersIcon, SearchIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";

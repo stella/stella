@@ -1,5 +1,8 @@
 import { useState } from "react";
 
+import { PlusIcon, XIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import type { OptionColor } from "@stll/api/types";
 import { Button } from "@stll/ui/components/button";
 import {
@@ -8,8 +11,6 @@ import {
   PopoverPopup,
   PopoverTrigger,
 } from "@stll/ui/components/popover";
-import { PlusIcon, XIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import type { WorkspacePropertyOption } from "@/lib/types";
 import { SelectFallback } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/select-fallback";

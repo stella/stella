@@ -1,8 +1,9 @@
 import { useCallback, useState } from "react";
 
+import { useTranslations } from "use-intl";
+
 import { Input } from "@stll/ui/components/input";
 import { cn } from "@stll/ui/lib/utils";
-import { useTranslations } from "use-intl";
 
 const BILLING_INCREMENT = 6;
 

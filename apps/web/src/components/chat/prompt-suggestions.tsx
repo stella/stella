@@ -1,5 +1,6 @@
-import { cn } from "@stll/ui/lib/utils";
 import { useTranslations } from "use-intl";
+
+import { cn } from "@stll/ui/lib/utils";
 
 import type { ChatPrompt } from "@/lib/prompts/types";
 

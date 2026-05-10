@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  MoreHorizontalIcon,
+  PencilIcon,
+  PlusIcon,
+  Trash2Icon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+
+import {
   AlertDialog,
   AlertDialogClose,
   AlertDialogDescription,
@@ -27,13 +35,6 @@ import {
   DropdownMenuTrigger,
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
-import {
-  MoreHorizontalIcon,
-  PencilIcon,
-  PlusIcon,
-  Trash2Icon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";

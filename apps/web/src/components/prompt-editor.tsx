@@ -1,13 +1,14 @@
 import "./prompt-editor.css";
 import type React from "react";
 
-import { cn } from "@stll/ui/lib/utils";
 import Document from "@tiptap/extension-document";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { EditorState } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { EditorContent } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
+
+import { cn } from "@stll/ui/lib/utils";
 
 export const PROMPT_EDITOR_SELECTION_CLASS = "prompt-editor-selection";
 

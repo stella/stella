@@ -1,6 +1,5 @@
 import { Suspense, useState } from "react";
 
-import { Button } from "@stll/ui/components/button";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -11,6 +10,8 @@ import {
 } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
@@ -117,7 +118,6 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
               <tr
                 className="hover:bg-muted/30 cursor-pointer border-b last:border-0"
                 key={invoice.id}
-                // eslint-disable-next-line typescript/no-misused-promises
                 onClick={() => {
                   void (async () =>
                     await navigate({

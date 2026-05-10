@@ -7,29 +7,6 @@ import {
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@stll/ui/components/avatar";
-import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
-import {
-  Menu,
-  MenuGroup,
-  MenuGroupLabel,
-  MenuItem,
-  MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
-  MenuSeparator,
-  MenuSub,
-  MenuSubPopup,
-  MenuSubTrigger,
-  MenuTrigger,
-} from "@stll/ui/components/menu";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
-import {
   formatForDisplay,
   useHotkey,
   useKeyHold,
@@ -57,6 +34,30 @@ import {
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
+
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@stll/ui/components/avatar";
+import { Button } from "@stll/ui/components/button";
+import { Input } from "@stll/ui/components/input";
+import {
+  Menu,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { DevSidebarGroup } from "@/components/dev-sidebar-group";
 import { FeedbackDialog } from "@/components/feedback-dialog";
@@ -204,7 +205,6 @@ const NavContextMenu = ({
             <MenuSeparator />
           )}
           {config.recents?.map((item, i) => (
-            // eslint-disable-next-line react/no-array-index-key
             <MenuItem
               className={
                 item.variant === "destructive" ? "text-destructive" : undefined
@@ -304,7 +304,7 @@ const MatterItem = ({
         onDrop: ({ source }) => {
           setIsDropTarget(false);
           // SAFETY: matterId is always a string; set by our own draggable getInitialData.
-          // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+          // eslint-disable-next-line typescript/no-unsafe-type-assertion
           const draggedId = source.data["matterId"] as string;
           if (draggedId !== ws.id) {
             onReorderRef.current?.(draggedId, ws.id);

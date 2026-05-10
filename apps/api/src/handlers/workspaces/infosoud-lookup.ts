@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { getEventLabel, resolveCourtCodeAlias } from "@stll/infosoud";
 import type {
   CaseEvent,
@@ -6,7 +8,6 @@ import type {
   HearingEvent,
   RelatedCase,
 } from "@stll/infosoud";
-import { Result } from "better-result";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";

@@ -416,18 +416,15 @@ export function paragraphToStyle(
   // ============================================================================
 
   if (formatting.pageBreakBefore) {
-    // eslint-disable-next-line typescript/no-deprecated -- legacy DOCX renderer uses page-break CSS for print layout compatibility
     style.pageBreakBefore = "always";
   }
 
   // Keep with next / keep lines together
   if (formatting.keepNext) {
-    // eslint-disable-next-line typescript/no-deprecated -- legacy DOCX renderer uses page-break CSS for print layout compatibility
     style.pageBreakAfter = "avoid";
   }
 
   if (formatting.keepLines) {
-    // eslint-disable-next-line typescript/no-deprecated -- legacy DOCX renderer uses page-break CSS for print layout compatibility
     style.pageBreakInside = "avoid";
   }
 

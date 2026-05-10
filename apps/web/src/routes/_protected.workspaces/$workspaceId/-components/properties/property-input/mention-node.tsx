@@ -1,7 +1,8 @@
-import { cn } from "@stll/ui/lib/utils";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
+
+import { cn } from "@stll/ui/lib/utils";
 
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
@@ -11,7 +12,7 @@ type MentionNodeProps = NodeViewProps & {
 
 export const MentionNode = ({ workspaceId, ...props }: MentionNodeProps) => {
   // SAFETY: attrs from our mention extension schema
-  // eslint-disable-next-line typescript/consistent-type-assertions, typescript/no-unsafe-type-assertion
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
   const attributes = props.node.attrs as {
     id: string;
     label: string;

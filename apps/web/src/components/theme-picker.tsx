@@ -1,3 +1,6 @@
+import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import {
   Menu,
   MenuPopup,
@@ -5,8 +8,6 @@ import {
   MenuRadioItem,
   MenuTrigger,
 } from "@stll/ui/components/menu";
-import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import { THEMES, useTheme } from "@/components/theme-provider";
 

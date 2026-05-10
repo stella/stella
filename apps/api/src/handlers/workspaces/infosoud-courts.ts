@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import {
   buildCourtMapFromEntries,
   InfoSoudAPIError,
@@ -5,7 +7,6 @@ import {
   InfoSoudParseError,
   InfoSoudRequestError,
 } from "@stll/infosoud";
-import { Result } from "better-result";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";

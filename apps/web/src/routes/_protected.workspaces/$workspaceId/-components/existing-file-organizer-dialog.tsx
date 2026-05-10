@@ -5,6 +5,19 @@ import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  FolderIcon,
+  LoaderCircleIcon,
+  RotateCcwIcon,
+  Rows3Icon,
+  Trash2Icon,
+  TriangleAlertIcon,
+} from "lucide-react";
+import { useLocale, useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import {
@@ -21,18 +34,6 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
-import {
-  ChevronDownIcon,
-  ChevronRightIcon,
-  FolderIcon,
-  LoaderCircleIcon,
-  RotateCcwIcon,
-  Rows3Icon,
-  Trash2Icon,
-  TriangleAlertIcon,
-} from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";

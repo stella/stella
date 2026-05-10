@@ -1,16 +1,17 @@
 import { useEffect, useMemo } from "react";
 
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { getToolName, isDataUIPart, isToolUIPart } from "ai";
+import type { UIDataTypes } from "ai";
+import { ExternalLinkIcon, FileTextIcon, FolderIcon } from "lucide-react";
+
 import type {
   ChatMessage,
   ChatPart,
   ChatSourceDocument,
 } from "@stll/api/types";
 import { cn } from "@stll/ui/lib/utils";
-import { useQuery } from "@tanstack/react-query";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { getToolName, isDataUIPart, isToolUIPart } from "ai";
-import type { UIDataTypes } from "ai";
-import { ExternalLinkIcon, FileTextIcon, FolderIcon } from "lucide-react";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
@@ -20,7 +22,6 @@ import {
 } from "@stll/ui/components/select";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
-import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";

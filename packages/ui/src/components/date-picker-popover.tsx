@@ -2,6 +2,8 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+
 import { Button } from "@stll/ui/components/button";
 import {
   Popover,
@@ -9,7 +11,6 @@ import {
   PopoverTrigger,
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
-import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Calendar utilities
@@ -485,7 +486,6 @@ function DatePickerPopover({
                 ))}
               </div>
 
-              {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
               <div
                 aria-label={headerLabel}
                 className="grid grid-cols-7 gap-0"

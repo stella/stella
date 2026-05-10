@@ -131,7 +131,6 @@ const pipelineRoundtrip = (
   const accepted = extractAcceptedText(result);
 
   for (const rw of rewrites) {
-    // eslint-disable-next-line vitest/no-standalone-expect
     expect(accepted[rw.paragraphIndex]).toBe(rw.newText);
   }
 };
@@ -428,7 +427,6 @@ describe("run-map vs extract-text consistency", () => {
           `\n    extract: ${JSON.stringify(extractedText)}`,
         );
       }
-      // eslint-disable-next-line vitest/no-standalone-expect
       expect(runMapText).toBe(extractedText);
     }
   };

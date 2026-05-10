@@ -1,8 +1,9 @@
+import { SquareMinusIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import type { OptionColor, PropertyContent } from "@stll/api/types";
 import { PopoverTrigger } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
-import { SquareMinusIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import Tooltip from "@/components/tooltip";
 import type { WorkspaceProperty } from "@/lib/types";

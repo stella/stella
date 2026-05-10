@@ -1,8 +1,8 @@
 import { valibotSchema } from "@ai-sdk/valibot";
-import { lookupByIco, searchByName } from "@stll/ares";
-// oxlint-disable-next-line no-restricted-imports
 import { tool } from "ai";
 import * as v from "valibot";
+
+import { lookupByIco, searchByName } from "@stll/ares";
 
 export const createAresTools = () => ({
   ares_lookup_company: tool({

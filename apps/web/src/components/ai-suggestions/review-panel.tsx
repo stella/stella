@@ -8,6 +8,16 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, RefObject } from "react";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
+import {
+  ArrowRightIcon,
+  CheckIcon,
+  LoaderCircleIcon,
+  XIcon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+
 import { diffWordSegments } from "@stll/folio";
 import type { DocxEditorRef, FolioAIBlockPreviewRun } from "@stll/folio";
 import { Avatar, AvatarFallback } from "@stll/ui/components/avatar";
@@ -28,15 +38,6 @@ import {
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
-import {
-  ArrowRightIcon,
-  CheckIcon,
-  LoaderCircleIcon,
-  XIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
 
 import {
   REVIEW_UNSPECIFIED_AREA,
@@ -90,15 +91,11 @@ type SeverityTone = { dot: string; chip: string; chipActive: string };
 // false positive here; suppressed at the constant declarations
 // rather than inside the object so reformatting can't split the
 // suppression away from the value.
-// oxlint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
 const HIGH_DOT = "bg-red-500";
-// oxlint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
 const HIGH_CHIP = "border-red-500/30 text-red-700 dark:text-red-300";
-// oxlint-disable-next-line no-inline-style-colors/no-inline-style-colors -- dark: variant present; rule false positive
 const HIGH_CHIP_ACTIVE =
   "bg-red-500/10 border-red-500 text-red-700 dark:text-red-200";
 
-// oxlint-disable-next-line no-inline-style-colors/no-inline-style-colors -- amber not in named-color blacklist; future-proofing
 const MEDIUM_DOT = "bg-amber-500";
 const MEDIUM_CHIP = "border-amber-500/30 text-amber-700 dark:text-amber-300";
 const MEDIUM_CHIP_ACTIVE =
@@ -958,7 +955,6 @@ const RedlinePreview = ({
   );
   const muted = "text-foreground-strong-muted";
   const contextCls = "text-foreground";
-  // oxlint-disable-next-line no-inline-style-colors/no-inline-style-colors -- emerald not in named-color blacklist
   const insCls =
     "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1 py-0.5 rounded-sm";
   const delCls =

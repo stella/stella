@@ -1,6 +1,14 @@
 import { useCallback, useRef, useState } from "react";
 
 import {
+  LayoutTemplateIcon,
+  MoreHorizontalIcon,
+  PlusIcon,
+  Trash2Icon,
+} from "lucide-react";
+import { useFormatter, useTranslations } from "use-intl";
+
+import {
   AlertDialog,
   AlertDialogClose,
   AlertDialogDescription,
@@ -17,13 +25,6 @@ import {
   DropdownMenuTrigger,
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
-import {
-  LayoutTemplateIcon,
-  MoreHorizontalIcon,
-  PlusIcon,
-  Trash2Icon,
-} from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";

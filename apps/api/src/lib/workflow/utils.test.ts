@@ -13,9 +13,7 @@ import type {
 // Stub registry-only side effects. Avoid mocking `@/api/db`: this test never
 // loads `root.ts`, and Bun's `mock.module` leaks process-wide across files.
 void mock.module("@/api/handlers/registry/utils", () => ({
-  // eslint-disable-next-line no-empty-function
   broadcastEvent: () => {},
-  // eslint-disable-next-line no-empty-function
   resetActorState: () => {},
 }));
 

@@ -4,8 +4,6 @@ import * as React from "react";
 
 import { Toast } from "@base-ui/react/toast";
 import type { ToastManagerAddOptions } from "@base-ui/react/toast";
-import { buttonVariants } from "@stll/ui/components/button";
-import { cn } from "@stll/ui/lib/utils";
 import {
   CircleAlertIcon,
   CircleCheckIcon,
@@ -14,6 +12,9 @@ import {
   TriangleAlertIcon,
   XIcon,
 } from "lucide-react";
+
+import { buttonVariants } from "@stll/ui/components/button";
+import { cn } from "@stll/ui/lib/utils";
 
 type ToastData = {
   tooltipStyle?: boolean;

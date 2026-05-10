@@ -512,7 +512,6 @@ const anonymizeToolPart = ({
 
     // SAFETY: the tool UI part discriminator fields are preserved. We only
     // anonymize provider-visible text nested in input/output/error/title fields.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     return Result.ok(prepared as ToolLikePart);
   });
 
