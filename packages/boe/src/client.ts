@@ -138,15 +138,13 @@ export const searchConsolidatedLegislation = async (
     limit: String(limit),
   });
 
+  // Date filters live inside the JSON DSL (range.fecha_publicacion).
+  // The top-level `from` / `to` URL params on this endpoint filter by
+  // last-update date, not publication date, so passing them would
+  // double-bound the results.
   const queryDsl = buildSearchQuery(options);
   if (queryDsl) {
     params.set("query", queryDsl);
-  }
-  if (options.dateFrom) {
-    params.set("from", options.dateFrom);
-  }
-  if (options.dateTo) {
-    params.set("to", options.dateTo);
   }
 
   const url = `${LEGISLATION_ENDPOINT}?${params.toString()}`;
@@ -224,7 +222,8 @@ export const getConsolidatedLaw = async (
 
   // metadatos is the canonical "does this law exist" probe; the others can
   // legitimately be missing for older or partially-published laws and must
-  // not fail the whole request.
+  // not fail the whole request. /texto and /metadata-eli are
+  // application/xml only on this API.
   const [metadata, analysis, fullText, eli] = await Promise.all([
     sections.metadata
       ? fetchLawJsonSection(lawId, "metadatos")
@@ -236,7 +235,7 @@ export const getConsolidatedLaw = async (
       ? fetchOptionalLawXmlSection(lawId, "texto")
       : Promise.resolve(null),
     sections.eli
-      ? fetchOptionalLawJsonSection(lawId, "metadata-eli")
+      ? fetchOptionalLawXmlSection(lawId, "metadata-eli")
       : Promise.resolve(null),
   ]);
 

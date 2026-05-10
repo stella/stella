@@ -50,8 +50,10 @@ export type ConsolidatedLawResult = {
   lawId: string;
   metadata: unknown;
   analysis: unknown;
-  fullText: unknown;
-  eli: unknown;
+  /** Raw XML — the BOE /texto endpoint serves application/xml only. */
+  fullText: string | null;
+  /** Raw XML — the BOE /metadata-eli endpoint serves application/xml only. */
+  eli: string | null;
 };
 
 // ---------------------------------------------------------------------------
