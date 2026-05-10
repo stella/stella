@@ -52,7 +52,7 @@ const intersectsJurisdictions = (
     ),
   );
   return recommendedJurisdictions.some((countryCode) =>
-    practiceCountryCodes.has(countryCode),
+    practiceCountryCodes.has(countryCode.toUpperCase()),
   );
 };
 
