@@ -1,4 +1,14 @@
-import type { GazetteerEntry, PipelineConfig } from "@stll/anonymize-wasm";
+import type {
+  createPipelineContext,
+  DEFAULT_OPERATOR_CONFIG,
+  Entity,
+  GazetteerEntry,
+  PipelineConfig,
+  PipelineContext,
+  redactText,
+  RedactionResult,
+  runPipeline,
+} from "@stll/anonymize-wasm";
 
 import { DEFAULT_ENTITY_LABELS } from "@/lib/anonymize/constants";
 
@@ -14,7 +24,13 @@ export type ChatAnonResult = {
   pairs: ChatAnonPair[];
 };
 
-const buildPipelineConfig = ({
+/**
+ * Shared pipeline config for the chat-input anonymizer. Both the
+ * Web Worker (statically imported wasm) and the main-thread
+ * fallback (dynamic-imported wasm) feed this into `runPipeline` so
+ * the recognition surface stays identical across paths.
+ */
+export const buildChatAnonPipelineConfig = ({
   hasGazetteer,
   workspaceId,
 }: {
@@ -34,6 +50,62 @@ const buildPipelineConfig = ({
   labels: [...DEFAULT_ENTITY_LABELS],
   workspaceId,
 });
+
+/**
+ * Wasm-package functions the pipeline needs. Threading these
+ * through as a dependency record (rather than importing them at
+ * module top-level) lets the Web Worker reuse this code with its
+ * own static imports, while the main-thread fallback hydrates them
+ * lazily via `import()`.
+ */
+export type ChatAnonRuntime = {
+  createPipelineContext: typeof createPipelineContext;
+  defaultOperatorConfig: typeof DEFAULT_OPERATOR_CONFIG;
+  redactText: typeof redactText;
+  runPipeline: typeof runPipeline;
+};
+
+export const runChatAnonPipeline = async ({
+  runtime,
+  dictionaries,
+  text,
+  workspaceId,
+  gazetteerEntries = [],
+}: {
+  runtime: ChatAnonRuntime;
+  dictionaries: NonNullable<PipelineConfig["dictionaries"]>;
+  text: string;
+  workspaceId: string;
+  gazetteerEntries?: GazetteerEntry[];
+}): Promise<ChatAnonResult> => {
+  if (text.trim().length === 0) {
+    return { redactedText: text, pairs: [] };
+  }
+  const config: PipelineConfig = {
+    ...buildChatAnonPipelineConfig({
+      hasGazetteer: gazetteerEntries.length > 0,
+      workspaceId,
+    }),
+    dictionaries,
+  };
+  const context: PipelineContext = runtime.createPipelineContext();
+  const entities: Entity[] = await runtime.runPipeline({
+    fullText: text,
+    config,
+    gazetteerEntries,
+    context,
+  });
+  const result: RedactionResult = runtime.redactText(
+    text,
+    entities,
+    runtime.defaultOperatorConfig,
+    context,
+  );
+  const pairs: ChatAnonPair[] = [...result.redactionMap.entries()].map(
+    ([placeholder, original]) => ({ placeholder, original }),
+  );
+  return { redactedText: result.redactedText, pairs };
+};
 
 // Dictionaries are large but idempotent and HTTP-cached. Hold a
 // single promise so repeated calls in the same tab share one
@@ -55,14 +127,9 @@ const getDictionaries = (): Promise<
 
 /**
  * Run the same wasm pipeline the server uses against a single
- * chat-sized text. A fresh `PipelineContext` is created per call
- * so coreference numbering restarts at `_1` for each preview /
- * sent-message render — otherwise the same name would get
- * different placeholders depending on call order, which is
- * confusing for the audit-pill the UI shows.
- *
- * The dictionaries cache (module-scoped) keeps follow-up calls
- * fast (~tens of ms in practice).
+ * chat-sized text from the main thread. Each call gets a fresh
+ * `PipelineContext`, matching the chat-anonymize-worker's
+ * per-request semantics.
  */
 export const anonymizeChatText = async ({
   gazetteerEntries = [],
@@ -73,38 +140,20 @@ export const anonymizeChatText = async ({
   workspaceId: string;
   gazetteerEntries?: GazetteerEntry[];
 }): Promise<ChatAnonResult> => {
-  if (text.trim().length === 0) {
-    return { redactedText: text, pairs: [] };
-  }
-
   const [wasm, dictionaries] = await Promise.all([
     import("@stll/anonymize-wasm"),
     getDictionaries(),
   ]);
-  const config: PipelineConfig = {
-    ...buildPipelineConfig({
-      hasGazetteer: gazetteerEntries.length > 0,
-      workspaceId,
-    }),
+  return await runChatAnonPipeline({
+    runtime: {
+      createPipelineContext: wasm.createPipelineContext,
+      defaultOperatorConfig: wasm.DEFAULT_OPERATOR_CONFIG,
+      redactText: wasm.redactText,
+      runPipeline: wasm.runPipeline,
+    },
     dictionaries,
-  };
-  const context = wasm.createPipelineContext();
-
-  const entities = await wasm.runPipeline({
-    fullText: text,
-    config,
-    gazetteerEntries,
-    context,
-  });
-  const result = wasm.redactText(
     text,
-    entities,
-    wasm.DEFAULT_OPERATOR_CONFIG,
-    context,
-  );
-
-  const pairs: ChatAnonPair[] = [...result.redactionMap.entries()].map(
-    ([placeholder, original]) => ({ placeholder, original }),
-  );
-  return { redactedText: result.redactedText, pairs };
+    workspaceId,
+    gazetteerEntries,
+  });
 };

@@ -22,6 +22,15 @@ export type AnonymizeTextFieldsInput = {
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
   workspaceId: string;
+  /**
+   * Optional shared `PipelineContext`. When set, the placeholder
+   * counter continues across calls so independent batches don't
+   * collide on `[PERSON_1]`. Chat boundaries pass the same context
+   * for every user-message / tool-output / system-prompt pass so
+   * the cumulative redaction map stays internally consistent.
+   * Omitted callers (one-shot anonymizations) get a fresh context.
+   */
+  context?: PipelineContext | undefined;
 };
 
 export type AnonymizeTextFieldsDependencies = {
@@ -114,6 +123,7 @@ export const anonymizeTextFieldsWithDependencies = async ({
   organizationId,
   scopedDb,
   workspaceId,
+  context: providedContext,
 }: AnonymizeTextFieldsInput & {
   dependencies: AnonymizeTextFieldsDependencies;
 }) => {
@@ -125,7 +135,7 @@ export const anonymizeTextFieldsWithDependencies = async ({
     };
   }
 
-  const context = dependencies.createPipelineContext();
+  const context = providedContext ?? dependencies.createPipelineContext();
   const markers = buildFieldMarkers({
     fieldCount: fields.length,
     fields,

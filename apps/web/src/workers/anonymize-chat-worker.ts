@@ -9,17 +9,19 @@ import {
 } from "@stll/anonymize-wasm";
 import type { GazetteerEntry, PipelineConfig } from "@stll/anonymize-wasm";
 
-import { DEFAULT_ENTITY_LABELS } from "@/lib/anonymize/constants";
+import { runChatAnonPipeline } from "@/lib/anonymize/chat-anonymize";
 
 /**
- * Off-main-thread runner for the chat-input anonymization pipeline.
+ * Off-main-thread runner for the chat-input anonymization
+ * pipeline. Loading the wasm module + name dictionaries is heavy
+ * enough that doing it on the main thread blocks keystrokes. The
+ * pipeline itself is synchronous, so the only real fix is to
+ * relocate it here.
  *
- * Loading the wasm module + name dictionaries is heavy enough that
- * doing it on the main thread blocks keystrokes. The pipeline
- * itself is synchronous, so the only real fix is to relocate it to
- * a Web Worker — that's what this file does. The protocol is a
- * single request/response pair keyed by a numeric `id` so the
- * client can multiplex.
+ * The wasm-side recognition logic and config live in
+ * `chat-anonymize.ts` (`runChatAnonPipeline`); this file owns the
+ * worker plumbing — dictionaries cache, message protocol, request
+ * multiplexing.
  */
 
 type AnonRequest = {
@@ -47,53 +49,23 @@ const getDictionaries = (): Promise<
   return dictionariesPromise;
 };
 
-const buildPipelineConfig = ({
-  hasGazetteer,
-  workspaceId,
-}: {
-  hasGazetteer: boolean;
-  workspaceId: string;
-}): PipelineConfig => ({
-  threshold: 0.4,
-  enableTriggerPhrases: true,
-  enableRegex: true,
-  enableNameCorpus: true,
-  enableDenyList: false,
-  enableGazetteer: hasGazetteer,
-  enableNer: false,
-  enableConfidenceBoost: false,
-  enableCoreference: true,
-  enableLegalForms: true,
-  labels: [...DEFAULT_ENTITY_LABELS],
-  workspaceId,
-});
-
 const handle = async (request: AnonRequest): Promise<AnonResponse> => {
   const { id, text, workspaceId, gazetteerEntries = [] } = request;
   try {
-    if (text.trim().length === 0) {
-      return { id, ok: true, redactedText: text, pairs: [] };
-    }
     const dictionaries = await getDictionaries();
-    const config: PipelineConfig = {
-      ...buildPipelineConfig({
-        hasGazetteer: gazetteerEntries.length > 0,
-        workspaceId,
-      }),
+    const { redactedText, pairs } = await runChatAnonPipeline({
+      runtime: {
+        createPipelineContext,
+        defaultOperatorConfig: DEFAULT_OPERATOR_CONFIG,
+        redactText,
+        runPipeline,
+      },
       dictionaries,
-    };
-    const context = createPipelineContext();
-    const entities = await runPipeline({
-      fullText: text,
-      config,
+      text,
+      workspaceId,
       gazetteerEntries,
-      context,
     });
-    const result = redactText(text, entities, DEFAULT_OPERATOR_CONFIG, context);
-    const pairs: AnonPair[] = [...result.redactionMap.entries()].map(
-      ([placeholder, original]) => ({ placeholder, original }),
-    );
-    return { id, ok: true, redactedText: result.redactedText, pairs };
+    return { id, ok: true, redactedText, pairs };
   } catch (error) {
     return {
       id,

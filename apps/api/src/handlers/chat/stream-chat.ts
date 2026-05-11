@@ -23,6 +23,7 @@ import {
   deanonymizeFromBoundary,
   deanonymizeUnknownStringsFromBoundary,
   prepareMessagesForThirdParty,
+  prepareSystemPromptForThirdParty,
   prepareToolsForThirdParty,
 } from "@/api/handlers/chat/third-party-boundary";
 import { repairActiveDocxEditToolCall } from "@/api/handlers/chat/tools/active-docx-edit-tool-repair";
@@ -87,14 +88,32 @@ export const streamChat = async ({
   threadId,
   tools,
 }: StreamChatProps) => {
-  // The system prompt is server-built scaffold (product copy, skill
-  // catalog, API surface) plus the active user's own profile fields.
-  // It carries no third-party data outside pinned-matter labels —
-  // and those are the user's own matters. Running it through the
-  // anonymizer just shreds brand and skill names ("Stella" →
-  // "[PERSON_1]") without protecting any privileged data, so we
-  // skip it. User-content paths (messages, tool outputs) still go
-  // through the boundary as before.
+  // The system prompt mixes static scaffold (product copy, skill
+  // catalog, API surface) with dynamic context that DOES carry
+  // third-party PII: active file body text, active case-law
+  // decision content, active external-source text, pinned matter
+  // labels. Running the whole prompt through the boundary covers
+  // every dynamic injection point; `prepareSystemPromptForThird-
+  // Party` protects brand terms ("Stella") so the assistant's own
+  // identity stays readable in the prompt while names embedded in
+  // file/decision context still get placeholdered.
+  const preparedSystem = await prepareSystemPromptForThirdParty({
+    boundary: thirdPartyBoundary,
+    text: system,
+  });
+  if (Result.isError(preparedSystem)) {
+    return new Response(
+      JSON.stringify({
+        message: preparedSystem.error.message,
+        type: "third_party_boundary_refusal",
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+        status: preparedSystem.error.status,
+      },
+    );
+  }
+
   const preparedMessages = await prepareMessagesForThirdParty({
     boundary: thirdPartyBoundary,
     messages,
@@ -147,7 +166,7 @@ export const streamChat = async ({
           ? getModelById(devModelId, orgAIConfig)
           : getModelForRole("chat", orgAIConfig),
         temperature: getTemperatureForRole("chat"),
-        system,
+        system: preparedSystem.value,
         tools: modelTools,
         experimental_repairToolCall: async ({ toolCall }) =>
           await Promise.resolve(repairActiveDocxEditToolCall(toolCall)),
@@ -240,23 +259,38 @@ export const deanonymizeOutgoingStream = (
 ) => {
   const buffers = new Map<string, string>();
 
-  // Surface the placeholder/original pairs to the client as a
-  // persisted data part so the chat UI can underline restored
-  // values inline. Emitted once at stream start; the AI SDK folds
-  // data chunks into the assistant message's `parts` and persists
-  // them, so reload keeps the highlighting.
-  const restorationsPart =
-    boundary.redactionMap.size > 0
-      ? ({
-          type: "data-stella-anon-restorations" as const,
-          data: {
-            pairs: [...boundary.redactionMap.entries()].map(
-              ([placeholder, original]) => ({ placeholder, original }),
-            ),
-          },
-        } satisfies InferUIMessageChunk<ChatMessage>)
-      : null;
-  let restorationsEmitted = false;
+  // Tracks which placeholders we've already pushed to the client
+  // so subsequent emissions only carry the *new* pairs. The map on
+  // the boundary keeps growing as tools run (their outputs get
+  // anonymized through the same map), and the client's
+  // `collectAnonRestorations` aggregates every
+  // `data-stella-anon-restorations` part on the message — so each
+  // delta is purely additive and ends up merged in the right order.
+  const emittedPlaceholders = new Set<string>();
+
+  const emitRestorationDelta = (
+    controller: TransformStreamDefaultController<
+      InferUIMessageChunk<ChatMessage>
+    >,
+  ) => {
+    if (boundary.redactionMap.size === emittedPlaceholders.size) {
+      return;
+    }
+    const newPairs: { placeholder: string; original: string }[] = [];
+    for (const [placeholder, original] of boundary.redactionMap) {
+      if (!emittedPlaceholders.has(placeholder)) {
+        emittedPlaceholders.add(placeholder);
+        newPairs.push({ placeholder, original });
+      }
+    }
+    if (newPairs.length === 0) {
+      return;
+    }
+    controller.enqueue({
+      type: "data-stella-anon-restorations" as const,
+      data: { pairs: newPairs },
+    } satisfies InferUIMessageChunk<ChatMessage>);
+  };
 
   const flushText = ({
     controller,
@@ -285,10 +319,10 @@ export const deanonymizeOutgoingStream = (
       InferUIMessageChunk<ChatMessage>
     >({
       transform(chunk, controller) {
-        if (restorationsPart && !restorationsEmitted) {
-          controller.enqueue(restorationsPart);
-          restorationsEmitted = true;
-        }
+        // Re-check on every chunk so placeholders introduced by
+        // tool-output anonymization (or any other late call into
+        // the boundary) show up as additional restoration parts.
+        emitRestorationDelta(controller);
         if (chunk.type === "text-delta") {
           const buffer = `${buffers.get(chunk.id) ?? ""}${chunk.delta}`;
           const prefixLength = getDeanonymisablePrefixLength(buffer);

@@ -475,78 +475,26 @@ export const ChatThreadMessages = ({
           <MessageContent>
             {message.role === "assistant" ? (
               <>
-                {(() => {
-                  const restorationPairs = collectAnonRestorations(
-                    message.parts,
-                  );
-                  return message.parts.map((part, index) => {
-                    if (part.type === "text") {
-                      return (
-                        <AssistantTextPart
-                          components={streamdownComponents}
-                          key={`${message.id}-text-${index}`}
-                          restorationPairs={restorationPairs}
-                          text={part.text}
-                        />
-                      );
-                    }
-
-                    if (part.type === "tool-ask-user") {
-                      return (
-                        <AskUserCard
-                          key={part.toolCallId}
-                          onSubmit={(toolCallId, output) => {
-                            void onAskUserSubmit(toolCallId, output);
-                          }}
-                          part={part}
-                          workspaceId={workspaceId}
-                        />
-                      );
-                    }
-
-                    if (part.type === "tool-create-document") {
-                      return (
-                        <NeedsMatterCard
-                          isLoadingMatters={isLoadingCreateDocumentMatters}
-                          key={part.toolCallId}
-                          matters={createDocumentMatters}
-                          onOpenCreated={onOpenCreatedDocument}
-                          onResolve={onCreateDocumentResolve}
-                          part={part}
-                        />
-                      );
-                    }
-
-                    if (isApprovalPart(part)) {
-                      return (
-                        <ToolApprovalCard
-                          alwaysApprovedTools={alwaysApprovedTools}
-                          blockedApprovalTools={blockedApprovalTools}
-                          conversationApprovedTools={conversationApprovedTools}
-                          key={part.toolCallId}
-                          onAllowInConversation={handleAllowInConversation}
-                          onAlwaysAllow={handleAlwaysAllow}
-                          onApprove={handleApprove}
-                          onDeny={handleDeny}
-                          part={part}
-                          workspaceId={workspaceId}
-                        />
-                      );
-                    }
-
-                    if (isToolUIPart(part)) {
-                      return (
-                        <ToolCallCard
-                          key={part.toolCallId}
-                          part={part}
-                          showDetails={shouldShowToolCalls}
-                        />
-                      );
-                    }
-
-                    return null;
-                  });
-                })()}
+                <AssistantMessageParts
+                  alwaysApprovedTools={alwaysApprovedTools}
+                  blockedApprovalTools={blockedApprovalTools}
+                  conversationApprovedTools={conversationApprovedTools}
+                  createDocumentMatters={createDocumentMatters}
+                  handleAllowInConversation={handleAllowInConversation}
+                  handleAlwaysAllow={handleAlwaysAllow}
+                  handleApprove={handleApprove}
+                  handleDeny={handleDeny}
+                  isLoadingCreateDocumentMatters={
+                    isLoadingCreateDocumentMatters
+                  }
+                  message={message}
+                  onAskUserSubmit={onAskUserSubmit}
+                  onCreateDocumentResolve={onCreateDocumentResolve}
+                  onOpenCreatedDocument={onOpenCreatedDocument}
+                  shouldShowToolCalls={shouldShowToolCalls}
+                  streamdownComponents={streamdownComponents}
+                  workspaceId={workspaceId}
+                />
                 <SourceChips
                   messageId={message.id}
                   parts={message.parts}
@@ -597,6 +545,127 @@ export const ChatThreadMessages = ({
       {showThinkingIndicator &&
         isGenerating &&
         !hasVisibleContent(messages) && <ThinkingIndicator />}
+    </>
+  );
+};
+
+type AssistantMessagePartsProps = Pick<
+  ChatThreadMessagesProps,
+  | "alwaysApprovedTools"
+  | "blockedApprovalTools"
+  | "conversationApprovedTools"
+  | "createDocumentMatters"
+  | "handleAllowInConversation"
+  | "handleAlwaysAllow"
+  | "handleApprove"
+  | "handleDeny"
+  | "isLoadingCreateDocumentMatters"
+  | "onAskUserSubmit"
+  | "onCreateDocumentResolve"
+  | "onOpenCreatedDocument"
+  | "streamdownComponents"
+  | "workspaceId"
+> & {
+  message: PersistedChatMessage;
+  shouldShowToolCalls: boolean;
+};
+
+/**
+ * Renders the body of an assistant message. Splitting this out of
+ * the parent `messages.map` lets React Compiler memoize the
+ * `restorationPairs` snapshot per-message — without the split,
+ * `collectAnonRestorations` re-runs on every render in the parent
+ * and the resulting array identity churns, forcing Streamdown to
+ * remount on every streaming text delta.
+ */
+const AssistantMessageParts = ({
+  alwaysApprovedTools,
+  blockedApprovalTools,
+  conversationApprovedTools,
+  createDocumentMatters,
+  handleAllowInConversation,
+  handleAlwaysAllow,
+  handleApprove,
+  handleDeny,
+  isLoadingCreateDocumentMatters,
+  message,
+  onAskUserSubmit,
+  onCreateDocumentResolve,
+  onOpenCreatedDocument,
+  shouldShowToolCalls,
+  streamdownComponents,
+  workspaceId,
+}: AssistantMessagePartsProps) => {
+  const restorationPairs = collectAnonRestorations(message.parts);
+  return (
+    <>
+      {message.parts.map((part, index) => {
+        if (part.type === "text") {
+          return (
+            <AssistantTextPart
+              components={streamdownComponents}
+              key={`${message.id}-text-${index}`}
+              restorationPairs={restorationPairs}
+              text={part.text}
+            />
+          );
+        }
+
+        if (part.type === "tool-ask-user") {
+          return (
+            <AskUserCard
+              key={part.toolCallId}
+              onSubmit={(toolCallId, output) => {
+                void onAskUserSubmit(toolCallId, output);
+              }}
+              part={part}
+              workspaceId={workspaceId}
+            />
+          );
+        }
+
+        if (part.type === "tool-create-document") {
+          return (
+            <NeedsMatterCard
+              isLoadingMatters={isLoadingCreateDocumentMatters}
+              key={part.toolCallId}
+              matters={createDocumentMatters}
+              onOpenCreated={onOpenCreatedDocument}
+              onResolve={onCreateDocumentResolve}
+              part={part}
+            />
+          );
+        }
+
+        if (isApprovalPart(part)) {
+          return (
+            <ToolApprovalCard
+              alwaysApprovedTools={alwaysApprovedTools}
+              blockedApprovalTools={blockedApprovalTools}
+              conversationApprovedTools={conversationApprovedTools}
+              key={part.toolCallId}
+              onAllowInConversation={handleAllowInConversation}
+              onAlwaysAllow={handleAlwaysAllow}
+              onApprove={handleApprove}
+              onDeny={handleDeny}
+              part={part}
+              workspaceId={workspaceId}
+            />
+          );
+        }
+
+        if (isToolUIPart(part)) {
+          return (
+            <ToolCallCard
+              key={part.toolCallId}
+              part={part}
+              showDetails={shouldShowToolCalls}
+            />
+          );
+        }
+
+        return null;
+      })}
     </>
   );
 };

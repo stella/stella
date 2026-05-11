@@ -2,7 +2,8 @@ import type { FileUIPart, ToolSet } from "ai";
 import { isFileUIPart, isToolUIPart } from "ai";
 import { Result } from "better-result";
 
-import { deanonymise } from "@stll/anonymize-wasm";
+import { createPipelineContext, deanonymise } from "@stll/anonymize-wasm";
+import type { PipelineContext } from "@stll/anonymize-wasm";
 
 import type { ScopedDb } from "@/api/db";
 import {
@@ -27,6 +28,15 @@ export type ChatThirdPartyBoundary =
       anonymizationScopeId: string;
       gazetteerEntries: ReturnType<typeof loadAnonymizationGazetteerEntries>;
       organizationId: SafeId<"organization">;
+      /**
+       * Shared pipeline context for every anonymization call on
+       * this boundary. The wasm pipeline's placeholder counter
+       * lives on the context — reusing the same instance means a
+       * later batch (tool output, system prompt) keeps numbering
+       * from where the previous batch (user prompt) left off, and
+       * `[PERSON_1]` can never resolve to two different originals.
+       */
+      pipelineContext: PipelineContext;
       /**
        * Cumulative placeholder → original map across every
        * anonymization call on this boundary. Mutated as the request
@@ -82,6 +92,7 @@ export const createChatThirdPartyBoundary = ({
           ? Promise.resolve([])
           : loadAnonymizationGazetteerEntries({ organizationId, scopedDb }),
         organizationId,
+        pipelineContext: createPipelineContext(),
         redactionMap: new Map<string, string>(),
         scopedDb,
       }
@@ -235,6 +246,72 @@ type TextReplacement = {
   apply: (value: string) => void;
 };
 
+// Brand terms ("Stella") are part of the assistant's identity in
+// the system prompt — we don't want them redacted to placeholders.
+// We can't ask the wasm pipeline to skip specific tokens at the
+// recognition layer, so we wrap each occurrence in Unicode Private
+// Use Area sentinels before anonymization (which break tokenisa-
+// tion and stop the pipeline from classifying the inner word as a
+// person name) and restore them after. The sentinel uses code
+// points no real text contains, so this is safe.
+const BRAND_OPEN = "";
+const BRAND_CLOSE = "";
+const BRAND_PATTERN = /\bStella\b/g;
+const BRAND_RESTORE_PATTERN = new RegExp(
+  `${BRAND_OPEN}(\\d+)${BRAND_CLOSE}`,
+  "g",
+);
+
+const protectBrandTerms = (
+  text: string,
+): { text: string; restoreMap: string[] } => {
+  const restoreMap: string[] = [];
+  const replaced = text.replace(BRAND_PATTERN, (match) => {
+    const index = restoreMap.length;
+    restoreMap.push(match);
+    return `${BRAND_OPEN}${String(index)}${BRAND_CLOSE}`;
+  });
+  return { text: replaced, restoreMap };
+};
+
+const restoreBrandTerms = (text: string, restoreMap: string[]): string =>
+  text.replace(BRAND_RESTORE_PATTERN, (_match, indexStr: string) => {
+    const index = Number(indexStr);
+    return restoreMap[index] ?? "";
+  });
+
+/**
+ * System prompts mix two kinds of content: static scaffold (skill
+ * catalog, brand voice, instructions) and dynamic context (active
+ * file text, case-law decision body, external source content,
+ * matter labels). The dynamic content carries third-party PII and
+ * must cross the boundary; the scaffold is safe but mentions the
+ * brand by name, which the pipeline would otherwise scrub to a
+ * placeholder. This pre-protects brand terms, runs the prompt
+ * through the standard anonymizer, then restores the brand —
+ * dynamic PII gets placeholders, scaffold stays readable.
+ */
+export const prepareSystemPromptForThirdParty = async ({
+  boundary,
+  text,
+}: {
+  boundary: ChatThirdPartyBoundary;
+  text: string;
+}): Promise<Result<string, BoundaryRefusal>> => {
+  if (boundary.type === "raw" || text.length === 0) {
+    return Result.ok(text);
+  }
+  const { text: protectedText, restoreMap } = protectBrandTerms(text);
+  const anonymized = await prepareTextForThirdParty({
+    boundary,
+    text: protectedText,
+  });
+  if (Result.isError(anonymized)) {
+    return anonymized;
+  }
+  return Result.ok(restoreBrandTerms(anonymized.value, restoreMap));
+};
+
 export const prepareTextForThirdParty = async ({
   boundary,
   text,
@@ -288,6 +365,7 @@ const prepareTextBatchForThirdParty = async ({
   const anonymized = await Result.tryPromise({
     try: async () =>
       await anonymizeFields({
+        context: boundary.pipelineContext,
         fields,
         gazetteerEntries: await boundary.gazetteerEntries,
         organizationId: boundary.organizationId,
