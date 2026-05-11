@@ -58,8 +58,8 @@ export const NeedsMatterCard = ({
     part.state === "input-streaming" ||
     part.state === "input-available" ||
     part.state === "output-available"
-      ? (part.input as Partial<CreateDocumentInput> | undefined)
-      : undefined;
+      ? normalizeCreateDocumentInput(part.input)
+      : null;
   const name = partialInput?.name ?? "";
   const sourcePreview = partialInput?.source ?? partialInput?.markdown ?? "";
 
@@ -171,6 +171,27 @@ const DocumentThumbnail = () => (
     <div className="bg-foreground-disabled h-0.5 w-1/2 rounded" />
   </div>
 );
+
+const normalizeCreateDocumentInput = (
+  input: unknown,
+): Partial<CreateDocumentInput> | null => {
+  if (typeof input !== "object" || input === null) {
+    return null;
+  }
+
+  const normalized: Partial<CreateDocumentInput> = {};
+  if ("name" in input && typeof input.name === "string") {
+    normalized.name = input.name;
+  }
+  if ("source" in input && typeof input.source === "string") {
+    normalized.source = input.source;
+  }
+  if ("markdown" in input && typeof input.markdown === "string") {
+    normalized.markdown = input.markdown;
+  }
+
+  return normalized;
+};
 
 // Strip the source `@`-directives (`@title`, `@clause`, etc.)
 // so the preview shows readable text instead of compiler input.
