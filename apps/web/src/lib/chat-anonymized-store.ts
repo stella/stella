@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import type { ChatSendModeOverride } from "@stll/anonymize-chat";
+
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 
@@ -34,13 +37,22 @@ export const useSetChatAnonymized = (_threadRef: ChatThreadRef) =>
 export const getChatAnonymized = (_threadRef: ChatThreadRef): boolean =>
   useChatAnonymizedStore.getState().anonymized;
 
-const rawSendOverrides = new Set<string>();
+const sendModeOverrides = new Map<string, ChatSendModeOverride>();
 
 export const sendNextChatRequestWithoutAnonymization = (
   threadRef: ChatThreadRef,
 ): void => {
-  rawSendOverrides.add(getChatThreadKey(threadRef));
+  sendModeOverrides.set(
+    getChatThreadKey(threadRef),
+    CHAT_SEND_MODE.rawOverride,
+  );
 };
 
-export const consumeChatRawSendOverride = (threadRef: ChatThreadRef): boolean =>
-  rawSendOverrides.delete(getChatThreadKey(threadRef));
+export const consumeChatSendModeOverride = (
+  threadRef: ChatThreadRef,
+): ChatSendModeOverride | null => {
+  const key = getChatThreadKey(threadRef);
+  const override = sendModeOverrides.get(key) ?? null;
+  sendModeOverrides.delete(key);
+  return override;
+};

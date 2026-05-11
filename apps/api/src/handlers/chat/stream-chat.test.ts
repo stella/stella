@@ -2,6 +2,7 @@ import type { InferUIMessageChunk } from "ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { createPipelineContext } from "@stll/anonymize-wasm";
 
 import type { ScopedDb } from "@/api/db";
@@ -229,14 +230,14 @@ describe("chat message hydration", () => {
           ],
         },
       ],
-      refuseNonPlainTextFiles: true,
       safeDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
       userId,
     });
 
     expect(Result.isError(result)).toBe(true);
     if (Result.isOk(result)) {
-      throw new Error("Expected DOCX hydration refusal");
+      throw new Error("Expected PDF hydration refusal");
     }
 
     if (!("status" in result.error)) {

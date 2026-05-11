@@ -28,6 +28,7 @@ import { ArrowUpIcon, Maximize2Icon, SquarePenIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
+import { getPreferredChatSendMode } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/components/button";
 
 import {
@@ -48,6 +49,7 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
+import { sendNextChatRequestWithoutAnonymization } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
@@ -115,7 +117,9 @@ export const ChatTabPanel = ({
   // server. `useEffectEvent` always reads the latest closure values.
   const getContextMatterIds = useEffectEvent(() => tab.contextMatterIds);
   const [anonymized, setAnonymized] = useState(false);
-  const getAnonymized = useEffectEvent(() => anonymized);
+  const getSendMode = useEffectEvent(() =>
+    getPreferredChatSendMode(anonymized),
+  );
   const showToolCallDetails = useDevStore((s) => s.showToolCallDetails);
   const chatContextLabel = useChatContextLabel(tab);
 
@@ -161,7 +165,7 @@ export const ChatTabPanel = ({
         getUserContext,
         getActiveDecision,
         getContextMatterIds,
-        getAnonymized,
+        getSendMode,
       },
     }),
   );
@@ -202,6 +206,10 @@ export const ChatTabPanel = ({
     threadRef,
   });
   const focusComposer = editorController.focus;
+  const sendWithoutAnonymization = useEffectEvent(async () => {
+    sendNextChatRequestWithoutAnonymization(threadRef);
+    await resendLatestMessage();
+  });
 
   useEffect(() => {
     if (messages.length > 0 || isGenerating) {
@@ -309,6 +317,7 @@ export const ChatTabPanel = ({
               createDocumentMatters={createDocumentMatters}
               isLoadingCreateDocumentMatters={isLoadingCreateDocumentMatters}
               onResend={resendLatestMessage}
+              onSendWithoutAnonymization={sendWithoutAnonymization}
               showThinkingIndicator
               showToolCallDetails={showToolCallDetails}
               streamdownComponents={streamdownComponents}

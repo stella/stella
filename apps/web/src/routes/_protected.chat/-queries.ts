@@ -9,6 +9,9 @@ import {
 import { panic } from "better-result";
 import { v7 as uuidv7 } from "uuid";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import type { ChatPreferredSendMode, ChatSendMode } from "@stll/anonymize-chat";
+
 import type {
   ChatUITools,
   PersistedChatMessage,
@@ -20,7 +23,7 @@ import {
 import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { consumeChatRawSendOverride } from "@/lib/chat-anonymized-store";
+import { consumeChatSendModeOverride } from "@/lib/chat-anonymized-store";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { useDevStore } from "@/lib/dev-store";
@@ -85,7 +88,7 @@ type ChatThreadOptionsContext = {
    * next send carries the latest set.
    */
   getContextMatterIds?: (() => string[]) | undefined;
-  getAnonymized?: (() => boolean) | undefined;
+  getSendMode?: (() => ChatPreferredSendMode) | undefined;
   getUserContext?: (() => ChatUserContext) | undefined;
   handleActiveDocxEditToolCall?:
     | ((
@@ -221,15 +224,19 @@ export const buildSendRequestBody = ({
     activeDecision?: ActiveDecisionContext | undefined;
     activeExternal?: ActiveExternalContext | undefined;
     activeFile?: ActiveFileContext | undefined;
-    anonymized?: boolean | undefined;
     contextMatterIds?: string[] | undefined;
     devModelId?: string | undefined;
     message: PersistedChatMessage;
+    sendMode: ChatSendMode;
     threadId: string;
     userContext?: ChatUserContext | undefined;
     workspaceId?: string | undefined;
   } = {
     message,
+    sendMode:
+      consumeChatSendModeOverride(key) ??
+      context?.getSendMode?.() ??
+      CHAT_SEND_MODE.raw,
     threadId: key.threadId,
   };
 
@@ -260,11 +267,6 @@ export const buildSendRequestBody = ({
   const contextMatterIds = context?.getContextMatterIds?.();
   if (contextMatterIds !== undefined) {
     body.contextMatterIds = contextMatterIds;
-  }
-
-  const anonymized = context?.getAnonymized?.();
-  if (anonymized !== undefined) {
-    body.anonymized = consumeChatRawSendOverride(key) ? false : anonymized;
   }
 
   if (import.meta.env.DEV) {

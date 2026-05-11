@@ -1,5 +1,7 @@
 import { TaggedError } from "better-result";
 
+import type { ChatTransportErrorCode } from "@stll/anonymize-chat";
+
 export type HandlerErrorStatusCode =
   | 400
   | 402
@@ -11,7 +13,7 @@ export type HandlerErrorStatusCode =
   | 500
   | 502;
 
-export type HandlerErrorCode = "third_party_boundary_refusal";
+export type HandlerErrorCode = ChatTransportErrorCode;
 
 export type HandlerErrorProps<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,

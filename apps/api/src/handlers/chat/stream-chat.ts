@@ -14,11 +14,15 @@ import type {
 } from "ai";
 import { panic, Result } from "better-result";
 
-import type { SafeDb, SafeDbError } from "@/api/db";
 import {
-  getUserFileIdFromPart,
-  TEXT_PLAIN_MIME_TYPE,
-} from "@/api/handlers/chat/attachment-validation";
+  CHAT_SEND_MODE,
+  CHAT_TRANSPORT_ERROR_CODE,
+  createThirdPartyBoundaryRefusalPayload,
+} from "@stll/anonymize-chat";
+import type { ChatSendMode } from "@stll/anonymize-chat";
+
+import type { SafeDb, SafeDbError } from "@/api/db";
+import { getUserFileIdFromPart } from "@/api/handlers/chat/attachment-validation";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   deanonymizeFromBoundary,
@@ -30,10 +34,7 @@ import {
 import { repairActiveDocxEditToolCall } from "@/api/handlers/chat/tools/active-docx-edit-tool-repair";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type { ChatMessage } from "@/api/handlers/chat/types";
-import {
-  canHydrateFilePartAsPlainText,
-  hydrateFilePart,
-} from "@/api/handlers/chat/upload-files";
+import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
 import { classifyAIError } from "@/api/lib/ai-error";
 import type { OrgAIConfig, ResolvedModelInfo } from "@/api/lib/ai-models";
 import {
@@ -51,6 +52,8 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 
 const MAX_TOOL_STEPS = 8;
+const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
+  "Cannot send this attachment to the AI in anonymized mode because Stella cannot extract and anonymize it safely.";
 
 type AssistantValueRefResolver = ChatRefRegistry["resolveAssistantValueRefs"];
 
@@ -249,11 +252,9 @@ export const streamChat = async ({
   });
   if (Result.isError(preparedUntrusted)) {
     return new Response(
-      JSON.stringify({
-        code: "third_party_boundary_refusal",
-        message: preparedUntrusted.error.message,
-        type: "third_party_boundary_refusal",
-      }),
+      JSON.stringify(
+        createThirdPartyBoundaryRefusalPayload(preparedUntrusted.error.message),
+      ),
       {
         headers: { "Content-Type": "application/json" },
         status: preparedUntrusted.error.status,
@@ -276,11 +277,9 @@ export const streamChat = async ({
 
   if (Result.isError(preparedMessages)) {
     return new Response(
-      JSON.stringify({
-        code: "third_party_boundary_refusal",
-        message: preparedMessages.error.message,
-        type: "third_party_boundary_refusal",
-      }),
+      JSON.stringify(
+        createThirdPartyBoundaryRefusalPayload(preparedMessages.error.message),
+      ),
       {
         headers: { "Content-Type": "application/json" },
         status: preparedMessages.error.status,
@@ -729,15 +728,15 @@ export const resolveRefsInTextStream = (
 
 type HydrateMessagesProps = {
   messages: ChatMessage[];
-  refuseNonPlainTextFiles?: boolean | undefined;
   safeDb: SafeDb;
+  sendMode: ChatSendMode;
   userId: SafeId<"user">;
 };
 
 export const hydrateMessages = async ({
   messages,
-  refuseNonPlainTextFiles = false,
   safeDb,
+  sendMode,
   userId,
 }: HydrateMessagesProps) =>
   await Result.gen(async function* () {
@@ -769,45 +768,34 @@ export const hydrateMessages = async ({
           panic("Persisted chat file reference missing user_files row");
         }
 
-        if (
-          refuseNonPlainTextFiles &&
-          !canHydrateFilePartAsPlainText(file.mimeType)
-        ) {
-          return Result.err(
-            new HandlerError({
-              code: "third_party_boundary_refusal",
-              status: 422,
-              message:
-                "Cannot send this attachment to the AI in anonymized mode because Stella cannot extract and anonymize it safely.",
-            }),
-          );
-        }
-
         const hydratedPart = yield* Result.await(
           hydrateFilePart({
             // eslint-disable-next-line security-guards/no-raw-filename-write -- DB read-back from user_files, already sanitized on upload
             fileName: file.fileName,
             mimeType: file.mimeType,
-            plainTextOnly: refuseNonPlainTextFiles,
+            sendMode,
             s3Key: file.s3Key,
           }),
         );
 
+        if (hydratedPart.type === "blocked") {
+          return Result.err(hydratedPart.error);
+        }
+
         if (
-          refuseNonPlainTextFiles &&
-          hydratedPart.mediaType !== TEXT_PLAIN_MIME_TYPE
+          sendMode === CHAT_SEND_MODE.anonymized &&
+          hydratedPart.type !== "anonymizable"
         ) {
           return Result.err(
             new HandlerError({
-              code: "third_party_boundary_refusal",
+              code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
               status: 422,
-              message:
-                "Cannot send this attachment to the AI in anonymized mode because Stella cannot extract and anonymize it safely.",
+              message: THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE,
             }),
           );
         }
 
-        parts.push(hydratedPart);
+        parts.push(hydratedPart.part);
       }
 
       hydratedMessages.push({

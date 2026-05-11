@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+
 import {
   TEXT_CSV_MIME_TYPE,
   TEXT_MARKDOWN_MIME_TYPE,
@@ -43,7 +45,7 @@ describe("chat attachment hydration", () => {
     const result = await hydrateFilePart({
       fileName: "contacts.csv",
       mimeType: TEXT_CSV_MIME_TYPE,
-      plainTextOnly: true,
+      sendMode: CHAT_SEND_MODE.anonymized,
       s3Key: "user/file",
     });
 
@@ -53,14 +55,20 @@ describe("chat attachment hydration", () => {
     }
 
     expect(result.value).toMatchObject({
-      filename: "contacts.csv",
-      mediaType: TEXT_PLAIN_MIME_TYPE,
-      type: "file",
+      type: "anonymizable",
+      part: {
+        filename: "contacts.csv",
+        mediaType: TEXT_PLAIN_MIME_TYPE,
+        type: "file",
+      },
     });
+    if (result.value.type !== "anonymizable") {
+      throw new Error("Expected anonymizable attachment hydration");
+    }
     const parsed = parseDataUrl({
       expectedMimeType: TEXT_PLAIN_MIME_TYPE,
       maxBytes: 1024,
-      url: result.value.url,
+      url: result.value.part.url,
     });
 
     expect(Result.isOk(parsed)).toBe(true);
@@ -68,5 +76,65 @@ describe("chat attachment hydration", () => {
       throw parsed.error;
     }
     expect(new TextDecoder().decode(parsed.value.bytes)).toBe("Jan Novak,Acme");
+  });
+
+  test("blocks non-extractable attachments before reading bytes in anonymized mode", async () => {
+    const result = await hydrateFilePart({
+      fileName: "scan.pdf",
+      mimeType: PDF_MIME_TYPE,
+      sendMode: CHAT_SEND_MODE.anonymized,
+      s3Key: "user/file",
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value.type).toBe("blocked");
+    expect(fileMock).not.toHaveBeenCalled();
+  });
+
+  test("hydrates non-extractable attachments as raw override when the user allows it", async () => {
+    const result = await hydrateFilePart({
+      fileName: "scan.pdf",
+      mimeType: PDF_MIME_TYPE,
+      sendMode: CHAT_SEND_MODE.rawOverride,
+      s3Key: "user/file",
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value).toMatchObject({
+      type: "rawOverride",
+      part: {
+        filename: "scan.pdf",
+        mediaType: PDF_MIME_TYPE,
+        type: "file",
+      },
+    });
+  });
+
+  test("raw override bypasses DOCX text extraction and sends the original file", async () => {
+    const result = await hydrateFilePart({
+      fileName: "draft.docx",
+      mimeType: DOCX_MIME_TYPE,
+      sendMode: CHAT_SEND_MODE.rawOverride,
+      s3Key: "user/file",
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value).toMatchObject({
+      type: "rawOverride",
+      part: {
+        filename: "draft.docx",
+        mediaType: DOCX_MIME_TYPE,
+        type: "file",
+      },
+    });
   });
 });

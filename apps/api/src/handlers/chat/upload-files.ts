@@ -2,6 +2,12 @@ import type { FileUIPart } from "ai";
 import { isFileUIPart } from "ai";
 import { Result } from "better-result";
 
+import {
+  CHAT_SEND_MODE,
+  CHAT_TRANSPORT_ERROR_CODE,
+} from "@stll/anonymize-chat";
+import type { ChatSendMode } from "@stll/anonymize-chat";
+
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { userFiles } from "@/api/db/schema";
 import {
@@ -95,26 +101,91 @@ export const uploadMessageFiles = async ({
 type HydrateFilePartProps = {
   fileName: string;
   mimeType: string;
-  plainTextOnly?: boolean | undefined;
+  sendMode: ChatSendMode;
   s3Key: string;
 };
+
+export type HydratedFilePart =
+  | {
+      part: FileUIPart;
+      type: "anonymizable";
+    }
+  | {
+      error: HandlerError<422>;
+      type: "blocked";
+    }
+  | {
+      part: FileUIPart;
+      type: "raw";
+    }
+  | {
+      part: FileUIPart;
+      type: "rawOverride";
+    };
 
 const DIRECT_TEXT_MIME_TYPES: ReadonlySet<string> = new Set([
   TEXT_CSV_MIME_TYPE,
   TEXT_MARKDOWN_MIME_TYPE,
   TEXT_PLAIN_MIME_TYPE,
 ]);
+const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
+  "Cannot send this attachment to the AI in anonymized mode because Stella cannot extract and anonymize it safely.";
 
 export const canHydrateFilePartAsPlainText = (mimeType: string): boolean =>
   DIRECT_TEXT_MIME_TYPES.has(mimeType) || mimeType === DOCX_MIME_TYPE;
 
+const toHydratedFilePart = ({
+  part,
+  sendMode,
+}: {
+  part: FileUIPart;
+  sendMode: ChatSendMode;
+}): HydratedFilePart => {
+  if (sendMode === CHAT_SEND_MODE.anonymized) {
+    return { part, type: "anonymizable" };
+  }
+  if (sendMode === CHAT_SEND_MODE.rawOverride) {
+    return { part, type: "rawOverride" };
+  }
+  return { part, type: "raw" };
+};
+
+const createBlockedHydratedFilePart = (): HydratedFilePart => ({
+  error: new HandlerError({
+    code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
+    status: 422,
+    message: THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE,
+  }),
+  type: "blocked",
+});
+
+const createRawFilePart = ({
+  bytes,
+  fileName,
+  mimeType,
+}: {
+  bytes: Uint8Array;
+  fileName: string;
+  mimeType: string;
+}): FileUIPart => ({
+  type: "file",
+  filename: fileName,
+  mediaType: mimeType,
+  url: toDataUrl(bytes, mimeType),
+});
+
 export const hydrateFilePart = async ({
   fileName,
   mimeType,
-  plainTextOnly = false,
+  sendMode,
   s3Key,
 }: HydrateFilePartProps) =>
   await Result.gen(async function* () {
+    const requiresPlainText = sendMode === CHAT_SEND_MODE.anonymized;
+    if (requiresPlainText && !canHydrateFilePartAsPlainText(mimeType)) {
+      return Result.ok<HydratedFilePart>(createBlockedHydratedFilePart());
+    }
+
     const buffer = yield* Result.await(
       Result.tryPromise({
         try: async () => await getS3().file(s3Key).arrayBuffer(),
@@ -127,23 +198,37 @@ export const hydrateFilePart = async ({
     );
     const bytes = new Uint8Array(buffer);
 
-    if (DIRECT_TEXT_MIME_TYPES.has(mimeType)) {
-      const hydratedMimeType = plainTextOnly ? TEXT_PLAIN_MIME_TYPE : mimeType;
-      return Result.ok<FileUIPart>({
-        type: "file",
-        filename: fileName,
-        mediaType: hydratedMimeType,
-        url: toDataUrl(bytes, hydratedMimeType),
+    if (sendMode === CHAT_SEND_MODE.rawOverride) {
+      return Result.ok<HydratedFilePart>({
+        part: createRawFilePart({ bytes, fileName, mimeType }),
+        type: "rawOverride",
       });
     }
 
+    if (DIRECT_TEXT_MIME_TYPES.has(mimeType)) {
+      const hydratedMimeType = requiresPlainText
+        ? TEXT_PLAIN_MIME_TYPE
+        : mimeType;
+      return Result.ok<HydratedFilePart>(
+        toHydratedFilePart({
+          part: {
+            type: "file",
+            filename: fileName,
+            mediaType: hydratedMimeType,
+            url: toDataUrl(bytes, hydratedMimeType),
+          },
+          sendMode,
+        }),
+      );
+    }
+
     if (mimeType !== DOCX_MIME_TYPE) {
-      return Result.ok<FileUIPart>({
-        type: "file",
-        filename: fileName,
-        mediaType: mimeType,
-        url: toDataUrl(bytes, mimeType),
-      });
+      return Result.ok<HydratedFilePart>(
+        toHydratedFilePart({
+          part: createRawFilePart({ bytes, fileName, mimeType }),
+          sendMode,
+        }),
+      );
     }
 
     const extractedText = yield* Result.await(
@@ -168,6 +253,9 @@ export const hydrateFilePart = async ({
     const text = extractedText.trim();
 
     if (!text) {
+      if (requiresPlainText) {
+        return Result.ok<HydratedFilePart>(createBlockedHydratedFilePart());
+      }
       return Result.err(
         new HandlerError({
           status: 422,
@@ -176,12 +264,17 @@ export const hydrateFilePart = async ({
       );
     }
 
-    return Result.ok<FileUIPart>({
-      type: "file",
-      filename: toDocxTextFilename({ filename: fileName }),
-      mediaType: TEXT_PLAIN_MIME_TYPE,
-      url: toDataUrl(Buffer.from(text, "utf-8"), TEXT_PLAIN_MIME_TYPE),
-    });
+    return Result.ok<HydratedFilePart>(
+      toHydratedFilePart({
+        part: {
+          type: "file",
+          filename: toDocxTextFilename({ filename: fileName }),
+          mediaType: TEXT_PLAIN_MIME_TYPE,
+          url: toDataUrl(Buffer.from(text, "utf-8"), TEXT_PLAIN_MIME_TYPE),
+        },
+        sendMode,
+      }),
+    );
   });
 
 type UploadUserFileInput = {

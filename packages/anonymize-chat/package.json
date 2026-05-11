@@ -17,7 +17,8 @@
     "format": "oxfmt ."
   },
   "dependencies": {
-    "@stll/anonymize-wasm": "catalog:"
+    "@stll/anonymize-wasm": "catalog:",
+    "valibot": "catalog:"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",

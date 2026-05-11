@@ -2,6 +2,9 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import type { Static } from "elysia";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import type { ChatSendMode } from "@stll/anonymize-chat";
+
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -215,10 +218,10 @@ const sendMessage = createSafeRootHandler(
     }
 
     const thirdPartyBoundary = createChatThirdPartyBoundary({
-      anonymized: body.anonymized ?? false,
       anonymizationScopeId: workspaceId ?? body.threadId,
       organizationId: session.activeOrganizationId,
       scopedDb,
+      sendMode: body.sendMode,
     });
 
     const uploadedMessage = yield* Result.await(
@@ -250,8 +253,8 @@ const sendMessage = createSafeRootHandler(
         contextMatterIds: effectiveContextMatterIds,
         messageWindow,
         organizationId: session.activeOrganizationId,
-        refuseNonPlainTextFiles: thirdPartyBoundary.type === "anonymized",
         safeDb,
+        sendMode: body.sendMode,
         userContext: body.userContext,
         userId: user.id,
         workspaceId,
@@ -337,9 +340,10 @@ const sendMessage = createSafeRootHandler(
     const externalMcpSystemHint = buildExternalMcpSystemHint(
       externalMcpTools.connectors,
     );
-    const anonymizedSystemHint = body.anonymized
-      ? buildAnonymizedSystemHint()
-      : null;
+    const anonymizedSystemHint =
+      body.sendMode === CHAT_SEND_MODE.anonymized
+        ? buildAnonymizedSystemHint()
+        : null;
     // The "safe" half is whatever the prompt builder declared
     // safe plus our own static anonymized-mode instructions. The
     // external MCP catalog is organization/user-configured text, so
@@ -728,8 +732,8 @@ type PrepareChatContextProps = {
   messageWindow: ChatMessage[];
   organizationId: SafeId<"organization">;
   refRegistry: ReturnType<typeof createChatRefRegistry>;
-  refuseNonPlainTextFiles: boolean;
   safeDb: SafeDb;
+  sendMode: ChatSendMode;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -762,8 +766,8 @@ const prepareChatContext = async ({
   messageWindow,
   organizationId,
   refRegistry,
-  refuseNonPlainTextFiles,
   safeDb,
+  sendMode,
   userContext,
   userId,
   workspaceId,
@@ -793,8 +797,8 @@ const prepareChatContext = async ({
       }),
       hydrateMessages({
         messages: messageWindow,
-        refuseNonPlainTextFiles,
         safeDb,
+        sendMode,
         userId,
       }),
     ]);

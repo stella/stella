@@ -280,6 +280,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/anonymize-wasm": "catalog:",
+        "valibot": "catalog:",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",

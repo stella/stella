@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { sendNextChatRequestWithoutAnonymization } from "@/lib/chat-anonymized-store";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
@@ -96,16 +98,16 @@ describe("matchesChatThreadAcrossScopes", () => {
 });
 
 describe("buildSendRequestBody", () => {
-  test("includes anonymized mode when the chat surface enables it", () => {
+  test("includes the preferred send mode from the chat surface", () => {
     const threadId = toChatThreadId("thread-A");
     expect(
       buildSendRequestBody({
-        context: { getAnonymized: () => true },
+        context: { getSendMode: () => CHAT_SEND_MODE.anonymized },
         key: { scope: "global", threadId },
         messages: [createMessage()],
       }),
     ).toMatchObject({
-      anonymized: true,
+      sendMode: CHAT_SEND_MODE.anonymized,
       threadId: "thread-A",
     });
   });
@@ -117,22 +119,22 @@ describe("buildSendRequestBody", () => {
 
     expect(
       buildSendRequestBody({
-        context: { getAnonymized: () => true },
+        context: { getSendMode: () => CHAT_SEND_MODE.anonymized },
         key,
         messages: [createMessage()],
       }),
     ).toMatchObject({
-      anonymized: false,
+      sendMode: CHAT_SEND_MODE.rawOverride,
       threadId: "thread-A",
     });
     expect(
       buildSendRequestBody({
-        context: { getAnonymized: () => true },
+        context: { getSendMode: () => CHAT_SEND_MODE.anonymized },
         key,
         messages: [createMessage()],
       }),
     ).toMatchObject({
-      anonymized: true,
+      sendMode: CHAT_SEND_MODE.anonymized,
       threadId: "thread-A",
     });
   });

@@ -5,6 +5,8 @@ import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import * as v from "valibot";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
 import {
   applyChatToolPolicy,
@@ -56,13 +58,13 @@ const createBoundary = () => {
   const { scopedDb } = createScopedDbMock({});
 
   return createChatThirdPartyBoundary({
-    anonymized: true,
     anonymizeFields: anonymizeTextFieldsMock,
     anonymizationScopeId: "workspace-A",
     organizationId: toSafeId<"organization">(
       "11111111-1111-4111-8111-111111111111",
     ),
     scopedDb,
+    sendMode: CHAT_SEND_MODE.anonymized,
   });
 };
 
@@ -70,13 +72,13 @@ const createRawBoundary = () => {
   const { scopedDb } = createScopedDbMock({});
 
   return createChatThirdPartyBoundary({
-    anonymized: false,
     anonymizeFields: anonymizeTextFieldsMock,
     anonymizationScopeId: "workspace-A",
     organizationId: toSafeId<"organization">(
       "11111111-1111-4111-8111-111111111111",
     ),
     scopedDb,
+    sendMode: CHAT_SEND_MODE.raw,
   });
 };
 

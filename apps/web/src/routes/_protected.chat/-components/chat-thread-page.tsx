@@ -5,6 +5,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Maximize2Icon, PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { getPreferredChatSendMode } from "@stll/anonymize-chat";
 import { Button, buttonVariants } from "@stll/ui/components/button";
 
 import {
@@ -75,7 +76,9 @@ export const ChatThreadPage = ({
   const anonymized = useChatAnonymized(threadRef);
   const setAnonymized = useSetChatAnonymized(threadRef);
   const getContextMatterIds = useEffectEvent(() => contextMatterIds ?? []);
-  const getAnonymized = useEffectEvent(() => anonymized);
+  const getSendMode = useEffectEvent(() =>
+    getPreferredChatSendMode(anonymized),
+  );
 
   const { data } = useSuspenseQuery(
     chatThreadOptions({
@@ -88,7 +91,7 @@ export const ChatThreadPage = ({
         allowMissingThread: true,
         getUserContext,
         getContextMatterIds,
-        getAnonymized,
+        getSendMode,
       },
     }),
   );

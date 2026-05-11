@@ -2,6 +2,11 @@ import type { FileUIPart, ToolSet } from "ai";
 import { isFileUIPart, isToolUIPart } from "ai";
 import { Result } from "better-result";
 
+import {
+  CHAT_SEND_MODE,
+  CHAT_TRANSPORT_ERROR_CODE,
+} from "@stll/anonymize-chat";
+import type { ChatSendMode } from "@stll/anonymize-chat";
 import { createPipelineContext, deanonymise } from "@stll/anonymize-wasm";
 import type { PipelineContext } from "@stll/anonymize-wasm";
 
@@ -71,19 +76,19 @@ export const buildAnonymizedSystemHint = (): string =>
   ].join(" ");
 
 export const createChatThirdPartyBoundary = ({
-  anonymized,
   anonymizeFields,
   anonymizationScopeId,
   organizationId,
   scopedDb,
+  sendMode,
 }: {
-  anonymized: boolean;
   anonymizeFields?: typeof anonymizeTextFields | undefined;
   anonymizationScopeId: string;
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
+  sendMode: ChatSendMode;
 }): ChatThirdPartyBoundary =>
-  anonymized
+  sendMode === CHAT_SEND_MODE.anonymized
     ? {
         type: "anonymized",
         anonymizeFields,
@@ -371,7 +376,7 @@ const anonymizePlainTextFile = ({
   if (part.mediaType !== TEXT_PLAIN_MIME_TYPE) {
     return Result.err(
       new HandlerError({
-        code: "third_party_boundary_refusal",
+        code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
         status: 422,
         message:
           "Cannot send this attachment to the AI in anonymized mode because Stella cannot extract and anonymize it safely.",
@@ -388,7 +393,7 @@ const anonymizePlainTextFile = ({
   if (Result.isError(parsed)) {
     return Result.err(
       new HandlerError({
-        code: "third_party_boundary_refusal",
+        code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
         status: 422,
         message:
           "Cannot send this attachment to the AI in anonymized mode because Stella cannot read it as text.",

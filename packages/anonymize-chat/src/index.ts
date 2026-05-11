@@ -1,3 +1,5 @@
+import * as v from "valibot";
+
 import type {
   createPipelineContext,
   DEFAULT_OPERATOR_CONFIG,
@@ -51,6 +53,86 @@ export type ChatAnonResult = {
   redactionMap: Map<string, string>;
   entityCount: number;
 };
+
+export const CHAT_SEND_MODE = {
+  raw: "raw",
+  anonymized: "anonymized",
+  rawOverride: "rawOverride",
+} as const;
+
+export const CHAT_SEND_MODES = [
+  CHAT_SEND_MODE.raw,
+  CHAT_SEND_MODE.anonymized,
+  CHAT_SEND_MODE.rawOverride,
+] as const;
+
+export const chatSendModeSchema = v.picklist(CHAT_SEND_MODES);
+export type ChatSendMode = v.InferOutput<typeof chatSendModeSchema>;
+export type ChatPreferredSendMode = Exclude<
+  ChatSendMode,
+  typeof CHAT_SEND_MODE.rawOverride
+>;
+export type ChatSendModeOverride = Extract<
+  ChatSendMode,
+  typeof CHAT_SEND_MODE.rawOverride
+>;
+
+export const getPreferredChatSendMode = (
+  anonymized: boolean,
+): ChatPreferredSendMode =>
+  anonymized ? CHAT_SEND_MODE.anonymized : CHAT_SEND_MODE.raw;
+
+export const CHAT_TRANSPORT_ERROR_CODE = {
+  thirdPartyBoundaryRefusal: "third_party_boundary_refusal",
+} as const;
+
+export const CHAT_TRANSPORT_ERROR_CODES = [
+  CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
+] as const;
+
+export const chatTransportErrorCodeSchema = v.picklist(
+  CHAT_TRANSPORT_ERROR_CODES,
+);
+export type ChatTransportErrorCode = v.InferOutput<
+  typeof chatTransportErrorCodeSchema
+>;
+
+export const chatTransportErrorPayloadSchema = v.strictObject({
+  code: chatTransportErrorCodeSchema,
+  message: v.string(),
+});
+export type ChatTransportErrorPayload = v.InferOutput<
+  typeof chatTransportErrorPayloadSchema
+>;
+
+export const createThirdPartyBoundaryRefusalPayload = (
+  message: string,
+): ChatTransportErrorPayload => ({
+  code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
+  message,
+});
+
+export const parseChatTransportErrorPayload = (
+  payload: unknown,
+): ChatTransportErrorPayload | null => {
+  const result = v.safeParse(chatTransportErrorPayloadSchema, payload);
+  return result.success ? result.output : null;
+};
+
+export const parseChatTransportErrorMessage = (
+  message: string,
+): ChatTransportErrorPayload | null => {
+  try {
+    return parseChatTransportErrorPayload(JSON.parse(message));
+  } catch {
+    return null;
+  }
+};
+
+export const isThirdPartyBoundaryRefusalPayload = (
+  payload: ChatTransportErrorPayload | null,
+): boolean =>
+  payload?.code === CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal;
 
 export type ChatAnonRuntime = {
   createPipelineContext: typeof createPipelineContext;

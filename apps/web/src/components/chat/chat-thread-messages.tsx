@@ -7,6 +7,10 @@ import { CopyIcon, FileTextIcon, RotateCcwIcon } from "lucide-react";
 import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
+import {
+  isThirdPartyBoundaryRefusalPayload,
+  parseChatTransportErrorMessage,
+} from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
@@ -244,47 +248,9 @@ type ChatErrorTranslationKey =
   | "chat.sendErrorAnonymizationBlocked"
   | "chat.sendError";
 
-const THIRD_PARTY_BOUNDARY_REFUSAL = "third_party_boundary_refusal";
-
-type ChatTransportErrorPayload = {
-  code?: string | undefined;
-  message?: string | undefined;
-  type?: string | undefined;
-};
-
-const getChatTransportErrorPayload = (
-  error: Error,
-): ChatTransportErrorPayload => {
-  try {
-    const payload: unknown = JSON.parse(error.message);
-    if (typeof payload !== "object" || payload === null) {
-      return {};
-    }
-    return {
-      code:
-        "code" in payload && typeof payload.code === "string"
-          ? payload.code
-          : undefined,
-      message:
-        "message" in payload && typeof payload.message === "string"
-          ? payload.message
-          : undefined,
-      type:
-        "type" in payload && typeof payload.type === "string"
-          ? payload.type
-          : undefined,
-    };
-  } catch {
-    return {};
-  }
-};
-
 const isAnonymizationBlockedError = (error: Error): boolean => {
-  const payload = getChatTransportErrorPayload(error);
-  return (
-    payload.code === THIRD_PARTY_BOUNDARY_REFUSAL ||
-    payload.type === THIRD_PARTY_BOUNDARY_REFUSAL
-  );
+  const payload = parseChatTransportErrorMessage(error.message);
+  return isThirdPartyBoundaryRefusalPayload(payload);
 };
 
 const isMappedChatErrorKind = (
