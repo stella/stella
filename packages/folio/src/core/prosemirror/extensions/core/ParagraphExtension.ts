@@ -64,7 +64,14 @@ function paragraphAttrsToDOMStyle(attrs: ParagraphAttrs): string {
   };
 
   const style = paragraphToStyle(formatting);
-  return Object.entries(style)
+  const customStyle: Record<string, string | number> = {};
+  if (style.marginTop) {
+    customStyle["--docx-space-before"] = style.marginTop;
+  }
+  if (style.marginBottom) {
+    customStyle["--docx-space-after"] = style.marginBottom;
+  }
+  return Object.entries({ ...style, ...customStyle })
     .map(([key, value]) => {
       const cssKey = key.replace(/([A-Z])/g, "-$1").toLowerCase();
       return `${cssKey}: ${value}`;

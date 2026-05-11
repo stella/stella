@@ -41,6 +41,7 @@ import type {
   MathEquation,
   Theme,
 } from "../../types/document";
+import { resolveColor } from "../../utils/colorResolver";
 import { mergeTextFormatting } from "../../utils/textFormattingMerge";
 import { emuToPixels } from "../../utils/units";
 import { buildRunFormattingOverrideAttrs } from "../extensions/marks/RunFormattingOverrideExtension";
@@ -82,6 +83,7 @@ export function toProseDoc(
   const nodes: PMNode[] = [];
 
   const styleResolver = createStyleResolver(options?.styles);
+  const theme = options?.theme ?? document.package.theme ?? null;
 
   for (const block of paragraphs) {
     if (block.type === "paragraph") {
@@ -98,7 +100,7 @@ export function toProseDoc(
         nodes.push(schema.node("pageBreak"));
       }
     } else if (block.type === "table") {
-      const pmTable = convertTable(block, styleResolver);
+      const pmTable = convertTable(block, styleResolver, theme);
       nodes.push(pmTable);
     }
   }
@@ -748,6 +750,7 @@ function calculateRowSpans(
 function convertTable(
   table: Table,
   styleResolver: StyleResolver | null,
+  theme: Theme | null | undefined,
 ): PMNode {
   // Calculate rowSpan values from vMerge
   const rowSpanMap = calculateRowSpans(table);
@@ -921,6 +924,7 @@ function convertTable(
       totalColumns,
       rowSpanMap,
       cellMarginsAttr,
+      theme,
     );
   });
 
@@ -965,6 +969,7 @@ function convertTableRow(
     left?: number;
     right?: number;
   },
+  theme?: Theme | null,
 ): PMNode {
   const attrs: TableRowAttrs = {
     // isHeader controls header row REPETITION on page breaks.
@@ -1173,11 +1178,48 @@ function convertTableRow(
         isLastCol,
         calculatedRowSpan,
         defaultCellMargins,
+        theme,
       ),
     );
   }
 
   return schema.node("tableRow", attrs, cells);
+}
+
+const TABLE_BORDER_SIDES = [
+  "top",
+  "bottom",
+  "left",
+  "right",
+  "insideH",
+  "insideV",
+] as const satisfies readonly (keyof TableBorders)[];
+
+function resolveThemedBorderColors(
+  borders: TableBorders | undefined,
+  theme: Theme | null | undefined,
+): TableBorders | undefined {
+  if (!borders || !theme?.colorScheme) {
+    return borders;
+  }
+
+  let resolved: TableBorders | undefined;
+  for (const side of TABLE_BORDER_SIDES) {
+    const border = borders[side];
+    if (!border?.color?.themeColor || border.color.auto) {
+      continue;
+    }
+
+    resolved ??= { ...borders };
+    resolved[side] = {
+      ...border,
+      color: {
+        rgb: resolveColor(border.color, theme).replace(/^#/, ""),
+      },
+    };
+  }
+
+  return resolved ?? borders;
 }
 
 /**
@@ -1201,6 +1243,7 @@ function convertTableCell(
     left?: number;
     right?: number;
   },
+  theme?: Theme | null,
 ): PMNode {
   const formatting = cell.formatting;
 
@@ -1236,14 +1279,16 @@ function convertTableCell(
   const conditionalBorders = conditionalStyle?.tcPr?.borders;
   const cellBorders = formatting?.borders;
 
-  const borders =
+  const borders = resolveThemedBorderColors(
     baseBorders || conditionalBorders || cellBorders
       ? {
           ...baseBorders,
           ...conditionalBorders,
           ...cellBorders,
         }
-      : undefined;
+      : undefined,
+    theme,
+  );
 
   // Helper to build margins object without undefined values
   const buildMarginsAttr = (src: {
@@ -1319,7 +1364,7 @@ function convertTableCell(
       );
     } else if (content.type === "table") {
       // Nested tables - recursively convert
-      contentNodes.push(convertTable(content, styleResolver));
+      contentNodes.push(convertTable(content, styleResolver, theme));
     }
   }
 
@@ -2200,12 +2245,13 @@ export function headerFooterToProseDoc(
   const styleResolver = options?.styles
     ? createStyleResolver(options.styles)
     : null;
+  const theme = options?.theme ?? null;
 
   for (const block of content) {
     if (block.type === "paragraph") {
       nodes.push(...convertParagraphWithTextBoxes(block, styleResolver));
     } else if (block.type === "table") {
-      nodes.push(convertTable(block, styleResolver));
+      nodes.push(convertTable(block, styleResolver, theme));
     }
   }
 
