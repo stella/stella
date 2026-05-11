@@ -50,6 +50,7 @@ describe("BYOK provider and model configuration", () => {
         provider: "google",
         apiKey: "",
         apiKeyMasked: "AIza****",
+        endpoint: "",
         region: "eu",
         replacingKey: false,
       },
@@ -57,6 +58,30 @@ describe("BYOK provider and model configuration", () => {
         provider: "openai",
         apiKey: "",
         apiKeyMasked: "sk-proj****",
+        endpoint: "",
+        region: "global",
+        replacingKey: false,
+      },
+    ]);
+  });
+
+  test("normalizes stored Azure Foundry provider endpoint metadata", () => {
+    expect(
+      providerDraftsFromStoredProviders([
+        {
+          provider: "azure_foundry",
+          apiKeyMasked: "abcd****",
+          endpoint: "https://example.openai.azure.com/openai",
+          apiVersion: "v1",
+        },
+      ]),
+    ).toEqual([
+      {
+        provider: "azure_foundry",
+        apiKey: "",
+        apiKeyMasked: "abcd****",
+        endpoint: "https://example.openai.azure.com/openai",
+        apiVersion: "v1",
         region: "global",
         replacingKey: false,
       },
@@ -229,6 +254,26 @@ describe("BYOK provider and model configuration", () => {
     ).toBe(true);
   });
 
+  test("requires an endpoint for Azure Foundry drafts", () => {
+    expect(
+      hasUsableProviderDrafts([
+        {
+          ...createProviderCredentialDraft("azure_foundry"),
+          apiKey: "azure-test",
+        },
+      ]),
+    ).toBe(false);
+    expect(
+      hasUsableProviderDrafts([
+        {
+          ...createProviderCredentialDraft("azure_foundry"),
+          apiKey: "azure-test",
+          endpoint: "https://example.openai.azure.com/openai/v1",
+        },
+      ]),
+    ).toBe(true);
+  });
+
   test("accepts saved provider drafts without requiring key replacement", () => {
     expect(
       hasUsableProviderDrafts([
@@ -272,6 +317,37 @@ describe("BYOK provider and model configuration", () => {
         },
       }),
     ).toBeNull();
+  });
+
+  test("allows custom Azure Foundry deployment names", () => {
+    expect(
+      isKnownModelSelection({
+        provider: "azure_foundry",
+        modelId: "customer-deployment",
+      }),
+    ).toBe(true);
+    expect(
+      serializeOverrideModels({
+        providers: ["azure_foundry"],
+        roleModels: {
+          chat: { provider: "azure_foundry", modelId: " customer-chat " },
+          fast: { provider: "azure_foundry", modelId: "customer-fast" },
+          reasoning: {
+            provider: "azure_foundry",
+            modelId: "customer-reasoning",
+          },
+          pdf: { provider: "azure_foundry", modelId: "customer-pdf" },
+        },
+      }),
+    ).toEqual({
+      chat: { provider: "azure_foundry", modelId: "customer-chat" },
+      fast: { provider: "azure_foundry", modelId: "customer-fast" },
+      reasoning: {
+        provider: "azure_foundry",
+        modelId: "customer-reasoning",
+      },
+      pdf: { provider: "azure_foundry", modelId: "customer-pdf" },
+    });
   });
 
   test("finds provider values and the next addable provider", () => {

@@ -292,6 +292,14 @@ export function AIKeyRequiredDialog({
           ...(providerDraft.apiKey.trim()
             ? { apiKey: providerDraft.apiKey.trim() }
             : {}),
+          ...(providerDraft.provider === "azure_foundry"
+            ? {
+                endpoint: providerDraft.endpoint.trim(),
+                ...(providerDraft.apiVersion
+                  ? { apiVersion: providerDraft.apiVersion }
+                  : {}),
+              }
+            : {}),
           region: providerDraft.region,
         })),
         overrideModels,

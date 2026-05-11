@@ -1290,8 +1290,11 @@
       "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).",
       "defaultModel": "Numatytasis: {model}",
       "defaultModelOption": "Numatytasis",
+      "deploymentNamePlaceholder": "Diegimo pavadinimas",
       "description": "Bring your own API key or configure data sovereignty region.",
       "editProviders": "Redaguoti tiekėjus",
+      "endpoint": "Galinis taškas",
+      "endpointDescription": "Naudokite Azure OpenAI arba Azure Foundry /openai/v1 galinį tašką. Stella išsaugo normalizuotą galinį tašką.",
       "keepSavedKey": "Palikti išsaugotą raktą",
       "modelForRole": "{role} modelis",
       "modelIdPlaceholder": "Ieškoti modelių",
@@ -1304,6 +1307,7 @@
       "overrideRoles": "Override roles",
       "overrideRolesDescription": "Pasirinkite, kurie vaidmenys naudoja šį raktą, tada kiekvienam vaidmeniui pasirinkite modelį. Nepasirinkti vaidmenys naudoja platformos numatytuosius nustatymus.",
       "prices": {
+        "azureManaged": "Diegimo kainos valdomos Azure.",
         "empty": "Pridėkite tiekėją, kad matytumėte modelių kainas",
         "emptyHint": "Kairėje pasirinkite tiekėją — čia parodysime jo modelių kainas.",
         "inMtok": "Įv/M",
@@ -1321,6 +1325,7 @@
       "providerKeyInvalidShort": "Negaliojantis",
       "providers": {
         "anthropic": "Anthropic",
+        "azure_foundry": "Azure Foundry",
         "google": "Google",
         "openai": "ChatGPT",
         "openrouter": "OpenRouter"

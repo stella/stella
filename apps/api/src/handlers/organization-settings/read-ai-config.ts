@@ -22,6 +22,8 @@ type AIConfigResult = {
       providers: {
         provider: OrgAIConfig["providers"][number]["provider"];
         apiKeyMasked: string;
+        endpoint?: string | undefined;
+        apiVersion?: string | undefined;
         region: DataRegion;
       }[];
       overrideModels: OrgAIConfig["overrideModels"];
@@ -81,7 +83,16 @@ const readAIConfig = createSafeRootHandler(
           providers: aiConfig.providers.map((providerConfig) => ({
             provider: providerConfig.provider,
             apiKeyMasked: maskApiKey(providerConfig.apiKey),
-            region: providerConfig.region ?? "global",
+            region:
+              providerConfig.provider === "azure_foundry"
+                ? "global"
+                : (providerConfig.region ?? "global"),
+            ...(providerConfig.provider === "azure_foundry"
+              ? {
+                  endpoint: providerConfig.baseURL,
+                  apiVersion: providerConfig.apiVersion,
+                }
+              : {}),
           })),
           overrideModels: aiConfig.overrideModels,
           instanceProvisioned,

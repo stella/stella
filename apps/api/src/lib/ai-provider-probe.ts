@@ -5,12 +5,15 @@
  * committing the config.
  */
 
+import { normalizeAzureFoundryBaseURL } from "@/api/lib/azure-foundry";
+
 const VALIDATION_TIMEOUT_MS = 5000;
 
 export const PROVIDER_PROBE_VALUES = [
   "google",
   "openrouter",
   "openai",
+  "azure_foundry",
   "anthropic",
 ] as const;
 
@@ -24,7 +27,7 @@ type ProbeTarget = {
 };
 
 const PROBE_TARGETS: Record<
-  ProviderProbeValue,
+  Exclude<ProviderProbeValue, "azure_foundry">,
   (apiKey: string) => ProbeTarget
 > = {
   google: (apiKey) => ({
@@ -53,6 +56,7 @@ const PROVIDER_LABELS: Record<ProviderProbeValue, string> = {
   google: "Google",
   anthropic: "Anthropic",
   openai: "OpenAI",
+  azure_foundry: "Azure Foundry",
   openrouter: "OpenRouter",
 };
 
@@ -88,7 +92,12 @@ const extractDetail = async (response: Response): Promise<string | undefined> =>
 export const probeProvider = async (
   provider: ProviderProbeValue,
   apiKey: string,
+  endpoint?: string,
 ): Promise<ProviderProbeResult> => {
+  if (provider === "azure_foundry") {
+    return await probeAzureFoundry(apiKey, endpoint);
+  }
+
   const signal = AbortSignal.timeout(VALIDATION_TIMEOUT_MS);
   const target = PROBE_TARGETS[provider](apiKey);
   const response = await fetch(target.url, { ...target.init, signal });
@@ -104,5 +113,42 @@ export const probeProvider = async (
     error: detail
       ? `${label} rejected the key (HTTP ${response.status}): ${detail}`
       : `${label} rejected the key (HTTP ${response.status})`,
+  };
+};
+
+const probeAzureFoundry = async (
+  apiKey: string,
+  endpoint: string | undefined,
+): Promise<ProviderProbeResult> => {
+  if (!endpoint?.trim()) {
+    return {
+      valid: false,
+      error: "Azure Foundry endpoint is required",
+    };
+  }
+
+  const normalized = normalizeAzureFoundryBaseURL(endpoint);
+  if (!normalized.ok) {
+    return { valid: false, error: normalized.error };
+  }
+
+  const signal = AbortSignal.timeout(VALIDATION_TIMEOUT_MS);
+  const url = new URL(`${normalized.baseURL}/v1/models`);
+  url.searchParams.set("api-version", "v1");
+  const response = await fetch(url, {
+    headers: { "api-key": apiKey },
+    signal,
+  });
+
+  if (response.ok) {
+    return { valid: true };
+  }
+
+  const detail = await extractDetail(response);
+  return {
+    valid: false,
+    error: detail
+      ? `Azure Foundry rejected the key or endpoint (HTTP ${response.status}): ${detail}`
+      : `Azure Foundry rejected the key or endpoint (HTTP ${response.status})`,
   };
 };

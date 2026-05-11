@@ -42,6 +42,18 @@ const PROVIDER_KEY_PREVIEW_LEN = 8;
 const fingerprintKey = (key: string) =>
   `${key.length}:${key.slice(-PROVIDER_KEY_PREVIEW_LEN)}`;
 
+const fingerprintDraft = (draft: ProviderCredentialDraft): string | null => {
+  const apiKey = draft.apiKey.trim();
+  if (!apiKey) {
+    return null;
+  }
+  const keyFingerprint = fingerprintKey(apiKey);
+  if (draft.provider !== "azure_foundry") {
+    return keyFingerprint;
+  }
+  return `${keyFingerprint}:${draft.endpoint.trim()}`;
+};
+
 type RowState = {
   status: ProviderRowStatus;
   // Fingerprint of the key the user explicitly saved. The row
@@ -56,6 +68,7 @@ const INITIAL_ROW_STATES: RowStateMap = {
   google: { status: "idle" },
   anthropic: { status: "idle" },
   openai: { status: "idle" },
+  azure_foundry: { status: "idle" },
   openrouter: { status: "idle" },
 };
 
@@ -79,7 +92,7 @@ export const AIStep = ({
   // Every provider in the list is either explicitly saved (valid)
   // or carries a previously-stored masked key.
   const allProvidersConfirmed = providers.every((draft) => {
-    const fp = draft.apiKey.trim() ? fingerprintKey(draft.apiKey.trim()) : null;
+    const fp = fingerprintDraft(draft);
     const state = rowStates[draft.provider];
     if (state.status === "valid" && state.savedKey && state.savedKey === fp) {
       return true;
@@ -117,9 +130,7 @@ export const AIStep = ({
       let changed = false;
       const next: RowStateMap = { ...prev };
       for (const draft of providers) {
-        const fp = draft.apiKey.trim()
-          ? fingerprintKey(draft.apiKey.trim())
-          : null;
+        const fp = fingerprintDraft(draft);
         const state = prev[draft.provider];
         // Edited away from the saved key — reset the row.
         if (
@@ -151,7 +162,10 @@ export const AIStep = ({
       if (!apiKey) {
         return;
       }
-      const fp = fingerprintKey(apiKey);
+      const fp = fingerprintDraft(draft);
+      if (!fp) {
+        return;
+      }
       setRowStates((prev) => ({
         ...prev,
         [draft.provider]: { status: "checking", savedKey: fp },
@@ -160,6 +174,9 @@ export const AIStep = ({
       const response = await api["ai-config"]["validate-provider"].post({
         provider: draft.provider,
         apiKey,
+        ...(draft.provider === "azure_foundry"
+          ? { endpoint: draft.endpoint.trim() }
+          : {}),
         ...(draft.provider === "google" ? { region: draft.region } : {}),
       });
 
@@ -255,6 +272,9 @@ export const AIStep = ({
         ? prev.anthropic
         : { status: "idle" },
       openai: stillPresent.has("openai") ? prev.openai : { status: "idle" },
+      azure_foundry: stillPresent.has("azure_foundry")
+        ? prev.azure_foundry
+        : { status: "idle" },
       openrouter: stillPresent.has("openrouter")
         ? prev.openrouter
         : { status: "idle" },

@@ -26,6 +26,7 @@ import type {
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { normalizeAzureFoundryBaseURL } from "@/api/lib/azure-foundry";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -33,6 +34,7 @@ const BYOK_PROVIDER_VALUES = [
   "google",
   "openrouter",
   "openai",
+  "azure_foundry",
   "anthropic",
 ] as const satisfies readonly AIProvider[];
 type BYOKProvider = (typeof BYOK_PROVIDER_VALUES)[number];
@@ -40,6 +42,8 @@ type BYOKProvider = (typeof BYOK_PROVIDER_VALUES)[number];
 const providerBody = t.Object({
   provider: t.UnionEnum(BYOK_PROVIDER_VALUES),
   apiKey: t.Optional(t.String({ minLength: 1 })),
+  endpoint: t.Optional(t.String({ minLength: 1, maxLength: 2048 })),
+  apiVersion: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
   region: t.Optional(t.UnionEnum(["eu", "global", "ch"])),
 });
 
@@ -133,7 +137,13 @@ const updateAIConfig = createSafeRootHandler(
     );
 
     const providersToValidate = providerResult.providers.filter(
-      (providerConfig) => newKeyProviders.has(providerConfig.provider),
+      (providerConfig) =>
+        shouldValidateProviderConfig({
+          existingConfig,
+          newKeyProviders,
+          overrideModels: modelResult.overrideModels,
+          providerConfig,
+        }),
     );
 
     const validationResults = await Promise.all(
@@ -197,7 +207,16 @@ const updateAIConfig = createSafeRootHandler(
       providers: orgConfig.providers.map((providerConfig) => ({
         provider: providerConfig.provider,
         apiKeyMasked: maskApiKey(providerConfig.apiKey),
-        region: providerConfig.region ?? "global",
+        region:
+          providerConfig.provider === "azure_foundry"
+            ? "global"
+            : (providerConfig.region ?? "global"),
+        ...(providerConfig.provider === "azure_foundry"
+          ? {
+              endpoint: providerConfig.baseURL,
+              apiVersion: providerConfig.apiVersion,
+            }
+          : {}),
       })),
       overrideModels: orgConfig.overrideModels,
     });
@@ -209,6 +228,8 @@ type ValidationResult = { valid: true } | { valid: false; error: string };
 type ProviderConfigInput = {
   provider: BYOKProvider;
   apiKey?: string | undefined;
+  endpoint?: string | undefined;
+  apiVersion?: string | undefined;
   region?: DataRegion | undefined;
 };
 
@@ -249,6 +270,40 @@ const resolveProviderConfigs = (
       };
     }
 
+    if (providerInput.provider === "azure_foundry") {
+      const existingEndpoint =
+        existingProvider?.provider === "azure_foundry"
+          ? existingProvider.baseURL
+          : undefined;
+      const endpoint = providerInput.endpoint?.trim() || existingEndpoint;
+      if (!endpoint) {
+        return {
+          valid: false,
+          error: "Endpoint is required for azure_foundry",
+        };
+      }
+
+      const normalized = normalizeAzureFoundryBaseURL(endpoint);
+      if (!normalized.ok) {
+        return { valid: false, error: normalized.error };
+      }
+
+      const existingApiVersion =
+        existingProvider?.provider === "azure_foundry"
+          ? existingProvider.apiVersion
+          : undefined;
+      const apiVersion =
+        providerInput.apiVersion?.trim() || existingApiVersion || "v1";
+
+      resolvedProviders.push({
+        provider: providerInput.provider,
+        apiKey,
+        baseURL: normalized.baseURL,
+        apiVersion,
+      });
+      continue;
+    }
+
     if (
       providerInput.region &&
       providerInput.region !== "global" &&
@@ -266,7 +321,11 @@ const resolveProviderConfigs = (
       provider: providerInput.provider,
       apiKey,
       region: supportsRegion(providerInput.provider)
-        ? (providerInput.region ?? existingProvider?.region ?? "global")
+        ? (providerInput.region ??
+          (existingProvider?.provider === "azure_foundry"
+            ? undefined
+            : existingProvider?.region) ??
+          "global")
         : "global",
     });
   }
@@ -390,6 +449,49 @@ const getValidationRole = (
   panic(
     `validateProviderKey called for ${provider} but no role is bound to it`,
   );
+
+type ShouldValidateProviderConfigOptions = {
+  existingConfig: OrgAIConfig | undefined;
+  newKeyProviders: ReadonlySet<AIProvider>;
+  overrideModels: Record<ModelRole, OrgAIModelSelection>;
+  providerConfig: OrgAIProviderConfig;
+};
+
+const shouldValidateProviderConfig = ({
+  existingConfig,
+  newKeyProviders,
+  overrideModels,
+  providerConfig,
+}: ShouldValidateProviderConfigOptions): boolean => {
+  if (newKeyProviders.has(providerConfig.provider)) {
+    return true;
+  }
+
+  if (providerConfig.provider !== "azure_foundry") {
+    return false;
+  }
+
+  const existingProvider = existingConfig?.providers.find(
+    (candidate) => candidate.provider === providerConfig.provider,
+  );
+  if (existingProvider?.provider !== "azure_foundry") {
+    return true;
+  }
+
+  if (
+    providerConfig.baseURL !== existingProvider.baseURL ||
+    providerConfig.apiVersion !== (existingProvider.apiVersion ?? "v1")
+  ) {
+    return true;
+  }
+
+  return MODEL_ROLES.some(
+    (role) =>
+      overrideModels[role].provider === "azure_foundry" &&
+      existingConfig?.overrideModels[role]?.modelId !==
+        overrideModels[role].modelId,
+  );
+};
 
 // Provider first-call latency can exceed 10 s and we don't want a
 // healthy key flagged invalid by a slow upstream. Validations run in

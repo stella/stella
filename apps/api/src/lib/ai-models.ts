@@ -8,15 +8,18 @@
  * - "google": Google AI (GOOGLE_GENERATIVE_AI_API_KEY)
  * - "openrouter": OpenRouter (OPENROUTER_API_KEY)
  * - "openai": OpenAI (OPENAI_API_KEY)
+ * - "azure_foundry": Azure AI Foundry / Azure OpenAI
+ *   (AZURE_API_KEY + AZURE_RESOURCE_NAME or AZURE_BASE_URL)
  * - "anthropic": Anthropic (ANTHROPIC_API_KEY)
  * - "openai_compatible": Any OpenAI-compatible endpoint
  *   (OPENAI_API_KEY + AI_PROVIDER_BASE_URL)
  *
  * When AI_PROVIDER is not set, auto-detects from available
- * API keys: OPENROUTER → Google → OpenAI → Anthropic.
+ * API keys: OPENROUTER → Google → OpenAI → Azure → Anthropic.
  */
 
 import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
+import { createAzure } from "@ai-sdk/azure";
 import { devToolsMiddleware } from "@ai-sdk/devtools";
 import { createGoogleGenerativeAI, google } from "@ai-sdk/google";
 import { createVertex } from "@ai-sdk/google-vertex";
@@ -27,6 +30,7 @@ import type { LanguageModel } from "ai";
 import { panic, Result } from "better-result";
 
 import { env } from "@/api/env";
+import { normalizeAzureFoundryBaseURL } from "@/api/lib/azure-foundry";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 // -- Types ------------------------------------------------------
@@ -53,6 +57,7 @@ export type AIProvider =
   | "google"
   | "openrouter"
   | "openai"
+  | "azure_foundry"
   | "anthropic"
   | "openai_compatible";
 
@@ -72,6 +77,12 @@ export const DEFAULT_MODELS = {
     pdf: "google/gemini-3.1-flash-lite-preview",
   },
   openai: {
+    fast: "gpt-5.4-nano",
+    chat: "gpt-5.4-mini",
+    reasoning: "gpt-5.4",
+    pdf: "gpt-5.4",
+  },
+  azure_foundry: {
     fast: "gpt-5.4-nano",
     chat: "gpt-5.4-mini",
     reasoning: "gpt-5.4",
@@ -115,6 +126,7 @@ export const BYOK_MODEL_OPTIONS = {
     "claude-haiku-4-5-20251001",
   ],
   openai: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2"],
+  azure_foundry: [],
   openrouter: [
     "google/gemini-3-flash-preview",
     "google/gemini-3.1-pro-preview",
@@ -131,6 +143,8 @@ export const BYOK_MODEL_OPTIONS = {
 
 export type BYOKProvider = keyof typeof BYOK_MODEL_OPTIONS;
 
+const CUSTOM_BYOK_MODEL_PROVIDERS = new Set<BYOKProvider>(["azure_foundry"]);
+
 export const isBYOKProvider = (
   provider: AIProvider,
 ): provider is BYOKProvider => provider in BYOK_MODEL_OPTIONS;
@@ -141,6 +155,9 @@ export const isAllowedBYOKModel = (
 ): boolean => {
   if (!isBYOKProvider(provider)) {
     return false;
+  }
+  if (CUSTOM_BYOK_MODEL_PROVIDERS.has(provider)) {
+    return modelId.trim().length > 0;
   }
   const allowed: readonly string[] = BYOK_MODEL_OPTIONS[provider];
   return allowed.includes(modelId);
@@ -191,6 +208,14 @@ export const getTemperatureForRole = (role: ModelRole): number =>
 type WrappableLanguageModel = Parameters<typeof wrapLanguageModel>[0]["model"];
 type ModelFactory = (modelId: string) => WrappableLanguageModel;
 
+type ModelFactoryOptions = {
+  provider: AIProvider;
+  apiKey?: string | undefined;
+  baseURL?: string | undefined;
+  region?: DataRegion | undefined;
+  apiVersion?: string | undefined;
+};
+
 const resolveProvider = (): AIProvider => {
   if (env.AI_PROVIDER) {
     return env.AI_PROVIDER;
@@ -204,6 +229,9 @@ const resolveProvider = (): AIProvider => {
   if (env.OPENAI_API_KEY) {
     return "openai";
   }
+  if (env.AZURE_API_KEY && (env.AZURE_RESOURCE_NAME || env.AZURE_BASE_URL)) {
+    return "azure_foundry";
+  }
   if (env.ANTHROPIC_API_KEY) {
     return "anthropic";
   }
@@ -212,7 +240,7 @@ const resolveProvider = (): AIProvider => {
     "No AI provider configured. Set AI_PROVIDER or " +
       "provide at least one API key: " +
       "GOOGLE_GENERATIVE_AI_API_KEY, OPENROUTER_API_KEY, " +
-      "OPENAI_API_KEY, or ANTHROPIC_API_KEY.",
+      "OPENAI_API_KEY, AZURE_API_KEY, or ANTHROPIC_API_KEY.",
   );
 };
 
@@ -240,6 +268,7 @@ export const hasInstanceProvider = (): boolean => {
     env.GOOGLE_AI_API_KEY_EU ||
     env.GOOGLE_AI_API_KEY_CH ||
     env.OPENAI_API_KEY ||
+    (env.AZURE_API_KEY && (env.AZURE_RESOURCE_NAME || env.AZURE_BASE_URL)) ||
     env.ANTHROPIC_API_KEY
   );
   if (!env.AI_PROVIDER) {
@@ -259,6 +288,11 @@ export const hasInstanceProvider = (): boolean => {
       );
     case "openai":
       return !!env.OPENAI_API_KEY;
+    case "azure_foundry":
+      return !!(
+        env.AZURE_API_KEY &&
+        (env.AZURE_RESOURCE_NAME || env.AZURE_BASE_URL)
+      );
     case "anthropic":
       return !!env.ANTHROPIC_API_KEY;
     case "openai_compatible":
@@ -323,12 +357,13 @@ const createRegionalGoogleFactory = (
   return (id) => client(id);
 };
 
-const createModelFactory = (
-  provider: AIProvider,
-  apiKey?: string,
-  baseURL?: string,
-  region?: DataRegion,
-): ModelFactory => {
+const createModelFactory = ({
+  provider,
+  apiKey,
+  baseURL,
+  region,
+  apiVersion,
+}: ModelFactoryOptions): ModelFactory => {
   switch (provider) {
     case "google": {
       // Regional routing: use Vertex AI with location.
@@ -373,6 +408,44 @@ const createModelFactory = (
       }
       return (id) => openai(id);
     }
+    case "azure_foundry": {
+      const key =
+        apiKey ??
+        env.AZURE_API_KEY ??
+        panic("AZURE_API_KEY required for azure_foundry");
+      const resourceName = baseURL ? undefined : env.AZURE_RESOURCE_NAME;
+      const rawURL =
+        baseURL ??
+        (env.AZURE_BASE_URL
+          ? resolveAzureFoundryEnvBaseURL(env.AZURE_BASE_URL)
+          : undefined);
+      const url =
+        rawURL ??
+        (resourceName
+          ? undefined
+          : panic(
+              "AZURE_RESOURCE_NAME or AZURE_BASE_URL required for azure_foundry",
+            ));
+      const resolvedApiVersion = apiVersion ?? env.AZURE_API_VERSION;
+      const client = createAzure(
+        url
+          ? {
+              apiKey: key,
+              baseURL: url,
+              ...(resolvedApiVersion ? { apiVersion: resolvedApiVersion } : {}),
+            }
+          : {
+              apiKey: key,
+              resourceName:
+                resourceName ??
+                panic(
+                  "AZURE_RESOURCE_NAME or AZURE_BASE_URL required for azure_foundry",
+                ),
+              ...(resolvedApiVersion ? { apiVersion: resolvedApiVersion } : {}),
+            },
+      );
+      return (id) => client(id);
+    }
     case "anthropic": {
       if (apiKey) {
         const client = createAnthropic({ apiKey });
@@ -403,6 +476,14 @@ const createModelFactory = (
   }
 };
 
+const resolveAzureFoundryEnvBaseURL = (rawURL: string): string => {
+  const normalized = normalizeAzureFoundryBaseURL(rawURL);
+  if (!normalized.ok) {
+    return panic(`Invalid AZURE_BASE_URL: ${normalized.error}`);
+  }
+  return normalized.baseURL;
+};
+
 // -- BYOK org config --------------------------------------------
 
 /**
@@ -422,8 +503,8 @@ export type OrgAIConfig = {
   overrideModels: Record<ModelRole, OrgAIModelSelection>;
 };
 
-export type OrgAIProviderConfig = {
-  provider: AIProvider;
+export type StandardOrgAIProviderConfig = {
+  provider: Exclude<AIProvider, "azure_foundry">;
   /** Decrypted API key. */
   apiKey: string;
   /**
@@ -433,6 +514,19 @@ export type OrgAIProviderConfig = {
    */
   region?: DataRegion | undefined;
 };
+
+export type AzureFoundryOrgAIProviderConfig = {
+  provider: "azure_foundry";
+  /** Decrypted API key. */
+  apiKey: string;
+  /** Normalized @ai-sdk/azure baseURL, without the trailing `/v1`. */
+  baseURL: string;
+  apiVersion?: string | undefined;
+};
+
+export type OrgAIProviderConfig =
+  | StandardOrgAIProviderConfig
+  | AzureFoundryOrgAIProviderConfig;
 
 export type OrgAIModelSelection = {
   provider: AIProvider;
@@ -450,7 +544,7 @@ export type ResolvedModelInfo = {
 
 /**
  * LRU cache for BYOK model factories. Keyed by a stable
- * hash of (provider + apiKey + region) so we don't
+ * hash of (provider + apiKey + endpoint/region) so we don't
  * recreate HTTP clients on every call within the same
  * connection. Uses a truncated SHA-256 digest to avoid
  * holding full secrets as map keys.
@@ -460,9 +554,16 @@ const byokCache = new Map<string, ModelFactory>();
 
 const byokCacheKey = (config: OrgAIProviderConfig): string => {
   const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(config.provider);
   hasher.update(config.apiKey);
+  if (config.provider === "azure_foundry") {
+    hasher.update(config.baseURL);
+    hasher.update(config.apiVersion ?? "v1");
+  } else {
+    hasher.update(config.region ?? "global");
+  }
   const hash = hasher.digest("hex").slice(0, 16);
-  return `${config.provider}:${hash}:${config.region ?? "global"}`;
+  return `${config.provider}:${hash}`;
 };
 
 const getCachedFactory = (config: OrgAIProviderConfig): ModelFactory => {
@@ -478,12 +579,13 @@ const getCachedFactory = (config: OrgAIProviderConfig): ModelFactory => {
       byokCache.delete(oldest);
     }
   }
-  const factory = createModelFactory(
-    config.provider,
-    config.apiKey,
-    undefined,
-    config.region,
-  );
+  const factory = createModelFactory({
+    provider: config.provider,
+    apiKey: config.apiKey,
+    ...(config.provider === "azure_foundry"
+      ? { baseURL: config.baseURL, apiVersion: config.apiVersion }
+      : { region: config.region }),
+  });
   byokCache.set(key, factory);
   return factory;
 };
@@ -501,7 +603,7 @@ const getActiveProvider = (): AIProvider => {
 let _instanceFactory: ModelFactory | undefined;
 
 const getInstanceFactory = (): ModelFactory => {
-  _instanceFactory ??= createModelFactory(getActiveProvider());
+  _instanceFactory ??= createModelFactory({ provider: getActiveProvider() });
   return _instanceFactory;
 };
 
@@ -598,7 +700,10 @@ export const getModelInfoForRole = (
       keySource: "byok",
       provider: providerConfig.provider,
       modelId: selection.modelId,
-      region: providerConfig.region,
+      region:
+        providerConfig.provider === "azure_foundry"
+          ? undefined
+          : providerConfig.region,
     };
   }
 
@@ -620,7 +725,10 @@ export const getModelInfoById = (
       keySource: "byok",
       provider: providerConfig.provider,
       modelId,
-      region: providerConfig.region,
+      region:
+        providerConfig.provider === "azure_foundry"
+          ? undefined
+          : providerConfig.region,
     };
   }
 

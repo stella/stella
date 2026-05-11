@@ -58,6 +58,52 @@ describe("isOrgAIConfig", () => {
     ).toBe(true);
   });
 
+  test("accepts Azure Foundry org AI config with endpoint metadata", () => {
+    expect(
+      isOrgAIConfig({
+        providers: [
+          {
+            provider: "azure_foundry",
+            apiKey: "azure-test",
+            baseURL: "https://example.openai.azure.com/openai",
+            apiVersion: "v1",
+          },
+        ],
+        overrideModels: {
+          chat: { provider: "azure_foundry", modelId: "customer-chat" },
+          fast: { provider: "azure_foundry", modelId: "customer-fast" },
+          reasoning: {
+            provider: "azure_foundry",
+            modelId: "customer-reasoning",
+          },
+          pdf: { provider: "azure_foundry", modelId: "customer-pdf" },
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects Azure Foundry configs without endpoint metadata", () => {
+    expect(
+      isOrgAIConfig({
+        providers: [
+          {
+            provider: "azure_foundry",
+            apiKey: "azure-test",
+          },
+        ],
+        overrideModels: {
+          chat: { provider: "azure_foundry", modelId: "customer-chat" },
+          fast: { provider: "azure_foundry", modelId: "customer-fast" },
+          reasoning: {
+            provider: "azure_foundry",
+            modelId: "customer-reasoning",
+          },
+          pdf: { provider: "azure_foundry", modelId: "customer-pdf" },
+        },
+      }),
+    ).toBe(false);
+  });
+
   test("rejects configs missing any role in overrideModels", () => {
     expect(
       isOrgAIConfig({

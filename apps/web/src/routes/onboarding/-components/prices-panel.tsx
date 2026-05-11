@@ -261,6 +261,13 @@ export const PricesPanel = ({ providers, roleModels }: PricesPanelProps) => {
                   {tOrganization(`aiConfig.providers.${provider}`)}
                 </span>
               </div>
+              {rows.length === 0 && (
+                <div className="px-5 py-2 text-sm">
+                  <span className="text-muted-foreground text-xs">
+                    {tOrganization("aiConfig.prices.azureManaged")}
+                  </span>
+                </div>
+              )}
               {rows.map((row) => {
                 const selectionKey = encodeModelSelection({
                   provider,

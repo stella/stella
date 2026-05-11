@@ -1,6 +1,6 @@
 import type { ComponentProps, ComponentType } from "react";
 
-import { SparklesIcon } from "lucide-react";
+import { CloudIcon, SparklesIcon } from "lucide-react";
 
 import type { ProviderValue } from "@/components/ai-config-role-models.logic";
 
@@ -42,6 +42,7 @@ const PROVIDER_ICONS = {
   google: GeminiIcon,
   anthropic: AnthropicIcon,
   openai: OpenAIIcon,
+  azure_foundry: CloudIcon,
   openrouter: SparklesIcon,
 } as const satisfies Record<ProviderValue, IconComponent>;
 
