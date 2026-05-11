@@ -101,6 +101,65 @@ function isFieldRun(run: Run): run is FieldRun {
   return run.kind === "field";
 }
 
+const AUTOMATIC_TEXT_COLOR_VALUES = new Set(["auto", "windowtext"]);
+const DEFAULT_BLACK_TEXT_COLOR_VALUES = new Set(["000000", "000"]);
+
+function normalizeTextColorValue(color: string): string {
+  return color.trim().toLowerCase().replace(/^#/, "");
+}
+
+function isAutomaticTextColor(color: string): boolean {
+  return AUTOMATIC_TEXT_COLOR_VALUES.has(normalizeTextColorValue(color));
+}
+
+function isDefaultBlackTextColor(color: string): boolean {
+  return DEFAULT_BLACK_TEXT_COLOR_VALUES.has(normalizeTextColorValue(color));
+}
+
+function shouldRenderTextColor(
+  color: string,
+  highlight: string | undefined,
+  textColorSource: TextRun["textColorSource"],
+): boolean {
+  if (isAutomaticTextColor(color)) {
+    return false;
+  }
+
+  if (highlight) {
+    return (
+      textColorSource !== "paragraphDefault" || !isDefaultBlackTextColor(color)
+    );
+  }
+
+  return !isDefaultBlackTextColor(color);
+}
+
+function getRenderableTextColor(run: TextRun | TabRun): string | undefined {
+  const textColor = run.color;
+  if (!textColor) {
+    return undefined;
+  }
+
+  if (!shouldRenderTextColor(textColor, run.highlight, run.textColorSource)) {
+    return undefined;
+  }
+
+  return textColor.trim();
+}
+
+function getHyperlinkTextColor(run: TextRun, inheritedColor: string): string {
+  const textColor = run.color?.trim();
+  if (
+    textColor &&
+    !isAutomaticTextColor(textColor) &&
+    run.textColorSource === "direct"
+  ) {
+    return textColor;
+  }
+
+  return getRenderableTextColor(run) || inheritedColor || "#0563c1";
+}
+
 /**
  * Apply text run styles to an element
  */
@@ -126,13 +185,11 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
   }
 
   // Color — skip black/auto so the CSS variable --doc-canvas-text can adapt to dark mode
-  if (run.color) {
-    const c = run.color.toLowerCase().replace(/^#/, "");
-    const isBlackOrDefault =
-      c === "000000" || c === "000" || c === "auto" || c === "windowtext";
-    if (!isBlackOrDefault) {
-      element.style.color = run.color;
-    }
+  let hasExplicitTextColor = false;
+  const textColor = getRenderableTextColor(run);
+  if (textColor) {
+    element.style.color = textColor;
+    hasExplicitTextColor = true;
   }
 
   // Letter spacing
@@ -203,6 +260,16 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
   // Highlight (background color)
   if (run.highlight) {
     element.style.backgroundColor = run.highlight;
+    const hasTrackedChangeColor = run.isInsertion || run.isDeletion;
+    const hasCommentHighlight =
+      run.commentIds !== undefined && run.commentIds.length > 0;
+    const automaticTextColor =
+      hasExplicitTextColor || hasTrackedChangeColor || hasCommentHighlight
+        ? undefined
+        : getAutomaticTextColorForBackground(run.highlight);
+    if (automaticTextColor) {
+      element.style.color = automaticTextColor;
+    }
   }
 
   // Text decorations
@@ -358,7 +425,7 @@ function renderTextRun(run: TextRun, doc: Document): HTMLElement {
     }
     anchor.textContent = run.text;
     // Style hyperlink — default Word hyperlink color is blue (#0563c1)
-    const hyperlinkColor = run.color || "#0563c1";
+    const hyperlinkColor = getHyperlinkTextColor(run, span.style.color);
     anchor.style.color = hyperlinkColor;
     anchor.style.textDecoration = "underline";
     // Override span color to match anchor (prevents color mismatch in selection)
@@ -559,6 +626,9 @@ function renderFieldRun(
     ...(run.underline !== undefined ? { underline: run.underline } : {}),
     ...(run.strike !== undefined ? { strike: run.strike } : {}),
     ...(run.color !== undefined ? { color: run.color } : {}),
+    ...(run.textColorSource !== undefined
+      ? { textColorSource: run.textColorSource }
+      : {}),
     ...(run.highlight !== undefined ? { highlight: run.highlight } : {}),
     ...(run.fontFamily !== undefined ? { fontFamily: run.fontFamily } : {}),
     ...(run.fontSize !== undefined ? { fontSize: run.fontSize } : {}),

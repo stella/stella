@@ -11,6 +11,10 @@ describe("document automatic text color", () => {
     expect(getAutomaticTextColorForBackground("#111111")).toBe("#FFFFFF");
   });
 
+  test("uses black automatic text on mid-tone document shading", () => {
+    expect(getAutomaticTextColorForBackground("#A9A9A9")).toBe("#000000");
+  });
+
   test("leaves automatic text theme-adaptive when shading is not a concrete color", () => {
     expect(getAutomaticTextColorForBackground("auto")).toBeUndefined();
     expect(getAutomaticTextColorForBackground(undefined)).toBeUndefined();

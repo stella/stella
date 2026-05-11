@@ -7,6 +7,7 @@ import type {
   ParagraphFragment,
   ParagraphMeasure,
 } from "../layout-engine/types";
+import { AUTHOR_COLORS, resetAuthorColors } from "../utils/authorColors";
 import { renderLine, renderParagraphFragment } from "./renderParagraph";
 
 class FakeElement {
@@ -15,6 +16,11 @@ class FakeElement {
   innerHTML = "";
   style: Record<string, string> = {};
   children: FakeElement[] = [];
+  classList = {
+    add: (...tokens: string[]) => {
+      this.className = [this.className, ...tokens].filter(Boolean).join(" ");
+    },
+  };
   height = 0;
   width = 0;
   src = "";
@@ -57,6 +63,12 @@ const fakeDocument = {
     return new FakeElement(tagName);
   },
 } as unknown as Document;
+
+const TEST_HIGHLIGHT_COLOR = "#FFFF00";
+const TEST_DARK_HIGHLIGHT_COLOR = "#000080";
+const TEST_MID_HIGHLIGHT_COLOR = "#A9A9A9";
+const TEST_EXPLICIT_BLACK_COLOR = " #000000 ";
+const TEST_EXPLICIT_TEXT_COLOR = "#C00000";
 
 describe("renderLine inline image handling", () => {
   test("pins image dimensions and centers an image-only line", () => {
@@ -156,6 +168,389 @@ describe("renderLine text styling", () => {
     const textEl = lineEl.children[0] as HTMLElement | undefined;
 
     expect(textEl?.style.fontWeight).toBe("800");
+  });
+
+  test("keeps automatic text readable on bright DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Highlighted text",
+          highlight: TEST_HIGHLIGHT_COLOR,
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 16,
+      width: 112,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.backgroundColor).toBe(TEST_HIGHLIGHT_COLOR);
+    expect(textEl?.style.color).toBe("#000000");
+  });
+
+  test("keeps automatic text readable on dark DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Highlighted text",
+          highlight: TEST_DARK_HIGHLIGHT_COLOR,
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 16,
+      width: 112,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.backgroundColor).toBe(TEST_DARK_HIGHLIGHT_COLOR);
+    expect(textEl?.style.color).toBe("#FFFFFF");
+  });
+
+  test("keeps inherited default-black text readable on dark DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Highlighted text",
+          color: TEST_EXPLICIT_BLACK_COLOR,
+          textColorSource: "paragraphDefault",
+          highlight: TEST_DARK_HIGHLIGHT_COLOR,
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 16,
+      width: 112,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.backgroundColor).toBe(TEST_DARK_HIGHLIGHT_COLOR);
+    expect(textEl?.style.color).toBe("#FFFFFF");
+  });
+
+  test("keeps automatic hyperlink text readable on dark DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Highlighted text",
+          highlight: TEST_DARK_HIGHLIGHT_COLOR,
+          hyperlink: { href: "https://example.com" },
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 16,
+      width: 112,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+    const anchorEl = textEl?.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.backgroundColor).toBe(TEST_DARK_HIGHLIGHT_COLOR);
+    expect(textEl?.style.color).toBe("#FFFFFF");
+    expect(anchorEl?.style.color).toBe("#FFFFFF");
+  });
+
+  test("keeps inherited default-black hyperlink text readable on dark DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Highlighted text",
+          color: TEST_EXPLICIT_BLACK_COLOR,
+          textColorSource: "paragraphDefault",
+          highlight: TEST_DARK_HIGHLIGHT_COLOR,
+          hyperlink: { href: "https://example.com" },
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 16,
+      width: 112,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+    const anchorEl = textEl?.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.backgroundColor).toBe(TEST_DARK_HIGHLIGHT_COLOR);
+    expect(textEl?.style.color).toBe("#FFFFFF");
+    expect(anchorEl?.style.color).toBe("#FFFFFF");
+  });
+
+  test("preserves direct black hyperlink text without DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Linked text",
+          color: TEST_EXPLICIT_BLACK_COLOR,
+          textColorSource: "direct",
+          hyperlink: { href: "https://example.com" },
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 11,
+      width: 77,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+    const anchorEl = textEl?.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.color).toBe("#000000");
+    expect(anchorEl?.style.color).toBe("#000000");
+  });
+
+  test("uses Word blue for inherited default-black hyperlink text without DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Linked text",
+          color: TEST_EXPLICIT_BLACK_COLOR,
+          textColorSource: "paragraphDefault",
+          hyperlink: { href: "https://example.com" },
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 11,
+      width: 77,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+    const anchorEl = textEl?.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.color).toBe("#0563c1");
+    expect(anchorEl?.style.color).toBe("#0563c1");
+  });
+
+  test("uses the higher-contrast text color on mid-tone DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Highlighted text",
+          highlight: TEST_MID_HIGHLIGHT_COLOR,
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 16,
+      width: 112,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.backgroundColor).toBe(TEST_MID_HIGHLIGHT_COLOR);
+    expect(textEl?.style.color).toBe("#000000");
+  });
+
+  test("keeps automatic comment text readable when comment styling overrides a DOCX highlight", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Highlighted text",
+          highlight: TEST_DARK_HIGHLIGHT_COLOR,
+          commentIds: [42],
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 16,
+      width: 112,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.backgroundColor).toBe("rgba(255, 212, 0, 0.08)");
+    expect(textEl?.style.color).toBeUndefined();
+    expect(textEl?.dataset.commentId).toBe("42");
+  });
+
+  test("preserves explicit text colors on DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Highlighted text",
+          color: TEST_EXPLICIT_TEXT_COLOR,
+          highlight: TEST_HIGHLIGHT_COLOR,
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 16,
+      width: 112,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.backgroundColor).toBe(TEST_HIGHLIGHT_COLOR);
+    expect(textEl?.style.color).toBe(TEST_EXPLICIT_TEXT_COLOR);
+  });
+
+  test("preserves explicit black text colors on DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Highlighted text",
+          color: TEST_EXPLICIT_BLACK_COLOR,
+          highlight: TEST_DARK_HIGHLIGHT_COLOR,
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 16,
+      width: 112,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.backgroundColor).toBe(TEST_DARK_HIGHLIGHT_COLOR);
+    expect(textEl?.style.color).toBe("#000000");
+  });
+
+  test("preserves tracked-change author colors on DOCX highlights", () => {
+    resetAuthorColors();
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Highlighted text",
+          highlight: TEST_HIGHLIGHT_COLOR,
+          isInsertion: true,
+          changeAuthor: "Reviewer",
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 16,
+      width: 112,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.backgroundColor).toBe(TEST_HIGHLIGHT_COLOR);
+    expect(textEl?.style.color).toBe(AUTHOR_COLORS[0]);
   });
 });
 

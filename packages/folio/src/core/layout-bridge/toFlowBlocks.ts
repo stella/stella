@@ -42,6 +42,7 @@ import type {
 } from "../prosemirror/schema/marks";
 import type { ParagraphAttrs as PMParagraphAttrs } from "../prosemirror/schema/nodes";
 import type {
+  ColorValue,
   Theme,
   SectionProperties,
   NumberFormat,
@@ -82,6 +83,19 @@ const DEFAULT_TABLE_CELL_MARGIN_TWIPS = {
   left: 108,
 } as const;
 type TablePaddingSide = keyof typeof DEFAULT_TABLE_CELL_MARGIN_TWIPS;
+const DEFAULT_BLACK_TEXT_COLOR_VALUES = new Set(["000000", "000"]);
+
+function normalizeResolvedTextColor(color: string): string {
+  return color.trim().toLowerCase().replace(/^#/, "");
+}
+
+function isDefaultBlackResolvedTextColor(color: string): boolean {
+  return DEFAULT_BLACK_TEXT_COLOR_VALUES.has(normalizeResolvedTextColor(color));
+}
+
+function areResolvedTextColorsEqual(left: string, right: string): boolean {
+  return normalizeResolvedTextColor(left) === normalizeResolvedTextColor(right);
+}
 
 /**
  * Constrain image dimensions to fit within the page content area.
@@ -357,7 +371,7 @@ function extractRunFormatting(
       case "textColor": {
         const attrs = mark.attrs as TextColorAttrs;
         if (attrs.themeColor || attrs.rgb) {
-          const colorArg: Parameters<typeof resolveColor>[0] = {};
+          const colorArg: ColorValue = {};
           if (attrs.rgb) {
             colorArg.rgb = attrs.rgb;
           }
@@ -370,7 +384,10 @@ function extractRunFormatting(
           if (attrs.themeShade) {
             colorArg.themeShade = attrs.themeShade;
           }
-          formatting.color = resolveColor(colorArg, theme);
+          if (!isAutomaticTextColorValue(colorArg)) {
+            formatting.color = resolveColor(colorArg, theme);
+            formatting.textColorSource = "direct";
+          }
         }
         break;
       }
@@ -525,6 +542,41 @@ function extractRunFormatting(
   return formatting;
 }
 
+function isAutomaticTextColorValue(color: ColorValue): boolean {
+  const rgb = color.rgb?.trim().toLowerCase();
+  return color.auto === true || rgb === "auto" || (!rgb && !color.themeColor);
+}
+
+function markDefaultBlackTextColorSource(
+  formatting: RunFormatting,
+  paraDefaults: RunFormatting,
+): RunFormatting {
+  if (
+    formatting.textColorSource === "direct" ||
+    formatting.color === undefined ||
+    paraDefaults.color === undefined ||
+    !isDefaultBlackResolvedTextColor(formatting.color) ||
+    !areResolvedTextColorsEqual(formatting.color, paraDefaults.color)
+  ) {
+    return formatting;
+  }
+
+  return {
+    ...formatting,
+    textColorSource: "paragraphDefault",
+  };
+}
+
+function mergeRunFormatting(
+  paraDefaults: RunFormatting,
+  formatting: RunFormatting,
+): RunFormatting {
+  return {
+    ...paraDefaults,
+    ...markDefaultBlackTextColorSource(formatting, paraDefaults),
+  };
+}
+
 function applyRunFormattingOverrides(
   formatting: RunFormatting,
   mark: Mark,
@@ -606,8 +658,12 @@ function paragraphRunDefaults(
   if (defaultTextFormatting.strike !== undefined) {
     result.strike = defaultTextFormatting.strike;
   }
-  if (defaultTextFormatting.color) {
+  if (
+    defaultTextFormatting.color &&
+    !isAutomaticTextColorValue(defaultTextFormatting.color)
+  ) {
     result.color = resolveColor(defaultTextFormatting.color, theme);
+    result.textColorSource = "paragraphDefault";
   }
   if (defaultTextFormatting.highlight) {
     const highlight = resolveHighlightToCss(defaultTextFormatting.highlight);
@@ -749,8 +805,7 @@ function paragraphToRuns(
       const run: TextRun = {
         kind: "text",
         text: child.text,
-        ...paraDefaults,
-        ...formatting,
+        ...mergeRunFormatting(paraDefaults, formatting),
         pmStart: childPos,
         pmEnd: childPos + child.nodeSize,
       };
@@ -768,8 +823,7 @@ function paragraphToRuns(
       const formatting = extractRunFormatting(child.marks, theme);
       const run: TabRun = {
         kind: "tab",
-        ...paraDefaults,
-        ...formatting,
+        ...mergeRunFormatting(paraDefaults, formatting),
         pmStart: childPos,
         pmEnd: childPos + child.nodeSize,
       };
@@ -809,7 +863,10 @@ function paragraphToRuns(
               : ft === "TIME"
                 ? "TIME"
                 : "OTHER";
-      const fieldFormatting = extractRunFormatting(child.marks, theme);
+      const fieldFormatting = markDefaultBlackTextColorSource(
+        extractRunFormatting(child.marks, theme),
+        paraDefaults,
+      );
       const run: FieldRun = {
         kind: "field",
         fieldType: mappedType,
@@ -843,8 +900,7 @@ function paragraphToRuns(
           const run: TextRun = {
             kind: "text",
             text: sdtChild.text,
-            ...paraDefaults,
-            ...formatting,
+            ...mergeRunFormatting(paraDefaults, formatting),
             pmStart: sdtChildPos,
             pmEnd: sdtChildPos + sdtChild.nodeSize,
           };
@@ -860,8 +916,7 @@ function paragraphToRuns(
           const formatting = extractRunFormatting(sdtChild.marks, theme);
           const run: TabRun = {
             kind: "tab",
-            ...paraDefaults,
-            ...formatting,
+            ...mergeRunFormatting(paraDefaults, formatting),
             pmStart: sdtChildPos,
             pmEnd: sdtChildPos + sdtChild.nodeSize,
           };

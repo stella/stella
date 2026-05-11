@@ -1,4 +1,9 @@
 const HEX_COLOR_RE = /^#?[0-9a-f]{6}$/i;
+const BLACK_TEXT_COLOR = "#000000";
+const WHITE_TEXT_COLOR = "#FFFFFF";
+const BLACK_LUMINANCE = 0;
+const WHITE_LUMINANCE = 1;
+const CONTRAST_OFFSET = 0.05;
 
 function normalizeHexColor(color: string): string | null {
   const trimmed = color.trim();
@@ -28,6 +33,12 @@ function relativeLuminance(hexColor: string): number | null {
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
 
+function contrastRatio(luminanceA: number, luminanceB: number): number {
+  const lighter = Math.max(luminanceA, luminanceB);
+  const darker = Math.min(luminanceA, luminanceB);
+  return (lighter + CONTRAST_OFFSET) / (darker + CONTRAST_OFFSET);
+}
+
 export function getAutomaticTextColorForBackground(
   backgroundColor: string | undefined,
 ): string | undefined {
@@ -40,5 +51,7 @@ export function getAutomaticTextColorForBackground(
     return undefined;
   }
 
-  return luminance > 0.45 ? "#000000" : "#FFFFFF";
+  const blackContrast = contrastRatio(luminance, BLACK_LUMINANCE);
+  const whiteContrast = contrastRatio(luminance, WHITE_LUMINANCE);
+  return blackContrast >= whiteContrast ? BLACK_TEXT_COLOR : WHITE_TEXT_COLOR;
 }
