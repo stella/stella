@@ -32,6 +32,7 @@ export const aiConfigPublicRoute = new Elysia({ prefix: "/ai-config" }).post(
         body.provider,
         body.apiKey,
         body.endpoint,
+        body.apiVersion,
       );
       if (!result.valid) {
         logger.warn("ai_config.provider_validation_rejected", {
@@ -52,6 +53,7 @@ export const aiConfigPublicRoute = new Elysia({ prefix: "/ai-config" }).post(
       provider: t.UnionEnum(PROVIDER_PROBE_VALUES),
       apiKey: t.String({ minLength: 1, maxLength: 512 }),
       endpoint: t.Optional(t.String({ minLength: 1, maxLength: 2048 })),
+      apiVersion: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
       region: t.Optional(t.UnionEnum(["eu", "global", "ch"])),
     }),
   },

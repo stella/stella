@@ -292,14 +292,13 @@ const resolveProviderConfigs = (
         existingProvider?.provider === "azure_foundry"
           ? existingProvider.apiVersion
           : undefined;
-      const apiVersion =
-        providerInput.apiVersion?.trim() || existingApiVersion || "v1";
+      const apiVersion = providerInput.apiVersion?.trim() || existingApiVersion;
 
       resolvedProviders.push({
         provider: providerInput.provider,
         apiKey,
         baseURL: normalized.baseURL,
-        apiVersion,
+        ...(apiVersion ? { apiVersion } : {}),
       });
       continue;
     }

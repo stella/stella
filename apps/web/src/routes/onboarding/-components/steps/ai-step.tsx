@@ -175,7 +175,10 @@ export const AIStep = ({
         provider: draft.provider,
         apiKey,
         ...(draft.provider === "azure_foundry"
-          ? { endpoint: draft.endpoint.trim() }
+          ? {
+              endpoint: draft.endpoint.trim(),
+              ...(draft.apiVersion ? { apiVersion: draft.apiVersion } : {}),
+            }
           : {}),
         ...(draft.provider === "google" ? { region: draft.region } : {}),
       });

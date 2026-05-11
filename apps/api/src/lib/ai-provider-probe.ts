@@ -5,9 +5,11 @@
  * committing the config.
  */
 
+import { env } from "@/api/env";
 import { normalizeAzureFoundryBaseURL } from "@/api/lib/azure-foundry";
 
 const VALIDATION_TIMEOUT_MS = 5000;
+const AI_SDK_AZURE_DEFAULT_API_VERSION = "v1";
 
 export const PROVIDER_PROBE_VALUES = [
   "google",
@@ -93,9 +95,10 @@ export const probeProvider = async (
   provider: ProviderProbeValue,
   apiKey: string,
   endpoint?: string,
+  apiVersion?: string,
 ): Promise<ProviderProbeResult> => {
   if (provider === "azure_foundry") {
-    return await probeAzureFoundry(apiKey, endpoint);
+    return await probeAzureFoundry(apiKey, endpoint, apiVersion);
   }
 
   const signal = AbortSignal.timeout(VALIDATION_TIMEOUT_MS);
@@ -119,6 +122,7 @@ export const probeProvider = async (
 const probeAzureFoundry = async (
   apiKey: string,
   endpoint: string | undefined,
+  apiVersion: string | undefined,
 ): Promise<ProviderProbeResult> => {
   if (!endpoint?.trim()) {
     return {
@@ -134,7 +138,7 @@ const probeAzureFoundry = async (
 
   const signal = AbortSignal.timeout(VALIDATION_TIMEOUT_MS);
   const url = new URL(`${normalized.baseURL}/v1/models`);
-  url.searchParams.set("api-version", "v1");
+  url.searchParams.set("api-version", resolveAzureApiVersion(apiVersion));
   const response = await fetch(url, {
     headers: { "api-key": apiKey },
     signal,
@@ -152,3 +156,8 @@ const probeAzureFoundry = async (
       : `Azure Foundry rejected the key or endpoint (HTTP ${response.status})`,
   };
 };
+
+const resolveAzureApiVersion = (apiVersion: string | undefined): string =>
+  apiVersion?.trim() ||
+  env.AZURE_API_VERSION ||
+  AI_SDK_AZURE_DEFAULT_API_VERSION;
