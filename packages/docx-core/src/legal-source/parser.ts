@@ -635,9 +635,11 @@ const applyDocumentAutofixes = ({
 }): LegalSourceParseResult => {
   const blocks: LegalDraftBlock[] = [];
   const normalizedTitle = normalizeTitle(draft.meta.title ?? "");
+  let hasSeenSubstantiveBlock = false;
 
   for (const block of draft.blocks) {
     if (
+      !hasSeenSubstantiveBlock &&
       block.type === "clause" &&
       block.level === 1 &&
       normalizedTitle.length > 0 &&
@@ -650,6 +652,7 @@ const applyDocumentAutofixes = ({
       continue;
     }
     blocks.push(block);
+    hasSeenSubstantiveBlock ||= isSubstantiveDraftBlock(block);
   }
 
   const signatureIndex = blocks.findIndex(
@@ -672,6 +675,9 @@ const applyDocumentAutofixes = ({
     fixes,
   };
 };
+
+const isSubstantiveDraftBlock = (block: LegalDraftBlock): boolean =>
+  block.type !== "title" && block.type !== "pageBreak";
 
 // Localized aliases for `@signatures` field keys. Lets the AI
 // write `strana:` / `funkce:` etc. when the document is in Czech

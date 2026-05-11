@@ -164,6 +164,34 @@ describe("Stella Legal Source", () => {
     );
   });
 
+  test("removes only a leading duplicate-title clause", () => {
+    const result = parseLegalSource(
+      [
+        '@doc title="Master Services Agreement"',
+        "@clause Master Services Agreement",
+        "Introductory duplicate title.",
+        "@clause Background",
+        "The parties have prior dealings.",
+        "@clause Master Services Agreement",
+        "This later clause is intentional.",
+      ].join("\n"),
+    );
+
+    const clauses = result.draft.blocks.filter(
+      (block) => block.type === "clause",
+    );
+
+    expect(clauses.map((clause) => clause.heading)).toEqual([
+      "Background",
+      "Master Services Agreement",
+    ]);
+    expect(
+      result.fixes.filter(
+        (fix) => fix.code === "duplicate-title-clause-removed",
+      ),
+    ).toHaveLength(1);
+  });
+
   test("does not strip legitimate one-letter clause heading words", () => {
     const result = parseLegalSource(
       [

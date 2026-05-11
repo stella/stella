@@ -9,6 +9,7 @@ describe("legacy chat tool input compatibility", () => {
         input: {
           markdown: "@title Legacy agreement",
           name: "Legacy agreement",
+          workspaceId: "legacy-matter-id",
         },
         state: "input-available",
         toolCallId: "tool-call-1",
@@ -50,6 +51,50 @@ describe("legacy chat tool input compatibility", () => {
           source: "@title Current",
         },
         state: "input-available",
+        toolCallId: "tool-call-1",
+        type: "tool-create-document",
+      },
+    ]);
+  });
+
+  test("fills route ids on legacy create-document success outputs", () => {
+    const parts = [
+      {
+        input: {
+          name: "Legacy agreement",
+          source: "@title Legacy agreement",
+        },
+        output: {
+          success: true,
+          fileName: "Legacy agreement.docx",
+          entityRef: "MAT-001/0001.v1",
+          matterRef: "MAT-001",
+          href: "/workspaces/legacy-matter-id",
+          mention: "@Legacy agreement",
+        },
+        state: "output-available",
+        toolCallId: "tool-call-1",
+        type: "tool-create-document",
+      },
+    ];
+
+    expect(normalizeLegacyRawToolInputs(parts)).toEqual([
+      {
+        input: {
+          name: "Legacy agreement",
+          source: "@title Legacy agreement",
+        },
+        output: {
+          success: true,
+          fileName: "Legacy agreement.docx",
+          entityId: "",
+          workspaceId: "",
+          entityRef: "MAT-001/0001.v1",
+          matterRef: "MAT-001",
+          href: "/workspaces/legacy-matter-id",
+          mention: "@Legacy agreement",
+        },
+        state: "output-available",
         toolCallId: "tool-call-1",
         type: "tool-create-document",
       },
