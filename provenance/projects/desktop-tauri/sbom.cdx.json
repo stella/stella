@@ -33074,6 +33074,7 @@
         "pkg:cargo/tauri@2.11.1",
         "pkg:cargo/tokio@1.52.2",
         "pkg:cargo/tower-http@0.6.10",
+        "pkg:cargo/tower@0.5.3",
         "pkg:cargo/tracing-subscriber@0.3.23",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/uuid@1.23.1",
