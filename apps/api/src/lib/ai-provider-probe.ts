@@ -19,6 +19,7 @@ export const PROVIDER_PROBE_VALUES = [
   "openai",
   "azure_foundry",
   "anthropic",
+  "mistral",
 ] as const;
 
 export type ProviderProbeValue = (typeof PROVIDER_PROBE_VALUES)[number];
@@ -54,6 +55,10 @@ const PROBE_TARGETS: Record<
     url: "https://openrouter.ai/api/v1/auth/key",
     init: { headers: { Authorization: `Bearer ${apiKey}` } },
   }),
+  mistral: (apiKey) => ({
+    url: "https://api.mistral.ai/v1/models",
+    init: { headers: { Authorization: `Bearer ${apiKey}` } },
+  }),
 };
 
 const PROVIDER_LABELS: Record<ProviderProbeValue, string> = {
@@ -62,6 +67,7 @@ const PROVIDER_LABELS: Record<ProviderProbeValue, string> = {
   openai: "OpenAI",
   azure_foundry: "Azure Foundry",
   openrouter: "OpenRouter",
+  mistral: "Mistral",
 };
 
 const extractDetail = async (response: Response): Promise<string | undefined> =>

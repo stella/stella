@@ -67,6 +67,7 @@ type RowStateMap = Record<ProviderValue, RowState>;
 const INITIAL_ROW_STATES: RowStateMap = {
   google: { status: "idle" },
   anthropic: { status: "idle" },
+  mistral: { status: "idle" },
   openai: { status: "idle" },
   azure_foundry: { status: "idle" },
   openrouter: { status: "idle" },
@@ -274,6 +275,7 @@ export const AIStep = ({
       anthropic: stillPresent.has("anthropic")
         ? prev.anthropic
         : { status: "idle" },
+      mistral: stillPresent.has("mistral") ? prev.mistral : { status: "idle" },
       openai: stillPresent.has("openai") ? prev.openai : { status: "idle" },
       azure_foundry: stillPresent.has("azure_foundry")
         ? prev.azure_foundry

@@ -11,11 +11,12 @@
  * - "azure_foundry": Azure AI Foundry / Azure OpenAI
  *   (AZURE_API_KEY + AZURE_RESOURCE_NAME or AZURE_BASE_URL)
  * - "anthropic": Anthropic (ANTHROPIC_API_KEY)
+ * - "mistral": Mistral AI (MISTRAL_API_KEY)
  * - "openai_compatible": Any OpenAI-compatible endpoint
  *   (OPENAI_API_KEY + AI_PROVIDER_BASE_URL)
  *
  * When AI_PROVIDER is not set, auto-detects from available
- * API keys: OPENROUTER → Google → OpenAI → Azure → Anthropic.
+ * API keys: OPENROUTER → Google → OpenAI → Azure → Anthropic → Mistral.
  */
 
 import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
@@ -23,6 +24,7 @@ import { createAzure } from "@ai-sdk/azure";
 import { devToolsMiddleware } from "@ai-sdk/devtools";
 import { createGoogleGenerativeAI, google } from "@ai-sdk/google";
 import { createVertex } from "@ai-sdk/google-vertex";
+import { createMistral, mistral } from "@ai-sdk/mistral";
 import { createOpenAI, openai } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { wrapLanguageModel } from "ai";
@@ -62,6 +64,7 @@ export type AIProvider =
   | "openai"
   | "azure_foundry"
   | "anthropic"
+  | "mistral"
   | "openai_compatible";
 
 // -- Default model IDs per provider -----------------------------
@@ -97,6 +100,12 @@ export const DEFAULT_MODELS = {
     reasoning: "claude-sonnet-4-6",
     pdf: "claude-sonnet-4-6",
   },
+  mistral: {
+    fast: "mistral-small-latest",
+    chat: "mistral-large-latest",
+    reasoning: "magistral-medium-latest",
+    pdf: "mistral-large-latest",
+  },
   openai_compatible: {
     fast: "default",
     chat: "default",
@@ -127,6 +136,13 @@ export const BYOK_MODEL_OPTIONS = {
     "claude-sonnet-4-6",
     "claude-opus-4-6",
     "claude-haiku-4-5-20251001",
+  ],
+  mistral: [
+    "mistral-medium-3-5",
+    "mistral-large-latest",
+    "mistral-small-latest",
+    "magistral-medium-latest",
+    "magistral-small-latest",
   ],
   openai: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2"],
   azure_foundry: [],
@@ -238,12 +254,15 @@ const resolveProvider = (): AIProvider => {
   if (env.ANTHROPIC_API_KEY) {
     return "anthropic";
   }
+  if (env.MISTRAL_API_KEY) {
+    return "mistral";
+  }
 
   return panic(
     "No AI provider configured. Set AI_PROVIDER or " +
       "provide at least one API key: " +
       "GOOGLE_GENERATIVE_AI_API_KEY, OPENROUTER_API_KEY, " +
-      "OPENAI_API_KEY, AZURE_API_KEY, or ANTHROPIC_API_KEY.",
+      "OPENAI_API_KEY, AZURE_API_KEY, ANTHROPIC_API_KEY, or MISTRAL_API_KEY.",
   );
 };
 
@@ -272,7 +291,8 @@ export const hasInstanceProvider = (): boolean => {
     env.GOOGLE_AI_API_KEY_CH ||
     env.OPENAI_API_KEY ||
     (env.AZURE_API_KEY && (env.AZURE_RESOURCE_NAME || env.AZURE_BASE_URL)) ||
-    env.ANTHROPIC_API_KEY
+    env.ANTHROPIC_API_KEY ||
+    env.MISTRAL_API_KEY
   );
   if (!env.AI_PROVIDER) {
     return hasAnyKey;
@@ -298,6 +318,8 @@ export const hasInstanceProvider = (): boolean => {
       );
     case "anthropic":
       return !!env.ANTHROPIC_API_KEY;
+    case "mistral":
+      return !!env.MISTRAL_API_KEY;
     case "openai_compatible":
       return !!(env.OPENAI_API_KEY && env.AI_PROVIDER_BASE_URL);
     default:
@@ -460,6 +482,13 @@ const createModelFactory = ({
         return (id) => client(id);
       }
       return (id) => anthropic(id);
+    }
+    case "mistral": {
+      if (apiKey) {
+        const client = createMistral({ apiKey });
+        return (id) => client(id);
+      }
+      return (id) => mistral(id);
     }
     case "openai_compatible": {
       const key =

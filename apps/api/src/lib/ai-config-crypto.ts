@@ -19,6 +19,7 @@ const standardProviderSchema = v.picklist([
   "openrouter",
   "openai",
   "anthropic",
+  "mistral",
 ]);
 
 const modelSelectionSchema = v.strictObject({
@@ -28,6 +29,7 @@ const modelSelectionSchema = v.strictObject({
     "openai",
     "azure_foundry",
     "anthropic",
+    "mistral",
   ]),
   modelId: v.pipe(v.string(), v.minLength(1)),
 });

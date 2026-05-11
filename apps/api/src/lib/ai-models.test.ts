@@ -26,6 +26,7 @@ type AIProvider =
   | "openai"
   | "azure_foundry"
   | "anthropic"
+  | "mistral"
   | "openai_compatible";
 
 describe("supportsRegion", () => {
@@ -39,6 +40,7 @@ describe("supportsRegion", () => {
       "openai",
       "azure_foundry",
       "anthropic",
+      "mistral",
       "openai_compatible",
     ];
 
@@ -59,6 +61,8 @@ describe("isAllowedBYOKModel", () => {
   test("accepts curated catalog models", () => {
     expect(isAllowedBYOKModel("anthropic", "claude-opus-4-7")).toBe(true);
     expect(isAllowedBYOKModel("google", "gemini-3-pro-preview")).toBe(true);
+    expect(isAllowedBYOKModel("mistral", "mistral-medium-3-5")).toBe(true);
+    expect(isAllowedBYOKModel("mistral", "mistral-large-latest")).toBe(true);
     expect(isAllowedBYOKModel("openai", "gpt-5.4")).toBe(true);
     expect(isAllowedBYOKModel("azure_foundry", "customer-gpt-5")).toBe(true);
     expect(isAllowedBYOKModel("openrouter", "anthropic/claude-opus-4.5")).toBe(
@@ -70,6 +74,8 @@ describe("isAllowedBYOKModel", () => {
     expect(isAllowedBYOKModel("openrouter", "x-ai/grok-4")).toBe(false);
     expect(isAllowedBYOKModel("anthropic", "claude-2")).toBe(false);
     expect(isAllowedBYOKModel("google", "gemini-1.5-pro")).toBe(false);
+    expect(isAllowedBYOKModel("mistral", "pixtral-large-latest")).toBe(false);
+    expect(isAllowedBYOKModel("mistral", "mistral-tiny")).toBe(false);
     expect(isAllowedBYOKModel("openai", "gpt-4o")).toBe(false);
     expect(isAllowedBYOKModel("azure_foundry", "")).toBe(false);
   });
@@ -181,6 +187,44 @@ describe("BYOK model overrides", () => {
       expect(getModelInfoForRole(role, orgConfig)).toMatchObject({
         keySource: "byok",
         provider: "openrouter",
+        modelId: orgConfig.overrideModels[role].modelId,
+      });
+      expect(() => getModelForRole(role, orgConfig)).not.toThrow();
+    }
+  });
+
+  test("routes every Stella role through configured Mistral models", () => {
+    const orgConfig: OrgAIConfig = {
+      providers: [
+        {
+          apiKey: "sk-org-mistral",
+          provider: "mistral",
+        },
+      ],
+      overrideModels: {
+        fast: {
+          provider: "mistral",
+          modelId: "mistral-small-latest",
+        },
+        chat: {
+          provider: "mistral",
+          modelId: "mistral-large-latest",
+        },
+        reasoning: {
+          provider: "mistral",
+          modelId: "magistral-medium-latest",
+        },
+        pdf: {
+          provider: "mistral",
+          modelId: "mistral-large-latest",
+        },
+      },
+    };
+
+    for (const role of ["fast", "chat", "reasoning", "pdf"] as const) {
+      expect(getModelInfoForRole(role, orgConfig)).toMatchObject({
+        keySource: "byok",
+        provider: "mistral",
         modelId: orgConfig.overrideModels[role].modelId,
       });
       expect(() => getModelForRole(role, orgConfig)).not.toThrow();

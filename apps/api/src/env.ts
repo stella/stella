@@ -23,6 +23,7 @@ const envApi = createEnv({
         "openai",
         "azure_foundry",
         "anthropic",
+        "mistral",
         "openai_compatible",
       ]),
     ),
@@ -50,6 +51,7 @@ const envApi = createEnv({
     AZURE_BASE_URL: v.optional(v.pipe(v.string(), v.url())),
     AZURE_API_VERSION: v.optional(v.string()),
     ANTHROPIC_API_KEY: v.optional(v.string()),
+    MISTRAL_API_KEY: v.optional(v.string()),
     GOOGLE_AI_API_KEY_EU: v.optional(v.string()),
     GOOGLE_AI_API_KEY_CH: v.optional(v.string()),
     /**

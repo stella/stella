@@ -1,6 +1,7 @@
 export const PROVIDER_KEYS = [
   "google",
   "anthropic",
+  "mistral",
   "openai",
   "azure_foundry",
   "openrouter",
@@ -83,6 +84,12 @@ export const DEFAULT_MODELS_BY_PROVIDER = {
     reasoning: "claude-sonnet-4-6",
     pdf: "claude-sonnet-4-6",
   },
+  mistral: {
+    chat: "mistral-large-latest",
+    fast: "mistral-small-latest",
+    reasoning: "magistral-medium-latest",
+    pdf: "mistral-large-latest",
+  },
   openai: {
     chat: "gpt-5.4-mini",
     fast: "gpt-5.4-nano",
@@ -110,6 +117,13 @@ export const MODEL_OPTIONS_BY_PROVIDER = {
     "claude-sonnet-4-6",
     "claude-opus-4-6",
     "claude-haiku-4-5-20251001",
+  ],
+  mistral: [
+    "mistral-medium-3-5",
+    "mistral-large-latest",
+    "mistral-small-latest",
+    "magistral-medium-latest",
+    "magistral-small-latest",
   ],
   openai: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2"],
   azure_foundry: [],

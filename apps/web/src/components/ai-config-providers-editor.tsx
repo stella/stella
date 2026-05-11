@@ -30,6 +30,7 @@ import type {
 const API_KEY_PLACEHOLDER = {
   google: "AIza...",
   anthropic: "sk-ant-...",
+  mistral: "...",
   openai: "sk-proj-...",
   azure_foundry: "0123456789abcdef...",
   openrouter: "sk-or-v1-...",

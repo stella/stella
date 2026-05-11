@@ -41,6 +41,7 @@ const OpenAIIcon = (props: IconProps) => (
 const PROVIDER_ICONS = {
   google: GeminiIcon,
   anthropic: AnthropicIcon,
+  mistral: SparklesIcon,
   openai: OpenAIIcon,
   azure_foundry: CloudIcon,
   openrouter: SparklesIcon,

@@ -1330,6 +1330,7 @@ type Messages = {
         "anthropic": "Anthropic";
         "azure_foundry": "Azure Foundry";
         "google": "Google";
+        "mistral": "Mistral";
         "openai": "ChatGPT";
         "openrouter": "OpenRouter";
       };
