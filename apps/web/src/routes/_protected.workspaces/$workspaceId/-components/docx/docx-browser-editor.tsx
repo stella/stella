@@ -552,13 +552,15 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     useState<AutosaveStatus>("synced");
   const targetZoom = useDocxFitZoom(containerRef, scaleOffset, 0.85);
   const t = useTranslations();
+  const canAutoRequestCollaboration =
+    isEditing && compatibility?.canSafelyEdit === true;
   const collaborationRuntime = useDocxBrowserCollaboration({
     canUnlock,
     externalCollaboration: collaboration,
     entityId,
     fieldId,
     propertyId,
-    initiallyRequested: isEditing,
+    initiallyRequested: canAutoRequestCollaboration,
     workspaceId,
   });
   const {
@@ -1499,6 +1501,11 @@ const useDocxBrowserCollaboration = ({
     },
     workspaceId,
   });
+  useEffect(() => {
+    if (initiallyRequested) {
+      setRequested(true);
+    }
+  }, [initiallyRequested]);
   const collaborationSession =
     collaborationState.status === "ready" ? collaborationState.session : null;
   const cancelCollaboration = useCallback(() => {
