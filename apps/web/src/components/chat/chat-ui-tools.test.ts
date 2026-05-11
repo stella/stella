@@ -301,7 +301,10 @@ describe("hasRunningToolCallInLatestAssistantMessage", () => {
         id: "message-1",
         parts: [
           {
-            input: { name: "Engagement letter" },
+            input: {
+              name: "Engagement letter",
+              source: "@title Engagement letter",
+            },
             state: "input-available",
             toolCallId: "tool-call-1",
             type: "tool-create-document",

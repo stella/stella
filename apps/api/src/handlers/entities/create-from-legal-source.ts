@@ -12,8 +12,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const createFromLegalSourceBodySchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 256 }),
-  source: t.Optional(t.String({ minLength: 1 })),
-  markdown: t.Optional(t.String({ minLength: 1 })),
+  source: t.String({ minLength: 1 }),
 });
 
 export default createSafeHandler(
@@ -27,21 +26,10 @@ export default createSafeHandler(
       session,
       user,
       workspaceId,
-      body: { name, source, markdown },
+      body: { name, source },
     } = ctx;
 
-    const legalSource = source ?? markdown;
-    if (!legalSource) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message:
-            "Document content is required. Provide `source` (the `@`-directive body) or `markdown` (deprecated fallback).",
-        }),
-      );
-    }
-
-    const compiled = await compileLegalSourceToDocx(legalSource, {
+    const compiled = await compileLegalSourceToDocx(source, {
       titleFallback: name,
     });
     if (compiled.status !== "ok") {

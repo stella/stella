@@ -202,8 +202,7 @@ export const useChatSession = ({
         ["create-from-legal-source"].post({
           queryKey: entitiesKeys.all(matterId),
           name: input.name,
-          ...(input.source !== undefined && { source: input.source }),
-          ...(input.markdown !== undefined && { markdown: input.markdown }),
+          source: input.source,
         });
 
       if (response.error) {

@@ -61,7 +61,7 @@ export const NeedsMatterCard = ({
       ? normalizeCreateDocumentInput(part.input)
       : null;
   const name = partialInput?.name ?? "";
-  const sourcePreview = partialInput?.source ?? partialInput?.markdown ?? "";
+  const sourcePreview = partialInput?.source ?? "";
 
   const isStreaming = part.state === "input-streaming";
   const isAwaitingMatter = part.state === "input-available";
@@ -105,17 +105,12 @@ export const NeedsMatterCard = ({
           isLoadingMatters={isLoadingMatters}
           matters={matters}
           onContinue={async (matterId) => {
-            if (!partialInput) {
+            if (!partialInput?.source) {
               return;
             }
             const fullInput: CreateDocumentInput = {
               name: partialInput.name ?? "Untitled",
-              ...(partialInput.source !== undefined && {
-                source: partialInput.source,
-              }),
-              ...(partialInput.markdown !== undefined && {
-                markdown: partialInput.markdown,
-              }),
+              source: partialInput.source,
             };
             await onResolve(part.toolCallId, matterId, fullInput);
           }}
@@ -183,11 +178,14 @@ const normalizeCreateDocumentInput = (
   if ("name" in input && typeof input.name === "string") {
     normalized.name = input.name;
   }
+  let source: string | null = null;
   if ("source" in input && typeof input.source === "string") {
-    normalized.source = input.source;
+    source = input.source;
+  } else if ("markdown" in input && typeof input.markdown === "string") {
+    source = input.markdown;
   }
-  if ("markdown" in input && typeof input.markdown === "string") {
-    normalized.markdown = input.markdown;
+  if (source !== null) {
+    normalized.source = source;
   }
 
   return normalized;

@@ -10,6 +10,7 @@ import {
   validateChatFileParts,
   validateStoredFileRefs,
 } from "@/api/handlers/chat/attachment-validation";
+import { normalizeLegacyRawToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -130,8 +131,12 @@ export const validateMessage = async ({
   userId,
 }: ValidateMessageInput): Promise<ValidateMessageResult> =>
   await Result.gen(async function* () {
+    const normalizedMessage = {
+      ...message,
+      parts: normalizeLegacyRawToolInputs(message.parts),
+    };
     const validationResult = await safeValidateUIMessages<ChatMessage>({
-      messages: [message],
+      messages: [normalizedMessage],
       tools,
     });
 

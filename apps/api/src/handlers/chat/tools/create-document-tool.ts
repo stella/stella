@@ -22,18 +22,11 @@ const createDocumentToolInputSchema = v.strictObject({
     v.maxLength(256),
     v.description("Document file name (without .docx extension)"),
   ),
-  source: v.optional(
-    v.pipe(
-      v.string(),
-      v.description(
-        "Document body written as `@`-directives (see tool description).",
-      ),
-    ),
-  ),
-  markdown: v.optional(
-    v.pipe(
-      v.string(),
-      v.description("Deprecated fallback for old tool calls. Prefer source."),
+  source: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description(
+      "Document body written as `@`-directives (see tool description).",
     ),
   ),
 });

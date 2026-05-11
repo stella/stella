@@ -33,7 +33,7 @@ const createDocumentApprovalRespondedMessage = {
       state: "approval-responded",
       input: {
         name: "Draft agreement",
-        markdown: "# Draft agreement",
+        source: "@title Draft agreement",
       },
       approval: {
         id: "approval-1",
@@ -52,7 +52,7 @@ const createDocumentFinishedMessage = {
       state: "output-available",
       input: {
         name: "Draft agreement",
-        markdown: "# Draft agreement",
+        source: "@title Draft agreement",
       },
       output: {
         success: true,
