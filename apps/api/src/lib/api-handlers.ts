@@ -21,7 +21,10 @@ import {
   DatabaseRlsError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
-import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
+import type {
+  HandlerErrorCode,
+  HandlerErrorStatusCode,
+} from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { getRequestContext } from "@/api/lib/observability/request-context";
@@ -71,7 +74,7 @@ type SafeHandlerError =
   | HandlerError
   | UnhandledException;
 
-type SafeErrorBody = { message: string };
+type SafeErrorBody = { code?: HandlerErrorCode | undefined; message: string };
 
 // The conditional form is intentional: it keeps status unions distributive so
 // Eden sees distinct error codes instead of a single widened response.
@@ -153,9 +156,7 @@ const createSafeScopedHandler = <
           });
         }
 
-        return toSafeStatusResponse(error.status, {
-          message: error.message,
-        });
+        return toSafeStatusResponse(error.status, safeErrorBody(error));
       }
 
       if (DatabaseError.is(error)) {
@@ -207,7 +208,7 @@ const createSafeScopedHandler = <
             statusCode: error.status,
           });
         }
-        return toSafeStatusResponse(error.status, { message: error.message });
+        return toSafeStatusResponse(error.status, safeErrorBody(error));
       }
 
       logAndCaptureSafeError({
@@ -220,6 +221,11 @@ const createSafeScopedHandler = <
       return toSafeStatusResponse(500, { message: "Internal server error" });
     }
   },
+});
+
+const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
+  ...(error.code ? { code: error.code } : {}),
+  message: error.message,
 });
 
 export const createSafeRootHandler = <TConfig extends HandlerConfig, TResult>(

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { sendNextChatRequestWithoutAnonymization } from "@/lib/chat-anonymized-store";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import {
   __resetAutoSendStateForTests,
@@ -101,6 +102,33 @@ describe("buildSendRequestBody", () => {
       buildSendRequestBody({
         context: { getAnonymized: () => true },
         key: { scope: "global", threadId },
+        messages: [createMessage()],
+      }),
+    ).toMatchObject({
+      anonymized: true,
+      threadId: "thread-A",
+    });
+  });
+
+  test("uses a one-shot raw override for anonymization refusal retries", () => {
+    const threadId = toChatThreadId("thread-A");
+    const key = { scope: "global", threadId } as const;
+    sendNextChatRequestWithoutAnonymization(key);
+
+    expect(
+      buildSendRequestBody({
+        context: { getAnonymized: () => true },
+        key,
+        messages: [createMessage()],
+      }),
+    ).toMatchObject({
+      anonymized: false,
+      threadId: "thread-A",
+    });
+    expect(
+      buildSendRequestBody({
+        context: { getAnonymized: () => true },
+        key,
         messages: [createMessage()],
       }),
     ).toMatchObject({

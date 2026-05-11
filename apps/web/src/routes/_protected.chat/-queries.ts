@@ -20,6 +20,7 @@ import {
 import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { consumeChatRawSendOverride } from "@/lib/chat-anonymized-store";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { useDevStore } from "@/lib/dev-store";
@@ -263,7 +264,7 @@ export const buildSendRequestBody = ({
 
   const anonymized = context?.getAnonymized?.();
   if (anonymized !== undefined) {
-    body.anonymized = anonymized;
+    body.anonymized = consumeChatRawSendOverride(key) ? false : anonymized;
   }
 
   if (import.meta.env.DEV) {

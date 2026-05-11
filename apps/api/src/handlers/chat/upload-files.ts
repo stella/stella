@@ -6,6 +6,8 @@ import type { SafeDb, SafeDbError } from "@/api/db";
 import { userFiles } from "@/api/db/schema";
 import {
   CHAT_MAX_FILE_BYTES,
+  TEXT_CSV_MIME_TYPE,
+  TEXT_MARKDOWN_MIME_TYPE,
   TEXT_PLAIN_MIME_TYPE,
 } from "@/api/handlers/chat/attachment-validation";
 import { ChatError } from "@/api/handlers/chat/errors";
@@ -93,12 +95,23 @@ export const uploadMessageFiles = async ({
 type HydrateFilePartProps = {
   fileName: string;
   mimeType: string;
+  plainTextOnly?: boolean | undefined;
   s3Key: string;
 };
+
+const DIRECT_TEXT_MIME_TYPES: ReadonlySet<string> = new Set([
+  TEXT_CSV_MIME_TYPE,
+  TEXT_MARKDOWN_MIME_TYPE,
+  TEXT_PLAIN_MIME_TYPE,
+]);
+
+export const canHydrateFilePartAsPlainText = (mimeType: string): boolean =>
+  DIRECT_TEXT_MIME_TYPES.has(mimeType) || mimeType === DOCX_MIME_TYPE;
 
 export const hydrateFilePart = async ({
   fileName,
   mimeType,
+  plainTextOnly = false,
   s3Key,
 }: HydrateFilePartProps) =>
   await Result.gen(async function* () {
@@ -113,6 +126,16 @@ export const hydrateFilePart = async ({
       }),
     );
     const bytes = new Uint8Array(buffer);
+
+    if (DIRECT_TEXT_MIME_TYPES.has(mimeType)) {
+      const hydratedMimeType = plainTextOnly ? TEXT_PLAIN_MIME_TYPE : mimeType;
+      return Result.ok<FileUIPart>({
+        type: "file",
+        filename: fileName,
+        mediaType: hydratedMimeType,
+        url: toDataUrl(bytes, hydratedMimeType),
+      });
+    }
 
     if (mimeType !== DOCX_MIME_TYPE) {
       return Result.ok<FileUIPart>({

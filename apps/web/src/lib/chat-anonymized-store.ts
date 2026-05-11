@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { getChatThreadKey } from "@/lib/chat-thread-ref";
 
 type ChatAnonymizedStore = {
   /** Single org-wide preference: once toggled on, every chat (new or reopened)
@@ -32,3 +33,14 @@ export const useSetChatAnonymized = (_threadRef: ChatThreadRef) =>
 
 export const getChatAnonymized = (_threadRef: ChatThreadRef): boolean =>
   useChatAnonymizedStore.getState().anonymized;
+
+const rawSendOverrides = new Set<string>();
+
+export const sendNextChatRequestWithoutAnonymization = (
+  threadRef: ChatThreadRef,
+): void => {
+  rawSendOverrides.add(getChatThreadKey(threadRef));
+};
+
+export const consumeChatRawSendOverride = (threadRef: ChatThreadRef): boolean =>
+  rawSendOverrides.delete(getChatThreadKey(threadRef));

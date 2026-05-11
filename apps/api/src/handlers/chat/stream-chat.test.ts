@@ -10,7 +10,7 @@ import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-reg
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { toUserFileUrl } from "@/api/handlers/user-files/types";
 import { toSafeId } from "@/api/lib/branded-types";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
@@ -189,7 +189,7 @@ describe("chat stream refs", () => {
 });
 
 describe("chat message hydration", () => {
-  test("refuses stored DOCX attachments for anonymized third-party sends", async () => {
+  test("refuses stored attachments that cannot be text-hydrated for anonymized third-party sends", async () => {
     const userFileId = toSafeId<"userFile">(
       "11111111-1111-4111-8111-111111111111",
     );
@@ -205,8 +205,8 @@ describe("chat message hydration", () => {
               id: userFileId,
               userId,
               threadId,
-              fileName: "draft.docx",
-              mimeType: DOCX_MIME_TYPE,
+              fileName: "draft.pdf",
+              mimeType: PDF_MIME_TYPE,
               s3Key: "user/file",
             },
           ],
@@ -222,8 +222,8 @@ describe("chat message hydration", () => {
           parts: [
             {
               type: "file",
-              filename: "draft.docx",
-              mediaType: DOCX_MIME_TYPE,
+              filename: "draft.pdf",
+              mediaType: PDF_MIME_TYPE,
               url: toUserFileUrl(userFileId),
             },
           ],

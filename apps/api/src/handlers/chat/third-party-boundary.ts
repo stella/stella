@@ -371,6 +371,7 @@ const anonymizePlainTextFile = ({
   if (part.mediaType !== TEXT_PLAIN_MIME_TYPE) {
     return Result.err(
       new HandlerError({
+        code: "third_party_boundary_refusal",
         status: 422,
         message:
           "Cannot send this attachment to the AI in anonymized mode because Stella cannot extract and anonymize it safely.",
@@ -387,6 +388,7 @@ const anonymizePlainTextFile = ({
   if (Result.isError(parsed)) {
     return Result.err(
       new HandlerError({
+        code: "third_party_boundary_refusal",
         status: 422,
         message:
           "Cannot send this attachment to the AI in anonymized mode because Stella cannot read it as text.",

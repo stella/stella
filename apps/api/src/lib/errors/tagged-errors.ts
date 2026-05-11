@@ -11,9 +11,12 @@ export type HandlerErrorStatusCode =
   | 500
   | 502;
 
+export type HandlerErrorCode = "third_party_boundary_refusal";
+
 export type HandlerErrorProps<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
 > = {
+  code?: HandlerErrorCode | undefined;
   status: TStatus;
   message: string;
   cause?: unknown;
@@ -25,10 +28,12 @@ export type HandlerErrorProps<
 export class HandlerError<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
 > extends TaggedError("HandlerError")<HandlerErrorProps>() {
+  declare code?: HandlerErrorCode | undefined;
   declare status: TStatus;
 
   constructor(props: HandlerErrorProps<TStatus>) {
     super(props);
+    this.code = props.code;
     this.status = props.status;
   }
 }

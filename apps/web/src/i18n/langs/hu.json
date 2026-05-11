@@ -410,9 +410,11 @@
     "resend": "Újraküldés",
     "send": "Üzenet küldése",
     "sendError": "Probléma történt az üzenet elküldésekor. Ha a hiba továbbra is fennáll, vedd fel a kapcsolatot a támogatással.",
+    "sendErrorAnonymizationBlocked": "A Stella nem tudta anonimizálni az egyik mellékletet, ezért semmi sem lett elküldve. Távolítsd el a fájlt, vagy küldd el az üzenetet anonimizálás nélkül.",
     "sendErrorInsufficientCredits": "Az AI-szolgáltatónak további kreditre van szüksége. Kérd a munkaterület adminisztrátorát, hogy töltse fel a fiókot.",
     "sendErrorProviderUnavailable": "Az AI-szolgáltató átmenetileg nem elérhető. Próbáld újra egy pillanat múlva.",
     "sendErrorQuotaExhausted": "Az AI-szolgáltató kvótája kimerült. Próbáld újra egy perc múlva, vagy kérd a munkaterület adminisztrátorát, hogy bővítse a csomagot.",
+    "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
     "thinking": "Kontextussal dolgozom",
     "threads": "Előzmények",
     "tool": {

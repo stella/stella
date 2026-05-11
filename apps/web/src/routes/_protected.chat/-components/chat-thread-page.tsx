@@ -22,6 +22,7 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import {
+  sendNextChatRequestWithoutAnonymization,
   useChatAnonymized,
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
@@ -171,6 +172,10 @@ export const ChatThreadPage = ({
     editor.commands.setContent(prompt.body);
     editor.commands.focus("end");
   };
+  const sendWithoutAnonymization = useEffectEvent(async () => {
+    sendNextChatRequestWithoutAnonymization(threadRef);
+    await resendLatestMessage();
+  });
 
   return (
     <div className="flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
@@ -245,6 +250,7 @@ export const ChatThreadPage = ({
               createDocumentMatters={createDocumentMatters}
               isLoadingCreateDocumentMatters={isLoadingCreateDocumentMatters}
               onResend={resendLatestMessage}
+              onSendWithoutAnonymization={sendWithoutAnonymization}
               showThinkingIndicator
               showToolCallDetails={showToolCallDetails}
               streamdownComponents={streamdownComponents}

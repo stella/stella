@@ -241,7 +241,51 @@ const CHAT_ERROR_TRANSLATION_KEYS = {
 
 type ChatErrorTranslationKey =
   | (typeof CHAT_ERROR_TRANSLATION_KEYS)[keyof typeof CHAT_ERROR_TRANSLATION_KEYS]
+  | "chat.sendErrorAnonymizationBlocked"
   | "chat.sendError";
+
+const THIRD_PARTY_BOUNDARY_REFUSAL = "third_party_boundary_refusal";
+
+type ChatTransportErrorPayload = {
+  code?: string | undefined;
+  message?: string | undefined;
+  type?: string | undefined;
+};
+
+const getChatTransportErrorPayload = (
+  error: Error,
+): ChatTransportErrorPayload => {
+  try {
+    const payload: unknown = JSON.parse(error.message);
+    if (typeof payload !== "object" || payload === null) {
+      return {};
+    }
+    return {
+      code:
+        "code" in payload && typeof payload.code === "string"
+          ? payload.code
+          : undefined,
+      message:
+        "message" in payload && typeof payload.message === "string"
+          ? payload.message
+          : undefined,
+      type:
+        "type" in payload && typeof payload.type === "string"
+          ? payload.type
+          : undefined,
+    };
+  } catch {
+    return {};
+  }
+};
+
+const isAnonymizationBlockedError = (error: Error): boolean => {
+  const payload = getChatTransportErrorPayload(error);
+  return (
+    payload.code === THIRD_PARTY_BOUNDARY_REFUSAL ||
+    payload.type === THIRD_PARTY_BOUNDARY_REFUSAL
+  );
+};
 
 const isMappedChatErrorKind = (
   message: string,
@@ -249,6 +293,9 @@ const isMappedChatErrorKind = (
   message in CHAT_ERROR_TRANSLATION_KEYS;
 
 const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
+  if (isAnonymizationBlockedError(error)) {
+    return "chat.sendErrorAnonymizationBlocked";
+  }
   if (isMappedChatErrorKind(error.message)) {
     return CHAT_ERROR_TRANSLATION_KEYS[error.message];
   }
@@ -259,30 +306,48 @@ export const ChatErrorMessage = ({
   error,
   isGenerating,
   onResend,
+  onSendWithoutAnonymization,
 }: {
   error: Error;
   isGenerating: boolean;
   onResend?: (() => void | PromiseLike<void>) | undefined;
+  onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
 }) => {
   const t = useTranslations();
+  const canSendWithoutAnonymization =
+    onSendWithoutAnonymization !== undefined &&
+    isAnonymizationBlockedError(error);
 
   return (
     <Message from="assistant">
       <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
         <p className="text-sm">{t(chatErrorTranslationKey(error))}</p>
-        {onResend && (
-          <Button
-            className="self-start"
-            disabled={isGenerating}
-            onClick={() => {
-              void onResend();
-            }}
-            size="sm"
-            variant="destructive-outline"
-          >
-            {t("chat.resend")}
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {canSendWithoutAnonymization && (
+            <Button
+              disabled={isGenerating}
+              onClick={() => {
+                void onSendWithoutAnonymization();
+              }}
+              size="sm"
+              variant="destructive-outline"
+            >
+              {t("chat.sendWithoutAnonymization")}
+            </Button>
+          )}
+          {onResend && (
+            <Button
+              disabled={isGenerating}
+              onClick={() => {
+                void onResend();
+              }}
+              size="sm"
+              variant="destructive-outline"
+            >
+              {t("chat.resend")}
+            </Button>
+          )}
+        </div>
       </MessageContent>
     </Message>
   );
@@ -427,6 +492,7 @@ type ChatThreadMessagesProps = {
   isGenerating?: boolean | undefined;
   messages: PersistedChatMessage[];
   onResend?: ((messageId?: string) => void | PromiseLike<void>) | undefined;
+  onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
   onAskUserSubmit: (
     toolCallId: string,
     output: AskUserOutput,
@@ -469,6 +535,7 @@ export const ChatThreadMessages = ({
   isGenerating = false,
   messages,
   onResend,
+  onSendWithoutAnonymization,
   onAskUserSubmit,
   onCreateDocumentResolve,
   onOpenCreatedDocument,
@@ -570,6 +637,7 @@ export const ChatThreadMessages = ({
           error={error}
           isGenerating={isGenerating}
           onResend={onResend}
+          onSendWithoutAnonymization={onSendWithoutAnonymization}
         />
       )}
       {showThinkingIndicator &&
