@@ -9,8 +9,6 @@ process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
 process.env["AZURE_API_VERSION"] = "";
 
-const { AZURE_FOUNDRY_DEFAULT_API_VERSION } =
-  await import("@/api/lib/azure-foundry");
 const { probeProvider } = await import("@/api/lib/ai-provider-probe");
 
 const originalFetch = globalThis.fetch;
@@ -46,9 +44,7 @@ describe("probeProvider", () => {
     );
 
     expect(result).toEqual({ valid: true });
-    expect(captured.url?.searchParams.get("api-version")).toBe(
-      AZURE_FOUNDRY_DEFAULT_API_VERSION,
-    );
+    expect(captured.url?.searchParams.get("api-version")).toBe("v1");
   });
 });
 

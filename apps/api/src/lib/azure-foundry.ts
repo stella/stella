@@ -1,6 +1,6 @@
 import { validateSafeBaseURL } from "@/api/lib/safe-base-url";
 
-export const AZURE_FOUNDRY_DEFAULT_API_VERSION = "2024-06-01";
+export const AZURE_FOUNDRY_DEFAULT_API_VERSION = "v1";
 
 export type AzureFoundryBaseURLResult =
   | { ok: true; baseURL: string }
