@@ -1,15 +1,11 @@
 import { panic } from "better-result";
 
-import {
-  DEFAULT_ENTITY_LABELS,
-  DEFAULT_OPERATOR_CONFIG,
-} from "@stll/anonymize-wasm";
+import { runChatAnonPipeline } from "@stll/anonymize-chat";
+import type { ChatAnonRuntime } from "@stll/anonymize-chat";
 import type {
-  Entity,
   GazetteerEntry,
   PipelineConfig,
   PipelineContext,
-  RedactionResult,
 } from "@stll/anonymize-wasm";
 
 import type { ScopedDb } from "@/api/db";
@@ -33,8 +29,7 @@ export type AnonymizeTextFieldsInput = {
   context?: PipelineContext | undefined;
 };
 
-export type AnonymizeTextFieldsDependencies = {
-  createPipelineContext: () => PipelineContext;
+export type AnonymizeTextFieldsDependencies = ChatAnonRuntime & {
   loadAnonymizationGazetteerEntries: (input: {
     organizationId: SafeId<"organization">;
     scopedDb: ScopedDb;
@@ -42,40 +37,7 @@ export type AnonymizeTextFieldsDependencies = {
   loadNameDictionaries: () => Promise<
     NonNullable<PipelineConfig["dictionaries"]>
   >;
-  redactText: (
-    fullText: string,
-    entities: Entity[],
-    operatorConfig: typeof DEFAULT_OPERATOR_CONFIG,
-    context: PipelineContext,
-  ) => RedactionResult;
-  runPipeline: (input: {
-    fullText: string;
-    config: PipelineConfig;
-    gazetteerEntries: GazetteerEntry[];
-    context: PipelineContext;
-  }) => Promise<Entity[]>;
 };
-
-const buildPipelineConfig = ({
-  gazetteerEntries,
-  workspaceId,
-}: {
-  gazetteerEntries: GazetteerEntry[];
-  workspaceId: string;
-}): PipelineConfig => ({
-  threshold: 0.4,
-  enableTriggerPhrases: true,
-  enableRegex: true,
-  enableNameCorpus: true,
-  enableDenyList: false,
-  enableGazetteer: gazetteerEntries.length > 0,
-  enableNer: false,
-  enableConfidenceBoost: false,
-  enableCoreference: true,
-  enableLegalForms: true,
-  labels: [...DEFAULT_ENTITY_LABELS],
-  workspaceId,
-});
 
 const splitRedactedFields = ({
   markers,
@@ -152,21 +114,14 @@ export const anonymizeTextFieldsWithDependencies = async ({
     }));
   const dictionaries = await dependencies.loadNameDictionaries();
 
-  const entities = await dependencies.runPipeline({
-    fullText: combinedText,
-    config: {
-      ...buildPipelineConfig({ gazetteerEntries: entries, workspaceId }),
-      dictionaries,
-    },
+  const result = await runChatAnonPipeline({
+    runtime: dependencies,
+    dictionaries,
+    text: combinedText,
+    workspaceId,
     gazetteerEntries: entries,
     context,
   });
-  const result = dependencies.redactText(
-    combinedText,
-    entities,
-    DEFAULT_OPERATOR_CONFIG,
-    context,
-  );
 
   return {
     entityCount: result.entityCount,

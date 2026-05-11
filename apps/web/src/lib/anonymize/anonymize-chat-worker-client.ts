@@ -1,7 +1,4 @@
-import type {
-  ChatAnonPair,
-  ChatAnonResult,
-} from "@/lib/anonymize/chat-anonymize";
+import type { ChatAnonResult } from "@stll/anonymize-chat";
 
 /**
  * Main-thread client for the chat-input anonymization Web Worker.
@@ -19,7 +16,7 @@ type WorkerRequest = {
 };
 
 type WorkerResponse =
-  | { id: number; ok: true; redactedText: string; pairs: ChatAnonPair[] }
+  | ({ id: number; ok: true } & ChatAnonResult)
   | { id: number; ok: false; error: string };
 
 type Pending = {
@@ -50,6 +47,8 @@ const ensureWorker = (): Worker => {
       entry.resolve({
         redactedText: message.redactedText,
         pairs: message.pairs,
+        redactionMap: message.redactionMap,
+        entityCount: message.entityCount,
       });
     } else {
       entry.reject(new Error(message.error));

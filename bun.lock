@@ -59,6 +59,7 @@
         "@opentelemetry/api-logs": "^0.216.0",
         "@react-email/render": "^2.0.8",
         "@sinclair/typebox": "^0.34.49",
+        "@stll/anonymize-chat": "workspace:*",
         "@stll/anonymize-data": "catalog:",
         "@stll/anonymize-wasm": "catalog:",
         "@stll/ares": "workspace:*",
@@ -194,6 +195,7 @@
         "@libpdf/core": "catalog:",
         "@posthog/react": "^1.9.0",
         "@pydantic/genai-prices": "^0.0.56",
+        "@stll/anonymize-chat": "workspace:*",
         "@stll/anonymize-data": "catalog:",
         "@stll/anonymize-wasm": "catalog:",
         "@stll/api": "workspace:*",
@@ -270,6 +272,18 @@
         "elysia": "catalog:",
         "react-grab": "0.1.32",
         "rollup-plugin-visualizer": "^7.0.1",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/anonymize-chat": {
+      "name": "@stll/anonymize-chat",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/anonymize-wasm": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
         "typescript": "catalog:",
       },
     },
@@ -1556,6 +1570,8 @@
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
     "@stll/aho-corasick-wasm": ["@stll/aho-corasick-wasm@1.0.0", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-aefKKHhFpZkS1dytxBFiqZKbjnBz08h19b3J6wl0UAtBBW+hoSbYat0Xp5IULt1Fpd4ATqFHspsfpXDb8v15Zw=="],
+
+    "@stll/anonymize-chat": ["@stll/anonymize-chat@workspace:packages/anonymize-chat"],
 
     "@stll/anonymize-data": ["@stll/anonymize-data@0.0.5", "", {}, "sha512-4/j5sJjGXw8UxR2AOY21Av31/kFCHRYIcxGh248EcogeBvu25JSXdJuIEsN8rVKSRJOeqEG/ZdM+tF0uaN228w=="],
 

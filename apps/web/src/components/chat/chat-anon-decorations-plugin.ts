@@ -3,7 +3,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { EditorView } from "@tiptap/pm/view";
 
-import type { ChatAnonPair } from "@/lib/anonymize/chat-anonymize";
+import type { ChatAnonPair } from "@stll/anonymize-chat";
 
 /**
  * ProseMirror plugin that paints round-tripped anonymization

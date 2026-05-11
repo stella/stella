@@ -4,8 +4,9 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
 import { useDebounce } from "use-debounce";
 
+import type { ChatAnonPair } from "@stll/anonymize-chat";
+
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
-import type { ChatAnonPair } from "@/lib/anonymize/chat-anonymize";
 
 /**
  * Watch a TipTap editor's plain-text content. Returns the
