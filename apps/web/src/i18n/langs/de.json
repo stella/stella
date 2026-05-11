@@ -305,7 +305,8 @@
     "anonymizedModeDisabled": "Anonymisierter KI-Modus ist aus",
     "anonymizedModeEnabled": "Anonymisierter KI-Modus ist an",
     "anonymizedSpan": {
-      "tooltip": "An das Modell gesendet als {placeholder}."
+      "tooltip": "An das Modell gesendet als {placeholder}.",
+      "tooltipGeneric": "Sent to the model anonymized."
     },
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",

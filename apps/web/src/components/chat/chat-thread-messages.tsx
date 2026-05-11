@@ -702,8 +702,16 @@ const AssistantTextPart = ({
 
 const USER_TEXT_STREAMDOWN_COMPONENTS = {
   ...USER_STREAMDOWN_COMPONENTS,
+  // `hidePlaceholderId`: the user-message pill is driven by a
+  // fresh client-side wasm pass, whose `PipelineContext` does
+  // *not* share the server's placeholder counter. The server's
+  // counter is already advanced by the anonymized system suffix
+  // (matter labels, active file body, …), so a name that the
+  // client labels `[PERSON_1]` might actually have crossed the
+  // boundary as `[PERSON_2]` (or any shifted id). Suppress the
+  // exact id in the tooltip so the audit cue stays honest.
   "stll-anon": (props: ComponentProps<"button"> & { ph?: string }) => (
-    <AnonymizedSpan {...props} />
+    <AnonymizedSpan {...props} hidePlaceholderId />
   ),
 };
 

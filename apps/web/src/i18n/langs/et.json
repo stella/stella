@@ -305,7 +305,8 @@
     "anonymizedModeDisabled": "Anonüümitud AI režiim on väljas",
     "anonymizedModeEnabled": "Anonüümitud AI režiim on sees",
     "anonymizedSpan": {
-      "tooltip": "Mudelile saadeti kujul {placeholder}."
+      "tooltip": "Mudelile saadeti kujul {placeholder}.",
+      "tooltipGeneric": "Sent to the model anonymized."
     },
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",

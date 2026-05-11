@@ -305,7 +305,8 @@
     "anonymizedModeDisabled": "Az anonimizált AI mód ki van kapcsolva",
     "anonymizedModeEnabled": "Az anonimizált AI mód be van kapcsolva",
     "anonymizedSpan": {
-      "tooltip": "A modellnek elküldve mint {placeholder}."
+      "tooltip": "A modellnek elküldve mint {placeholder}.",
+      "tooltipGeneric": "Sent to the model anonymized."
     },
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",

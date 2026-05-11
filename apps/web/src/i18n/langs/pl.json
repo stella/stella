@@ -305,7 +305,8 @@
     "anonymizedModeDisabled": "Zanonimizowany tryb AI jest wyłączony",
     "anonymizedModeEnabled": "Zanonimizowany tryb AI jest włączony",
     "anonymizedSpan": {
-      "tooltip": "Wysłano do modelu jako {placeholder}."
+      "tooltip": "Wysłano do modelu jako {placeholder}.",
+      "tooltipGeneric": "Sent to the model anonymized."
     },
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",

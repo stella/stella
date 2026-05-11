@@ -305,7 +305,8 @@
     "anonymizedModeDisabled": "Anonimizēts AI režīms ir izslēgts",
     "anonymizedModeEnabled": "Anonimizēts AI režīms ir ieslēgts",
     "anonymizedSpan": {
-      "tooltip": "Modelim nosūtīts kā {placeholder}."
+      "tooltip": "Modelim nosūtīts kā {placeholder}.",
+      "tooltipGeneric": "Sent to the model anonymized."
     },
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",
