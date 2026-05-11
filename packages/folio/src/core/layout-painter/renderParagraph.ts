@@ -396,7 +396,7 @@ function renderTextRun(run: TextRun, doc: Document): HTMLElement {
     }
     anchor.textContent = run.text;
     // Style hyperlink — default Word hyperlink color is blue (#0563c1)
-    const hyperlinkColor = run.color || "#0563c1";
+    const hyperlinkColor = run.color?.trim() || span.style.color || "#0563c1";
     anchor.style.color = hyperlinkColor;
     anchor.style.textDecoration = "underline";
     // Override span color to match anchor (prevents color mismatch in selection)

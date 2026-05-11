@@ -230,6 +230,39 @@ describe("renderLine text styling", () => {
     expect(textEl?.style.color).toBe("#FFFFFF");
   });
 
+  test("keeps automatic hyperlink text readable on dark DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Highlighted text",
+          highlight: TEST_DARK_HIGHLIGHT_COLOR,
+          hyperlink: { href: "https://example.com" },
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 16,
+      width: 112,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+    const anchorEl = textEl?.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.backgroundColor).toBe(TEST_DARK_HIGHLIGHT_COLOR);
+    expect(textEl?.style.color).toBe("#FFFFFF");
+    expect(anchorEl?.style.color).toBe("#FFFFFF");
+  });
+
   test("uses the higher-contrast text color on mid-tone DOCX highlights", () => {
     const block: ParagraphBlock = {
       kind: "paragraph",
