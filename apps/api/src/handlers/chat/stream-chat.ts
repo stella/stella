@@ -8,6 +8,7 @@ import {
 } from "ai";
 import type {
   InferUIMessageChunk,
+  LanguageModel,
   ToolSet,
   UIMessageStreamOnFinishCallback,
 } from "ai";
@@ -31,7 +32,7 @@ import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-regi
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
 import { classifyAIError } from "@/api/lib/ai-error";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
+import type { OrgAIConfig, ResolvedModelInfo } from "@/api/lib/ai-models";
 import {
   getModelById,
   getModelInfoById,
@@ -49,6 +50,135 @@ import {
 const MAX_TOOL_STEPS = 8;
 
 type AssistantValueRefResolver = ChatRefRegistry["resolveAssistantValueRefs"];
+
+type RunChatStreamArgs = {
+  writer: Parameters<
+    NonNullable<
+      Parameters<typeof createUIMessageStream<ChatMessage>>[0]["execute"]
+    >
+  >[0]["writer"];
+  model: LanguageModel;
+  modelInfo: ResolvedModelInfo;
+  /**
+   * When true, an empty completion appends an `{type: "error"}`
+   * chunk to the tail of the stream — `Chat.onFinish` then reports
+   * `isError: true` and the frontend renders the recoverable error
+   * bubble. When false, the empty case finishes silently so a
+   * caller (the fallback path) can continue with a different
+   * model on the same writer.
+   */
+  emitErrorOnEmpty: boolean;
+  abortSignal: AbortSignal;
+  system: string;
+  tools: ToolSet;
+  promptCacheKey: string;
+  modelMessages: Awaited<ReturnType<typeof convertToModelMessages>>;
+  threadId: SafeId<"chatThread">;
+  thirdPartyBoundary: ChatThirdPartyBoundary;
+  resolveAssistantTextRefs: ((text: string) => string) | undefined;
+  resolveAssistantValueRefs: AssistantValueRefResolver | undefined;
+  onAiError: (error: unknown) => string;
+};
+
+/**
+ * One streamText invocation, threaded through the deanonymization
+ * + ref-resolution pipeline and merged onto the shared writer.
+ * Returns `true` if the model produced zero output tokens — the
+ * caller decides whether to retry on a fallback model or surface
+ * the error.
+ */
+const runChatStream = async ({
+  writer,
+  model,
+  modelInfo,
+  emitErrorOnEmpty,
+  abortSignal,
+  system,
+  tools,
+  promptCacheKey,
+  modelMessages,
+  threadId,
+  thirdPartyBoundary,
+  resolveAssistantTextRefs,
+  resolveAssistantValueRefs,
+  onAiError,
+}: RunChatStreamArgs): Promise<boolean> => {
+  let emptyCompletion: ChatEmptyCompletionError | null = null;
+  let flushResolve: (() => void) | null = null;
+  const flushed = new Promise<void>((resolve) => {
+    flushResolve = resolve;
+  });
+  const result = streamText({
+    abortSignal,
+    model,
+    temperature: getTemperatureForRole("chat"),
+    system,
+    tools,
+    experimental_repairToolCall: async ({ toolCall }) =>
+      await Promise.resolve(repairActiveDocxEditToolCall(toolCall)),
+    providerOptions: {
+      openai: { promptCacheKey },
+    },
+    stopWhen: [stepCountIs(MAX_TOOL_STEPS), hasToolCall("ask-user")],
+    messages: modelMessages,
+    onFinish: ({ finishReason, totalUsage }) => {
+      // `outputTokens` is `number | undefined` — only fire when
+      // explicitly zero, otherwise providers that omit usage
+      // metadata would all be misclassified as empty.
+      if (finishReason === "stop" && totalUsage.outputTokens === 0) {
+        emptyCompletion = new ChatEmptyCompletionError({
+          message: "Model returned finish_reason=stop with zero output",
+        });
+        captureError(emptyCompletion, {
+          threadId,
+          provider: modelInfo.provider,
+          modelId: modelInfo.modelId,
+        });
+      }
+    },
+  });
+
+  const uiStream = result.toUIMessageStream<ChatMessage>({
+    onError: onAiError,
+  });
+  const refResolved = resolveAssistantTextRefs
+    ? resolveRefsInTextStream(
+        uiStream,
+        resolveAssistantTextRefs,
+        resolveAssistantValueRefs,
+      )
+    : uiStream;
+  const piped =
+    thirdPartyBoundary.type === "anonymized"
+      ? deanonymizeOutgoingStream(refResolved, thirdPartyBoundary)
+      : refResolved;
+  // Terminal-flush transform: when `emitErrorOnEmpty` and the
+  // model returned empty, append the error chunk so the client
+  // sees a clear failure. The flush also resolves `flushed`, which
+  // we await below to know when the pipeline has fully drained.
+  const finalised = piped.pipeThrough(
+    new TransformStream<
+      InferUIMessageChunk<ChatMessage>,
+      InferUIMessageChunk<ChatMessage>
+    >({
+      transform(chunk, controller) {
+        controller.enqueue(chunk);
+      },
+      flush(controller) {
+        if (emptyCompletion && emitErrorOnEmpty) {
+          controller.enqueue({
+            type: "error",
+            errorText: onAiError(emptyCompletion),
+          });
+        }
+        flushResolve?.();
+      },
+    }),
+  );
+  writer.merge(finalised);
+  await flushed;
+  return emptyCompletion !== null;
+};
 
 type StoredUserFile = {
   id: SafeId<"userFile">;
@@ -169,93 +299,68 @@ export const streamChat = async ({
     originalMessages: preparedMessages.value,
     onFinish,
     onError: onAiError,
-    execute: ({ writer }) => {
-      const modelInfo = devModelId
+    execute: async ({ writer }) => {
+      const primaryInfo = devModelId
         ? getModelInfoById(devModelId, orgAIConfig)
         : getModelInfoForRole("chat", orgAIConfig);
-      // Track empty-completion state via a closure mutated from
-      // streamText.onFinish. We need to surface it as an *error*
-      // chunk on the way out — without that, the frontend's
-      // `Chat.onFinish` runs with `isError: false`, invalidates the
-      // chat-thread query, rebuilds the Chat with a fresh
-      // sendAutomaticallyWhen predicate, and immediately auto-
-      // resubmits on the unchanged tail. That loop fires once per
-      // empty completion and burns LLM credits silently.
-      let emptyCompletion: ChatEmptyCompletionError | null = null;
-      const result = streamText({
+      const primaryModel = devModelId
+        ? getModelById(devModelId, orgAIConfig)
+        : getModelForRole("chat", orgAIConfig);
+      // Eligible fallback: a *different* model on the same orgAI
+      // config. Skip when the user has pinned a specific dev
+      // override (their choice is authoritative) and when the
+      // reasoning role resolves to the same id as chat (e.g.
+      // anthropic — claude-sonnet-4-6 for both; same on
+      // openai_compatible's "default").
+      const fallbackInfo: ResolvedModelInfo | null =
+        devModelId === undefined
+          ? getModelInfoForRole("reasoning", orgAIConfig)
+          : null;
+      const fallbackEligible =
+        fallbackInfo !== null && fallbackInfo.modelId !== primaryInfo.modelId;
+
+      const primaryEmpty = await runChatStream({
+        writer,
+        model: primaryModel,
+        modelInfo: primaryInfo,
+        // Primary finalises on empty only when there's no fallback
+        // — otherwise the fallback path emits the terminal error.
+        emitErrorOnEmpty: !fallbackEligible,
         abortSignal,
-        model: devModelId
-          ? getModelById(devModelId, orgAIConfig)
-          : getModelForRole("chat", orgAIConfig),
-        temperature: getTemperatureForRole("chat"),
         system,
         tools: modelTools,
-        experimental_repairToolCall: async ({ toolCall }) =>
-          await Promise.resolve(repairActiveDocxEditToolCall(toolCall)),
-        providerOptions: {
-          openai: {
-            promptCacheKey,
-          },
-        },
-        stopWhen: [stepCountIs(MAX_TOOL_STEPS), hasToolCall("ask-user")],
-        messages: modelMessages,
-        onFinish: ({ finishReason, totalUsage }) => {
-          // Some providers (notably gemini-2.5-flash-lite on cached
-          // prefixes) return finish_reason=stop with zero output
-          // tokens. `outputTokens` is `number | undefined` — only
-          // fire when explicitly zero, otherwise providers that
-          // omit usage metadata would all be misclassified.
-          if (finishReason === "stop" && totalUsage.outputTokens === 0) {
-            emptyCompletion = new ChatEmptyCompletionError({
-              message: "Model returned finish_reason=stop with zero output",
-            });
-            captureError(emptyCompletion, {
-              threadId,
-              provider: modelInfo.provider,
-              modelId: modelInfo.modelId,
-            });
-          }
-        },
+        promptCacheKey,
+        modelMessages,
+        threadId,
+        thirdPartyBoundary,
+        resolveAssistantTextRefs,
+        resolveAssistantValueRefs,
+        onAiError,
       });
 
-      const uiStream = result.toUIMessageStream<ChatMessage>({
-        onError: onAiError,
-      });
-      const refResolved = resolveAssistantTextRefs
-        ? resolveRefsInTextStream(
-            uiStream,
-            resolveAssistantTextRefs,
-            resolveAssistantValueRefs,
-          )
-        : uiStream;
-      const piped =
-        thirdPartyBoundary.type === "anonymized"
-          ? deanonymizeOutgoingStream(refResolved, thirdPartyBoundary)
-          : refResolved;
-      // Append a terminal-flush transform that converts the
-      // empty-completion flag into an `{type: "error"}` chunk at
-      // the tail of the stream. `Chat.onFinish` then reports
-      // `isError: true`, which short-circuits the invalidation
-      // path and stops the AI SDK auto-resubmit loop.
-      const withEmptyGuard = piped.pipeThrough(
-        new TransformStream<
-          InferUIMessageChunk<ChatMessage>,
-          InferUIMessageChunk<ChatMessage>
-        >({
-          transform(chunk, controller) {
-            controller.enqueue(chunk);
-          },
-          flush(controller) {
-            if (emptyCompletion) {
-              controller.enqueue({
-                type: "error",
-                errorText: onAiError(emptyCompletion),
-              });
-            }
-          },
-        }),
-      );
-      writer.merge(withEmptyGuard);
+      if (primaryEmpty && fallbackEligible && fallbackInfo !== null) {
+        // Same conversation, different model. If the fallback also
+        // returns empty we surface the error chunk; one automatic
+        // retry on a different model is bounded and recoverable,
+        // unlike the model-keeps-failing-on-cached-prefix case.
+        const fallbackModel = getModelForRole("reasoning", orgAIConfig);
+        await runChatStream({
+          writer,
+          model: fallbackModel,
+          modelInfo: fallbackInfo,
+          emitErrorOnEmpty: true,
+          abortSignal,
+          system,
+          tools: modelTools,
+          promptCacheKey,
+          modelMessages,
+          threadId,
+          thirdPartyBoundary,
+          resolveAssistantTextRefs,
+          resolveAssistantValueRefs,
+          onAiError,
+        });
+      }
     },
   });
 

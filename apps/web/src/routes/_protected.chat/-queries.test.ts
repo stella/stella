@@ -1,8 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import {
+  __resetAutoSendStateForTests,
   buildSendRequestBody,
   chatKeys,
   createSendAutomaticallyPredicate,
@@ -110,6 +111,10 @@ describe("buildSendRequestBody", () => {
 });
 
 describe("createSendAutomaticallyPredicate", () => {
+  beforeEach(() => {
+    __resetAutoSendStateForTests();
+  });
+
   test("allows sequential auto sends inside the same assistant message", () => {
     const shouldSendAutomatically = createSendAutomaticallyPredicate();
     const baseMessage = {

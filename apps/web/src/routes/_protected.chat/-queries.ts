@@ -285,15 +285,72 @@ export const buildSendRequestBody = ({
 // tool-state fingerprint breaks that loop while still allowing the
 // same assistant message to advance through multiple sequential
 // tool calls.
-export const createSendAutomaticallyPredicate = () => {
-  let lastFiredFingerprint: string | null = null;
-  return ({ messages }: { messages: PersistedChatMessage[] }) => {
+//
+// State lives at module scope (keyed by the thread's first message
+// id) instead of inside the predicate's closure: the chat-thread
+// query gets invalidated after every successful turn and the
+// queryFn recreates the `Chat` + a fresh predicate. A purely
+// closure-scoped fingerprint resets every time, which let the loop
+// re-arm itself. Module scope survives invalidation; the cap is a
+// hard ceiling per fingerprint regardless of how many Chat
+// instances exist for the same thread.
+//
+// Cap of 1 mirrors the original "fire once per fingerprint"
+// semantic; legitimate sequential tool calls advance the
+// fingerprint (each new tool result adds a part), so each gets its
+// own one-fire budget. Anything higher would just reopen the loop
+// the closure version used to suffer from.
+const MAX_AUTO_FIRES_PER_FINGERPRINT = 1;
+type ThreadAutoFireState = {
+  fingerprint: string | null;
+  fires: number;
+};
+const threadAutoFireState = new Map<string, ThreadAutoFireState>();
+
+/**
+ * Test-only escape hatch. The module-level cache is intentionally
+ * not cleared automatically; this helper resets it between unit
+ * tests so each one starts hermetically.
+ */
+export const __resetAutoSendStateForTests = (): void => {
+  threadAutoFireState.clear();
+};
+
+const getThreadAutoFireKey = (
+  messages: readonly PersistedChatMessage[],
+): string | null => messages[0]?.id ?? null;
+
+export const createSendAutomaticallyPredicate =
+  () =>
+  ({ messages }: { messages: PersistedChatMessage[] }) => {
     if (hasApprovedActiveDocxEditAwaitingClientOutput({ messages })) {
       return false;
     }
     const lastMessage = messages.at(-1);
     const fingerprint = getAutoSendFingerprint(lastMessage);
-    if (!fingerprint || fingerprint === lastFiredFingerprint) {
+    if (!fingerprint) {
+      return false;
+    }
+    const threadKey = getThreadAutoFireKey(messages);
+    if (!threadKey) {
+      return false;
+    }
+    const state = threadAutoFireState.get(threadKey) ?? {
+      fingerprint: null,
+      fires: 0,
+    };
+    // Different fingerprint → fresh tail, reset the counter.
+    if (state.fingerprint !== fingerprint) {
+      state.fingerprint = fingerprint;
+      state.fires = 0;
+    }
+    // Hard cap: any future regression that reopens the loop hits
+    // this ceiling and stops automatically. 3 covers the
+    // legitimate sequential-tool-call case (each tool result lands
+    // with a new fingerprint, so each new fingerprint gets its own
+    // budget).
+    if (state.fires >= MAX_AUTO_FIRES_PER_FINGERPRINT) {
+      threadAutoFireState.set(threadKey, state);
       return false;
     }
     const shouldFire =
@@ -301,11 +358,11 @@ export const createSendAutomaticallyPredicate = () => {
       lastAssistantMessageIsCompleteWithApprovalResponses({ messages }) ||
       lastAssistantMessageIsCompleteWithToolCalls({ messages });
     if (shouldFire) {
-      lastFiredFingerprint = fingerprint;
+      state.fires += 1;
     }
+    threadAutoFireState.set(threadKey, state);
     return shouldFire;
   };
-};
 
 const getAutoSendFingerprint = (
   message: PersistedChatMessage | undefined,
