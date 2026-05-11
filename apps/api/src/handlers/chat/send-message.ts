@@ -25,7 +25,7 @@ import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import {
   expandThreadDataScope,
   extractAssistantWorkspaceIds,
-  extractMentionWorkspaceIds,
+  extractIncomingMessageWorkspaceIds,
 } from "@/api/handlers/chat/data-scope";
 import { ChatError } from "@/api/handlers/chat/errors";
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
@@ -256,25 +256,27 @@ const sendMessage = createSafeRootHandler(
       }),
     );
 
-    // Widen the thread's data scope BEFORE persisting the message so
-    // any workspace IDs the user just embedded (entity mentions,
-    // workspace mentions) are recorded on the thread row. Without
-    // this, a global thread with workspace mentions would remain
-    // visible to the user even after they lose access to those
-    // workspaces.
+    // Widen the thread's data scope BEFORE persisting the incoming
+    // message so any workspace IDs it embeds are recorded on the
+    // thread row. User messages can embed entity/workspace mentions;
+    // assistant updates can embed client-executed tool outputs such
+    // as create-document results. Without this, a global thread
+    // could store workspace-scoped content while its data scope
+    // remains stale.
     //
     // Intersect with `accessibleWorkspaceIds` first: an unknown ID
     // (model hallucination, copy-pasted UUID from elsewhere) added
     // to `data_workspace_ids` would fail the RLS subset check on
     // every subsequent message persist, silently breaking the
     // thread.
-    const userMessageWorkspaceIds = extractMentionWorkspaceIds(
-      parsedMessage.mentions,
-    ).filter((id) => accessibleSet.has(id));
-    const dataScopeAfterUserMessage = yield* Result.await(
+    const incomingMessageWorkspaceIds = extractIncomingMessageWorkspaceIds({
+      mentions: parsedMessage.mentions,
+      message: parsedMessage.message,
+    }).filter((id) => accessibleSet.has(id));
+    const dataScopeAfterIncomingMessage = yield* Result.await(
       expandThreadDataScope({
         currentDataWorkspaceIds: thread.data.dataWorkspaceIds,
-        newWorkspaceIds: userMessageWorkspaceIds,
+        newWorkspaceIds: incomingMessageWorkspaceIds,
         safeDb,
         threadId: body.threadId,
       }),
@@ -405,7 +407,7 @@ const sendMessage = createSafeRootHandler(
                     resolvedResponseMessage.parts,
                   ).filter((id) => accessibleSet.has(id));
                   const expandResult = await expandThreadDataScope({
-                    currentDataWorkspaceIds: dataScopeAfterUserMessage,
+                    currentDataWorkspaceIds: dataScopeAfterIncomingMessage,
                     newWorkspaceIds: assistantWorkspaceIds,
                     safeDb,
                     threadId: body.threadId,

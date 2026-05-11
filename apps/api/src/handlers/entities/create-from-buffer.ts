@@ -6,6 +6,12 @@ import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  writeAuditLog,
+} from "@/api/lib/audit-log";
+import type { AuditContext } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
@@ -45,6 +51,7 @@ type CreateEntityFromBufferInput = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
+  auditContext: AuditContext;
   buffer: Uint8Array | ArrayBuffer;
   fileName: string;
   mimeType: string;
@@ -78,6 +85,7 @@ export const createEntityFromBuffer = async ({
   organizationId,
   workspaceId,
   userId,
+  auditContext,
   buffer,
   fileName: rawFileName,
   mimeType,
@@ -185,6 +193,28 @@ export const createEntityFromBuffer = async ({
         .update(workspaces)
         .set({ lastActivityAt: new Date() })
         .where(eq(workspaces.id, workspaceId));
+
+      await writeAuditLog(
+        {
+          ...auditContext,
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: entityId,
+          changes: {
+            created: {
+              old: null,
+              new: {
+                kind: "document",
+                fileName,
+                mimeType,
+                sizeBytes: bytes.byteLength,
+                propertyId: fileProperty.id,
+              },
+            },
+          },
+        },
+        tx,
+      );
     });
   } catch (error) {
     await Promise.all(s3Keys.map(async (k) => await getS3().delete(k)));
