@@ -197,12 +197,13 @@ export const WorkspaceBreadcrumb = ({
   ) : (
     <>
       <BreadcrumbItem className="min-w-8 shrink">
-        <span
-          className="text-muted-foreground min-w-0 truncate"
+        <Link
+          className="hover:text-foreground text-muted-foreground min-w-0 truncate transition-colors"
+          to="/workspaces"
           title={t("workspaces.parties.personalLabel")}
         >
           {t("workspaces.parties.personalLabel")}
-        </span>
+        </Link>
       </BreadcrumbItem>
       <BreadcrumbSeparator className="shrink-0" />
     </>
