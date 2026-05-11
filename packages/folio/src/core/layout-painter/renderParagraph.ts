@@ -119,16 +119,32 @@ function isDefaultBlackTextColor(color: string): boolean {
 function shouldRenderTextColor(
   color: string,
   highlight: string | undefined,
+  textColorSource: TextRun["textColorSource"],
 ): boolean {
   if (isAutomaticTextColor(color)) {
     return false;
   }
 
   if (highlight) {
-    return true;
+    return (
+      textColorSource !== "paragraphDefault" || !isDefaultBlackTextColor(color)
+    );
   }
 
   return !isDefaultBlackTextColor(color);
+}
+
+function getRenderableTextColor(run: TextRun | TabRun): string | undefined {
+  const textColor = run.color;
+  if (!textColor) {
+    return undefined;
+  }
+
+  if (!shouldRenderTextColor(textColor, run.highlight, run.textColorSource)) {
+    return undefined;
+  }
+
+  return textColor.trim();
 }
 
 /**
@@ -157,9 +173,9 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
 
   // Color — skip black/auto so the CSS variable --doc-canvas-text can adapt to dark mode
   let hasExplicitTextColor = false;
-  const textColor = run.color;
-  if (textColor && shouldRenderTextColor(textColor, run.highlight)) {
-    element.style.color = textColor.trim();
+  const textColor = getRenderableTextColor(run);
+  if (textColor) {
+    element.style.color = textColor;
     hasExplicitTextColor = true;
   }
 
@@ -396,7 +412,8 @@ function renderTextRun(run: TextRun, doc: Document): HTMLElement {
     }
     anchor.textContent = run.text;
     // Style hyperlink — default Word hyperlink color is blue (#0563c1)
-    const hyperlinkColor = run.color?.trim() || span.style.color || "#0563c1";
+    const hyperlinkColor =
+      getRenderableTextColor(run) || span.style.color || "#0563c1";
     anchor.style.color = hyperlinkColor;
     anchor.style.textDecoration = "underline";
     // Override span color to match anchor (prevents color mismatch in selection)
@@ -597,6 +614,9 @@ function renderFieldRun(
     ...(run.underline !== undefined ? { underline: run.underline } : {}),
     ...(run.strike !== undefined ? { strike: run.strike } : {}),
     ...(run.color !== undefined ? { color: run.color } : {}),
+    ...(run.textColorSource !== undefined
+      ? { textColorSource: run.textColorSource }
+      : {}),
     ...(run.highlight !== undefined ? { highlight: run.highlight } : {}),
     ...(run.fontFamily !== undefined ? { fontFamily: run.fontFamily } : {}),
     ...(run.fontSize !== undefined ? { fontSize: run.fontSize } : {}),

@@ -35,6 +35,17 @@ const schema = new Schema({
         kerning: { default: null },
       },
     },
+    textColor: {
+      attrs: {
+        rgb: { default: null },
+        themeColor: { default: null },
+        themeTint: { default: null },
+        themeShade: { default: null },
+      },
+    },
+    highlight: {
+      attrs: { color: {} },
+    },
   },
 });
 
@@ -143,8 +154,50 @@ describe("toFlowBlocks run-level OOXML marks", () => {
     expect(run.fontSize).toBe(11);
     expect(run.bold).toBe(true);
     expect(run.color).toBe("#C00000");
+    expect(run.textColorSource).toBe("paragraphDefault");
     expect(run.underline).toEqual({ style: "single" });
     expect(run.smallCaps).toBe(true);
+  });
+
+  test("keeps merged paragraph default black identifiable on highlighted runs", () => {
+    const textColor = schema.marks.textColor.create({ rgb: "000000" });
+    const highlight = schema.marks.highlight.create({ color: "darkBlue" });
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          defaultTextFormatting: {
+            color: { rgb: "000000" },
+            highlight: "darkBlue",
+          },
+        },
+        [schema.text("body text", [textColor, highlight])],
+      ),
+    ]);
+    const run = firstRun(toFlowBlocks(doc, {}));
+
+    expect(run.color).toBe("#000000");
+    expect(run.textColorSource).toBe("paragraphDefault");
+    expect(run.highlight).toBe("#00008B");
+  });
+
+  test("keeps distinguishable direct black text colors marked as direct", () => {
+    const textColor = schema.marks.textColor.create({ rgb: "000000" });
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          defaultTextFormatting: {
+            color: { rgb: "C00000" },
+          },
+        },
+        [schema.text("body text", [textColor])],
+      ),
+    ]);
+    const run = firstRun(toFlowBlocks(doc, {}));
+
+    expect(run.color).toBe("#000000");
+    expect(run.textColorSource).toBe("direct");
   });
 
   test("omits automatic paragraph default text colors from runs", () => {

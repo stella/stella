@@ -24,6 +24,7 @@ export type RunFormatting = {
   underline?: boolean | { style?: string; color?: string };
   strike?: boolean;
   color?: string;
+  textColorSource?: "direct" | "paragraphDefault";
   highlight?: string;
   fontFamily?: string;
   fontSize?: number;
