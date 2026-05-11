@@ -221,6 +221,7 @@ type StreamChatProps = {
    */
   systemUntrusted: string;
   thirdPartyBoundary: ChatThirdPartyBoundary;
+  latestMessageId: string;
   threadId: SafeId<"chatThread">;
   tools: ToolSet;
 };
@@ -237,6 +238,7 @@ export const streamChat = async ({
   systemSafe,
   systemUntrusted,
   thirdPartyBoundary,
+  latestMessageId,
   threadId,
   tools,
 }: StreamChatProps) => {
@@ -265,10 +267,6 @@ export const streamChat = async ({
     preparedUntrusted.value.length > 0
       ? `${systemSafe}${preparedUntrusted.value.startsWith("\n") ? "" : "\n\n"}${preparedUntrusted.value}`
       : systemSafe;
-  const systemOnlyPlaceholders =
-    thirdPartyBoundary.type === "anonymized"
-      ? new Set(thirdPartyBoundary.redactionMap.keys())
-      : new Set<string>();
 
   const preparedMessages = await prepareMessagesForThirdParty({
     boundary: thirdPartyBoundary,
@@ -290,8 +288,9 @@ export const streamChat = async ({
   const modelMessages = await convertToModelMessages(preparedMessages.value);
   const initialRestorationPlaceholders =
     thirdPartyBoundary.type === "anonymized"
-      ? collectRestorationPlaceholders({
-          exclude: systemOnlyPlaceholders,
+      ? collectInitialRestorationPlaceholders({
+          latestMessageId,
+          messages: preparedMessages.value,
           redactionMap: thirdPartyBoundary.redactionMap,
         })
       : new Set<string>();
@@ -426,16 +425,27 @@ const getDeanonymisablePrefixLength = (text: string): number => {
   return match ? match.index : text.length;
 };
 
-const collectRestorationPlaceholders = ({
-  exclude = new Set<string>(),
+export const collectInitialRestorationPlaceholders = ({
+  latestMessageId,
+  messages,
   redactionMap,
 }: {
+  latestMessageId: string;
+  messages: ChatMessage[];
   redactionMap: ReadonlyMap<string, string>;
-  exclude?: ReadonlySet<string> | undefined;
 }): Set<string> => {
   const placeholders = new Set<string>();
-  for (const placeholder of redactionMap.keys()) {
-    if (!exclude.has(placeholder)) {
+  const latestMessage = messages.find(
+    (message) => message.id === latestMessageId,
+  );
+  if (!latestMessage) {
+    return placeholders;
+  }
+
+  for (const placeholder of collectUnknownStringPlaceholders(
+    latestMessage.parts,
+  )) {
+    if (redactionMap.has(placeholder)) {
       placeholders.add(placeholder);
     }
   }

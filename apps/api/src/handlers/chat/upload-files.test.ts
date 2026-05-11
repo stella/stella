@@ -3,12 +3,15 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
+import type { SafeDb, Transaction } from "@/api/db";
 import {
   TEXT_CSV_MIME_TYPE,
   TEXT_MARKDOWN_MIME_TYPE,
   TEXT_PLAIN_MIME_TYPE,
 } from "@/api/handlers/chat/attachment-validation";
-import { parseDataUrl } from "@/api/lib/data-url";
+import type { ChatMessage } from "@/api/handlers/chat/types";
+import { toSafeId } from "@/api/lib/branded-types";
+import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const fileBytes = new TextEncoder().encode("Jan Novak,Acme");
@@ -19,18 +22,34 @@ const arrayBufferMock = mock(async () =>
   ),
 );
 const fileMock = mock(() => ({ arrayBuffer: arrayBufferMock }));
+const writeMock = mock(async () => undefined);
+const s3DeleteMock = mock(async () => undefined);
+const scanFileMock = mock(async () =>
+  Result.ok({
+    detectedMimeType: TEXT_PLAIN_MIME_TYPE,
+    verdict: "allow" as const,
+  }),
+);
 
 void mock.module("@/api/lib/s3", () => ({
-  getS3: () => ({ file: fileMock }),
+  getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
 }));
 
-const { canHydrateFilePartAsPlainText, hydrateFilePart } =
+void mock.module("@/api/lib/file-scan/scan", () => ({
+  getScanWarnings: () => [],
+  scanFile: scanFileMock,
+}));
+
+const { canHydrateFilePartAsPlainText, hydrateFilePart, uploadMessageFiles } =
   await import("./upload-files");
 
 describe("chat attachment hydration", () => {
   beforeEach(() => {
     arrayBufferMock.mockClear();
     fileMock.mockClear();
+    scanFileMock.mockClear();
+    s3DeleteMock.mockClear();
+    writeMock.mockClear();
   });
 
   test("classifies extractable document and text attachments", () => {
@@ -136,5 +155,55 @@ describe("chat attachment hydration", () => {
         type: "file",
       },
     });
+  });
+
+  test("cleans up already uploaded files when a later attachment fails", async () => {
+    const valuesMock = mock(async () => undefined);
+    const insertMock = mock(() => ({ values: valuesMock }));
+    const whereMock = mock(async () => undefined);
+    const deleteMock = mock(() => ({ where: whereMock }));
+    const tx = {
+      delete: deleteMock,
+      insert: insertMock,
+    };
+    // SAFETY: the upload helper only touches `insert().values()` and
+    // `delete().where()` in this regression test.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    const testTx = tx as unknown as Transaction;
+    const safeDb: SafeDb = async (callback) =>
+      await Result.tryPromise(async () => await callback(testTx));
+    const message: ChatMessage = {
+      id: "msg_1",
+      role: "user",
+      parts: [
+        {
+          type: "file",
+          filename: "first.txt",
+          mediaType: TEXT_PLAIN_MIME_TYPE,
+          url: toDataUrl(
+            new TextEncoder().encode("first"),
+            TEXT_PLAIN_MIME_TYPE,
+          ),
+        },
+        {
+          type: "file",
+          filename: "broken.txt",
+          mediaType: TEXT_PLAIN_MIME_TYPE,
+          url: "not-a-data-url",
+        },
+      ],
+    };
+
+    const result = await uploadMessageFiles({
+      message,
+      safeDb,
+      threadId: toSafeId<"chatThread">("thread_1"),
+      userId: toSafeId<"user">("user_1"),
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    expect(writeMock).toHaveBeenCalledTimes(1);
+    expect(s3DeleteMock).toHaveBeenCalledTimes(1);
+    expect(whereMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,6 +1,7 @@
 import type { FileUIPart } from "ai";
 import { isFileUIPart } from "ai";
 import { Result } from "better-result";
+import { and, eq, inArray } from "drizzle-orm";
 
 import {
   CHAT_SEND_MODE,
@@ -17,7 +18,7 @@ import {
   TEXT_PLAIN_MIME_TYPE,
 } from "@/api/handlers/chat/attachment-validation";
 import { ChatError } from "@/api/handlers/chat/errors";
-import { createUserFileKey } from "@/api/handlers/files/utils";
+import { createUserFileKey, deleteS3Keys } from "@/api/handlers/files/utils";
 import { isUserFileUrl, toUserFileUrl } from "@/api/handlers/user-files/types";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -50,9 +51,19 @@ type UploadMessageFilesProps = {
 };
 
 type UploadMessageFilesReturn = Result<
-  ChatMessage,
+  UploadedChatMessage,
   HandlerError<400 | 422 | 500> | SafeDbError
 >;
+
+export type UploadedChatFile = {
+  id: SafeId<"userFile">;
+  s3Key: string;
+};
+
+type UploadedChatMessage = {
+  message: ChatMessage;
+  uploadedFiles: UploadedChatFile[];
+};
 
 export const uploadMessageFiles = async ({
   message,
@@ -61,41 +72,115 @@ export const uploadMessageFiles = async ({
   userId,
 }: UploadMessageFilesProps): Promise<UploadMessageFilesReturn> => {
   if (message.role !== "user") {
-    return Result.ok(message);
+    return Result.ok({ message, uploadedFiles: [] });
   }
 
-  return await Result.gen(async function* () {
-    const parts: ChatMessage["parts"] = [];
-
-    for (const part of message.parts) {
-      if (!isFileUIPart(part) || isUserFileUrl(part.url)) {
-        parts.push(part);
-        continue;
-      }
-
-      const parsedPart = yield* parseMessageFileDataUrl({ part });
-      const uploadedFile = yield* Result.await(
-        uploadUserFile({
-          file: parsedPart,
-          safeDb,
-          threadId,
-          userId,
-        }),
-      );
-
-      parts.push({
-        ...part,
-        filename: uploadedFile.fileName,
-        mediaType: uploadedFile.mimeType,
-        url: toUserFileUrl(uploadedFile.id),
-      });
+  const uploadedFiles: UploadedChatFile[] = [];
+  const parts: ChatMessage["parts"] = [];
+  const fail = async (
+    error: HandlerError<400 | 422 | 500> | SafeDbError,
+  ): Promise<UploadMessageFilesReturn> => {
+    if (uploadedFiles.length === 0) {
+      return Result.err(error);
     }
 
-    return Result.ok({
+    const rollbackResult = await deleteUploadedChatFiles({
+      files: uploadedFiles,
+      safeDb,
+      threadId,
+      userId,
+    });
+
+    if (Result.isOk(rollbackResult)) {
+      return Result.err(error);
+    }
+
+    captureError(error, { threadId });
+    return Result.err(rollbackResult.error);
+  };
+
+  for (const part of message.parts) {
+    if (!isFileUIPart(part) || isUserFileUrl(part.url)) {
+      parts.push(part);
+      continue;
+    }
+
+    const parsedPart = parseMessageFileDataUrl({ part });
+    if (Result.isError(parsedPart)) {
+      return await fail(parsedPart.error);
+    }
+
+    const uploadedFile = await uploadUserFile({
+      file: parsedPart.value,
+      safeDb,
+      threadId,
+      userId,
+    });
+    if (Result.isError(uploadedFile)) {
+      return await fail(uploadedFile.error);
+    }
+
+    uploadedFiles.push({
+      id: uploadedFile.value.id,
+      s3Key: uploadedFile.value.s3Key,
+    });
+    parts.push({
+      ...part,
+      filename: uploadedFile.value.fileName,
+      mediaType: uploadedFile.value.mimeType,
+      url: toUserFileUrl(uploadedFile.value.id),
+    });
+  }
+
+  return Result.ok({
+    message: {
       ...message,
       parts,
-    });
+    },
+    uploadedFiles,
   });
+};
+
+export const deleteUploadedChatFiles = async ({
+  files,
+  safeDb,
+  threadId,
+  userId,
+}: {
+  files: readonly UploadedChatFile[];
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+}): Promise<Result<void, HandlerError<500> | SafeDbError>> => {
+  if (files.length === 0) {
+    return Result.ok();
+  }
+
+  const deleteS3Result = await deleteS3Keys(files.map((file) => file.s3Key));
+  if (Result.isError(deleteS3Result)) {
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: "Failed to delete uploaded chat attachments from storage",
+        cause: deleteS3Result.error,
+      }),
+    );
+  }
+
+  const deleteDbResult = await safeDb((tx) =>
+    tx.delete(userFiles).where(
+      and(
+        eq(userFiles.threadId, threadId),
+        eq(userFiles.userId, userId),
+        inArray(
+          userFiles.id,
+          files.map((file) => file.id),
+        ),
+      ),
+    ),
+  );
+
+  return deleteDbResult.andThen(() => Result.ok());
 };
 
 type HydrateFilePartProps = {
@@ -365,6 +450,7 @@ export const uploadUserFile = async ({
         id,
         mimeType: file.mimeType,
         fileName: sanitizedFileName,
+        s3Key,
       });
     }
 

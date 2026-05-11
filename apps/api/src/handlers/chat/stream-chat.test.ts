@@ -15,6 +15,7 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
+  collectInitialRestorationPlaceholders,
   deanonymizeOutgoingStream,
   hydrateMessages,
   resolveRefsInTextStream,
@@ -249,6 +250,36 @@ describe("chat message hydration", () => {
 });
 
 describe("anonymized outgoing chat stream", () => {
+  test("seeds restorations from the current provider-visible message only", () => {
+    const placeholders = collectInitialRestorationPlaceholders({
+      latestMessageId: "current",
+      messages: [
+        {
+          id: "previous",
+          role: "assistant",
+          parts: [{ type: "text", text: "Earlier [PERSON_3]" }],
+        },
+        {
+          id: "current",
+          role: "user",
+          parts: [
+            {
+              type: "text",
+              text: "Does [PERSON_1] involve [PERSON_2]?",
+            },
+          ],
+        },
+      ],
+      redactionMap: new Map([
+        ["[PERSON_1]", "System and user shared name"],
+        ["[PERSON_2]", "Current user only"],
+        ["[PERSON_3]", "Prior assistant only"],
+      ]),
+    });
+
+    expect([...placeholders]).toEqual(["[PERSON_1]", "[PERSON_2]"]);
+  });
+
   test("does not emit system-context-only restoration pairs", async () => {
     const boundary = createBoundary([
       ["[PERSON_1]", "System Only"],

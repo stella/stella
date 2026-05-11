@@ -56,7 +56,11 @@ import type {
   ChatMessage,
   ChatMessageContent,
 } from "@/api/handlers/chat/types";
-import { uploadMessageFiles } from "@/api/handlers/chat/upload-files";
+import {
+  deleteUploadedChatFiles,
+  uploadMessageFiles,
+} from "@/api/handlers/chat/upload-files";
+import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { requireAIAvailable } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -224,7 +228,7 @@ const sendMessage = createSafeRootHandler(
       sendMode: body.sendMode,
     });
 
-    const uploadedMessage = yield* Result.await(
+    const uploadResult = yield* Result.await(
       uploadMessageFilesWithRollback({
         message: validatedMessage.message,
         safeDb,
@@ -236,7 +240,7 @@ const sendMessage = createSafeRootHandler(
 
     const parsedMessage = parseMessage({
       accessibleWorkspaceIds,
-      message: uploadedMessage,
+      message: uploadResult.message,
     });
 
     const latestMessagePlan = planMessagePersistence({
@@ -245,22 +249,36 @@ const sendMessage = createSafeRootHandler(
     });
 
     const messageWindow = latestMessagePlan.messages.slice(-MESSAGE_WINDOW);
-    const chatContext = yield* Result.await(
-      prepareChatContext({
-        activeDecision: body.activeDecision,
-        activeExternal: body.activeExternal,
-        activeFile: body.activeFile,
-        contextMatterIds: effectiveContextMatterIds,
-        messageWindow,
-        organizationId: session.activeOrganizationId,
+    const chatContextResult = await prepareChatContext({
+      activeDecision: body.activeDecision,
+      activeExternal: body.activeExternal,
+      activeFile: body.activeFile,
+      contextMatterIds: effectiveContextMatterIds,
+      messageWindow,
+      organizationId: session.activeOrganizationId,
+      safeDb,
+      sendMode: body.sendMode,
+      userContext: body.userContext,
+      userId: user.id,
+      workspaceId,
+      refRegistry,
+    });
+    if (Result.isError(chatContextResult)) {
+      const rollbackResult = await rollbackUnpersistedChatSideEffects({
         safeDb,
-        sendMode: body.sendMode,
-        userContext: body.userContext,
+        threadId: body.threadId,
+        threadState: thread,
+        uploadedFiles: uploadResult.uploadedFiles,
         userId: user.id,
-        workspaceId,
-        refRegistry,
-      }),
-    );
+      });
+      if (Result.isError(rollbackResult)) {
+        captureError(chatContextResult.error, { threadId: body.threadId });
+        return yield* Result.err(rollbackResult.error);
+      }
+
+      return yield* Result.err(chatContextResult.error);
+    }
+    const chatContext = chatContextResult.value;
 
     // Widen the thread's data scope BEFORE persisting the incoming
     // message so any workspace IDs it embeds are recorded on the
@@ -372,6 +390,7 @@ const sendMessage = createSafeRootHandler(
             const chatResponse = await streamChat({
               abortSignal: request.signal,
               messages: chatContext.hydratedMessages,
+              latestMessageId: parsedMessage.message.id,
               onFinish: async ({ isAborted, responseMessage }) => {
                 try {
                   const resolvedMessages = resolveAssistantMessageRefs({
@@ -690,7 +709,10 @@ type UploadMessageFilesWithRollbackProps = {
 };
 
 type UploadMessageFilesWithRollbackResult = Result<
-  ChatMessage,
+  {
+    message: ChatMessage;
+    uploadedFiles: UploadedChatFile[];
+  },
   HandlerError<400 | 422 | 500> | SafeDbError
 >;
 
@@ -708,13 +730,21 @@ const uploadMessageFilesWithRollback = async ({
     userId,
   });
 
-  if (threadState.type !== "created" || Result.isOk(uploadResult)) {
+  if (Result.isOk(uploadResult)) {
     return uploadResult;
   }
 
-  const rollbackResult = await safeDb((tx) =>
-    tx.delete(chatThreads).where(eq(chatThreads.id, threadId)),
-  );
+  if (threadState.type !== "created") {
+    return uploadResult;
+  }
+
+  const rollbackResult = await rollbackUnpersistedChatSideEffects({
+    safeDb,
+    threadId,
+    threadState,
+    uploadedFiles: [],
+    userId,
+  });
 
   if (Result.isOk(rollbackResult)) {
     return Result.err(uploadResult.error);
@@ -722,6 +752,40 @@ const uploadMessageFilesWithRollback = async ({
 
   captureError(uploadResult.error, { threadId });
   return Result.err(rollbackResult.error);
+};
+
+const rollbackUnpersistedChatSideEffects = async ({
+  safeDb,
+  threadId,
+  threadState,
+  uploadedFiles,
+  userId,
+}: {
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+  threadState: LoadThreadResult;
+  uploadedFiles: UploadedChatFile[];
+  userId: SafeId<"user">;
+}): Promise<Result<void, HandlerError<500> | SafeDbError>> => {
+  const fileRollbackResult = await deleteUploadedChatFiles({
+    files: uploadedFiles,
+    safeDb,
+    threadId,
+    userId,
+  });
+  if (Result.isError(fileRollbackResult)) {
+    return fileRollbackResult;
+  }
+
+  if (threadState.type !== "created") {
+    return Result.ok();
+  }
+
+  const threadRollbackResult = await safeDb((tx) =>
+    tx.delete(chatThreads).where(eq(chatThreads.id, threadId)),
+  );
+
+  return threadRollbackResult.andThen(() => Result.ok());
 };
 
 type PrepareChatContextProps = {
