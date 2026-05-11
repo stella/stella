@@ -15,8 +15,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
-    "jszip": "catalog:",
-    "valibot": "catalog:"
+    "jszip": "catalog:"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
