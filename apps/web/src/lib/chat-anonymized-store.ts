@@ -1,32 +1,34 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { getChatThreadKey } from "@/lib/chat-thread-ref";
 
 type ChatAnonymizedStore = {
-  byThreadKey: Record<string, boolean>;
-  setAnonymized: (threadKey: string, anonymized: boolean) => void;
+  /** Single org-wide preference: once toggled on, every chat (new or reopened)
+   *  inherits the setting until the user turns it back off. */
+  anonymized: boolean;
+  setAnonymized: (anonymized: boolean) => void;
 };
 
-export const useChatAnonymizedStore = create<ChatAnonymizedStore>((set) => ({
-  byThreadKey: {},
-  setAnonymized: (threadKey, anonymized) =>
-    set((state) => ({
-      byThreadKey: { ...state.byThreadKey, [threadKey]: anonymized },
-    })),
-}));
+export const useChatAnonymizedStore = create<ChatAnonymizedStore>()(
+  persist(
+    (set) => ({
+      anonymized: false,
+      setAnonymized: (anonymized) => {
+        set({ anonymized });
+      },
+    }),
+    { name: "stella.chat.anonymized" },
+  ),
+);
 
-export const useChatAnonymized = (threadRef: ChatThreadRef): boolean => {
-  const key = getChatThreadKey(threadRef);
-  return useChatAnonymizedStore((s) => s.byThreadKey[key] ?? false);
-};
+// `threadRef` is kept on the public API so call sites don't have to change
+// when we eventually re-introduce per-thread overrides.
+export const useChatAnonymized = (_threadRef: ChatThreadRef): boolean =>
+  useChatAnonymizedStore((s) => s.anonymized);
 
-export const useSetChatAnonymized = (threadRef: ChatThreadRef) => {
-  const key = getChatThreadKey(threadRef);
-  const setAnonymized = useChatAnonymizedStore((s) => s.setAnonymized);
-  return (anonymized: boolean) => setAnonymized(key, anonymized);
-};
+export const useSetChatAnonymized = (_threadRef: ChatThreadRef) =>
+  useChatAnonymizedStore((s) => s.setAnonymized);
 
-export const getChatAnonymized = (threadRef: ChatThreadRef): boolean =>
-  useChatAnonymizedStore.getState().byThreadKey[getChatThreadKey(threadRef)] ??
-  false;
+export const getChatAnonymized = (_threadRef: ChatThreadRef): boolean =>
+  useChatAnonymizedStore.getState().anonymized;

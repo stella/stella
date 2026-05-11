@@ -20,8 +20,9 @@ import {
 } from "@/api/handlers/chat/attachment-validation";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
+  deanonymizeFromBoundary,
+  deanonymizeUnknownStringsFromBoundary,
   prepareMessagesForThirdParty,
-  prepareTextForThirdParty,
   prepareToolsForThirdParty,
 } from "@/api/handlers/chat/third-party-boundary";
 import { repairActiveDocxEditToolCall } from "@/api/handlers/chat/tools/active-docx-edit-tool-repair";
@@ -86,16 +87,18 @@ export const streamChat = async ({
   threadId,
   tools,
 }: StreamChatProps) => {
-  const [preparedMessages, preparedSystem] = await Promise.all([
-    prepareMessagesForThirdParty({
-      boundary: thirdPartyBoundary,
-      messages,
-    }),
-    prepareTextForThirdParty({
-      boundary: thirdPartyBoundary,
-      text: system,
-    }),
-  ]);
+  // The system prompt is server-built scaffold (product copy, skill
+  // catalog, API surface) plus the active user's own profile fields.
+  // It carries no third-party data outside pinned-matter labels —
+  // and those are the user's own matters. Running it through the
+  // anonymizer just shreds brand and skill names ("Stella" →
+  // "[PERSON_1]") without protecting any privileged data, so we
+  // skip it. User-content paths (messages, tool outputs) still go
+  // through the boundary as before.
+  const preparedMessages = await prepareMessagesForThirdParty({
+    boundary: thirdPartyBoundary,
+    messages,
+  });
 
   if (Result.isError(preparedMessages)) {
     return new Response(
@@ -106,19 +109,6 @@ export const streamChat = async ({
       {
         headers: { "Content-Type": "application/json" },
         status: preparedMessages.error.status,
-      },
-    );
-  }
-
-  if (Result.isError(preparedSystem)) {
-    return new Response(
-      JSON.stringify({
-        message: preparedSystem.error.message,
-        type: "third_party_boundary_refusal",
-      }),
-      {
-        headers: { "Content-Type": "application/json" },
-        status: preparedSystem.error.status,
       },
     );
   }
@@ -157,7 +147,7 @@ export const streamChat = async ({
           ? getModelById(devModelId, orgAIConfig)
           : getModelForRole("chat", orgAIConfig),
         temperature: getTemperatureForRole("chat"),
-        system: preparedSystem.value,
+        system,
         tools: modelTools,
         experimental_repairToolCall: async ({ toolCall }) =>
           await Promise.resolve(repairActiveDocxEditToolCall(toolCall)),
@@ -196,14 +186,17 @@ export const streamChat = async ({
       const uiStream = result.toUIMessageStream<ChatMessage>({
         onError: onAiError,
       });
+      const refResolved = resolveAssistantTextRefs
+        ? resolveRefsInTextStream(
+            uiStream,
+            resolveAssistantTextRefs,
+            resolveAssistantValueRefs,
+          )
+        : uiStream;
       writer.merge(
-        resolveAssistantTextRefs
-          ? resolveRefsInTextStream(
-              uiStream,
-              resolveAssistantTextRefs,
-              resolveAssistantValueRefs,
-            )
-          : uiStream,
+        thirdPartyBoundary.type === "anonymized"
+          ? deanonymizeOutgoingStream(refResolved, thirdPartyBoundary)
+          : refResolved,
       );
     },
   });
@@ -223,6 +216,117 @@ const getResolvedTextPrefixLength = (text: string) => {
 
   const markerSuffix = text.slice(markerIndex);
   return /[\s)]/.test(markerSuffix) ? text.length : markerIndex;
+};
+
+// A token like `[PERSON_1]` may straddle two text deltas. Hold back
+// any tail that *could* be the opening of a placeholder until the
+// closing `]` arrives or the stream completes — otherwise the user
+// briefly sees `[PERSON_1]` before it snaps to the real name.
+//
+// `[A-Z][A-Z0-9_]*` is the smallest superset of the wasm pipeline's
+// "replace" operator output (`[PERSON_1]`, `[ORG_3]`, `[CUSTOM_2]`,
+// …). Lowercase-leading `[` (e.g. markdown `[link text](url)`) is
+// flushed without delay.
+const PARTIAL_PLACEHOLDER_TAIL = /\[[A-Z][A-Z0-9_]*$/;
+
+const getDeanonymisablePrefixLength = (text: string): number => {
+  const match = PARTIAL_PLACEHOLDER_TAIL.exec(text);
+  return match ? match.index : text.length;
+};
+
+export const deanonymizeOutgoingStream = (
+  stream: ReadableStream<InferUIMessageChunk<ChatMessage>>,
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+) => {
+  const buffers = new Map<string, string>();
+
+  // Surface the placeholder/original pairs to the client as a
+  // persisted data part so the chat UI can underline restored
+  // values inline. Emitted once at stream start; the AI SDK folds
+  // data chunks into the assistant message's `parts` and persists
+  // them, so reload keeps the highlighting.
+  const restorationsPart =
+    boundary.redactionMap.size > 0
+      ? ({
+          type: "data-stella-anon-restorations" as const,
+          data: {
+            pairs: [...boundary.redactionMap.entries()].map(
+              ([placeholder, original]) => ({ placeholder, original }),
+            ),
+          },
+        } satisfies InferUIMessageChunk<ChatMessage>)
+      : null;
+  let restorationsEmitted = false;
+
+  const flushText = ({
+    controller,
+    id,
+    text,
+  }: {
+    controller: TransformStreamDefaultController<
+      InferUIMessageChunk<ChatMessage>
+    >;
+    id: string;
+    text: string;
+  }) => {
+    if (text.length === 0) {
+      return;
+    }
+    controller.enqueue({
+      type: "text-delta",
+      id,
+      delta: deanonymizeFromBoundary({ boundary, text }),
+    });
+  };
+
+  return stream.pipeThrough(
+    new TransformStream<
+      InferUIMessageChunk<ChatMessage>,
+      InferUIMessageChunk<ChatMessage>
+    >({
+      transform(chunk, controller) {
+        if (restorationsPart && !restorationsEmitted) {
+          controller.enqueue(restorationsPart);
+          restorationsEmitted = true;
+        }
+        if (chunk.type === "text-delta") {
+          const buffer = `${buffers.get(chunk.id) ?? ""}${chunk.delta}`;
+          const prefixLength = getDeanonymisablePrefixLength(buffer);
+          flushText({
+            controller,
+            id: chunk.id,
+            text: buffer.slice(0, prefixLength),
+          });
+          buffers.set(chunk.id, buffer.slice(prefixLength));
+          return;
+        }
+
+        if (chunk.type === "text-end") {
+          flushText({
+            controller,
+            id: chunk.id,
+            text: buffers.get(chunk.id) ?? "",
+          });
+          buffers.delete(chunk.id);
+          controller.enqueue(chunk);
+          return;
+        }
+
+        if (chunk.type === "tool-output-available") {
+          controller.enqueue({
+            ...chunk,
+            output: deanonymizeUnknownStringsFromBoundary(
+              boundary,
+              chunk.output,
+            ),
+          });
+          return;
+        }
+
+        controller.enqueue(chunk);
+      },
+    }),
+  );
 };
 
 export const resolveRefsInTextStream = (

@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import { isToolUIPart } from "ai";
 import type { FileUIPart } from "ai";
 import { CopyIcon, FileTextIcon, RotateCcwIcon } from "lucide-react";
+import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -15,10 +16,13 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
+import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
 import type {
   ApprovalToolName,
   AskUserOutput,
+  ChatAnonRestoration,
+  ChatPart,
   ChatUITools,
   PersistedChatMessage,
   ToolApprovalGrant,
@@ -26,11 +30,14 @@ import type {
 import { isApprovalPart } from "@/components/chat/chat-ui-tools";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
+import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { SourceChips } from "@/components/chat/source-chips";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import type { TranslationKey } from "@/i18n/types";
+import { useChatAnonymizeForRender } from "@/lib/anonymize/use-chat-anonymize";
+import { useChatAnonymizedStore } from "@/lib/chat-anonymized-store";
 import { getUserFileContentUrl } from "@/lib/user-files";
 
 const USER_STREAMDOWN_COMPONENTS = {
@@ -41,6 +48,29 @@ const USER_STREAMDOWN_COMPONENTS = {
 
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const collectAnonRestorations = (
+  parts: readonly ChatPart[],
+): readonly ChatAnonRestoration[] => {
+  // De-dupe placeholder→original pairs across multiple parts in a
+  // single assistant message so the rehype plugin builds one
+  // pattern per stream.
+  const seen = new Map<string, string>();
+  for (const part of parts) {
+    if (part.type !== "data-stella-anon-restorations") {
+      continue;
+    }
+    for (const pair of part.data.pairs) {
+      if (!seen.has(pair.placeholder)) {
+        seen.set(pair.placeholder, pair.original);
+      }
+    }
+  }
+  return [...seen.entries()].map(([placeholder, original]) => ({
+    placeholder,
+    original,
+  }));
+};
 
 const getMentionTagAttr = (attrs: string, name: string) => {
   const attrName = escapeRegExp(name);
@@ -392,6 +422,9 @@ type ChatThreadMessagesProps = {
   showToolCalls?: boolean | undefined;
   streamdownComponents: {
     a: (props: ComponentProps<"a">) => React.ReactNode;
+    "stll-anon"?: (
+      props: ComponentProps<"button"> & { ph?: string },
+    ) => React.ReactNode;
   };
   workspaceId?: string | undefined;
 };
@@ -442,73 +475,78 @@ export const ChatThreadMessages = ({
           <MessageContent>
             {message.role === "assistant" ? (
               <>
-                {message.parts.map((part, index) => {
-                  if (part.type === "text") {
-                    return (
-                      <MessageResponse
-                        components={streamdownComponents}
-                        key={`${message.id}-text-${index}`}
-                      >
-                        {part.text}
-                      </MessageResponse>
-                    );
-                  }
+                {(() => {
+                  const restorationPairs = collectAnonRestorations(
+                    message.parts,
+                  );
+                  return message.parts.map((part, index) => {
+                    if (part.type === "text") {
+                      return (
+                        <AssistantTextPart
+                          components={streamdownComponents}
+                          key={`${message.id}-text-${index}`}
+                          restorationPairs={restorationPairs}
+                          text={part.text}
+                        />
+                      );
+                    }
 
-                  if (part.type === "tool-ask-user") {
-                    return (
-                      <AskUserCard
-                        key={part.toolCallId}
-                        onSubmit={(toolCallId, output) => {
-                          void onAskUserSubmit(toolCallId, output);
-                        }}
-                        part={part}
-                        workspaceId={workspaceId}
-                      />
-                    );
-                  }
+                    if (part.type === "tool-ask-user") {
+                      return (
+                        <AskUserCard
+                          key={part.toolCallId}
+                          onSubmit={(toolCallId, output) => {
+                            void onAskUserSubmit(toolCallId, output);
+                          }}
+                          part={part}
+                          workspaceId={workspaceId}
+                        />
+                      );
+                    }
 
-                  if (part.type === "tool-create-document") {
-                    return (
-                      <NeedsMatterCard
-                        isLoadingMatters={isLoadingCreateDocumentMatters}
-                        key={part.toolCallId}
-                        matters={createDocumentMatters}
-                        onOpenCreated={onOpenCreatedDocument}
-                        onResolve={onCreateDocumentResolve}
-                        part={part}
-                      />
-                    );
-                  }
+                    if (part.type === "tool-create-document") {
+                      return (
+                        <NeedsMatterCard
+                          isLoadingMatters={isLoadingCreateDocumentMatters}
+                          key={part.toolCallId}
+                          matters={createDocumentMatters}
+                          onOpenCreated={onOpenCreatedDocument}
+                          onResolve={onCreateDocumentResolve}
+                          part={part}
+                        />
+                      );
+                    }
 
-                  if (isApprovalPart(part)) {
-                    return (
-                      <ToolApprovalCard
-                        alwaysApprovedTools={alwaysApprovedTools}
-                        blockedApprovalTools={blockedApprovalTools}
-                        conversationApprovedTools={conversationApprovedTools}
-                        key={part.toolCallId}
-                        onAllowInConversation={handleAllowInConversation}
-                        onAlwaysAllow={handleAlwaysAllow}
-                        onApprove={handleApprove}
-                        onDeny={handleDeny}
-                        part={part}
-                        workspaceId={workspaceId}
-                      />
-                    );
-                  }
+                    if (isApprovalPart(part)) {
+                      return (
+                        <ToolApprovalCard
+                          alwaysApprovedTools={alwaysApprovedTools}
+                          blockedApprovalTools={blockedApprovalTools}
+                          conversationApprovedTools={conversationApprovedTools}
+                          key={part.toolCallId}
+                          onAllowInConversation={handleAllowInConversation}
+                          onAlwaysAllow={handleAlwaysAllow}
+                          onApprove={handleApprove}
+                          onDeny={handleDeny}
+                          part={part}
+                          workspaceId={workspaceId}
+                        />
+                      );
+                    }
 
-                  if (isToolUIPart(part)) {
-                    return (
-                      <ToolCallCard
-                        key={part.toolCallId}
-                        part={part}
-                        showDetails={shouldShowToolCalls}
-                      />
-                    );
-                  }
+                    if (isToolUIPart(part)) {
+                      return (
+                        <ToolCallCard
+                          key={part.toolCallId}
+                          part={part}
+                          showDetails={shouldShowToolCalls}
+                        />
+                      );
+                    }
 
-                  return null;
-                })}
+                    return null;
+                  });
+                })()}
                 <SourceChips
                   messageId={message.id}
                   parts={message.parts}
@@ -537,12 +575,11 @@ export const ChatThreadMessages = ({
                 })()}
                 {message.parts.map((part, index) =>
                   part.type === "text" ? (
-                    <MessageResponse
-                      components={USER_STREAMDOWN_COMPONENTS}
+                    <UserMessageText
                       key={`${message.id}-user-text-${index}`}
-                    >
-                      {normalizeUserMessageTextForDisplay(part.text)}
-                    </MessageResponse>
+                      text={normalizeUserMessageTextForDisplay(part.text)}
+                      workspaceId={workspaceId ?? message.id}
+                    />
                   ) : null,
                 )}
               </>
@@ -561,5 +598,81 @@ export const ChatThreadMessages = ({
         isGenerating &&
         !hasVisibleContent(messages) && <ThinkingIndicator />}
     </>
+  );
+};
+
+const AssistantTextPart = ({
+  components,
+  restorationPairs,
+  text,
+}: {
+  components: ChatThreadMessagesProps["streamdownComponents"];
+  restorationPairs: readonly ChatAnonRestoration[];
+  text: string;
+}) => {
+  // Stable identity so MessageResponse memo can short-circuit when
+  // nothing actually changed; recomputes only when the pairs array
+  // identity changes (i.e. a fresh stream emitted new restorations).
+  const rehypePlugins = useMemo<PluggableList | undefined>(
+    () =>
+      restorationPairs.length > 0
+        ? [[rehypeAnonSpans, restorationPairs]]
+        : undefined,
+    [restorationPairs],
+  );
+  if (rehypePlugins === undefined) {
+    return <MessageResponse components={components}>{text}</MessageResponse>;
+  }
+  return (
+    <MessageResponse components={components} rehypePlugins={rehypePlugins}>
+      {text}
+    </MessageResponse>
+  );
+};
+
+const USER_TEXT_STREAMDOWN_COMPONENTS = {
+  ...USER_STREAMDOWN_COMPONENTS,
+  "stll-anon": (props: ComponentProps<"button"> & { ph?: string }) => (
+    <AnonymizedSpan {...props} />
+  ),
+};
+
+const UserMessageText = ({
+  text,
+  workspaceId,
+}: {
+  text: string;
+  workspaceId: string;
+}) => {
+  // Read the global preference directly so we don't need to thread
+  // `anonymized` through every parent — the store is a single
+  // boolean, not per-thread, since the v0.1.6 store rewrite.
+  const anonymized = useChatAnonymizedStore((s) => s.anonymized);
+  const pairs = useChatAnonymizeForRender({
+    enabled: anonymized,
+    text,
+    workspaceId,
+  });
+  // Memoise so MessageResponse's identity-based memo can short-
+  // circuit on subsequent renders. `pairs` itself comes from
+  // TanStack Query and is stable across renders.
+  const rehypePlugins = useMemo<PluggableList | undefined>(
+    () => (pairs.length > 0 ? [[rehypeAnonSpans, pairs]] : undefined),
+    [pairs],
+  );
+  if (rehypePlugins === undefined) {
+    return (
+      <MessageResponse components={USER_TEXT_STREAMDOWN_COMPONENTS}>
+        {text}
+      </MessageResponse>
+    );
+  }
+  return (
+    <MessageResponse
+      components={USER_TEXT_STREAMDOWN_COMPONENTS}
+      rehypePlugins={rehypePlugins}
+    >
+      {text}
+    </MessageResponse>
   );
 };

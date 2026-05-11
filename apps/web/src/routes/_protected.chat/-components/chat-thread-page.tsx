@@ -20,6 +20,7 @@ import { getUserMessageHtmlHistory } from "@/components/chat/chat-ui-tools";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
+import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import {
   useChatAnonymized,
   useSetChatAnonymized,
@@ -254,6 +255,10 @@ export const ChatThreadPage = ({
         <ConversationScrollButton />
       </Conversation>
 
+      <ChatAnonymizationLayer
+        editor={controller.editor}
+        workspaceId={workspaceId ?? threadRef.threadId}
+      />
       <div className="p-4">
         <ChatInputSurface
           autoFocus

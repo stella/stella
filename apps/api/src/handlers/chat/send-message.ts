@@ -35,7 +35,10 @@ import {
   planMessagePersistence,
 } from "@/api/handlers/chat/persist-message";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
-import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
+import {
+  buildAnonymizedSystemHint,
+  createChatThirdPartyBoundary,
+} from "@/api/handlers/chat/third-party-boundary";
 import {
   intersectAccessibleWorkspaceIds,
   resolveToolWorkspaceIds,
@@ -334,9 +337,16 @@ const sendMessage = createSafeRootHandler(
     const externalMcpSystemHint = buildExternalMcpSystemHint(
       externalMcpTools.connectors,
     );
-    const system = externalMcpSystemHint
-      ? `${chatContext.system}\n\n${externalMcpSystemHint}`
-      : chatContext.system;
+    const anonymizedSystemHint = body.anonymized
+      ? buildAnonymizedSystemHint()
+      : null;
+    const system = [
+      chatContext.system,
+      externalMcpSystemHint,
+      anonymizedSystemHint,
+    ]
+      .filter((part): part is string => part !== null && part.length > 0)
+      .join("\n\n");
     let externalMcpToolsClosed = false;
     const closeExternalMcpTools = async () => {
       if (externalMcpToolsClosed) {

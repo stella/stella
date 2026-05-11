@@ -2,6 +2,7 @@ import { ShieldCheckIcon, ShieldIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
 
@@ -33,7 +34,12 @@ export const ChatAnonymizedToggle = ({
           size={size}
           variant={enabled ? "secondary" : "ghost"}
         >
-          <Icon className={size === "icon-xs" ? "size-3.5" : "size-4"} />
+          <Icon
+            className={cn(
+              size === "icon-xs" ? "size-3.5" : "size-4",
+              enabled && "text-success",
+            )}
+          />
         </Button>
       }
     />

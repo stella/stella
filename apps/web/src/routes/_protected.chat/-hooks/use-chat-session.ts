@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { isToolUIPart } from "ai";
 
+import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import type {
   ApprovalToolName,
   AskUserOutput,
@@ -288,6 +289,8 @@ export const useChatSession = ({
           interactive: true,
           workspaceId,
         }),
+      "stll-anon": (props: ComponentProps<"button"> & { ph?: string }) =>
+        createElement(AnonymizedSpan, props),
     }),
     [workspaceId],
   );

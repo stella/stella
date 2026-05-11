@@ -2,12 +2,17 @@ import type { FileUIPart, ToolSet } from "ai";
 import { isFileUIPart, isToolUIPart } from "ai";
 import { Result } from "better-result";
 
+import { deanonymise } from "@stll/anonymize-wasm";
+
 import type { ScopedDb } from "@/api/db";
 import {
   CHAT_MAX_FILE_BYTES,
   TEXT_PLAIN_MIME_TYPE,
 } from "@/api/handlers/chat/attachment-validation";
-import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
+import {
+  CHAT_TOOL_POLICY_KIND,
+  getChatToolPolicy,
+} from "@/api/handlers/chat/tools/tool-policy";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -22,9 +27,38 @@ export type ChatThirdPartyBoundary =
       anonymizationScopeId: string;
       gazetteerEntries: ReturnType<typeof loadAnonymizationGazetteerEntries>;
       organizationId: SafeId<"organization">;
+      /**
+       * Cumulative placeholder → original map across every
+       * anonymization call on this boundary. Mutated as the request
+       * progresses (user message, tool outputs, system text). The
+       * stream-back path reads this to deanonymize assistant text /
+       * tool outputs before they reach the user. Default operator
+       * is "replace", which is reversible.
+       */
+      redactionMap: Map<string, string>;
       scopedDb: ScopedDb;
       type: "anonymized";
     };
+
+/**
+ * System-prompt note appended when anonymized mode is active.
+ *
+ * The model only sees placeholders (`[PERSON_1]`, `[ORGANIZATION_1]`,
+ * …) in user input and tool output. Without this hint the model
+ * tends to (a) refuse to act on a placeholder ("PERSON_1 doesn't
+ * make sense"), or (b) strip the brackets when copying the value
+ * into a JSON tool argument. The note tells the model that
+ * placeholders are valid identifiers for *Stella's* internal
+ * tools — Stella swaps them back to the real values before
+ * executing the lookup, and re-anonymizes any output before the
+ * model sees it again.
+ */
+export const buildAnonymizedSystemHint = (): string =>
+  [
+    "ANONYMIZED MODE: Names, organizations and other identifying entities the user mentions have been replaced with stable placeholders such as `[PERSON_1]`, `[ORGANIZATION_1]`, `[DATE_1]`. The same placeholder always refers to the same real entity within this conversation.",
+    'When you call a Stella internal tool (run-stella-query, listContacts, listMatters, etc.), pass the placeholder verbatim — including the square brackets — as if it were the real name. Stella deanonymizes the placeholder back to the real value before the lookup runs and re-anonymizes the result before you see it. So `read.listContacts({ query: "[PERSON_1]" })` is the correct shape; the lookup will hit the real record.',
+    'Do not try to invent the real value behind a placeholder, ask the user for it, or refuse to proceed because the placeholder "isn\'t a real name". External (non-Stella) tools, by contrast, only ever receive the placeholder.',
+  ].join(" ");
 
 export const createChatThirdPartyBoundary = ({
   anonymized,
@@ -48,9 +82,151 @@ export const createChatThirdPartyBoundary = ({
           ? Promise.resolve([])
           : loadAnonymizationGazetteerEntries({ organizationId, scopedDb }),
         organizationId,
+        redactionMap: new Map<string, string>(),
         scopedDb,
       }
     : { type: "raw" };
+
+const mergeRedactionMap = (
+  target: Map<string, string>,
+  source: Map<string, string> | undefined,
+) => {
+  if (!source) {
+    return;
+  }
+  for (const [placeholder, original] of source) {
+    // Stable mapping per request: the same placeholder must always
+    // resolve to the same original. If a later call disagrees we
+    // keep the first observation rather than silently rewriting it
+    // — in practice the wasm pipeline gives stable numbers within a
+    // single context, so collisions only arise from independent
+    // anonymization batches.
+    if (!target.has(placeholder)) {
+      target.set(placeholder, original);
+    }
+  }
+};
+
+/**
+ * Reverse the anonymization for outgoing assistant content. No-op
+ * for raw boundaries and for placeholders not seen on the way in
+ * (so hallucinated `[PERSON_99]` stays as-is rather than
+ * substituting wrong text).
+ */
+export const deanonymizeFromBoundary = ({
+  boundary,
+  text,
+}: {
+  boundary: ChatThirdPartyBoundary;
+  text: string;
+}): string => {
+  if (boundary.type === "raw" || boundary.redactionMap.size === 0) {
+    return text;
+  }
+  return deanonymise(text, boundary.redactionMap);
+};
+
+const PLACEHOLDER_LIKE = /\[[A-Z][A-Z0-9_]*]/;
+const PLACEHOLDER_INNER_RE = /^[A-Z][A-Z0-9_]*$/;
+const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/g;
+const escapeRegex = (value: string) => value.replaceAll(REGEX_SPECIALS, "\\$&");
+
+/**
+ * Recursively swap placeholders back to originals inside a value
+ * tree.
+ *
+ * `mode` defaults to "strict" (only `[PERSON_1]` matches), used by
+ * the assistant-output rehydration path so unrelated all-caps text
+ * isn't accidentally swapped.
+ *
+ * `mode: "lenient"` *also* matches the bracketless inner form
+ * (`PERSON_1`). The LLM regularly drops the brackets when copying
+ * a placeholder into a JSON tool argument — without lenient
+ * matching, the internal DB lookup queries the literal string
+ * "PERSON_1" and finds nothing.
+ */
+export const deanonymizeUnknownStringsFromBoundary = (
+  boundary: ChatThirdPartyBoundary,
+  value: unknown,
+  mode: "strict" | "lenient" = "strict",
+): unknown => {
+  if (boundary.type === "raw" || boundary.redactionMap.size === 0) {
+    return value;
+  }
+  if (mode === "strict") {
+    return walkStrict(value, boundary.redactionMap);
+  }
+  const lenient = buildLenientReplacer(boundary.redactionMap);
+  if (lenient === null) {
+    return value;
+  }
+  return walkLenient(value, lenient);
+};
+
+const walkStrict = (value: unknown, map: Map<string, string>): unknown => {
+  if (typeof value === "string") {
+    return PLACEHOLDER_LIKE.test(value) ? deanonymise(value, map) : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item: unknown) => walkStrict(item, map));
+  }
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+  const entries = Object.entries(value).map(
+    ([key, nested]) => [key, walkStrict(nested, map)] as const,
+  );
+  return Object.fromEntries(entries);
+};
+
+type LenientReplacer = {
+  pattern: RegExp;
+  lookup: Map<string, string>;
+};
+
+const buildLenientReplacer = (
+  redactionMap: Map<string, string>,
+): LenientReplacer | null => {
+  const lookup = new Map<string, string>();
+  const tokens: string[] = [];
+  for (const [placeholder, original] of redactionMap) {
+    if (!lookup.has(placeholder)) {
+      lookup.set(placeholder, original);
+      tokens.push(escapeRegex(placeholder));
+    }
+    const inner = placeholder.slice(1, -1);
+    if (PLACEHOLDER_INNER_RE.test(inner) && !lookup.has(inner)) {
+      lookup.set(inner, original);
+      tokens.push(escapeRegex(inner));
+    }
+  }
+  if (tokens.length === 0) {
+    return null;
+  }
+  // Sort longest-first so `[PERSON_1]` wins over `PERSON_1` when
+  // both could match overlapping spans.
+  tokens.sort((a, b) => b.length - a.length);
+  return { pattern: new RegExp(tokens.join("|"), "g"), lookup };
+};
+
+const walkLenient = (value: unknown, replacer: LenientReplacer): unknown => {
+  if (typeof value === "string") {
+    return value.replaceAll(
+      replacer.pattern,
+      (token) => replacer.lookup.get(token) ?? token,
+    );
+  }
+  if (Array.isArray(value)) {
+    return value.map((item: unknown) => walkLenient(item, replacer));
+  }
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+  const entries = Object.entries(value).map(
+    ([key, nested]) => [key, walkLenient(nested, replacer)] as const,
+  );
+  return Object.fromEntries(entries);
+};
 
 type BoundaryRefusal = HandlerError<422 | 500>;
 
@@ -92,6 +268,7 @@ export const prepareTextForThirdParty = async ({
     return Result.err(anonymized.error);
   }
 
+  mergeRedactionMap(boundary.redactionMap, anonymized.value.redactionMap);
   return Result.ok(anonymized.value.fields.at(0) ?? "");
 };
 
@@ -128,6 +305,8 @@ const prepareTextBatchForThirdParty = async ({
   if (Result.isError(anonymized)) {
     return Result.err(anonymized.error);
   }
+
+  mergeRedactionMap(boundary.redactionMap, anonymized.value.redactionMap);
 
   for (let index = 0; index < replacements.length; index += 1) {
     const replacement = replacements[index];
@@ -540,6 +719,15 @@ export const prepareToolsForThirdParty = <TTools extends ToolSet>({
 
     const execute = current.execute;
     const policy = getChatToolPolicy(current);
+    // Internal Stella tools (DB queries, mutations) operate on real
+    // data, so when the model passes a placeholder it saw
+    // (`[PERSON_1]`) we swap it back to the original (`Jan Novák`)
+    // *before* the tool runs — otherwise the lookup misses every
+    // anonymized record. External / public tools keep the
+    // placeholder so real names never leave Stella.
+    const deanonymizeInputBeforeExecute =
+      policy.kind === CHAT_TOOL_POLICY_KIND.internal ||
+      policy.kind === CHAT_TOOL_POLICY_KIND.mutation;
     wrapped[key] = {
       ...current,
       execute: async (...args: Parameters<typeof execute>) => {
@@ -554,6 +742,18 @@ export const prepareToolsForThirdParty = <TTools extends ToolSet>({
         if (boundary.type === "raw") {
           const rawOutput: unknown = await execute(...args);
           return rawOutput;
+        }
+
+        if (deanonymizeInputBeforeExecute && args.length > 0) {
+          // SAFETY: the AI SDK types tool execute's input arg as `any`
+          // because each tool defines its own input schema. We
+          // recursively walk strings only and preserve every other
+          // value identity, so the shape match is safe.
+          // Lenient match: the LLM regularly strips the `[ ]` from
+          // a placeholder when embedding it in a JSON argument, so
+          // bare `PERSON_1` must also resolve here.
+          (args as [unknown, ...unknown[]])[0] =
+            deanonymizeUnknownStringsFromBoundary(boundary, args[0], "lenient");
         }
 
         const replacements: TextReplacement[] = [];

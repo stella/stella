@@ -13,6 +13,7 @@ import type {
 } from "@/components/chat-editor-provider";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import { PromptEditorContent } from "@/components/prompt-editor";
+import { useChatAnonymizedStore } from "@/lib/chat-anonymized-store";
 
 type ChatInputSurfaceProps = {
   autoFocus?: boolean;
@@ -61,6 +62,11 @@ export const ChatInputSurface = ({
   } = controller;
   const inputDisabled = disabled;
   const submitDisabled = disabled || isGenerating;
+  // Visible "shield active" treatment for the input itself —
+  // applies on every chat surface (main /chat, dedicated thread,
+  // document overlay, inspector tab) since they all funnel
+  // through this component.
+  const anonymized = useChatAnonymizedStore((s) => s.anonymized);
 
   const submitDraft = useCallback(async () => {
     // While the assistant is streaming we render Stop in place of
@@ -120,6 +126,8 @@ export const ChatInputSurface = ({
         "bg-background rounded-lg border",
         "transition-colors",
         !inputDisabled && "focus-within:border-ring",
+        anonymized &&
+          "ring-success/40 border-success/40 shadow-[0_0_0_4px_rgb(from_var(--color-success)_r_g_b_/_0.08)] ring-1",
         className,
       )}
       onBlurCapture={handleBlur}

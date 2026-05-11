@@ -22,6 +22,7 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { useI18nStore } from "@/i18n/i18n-store";
+import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import {
   getChatAnonymized,
   useChatAnonymized,
@@ -199,6 +200,10 @@ function ChatIndex() {
             </p>
           </div>
           <div className="w-full">
+            <ChatAnonymizationLayer
+              editor={controller.editor}
+              workspaceId={threadRef.threadId}
+            />
             <ChatInputSurface
               autoFocus
               controller={controller}

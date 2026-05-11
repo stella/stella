@@ -47,6 +47,7 @@ import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
+import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
@@ -318,6 +319,10 @@ export const ChatTabPanel = ({
         <ConversationScrollButton />
       </Conversation>
 
+      <ChatAnonymizationLayer
+        editor={editorController.editor}
+        workspaceId={tabWorkspaceId ?? threadRef.threadId}
+      />
       <PromptBar
         editorController={editorController}
         emptyPlaceholder={

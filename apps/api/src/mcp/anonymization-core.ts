@@ -121,6 +121,7 @@ export const anonymizeTextFieldsWithDependencies = async ({
     return {
       entityCount: 0,
       fields,
+      redactionMap: new Map<string, string>(),
     };
   }
 
@@ -163,5 +164,7 @@ export const anonymizeTextFieldsWithDependencies = async ({
       markers,
       redactedText: result.redactedText,
     }),
+    /** Placeholder → original. Empty for fully-redacted (non-reversible) operators. */
+    redactionMap: result.redactionMap,
   };
 };

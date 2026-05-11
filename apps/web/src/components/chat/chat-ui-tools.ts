@@ -7,7 +7,12 @@ import type { ChatMessage, ChatPart, ChatUITools } from "@stll/api/types";
 
 import type { TranslationKey } from "@/i18n/types";
 
-export type { ChatMessage, ChatPart, ChatUITools } from "@stll/api/types";
+export type {
+  ChatAnonRestoration,
+  ChatMessage,
+  ChatPart,
+  ChatUITools,
+} from "@stll/api/types";
 export type PersistedChatMessage = ChatMessage;
 export type SharedChatUITools = Pick<ChatUITools, "ask-user">;
 export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
