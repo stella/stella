@@ -119,7 +119,12 @@ export type ExternalTab = {
   text?: string | undefined;
 };
 
-export type InspectorTab = FileTab | TaskTab | ChatTab | MatterTab | ExternalTab;
+export type InspectorTab =
+  | FileTab
+  | TaskTab
+  | ChatTab
+  | MatterTab
+  | ExternalTab;
 
 type State = {
   tabs: InspectorTab[];

@@ -93,6 +93,32 @@ describe("owned OOXML placeholder patching", () => {
     expect(result.xml.indexOf("world")).toBeLessThan(result.xml.indexOf("!"));
   });
 
+  test("keeps same-run non-text content after inline replacements", () => {
+    const xml = WRAP(
+      [
+        "<w:p>",
+        "<w:r>",
+        '<w:t xml:space="preserve">Name: {{name}}</w:t>',
+        "<w:tab/>",
+        "<w:t>Date</w:t>",
+        "</w:r>",
+        "</w:p>",
+      ].join(""),
+    );
+
+    const result = patchXmlPart(xml, { name: "Acme Ltd" });
+
+    expect(result.changed).toBe(true);
+    const prefixIndex = result.xml.indexOf("Name: ");
+    const replacementIndex = result.xml.indexOf("Acme Ltd");
+    const tabIndex = result.xml.indexOf("<w:tab");
+    const dateIndex = result.xml.indexOf("Date");
+    expect(prefixIndex).toBeGreaterThanOrEqual(0);
+    expect(replacementIndex).toBeGreaterThan(prefixIndex);
+    expect(tabIndex).toBeGreaterThan(replacementIndex);
+    expect(dateIndex).toBeGreaterThan(tabIndex);
+  });
+
   test("preserves surrounding paragraph text and source run formatting", () => {
     const xml = WRAP(
       [

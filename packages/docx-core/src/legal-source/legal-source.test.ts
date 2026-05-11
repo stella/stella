@@ -125,6 +125,8 @@ describe("Stella Legal Source", () => {
         "1. First item",
         "2) Second item",
         "3.1 Third item",
+        "2024 budget approval",
+        "30 day notice period",
       ].join("\n"),
     );
 
@@ -133,8 +135,33 @@ describe("Stella Legal Source", () => {
     expect(list).toEqual({
       type: "list",
       ordered: true,
-      items: ["First item", "Second item", "Third item"],
+      items: [
+        "First item",
+        "Second item",
+        "Third item",
+        "2024 budget approval",
+        "30 day notice period",
+      ],
     });
+  });
+
+  test("keeps distinct non-Latin clauses when removing duplicate titles", () => {
+    const result = parseLegalSource(
+      [
+        '@doc title="服务协议"',
+        "@clause 保密义务",
+        "双方应保护机密信息。",
+      ].join("\n"),
+    );
+
+    const clauses = result.draft.blocks.filter(
+      (block) => block.type === "clause",
+    );
+
+    expect(clauses.map((clause) => clause.heading)).toEqual(["保密义务"]);
+    expect(result.fixes.map((fix) => fix.code)).not.toContain(
+      "duplicate-title-clause-removed",
+    );
   });
 
   test("does not strip legitimate one-letter clause heading words", () => {

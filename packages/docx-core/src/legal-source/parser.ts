@@ -634,12 +634,14 @@ const applyDocumentAutofixes = ({
   fixes: Autofix[];
 }): LegalSourceParseResult => {
   const blocks: LegalDraftBlock[] = [];
+  const normalizedTitle = normalizeTitle(draft.meta.title ?? "");
 
   for (const block of draft.blocks) {
     if (
       block.type === "clause" &&
       block.level === 1 &&
-      normalizeTitle(block.heading) === normalizeTitle(draft.meta.title ?? "")
+      normalizedTitle.length > 0 &&
+      normalizeTitle(block.heading) === normalizedTitle
     ) {
       fixes.push({
         code: "duplicate-title-clause-removed",
@@ -812,10 +814,14 @@ const parseSignatureParties = (
   });
 };
 
+const ORDERED_LIST_MARKER_RE = /^(\d+(?:\.\d+)+|\d+[.)])\s+/;
+const MANUAL_NUMBERING_PREFIX_RE =
+  /^(\d+(?:\.\d+)+|\d+[.)]|[A-Za-z][.)]|\([a-zivx]+\))\s+/;
+
 const stripListMarker = (line: string, ordered: boolean): string => {
   const trimmed = line.trim();
   if (ordered) {
-    return trimmed.replace(/^\d+(?:\.\d+)*[.)]?\s+/, "");
+    return trimmed.replace(ORDERED_LIST_MARKER_RE, "");
   }
   return trimmed.replace(/^[-*•]\s+/, "");
 };
@@ -870,9 +876,7 @@ const stripManualNumbering = (
   //   - `\d+[.)]` accepts a single number followed by '.' or ')'.
   //   - `[A-Za-z][.)]` accepts a letter followed by '.' or ')'.
   //   - `\([a-zivx]+\)` accepts parenthesised letters/roman.
-  const stripped = value
-    .trim()
-    .replace(/^(\d+(?:\.\d+)+|\d+[.)]|[A-Za-z][.)]|\([a-zivx]+\))\s+/, "");
+  const stripped = value.trim().replace(MANUAL_NUMBERING_PREFIX_RE, "");
   if (stripped !== value.trim()) {
     fixes.push({
       code: "manual-numbering-stripped",
@@ -885,8 +889,9 @@ const stripManualNumbering = (
 
 const normalizeTitle = (value: string): string =>
   value
+    .normalize("NFKC")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 
 const isLegalKind = (value: string | undefined): value is LegalDocumentKind =>

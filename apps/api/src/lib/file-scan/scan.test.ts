@@ -1,8 +1,9 @@
 import { PDF } from "@libpdf/core";
-import { compileLegalSourceToDocx } from "@stll/docx-core";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
+
+import { compileLegalSourceToDocx } from "@stll/docx-core";
 
 import { scanFile } from "./scan";
 

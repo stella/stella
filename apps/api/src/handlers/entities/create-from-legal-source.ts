@@ -1,6 +1,7 @@
-import { compileLegalSourceToDocx } from "@stll/docx-core";
 import { Result } from "better-result";
 import { t } from "elysia";
+
+import { compileLegalSourceToDocx } from "@stll/docx-core";
 
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";

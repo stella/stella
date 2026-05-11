@@ -348,6 +348,73 @@ const insertAfter = (
   }
 };
 
+const directRunChildForNode = (
+  run: slimdom.Element,
+  node: slimdom.Node,
+): slimdom.Node | null => {
+  let current: slimdom.Node | null = node;
+  while (current && current.parentNode !== run) {
+    current = current.parentNode;
+  }
+  return current?.parentNode === run ? current : null;
+};
+
+const createSameRunTrailingRun = ({
+  doc,
+  endNode,
+  run,
+  sourceRunProps,
+  startNode,
+  suffix,
+}: {
+  doc: slimdom.Document;
+  endNode: slimdom.Element;
+  run: slimdom.Element;
+  sourceRunProps: slimdom.Element | null;
+  startNode: slimdom.Element;
+  suffix: string;
+}): slimdom.Element | null => {
+  const trailingRun = doc.createElementNS(W_NS, "w:r");
+  const props = cloneElement(sourceRunProps);
+  if (props) {
+    trailingRun.append(props);
+  }
+
+  let hasContent = false;
+  if (suffix.length > 0) {
+    trailingRun.append(createText(doc, suffix));
+    hasContent = true;
+  }
+
+  const startChild = directRunChildForNode(run, startNode);
+  const endChild = directRunChildForNode(run, endNode);
+  if (!startChild || !endChild) {
+    return hasContent ? trailingRun : null;
+  }
+
+  let trailingChild = endChild.nextSibling;
+  while (trailingChild) {
+    const next = trailingChild.nextSibling;
+    trailingRun.appendChild(trailingChild);
+    hasContent = true;
+    trailingChild = next;
+  }
+
+  if (startChild !== endChild) {
+    let childToRemove = startChild.nextSibling;
+    while (childToRemove) {
+      const next = childToRemove.nextSibling;
+      run.removeChild(childToRemove);
+      if (childToRemove === endChild) {
+        break;
+      }
+      childToRemove = next;
+    }
+  }
+
+  return hasContent ? trailingRun : null;
+};
+
 const applyInlineMatch = (
   paragraph: slimdom.Element,
   spans: TextSpan[],
@@ -367,9 +434,6 @@ const applyInlineMatch = (
   const prefix = startSpan.text.slice(0, match.start - startSpan.start);
   const suffix = endSpan.text.slice(match.end - endSpan.start);
   const sameRunMatch = startSpan.run === endSpan.run;
-  const suffixAfterReplacement = sameRunMatch
-    ? suffix + clearTrailingTextInRun(spans, endSpan, startSpan.run)
-    : suffix;
   setText(startSpan.node, prefix);
 
   if (endSpan !== startSpan) {
@@ -393,10 +457,18 @@ const applyInlineMatch = (
   const sourceRunProps = cloneRunProps(startSpan.run);
   const replacementRuns = createInlineRuns(doc, match.value, sourceRunProps);
 
-  if (suffixAfterReplacement.length > 0 && sameRunMatch) {
-    replacementRuns.push(
-      createRun(doc, suffixAfterReplacement, sourceRunProps),
-    );
+  if (sameRunMatch) {
+    const trailingRun = createSameRunTrailingRun({
+      doc,
+      endNode: endSpan.node,
+      run: startSpan.run,
+      sourceRunProps,
+      startNode: startSpan.node,
+      suffix,
+    });
+    if (trailingRun) {
+      replacementRuns.push(trailingRun);
+    }
   }
 
   const parent = startSpan.run.parentNode;
@@ -404,32 +476,6 @@ const applyInlineMatch = (
     return;
   }
   insertAfter(parent, startSpan.run, replacementRuns);
-};
-
-const clearTrailingTextInRun = (
-  spans: TextSpan[],
-  endSpan: TextSpan,
-  run: slimdom.Element,
-): string => {
-  const trailingText: string[] = [];
-  let afterEndSpan = false;
-
-  for (const span of spans) {
-    if (span === endSpan) {
-      afterEndSpan = true;
-      continue;
-    }
-    if (!afterEndSpan) {
-      continue;
-    }
-    if (span.run !== run) {
-      break;
-    }
-    trailingText.push(span.text);
-    setText(span.node, "");
-  }
-
-  return trailingText.join("");
 };
 
 const patchInlinePlaceholders = (

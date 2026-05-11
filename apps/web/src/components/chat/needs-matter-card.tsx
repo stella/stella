@@ -1,7 +1,5 @@
 import { useDeferredValue, useMemo, useState } from "react";
 
-import { Button } from "@stll/ui/components/button";
-import { cn } from "@stll/ui/lib/utils";
 import type { ToolUIPart } from "ai";
 import {
   ArrowRightIcon,
@@ -13,6 +11,9 @@ import {
   SearchIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
+import { cn } from "@stll/ui/lib/utils";
 
 import type { ChatUITools } from "@/components/chat/chat-ui-tools";
 import { resolveMatterColor } from "@/lib/matter-colors";
