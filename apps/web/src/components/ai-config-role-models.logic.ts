@@ -2,6 +2,7 @@ export const PROVIDER_KEYS = [
   "google",
   "anthropic",
   "openai",
+  "azure_foundry",
   "openrouter",
 ] as const;
 
@@ -24,6 +25,8 @@ export type ProviderCredentialDraft = {
   provider: ProviderValue;
   apiKey: string;
   apiKeyMasked?: string | undefined;
+  endpoint: string;
+  apiVersion?: string | undefined;
   region: RegionValue;
   replacingKey: boolean;
 };
@@ -42,6 +45,8 @@ export type ModelOption = ModelSelection & {
 export type StoredProviderConfig = {
   provider: string;
   apiKeyMasked?: string | undefined;
+  endpoint?: string | undefined;
+  apiVersion?: string | undefined;
   region?: string | undefined;
 };
 
@@ -61,6 +66,9 @@ const REGION_VALUES = new Set<string>(REGION_KEYS);
 const ROLE_VALUES = new Set<string>(ROLE_KEYS);
 
 export const REGIONAL_PROVIDERS = new Set<ProviderValue>(["google"]);
+export const CUSTOM_MODEL_ID_PROVIDERS = new Set<ProviderValue>([
+  "azure_foundry",
+]);
 
 export const DEFAULT_MODELS_BY_PROVIDER = {
   google: {
@@ -87,7 +95,7 @@ export const DEFAULT_MODELS_BY_PROVIDER = {
     reasoning: "google/gemini-3.1-pro-preview",
     pdf: "google/gemini-3-flash-preview",
   },
-} as const satisfies Record<ProviderValue, Record<RoleValue, string>>;
+} as const satisfies Partial<Record<ProviderValue, Record<RoleValue, string>>>;
 
 export const MODEL_OPTIONS_BY_PROVIDER = {
   google: [
@@ -104,6 +112,7 @@ export const MODEL_OPTIONS_BY_PROVIDER = {
     "claude-haiku-4-5-20251001",
   ],
   openai: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2"],
+  azure_foundry: [],
   openrouter: [
     "google/gemini-3-flash-preview",
     "google/gemini-3.1-pro-preview",
@@ -129,6 +138,7 @@ export const createProviderCredentialDraft = (
 ): ProviderCredentialDraft => ({
   provider,
   apiKey: "",
+  endpoint: "",
   region: "global",
   replacingKey: true,
 });
@@ -162,6 +172,8 @@ export const providerDraftsFromStoredProviders = (
       provider,
       apiKey: "",
       apiKeyMasked: providerConfig.apiKeyMasked,
+      endpoint: providerConfig.endpoint ?? "",
+      apiVersion: providerConfig.apiVersion,
       region,
       replacingKey: false,
     });
@@ -298,6 +310,9 @@ export const isKnownModelSelection = (
   }
   const knownModels: readonly string[] =
     MODEL_OPTIONS_BY_PROVIDER[selection.provider];
+  if (CUSTOM_MODEL_ID_PROVIDERS.has(selection.provider)) {
+    return selection.modelId.trim().length > 0;
+  }
   return knownModels.includes(selection.modelId);
 };
 
@@ -343,10 +358,10 @@ export const serializeOverrideModels = ({
   }
 
   return {
-    chat,
-    fast,
-    reasoning,
-    pdf,
+    chat: normalizeModelSelection(chat),
+    fast: normalizeModelSelection(fast),
+    reasoning: normalizeModelSelection(reasoning),
+    pdf: normalizeModelSelection(pdf),
   };
 };
 
@@ -399,6 +414,12 @@ export const hasUsableProviderDrafts = (
     ) {
       return false;
     }
+    if (
+      providerDraft.provider === "azure_foundry" &&
+      !providerDraft.endpoint.trim()
+    ) {
+      return false;
+    }
   }
 
   return true;
@@ -411,8 +432,20 @@ export const getDefaultModelSelection = (
   if (!provider) {
     return null;
   }
+  if (provider === "azure_foundry") {
+    return null;
+  }
+  const defaults = DEFAULT_MODELS_BY_PROVIDER[provider];
   return {
     provider,
-    modelId: DEFAULT_MODELS_BY_PROVIDER[provider][role],
+    modelId: defaults[role],
   };
 };
+
+const normalizeModelSelection = ({
+  provider,
+  modelId,
+}: ModelSelection): ModelSelection => ({
+  provider,
+  modelId: CUSTOM_MODEL_ID_PROVIDERS.has(provider) ? modelId.trim() : modelId,
+});

@@ -31,8 +31,11 @@ const API_KEY_PLACEHOLDER = {
   google: "AIza...",
   anthropic: "sk-ant-...",
   openai: "sk-proj-...",
+  azure_foundry: "0123456789abcdef...",
   openrouter: "sk-or-v1-...",
 } as const satisfies Record<ProviderValue, string>;
+
+const ENDPOINT_PLACEHOLDER = "https://<resource>.openai.azure.com/openai/v1";
 
 export type ProviderRowStatus =
   | "idle"
@@ -119,6 +122,7 @@ export const AIConfigProvidersEditor = ({
           const supportsRegionalRouting = REGIONAL_PROVIDERS.has(
             providerDraft.provider,
           );
+          const needsEndpoint = providerDraft.provider === "azure_foundry";
           const providerOptions = getAvailableProviderKeys({
             currentProvider: providerDraft.provider,
             providers,
@@ -130,8 +134,9 @@ export const AIConfigProvidersEditor = ({
           if (compact) {
             const rowStatus: ProviderRowStatus = rowStatuses?.[index] ?? "idle";
             const hasUsableKey =
-              providerDraft.apiKey.trim().length > 0 ||
-              (hasSavedKey && !providerDraft.replacingKey);
+              (providerDraft.apiKey.trim().length > 0 ||
+                (hasSavedKey && !providerDraft.replacingKey)) &&
+              (!needsEndpoint || providerDraft.endpoint.trim().length > 0);
             const showSaveButton =
               onSaveRow !== undefined &&
               hasUsableKey &&
@@ -252,6 +257,22 @@ export const AIConfigProvidersEditor = ({
                     </Select>
                   )}
                 </div>
+
+                {needsEndpoint && (
+                  <Input
+                    aria-label={t("aiConfig.endpoint")}
+                    className="col-span-2 min-w-0 sm:col-span-2 sm:col-start-2"
+                    disabled={disabled}
+                    onChange={(event) =>
+                      updateProvider(index, {
+                        ...providerDraft,
+                        endpoint: event.target.value,
+                      })
+                    }
+                    placeholder={ENDPOINT_PLACEHOLDER}
+                    value={providerDraft.endpoint}
+                  />
+                )}
 
                 {showSaveButton ? (
                   <Button
@@ -390,6 +411,30 @@ export const AIConfigProvidersEditor = ({
                     : "grid gap-3 sm:grid-cols-2"
                 }
               >
+                {needsEndpoint && (
+                  <Field>
+                    <FieldLabel>{t("aiConfig.endpoint")}</FieldLabel>
+                    <Input
+                      autoComplete="off"
+                      disabled={disabled}
+                      onChange={(event) =>
+                        updateProvider(index, {
+                          ...providerDraft,
+                          endpoint: event.target.value,
+                        })
+                      }
+                      placeholder={ENDPOINT_PLACEHOLDER}
+                      type="url"
+                      value={providerDraft.endpoint}
+                    />
+                    {!compact && (
+                      <p className="text-muted-foreground text-xs">
+                        {t("aiConfig.endpointDescription")}
+                      </p>
+                    )}
+                  </Field>
+                )}
+
                 {showKeyInput && (
                   <Field>
                     <FieldLabel>

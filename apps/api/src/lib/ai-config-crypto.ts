@@ -14,7 +14,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 
-const providerSchema = v.picklist([
+const standardProviderSchema = v.picklist([
   "google",
   "openrouter",
   "openai",
@@ -22,22 +22,33 @@ const providerSchema = v.picklist([
 ]);
 
 const modelSelectionSchema = v.strictObject({
-  provider: providerSchema,
+  provider: v.picklist([
+    "google",
+    "openrouter",
+    "openai",
+    "azure_foundry",
+    "anthropic",
+  ]),
   modelId: v.pipe(v.string(), v.minLength(1)),
 });
 
+const providerSchema = v.variant("provider", [
+  v.strictObject({
+    provider: standardProviderSchema,
+    apiKey: v.pipe(v.string(), v.minLength(1)),
+    region: v.optional(v.picklist(["eu", "global", "ch"])),
+  }),
+  v.strictObject({
+    provider: v.literal("azure_foundry"),
+    apiKey: v.pipe(v.string(), v.minLength(1)),
+    baseURL: v.pipe(v.string(), v.url()),
+    apiVersion: v.optional(v.pipe(v.string(), v.minLength(1))),
+  }),
+]);
+
 /** Validate the decrypted JSON matches OrgAIConfig shape. */
 const orgAIConfigSchema = v.strictObject({
-  providers: v.pipe(
-    v.array(
-      v.strictObject({
-        provider: providerSchema,
-        apiKey: v.pipe(v.string(), v.minLength(1)),
-        region: v.optional(v.picklist(["eu", "global", "ch"])),
-      }),
-    ),
-    v.minLength(1),
-  ),
+  providers: v.pipe(v.array(providerSchema), v.minLength(1)),
   overrideModels: v.strictObject({
     fast: modelSelectionSchema,
     chat: modelSelectionSchema,

@@ -1290,8 +1290,11 @@
       "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).",
       "defaultModel": "Alapértelmezett: {model}",
       "defaultModelOption": "Alapértelmezett",
+      "deploymentNamePlaceholder": "Üzembe helyezés neve",
       "description": "Bring your own API key or configure data sovereignty region.",
       "editProviders": "Szolgáltatók szerkesztése",
+      "endpoint": "Végpont",
+      "endpointDescription": "Használd az Azure OpenAI vagy Azure Foundry /openai/v1 végpontot. A Stella a normalizált végpontot menti.",
       "keepSavedKey": "Mentett kulcs megtartása",
       "modelForRole": "{role} modellje",
       "modelIdPlaceholder": "Modellek keresése",
@@ -1304,6 +1307,7 @@
       "overrideRoles": "Override roles",
       "overrideRolesDescription": "Válaszd ki, mely szerepkörök használják ezt a kulcsot, majd válassz modellt minden szerepkörhöz. A ki nem választott szerepkörök a platform alapértelmezését használják.",
       "prices": {
+        "azureManaged": "Az üzembe helyezés árazása az Azure-ban kezelhető.",
         "empty": "Adjon hozzá szolgáltatót a modellárak megtekintéséhez",
         "emptyHint": "Válasszon szolgáltatót balra, és itt megjelennek a modelljei árai.",
         "inMtok": "Be/M",
@@ -1321,6 +1325,7 @@
       "providerKeyInvalidShort": "Érvénytelen",
       "providers": {
         "anthropic": "Anthropic",
+        "azure_foundry": "Azure Foundry",
         "google": "Google",
         "openai": "ChatGPT",
         "openrouter": "OpenRouter"

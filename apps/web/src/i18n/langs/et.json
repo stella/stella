@@ -1290,8 +1290,11 @@
       "dataRegionUnsupported": "Regional routing is only available for Google AI (Vertex AI).",
       "defaultModel": "Vaikimisi: {model}",
       "defaultModelOption": "Vaikimisi",
+      "deploymentNamePlaceholder": "Juurutuse nimi",
       "description": "Bring your own API key or configure data sovereignty region.",
       "editProviders": "Muuda teenusepakkujaid",
+      "endpoint": "Endpoint",
+      "endpointDescription": "Kasuta Azure OpenAI või Azure Foundry /openai/v1 endpointi. Stella salvestab normaliseeritud endpointi.",
       "keepSavedKey": "Hoia salvestatud võti alles",
       "modelForRole": "Rolli {role} mudel",
       "modelIdPlaceholder": "Otsi mudeleid",
@@ -1304,6 +1307,7 @@
       "overrideRoles": "Override roles",
       "overrideRolesDescription": "Vali, millised rollid kasutavad seda võtit, ja seejärel iga rolli mudel. Valimata rollid kasutavad platvormi vaikevalikut.",
       "prices": {
+        "azureManaged": "Juurutuse hinnad hallatakse Azure'is.",
         "empty": "Lisage teenusepakkuja, et näha mudelihindu",
         "emptyHint": "Valige vasakult teenusepakkuja ja näitame siin selle mudelite hinda.",
         "inMtok": "Sisse/M",
@@ -1321,6 +1325,7 @@
       "providerKeyInvalidShort": "Vigane",
       "providers": {
         "anthropic": "Anthropic",
+        "azure_foundry": "Azure Foundry",
         "google": "Google",
         "openai": "ChatGPT",
         "openrouter": "OpenRouter"

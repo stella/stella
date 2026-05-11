@@ -24,6 +24,7 @@ type AIProvider =
   | "google"
   | "openrouter"
   | "openai"
+  | "azure_foundry"
   | "anthropic"
   | "openai_compatible";
 
@@ -36,6 +37,7 @@ describe("supportsRegion", () => {
     const nonRegional: AIProvider[] = [
       "openrouter",
       "openai",
+      "azure_foundry",
       "anthropic",
       "openai_compatible",
     ];
@@ -58,6 +60,7 @@ describe("isAllowedBYOKModel", () => {
     expect(isAllowedBYOKModel("anthropic", "claude-opus-4-7")).toBe(true);
     expect(isAllowedBYOKModel("google", "gemini-3-pro-preview")).toBe(true);
     expect(isAllowedBYOKModel("openai", "gpt-5.4")).toBe(true);
+    expect(isAllowedBYOKModel("azure_foundry", "customer-gpt-5")).toBe(true);
     expect(isAllowedBYOKModel("openrouter", "anthropic/claude-opus-4.5")).toBe(
       true,
     );
@@ -68,6 +71,7 @@ describe("isAllowedBYOKModel", () => {
     expect(isAllowedBYOKModel("anthropic", "claude-2")).toBe(false);
     expect(isAllowedBYOKModel("google", "gemini-1.5-pro")).toBe(false);
     expect(isAllowedBYOKModel("openai", "gpt-4o")).toBe(false);
+    expect(isAllowedBYOKModel("azure_foundry", "")).toBe(false);
   });
 
   test("rejects every model id for openai_compatible", () => {
@@ -203,5 +207,33 @@ describe("BYOK model overrides", () => {
     expect(getModelInfoForRole("reasoning", orgConfig).modelId).toBe(
       "gpt-5.4-pro",
     );
+  });
+
+  test("routes Azure Foundry BYOK through deployment names", () => {
+    const orgConfig: OrgAIConfig = {
+      providers: [
+        {
+          apiKey: "azure-org",
+          baseURL: "https://example.openai.azure.com/openai",
+          provider: "azure_foundry",
+        },
+      ],
+      overrideModels: {
+        chat: { provider: "azure_foundry", modelId: "customer-chat" },
+        fast: { provider: "azure_foundry", modelId: "customer-fast" },
+        reasoning: {
+          provider: "azure_foundry",
+          modelId: "customer-reasoning",
+        },
+        pdf: { provider: "azure_foundry", modelId: "customer-pdf" },
+      },
+    };
+
+    expect(getModelInfoForRole("chat", orgConfig)).toMatchObject({
+      keySource: "byok",
+      modelId: "customer-chat",
+      provider: "azure_foundry",
+    });
+    expect(() => getModelForRole("chat", orgConfig)).not.toThrow();
   });
 });

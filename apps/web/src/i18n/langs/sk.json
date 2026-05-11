@@ -1290,8 +1290,11 @@
       "dataRegionUnsupported": "Regionálne smerovanie je dostupné iba pre Google AI (Vertex AI).",
       "defaultModel": "Predvolené: {model}",
       "defaultModelOption": "Predvolené",
+      "deploymentNamePlaceholder": "Názov nasadenia",
       "description": "Použite vlastný API kľúč alebo zvoľte región pre suverenitu dát.",
       "editProviders": "Upraviť poskytovateľov",
+      "endpoint": "Endpoint",
+      "endpointDescription": "Použite Azure OpenAI alebo Azure Foundry endpoint /openai/v1. Stella uloží normalizovaný endpoint.",
       "keepSavedKey": "Ponechať uložený kľúč",
       "modelForRole": "Model pre rolu {role}",
       "modelIdPlaceholder": "Hľadať modely",
@@ -1304,6 +1307,7 @@
       "overrideRoles": "Prepísať roly",
       "overrideRolesDescription": "Vyberte, ktoré roly používajú tento kľúč, a potom vyberte model pre každú rolu. Nevybrané roly použijú predvolené nastavenie platformy.",
       "prices": {
+        "azureManaged": "Ceny nasadenia sa spravujú v Azure.",
         "empty": "Pridajte poskytovateľa a uvidíte ceny modelov",
         "emptyHint": "Zvoľte poskytovateľa vľavo — zobrazíme ceny jeho modelov.",
         "inMtok": "Vst/M",
@@ -1321,6 +1325,7 @@
       "providerKeyInvalidShort": "Neplatný",
       "providers": {
         "anthropic": "Anthropic",
+        "azure_foundry": "Azure Foundry",
         "google": "Google",
         "openai": "ChatGPT",
         "openrouter": "OpenRouter"

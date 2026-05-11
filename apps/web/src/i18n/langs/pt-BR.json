@@ -1290,8 +1290,11 @@
       "dataRegionUnsupported": "O roteamento regional está disponível apenas para Google AI (Vertex AI).",
       "defaultModel": "Padrão: {model}",
       "defaultModelOption": "Padrão",
+      "deploymentNamePlaceholder": "Nome da implantação",
       "description": "Traga sua própria chave de API ou configure a região de soberania de dados.",
       "editProviders": "Editar provedores",
+      "endpoint": "Endpoint",
+      "endpointDescription": "Use o endpoint /openai/v1 do Azure OpenAI ou Azure Foundry. Stella armazena o endpoint normalizado.",
       "keepSavedKey": "Manter chave salva",
       "modelForRole": "Modelo {role}",
       "modelIdPlaceholder": "Pesquisar modelos",
@@ -1304,6 +1307,7 @@
       "overrideRoles": "Substituir funções",
       "overrideRolesDescription": "Escolha quais funções usam essa chave e escolha um modelo para cada função. As funções não selecionadas usam o padrão da plataforma.",
       "prices": {
+        "azureManaged": "Os preços da implantação são gerenciados no Azure.",
         "empty": "Adicione um fornecedor para ver os preços dos modelos",
         "emptyHint": "Escolha um fornecedor à esquerda e mostraremos os preços de seus modelos aqui.",
         "inMtok": "Entrada/M",
@@ -1321,6 +1325,7 @@
       "providerKeyInvalidShort": "Inválido",
       "providers": {
         "anthropic": "Anthropic",
+        "azure_foundry": "Azure Foundry",
         "google": "Google",
         "openai": "ChatGPT",
         "openrouter": "OpenRouter"
