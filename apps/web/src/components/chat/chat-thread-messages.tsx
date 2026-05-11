@@ -619,6 +619,7 @@ const AssistantMessageParts = ({
                 void onAskUserSubmit(toolCallId, output);
               }}
               part={part}
+              restorationPairs={restorationPairs}
               workspaceId={workspaceId}
             />
           );

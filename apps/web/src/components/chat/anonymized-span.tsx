@@ -8,7 +8,7 @@ import { InlinePill } from "@/components/inline-pill";
 
 type AnonymizedSpanProps = ComponentProps<"button"> & {
   /** Wire-format placeholder the model saw, e.g. `[PERSON_1]`. */
-  ph?: string;
+  ph?: string | undefined;
   children?: ReactNode;
 };
 
