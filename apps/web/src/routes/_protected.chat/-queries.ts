@@ -24,6 +24,7 @@ import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
+import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { useDevStore } from "@/lib/dev-store";
 import { APIError, toAPIError } from "@/lib/errors";
@@ -234,10 +235,12 @@ export const buildSendRequestBody = ({
     workspaceId?: string | undefined;
   } = {
     message,
-    sendMode:
-      getRequestSendMode(requestBody) ??
-      context?.getSendMode?.() ??
-      CHAT_SEND_MODE.rawOverride,
+    sendMode: resolveChatRequestSendMode({
+      context,
+      key,
+      messages,
+      requestBody,
+    }),
     threadId: key.threadId,
   };
 
@@ -290,6 +293,51 @@ const getRequestSendMode = (
   return isChatSendMode(requestBody.sendMode) ? requestBody.sendMode : null;
 };
 
+type ResolveChatRequestSendModeProps = {
+  context: ChatThreadOptionsContext | undefined;
+  key: ChatThreadKey;
+  messages: readonly PersistedChatMessage[];
+  requestBody: object | undefined;
+};
+
+const resolveChatRequestSendMode = ({
+  context,
+  key,
+  messages,
+  requestBody,
+}: ResolveChatRequestSendModeProps): ChatSendMode => {
+  const explicitSendMode = getRequestSendMode(requestBody);
+  const threadKey = getChatThreadKey(key);
+  const userMessageId = getLatestUserMessageId(messages);
+  const activeTurn = activeTurnSendModes.get(threadKey);
+  const sendMode =
+    explicitSendMode ??
+    (activeTurn?.userMessageId === userMessageId
+      ? activeTurn.sendMode
+      : null) ??
+    context?.getSendMode?.() ??
+    CHAT_SEND_MODE.rawOverride;
+
+  if (userMessageId) {
+    activeTurnSendModes.set(threadKey, { sendMode, userMessageId });
+  }
+
+  return sendMode;
+};
+
+const getLatestUserMessageId = (
+  messages: readonly PersistedChatMessage[],
+): string | null => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages.at(index);
+    if (message?.role === "user") {
+      return message.id;
+    }
+  }
+
+  return null;
+};
+
 // Per-thread guard against empty-completion auto-resubmit storms.
 // When a model returns finish_reason=stop with zero tokens (observed
 // with cached prefixes on small Gemini variants), the AI SDK does
@@ -320,13 +368,18 @@ type ThreadAutoFireState = {
   fires: number;
 };
 const threadAutoFireState = new Map<string, ThreadAutoFireState>();
+const activeTurnSendModes = new Map<
+  string,
+  { sendMode: ChatSendMode; userMessageId: string }
+>();
 
 /**
  * Test-only escape hatch. The module-level cache is intentionally
  * not cleared automatically; this helper resets it between unit
  * tests so each one starts hermetically.
  */
-export const __resetAutoSendStateForTests = (): void => {
+export const __resetChatRequestStateForTests = (): void => {
+  activeTurnSendModes.clear();
   threadAutoFireState.clear();
 };
 
