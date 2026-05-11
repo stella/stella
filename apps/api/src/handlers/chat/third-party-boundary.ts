@@ -653,6 +653,9 @@ const anonymizeUnknownStrings = ({
       for (let index = 0; index < value.length; index += 1) {
         const item: unknown = value.at(index);
         output[index] = yield* anonymizeUnknownStrings({
+          apply: (next) => {
+            output[index] = next;
+          },
           key,
           replacements,
           value: item,

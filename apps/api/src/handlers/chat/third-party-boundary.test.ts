@@ -275,6 +275,7 @@ describe("chat third-party anonymization boundary", () => {
           documentId: "doc_123",
           ids: ["person_456"],
           nationalId: "Secret-123",
+          participants: ["Jan Novák", "Secret"],
           text: "Secret notes for Jan Novák",
         }),
       },
@@ -295,6 +296,7 @@ describe("chat third-party anonymization boundary", () => {
       documentId: "doc_123",
       ids: ["person_456"],
       nationalId: "[CUSTOM_1]-123",
+      participants: ["[PERSON_1]", "[CUSTOM_1]"],
       text: "[CUSTOM_1] notes for [PERSON_1]",
     });
   });
