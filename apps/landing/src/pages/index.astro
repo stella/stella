@@ -378,7 +378,7 @@ const selfHostingDocsUrl =
     <div class="mx-auto max-w-300">
       <div class="flex flex-col items-center justify-between gap-6 sm:flex-row">
         <nav
-          class="flex items-center gap-4 text-sm"
+          class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm sm:justify-start"
           style="color: var(--muted-foreground)"
           aria-label="Footer"
         >
@@ -523,8 +523,9 @@ const selfHostingDocsUrl =
 
   <script>
     async function initGradient(containerId: string, svgUrl: string) {
-      const container = document.getElementById(containerId);
-      if (!container) return;
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      const container: HTMLElement = el;
 
       const resp = await fetch(svgUrl);
       const svg = await resp.text();
@@ -543,8 +544,6 @@ const selfHostingDocsUrl =
       const rects = group
         ? [...group.querySelectorAll<SVGRectElement>("rect")]
         : [];
-      const filterId =
-        group?.getAttribute("filter")?.match(/url\(#([^)]+)\)/)?.[1] ?? "";
       const n = rects.length;
       if (n === 0) return;
 
@@ -566,9 +565,9 @@ const selfHostingDocsUrl =
       const startTime = performance.now();
 
       function loop() {
+        if (!container.isConnected) return;
         // Skip animation when this layer is hidden (opacity 0)
-        const layerEl = document.getElementById(containerId);
-        if (layerEl && getComputedStyle(layerEl).opacity === "0") {
+        if (getComputedStyle(container).opacity === "0") {
           requestAnimationFrame(loop);
           return;
         }
@@ -583,9 +582,7 @@ const selfHostingDocsUrl =
         const w2 = 0.15 + Math.cos(t * 0.045) * 0.05;
         const hueShift = Math.sin(t * 0.06) * 6.5 - 1.5;
 
-        if (group) {
-          group.style.filter = `url(#${filterId}) hue-rotate(${hueShift.toFixed(1)}deg)`;
-        }
+        container.style.filter = `hue-rotate(${hueShift.toFixed(1)}deg)`;
 
         for (let i = 0; i < n; i++) {
           const r = rects[i];
