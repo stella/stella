@@ -18,6 +18,7 @@ import {
 import { Decoration, DecorationSet } from "prosemirror-view";
 
 import type { ColorValue, BorderSpec } from "../../../types/colors";
+import { resolveColor } from "../../../utils/colorResolver";
 import type {
   TableAttrs,
   TableRowAttrs,
@@ -395,7 +396,7 @@ function buildCellBorderStyles(attrs: TableCellAttrs): string[] {
   const borderToCss = (border?: {
     style?: string;
     size?: number;
-    color?: { rgb?: string };
+    color?: ColorValue;
   }): string => {
     if (
       !border ||
@@ -410,7 +411,7 @@ function buildCellBorderStyles(attrs: TableCellAttrs): string[] {
         ? Math.max(1, Math.round((border.size / 8) * 1.333))
         : 1;
     const cssStyle = BORDER_STYLE_CSS[border.style] || "solid";
-    const color = border.color?.rgb ? `#${border.color.rgb}` : "#000000";
+    const color = resolveColor(border.color, undefined);
     return `${widthPx}px ${cssStyle} ${color}`;
   };
 

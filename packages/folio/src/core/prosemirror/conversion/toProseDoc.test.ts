@@ -1,7 +1,46 @@
 import { describe, expect, test } from "bun:test";
 
-import type { Document } from "../../types/document";
+import type { Document, TableCell, Theme } from "../../types/document";
 import { toProseDoc } from "./toProseDoc";
+
+const officeTheme: Theme = {
+  colorScheme: {
+    dk1: "000000",
+    lt1: "FFFFFF",
+    dk2: "44546A",
+    lt2: "E7E6E6",
+    accent1: "4472C4",
+    accent2: "ED7D31",
+    accent3: "A5A5A5",
+    accent4: "FFC000",
+    accent5: "5B9BD5",
+    accent6: "70AD47",
+    hlink: "0563C1",
+    folHlink: "954F72",
+  },
+};
+
+function tableCellBorderColor(
+  attrs: Record<string, unknown>,
+  side: "top" | "bottom" | "left" | "right",
+): { rgb?: string; themeColor?: string } | undefined {
+  const borders = attrs["borders"] as
+    | Record<string, { color?: { rgb?: string; themeColor?: string } }>
+    | null
+    | undefined;
+  return borders?.[side]?.color;
+}
+
+function firstTableCellAttrs(doc: Document): Record<string, unknown> {
+  const pmDoc = toProseDoc(doc, {
+    ...(doc.package.styles ? { styles: doc.package.styles } : {}),
+    ...(doc.package.theme !== undefined ? { theme: doc.package.theme } : {}),
+  });
+  const firstTable = pmDoc.firstChild;
+  const firstRow = firstTable?.firstChild;
+  const firstCell = firstRow?.firstChild;
+  return (firstCell?.attrs ?? {}) as Record<string, unknown>;
+}
 
 describe("toProseDoc", () => {
   test("applies oneNDA paragraph mark defaults to unformatted visible text like Word", () => {
@@ -138,6 +177,81 @@ describe("toProseDoc", () => {
     expect(
       text?.marks.find((mark) => mark.type.name === "fontFamily")?.attrs.ascii,
     ).toBe("Open Sans Light");
+  });
+
+  test("resolves themed table-cell border colors against the document theme", () => {
+    const cellFormatting: TableCell["formatting"] = {
+      borders: {
+        top: {
+          style: "single",
+          size: 8,
+          color: { themeColor: "accent2" },
+        },
+      },
+    };
+    const document: Document = {
+      package: {
+        theme: officeTheme,
+        document: {
+          content: [
+            {
+              type: "table",
+              rows: [
+                {
+                  cells: [
+                    {
+                      formatting: cellFormatting,
+                      content: [{ type: "paragraph", content: [] }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const attrs = firstTableCellAttrs(document);
+
+    expect(tableCellBorderColor(attrs, "top")?.rgb).toBe("ED7D31");
+    expect(tableCellBorderColor(attrs, "top")?.themeColor).toBeUndefined();
+  });
+
+  test("keeps unresolved themed table-cell border colors when no document theme exists", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "table",
+              rows: [
+                {
+                  cells: [
+                    {
+                      formatting: {
+                        borders: {
+                          left: {
+                            style: "single",
+                            size: 8,
+                            color: { themeColor: "accent1", themeTint: "33" },
+                          },
+                        },
+                      },
+                      content: [{ type: "paragraph", content: [] }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const attrs = firstTableCellAttrs(document);
+
+    expect(tableCellBorderColor(attrs, "left")?.themeColor).toBe("accent1");
   });
 
   test("applies built-in Word Normal defaults when styles.xml is absent", () => {

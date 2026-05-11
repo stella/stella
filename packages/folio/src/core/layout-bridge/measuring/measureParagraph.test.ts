@@ -124,6 +124,38 @@ describe("empty paragraph line-height floor", () => {
     expect(measure.totalHeight).toBeCloseTo(11 * PT_TO_PX * 1.15 + 12, 1);
   });
 
+  for (const text of ["", " ", "\u00a0"]) {
+    test(`visually empty single text run ${JSON.stringify(text)} includes authored spacing`, () => {
+      const measure = measureParagraph(
+        {
+          kind: "paragraph",
+          id: "t3-text-run",
+          pmStart: 0,
+          pmEnd: 0,
+          runs: [{ kind: "text", text }],
+          attrs: {
+            defaultFontSize: 11,
+            defaultFontFamily: "Arial Narrow",
+            spacing: {
+              before: 5,
+              after: 7,
+              line: 1,
+              lineUnit: "multiplier",
+              lineRule: "auto",
+            },
+          },
+        },
+        600,
+      );
+
+      expect(measure.lines).toHaveLength(1);
+      expect(measure.totalHeight).toBeCloseTo(
+        (measure.lines[0]?.lineHeight ?? 0) + 12,
+        1,
+      );
+    });
+  }
+
   test("suppressed empty paragraph keeps a zero-height anchor", () => {
     const measure = measureParagraph(
       {

@@ -443,10 +443,10 @@
   /* Text wrapping handled via inline styles based on noWrap attribute */
 }
 
-/* Table header cells - styling comes from inline styles, not CSS defaults */
+/* Table header cells are structural; DOCX text formatting comes from marks/styles. */
 .prosemirror-editor .ProseMirror th.docx-table-header {
-  font-weight: bold;
-  text-align: left;
+  font-weight: inherit;
+  text-align: inherit;
 }
 
 /* Cell content - paragraphs inside cells */
@@ -657,27 +657,78 @@
 }
 
 /* Header/footer editor ProseMirror styles */
+.hf-editor-pm.prosemirror-editor {
+  width: 100%;
+  max-width: 100%;
+}
 .hf-editor-pm .ProseMirror {
   outline: none;
   min-height: 40px;
-  padding: 4px;
+  padding: 0;
+}
+.hf-editor-pm.prosemirror-editor .ProseMirror {
+  width: 100%;
+  max-width: 100%;
+  min-height: 40px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .hf-editor-pm .ProseMirror:focus {
   outline: none;
 }
 .hf-editor-pm .ProseMirror p {
   display: block;
-  /* !important overrides inline margin-bottom from style-resolved spaceAfter.
-     The layout painter doesn't apply style-resolved spacing to headers/footers,
-     so the editor must match by stripping paragraph margins. */
   margin: 0 !important;
-  padding: 0;
+  padding-top: var(--docx-space-before, 0);
+  padding-right: 0;
+  padding-bottom: var(--docx-space-after, 0);
+  padding-left: 0;
   min-height: 1em;
   white-space: pre-wrap;
   word-wrap: break-word;
-  /* Override inline line-height from style-resolved lineSpacing to match
-     the layout painter's rendering of header/footer content */
   line-height: normal !important;
+}
+
+.hf-editor-pm .ProseMirror td p,
+.hf-editor-pm .ProseMirror th p {
+  margin: 0 !important;
+  padding-top: var(--docx-space-before, 0);
+  padding-right: 0;
+  padding-bottom: var(--docx-space-after, 0);
+  padding-left: 0;
+  min-height: auto;
+  line-height: normal !important;
+}
+
+.hf-editor-pm .ProseMirror .tableWrapper {
+  overflow: visible;
+}
+
+.hf-editor-pm .ProseMirror table {
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+  table-layout: fixed !important;
+  margin: 0;
+}
+
+.hf-editor-pm .ProseMirror td.docx-table-cell,
+.hf-editor-pm .ProseMirror th.docx-table-header {
+  box-sizing: border-box !important;
+}
+
+.hf-editor-pm .ProseMirror td p:has(img),
+.hf-editor-pm .ProseMirror th p:has(img),
+.hf-editor-pm .ProseMirror td p:has(span),
+.hf-editor-pm .ProseMirror th p:has(span) {
+  font-size: 0 !important;
+  line-height: 0 !important;
+}
+
+.hf-editor-pm .ProseMirror td p span:not(:has(> span)),
+.hf-editor-pm .ProseMirror th p span:not(:has(> span)) {
+  position: relative;
+  top: 0.4em;
 }
 
 /* ============================================================================

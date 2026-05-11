@@ -24,6 +24,7 @@ import type {
   Measure,
   PageMargins,
   Run,
+  TableBlock,
   TableMeasure,
 } from "../layout-engine/types";
 import type { HeaderFooterContent } from "../layout-painter/renderPage";
@@ -109,6 +110,10 @@ function hasAuthoredVisualContent(block: FlowBlock): boolean {
 export function normalizeHeaderFooterMeasureBlocks(
   blocks: FlowBlock[],
 ): FlowBlock[] {
+  return normalizeFlowBlockArray(blocks);
+}
+
+function normalizeFlowBlockArray(blocks: FlowBlock[]): FlowBlock[] {
   // Only the *canonical trailing* OOXML paragraph after the LAST block
   // qualifies for height suppression. Empty paragraphs used as authored
   // spacers in the middle of an HF (e.g. `[table, blank, paragraph,
@@ -130,6 +135,9 @@ export function normalizeHeaderFooterMeasureBlocks(
   }
 
   return blocks.map((block, index) => {
+    if (block.kind === "table") {
+      return normalizeTableBlock(block);
+    }
     if (block.kind !== "paragraph") {
       return block;
     }
@@ -177,6 +185,31 @@ export function normalizeHeaderFooterMeasureBlocks(
       ? { ...block, runs: inlineRuns, attrs }
       : { ...block, runs: inlineRuns };
   });
+}
+
+function normalizeTableBlock(block: TableBlock): TableBlock {
+  let changed = false;
+  const rows = block.rows.map((row) => {
+    let rowChanged = false;
+    const cells = row.cells.map((cell) => {
+      const normalizedBlocks = normalizeFlowBlockArray(cell.blocks);
+      const cellChanged = normalizedBlocks.some(
+        (normalizedBlock, idx) => normalizedBlock !== cell.blocks[idx],
+      );
+      if (!cellChanged) {
+        return cell;
+      }
+      rowChanged = true;
+      return { ...cell, blocks: normalizedBlocks };
+    });
+    if (!rowChanged) {
+      return row;
+    }
+    changed = true;
+    return { ...row, cells };
+  });
+
+  return changed ? { ...block, rows } : block;
 }
 
 // =============================================================================
