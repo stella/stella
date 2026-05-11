@@ -36,6 +36,7 @@
     "@ai-sdk/google-vertex": "^4.0.118",
     "@ai-sdk/mcp": "^1.0.39",
     "@ai-sdk/openai": "^3.0.58",
+    "@ai-sdk/provider-utils": "^4.0.26",
     "@ai-sdk/valibot": "^2.0.27",
     "@aws-sdk/client-sesv2": "^3.1041.0",
     "@better-auth/oauth-provider": "catalog:",
