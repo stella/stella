@@ -13,7 +13,6 @@ import type {
 } from "@/components/chat-editor-provider";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import { PromptEditorContent } from "@/components/prompt-editor";
-import { useChatAnonymizedStore } from "@/lib/chat-anonymized-store";
 
 type ChatInputSurfaceProps = {
   autoFocus?: boolean;
@@ -29,6 +28,16 @@ type ChatInputSurfaceProps = {
    */
   isGenerating?: boolean;
   onStop?: () => void;
+  /**
+   * Whether this surface will send the next request anonymized.
+   * Drives the green-ring "shield active" treatment so the cue
+   * matches what gets sent. The shared input is mounted from
+   * surfaces with different toggle scopes (per-thread store on
+   * `/chat`, local state in the inspector tab, none in the file
+   * overlay), so reading from a global store here would render a
+   * shield on raw requests or hide it on protected ones.
+   */
+  anonymized?: boolean;
 };
 
 export const ChatInputSurface = ({
@@ -40,6 +49,7 @@ export const ChatInputSurface = ({
   onFocusChange,
   isGenerating = false,
   onStop,
+  anonymized = false,
 }: ChatInputSurfaceProps) => {
   const t = useTranslations();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -62,11 +72,6 @@ export const ChatInputSurface = ({
   } = controller;
   const inputDisabled = disabled;
   const submitDisabled = disabled || isGenerating;
-  // Visible "shield active" treatment for the input itself —
-  // applies on every chat surface (main /chat, dedicated thread,
-  // document overlay, inspector tab) since they all funnel
-  // through this component.
-  const anonymized = useChatAnonymizedStore((s) => s.anonymized);
 
   const submitDraft = useCallback(async () => {
     // While the assistant is streaming we render Stop in place of

@@ -305,8 +305,7 @@
     "anonymizedModeDisabled": "Anonymizovaný režim AI je vypnutý",
     "anonymizedModeEnabled": "Anonymizovaný režim AI je zapnutý",
     "anonymizedSpan": {
-      "tooltip": "Modelu odoslané ako {placeholder}.",
-      "tooltipGeneric": "Sent to the model anonymized."
+      "tooltip": "Modelu odoslané ako {placeholder}."
     },
     "applyMode": {
       "description": "Word ukladá, kto urobil každú zmenu. Vašu voľbu si zapamätáme.",

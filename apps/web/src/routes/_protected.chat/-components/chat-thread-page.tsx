@@ -262,6 +262,7 @@ export const ChatThreadPage = ({
       />
       <div className="p-4">
         <ChatInputSurface
+          anonymized={anonymized}
           autoFocus
           controller={controller}
           isGenerating={isGenerating}

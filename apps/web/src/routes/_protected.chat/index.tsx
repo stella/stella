@@ -206,6 +206,7 @@ function ChatIndex() {
               workspaceId={threadRef.threadId}
             />
             <ChatInputSurface
+              anonymized={anonymized}
               autoFocus
               controller={controller}
               onSubmit={async (draft) => {

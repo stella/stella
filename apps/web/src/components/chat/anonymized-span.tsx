@@ -18,16 +18,6 @@ type AnonymizedSpanProps = ComponentProps<"button"> & {
    * and produce invalid HTML.
    */
   interactive?: boolean | undefined;
-  /**
-   * Suppress the exact placeholder id in the tooltip. The
-   * user-message render path recomputes pairs from a fresh
-   * client-side pipeline that doesn't share the server's
-   * placeholder counter, so the displayed `[PERSON_N]` would not
-   * match what actually crossed the boundary. The pill still
-   * renders; the tooltip just falls back to a generic
-   * "sent anonymized" message.
-   */
-  hidePlaceholderId?: boolean | undefined;
 };
 
 /**
@@ -44,7 +34,6 @@ export const AnonymizedSpan = ({
   children,
   className,
   interactive = true,
-  hidePlaceholderId = false,
 }: AnonymizedSpanProps) => {
   const t = useTranslations();
 
@@ -52,9 +41,7 @@ export const AnonymizedSpan = ({
     return <span className={className}>{children}</span>;
   }
 
-  const label = hidePlaceholderId
-    ? t("chat.anonymizedSpan.tooltipGeneric")
-    : t("chat.anonymizedSpan.tooltip", { placeholder: ph });
+  const label = t("chat.anonymizedSpan.tooltip", { placeholder: ph });
 
   if (!interactive) {
     // Static, non-focusable rendering for use inside another

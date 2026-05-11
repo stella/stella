@@ -305,8 +305,7 @@
     "anonymizedModeDisabled": "Le mode IA anonymisé est désactivé",
     "anonymizedModeEnabled": "Le mode IA anonymisé est activé",
     "anonymizedSpan": {
-      "tooltip": "Envoyé au modèle sous la forme {placeholder}.",
-      "tooltipGeneric": "Sent to the model anonymized."
+      "tooltip": "Envoyé au modèle sous la forme {placeholder}."
     },
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",

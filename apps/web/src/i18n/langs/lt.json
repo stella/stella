@@ -305,8 +305,7 @@
     "anonymizedModeDisabled": "Anonimizuotas DI režimas išjungtas",
     "anonymizedModeEnabled": "Anonimizuotas DI režimas įjungtas",
     "anonymizedSpan": {
-      "tooltip": "Modeliui išsiųsta kaip {placeholder}.",
-      "tooltipGeneric": "Sent to the model anonymized."
+      "tooltip": "Modeliui išsiųsta kaip {placeholder}."
     },
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",

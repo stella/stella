@@ -309,7 +309,6 @@ type Messages = {
     "anonymizedModeEnabled": "Anonymized AI mode is on";
     "anonymizedSpan": {
       "tooltip": "Sent to the model as {placeholder}.";
-      "tooltipGeneric": "Sent to the model anonymized.";
     };
     "applyMode": {
       "description": "Word stores who made each change. We'll remember your choice.";

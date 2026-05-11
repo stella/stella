@@ -36,8 +36,6 @@ import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import type { TranslationKey } from "@/i18n/types";
-import { useChatAnonymizeForRender } from "@/lib/anonymize/use-chat-anonymize";
-import { useChatAnonymizedStore } from "@/lib/chat-anonymized-store";
 import { getUserFileContentUrl } from "@/lib/user-files";
 
 const USER_STREAMDOWN_COMPONENTS = {
@@ -70,6 +68,35 @@ const collectAnonRestorations = (
     placeholder,
     original,
   }));
+};
+
+const EMPTY_RESTORATION_PAIRS: readonly ChatAnonRestoration[] = Object.freeze(
+  [],
+);
+
+/**
+ * Resolve the restoration pairs that match what *this user
+ * message* actually sent. Walks forward to the next assistant
+ * message (skipping any intervening user messages — the AI SDK
+ * persists in chronological order) and uses its server-emitted
+ * `data-stella-anon-restorations` pairs, which were produced by
+ * the same `PipelineContext` the request body crossed. Returns an
+ * empty array while the assistant is still streaming or if the
+ * turn was sent raw — both cases render the user message without
+ * pills, which matches the audit story (no anonymization → no
+ * audit cue).
+ */
+const getFollowingAssistantRestorations = (
+  messages: readonly PersistedChatMessage[],
+  userMessageIndex: number,
+): readonly ChatAnonRestoration[] => {
+  for (let i = userMessageIndex + 1; i < messages.length; i += 1) {
+    const candidate = messages[i];
+    if (candidate?.role === "assistant") {
+      return collectAnonRestorations(candidate.parts);
+    }
+  }
+  return EMPTY_RESTORATION_PAIRS;
 };
 
 const getMentionTagAttr = (attrs: string, name: string) => {
@@ -461,7 +488,7 @@ export const ChatThreadMessages = ({
 
   return (
     <>
-      {messages.map((message) => (
+      {messages.map((message, index) => (
         <Message
           className={cn(
             "transition-opacity duration-200",
@@ -521,12 +548,15 @@ export const ChatThreadMessages = ({
 
                   return <UserAttachments parts={fileParts} />;
                 })()}
-                {message.parts.map((part, index) =>
+                {message.parts.map((part, partIndex) =>
                   part.type === "text" ? (
                     <UserMessageText
-                      key={`${message.id}-user-text-${index}`}
+                      key={`${message.id}-user-text-${partIndex}`}
+                      restorationPairs={getFollowingAssistantRestorations(
+                        messages,
+                        index,
+                      )}
                       text={normalizeUserMessageTextForDisplay(part.text)}
-                      workspaceId={workspaceId ?? message.id}
                     />
                   ) : null,
                 )}
@@ -702,41 +732,35 @@ const AssistantTextPart = ({
 
 const USER_TEXT_STREAMDOWN_COMPONENTS = {
   ...USER_STREAMDOWN_COMPONENTS,
-  // `hidePlaceholderId`: the user-message pill is driven by a
-  // fresh client-side wasm pass, whose `PipelineContext` does
-  // *not* share the server's placeholder counter. The server's
-  // counter is already advanced by the anonymized system suffix
-  // (matter labels, active file body, …), so a name that the
-  // client labels `[PERSON_1]` might actually have crossed the
-  // boundary as `[PERSON_2]` (or any shifted id). Suppress the
-  // exact id in the tooltip so the audit cue stays honest.
   "stll-anon": (props: ComponentProps<"button"> & { ph?: string }) => (
-    <AnonymizedSpan {...props} hidePlaceholderId />
+    <AnonymizedSpan {...props} />
   ),
 };
 
 const UserMessageText = ({
   text,
-  workspaceId,
+  restorationPairs,
 }: {
   text: string;
-  workspaceId: string;
+  /**
+   * Server-side placeholder → original pairs from the *following*
+   * assistant message's `data-stella-anon-restorations` part.
+   * Using those guarantees the pill rendering matches what
+   * actually crossed the boundary on this turn: any pair listed
+   * here was minted by the server's shared `PipelineContext`, so
+   * the placeholder id is accurate. Reading the live store and
+   * rerunning the client-side wasm pipeline used to produce both
+   * the wrong id (fresh counter) and false positives/negatives
+   * after toggling anonymized mode post-send.
+   */
+  restorationPairs: readonly ChatAnonRestoration[];
 }) => {
-  // Read the global preference directly so we don't need to thread
-  // `anonymized` through every parent — the store is a single
-  // boolean, not per-thread, since the v0.1.6 store rewrite.
-  const anonymized = useChatAnonymizedStore((s) => s.anonymized);
-  const pairs = useChatAnonymizeForRender({
-    enabled: anonymized,
-    text,
-    workspaceId,
-  });
-  // Memoise so MessageResponse's identity-based memo can short-
-  // circuit on subsequent renders. `pairs` itself comes from
-  // TanStack Query and is stable across renders.
   const rehypePlugins = useMemo<PluggableList | undefined>(
-    () => (pairs.length > 0 ? [[rehypeAnonSpans, pairs]] : undefined),
-    [pairs],
+    () =>
+      restorationPairs.length > 0
+        ? [[rehypeAnonSpans, restorationPairs]]
+        : undefined,
+    [restorationPairs],
   );
   if (rehypePlugins === undefined) {
     return (

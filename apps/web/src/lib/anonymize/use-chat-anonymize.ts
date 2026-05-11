@@ -87,30 +87,3 @@ export const useChatAnonymizePreview = ({
     isPending: result.isFetching,
   };
 };
-
-/**
- * Cached anonymization for a sent message rendered in the
- * thread. Same query key shape as the live preview, so the moment
- * the user submits, the post-send render hits the warm cache and
- * the pills snap in instantly.
- */
-export const useChatAnonymizeForRender = ({
-  enabled,
-  text,
-  workspaceId,
-}: {
-  enabled: boolean;
-  text: string;
-  workspaceId: string;
-}): ChatAnonPair[] => {
-  const shouldRun = enabled && text.trim().length > 0;
-  const result = useQuery({
-    queryKey: ["chat-anon-preview", workspaceId, text],
-    queryFn: async () => await anonymizeChatTextInWorker({ text, workspaceId }),
-    enabled: shouldRun,
-    staleTime: 60_000,
-    gcTime: 5 * 60_000,
-    placeholderData: keepPreviousData,
-  });
-  return result.data?.pairs ?? [];
-};
