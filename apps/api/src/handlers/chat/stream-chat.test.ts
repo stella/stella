@@ -294,4 +294,38 @@ describe("anonymized outgoing chat stream", () => {
       { type: "text-end", id: "text-1" },
     ]);
   });
+
+  test("restores bracketless placeholders in user-visible tool input", async () => {
+    const boundary = createBoundary([["[PERSON_1]", "Jan Novak"]]);
+    const stream = deanonymizeOutgoingStream(
+      streamChunks([
+        {
+          type: "tool-input-available",
+          toolCallId: "tool_1",
+          toolName: "ask-user",
+          input: {
+            options: ["Call PERSON_1", "Email [PERSON_1]"],
+            question: "How should PERSON_1 be contacted?",
+          },
+        },
+      ]),
+      boundary,
+    );
+
+    expect(await collectChunks(stream)).toEqual([
+      {
+        type: "data-stella-anon-restorations",
+        data: { pairs: [{ placeholder: "[PERSON_1]", original: "Jan Novak" }] },
+      },
+      {
+        type: "tool-input-available",
+        toolCallId: "tool_1",
+        toolName: "ask-user",
+        input: {
+          options: ["Call Jan Novak", "Email Jan Novak"],
+          question: "How should Jan Novak be contacted?",
+        },
+      },
+    ]);
+  });
 });

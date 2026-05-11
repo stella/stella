@@ -55,6 +55,8 @@ export type ChatThirdPartyBoundary =
       type: "anonymized";
     };
 
+const ANON_RESTORATIONS_DATA_PART_TYPE = "data-stella-anon-restorations";
+
 /**
  * System-prompt note appended when anonymized mode is active.
  *
@@ -509,6 +511,31 @@ const preparePartForThirdParty = ({
   return Result.ok(part);
 };
 
+const isProviderInvisiblePart = (part: ChatMessage["parts"][number]): boolean =>
+  part.type === ANON_RESTORATIONS_DATA_PART_TYPE;
+
+const removeProviderInvisibleParts = (
+  messages: ChatMessage[],
+): ChatMessage[] => {
+  const visibleMessages: ChatMessage[] = [];
+
+  for (const message of messages) {
+    const parts = message.parts.filter(
+      (part) => !isProviderInvisiblePart(part),
+    );
+
+    if (parts.length === 0) {
+      continue;
+    }
+
+    visibleMessages.push(
+      parts.length === message.parts.length ? message : { ...message, parts },
+    );
+  }
+
+  return visibleMessages;
+};
+
 export const prepareMessagesForThirdParty = async ({
   boundary,
   messages,
@@ -516,15 +543,17 @@ export const prepareMessagesForThirdParty = async ({
   boundary: ChatThirdPartyBoundary;
   messages: ChatMessage[];
 }): Promise<Result<ChatMessage[], BoundaryRefusal>> => {
+  const providerVisibleMessages = removeProviderInvisibleParts(messages);
+
   if (boundary.type === "raw") {
-    return Result.ok(messages);
+    return Result.ok(providerVisibleMessages);
   }
 
   return await Result.gen(async function* () {
     const prepared: ChatMessage[] = [];
     const replacements: TextReplacement[] = [];
 
-    for (const message of messages) {
+    for (const message of providerVisibleMessages) {
       const parts: ChatMessage["parts"] = [];
 
       for (const part of message.parts) {

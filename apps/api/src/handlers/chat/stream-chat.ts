@@ -418,6 +418,8 @@ const getResolvedTextPrefixLength = (text: string) => {
 // regex stops matching, and the buffered `[` flushes.
 const PARTIAL_PLACEHOLDER_TAIL = /\[[A-Z][A-Z0-9_]*$|\[$/;
 const PLACEHOLDER_TOKEN = /\[[A-Z][A-Z0-9_]*]/g;
+const PLACEHOLDER_INNER_TOKEN = /^[A-Z][A-Z0-9_]*$/;
+const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/g;
 
 const getDeanonymisablePrefixLength = (text: string): number => {
   const match = PARTIAL_PLACEHOLDER_TAIL.exec(text);
@@ -450,11 +452,92 @@ const collectTextPlaceholders = (text: string): Set<string> => {
   return placeholders;
 };
 
-const collectUnknownStringPlaceholders = (value: unknown): Set<string> => {
+type LenientPlaceholderCollector = {
+  pattern: RegExp;
+  placeholderByToken: ReadonlyMap<string, string>;
+};
+
+const escapeRegex = (value: string): string =>
+  value.replaceAll(REGEX_SPECIALS, "\\$&");
+
+const buildLenientPlaceholderCollector = (
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+): LenientPlaceholderCollector | null => {
+  const placeholderByToken = new Map<string, string>();
+  const bracketed: string[] = [];
+  const bracketless: string[] = [];
+
+  for (const placeholder of boundary.redactionMap.keys()) {
+    if (!placeholderByToken.has(placeholder)) {
+      placeholderByToken.set(placeholder, placeholder);
+      bracketed.push(escapeRegex(placeholder));
+    }
+
+    if (!placeholder.startsWith("[") || !placeholder.endsWith("]")) {
+      continue;
+    }
+
+    const inner = placeholder.slice(1, -1);
+    if (PLACEHOLDER_INNER_TOKEN.test(inner) && !placeholderByToken.has(inner)) {
+      placeholderByToken.set(inner, placeholder);
+      bracketless.push(escapeRegex(inner));
+    }
+  }
+
+  if (bracketed.length === 0 && bracketless.length === 0) {
+    return null;
+  }
+
+  bracketed.sort((a, b) => b.length - a.length);
+  bracketless.sort((a, b) => b.length - a.length);
+
+  const patterns: string[] = [];
+  if (bracketed.length > 0) {
+    patterns.push(bracketed.join("|"));
+  }
+  if (bracketless.length > 0) {
+    patterns.push(`\\b(?:${bracketless.join("|")})\\b`);
+  }
+
+  return {
+    pattern: new RegExp(patterns.join("|"), "g"),
+    placeholderByToken,
+  };
+};
+
+const collectPlaceholdersFromText = (
+  text: string,
+  lenientCollector: LenientPlaceholderCollector | null,
+): Set<string> => {
+  if (lenientCollector === null) {
+    return collectTextPlaceholders(text);
+  }
+
+  const placeholders = new Set<string>();
+  lenientCollector.pattern.lastIndex = 0;
+
+  let match: RegExpExecArray | null;
+  while ((match = lenientCollector.pattern.exec(text)) !== null) {
+    const placeholder = lenientCollector.placeholderByToken.get(match[0]);
+    if (placeholder !== undefined) {
+      placeholders.add(placeholder);
+    }
+  }
+
+  return placeholders;
+};
+
+const collectUnknownStringPlaceholders = (
+  value: unknown,
+  lenientCollector: LenientPlaceholderCollector | null = null,
+): Set<string> => {
   const placeholders = new Set<string>();
   const walk = (next: unknown): void => {
     if (typeof next === "string") {
-      for (const placeholder of collectTextPlaceholders(next)) {
+      for (const placeholder of collectPlaceholdersFromText(
+        next,
+        lenientCollector,
+      )) {
         placeholders.add(placeholder);
       }
       return;
@@ -474,6 +557,19 @@ const collectUnknownStringPlaceholders = (value: unknown): Set<string> => {
   };
   walk(value);
   return placeholders;
+};
+
+const deanonymizeToolInputText = (
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+  text: string,
+): string => {
+  const deanonymized = deanonymizeUnknownStringsFromBoundary(
+    boundary,
+    text,
+    "lenient",
+  );
+
+  return typeof deanonymized === "string" ? deanonymized : text;
 };
 
 export const deanonymizeOutgoingStream = (
@@ -624,25 +720,30 @@ export const deanonymizeOutgoingStream = (
         if (chunk.type === "tool-input-available") {
           const key = `tool-input:${chunk.toolCallId}`;
           const pending = buffers.get(key);
+          const lenientCollector = buildLenientPlaceholderCollector(boundary);
           if (pending !== undefined && pending.length > 0) {
-            emitRestorationDelta(controller, collectTextPlaceholders(pending));
+            emitRestorationDelta(
+              controller,
+              collectPlaceholdersFromText(pending, lenientCollector),
+            );
             controller.enqueue({
               type: "tool-input-delta",
               toolCallId: chunk.toolCallId,
-              inputTextDelta: deanonymizeFromBoundary({
-                boundary,
-                text: pending,
-              }),
+              inputTextDelta: deanonymizeToolInputText(boundary, pending),
             });
             buffers.delete(key);
           }
           emitRestorationDelta(
             controller,
-            collectUnknownStringPlaceholders(chunk.input),
+            collectUnknownStringPlaceholders(chunk.input, lenientCollector),
           );
           controller.enqueue({
             ...chunk,
-            input: deanonymizeUnknownStringsFromBoundary(boundary, chunk.input),
+            input: deanonymizeUnknownStringsFromBoundary(
+              boundary,
+              chunk.input,
+              "lenient",
+            ),
           });
           return;
         }

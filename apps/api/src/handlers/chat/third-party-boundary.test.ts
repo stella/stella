@@ -207,6 +207,66 @@ describe("chat third-party anonymization boundary", () => {
     );
   });
 
+  test("removes restoration metadata before provider preparation", async () => {
+    const boundary = createBoundary();
+    const messages: ChatMessage[] = [
+      {
+        id: "msg_1",
+        role: "assistant",
+        parts: [
+          {
+            type: "data-stella-anon-restorations",
+            data: {
+              pairs: [{ placeholder: "[PERSON_1]", original: "Jan Novák" }],
+            },
+          },
+          {
+            type: "text",
+            text: "Visible answer.",
+          },
+        ],
+      },
+      {
+        id: "msg_2",
+        role: "assistant",
+        parts: [
+          {
+            type: "data-stella-anon-restorations",
+            data: {
+              pairs: [{ placeholder: "[CUSTOM_1]", original: "Secret" }],
+            },
+          },
+        ],
+      },
+    ];
+
+    const prepared = await prepareMessagesForThirdParty({
+      boundary,
+      messages,
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+
+    expect(prepared.value).toEqual([
+      {
+        id: "msg_1",
+        role: "assistant",
+        parts: [{ type: "text", text: "Visible answer." }],
+      },
+    ]);
+    expect(boundary.type).toBe("anonymized");
+    if (boundary.type === "anonymized") {
+      expect(boundary.redactionMap.size).toBe(0);
+    }
+    expect(anonymizeTextFieldsMock).toHaveBeenCalledTimes(1);
+    expect(anonymizeTextFieldsMock.mock.calls.at(0)?.[0].fields).toEqual([
+      "Visible answer.",
+    ]);
+  });
+
   test("returns anonymized live tool output values", async () => {
     const boundary = createBoundary();
     const tools = {
