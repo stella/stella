@@ -10,6 +10,7 @@ import {
   folioCollabSessionTokens,
 } from "@/api/db/schema";
 import {
+  lockDocxEditTarget,
   presignDocxFieldDownload,
   readCurrentDocxTarget,
   readVersionDocxTarget,
@@ -93,6 +94,13 @@ const openFolioCollabSessionHandler = async function* ({
 }: OpenFolioCollabSessionProps) {
   const openSession = yield* Result.await(
     safeDb(async (tx) => {
+      await lockDocxEditTarget({
+        entityId,
+        propertyId,
+        tx,
+        workspaceId,
+      });
+
       const desktopSessions = await tx
         .select({ id: desktopEditSessions.id })
         .from(desktopEditSessions)

@@ -24,6 +24,7 @@ import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcast } from "@/api/lib/sse";
 
 import {
+  lockDocxEditTarget,
   presignDocxDownloadFromFileId,
   presignDocxFieldDownload,
   readCurrentDocxTarget,
@@ -222,6 +223,13 @@ export const openDesktopEditSessionHandler = async function* ({
   if (force) {
     yield* Result.await(
       safeDb(async (tx) => {
+        await lockDocxEditTarget({
+          entityId,
+          propertyId,
+          tx,
+          workspaceId,
+        });
+
         const existing = await tx
           .select({ id: desktopEditSessions.id })
           .from(desktopEditSessions)
@@ -254,6 +262,13 @@ export const openDesktopEditSessionHandler = async function* ({
 
   const runOpenSession = async ({ allowInsert }: { allowInsert: boolean }) =>
     await safeDb(async (tx) => {
+      await lockDocxEditTarget({
+        entityId,
+        propertyId,
+        tx,
+        workspaceId,
+      });
+
       const existingSession = await readExistingOpenDesktopEditSession({
         entityId,
         propertyId,

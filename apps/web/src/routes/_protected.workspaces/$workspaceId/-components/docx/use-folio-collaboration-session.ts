@@ -57,6 +57,8 @@ type UseFolioCollaborationSessionOptions = {
   workspaceId: string;
 };
 
+const FOLIO_COLLAB_TOKEN_REFRESH_LEEWAY_MS = 5 * 60 * 1000;
+
 export const useFolioCollaborationSession = ({
   enabled,
   entityId,
@@ -108,13 +110,39 @@ export const useFolioCollaborationSession = ({
         return;
       }
 
+      const sessionId = response.data.collabSessionId;
+      let token = response.data.token;
+      let tokenExpiresAtMs = Date.parse(response.data.tokenExpiresAt);
+      const refreshTokenIfNeeded = async () => {
+        if (
+          Number.isFinite(tokenExpiresAtMs) &&
+          Date.now() < tokenExpiresAtMs - FOLIO_COLLAB_TOKEN_REFRESH_LEEWAY_MS
+        ) {
+          return token;
+        }
+
+        const refreshed = await api
+          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          ["folio-collab-sessions"].open.post({
+            entityId: toSafeId<"entity">(entityId),
+            propertyId: toSafeId<"property">(propertyId),
+          });
+
+        if (refreshed.error || refreshed.data.collabSessionId !== sessionId) {
+          return null;
+        }
+
+        token = refreshed.data.token;
+        tokenExpiresAtMs = Date.parse(refreshed.data.tokenExpiresAt);
+        return token;
+      };
       const ydoc = new Y.Doc();
       const yXmlFragment = ydoc.get("prosemirror", Y.XmlFragment);
 
       provider = new HocuspocusProvider({
         document: ydoc,
         name: response.data.roomName,
-        token: response.data.token,
+        token: async () => (await refreshTokenIfNeeded()) ?? "",
         url: collabUrl,
       });
 
@@ -134,8 +162,6 @@ export const useFolioCollaborationSession = ({
         name: user.name,
       });
 
-      const sessionId = response.data.collabSessionId;
-      const token = response.data.token;
       const invalidateSessionQueries = async () => {
         await Promise.all([
           queryClient.invalidateQueries({
@@ -158,9 +184,14 @@ export const useFolioCollaborationSession = ({
         ]);
       };
       const cancel = async () => {
+        const freshToken = await refreshTokenIfNeeded();
+        if (freshToken === null) {
+          return false;
+        }
+
         const cancelled = await api["folio-collab-sessions"]({
           sessionId,
-        }).cancel.post({ token });
+        }).cancel.post({ token: freshToken });
 
         if (cancelled.error) {
           return false;
@@ -170,21 +201,31 @@ export const useFolioCollaborationSession = ({
         return true;
       };
       const saveCheckpoint = async (docxBuffer: ArrayBuffer) => {
+        const freshToken = await refreshTokenIfNeeded();
+        if (freshToken === null) {
+          return false;
+        }
+
         const checkpoint = await api["folio-collab-sessions"]({
           sessionId,
         }).checkpoint.post({
           file: new File([docxBuffer], response.data.fileName, {
             type: DOCX_MIME,
           }),
-          token,
+          token: freshToken,
         });
 
         return !checkpoint.error;
       };
       const finalize = async () => {
+        const freshToken = await refreshTokenIfNeeded();
+        if (freshToken === null) {
+          return null;
+        }
+
         const finalized = await api["folio-collab-sessions"]({
           sessionId,
-        }).finalize.post({ token });
+        }).finalize.post({ token: freshToken });
 
         if (finalized.error) {
           return null;
