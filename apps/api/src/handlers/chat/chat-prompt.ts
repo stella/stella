@@ -204,7 +204,7 @@ export const buildChatSystemPromptParts = async ({
       });
     }
 
-    const untrustedSuffix = [
+    const appendedUntrusted = [
       decisionSection,
       externalSection,
       matterScopeSection,
@@ -213,12 +213,17 @@ export const buildChatSystemPromptParts = async ({
       .filter((section) => section.length > 0)
       .map((section) => `\n\n${section}`)
       .join("");
+    // The workspace / global prompt builder may itself have
+    // produced an untrusted half (matter-name interpolation, user
+    // profile block); prepend it so anonymization covers the
+    // whole user-driven tail.
+    const untrustedSuffix = `${safeParts.untrustedSuffix}${appendedUntrusted}`;
 
     return Result.ok({
       cacheStablePrefix: safeParts.cacheStablePrefix,
-      safePrompt: safeParts.fullPrompt,
+      safePrompt: safeParts.safePrompt,
       untrustedSuffix,
-      fullPrompt: `${safeParts.fullPrompt}${untrustedSuffix}`,
+      fullPrompt: `${safeParts.safePrompt}${untrustedSuffix}`,
     });
   });
 
@@ -828,25 +833,38 @@ const buildPromptParts = ({
     buildSkillCatalogSection(skillMetadata),
     READONLY_API_HINT,
   ]);
-  const sections = [cacheStablePrefix, ...requestContextSections];
+  // Safe half: scaffold + jurisdiction labels. Both are
+  // server-defined catalogs with no third-party PII.
+  const safeSections = [cacheStablePrefix];
   const practiceJurisdictionLine = buildPracticeJurisdictionLine(
     practiceJurisdictions,
   );
   if (practiceJurisdictionLine) {
-    sections.push(practiceJurisdictionLine);
+    safeSections.push(practiceJurisdictionLine);
   }
+  const safePrompt = joinPromptSections(safeSections);
+
+  // Untrusted half: anything that interpolates user-controlled
+  // text into the prompt. `requestContextSections` is the
+  // `Connected to matter "..."` line (matter names commonly carry
+  // client / opposing-party names); `userContextBlock` echoes the
+  // user's own profile (name, email). Both must cross the
+  // anonymizer in anonymized mode.
+  const untrustedSections: string[] = [...requestContextSections];
   const userContextBlock = buildUserContextBlock(userContext);
-
   if (userContextBlock) {
-    sections.push(userContextBlock);
+    untrustedSections.push(userContextBlock);
   }
+  const untrustedSuffix =
+    untrustedSections.length > 0
+      ? `\n\n${joinPromptSections(untrustedSections)}`
+      : "";
 
-  const fullPrompt = joinPromptSections(sections);
   return {
     cacheStablePrefix,
-    safePrompt: fullPrompt,
-    untrustedSuffix: "",
-    fullPrompt,
+    safePrompt,
+    untrustedSuffix,
+    fullPrompt: `${safePrompt}${untrustedSuffix}`,
   };
 };
 

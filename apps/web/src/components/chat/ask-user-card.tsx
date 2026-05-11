@@ -52,10 +52,16 @@ const EMPTY_RESTORATION_PAIRS: readonly ChatAnonRestoration[] = Object.freeze(
  * labels — the rehype plugin handles the markdown `analysis` body
  * but the questions/options are rendered as plain text nodes, so
  * they need their own pass.
+ *
+ * `interactive` propagates to `<AnonymizedSpan>`: pass `false`
+ * when the call site is already inside another interactive
+ * element (option `<button>`) to avoid invalid nested-button
+ * markup; the pill renders as a styled `<span>` without tooltip.
  */
 const renderAnonPills = (
   text: string,
   pairs: readonly ChatAnonRestoration[],
+  options: { interactive?: boolean } = {},
 ): ReactNode => {
   if (pairs.length === 0 || text.length === 0) {
     return text;
@@ -80,6 +86,7 @@ const renderAnonPills = (
     const original = match[0];
     nodes.push(
       <AnonymizedSpan
+        interactive={options.interactive ?? true}
         key={`${match.index}-${original}`}
         ph={lookup.get(original)}
       >
@@ -274,7 +281,7 @@ export const AskUserCard = ({
                     onClick={() => setAnswer(i, opt)}
                     type="button"
                   >
-                    {renderAnonPills(opt, pairs)}
+                    {renderAnonPills(opt, pairs, { interactive: false })}
                   </button>
                 ))}
                 <button
