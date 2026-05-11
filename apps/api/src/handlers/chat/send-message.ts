@@ -341,18 +341,16 @@ const sendMessage = createSafeRootHandler(
       ? buildAnonymizedSystemHint()
       : null;
     // The "safe" half is whatever the prompt builder declared
-    // safe plus our own static hints (external MCP catalog,
-    // anonymized-mode instructions). The "untrusted" half is the
-    // builder's dynamic suffix and stays separate so streamChat
-    // can run *only that* through the boundary.
-    const systemSafe = [
-      chatContext.systemSafe,
-      externalMcpSystemHint,
-      anonymizedSystemHint,
-    ]
+    // safe plus our own static anonymized-mode instructions. The
+    // external MCP catalog is organization/user-configured text, so
+    // it rides with the dynamic suffix and crosses the boundary in
+    // anonymized mode.
+    const systemSafe = [chatContext.systemSafe, anonymizedSystemHint]
       .filter((part): part is string => part !== null && part.length > 0)
       .join("\n\n");
-    const systemUntrusted = chatContext.systemUntrusted;
+    const systemUntrusted = [chatContext.systemUntrusted, externalMcpSystemHint]
+      .filter((part) => part.length > 0)
+      .join("\n\n");
     let externalMcpToolsClosed = false;
     const closeExternalMcpTools = async () => {
       if (externalMcpToolsClosed) {

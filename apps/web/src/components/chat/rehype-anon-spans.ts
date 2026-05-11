@@ -9,14 +9,15 @@ import type { ChatAnonRestoration } from "@/components/chat/chat-ui-tools";
  * `<stll-anon ph="…">` element so the chat renderer can paint a
  * tooltip-bearing underline.
  *
- * Skipping by parent tag (`pre`, `script`, `style`) means the
- * highlight never lands inside a fenced code block. Inline
- * `<code>` is fair game.
+ * Skipping by parent tag (`a`, `button`, `pre`, `script`,
+ * `style`) means the highlight never lands inside links, buttons,
+ * or fenced code blocks. Inline `<code>` is fair game.
  */
 
-// Only skip block-level code (`pre` wraps fenced code blocks) and
+// Skip interactive containers (the anon pill is tooltip-capable)
+// plus block-level code (`pre` wraps fenced code blocks) and
 // non-prose containers.
-const SKIP_PARENT_TAGS = new Set(["pre", "script", "style"]);
+const SKIP_PARENT_TAGS = new Set(["a", "button", "pre", "script", "style"]);
 
 const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/g;
 

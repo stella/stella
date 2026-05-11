@@ -77,6 +77,7 @@ type RunChatStreamArgs = {
   thirdPartyBoundary: ChatThirdPartyBoundary;
   resolveAssistantTextRefs: ((text: string) => string) | undefined;
   resolveAssistantValueRefs: AssistantValueRefResolver | undefined;
+  initialRestorationPlaceholders: ReadonlySet<string>;
   onAiError: (error: unknown) => string;
 };
 
@@ -101,6 +102,7 @@ const runChatStream = async ({
   thirdPartyBoundary,
   resolveAssistantTextRefs,
   resolveAssistantValueRefs,
+  initialRestorationPlaceholders,
   onAiError,
 }: RunChatStreamArgs): Promise<boolean> => {
   let emptyCompletion: ChatEmptyCompletionError | null = null;
@@ -150,7 +152,9 @@ const runChatStream = async ({
     : uiStream;
   const piped =
     thirdPartyBoundary.type === "anonymized"
-      ? deanonymizeOutgoingStream(refResolved, thirdPartyBoundary)
+      ? deanonymizeOutgoingStream(refResolved, thirdPartyBoundary, {
+          initialRestorationPlaceholders,
+        })
       : refResolved;
   // Terminal-flush transform: when `emitErrorOnEmpty` and the
   // model returned empty, append the error chunk so the client
@@ -256,6 +260,10 @@ export const streamChat = async ({
     preparedUntrusted.value.length > 0
       ? `${systemSafe}${preparedUntrusted.value.startsWith("\n") ? "" : "\n\n"}${preparedUntrusted.value}`
       : systemSafe;
+  const systemOnlyPlaceholders =
+    thirdPartyBoundary.type === "anonymized"
+      ? new Set(thirdPartyBoundary.redactionMap.keys())
+      : new Set<string>();
 
   const preparedMessages = await prepareMessagesForThirdParty({
     boundary: thirdPartyBoundary,
@@ -276,6 +284,13 @@ export const streamChat = async ({
   }
 
   const modelMessages = await convertToModelMessages(preparedMessages.value);
+  const initialRestorationPlaceholders =
+    thirdPartyBoundary.type === "anonymized"
+      ? collectRestorationPlaceholders({
+          exclude: systemOnlyPlaceholders,
+          redactionMap: thirdPartyBoundary.redactionMap,
+        })
+      : new Set<string>();
   const modelTools = prepareToolsForThirdParty({
     boundary: thirdPartyBoundary,
     tools,
@@ -335,6 +350,7 @@ export const streamChat = async ({
         thirdPartyBoundary,
         resolveAssistantTextRefs,
         resolveAssistantValueRefs,
+        initialRestorationPlaceholders,
         onAiError,
       });
 
@@ -358,6 +374,7 @@ export const streamChat = async ({
           thirdPartyBoundary,
           resolveAssistantTextRefs,
           resolveAssistantValueRefs,
+          initialRestorationPlaceholders,
           onAiError,
         });
       }
@@ -396,38 +413,101 @@ const getResolvedTextPrefixLength = (text: string) => {
 // is acceptable; once the next char arrives it's lowercase, the
 // regex stops matching, and the buffered `[` flushes.
 const PARTIAL_PLACEHOLDER_TAIL = /\[[A-Z][A-Z0-9_]*$|\[$/;
+const PLACEHOLDER_TOKEN = /\[[A-Z][A-Z0-9_]*]/g;
 
 const getDeanonymisablePrefixLength = (text: string): number => {
   const match = PARTIAL_PLACEHOLDER_TAIL.exec(text);
   return match ? match.index : text.length;
 };
 
+const collectRestorationPlaceholders = ({
+  exclude = new Set<string>(),
+  redactionMap,
+}: {
+  redactionMap: ReadonlyMap<string, string>;
+  exclude?: ReadonlySet<string> | undefined;
+}): Set<string> => {
+  const placeholders = new Set<string>();
+  for (const placeholder of redactionMap.keys()) {
+    if (!exclude.has(placeholder)) {
+      placeholders.add(placeholder);
+    }
+  }
+  return placeholders;
+};
+
+const collectTextPlaceholders = (text: string): Set<string> => {
+  const placeholders = new Set<string>();
+  PLACEHOLDER_TOKEN.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = PLACEHOLDER_TOKEN.exec(text)) !== null) {
+    placeholders.add(match[0]);
+  }
+  return placeholders;
+};
+
+const collectUnknownStringPlaceholders = (value: unknown): Set<string> => {
+  const placeholders = new Set<string>();
+  const walk = (next: unknown): void => {
+    if (typeof next === "string") {
+      for (const placeholder of collectTextPlaceholders(next)) {
+        placeholders.add(placeholder);
+      }
+      return;
+    }
+    if (Array.isArray(next)) {
+      for (const item of next) {
+        walk(item);
+      }
+      return;
+    }
+    if (typeof next !== "object" || next === null) {
+      return;
+    }
+    for (const nested of Object.values(next)) {
+      walk(nested);
+    }
+  };
+  walk(value);
+  return placeholders;
+};
+
 export const deanonymizeOutgoingStream = (
   stream: ReadableStream<InferUIMessageChunk<ChatMessage>>,
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+  {
+    initialRestorationPlaceholders = new Set<string>(),
+  }: {
+    initialRestorationPlaceholders?: ReadonlySet<string> | undefined;
+  } = {},
 ) => {
   const buffers = new Map<string, string>();
 
   // Tracks which placeholders we've already pushed to the client
-  // so subsequent emissions only carry the *new* pairs. The map on
-  // the boundary keeps growing as tools run (their outputs get
-  // anonymized through the same map), and the client's
-  // `collectAnonRestorations` aggregates every
-  // `data-stella-anon-restorations` part on the message — so each
-  // delta is purely additive and ends up merged in the right order.
+  // so subsequent emissions only carry the *new* pairs. Initial
+  // placeholders come from provider-visible chat messages; later
+  // placeholders are emitted only when they appear in user-visible
+  // assistant/tool chunks. System-context-only placeholders stay on
+  // the server map for deanonymization but are not persisted into
+  // chat history.
   const emittedPlaceholders = new Set<string>();
 
   const emitRestorationDelta = (
     controller: TransformStreamDefaultController<
       InferUIMessageChunk<ChatMessage>
     >,
+    placeholders: ReadonlySet<string>,
   ) => {
-    if (boundary.redactionMap.size === emittedPlaceholders.size) {
+    if (placeholders.size === 0) {
       return;
     }
     const newPairs: { placeholder: string; original: string }[] = [];
-    for (const [placeholder, original] of boundary.redactionMap) {
-      if (!emittedPlaceholders.has(placeholder)) {
+    for (const placeholder of placeholders) {
+      if (emittedPlaceholders.has(placeholder)) {
+        continue;
+      }
+      const original = boundary.redactionMap.get(placeholder);
+      if (original !== undefined) {
         emittedPlaceholders.add(placeholder);
         newPairs.push({ placeholder, original });
       }
@@ -455,6 +535,7 @@ export const deanonymizeOutgoingStream = (
     if (text.length === 0) {
       return;
     }
+    emitRestorationDelta(controller, collectTextPlaceholders(text));
     controller.enqueue({
       type: "text-delta",
       id,
@@ -468,10 +549,7 @@ export const deanonymizeOutgoingStream = (
       InferUIMessageChunk<ChatMessage>
     >({
       transform(chunk, controller) {
-        // Re-check on every chunk so placeholders introduced by
-        // tool-output anonymization (or any other late call into
-        // the boundary) show up as additional restoration parts.
-        emitRestorationDelta(controller);
+        emitRestorationDelta(controller, initialRestorationPlaceholders);
         if (chunk.type === "text-delta") {
           const buffer = `${buffers.get(chunk.id) ?? ""}${chunk.delta}`;
           const prefixLength = getDeanonymisablePrefixLength(buffer);
@@ -496,6 +574,10 @@ export const deanonymizeOutgoingStream = (
         }
 
         if (chunk.type === "tool-output-available") {
+          emitRestorationDelta(
+            controller,
+            collectUnknownStringPlaceholders(chunk.output),
+          );
           controller.enqueue({
             ...chunk,
             output: deanonymizeUnknownStringsFromBoundary(
@@ -520,6 +602,10 @@ export const deanonymizeOutgoingStream = (
           const flushable = buffer.slice(0, prefixLength);
           buffers.set(key, buffer.slice(prefixLength));
           if (flushable.length > 0) {
+            emitRestorationDelta(
+              controller,
+              collectTextPlaceholders(flushable),
+            );
             controller.enqueue({
               ...chunk,
               inputTextDelta: deanonymizeFromBoundary({
@@ -535,6 +621,7 @@ export const deanonymizeOutgoingStream = (
           const key = `tool-input:${chunk.toolCallId}`;
           const pending = buffers.get(key);
           if (pending !== undefined && pending.length > 0) {
+            emitRestorationDelta(controller, collectTextPlaceholders(pending));
             controller.enqueue({
               type: "tool-input-delta",
               toolCallId: chunk.toolCallId,
@@ -545,6 +632,10 @@ export const deanonymizeOutgoingStream = (
             });
             buffers.delete(key);
           }
+          emitRestorationDelta(
+            controller,
+            collectUnknownStringPlaceholders(chunk.input),
+          );
           controller.enqueue({
             ...chunk,
             input: deanonymizeUnknownStringsFromBoundary(boundary, chunk.input),
