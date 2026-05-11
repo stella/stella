@@ -717,18 +717,10 @@
   box-sizing: border-box !important;
 }
 
-.hf-editor-pm .ProseMirror td p:has(img),
-.hf-editor-pm .ProseMirror th p:has(img),
-.hf-editor-pm .ProseMirror td p:has(span),
-.hf-editor-pm .ProseMirror th p:has(span) {
+.hf-editor-pm .ProseMirror td p:has(> img.docx-image):not(:has(> span)),
+.hf-editor-pm .ProseMirror th p:has(> img.docx-image):not(:has(> span)) {
   font-size: 0 !important;
   line-height: 0 !important;
-}
-
-.hf-editor-pm .ProseMirror td p span:not(:has(> span)),
-.hf-editor-pm .ProseMirror th p span:not(:has(> span)) {
-  position: relative;
-  top: 0.4em;
 }
 
 /* ============================================================================
