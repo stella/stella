@@ -370,6 +370,52 @@ export const deanonymizeOutgoingStream = (
           return;
         }
 
+        // Tool *input* chunks carry text the LLM writes into its
+        // tool arguments — for `ask-user` that's the question and
+        // option labels rendered to the user. Without rehydration
+        // here, the card shows raw `[PERSON_N]` instead of the
+        // original name. Same partial-placeholder buffering as
+        // text-delta so a placeholder split across deltas isn't
+        // emitted half-formed.
+        if (chunk.type === "tool-input-delta") {
+          const key = `tool-input:${chunk.toolCallId}`;
+          const buffer = `${buffers.get(key) ?? ""}${chunk.inputTextDelta}`;
+          const prefixLength = getDeanonymisablePrefixLength(buffer);
+          const flushable = buffer.slice(0, prefixLength);
+          buffers.set(key, buffer.slice(prefixLength));
+          if (flushable.length > 0) {
+            controller.enqueue({
+              ...chunk,
+              inputTextDelta: deanonymizeFromBoundary({
+                boundary,
+                text: flushable,
+              }),
+            });
+          }
+          return;
+        }
+
+        if (chunk.type === "tool-input-available") {
+          const key = `tool-input:${chunk.toolCallId}`;
+          const pending = buffers.get(key);
+          if (pending !== undefined && pending.length > 0) {
+            controller.enqueue({
+              type: "tool-input-delta",
+              toolCallId: chunk.toolCallId,
+              inputTextDelta: deanonymizeFromBoundary({
+                boundary,
+                text: pending,
+              }),
+            });
+            buffers.delete(key);
+          }
+          controller.enqueue({
+            ...chunk,
+            input: deanonymizeUnknownStringsFromBoundary(boundary, chunk.input),
+          });
+          return;
+        }
+
         controller.enqueue(chunk);
       },
     }),
