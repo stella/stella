@@ -9,8 +9,8 @@ import {
 import { panic } from "better-result";
 import { v7 as uuidv7 } from "uuid";
 
-import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import type { ChatPreferredSendMode, ChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat";
+import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type {
   ChatUITools,
@@ -23,7 +23,6 @@ import {
 import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { consumeChatSendModeOverride } from "@/lib/chat-anonymized-store";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { useDevStore } from "@/lib/dev-store";
@@ -88,7 +87,7 @@ type ChatThreadOptionsContext = {
    * next send carries the latest set.
    */
   getContextMatterIds?: (() => string[]) | undefined;
-  getSendMode?: (() => ChatPreferredSendMode) | undefined;
+  getSendMode?: (() => ChatSendMode) | undefined;
   getUserContext?: (() => ChatUserContext) | undefined;
   handleActiveDocxEditToolCall?:
     | ((
@@ -210,10 +209,12 @@ export const buildSendRequestBody = ({
   context,
   key,
   messages,
+  requestBody,
 }: {
   context: ChatThreadOptionsContext | undefined;
   key: ChatThreadKey;
   messages: PersistedChatMessage[];
+  requestBody?: object | undefined;
 }) => {
   const message = messages.at(-1);
   if (!message) {
@@ -234,9 +235,9 @@ export const buildSendRequestBody = ({
   } = {
     message,
     sendMode:
-      consumeChatSendModeOverride(key) ??
+      getRequestSendMode(requestBody) ??
       context?.getSendMode?.() ??
-      CHAT_SEND_MODE.raw,
+      CHAT_SEND_MODE.rawOverride,
     threadId: key.threadId,
   };
 
@@ -277,6 +278,16 @@ export const buildSendRequestBody = ({
   }
 
   return body;
+};
+
+const getRequestSendMode = (
+  requestBody: object | undefined,
+): ChatSendMode | null => {
+  if (!requestBody || !("sendMode" in requestBody)) {
+    return null;
+  }
+
+  return isChatSendMode(requestBody.sendMode) ? requestBody.sendMode : null;
 };
 
 // Per-thread guard against empty-completion auto-resubmit storms.
@@ -446,11 +457,15 @@ export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
         transport: new DefaultChatTransport({
           api: getChatApiPath(),
           credentials: "include",
-          prepareSendMessagesRequest: ({ messages: nextMessages }) => ({
+          prepareSendMessagesRequest: ({
+            body: requestBody,
+            messages: nextMessages,
+          }) => ({
             body: buildSendRequestBody({
               context,
               key,
               messages: nextMessages,
+              requestBody,
             }),
           }),
         }),

@@ -78,7 +78,7 @@ const createRawBoundary = () => {
       "11111111-1111-4111-8111-111111111111",
     ),
     scopedDb,
-    sendMode: CHAT_SEND_MODE.raw,
+    sendMode: CHAT_SEND_MODE.rawOverride,
   });
 };
 

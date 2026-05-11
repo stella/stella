@@ -80,7 +80,6 @@ export const sendMessageBodySchema = t.Object({
   threadId: tSafeId("chatThread"),
   workspaceId: t.Optional(tSafeId("workspace")),
   sendMode: t.Union([
-    t.Literal(CHAT_SEND_MODE.raw),
     t.Literal(CHAT_SEND_MODE.anonymized),
     t.Literal(CHAT_SEND_MODE.rawOverride),
   ]),

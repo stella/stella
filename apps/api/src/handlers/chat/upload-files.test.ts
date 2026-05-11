@@ -24,20 +24,9 @@ const arrayBufferMock = mock(async () =>
 const fileMock = mock(() => ({ arrayBuffer: arrayBufferMock }));
 const writeMock = mock(async () => undefined);
 const s3DeleteMock = mock(async () => undefined);
-const scanFileMock = mock(async () =>
-  Result.ok({
-    detectedMimeType: TEXT_PLAIN_MIME_TYPE,
-    verdict: "allow" as const,
-  }),
-);
 
 void mock.module("@/api/lib/s3", () => ({
   getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
-}));
-
-void mock.module("@/api/lib/file-scan/scan", () => ({
-  getScanWarnings: () => [],
-  scanFile: scanFileMock,
 }));
 
 const { canHydrateFilePartAsPlainText, hydrateFilePart, uploadMessageFiles } =
@@ -47,7 +36,6 @@ describe("chat attachment hydration", () => {
   beforeEach(() => {
     arrayBufferMock.mockClear();
     fileMock.mockClear();
-    scanFileMock.mockClear();
     s3DeleteMock.mockClear();
     writeMock.mockClear();
   });

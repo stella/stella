@@ -28,7 +28,8 @@ import { ArrowUpIcon, Maximize2Icon, SquarePenIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
-import { getPreferredChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_SEND_MODE, getPreferredChatSendMode } from "@stll/anonymize-chat";
+import type { ChatSendMode } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/components/button";
 
 import {
@@ -49,7 +50,6 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
-import { sendNextChatRequestWithoutAnonymization } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
@@ -116,10 +116,14 @@ export const ChatTabPanel = ({
   // picker updates would land in the store but never reach the
   // server. `useEffectEvent` always reads the latest closure values.
   const getContextMatterIds = useEffectEvent(() => tab.contextMatterIds);
-  const [anonymized, setAnonymized] = useState(false);
-  const getSendMode = useEffectEvent(() =>
-    getPreferredChatSendMode(anonymized),
+  const [sendMode, setSendMode] = useState<ChatSendMode>(
+    CHAT_SEND_MODE.rawOverride,
   );
+  const anonymized = sendMode === CHAT_SEND_MODE.anonymized;
+  const setAnonymized = (enabled: boolean) => {
+    setSendMode(getPreferredChatSendMode(enabled));
+  };
+  const getSendMode = useEffectEvent(() => sendMode);
   const showToolCallDetails = useDevStore((s) => s.showToolCallDetails);
   const chatContextLabel = useChatContextLabel(tab);
 
@@ -207,8 +211,7 @@ export const ChatTabPanel = ({
   });
   const focusComposer = editorController.focus;
   const sendWithoutAnonymization = useEffectEvent(async () => {
-    sendNextChatRequestWithoutAnonymization(threadRef);
-    await resendLatestMessage();
+    await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
   });
 
   useEffect(() => {

@@ -13,6 +13,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { isToolUIPart } from "ai";
 
+import type { ChatSendMode } from "@stll/anonymize-chat";
+
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import type {
   ApprovalToolName,
@@ -57,6 +59,11 @@ type McpConnectorApprovalIdentity = {
   slug: string;
 };
 
+export type ResendLatestMessageOptions = {
+  messageId?: string | undefined;
+  sendMode?: ChatSendMode | undefined;
+};
+
 const EMPTY_MCP_CONNECTOR_IDENTITIES: readonly McpConnectorApprovalIdentity[] =
   [];
 
@@ -99,8 +106,11 @@ export const useChatSession = ({
   );
 
   const resendLatestMessage = useCallback(
-    async (messageId?: string) => {
-      await regenerate(messageId === undefined ? undefined : { messageId });
+    async ({ messageId, sendMode }: ResendLatestMessageOptions = {}) => {
+      await regenerate({
+        ...(messageId === undefined ? {} : { messageId }),
+        ...(sendMode === undefined ? {} : { body: { sendMode } }),
+      });
     },
     [regenerate],
   );

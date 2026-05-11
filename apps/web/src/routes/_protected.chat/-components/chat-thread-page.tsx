@@ -5,7 +5,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Maximize2Icon, PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { getPreferredChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { Button, buttonVariants } from "@stll/ui/components/button";
 
 import {
@@ -23,7 +23,7 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import {
-  sendNextChatRequestWithoutAnonymization,
+  getChatSendMode,
   useChatAnonymized,
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
@@ -76,9 +76,7 @@ export const ChatThreadPage = ({
   const anonymized = useChatAnonymized(threadRef);
   const setAnonymized = useSetChatAnonymized(threadRef);
   const getContextMatterIds = useEffectEvent(() => contextMatterIds ?? []);
-  const getSendMode = useEffectEvent(() =>
-    getPreferredChatSendMode(anonymized),
-  );
+  const getSendMode = useEffectEvent(() => getChatSendMode(threadRef));
 
   const { data } = useSuspenseQuery(
     chatThreadOptions({
@@ -176,8 +174,7 @@ export const ChatThreadPage = ({
     editor.commands.focus("end");
   };
   const sendWithoutAnonymization = useEffectEvent(async () => {
-    sendNextChatRequestWithoutAnonymization(threadRef);
-    await resendLatestMessage();
+    await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
   });
 
   return (

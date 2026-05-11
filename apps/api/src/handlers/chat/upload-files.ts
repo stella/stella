@@ -201,10 +201,6 @@ export type HydratedFilePart =
     }
   | {
       part: FileUIPart;
-      type: "raw";
-    }
-  | {
-      part: FileUIPart;
       type: "rawOverride";
     };
 
@@ -218,22 +214,6 @@ const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
 
 export const canHydrateFilePartAsPlainText = (mimeType: string): boolean =>
   DIRECT_TEXT_MIME_TYPES.has(mimeType) || mimeType === DOCX_MIME_TYPE;
-
-const toHydratedFilePart = ({
-  part,
-  sendMode,
-}: {
-  part: FileUIPart;
-  sendMode: ChatSendMode;
-}): HydratedFilePart => {
-  if (sendMode === CHAT_SEND_MODE.anonymized) {
-    return { part, type: "anonymizable" };
-  }
-  if (sendMode === CHAT_SEND_MODE.rawOverride) {
-    return { part, type: "rawOverride" };
-  }
-  return { part, type: "raw" };
-};
 
 const createBlockedHydratedFilePart = (): HydratedFilePart => ({
   error: new HandlerError({
@@ -291,29 +271,19 @@ export const hydrateFilePart = async ({
     }
 
     if (DIRECT_TEXT_MIME_TYPES.has(mimeType)) {
-      const hydratedMimeType = requiresPlainText
-        ? TEXT_PLAIN_MIME_TYPE
-        : mimeType;
-      return Result.ok<HydratedFilePart>(
-        toHydratedFilePart({
-          part: {
-            type: "file",
-            filename: fileName,
-            mediaType: hydratedMimeType,
-            url: toDataUrl(bytes, hydratedMimeType),
-          },
-          sendMode,
-        }),
-      );
+      return Result.ok<HydratedFilePart>({
+        part: {
+          type: "file",
+          filename: fileName,
+          mediaType: TEXT_PLAIN_MIME_TYPE,
+          url: toDataUrl(bytes, TEXT_PLAIN_MIME_TYPE),
+        },
+        type: "anonymizable",
+      });
     }
 
     if (mimeType !== DOCX_MIME_TYPE) {
-      return Result.ok<HydratedFilePart>(
-        toHydratedFilePart({
-          part: createRawFilePart({ bytes, fileName, mimeType }),
-          sendMode,
-        }),
-      );
+      return Result.ok<HydratedFilePart>(createBlockedHydratedFilePart());
     }
 
     const extractedText = yield* Result.await(
@@ -349,17 +319,15 @@ export const hydrateFilePart = async ({
       );
     }
 
-    return Result.ok<HydratedFilePart>(
-      toHydratedFilePart({
-        part: {
-          type: "file",
-          filename: toDocxTextFilename({ filename: fileName }),
-          mediaType: TEXT_PLAIN_MIME_TYPE,
-          url: toDataUrl(Buffer.from(text, "utf-8"), TEXT_PLAIN_MIME_TYPE),
-        },
-        sendMode,
-      }),
-    );
+    return Result.ok<HydratedFilePart>({
+      part: {
+        type: "file",
+        filename: toDocxTextFilename({ filename: fileName }),
+        mediaType: TEXT_PLAIN_MIME_TYPE,
+        url: toDataUrl(Buffer.from(text, "utf-8"), TEXT_PLAIN_MIME_TYPE),
+      },
+      type: "anonymizable",
+    });
   });
 
 type UploadUserFileInput = {

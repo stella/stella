@@ -7,10 +7,7 @@ import { CopyIcon, FileTextIcon, RotateCcwIcon } from "lucide-react";
 import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
-import {
-  isThirdPartyBoundaryRefusalPayload,
-  parseChatTransportErrorMessage,
-} from "@stll/anonymize-chat";
+import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
@@ -248,18 +245,13 @@ type ChatErrorTranslationKey =
   | "chat.sendErrorAnonymizationBlocked"
   | "chat.sendError";
 
-const isAnonymizationBlockedError = (error: Error): boolean => {
-  const payload = parseChatTransportErrorMessage(error.message);
-  return isThirdPartyBoundaryRefusalPayload(payload);
-};
-
 const isMappedChatErrorKind = (
   message: string,
 ): message is keyof typeof CHAT_ERROR_TRANSLATION_KEYS =>
   message in CHAT_ERROR_TRANSLATION_KEYS;
 
 const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
-  if (isAnonymizationBlockedError(error)) {
+  if (isThirdPartyBoundaryRefusalError(error)) {
     return "chat.sendErrorAnonymizationBlocked";
   }
   if (isMappedChatErrorKind(error.message)) {
@@ -276,13 +268,15 @@ export const ChatErrorMessage = ({
 }: {
   error: Error;
   isGenerating: boolean;
-  onResend?: (() => void | PromiseLike<void>) | undefined;
+  onResend?:
+    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
+    | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
 }) => {
   const t = useTranslations();
   const canSendWithoutAnonymization =
     onSendWithoutAnonymization !== undefined &&
-    isAnonymizationBlockedError(error);
+    isThirdPartyBoundaryRefusalError(error);
 
   return (
     <Message from="assistant">
@@ -370,7 +364,9 @@ const AssistantMessageActions = ({
   isGenerating: boolean;
   isLatestAssistantMessage: boolean;
   message: PersistedChatMessage;
-  onResend?: ((messageId?: string) => void | PromiseLike<void>) | undefined;
+  onResend?:
+    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
+    | undefined;
 }) => {
   const t = useTranslations();
   const text = useMemo(() => getMessageText(message), [message]);
@@ -412,7 +408,7 @@ const AssistantMessageActions = ({
           aria-label={t("common.retry")}
           className="text-muted-foreground h-6 px-1.5 text-xs"
           onClick={() => {
-            void onResend?.(message.id);
+            void onResend?.({ messageId: message.id });
           }}
           size="xs"
           variant="ghost"
@@ -457,7 +453,9 @@ type ChatThreadMessagesProps = {
   error?: Error | undefined;
   isGenerating?: boolean | undefined;
   messages: PersistedChatMessage[];
-  onResend?: ((messageId?: string) => void | PromiseLike<void>) | undefined;
+  onResend?:
+    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
+    | undefined;
   onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
   onAskUserSubmit: (
     toolCallId: string,
@@ -486,6 +484,10 @@ type ChatThreadMessagesProps = {
     ) => React.ReactNode;
   };
   workspaceId?: string | undefined;
+};
+
+type ChatResendOptions = {
+  messageId?: string | undefined;
 };
 
 export const ChatThreadMessages = ({

@@ -8,6 +8,8 @@ import {
   CHAT_TRANSPORT_ERROR_CODE,
   DEFAULT_CHAT_ANON_ENTITY_LABELS,
   createThirdPartyBoundaryRefusalPayload,
+  getPreferredChatSendMode,
+  isThirdPartyBoundaryRefusalError,
   isThirdPartyBoundaryRefusalPayload,
   parseChatTransportErrorMessage,
   parseChatTransportErrorPayload,
@@ -54,15 +56,21 @@ describe("chat anonymization pipeline contract", () => {
     );
     expect(isThirdPartyBoundaryRefusalPayload(payload)).toBe(true);
     expect(
+      isThirdPartyBoundaryRefusalError(
+        new Error(JSON.stringify(createThirdPartyBoundaryRefusalPayload("x"))),
+      ),
+    ).toBe(true);
+    expect(
       parseChatTransportErrorPayload({ code: "other", message: "x" }),
     ).toBe(null);
   });
 
   test("models raw override as a first-class send mode", () => {
     expect(CHAT_SEND_MODE).toEqual({
-      raw: "raw",
       anonymized: "anonymized",
       rawOverride: "rawOverride",
     });
+    expect(getPreferredChatSendMode(false)).toBe(CHAT_SEND_MODE.rawOverride);
+    expect(getPreferredChatSendMode(true)).toBe(CHAT_SEND_MODE.anonymized);
   });
 });

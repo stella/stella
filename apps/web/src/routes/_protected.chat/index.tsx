@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { getPreferredChatSendMode } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -25,7 +24,7 @@ import Tooltip from "@/components/tooltip";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import {
-  getChatAnonymized,
+  getChatSendMode,
   useChatAnonymized,
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
@@ -73,9 +72,7 @@ function ChatIndex() {
   const { data: groupedThreads } = useQuery(groupedChatThreadsOptions());
   const anonymized = useChatAnonymized(threadRef);
   const setAnonymized = useSetChatAnonymized(threadRef);
-  const getSendMode = useEffectEvent(() =>
-    getPreferredChatSendMode(getChatAnonymized(threadRef)),
-  );
+  const getSendMode = useEffectEvent(() => getChatSendMode(threadRef));
   const openInspectorChat = useInspectorStore((s) => s.openChat);
   const [contextMatterIds, setContextMatterIds] = useState<string[]>([]);
   const getContextMatterIds = useEffectEvent(() => contextMatterIds);

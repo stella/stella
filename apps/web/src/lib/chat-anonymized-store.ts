@@ -1,58 +1,71 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import type { ChatSendModeOverride } from "@stll/anonymize-chat";
+import {
+  CHAT_SEND_MODE,
+  getPreferredChatSendMode,
+  isChatSendMode,
+} from "@stll/anonymize-chat";
+import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { getChatThreadKey } from "@/lib/chat-thread-ref";
 
 type ChatAnonymizedStore = {
-  /** Single org-wide preference: once toggled on, every chat (new or reopened)
-   *  inherits the setting until the user turns it back off. */
-  anonymized: boolean;
+  /**
+   * Single org-wide preference: once toggled on, every chat (new
+   * or reopened) inherits the setting until the user turns it back
+   * off. The off state is explicit `rawOverride`, not an absent
+   * boolean, so every transport request has the same shared mode
+   * shape.
+   */
+  sendMode: ChatSendMode;
   setAnonymized: (anonymized: boolean) => void;
 };
+
+const DEFAULT_SEND_MODE = CHAT_SEND_MODE.rawOverride;
 
 export const useChatAnonymizedStore = create<ChatAnonymizedStore>()(
   persist(
     (set) => ({
-      anonymized: false,
+      sendMode: DEFAULT_SEND_MODE,
       setAnonymized: (anonymized) => {
-        set({ anonymized });
+        set({ sendMode: getPreferredChatSendMode(anonymized) });
       },
     }),
-    { name: "stella.chat.anonymized" },
+    {
+      name: "stella.chat.anonymized",
+      partialize: ({ sendMode }) => ({ sendMode }),
+      version: 1,
+      migrate: (persisted) => ({
+        sendMode: readPersistedSendMode(persisted) ?? DEFAULT_SEND_MODE,
+      }),
+    },
   ),
 );
 
 // `threadRef` is kept on the public API so call sites don't have to change
 // when we eventually re-introduce per-thread overrides.
 export const useChatAnonymized = (_threadRef: ChatThreadRef): boolean =>
-  useChatAnonymizedStore((s) => s.anonymized);
+  useChatAnonymizedStore((s) => s.sendMode === CHAT_SEND_MODE.anonymized);
 
 export const useSetChatAnonymized = (_threadRef: ChatThreadRef) =>
   useChatAnonymizedStore((s) => s.setAnonymized);
 
-export const getChatAnonymized = (_threadRef: ChatThreadRef): boolean =>
-  useChatAnonymizedStore.getState().anonymized;
+export const getChatSendMode = (_threadRef: ChatThreadRef): ChatSendMode =>
+  useChatAnonymizedStore.getState().sendMode;
 
-const sendModeOverrides = new Map<string, ChatSendModeOverride>();
+const readPersistedSendMode = (persisted: unknown): ChatSendMode | null => {
+  if (typeof persisted !== "object" || persisted === null) {
+    return null;
+  }
 
-export const sendNextChatRequestWithoutAnonymization = (
-  threadRef: ChatThreadRef,
-): void => {
-  sendModeOverrides.set(
-    getChatThreadKey(threadRef),
-    CHAT_SEND_MODE.rawOverride,
-  );
-};
+  if ("sendMode" in persisted && isChatSendMode(persisted.sendMode)) {
+    return persisted.sendMode;
+  }
 
-export const consumeChatSendModeOverride = (
-  threadRef: ChatThreadRef,
-): ChatSendModeOverride | null => {
-  const key = getChatThreadKey(threadRef);
-  const override = sendModeOverrides.get(key) ?? null;
-  sendModeOverrides.delete(key);
-  return override;
+  if ("anonymized" in persisted && typeof persisted.anonymized === "boolean") {
+    return getPreferredChatSendMode(persisted.anonymized);
+  }
+
+  return null;
 };

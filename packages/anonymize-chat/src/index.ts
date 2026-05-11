@@ -55,32 +55,23 @@ export type ChatAnonResult = {
 };
 
 export const CHAT_SEND_MODE = {
-  raw: "raw",
   anonymized: "anonymized",
   rawOverride: "rawOverride",
 } as const;
 
 export const CHAT_SEND_MODES = [
-  CHAT_SEND_MODE.raw,
   CHAT_SEND_MODE.anonymized,
   CHAT_SEND_MODE.rawOverride,
 ] as const;
 
 export const chatSendModeSchema = v.picklist(CHAT_SEND_MODES);
 export type ChatSendMode = v.InferOutput<typeof chatSendModeSchema>;
-export type ChatPreferredSendMode = Exclude<
-  ChatSendMode,
-  typeof CHAT_SEND_MODE.rawOverride
->;
-export type ChatSendModeOverride = Extract<
-  ChatSendMode,
-  typeof CHAT_SEND_MODE.rawOverride
->;
 
-export const getPreferredChatSendMode = (
-  anonymized: boolean,
-): ChatPreferredSendMode =>
-  anonymized ? CHAT_SEND_MODE.anonymized : CHAT_SEND_MODE.raw;
+export const isChatSendMode = (value: unknown): value is ChatSendMode =>
+  v.safeParse(chatSendModeSchema, value).success;
+
+export const getPreferredChatSendMode = (anonymized: boolean): ChatSendMode =>
+  anonymized ? CHAT_SEND_MODE.anonymized : CHAT_SEND_MODE.rawOverride;
 
 export const CHAT_TRANSPORT_ERROR_CODE = {
   thirdPartyBoundaryRefusal: "third_party_boundary_refusal",
@@ -133,6 +124,11 @@ export const isThirdPartyBoundaryRefusalPayload = (
   payload: ChatTransportErrorPayload | null,
 ): boolean =>
   payload?.code === CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal;
+
+export const isThirdPartyBoundaryRefusalError = (error: Error): boolean =>
+  isThirdPartyBoundaryRefusalPayload(
+    parseChatTransportErrorMessage(error.message),
+  );
 
 export type ChatAnonRuntime = {
   createPipelineContext: typeof createPipelineContext;
