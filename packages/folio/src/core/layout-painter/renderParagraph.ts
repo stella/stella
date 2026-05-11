@@ -147,6 +147,19 @@ function getRenderableTextColor(run: TextRun | TabRun): string | undefined {
   return textColor.trim();
 }
 
+function getHyperlinkTextColor(run: TextRun, inheritedColor: string): string {
+  const textColor = run.color?.trim();
+  if (
+    textColor &&
+    !isAutomaticTextColor(textColor) &&
+    run.textColorSource === "direct"
+  ) {
+    return textColor;
+  }
+
+  return getRenderableTextColor(run) || inheritedColor || "#0563c1";
+}
+
 /**
  * Apply text run styles to an element
  */
@@ -412,8 +425,7 @@ function renderTextRun(run: TextRun, doc: Document): HTMLElement {
     }
     anchor.textContent = run.text;
     // Style hyperlink — default Word hyperlink color is blue (#0563c1)
-    const hyperlinkColor =
-      getRenderableTextColor(run) || span.style.color || "#0563c1";
+    const hyperlinkColor = getHyperlinkTextColor(run, span.style.color);
     anchor.style.color = hyperlinkColor;
     anchor.style.textDecoration = "underline";
     // Override span color to match anchor (prevents color mismatch in selection)

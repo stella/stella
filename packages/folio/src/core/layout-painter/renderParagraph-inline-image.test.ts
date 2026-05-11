@@ -330,6 +330,72 @@ describe("renderLine text styling", () => {
     expect(anchorEl?.style.color).toBe("#FFFFFF");
   });
 
+  test("preserves direct black hyperlink text without DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Linked text",
+          color: TEST_EXPLICIT_BLACK_COLOR,
+          textColorSource: "direct",
+          hyperlink: { href: "https://example.com" },
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 11,
+      width: 77,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+    const anchorEl = textEl?.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.color).toBe("#000000");
+    expect(anchorEl?.style.color).toBe("#000000");
+  });
+
+  test("uses Word blue for inherited default-black hyperlink text without DOCX highlights", () => {
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [
+        {
+          kind: "text",
+          text: "Linked text",
+          color: TEST_EXPLICIT_BLACK_COLOR,
+          textColorSource: "paragraphDefault",
+          hyperlink: { href: "https://example.com" },
+        },
+      ],
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 11,
+      width: 77,
+      ascent: 10,
+      descent: 2,
+      lineHeight: 12,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const textEl = lineEl.children[0] as HTMLElement | undefined;
+    const anchorEl = textEl?.children[0] as HTMLElement | undefined;
+
+    expect(textEl?.style.color).toBe("#0563c1");
+    expect(anchorEl?.style.color).toBe("#0563c1");
+  });
+
   test("uses the higher-contrast text color on mid-tone DOCX highlights", () => {
     const block: ParagraphBlock = {
       kind: "paragraph",
