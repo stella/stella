@@ -173,6 +173,15 @@ export const streamChat = async ({
       const modelInfo = devModelId
         ? getModelInfoById(devModelId, orgAIConfig)
         : getModelInfoForRole("chat", orgAIConfig);
+      // Track empty-completion state via a closure mutated from
+      // streamText.onFinish. We need to surface it as an *error*
+      // chunk on the way out — without that, the frontend's
+      // `Chat.onFinish` runs with `isError: false`, invalidates the
+      // chat-thread query, rebuilds the Chat with a fresh
+      // sendAutomaticallyWhen predicate, and immediately auto-
+      // resubmits on the unchanged tail. That loop fires once per
+      // empty completion and burns LLM credits silently.
+      let emptyCompletion: ChatEmptyCompletionError | null = null;
       const result = streamText({
         abortSignal,
         model: devModelId
@@ -193,24 +202,18 @@ export const streamChat = async ({
         onFinish: ({ finishReason, totalUsage }) => {
           // Some providers (notably gemini-2.5-flash-lite on cached
           // prefixes) return finish_reason=stop with zero output
-          // tokens. The frontend predicate guards against the
-          // resulting auto-resubmit storm, but the failure is
-          // otherwise invisible — capture it so we can track which
-          // models regress.
-          // `outputTokens` is `number | undefined` — only fire when
-          // explicitly zero, otherwise providers that omit usage
-          // metadata would all be misclassified as empty.
+          // tokens. `outputTokens` is `number | undefined` — only
+          // fire when explicitly zero, otherwise providers that
+          // omit usage metadata would all be misclassified.
           if (finishReason === "stop" && totalUsage.outputTokens === 0) {
-            captureError(
-              new ChatEmptyCompletionError({
-                message: "Model returned finish_reason=stop with zero output",
-              }),
-              {
-                threadId,
-                provider: modelInfo.provider,
-                modelId: modelInfo.modelId,
-              },
-            );
+            emptyCompletion = new ChatEmptyCompletionError({
+              message: "Model returned finish_reason=stop with zero output",
+            });
+            captureError(emptyCompletion, {
+              threadId,
+              provider: modelInfo.provider,
+              modelId: modelInfo.modelId,
+            });
           }
         },
       });
@@ -225,11 +228,34 @@ export const streamChat = async ({
             resolveAssistantValueRefs,
           )
         : uiStream;
-      writer.merge(
+      const piped =
         thirdPartyBoundary.type === "anonymized"
           ? deanonymizeOutgoingStream(refResolved, thirdPartyBoundary)
-          : refResolved,
+          : refResolved;
+      // Append a terminal-flush transform that converts the
+      // empty-completion flag into an `{type: "error"}` chunk at
+      // the tail of the stream. `Chat.onFinish` then reports
+      // `isError: true`, which short-circuits the invalidation
+      // path and stops the AI SDK auto-resubmit loop.
+      const withEmptyGuard = piped.pipeThrough(
+        new TransformStream<
+          InferUIMessageChunk<ChatMessage>,
+          InferUIMessageChunk<ChatMessage>
+        >({
+          transform(chunk, controller) {
+            controller.enqueue(chunk);
+          },
+          flush(controller) {
+            if (emptyCompletion) {
+              controller.enqueue({
+                type: "error",
+                errorText: onAiError(emptyCompletion),
+              });
+            }
+          },
+        }),
       );
+      writer.merge(withEmptyGuard);
     },
   });
 
