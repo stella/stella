@@ -639,18 +639,31 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     collaborationSession?.saveCheckpoint ?? saveDesktopCheckpoint;
   const finalizeActiveSession =
     collaborationSession?.finalize ?? finalizeDesktopSession;
-  const closeCollaborationSession = useCallback(() => {
-    cancelCollaboration();
-    onClose();
-  }, [cancelCollaboration, onClose]);
   const cancelActiveSession = useCallback(async () => {
     if (collaborationSession !== null) {
-      closeCollaborationSession();
+      const cancelled = await collaborationSession.cancel();
+      if (!cancelled) {
+        stellaToast.add({
+          description: t("folio.saveCheckpointFailedDescription"),
+          title: t("folio.saveCheckpointFailedTitle"),
+          type: "error",
+        });
+        return;
+      }
+
+      cancelCollaboration();
+      onClose();
       return;
     }
 
     await cancelDesktopSession();
-  }, [cancelDesktopSession, closeCollaborationSession, collaborationSession]);
+  }, [
+    cancelCollaboration,
+    cancelDesktopSession,
+    collaborationSession,
+    onClose,
+    t,
+  ]);
 
   useEffect(() => {
     if (optimisticPreviewRef.current?.fieldId === fieldId) {
@@ -1356,6 +1369,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   }
 
   const previewIdentity = previewFile.fileId;
+  const collaborationIdentity = collaborationSession?.sessionId ?? "local";
 
   return (
     <div ref={containerRef} className="flex h-full w-full min-w-0 flex-col">
@@ -1391,7 +1405,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             }
           >
             <DocxEditor
-              key={`docx-${previewIdentity}`}
+              key={`docx-${previewIdentity}-${collaborationIdentity}`}
               ref={editorRef}
               autoOpenReviewSidebar={false}
               className="folio-docx-preview folio-peek h-full"

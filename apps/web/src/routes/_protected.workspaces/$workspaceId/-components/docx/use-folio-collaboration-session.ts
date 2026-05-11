@@ -26,9 +26,11 @@ type FinalizeFolioCollaborationSessionResult =
   | { outcome: "no_changes" };
 
 export type FolioCollaborationSession = {
+  cancel: () => Promise<boolean>;
   collaboration: DocxEditorCollaboration;
   finalize: () => Promise<FinalizeFolioCollaborationSessionResult | null>;
   saveCheckpoint: (docxBuffer: ArrayBuffer) => Promise<boolean>;
+  sessionId: string;
 };
 
 type FolioCollaborationSessionState =
@@ -134,6 +136,39 @@ export const useFolioCollaborationSession = ({
 
       const sessionId = response.data.collabSessionId;
       const token = response.data.token;
+      const invalidateSessionQueries = async () => {
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: entitiesKeys.all(workspaceId),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: filesKeys.byFieldId({
+              workspaceId,
+              fieldId,
+              purpose: "native-display",
+            }),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: filesKeys.metadataByFieldId({
+              workspaceId,
+              fieldId,
+              purpose: "native-display",
+            }),
+          }),
+        ]);
+      };
+      const cancel = async () => {
+        const cancelled = await api["folio-collab-sessions"]({
+          sessionId,
+        }).cancel.post({ token });
+
+        if (cancelled.error) {
+          return false;
+        }
+
+        await invalidateSessionQueries();
+        return true;
+      };
       const saveCheckpoint = async (docxBuffer: ArrayBuffer) => {
         const checkpoint = await api["folio-collab-sessions"]({
           sessionId,
@@ -161,23 +196,7 @@ export const useFolioCollaborationSession = ({
             : fieldId;
         await Promise.all(
           [
-            queryClient.invalidateQueries({
-              queryKey: entitiesKeys.all(workspaceId),
-            }),
-            queryClient.invalidateQueries({
-              queryKey: filesKeys.byFieldId({
-                workspaceId,
-                fieldId,
-                purpose: "native-display",
-              }),
-            }),
-            queryClient.invalidateQueries({
-              queryKey: filesKeys.metadataByFieldId({
-                workspaceId,
-                fieldId,
-                purpose: "native-display",
-              }),
-            }),
+            invalidateSessionQueries(),
             finalizedFieldId !== fieldId
               ? queryClient.invalidateQueries({
                   queryKey: filesKeys.byFieldId({
@@ -218,9 +237,11 @@ export const useFolioCollaborationSession = ({
         provider,
         collaboration,
         session: {
+          cancel,
           collaboration,
           finalize,
           saveCheckpoint,
+          sessionId,
         },
       });
     })().catch((error: unknown) => {

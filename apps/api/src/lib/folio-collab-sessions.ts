@@ -22,7 +22,7 @@ import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 export const FOLIO_COLLAB_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 const FOLIO_COLLAB_TOKEN_PART_LENGTH = 32;
-const YJS_UPDATE_MIME_TYPE = "application/octet-stream";
+export const FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE = "application/octet-stream";
 export const FOLIO_COLLAB_SNAPSHOT_MAX_BYTES = 50 * 1024 * 1024;
 export const FOLIO_COLLAB_SNAPSHOT_MAX_BASE64_LENGTH =
   Math.ceil(FOLIO_COLLAB_SNAPSHOT_MAX_BYTES / 3) * 4;
@@ -169,7 +169,7 @@ export const loadFolioCollabSnapshot = async (
 
   const key = createFileKey({
     fileId: session.yjsSnapshotFileId,
-    mimeType: YJS_UPDATE_MIME_TYPE,
+    mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
     organizationId: value.organizationId,
     workspaceId: value.workspaceId,
   });
@@ -188,7 +188,7 @@ export const storeFolioCollabSnapshot = async ({
   const buffer = Buffer.from(snapshotBase64, "base64");
   const key = createFileKey({
     fileId: value.yjsSnapshotFileId,
-    mimeType: YJS_UPDATE_MIME_TYPE,
+    mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
     organizationId: value.organizationId,
     workspaceId: value.workspaceId,
   });

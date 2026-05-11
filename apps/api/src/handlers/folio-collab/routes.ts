@@ -1,6 +1,11 @@
 import Elysia, { status, t } from "elysia";
 
 import {
+  cancelFolioCollabSessionBodySchema,
+  cancelFolioCollabSessionHandler,
+  cancelFolioCollabSessionParamsSchema,
+} from "@/api/handlers/folio-collab/cancel";
+import {
   checkpointFolioCollabSessionBodySchema,
   checkpointFolioCollabSessionHandler,
   checkpointFolioCollabSessionParamsSchema,
@@ -131,6 +136,18 @@ export const folioCollabRoute = new Elysia({
       return { storedAt: storedAt.toISOString() };
     },
     { body: storeSnapshotBodySchema },
+  )
+  .post(
+    "/:sessionId/cancel",
+    async ({ body, params }) =>
+      await cancelFolioCollabSessionHandler({
+        body,
+        sessionId: params.sessionId,
+      }),
+    {
+      body: cancelFolioCollabSessionBodySchema,
+      params: cancelFolioCollabSessionParamsSchema,
+    },
   )
   .post(
     "/:sessionId/checkpoint",
