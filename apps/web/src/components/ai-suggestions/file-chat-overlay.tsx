@@ -891,6 +891,7 @@ const FileChatOverlayInner = ({
 
       <ChatAnonymizationLayer
         editor={editorController.editor}
+        enabled={false}
         workspaceId={workspaceId ?? threadRef.threadId}
       />
       <PromptBar

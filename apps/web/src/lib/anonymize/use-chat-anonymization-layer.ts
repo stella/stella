@@ -11,7 +11,6 @@ import {
   useChatAnonymizePreview,
   useChatDraftText,
 } from "@/lib/anonymize/use-chat-anonymize";
-import { useChatAnonymizedStore } from "@/lib/chat-anonymized-store";
 
 // Per-editor mount counter for the singleton decoration plugin.
 // See the long comment in the install effect below for why this
@@ -68,13 +67,21 @@ const releaseAnonPlugin = (editor: Editor): void => {
  */
 export const useChatAnonymizationLayer = ({
   editor,
+  enabled,
   workspaceId,
 }: {
   editor: Editor | null;
+  /**
+   * Anonymized state for *this surface*. Each chat surface owns its
+   * own toggle (the inspector tab has a local one, the /chat page
+   * uses the per-thread store, the file overlay has none and sends
+   * raw). Reading from a global store here would let the editor
+   * highlight names that the request then forwards raw — and vice
+   * versa. Callers pass their own source of truth.
+   */
+  enabled: boolean;
   workspaceId: string;
 }): void => {
-  const enabled = useChatAnonymizedStore((s) => s.anonymized);
-
   // Kick off worker boot + dictionary load the moment the user
   // turns on anonymized mode (or mounts a chat surface with it
   // already on), instead of waiting for the first keystroke.
@@ -143,11 +150,13 @@ export const useChatAnonymizationLayer = ({
  */
 export const ChatAnonymizationLayer = ({
   editor,
+  enabled,
   workspaceId,
 }: {
   editor: Editor | null;
+  enabled: boolean;
   workspaceId: string;
 }): null => {
-  useChatAnonymizationLayer({ editor, workspaceId });
+  useChatAnonymizationLayer({ editor, enabled, workspaceId });
   return null;
 };

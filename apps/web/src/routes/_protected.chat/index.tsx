@@ -202,6 +202,7 @@ function ChatIndex() {
           <div className="w-full">
             <ChatAnonymizationLayer
               editor={controller.editor}
+              enabled={anonymized}
               workspaceId={threadRef.threadId}
             />
             <ChatInputSurface

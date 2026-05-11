@@ -388,9 +388,14 @@ const getResolvedTextPrefixLength = (text: string) => {
 //
 // `[A-Z][A-Z0-9_]*` is the smallest superset of the wasm pipeline's
 // "replace" operator output (`[PERSON_1]`, `[ORG_3]`, `[CUSTOM_2]`,
-// …). Lowercase-leading `[` (e.g. markdown `[link text](url)`) is
-// flushed without delay.
-const PARTIAL_PLACEHOLDER_TAIL = /\[[A-Z][A-Z0-9_]*$/;
+// …). The `\[$` alternative also buffers a *lone* trailing `[`,
+// because the first char after the bracket can land in the next
+// delta — without it, `"foo ["` flushes immediately and the next
+// `"PERSON_1] bar"` chunk never sees `[PERSON_1]` to deanonymize.
+// The one-delta latency penalty for markdown `[link text](url)`
+// is acceptable; once the next char arrives it's lowercase, the
+// regex stops matching, and the buffered `[` flushes.
+const PARTIAL_PLACEHOLDER_TAIL = /\[[A-Z][A-Z0-9_]*$|\[$/;
 
 const getDeanonymisablePrefixLength = (text: string): number => {
   const match = PARTIAL_PLACEHOLDER_TAIL.exec(text);

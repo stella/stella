@@ -321,6 +321,7 @@ export const ChatTabPanel = ({
 
       <ChatAnonymizationLayer
         editor={editorController.editor}
+        enabled={anonymized}
         workspaceId={tabWorkspaceId ?? threadRef.threadId}
       />
       <PromptBar

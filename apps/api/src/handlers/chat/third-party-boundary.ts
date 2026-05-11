@@ -199,25 +199,41 @@ const buildLenientReplacer = (
   redactionMap: Map<string, string>,
 ): LenientReplacer | null => {
   const lookup = new Map<string, string>();
-  const tokens: string[] = [];
+  // Bracketed placeholders (`[PERSON_1]`) and bracketless inners
+  // (`PERSON_1`) live in two separate token lists. The bracketed
+  // form can be `|`-joined directly — brackets are token boundaries
+  // already. The bracketless form needs `\b` on both sides so a
+  // larger token like `PERSON_10` (the model hallucinating a higher
+  // number, or `[PERSON_1]` followed by `0`) isn't matched as
+  // `PERSON_1` + dangling `0`.
+  const bracketed: string[] = [];
+  const bracketless: string[] = [];
   for (const [placeholder, original] of redactionMap) {
     if (!lookup.has(placeholder)) {
       lookup.set(placeholder, original);
-      tokens.push(escapeRegex(placeholder));
+      bracketed.push(escapeRegex(placeholder));
     }
     const inner = placeholder.slice(1, -1);
     if (PLACEHOLDER_INNER_RE.test(inner) && !lookup.has(inner)) {
       lookup.set(inner, original);
-      tokens.push(escapeRegex(inner));
+      bracketless.push(escapeRegex(inner));
     }
   }
-  if (tokens.length === 0) {
+  if (bracketed.length === 0 && bracketless.length === 0) {
     return null;
   }
-  // Sort longest-first so `[PERSON_1]` wins over `PERSON_1` when
-  // both could match overlapping spans.
-  tokens.sort((a, b) => b.length - a.length);
-  return { pattern: new RegExp(tokens.join("|"), "g"), lookup };
+  // Sort longest-first within each bucket so `[PERSON_10]` wins
+  // over `[PERSON_1]` when both could match overlapping spans.
+  bracketed.sort((a, b) => b.length - a.length);
+  bracketless.sort((a, b) => b.length - a.length);
+  const parts: string[] = [];
+  if (bracketed.length > 0) {
+    parts.push(bracketed.join("|"));
+  }
+  if (bracketless.length > 0) {
+    parts.push(`\\b(?:${bracketless.join("|")})\\b`);
+  }
+  return { pattern: new RegExp(parts.join("|"), "g"), lookup };
 };
 
 const walkLenient = (value: unknown, replacer: LenientReplacer): unknown => {

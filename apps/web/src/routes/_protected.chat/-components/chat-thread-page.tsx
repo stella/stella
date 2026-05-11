@@ -257,6 +257,7 @@ export const ChatThreadPage = ({
 
       <ChatAnonymizationLayer
         editor={controller.editor}
+        enabled={anonymized}
         workspaceId={workspaceId ?? threadRef.threadId}
       />
       <div className="p-4">
