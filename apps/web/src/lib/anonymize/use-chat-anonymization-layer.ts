@@ -2,52 +2,16 @@ import { useEffect } from "react";
 
 import type { Editor } from "@tiptap/react";
 
-import {
-  getChatAnonDecorationsPlugin,
-  setChatAnonDecorationPairs,
-} from "@/components/chat/chat-anon-decorations-plugin";
+import { setChatAnonDecorationPairs } from "@/components/chat/chat-anon-decorations-plugin";
 import { warmupChatAnonymizeWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
+import {
+  acquireChatAnonDecorationsPlugin,
+  releaseChatAnonDecorationsPlugin,
+} from "@/lib/anonymize/chat-anon-plugin-lifecycle";
 import {
   useChatAnonymizePreview,
   useChatDraftText,
 } from "@/lib/anonymize/use-chat-anonymize";
-
-// Per-editor mount counter for the singleton decoration plugin.
-// See the long comment in the install effect below for why this
-// has to be a ref count rather than a per-component install.
-const anonPluginRefCount = new WeakMap<Editor, number>();
-
-// `unregisterPlugin` accepts a plain name string and filters by
-// `name + "$"` prefix internally. That matches every PluginKey
-// instance ever created with this name — each Vite HMR cycle
-// that re-evaluates the plugin module mints a new key from
-// ProseMirror's per-name counter ("stll-anon-decorations$",
-// "stll-anon-decorations$1", "stll-anon-decorations$2", …), so
-// passing the current key only removes one of them. Passing the
-// name scrubs them all and prevents stale instances from
-// colliding with the fresh install.
-const ANON_PLUGIN_NAME = "stll-anon-decorations";
-
-const acquireAnonPlugin = (editor: Editor): void => {
-  const next = (anonPluginRefCount.get(editor) ?? 0) + 1;
-  anonPluginRefCount.set(editor, next);
-  if (next !== 1) {
-    return;
-  }
-  editor.unregisterPlugin(ANON_PLUGIN_NAME);
-  editor.registerPlugin(getChatAnonDecorationsPlugin());
-};
-
-const releaseAnonPlugin = (editor: Editor): void => {
-  const current = anonPluginRefCount.get(editor) ?? 0;
-  const next = current - 1;
-  if (next > 0) {
-    anonPluginRefCount.set(editor, next);
-    return;
-  }
-  anonPluginRefCount.delete(editor);
-  editor.unregisterPlugin(ANON_PLUGIN_NAME);
-};
 
 /**
  * The single integration point that lights up anonymization
@@ -118,17 +82,17 @@ export const useChatAnonymizationLayer = ({
   // a keyed plugin (stll-anon-decorations$)" — the duplicate-key
   // check fires even when the two entries are the same object.
   //
-  // So we ref-count installs per editor: the first mount installs,
-  // the last unmount removes, intermediate mounts just bump the
-  // counter. WeakMap so editors get GC'd cleanly when their
-  // provider unmounts.
+  // So we ref-count installs per editor: every mount performs an
+  // idempotent replace, the last unmount removes. The WeakMap
+  // lives on `globalThis` so Vite HMR cannot split bookkeeping
+  // across old and new module instances.
   useEffect(() => {
     if (!editor || !enabled) {
       return undefined;
     }
-    acquireAnonPlugin(editor);
+    acquireChatAnonDecorationsPlugin(editor);
     return () => {
-      releaseAnonPlugin(editor);
+      releaseChatAnonDecorationsPlugin(editor);
     };
   }, [editor, enabled]);
 

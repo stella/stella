@@ -25,6 +25,8 @@ type PluginState = {
 const META_KEY = "stll.anon.pairs";
 const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/g;
 const escapeRegex = (value: string) => value.replaceAll(REGEX_SPECIALS, "\\$&");
+export const CHAT_ANON_DECORATIONS_PLUGIN_NAME = "stll-anon-decorations";
+export const CHAT_ANON_DECORATIONS_PLUGIN_KEY_PREFIX = `${CHAT_ANON_DECORATIONS_PLUGIN_NAME}$`;
 
 // Pin the PluginKey to globalThis so Vite HMR re-evaluating this
 // module doesn't allocate a *new* PluginKey while the editor
@@ -43,7 +45,7 @@ const anonGlobals = globalThis as unknown as AnonGlobals;
 
 export const chatAnonDecorationsPluginKey: PluginKey<PluginState> =
   (anonGlobals.__stllAnonPluginKey ??= new PluginKey<PluginState>(
-    "stll-anon-decorations",
+    CHAT_ANON_DECORATIONS_PLUGIN_NAME,
   ));
 
 const buildDecorations = (
