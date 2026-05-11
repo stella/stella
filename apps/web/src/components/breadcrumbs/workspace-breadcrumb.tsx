@@ -29,6 +29,7 @@ import {
 } from "@/lib/matter-colors";
 import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
+import { useConfigStore } from "@/stores/config-store";
 
 const breadcrumbInputClassName =
   "border-input bg-background text-foreground inline-flex rounded-md border text-sm shadow-xs/5 transition-colors has-focus-visible:border-ring";
@@ -54,6 +55,7 @@ export const WorkspaceBreadcrumb = ({
   const [iconAnchor, setIconAnchor] = useState<HTMLSpanElement | null>(null);
   const { data: workspace } = useQuery(workspaceOptions(workspaceId));
   const updateWorkspace = useUpdateWorkspace();
+  const updateMattersConfig = useConfigStore((s) => s.updateMatters);
 
   if (!workspace) {
     return (
@@ -163,33 +165,19 @@ export const WorkspaceBreadcrumb = ({
     <LayersIcon className="size-3.5 shrink-0" style={{ color: activeColor }} />
   );
 
-  const clientSegment = workspace.client ? (
+  const { client } = workspace;
+  const clientSegment = client ? (
     <>
       <BreadcrumbItem className="min-w-8 shrink">
         <Link
           className="hover:text-foreground min-w-0 truncate transition-colors"
           onClick={() => {
-            try {
-              const raw = localStorage.getItem("matters_overview_config");
-              const parsed: unknown = raw ? JSON.parse(raw) : null;
-              const config: Record<string, unknown> =
-                typeof parsed === "object" && parsed !== null
-                  ? // eslint-disable-next-line typescript/no-unsafe-type-assertion
-                    (parsed as Record<string, unknown>)
-                  : {};
-              config["clientFilter"] = workspace.client?.id ?? null;
-              localStorage.setItem(
-                "matters_overview_config",
-                JSON.stringify(config),
-              );
-            } catch {
-              // localStorage may throw in private browsing
-            }
+            updateMattersConfig({ clientFilter: client.id });
           }}
-          title={workspace.client.displayName}
+          title={client.displayName}
           to="/workspaces"
         >
-          {workspace.client.displayName}
+          {client.displayName}
         </Link>
       </BreadcrumbItem>
       <BreadcrumbSeparator className="shrink-0" />
@@ -197,12 +185,16 @@ export const WorkspaceBreadcrumb = ({
   ) : (
     <>
       <BreadcrumbItem className="min-w-8 shrink">
-        <span
-          className="text-muted-foreground min-w-0 truncate"
+        <Link
+          className="hover:text-foreground text-muted-foreground min-w-0 truncate transition-colors"
+          onClick={() => {
+            updateMattersConfig({ clientFilter: null });
+          }}
+          to="/workspaces"
           title={t("workspaces.parties.personalLabel")}
         >
           {t("workspaces.parties.personalLabel")}
-        </span>
+        </Link>
       </BreadcrumbItem>
       <BreadcrumbSeparator className="shrink-0" />
     </>
