@@ -327,6 +327,7 @@ export const prepareTextForThirdParty = async ({
   const anonymized = await Result.tryPromise({
     try: async () =>
       await anonymizeFields({
+        context: boundary.pipelineContext,
         fields: [text],
         gazetteerEntries: await boundary.gazetteerEntries,
         organizationId: boundary.organizationId,
