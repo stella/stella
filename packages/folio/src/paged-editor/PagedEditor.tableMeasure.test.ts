@@ -83,6 +83,86 @@ describe("measureTableCellBlockVisualHeight", () => {
     ).toBe(42);
   });
 
+  test("keeps measured paragraph height for floating image-only paragraphs", () => {
+    const floatingImageParagraph: ParagraphBlock = {
+      ...imageOnlyParagraph,
+      runs: [
+        {
+          kind: "image",
+          src: "data:image/png;base64,",
+          width: 186,
+          height: 90,
+          displayMode: "float",
+          wrapType: "square",
+        },
+      ],
+    };
+    const floatingParagraphMeasure: ParagraphMeasure = {
+      kind: "paragraph",
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 1,
+          width: 0,
+          ascent: 10,
+          descent: 2,
+          lineHeight: 12,
+        },
+      ],
+      totalHeight: 12,
+    };
+
+    expect(
+      measureTableCellBlockVisualHeight(
+        floatingImageParagraph,
+        floatingParagraphMeasure,
+      ),
+    ).toBe(12);
+  });
+
+  test("keeps measured paragraph height for block image-only paragraphs", () => {
+    const blockImageParagraph: ParagraphBlock = {
+      ...imageOnlyParagraph,
+      runs: [
+        {
+          kind: "image",
+          src: "data:image/png;base64,",
+          width: 186,
+          height: 90,
+          displayMode: "block",
+          wrapType: "topAndBottom",
+          distTop: 8,
+          distBottom: 6,
+        },
+      ],
+    };
+    const blockParagraphMeasure: ParagraphMeasure = {
+      kind: "paragraph",
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 1,
+          width: 186,
+          ascent: 96,
+          descent: 8,
+          lineHeight: 104,
+        },
+      ],
+      totalHeight: 104,
+    };
+
+    expect(
+      measureTableCellBlockVisualHeight(
+        blockImageParagraph,
+        blockParagraphMeasure,
+      ),
+    ).toBe(104);
+  });
+
   test("uses totalHeight for non-paragraph block measures", () => {
     const block: FlowBlock = {
       kind: "table",

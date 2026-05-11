@@ -605,6 +605,28 @@ function resolveTableWidthPx(
   return undefined;
 }
 
+function isInlineFlowImageRun(run: ImageRun): boolean {
+  if (run.displayMode === "float") {
+    return false;
+  }
+
+  if (
+    run.wrapType === "square" ||
+    run.wrapType === "tight" ||
+    run.wrapType === "through" ||
+    run.wrapType === "behind" ||
+    run.wrapType === "inFront"
+  ) {
+    return false;
+  }
+
+  if (run.displayMode === "block" || run.wrapType === "topAndBottom") {
+    return false;
+  }
+
+  return true;
+}
+
 export function measureTableCellBlockVisualHeight(
   block: FlowBlock,
   blockMeasure: Measure,
@@ -625,20 +647,21 @@ export function measureTableCellBlockVisualHeight(
     (run) =>
       run.kind !== "text" || run.text.replace(/\u00a0/g, " ").trim().length > 0,
   );
-  const imageOnlySingleLine =
-    paragraphMeasure.lines.length === 1 &&
-    nonEmptyRuns.length > 0 &&
-    nonEmptyRuns.every((run) => run.kind === "image");
-
-  if (!imageOnlySingleLine) {
+  if (paragraphMeasure.lines.length !== 1 || nonEmptyRuns.length === 0) {
     return paragraphMeasure.totalHeight;
   }
 
-  let maxImageHeight = 0;
+  const inlineImageRuns: ImageRun[] = [];
   for (const run of nonEmptyRuns) {
-    if (run.kind === "image") {
-      maxImageHeight = Math.max(maxImageHeight, run.height);
+    if (run.kind !== "image" || !isInlineFlowImageRun(run)) {
+      return paragraphMeasure.totalHeight;
     }
+    inlineImageRuns.push(run);
+  }
+
+  let maxImageHeight = 0;
+  for (const run of inlineImageRuns) {
+    maxImageHeight = Math.max(maxImageHeight, run.height);
   }
   const spacingBefore = paragraphBlock.attrs?.spacing?.before ?? 0;
   const spacingAfter = paragraphBlock.attrs?.spacing?.after ?? 0;
