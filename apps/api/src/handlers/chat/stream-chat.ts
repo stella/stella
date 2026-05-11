@@ -23,7 +23,7 @@ import {
   deanonymizeFromBoundary,
   deanonymizeUnknownStringsFromBoundary,
   prepareMessagesForThirdParty,
-  prepareSystemPromptForThirdParty,
+  prepareTextForThirdParty,
   prepareToolsForThirdParty,
 } from "@/api/handlers/chat/third-party-boundary";
 import { repairActiveDocxEditToolCall } from "@/api/handlers/chat/tools/active-docx-edit-tool-repair";
@@ -68,7 +68,18 @@ type StreamChatProps = {
   promptCacheKey: string;
   resolveAssistantTextRefs?: ((text: string) => string) | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
-  system: string;
+  /**
+   * Server-built scaffold half of the system prompt. Sent to the
+   * model verbatim.
+   */
+  systemSafe: string;
+  /**
+   * Dynamic, user-supplied half of the system prompt (active file
+   * body, decision text, external source content, matter labels).
+   * In anonymized mode this passes through the boundary first;
+   * otherwise it concatenates straight onto `systemSafe`.
+   */
+  systemUntrusted: string;
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
   tools: ToolSet;
@@ -83,36 +94,38 @@ export const streamChat = async ({
   promptCacheKey,
   resolveAssistantTextRefs,
   resolveAssistantValueRefs,
-  system,
+  systemSafe,
+  systemUntrusted,
   thirdPartyBoundary,
   threadId,
   tools,
 }: StreamChatProps) => {
-  // The system prompt mixes static scaffold (product copy, skill
-  // catalog, API surface) with dynamic context that DOES carry
-  // third-party PII: active file body text, active case-law
-  // decision content, active external-source text, pinned matter
-  // labels. Running the whole prompt through the boundary covers
-  // every dynamic injection point; `prepareSystemPromptForThird-
-  // Party` protects brand terms ("Stella") so the assistant's own
-  // identity stays readable in the prompt while names embedded in
-  // file/decision context still get placeholdered.
-  const preparedSystem = await prepareSystemPromptForThirdParty({
+  // The prompt builder already split the system prompt into a safe
+  // scaffold half (brand voice, skill catalog, jurisdictions) and
+  // a dynamic-context half (active file body, decision text,
+  // external source, matter labels). Only the dynamic half can
+  // carry third-party PII, so it's the only piece that crosses the
+  // boundary; the scaffold concatenates onto the front unchanged.
+  const preparedUntrusted = await prepareTextForThirdParty({
     boundary: thirdPartyBoundary,
-    text: system,
+    text: systemUntrusted,
   });
-  if (Result.isError(preparedSystem)) {
+  if (Result.isError(preparedUntrusted)) {
     return new Response(
       JSON.stringify({
-        message: preparedSystem.error.message,
+        message: preparedUntrusted.error.message,
         type: "third_party_boundary_refusal",
       }),
       {
         headers: { "Content-Type": "application/json" },
-        status: preparedSystem.error.status,
+        status: preparedUntrusted.error.status,
       },
     );
   }
+  const system =
+    preparedUntrusted.value.length > 0
+      ? `${systemSafe}${preparedUntrusted.value.startsWith("\n") ? "" : "\n\n"}${preparedUntrusted.value}`
+      : systemSafe;
 
   const preparedMessages = await prepareMessagesForThirdParty({
     boundary: thirdPartyBoundary,
@@ -166,7 +179,7 @@ export const streamChat = async ({
           ? getModelById(devModelId, orgAIConfig)
           : getModelForRole("chat", orgAIConfig),
         temperature: getTemperatureForRole("chat"),
-        system: preparedSystem.value,
+        system,
         tools: modelTools,
         experimental_repairToolCall: async ({ toolCall }) =>
           await Promise.resolve(repairActiveDocxEditToolCall(toolCall)),

@@ -340,13 +340,19 @@ const sendMessage = createSafeRootHandler(
     const anonymizedSystemHint = body.anonymized
       ? buildAnonymizedSystemHint()
       : null;
-    const system = [
-      chatContext.system,
+    // The "safe" half is whatever the prompt builder declared
+    // safe plus our own static hints (external MCP catalog,
+    // anonymized-mode instructions). The "untrusted" half is the
+    // builder's dynamic suffix and stays separate so streamChat
+    // can run *only that* through the boundary.
+    const systemSafe = [
+      chatContext.systemSafe,
       externalMcpSystemHint,
       anonymizedSystemHint,
     ]
       .filter((part): part is string => part !== null && part.length > 0)
       .join("\n\n");
+    const systemUntrusted = chatContext.systemUntrusted;
     let externalMcpToolsClosed = false;
     const closeExternalMcpTools = async () => {
       if (externalMcpToolsClosed) {
@@ -454,7 +460,8 @@ const sendMessage = createSafeRootHandler(
               thirdPartyBoundary,
               threadId: body.threadId,
               tools: chatTools,
-              system,
+              systemSafe,
+              systemUntrusted,
             });
 
             if (!isChatStreamResponse(chatResponse)) {
@@ -734,7 +741,17 @@ type PrepareChatContextResult = Result<
   {
     hydratedMessages: ChatMessage[];
     promptCacheKey: string;
-    system: string;
+    /**
+     * Server-built scaffold. Safe to send to the LLM verbatim.
+     */
+    systemSafe: string;
+    /**
+     * Dynamic user-supplied context (active file body, decision
+     * text, external source, matter labels). Pass through the
+     * boundary in anonymized mode before concatenating with
+     * `systemSafe`.
+     */
+    systemUntrusted: string;
   },
   HandlerError<422 | 500> | SafeDbError
 >;
@@ -796,7 +813,8 @@ const prepareChatContext = async ({
 
     return Result.ok({
       promptCacheKey: buildChatPromptCacheKey(systemPrompt.cacheStablePrefix),
-      system: systemPrompt.fullPrompt,
+      systemSafe: systemPrompt.safePrompt,
+      systemUntrusted: systemPrompt.untrustedSuffix,
       hydratedMessages: hydrateAssistantMessageRefs({
         messages: hydratedMessages,
         refRegistry,

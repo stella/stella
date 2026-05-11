@@ -125,9 +125,12 @@ export const ChatInputSurface = ({
       className={cn(
         "bg-background rounded-lg border",
         "transition-colors",
-        !inputDisabled && "focus-within:border-ring",
+        // Default focus border (gray) only when not in anonymized
+        // mode — otherwise the gray border landed on top of the
+        // green ring and read as a double-ring on click.
+        !inputDisabled && !anonymized && "focus-within:border-ring",
         anonymized &&
-          "ring-success/40 border-success/40 shadow-[0_0_0_4px_rgb(from_var(--color-success)_r_g_b_/_0.08)] ring-1",
+          "ring-success/40 border-success/40 focus-within:border-success/60 shadow-[0_0_0_4px_rgb(from_var(--color-success)_r_g_b_/_0.08)] ring-1",
         className,
       )}
       onBlurCapture={handleBlur}
