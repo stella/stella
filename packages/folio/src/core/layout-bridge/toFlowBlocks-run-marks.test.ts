@@ -159,8 +159,7 @@ describe("toFlowBlocks run-level OOXML marks", () => {
     expect(run.smallCaps).toBe(true);
   });
 
-  test("keeps merged paragraph default black identifiable on highlighted runs", () => {
-    const textColor = schema.marks.textColor.create({ rgb: "000000" });
+  test("keeps inherited paragraph default black identifiable on highlighted runs", () => {
     const highlight = schema.marks.highlight.create({ color: "darkBlue" });
     const doc = schema.node("doc", null, [
       schema.node(
@@ -171,13 +170,34 @@ describe("toFlowBlocks run-level OOXML marks", () => {
             highlight: "darkBlue",
           },
         },
-        [schema.text("body text", [textColor, highlight])],
+        [schema.text("body text", [highlight])],
       ),
     ]);
     const run = firstRun(toFlowBlocks(doc, {}));
 
     expect(run.color).toBe("#000000");
     expect(run.textColorSource).toBe("paragraphDefault");
+    expect(run.highlight).toBe("#00008B");
+  });
+
+  test("keeps direct black text colors marked as direct when paragraph default is also black", () => {
+    const textColor = schema.marks.textColor.create({ rgb: "000000" });
+    const highlight = schema.marks.highlight.create({ color: "darkBlue" });
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          defaultTextFormatting: {
+            color: { rgb: "000000" },
+          },
+        },
+        [schema.text("body text", [textColor, highlight])],
+      ),
+    ]);
+    const run = firstRun(toFlowBlocks(doc, {}));
+
+    expect(run.color).toBe("#000000");
+    expect(run.textColorSource).toBe("direct");
     expect(run.highlight).toBe("#00008B");
   });
 

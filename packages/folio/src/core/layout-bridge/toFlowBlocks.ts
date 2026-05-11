@@ -552,6 +552,7 @@ function markDefaultBlackTextColorSource(
   paraDefaults: RunFormatting,
 ): RunFormatting {
   if (
+    formatting.textColorSource === "direct" ||
     formatting.color === undefined ||
     paraDefaults.color === undefined ||
     !isDefaultBlackResolvedTextColor(formatting.color) ||
