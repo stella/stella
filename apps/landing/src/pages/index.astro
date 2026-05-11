@@ -523,8 +523,9 @@ const selfHostingDocsUrl =
 
   <script>
     async function initGradient(containerId: string, svgUrl: string) {
-      const container = document.getElementById(containerId);
-      if (!container) return;
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      const container: HTMLElement = el;
 
       const resp = await fetch(svgUrl);
       const svg = await resp.text();
@@ -564,10 +565,9 @@ const selfHostingDocsUrl =
       const startTime = performance.now();
 
       function loop() {
+        if (!container.isConnected) return;
         // Skip animation when this layer is hidden (opacity 0)
-        const layerEl = document.getElementById(containerId);
-        if (!layerEl) return;
-        if (getComputedStyle(layerEl).opacity === "0") {
+        if (getComputedStyle(container).opacity === "0") {
           requestAnimationFrame(loop);
           return;
         }
@@ -582,7 +582,7 @@ const selfHostingDocsUrl =
         const w2 = 0.15 + Math.cos(t * 0.045) * 0.05;
         const hueShift = Math.sin(t * 0.06) * 6.5 - 1.5;
 
-        layerEl.style.filter = `hue-rotate(${hueShift.toFixed(1)}deg)`;
+        container.style.filter = `hue-rotate(${hueShift.toFixed(1)}deg)`;
 
         for (let i = 0; i < n; i++) {
           const r = rects[i];
