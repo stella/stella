@@ -44,6 +44,10 @@ const RUNNING_TOOL_STATES = {
   "input-available": true,
   "input-streaming": true,
 } as const satisfies Record<string, true>;
+const USER_INPUT_TOOL_TYPES = {
+  "tool-ask-user": true,
+  "tool-create-document": true,
+} as const satisfies Record<string, true>;
 
 const CHAT_TOOL_TITLE_KEYS = {
   "apply-active-docx-edits": "chat.tool.apply-active-docx-edits",
@@ -282,7 +286,7 @@ export const isRunningToolPart = (part: unknown): boolean => {
     return false;
   }
 
-  if (part.type === "tool-ask-user") {
+  if (part.type in USER_INPUT_TOOL_TYPES) {
     return false;
   }
 

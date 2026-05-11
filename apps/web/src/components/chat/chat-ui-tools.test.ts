@@ -295,6 +295,29 @@ describe("hasRunningToolCallInLatestAssistantMessage", () => {
     );
   });
 
+  test("ignores create-document prompts waiting for a matter selection", () => {
+    const messages = [
+      {
+        id: "message-1",
+        parts: [
+          {
+            input: { name: "Engagement letter" },
+            state: "input-available",
+            toolCallId: "tool-call-1",
+            type: "tool-create-document",
+          },
+        ],
+        role: "assistant",
+      },
+    ] satisfies Parameters<
+      typeof hasRunningToolCallInLatestAssistantMessage
+    >[0]["messages"];
+
+    expect(hasRunningToolCallInLatestAssistantMessage({ messages })).toBe(
+      false,
+    );
+  });
+
   test("ignores stale running tool parts from older messages", () => {
     const messages = [
       {
