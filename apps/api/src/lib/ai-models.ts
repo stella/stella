@@ -30,7 +30,10 @@ import type { LanguageModel } from "ai";
 import { panic, Result } from "better-result";
 
 import { env } from "@/api/env";
-import { normalizeAzureFoundryBaseURL } from "@/api/lib/azure-foundry";
+import {
+  AZURE_FOUNDRY_DEFAULT_API_VERSION,
+  normalizeAzureFoundryBaseURL,
+} from "@/api/lib/azure-foundry";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 // -- Types ------------------------------------------------------
@@ -357,6 +360,11 @@ const createRegionalGoogleFactory = (
   return (id) => client(id);
 };
 
+const resolveAzureApiVersion = (apiVersion: string | undefined): string =>
+  apiVersion?.trim() ||
+  env.AZURE_API_VERSION ||
+  AZURE_FOUNDRY_DEFAULT_API_VERSION;
+
 const createModelFactory = ({
   provider,
   apiKey,
@@ -426,13 +434,13 @@ const createModelFactory = ({
           : panic(
               "AZURE_RESOURCE_NAME or AZURE_BASE_URL required for azure_foundry",
             ));
-      const resolvedApiVersion = apiVersion ?? env.AZURE_API_VERSION;
+      const resolvedApiVersion = resolveAzureApiVersion(apiVersion);
       const client = createAzure(
         url
           ? {
               apiKey: key,
               baseURL: url,
-              ...(resolvedApiVersion ? { apiVersion: resolvedApiVersion } : {}),
+              apiVersion: resolvedApiVersion,
             }
           : {
               apiKey: key,
@@ -441,7 +449,7 @@ const createModelFactory = ({
                 panic(
                   "AZURE_RESOURCE_NAME or AZURE_BASE_URL required for azure_foundry",
                 ),
-              ...(resolvedApiVersion ? { apiVersion: resolvedApiVersion } : {}),
+              apiVersion: resolvedApiVersion,
             },
       );
       return (id) => client(id);
@@ -558,7 +566,7 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
   hasher.update(config.apiKey);
   if (config.provider === "azure_foundry") {
     hasher.update(config.baseURL);
-    hasher.update(config.apiVersion ?? "v1");
+    hasher.update(resolveAzureApiVersion(config.apiVersion));
   } else {
     hasher.update(config.region ?? "global");
   }

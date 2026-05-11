@@ -6,10 +6,12 @@
  */
 
 import { env } from "@/api/env";
-import { normalizeAzureFoundryBaseURL } from "@/api/lib/azure-foundry";
+import {
+  AZURE_FOUNDRY_DEFAULT_API_VERSION,
+  normalizeAzureFoundryBaseURL,
+} from "@/api/lib/azure-foundry";
 
 const VALIDATION_TIMEOUT_MS = 5000;
-const AI_SDK_AZURE_DEFAULT_API_VERSION = "v1";
 
 export const PROVIDER_PROBE_VALUES = [
   "google",
@@ -160,4 +162,4 @@ const probeAzureFoundry = async (
 const resolveAzureApiVersion = (apiVersion: string | undefined): string =>
   apiVersion?.trim() ||
   env.AZURE_API_VERSION ||
-  AI_SDK_AZURE_DEFAULT_API_VERSION;
+  AZURE_FOUNDRY_DEFAULT_API_VERSION;

@@ -479,7 +479,7 @@ const shouldValidateProviderConfig = ({
 
   if (
     providerConfig.baseURL !== existingProvider.baseURL ||
-    providerConfig.apiVersion !== (existingProvider.apiVersion ?? "v1")
+    providerConfig.apiVersion !== existingProvider.apiVersion
   ) {
     return true;
   }

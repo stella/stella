@@ -7,7 +7,10 @@ process.env["GOTENBERG_USERNAME"] ??= "gotenberg";
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
+process.env["AZURE_API_VERSION"] = "";
 
+const { AZURE_FOUNDRY_DEFAULT_API_VERSION } =
+  await import("@/api/lib/azure-foundry");
 const { probeProvider } = await import("@/api/lib/ai-provider-probe");
 
 const originalFetch = globalThis.fetch;
@@ -18,23 +21,7 @@ afterEach(() => {
 
 describe("probeProvider", () => {
   test("passes the configured Azure API version to the Foundry probe", async () => {
-    const captured: {
-      apiKey?: string | null;
-      url?: URL;
-    } = {};
-
-    const mockFetch: typeof fetch = Object.assign(
-      async (input: string | URL | Request, init?: RequestInit) => {
-        const url = input instanceof Request ? input.url : input.toString();
-        captured.url = new URL(url);
-        captured.apiKey = new Headers(init?.headers).get("api-key");
-        return new Response("{}", { status: 200 });
-      },
-      {
-        preconnect: originalFetch.preconnect,
-      },
-    );
-    globalThis.fetch = mockFetch;
+    const captured = captureAzureProbeRequest();
 
     const result = await probeProvider(
       "azure_foundry",
@@ -48,4 +35,41 @@ describe("probeProvider", () => {
     expect(captured.url?.searchParams.get("api-version")).toBe("2024-06-01");
     expect(captured.apiKey).toBe("azure-key");
   });
+
+  test("uses the Azure default API version when none is configured", async () => {
+    const captured = captureAzureProbeRequest();
+
+    const result = await probeProvider(
+      "azure_foundry",
+      "azure-key",
+      "https://example.openai.azure.com/openai/v1",
+    );
+
+    expect(result).toEqual({ valid: true });
+    expect(captured.url?.searchParams.get("api-version")).toBe(
+      AZURE_FOUNDRY_DEFAULT_API_VERSION,
+    );
+  });
 });
+
+type CapturedAzureProbeRequest = {
+  apiKey?: string | null;
+  url?: URL;
+};
+
+const captureAzureProbeRequest = (): CapturedAzureProbeRequest => {
+  const captured: CapturedAzureProbeRequest = {};
+  const mockFetch: typeof fetch = Object.assign(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      captured.url = new URL(url);
+      captured.apiKey = new Headers(init?.headers).get("api-key");
+      return new Response("{}", { status: 200 });
+    },
+    {
+      preconnect: originalFetch.preconnect,
+    },
+  );
+  globalThis.fetch = mockFetch;
+  return captured;
+};

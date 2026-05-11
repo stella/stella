@@ -72,7 +72,7 @@ describe("BYOK provider and model configuration", () => {
           provider: "azure_foundry",
           apiKeyMasked: "abcd****",
           endpoint: "https://example.openai.azure.com/openai",
-          apiVersion: "v1",
+          apiVersion: "2024-06-01",
         },
       ]),
     ).toEqual([
@@ -81,7 +81,7 @@ describe("BYOK provider and model configuration", () => {
         apiKey: "",
         apiKeyMasked: "abcd****",
         endpoint: "https://example.openai.azure.com/openai",
-        apiVersion: "v1",
+        apiVersion: "2024-06-01",
         region: "global",
         replacingKey: false,
       },

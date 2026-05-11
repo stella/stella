@@ -66,7 +66,7 @@ describe("isOrgAIConfig", () => {
             provider: "azure_foundry",
             apiKey: "azure-test",
             baseURL: "https://example.openai.azure.com/openai",
-            apiVersion: "v1",
+            apiVersion: "2024-06-01",
           },
         ],
         overrideModels: {
