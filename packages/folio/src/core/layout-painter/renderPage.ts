@@ -376,6 +376,34 @@ function renderPageBorderOverlay(
 }
 
 /**
+ * Refresh the page-border overlay on an existing page shell so incremental
+ * rerenders pick up changes to size, margins, page number, or pageBorders
+ * options. Removes any stale `.layout-page-border` child before re-attaching
+ * with the current z-order (back → first child, front → last child).
+ */
+function syncPageBorderOverlay(
+  pageEl: HTMLElement,
+  page: Page,
+  options: RenderPageOptions,
+  doc: Document,
+): void {
+  for (const stale of Array.from(
+    pageEl.querySelectorAll<HTMLElement>(":scope > .layout-page-border"),
+  )) {
+    stale.remove();
+  }
+  const overlay = renderPageBorderOverlay(page, options, doc);
+  if (!overlay) {
+    return;
+  }
+  if (options.pageBorders?.zOrder === "back") {
+    pageEl.prepend(overlay);
+  } else {
+    pageEl.append(overlay);
+  }
+}
+
+/**
  * Apply content area styles to an element
  */
 function applyContentAreaStyles(element: HTMLElement, page: Page): void {
@@ -2258,6 +2286,7 @@ export function renderPages(
       // Update page styles in case size changed
       const page = pages[i]!; // SAFETY: i < commonCount <= pages.length
       applyPageStyles(shell, page.size.w, page.size.h, options);
+      syncPageBorderOverlay(shell, page, options, options.document ?? document);
       shell.dataset["pageNumber"] = String(page.number);
     }
 
@@ -2271,6 +2300,7 @@ export function renderPages(
         pageEl.dataset["pageNumber"] = String(page.number);
         pageEl.dataset["pageIndex"] = String(i);
         applyPageStyles(pageEl, page.size.w, page.size.h, options);
+        syncPageBorderOverlay(pageEl, page, options, doc);
         container.append(pageEl);
 
         prevShells.push({ element: pageEl, fingerprint: newFingerprints[i]! }); // SAFETY: i < pages.length
@@ -2351,6 +2381,7 @@ export function renderPages(
       pageEl.dataset["pageNumber"] = String(page.number);
       pageEl.dataset["pageIndex"] = String(i);
       applyPageStyles(pageEl, page.size.w, page.size.h, options);
+      syncPageBorderOverlay(pageEl, page, options, doc);
       container.append(pageEl);
       pageShells.push(pageEl);
     }
