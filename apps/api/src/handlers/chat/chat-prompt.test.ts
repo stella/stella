@@ -179,15 +179,17 @@ describe("chat prompt builders", () => {
       }),
     ).toBe(basePrompt);
 
-    expect(
-      appendActiveFilePromptIfEntityExists({
-        activeFile,
-        entityExists: true,
-        prompt: basePrompt,
-        refRegistry,
-        workspaceId: WORKSPACE_ID,
-      }),
-    ).toContain("Do NOT use it to edit");
+    const prompt = appendActiveFilePromptIfEntityExists({
+      activeFile,
+      entityExists: true,
+      prompt: basePrompt,
+      refRegistry,
+      workspaceId: WORKSPACE_ID,
+    });
+
+    expect(prompt).toContain("Do NOT use it to edit");
+    expect(prompt).not.toContain("ACTIVE DOCX EDITING");
+    expect(prompt).not.toContain("apply-active-docx-edits");
   });
 
   test("instructs the model to use live DOCX edits when a snapshot is available", () => {
@@ -208,6 +210,7 @@ describe("chat prompt builders", () => {
         },
         entityId: toSafeId<"entity">("entity_docx"),
         fileName: "Kupni smlouva.docx",
+        supportsDocxEdits: true,
       },
       entityExists: true,
       prompt: basePrompt,

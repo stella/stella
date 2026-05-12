@@ -314,6 +314,11 @@ export default defineConfig({
                 message:
                   "apps/web must not import other app workspaces directly.",
               },
+              {
+                group: ["@stll/ui/components/date-picker-popover"],
+                message:
+                  "Use '@/components/date-picker-popover' so locale labels are injected.",
+              },
             ],
           },
         ],
@@ -322,6 +327,22 @@ export default defineConfig({
         "sonarjs/jsx-no-leaked-render": "error",
         "sonarjs/no-hook-setter-in-body": "error",
         "stella-toast/stella-toast": "error",
+      },
+    },
+    {
+      files: ["apps/web/src/components/date-picker-popover.tsx"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              {
+                name: "zod",
+                message: "Use 'valibot' instead of 'zod'.",
+              },
+            ],
+          },
+        ],
       },
     },
     {

@@ -31,7 +31,6 @@ import {
   AlertDialogTrigger,
 } from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
-import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
 import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
 import { Field, FieldError } from "@stll/ui/components/field";
 import { Form } from "@stll/ui/components/form";
@@ -40,6 +39,7 @@ import { Label } from "@stll/ui/components/label";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { DatePickerPopover } from "@/components/date-picker-popover";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";

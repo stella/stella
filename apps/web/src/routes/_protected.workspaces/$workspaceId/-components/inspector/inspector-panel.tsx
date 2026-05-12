@@ -69,7 +69,12 @@ import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import type { Citation } from "@/lib/citations";
 import { iterateJustificationCitations } from "@/lib/citations";
-import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import {
+  DOCX_MIME,
+  SIDE_RAIL_ICON_BUTTON_SIZE,
+  SIDE_RAIL_WIDTH,
+  TOOLBAR_ROW_HEIGHT,
+} from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
 import { APIError, isUnauthorizedError, toAPIError } from "@/lib/errors";
 import { resolveMatterColor } from "@/lib/matter-colors";
@@ -707,7 +712,12 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           houses the pane toggle button (with no tabs it doubles as
           "open new chat"), the middle scrolls the open tabs, the
           bottom hosts the new-chat affordance. */}
-      <div className="bg-muted/50 flex w-10 shrink-0 flex-col border-e">
+      <div
+        className={cn(
+          "bg-muted/50 flex shrink-0 flex-col border-e",
+          SIDE_RAIL_WIDTH,
+        )}
+      >
         <div
           className={cn(
             "flex w-full shrink-0 items-center justify-center border-b",
@@ -731,7 +741,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                       ? t("inspector.showPane")
                       : t("inspector.hidePane")
                 }
-                className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-7 items-center justify-center rounded-md transition-colors"
+                className={cn(
+                  "text-muted-foreground hover:bg-accent hover:text-foreground flex items-center justify-center rounded-md transition-colors",
+                  SIDE_RAIL_ICON_BUTTON_SIZE,
+                )}
                 onClick={() => {
                   // No tabs yet — clicking "open" creates the
                   // first chat instead of expanding an empty pane.
@@ -796,7 +809,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             render={
               <button
                 aria-label={t("chat.newChat")}
-                className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-7 items-center justify-center rounded-md transition-colors"
+                className={cn(
+                  "text-muted-foreground hover:bg-accent hover:text-foreground flex items-center justify-center rounded-md transition-colors",
+                  SIDE_RAIL_ICON_BUTTON_SIZE,
+                )}
                 onClick={() =>
                   openChat(
                     workspaceId === undefined

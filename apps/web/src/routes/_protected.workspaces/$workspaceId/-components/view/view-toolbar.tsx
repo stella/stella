@@ -259,7 +259,8 @@ const TableContentModeControl = ({ viewId }: TableContentModeControlProps) => {
                 aria-pressed={isActive}
                 className={cn(
                   "text-muted-foreground h-6 min-h-0 w-7 rounded-[4px] p-0",
-                  isActive && "bg-background text-foreground shadow-xs",
+                  isActive &&
+                    "bg-muted text-foreground ring-border/80 hover:bg-muted hover:text-foreground shadow-xs ring-1",
                 )}
                 onClick={() => setMode(viewId, option.mode)}
                 size="icon-xs"

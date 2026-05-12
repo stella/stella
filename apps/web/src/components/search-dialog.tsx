@@ -31,11 +31,11 @@ import {
   CommandItem,
   CommandList,
 } from "@stll/ui/components/command";
-import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
 import { Input } from "@stll/ui/components/input";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { DatePickerPopover } from "@/components/date-picker-popover";
 import { UserAvatar } from "@/components/user-avatar";
 import type { TranslationKey } from "@/i18n/types";
 import { resolveMatterColor } from "@/lib/matter-colors";

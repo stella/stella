@@ -144,7 +144,7 @@ const PeekPdfViewerContent = ({
 
   return (
     <FileViewerWithAI
-      activeFile={{ entityId, fileName: file.fileName }}
+      activeFile={{ entityId, fileFieldId: fieldId, fileName: file.fileName }}
       chatThreadId={chatThreadIdFromFileFieldId(fieldId)}
       workspaceId={workspaceId}
     >

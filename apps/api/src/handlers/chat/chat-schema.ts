@@ -42,7 +42,9 @@ export const userContextSchema = t.Object({
 
 export const activeFileSchema = t.Object({
   entityId: tSafeId("entity"),
+  fileFieldId: t.Optional(tSafeId("field")),
   fileName: t.String(),
+  supportsDocxEdits: t.Optional(t.Boolean()),
   docxEditSnapshot: t.Optional(
     t.Object({
       canApplyEdits: t.Optional(t.Boolean()),

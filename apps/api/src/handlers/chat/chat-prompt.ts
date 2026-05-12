@@ -504,8 +504,11 @@ const buildActiveFilePrompt = ({
   return [
     `ACTIVE FILE: The user is viewing "${safeName}" (entity ref ${entityRef}) in the inspector sidebar.`,
     `DEFAULT SCOPE: While an active file is set, treat it as the sole subject of any open-ended question ("what's going on", "summarize this", "what does it say", "explain", and similar). Read its contents with \`read.getMatterEntityContents\` using \`matterRefs: ["${matterRef}"]\` and \`entityRefs: ["${entityRef}"]\`, and answer ONLY from that file.`,
-    "`create-document` creates a separate new DOCX from legal-source directives. Do NOT use it to edit, rewrite, replace, save, or make a new version of the active file. If live DOCX editing is available below, use `apply-active-docx-edits`; otherwise explain that the document must be opened for editing first. Never create a substitute document.",
-    buildActiveDocxEditPrompt(activeFile),
+    "DIRECT FILE FALLBACK: If the latest user message includes the active file as a direct attachment, inspect that attachment directly before answering. Do not claim the file has no extracted text when a direct attachment is available for this turn.",
+    activeFile.supportsDocxEdits
+      ? "`create-document` creates a separate new DOCX from legal-source directives. Do NOT use it to edit, rewrite, replace, save, or make a new version of the active file. If live DOCX editing is available below, use `apply-active-docx-edits`; otherwise explain that the document must be opened for editing first. Never create a substitute document."
+      : "`create-document` creates a separate new DOCX from legal-source directives. Do NOT use it to edit, rewrite, replace, save, or make a new version of the active file. Never create a substitute document.",
+    activeFile.supportsDocxEdits ? buildActiveDocxEditPrompt(activeFile) : "",
     `Do NOT call matter-wide retrieval (\`read.searchMatterDocuments\`, \`read.listMatterEntities\`, or \`read.getMatterEntities\`) for these open-ended questions — the user does not want answers synthesised from other files in the matter. The chat history is always available; reference earlier turns directly without re-fetching.`,
     `Widen the scope to the rest of the matter ONLY when the user explicitly asks (e.g., "compare with the other contracts", "search across the matter", or names another document). When that happens, the matter-wide retrieval functions above are allowed again; scope them to \`matterRefs: ["${matterRef}"]\` as usual.`,
   ]

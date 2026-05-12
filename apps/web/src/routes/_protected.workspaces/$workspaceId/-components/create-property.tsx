@@ -5,7 +5,6 @@ import type { Editor } from "@tiptap/react";
 import {
   AlertTriangleIcon,
   AlignLeftIcon,
-  ArrowUpRightIcon,
   AtSignIcon,
   CalendarIcon,
   CircleDotIcon,
@@ -13,7 +12,6 @@ import {
   HashIcon,
   PlusIcon,
   TagsIcon,
-  WandSparklesIcon,
   XIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -65,13 +63,21 @@ type CreatePropertyProps = {
    *    toolbar so the action is discoverable next to the other
    *    chip-shaped controls.
    *  - `panel`: full-width action used in side panels.
-   *  - `blank-cell`: invisible full-cell action used in the
-   *    table's trailing add-column track.
+   *  - `blank-cell`: full-cell action used in the table's
+   *    trailing add-column track.
+   *  - `rail`: full-height table add-column rail. The whole gutter
+   *    is clickable and the visible + is only an affordance.
    *  - `none`: no built-in trigger. The caller controls `open` /
    *    `onOpenChange` and renders its own trigger (used by the
    *    column popover's "Edit column…" item).
    */
-  triggerVariant?: "icon" | "labelled" | "panel" | "blank-cell" | "none";
+  triggerVariant?:
+    | "icon"
+    | "labelled"
+    | "panel"
+    | "blank-cell"
+    | "rail"
+    | "none";
   extractionContext?: {
     entityId: string;
     filePropertyId: string | null;
@@ -139,15 +145,6 @@ const useChipDefinitions = (): readonly {
       icon: TagsIcon,
       label: t("workspaces.properties.chipMulti"),
     },
-  ];
-};
-
-const useSuggestionTexts = (): readonly string[] => {
-  const t = useTranslations();
-  return [
-    t("workspaces.properties.suggestionGoverningLaw"),
-    t("workspaces.properties.suggestionParties"),
-    t("workspaces.properties.suggestionEffectiveDate"),
   ];
 };
 
@@ -251,17 +248,20 @@ export const CreateProperty = ({
       ) : triggerVariant === "icon" ? (
         <DialogTrigger
           render={
-            <Button
+            <button
               aria-label={t("workspaces.properties.newColumn")}
-              className="text-muted-foreground hover:bg-accent h-full! min-w-10 rounded-none"
-              size="icon"
+              className="ring-ring focus-visible:ring-offset-background text-muted-foreground flex h-full w-full cursor-pointer items-center justify-center border-0 bg-transparent p-0 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+              data-add-property-trigger
+              data-row-expansion-ignore
+              onClick={(event) => {
+                event.currentTarget.blur();
+              }}
               title={t("workspaces.properties.newColumn")}
               type="button"
-              variant="ghost"
             />
           }
         >
-          <PlusIcon />
+          <PlusIcon className="size-4" />
         </DialogTrigger>
       ) : triggerVariant === "blank-cell" ? (
         <DialogTrigger
@@ -269,12 +269,32 @@ export const CreateProperty = ({
             <button
               aria-label={t("workspaces.properties.newColumn")}
               className="ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+              data-add-property-trigger
+              data-row-expansion-ignore
               onClick={(event) => {
                 event.currentTarget.blur();
               }}
               title={t("workspaces.properties.newColumn")}
               type="button"
             />
+          }
+        />
+      ) : triggerVariant === "rail" ? (
+        <DialogTrigger
+          render={
+            <button
+              aria-label={t("workspaces.properties.newColumn")}
+              className="group/add-column-rail ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+              data-add-property-trigger
+              data-row-expansion-ignore
+              onClick={(event) => {
+                event.currentTarget.blur();
+              }}
+              title={t("workspaces.properties.newColumn")}
+              type="button"
+            >
+              <PlusIcon className="text-muted-foreground group-hover/add-column-rail:text-foreground group-focus-visible/add-column-rail:text-foreground absolute start-1/2 top-5 size-4 -translate-x-1/2 -translate-y-1/2 transition-colors rtl:translate-x-1/2" />
+            </button>
           }
         />
       ) : null}
@@ -648,18 +668,6 @@ const PropertyComposerBody = ({
     workspaceId,
   ]);
 
-  const applySuggestion = (text: string) => {
-    if (!editor || editor.isDestroyed) {
-      setPrompt(text);
-      return;
-    }
-    editor.commands.setContent({
-      type: "doc",
-      content: [{ type: "paragraph", content: [{ type: "text", text }] }],
-    });
-    editor.commands.focus("end");
-  };
-
   // Drop the fallback selection if its target option was renamed/removed,
   // or if the user switched away from a select content type. The backend
   // rejects mismatched fallbacks; clearing here keeps the UI honest.
@@ -713,7 +721,7 @@ const PropertyComposerBody = ({
           <Input
             autoComplete="off"
             autoFocus
-            className="border-0 bg-transparent text-sm font-medium shadow-none placeholder:text-[var(--muted-foreground)] focus-visible:ring-0 focus-visible:outline-none"
+            className="text-foreground placeholder:text-foreground-label border-0 bg-transparent text-sm font-medium shadow-none focus-visible:ring-0 focus-visible:outline-none"
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSubmit) {
@@ -778,10 +786,6 @@ const PropertyComposerBody = ({
             removeOptionAt={removeOptionAt}
             replaceOptionAt={replaceOptionAt}
           />
-        )}
-
-        {showAiSections && !isEditMode && (
-          <SuggestionsList onPick={applySuggestion} />
         )}
       </div>
 
@@ -1070,31 +1074,3 @@ const ReadingChip = ({ label, onRemove }: ReadingChipProps) => (
     )}
   </span>
 );
-
-type SuggestionsListProps = {
-  onPick: (text: string) => void;
-};
-
-const SuggestionsList = ({ onPick }: SuggestionsListProps) => {
-  const t = useTranslations();
-  const suggestions = useSuggestionTexts();
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="text-foreground-label px-0.5 text-[11px] font-medium tracking-[0.08em] uppercase">
-        {t("workspaces.properties.suggestionsLabel")}
-      </div>
-      {suggestions.map((text) => (
-        <button
-          className="hover:bg-muted/40 flex items-center gap-2 rounded-lg border px-2.5 py-2 text-start text-[13px] transition-colors"
-          key={text}
-          onClick={() => onPick(text)}
-          type="button"
-        >
-          <WandSparklesIcon className="text-foreground-label size-3 shrink-0" />
-          <span className="flex-1">{text}</span>
-          <ArrowUpRightIcon className="text-foreground-label size-3 shrink-0" />
-        </button>
-      ))}
-    </div>
-  );
-};

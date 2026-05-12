@@ -45,7 +45,9 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { renderDragPreview } from "@/components/drag-preview";
+import { TOOLBAR_ROW_HEIGHT, TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
+import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -85,7 +87,7 @@ import {
 
 const selectColId = getInternalColId("select");
 const addPropertyColId = getInternalColId("add-property");
-const TABLE_ROW_ESTIMATE_PX = 41;
+const TABLE_ROW_ESTIMATE_PX = TOOLBAR_ROW_HEIGHT_PX;
 const TABLE_ROW_OVERSCAN = 16;
 const TABLE_COLUMN_DRAG_TYPE = "workspace-table-column";
 const TABLE_END_FILLER_LINE =
@@ -93,10 +95,12 @@ const TABLE_END_FILLER_LINE =
 const TABLE_END_FILLER_BACKGROUND = `repeating-linear-gradient(
   to bottom,
   transparent 0,
-  transparent 40px,
-  ${TABLE_END_FILLER_LINE} 40px,
-  ${TABLE_END_FILLER_LINE} 41px
+  transparent ${TABLE_ROW_ESTIMATE_PX - 1}px,
+  ${TABLE_END_FILLER_LINE} ${TABLE_ROW_ESTIMATE_PX - 1}px,
+  ${TABLE_END_FILLER_LINE} ${TABLE_ROW_ESTIMATE_PX}px
 )`;
+const ADD_PROPERTY_RAIL_ACTIVE_CLASS_NAME =
+  "[&:has([data-add-property-trigger]:hover)_[data-add-property-surface]]:bg-[color-mix(in_srgb,var(--color-foreground)_4%,var(--color-background))] [&:has([data-add-property-trigger]:focus-visible)_[data-add-property-surface]]:bg-[color-mix(in_srgb,var(--color-foreground)_4%,var(--color-background))]";
 
 type WorkspaceGridStyle = CSSProperties & {
   "--workspace-table-columns": string;
@@ -456,148 +460,158 @@ export const WorkspaceTable = ({
   }, [horizontalMaxScroll]);
 
   return (
-    <div className="relative h-full flex-1 overflow-auto" ref={tableWrapperRef}>
-      <div
-        aria-colcount={visibleColumnCount}
-        aria-rowcount={rowModel.rows.length}
-        className="relative flex min-h-full flex-col text-sm"
-        role="grid"
-        style={gridStyle}
-      >
-        <div className="bg-background sticky top-0 z-30">
-          {table.getHeaderGroups().map((headerGroup) => (
-            <WorkspaceGridRow key={headerGroup.id}>
-              {getOrderedHeaders(headerGroup.headers, renderColumns).map(
-                (header, index) => (
+    <div
+      className={cn(
+        "relative h-full flex-1",
+        addPropertyColumn && ADD_PROPERTY_RAIL_ACTIVE_CLASS_NAME,
+      )}
+    >
+      <div className="h-full overflow-auto" ref={tableWrapperRef}>
+        <div
+          aria-colcount={visibleColumnCount}
+          aria-rowcount={rowModel.rows.length}
+          className="relative flex min-h-full flex-col text-sm"
+          role="grid"
+          style={gridStyle}
+        >
+          <div className="bg-background sticky top-0 z-30">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <WorkspaceGridRow key={headerGroup.id}>
+                {getOrderedHeaders(headerGroup.headers, renderColumns).map(
+                  (header, index) => (
+                    <DraggableHeaderCell
+                      expandedColumnId={expandedTableCell?.columnId ?? null}
+                      header={header}
+                      index={index}
+                      key={header.id}
+                      onToggleSelectAll={handleToggleSelectAll}
+                      selectAllState={selectAllState}
+                    />
+                  ),
+                )}
+                <HeaderEndFillerCell
+                  addPropertyColumn={addPropertyColumn}
+                  renderColumns={renderColumns}
+                />
+                {addPropertyColumn && (
                   <DraggableHeaderCell
                     expandedColumnId={expandedTableCell?.columnId ?? null}
-                    header={header}
-                    index={index}
-                    key={header.id}
+                    header={getRequiredHeader(
+                      headerGroup.headers,
+                      addPropertyColumn.id,
+                    )}
+                    index={renderColumns.length}
                     onToggleSelectAll={handleToggleSelectAll}
                     selectAllState={selectAllState}
                   />
-                ),
-              )}
-              <HeaderEndFillerCell
-                addPropertyColumn={addPropertyColumn}
-                renderColumns={renderColumns}
-              />
-              {addPropertyColumn && (
-                <DraggableHeaderCell
-                  expandedColumnId={expandedTableCell?.columnId ?? null}
-                  header={getRequiredHeader(
-                    headerGroup.headers,
-                    addPropertyColumn.id,
-                  )}
-                  index={renderColumns.length}
-                  onToggleSelectAll={handleToggleSelectAll}
-                  selectAllState={selectAllState}
+                )}
+              </WorkspaceGridRow>
+            ))}
+          </div>
+          <div className="flex flex-1 flex-col">
+            {paddingTop > 0 && (
+              <WorkspaceGridRow className="pointer-events-none">
+                <WorkspaceGridFillerCell
+                  className="border-b-0"
+                  style={{
+                    gridColumn: addPropertyColumn ? "1 / -2" : "1 / -1",
+                    height: paddingTop,
+                  }}
                 />
-              )}
-            </WorkspaceGridRow>
-          ))}
-        </div>
-        <div className="flex flex-1 flex-col">
-          {paddingTop > 0 && (
-            <WorkspaceGridRow
-              aria-hidden="true"
-              className="pointer-events-none"
-            >
-              <WorkspaceGridFillerCell
-                className="border-b-0"
-                style={{
-                  gridColumn: addPropertyColumn ? "1 / -2" : "1 / -1",
-                  height: paddingTop,
-                }}
-              />
-              {addPropertyColumn && (
-                <AddPropertyRailSpacer height={paddingTop} />
-              )}
-            </WorkspaceGridRow>
-          )}
-          {virtualRows.map((virtualRow) => {
-            const row = rowModel.rows.at(virtualRow.index);
-            if (!row) {
-              return null;
-            }
+                {addPropertyColumn && (
+                  <AddPropertyRailSpacer height={paddingTop} />
+                )}
+              </WorkspaceGridRow>
+            )}
+            {virtualRows.map((virtualRow) => {
+              const row = rowModel.rows.at(virtualRow.index);
+              if (!row) {
+                return null;
+              }
 
-            return (
-              <DraggableRow
-                activeEntityId={activeEntityId}
-                activePropertyId={activePropertyId}
-                activeTaskId={activeTaskId}
-                editingEntityId={editingEntityId}
-                expandedCellId={
-                  expandedTableCell?.entityId === row.original.entityId
-                    ? expandedTableCell.columnId
-                    : null
-                }
-                contentMode={contentMode}
-                hasExpandedTableCell={expandedTableCell !== null}
-                index={virtualRow.index}
-                key={row.id}
-                lastSelectedIndex={lastSelectedIndex}
-                measureElement={rowVirtualizer.measureElement}
-                onRename={(entityId, newName) => {
-                  renameEntity.mutate({
-                    workspaceId,
-                    entityId,
-                    name: newName,
-                  });
-                }}
-                onStartEditing={setEditingEntityId}
-                onStopEditing={() => setEditingEntityId(null)}
-                onToggleExpandedCell={(entityId, columnId) => {
-                  setExpandedTableCell((current) => {
-                    if (
-                      current?.entityId === entityId &&
-                      current.columnId === columnId
-                    ) {
-                      return null;
-                    }
+              return (
+                <DraggableRow
+                  activeEntityId={activeEntityId}
+                  activePropertyId={activePropertyId}
+                  activeTaskId={activeTaskId}
+                  editingEntityId={editingEntityId}
+                  expandedCellId={
+                    expandedTableCell?.entityId === row.original.entityId
+                      ? expandedTableCell.columnId
+                      : null
+                  }
+                  contentMode={contentMode}
+                  hasExpandedTableCell={expandedTableCell !== null}
+                  index={virtualRow.index}
+                  key={row.id}
+                  lastSelectedIndex={lastSelectedIndex}
+                  measureElement={rowVirtualizer.measureElement}
+                  onRename={(entityId, newName) => {
+                    renameEntity.mutate({
+                      workspaceId,
+                      entityId,
+                      name: newName,
+                    });
+                  }}
+                  onStartEditing={setEditingEntityId}
+                  onStopEditing={() => setEditingEntityId(null)}
+                  onToggleExpandedCell={(entityId, columnId, mode) => {
+                    setExpandedTableCell((current) => {
+                      if (
+                        current?.entityId === entityId &&
+                        current.columnId === columnId
+                      ) {
+                        if (mode === "open") {
+                          return current;
+                        }
 
-                    return { entityId, columnId };
-                  });
-                }}
-                addPropertyColumn={addPropertyColumn}
-                row={row}
-                rowLabel={rowLabels[virtualRow.index] ?? ""}
-                renderColumns={renderColumns}
-                table={table}
-                virtualIndex={virtualRow.index}
-                workspaceId={workspaceId}
-              />
-            );
-          })}
-          {paddingBottom > 0 && (
-            <WorkspaceGridRow
-              aria-hidden="true"
-              className="pointer-events-none"
-            >
-              <WorkspaceGridFillerCell
-                className="border-b-0"
-                style={{
-                  gridColumn: addPropertyColumn ? "1 / -2" : "1 / -1",
-                  height: paddingBottom,
-                }}
-              />
-              {addPropertyColumn && (
-                <AddPropertyRailSpacer height={paddingBottom} />
-              )}
-            </WorkspaceGridRow>
-          )}
-          <TableEndFiller
-            addPropertyColumn={addPropertyColumn}
-            renderColumns={renderColumns}
-          />
-          <BottomRow
-            table={table}
-            onFolderCreated={setEditingEntityId}
-            workspaceId={workspaceId}
-          />
+                        return null;
+                      }
+
+                      return { entityId, columnId };
+                    });
+                  }}
+                  addPropertyColumn={addPropertyColumn}
+                  row={row}
+                  rowLabel={rowLabels[virtualRow.index] ?? ""}
+                  renderColumns={renderColumns}
+                  table={table}
+                  virtualIndex={virtualRow.index}
+                  workspaceId={workspaceId}
+                />
+              );
+            })}
+            {paddingBottom > 0 && (
+              <WorkspaceGridRow className="pointer-events-none">
+                <WorkspaceGridFillerCell
+                  className="border-b-0"
+                  style={{
+                    gridColumn: addPropertyColumn ? "1 / -2" : "1 / -1",
+                    height: paddingBottom,
+                  }}
+                />
+                {addPropertyColumn && (
+                  <AddPropertyRailSpacer height={paddingBottom} />
+                )}
+              </WorkspaceGridRow>
+            )}
+            <TableEndFiller
+              addPropertyColumn={addPropertyColumn}
+              renderColumns={renderColumns}
+            />
+            <BottomRow
+              table={table}
+              onFolderCreated={setEditingEntityId}
+              workspaceId={workspaceId}
+            />
+          </div>
         </div>
       </div>
+      {addPropertyColumn && (
+        <div className="absolute top-0 right-0 bottom-12 z-40 w-12">
+          <CreateProperty triggerVariant="rail" workspaceId={workspaceId} />
+        </div>
+      )}
     </div>
   );
 };
@@ -611,14 +625,13 @@ const TableEndFiller = ({
   renderColumns,
   addPropertyColumn,
 }: TableEndFillerProps) => (
-  <WorkspaceGridRow
-    aria-hidden="true"
-    className="pointer-events-none min-h-0 flex-1 opacity-45"
-    role="presentation"
-  >
+  <WorkspaceGridRow className="pointer-events-none min-h-0 flex-1">
     {renderColumns.map((column, index) => (
       <WorkspaceGridCell
-        className="border-b-0"
+        className={cn(
+          "border-b-0",
+          isPinnedBoundaryColumn(column) && "border-e-0",
+        )}
         key={column.id}
         role="presentation"
         style={{
@@ -626,7 +639,9 @@ const TableEndFiller = ({
           ...getGridPinningStyles(column),
           ...tableEndFillerCellStyle,
         }}
-      />
+      >
+        <PinnedBoundary column={column} />
+      </WorkspaceGridCell>
     ))}
     <WorkspaceGridCell
       className={cn("border-b-0 p-0", addPropertyColumn && "border-e-0")}
@@ -641,8 +656,8 @@ const TableEndFiller = ({
     />
     {addPropertyColumn && (
       <WorkspaceGridCell
-        className="border-s border-b-0 p-0"
-        role="presentation"
+        className="border-s-2 border-e-2 border-b-0 p-0"
+        data-add-property-surface
         style={{
           ...getGridPinningStyles(addPropertyColumn),
           ...tableEndFillerCellStyle,
@@ -795,7 +810,10 @@ const DraggableHeaderCell = ({
       aria-colindex={index + 1}
       className={cn(
         "relative",
-        isAddPropertyColumn && "border-s",
+        isAddPropertyColumn && "border-s-2 border-e-2",
+        isAddPropertyColumn && "transition-colors",
+        isAddPropertyColumn && "hover:bg-transparent",
+        isPinnedBoundaryColumn(header.column) && "border-e-0",
         collapseEndBorder && "border-e-0",
         expandedColumnId !== null &&
           expandedColumnId !== header.column.id &&
@@ -805,6 +823,7 @@ const DraggableHeaderCell = ({
         header.column.getIsResizing() &&
           "after:bg-info after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-50 after:w-px",
       )}
+      data-add-property-surface={isAddPropertyColumn ? true : undefined}
       ref={headerRef}
       style={{
         gridColumn: isAddPropertyColumn ? undefined : index + 1,
@@ -954,7 +973,7 @@ const getGridPinningStyles = (column: Column<TableTreeNode>): CSSProperties => {
   return {
     left: `${column.getStart("left")}px`,
     position: "sticky",
-    zIndex: column.id === selectColId ? 3 : 2,
+    zIndex: column.id === selectColId ? 21 : 20,
   };
 };
 
@@ -962,21 +981,19 @@ type PinnedBoundaryProps = {
   column: Column<TableTreeNode>;
 };
 
+const isPinnedBoundaryColumn = (column: Column<TableTreeNode>) =>
+  column.getIsPinned() === "left" && column.getIsLastColumn("left");
+
 const PinnedBoundary = ({ column }: PinnedBoundaryProps) => {
-  const isLeftPinned = column.getIsPinned() === "left";
-  const isLastLeftPinned = isLeftPinned && column.getIsLastColumn("left");
-  if (!isLastLeftPinned || column.id === selectColId) {
+  if (!isPinnedBoundaryColumn(column)) {
     return null;
   }
 
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none absolute inset-y-0 right-0 z-40 w-1"
-    >
-      <span className="bg-border absolute inset-y-0 left-0 w-px" />
-      <span className="bg-border absolute inset-y-0 right-0 w-px" />
-    </span>
+      className="bg-border pointer-events-none absolute inset-y-0 right-0 z-40 w-px"
+    />
   );
 };
 
@@ -1020,6 +1037,10 @@ const toColumnDropEdge = (edge: Edge | null): ColumnDropEdge | null => {
 const shouldIgnoreRowExpansionClick = (target: EventTarget) => {
   if (!(target instanceof HTMLElement)) {
     return true;
+  }
+
+  if (target.closest("[data-open-expanded-cell]")) {
+    return false;
   }
 
   return Boolean(
@@ -1129,7 +1150,11 @@ type DraggableRowProps = {
   onRename: (entityId: string, newName: string) => void;
   onStartEditing: (entityId: string) => void;
   onStopEditing: () => void;
-  onToggleExpandedCell: (entityId: string, columnId: string) => void;
+  onToggleExpandedCell: (
+    entityId: string,
+    columnId: string,
+    mode?: "toggle" | "open",
+  ) => void;
 };
 
 const DraggableRow = ({
@@ -1231,8 +1256,8 @@ const DraggableRow = ({
     useInspectorStore.getState().openTask(entity.entityId, name);
   };
 
-  const toggleExpandedCell = (columnId: string) => {
-    onToggleExpandedCell(entity.entityId, columnId);
+  const toggleExpandedCell = (columnId: string, mode?: "toggle" | "open") => {
+    onToggleExpandedCell(entity.entityId, columnId, mode);
   };
 
   const handleCellClick = (
@@ -1245,7 +1270,13 @@ const DraggableRow = ({
     }
 
     event.stopPropagation();
-    toggleExpandedCell(columnId);
+    toggleExpandedCell(
+      columnId,
+      event.target instanceof HTMLElement &&
+        event.target.closest("[data-open-expanded-cell]")
+        ? "open"
+        : "toggle",
+    );
   };
 
   const selectCellContent = (
@@ -1370,6 +1401,7 @@ const DraggableRow = ({
       aria-selected={row.getIsSelected()}
       className={cn(
         "transition-opacity duration-150",
+        contentMode === "tight" && TOOLBAR_ROW_HEIGHT,
         isTask && "cursor-pointer",
         isFocusedExpansionRow && "relative z-20",
         isMutedByExpandedCell && "opacity-[0.78] hover:opacity-95",
@@ -1451,6 +1483,7 @@ const FolderTableRow = ({
       aria-selected={row.getIsSelected()}
       className={cn(
         "transition-opacity duration-150",
+        TOOLBAR_ROW_HEIGHT,
         isMutedByExpandedCell && "opacity-[0.78] hover:opacity-95",
       )}
       data-active={entity.entityId === activeEntityId || undefined}
@@ -1462,6 +1495,9 @@ const FolderTableRow = ({
     >
       <WorkspaceGridCell
         aria-colindex={1}
+        className={cn(
+          isPinnedBoundaryColumn(selectCell.column) && "border-e-0",
+        )}
         data-state={row.getIsSelected() ? "selected" : undefined}
         key={selectCell.id}
         style={{
@@ -1474,7 +1510,10 @@ const FolderTableRow = ({
       </WorkspaceGridCell>
       <WorkspaceGridCell
         aria-colindex={2}
-        className="cursor-pointer"
+        className={cn(
+          "cursor-pointer",
+          isPinnedBoundaryColumn(nameCell.column) && "border-e-0",
+        )}
         data-state={row.getIsSelected() ? "selected" : undefined}
         key={nameCell.id}
         onClick={() => row.toggleExpanded()}
@@ -1537,6 +1576,8 @@ const DataRowCells = ({
     const canExpandCell = !isSelectCell && !isAddPropertyCell;
     const canFlagCell = canExpandCell && !cell.column.id.startsWith("_");
     const isExpandedCell = expandedCellId === cell.column.id;
+    const fieldContent = cell.row.original.fields[cell.column.id]?.content;
+    const isExpandedTextCell = isExpandedCell && fieldContent?.type === "text";
 
     return (
       <WorkspaceGridCell
@@ -1545,6 +1586,7 @@ const DataRowCells = ({
           "relative",
           canExpandCell && "cursor-pointer",
           isSelectCell && "min-w-12 shrink-0",
+          isPinnedBoundaryColumn(cell.column) && "border-e-0",
           cell.column.columnDef.meta?.muted && "text-muted-foreground",
           contentMode === "fit-content" &&
             "whitespace-normal! [&_.line-clamp-2]:line-clamp-none [&_.truncate]:min-w-0 [&_.truncate]:overflow-visible [&_.truncate]:wrap-break-word [&_.truncate]:whitespace-normal",
@@ -1574,9 +1616,10 @@ const DataRowCells = ({
           <span
             className={cn(
               "flex w-full min-w-0 items-center gap-1.5",
-              contentMode === "fit-content" && "items-start",
+              (contentMode === "fit-content" || isExpandedTextCell) &&
+                "items-start",
               isExpandedCell &&
-                "border-border/80 bg-background absolute inset-x-0 top-0 z-40 max-h-96 items-start overflow-y-auto border p-2 pb-8 shadow-lg",
+                "border-border/80 bg-background absolute inset-x-0 top-0 z-40 max-h-96 min-h-24 items-start overflow-y-auto border p-2 pb-8 shadow-lg",
             )}
           >
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -1604,7 +1647,8 @@ const AddPropertyCell = ({
   return (
     <WorkspaceGridCell
       aria-colindex={columnIndex}
-      className="border-s p-0"
+      className="border-s-2 border-e-2 p-0"
+      data-add-property-surface
       data-state={selected ? "selected" : undefined}
       style={{
         ...getGridPinningStyles(cell.column),
@@ -1621,15 +1665,15 @@ type AddPropertyRailSpacerProps = {
 
 const AddPropertyRailSpacer = ({ height }: AddPropertyRailSpacerProps) => (
   <WorkspaceGridCell
-    aria-hidden="true"
-    className="border-s border-b-0 p-0"
-    role="presentation"
+    className="border-s-2 border-e-2 border-b-0 p-0"
+    data-add-property-surface
     style={{
       gridColumn: "-2 / -1",
       height,
       position: "sticky",
       right: 0,
       zIndex: 2,
+      ...tableEndFillerCellStyle,
     }}
   />
 );

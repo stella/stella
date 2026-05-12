@@ -5,7 +5,6 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
-import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
 import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import {
@@ -18,6 +17,7 @@ import {
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { DatePickerPopover } from "@/components/date-picker-popover";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 
 const EXPENSE_CATEGORIES = [

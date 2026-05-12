@@ -95,6 +95,7 @@ const PropertyCell = ({
           entityKind={entity.kind}
           property={property}
           propertyId={property.id}
+          showDateIcon={false}
           workspaceId={property.workspaceId}
         />
       </>

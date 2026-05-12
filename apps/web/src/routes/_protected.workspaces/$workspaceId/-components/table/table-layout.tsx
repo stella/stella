@@ -10,7 +10,6 @@ import { useTranslations } from "use-intl";
 
 import { useAIKeyGate } from "@/components/require-ai-key";
 import type { WorkspaceView } from "@/lib/types";
-import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import {
   AuthorCell,
@@ -37,7 +36,7 @@ import {
 const selectColId = getInternalColId("select");
 const addPropertyColId = getInternalColId("add-property");
 const DEFAULT_COLUMN_MIN_SIZE = 64;
-const ADD_PROPERTY_COLUMN_SIZE = 40;
+const ADD_PROPERTY_COLUMN_SIZE = 48;
 
 type TableLayoutProps = {
   workspaceId: string;
@@ -167,9 +166,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     columnDefs.push({
       id: addPropertyColId,
       accessorKey: addPropertyColId,
-      header: () => (
-        <CreateProperty triggerVariant="icon" workspaceId={workspaceId} />
-      ),
+      header: () => null,
       cell: () => null,
       enableResizing: false,
       enablePinning: false,
@@ -180,7 +177,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     });
 
     return columnDefs;
-  }, [properties, workspaceId, t]);
+  }, [properties, t]);
 
   const table = useReactTable({
     columnResizeMode: "onChange",

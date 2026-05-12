@@ -45,7 +45,9 @@ type ActiveFileContext = {
       }
     | undefined;
   entityId: string;
+  fileFieldId?: string | undefined;
   fileName: string;
+  supportsDocxEdits?: boolean | undefined;
 };
 
 type ActiveDecisionContext = {
