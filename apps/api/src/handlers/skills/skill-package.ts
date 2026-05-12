@@ -16,11 +16,16 @@ import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 const SKILL_FILE_NAME = "SKILL.md";
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const GITHUB_API_TIMEOUT_MS = 10_000;
+const GITHUB_REF_CANDIDATE_LIMIT = 16;
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
 const GITHUB_SKILL_HOSTNAMES = new Set([
   "github.com",
   "raw.githubusercontent.com",
 ]);
+const GITHUB_FETCH_HEADERS = {
+  Accept: "application/vnd.github+json, text/plain, application/zip",
+  "User-Agent": "Stella skill importer",
+};
 
 export type ParsedSkillResource = {
   content: string;
@@ -56,6 +61,14 @@ type GithubSkillPath = {
   repo: string;
   rootPath: string;
 };
+
+type GithubRefKind = "heads" | "tags";
+
+type GithubRefExists = (options: {
+  owner: string;
+  ref: string;
+  repo: string;
+}) => Promise<boolean>;
 
 type GithubContentItem = {
   path: string;
@@ -98,7 +111,7 @@ export const fetchSkillPackageFromUrl = async (
 ): Promise<Result<ParsedSkillPackage, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
-      const githubPath = parseGithubSkillPath(rawUrl);
+      const githubPath = await parseGithubSkillPath(rawUrl);
       if (githubPath) {
         return await fetchGithubSkillPackage(githubPath, rawUrl);
       }
@@ -493,6 +506,24 @@ const githubRawUrl = ({
       .join("/")}`,
   );
 
+const githubRefUrl = ({
+  kind,
+  owner,
+  ref,
+  repo,
+}: {
+  kind: GithubRefKind;
+  owner: string;
+  ref: string;
+  repo: string;
+}) =>
+  new URL(
+    `https://api.github.com/repos/${owner}/${repo}/git/ref/${kind}/${ref
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/")}`,
+  );
+
 const pathParts = (url: URL): string[] =>
   url.pathname.split("/").filter((part) => part.length > 0);
 
@@ -556,10 +587,7 @@ const hashSkillPackage = ({
 
 const fetchSafeBytes = async (url: URL) => {
   const response = await safeMcpFetchBytes({
-    headers: {
-      Accept: "application/vnd.github+json, text/plain, application/zip",
-      "User-Agent": "Stella skill importer",
-    },
+    headers: GITHUB_FETCH_HEADERS,
     maxBytes: FILE_SIZE_LIMIT_BYTES.skillPack,
     timeoutMs: GITHUB_API_TIMEOUT_MS,
     url,
@@ -580,7 +608,87 @@ const fetchSafeBytes = async (url: URL) => {
   return response.value;
 };
 
-const parseGithubSkillPath = (rawUrl: string): GithubSkillPath | null => {
+const githubRefExists: GithubRefExists = async ({ owner, ref, repo }) =>
+  (await githubRefKindExists({ kind: "heads", owner, ref, repo })) ||
+  (await githubRefKindExists({ kind: "tags", owner, ref, repo }));
+
+const githubRefKindExists = async ({
+  kind,
+  owner,
+  ref,
+  repo,
+}: {
+  kind: GithubRefKind;
+  owner: string;
+  ref: string;
+  repo: string;
+}): Promise<boolean> => {
+  const response = await safeMcpFetchBytes({
+    headers: GITHUB_FETCH_HEADERS,
+    maxBytes: FILE_SIZE_LIMIT_BYTES.skillPack,
+    timeoutMs: GITHUB_API_TIMEOUT_MS,
+    url: githubRefUrl({ kind, owner, ref, repo }),
+  });
+  if (Result.isError(response)) {
+    throw new HandlerError({
+      status: 400,
+      message: response.error.message,
+      cause: response.error,
+    });
+  }
+  if (response.value.status === 404) {
+    return false;
+  }
+  if (!response.value.ok) {
+    throw new HandlerError({
+      status: 400,
+      message: `Skill source returned HTTP ${response.value.status}`,
+    });
+  }
+  return true;
+};
+
+export const resolveGithubRefAndPath = async ({
+  minPathParts,
+  owner,
+  parts,
+  refExists = githubRefExists,
+  repo,
+}: {
+  minPathParts: number;
+  owner: string;
+  parts: readonly string[];
+  refExists?: GithubRefExists;
+  repo: string;
+}): Promise<Pick<GithubSkillPath, "ref" | "rootPath"> | null> => {
+  const firstRefPartCount = Math.min(
+    parts.length - minPathParts,
+    GITHUB_REF_CANDIDATE_LIMIT,
+  );
+  for (
+    let refPartCount = firstRefPartCount;
+    refPartCount >= 1;
+    refPartCount--
+  ) {
+    const ref = parts.slice(0, refPartCount).join("/");
+    if (!(await refExists({ owner, ref, repo }))) {
+      continue;
+    }
+
+    const path = parts.slice(refPartCount);
+    const rootPath =
+      path.at(-1) === SKILL_FILE_NAME
+        ? path.slice(0, -1).join("/")
+        : path.join("/");
+    return { ref, rootPath };
+  }
+
+  return null;
+};
+
+const parseGithubSkillPath = async (
+  rawUrl: string,
+): Promise<GithubSkillPath | null> => {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -594,30 +702,34 @@ const parseGithubSkillPath = (rawUrl: string): GithubSkillPath | null => {
   assertSafeGithubSkillUrl(url);
 
   if (url.hostname === "raw.githubusercontent.com") {
-    const [owner, repo, ref, ...filePath] = pathParts(url);
-    if (!owner || !repo || !ref || filePath.length === 0) {
+    const [owner, repo, ...parts] = pathParts(url);
+    if (!owner || !repo || parts.length < 2) {
       return null;
     }
-    const rootPath =
-      filePath.at(-1) === SKILL_FILE_NAME
-        ? filePath.slice(0, -1).join("/")
-        : filePath.join("/");
-    return { owner, ref, repo, rootPath };
+    const resolved = await resolveGithubRefAndPath({
+      minPathParts: 1,
+      owner,
+      parts,
+      repo,
+    });
+    return resolved ? { owner, repo, ...resolved } : null;
   }
 
-  const [owner, repo, kind, ref, ...path] = pathParts(url);
-  if (!owner || !repo || !kind || !ref) {
+  const [owner, repo, kind, ...parts] = pathParts(url);
+  if (!owner || !repo || !kind || parts.length === 0) {
     return null;
   }
   if (kind !== "tree" && kind !== "blob") {
     return null;
   }
 
-  const rootPath =
-    path.at(-1) === SKILL_FILE_NAME
-      ? path.slice(0, -1).join("/")
-      : path.join("/");
-  return { owner, ref, repo, rootPath };
+  const resolved = await resolveGithubRefAndPath({
+    minPathParts: kind === "tree" ? 0 : 1,
+    owner,
+    parts,
+    repo,
+  });
+  return resolved ? { owner, repo, ...resolved } : null;
 };
 
 const assertSafeGithubSkillUrl = (url: URL) => {

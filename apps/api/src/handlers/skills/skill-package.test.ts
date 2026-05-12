@@ -7,6 +7,7 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   fetchSkillPackageFromUrl,
   parseUploadedSkillPackage,
+  resolveGithubRefAndPath,
 } from "./skill-package";
 
 describe("agent skill package imports", () => {
@@ -145,5 +146,32 @@ Instructions.`,
       const result = await fetchSkillPackageFromUrl(url);
       expect(Result.isError(result)).toBe(true);
     }
+  });
+
+  test("resolves GitHub skill paths with multi-segment refs", async () => {
+    const result = await resolveGithubRefAndPath({
+      minPathParts: 0,
+      owner: "org",
+      parts: ["feature", "foo", "skill"],
+      refExists: async ({ ref }) => ref === "feature/foo",
+      repo: "repo",
+    });
+
+    expect(result).toEqual({ ref: "feature/foo", rootPath: "skill" });
+  });
+
+  test("prefers the longest matching GitHub ref before deriving the skill path", async () => {
+    const result = await resolveGithubRefAndPath({
+      minPathParts: 1,
+      owner: "org",
+      parts: ["release", "2026", "skills", "review", "SKILL.md"],
+      refExists: async ({ ref }) => ref === "release/2026" || ref === "release",
+      repo: "repo",
+    });
+
+    expect(result).toEqual({
+      ref: "release/2026",
+      rootPath: "skills/review",
+    });
   });
 });
