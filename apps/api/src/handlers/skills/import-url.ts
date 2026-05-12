@@ -5,7 +5,7 @@ import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
-import { installSkill } from "./install";
+import { authorizeSkillInstallScope, installSkill } from "./install";
 import { fetchSkillPackageFromUrl } from "./skill-package";
 
 const importSkillBodySchema = t.Object({
@@ -29,6 +29,14 @@ const importSkillFromUrl = createSafeRootHandler(
     session,
     user,
   }) {
+    const authorization = authorizeSkillInstallScope({
+      memberRole,
+      scope: body.scope,
+    });
+    if (Result.isError(authorization)) {
+      return Result.err(authorization.error);
+    }
+
     const parsed = yield* Result.await(fetchSkillPackageFromUrl(body.url));
 
     const installResult = await installSkill({

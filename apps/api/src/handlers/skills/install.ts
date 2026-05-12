@@ -47,13 +47,9 @@ export const installSkill = async ({
   session,
   user,
 }: InstallSkillProps) => {
-  if (scope === "team" && !["admin", "owner"].includes(memberRole.role)) {
-    return Result.err(
-      new HandlerError({
-        status: 403,
-        message: "Only admins and owners can install team skills",
-      }),
-    );
+  const authorization = authorizeSkillInstallScope({ memberRole, scope });
+  if (Result.isError(authorization)) {
+    return Result.err(authorization.error);
   }
 
   const insertResult = await safeDb(
@@ -173,4 +169,23 @@ export const installSkill = async ({
   }
 
   return Result.ok({ id: insertResult.value.id });
+};
+
+export const authorizeSkillInstallScope = ({
+  memberRole,
+  scope,
+}: {
+  memberRole: { role: string };
+  scope: AgentSkillScope;
+}): Result<void, HandlerError> => {
+  if (scope !== "team" || ["admin", "owner"].includes(memberRole.role)) {
+    return Result.ok(undefined);
+  }
+
+  return Result.err(
+    new HandlerError({
+      status: 403,
+      message: "Only admins and owners can install team skills",
+    }),
+  );
 };

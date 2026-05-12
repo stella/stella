@@ -6,7 +6,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 
-import { installSkill } from "./install";
+import { authorizeSkillInstallScope, installSkill } from "./install";
 import { parseUploadedSkillPackage } from "./skill-package";
 
 const uploadSkillBodySchema = t.Object({
@@ -30,6 +30,14 @@ const uploadSkill = createSafeRootHandler(
     session,
     user,
   }) {
+    const authorization = authorizeSkillInstallScope({
+      memberRole,
+      scope: body.scope,
+    });
+    if (Result.isError(authorization)) {
+      return Result.err(authorization.error);
+    }
+
     const parsed = yield* Result.await(parseUploadedSkillPackage(body.file));
 
     const installResult = await installSkill({
