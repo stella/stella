@@ -40,7 +40,9 @@ jobs:
       - name: Install dependencies
         run: bun ci
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
 
       - name: Check migration coverage
         env:
@@ -93,7 +95,9 @@ jobs:
       - name: Install dependencies
         run: bun ci
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
 
       - name: Apply all migrations to fresh Postgres
         working-directory: apps/api
