@@ -115,6 +115,9 @@ const tableEndFillerCellStyle: CSSProperties = {
   backgroundImage: TABLE_END_FILLER_BACKGROUND,
 };
 
+const getVerticalScrollbarWidth = (element: HTMLElement) =>
+  Math.max(0, element.offsetWidth - element.clientWidth);
+
 type WorkspaceTableProps = {
   workspaceId: string;
   table: WorkspaceTableType;
@@ -160,6 +163,7 @@ export const WorkspaceTable = ({
   const [expandedTableCell, setExpandedTableCell] =
     useState<ExpandedTableCell | null>(null);
   const [wrapperWidth, setWrapperWidth] = useState(0);
+  const [verticalScrollbarWidth, setVerticalScrollbarWidth] = useState(0);
 
   useEffect(() => {
     if (!expandedTableCell) {
@@ -438,11 +442,11 @@ export const WorkspaceTable = ({
     }
 
     setWrapperWidth(element.clientWidth);
+    setVerticalScrollbarWidth(getVerticalScrollbarWidth(element));
 
-    const resizeObserver = new ResizeObserver(([entry]) => {
-      if (entry) {
-        setWrapperWidth(entry.contentRect.width);
-      }
+    const resizeObserver = new ResizeObserver(() => {
+      setWrapperWidth(element.clientWidth);
+      setVerticalScrollbarWidth(getVerticalScrollbarWidth(element));
     });
     resizeObserver.observe(element);
 
@@ -621,7 +625,10 @@ export const WorkspaceTable = ({
         </div>
       </div>
       {addPropertyColumn && (
-        <div className="absolute top-0 right-0 bottom-12 z-40 w-12">
+        <div
+          className="absolute top-0 bottom-12 z-40 w-12"
+          style={{ right: verticalScrollbarWidth }}
+        >
           <CreateProperty triggerVariant="rail" workspaceId={workspaceId} />
         </div>
       )}
