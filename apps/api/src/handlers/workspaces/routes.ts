@@ -1,6 +1,11 @@
 import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
+import {
+  createWorkspaceAnonymizationTerms,
+  deleteWorkspaceAnonymizationTerm,
+  readWorkspaceAnonymizationTerms,
+} from "@/api/handlers/workspaces/anonymization-terms";
 import archiveWorkspace from "@/api/handlers/workspaces/archive";
 import createWorkspaces from "@/api/handlers/workspaces/create";
 import deleteWorkspace from "@/api/handlers/workspaces/delete-by-id";
@@ -221,6 +226,23 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
           deleteWorkspaceContact.handler,
           {
             params: deleteWorkspaceContact.config.params,
+            invalidateQuery: true,
+          },
+        )
+        .get("/anonymization-terms", readWorkspaceAnonymizationTerms.handler)
+        .put(
+          "/anonymization-terms",
+          createWorkspaceAnonymizationTerms.handler,
+          {
+            body: createWorkspaceAnonymizationTerms.config.body,
+            invalidateQuery: true,
+          },
+        )
+        .delete(
+          "/anonymization-terms/:entryId",
+          deleteWorkspaceAnonymizationTerm.handler,
+          {
+            params: deleteWorkspaceAnonymizationTerm.config.params,
             invalidateQuery: true,
           },
         )

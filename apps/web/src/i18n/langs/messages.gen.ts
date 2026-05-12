@@ -1070,6 +1070,16 @@ type Messages = {
     "unsupportedDocxEditTitle": "Editing blocked";
   };
   "inspector": {
+    "anonymization": {
+      "addAction": "Add";
+      "addPlaceholder": "Term to anonymize";
+      "deleteAction": "Delete term";
+      "description": "Terms added here are masked everywhere this workspace sends data — chat to external AI, PDF inspector, exports. Org-wide defaults are managed in Organization settings.";
+      "emptyState": "No workspace-specific terms yet. Add one above.";
+      "termAddedToast": "Added \"{value}\" to workspace anonymization terms.";
+      "title": "Anonymization vocabulary";
+      "workspaceTermsHeading": "Workspace terms ({count})";
+    };
     "external": {
       "confirmDescription": "You're about to visit an external website.";
       "confirmTitle": "Open external link?";
@@ -1078,6 +1088,7 @@ type Messages = {
       "unavailable": "The referenced site does not allow a safe preview. If the tool returned document text, it appears here; otherwise open the original.";
     };
     "facet": {
+      "anonymization": "Anonymization";
       "preview": "Preview";
       "previewInFullViewToast": "Preview is the main view here. Click the minimize button to see it alongside metadata.";
     };

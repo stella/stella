@@ -96,6 +96,7 @@ import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-
 import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { getDocxEditBlockReason } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
+import { AnonymizationFacet } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet";
 import { clearAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymize-pdf";
 import {
   ChatTabPanel,
@@ -1079,6 +1080,9 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 {tab.facet === "suggestions" && (
                   <SuggestionsFacet entityId={tab.entityId} />
                 )}
+                {tab.facet === "anonymization" && (
+                  <AnonymizationFacet workspaceId={tab.workspaceId} />
+                )}
                 {/* No preview branch in fullscreen: the main view
                  *  IS the preview. FullViewPreviewGuard above swaps
                  *  a stale "preview" facet to "metadata" on entry
@@ -1510,6 +1514,9 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                     : {})}
                 />
               )}
+              {sidepeekFacet === "anonymization" && (
+                <AnonymizationFacet workspaceId={tab.workspaceId} />
+              )}
             </div>
           );
 
@@ -1745,11 +1752,13 @@ const FACETS: readonly Facet[] = [
   "metadata",
   "versions",
   "suggestions",
+  "anonymization",
 ];
 const FULLVIEW_FACETS: readonly Facet[] = [
   "metadata",
   "versions",
   "suggestions",
+  "anonymization",
 ];
 
 /**
@@ -1811,6 +1820,7 @@ const FacetBar = ({
     metadata: t("common.metadata"),
     versions: t("fileDetail.versionHistory"),
     suggestions: t("docxReview.title"),
+    anonymization: t("inspector.facet.anonymization"),
   };
 
   return (

@@ -1067,6 +1067,16 @@
     "unsupportedDocxEditTitle": "Úpravy zablokované"
   },
   "inspector": {
+    "anonymization": {
+      "addAction": "Add",
+      "addPlaceholder": "Term to anonymize",
+      "deleteAction": "Delete term",
+      "description": "Terms added here are masked everywhere this workspace sends data — chat to external AI, PDF inspector, exports. Org-wide defaults are managed in Organization settings.",
+      "emptyState": "No workspace-specific terms yet. Add one above.",
+      "termAddedToast": "Added \"{value}\" to workspace anonymization terms.",
+      "title": "Anonymization vocabulary",
+      "workspaceTermsHeading": "Workspace terms ({count})"
+    },
     "external": {
       "confirmDescription": "Chystáte sa navštíviť externý web.",
       "confirmTitle": "Otvoriť externý odkaz?",
@@ -1075,6 +1085,7 @@
       "unavailable": "Odkazovaný web nepovoľuje bezpečný náhľad. Ak nástroj vrátil text dokumentu, zobrazí sa tu; inak otvorte originál."
     },
     "facet": {
+      "anonymization": "Anonymization",
       "preview": "Náhľad",
       "previewInFullViewToast": "Náhľad je tu hlavným zobrazením. Kliknutím na tlačidlo minimalizácie ho zobrazíte vedľa metadát."
     },

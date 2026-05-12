@@ -1067,6 +1067,16 @@
     "unsupportedDocxEditTitle": "Edição bloqueada"
   },
   "inspector": {
+    "anonymization": {
+      "addAction": "Add",
+      "addPlaceholder": "Term to anonymize",
+      "deleteAction": "Delete term",
+      "description": "Terms added here are masked everywhere this workspace sends data — chat to external AI, PDF inspector, exports. Org-wide defaults are managed in Organization settings.",
+      "emptyState": "No workspace-specific terms yet. Add one above.",
+      "termAddedToast": "Added \"{value}\" to workspace anonymization terms.",
+      "title": "Anonymization vocabulary",
+      "workspaceTermsHeading": "Workspace terms ({count})"
+    },
     "external": {
       "confirmDescription": "Você está prestes a acessar um site externo.",
       "confirmTitle": "Abrir link externo?",
@@ -1075,6 +1085,7 @@
       "unavailable": "O site referenciado não permite uma pré-visualização segura. Se a ferramenta retornou o texto do documento, ele aparece aqui; caso contrário, abra o original."
     },
     "facet": {
+      "anonymization": "Anonymization",
       "preview": "Visualização",
       "previewInFullViewToast": "A visualização é a visualização principal aqui. Clique no botão minimizar para vê-lo junto com os metadados."
     },
