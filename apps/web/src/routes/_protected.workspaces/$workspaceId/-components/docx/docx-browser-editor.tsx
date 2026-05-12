@@ -202,12 +202,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     const view = editorViewForAnonymization;
     if (!view) return;
     let cancelled = false;
+    let lastText: string | null = null;
     const run = () => {
+      if (cancelled) return;
       const text = view.state.doc.textContent;
-      if (text.length === 0) {
-        setDetectedAnonymizationTerms([]);
-        return;
-      }
+      if (text.length === 0) return;
+      if (text === lastText) return;
+      lastText = text;
       anonymizeChatText({ text, workspaceId })
         .then((result) => {
           if (cancelled) return;
@@ -233,10 +234,17 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           // than surfacing a toast on every keystroke.
         });
     };
-    const initialTimer = setTimeout(run, 250);
+    // The doc text isn't always populated when the view first
+    // captures (lazy DOCX load, async paged rendering). Slow
+    // heartbeat catches it shortly after, and also picks up
+    // edits without per-keystroke pipeline runs. The same-text
+    // guard above no-ops re-runs once the doc is steady.
+    const initialTimer = setTimeout(run, 300);
+    const heartbeat = setInterval(run, 2000);
     return () => {
       cancelled = true;
       clearTimeout(initialTimer);
+      clearInterval(heartbeat);
     };
   }, [editorViewForAnonymization, workspaceId]);
   useEffect(() => {
