@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   audit:
-    uses: stella/.github/.github/workflows/audit-branch-protection.yml@main
+    uses: stella/.github/.github/workflows/audit-branch-protection.yml@9aba86f19b0d72fb02344c49342d7f0b0c9700b0
     with:
       expected-config-path: .github/branch-protection/ruleset-main.json
     secrets:

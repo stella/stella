@@ -27,5 +27,5 @@ jobs:
     if: >-
       github.event.action != 'labeled'
       || github.event.label.name == 'run-pr-lint'
-    uses: stella/.github/.github/workflows/pr-lint.yml@main
+    uses: stella/.github/.github/workflows/pr-lint.yml@9aba86f19b0d72fb02344c49342d7f0b0c9700b0
     secrets: inherit
