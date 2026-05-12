@@ -27,5 +27,7 @@ jobs:
     if: >-
       github.event.action != 'labeled'
       || github.event.label.name == 'run-pr-lint'
+    # Reusable workflow only consumes the auto-provided GITHUB_TOKEN.
+    # Do not switch to `secrets: inherit` — that widens the blast radius
+    # if the reusable ever starts touching named secrets.
     uses: stella/.github/.github/workflows/pr-lint.yml@9aba86f19b0d72fb02344c49342d7f0b0c9700b0
-    secrets: inherit

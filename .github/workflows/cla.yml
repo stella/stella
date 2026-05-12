@@ -1,5 +1,16 @@
 name: CLA Assistant
 
+# SECURITY INVARIANT — DO NOT BREAK.
+# This workflow runs under `pull_request_target` and therefore executes in
+# the base-repo trust context with access to secrets (CLA_APP_PRIVATE_KEY,
+# write tokens on issues/PRs). It MUST NOT check out PR head code, MUST
+# NOT run any script, build, or install step from the PR, and MUST NOT
+# pass `github.event.pull_request.head.sha` / `head.ref` into any step
+# that executes code. The only safe operation here is to call the pinned
+# reusable workflow that performs CLA signature verification.
+# Background: pull_request_target + checkout(head) is the same attack
+# shape that led to the tj-actions / Ultralytics / Nx compromises.
+
 on:
   issue_comment:
     types: [created]

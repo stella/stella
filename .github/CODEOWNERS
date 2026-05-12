@@ -10,6 +10,7 @@ scripts/                                @jan-kubica
 # Desktop signing surface — build runs with signing keys live.
 apps/desktop/package.json               @jan-kubica
 apps/desktop/src-tauri/Cargo.toml       @jan-kubica
+apps/desktop/src-tauri/Cargo.lock       @jan-kubica
 apps/desktop/src-tauri/build.rs         @jan-kubica
 apps/desktop/src-tauri/tauri.conf.json  @jan-kubica
 

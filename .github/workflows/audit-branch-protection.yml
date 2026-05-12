@@ -9,6 +9,8 @@ concurrency:
   group: audit-branch-protection
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   audit:
     uses: stella/.github/.github/workflows/audit-branch-protection.yml@9aba86f19b0d72fb02344c49342d7f0b0c9700b0
