@@ -972,7 +972,12 @@ const attachActivePdfWhenExtractionIsEmpty = async ({
     const nextMessages = [...hydratedMessages];
     const latestUserMessage = hydratedMessages.at(latestUserIndex);
     if (!latestUserMessage) {
-      panic("findLastIndex returned an out-of-bounds user message index");
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Failed to find user message for context attachment",
+        }),
+      );
     }
     nextMessages[latestUserIndex] = {
       ...latestUserMessage,

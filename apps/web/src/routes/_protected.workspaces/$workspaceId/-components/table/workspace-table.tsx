@@ -1272,7 +1272,7 @@ const DraggableRow = ({
     event.stopPropagation();
     toggleExpandedCell(
       columnId,
-      event.target instanceof HTMLElement &&
+      event.target instanceof Element &&
         event.target.closest("[data-open-expanded-cell]")
         ? "open"
         : "toggle",
