@@ -243,6 +243,10 @@ describe("chat thread messages", () => {
         handleDeny={() => {}}
         messages={[]}
         onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        createDocumentMatters={[]}
+        isLoadingCreateDocumentMatters={false}
         onResend={() => {}}
         onSendWithoutAnonymization={() => {}}
         showToolCallDetails={false}
