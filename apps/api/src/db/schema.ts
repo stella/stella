@@ -9,6 +9,8 @@ import { customType } from "drizzle-orm/pg-core";
 import { organization, user } from "@/api/db/auth-schema";
 import { jsonb } from "@/api/db/columns";
 import {
+  agentSkillPolicies,
+  agentSkillResourcePolicies,
   chatMessagePolicies,
   chatThreadPolicies,
   globalCaseLawPolicies,
@@ -2837,10 +2839,111 @@ export const promptShortcuts = p.pgTable(
   ],
 );
 
+// -- Agent Skills --
+
+export const AGENT_SKILL_SCOPES = ["team", "private"] as const;
+export type AgentSkillScope = (typeof AGENT_SKILL_SCOPES)[number];
+
+export const AGENT_SKILL_ORIGINS = ["upload", "url"] as const;
+export type AgentSkillOrigin = (typeof AGENT_SKILL_ORIGINS)[number];
+
+export const AGENT_SKILL_RESOURCE_KINDS = [
+  "asset",
+  "knowledge",
+  "prompt",
+  "reference",
+  "script",
+  "template",
+] as const;
+export type AgentSkillResourceKind =
+  (typeof AGENT_SKILL_RESOURCE_KINDS)[number];
+
+export const agentSkills = p.pgTable(
+  "agent_skills",
+  {
+    id: pUuid<"agentSkill">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    scope: p.text("scope", { enum: AGENT_SKILL_SCOPES }).notNull(),
+    origin: p.text("origin", { enum: AGENT_SKILL_ORIGINS }).notNull(),
+    slug: p.varchar({ length: 64 }).notNull(),
+    name: p.varchar({ length: 64 }).notNull(),
+    description: p.text().notNull(),
+    version: p.varchar({ length: 64 }),
+    license: p.text(),
+    compatibility: p.text(),
+    metadata: jsonb().$type<Record<string, string>>().notNull().default({}),
+    sourceUrl: p.text("source_url"),
+    contentHash: p.varchar("content_hash", { length: 64 }).notNull(),
+    body: p.text().notNull(),
+    enabled: p.boolean().notNull().default(true),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p
+      .uniqueIndex("agent_skills_org_team_slug_uidx")
+      .on(table.organizationId, table.slug)
+      .where(sql`scope = 'team'`),
+    p
+      .uniqueIndex("agent_skills_user_private_slug_uidx")
+      .on(table.organizationId, table.userId, table.slug)
+      .where(sql`scope = 'private'`),
+    p.index("agent_skills_org_scope_idx").on(table.organizationId, table.scope),
+    p
+      .index("agent_skills_org_enabled_idx")
+      .on(table.organizationId, table.enabled),
+    p.index("agent_skills_user_idx").on(table.userId),
+    ...agentSkillPolicies(),
+  ],
+);
+
+export const agentSkillResources = p.pgTable(
+  "agent_skill_resources",
+  {
+    id: pUuid<"agentSkillResource">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    skillId: safeUuid<"agentSkill">("skill_id")
+      .notNull()
+      .references(() => agentSkills.id, { onDelete: "cascade" }),
+    path: p.varchar({ length: 512 }).notNull(),
+    kind: p
+      .text("kind", { enum: AGENT_SKILL_RESOURCE_KINDS })
+      .notNull()
+      .$type<AgentSkillResourceKind>(),
+    content: p.text().notNull(),
+    sizeBytes: p.integer("size_bytes").notNull(),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .uniqueIndex("agent_skill_resources_skill_path_uidx")
+      .on(table.skillId, table.path),
+    p.index("agent_skill_resources_skill_idx").on(table.skillId),
+    p
+      .index("agent_skill_resources_org_skill_idx")
+      .on(table.organizationId, table.skillId),
+    ...agentSkillResourcePolicies(),
+  ],
+);
+
 // -- Relations --
 
 export const relations = defineRelations(
   {
+    agentSkills,
+    agentSkillResources,
     user,
     contacts,
     contactRelationships,
@@ -3574,6 +3677,22 @@ export const relations = defineRelations(
       workspace: r.one.workspaces({
         from: r.workspaceViews.workspaceId,
         to: r.workspaces.id,
+      }),
+    },
+    agentSkills: {
+      user: r.one.user({
+        from: r.agentSkills.userId,
+        to: r.user.id,
+      }),
+      resources: r.many.agentSkillResources({
+        from: r.agentSkills.id,
+        to: r.agentSkillResources.skillId,
+      }),
+    },
+    agentSkillResources: {
+      skill: r.one.agentSkills({
+        from: r.agentSkillResources.skillId,
+        to: r.agentSkills.id,
       }),
     },
     promptShortcuts: {

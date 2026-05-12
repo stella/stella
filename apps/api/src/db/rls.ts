@@ -364,6 +364,73 @@ export const promptShortcutPolicies = () => [
   }),
 ];
 
+const agentSkillVisibleCheck = sql`(
+  ${organizationCheck} AND (scope = 'team' OR ${userCheck})
+)`;
+
+const agentSkillInsertCheck = sql`(
+  ${organizationCheck} AND ${userCheck}
+)`;
+
+const agentSkillResourceVisibleCheck = sql`(
+  ${organizationCheck} AND EXISTS (
+    SELECT 1
+    FROM agent_skills s
+    WHERE s.id = skill_id
+      AND (s.scope = 'team' OR s.user_id = (SELECT current_setting(
+        '${sql.raw(SETTING_USER_ID)}', true
+      )))
+  )
+)`;
+
+export const agentSkillPolicies = () => [
+  p.pgPolicy("agent_skill_select", {
+    for: "select",
+    to: stella,
+    using: agentSkillVisibleCheck,
+  }),
+  p.pgPolicy("agent_skill_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: agentSkillInsertCheck,
+  }),
+  p.pgPolicy("agent_skill_update", {
+    for: "update",
+    to: stella,
+    using: agentSkillVisibleCheck,
+    withCheck: agentSkillVisibleCheck,
+  }),
+  p.pgPolicy("agent_skill_delete", {
+    for: "delete",
+    to: stella,
+    using: agentSkillVisibleCheck,
+  }),
+];
+
+export const agentSkillResourcePolicies = () => [
+  p.pgPolicy("agent_skill_resource_select", {
+    for: "select",
+    to: stella,
+    using: agentSkillResourceVisibleCheck,
+  }),
+  p.pgPolicy("agent_skill_resource_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: agentSkillResourceVisibleCheck,
+  }),
+  p.pgPolicy("agent_skill_resource_update", {
+    for: "update",
+    to: stella,
+    using: agentSkillResourceVisibleCheck,
+    withCheck: agentSkillResourceVisibleCheck,
+  }),
+  p.pgPolicy("agent_skill_resource_delete", {
+    for: "delete",
+    to: stella,
+    using: agentSkillResourceVisibleCheck,
+  }),
+];
+
 export const chatThreadPolicies = () => [
   p.pgPolicy("chat_thread_select", {
     for: "select",

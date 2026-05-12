@@ -1,5 +1,7 @@
 import type { ToolSet } from "ai";
 
+import type { SkillMetadata } from "@stll/skills";
+
 import type { SafeDb, ScopedDb } from "@/api/db";
 import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
 import {
@@ -68,6 +70,7 @@ type GetChatToolsProps = {
    * live execution path.
    */
   disabledNativeToolSlugs?: readonly string[] | undefined;
+  skillMetadata?: readonly SkillMetadata[] | undefined;
 };
 
 const createActiveDocxEditTools = () => ({
@@ -104,6 +107,7 @@ export const getChatTools = ({
   hasActiveFileChat,
   externalTools = {},
   disabledNativeToolSlugs,
+  skillMetadata,
 }: GetChatToolsProps): ToolSet => {
   const orgTools = createOrgTools({
     accessibleWorkspaceIds: toolWorkspaceIds,
@@ -118,7 +122,10 @@ export const getChatTools = ({
     userId,
   });
   const skillTools = createSkillTools({
-    skills: getChatSkillMetadata(),
+    organizationId,
+    safeDb,
+    skills: skillMetadata ?? getChatSkillMetadata(),
+    userId,
   });
   const aresDisabled = disabledNativeToolSlugs?.includes("ares") ?? false;
   const aresTools = aresDisabled ? {} : createAresTools();

@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  getSkillResourceKind,
   listSkillMetadata,
   listSkillResources,
   loadSkill,
+  parseSkillFile,
   readSkillResource,
 } from "./loader";
 
@@ -21,6 +23,9 @@ describe("Stella skill loader", () => {
     expect(
       metadata.find((skill) => skill.name === "legal-interpretation")?.version,
     ).toBe("3.0");
+    expect(
+      metadata.find((skill) => skill.name === "legal-interpretation")?.license,
+    ).toBeNull();
   });
 
   test("loads a skill body and whitelisted resource manifest", () => {
@@ -64,5 +69,39 @@ describe("Stella skill loader", () => {
         resourcePath: "SKILL.md",
       }),
     ).toThrow();
+  });
+
+  test("parses standard Agent Skills metadata fields", () => {
+    const parsed = parseSkillFile(`---
+name: imported-skill
+description: Use when reviewing imported skills: validate metadata.
+license: Apache-2.0
+compatibility: Works with SKILL.md-compatible agents
+metadata:
+  author: stella
+  version: "1.2.3"
+---
+
+Follow the process.`);
+
+    expect(parsed.metadata).toEqual({
+      compatibility: "Works with SKILL.md-compatible agents",
+      description: "Use when reviewing imported skills: validate metadata.",
+      license: "Apache-2.0",
+      metadata: {
+        author: "stella",
+        version: "1.2.3",
+      },
+      name: "imported-skill",
+      version: "1.2.3",
+    });
+    expect(parsed.body).toBe("Follow the process.");
+  });
+
+  test("classifies common Agent Skills resource roots", () => {
+    expect(getSkillResourceKind("references/checklist.md")).toBe("reference");
+    expect(getSkillResourceKind("assets/template.txt")).toBe("asset");
+    expect(getSkillResourceKind("scripts/helper.py")).toBe("script");
+    expect(getSkillResourceKind("unknown/file.md")).toBeNull();
   });
 });

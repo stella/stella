@@ -22,7 +22,10 @@ import type {
   IncomingActiveFile,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
-import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
+import {
+  getChatSkillMetadata,
+  listAvailableChatSkillMetadata,
+} from "@/api/handlers/chat/skills";
 import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/org-manifest";
 import { buildReadonlyFunctionManifest } from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import type { ReadonlyFunctionManifest } from "@/api/handlers/chat/tools/execute/readonly-manifest";
@@ -94,6 +97,7 @@ export type ChatPromptParts = {
    * logging).
    */
   fullPrompt: string;
+  skillMetadata: readonly SkillMetadata[];
 };
 
 export const buildChatPromptCacheKey = (cacheStablePrefix: string) => {
@@ -122,6 +126,8 @@ type BuildChatSystemPromptProps = {
   safeDb: SafeDb;
   userContext: IncomingUserContext | undefined;
   workspaceId: SafeId<"workspace"> | null;
+  organizationId?: SafeId<"organization"> | undefined;
+  userId?: SafeId<"user"> | undefined;
 };
 
 export const buildChatSystemPrompt = async (
@@ -134,13 +140,26 @@ export const buildChatSystemPromptParts = async ({
   activeExternal,
   activeFile,
   contextMatterIds,
+  organizationId,
   practiceJurisdictions,
   refRegistry,
   safeDb,
   userContext,
+  userId,
   workspaceId,
 }: BuildChatSystemPromptProps): Promise<Result<ChatPromptParts, SafeDbError>> =>
   await Result.gen(async function* () {
+    const skillMetadata =
+      organizationId && userId
+        ? yield* Result.await(
+            listAvailableChatSkillMetadata({
+              organizationId,
+              safeDb,
+              userId,
+            }),
+          )
+        : getChatSkillMetadata();
+
     // The "safe" half is built by the workspace / global builders:
     // brand voice, skill catalog, jurisdiction labels, workspace
     // metadata. Anything that pulls user-supplied free text (active
@@ -152,7 +171,7 @@ export const buildChatSystemPromptParts = async ({
       workspaceId === null
         ? buildGlobalPromptParts({
             practiceJurisdictions,
-            skillMetadata: getChatSkillMetadata(),
+            skillMetadata,
             userContext: userContext ?? null,
           })
         : yield* Result.await(
@@ -160,6 +179,7 @@ export const buildChatSystemPromptParts = async ({
               practiceJurisdictions,
               refRegistry,
               safeDb,
+              skillMetadata,
               userContext: userContext ?? null,
               workspaceId,
             }),
@@ -224,6 +244,7 @@ export const buildChatSystemPromptParts = async ({
       safePrompt: safeParts.safePrompt,
       untrustedSuffix,
       fullPrompt: `${safeParts.safePrompt}${untrustedSuffix}`,
+      skillMetadata,
     });
   });
 
@@ -868,6 +889,7 @@ const buildPromptParts = ({
     safePrompt,
     untrustedSuffix,
     fullPrompt: `${safePrompt}${untrustedSuffix}`,
+    skillMetadata,
   };
 };
 

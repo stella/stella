@@ -54,6 +54,8 @@ describe("chat tool schemas", () => {
   test("construct skill tools as JSON-schema-compatible AI tools", () => {
     expect(() =>
       createSkillTools({
+        organizationId,
+        safeDb: unusedSafeDb,
         skills: [
           {
             description: "Analyze legal texts.",
@@ -61,6 +63,7 @@ describe("chat tool schemas", () => {
             version: "3.0",
           },
         ],
+        userId,
       }),
     ).not.toThrow();
   });

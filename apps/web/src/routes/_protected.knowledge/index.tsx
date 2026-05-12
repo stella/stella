@@ -16,12 +16,12 @@ export const Route = createFileRoute("/_protected/knowledge/")({
 type KnowledgeSection = {
   key: "agents" | "mcp" | "prompts" | "skills";
   icon: ComponentType<SVGProps<SVGSVGElement>>;
-  to?: "/knowledge/mcp" | "/knowledge/skills";
+  to?: "/knowledge/mcp" | "/knowledge/prompts" | "/knowledge/skills";
 };
 
 export const knowledgeSections: readonly KnowledgeSection[] = [
-  { key: "prompts", icon: LightbulbIcon, to: "/knowledge/skills" },
-  { key: "skills", icon: SparklesIcon },
+  { key: "prompts", icon: LightbulbIcon, to: "/knowledge/prompts" },
+  { key: "skills", icon: SparklesIcon, to: "/knowledge/skills" },
   { key: "mcp", icon: McpIcon, to: "/knowledge/mcp" },
   { key: "agents", icon: BotIcon },
 ];

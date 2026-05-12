@@ -1,8 +1,15 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
+import {
+  DownloadIcon,
+  FileUpIcon,
+  GlobeIcon,
+  LibraryIcon,
+  PowerIcon,
+  TrashIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -15,107 +22,109 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
-import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
-
+import { Input } from "@stll/ui/components/input";
 import {
-  EMPTY_SCREEN_TABLE_PREVIEW,
-  EmptyScreen,
-} from "@/components/empty-screen";
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/components/select";
+import { stellaToast } from "@stll/ui/components/toast";
+
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
-import { roleOptions } from "@/routes/-queries";
+import { toSafeId } from "@/lib/safe-id";
 import {
   knowledgeKeys,
-  shortcutsOptions,
+  skillsOptions,
 } from "@/routes/_protected.knowledge/-queries";
-
-import { ShortcutFormDialog } from "./-components/shortcut-form-dialog";
-import type { ShortcutInitial } from "./-components/shortcut-form-dialog";
 
 export const Route = createFileRoute("/_protected/knowledge/skills")({
   component: SkillsPage,
 });
 
-// ── Types ────────────────────────────────────────────
+type SkillScope = "team" | "private";
 
-type ShortcutRow = {
+type InstalledSkill = {
+  compatibility: string | null;
+  contentHash: string;
+  description: string;
+  enabled: boolean;
   id: string;
-  scope: "team" | "private";
+  license: string | null;
   name: string;
-  description: string | null;
-  command: string;
-  prompt: string;
-  isDefault: boolean;
+  origin: "upload" | "url";
+  scope: SkillScope;
+  slug: string;
+  sourceUrl: string | null;
   userId: string;
+  version: string | null;
 };
 
-// ── Component ────────────────────────────────────────
+type BuiltInSkill = {
+  compatibility: string | null;
+  description: string;
+  enabled: boolean;
+  id: string;
+  license: string | null;
+  name: string;
+  origin: "built-in";
+  resourceCount: number;
+  scope: "built-in";
+  slug: string;
+  version: string | null;
+};
 
 function SkillsPage() {
   const t = useTranslations();
-  const tSkills = useTranslations("knowledge.skills");
+  const tSkills = useTranslations("knowledge.agentSkills");
   const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery(skillsOptions());
 
-  const { data: shortcuts = [], isLoading } = useQuery(shortcutsOptions());
-  const { data: role } = useQuery(roleOptions);
-
-  const canManageTeam = role === "owner" || role === "admin";
-
-  // Seed defaults on first mount if no shortcuts exist yet
-  useEffect(() => {
-    if (!isLoading && shortcuts.length === 0) {
-      void api.shortcuts.seed.post({ queryKey: ["shortcuts"] }).then(() => {
-        void queryClient.invalidateQueries({
-          queryKey: knowledgeKeys.shortcuts.all,
-        });
-      });
-    }
-  }, [isLoading, shortcuts.length, queryClient]);
-
-  const [formOpen, setFormOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState<ShortcutInitial | undefined>();
-  const [deleteTarget, setDeleteTarget] = useState<ShortcutRow | undefined>();
-  const [deleting, setDeleting] = useState(false);
-
-  const teamShortcuts = shortcuts.filter((s) => s.scope === "team");
-  const privateShortcuts = shortcuts.filter((s) => s.scope === "private");
-  const teamCommands = new Set(teamShortcuts.map((s) => s.command));
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<InstalledSkill | null>(null);
+  const canManageTeam = data?.canManageTeam ?? false;
+  const installed = data?.installed ?? [];
+  const builtIn = data?.builtIn ?? [];
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.shortcuts.all,
-    });
+    void queryClient.invalidateQueries({ queryKey: knowledgeKeys.skills.all });
   };
 
-  const openEdit = (s: ShortcutRow) => {
-    setEditTarget({
-      id: s.id,
-      name: s.name,
-      description: s.description,
-      command: s.command,
-      prompt: s.prompt,
-      scope: s.scope,
-    });
-    setFormOpen(true);
+  const teamSkills = installed.filter((skill) => skill.scope === "team");
+  const privateSkills = installed.filter((skill) => skill.scope === "private");
+
+  const toggleSkill = async (skill: InstalledSkill) => {
+    const response = await api
+      .skills({ skillId: toSafeId<"agentSkill">(skill.id) })
+      .patch({
+        enabled: !skill.enabled,
+        queryKey: ["skills"],
+      });
+    if (response.error) {
+      stellaToast.add({
+        title: t("common.unexpectedError"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+        type: "error",
+      });
+      return;
+    }
+    invalidate();
   };
 
-  const openCreate = () => {
-    setEditTarget(undefined);
-    setFormOpen(true);
-  };
-
-  const confirmDelete = async () => {
+  const deleteSkill = async () => {
     if (!deleteTarget) {
       return;
     }
-    setDeleting(true);
 
     const response = await api
-      .shortcuts({ shortcutId: deleteTarget.id })
-      .delete({ queryKey: ["shortcuts"] });
-    setDeleting(false);
-
+      .skills({ skillId: toSafeId<"agentSkill">(deleteTarget.id) })
+      .delete({ queryKey: ["skills"] });
     if (response.error) {
       stellaToast.add({
         title: t("common.unexpectedError"),
@@ -128,208 +137,505 @@ function SkillsPage() {
       return;
     }
 
+    setDeleteTarget(null);
     invalidate();
-    setDeleteTarget(undefined);
   };
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-foreground text-xl font-semibold">
-          {t("knowledge.sections.prompts.title")}
-        </h1>
-        <Button onClick={openCreate} size="sm">
-          <PlusIcon className="me-1.5 size-4" />
-          {t("knowledge.skills.addShortcut")}
-        </Button>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-foreground text-xl font-semibold">
+            {t("knowledge.sections.skills.title")}
+          </h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            {tSkills("description")}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setImportOpen(true)}
+            size="sm"
+            variant="secondary"
+          >
+            <GlobeIcon className="me-1.5 size-4" />
+            {tSkills("importSkill")}
+          </Button>
+          <Button onClick={() => setUploadOpen(true)} size="sm">
+            <FileUpIcon className="me-1.5 size-4" />
+            {tSkills("uploadSkill")}
+          </Button>
+        </div>
       </div>
 
-      {shortcuts.length === 0 && !isLoading && (
-        <EmptyScreen
-          className="min-h-[520px] p-0"
-          description={tSkills("emptyDescription")}
-          primaryAction={{
-            label: tSkills("addShortcut"),
-            icon: PlusIcon,
-            onClick: openCreate,
-          }}
-          title={tSkills("emptyTitle")}
-          video={{
-            ...EMPTY_SCREEN_TABLE_PREVIEW,
-            title: tSkills("emptyTitle"),
-          }}
-        />
+      {installed.length === 0 && !isLoading && (
+        <div className="border-border bg-muted/20 mb-8 flex min-h-48 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
+          <LibraryIcon className="text-muted-foreground size-8" />
+          <h2 className="mt-3 text-sm font-semibold">
+            {tSkills("emptyTitle")}
+          </h2>
+          <p className="text-muted-foreground mt-1 max-w-xl text-sm">
+            {tSkills("emptyDescription")}
+          </p>
+        </div>
       )}
 
-      {teamShortcuts.length > 0 && (
-        <Section title={t("knowledge.skills.teamSection")}>
-          {teamShortcuts.map((s) => (
-            <ShortcutCard
-              key={s.id}
-              shortcut={s}
-              canEdit={canManageTeam}
-              shadowed={false}
-              onEdit={openEdit}
+      {teamSkills.length > 0 && (
+        <SkillSection title={tSkills("teamSection")}>
+          {teamSkills.map((skill) => (
+            <InstalledSkillCard
+              canDelete={canManageTeam}
+              canToggle={canManageTeam}
+              key={skill.id}
               onDelete={setDeleteTarget}
+              onToggle={(target) => {
+                void toggleSkill(target);
+              }}
+              skill={skill}
             />
           ))}
-        </Section>
+        </SkillSection>
       )}
 
-      {privateShortcuts.length > 0 && (
-        <Section title={t("knowledge.skills.privateSection")}>
-          {privateShortcuts.map((s) => (
-            <ShortcutCard
-              key={s.id}
-              shortcut={s}
-              canEdit
-              shadowed={teamCommands.has(s.command)}
-              onEdit={openEdit}
+      {privateSkills.length > 0 && (
+        <SkillSection title={tSkills("privateSection")}>
+          {privateSkills.map((skill) => (
+            <InstalledSkillCard
+              canDelete
+              canToggle
+              key={skill.id}
               onDelete={setDeleteTarget}
+              onToggle={(target) => {
+                void toggleSkill(target);
+              }}
+              skill={skill}
             />
           ))}
-        </Section>
+        </SkillSection>
       )}
 
-      <ShortcutFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        onSaved={invalidate}
+      {builtIn.length > 0 && (
+        <SkillSection title={tSkills("builtInSection")}>
+          {builtIn.map((skill) => (
+            <BuiltInSkillCard key={skill.id} skill={skill} />
+          ))}
+        </SkillSection>
+      )}
+
+      <UploadSkillDialog
         canManageTeam={canManageTeam}
-        {...(editTarget ? { initial: editTarget } : {})}
+        onChanged={invalidate}
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
       />
-
-      {/* Delete confirmation dialog */}
-      <Dialog
-        open={!!deleteTarget}
+      <ImportSkillDialog
+        canManageTeam={canManageTeam}
+        onChanged={invalidate}
+        open={importOpen}
+        onOpenChange={setImportOpen}
+      />
+      <DeleteSkillDialog
+        onConfirm={() => {
+          void deleteSkill();
+        }}
         onOpenChange={(open) => {
           if (!open) {
-            setDeleteTarget(undefined);
+            setDeleteTarget(null);
           }
         }}
-      >
-        <DialogPopup className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>
-              {t("knowledge.skills.deleteConfirmTitle")}
-            </DialogTitle>
-          </DialogHeader>
-          <DialogPanel>
-            <p className="text-muted-foreground text-sm">
-              {t("knowledge.skills.deleteConfirmDescription")}
-            </p>
-          </DialogPanel>
-          <DialogFooter>
-            <DialogClose render={<Button variant="ghost" />}>
-              {t("common.cancel")}
-            </DialogClose>
-            <Button
-              variant="destructive"
-              disabled={deleting}
-              onClick={() => {
-                void confirmDelete();
-              }}
-            >
-              {t("knowledge.skills.deleteShortcut")}
-            </Button>
-          </DialogFooter>
-        </DialogPopup>
-      </Dialog>
+        open={deleteTarget !== null}
+        skill={deleteTarget}
+      />
     </div>
   );
 }
 
-// ── Sub-components ───────────────────────────────────
-
-type SectionProps = {
-  title: string;
+type SkillSectionProps = {
   children: React.ReactNode;
+  title: string;
 };
 
-function Section({ title, children }: SectionProps) {
+function SkillSection({ children, title }: SkillSectionProps) {
   return (
-    <div className="mb-8">
+    <section className="mb-8">
       <h2 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wider uppercase">
         {title}
       </h2>
-      <div className="flex flex-col gap-2">{children}</div>
+      <div className="grid gap-3 xl:grid-cols-2">{children}</div>
+    </section>
+  );
+}
+
+type InstalledSkillCardProps = {
+  canDelete: boolean;
+  canToggle: boolean;
+  onDelete: (skill: InstalledSkill) => void;
+  onToggle: (skill: InstalledSkill) => void;
+  skill: InstalledSkill;
+};
+
+function InstalledSkillCard({
+  canDelete,
+  canToggle,
+  onDelete,
+  onToggle,
+  skill,
+}: InstalledSkillCardProps) {
+  const t = useTranslations();
+  const tSkills = useTranslations("knowledge.agentSkills");
+
+  return (
+    <article className="bg-card flex min-w-0 items-start justify-between gap-4 rounded-lg border p-4">
+      <SkillCardBody
+        badge={skill.enabled ? tSkills("enabled") : tSkills("disabled")}
+        description={skill.description}
+        meta={[
+          skill.version ? tSkills("version", { version: skill.version }) : null,
+          skill.license ? tSkills("license", { license: skill.license }) : null,
+          skill.origin === "upload"
+            ? tSkills("sourceUpload")
+            : tSkills("sourceUrl"),
+        ]}
+        name={skill.name}
+        slug={skill.slug}
+      />
+      <div className="flex shrink-0 items-center gap-1">
+        {canToggle && (
+          <Button
+            aria-label={
+              skill.enabled ? tSkills("disableSkill") : tSkills("enableSkill")
+            }
+            onClick={() => onToggle(skill)}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <PowerIcon className="size-4" />
+          </Button>
+        )}
+        {canDelete && (
+          <Button
+            aria-label={t("common.delete")}
+            onClick={() => onDelete(skill)}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <TrashIcon className="size-4" />
+          </Button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function BuiltInSkillCard({ skill }: { skill: BuiltInSkill }) {
+  const tSkills = useTranslations("knowledge.agentSkills");
+
+  return (
+    <article className="bg-card rounded-lg border p-4">
+      <SkillCardBody
+        badge={tSkills("builtInBadge")}
+        description={skill.description}
+        meta={[
+          skill.version ? tSkills("version", { version: skill.version }) : null,
+          tSkills("resources", { count: skill.resourceCount }),
+        ]}
+        name={skill.name}
+        slug={skill.slug}
+      />
+    </article>
+  );
+}
+
+type SkillCardBodyProps = {
+  badge: string;
+  description: string;
+  meta: (string | null)[];
+  name: string;
+  slug: string;
+};
+
+function SkillCardBody({
+  badge,
+  description,
+  meta,
+  name,
+  slug,
+}: SkillCardBodyProps) {
+  return (
+    <div className="min-w-0 flex-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-foreground truncate text-sm font-medium">
+          {name}
+        </span>
+        <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-xs">
+          {slug}
+        </span>
+        <span className="text-muted-foreground rounded border px-1.5 py-0.5 text-xs">
+          {badge}
+        </span>
+      </div>
+      <p className="text-muted-foreground mt-1 line-clamp-2 text-sm">
+        {description}
+      </p>
+      <div className="text-muted-foreground mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+        {meta.filter(isNonNull).map((item) => (
+          <span key={item}>{item}</span>
+        ))}
+      </div>
     </div>
   );
 }
 
-type ShortcutCardProps = {
-  shortcut: ShortcutRow;
-  canEdit: boolean;
-  shadowed: boolean;
-  onEdit: (s: ShortcutRow) => void;
-  onDelete: (s: ShortcutRow) => void;
+type SkillFormDialogProps = {
+  canManageTeam: boolean;
+  onChanged: () => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
 };
 
-function ShortcutCard({
-  shortcut,
-  canEdit,
-  shadowed,
-  onEdit,
-  onDelete,
-}: ShortcutCardProps) {
+function UploadSkillDialog({
+  canManageTeam,
+  onChanged,
+  onOpenChange,
+  open,
+}: SkillFormDialogProps) {
   const t = useTranslations();
+  const tSkills = useTranslations("knowledge.agentSkills");
+  const [file, setFile] = useState<File | null>(null);
+  const [scope, setScope] = useState<SkillScope>("private");
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!file) {
+      return;
+    }
+
+    setSaving(true);
+    const response = await api.skills.upload.post({
+      file,
+      scope,
+      queryKey: ["skills"],
+    });
+    setSaving(false);
+
+    if (response.error) {
+      const fallback = t("common.unexpectedError");
+      stellaToast.add({
+        title: fallback,
+        description:
+          typeof response.error.status === "number"
+            ? userErrorMessage(response.error, fallback)
+            : fallback,
+        type: "error",
+      });
+      return;
+    }
+
+    onChanged();
+    onOpenChange(false);
+  };
 
   return (
-    <div
-      className={cn(
-        "bg-card group flex items-start justify-between gap-4 rounded-xl border p-4",
-        "hover:border-foreground/15 transition-colors hover:shadow-sm",
-      )}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-foreground text-sm font-medium">
-            {shortcut.name}
-          </span>
-          <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-xs">
-            /{shortcut.command}
-          </span>
-          {shortcut.isDefault && (
-            <span className="text-muted-foreground rounded border px-1.5 py-0.5 text-xs">
-              {t("knowledge.skills.defaultBadge")}
-            </span>
-          )}
-          {shadowed && (
-            <span className="rounded border border-amber-200 px-1.5 py-0.5 text-xs text-amber-600 dark:border-amber-800 dark:text-amber-400">
-              {t("knowledge.skills.shadowed")}
-            </span>
-          )}
-        </div>
-        {shortcut.description && (
-          <p className="text-muted-foreground mt-0.5 text-sm">
-            {shortcut.description}
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogPopup className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{tSkills("uploadTitle")}</DialogTitle>
+        </DialogHeader>
+        <DialogPanel className="flex flex-col gap-4">
+          <p className="text-muted-foreground text-sm">
+            {tSkills("uploadHelp")}
           </p>
-        )}
-        <p className="text-muted-foreground mt-1 line-clamp-2 text-xs">
-          {shortcut.prompt}
-        </p>
-      </div>
+          <Input
+            accept=".md,.zip"
+            onChange={(event) => setFile(event.target.files?.item(0) ?? null)}
+            type="file"
+          />
+          <ScopeField
+            canManageTeam={canManageTeam}
+            scope={scope}
+            onScopeChange={setScope}
+          />
+        </DialogPanel>
+        <DialogFooter>
+          <DialogClose render={<Button variant="ghost" />}>
+            {t("common.cancel")}
+          </DialogClose>
+          <Button
+            disabled={!file || saving}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <DownloadIcon className="me-1.5 size-4" />
+            {t("common.add")}
+          </Button>
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
+  );
+}
 
-      {canEdit && (
-        <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+function ImportSkillDialog({
+  canManageTeam,
+  onChanged,
+  onOpenChange,
+  open,
+}: SkillFormDialogProps) {
+  const t = useTranslations();
+  const tSkills = useTranslations("knowledge.agentSkills");
+  const [url, setUrl] = useState("");
+  const [scope, setScope] = useState<SkillScope>("private");
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!url.trim()) {
+      return;
+    }
+
+    setSaving(true);
+    const response = await api.skills["import-url"].post({
+      scope,
+      url: url.trim(),
+      queryKey: ["skills"],
+    });
+    setSaving(false);
+
+    if (response.error) {
+      const fallback = t("common.unexpectedError");
+      stellaToast.add({
+        title: fallback,
+        description:
+          typeof response.error.status === "number"
+            ? userErrorMessage(response.error, fallback)
+            : fallback,
+        type: "error",
+      });
+      return;
+    }
+
+    onChanged();
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogPopup className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{tSkills("importTitle")}</DialogTitle>
+        </DialogHeader>
+        <DialogPanel className="flex flex-col gap-4">
+          <p className="text-muted-foreground text-sm">
+            {tSkills("importHelp")}
+          </p>
+          <Input
+            onChange={(event) => setUrl(event.target.value)}
+            placeholder={tSkills("urlPlaceholder")}
+            value={url}
+          />
+          <ScopeField
+            canManageTeam={canManageTeam}
+            scope={scope}
+            onScopeChange={setScope}
+          />
+        </DialogPanel>
+        <DialogFooter>
+          <DialogClose render={<Button variant="ghost" />}>
+            {t("common.cancel")}
+          </DialogClose>
           <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => onEdit(shortcut)}
-            aria-label={t("knowledge.skills.editShortcut")}
+            disabled={!url.trim() || saving}
+            onClick={() => {
+              void submit();
+            }}
           >
-            <PencilIcon className="size-4" />
+            <GlobeIcon className="me-1.5 size-4" />
+            {t("common.add")}
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => onDelete(shortcut)}
-            aria-label={t("knowledge.skills.deleteShortcut")}
-          >
-            <TrashIcon className="size-4" />
-          </Button>
-        </div>
-      )}
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
+  );
+}
+
+type ScopeFieldProps = {
+  canManageTeam: boolean;
+  onScopeChange: (scope: SkillScope) => void;
+  scope: SkillScope;
+};
+
+function ScopeField({ canManageTeam, onScopeChange, scope }: ScopeFieldProps) {
+  const tSkills = useTranslations("knowledge.agentSkills");
+
+  if (!canManageTeam) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-sm font-medium" htmlFor="skill-scope">
+        {tSkills("scope")}
+      </label>
+      <Select
+        value={scope}
+        onValueChange={(value) =>
+          onScopeChange(toSkillScope(value ?? "private"))
+        }
+      >
+        <SelectTrigger id="skill-scope">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectPopup>
+          <SelectItem value="private">{tSkills("scopePrivate")}</SelectItem>
+          <SelectItem value="team">{tSkills("scopeTeam")}</SelectItem>
+        </SelectPopup>
+      </Select>
     </div>
+  );
+}
+
+const isNonNull = <T,>(value: T | null): value is T => value !== null;
+
+const toSkillScope = (value: string): SkillScope =>
+  value === "team" ? "team" : "private";
+
+type DeleteSkillDialogProps = {
+  onConfirm: () => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  skill: InstalledSkill | null;
+};
+
+function DeleteSkillDialog({
+  onConfirm,
+  onOpenChange,
+  open,
+  skill,
+}: DeleteSkillDialogProps) {
+  const t = useTranslations();
+  const tSkills = useTranslations("knowledge.agentSkills");
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogPopup className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{tSkills("deleteConfirmTitle")}</DialogTitle>
+        </DialogHeader>
+        <DialogPanel>
+          <p className="text-muted-foreground text-sm">
+            {skill
+              ? tSkills("deleteConfirmDescription", { name: skill.name })
+              : ""}
+          </p>
+        </DialogPanel>
+        <DialogFooter>
+          <DialogClose render={<Button variant="ghost" />}>
+            {t("common.cancel")}
+          </DialogClose>
+          <Button onClick={onConfirm} variant="destructive">
+            {t("common.delete")}
+          </Button>
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
   );
 }

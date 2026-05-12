@@ -31,6 +31,7 @@ import { propertiesRoute } from "@/api/handlers/properties/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
 import { shortcutsRoute } from "@/api/handlers/shortcuts/routes";
+import { skillsRoute } from "@/api/handlers/skills/routes";
 import { myTasksRoute } from "@/api/handlers/tasks/my-tasks-route";
 import { tasksRoute } from "@/api/handlers/tasks/routes";
 import {
@@ -324,6 +325,7 @@ const api = new Elysia()
       .use(caseLawRoute)
       .use(chatRoute)
       .use(userFilesRoute)
+      .use(skillsRoute)
       .use(shortcutsRoute)
       .use(viewsRoute)
       .use(tasksRoute)

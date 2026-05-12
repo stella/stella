@@ -13,6 +13,10 @@ export const knowledgeKeys = {
     all: ["shortcuts"] as const,
     list: () => [...knowledgeKeys.shortcuts.all, "list"] as const,
   },
+  skills: {
+    all: ["skills"] as const,
+    list: () => [...knowledgeKeys.skills.all, "list"] as const,
+  },
   templates: {
     all: ["templates"] as const,
     list: (categoryId?: string | null) =>
@@ -227,6 +231,21 @@ export const shortcutsOptions = () =>
     queryKey: knowledgeKeys.shortcuts.list(),
     queryFn: async ({ signal }) => {
       const response = await api.shortcuts.get({ fetch: { signal } });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// ── Skills queries ───────────────────────────────────
+
+export const skillsOptions = () =>
+  queryOptions({
+    queryKey: knowledgeKeys.skills.list(),
+    queryFn: async ({ signal }) => {
+      const response = await api.skills.get({ fetch: { signal } });
       if (response.error) {
         throw toAPIError(response.error);
       }
