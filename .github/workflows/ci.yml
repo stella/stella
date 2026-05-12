@@ -186,6 +186,75 @@ jobs:
         if: github.event_name == 'pull_request'
         run: bash scripts/check-bridge-version.sh
 
+  # Vite web build. Same rationale as landing-build below: the
+  # ci-checks job's lint + typecheck + test don't exercise the
+  # bundler, so worker bundling / wasm-loader / plugin issues
+  # surface only at deploy time. PR #294 hit exactly that — a
+  # worker importing @stll/*-wasm tripped Vite's iife-no-top-
+  # level-await rule, undetected until the staging promote.
+  # Run `vite build` on every PR that could plausibly affect
+  # the web output so this class of failure is caught pre-merge.
+  web-build:
+    needs: trust-check
+    if: >-
+      needs.trust-check.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Check whether web-affecting paths changed
+        id: changed
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base_ref="origin/${{ github.base_ref || 'main' }}"
+          mapfile -t changed_files < <(git diff --name-only "$base_ref"...HEAD)
+          run=false
+          for file in "${changed_files[@]}"; do
+            case "$file" in
+              apps/web/*|packages/*|bun.lock|package.json|.github/workflows/ci.yml)
+                run=true
+                break
+                ;;
+            esac
+          done
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          if [[ "$run" != "true" ]]; then
+            echo "::notice::No web-affecting paths changed; skipping web build."
+          fi
+
+      - name: Setup Bun
+        if: steps.changed.outputs.run == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        if: steps.changed.outputs.run == 'true'
+        run: bun ci
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Prepare environment
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          cd ./apps/web
+          mv .env.example .env
+
+      - name: Build web
+        if: steps.changed.outputs.run == 'true'
+        run: bun --filter @stll/web build
+
   # Astro landing build. The existing ci-checks job runs lint,
   # typecheck, and test, but no `astro build`, so plugin/runtime
   # incompatibilities surface only at deploy time. Catch those
@@ -251,7 +320,7 @@ jobs:
   # merged without CI and trusted PRs must pass all checks.
   ci-result:
     if: always()
-    needs: [trust-check, ci-checks, landing-build]
+    needs: [trust-check, ci-checks, web-build, landing-build]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -260,6 +329,7 @@ jobs:
         run: |
           TRUSTED="${{ needs.trust-check.outputs.trusted }}"
           CI_RESULT="${{ needs.ci-checks.result }}"
+          WEB_RESULT="${{ needs.web-build.result }}"
           LANDING_RESULT="${{ needs.landing-build.result }}"
           TRUST_RESULT="${{ needs.trust-check.result }}"
           EVENT="${{ github.event_name }}"
@@ -274,6 +344,7 @@ jobs:
 
           if [[ "$EVENT" == "workflow_dispatch" ]]; then
             if [[ "$CI_RESULT" == "failure" || "$CI_RESULT" == "cancelled" \
+                  || "$WEB_RESULT" == "failure" || "$WEB_RESULT" == "cancelled" \
                   || "$LANDING_RESULT" == "failure" || "$LANDING_RESULT" == "cancelled" ]]; then
               echo "::error::CI checks failed."
               exit 1
@@ -288,12 +359,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$CI_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" ]]; then
+          if [[ "$CI_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$CI_RESULT" == "failure" || "$LANDING_RESULT" == "failure" ]]; then
+          if [[ "$CI_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$LANDING_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi
