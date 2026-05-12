@@ -34,7 +34,7 @@ import type {
 import type { BorderSpec, Theme } from "../types/document";
 import { resolveFontFamily } from "../utils/fontResolver";
 import { borderToStyle } from "../utils/formatToStyle";
-import { pointsToPixels } from "../utils/units";
+import { eighthsToPixels, pointsToPixels } from "../utils/units";
 import type { BlockLookup } from "./index";
 import { renderFragment } from "./renderFragment";
 import { renderImageFragment } from "./renderImage";
@@ -268,6 +268,24 @@ function pageBorderSpacePx(border: BorderSpec | undefined): number {
   return border?.space !== undefined ? pointsToPixels(border.space) : 0;
 }
 
+/**
+ * Effective rendered border width in pixels. Mirrors `borderToStyle` (1px
+ * floor for hairlines) and the 3px floor applied to double borders in
+ * `applyPageBorderSide`, so callers can shift the overlay outward by the
+ * exact stroke they will see on screen.
+ */
+function pageBorderWidthPx(border: BorderSpec | undefined): number {
+  if (!border || border.style === "none" || border.style === "nil") {
+    return 0;
+  }
+  const widthPx =
+    border.size !== undefined && border.size !== 0
+      ? eighthsToPixels(border.size)
+      : 1;
+  const floored = Math.max(1, widthPx);
+  return border.style === "double" ? Math.max(3, floored) : floored;
+}
+
 function applyPageBorderSide(
   element: HTMLElement,
   border: BorderSpec | undefined,
@@ -335,10 +353,18 @@ function renderPageBorderOverlay(
     overlay.style.bottom = `${bottomOffset}px`;
     overlay.style.left = `${leftOffset}px`;
   } else {
-    overlay.style.top = `${Math.max(0, page.margins.top - topOffset)}px`;
-    overlay.style.right = `${Math.max(0, page.margins.right - rightOffset)}px`;
-    overlay.style.bottom = `${Math.max(0, page.margins.bottom - bottomOffset)}px`;
-    overlay.style.left = `${Math.max(0, page.margins.left - leftOffset)}px`;
+    // With box-sizing: border-box, the border paints inside the overlay,
+    // so for offsetFrom="text" we must shift each side outward by both
+    // `space` (text↔border gap) and the visible stroke width to preserve
+    // the OOXML gap when borders are thick or doubled.
+    const topWidth = pageBorderWidthPx(pb.top);
+    const rightWidth = pageBorderWidthPx(pb.right);
+    const bottomWidth = pageBorderWidthPx(pb.bottom);
+    const leftWidth = pageBorderWidthPx(pb.left);
+    overlay.style.top = `${Math.max(0, page.margins.top - topOffset - topWidth)}px`;
+    overlay.style.right = `${Math.max(0, page.margins.right - rightOffset - rightWidth)}px`;
+    overlay.style.bottom = `${Math.max(0, page.margins.bottom - bottomOffset - bottomWidth)}px`;
+    overlay.style.left = `${Math.max(0, page.margins.left - leftOffset - leftWidth)}px`;
   }
 
   applyPageBorderSide(overlay, pb.top, "Top", options.theme);
