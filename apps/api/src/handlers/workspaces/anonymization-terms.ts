@@ -64,8 +64,8 @@ const createConfig = {
 /**
  * Create one or more workspace-scoped anonymization terms.
  * On canonical conflict within the workspace the entry is
- * left alone (idempotent re-add). Returns all created or
- * existing rows.
+ * left alone (idempotent re-add). Returns the number of
+ * newly inserted rows.
  */
 export const createWorkspaceAnonymizationTerms = createSafeHandler(
   createConfig,
