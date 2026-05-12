@@ -189,11 +189,9 @@ jobs:
   # Vite web build. Same rationale as landing-build below: the
   # ci-checks job's lint + typecheck + test don't exercise the
   # bundler, so worker bundling / wasm-loader / plugin issues
-  # surface only at deploy time. PR #294 hit exactly that — a
-  # worker importing @stll/*-wasm tripped Vite's iife-no-top-
-  # level-await rule, undetected until the staging promote.
-  # Run `vite build` on every PR that could plausibly affect
-  # the web output so this class of failure is caught pre-merge.
+  # surface only at deploy time. Run `vite build` on every PR
+  # that could plausibly affect the web output so this class of
+  # failure is caught pre-merge.
   web-build:
     needs: trust-check
     if: >-
