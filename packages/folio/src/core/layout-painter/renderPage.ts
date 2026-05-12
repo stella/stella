@@ -2548,6 +2548,15 @@ function populatePageShell(
   );
   const fullPageEl = renderPage(data.page, context, pageOptions);
 
+  // Strip any overlay left behind by the lightweight virtualized shell setup,
+  // otherwise the overlay carried over from renderPage() stacks on top of it
+  // and the border paints twice (darker/thicker than intended).
+  for (const stale of Array.from(
+    shell.querySelectorAll<HTMLElement>(":scope > .layout-page-border"),
+  )) {
+    stale.remove();
+  }
+
   while (fullPageEl.firstChild) {
     shell.append(fullPageEl.firstChild);
   }
