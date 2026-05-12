@@ -39,7 +39,7 @@
     "@ai-sdk/openai": "^3.0.58",
     "@ai-sdk/provider-utils": "^4.0.26",
     "@ai-sdk/valibot": "^2.0.27",
-    "@aws-sdk/client-sesv2": "^3.1041.0",
+    "@aws-sdk/client-sesv2": "^3.1045.0",
     "@better-auth/oauth-provider": "catalog:",
     "@elysiajs/cors": "^1.4.2",
     "@libpdf/core": "catalog:",

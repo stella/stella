@@ -91,7 +91,7 @@
     "@types/bun": "1.3.13",
     "@vitejs/plugin-react": "^6.0.1",
     "better-auth": "1.6.9",
-    "better-result": "2.9.1",
+    "better-result": "2.9.2",
     "diff": "9.0.0",
     "drizzle-kit": "1.0.0-rc.1",
     "drizzle-orm": "1.0.0-rc.1",
