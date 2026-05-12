@@ -708,6 +708,22 @@
   background-color: color-mix(in oklch, var(--doc-bg-hover) 90%, transparent);
 }
 
+/* Workspace anonymization term highlights — subtle bracket-ish
+   block so a lawyer scanning the doc can see at a glance which
+   strings are in the workspace's PII vocabulary. Renders nothing
+   unless the host pushes a term list through the plugin. */
+.folio-anonymization-term {
+  background-color: color-mix(
+    in oklch,
+    var(--doc-error, currentColor) 12%,
+    transparent
+  );
+  box-shadow: inset 0 -1px 0 0
+    color-mix(in oklch, var(--doc-error, currentColor) 45%, transparent);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
 /* AI prompt-bar caret suppression lives in apps/web (the bar is no
    longer part of folio); see file-viewer-with-ai.css. */
 

@@ -154,6 +154,7 @@ import {
 import { createStarterKit } from "../core/prosemirror/extensions/StarterKit";
 import { createAICitationDecorationsPlugin } from "../core/prosemirror/plugins/aiCitationDecorations";
 import { createAISuggestionDecorationsPlugin } from "../core/prosemirror/plugins/aiSuggestionDecorations";
+import { createAnonymizationDecorationsPlugin } from "../core/prosemirror/plugins/anonymizationDecorations";
 import {
   createSuggestionModePlugin,
   setSuggestionMode,
@@ -977,9 +978,26 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       () => createAICitationDecorationsPlugin(),
       [],
     );
+    // Workspace anonymization-term highlights. Always installed;
+    // renders nothing until the host pushes a term list via
+    // `setAnonymizationTermsMeta`.
+    const anonymizationDecorationsPlugin = useMemo(
+      () => createAnonymizationDecorationsPlugin(),
+      [],
+    );
     const editorPlugins = useMemo(
-      () => [suggestionPlugin, aiSuggestionPlugin, aiCitationPlugin],
-      [suggestionPlugin, aiSuggestionPlugin, aiCitationPlugin],
+      () => [
+        suggestionPlugin,
+        aiSuggestionPlugin,
+        aiCitationPlugin,
+        anonymizationDecorationsPlugin,
+      ],
+      [
+        suggestionPlugin,
+        aiSuggestionPlugin,
+        aiCitationPlugin,
+        anonymizationDecorationsPlugin,
+      ],
     );
 
     // Surface the live PM view to the host for AI overlay wiring.

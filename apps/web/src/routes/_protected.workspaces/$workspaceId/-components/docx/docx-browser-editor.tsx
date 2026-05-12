@@ -15,6 +15,7 @@ import {
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import type { EditorView } from "prosemirror-view";
 import {
   CheckCircle2Icon,
   EyeIcon,
@@ -25,8 +26,13 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { FormattingBar } from "@stll/folio";
-import type { DocxCompatibility, DocxEditorRef, EditorMode } from "@stll/folio";
+import { FormattingBar, setAnonymizationTermsMeta } from "@stll/folio";
+import type {
+  AnonymizationTerm,
+  DocxCompatibility,
+  DocxEditorRef,
+  EditorMode,
+} from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
 import {
   Select as StSelect,
@@ -47,6 +53,7 @@ import { StatusMessage } from "@/components/route-components";
 import Tooltip from "@/components/tooltip";
 import { chatThreadIdFromFileFieldId } from "@/lib/chat-thread-ref";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
+import { anonymizationTermsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-terms";
 import {
   useDocxFitZoom,
   useDocxWheelZoom,
@@ -163,6 +170,28 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   } = props;
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Track the live ProseMirror view so we can dispatch the
+  // workspace anonymization-term list into the decoration plugin
+  // installed inside Folio. The view is captured via the
+  // onEditorViewReady callback below; the effect re-pushes the
+  // term list whenever it (or the view) changes.
+  const [editorViewForAnonymization, setEditorViewForAnonymization] =
+    useState<EditorView | null>(null);
+  const anonymizationTermsQuery = useQuery(
+    anonymizationTermsOptions(workspaceId),
+  );
+  const anonymizationTerms: AnonymizationTerm[] =
+    anonymizationTermsQuery.data?.entries.map((entry) => ({
+      canonical: entry.canonical,
+      label: entry.label,
+      variants: entry.variants,
+    })) ?? [];
+  useEffect(() => {
+    const view = editorViewForAnonymization;
+    if (!view) return;
+    const { key, payload } = setAnonymizationTermsMeta(anonymizationTerms);
+    view.dispatch(view.state.tr.setMeta(key, payload));
+  }, [editorViewForAnonymization, anonymizationTerms]);
   const didOpenRef = useRef(false);
   const errorToastShownRef = useRef(false);
   const lastStyleLabelRef = useRef("Normal");
@@ -953,6 +982,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
                 setCompatibility(nextCompatibility);
                 onCompatibilityChange?.(nextCompatibility);
               }}
+              onEditorViewReady={setEditorViewForAnonymization}
               showToolbar={showActionBar ? true : isUnlocked}
               toolbarExtra={toolbarExtra}
               {...(isUnlocked ? { onChange: handleChange } : {})}

@@ -72,3 +72,8 @@ export {
   setActiveCitationMeta,
   type AICitationRange,
 } from "./core/prosemirror/plugins/aiCitationDecorations";
+export {
+  anonymizationDecorationsKey,
+  setAnonymizationTermsMeta,
+  type AnonymizationTerm,
+} from "./core/prosemirror/plugins/anonymizationDecorations";
