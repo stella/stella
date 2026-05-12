@@ -154,6 +154,7 @@ jobs:
           bun src/index.ts >"$log_file" 2>&1 &
           api_pid=$!
 
+          # shellcheck disable=SC2329
           cleanup() {
             kill "$api_pid" >/dev/null 2>&1 || true
             wait "$api_pid" >/dev/null 2>&1 || true
