@@ -31,6 +31,11 @@ type InstallSkillProps = {
   user: { id: SafeId<"user"> };
 };
 
+type InstallSkillTransactionResult =
+  | { id: SafeId<"agentSkill">; type: "installed" }
+  | { type: "insert-failed" }
+  | { type: "limit-reached" };
+
 export const installSkill = async ({
   memberRole,
   origin,
@@ -51,98 +56,90 @@ export const installSkill = async ({
     );
   }
 
-  const userCount = await safeDb((tx) =>
-    tx.$count(
-      agentSkills,
-      and(
-        eq(agentSkills.organizationId, session.activeOrganizationId),
-        eq(agentSkills.userId, user.id),
-      ),
-    ),
-  );
-  if (Result.isError(userCount)) {
-    return Result.err(userCount.error);
-  }
-  if (userCount.value >= LIMITS.agentSkillsPerUser) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Skill limit reached for this user",
-      }),
-    );
-  }
-
   const insertResult = await safeDb(
     async (tx) =>
-      await tx.transaction(async (innerTx) => {
-        const rows = await innerTx
-          .insert(agentSkills)
-          .values({
-            organizationId: session.activeOrganizationId,
-            userId: user.id,
-            scope,
-            origin,
-            slug: parsed.name,
-            name: parsed.name,
-            description: parsed.description,
-            version: parsed.version,
-            license: parsed.license,
-            compatibility: parsed.compatibility,
-            metadata: parsed.metadata,
-            sourceUrl: parsed.sourceUrl,
-            contentHash: parsed.contentHash,
-            body: parsed.body,
-            enabled: true,
-          })
-          .returning({ id: agentSkills.id });
-
-        const row = rows.at(0);
-        if (!row) {
-          return null;
-        }
-
-        if (parsed.resources.length > 0) {
-          await innerTx.insert(agentSkillResources).values(
-            parsed.resources.map((resource) => ({
-              organizationId: session.activeOrganizationId,
-              skillId: row.id,
-              path: resource.path,
-              kind: resource.kind,
-              content: resource.content,
-              sizeBytes: resource.sizeBytes,
-            })),
+      await tx.transaction(
+        async (innerTx): Promise<InstallSkillTransactionResult> => {
+          const userCount = await innerTx.$count(
+            agentSkills,
+            and(
+              eq(agentSkills.organizationId, session.activeOrganizationId),
+              eq(agentSkills.userId, user.id),
+            ),
           );
-        }
+          if (userCount >= LIMITS.agentSkillsPerUser) {
+            return { type: "limit-reached" };
+          }
 
-        await writeAuditLog(
-          {
-            ...createAuditContext({
+          const rows = await innerTx
+            .insert(agentSkills)
+            .values({
               organizationId: session.activeOrganizationId,
               userId: user.id,
-              request,
-              server,
-            }),
-            action: AUDIT_ACTION.CREATE,
-            resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
-            resourceId: row.id,
-            changes: {
-              created: {
-                old: null,
-                new: {
-                  contentHash: parsed.contentHash,
-                  origin,
-                  resourceCount: parsed.resources.length,
-                  scope,
-                  slug: parsed.name,
+              scope,
+              origin,
+              slug: parsed.name,
+              name: parsed.name,
+              description: parsed.description,
+              version: parsed.version,
+              license: parsed.license,
+              compatibility: parsed.compatibility,
+              metadata: parsed.metadata,
+              sourceUrl: parsed.sourceUrl,
+              contentHash: parsed.contentHash,
+              body: parsed.body,
+              enabled: true,
+            })
+            .returning({ id: agentSkills.id });
+
+          const row = rows.at(0);
+          if (!row) {
+            return { type: "insert-failed" };
+          }
+
+          if (parsed.resources.length > 0) {
+            await innerTx.insert(agentSkillResources).values(
+              parsed.resources.map((resource) => ({
+                organizationId: session.activeOrganizationId,
+                skillId: row.id,
+                path: resource.path,
+                kind: resource.kind,
+                content: resource.content,
+                sizeBytes: resource.sizeBytes,
+              })),
+            );
+          }
+
+          await writeAuditLog(
+            {
+              ...createAuditContext({
+                organizationId: session.activeOrganizationId,
+                userId: user.id,
+                request,
+                server,
+              }),
+              action: AUDIT_ACTION.CREATE,
+              resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
+              resourceId: row.id,
+              changes: {
+                created: {
+                  old: null,
+                  new: {
+                    contentHash: parsed.contentHash,
+                    origin,
+                    resourceCount: parsed.resources.length,
+                    scope,
+                    slug: parsed.name,
+                  },
                 },
               },
             },
-          },
-          innerTx,
-        );
+            innerTx,
+          );
 
-        return { id: row.id };
-      }),
+          return { id: row.id, type: "installed" };
+        },
+      ),
   );
 
   if (Result.isError(insertResult)) {
@@ -160,11 +157,20 @@ export const installSkill = async ({
     return Result.err(insertResult.error);
   }
 
-  if (!insertResult.value) {
+  if (insertResult.value.type === "limit-reached") {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Skill limit reached for this user",
+      }),
+    );
+  }
+
+  if (insertResult.value.type === "insert-failed") {
     return Result.err(
       new HandlerError({ status: 500, message: "Failed to install skill" }),
     );
   }
 
-  return Result.ok(insertResult.value);
+  return Result.ok({ id: insertResult.value.id });
 };

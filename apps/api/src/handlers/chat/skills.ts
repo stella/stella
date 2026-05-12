@@ -294,4 +294,5 @@ const resolveSkillPrecedence = (
   return skills.toSorted((a, b) => a.name.localeCompare(b.name));
 };
 
-const scopePriority = (scope: "team" | "private") => (scope === "team" ? 0 : 1);
+const scopePriority = (scope: "team" | "private") =>
+  scope === "private" ? 0 : 1;

@@ -137,21 +137,17 @@ const parseZipSkillPackage = async (
 
     const declaredSize = zipUncompressedSize(file);
     if (declaredSize !== null) {
-      totalUncompressedBytes += declaredSize;
-      assertZipUncompressedLimit(totalUncompressedBytes);
+      assertZipUncompressedLimit(totalUncompressedBytes + declaredSize);
     }
 
-    const content = await file.async("string");
-    const sizeBytes = encodedSize(content);
-    if (declaredSize === null) {
-      totalUncompressedBytes += sizeBytes;
-      assertZipUncompressedLimit(totalUncompressedBytes);
-    }
+    const bytes = await file.async("uint8array");
+    totalUncompressedBytes += bytes.byteLength;
+    assertZipUncompressedLimit(totalUncompressedBytes);
 
     files.push({
-      content,
+      content: decodeUtf8(bytes),
       path: normalizedPath,
-      sizeBytes,
+      sizeBytes: bytes.byteLength,
     });
   }
 
@@ -337,7 +333,18 @@ const fetchGithubSkillPackage = async (
         isAllowedResourcePath(normalizeResourcePath(relative))
       );
     })
-    .slice(0, LIMITS.agentSkillResourcesPerSkill + 1);
+    .slice(0, LIMITS.agentSkillResourcesPerSkill + 2);
+  const wantedResourceCount = wanted.filter((item) => {
+    const relative =
+      rootPrefix.length > 0 ? item.path.slice(rootPrefix.length) : item.path;
+    return relative !== SKILL_FILE_NAME;
+  }).length;
+  if (wantedResourceCount > LIMITS.agentSkillResourcesPerSkill) {
+    throw new HandlerError({
+      status: 400,
+      message: "Skill has too many resources",
+    });
+  }
 
   const files = await Promise.all(
     wanted.map(async (item): Promise<SkillFile> => {
@@ -512,7 +519,7 @@ const isZipFile = ({ buffer, name }: { buffer: ArrayBuffer; name: string }) => {
   );
 };
 
-const decodeUtf8 = (buffer: ArrayBuffer): string => {
+const decodeUtf8 = (buffer: ArrayBuffer | Uint8Array): string => {
   try {
     return UTF8_DECODER.decode(buffer);
   } catch (error) {
@@ -528,6 +535,8 @@ const encodedSize = (value: string): number =>
   new TextEncoder().encode(value).byteLength;
 
 const zipUncompressedSize = (file: JSZip.JSZipObject): number | null => {
+  // JSZip has no public declared-size API; this is only a preflight before the
+  // authoritative post-decompression byte count.
   const candidate: unknown = file;
   if (!isRecord(candidate)) {
     return null;
