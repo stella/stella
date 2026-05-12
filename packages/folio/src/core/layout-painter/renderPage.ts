@@ -34,6 +34,7 @@ import type {
 import type { BorderSpec, Theme } from "../types/document";
 import { resolveFontFamily } from "../utils/fontResolver";
 import { borderToStyle } from "../utils/formatToStyle";
+import { pointsToPixels } from "../utils/units";
 import type { BlockLookup } from "./index";
 import { renderFragment } from "./renderFragment";
 import { renderImageFragment } from "./renderImage";
@@ -193,7 +194,9 @@ export type RenderPageOptions = {
     bottom?: BorderSpec;
     left?: BorderSpec;
     right?: BorderSpec;
+    display?: "allPages" | "firstPage" | "notFirstPage";
     offsetFrom?: "page" | "text";
+    zOrder?: "front" | "back";
   };
   /** Theme for resolving border colors. */
   theme?: Theme | null;
@@ -243,25 +246,107 @@ function applyPageStyles(
   element.style.fontSize = `${(11 * 96) / 72}px`;
   element.style.color = "var(--doc-canvas-text, #000)";
 
-  // Page borders and shadows removed — Stella doesn't use them
+  // Page borders are painted as a separate overlay (see renderPageBorderOverlay)
+  // so they can honor OOXML offsetFrom/zOrder/display and remain text-relative.
+}
 
-  // Apply OOXML page borders
-  if (options.pageBorders) {
-    const pb = options.pageBorders;
-    const sides = ["top", "bottom", "left", "right"] as const;
-    const cssSides = ["Top", "Bottom", "Left", "Right"] as const;
+function pageBorderShouldRender(
+  pageNumber: number,
+  display?: "allPages" | "firstPage" | "notFirstPage",
+): boolean {
+  switch (display ?? "allPages") {
+    case "firstPage":
+      return pageNumber === 1;
+    case "notFirstPage":
+      return pageNumber !== 1;
+    default:
+      return true;
+  }
+}
 
-    for (let i = 0; i < sides.length; i++) {
-      const border = pb[sides[i]!]; // SAFETY: i < sides.length (4 elements)
-      if (border && border.style !== "none" && border.style !== "nil") {
-        const styles = borderToStyle(border, cssSides[i]!, options.theme); // SAFETY: same bounds
-        for (const [key, value] of Object.entries(styles)) {
-          (element.style as unknown as Record<string, string>)[key] =
-            String(value);
-        }
-      }
+function pageBorderSpacePx(border: BorderSpec | undefined): number {
+  return border?.space !== undefined ? pointsToPixels(border.space) : 0;
+}
+
+function applyPageBorderSide(
+  element: HTMLElement,
+  border: BorderSpec | undefined,
+  side: "Top" | "Bottom" | "Left" | "Right",
+  theme?: Theme | null,
+): void {
+  if (!border || border.style === "none" || border.style === "nil") {
+    return;
+  }
+
+  const styles = borderToStyle(border, side, theme);
+  for (const [key, value] of Object.entries(styles)) {
+    (element.style as unknown as Record<string, string>)[key] = String(value);
+  }
+
+  // Browsers collapse double borders narrower than 3px into a single line.
+  const styleKey = `border${side}Style`;
+  const widthKey = `border${side}Width`;
+  const styleValue = (element.style as unknown as Record<string, string>)[
+    styleKey
+  ];
+  if (styleValue === "double") {
+    const widthValue = Number.parseFloat(
+      (element.style as unknown as Record<string, string>)[widthKey] ?? "",
+    );
+    if (!Number.isFinite(widthValue) || widthValue < 3) {
+      (element.style as unknown as Record<string, string>)[widthKey] = "3px";
     }
   }
+}
+
+function renderPageBorderOverlay(
+  page: Page,
+  options: RenderPageOptions,
+  doc: Document,
+): HTMLElement | null {
+  const pb = options.pageBorders;
+  if (!pb || !pageBorderShouldRender(page.number, pb.display)) {
+    return null;
+  }
+
+  const hasBorder = [pb.top, pb.bottom, pb.left, pb.right].some(
+    (border) => border && border.style !== "none" && border.style !== "nil",
+  );
+  if (!hasBorder) {
+    return null;
+  }
+
+  const offsetFrom = pb.offsetFrom ?? "text";
+  const topOffset = pageBorderSpacePx(pb.top);
+  const rightOffset = pageBorderSpacePx(pb.right);
+  const bottomOffset = pageBorderSpacePx(pb.bottom);
+  const leftOffset = pageBorderSpacePx(pb.left);
+
+  const overlay = doc.createElement("div");
+  overlay.className = "layout-page-border";
+  overlay.style.position = "absolute";
+  overlay.style.pointerEvents = "none";
+  overlay.style.boxSizing = "border-box";
+  overlay.style.zIndex = pb.zOrder === "back" ? "0" : "20";
+
+  if (offsetFrom === "page") {
+    overlay.style.top = `${topOffset}px`;
+    overlay.style.right = `${rightOffset}px`;
+    overlay.style.bottom = `${bottomOffset}px`;
+    overlay.style.left = `${leftOffset}px`;
+  } else {
+    overlay.style.top = `${Math.max(0, page.margins.top - topOffset)}px`;
+    overlay.style.right = `${Math.max(0, page.margins.right - rightOffset)}px`;
+    overlay.style.bottom = `${Math.max(0, page.margins.bottom - bottomOffset)}px`;
+    overlay.style.left = `${Math.max(0, page.margins.left - leftOffset)}px`;
+  }
+
+  applyPageBorderSide(overlay, pb.top, "Top", options.theme);
+  applyPageBorderSide(overlay, pb.bottom, "Bottom", options.theme);
+  applyPageBorderSide(overlay, pb.left, "Left", options.theme);
+  applyPageBorderSide(overlay, pb.right, "Right", options.theme);
+
+  return overlay;
 }
 
 /**
@@ -1325,6 +1410,10 @@ export function renderPage(
   pageEl.dataset["pageNumber"] = String(page.number);
 
   applyPageStyles(pageEl, page.size.w, page.size.h, options);
+  const pageBorderEl = renderPageBorderOverlay(page, options, doc);
+  if (pageBorderEl && options.pageBorders?.zOrder === "back") {
+    pageEl.append(pageBorderEl);
+  }
 
   // Create content area
   const contentEl = doc.createElement("div");
@@ -1785,6 +1874,10 @@ export function renderPage(
       footerEl.style.overflow = "hidden";
     }
     pageEl.append(footerEl);
+  }
+
+  if (pageBorderEl && options.pageBorders?.zOrder !== "back") {
+    pageEl.append(pageBorderEl);
   }
 
   return pageEl;
