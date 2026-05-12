@@ -365,6 +365,15 @@ export function calculateHeaderFooterVisualBounds(
         if (!run.position && !isFloatingImageRun(run)) {
           continue;
         }
+        // behindDoc images (full-page letterheads, watermarks) paint behind
+        // body content by design and are lifted out of the HF container to
+        // the page root at render time. They must not contribute to the
+        // header's visualBottom — otherwise `computeHeaderFooterMarginExtender`
+        // reserves the entire image as body push-down, and the body (plus
+        // the image's own margin-anchored position) cascades off the page.
+        if (run.wrapType === "behind") {
+          continue;
+        }
         const runTop = resolveHeaderFooterVisualTop(
           run,
           paragraphStartY,

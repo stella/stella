@@ -144,6 +144,43 @@ describe("calculateHeaderFooterVisualBounds", () => {
 
     expect(bounds).toEqual({ visualTop: 0, visualBottom: 70 });
   });
+
+  test("excludes behindDoc images from visualBottom so they don't extend body margins", () => {
+    // Full-page letterhead: anchored to "margin", posOffset -1460500 EMU
+    // (≈ -153px) places the image just above the body margin and its 1117px
+    // height covers the whole page. Renderer lifts behindDoc images out of
+    // the HF container; if they leak into visualBottom,
+    // `computeHeaderFooterMarginExtender` reserves the full image height as
+    // body push-down and the body cascades off the page.
+    const blocks: FlowBlock[] = [
+      {
+        kind: "paragraph",
+        id: "letterhead",
+        runs: [
+          {
+            kind: "image",
+            src: "letterhead.png",
+            width: 790,
+            height: 1117,
+            wrapType: "behind",
+            position: {
+              horizontal: { relativeTo: "margin", posOffset: -702_422 },
+              vertical: { relativeTo: "margin", posOffset: -1_460_500 },
+            },
+          },
+        ],
+      },
+    ];
+
+    const bounds = calculateHeaderFooterVisualBounds(
+      blocks,
+      [{ kind: "paragraph", lines: [], totalHeight: 0 }],
+      0,
+      metrics,
+    );
+
+    expect(bounds).toEqual({ visualTop: 0, visualBottom: 0 });
+  });
 });
 
 describe("header/footer layout conversion", () => {
