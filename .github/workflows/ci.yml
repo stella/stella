@@ -8,7 +8,8 @@ on:
 concurrency:
   # Non-run-ci label events intentionally skip below. Keep them out of
   # the main CI concurrency group so an incidental label cannot cancel
-  # real checks and replace the required status with a skipped pass.
+  # real checks. The ci-result job also changes its check name for
+  # those events so it cannot replace the required status with a pass.
   group: >-
     ${{ github.workflow }}-${{ github.ref }}-${{
       github.event_name == 'pull_request'
@@ -329,6 +330,14 @@ jobs:
   # this check to pass, which ensures untrusted PRs cannot be
   # merged without CI and trusted PRs must pass all checks.
   ci-result:
+    name: >-
+      ${{
+        github.event_name == 'pull_request'
+        && github.event.action == 'labeled'
+        && github.event.label.name != 'run-ci'
+        && format('ci-result-ignored-label-{0}', github.run_id)
+        || 'ci-result'
+      }}
     if: always()
     needs: [trust-check, ci-checks, web-build, landing-build]
     runs-on: ubuntu-latest
