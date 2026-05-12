@@ -63,7 +63,6 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/components/combobox";
-import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
 import {
   DestructiveActionConfirmation,
   useDestructiveActionConfirmation,
@@ -197,6 +196,7 @@ import {
   ChatThreadMessages,
 } from "@/components/chat/chat-thread-messages";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { DatePickerPopover } from "@/components/date-picker-popover";
 import { AIKeyRequiredDialog } from "@/components/require-ai-key";
 
 type ComboboxOption = {

@@ -87,6 +87,7 @@ import {
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
+import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@/lib/consts";
 import { getInitials } from "@/lib/get-initials";
 import { HOTKEYS, NAV_KEY } from "@/lib/hotkeys";
 import { resolveMatterColor } from "@/lib/matter-colors";
@@ -920,7 +921,7 @@ export function AppSidebar(props: AppSidebarProps) {
         >
           {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
           <Button
-            className="text-muted-foreground size-7"
+            className={cn("text-muted-foreground", SIDE_RAIL_ICON_BUTTON_SIZE)}
             onClick={toggleSidebar}
             size="icon"
             variant="ghost"

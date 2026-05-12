@@ -72,7 +72,11 @@ const FullscreenPdfViewer = () => {
 
   return (
     <FileViewerWithAI
-      activeFile={entityId ? { entityId, fileName: file.fileName } : undefined}
+      activeFile={
+        entityId
+          ? { entityId, fileFieldId: fieldId, fileName: file.fileName }
+          : undefined
+      }
       chatThreadId={chatThreadIdFromFileFieldId(fieldId)}
       workspaceId={workspaceId}
     >

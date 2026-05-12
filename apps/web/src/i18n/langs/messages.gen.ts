@@ -339,7 +339,7 @@ type Messages = {
     "attachment": "Attachment";
     "caseLawGreeting": "Ask about this decision — its full text is available here.";
     "chatAbout": "Chat about this";
-    "contextPlaceholder": "Chat about {context}, / for skills, @ to add context";
+    "contextPlaceholder": "Chat about {context}, / for prompts, @ to add context";
     "createDocument": {
       "continue": "Create document";
       "created": "Document created";
@@ -372,10 +372,10 @@ type Messages = {
     "landing": {
       "lastAccessedMatters": "Last accessed matters";
       "noMatters": "No matters yet";
-      "noPrompts": "No skills yet";
+      "noPrompts": "No prompts yet";
       "noRecentChats": "No recent chats";
       "pinnedMatters": "Pinned matters";
-      "prompts": "Skills";
+      "prompts": "Prompts";
       "recentChats": "Recent chats";
     };
     "maxAttachmentsReached": "Maximum {count} files per message";
@@ -397,16 +397,16 @@ type Messages = {
     "pastedText": {
       "expand": "Show full text";
       "fromClipboard": "Pasted {count, plural, one {# character} other {# characters}}";
-      "fromPromptFallback": "Skill";
+      "fromPromptFallback": "Prompt";
       "remove": "Remove";
     };
-    "placeholder": "Type your question here, / for skills, @ to add context";
+    "placeholder": "Type your question here, / for prompts, @ to add context";
     "prompts": {
-      "noResults": "No matching skills";
-      "noShortcuts": "No skills yet. Add some in Knowledge → Skills.";
+      "noResults": "No matching prompts";
+      "noShortcuts": "No prompts yet. Add some in Knowledge → Prompts.";
       "scope": {
-        "private": "Your skills";
-        "team": "Team skills";
+        "private": "Your prompts";
+        "team": "Team prompts";
       };
       "tryOne": "Try one of these to start";
     };
@@ -421,13 +421,13 @@ type Messages = {
     "thinking": "Working with context";
     "threads": "History";
     "tool": {
-      "apply-active-docx-edits": "Applying DOCX edits";
-      "ares_lookup_company": "ARES company lookup";
-      "ares_search_companies": "ARES company search";
+      "apply-active-docx-edits": "Preparing document edits";
+      "ares_lookup_company": "Searching company records";
+      "ares_search_companies": "Searching company records";
       "ask-user": "Asking for clarification";
-      "create-document": "Creating document";
-      "describe-stella-api": "Inspecting Stella API";
-      "describe-stella-function": "Inspecting stella function";
+      "create-document": "Preparing document";
+      "describe-stella-api": "Preparing data lookup";
+      "describe-stella-function": "Preparing data lookup";
       "docxCommentSummary": "Add a comment to {blockId}";
       "docxDeleteSummary": "Delete {blockId}";
       "docxEditMore": "{count, plural, one {# more edit} other {# more edits}}";
@@ -436,12 +436,12 @@ type Messages = {
       "docxInsertBeforeSummary": "Insert text before {blockId}";
       "docxReplaceBlockSummary": "Replace {blockId}";
       "docxReplaceSummary": "Replace “{find}” with “{replace}”";
-      "execute-typescript": "Running TypeScript";
-      "load-skill": "Loading skill";
+      "execute-typescript": "Reading workspace data";
+      "load-skill": "Reading guidance";
       "read-contact": "Reading contact";
       "read-content-across-matters": "Reading content across matters";
-      "read-skill-resource": "Reading skill resource";
-      "run-stella-query": "Running Stella query";
+      "read-skill-resource": "Reading guidance";
+      "run-stella-query": "Reading workspace data";
       "search-across-matters": "Searching across matters";
       "unknown": "Using tool";
       "update-entity-fields": "Updating metadata";
@@ -547,6 +547,7 @@ type Messages = {
     "category": "Category";
     "changeColor": "Change color";
     "clauses": "Clauses";
+    "clearDate": "Clear date";
     "close": "Close";
     "closeAll": "Close all";
     "closeOthers": "Close others";
@@ -634,6 +635,7 @@ type Messages = {
     "somethingWentWrong": "Something went wrong";
     "sort": "Sort";
     "status": "Status";
+    "today": "Today";
     "tryAgain": "Try again";
     "type": "Type";
     "typeNameToConfirm": "Type the name to confirm";
@@ -1102,6 +1104,36 @@ type Messages = {
     "showPane": "Show pane";
   };
   "knowledge": {
+    "agentSkills": {
+      "builtInBadge": "Built in";
+      "builtInSection": "Built-in skills";
+      "deleteConfirmDescription": "\"{name}\" will be removed from this workspace.";
+      "deleteConfirmTitle": "Delete skill?";
+      "description": "Install SKILL.md packs that add specialist methods and read-only resources to chat.";
+      "disableSkill": "Disable skill";
+      "disabled": "Disabled";
+      "emptyDescription": "Upload a SKILL.md file, a zipped skill folder, or import a public GitHub skill URL.";
+      "emptyTitle": "Install your first skill";
+      "enableSkill": "Enable skill";
+      "enabled": "Enabled";
+      "importHelp": "Paste a direct SKILL.md URL, a GitHub file URL, or a GitHub folder URL that contains SKILL.md.";
+      "importSkill": "Import from URL";
+      "importTitle": "Import skill";
+      "license": "License: {license}";
+      "privateSection": "Your skills";
+      "resources": "{count, plural, one {# resource} other {# resources}}";
+      "scope": "Visibility";
+      "scopePrivate": "Only me";
+      "scopeTeam": "Everyone in the organisation";
+      "sourceUpload": "Uploaded";
+      "sourceUrl": "Public URL";
+      "teamSection": "Team skills";
+      "uploadHelp": "Use a SKILL.md file or a .zip folder containing SKILL.md and optional read-only resources.";
+      "uploadSkill": "Upload skill";
+      "uploadTitle": "Upload skill";
+      "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill";
+      "version": "Version: {version}";
+    };
     "mcp": {
       "addAndConnect": "Add and connect";
       "addServer": "Add server";
@@ -2026,15 +2058,11 @@ type Messages = {
       "sortAscendingDate": "Oldest first";
       "sortDescending": "Sort descending";
       "sortDescendingDate": "Newest first";
-      "suggestionEffectiveDate": "Find the contract effective date.";
-      "suggestionGoverningLaw": "Find the governing law and return only the jurisdiction.";
-      "suggestionParties": "List all parties with their role (buyer / seller).";
-      "suggestionsLabel": "Suggestions";
       "text": "Text";
       "typeChangeWarning": "Existing data will be cleared and rebuilt on save.";
       "unnamedColumn": "this column";
       "unsupported": "Unsupported";
-      "untitledColumn": "What should stella find?";
+      "untitledColumn": "Column name, e.g. Effective date";
     };
     "reference": "Reference number";
     "referenceConventionHint": "Organization format: {example}";

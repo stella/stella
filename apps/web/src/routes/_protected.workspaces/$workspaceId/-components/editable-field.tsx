@@ -15,10 +15,10 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { DatePickerPopover } from "@/components/date-picker-popover";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
@@ -44,6 +44,7 @@ type EditableFieldProps = {
   property: WorkspaceProperty;
   content: WorkspaceFieldContent | undefined;
   readonly?: boolean;
+  showDateIcon?: boolean;
 };
 
 export const EditableField = ({
@@ -54,6 +55,7 @@ export const EditableField = ({
   property,
   content,
   readonly = false,
+  showDateIcon = true,
 }: EditableFieldProps) => {
   const type = property.content.type;
 
@@ -79,6 +81,7 @@ export const EditableField = ({
       entityKind={entityKind}
       property={property}
       propertyId={propertyId}
+      showDateIcon={showDateIcon}
       type={type}
       workspaceId={workspaceId}
     />
@@ -183,6 +186,7 @@ type InlineEditorProps = {
   property: WorkspaceProperty;
   content: WorkspaceFieldContent | undefined;
   type: "text" | "date" | "single-select" | "multi-select" | "int";
+  showDateIcon: boolean;
 };
 
 const InlineEditor = ({
@@ -193,6 +197,7 @@ const InlineEditor = ({
   property,
   content,
   type,
+  showDateIcon,
 }: InlineEditorProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -255,6 +260,7 @@ const InlineEditor = ({
             save({ type: "date", version: 1, value });
           }
         }}
+        showIcon={showDateIcon}
         value={currentDate}
       />
     );
@@ -321,7 +327,11 @@ const InlineTextEditor = ({
     return (
       <button
         className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm transition-colors"
-        onClick={() => {
+        data-open-expanded-cell
+        onClick={(event) => {
+          if (!event.currentTarget.closest("[data-expanded-cell='true']")) {
+            return;
+          }
           setDraft(value);
           setEditing(true);
         }}
@@ -335,7 +345,7 @@ const InlineTextEditor = ({
   return (
     <textarea
       autoFocus
-      className="border-input bg-background focus:ring-ring w-full min-w-0 resize-none rounded-md border px-2 py-1 text-sm outline-none focus:ring-1"
+      className="border-input bg-background focus:ring-ring min-h-20 w-full min-w-0 resize-none rounded-md border px-2 py-1 text-sm outline-none focus:ring-1"
       onBlur={() => {
         const trimmed = draft.trim();
         if (trimmed !== value) {

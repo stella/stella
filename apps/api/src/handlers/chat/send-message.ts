@@ -7,6 +7,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
+import type { FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
 import {
   buildChatPromptCacheKey,
@@ -57,18 +58,23 @@ import type {
   ChatMessageContent,
 } from "@/api/handlers/chat/types";
 import {
+  createRawChatFilePart,
   deleteUploadedChatFiles,
   uploadMessageFiles,
 } from "@/api/handlers/chat/upload-files";
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
+import { createFileKey } from "@/api/handlers/files/utils";
 import { requireAIAvailable } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FILE_SIZE_LIMIT_BYTES, FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import { getS3 } from "@/api/lib/s3";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
   permissions: { chat: ["create"] },
@@ -334,12 +340,11 @@ const sendMessage = createSafeRootHandler(
     const disabledNativeToolSlugs =
       orgSettingsForChat?.disabledNativeTools ?? [];
     // Streaming tools mirror the surface the user is on: only the
-    // file-overlay client knows how to satisfy
+    // DOCX file-overlay client knows how to satisfy
     // apply-active-docx-edits (it queues into the review store and
-    // sends the output back via addToolOutput). On the standalone
-    // / global chat surface there's no client executor, so we
-    // omit it — otherwise the model can call it and the request
-    // hangs forever waiting for a response.
+    // sends the output back via addToolOutput). PDF/file overlays
+    // still send active-file context, but they must not expose the
+    // DOCX edit tool or the model can chase an impossible path.
     const chatTools = getChatTools({
       organizationId: session.activeOrganizationId,
       refRegistry,
@@ -350,7 +355,7 @@ const sendMessage = createSafeRootHandler(
         pinnedIds: effectiveContextMatterIds,
         accessibleWorkspaceIds,
       }),
-      hasActiveFileChat: body.activeFile !== undefined,
+      hasActiveFileChat: body.activeFile?.supportsDocxEdits === true,
       externalTools: externalMcpTools.tools,
       disabledNativeToolSlugs,
     });
@@ -877,16 +882,234 @@ const prepareChatContext = async ({
         : error,
     );
 
+    const messagesWithActiveFileFallback = yield* Result.await(
+      attachActivePdfWhenExtractionIsEmpty({
+        activeFile,
+        hydratedMessages,
+        organizationId,
+        safeDb,
+        sendMode,
+        workspaceId,
+      }),
+    );
+
     return Result.ok({
       promptCacheKey: buildChatPromptCacheKey(systemPrompt.cacheStablePrefix),
       systemSafe: systemPrompt.safePrompt,
       systemUntrusted: systemPrompt.untrustedSuffix,
       hydratedMessages: hydrateAssistantMessageRefs({
-        messages: hydratedMessages,
+        messages: messagesWithActiveFileFallback,
         refRegistry,
       }),
     });
   });
+
+type AttachActivePdfWhenExtractionIsEmptyProps = {
+  activeFile: IncomingActiveFile | undefined;
+  hydratedMessages: ChatMessage[];
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  sendMode: ChatSendMode;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+const attachActivePdfWhenExtractionIsEmpty = async ({
+  activeFile,
+  hydratedMessages,
+  organizationId,
+  safeDb,
+  sendMode,
+  workspaceId,
+}: AttachActivePdfWhenExtractionIsEmptyProps): Promise<
+  Result<ChatMessage[], HandlerError<422 | 500> | SafeDbError>
+> =>
+  await Result.gen(async function* () {
+    if (
+      sendMode !== CHAT_SEND_MODE.rawOverride ||
+      workspaceId === null ||
+      activeFile?.fileFieldId === undefined ||
+      activeFile.supportsDocxEdits === true
+    ) {
+      return Result.ok(hydratedMessages);
+    }
+
+    const latestUserIndex = hydratedMessages.findLastIndex(
+      (message) => message.role === "user",
+    );
+    if (latestUserIndex === -1) {
+      return Result.ok(hydratedMessages);
+    }
+
+    const extracted = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.extractedContent.findFirst({
+          where: {
+            entityId: { eq: activeFile.entityId },
+            organizationId: { eq: organizationId },
+            workspaceId: { eq: workspaceId },
+          },
+          columns: { charCount: true },
+        }),
+      ),
+    );
+    if (extracted && extracted.charCount > 0) {
+      return Result.ok(hydratedMessages);
+    }
+
+    const activePdf = yield* Result.await(
+      readActivePdfForModel({
+        activeFile,
+        fileFieldId: activeFile.fileFieldId,
+        organizationId,
+        safeDb,
+        workspaceId,
+      }),
+    );
+    if (activePdf === null) {
+      return Result.ok(hydratedMessages);
+    }
+
+    const nextMessages = [...hydratedMessages];
+    const latestUserMessage = hydratedMessages.at(latestUserIndex);
+    if (!latestUserMessage) {
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Failed to find user message for context attachment",
+        }),
+      );
+    }
+    nextMessages[latestUserIndex] = {
+      ...latestUserMessage,
+      parts: [
+        ...latestUserMessage.parts,
+        {
+          type: "text",
+          text: `The active file "${activePdf.fileName}" is attached directly as a PDF because Stella has no extracted text for it. Use the attached PDF itself for this question.`,
+        },
+        createRawChatFilePart({
+          bytes: activePdf.bytes,
+          fileName: activePdf.fileName,
+          mimeType: PDF_MIME_TYPE,
+        }),
+      ],
+    };
+
+    return Result.ok(nextMessages);
+  });
+
+type ReadActivePdfForModelProps = {
+  activeFile: IncomingActiveFile;
+  fileFieldId: SafeId<"field">;
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+};
+
+type ActivePdfForModel = {
+  bytes: Uint8Array;
+  fileName: string;
+};
+
+const readActivePdfForModel = async ({
+  activeFile,
+  fileFieldId,
+  organizationId,
+  safeDb,
+  workspaceId,
+}: ReadActivePdfForModelProps): Promise<
+  Result<ActivePdfForModel | null, HandlerError<422 | 500> | SafeDbError>
+> =>
+  await Result.gen(async function* () {
+    const entity = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.entities.findFirst({
+          where: {
+            id: { eq: activeFile.entityId },
+            workspaceId: { eq: workspaceId },
+          },
+          columns: { id: true },
+          with: {
+            currentVersion: {
+              columns: {},
+              with: {
+                fields: {
+                  columns: {
+                    content: true,
+                    id: true,
+                  },
+                },
+              },
+            },
+          },
+        }),
+      ),
+    );
+    const field = entity?.currentVersion?.fields.find(
+      (candidate) => candidate.id === fileFieldId,
+    );
+    const content = field?.content;
+    if (content?.type !== "file") {
+      return Result.ok(null);
+    }
+
+    const pdfRef = getPdfFileRefForModel(content);
+    if (pdfRef === null || content.encrypted) {
+      return Result.ok(null);
+    }
+
+    const s3Key = createFileKey({
+      organizationId,
+      workspaceId,
+      fileId: pdfRef.fileId,
+      mimeType: PDF_MIME_TYPE,
+    });
+    const buffer = yield* Result.await(
+      Result.tryPromise({
+        try: async () => await getS3().file(s3Key).arrayBuffer(),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Failed to read active PDF for AI context",
+            cause,
+          }),
+      }),
+    );
+    const bytes = new Uint8Array(buffer);
+    if (bytes.byteLength > FILE_SIZE_LIMIT_BYTES.chatContextFile) {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: `Active PDF exceeds the ${FILE_SIZE_LIMITS.chatContextFile} chat context limit`,
+        }),
+      );
+    }
+
+    return Result.ok({
+      bytes,
+      fileName: pdfRef.fileName,
+    });
+  });
+
+const getPdfFileRefForModel = (
+  content: Extract<FieldContent, { type: "file" }>,
+): { fileId: string; fileName: string } | null => {
+  if (content.mimeType === PDF_MIME_TYPE) {
+    return {
+      fileId: content.id,
+      fileName: content.fileName,
+    };
+  }
+
+  if (content.pdfFileId === null) {
+    return null;
+  }
+
+  return {
+    fileId: content.pdfFileId,
+    fileName: content.fileName,
+  };
+};
 
 type InsertMessagesProps = {
   messages: ChatMessage[];

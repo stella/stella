@@ -76,6 +76,7 @@ type ActiveFile = {
   entityId: string;
   editable?: boolean | undefined;
   fileName: string;
+  supportsDocxEdits?: boolean | undefined;
 };
 
 type ActiveExternal = {
@@ -562,6 +563,8 @@ const FileChatOverlayInner = ({
   const userContext = useChatUserContext();
   const getUserContext = useEffectEvent(() => userContext);
   const lastSentDocxEditSnapshotRef = useRef<FolioAIEditSnapshot | null>(null);
+  const hasDocxEditSurface =
+    activeFile !== undefined && docxEditorRef !== undefined;
   // Folio's PM view exists almost immediately after DocxBrowserEditor
   // mounts but there is a sub-100ms window where the ref is set but
   // `createAIEditSnapshot()` still returns null. Sending a message in
@@ -571,7 +574,7 @@ const FileChatOverlayInner = ({
   // ready for the lifetime of the editor.
   const [editorReady, setEditorReady] = useState(false);
   useEffect(() => {
-    if (editorReady || !activeFile || !docxEditorRef) {
+    if (editorReady || !hasDocxEditSurface) {
       return undefined;
     }
     const probe = () => {
@@ -592,7 +595,7 @@ const FileChatOverlayInner = ({
     return () => {
       window.clearInterval(id);
     };
-  }, [editorReady, activeFile, docxEditorRef]);
+  }, [editorReady, hasDocxEditSurface, docxEditorRef]);
   // Reset readiness when the active file changes — the new doc has
   // its own mount cycle.
   useEffect(() => {
@@ -613,8 +616,12 @@ const FileChatOverlayInner = ({
     const snapshot = docxEditorRef?.current?.createAIEditSnapshot() ?? null;
     lastSentDocxEditSnapshotRef.current = snapshot;
 
-    if (!snapshot) {
+    if (!hasDocxEditSurface) {
       return activeFile;
+    }
+
+    if (!snapshot) {
+      return { ...activeFile, supportsDocxEdits: true };
     }
 
     return {
@@ -623,6 +630,7 @@ const FileChatOverlayInner = ({
         blocks: snapshot.blocks,
         canApplyEdits: Boolean(docxEditable),
       },
+      supportsDocxEdits: true,
     };
   });
   const getActiveExternal = useEffectEvent(() => activeExternal);
@@ -698,8 +706,13 @@ const FileChatOverlayInner = ({
           ? { getActiveExternal: () => getActiveExternal() }
           : {}),
         ...(activeFile ? { getActiveFile: () => getActiveFile() } : {}),
-        handleActiveDocxEditToolCall: (input) =>
-          handleActiveDocxEditToolCall(input),
+        ...(hasDocxEditSurface
+          ? {
+              handleActiveDocxEditToolCall: (
+                input: ApplyActiveDocxEditsInput,
+              ) => handleActiveDocxEditToolCall(input),
+            }
+          : {}),
       },
     }),
   );
@@ -762,7 +775,7 @@ const FileChatOverlayInner = ({
     threadRef,
   });
   const canSubmitWithCurrentDocxSnapshot = useEffectEvent(() => {
-    if (!activeFile || !docxEditorRef) {
+    if (!hasDocxEditSurface) {
       return true;
     }
 

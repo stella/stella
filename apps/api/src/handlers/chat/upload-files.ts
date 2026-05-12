@@ -224,7 +224,7 @@ const createBlockedHydratedFilePart = (): HydratedFilePart => ({
   type: "blocked",
 });
 
-const createRawFilePart = ({
+export const createRawChatFilePart = ({
   bytes,
   fileName,
   mimeType,
@@ -265,7 +265,7 @@ export const hydrateFilePart = async ({
 
     if (sendMode === CHAT_SEND_MODE.rawOverride) {
       return Result.ok<HydratedFilePart>({
-        part: createRawFilePart({ bytes, fileName, mimeType }),
+        part: createRawChatFilePart({ bytes, fileName, mimeType }),
         type: "rawOverride",
       });
     }

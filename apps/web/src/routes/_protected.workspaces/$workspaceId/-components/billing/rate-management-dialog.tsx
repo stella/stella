@@ -7,7 +7,6 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
-import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
 import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
@@ -20,6 +19,7 @@ import {
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { DatePickerPopover } from "@/components/date-picker-popover";
 import { UserIdentity } from "@/components/user-avatar";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
 import {

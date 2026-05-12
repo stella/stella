@@ -89,7 +89,7 @@ export const InlineOptionEditor = ({
         </ul>
       )}
 
-      <div className="flex items-center gap-1.5 rounded-[7px] border border-dashed py-1 ps-1 pe-1.5">
+      <label className="hover:bg-muted/40 flex cursor-text items-center gap-1.5 rounded-[7px] border border-dashed py-1 ps-1 pe-1.5 transition-colors">
         <Button
           aria-label={t("workspaces.properties.addOption")}
           className="text-foreground-label size-6 shrink-0"
@@ -112,7 +112,7 @@ export const InlineOptionEditor = ({
           placeholder={t("workspaces.properties.addOption")}
           value={draft}
         />
-      </div>
+      </label>
 
       {options.length > 0 && (
         <SelectFallback

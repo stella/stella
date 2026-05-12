@@ -20,9 +20,16 @@ type CalendarDay = {
   date: string;
   isCurrentMonth: boolean;
   isToday: boolean;
+  isWeekend: boolean;
+};
+
+type CalendarWeekday = {
+  isWeekend: boolean;
+  label: string;
 };
 
 const toISODate = (d: Date): string => d.toISOString().slice(0, 10);
+const DEFAULT_WEEKEND_DAYS = new Set([0, 6]); // Sunday, Saturday
 
 const getFirstDayOfWeek = (locale: string): number => {
   try {
@@ -38,10 +45,26 @@ const getFirstDayOfWeek = (locale: string): number => {
   return 0;
 };
 
+const getWeekendDays = (locale: string): ReadonlySet<number> => {
+  try {
+    const loc = new Intl.Locale(locale);
+    const info =
+      typeof loc.getWeekInfo === "function" ? loc.getWeekInfo() : undefined;
+    const weekend = info?.weekend;
+    if (Array.isArray(weekend) && weekend.length > 0) {
+      return new Set(weekend.map((day) => day % 7));
+    }
+  } catch {
+    // fall back to Saturday/Sunday
+  }
+  return DEFAULT_WEEKEND_DAYS;
+};
+
 const getMonthDays = (
   year: number,
   month: number,
   firstDow: number,
+  weekendDays: ReadonlySet<number>,
 ): CalendarDay[] => {
   const today = toISODate(new Date());
   const days: CalendarDay[] = [];
@@ -60,19 +83,27 @@ const getMonthDays = (
       date: iso,
       isCurrentMonth: d.getUTCMonth() === month,
       isToday: iso === today,
+      isWeekend: weekendDays.has(d.getUTCDay()),
     });
   }
   return days;
 };
 
-const getWeekdayLabels = (locale: string, firstDow: number): string[] => {
+const getWeekdayLabels = (
+  locale: string,
+  firstDow: number,
+  weekendDays: ReadonlySet<number>,
+): CalendarWeekday[] => {
   const fmt = new Intl.DateTimeFormat(locale, {
     weekday: "short",
     timeZone: "UTC",
   });
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(Date.UTC(2024, 0, 1 + ((i + firstDow) % 7)));
-    return fmt.format(d);
+    return {
+      isWeekend: weekendDays.has(d.getUTCDay()),
+      label: fmt.format(d),
+    };
   });
 };
 
@@ -144,6 +175,7 @@ type DatePickerPopoverProps = {
   onChange: (value: string | null) => void;
   locale?: string;
   isOverdue?: boolean;
+  showIcon?: boolean;
   clearLabel?: string;
   /** Label for the "go to today" button. Auto-localized from the locale when omitted. */
   todayLabel?: string;
@@ -158,6 +190,7 @@ function DatePickerPopover({
   onChange,
   locale: localeProp,
   isOverdue = false,
+  showIcon = true,
   clearLabel = "Clear date",
   todayLabel: todayLabelProp,
   overdueLabel,
@@ -169,6 +202,7 @@ function DatePickerPopover({
   const value = normalizeDate(rawValue);
   const todayLabel = todayLabelProp ?? deriveTodayLabel(locale);
   const firstDow = useMemo(() => getFirstDayOfWeek(locale), [locale]);
+  const weekendDays = useMemo(() => getWeekendDays(locale), [locale]);
 
   const [viewYear, setViewYear] = useState(() => {
     const d = value ? new Date(`${value}T00:00:00Z`) : new Date();
@@ -182,12 +216,12 @@ function DatePickerPopover({
   const [decadeBase, setDecadeBase] = useState(() => decadeStart(viewYear));
 
   const days = useMemo(
-    () => getMonthDays(viewYear, viewMonth, firstDow),
-    [viewYear, viewMonth, firstDow],
+    () => getMonthDays(viewYear, viewMonth, firstDow, weekendDays),
+    [viewYear, viewMonth, firstDow, weekendDays],
   );
   const weekdays = useMemo(
-    () => getWeekdayLabels(locale, firstDow),
-    [locale, firstDow],
+    () => getWeekdayLabels(locale, firstDow, weekendDays),
+    [locale, firstDow, weekendDays],
   );
 
   const [focusedDate, setFocusedDate] = useState("");
@@ -409,7 +443,7 @@ function DatePickerPopover({
           />
         }
       >
-        <CalendarIcon className="size-3.5 shrink-0" />
+        {showIcon && <CalendarIcon className="size-3.5 shrink-0" />}
         <span className="min-w-0 flex-1 overflow-hidden text-start wrap-break-word text-ellipsis">
           {displayLabel}
         </span>
@@ -476,12 +510,17 @@ function DatePickerPopover({
                 role="row"
                 aria-hidden="true"
               >
-                {weekdays.map((wd) => (
+                {weekdays.map((weekday) => (
                   <span
-                    className="text-muted-foreground py-1 text-center text-[10px]"
-                    key={wd}
+                    className={cn(
+                      "py-1 text-center text-[10px]",
+                      weekday.isWeekend
+                        ? "text-muted-foreground"
+                        : "text-foreground-label",
+                    )}
+                    key={weekday.label}
                   >
-                    {wd}
+                    {weekday.label}
                   </span>
                 ))}
               </div>
@@ -517,6 +556,11 @@ function DatePickerPopover({
                         !day.isCurrentMonth &&
                           !disabled &&
                           "text-foreground-disabled",
+                        day.isWeekend &&
+                          day.isCurrentMonth &&
+                          !disabled &&
+                          !isSelected &&
+                          "text-foreground-label",
                         day.isToday &&
                           !isSelected &&
                           !disabled &&

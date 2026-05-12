@@ -7,7 +7,6 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Button } from "@stll/ui/components/button";
-import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
 import {
   Dialog,
   DialogClose,
@@ -23,6 +22,7 @@ import { Form } from "@stll/ui/components/form";
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { DatePickerPopover } from "@/components/date-picker-popover";
 import { toFormErrors } from "@/lib/schema";
 import type {
   EntityKind,
