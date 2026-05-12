@@ -34,6 +34,7 @@ import type {
 import type { BorderSpec, Theme } from "../types/document";
 import { resolveFontFamily } from "../utils/fontResolver";
 import { borderToStyle } from "../utils/formatToStyle";
+import { eighthsToPixels, pointsToPixels } from "../utils/units";
 import type { BlockLookup } from "./index";
 import { renderFragment } from "./renderFragment";
 import { renderImageFragment } from "./renderImage";
@@ -193,7 +194,9 @@ export type RenderPageOptions = {
     bottom?: BorderSpec;
     left?: BorderSpec;
     right?: BorderSpec;
+    display?: "allPages" | "firstPage" | "notFirstPage";
     offsetFrom?: "page" | "text";
+    zOrder?: "front" | "back";
   };
   /** Theme for resolving border colors. */
   theme?: Theme | null;
@@ -243,24 +246,160 @@ function applyPageStyles(
   element.style.fontSize = `${(11 * 96) / 72}px`;
   element.style.color = "var(--doc-canvas-text, #000)";
 
-  // Page borders and shadows removed — Stella doesn't use them
+  // Page borders are painted as a separate overlay (see renderPageBorderOverlay)
+  // so they can honor OOXML offsetFrom/zOrder/display and remain text-relative.
+}
 
-  // Apply OOXML page borders
-  if (options.pageBorders) {
-    const pb = options.pageBorders;
-    const sides = ["top", "bottom", "left", "right"] as const;
-    const cssSides = ["Top", "Bottom", "Left", "Right"] as const;
+function pageBorderShouldRender(
+  pageNumber: number,
+  display?: "allPages" | "firstPage" | "notFirstPage",
+): boolean {
+  switch (display ?? "allPages") {
+    case "firstPage":
+      return pageNumber === 1;
+    case "notFirstPage":
+      return pageNumber !== 1;
+    default:
+      return true;
+  }
+}
 
-    for (let i = 0; i < sides.length; i++) {
-      const border = pb[sides[i]!]; // SAFETY: i < sides.length (4 elements)
-      if (border && border.style !== "none" && border.style !== "nil") {
-        const styles = borderToStyle(border, cssSides[i]!, options.theme); // SAFETY: same bounds
-        for (const [key, value] of Object.entries(styles)) {
-          (element.style as unknown as Record<string, string>)[key] =
-            String(value);
-        }
-      }
+function pageBorderSpacePx(border: BorderSpec | undefined): number {
+  return border?.space !== undefined ? pointsToPixels(border.space) : 0;
+}
+
+/**
+ * Effective rendered border width in pixels. Mirrors `borderToStyle` (1px
+ * floor for hairlines) and the 3px floor applied to double borders in
+ * `applyPageBorderSide`, so callers can shift the overlay outward by the
+ * exact stroke they will see on screen.
+ */
+function pageBorderWidthPx(border: BorderSpec | undefined): number {
+  if (!border || border.style === "none" || border.style === "nil") {
+    return 0;
+  }
+  const widthPx =
+    border.size !== undefined && border.size !== 0
+      ? eighthsToPixels(border.size)
+      : 1;
+  const floored = Math.max(1, widthPx);
+  return border.style === "double" ? Math.max(3, floored) : floored;
+}
+
+function applyPageBorderSide(
+  element: HTMLElement,
+  border: BorderSpec | undefined,
+  side: "Top" | "Bottom" | "Left" | "Right",
+  theme?: Theme | null,
+): void {
+  if (!border || border.style === "none" || border.style === "nil") {
+    return;
+  }
+
+  const styles = borderToStyle(border, side, theme);
+  for (const [key, value] of Object.entries(styles)) {
+    (element.style as unknown as Record<string, string>)[key] = String(value);
+  }
+
+  // Browsers collapse double borders narrower than 3px into a single line.
+  const styleKey = `border${side}Style`;
+  const widthKey = `border${side}Width`;
+  const styleValue = (element.style as unknown as Record<string, string>)[
+    styleKey
+  ];
+  if (styleValue === "double") {
+    const widthValue = Number.parseFloat(
+      (element.style as unknown as Record<string, string>)[widthKey] ?? "",
+    );
+    if (!Number.isFinite(widthValue) || widthValue < 3) {
+      (element.style as unknown as Record<string, string>)[widthKey] = "3px";
     }
+  }
+}
+
+function renderPageBorderOverlay(
+  page: Page,
+  options: RenderPageOptions,
+  doc: Document,
+): HTMLElement | null {
+  const pb = options.pageBorders;
+  if (!pb || !pageBorderShouldRender(page.number, pb.display)) {
+    return null;
+  }
+
+  const hasBorder = [pb.top, pb.bottom, pb.left, pb.right].some(
+    (border) => border && border.style !== "none" && border.style !== "nil",
+  );
+  if (!hasBorder) {
+    return null;
+  }
+
+  const offsetFrom = pb.offsetFrom ?? "text";
+  const topOffset = pageBorderSpacePx(pb.top);
+  const rightOffset = pageBorderSpacePx(pb.right);
+  const bottomOffset = pageBorderSpacePx(pb.bottom);
+  const leftOffset = pageBorderSpacePx(pb.left);
+
+  const overlay = doc.createElement("div");
+  overlay.className = "layout-page-border";
+  overlay.style.position = "absolute";
+  overlay.style.pointerEvents = "none";
+  overlay.style.boxSizing = "border-box";
+  overlay.style.zIndex = pb.zOrder === "back" ? "0" : "20";
+
+  if (offsetFrom === "page") {
+    overlay.style.top = `${topOffset}px`;
+    overlay.style.right = `${rightOffset}px`;
+    overlay.style.bottom = `${bottomOffset}px`;
+    overlay.style.left = `${leftOffset}px`;
+  } else {
+    // With box-sizing: border-box, the border paints inside the overlay,
+    // so for offsetFrom="text" we must shift each side outward by both
+    // `space` (text↔border gap) and the visible stroke width to preserve
+    // the OOXML gap when borders are thick or doubled.
+    const topWidth = pageBorderWidthPx(pb.top);
+    const rightWidth = pageBorderWidthPx(pb.right);
+    const bottomWidth = pageBorderWidthPx(pb.bottom);
+    const leftWidth = pageBorderWidthPx(pb.left);
+    overlay.style.top = `${Math.max(0, page.margins.top - topOffset - topWidth)}px`;
+    overlay.style.right = `${Math.max(0, page.margins.right - rightOffset - rightWidth)}px`;
+    overlay.style.bottom = `${Math.max(0, page.margins.bottom - bottomOffset - bottomWidth)}px`;
+    overlay.style.left = `${Math.max(0, page.margins.left - leftOffset - leftWidth)}px`;
+  }
+
+  applyPageBorderSide(overlay, pb.top, "Top", options.theme);
+  applyPageBorderSide(overlay, pb.bottom, "Bottom", options.theme);
+  applyPageBorderSide(overlay, pb.left, "Left", options.theme);
+  applyPageBorderSide(overlay, pb.right, "Right", options.theme);
+
+  return overlay;
+}
+
+/**
+ * Refresh the page-border overlay on an existing page shell so incremental
+ * rerenders pick up changes to size, margins, page number, or pageBorders
+ * options. Removes any stale `.layout-page-border` child before re-attaching
+ * with the current z-order (back → first child, front → last child).
+ */
+function syncPageBorderOverlay(
+  pageEl: HTMLElement,
+  page: Page,
+  options: RenderPageOptions,
+  doc: Document,
+): void {
+  for (const stale of Array.from(
+    pageEl.querySelectorAll<HTMLElement>(":scope > .layout-page-border"),
+  )) {
+    stale.remove();
+  }
+  const overlay = renderPageBorderOverlay(page, options, doc);
+  if (!overlay) {
+    return;
+  }
+  if (options.pageBorders?.zOrder === "back") {
+    pageEl.prepend(overlay);
+  } else {
+    pageEl.append(overlay);
   }
 }
 
@@ -1325,6 +1464,10 @@ export function renderPage(
   pageEl.dataset["pageNumber"] = String(page.number);
 
   applyPageStyles(pageEl, page.size.w, page.size.h, options);
+  const pageBorderEl = renderPageBorderOverlay(page, options, doc);
+  if (pageBorderEl && options.pageBorders?.zOrder === "back") {
+    pageEl.append(pageBorderEl);
+  }
 
   // Create content area
   const contentEl = doc.createElement("div");
@@ -1787,6 +1930,10 @@ export function renderPage(
     pageEl.append(footerEl);
   }
 
+  if (pageBorderEl && options.pageBorders?.zOrder !== "back") {
+    pageEl.append(pageBorderEl);
+  }
+
   return pageEl;
 }
 
@@ -2139,6 +2286,7 @@ export function renderPages(
       // Update page styles in case size changed
       const page = pages[i]!; // SAFETY: i < commonCount <= pages.length
       applyPageStyles(shell, page.size.w, page.size.h, options);
+      syncPageBorderOverlay(shell, page, options, options.document ?? document);
       shell.dataset["pageNumber"] = String(page.number);
     }
 
@@ -2152,6 +2300,7 @@ export function renderPages(
         pageEl.dataset["pageNumber"] = String(page.number);
         pageEl.dataset["pageIndex"] = String(i);
         applyPageStyles(pageEl, page.size.w, page.size.h, options);
+        syncPageBorderOverlay(pageEl, page, options, doc);
         container.append(pageEl);
 
         prevShells.push({ element: pageEl, fingerprint: newFingerprints[i]! }); // SAFETY: i < pages.length
@@ -2232,6 +2381,7 @@ export function renderPages(
       pageEl.dataset["pageNumber"] = String(page.number);
       pageEl.dataset["pageIndex"] = String(i);
       applyPageStyles(pageEl, page.size.w, page.size.h, options);
+      syncPageBorderOverlay(pageEl, page, options, doc);
       container.append(pageEl);
       pageShells.push(pageEl);
     }
@@ -2397,6 +2547,15 @@ function populatePageShell(
     options,
   );
   const fullPageEl = renderPage(data.page, context, pageOptions);
+
+  // Strip any overlay left behind by the lightweight virtualized shell setup,
+  // otherwise the overlay carried over from renderPage() stacks on top of it
+  // and the border paints twice (darker/thicker than intended).
+  for (const stale of Array.from(
+    shell.querySelectorAll<HTMLElement>(":scope > .layout-page-border"),
+  )) {
+    stale.remove();
+  }
 
   while (fullPageEl.firstChild) {
     shell.append(fullPageEl.firstChild);

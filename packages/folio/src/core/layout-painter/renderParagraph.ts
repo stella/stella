@@ -1318,20 +1318,54 @@ export function renderParagraphFragment(
     const groupedWithPrev = bordersFormGroup(options.prevBorders, borders);
     const groupedWithNext = bordersFormGroup(borders, options.nextBorders);
 
-    if (groupedWithPrev && borders.between) {
-      fragmentEl.style.borderTop = borderToCss(borders.between);
-    } else if (borders.top && !groupedWithPrev) {
-      fragmentEl.style.borderTop = borderToCss(borders.top);
-    }
+    // Paragraph borders paint on an absolutely positioned overlay so they
+    // follow the text extents and indents rather than stretching across the
+    // full paragraph fragment width.
+    const renderedTopBorder = groupedWithPrev ? borders.between : borders.top;
+    const renderedBottomBorder = !groupedWithNext ? borders.bottom : undefined;
 
-    if (borders.bottom && !groupedWithNext) {
-      fragmentEl.style.borderBottom = borderToCss(borders.bottom);
+    const borderBox = doc.createElement("div");
+    borderBox.className = "layout-paragraph-border";
+    borderBox.style.position = "absolute";
+    borderBox.style.pointerEvents = "none";
+    borderBox.style.boxSizing = "border-box";
+    // With box-sizing: border-box, the border paints inside the box, so each
+    // side's outer edge must shift outward by both `space` (text↔border gap
+    // in OOXML §17.3.1.24) and the border width to keep the visible gap.
+    borderBox.style.left = `${
+      indentLeft - (borders.left?.space ?? 0) - (borders.left?.width ?? 0)
+    }px`;
+    borderBox.style.right = `${
+      indentRight - (borders.right?.space ?? 0) - (borders.right?.width ?? 0)
+    }px`;
+    borderBox.style.top = `${
+      -(renderedTopBorder?.space ?? 0) - (renderedTopBorder?.width ?? 0)
+    }px`;
+    borderBox.style.bottom = `${
+      -(renderedBottomBorder?.space ?? 0) - (renderedBottomBorder?.width ?? 0)
+    }px`;
+
+    if (renderedTopBorder) {
+      borderBox.style.borderTop = borderToCss(renderedTopBorder);
+    }
+    if (renderedBottomBorder) {
+      borderBox.style.borderBottom = borderToCss(renderedBottomBorder);
     }
     if (borders.left) {
-      fragmentEl.style.borderLeft = borderToCss(borders.left);
+      borderBox.style.borderLeft = borderToCss(borders.left);
     }
     if (borders.right) {
-      fragmentEl.style.borderRight = borderToCss(borders.right);
+      borderBox.style.borderRight = borderToCss(borders.right);
+    }
+
+    const hasBorder =
+      renderedTopBorder ||
+      renderedBottomBorder ||
+      borders.left ||
+      borders.right;
+    if (hasBorder) {
+      fragmentEl.style.position = "relative";
+      fragmentEl.append(borderBox);
     }
 
     // Bar border — vertical decorative bar on the left side (ECMA-376 §17.3.1.4)
@@ -1345,32 +1379,6 @@ export function renderParagraphFragment(
       barEl.style.borderLeft = borderToCss(borders.bar);
       fragmentEl.style.position = "relative";
       fragmentEl.append(barEl);
-    }
-
-    // Add padding inside borders using w:space values (ECMA-376 §17.3.1.24).
-    // The space attribute specifies the distance between text and border in points,
-    // converted to pixels during layout bridge conversion.
-    // Fallback to sensible defaults when space is not specified.
-    const hasBorder =
-      borders.top ||
-      borders.bottom ||
-      borders.left ||
-      borders.right ||
-      borders.between;
-    if (hasBorder) {
-      const topBorder = borders.top || borders.between;
-      fragmentEl.style.paddingLeft = borders.left
-        ? `${borders.left.space ?? 4}px`
-        : "0";
-      fragmentEl.style.paddingRight = borders.right
-        ? `${borders.right.space ?? 4}px`
-        : "0";
-      fragmentEl.style.paddingTop = topBorder
-        ? `${topBorder.space ?? 2}px`
-        : "0";
-      fragmentEl.style.paddingBottom = borders.bottom
-        ? `${borders.bottom.space ?? 6}px`
-        : "0";
     }
   }
 
