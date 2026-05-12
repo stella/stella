@@ -83,12 +83,20 @@ export const createChatThirdPartyBoundary = ({
   organizationId,
   scopedDb,
   sendMode,
+  workspaceId,
 }: {
   anonymizeFields?: typeof anonymizeTextFields | undefined;
   anonymizationScopeId: string;
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
   sendMode: ChatSendMode;
+  /**
+   * When the chat is workspace-scoped, the validated workspace
+   * SafeId from the workspaceAccessMacro. Threads gazetteer
+   * loading so workspace-specific terms join the org-wide
+   * catalog. Omit for global threads.
+   */
+  workspaceId?: SafeId<"workspace"> | undefined;
 }): ChatThirdPartyBoundary =>
   sendMode === CHAT_SEND_MODE.anonymized
     ? {
@@ -97,7 +105,11 @@ export const createChatThirdPartyBoundary = ({
         anonymizationScopeId,
         gazetteerEntries: anonymizeFields
           ? Promise.resolve([])
-          : loadAnonymizationGazetteerEntries({ organizationId, scopedDb }),
+          : loadAnonymizationGazetteerEntries({
+              organizationId,
+              workspaceId,
+              scopedDb,
+            }),
         organizationId,
         pipelineContext: createPipelineContext(),
         redactionMap: new Map<string, string>(),

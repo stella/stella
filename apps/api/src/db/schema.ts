@@ -1707,6 +1707,16 @@ export const anonymizationBlacklistEntries = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /**
+     * When set, the entry is scoped to a single workspace
+     * and is only consulted by detection runs for that
+     * workspace. NULL means org-wide — the firm-level
+     * default catalog the existing settings UI maintains.
+     */
+    workspaceId: safeWorkspaceId("workspace_id").references(
+      () => workspaces.id,
+      { onDelete: "cascade" },
+    ),
     label: p.varchar({ length: 64 }).notNull(),
     canonical: p.varchar({ length: 512 }).notNull(),
     variants: jsonb().$type<string[]>().notNull().default([]),
@@ -1729,8 +1739,16 @@ export const anonymizationBlacklistEntries = p.pgTable(
       .index("anonymization_blacklist_entries_org_enabled_idx")
       .on(table.organizationId, table.enabled),
     p
+      .index("anonymization_blacklist_entries_workspace_idx")
+      .on(table.workspaceId, table.enabled),
+    p
       .uniqueIndex("anonymization_blacklist_entries_org_canonical_uidx")
-      .on(table.organizationId, sql`lower(${table.canonical})`),
+      .on(table.organizationId, sql`lower(${table.canonical})`)
+      .where(sql`${table.workspaceId} is null`),
+    p
+      .uniqueIndex("anonymization_blacklist_entries_ws_canonical_uidx")
+      .on(table.workspaceId, sql`lower(${table.canonical})`)
+      .where(sql`${table.workspaceId} is not null`),
     ...orgPolicies(),
   ],
 );

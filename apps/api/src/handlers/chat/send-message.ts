@@ -232,6 +232,7 @@ const sendMessage = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
       scopedDb,
       sendMode: body.sendMode,
+      workspaceId: workspaceId ?? undefined,
     });
 
     const uploadResult = yield* Result.await(
