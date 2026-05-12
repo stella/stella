@@ -121,6 +121,26 @@ describe("chat prompt builders", () => {
     );
   });
 
+  test("routes installed skill metadata through the untrusted suffix", () => {
+    const prompt = buildGlobalPromptParts({
+      skillMetadata: [
+        {
+          description: "Use the Acme acquisition playbook.",
+          name: "acme-acquisition-review",
+          source: "installed",
+          version: null,
+        },
+      ],
+      userContext: null,
+    });
+
+    expect(prompt.cacheStablePrefix).not.toContain("acme-acquisition-review");
+    expect(prompt.safePrompt).not.toContain("Acme acquisition");
+    expect(prompt.untrustedSuffix).toContain("acme-acquisition-review");
+    expect(prompt.untrustedSuffix).toContain("Acme acquisition");
+    expect(prompt.fullPrompt).toContain("acme-acquisition-review");
+  });
+
   test("keeps the cache-stable prefix independent from workspace context", () => {
     const firstRefRegistry = createChatRefRegistry();
     const secondRefRegistry = createChatRefRegistry();

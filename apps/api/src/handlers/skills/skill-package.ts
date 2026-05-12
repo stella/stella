@@ -17,6 +17,10 @@ const SKILL_FILE_NAME = "SKILL.md";
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const GITHUB_API_TIMEOUT_MS = 10_000;
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
+const GITHUB_SKILL_HOSTNAMES = new Set([
+  "github.com",
+  "raw.githubusercontent.com",
+]);
 
 export type ParsedSkillResource = {
   content: string;
@@ -584,6 +588,11 @@ const parseGithubSkillPath = (rawUrl: string): GithubSkillPath | null => {
     throw new HandlerError({ status: 400, message: "Skill URL is invalid" });
   }
 
+  if (!GITHUB_SKILL_HOSTNAMES.has(url.hostname)) {
+    return null;
+  }
+  assertSafeGithubSkillUrl(url);
+
   if (url.hostname === "raw.githubusercontent.com") {
     const [owner, repo, ref, ...filePath] = pathParts(url);
     if (!owner || !repo || !ref || filePath.length === 0) {
@@ -594,10 +603,6 @@ const parseGithubSkillPath = (rawUrl: string): GithubSkillPath | null => {
         ? filePath.slice(0, -1).join("/")
         : filePath.join("/");
     return { owner, ref, repo, rootPath };
-  }
-
-  if (url.hostname !== "github.com") {
-    return null;
   }
 
   const [owner, repo, kind, ref, ...path] = pathParts(url);
@@ -613,6 +618,22 @@ const parseGithubSkillPath = (rawUrl: string): GithubSkillPath | null => {
       ? path.slice(0, -1).join("/")
       : path.join("/");
   return { owner, ref, repo, rootPath };
+};
+
+const assertSafeGithubSkillUrl = (url: URL) => {
+  if (
+    url.protocol === "https:" &&
+    !url.username &&
+    !url.password &&
+    !url.hash
+  ) {
+    return;
+  }
+
+  throw new HandlerError({
+    status: 400,
+    message: "GitHub skill URL is not allowed",
+  });
 };
 
 const isZipFile = ({ buffer, name }: { buffer: ArrayBuffer; name: string }) => {

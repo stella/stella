@@ -74,12 +74,16 @@ const CORE_RULE_SECTIONS = [
 
 export type UserContext = IncomingUserContext;
 
+type PromptSkillMetadata = SkillMetadata & {
+  source?: "built-in" | "installed" | undefined;
+};
+
 export type ChatPromptParts = {
   cacheStablePrefix: string;
   /**
-   * Server-built scaffold: product copy, skill catalog, jurisdic-
-   * tions, workspace metadata. Carries no third-party PII and is
-   * sent to the model verbatim — *no anonymization*.
+   * Server-built scaffold: product copy, built-in skill catalog,
+   * jurisdictions, workspace metadata. Carries no third-party PII
+   * and is sent to the model verbatim — *no anonymization*.
    */
   safePrompt: string;
   /**
@@ -97,7 +101,7 @@ export type ChatPromptParts = {
    * logging).
    */
   fullPrompt: string;
-  skillMetadata: readonly SkillMetadata[];
+  skillMetadata: readonly PromptSkillMetadata[];
 };
 
 export const buildChatPromptCacheKey = (cacheStablePrefix: string) => {
@@ -327,7 +331,7 @@ export const extractTitle = (parts: ChatMessage["parts"]) => {
 
 type BuildGlobalPromptProps = {
   practiceJurisdictions?: readonly PracticeJurisdiction[];
-  skillMetadata?: readonly SkillMetadata[] | undefined;
+  skillMetadata?: readonly PromptSkillMetadata[] | undefined;
   userContext: UserContext | null;
 };
 
@@ -358,7 +362,7 @@ type BuildWorkspacePromptProps = {
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
-  skillMetadata?: readonly SkillMetadata[] | undefined;
+  skillMetadata?: readonly PromptSkillMetadata[] | undefined;
   userContext: UserContext | null;
   workspaceId: SafeId<"workspace">;
 };
@@ -457,7 +461,7 @@ type BuildWorkspacePromptTextProps = {
   entityCount: number;
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
-  skillMetadata?: readonly SkillMetadata[] | undefined;
+  skillMetadata?: readonly PromptSkillMetadata[] | undefined;
   userContext: UserContext | null;
   workspaceId: SafeId<"workspace">;
   workspaceName: string;
@@ -844,7 +848,7 @@ export const appendActiveFilePromptIfEntityExists = ({
 type BuildPromptProps = {
   practiceJurisdictions: readonly PracticeJurisdiction[];
   requestContextSections: string[];
-  skillMetadata: readonly SkillMetadata[];
+  skillMetadata: readonly PromptSkillMetadata[];
   userContext: UserContext | null;
 };
 
@@ -854,9 +858,11 @@ const buildPromptParts = ({
   skillMetadata,
   userContext,
 }: BuildPromptProps): ChatPromptParts => {
+  const { safeSkillMetadata, untrustedSkillMetadata } =
+    splitSkillMetadataForPrompt(skillMetadata);
   const cacheStablePrefix = joinPromptSections([
     ...CORE_RULE_SECTIONS,
-    buildSkillCatalogSection(skillMetadata),
+    buildSkillCatalogSection(safeSkillMetadata),
     READONLY_API_HINT,
   ]);
   // Safe half: scaffold + jurisdiction labels. Both are
@@ -871,12 +877,16 @@ const buildPromptParts = ({
   const safePrompt = joinPromptSections(safeSections);
 
   // Untrusted half: anything that interpolates user-controlled
-  // text into the prompt. `requestContextSections` is the
+  // text into the prompt. Installed skill names/descriptions are
+  // user-configured text; `requestContextSections` includes the
   // `Connected to matter "..."` line (matter names commonly carry
   // client / opposing-party names); `userContextBlock` echoes the
-  // user's own profile (name, email). Both must cross the
+  // user's own profile (name, email). All must cross the
   // anonymizer in anonymized mode.
-  const untrustedSections: string[] = [...requestContextSections];
+  const untrustedSections: string[] = [
+    buildSkillCatalogSection(untrustedSkillMetadata),
+    ...requestContextSections,
+  ];
   const userContextBlock = buildUserContextBlock(userContext);
   if (userContextBlock) {
     untrustedSections.push(userContextBlock);
@@ -893,6 +903,24 @@ const buildPromptParts = ({
     fullPrompt: `${safePrompt}${untrustedSuffix}`,
     skillMetadata,
   };
+};
+
+const splitSkillMetadataForPrompt = (
+  skillMetadata: readonly PromptSkillMetadata[],
+) => {
+  const safeSkillMetadata: PromptSkillMetadata[] = [];
+  const untrustedSkillMetadata: PromptSkillMetadata[] = [];
+
+  for (const skill of skillMetadata) {
+    if (skill.source === "installed") {
+      untrustedSkillMetadata.push(skill);
+      continue;
+    }
+
+    safeSkillMetadata.push(skill);
+  }
+
+  return { safeSkillMetadata, untrustedSkillMetadata };
 };
 
 const buildPracticeJurisdictionLine = (

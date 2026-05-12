@@ -4,7 +4,10 @@ import JSZip from "jszip";
 
 import { LIMITS } from "@/api/lib/limits";
 
-import { parseUploadedSkillPackage } from "./skill-package";
+import {
+  fetchSkillPackageFromUrl,
+  parseUploadedSkillPackage,
+} from "./skill-package";
 
 describe("agent skill package imports", () => {
   test("parses a single SKILL.md upload", async () => {
@@ -128,5 +131,19 @@ Instructions.`,
     );
 
     expect(Result.isError(result)).toBe(true);
+  });
+
+  test("rejects unsafe GitHub URLs before persisting source URLs", async () => {
+    const unsafeUrls = [
+      "http://github.com/org/repo/tree/main/skill",
+      "https://user:password@github.com/org/repo/tree/main/skill",
+      "https://github.com/org/repo/tree/main/skill#fragment",
+      "https://user:password@raw.githubusercontent.com/org/repo/main/skill/SKILL.md",
+    ];
+
+    for (const url of unsafeUrls) {
+      const result = await fetchSkillPackageFromUrl(url);
+      expect(Result.isError(result)).toBe(true);
+    }
   });
 });
