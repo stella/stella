@@ -165,14 +165,27 @@ export const WorkspaceTable = ({
     if (!expandedTableCell) {
       return undefined;
     }
+    const onPointerDown = (event: PointerEvent) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest("[data-expanded-cell='true']")
+      ) {
+        return;
+      }
+      setExpandedTableCell(null);
+    };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) {
         return;
       }
       setExpandedTableCell(null);
     };
+    document.addEventListener("pointerdown", onPointerDown, { capture: true });
     document.addEventListener("keydown", onKeyDown);
     return () => {
+      document.removeEventListener("pointerdown", onPointerDown, {
+        capture: true,
+      });
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [expandedTableCell]);
@@ -1404,7 +1417,7 @@ const DraggableRow = ({
         contentMode === "tight" && TOOLBAR_ROW_HEIGHT,
         isTask && "cursor-pointer",
         isFocusedExpansionRow && "relative z-20",
-        isMutedByExpandedCell && "opacity-[0.78] hover:opacity-95",
+        isMutedByExpandedCell && "opacity-[0.92] hover:opacity-100",
       )}
       data-active={activeRow || undefined}
       data-index={virtualIndex}
@@ -1484,7 +1497,7 @@ const FolderTableRow = ({
       className={cn(
         "transition-opacity duration-150",
         TOOLBAR_ROW_HEIGHT,
-        isMutedByExpandedCell && "opacity-[0.78] hover:opacity-95",
+        isMutedByExpandedCell && "opacity-[0.92] hover:opacity-100",
       )}
       data-active={entity.entityId === activeEntityId || undefined}
       data-index={virtualIndex}
@@ -1593,7 +1606,7 @@ const DataRowCells = ({
           hasExpandedCell &&
             !isExpandedCell &&
             !isSelectCell &&
-            "opacity-70 transition-opacity duration-150",
+            "opacity-90 transition-opacity duration-150",
           isExpandedCell &&
             "z-30 overflow-visible! whitespace-normal! [&_.line-clamp-2]:line-clamp-none [&_.truncate]:min-w-0 [&_.truncate]:overflow-visible [&_.truncate]:wrap-break-word [&_.truncate]:whitespace-normal",
           cell.column.getIsResizing() &&
