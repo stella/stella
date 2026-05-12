@@ -115,9 +115,18 @@ const parseZipSkillPackage = async (
   buffer: ArrayBuffer,
 ): Promise<ParsedSkillPackage> => {
   const zip = await JSZip.loadAsync(buffer);
-  const files: SkillFile[] = [];
+  const entries = Object.values(zip.files);
+  if (entries.length > LIMITS.agentSkillArchiveFilesMax) {
+    throw new HandlerError({
+      status: 400,
+      message: "Skill pack has too many files",
+    });
+  }
 
-  for (const file of Object.values(zip.files)) {
+  const files: SkillFile[] = [];
+  let totalUncompressedBytes = 0;
+
+  for (const file of entries) {
     if (file.dir || file.name.startsWith("__MACOSX/")) {
       continue;
     }
@@ -125,15 +134,39 @@ const parseZipSkillPackage = async (
     if (!normalizedPath) {
       continue;
     }
+
+    const declaredSize = zipUncompressedSize(file);
+    if (declaredSize !== null) {
+      totalUncompressedBytes += declaredSize;
+      assertZipUncompressedLimit(totalUncompressedBytes);
+    }
+
     const content = await file.async("string");
+    const sizeBytes = encodedSize(content);
+    if (declaredSize === null) {
+      totalUncompressedBytes += sizeBytes;
+      assertZipUncompressedLimit(totalUncompressedBytes);
+    }
+
     files.push({
       content,
       path: normalizedPath,
-      sizeBytes: encodedSize(content),
+      sizeBytes,
     });
   }
 
   return parseSkillFiles(files);
+};
+
+const assertZipUncompressedLimit = (totalBytes: number) => {
+  if (totalBytes <= LIMITS.agentSkillArchiveUncompressedMaxBytes) {
+    return;
+  }
+
+  throw new HandlerError({
+    status: 400,
+    message: "Skill pack uncompressed content is too large",
+  });
 };
 
 const parseSkillFiles = (files: readonly SkillFile[]): ParsedSkillPackage => {
@@ -493,6 +526,23 @@ const decodeUtf8 = (buffer: ArrayBuffer): string => {
 
 const encodedSize = (value: string): number =>
   new TextEncoder().encode(value).byteLength;
+
+const zipUncompressedSize = (file: JSZip.JSZipObject): number | null => {
+  const candidate: unknown = file;
+  if (!isRecord(candidate)) {
+    return null;
+  }
+
+  const metadata = candidate["_data"];
+  if (!isRecord(metadata)) {
+    return null;
+  }
+
+  const size = metadata["uncompressedSize"];
+  return typeof size === "number" && Number.isFinite(size) && size >= 0
+    ? size
+    : null;
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

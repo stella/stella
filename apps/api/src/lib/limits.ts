@@ -20,6 +20,8 @@ export const LIMITS = {
   agentSkillsPerUser: 100,
   agentSkillsListLimit: 250,
   agentSkillBodyMaxChars: 80_000,
+  agentSkillArchiveFilesMax: 100,
+  agentSkillArchiveUncompressedMaxBytes: 6 * 1024 * 1024,
   agentSkillResourcesPerSkill: 50,
   agentSkillResourceMaxChars: 100_000,
   clauseVariantsPerClause: 10,

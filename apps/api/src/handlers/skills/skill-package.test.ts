@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { LIMITS } from "@/api/lib/limits";
+
 import { parseUploadedSkillPackage } from "./skill-package";
 
 describe("agent skill package imports", () => {
@@ -76,6 +78,53 @@ Instructions.`,
         "SKILL.md",
         { type: "text/markdown" },
       ),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+  });
+
+  test("rejects zip uploads with too many files", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "skill/SKILL.md",
+      `---
+name: crowded-skill
+description: Too many files.
+---
+
+Instructions.`,
+    );
+    for (let index = 0; index < LIMITS.agentSkillArchiveFilesMax; index++) {
+      zip.file(`skill/references/${index}.md`, "Reference");
+    }
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const result = await parseUploadedSkillPackage(
+      new File([buffer], "crowded-skill.zip", { type: "application/zip" }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+  });
+
+  test("rejects zip uploads with excessive uncompressed content", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "skill/SKILL.md",
+      `---
+name: huge-skill
+description: Huge uncompressed content.
+---
+
+Instructions.`,
+    );
+    zip.file(
+      "skill/references/huge.md",
+      "x".repeat(LIMITS.agentSkillArchiveUncompressedMaxBytes + 1),
+    );
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+
+    const result = await parseUploadedSkillPackage(
+      new File([buffer], "huge-skill.zip", { type: "application/zip" }),
     );
 
     expect(Result.isError(result)).toBe(true);
